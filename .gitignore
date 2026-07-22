@@ -1,0 +1,13 @@
+# .NET Build Outputs
+bin/
+obj/
+
+# OS/IDE generated files (Standard additions)
+.DS_Store
+.vs/
+.vscode/
+
+# Emulator Specific Data
+Saves/
+Logs/
+*.srm

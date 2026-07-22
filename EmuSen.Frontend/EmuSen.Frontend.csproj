@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <!-- Gamepad support: SDL's GameController API, initialized WITHOUT the
+         video subsystem so it never tries to open its own window - Avalonia
+         owns the window. Ships native SDL binaries via NuGet, same
+         convenience as Raylib-cs. See Input/GamepadManager.cs for a note on
+         confidence level - this is the one file in the project whose exact
+         API surface hasn't been independently verified against current docs
+         the way everything else has. -->
+    <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
+    <!-- Native Wayland backend, shipped in 12.1. Experimental and not picked up
+         by UsePlatformDetect() automatically yet - opted into explicitly in
+         Program.cs (Linux only, see comments there). -->
+    <PackageReference Include="Avalonia.Wayland" Version="12.1.0" />
+    <!-- Only needed for the in-app dev inspector (Alt+Shift+F12 at runtime);
+         excluded outside Debug builds so it doesn't ship in Release. Note:
+         this replaces the old "Avalonia.Diagnostics" package, which was
+         retired at 11.3.x and never got a 12.x release - this is its
+         successor as of Avalonia 12. -->
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.2">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Pulls in the emulation core (Cores/Snes/*, Settings/*, etc). Note this
+         references EmuSen.csproj as-is (still an Exe with its own Main/Raylib
+         loop) - see the accompanying notes on why that's fine for now and what
+         splitting it apart later would look like. -->
+    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+  </ItemGroup>
+
+</Project>

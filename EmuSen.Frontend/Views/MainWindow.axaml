@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmuSen.Frontend.Views.MainWindow"
+        Title="EmuSen"
+        Width="1024" Height="768"
+        MinWidth="512" MinHeight="480">
+
+    <DockPanel>
+
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Open ROM..." Click="OnOpenRomClick" />
+                <Separator />
+                <MenuItem Header="E_xit" Click="OnExitClick" />
+            </MenuItem>
+
+            <!-- Pause/Reset still aren't implemented - individually disabled.
+                 Save/Load State are real now (EmulatorSession.SaveState/
+                 LoadState), so the menu itself no longer needs a blanket
+                 disable. -->
+            <MenuItem Header="_Emulation">
+                <MenuItem Header="_Pause" IsEnabled="False" />
+                <MenuItem Header="_Reset" IsEnabled="False" />
+                <Separator />
+                <MenuItem Header="Save _State" Click="OnSaveStateClick" />
+                <MenuItem Header="_Load State" Click="OnLoadStateClick" />
+            </MenuItem>
+
+            <MenuItem Header="_Settings">
+                <MenuItem Header="_Controller Bindings..." Click="OnControllerBindingsClick" />
+            </MenuItem>
+        </Menu>
+
+        <Border DockPanel.Dock="Bottom"
+                Padding="6,3"
+                Background="{DynamicResource SystemChromeLowColor}">
+            <TextBlock x:Name="StatusText" Text="No ROM loaded" />
+        </Border>
+
+        <!-- Game viewport. GameView shows the live frame once a ROM is
+             running; NoRomText sits behind it and is only visible until then
+             (toggled in code-behind, not a binding, to keep this first pass
+             simple). -->
+        <Grid Background="Black">
+            <TextBlock x:Name="NoRomText"
+                       Text="No ROM loaded"
+                       Foreground="Gray"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+            <Image x:Name="GameView"
+                   Stretch="Uniform"
+                   RenderOptions.BitmapInterpolationMode="None"
+                   IsVisible="False" />
+        </Grid>
+
+    </DockPanel>
+
+</Window>

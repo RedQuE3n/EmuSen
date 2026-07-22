@@ -1,0 +1,190 @@
+.
+├── dir.txt
+├── EmuSen
+│   ├── bin
+│   │   └── Debug
+│   │       └── net10.0
+│   │           ├── EmuSen
+│   │           ├── EmuSen.deps.json
+│   │           ├── EmuSen.dll
+│   │           ├── EmuSen.pdb
+│   │           ├── EmuSen.runtimeconfig.json
+│   │           ├── Raylib-cs.dll
+│   │           └── runtimes
+│   │               ├── linux-x64
+│   │               │   └── native
+│   │               │       └── libraylib.so
+│   │               ├── osx-arm64
+│   │               │   └── native
+│   │               │       └── libraylib.dylib
+│   │               ├── osx-x64
+│   │               │   └── native
+│   │               │       └── libraylib.dylib
+│   │               ├── win-x64
+│   │               │   └── native
+│   │               │       └── raylib.dll
+│   │               └── win-x86
+│   │                   └── native
+│   │                       └── raylib.dll
+│   ├── Common
+│   │   ├── EmulatorSession.cs
+│   │   ├── StateSerializer.cs
+│   │   └── TeeTextWriter.cs
+│   ├── Cores
+│   │   └── Snes
+│   │       ├── Apu
+│   │       │   ├── Dsp
+│   │       │   │   ├── BrrDecoder.cs
+│   │       │   │   ├── DspVoice.cs
+│   │       │   │   └── SDsp.cs
+│   │       │   └── Spc700
+│   │       │       ├── Core
+│   │       │       │   └── Spc700.cs
+│   │       │       └── Opcodes
+│   │       │           ├── Spc700.AddressModes.cs
+│   │       │           ├── Spc700.Opcodes.cs
+│   │       │           └── Spc700.OpcodeTable.cs
+│   │       ├── Cpu
+│   │       │   ├── Core
+│   │       │   │   └── Cpu.cs
+│   │       │   ├── Disassembler
+│   │       │   │   └── Snes65816Disassembler.cs
+│   │       │   └── Opcodes
+│   │       │       ├── Cpu.AddressModes.cs
+│   │       │       ├── Cpu.Opcodes.cs
+│   │       │       └── Cpu.OpcodeTable.cs
+│   │       ├── Debug
+│   │       │   ├── SnesDebugTarget.cs
+│   │       │   └── StateDump.cs
+│   │       ├── Input
+│   │       │   └── Input.cs
+│   │       ├── Memory
+│   │       │   ├── Cartridge.cs
+│   │       │   ├── Dma.cs
+│   │       │   ├── InterruptController.cs
+│   │       │   ├── IWriteObserver.cs
+│   │       │   ├── MathUnit.cs
+│   │       │   └── MemoryBus.cs
+│   │       └── Ppu
+│   │           ├── Core
+│   │           │   ├── Ppu.cs
+│   │           │   ├── Ppu.Registers.cs
+│   │           │   └── Ppu.RegisterTable.cs
+│   │           └── Renderer
+│   │               ├── Renderer.Backgrounds.cs
+│   │               ├── Renderer.cs
+│   │               ├── Renderer.Debug.cs
+│   │               ├── Renderer.Mode7.cs
+│   │               ├── Renderer.Scanline.cs
+│   │               └── Renderer.Sprites.cs
+│   ├── Debug
+│   │   ├── DebugCommandProcessor.cs
+│   │   ├── DebugTools.cs
+│   │   ├── IDebugTarget.cs
+│   │   └── WatchRegistry.cs
+│   ├── EmuSen.csproj
+│   ├── Frontend
+│   │   └── Program.cs
+│   ├── Logs
+│   │   ├── console.log
+│   │   ├── screenshot_frame841.png
+│   │   └── screenshot_frame841.txt
+│   ├── obj
+│   │   ├── Debug
+│   │   │   └── net10.0
+│   │   │       ├── apphost
+│   │   │       ├── EmuSen.AssemblyInfo.cs
+│   │   │       ├── EmuSen.AssemblyInfoInputs.cache
+│   │   │       ├── EmuSen.assets.cache
+│   │   │       ├── EmuSen.csproj.AssemblyReference.cache
+│   │   │       ├── EmuSen.csproj.CoreCompileInputs.cache
+│   │   │       ├── EmuSen.csproj.FileListAbsolute.txt
+│   │   │       ├── EmuSen.csproj.Up2Date
+│   │   │       ├── EmuSen.dll
+│   │   │       ├── EmuSen.GeneratedMSBuildEditorConfig.editorconfig
+│   │   │       ├── EmuSen.genruntimeconfig.cache
+│   │   │       ├── EmuSen.GlobalUsings.g.cs
+│   │   │       ├── EmuSen.pdb
+│   │   │       ├── ref
+│   │   │       │   └── EmuSen.dll
+│   │   │       └── refint
+│   │   │           └── EmuSen.dll
+│   │   ├── EmuSen.csproj.nuget.dgspec.json
+│   │   ├── EmuSen.csproj.nuget.g.props
+│   │   ├── EmuSen.csproj.nuget.g.targets
+│   │   ├── project.assets.json
+│   │   └── project.nuget.cache
+│   ├── Saves
+│   │   ├── DKC.srm
+│   │   ├── LttP.srm
+│   │   ├── SMAS+.srm
+│   │   ├── SM.srm
+│   │   ├── SMW.srm
+│   │   └── SoMR.srm
+│   └── Settings
+│       ├── AudioSettings.cs
+│       ├── DebugSettings.cs
+│       ├── GraphicsSettings.cs
+│       └── InputBindings.cs
+├── EmuSen.Frontend
+│   ├── App.axaml
+│   ├── App.axaml.cs
+│   ├── bin
+│   │   └── Debug
+│   │       └── net10.0
+│   ├── EmuSen.Frontend.csproj
+│   ├── Input
+│   │   ├── ControllerKeyMap.cs
+│   │   ├── GamepadBindingMap.cs
+│   │   └── GamepadManager.cs
+│   ├── obj
+│   │   ├── Debug
+│   │   │   └── net10.0
+│   │   │       ├── apphost
+│   │   │       ├── Avalonia
+│   │   │       │   ├── references
+│   │   │       │   ├── resources
+│   │   │       │   └── Resources.Inputs.cache
+│   │   │       ├── EmuSen.F.CCA356A3.Up2Date
+│   │   │       ├── EmuSen.Frontend.AssemblyInfo.cs
+│   │   │       ├── EmuSen.Frontend.AssemblyInfoInputs.cache
+│   │   │       ├── EmuSen.Frontend.assets.cache
+│   │   │       ├── EmuSen.Frontend.csproj.AssemblyReference.cache
+│   │   │       ├── EmuSen.Frontend.csproj.CoreCompileInputs.cache
+│   │   │       ├── EmuSen.Frontend.csproj.FileListAbsolute.txt
+│   │   │       ├── EmuSen.Frontend.dll
+│   │   │       ├── EmuSen.Frontend.GeneratedMSBuildEditorConfig.editorconfig
+│   │   │       ├── EmuSen.Frontend.genruntimeconfig.cache
+│   │   │       ├── EmuSen.Frontend.GlobalUsings.g.cs
+│   │   │       ├── EmuSen.Frontend.pdb
+│   │   │       ├── ref
+│   │   │       │   └── EmuSen.Frontend.dll
+│   │   │       └── refint
+│   │   │           └── EmuSen.Frontend.dll
+│   │   ├── EmuSen.Frontend.csproj.nuget.dgspec.json
+│   │   ├── EmuSen.Frontend.csproj.nuget.g.props
+│   │   ├── EmuSen.Frontend.csproj.nuget.g.targets
+│   │   ├── project.assets.json
+│   │   └── project.nuget.cache
+│   ├── Program.cs
+│   ├── Saves
+│   │   └── SMW.srm
+│   └── Views
+│       ├── InputSettingsWindow.axaml
+│       ├── InputSettingsWindow.axaml.cs
+│       ├── MainWindow.axaml
+│       └── MainWindow.axaml.cs
+└── Man pages
+    ├── EmuSen_Core_Gameplan.md
+    ├── EmuSen_Debugging_Tools_Reference_v5.md
+    ├── EmuSen.Frontend_Multicore_Gameplan.md
+    ├── EmuSen_Project_Overview_v2.md
+    ├── GeminiHandoff072226.md
+    └── Old
+        ├── EmuSen_Debugging_Tools_Reference.md
+        ├── EmuSen_Debugging_Tools_Reference_v2.md
+        ├── EmuSen_Debugging_Tools_Reference_v3.md
+        ├── EmuSen_Debugging_Tools_Reference_v4.md
+        └── EmuSen_Project_Overview.md
+
+59 directories, 129 files

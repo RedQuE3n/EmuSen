@@ -19,7 +19,11 @@ namespace EmuSen.Frontend
             TextWriter originalOut = Console.Out;
             string logDir = Path.Combine(Directory.GetCurrentDirectory(), "Logs");
             Directory.CreateDirectory(logDir); // no-op if it already exists
-            string logPath = Path.Combine(logDir, "console.log");
+            // Timestamped per launch (not a fixed "console.log") so a new
+            // session doesn't overwrite the previous one's log - each capture
+            // sent for investigation is now self-identifying by filename
+            // alone, without needing to check the upload time separately.
+            string logPath = Path.Combine(logDir, $"console_{DateTime.Now:yyyyMMdd_HHmmss}.log");
             StreamWriter fileWriter = new StreamWriter(logPath, append: false) { AutoFlush = true };
             Console.SetOut(new TeeTextWriter(originalOut, fileWriter));
 

@@ -30,6 +30,7 @@ namespace EmuSen.Cores.Nintendo.Venus
     {
         private const int CyclesPerScanline = 227;
         private const int TotalScanlines = 262;
+        private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
         private readonly bool _headless;
         private int _currentScanline;
@@ -176,7 +177,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
                     // Periodic autosave - see Cartridge.SaveSram's own
                     // comment for why this is safe to call this often.
-                    if (TotalFrames % 300 == 0) Cart!.SaveSram();
+                    if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
 
                     return; // one full frame done - hand control back to the caller
                 }

@@ -1,11 +1,7 @@
 using System;
 using System.IO;
 using EmuSen.Common;
-using EmuSen.Cores.Nintendo.Venus.Memory;
-using EmuSen.Cores.Nintendo.Venus.Apu;
-using EmuSen.Cores.Nintendo.Venus.Processor;
-using EmuSen.Cores.Nintendo.Venus.Video;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
 using EmuSen.Bindings;
@@ -14,10 +10,7 @@ namespace EmuSen.Frontend
 {
     class Program
     {
-        private const int CyclesPerScanline = 227;
-        private const int TotalScanlines = 262;
         private const int StatusEveryNFrames = 60;
-        private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
         private static readonly DebugTools.BoundedTrace _bgScrollTrace = new();
 
@@ -49,23 +42,26 @@ namespace EmuSen.Frontend
 
             try
             {
-                Cartridge cart = new Cartridge(romPath);
                 string statePath = Path.Combine(Directory.GetCurrentDirectory(), "Saves", Path.GetFileNameWithoutExtension(romPath) + ".state");
-                Spc700 spc700 = new Spc700();
-                MemoryBus bus = new MemoryBus(cart, spc700);
 
-                Cpu cpu = new Cpu(bus);
+                // Drives the whole emulation - CPU/PPU/APU/memory, the
+                // per-scanline timing loop, save states, SRAM. See
+                // Cores/ICore.cs and this class's own header comment for
+                // why this exists instead of Main owning that loop
+                // directly the way it used to (that loop is now the ONE
+                // copy shared with EmulatorSession/the Avalonia frontend,
+                // not a second hand-maintained copy here).
+                VenusCore core = new VenusCore(headless: false);
+                core.LoadRom(romPath);
                 DebugSettings.CpuVerboseLogging = false;
                 DebugSettings.Spc700VerboseLogging = false;
-
-                Renderer renderer = new Renderer();
 
                 // The reusable debug toolchain - see Debug/IDebugTarget.cs
                 // and Debug/DebugCommandProcessor.cs. Built once here so
                 // both the F1 dump below and the new F4 interactive prompt
                 // go through the exact same underlying data, rather than
                 // each hotkey reaching into cpu/bus/ppu on its own.
-                SnesDebugTarget debugTarget = new SnesDebugTarget(cpu, bus);
+                SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!);
                 DebugCommandProcessor debugCmd = new DebugCommandProcessor(debugTarget);
 
                 // Continuous version of the F3 screenshot utility - see
@@ -99,118 +95,28 @@ namespace EmuSen.Frontend
                 // closes that gap here too.
                 debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
 
-                int currentScanline = 0;
-                long totalFrames = 0;
-
-                while (renderer.IsOpen())
+                while (core.Renderer!.IsOpen())
                 {
-                    if (currentScanline == 0)
-                    {
-                        bus.Interrupts.EndVBlank();
-                        bus.Dma.InitHdma();
-                    }
+                    core.RunFrame();
 
-                    // Documented NMI-enable-during-vblank quirk - see
-                    // PendingImmediateNmi's comment in InterruptController.cs.
-                    // Checked here at the same once-per-scanline granularity
-                    // as the H/V-IRQ check just below, for the same reason.
-                    if (bus.Interrupts.PendingImmediateNmi)
-                    {
-                        bus.Interrupts.PendingImmediateNmi = false;
-                        cpu.Nmi();
-                    }
+                    // Poll real keyboard/gamepad state once per frame and feed it
+                    // into the emulated controller. This has to happen before the
+                    // next RunFrame() call (i.e. before that frame's own
+                    // LatchAutoJoypad), so doing it here - right after a frame
+                    // completes - keeps the timing correct. The actual key/pad
+                    // mapping lives in InputBindings.cs, not here.
+                    InputBindings.ApplyInput(core.Bus!);
 
-                    // H/V-IRQ trigger check, done here (before this scanline's CPU
-                    // code runs) so a handler's register changes - e.g. SMW's classic
-                    // status-bar screen split - take effect in time for THIS
-                    // scanline's render, not the next one. H-only fires every line;
-                    // V-only and HV fire once per frame at the target scanline. This
-                    // approximates real hardware's dot-precise H-position check as
-                    // "the whole target scanline", since our timing runs at
-                    // per-scanline granularity rather than per-dot.
-                    // Temporary escape hatch: H/V-IRQ support caused a severe
-                    // regression (CPU lockup, INIDISP zeroed) - disabled by default
-                    // until the actual cause is found. See conversation notes.
-                    if (DebugSettings.HvIrqEnabled)
-                    {
-                        if (bus.Interrupts.HIrqEnabled && !bus.Interrupts.VIrqEnabled)
-                        {
-                            bus.Interrupts.RaiseTimerIrq();
-                            cpu.Irq();
-                        }
-                        else if (bus.Interrupts.VIrqEnabled && currentScanline == bus.Interrupts.VTime)
-                        {
-                            bus.Interrupts.RaiseTimerIrq();
-                            cpu.Irq();
-                        }
-                    }
+                    core.Renderer.DrawFrame(core.Bus!, core.TotalFrames);
 
-                    int lineCycles = 0;
-                    bus.LineCycles = 0;
-                    while (lineCycles < CyclesPerScanline)
-                    {
-                        int cpuCycles = cpu.Step();
-                        lineCycles += cpuCycles;
-                        bus.LineCycles = lineCycles;
-
-                        spc700.CycleBudget += cpuCycles;
-                        while (spc700.CycleBudget >= 21)
-                        {
-                            spc700.Step();
-                        }
-                    }
-
-                    bus.CurrentScanline = currentScanline;
-
-                    if (currentScanline < 225)
-                    {
-                        if (currentScanline < 224) 
-                        {
-                            renderer.RenderScanline(bus, currentScanline);
-                        }
-                        bus.Dma.ExecuteHdma();
-                    }
-
-                    if (currentScanline == 225)
-                    {
-                        bus.Interrupts.InVBlank = true;
-                        bus.Interrupts.RaiseVBlank();
-                        if (bus.Interrupts.NmiEnabled) cpu.Nmi();
-
-                        // Real hardware automatically reads the controller once per
-                        // frame right at the start of vblank; mirror that timing here.
-                        bus.Input.LatchAutoJoypad();
-                    }
-
-                    currentScanline++;
-                    if (currentScanline >= TotalScanlines)
-                    {
-                        currentScanline = 0;
-                        totalFrames++;
-                        bus.FrameCount = totalFrames;
-
-                        // Poll real keyboard/gamepad state once per frame and feed it
-                        // into the emulated controller. This has to happen before the
-                        // frame's worth of CPU steps run again (i.e. before the next
-                        // LatchAutoJoypad), so doing it here - right after a frame
-                        // completes - keeps the timing correct. The actual key/pad
-                        // mapping lives in InputBindings.cs, not here.
-                        InputBindings.ApplyInput(bus);
-
-                        renderer.DrawFrame(bus, totalFrames);
-
-                        // All debug/dev hotkeys (F1-F5, F9, P) live in one place -
-                        // see RunHotkeys below. Previously this was ~170 lines
-                        // inline here; pulled out so the actual per-scanline
-                        // emulation timing loop above isn't buried under debug UI
-                        // dispatch. totalFrames/currentScanline are passed by ref
-                        // since F9 (load state) reassigns both from the save file.
-                        RunHotkeys(cpu, bus, spc700, cart, renderer, debugTarget, debugCmd, frameRecorder,
-                            statePath, ref totalFrames, ref currentScanline);
-                    }
+                    // All debug/dev hotkeys (F1-F6, F9, P) live in one place -
+                    // see RunHotkeys below. Kept separate from the per-frame
+                    // loop above so the actual emulation driving isn't buried
+                    // under debug UI dispatch.
+                    RunHotkeys(core, debugTarget, debugCmd, frameRecorder, statePath);
                 }
-                cart.SaveSram(); // final flush on clean exit
-                renderer.Shutdown();
+                core.SaveSram(); // final flush on clean exit
+                core.Renderer.Shutdown();
             }
             catch (Exception ex)
             {
@@ -219,16 +125,15 @@ namespace EmuSen.Frontend
         }
 
         // Everything triggered by a keypress or a bounded background trace,
-        // checked once per completed frame. Deliberately separate from the
-        // scanline-by-scanline timing loop in Main - that loop is the actual
-        // emulation core and reads much more clearly without ~170 lines of
-        // debug-hotkey dispatch interleaved into it. Nothing here changes
-        // emulation behavior; it's read-only inspection plus the F5/F9 save-
-        // state and F3 screenshot side effects, same as before the extraction.
+        // checked once per completed frame. Deliberately separate from
+        // Main's per-frame loop - that loop is the actual emulation driver
+        // and reads much more clearly without ~170 lines of debug-hotkey
+        // dispatch interleaved into it. Nothing here changes emulation
+        // behavior; it's read-only inspection plus the F5/F9 save-state
+        // and F3 screenshot side effects, same as before the extraction.
         private static void RunHotkeys(
-            Cpu cpu, MemoryBus bus, Spc700 spc700, Cartridge cart, Renderer renderer,
-            SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, FrameRecorder frameRecorder,
-            string statePath, ref long totalFrames, ref int currentScanline)
+            VenusCore core, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, FrameRecorder frameRecorder,
+            string statePath)
         {
             // Called every completed frame, recording or not - CaptureFrame
             // is a cheap no-op when IsRecording is false, so no gating
@@ -289,7 +194,7 @@ namespace EmuSen.Frontend
             // just this dump's printed part, going forward.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F2))
             {
-                renderer.DumpActiveOam(bus.Ppu);
+                core.Renderer!.DumpActiveOam(core.Bus!.Ppu);
             }
 
             // Interactive debug command prompt - see
@@ -353,26 +258,17 @@ namespace EmuSen.Frontend
                 Console.WriteLine($"[SCREENSHOT] Saved {shotPath} (Core={debugTarget.CoreName} Frame={debugTarget.FrameCount})");
             }
 
-            // Save states (F5 save, F9 load) - one slot per ROM,
-            // named to match its .srm save. This build doesn't go
-            // through EmulatorSession (see that class's own header
-            // comment on why the two loops are separate), so this
-            // mirrors EmulatorSession.SaveState/LoadState's logic
-            // directly against the local cart/cpu/bus/spc700
-            // rather than sharing code with it.
+            // Save states (F5 save, F9 load) - one slot per ROM, named to
+            // match its .srm save. Both now go straight through
+            // VenusCore.SaveState/LoadState (via ICore) rather than each
+            // frontend hand-rolling its own BinaryWriter/StateSerializer
+            // dance - this used to be duplicated against EmulatorSession's
+            // near-identical version.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F5))
             {
                 try
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
-                    using var stream = new FileStream(statePath, FileMode.Create);
-                    using var w = new BinaryWriter(stream);
-                    w.Write(totalFrames);
-                    w.Write(currentScanline);
-                    StateSerializer.Write(w, cart);
-                    StateSerializer.Write(w, cpu);
-                    StateSerializer.Write(w, bus);
-                    StateSerializer.Write(w, spc700);
+                    core.SaveState(statePath);
                     Console.WriteLine($"[STATE] Saved: {statePath}");
                 }
                 catch (Exception ex)
@@ -384,14 +280,7 @@ namespace EmuSen.Frontend
             {
                 try
                 {
-                    using var stream = new FileStream(statePath, FileMode.Open);
-                    using var r = new BinaryReader(stream);
-                    totalFrames = r.ReadInt64();
-                    currentScanline = r.ReadInt32();
-                    StateSerializer.Read(r, cart);
-                    StateSerializer.Read(r, cpu);
-                    StateSerializer.Read(r, bus);
-                    StateSerializer.Read(r, spc700);
+                    core.LoadState(statePath);
                     Console.WriteLine($"[STATE] Loaded: {statePath}");
                 }
                 catch (Exception ex)
@@ -401,27 +290,20 @@ namespace EmuSen.Frontend
             }
             if (_bgScrollTrace.ShouldLog())
             {
-                Console.WriteLine($"[BG SCROLL] Frame {totalFrames}: BG1 X={bus.Ppu.BgScrollX[0]} Y={bus.Ppu.BgScrollY[0]}  |  BG2 X={bus.Ppu.BgScrollX[1]} Y={bus.Ppu.BgScrollY[1]}");
+                Console.WriteLine($"[BG SCROLL] Frame {core.TotalFrames}: BG1 X={core.Bus!.Ppu.BgScrollX[0]} Y={core.Bus.Ppu.BgScrollY[0]}  |  BG2 X={core.Bus.Ppu.BgScrollX[1]} Y={core.Bus.Ppu.BgScrollY[1]}");
                 if (!_bgScrollTrace.IsActive) DebugSettings.AllScrollWriteLogging = false;
             }
 
-            if (totalFrames % StatusEveryNFrames == 0)
+            if (core.TotalFrames % StatusEveryNFrames == 0)
             {
                 Console.WriteLine(
-                    $"[STATUS] Frame {totalFrames} | PC=0x{cpu.PB:X2}{cpu.PC:X4} | " +
-                    $"TM={bus.Ppu.Tm:X2} BGMODE={bus.Ppu.Bgmode:X2} INIDISP={bus.Ppu.Inidisp:X2}"
+                    $"[STATUS] Frame {core.TotalFrames} | PC=0x{core.Cpu!.PB:X2}{core.Cpu.PC:X4} | " +
+                    $"TM={core.Bus!.Ppu.Tm:X2} BGMODE={core.Bus.Ppu.Bgmode:X2} INIDISP={core.Bus.Ppu.Inidisp:X2}"
                 );
             }
 
-            // Periodic autosave - SRAM is a few KB at most, so this
-            // is cheap even at a fairly tight interval. Protects
-            // against losing a save to a crash or force-quit rather
-            // than a clean exit; SaveOnExit below still covers the
-            // normal case.
-            if (totalFrames % SaveEveryNFrames == 0)
-            {
-                cart.SaveSram();
-            }
+            // Periodic SRAM autosave now happens inside VenusCore.RunFrame()
+            // itself (see that class) - no longer duplicated here.
         }
     }
 }

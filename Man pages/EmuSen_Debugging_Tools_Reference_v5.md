@@ -126,27 +126,36 @@ Addresses/values accept `0x`, `$`, or bare hex.
 
 - **F2's sprite dump** still calls `renderer.DumpActiveOam` directly rather than the `sprites` command. That method has a second responsibility — it also returns rects consumed by the "O" key's overlay drawing — that `SnesDebugTarget.GetSprites()` intentionally doesn't take on, to keep the toolchain's data-producing role separate from the renderer's overlay-geometry role. The `sprites` command (via F4) is the generalized, going-forward equivalent of just F2's printed output.
 - **`StateDump`, `Debug/DebugTools.cs`, `Renderer.Debug.cs`** (below) are all still called directly in a few places rather than fully absorbed into the new layer — they're lower-level building blocks the new layer sometimes wraps (`GetSummaryText()` → `StateDump.DumpAll`) rather than things it replaced outright.
-- **The watch registry currently only hooks WRAM writes.** `MemoryBus`'s `IWriteObserver` hook (§3.5) is only called from the WRAM write path today — `Ppu`'s VRAM/CGRAM/OAM writes and SRAM don't report to it yet. Built for what the Yoshi investigation needed, with wiring in the other write paths as natural, additive follow-up whenever an investigation needs to watch one of them. **All three of WRAM's own write paths are now covered, found the hard way, one bug at a time:** direct bank-$7E/$7F addressing (original), the WMDATA `$2180` port (missed initially — a game writing through it would have been invisible to every watch until this was caught), and the low-RAM `offset < 0x2000` mirror used by bank-$00-relative absolute addressing (also missed initially, caught while investigating why a WRAM job table the Yoshi investigation depends on never showed a single recorded write despite clearly holding real, varying data — see `EmuSen_Core_Gameplan.md`'s current-status section).
+- **The watch registry currently only hooks WRAM reads and writes.** `MemoryBus`'s `IWriteObserver`/`IReadObserver` hooks (§3.5) are only called from the WRAM read/write paths today — `Ppu`'s VRAM/CGRAM/OAM accesses and SRAM don't report to either yet. Built for what the Yoshi investigation needed, with wiring in the other paths as natural, additive follow-up whenever an investigation needs to watch one of them. **All three of WRAM's own write paths are covered, found the hard way, one bug at a time:** direct bank-$7E/$7F addressing (original), the WMDATA `$2180` port (missed initially — a game writing through it would have been invisible to every watch until this was caught), and the low-RAM `offset < 0x2000` mirror used by bank-$00-relative absolute addressing (also missed initially, caught while investigating why a WRAM job table the Yoshi investigation depends on never showed a single recorded write despite clearly holding real, varying data — see `EmuSen_Core_Gameplan.md`'s current-status section). The same three paths now also report reads via the mirrored `IReadObserver` hook, added alongside read watchpoints (§3.5).
 
 ### 3.5 `WatchRegistry` (`Debug/WatchRegistry.cs`) — watchpoints
 
 The generalized version of the recurring "log every write to this address range" pattern this project kept building ad hoc (`CameraRamLogging`, `MosaicWriteLogging`, `DmaSourceAddrLogging`, and originally a one-off Yoshi-specific WRAM trace). Instead of adding a new `DebugSettings` flag and a hand-written range check in the emulation code every time an investigation needs one, register a watch through the toolchain instead.
 
-- **`AddWatch(spaceName, address, length)` → id** — register a watch on a memory-space address range.
+Each watch has a `WatchKind` — `Write` (default), `Read`, or `Both` — mirroring GDB's `watch`/`rwatch`/`awatch`. Write-only was this mechanism's original (and still default) behavior, so every pre-existing `watch add` invocation keeps meaning exactly what it always meant.
+
+- **`AddWatch(spaceName, address, length, kind = Write)` → id** — register a watch on a memory-space address range, optionally restricted to reads, writes, or both.
 - **`RemoveWatch(id)`** — remove one.
-- **`GetWatches()`** — list active watches.
-- **`RecordWrite(spaceName, address, value, contextFactory)`** — called by whoever owns the registry (`SnesDebugTarget`, via its `IWriteObserver.OnWrite` implementation - see §3.2) in response to a write reported by the core it's watching. Cheap to call even with zero watches registered (a quick scan over however many are active). When a write matches an active watch, it's both **printed live** (`[WATCH #id] ...` — so the existing "play, then grep the console log" workflow keeps working with zero changes) and **stored** in a bounded per-watch buffer (last 500 events), so it's also queryable later via `watch log` without needing a fresh log upload.
+- **`GetWatches()`** — list active watches, including each one's `Kind`.
+- **`RecordWrite(spaceName, address, value, contextFactory)`** / **`RecordRead(spaceName, address, value, contextFactory)`** — called by whoever owns the registry (`SnesDebugTarget`, via its `IWriteObserver.OnWrite`/`IReadObserver.OnRead` implementations — see §3.2) in response to an access reported by the core it's watching. Both delegate to one shared private `Record(accessKind, ...)` so the matching/storage/printing logic exists exactly once. Cheap to call even with zero watches registered (a quick scan over however many are active) — this matters more for reads than writes, since a read happens on every instruction fetch and operand read that touches a watched space, not just the writes a game actually makes. When an access matches an active watch's kind, it's both **printed live** (`[WATCH #id] W ...` or `[WATCH #id] R ...` — so the existing "play, then grep the console log" workflow keeps working with zero changes) and **stored** in a bounded per-watch buffer (last 500 events), so it's also queryable later via `watch log` without needing a fresh log upload.
 - **`GetEvents(id, maxCount)` / `ClearEvents(id)`** — read or clear a watch's stored buffer.
 
-`DebugWatchEvent` carries a sequence number, address, value, and a free-text `Context` string (typically `PC=0x00A358`) — kept as text rather than a structured field since what's useful context varies by core and shouldn't force an interface change every time a new kind becomes relevant.
+`DebugWatchEvent` carries a sequence number, an `AccessKind` (`Write`/`Read`), address, value, and a free-text `Context` string (typically `PC=0x00A358`) — kept as text rather than a structured field since what's useful context varies by core and shouldn't force an interface change every time a new kind becomes relevant.
 
-Core-agnostic on purpose, same as `IDebugTarget` — lives under `Debug/`, not `Cores/Nintendo/Venus - SNES/`, since nothing about it is SNES-specific. `SnesDebugTarget` owns the instance and reports writes to it via `MemoryBus`'s `IWriteObserver` hook (`Cores/Nintendo/Venus - SNES/Memory/IWriteObserver.cs`) — `MemoryBus` itself has no idea `WatchRegistry` exists. A future NES `IDebugTarget` would own its own instance the same way, wired to its own core's equivalent write-observer hook.
+Core-agnostic on purpose, same as `IDebugTarget` — lives under `Debug/`, not `Cores/Nintendo/Venus - SNES/`, since nothing about it is SNES-specific. `SnesDebugTarget` owns the instance and reports accesses to it via `MemoryBus`'s `IWriteObserver`/`IReadObserver` hooks (`Cores/Nintendo/Venus - SNES/Memory/IWriteObserver.cs`, `IReadObserver.cs`) — `MemoryBus` itself has no idea `WatchRegistry` exists. `IReadObserver` is a deliberately separate interface from `IWriteObserver` rather than an added method on it, so a future implementer that only cares about one kind of access can implement just the interface it needs; `SnesDebugTarget` implements both. A future NES `IDebugTarget` would own its own instance the same way, wired to its own core's equivalent observer hooks.
 
 **Example — reproducing the Yoshi WRAM trace on demand** instead of it being a permanent flag: press F4 once after launching, then:
 ```
 watch add WRAM 8000 1800
 ```
 Matching writes for the rest of that session get printed live exactly as before, and can also be pulled on demand later with `watch log <id>`.
+
+**Example — watching for reads instead of (or as well as) writes:**
+```
+watch add WRAM D80 20 read
+watch add WRAM D80 20 both
+```
+The first only logs reads of the $0D80-$0D9F job table; the second logs both directions. `watch list` shows each watch's kind alongside its range.
 
 ### 3.6 Screenshot timestamping (F3, `Frontend/Program.cs`)
 

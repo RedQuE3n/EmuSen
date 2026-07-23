@@ -48,6 +48,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // the observer can get that from its own Cpu reference instead).
         public IWriteObserver? WriteObserver;
 
+        // Mirror of WriteObserver for reads - see IReadObserver.cs. Called
+        // far more often than WriteObserver (every instruction fetch and
+        // operand read that touches a watched space, not just an actual
+        // write), so kept as the same cheap null-conditional call pattern
+        // rather than anything heavier.
+        public IReadObserver? ReadObserver;
+
         // Generic "what instruction is currently executing" hook, same
         // pattern and rationale as WriteObserver above - added because
         // Dma.cs's source-address trace (LogSourceAddrWrite) needs PC
@@ -170,6 +177,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 if (offset == 0x2180)
                 {
                     byte val = Ram[_wmAddr];
+                    ReadObserver?.OnRead("WRAM", (int)_wmAddr, val);
                     _wmAddr = (_wmAddr + 1) & 0x1FFFF;
                     return val;
                 }
@@ -181,7 +189,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 // address in this range fell through to open bus instead.
                 if (offset >= 0x2140 && offset <= 0x217F) return _spc700.ReadPort((byte)(offset & 0x03));
                 if (offset >= 0x2100 && offset <= 0x213F) return Ppu.ReadRegister(offset);
-                if (offset < 0x2000) return Ram[offset];
+                if (offset < 0x2000)
+                {
+                    byte val = Ram[offset];
+                    ReadObserver?.OnRead("WRAM", offset, val);
+                    return val;
+                }
 
                 // Genuinely unmapped register gap (e.g. $2000-$213F minus the
                 // PPU's actual registers is already handled above, but things
@@ -206,7 +219,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 if (offset < 0x8000) return _lastBusValue;
             }
 
-            if (bank == 0x7E || bank == 0x7F) return Ram[address - 0x7E0000];
+            if (bank == 0x7E || bank == 0x7F)
+            {
+                byte val = Ram[address - 0x7E0000];
+                ReadObserver?.OnRead("WRAM", (int)(address - 0x7E0000), val);
+                return val;
+            }
             return _cartridge.Read8(address);
         }
 

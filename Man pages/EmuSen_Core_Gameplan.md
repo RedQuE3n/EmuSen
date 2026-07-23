@@ -10,7 +10,7 @@
 
 **Licensing/reference stance:** the SNESdev wiki (mirrored at `snes.nesdev.org` and `snesdev.mesen.ca`, maintained by the Mesen/MesenCE team) is the primary hardware reference. Mesen/MesenCE's *documentation* gets read to understand hardware behavior; their source code never does — everything here is an original implementation. Cite `nesdev-org/MesenCE`, not the archived `SourMesen/Mesen2`.
 
-**Multi-core intent:** `Cores/Nintendo/Venus/` (SNES) sits alongside reserved sibling folders for every other planned core, per the Sailor Moon-themed naming scheme in `EmuSen_Core_Naming_Scheme.md`. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) is already genuinely core-agnostic by design — the one piece of the multi-core intent that's actually been built and proven useful, not just planned. The C# namespaces now match the folder structure (`EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory`) — the rename this section used to flag as deferred is done.
+**Multi-core intent:** `Cores/Nintendo/Venus - SNES/` (SNES) sits alongside reserved sibling folders for every other planned core, per the Sailor Moon-themed naming scheme in `EmuSen_Core_Naming_Scheme.md`. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) is already genuinely core-agnostic by design — the one piece of the multi-core intent that's actually been built and proven useful, not just planned. The C# namespaces now match the folder structure (`EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory`) — the rename this section used to flag as deferred is done.
 
 **Working style established across this project, worth preserving:** verify hardware claims against real documentation (SNESdev wiki, fullsnes, SnesLab, sometimes SMWCentral for game-specific behavior) before implementing, not from memory alone. State confidence honestly — "verified against docs," "verified against real captured data," and "built carefully but unverified" are different claims and get labeled differently throughout this project's own comments and docs. When something can't be build-tested (common — the environment producing this plan often can't compile/run the project), say so plainly rather than implying more certainty than earned.
 
@@ -43,7 +43,7 @@ Two items were identified in an architecture review and deliberately *not* rushe
 
 - **The `Renderer`/Raylib split.** `Renderer` still mixes pure pixel computation with Raylib window/texture ownership, even in headless mode. Real coupling issue, but this is core rendering code with a lot of delicate, hard-won accuracy work riding on it (the entire Mode 0-7 reconciliation, hi-res, mosaic, etc.) — treat as its own dedicated, carefully-planned pass, not a quick cleanup alongside something else.
 - **Watchpoints beyond WRAM.** `MemoryBus`'s `IWriteObserver` hook (used by the debug toolchain's watch mechanism) is only wired into the WRAM write path today. Extending it to `Ppu`'s VRAM/CGRAM/OAM writes and the general CPU-bus/SRAM path is a natural, low-risk, additive follow-up whenever a specific investigation needs to watch one of those.
-- ~~The drive-by namespace rename~~ — done: `Cores/Snes/` → `Cores/Nintendo/Venus/`, matching namespace rename applied throughout.
+- ~~The drive-by namespace rename~~ — done: `Cores/Snes/` → `Cores/Nintendo/Venus - SNES/`, matching namespace rename applied throughout.
 
 ### Phase 4 — Smaller feature completions
 

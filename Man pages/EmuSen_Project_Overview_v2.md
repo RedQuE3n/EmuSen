@@ -41,7 +41,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 
 - **Hardware simulation** (`Cores/Nintendo/Venus - SNES/Cpu`, `Cores/Nintendo/Venus - SNES/Apu`, `Cores/Nintendo/Venus - SNES/Ppu`, `Cores/Nintendo/Venus - SNES/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
 - **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by the Avalonia frontend), `StateSerializer` (reflective save states), `TeeTextWriter` (console+file logging).
-- **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight.
+- **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
 - **The debug toolchain** (`Debug/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Debug/DebugCommandProcessor.cs` is a Unix-toolchain-style command layer on top of that. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Frontends** (`Frontend/Program.cs` in `EmuSen/`, all of `EmuSen.Frontend/`) — presentation only. The Raylib console build and the Avalonia GUI are two independent entry points into the same core; neither owns emulation logic itself.
 
@@ -159,7 +159,7 @@ EmuSen Project/
 │   │                                          #   from Main in a later decoupling pass - see §7)
 │   └── Settings/
 │       ├── AudioSettings.cs
-│       ├── DebugSettings.cs                  # Every logging toggle - see companion doc
+│       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md
 │       ├── GraphicsSettings.cs
 │       └── InputBindings.cs
 │

@@ -6,6 +6,7 @@ using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Video;
+using EmuSen.Debug;
 
 namespace EmuSen.Cores.Nintendo.Venus
 {

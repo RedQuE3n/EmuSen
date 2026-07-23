@@ -16,11 +16,11 @@ Folder: `Cores/Nintendo/`
 
 | Console | Codename | Status |
 |---|---|---|
-| NES | **Sailor Moon** | Not started |
-| SNES | **Venus** | In progress — currently `Cores/Snes/`, not yet moved/renamed (see §4) |
-| Game Boy / Game Boy Color | **Mercury** | Not started — open question whether GB and GBC are different enough hardware to warrant two separate cores rather than one (undecided; revisit once SNES work is further along and there's a real basis for comparison) |
-| Game Boy Advance | **Jupiter** | Not started |
-| N64 | **Mars** | Not started |
+| NES | **Sailor Moon** | Not started — `Cores/Nintendo/SailorMoon/` reserved |
+| SNES | **Venus** | Active development — `Cores/Nintendo/Venus/`, `EmuSen.Cores.Nintendo.Venus.*` (see §4) |
+| Game Boy / Game Boy Color | **Mercury** | Not started — `Cores/Nintendo/Mercury/` reserved. Open question whether GB and GBC are different enough hardware to warrant two separate cores rather than one (undecided; revisit once Venus work is further along and there's a real basis for comparison) |
+| Game Boy Advance | **Jupiter** | Not started — `Cores/Nintendo/Jupiter/` reserved |
+| N64 | **Mars** | Not started — `Cores/Nintendo/Mars/` reserved |
 
 Sailor Moon herself anchors the console the project's own name-lineage effectively starts from (NES, the originator generation) — Venus/Mercury/Mars/Jupiter are her fellow Inner Senshi, extending outward to later Nintendo hardware in the order they line up with here.
 
@@ -32,22 +32,21 @@ Folder: `Cores/Sega/`
 
 | Console | Codename | Status |
 |---|---|---|
-| Master System | **Endymion** | Not started |
-| Genesis / Mega Drive | **Beryl** | Not started |
-| Game Gear | **Jadeite** | Not started |
-| 32X | **Nephrite** | Not started |
-| Saturn | **Zoisite** | Not started |
-| Dreamcast | **Kunzite** | Not started |
+| Master System | **Endymion** | Not started — `Cores/Sega/Endymion/` reserved |
+| Genesis / Mega Drive | **Beryl** | Not started — `Cores/Sega/Beryl/` reserved |
+| Game Gear | **Jadeite** | Not started — `Cores/Sega/Jadeite/` reserved |
+| 32X | **Nephrite** | Not started — `Cores/Sega/Nephrite/` reserved |
+| Saturn | **Zoisite** | Not started — `Cores/Sega/Zoisite/` reserved |
+| Dreamcast | **Kunzite** | Not started — `Cores/Sega/Kunzite/` reserved |
 
 **Spelling note:** corrected to the canon anime/manga spelling — Jadeite, Nephrite, Zoisite, Kunzite (not Jadeite/Nepherite/Zoisite/Kuzite) — verified against the Sailor Moon Wiki and the official Naoko Takeuchi character-profile site. Kunzite's name was changed to "Malachite" in the DiC English dub, but Kunzite is the original/canon name and the one used here.
 
 ---
 
-## 4. Current status: not yet applied to the codebase
+## 4. Current status: applied to the codebase
 
-As of this doc, **no rename has happened yet.** The SNES core still lives at `Cores/Snes/` with `EmuSen.Cores.Snes.*`-shaped... actually still-generic namespaces (`EmuSen.Memory`, `EmuSen.Processor`, etc. — see `EmuSen_Project_Overview`'s §7 TODO on this pre-existing, separate namespace-catchup item). This naming scheme is recorded here so it's not lost, and applied at whichever of these turns out to be the natural moment:
+**Done.** `Cores/Snes/` → `Cores/Nintendo/Venus/`; namespaces `EmuSen.Memory`/`.Apu`/`.Processor`/`.Video`/`.Controllers` → `EmuSen.Cores.Nintendo.Venus.{Memory,Apu,Processor,Video,Controllers}`; the two SNES-specific `Debug/` files (`StateDump.cs`, `SnesDebugTarget.cs`) moved from the generic `EmuSen.Debug` namespace to `EmuSen.Cores.Nintendo.Venus.Debug` (with an explicit `using EmuSen.Debug;` added so they can still reach the genuinely core-agnostic types — `IDebugTarget`, `WatchRegistry`, etc. — that live in the real `Debug/` folder and stay in `EmuSen.Debug`). Every other planned core's folder (§2, §3) was created alongside this with a placeholder `README.md`, so the full structure is visible even though only Venus has real code.
 
-- The existing planned "namespace catchup" pass (`EmuSen.Memory` → `EmuSen.Cores.Snes.Memory`, already noted as a deliberately-deferred drive-by cleanup) — do it once, correctly, as `EmuSen.Cores.Nintendo.Venus.*` instead of `EmuSen.Cores.Snes.*`, rather than renaming twice.
-- Whenever a second core actually starts (the Multicore Gameplan's Phase 1 trigger) — `Cores/Snes/` → `Cores/Nintendo/Venus/` naturally happens alongside creating the new core's own manufacturer/codename folder, so both cores land in the right structure from day one instead of one needing a follow-up move.
+**What deliberately did NOT change:** class names, comments, and display strings describing *real SNES hardware* — `SnesDebugTarget`, `Snes65816Disassembler`, the `CoreName` property returning `"SNES"`, console log lines, hardware-behavior comments citing the SNESdev wiki, etc. The codename `Venus` governs the organizational layer (folder path, C# namespace) only; it does not replace factually-accurate hardware terminology. Renaming those too would reduce technical clarity for no benefit — "Venus65816Disassembler" would obscure that it's a 65816 disassembler, which is the actually-useful fact about that class.
 
-**Until then:** every other Man pages doc, code comment, and console log line correctly refers to the current core as "SNES" / `Cores/Snes/` / `EmuSen.Cores.Snes.*`(-to-be) — that's not stale, it's just pre-rename. Don't "helpfully" start calling it Venus in code or docs before the actual rename happens, since a name used in some places and not others is worse than consistently using the old one until the real move.
+**No dotnet SDK is available in the environment this rename was performed from**, so this could not be built/compiled to verify after the fact — same limitation noted elsewhere in the Man pages (see the debugging tools reference's honesty notes on the disassembler and `ffmpeg` integration). The rename was done carefully and systematically (moved directories via `git mv` to preserve history, then verified via repo-wide `grep` that no old namespace/using references or stale `Cores/Snes` path comments remained), but **a real build on the project's own dev machine is the first actual verification this has had.** Report back if it doesn't compile clean.

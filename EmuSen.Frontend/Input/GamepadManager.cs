@@ -1,6 +1,6 @@
 using System;
 using Silk.NET.SDL;
-using EmuSen.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Controllers;
 
 namespace EmuSen.Frontend.Input
 {

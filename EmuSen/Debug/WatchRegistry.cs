@@ -47,10 +47,10 @@ namespace EmuSen.Debug
     // DebugCommandProcessor's `watch` commands today, and eventually a GUI
     // debug window's watch panel, without needing its own new mechanism).
     //
-    // Core-agnostic on purpose - lives here rather than under Cores/Snes/
-    // since nothing about it is SNES-specific. A future NES core's
-    // MemoryBus would own its own instance the same way SNES's does and
-    // call RecordWrite from its own write path(s).
+    // Core-agnostic on purpose - lives here rather than under
+    // Cores/Nintendo/Venus/ since nothing about it is SNES-specific. A
+    // future core's MemoryBus would own its own instance the same way
+    // Venus's does and call RecordWrite from its own write path(s).
     public class WatchRegistry
     {
         private readonly List<Watch> _watches = new();

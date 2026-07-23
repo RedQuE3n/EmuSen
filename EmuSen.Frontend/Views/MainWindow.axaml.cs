@@ -10,7 +10,7 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EmuSen.Common;
-using EmuSen.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Frontend.Input;
 
 namespace EmuSen.Frontend.Views

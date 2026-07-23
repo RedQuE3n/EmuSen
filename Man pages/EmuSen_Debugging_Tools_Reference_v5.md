@@ -75,7 +75,7 @@ The core-agnostic contract. Any emulated console implements this to plug into th
 
 **Deliberately not included yet:** breakpoints and single-stepping. The execution loop can't pause mid-frame today (it runs a whole frame at a time) — that's real, separate future work, expected to be *additive* to this interface rather than a rework of it. Disassembly (previously in this same "not yet" list) now exists — see §3.7.
 
-### 3.2 `SnesDebugTarget` (`Cores/Snes/Debug/SnesDebugTarget.cs`)
+### 3.2 `SnesDebugTarget` (`Cores/Nintendo/Venus/Debug/SnesDebugTarget.cs`)
 
 The SNES implementation. Almost entirely a *reshaping* of already-existing, already-verified logic (the same OAM size/high-table decoding `DumpActiveOam` always used, the same register fields `StateDump` already read) into the structured shapes `IDebugTarget` asks for — not new emulation logic.
 
@@ -83,7 +83,7 @@ Two small helper classes back the memory spaces:
 - `ByteArrayDebugMemorySpace` — wraps a `byte[]` directly (WRAM, VRAM, CGRAM, OAM).
 - `BusDebugMemorySpace` — routes through `MemoryBus.Read8`/`Write8` at a fixed bank offset (used for the raw CpuBus space, and for SRAM, which is more naturally viewed at its mapped CPU address `$70:0000`).
 
-`Watches` here just returns `SnesDebugTarget`'s own `WatchRegistry` instance. **This changed since first built:** the registry (and a `Cpu` back-reference, `DebugCpu`) used to live directly on `MemoryBus`, which mixed real emulation state with debug-toolchain plumbing in the same class — a coupling issue caught during a later architecture review. Now `MemoryBus` exposes only a tiny, debug-agnostic `IWriteObserver` hook (`Cores/Snes/Memory/IWriteObserver.cs`) that it calls on every write with no idea what's listening; `SnesDebugTarget` implements that interface, owns the `WatchRegistry` itself, and supplies the PC context from its own already-held `Cpu` reference. `MemoryBus` no longer references `Cpu` or the debug toolchain at all.
+`Watches` here just returns `SnesDebugTarget`'s own `WatchRegistry` instance. **This changed since first built:** the registry (and a `Cpu` back-reference, `DebugCpu`) used to live directly on `MemoryBus`, which mixed real emulation state with debug-toolchain plumbing in the same class — a coupling issue caught during a later architecture review. Now `MemoryBus` exposes only a tiny, debug-agnostic `IWriteObserver` hook (`Cores/Nintendo/Venus/Memory/IWriteObserver.cs`) that it calls on every write with no idea what's listening; `SnesDebugTarget` implements that interface, owns the `WatchRegistry` itself, and supplies the PC context from its own already-held `Cpu` reference. `MemoryBus` no longer references `Cpu` or the debug toolchain at all.
 
 ### 3.3 `DebugCommandProcessor` (`Debug/DebugCommandProcessor.cs`)
 
@@ -131,7 +131,7 @@ The generalized version of the recurring "log every write to this address range"
 
 `DebugWatchEvent` carries a sequence number, address, value, and a free-text `Context` string (typically `PC=0x00A358`) — kept as text rather than a structured field since what's useful context varies by core and shouldn't force an interface change every time a new kind becomes relevant.
 
-Core-agnostic on purpose, same as `IDebugTarget` — lives under `Debug/`, not `Cores/Snes/`, since nothing about it is SNES-specific. `SnesDebugTarget` owns the instance and reports writes to it via `MemoryBus`'s `IWriteObserver` hook (`Cores/Snes/Memory/IWriteObserver.cs`) — `MemoryBus` itself has no idea `WatchRegistry` exists. A future NES `IDebugTarget` would own its own instance the same way, wired to its own core's equivalent write-observer hook.
+Core-agnostic on purpose, same as `IDebugTarget` — lives under `Debug/`, not `Cores/Nintendo/Venus/`, since nothing about it is SNES-specific. `SnesDebugTarget` owns the instance and reports writes to it via `MemoryBus`'s `IWriteObserver` hook (`Cores/Nintendo/Venus/Memory/IWriteObserver.cs`) — `MemoryBus` itself has no idea `WatchRegistry` exists. A future NES `IDebugTarget` would own its own instance the same way, wired to its own core's equivalent write-observer hook.
 
 **Example — reproducing the Yoshi WRAM trace on demand** instead of it being a permanent flag: press F4 once after launching, then:
 ```
@@ -153,7 +153,7 @@ All three (filename, companion file, log line) are sourced from the same `debugT
 
 **Deliberately not done:** burning the timestamp into the image's pixels (a visual overlay baked into the PNG itself, closer to a security-camera timestamp). That would need Raylib's `LoadImageFromScreen`/`ImageDrawText`/`ExportImage` functions, and given a couple of build-error round trips this session already came from guessing at exact API shapes, the companion-file approach was chosen deliberately as the zero-new-API-surface, guaranteed-to-build option. Worth revisiting if the visual version is still wanted later.
 
-### 3.7 Disassembler (`Cores/Snes/Cpu/Disassembler/Snes65816Disassembler.cs`)
+### 3.7 Disassembler (`Cores/Nintendo/Venus/Cpu/Disassembler/Snes65816Disassembler.cs`)
 
 A full 65816 disassembler, wired in via `IDebugTarget.Disassemble` and the `disasm` command:
 ```
@@ -164,7 +164,7 @@ disasm <space> <addr> [<count>]     disassemble <count> instructions (default 10
   00A35B: A9 40 00  LDA #$0040
 ```
 
-**Deliberately a separate table from the execution opcode table** (`Cpu.OpcodeTable.cs`), not built from it — that table's addressing-mode delegates have real execution side effects (advancing PC, consuming cycles) and have no way to report "how many bytes would this take" without actually running the instruction. `Snes65816Disassembler` is a completely independent, read-only mnemonic + addressing-mode table built specifically for display, living under `Cores/Snes/Cpu/Disassembler/` rather than inside `Cpu.cs` itself.
+**Deliberately a separate table from the execution opcode table** (`Cpu.OpcodeTable.cs`), not built from it — that table's addressing-mode delegates have real execution side effects (advancing PC, consuming cycles) and have no way to report "how many bytes would this take" without actually running the instruction. `Snes65816Disassembler` is a completely independent, read-only mnemonic + addressing-mode table built specifically for display, living under `Cores/Nintendo/Venus/Cpu/Disassembler/` rather than inside `Cpu.cs` itself.
 
 **Important, deliberately-stated caveat — read this before trusting it for anything beyond casual use.** This project's *execution* opcode table got a dedicated verification pass against oxyron.de before being trusted (see the original project handoff notes — "completed 236→256/256, verified against oxyron.de, caught one cross-reference typo"). This disassembly table has **not** had the equivalent treatment; there's no way to build and run this project from wherever it gets edited to cross-check it the same way. It's built carefully against the standard, universally-documented 65816 opcode matrix, and two entries were spot-checked against real bytes captured during the Yoshi DMA investigation earlier this session (`8D 22 43` → `STA $4322`, `A9 40 00` → `LDA #$0040`, both correct) — but that's meaningfully short of a real verification pass. Treat it as a solid first draft, not a verified reference, until it gets one.
 
@@ -200,7 +200,7 @@ Starts a new session folder under `Logs/Recordings/<CoreName>_<timestamp>/` each
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)
 
-### `Cores/Snes/Debug/StateDump.cs`
+### `Cores/Nintendo/Venus/Debug/StateDump.cs`
 On-demand CPU+PPU snapshot formatter. Returns formatted strings (doesn't print directly) — `DumpCpuState`, `DumpPpuState`, `DumpAll`. Deliberately laid out to be directly comparable to MesenCE's own Status panel.
 
 ### `Debug/DebugTools.cs`
@@ -212,7 +212,7 @@ Generic, byte-array-level helpers — reusable for any console's data since none
 - `BoundedTrace` — a start/countdown helper for "trace the next N frames then auto-stop" (used by the P-key scroll trace).
 - `ChangeTracker<T>` — "did this value change since last time" helper, used throughout `DebugSettings`-gated change-only logging.
 
-### `Cores/Snes/Ppu/Renderer/Renderer.Debug.cs`
+### `Cores/Nintendo/Venus/Ppu/Renderer/Renderer.Debug.cs`
 - `RenderVramSheet` — renders the full VRAM tile sheet to an internal texture (feeds the console debug view's VRAM panel).
 - `DumpActiveOam` — see §1/§3.4.
 - `DumpBlackBg1Tiles` — an old, narrowly-scoped diagnostic from a "black squares" investigation; still wired to the O key.

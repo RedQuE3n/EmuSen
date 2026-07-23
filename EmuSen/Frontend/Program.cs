@@ -1,11 +1,12 @@
 using System;
 using System.IO;
 using EmuSen.Common;
-using EmuSen.Memory;
-using EmuSen.Apu;
-using EmuSen.Processor;
-using EmuSen.Video;
-using EmuSen.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Memory;
+using EmuSen.Cores.Nintendo.Venus.Apu;
+using EmuSen.Cores.Nintendo.Venus.Processor;
+using EmuSen.Cores.Nintendo.Venus.Video;
+using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
 using EmuSen.Bindings;
 

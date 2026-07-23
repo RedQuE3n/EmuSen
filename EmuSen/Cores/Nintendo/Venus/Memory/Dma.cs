@@ -1,0 +1,273 @@
+using System;
+using EmuSen.Debug;
+
+namespace EmuSen.Cores.Nintendo.Venus.Memory
+{
+    public class DmaChannel
+    {
+        public byte Control;
+        public byte DestinationReg;
+        public ushort SourceAddress;
+        public byte SourceBank;
+        public ushort TransferSize;
+        public byte IndirectBank;
+        public ushort TableAddress;
+        public byte LineCounter;
+        
+        public bool HdmaActive;
+        public bool HdmaDoTransfer;
+        public ushort IndirectAddress;
+    }
+
+    public class Dma
+    {
+        private DmaChannel[] _channels;
+        [EmuSen.Common.SkipInState] private MemoryBus _bus;
+        
+        
+        public byte HdmaEnable;
+
+        public Dma(MemoryBus bus)
+        {
+            _bus = bus;
+            _channels = new DmaChannel[8];
+            for (int i = 0; i < 8; i++) _channels[i] = new DmaChannel();
+        }
+
+        public byte ReadRegister(uint address)
+        {
+            int channel = (int)((address >> 4) & 0x07);
+            int reg = (int)(address & 0x0F);
+            DmaChannel ch = _channels[channel];
+
+            switch (reg)
+            {
+                case 0x0: return ch.Control;
+                case 0x1: return ch.DestinationReg;
+                case 0x2: return (byte)(ch.SourceAddress & 0xFF);
+                case 0x3: return (byte)(ch.SourceAddress >> 8);
+                case 0x4: return ch.SourceBank;
+                case 0x5: return (byte)(ch.TransferSize & 0xFF);
+                case 0x6: return (byte)(ch.TransferSize >> 8);
+                case 0x7: return ch.IndirectBank;
+                case 0x8: return (byte)(ch.TableAddress & 0xFF);
+                case 0x9: return (byte)(ch.TableAddress >> 8);
+                case 0xA: return ch.LineCounter;
+                default: return 0xFF; 
+            }
+        }
+
+        // Logs which instruction (PC) wrote a DMA channel's source address,
+        // gated separately from DmaVerboseLogging since this is a narrower,
+        // more targeted trace - added specifically to investigate why
+        // Yoshi's sprite-graphics DMA (channel targeting VRAM $C0C0/$C100)
+        // always uses a suspiciously constant source address ($7E0000)
+        // instead of a varying one the way the confirmed-working coin
+        // tile-animation transfers do. A constant, never-changing source
+        // address is the signature of an uninitialized or wrongly-computed
+        // pointer - if that's what's happening, this should show which PC
+        // is responsible so the actual CPU-side bug (not a DMA or
+        // rendering bug - both already ruled out for this) can be found.
+        private void LogSourceAddrWrite(int channel, DmaChannel ch)
+        {
+            if (!DebugSettings.DmaSourceAddrLogging) return;
+            string pc = "unknown";
+            string instrBytes = "";
+            if (_bus.DebugPcProvider != null)
+            {
+                (byte pb, ushort pcVal) = _bus.DebugPcProvider();
+                pc = $"0x{pb:X2}{pcVal:X4}";
+                // Raw bytes at PC, for manually identifying the actual
+                // instruction without needing a full disassembler or ROM
+                // symbol map - up to 4 bytes covers every 65816 instruction
+                // length (opcode + up to 3 operand bytes).
+                var b = new byte[4];
+                for (int k = 0; k < 4; k++) b[k] = _bus.Read8((uint)((pb << 16) | ((pcVal + k) & 0xFFFF)));
+                instrBytes = $" bytes={b[0]:X2} {b[1]:X2} {b[2]:X2} {b[3]:X2}";
+            }
+            Console.WriteLine($"[DMA-SRC] Ch{channel} SourceAddress now 0x{ch.SourceBank:X2}{ch.SourceAddress:X4}, written by PC={pc}{instrBytes}");
+        }
+
+        public void WriteRegister(uint address, byte data)
+        {
+            int channel = (int)((address >> 4) & 0x07);
+            int reg = (int)(address & 0x0F);
+            DmaChannel ch = _channels[channel];
+
+            switch (reg)
+            {
+                case 0x0: ch.Control = data; break;
+                case 0x1: ch.DestinationReg = data; break;
+                case 0x2:
+                    ch.SourceAddress = (ushort)((ch.SourceAddress & 0xFF00) | data);
+                    LogSourceAddrWrite(channel, ch);
+                    break;
+                case 0x3:
+                    ch.SourceAddress = (ushort)((ch.SourceAddress & 0x00FF) | (data << 8));
+                    LogSourceAddrWrite(channel, ch);
+                    break;
+                case 0x4: ch.SourceBank = data; break;
+                case 0x5: ch.TransferSize = (ushort)((ch.TransferSize & 0xFF00) | data); break;
+                case 0x6: ch.TransferSize = (ushort)((ch.TransferSize & 0x00FF) | (data << 8)); break;
+                case 0x7: ch.IndirectBank = data; break;
+                case 0x8: ch.TableAddress = (ushort)((ch.TableAddress & 0xFF00) | data); break;
+                case 0x9: ch.TableAddress = (ushort)((ch.TableAddress & 0x00FF) | (data << 8)); break;
+                case 0xA: ch.LineCounter = data; break;
+            }
+        }
+
+        private static readonly int[][] TransferPatterns = new int[][]
+        {
+            new[] { 0 },
+            new[] { 0, 1 },
+            new[] { 0, 0 },
+            new[] { 0, 0, 1, 1 },
+            new[] { 0, 1, 2, 3 },
+            new[] { 0, 1, 0, 1 }, 
+            new[] { 0, 0, 0, 0 },
+            new[] { 0, 0, 1, 1 },
+        };
+
+        public void ExecuteGeneralDma(byte channelMask)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                if ((channelMask & (1 << i)) == 0) continue;
+
+                DmaChannel ch = _channels[i];
+                uint destB = (uint)(0x2100 | ch.DestinationReg);
+                int remaining = ch.TransferSize == 0 ? 0x10000 : ch.TransferSize;
+                bool bToA = (ch.Control & 0x80) != 0;
+                int aStep = (ch.Control & 0x08) != 0 ? 0 : ((ch.Control & 0x10) != 0 ? -1 : 1);
+                int[] pattern = TransferPatterns[ch.Control & 0x07];
+
+                if (DebugSettings.DmaVerboseLogging)
+                {
+                    string targetInfo = "";
+                    if (ch.DestinationReg == 0x18 || ch.DestinationReg == 0x19)
+                    {
+                        int vramByteAddr = _bus.Ppu.CurrentVramAddr * 2;
+                        targetInfo = $" VRAM@0x{vramByteAddr:X4}-0x{(vramByteAddr + remaining - 1) & 0xFFFF:X4}";
+                    }
+                    else if (ch.DestinationReg == 0x22)
+                    {
+                        targetInfo = $" CGRAM@0x{_bus.Ppu.CurrentCgAddr * 2:X3}";
+                    }
+                    Console.WriteLine($"[DMA] Ch{i}: {(bToA ? "PPU->CPU" : "CPU->PPU")} src=0x{ch.SourceBank:X2}{ch.SourceAddress:X4} destReg=0x{destB:X4}{targetInfo} size={remaining} pattern={ch.Control & 0x07} step={aStep}");
+                }
+
+                if (bToA) continue; 
+
+                ushort addr = ch.SourceAddress;
+                int patternIdx = 0;
+
+                while (remaining > 0)
+                {
+                    byte value = _bus.Read8((uint)((ch.SourceBank << 16) | addr));
+                    _bus.Write8((uint)(destB + pattern[patternIdx]), value);
+
+                    addr = (ushort)(addr + aStep);
+                    patternIdx = (patternIdx + 1) % pattern.Length;
+                    remaining--;
+                }
+
+                ch.SourceAddress = addr;
+                ch.TransferSize = 0;
+            }
+        }
+
+        public void InitHdma()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                DmaChannel ch = _channels[i];
+                ch.HdmaActive = (HdmaEnable & (1 << i)) != 0;
+                if (!ch.HdmaActive) continue;
+
+                ch.TableAddress = ch.SourceAddress;
+                ch.LineCounter = _bus.Read8((uint)((ch.SourceBank << 16) | ch.TableAddress++));
+                ch.HdmaDoTransfer = true; 
+
+                if (ch.LineCounter == 0) 
+                {
+                    ch.HdmaActive = false;
+                }
+                else if ((ch.Control & 0x40) != 0) 
+                {
+                    byte low = _bus.Read8((uint)((ch.SourceBank << 16) | ch.TableAddress++));
+                    byte high = _bus.Read8((uint)((ch.SourceBank << 16) | ch.TableAddress++));
+                    ch.IndirectAddress = (ushort)((high << 8) | low);
+                }
+            }
+        }
+
+        public void ExecuteHdma()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                if ((HdmaEnable & (1 << i)) == 0) continue;
+                
+                DmaChannel ch = _channels[i];
+                if (!ch.HdmaActive) continue;
+
+                if (ch.HdmaDoTransfer)
+                {
+                    int[] pattern = TransferPatterns[ch.Control & 0x07];
+                    for (int p = 0; p < pattern.Length; p++)
+                    {
+                        uint addr;
+                        if ((ch.Control & 0x40) != 0) 
+                            addr = (uint)((ch.IndirectBank << 16) | ch.IndirectAddress++);
+                        else 
+                            addr = (uint)((ch.SourceBank << 16) | ch.TableAddress++);
+                        
+                        byte val = _bus.Read8(addr);
+                        uint destReg = (uint)(0x2100 + ch.DestinationReg + pattern[p]);
+                        _bus.Write8(destReg, val);
+
+                        // Targeted check: is anything driving the window position
+                        // registers via HDMA? That's the standard mechanism for an
+                        // animated wipe/reveal effect (growing window per scanline).
+                        if (destReg >= 0x2126 && destReg <= 0x2129 && DebugSettings.WindowHdmaLogging)
+                        {
+                            Console.WriteLine($"[HDMA-WINDOW] Ch{i} wrote 0x{val:X2} to $21{destReg & 0xFF:X2} (scanline={_bus.CurrentScanline})");
+                        }
+                    }
+                }
+
+                // --- 7-BIT LINE COUNTER FIX ---
+                bool repeat = (ch.LineCounter & 0x80) != 0;
+                byte lower7 = (byte)(ch.LineCounter & 0x7F);
+                lower7--; // Only decrement the 7-bit counter
+                
+                ch.LineCounter = (byte)((repeat ? 0x80 : 0x00) | (lower7 & 0x7F));
+                ch.HdmaDoTransfer = repeat; // If repeat is active, do transfer every line
+
+                // If the block is finished, fetch the next one
+                if (lower7 == 0)
+                {
+                    ushort fetchedFrom = ch.TableAddress;
+                    ch.LineCounter = _bus.Read8((uint)((ch.SourceBank << 16) | ch.TableAddress++));
+
+                    if (i == 7 && (ch.DestinationReg == 0x26 || ch.DestinationReg == 0x27) && DebugSettings.WindowHdmaLogging)
+                    {
+                        Console.WriteLine($"[HDMA-BLOCK] Ch{i} fetched new block header 0x{ch.LineCounter:X2} from table@0x{fetchedFrom:X4} (bank=0x{ch.SourceBank:X2})");
+                    }
+                    
+                    if ((ch.Control & 0x40) != 0) 
+                    {
+                        if (ch.LineCounter != 0)
+                        {
+                            byte low = _bus.Read8((uint)((ch.SourceBank << 16) | ch.TableAddress++));
+                            byte high = _bus.Read8((uint)((ch.SourceBank << 16) | ch.TableAddress++));
+                            ch.IndirectAddress = (ushort)((high << 8) | low);
+                        }
+                    }
+
+                    if (ch.LineCounter == 0) ch.HdmaActive = false;
+                    ch.HdmaDoTransfer = true; 
+                }
+            }
+        }
+    }
+}

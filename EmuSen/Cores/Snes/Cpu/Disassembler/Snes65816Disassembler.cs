@@ -321,31 +321,67 @@ namespace EmuSen.Processor
         };
 
         // eFlag: emulation mode forces 8-bit M/X regardless of the P
-        // register bits (65816 hardware behavior). mFlagSet/xFlagSet: the
-        // *current* P register M/X bits, used only when eFlag is false.
-        // These are a snapshot taken once for the whole requested range -
-        // if a REP/SEP instruction inside that range actually changes
-        // M/X, everything disassembled after it in the SAME call will
-        // still (incorrectly) use the snapshot's width. Documented
-        // simplification, not a silent gap - same category of tradeoff as
-        // this project's scanline-granularity rendering elsewhere.
+        // register bits (65816 hardware behavior) - REP/SEP still write to
+        // P in emulation mode, but the width is hardware-forced to 8-bit
+        // either way, so eFlag always wins over the tracked M/X state
+        // below. mFlagSet/xFlagSet: the P register M/X bits *at
+        // <address>*, used as the starting point when eFlag is false.
+        //
+        // M/X are then tracked live as REP/SEP instructions are decoded
+        // within the same call, so a range that crosses one disassembles
+        // correctly on both sides of it instead of desyncing every
+        // instruction after it (found via the Yoshi/coin WRAM
+        // investigation - a REP/SEP inside a requested range silently
+        // produced garbage past that point until decoding happened to
+        // resync on a real opcode boundary by luck).
+        //
+        // Known remaining gap, NOT fixed by this: XCE (opcode 0xFB) can
+        // change eFlag itself mid-stream (emulation vs. native mode) by
+        // swapping E with the carry flag - the disassembler has no carry
+        // flag to swap with, so a range that crosses an XCE will still use
+        // whatever eFlag was passed in for everything after it. Rare in
+        // practice (mode switches happen once near reset, essentially
+        // never mid-routine), but a real, documented limitation rather
+        // than a silent one - same honesty standard as the M/X fix this
+        // replaces.
         public static List<DisassembledInstruction> Disassemble(Func<int, byte> readByte, int address, int count, bool eFlag, bool mFlagSet, bool xFlagSet)
         {
             var result = new List<DisassembledInstruction>(count);
             int addr = address;
+            bool curM = mFlagSet;
+            bool curX = xFlagSet;
 
             for (int i = 0; i < count; i++)
             {
                 byte opcode = readByte(addr);
                 (string mnemonic, Snes65816AddrMode mode) = Table[opcode];
 
-                int operandLen = OperandLength(mode, eFlag, mFlagSet, xFlagSet);
+                int operandLen = OperandLength(mode, eFlag, curM, curX);
                 var bytes = new byte[1 + operandLen];
                 bytes[0] = opcode;
                 for (int b = 0; b < operandLen; b++) bytes[1 + b] = readByte(addr + 1 + b);
 
                 string operandText = FormatOperand(mode, bytes, addr);
                 result.Add(new DisassembledInstruction(addr, bytes, mnemonic, operandText));
+
+                // REP clears the P bits set in its operand (0 = 16-bit for
+                // M/X); SEP sets them (1 = 8-bit). Bit 0x20 is M, bit 0x10
+                // is X - standard 65816 status register layout. Both
+                // opcodes are fixed 1-byte-immediate regardless of M/X, so
+                // bytes[1] is always the mask here.
+                if (!eFlag)
+                {
+                    if (opcode == 0xC2) // REP
+                    {
+                        if ((bytes[1] & 0x20) != 0) curM = false;
+                        if ((bytes[1] & 0x10) != 0) curX = false;
+                    }
+                    else if (opcode == 0xE2) // SEP
+                    {
+                        if ((bytes[1] & 0x20) != 0) curM = true;
+                        if ((bytes[1] & 0x10) != 0) curX = true;
+                    }
+                }
 
                 addr += bytes.Length;
             }

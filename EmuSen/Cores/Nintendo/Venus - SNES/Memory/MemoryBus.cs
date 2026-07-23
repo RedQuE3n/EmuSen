@@ -300,6 +300,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     {
                         Console.WriteLine($"[CAMRAM] ${offset:X4} was 0x{Ram[offset]:X2} -> now 0x{data:X2}");
                     }
+                    WriteObserver?.OnWrite("WRAM", offset, data);
                     Ram[offset] = data;
                     return;
                 }

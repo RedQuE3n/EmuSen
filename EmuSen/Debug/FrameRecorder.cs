@@ -96,20 +96,35 @@ namespace EmuSen.Debug
         // convenience so a recording doesn't have to be reviewed as a
         // folder of thousands of loose images.
         //
-        // FFV1-in-Matroska specifically, not a lossy codec like VP9/H.264:
-        // this exists to inspect exact pixel-level rendering bugs, and a
-        // lossy codec's own compression artifacts would undermine that -
-        // trading file size for fidelity is the wrong tradeoff for a
-        // debugging tool. Both FFV1 and Matroska are open formats.
+        // libx264 in RGB colorspace at CRF 0, not FFV1: both are
+        // mathematically lossless (bit-exact, not just "visually
+        // lossless") - the fidelity requirement this exists for (exact
+        // pixel-level rendering bugs, no compression-artifact risk) is
+        // identical either way. The difference is FFV1 is intra-frame-only
+        // (every frame is encoded independently, so a static stretch of
+        // gameplay - or the debug side panels, which barely change frame
+        // to frame - costs full data every single frame), while libx264
+        // still does inter-frame prediction even at CRF 0, so it can
+        // actually exploit that redundancy. First implementation used
+        // FFV1 without measuring against the alternative; switched after
+        // real recordings turned out far larger than expected for a
+        // one-minute capture. -c:v libx264rgb specifically (not plain
+        // libx264, which defaults to yuv420p chroma-subsampled color -
+        // NOT lossless despite CRF 0) keeps the encode in RGB the whole
+        // way, matching what Raylib's screenshots already are, with no
+        // colorspace conversion to introduce any rounding at all.
         //
-        // HONESTY NOTE: verified against a real run on the project's own
-        // dev machine (Fedora 44, ffmpeg 8.1.2) - the first attempt
-        // failed with "No such file or directory" from a WorkingDirectory/
-        // output-path double-nesting bug (see outputFile's comment
-        // above), now fixed. The -pix_fmt rgb24 that run also flagged as
-        // "incompatible... auto-selecting bgr0" has been removed in favor
-        // of letting ffmpeg negotiate it, since the auto-select is exactly
-        // what worked. Re-verify after this fix on a real recording.
+        // HONESTY NOTE: the FFV1 version above was verified against a
+        // real run on the project's own dev machine (Fedora 44, ffmpeg
+        // 8.1.2) - see git history for that verification and the
+        // WorkingDirectory/pix_fmt bugs it caught. This libx264rgb
+        // replacement has NOT yet had the equivalent real-run
+        // verification (no ffmpeg available in the environment writing
+        // this change) - the CRF-0/RGB-colorspace losslessness claim is
+        // well-documented x264 behavior, not something assumed from
+        // scratch, but confirm output plays correctly and file size
+        // actually improved on a real recording before trusting this
+        // blind.
         private void TryEncodeVideo(string sessionDir, int frameStride)
         {
             // Output filename only, NOT sessionDir/recording.mkv - the
@@ -139,11 +154,11 @@ namespace EmuSen.Debug
             psi.ArgumentList.Add("-i");
             psi.ArgumentList.Add("frame_*.png");
             psi.ArgumentList.Add("-c:v");
-            psi.ArgumentList.Add("ffv1");
-            // No forced -pix_fmt: Raylib's screenshots are RGBA, and
-            // letting ffmpeg auto-negotiate a format FFV1 actually
-            // supports (confirmed working: it auto-picked bgr0 on a real
-            // run) is more robust than guessing one ourselves.
+            psi.ArgumentList.Add("libx264rgb"); // RGB colorspace - see this method's header comment for why
+            psi.ArgumentList.Add("-crf");
+            psi.ArgumentList.Add("0"); // mathematically lossless, not just visually
+            psi.ArgumentList.Add("-preset");
+            psi.ArgumentList.Add("slow"); // compression-ratio-favoring; raise to "veryslow" if encode time isn't a concern
             psi.ArgumentList.Add(outputFile);
 
             try
@@ -174,8 +189,8 @@ namespace EmuSen.Debug
         }
 
         // Only called after a confirmed-successful encode (ExitCode == 0)
-        // - at that point the loose PNGs are fully redundant (FFV1 is
-        // lossless, so recording.mkv already has everything they do), and
+        // - at that point the loose PNGs are fully redundant (the encode
+        // is lossless, so recording.mkv already has everything they do), and
         // a folder of potentially thousands of individual image files is
         // exactly the "hot mess" this whole video-encode step exists to
         // avoid. Zipped rather than deleted outright so the raw frames

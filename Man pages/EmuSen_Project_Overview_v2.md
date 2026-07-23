@@ -13,9 +13,9 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as two sibling pro
 
 **Licensing stance:** the SNESdev wiki (mirrored at both `snes.nesdev.org` and `snesdev.mesen.ca` — maintained by the Mesen/MesenCE team) is the primary hardware-reference source. Mesen/MesenCE's own *documentation* gets read to understand hardware behavior; their source code does not — every implementation here is original. `SourMesen/Mesen2` is archived; `nesdev-org/MesenCE` is the actively maintained continuation and gets cited, not "Mesen2."
 
-**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with sibling folders already reserved for every other planned core (`Cores/Nintendo/{Moon,Mercury,Jupiter,Mars}/`, `Cores/Sega/{Endymion,Beryl,Jadeite,Nephrite,Zoisite,Kunzite}/`), each with a placeholder `README.md` until real work starts there. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
+**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with reserved sibling folders (placeholder `README.md` only, no code) for every other planned core across five manufacturers: `Cores/Nintendo/` (the rest of the Sailor Guardians), `Cores/Sega/` (Dark Kingdom), `Cores/Sony/` (Black Moon Clan), `Cores/Atari/` (Death Busters), `Cores/Microsoft/` and `Cores/NEC/` (Dead Moon Circus's two subordinate groups). Full mapping in `EmuSen_Core_Naming_Scheme.md`. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
 
-**Naming scheme:** every core is named after an *EmuSen* = **Emu**lator **Sen**shi (Sailor Moon) character, grouped by manufacturer (`Cores/Nintendo/`, `Cores/Sega/`) — full mapping and rationale in `EmuSen_Core_Naming_Scheme.md`. The SNES core is `Venus`; still called "SNES" in prose/comments/log output/class names (`SnesDebugTarget`, `Snes65816Disassembler`, etc.) since that's the accurate hardware name — the codename governs the folder/namespace only, not every mention of the actual console.
+**Naming scheme:** every core is named after an *EmuSen* = **Emu**lator **Sen**shi (Sailor Moon) character, grouped by manufacturer — Nintendo gets the heroes (Sailor Guardians), every other manufacturer gets a villain faction (Sega = Dark Kingdom, Sony = Black Moon Clan, Atari = Death Busters, Microsoft/NEC = Dead Moon Circus's two subgroups). Full mapping and rationale in `EmuSen_Core_Naming_Scheme.md`. The SNES core is `Venus`; still called "SNES" in prose/comments/log output/class names (`SnesDebugTarget`, `Snes65816Disassembler`, etc.) since that's the accurate hardware name — the codename governs the folder/namespace only, not every mention of the actual console.
 
 ---
 
@@ -115,14 +115,39 @@ EmuSen Project/
 │   │   │   ├── Moon - NES/README.md          # Reserved - future NES core
 │   │   │   ├── Mercury - GB-GBC/README.md    # Reserved - future GB/GBC core
 │   │   │   ├── Jupiter - GBA/README.md       # Reserved - future GBA core
-│   │   │   └── Mars - N64/README.md          # Reserved - future N64 core
-│   │   └── Sega/
-│   │       ├── Endymion - Master System/README.md  # Reserved - future Master System core
-│   │       ├── Beryl - Genesis/README.md     # Reserved - future Genesis/Mega Drive core
-│   │       ├── Jadeite - Game Gear/README.md # Reserved - future Game Gear core
-│   │       ├── Nephrite - 32X/README.md      # Reserved - future 32X core
-│   │       ├── Zoisite - Saturn/README.md    # Reserved - future Saturn core
-│   │       └── Kunzite - Dreamcast/README.md # Reserved - future Dreamcast core
+│   │   │   ├── Mars - N64/README.md          # Reserved - future N64 core
+│   │   │   ├── Saturn - Virtual Boy/README.md   # Reserved - future Virtual Boy core (Outer Senshi)
+│   │   │   ├── Uranus - GameCube/README.md      # Reserved - future GameCube core (Outer Senshi)
+│   │   │   ├── Neptune - Wii/README.md          # Reserved - future Wii core (Outer Senshi)
+│   │   │   └── Pluto - Wii U/README.md          # Reserved - future Wii U core (Outer Senshi)
+│   │   ├── Sega/                             # Dark Kingdom / Shitennou codenames
+│   │   │   ├── Endymion - Master System/README.md  # Reserved - future Master System core
+│   │   │   ├── Beryl - Genesis/README.md     # Reserved - future Genesis/Mega Drive core
+│   │   │   ├── Jadeite - Game Gear/README.md # Reserved - future Game Gear core
+│   │   │   ├── Nephrite - 32X/README.md      # Reserved - future 32X core
+│   │   │   ├── Zoisite - Saturn/README.md    # Reserved - future Saturn core
+│   │   │   └── Kunzite - Dreamcast/README.md # Reserved - future Dreamcast core
+│   │   ├── Sony/                             # Black Moon Clan codenames
+│   │   │   ├── Diamond - PlayStation/README.md
+│   │   │   ├── Sapphire - PlayStation 2/README.md
+│   │   │   ├── Rubeus - PlayStation 3/README.md
+│   │   │   ├── Esmeraude - PSP/README.md
+│   │   │   └── Wiseman - PS Vita/README.md
+│   │   ├── Atari/                            # Death Busters (Witches 5) codenames
+│   │   │   ├── Eudial - Atari 2600/README.md
+│   │   │   ├── Mimete - Atari 5200/README.md
+│   │   │   ├── Tellu - Atari 7800/README.md
+│   │   │   ├── Viluy - Atari Lynx/README.md
+│   │   │   └── Cyprine & Ptilol - Atari Jaguar/README.md
+│   │   ├── Microsoft/                        # Dead Moon Circus (Amazoness Quartet) codenames
+│   │   │   ├── CereCere - Xbox/README.md
+│   │   │   ├── JunJun - Xbox 360/README.md
+│   │   │   ├── PallaPalla - Xbox One/README.md
+│   │   │   └── VesVes - Xbox Series/README.md
+│   │   └── NEC/                              # Dead Moon Circus (Amazon Trio) codenames
+│   │       ├── Tigers Eye - PC Engine/README.md
+│   │       ├── Hawks Eye - PC-FX/README.md
+│   │       └── Fish Eye - SuperGrafx/README.md
 │   ├── Debug/                                # Core-agnostic debug toolchain (see companion doc)
 │   │   ├── IDebugTarget.cs
 │   │   ├── DebugCommandProcessor.cs

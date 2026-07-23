@@ -17,6 +17,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public int Size => _data.Length;
         public bool IsWritable { get; }
 
+        // Plain array access - never touches live hardware, so never has
+        // a side effect beyond returning a byte.
+        public bool HasSideEffects => false;
+
         public ByteArrayDebugMemorySpace(string name, byte[] data, bool isWritable = true)
         {
             Name = name;
@@ -45,12 +49,23 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public int Size { get; }
         public bool IsWritable => true;
 
-        public BusDebugMemorySpace(string name, MemoryBus bus, uint baseAddress, int size)
+        // Conservative by default (true) - a bus-routed read CAN hit a
+        // live hardware register (RDNMI clears the pending-NMI flag on
+        // read, OPHCT/OPVCT toggle a byte-order latch, the manual joypad
+        // serial port shifts on every read), so assume the worst unless a
+        // caller knows better. SRAM specifically passes false: its
+        // address range ($70:0000+) only ever reaches inert cartridge
+        // SRAM, never a hardware register, even though it's routed
+        // through the same bus path as CpuBus.
+        public bool HasSideEffects { get; }
+
+        public BusDebugMemorySpace(string name, MemoryBus bus, uint baseAddress, int size, bool hasSideEffects = true)
         {
             Name = name;
             _bus = bus;
             _baseAddress = baseAddress;
             Size = size;
+            HasSideEffects = hasSideEffects;
         }
 
         public byte Read(int address) => _bus.Read8((uint)(_baseAddress + (uint)address));
@@ -142,7 +157,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new ByteArrayDebugMemorySpace("VRAM", _ppu.Vram),
                 new ByteArrayDebugMemorySpace("CGRAM", _ppu.Cgram),
                 new ByteArrayDebugMemorySpace("OAM", _ppu.Oam),
-                new BusDebugMemorySpace("SRAM", _bus, 0x700000, _bus.SramSize),
+                new BusDebugMemorySpace("SRAM", _bus, 0x700000, _bus.SramSize, hasSideEffects: false),
             };
         }
 

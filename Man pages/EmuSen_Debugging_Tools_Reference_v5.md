@@ -254,6 +254,23 @@ diff <name> [<count>]        compare snapshot <name> against that space's CURREN
 
 **Byte-granularity only, unlike `search`'s configurable width.** A "what changed" comparison doesn't need to already know a value's byte width the way a value-search does — any single byte differing is itself the useful signal, and a wider changed *value* just shows up as multiple adjacent single-byte diffs in the output. Kept deliberately simpler than `search` for that reason, not as an oversight.
 
+### 3.11 Memory dump/load to file (`dump`, `load`, `Debug/Commands/{DumpCommand,LoadCommand}.cs`)
+
+Takes a `snapshot`-style capture out of the process entirely, to disk, as raw bytes — for handing off to an external hex editor, diffing against a known-good ROM's own data, or just keeping a capture around after the session that took it ends (unlike `snapshot`, which lives only in memory for that session). `load` is the reverse: poke a raw byte file back into a memory space at a given address.
+
+```
+dump <space> <addr> <len> <file>   write raw bytes to Logs/<file>
+load <space> <addr> <file>         write Logs/<file>'s raw bytes into <space> starting at <addr>
+```
+
+Both always resolve `<file>` under `Logs/` — the same directory F3 screenshots and their companion `.txt` files already use, so debug artifacts from a session end up in one predictable place rather than scattered relative to wherever the process happened to be launched from.
+
+**Same `HasSideEffects` guard as `search`/`snapshot`** on `dump` — refuses a bulk read over `CpuBus` or any other space where reading can disturb live hardware state. `load` has no equivalent read-side concern but does check `IsWritable`, refusing to write into a read-only space.
+
+**No format, no header — just the bytes.** `dump`'s output is exactly `len` raw bytes starting at `addr`; `load` writes exactly however many bytes the file contains, starting at `addr`, with no length argument of its own (the file's own size *is* the length). This keeps both directly interoperable with any external tool that reads/writes plain binary — a hex editor, `xxd`, a Python script — without EmuSen needing to define or parse its own container format.
+
+**Distinct from save states.** `EmulatorSession`/`VenusCore`'s `SaveState`/`LoadState` (F5/F9 in the frontend) capture *everything* needed to resume execution — CPU, PPU, full bus state — as one opaque blob. `dump`/`load` capture *one named memory space* as plain bytes, readable and editable by anything, with no claim to being a complete or resumable snapshot of emulation state. Different tools for different jobs: F5/F9 for "come back to this later," `dump`/`load` for "take this data somewhere else and look at it."
+
 ---
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)

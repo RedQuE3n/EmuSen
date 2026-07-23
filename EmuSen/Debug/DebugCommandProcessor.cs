@@ -65,6 +65,8 @@ namespace EmuSen.Debug
                 new SearchCommand(),
                 new SnapshotCommand(snapshotStore),
                 new DiffCommand(snapshotStore),
+                new DumpCommand(),
+                new LoadCommand(),
                 new TileCommand(),
                 new DisasmCommand(),
                 new TraceCommand(),

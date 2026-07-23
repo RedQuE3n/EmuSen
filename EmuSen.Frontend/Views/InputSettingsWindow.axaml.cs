@@ -6,7 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using Silk.NET.SDL;
-using EmuSen.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Frontend.Input;
 
 namespace EmuSen.Frontend.Views

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Avalonia.Input;
-using EmuSen.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Controllers;
 
 namespace EmuSen.Frontend.Input
 {

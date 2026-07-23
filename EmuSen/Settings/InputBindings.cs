@@ -1,6 +1,6 @@
 using Raylib_cs;
-using EmuSen.Memory;
-using EmuSen.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Memory;
+using EmuSen.Cores.Nintendo.Venus.Controllers;
 
 namespace EmuSen.Bindings
 {

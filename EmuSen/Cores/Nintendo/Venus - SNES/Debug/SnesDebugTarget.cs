@@ -88,7 +88,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
     // this class supplies the actual watch-recording logic AND the PC
     // context (from its own _cpu reference, already held for other
     // reasons) in one place.
-    public class SnesDebugTarget : IDebugTarget, IWriteObserver
+    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver
     {
         private readonly Cpu _cpu;
         private readonly MemoryBus _bus;
@@ -101,6 +101,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _bus = bus;
             _ppu = bus.Ppu;
             bus.WriteObserver = this;
+            bus.ReadObserver = this;
             bus.DebugPcProvider = () => (_cpu.LastInstructionPB, _cpu.LastInstructionPC);
         }
 
@@ -116,6 +117,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // MemoryBus-owned version relied on, just without MemoryBus
             // needing to hold a Cpu reference to get it.
             _watches.RecordWrite(spaceName, address, value,
+                () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
+        }
+
+        // Mirror of OnWrite for reads - see IReadObserver's comment on why
+        // this is a separate interface/method rather than folded into
+        // OnWrite.
+        public void OnRead(string spaceName, int address, byte value)
+        {
+            _watches.RecordRead(spaceName, address, value,
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
         }
 

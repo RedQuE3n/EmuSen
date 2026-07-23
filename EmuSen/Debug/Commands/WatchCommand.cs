@@ -8,8 +8,10 @@ namespace EmuSen.Debug.Commands
         public string Name => "watch";
         public string Usage => string.Join('\n', new[]
         {
-            "  watch add <space> <addr> <len> register a watch, prints matching writes live + stores them",
-            "  watch list                    list active watches with their IDs",
+            "  watch add <space> <addr> <len> [write|read|both]",
+            "                                register a watch, prints matching accesses live + stores them",
+            "                                (default write, matching this command's original behavior)",
+            "  watch list                    list active watches with their IDs and access kind",
             "  watch log <id> [<count>]      show a watch's recorded events (default 20)",
             "  watch clear <id>              clear a watch's stored events (doesn't remove the watch)",
             "  watch remove <id>             remove a watch entirely",
@@ -25,18 +27,29 @@ namespace EmuSen.Debug.Commands
             {
                 case "add":
                 {
-                    if (parts.Length < 5) return "Usage: watch add <space> <addr> <len>";
+                    if (parts.Length < 5) return "Usage: watch add <space> <addr> <len> [write|read|both]";
                     FindSpace(target, parts[2]); // validates the space name exists, or throws a helpful error
                     int addr = ParseHex(parts[3]);
                     int len = ParseHex(parts[4]);
-                    int id = watches.AddWatch(parts[2], addr, len);
-                    return $"Watch #{id} added: {parts[2]} 0x{addr:X}-0x{addr + len - 1:X}";
+                    WatchKind kind = WatchKind.Write;
+                    if (parts.Length >= 6)
+                    {
+                        kind = parts[5].ToLowerInvariant() switch
+                        {
+                            "write" => WatchKind.Write,
+                            "read" => WatchKind.Read,
+                            "both" => WatchKind.Both,
+                            _ => throw new System.ArgumentException($"Unknown watch kind '{parts[5]}'. Use write, read, or both.")
+                        };
+                    }
+                    int id = watches.AddWatch(parts[2], addr, len, kind);
+                    return $"Watch #{id} added: {parts[2]} 0x{addr:X}-0x{addr + len - 1:X} ({kind.ToString().ToLowerInvariant()})";
                 }
                 case "list":
                 {
                     var list = watches.GetWatches();
                     if (list.Count == 0) return "No active watches.";
-                    return string.Join('\n', list.Select(w => $"  #{w.Id}: {w.SpaceName} 0x{w.StartAddress:X}-0x{w.StartAddress + w.Length - 1:X}"));
+                    return string.Join('\n', list.Select(w => $"  #{w.Id}: {w.SpaceName} 0x{w.StartAddress:X}-0x{w.StartAddress + w.Length - 1:X} ({w.Kind.ToString().ToLowerInvariant()})"));
                 }
                 case "log":
                 {
@@ -45,7 +58,7 @@ namespace EmuSen.Debug.Commands
                     int count = parts.Length >= 4 ? ParseHex(parts[3]) : 20;
                     var events = watches.GetEvents(id, count);
                     if (events.Count == 0) return $"No events recorded for watch #{id} (or it doesn't exist).";
-                    return string.Join('\n', events.Select(e => $"  [{e.Sequence}] 0x{e.Address:X} = 0x{e.Value:X2} ({e.Context})"));
+                    return string.Join('\n', events.Select(e => $"  [{e.Sequence}] {(e.AccessKind == WatchKind.Write ? "W" : "R")} 0x{e.Address:X} = 0x{e.Value:X2} ({e.Context})"));
                 }
                 case "clear":
                 {

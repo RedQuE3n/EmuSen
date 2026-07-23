@@ -4,10 +4,26 @@ using System.Linq;
 
 namespace EmuSen.Debug
 {
-    // One recorded write that matched an active watch.
+    // Which kind of access a watch triggers on - the same three-way split
+    // real hardware debuggers use (GDB's watch/rwatch/awatch: write-only/
+    // read-only/both). Write is the default everywhere a caller doesn't
+    // specify one, matching this mechanism's original write-only behavior
+    // before read watching existed - existing `watch add` calls (and any
+    // saved investigation notes referencing them) keep meaning exactly
+    // what they always meant.
+    public enum WatchKind
+    {
+        Write,
+        Read,
+        Both,
+    }
+
+    // One recorded access that matched an active watch - a write, or
+    // (once a core wires up an IReadObserver-equivalent hook) a read.
     public readonly struct DebugWatchEvent
     {
         public long Sequence { get; }
+        public WatchKind AccessKind { get; }
         public int Address { get; }
         public byte Value { get; }
         // Free-text context (typically "PC=0x00A358") - kept as a string
@@ -17,9 +33,10 @@ namespace EmuSen.Debug
         // change every time a new kind of context becomes relevant.
         public string Context { get; }
 
-        public DebugWatchEvent(long sequence, int address, byte value, string context)
+        public DebugWatchEvent(long sequence, WatchKind accessKind, int address, byte value, string context)
         {
             Sequence = sequence;
+            AccessKind = accessKind;
             Address = address;
             Value = value;
             Context = context;
@@ -32,6 +49,7 @@ namespace EmuSen.Debug
         public string SpaceName = "";
         public int StartAddress;
         public int Length;
+        public WatchKind Kind = WatchKind.Write;
         public readonly List<DebugWatchEvent> Events = new();
         public const int MaxStoredEvents = 500; // ring-buffer cap - a long session shouldn't grow this unbounded
     }
@@ -40,26 +58,28 @@ namespace EmuSen.Debug
     // trace this project has built ad hoc so far (CameraRamLogging,
     // MosaicWriteLogging, DmaSourceAddrLogging, the Yoshi WRAM trace...).
     // Generalizes that recurring pattern into one thing: register a watch
-    // on a (memory space, address range), and every matching write gets
-    // recorded - both printed live (so the existing "play, then grep the
-    // console log" workflow keeps working unchanged) and kept in a bounded
-    // per-watch buffer so it's also queryable on demand (via
-    // DebugCommandProcessor's `watch` commands today, and eventually a GUI
-    // debug window's watch panel, without needing its own new mechanism).
+    // on a (memory space, address range, access kind), and every matching
+    // access gets recorded - both printed live (so the existing "play,
+    // then grep the console log" workflow keeps working unchanged) and
+    // kept in a bounded per-watch buffer so it's also queryable on demand
+    // (via DebugCommandProcessor's `watch` commands today, and eventually
+    // a GUI debug window's watch panel, without needing its own new
+    // mechanism).
     //
     // Core-agnostic on purpose - lives here rather than under
     // Cores/Nintendo/Venus - SNES/ since nothing about it is SNES-specific. A
     // future core's MemoryBus would own its own instance the same way
-    // Venus's does and call RecordWrite from its own write path(s).
+    // Venus's does and call RecordWrite/RecordRead from its own read/
+    // write path(s).
     public class WatchRegistry
     {
         private readonly List<Watch> _watches = new();
         private int _nextId = 1;
         private long _nextSequence = 1;
 
-        public int AddWatch(string spaceName, int address, int length)
+        public int AddWatch(string spaceName, int address, int length, WatchKind kind = WatchKind.Write)
         {
-            var w = new Watch { Id = _nextId++, SpaceName = spaceName, StartAddress = address, Length = length };
+            var w = new Watch { Id = _nextId++, SpaceName = spaceName, StartAddress = address, Length = length, Kind = kind };
             _watches.Add(w);
             return w.Id;
         }
@@ -70,9 +90,9 @@ namespace EmuSen.Debug
             return removed > 0;
         }
 
-        public IReadOnlyList<(int Id, string SpaceName, int StartAddress, int Length)> GetWatches()
+        public IReadOnlyList<(int Id, string SpaceName, int StartAddress, int Length, WatchKind Kind)> GetWatches()
         {
-            return _watches.Select(w => (w.Id, w.SpaceName, w.StartAddress, w.Length)).ToList();
+            return _watches.Select(w => (w.Id, w.SpaceName, w.StartAddress, w.Length, w.Kind)).ToList();
         }
 
         public IReadOnlyList<DebugWatchEvent> GetEvents(int id, int maxCount = 100)
@@ -98,17 +118,38 @@ namespace EmuSen.Debug
         // the event for on-demand querying later.
         public void RecordWrite(string spaceName, int address, byte value, Func<string> contextFactory)
         {
+            Record(WatchKind.Write, spaceName, address, value, contextFactory);
+        }
+
+        // Mirror of RecordWrite for reads - called from an emulation-side
+        // read path (e.g. MemoryBus.Read8) for every read of a given
+        // space. Same "cheap when nothing matches" contract: a read
+        // happens far more often than a write (every instruction fetch,
+        // every operand read, not just the writes a game actually makes),
+        // so this has to stay just as cheap to call when no read watch is
+        // registered - the linear scan below costs the same either way,
+        // it's the contextFactory() call and event storage that only
+        // happen on an actual match.
+        public void RecordRead(string spaceName, int address, byte value, Func<string> contextFactory)
+        {
+            Record(WatchKind.Read, spaceName, address, value, contextFactory);
+        }
+
+        private void Record(WatchKind accessKind, string spaceName, int address, byte value, Func<string> contextFactory)
+        {
             foreach (var w in _watches)
             {
+                if (w.Kind != WatchKind.Both && w.Kind != accessKind) continue;
                 if (!string.Equals(w.SpaceName, spaceName, StringComparison.OrdinalIgnoreCase)) continue;
                 if (address < w.StartAddress || address >= w.StartAddress + w.Length) continue;
 
                 string context = contextFactory();
-                var ev = new DebugWatchEvent(_nextSequence++, address, value, context);
+                var ev = new DebugWatchEvent(_nextSequence++, accessKind, address, value, context);
                 w.Events.Add(ev);
                 if (w.Events.Count > Watch.MaxStoredEvents) w.Events.RemoveAt(0);
 
-                Console.WriteLine($"[WATCH #{w.Id}] {spaceName}:0x{address:X} = 0x{value:X2} ({context})");
+                string tag = accessKind == WatchKind.Write ? "W" : "R";
+                Console.WriteLine($"[WATCH #{w.Id}] {tag} {spaceName}:0x{address:X} = 0x{value:X2} ({context})");
             }
         }
     }

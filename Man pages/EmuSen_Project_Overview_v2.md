@@ -217,7 +217,11 @@ Not shown: `Saves/*.srm`/`*.state`, `Logs/`, `bin/`, `obj/` — build artifacts 
 ### PPU — other
 - Full open-bus emulation (`$4210`/`$4211`/`$4212`'s undriven bits now reflect the last bus value instead of being hardcoded to 0), plus the general "last value on the bus" model for genuinely-unmapped register reads.
 - Windowing (masking logic independently verified against 3 sources).
-- Color math / CGADSUB, per-layer participation rules.
+- **Color math / CGADSUB, per-layer participation rules**, plus three pieces this doc hadn't previously written down despite being real, currently-correct, in-use behavior (found and fixed during an earlier, otherwise largely-unreliable third-party detour — see this doc's own honesty standard: the fix is worth keeping regardless of how unreliable the session that produced it was elsewhere):
+  - **CGWSEL bits 4-5** gate color math itself: always on, only inside the color-math window, only outside it, or never — `Renderer.Scanline.cs`'s `colorMathEnable` check.
+  - **The color math window itself** (`IsColorMathWindowMasked`) — parses `WOBJSEL` (`$2125`) bits 4-7 for each of the two math windows' enable/invert, `WOBJLOG` (`$212B`) bits 2-3 for the AND/OR/XOR/XNOR combine logic when both windows are active, and `CGWSEL` bits 6-7 for a final main/sub-screen invert. This is the mechanism behind effects like SMW's cave/ghost-house "spotlight" (color math restricted to a moving window instead of applying screen-wide).
+  - **Fixed Color Register (`$2132`/COLDATA)** — per-channel (R/G/B) latched fixed color, used as the sub-screen operand when CGWSEL bit 1 selects "fixed color" over the real sub-screen.
+  - **The half-math-disabled-against-fixed-color hardware quirk**: half color math (`CGADSUB` bit 6) is forced off when blending against the fixed color (rather than a real sub-screen pixel), unless `CGADSUB` bit 5 ("backdrop enabled") is set — a documented, non-obvious real-hardware edge case, not a bug in either direction.
 
 ### Memory / DMA
 - LoROM mapping; SRAM size now read from the ROM header (was hardcoded to 2KB for every game) with correct chip-mirroring behavior (modulo addressing instead of a hard size cutoff) — this was the actual fix for Super Metroid's boot-time anti-piracy check, which specifically tests for correct SRAM mirroring.

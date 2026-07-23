@@ -88,12 +88,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
     // this class supplies the actual watch-recording logic AND the PC
     // context (from its own _cpu reference, already held for other
     // reasons) in one place.
-    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver
+    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver
     {
         private readonly Cpu _cpu;
         private readonly MemoryBus _bus;
         private readonly Ppu _ppu;
         private readonly WatchRegistry _watches = new WatchRegistry();
+        private readonly FrameLogRegistry _frameLog = new FrameLogRegistry();
 
         public SnesDebugTarget(Cpu cpu, MemoryBus bus)
         {
@@ -102,12 +103,35 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _ppu = bus.Ppu;
             bus.WriteObserver = this;
             bus.ReadObserver = this;
+            bus.FrameObserver = this;
             bus.DebugPcProvider = () => (_cpu.LastInstructionPB, _cpu.LastInstructionPC);
         }
 
         public string CoreName => "SNES";
 
         public WatchRegistry Watches => _watches;
+
+        public FrameLogRegistry FrameLog => _frameLog;
+
+        // Reads a (space, address, width) value the same way
+        // DebugCommandHelpers.ReadValue does (little-endian accumulation)
+        // - duplicated rather than shared since that helper lives in
+        // Debug/Commands and takes an already-resolved IDebugMemorySpace,
+        // while this needs to resolve the space by name itself. Called
+        // once per registered frame-log entry, once per frame - cheap
+        // even with several entries active, since GetMemorySpaces()
+        // allocates a small fixed array rather than anything heavier.
+        public void OnFrame(long frameCount)
+        {
+            _frameLog.RecordFrame(frameCount, (spaceName, address, width) =>
+            {
+                var space = GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+                if (space == null) return 0;
+                long value = 0;
+                for (int i = 0; i < width; i++) value |= (long)space.Read(address + i) << (8 * i);
+                return value;
+            });
+        }
 
         public void OnWrite(string spaceName, int address, byte value)
         {

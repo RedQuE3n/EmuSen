@@ -159,6 +159,12 @@ namespace EmuSen.Debug
         // memory-bus write path actually reports writes to.
         WatchRegistry Watches { get; }
 
+        // The frame-scoped value logging mechanism (see
+        // FrameLogRegistry.cs) - same exposure pattern as Watches above.
+        // Every core's implementation owns the same instance its
+        // per-frame boundary hook feeds.
+        FrameLogRegistry FrameLog { get; }
+
         // Monotonic frame counter, incremented once per rendered frame -
         // the shared "what moment is this" reference used to correlate a
         // screenshot, a log line, or a future GUI debugger's state all

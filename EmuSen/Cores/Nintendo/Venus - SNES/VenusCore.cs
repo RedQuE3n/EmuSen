@@ -174,6 +174,7 @@ namespace EmuSen.Cores.Nintendo.Venus
                     _currentScanline = 0;
                     TotalFrames++;
                     Bus.FrameCount = TotalFrames;
+                    Bus.FrameObserver?.OnFrame(TotalFrames);
 
                     // Periodic autosave - see Cartridge.SaveSram's own
                     // comment for why this is safe to call this often.

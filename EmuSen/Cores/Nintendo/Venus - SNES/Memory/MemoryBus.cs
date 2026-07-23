@@ -77,6 +77,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // CurrentScanline above.
         public long FrameCount;
 
+        // Mirror of WriteObserver/ReadObserver for frame boundaries - see
+        // IFrameObserver.cs. Notified once per frame (from VenusCore.
+        // RunFrame, right after FrameCount above is updated) rather than
+        // on every memory access, for frame-scoped value logging (see
+        // FrameLogRegistry) - watching a value's evolution frame-by-frame
+        // without needing it to actually change on a read/write to notice.
+        public IFrameObserver? FrameObserver;
+
         // Mirrored into Ppu on every set, so SLHV/OPHCT/OPVCT ($2137/$213C/
         // $213D) can read real scanline position - see Ppu.cs's
         // CurrentScanline/CurrentLineCycles fields for what H does and

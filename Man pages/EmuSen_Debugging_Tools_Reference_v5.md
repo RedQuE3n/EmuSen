@@ -284,6 +284,28 @@ Reuses `IDebugTarget.Disassemble` rather than re-decoding opcodes itself, so a `
 
 **Same "best-effort, may misalign through data mixed with code" caveat as `disasm`.** A linear disassembler walking forward byte-by-byte has no way to know which bytes in a scanned range are really instructions versus embedded data (graphics, tables, text) — if the scan range includes non-code bytes, everything after the first misaligned read can decode to garbage opcodes, including spurious `callers` matches or missed real ones. Best used on a range that's actually known to be code.
 
+### 3.13 Frame-scoped value logging (`framelog`, `Debug/FrameLogRegistry.cs`, `Debug/Commands/FrameLogCommand.cs`)
+
+The complement to `watch` for values that don't reliably *trigger* an access-based watch — a counter written once at level start and only ever read afterward would show exactly one write event forever; `framelog` instead samples a value **once per frame, unconditionally**, so its evolution over time is visible even when nothing about how it's touched would make a good watch.
+
+```
+framelog add <space> <addr> [<width>]   register a per-frame value sample (width 1/2/4 bytes, default 1)
+framelog list                           list active frame logs with their IDs
+framelog show <id> [<count>]            show a frame log's recorded (frame, value) samples (default 20)
+framelog clear <id>                     clear a frame log's stored samples (doesn't remove it)
+framelog remove <id>                    remove a frame log entirely
+```
+
+**Fed from a new per-frame hook, not the read/write observer hooks §3.5 already uses.** `MemoryBus.FrameObserver` (`IFrameObserver`, mirroring `IWriteObserver`/`IReadObserver`) is notified once per frame from `VenusCore.RunFrame`, right after `TotalFrames`/`Bus.FrameCount` are updated — the same moment `IDebugTarget.FrameCount` (§3.1) reports elsewhere, so a frame log's frame numbers line up exactly with a screenshot's or a save state's. `SnesDebugTarget` implements `IFrameObserver` the same way it implements the other two observer interfaces, and owns the `FrameLogRegistry` instance the same way it owns `WatchRegistry`.
+
+**Deliberately does NOT print live**, unlike `watch`. A watch fires on a comparatively rare event, so printing every match keeps the "play, then grep the console log" workflow useful; a frame log fires 60 times a second by design, and printing every sample would just flood the console. Samples are stored silently (capped at 3600 per entry — about a minute at 60fps) and pulled on demand with `framelog show`.
+
+**Example — watching a WRAM counter's value across a whole play session** instead of eyeballing it in `mem` one frame at a time:
+```
+framelog add WRAM 1234 2
+```
+Then, any time later, `framelog show 1` lists however many of the most recent per-frame samples are still in the buffer.
+
 ---
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)

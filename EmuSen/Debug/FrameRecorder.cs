@@ -101,14 +101,24 @@ namespace EmuSen.Debug
         // trading file size for fidelity is the wrong tradeoff for a
         // debugging tool. Both FFV1 and Matroska are open formats.
         //
-        // HONESTY NOTE: built carefully against ffmpeg's documented
-        // image2/glob demuxer and FFV1 encoder options, but not verified
-        // by actually running it - this project's build/run environment
-        // couldn't do that from where this was written. Report back if
-        // the exact invocation needs adjusting.
+        // HONESTY NOTE: verified against a real run on the project's own
+        // dev machine (Fedora 44, ffmpeg 8.1.2) - the first attempt
+        // failed with "No such file or directory" from a WorkingDirectory/
+        // output-path double-nesting bug (see outputFile's comment
+        // above), now fixed. The -pix_fmt rgb24 that run also flagged as
+        // "incompatible... auto-selecting bgr0" has been removed in favor
+        // of letting ffmpeg negotiate it, since the auto-select is exactly
+        // what worked. Re-verify after this fix on a real recording.
         private void TryEncodeVideo(string sessionDir, int frameStride)
         {
-            string outputPath = Path.Combine(sessionDir, "recording.mkv");
+            // Output filename only, NOT sessionDir/recording.mkv - the
+            // process's WorkingDirectory below already puts ffmpeg inside
+            // sessionDir, so a full relative path here would resolve
+            // relative to that (a real bug caught on first real-world run:
+            // ffmpeg tried to open sessionDir/sessionDir/recording.mkv,
+            // which obviously doesn't exist, and failed outright).
+            const string outputFile = "recording.mkv";
+            string outputPath = Path.Combine(sessionDir, outputFile);
             double fps = AssumedFps / Math.Max(1, frameStride);
 
             var psi = new ProcessStartInfo
@@ -129,9 +139,11 @@ namespace EmuSen.Debug
             psi.ArgumentList.Add("frame_*.png");
             psi.ArgumentList.Add("-c:v");
             psi.ArgumentList.Add("ffv1");
-            psi.ArgumentList.Add("-pix_fmt");
-            psi.ArgumentList.Add("rgb24");
-            psi.ArgumentList.Add(outputPath);
+            // No forced -pix_fmt: Raylib's screenshots are RGBA, and
+            // letting ffmpeg auto-negotiate a format FFV1 actually
+            // supports (confirmed working: it auto-picked bgr0 on a real
+            // run) is more robust than guessing one ourselves.
+            psi.ArgumentList.Add(outputFile);
 
             try
             {

@@ -66,29 +66,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         {
             int bg = (offset - 0x210D) / 2;
 
-            // BGnHOFS = (new<<8) | (Prev1 & ~7) | (Prev2 & 7); Prev1 = Prev2 = new
-            //
-            // The REAL fix for the horizontal-only scroll jitter investigated
-            // at length earlier in this project's history (see the BG2
-            // scroll jitter notes) - not the "borrow VOFS's simpler formula"
-            // workaround that used to be here. The actual bug: Prev2 must be
-            // a SEPARATE latch shared only by the four BGnHOFS registers,
-            // confirmed via the Mesen team's own reference documentation
-            // (snesdev.mesen.ca/wiki, PPU_Registers page - maintained by the
-            // same team as the emulator's source, SnesPpu.cpp): "there is
-            // only one Prev1 shared by all eight BGnxOFS registers, and only
-            // one Prev2 shared by the four BGnHOFS registers." Note: the
-            // active project is now called MesenCE (github.com/nesdev-org/
-            // MesenCE) - the original SourMesen/Mesen2 repo was archived June
-            // 2026 as a frozen snapshot; MesenCE is the direct, actively
-            // maintained continuation of the same codebase, not a rewrite.
-            // The previous implementation instead read THIS REGISTER'S OWN
-            // previously-committed value for the Prev2 term, which silently
-            // drops bit 2 of the low byte on every write - verified by
-            // simulating both formulas against the exact real write data
-            // captured earlier: the register's-own-value version reversed
-            // direction repeatedly; this two-latch version reconstructs every
-            // value exactly, zero reversals.
+            // BGnHOFS = (new<<8) | (Prev1 & ~7) | (Prev2 & 7) - see
+            // Venus_PPU.md §2 for why Prev2 must be a separate latch.
             BgScrollX[bg] = (ushort)(((data << 8) | (_bgOfsLatch & ~7) | (_bgHOfsLatch & 7)) & 0x3FF);
 
             if (DebugSettings.AllScrollWriteLogging) Console.WriteLine($"[SCROLL] BG{bg + 1} HOFS write: data=0x{data:X2} latchWas=0x{_bgOfsLatch:X2} -> BgScrollX[{bg}] now {BgScrollX[bg]}");
@@ -96,12 +75,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             _bgHOfsLatch = data;
             if (bg == 2 && DebugSettings.Bg3ScrollWriteLogging) Console.WriteLine($"[BG3SCROLL] HOFS write: offset=0x{offset:X4} data=0x{data:X2} -> BgScrollX[2] now {BgScrollX[2]}");
 
-            // $210D also feeds Mode 7's own H-scroll (M7HOFS) via a SEPARATE
-            // write-twice latch (_m7OfsLatch) from the BG-scroll ones above -
-            // see its declaration in Ppu.cs. Runs unconditionally (not just
-            // when Mode 7 is selected) since real hardware latches the value
-            // regardless of the active mode; only whether it's ever read
-            // back depends on that. Unaffected by the change above.
+            // $210D also feeds M7HOFS via a separate latch - see Venus_PPU.md §2.
             if (bg == 0)
             {
                 int m7Raw = ((data << 8) | _m7OfsLatch) & 0x1FFF;
@@ -119,7 +93,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             _bgOfsLatch = data;
             if (bg == 2 && DebugSettings.Bg3ScrollWriteLogging) Console.WriteLine($"[BG3SCROLL] VOFS write: offset=0x{offset:X4} data=0x{data:X2} -> BgScrollY[2] now {BgScrollY[2]}");
 
-            // Same piggyback as WriteBGHOFS above, for M7VOFS.
+            // Same piggyback as WriteBGHOFS above (M7VOFS) - see Venus_PPU.md §2.
             if (bg == 0)
             {
                 int m7Raw = ((data << 8) | _m7OfsLatch) & 0x1FFF;
@@ -233,23 +207,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         private void WriteM7SEL(ushort offset, byte data) { M7Sel = data; }
 
-        // M7A-D/M7X/M7Y share one latch (_m7Latch), separate from both the
-        // BG-scroll latch and the M7HOFS/VOFS latch - see the field comments
-        // in Ppu.cs. Same "latch on this write, combine with latch on next"
-        // shape as everywhere else in this file, just without BG-scroll's
-        // bit-shuffling since these are plain 16-bit (or 13-bit signed for
-        // X/Y) values that split cleanly across two 8-bit writes.
+        // M7A-D/M7X/M7Y share one latch (_m7Latch) - see Venus_PPU.md §3.3.
         private void WriteM7A(ushort offset, byte data) { M7A = (short)((data << 8) | _m7Latch); _m7Latch = data; }
         private void WriteM7B(ushort offset, byte data)
         {
             M7B = (short)((data << 8) | _m7Latch);
             _m7Latch = data;
-            // MPYL/M/H ($2134-$2136) read back M7A * this raw byte - NOT
-            // M7A * the combined 16-bit M7B - confirmed via ff6hacking's
-            // register docs: "the product of the 16-bit value written to
-            // $211B and the 8-bit value most recently written to $211C".
-            // Updates on every write to $211C (both halves of the pair),
-            // matching "most recently written" literally.
+            // MPYL/M/H read back M7A * this raw byte - see Venus_PPU.md §3.3.
             _m7bLastByte = (sbyte)data;
         }
         private void WriteM7C(ushort offset, byte data) { M7C = (short)((data << 8) | _m7Latch); _m7Latch = data; }
@@ -269,14 +233,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             _m7Latch = data;
         }
 
-        // SETINI ($2133): stored so writes don't get lost, but the modes it
-        // controls aren't implemented - interlace (would need a real
-        // alternating-field frame count, not just a flag), pseudo-hires
-        // (needs the color-math blend path to consider it), EXTBG (needs
-        // Mode 7, currently skipped), and overscan (would need the renderer's
-        // fixed 224-line ScreenH to become dynamic). None of these are things
-        // a stored byte alone can fix - flagging honestly rather than
-        // pretending this register does something it doesn't yet.
+        // SETINI ($2133) - see Venus_PPU.md §10 for what's actually implemented.
         private void WriteSETINI(ushort offset, byte data) { Setini = data; }
         // --- Read Operations ---
 
@@ -308,33 +265,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return Cgram[(_cgadd * 2) & 0x1FF];
         }
 
-        // MPYL/M/H ($2134-$2136) - see Mpy's declaration in Ppu.cs for what
-        // it actually multiplies.
+        // MPYL/M/H ($2134-$2136) - see Venus_PPU.md §3.3.
         private byte ReadMPYL(ushort offset) => (byte)(Mpy & 0xFF);
         private byte ReadMPYM(ushort offset) => (byte)((Mpy >> 8) & 0xFF);
         private byte ReadMPYH(ushort offset) => (byte)((Mpy >> 16) & 0xFF);
 
-        // SLHV ($2137): reading it latches the current H/V position into
-        // OPHCT/OPVCT. Real hardware also latches this way via WRIO ($4201)
-        // bit 7 transitions and the Super Scope's trigger - neither of those
-        // paths are wired up here, only the direct $2137 read is. The
-        // returned byte itself is genuine open bus on real hardware; 0 is as
-        // good a stand-in as any.
+        // SLHV ($2137) - see Venus_PPU.md §9.
         private byte ReadSLHV(ushort offset)
         {
             _latchedV = (ushort)CurrentScanline;
-            // H is not tracked - see CurrentLineCycles's comment. Always 0
-            // rather than a fabricated conversion from LineCycles, since this
-            // renderer has no real per-dot H position to report.
-            _latchedH = 0;
+            _latchedH = 0; // H is not tracked - see Venus_PPU.md §9.
             return 0;
         }
 
-        // OPHCT/OPVCT ($213C/$213D): each is a 9-bit value read as two
-        // sequential 8-bit reads (low byte first, then high byte in bit 0 -
-        // bits 1-7 of the high read are PPU2 open bus, returned as 0 here).
-        // Each register tracks its own low/high toggle independently; only
-        // reading STAT78 ($213F) resets both back to "low" (see ReadSTAT78).
+        // OPHCT/OPVCT ($213C/$213D) - see Venus_PPU.md §9.
         private byte ReadOPHCT(ushort offset)
         {
             byte result = !_ophctHigh ? (byte)(_latchedH & 0xFF) : (byte)((_latchedH >> 8) & 0x01);
@@ -349,10 +293,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return result;
         }
 
-        // STAT77 ($213E): trm-vvvv - Time Over, Range Over, Master/slave
-        // select (always 0 here - real consoles almost universally read this
-        // as 0 too), PPU1 version in the low nibble (1 is what most real
-        // units report).
+        // STAT77 ($213E) - see Venus_PPU.md §9.
         private byte ReadSTAT77(ushort offset)
         {
             byte result = 0x01; // PPU1 version = 1
@@ -361,13 +302,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return result;
         }
 
-        // STAT78 ($213F): flupvvvv - interlace field (bit 7, now tracked via
-        // FieldParity - see its declaration in Ppu.cs for the full citation
-        // and what is/isn't implemented around it), NTSC/PAL region (0 =
-        // NTSC, matching the 262-scanline timing already used throughout
-        // this project), PPU2 version in the low nibble. Reading this also
-        // resets the OPHCT/OPVCT high/low toggle back to "low", per
-        // documented hardware behavior.
+        // STAT78 ($213F) - see Venus_PPU.md §9.
         private byte ReadSTAT78(ushort offset)
         {
             _ophctHigh = false;

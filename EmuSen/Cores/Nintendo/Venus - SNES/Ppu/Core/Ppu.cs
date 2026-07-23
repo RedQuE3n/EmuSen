@@ -53,17 +53,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         public byte Tm;                      // $212C - main screen designation
         public byte Ts;                     // $212D - Sub Screen Designation
         public byte Mosaic;                  // $2106 - mosaic size + per-BG enable
-        public byte Setini;                  // $2133 - screen mode select (interlace/EXTBG/pseudo-hires/
-                                              // overscan/OBJ VRAM interleave). Stored so games that write
-                                              // it don't break, but none of those modes are actually
-                                              // rendered differently yet - see WriteSETINI's comment.
+        public byte Setini;                  // $2133 - screen mode select. See Venus_PPU.md §10.
 
         // --- Mode 7 ($211A-$2120) ---
         public byte M7Sel;                   // $211A - screen-over mode, H/V flip
         public short M7A, M7B, M7C, M7D;     // $211B-$211E - signed 8.8 fixed-point matrix
         public short M7X, M7Y;               // $211F/$2120 - signed 13-bit center/pivot point
-        public short M7HOfs, M7VOfs;         // piggyback $210D/$210E - Mode 7's own scroll,
-                                              // separate from BG1HOFS/VOFS despite sharing addresses
+        public short M7HOfs, M7VOfs;         // piggyback $210D/$210E - see Venus_PPU.md §2
 
         private byte _m7Latch;
         private byte _m7OfsLatch;

@@ -38,8 +38,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             // Main screen backdrop: plain CGRAM color 0, as always.
             Color mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
 
-            // Sub screen backdrop is different: wherever nothing is drawn on the sub
-            // screen, real hardware uses the FIXED COLOR register ($2132) as the fallback.
+            // Sub-screen backdrop fallback - see Venus_PPU.md §5.
             Color subBackdrop = new Color(
                 (byte)(((ppu.FixedColorR & 0x1F) << 3) * brightness),
                 (byte)(((ppu.FixedColorG & 0x1F) << 3) * brightness),
@@ -173,8 +172,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                     if (participates && mathAllowed)
                     {
-                        // SNES Hardware quirk: Half color math is disabled if blending against the fixed color
-                        // (either explicitly or via an empty subscreen pixel) UNLESS the backdrop is enabled in CGADSUB.
+                        // Half-color-math-disabled-for-fixed-color quirk - see Venus_PPU.md §5.
                         bool isFixedColor = !useSubScreen || _subLineLayer[px] == LayerBackdrop;
                         bool actualHalfMode = halfMode;
                         if (isFixedColor && (ppu.Cgadsub & 0x20) == 0)

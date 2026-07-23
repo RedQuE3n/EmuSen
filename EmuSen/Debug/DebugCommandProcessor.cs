@@ -30,6 +30,18 @@ namespace EmuSen.Debug
     {
         private readonly IDebugTarget _target;
 
+        // `search` command state - a single active search session, the
+        // same "first scan, then narrow with next scan" workflow classic
+        // memory-search tools use. Deliberately just plain fields, not
+        // its own class: one session at a time is exactly what the
+        // command's own UX implies (starting a new `search <space> ...`
+        // replaces whatever was active), so there's nothing a richer
+        // structure would buy here.
+        private string? _searchSpace;
+        private int _searchWidth = 1;
+        private List<int>? _searchCandidates;
+        private Dictionary<int, long>? _searchLastValues;
+
         public DebugCommandProcessor(IDebugTarget target)
         {
             _target = target;
@@ -53,6 +65,7 @@ namespace EmuSen.Debug
                     "sprites" => CmdSprites(),
                     "pal" => CmdPal(parts),
                     "watch" => CmdWatch(parts),
+                    "search" => CmdSearch(parts),
                     "tile" => CmdTile(parts),
                     "disasm" => CmdDisasm(parts),
                     "trace" => CmdTrace(parts),
@@ -86,6 +99,13 @@ namespace EmuSen.Debug
                 "  watch log <id> [<count>]      show a watch's recorded events (default 20)",
                 "  watch clear <id>              clear a watch's stored events (doesn't remove the watch)",
                 "  watch remove <id>             remove a watch entirely",
+                "  search <space> <val> [<w>]    start a new search: find every address currently equal to <val>",
+                "                                (width <w> in bytes: 1, 2, or 4 - default 1, little-endian)",
+                "  search refine <val>           narrow the current search to addresses now equal to <val>",
+                "  search changed|unchanged      narrow to addresses whose value did/didn't change since last search/refine",
+                "  search increased|decreased    narrow to addresses whose value went up/down since last search/refine",
+                "  search list [<count>]         list current candidate addresses + values (default 20)",
+                "  search reset                  clear the current search",
                 "  tile <space> <addr> <bpp>     ASCII-decode one 8x8 tile (bpp: 2, 4, or 8)",
                 "  disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)",
                 "  trace <count>                 arm a live CPU instruction trace for the next <count> instructions",
@@ -266,6 +286,133 @@ namespace EmuSen.Debug
                 default:
                     return $"Unknown 'watch' subcommand '{sub}'. Try add/list/log/clear/remove.";
             }
+        }
+
+        // Little-endian multi-byte read, matching the 65816/SNES
+        // convention every other multi-byte value in this codebase uses
+        // (see Snes65816Disassembler.FormatOperand's absolute-address
+        // formatting for the same low-byte-first pattern). A future
+        // core's memory spaces would read the same way for its own
+        // little-endian values, or a core-specific command could read
+        // multi-byte values its own way if it genuinely needed to -
+        // nothing about `search` itself assumes little-endian beyond
+        // this one helper.
+        private static long ReadValue(IDebugMemorySpace space, int addr, int width)
+        {
+            long v = 0;
+            for (int i = 0; i < width; i++) v |= (long)space.Read(addr + i) << (8 * i);
+            return v;
+        }
+
+        private void UpdateSearchLastValues(IDebugMemorySpace space)
+        {
+            _searchLastValues = _searchCandidates!.ToDictionary(a => a, a => ReadValue(space, a, _searchWidth));
+        }
+
+        // Classic "first scan, then narrow" memory search - find where a
+        // game stores something without already knowing the address
+        // (score, lives, a flag), the one common reverse-engineering
+        // workflow the rest of this toolchain (mem/write/watch/tile)
+        // doesn't cover on its own. Pure IDebugMemorySpace.Read() scans -
+        // no SNES-specific logic, works the same for any future core's
+        // memory spaces.
+        private string CmdSearch(string[] parts)
+        {
+            if (parts.Length < 2)
+            {
+                return "Usage: search <space> <value> [<width>] | search refine <value> | search changed|unchanged|increased|decreased | search list [<count>] | search reset";
+            }
+
+            string first = parts[1].ToLowerInvariant();
+
+            if (first == "reset")
+            {
+                _searchSpace = null;
+                _searchCandidates = null;
+                _searchLastValues = null;
+                return "Search cleared.";
+            }
+
+            if (first == "list")
+            {
+                if (_searchCandidates == null) return "No active search - run 'search <space> <value>' first.";
+                int listCount = parts.Length >= 3 ? ParseHex(parts[2]) : 20;
+                IDebugMemorySpace listSpace = FindSpace(_searchSpace!);
+                var shown = _searchCandidates.Take(listCount)
+                    .Select(a => $"  0x{a:X} = 0x{ReadValue(listSpace, a, _searchWidth):X}");
+                return $"{_searchCandidates.Count} candidate(s) in {_searchSpace} (width {_searchWidth}), showing up to {listCount}:\n" + string.Join('\n', shown);
+            }
+
+            if (first == "refine")
+            {
+                if (_searchCandidates == null) return "No active search - run 'search <space> <value>' first.";
+                if (parts.Length < 3) return "Usage: search refine <value>";
+                IDebugMemorySpace refineSpace = FindSpace(_searchSpace!);
+                // & 0xFFFFFFFFL: ParseHex returns a signed int, so a
+                // width-4 value with the high bit set (e.g. FFFFFFFF)
+                // would otherwise parse as a negative number and never
+                // match ReadValue's always-non-negative accumulation.
+                long target = ParseHex(parts[2]) & 0xFFFFFFFFL;
+                _searchCandidates = _searchCandidates.Where(a => ReadValue(refineSpace, a, _searchWidth) == target).ToList();
+                UpdateSearchLastValues(refineSpace);
+                return $"{_searchCandidates.Count} candidate(s) remain.";
+            }
+
+            if (first == "changed" || first == "unchanged" || first == "increased" || first == "decreased")
+            {
+                if (_searchCandidates == null) return "No active search - run 'search <space> <value>' first.";
+                IDebugMemorySpace compareSpace = FindSpace(_searchSpace!);
+                _searchCandidates = _searchCandidates.Where(a =>
+                {
+                    long now = ReadValue(compareSpace, a, _searchWidth);
+                    long then = _searchLastValues![a];
+                    return first switch
+                    {
+                        "changed" => now != then,
+                        "unchanged" => now == then,
+                        "increased" => now > then,
+                        "decreased" => now < then,
+                        _ => false,
+                    };
+                }).ToList();
+                UpdateSearchLastValues(compareSpace);
+                return $"{_searchCandidates.Count} candidate(s) remain.";
+            }
+
+            // Otherwise: parts[1] is a memory space name - start a brand
+            // new search, replacing whatever was active before.
+            if (parts.Length < 3) return "Usage: search <space> <value> [<width>]";
+            IDebugMemorySpace newSpace = FindSpace(parts[1]);
+
+            // A bulk, read-every-address scan is exactly the case
+            // IDebugMemorySpace.HasSideEffects exists for - a space
+            // routed through live hardware (the SNES's CpuBus) can have
+            // registers that change real emulation state just by being
+            // read (RDNMI clearing the pending-NMI flag, OPHCT/OPVCT
+            // toggling a latch, the manual joypad port shifting on every
+            // read). Refuse outright rather than silently corrupting a
+            // running session - there's no legitimate reason to bulk-
+            // search live registers anyway; real game state (scores,
+            // flags, counters) lives in WRAM/SRAM, not there.
+            if (newSpace.HasSideEffects)
+            {
+                return $"{newSpace.Name} can have real side effects on read (live hardware registers) - refusing a bulk search there. Try WRAM (or another plain-memory space) instead.";
+            }
+
+            // Same unsigned-mask reasoning as the 'refine' branch above.
+            long value = ParseHex(parts[2]) & 0xFFFFFFFFL;
+            int width = parts.Length >= 4 ? ParseHex(parts[3]) : 1;
+            if (width != 1 && width != 2 && width != 4) return "width must be 1, 2, or 4";
+
+            _searchSpace = newSpace.Name;
+            _searchWidth = width;
+            _searchCandidates = new List<int>();
+            for (int addr = 0; addr <= newSpace.Size - width; addr++)
+            {
+                if (ReadValue(newSpace, addr, width) == value) _searchCandidates.Add(addr);
+            }
+            UpdateSearchLastValues(newSpace);
+            return $"{_searchCandidates.Count} candidate(s) found in {newSpace.Name} matching 0x{value:X} (width {width}).";
         }
 
         // Generalizes DebugTools.DecodeTileAscii (which only ever worked

@@ -17,6 +17,19 @@ namespace EmuSen.Debug
         bool IsWritable { get; }
         byte Read(int address);
         void Write(int address, byte value);
+
+        // True if Read() can have a real side effect beyond returning a
+        // byte - a space routed through a live hardware bus (registers
+        // like the SNES's RDNMI, which clears the pending-NMI flag on
+        // read, or OPHCT/OPVCT, which toggle a byte-order latch on read)
+        // rather than a plain in-memory array. Exists specifically so a
+        // bulk, read-every-address tool (see the `search` command) can
+        // refuse to scan a space where doing so would silently disturb
+        // running emulation state, instead of assuming every Read() call
+        // is free of consequences the way it would be for WRAM/VRAM/etc.
+        // A core with no such live-register space can just return false
+        // everywhere.
+        bool HasSideEffects { get; }
     }
 
     // One named register/flag value for display. BitWidth drives formatting

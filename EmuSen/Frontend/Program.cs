@@ -17,16 +17,6 @@ namespace EmuSen.Frontend
         static void Main(string[] args)
         {
             TextWriter originalOut = Console.Out;
-            // Timestamped per-session subfolder (not a fixed "console.log")
-            // so a new launch doesn't overwrite the previous one's logs -
-            // each capture is self-identifying by folder name alone. Output
-            // is further split by category (see CategorizedLogWriter) rather
-            // than one ever-growing combined file - that file routinely
-            // reached hundreds of thousands of lines in a single play
-            // session, too large to search or hand off for review.
-            string logDir = Path.Combine(Directory.GetCurrentDirectory(), "Logs", $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
-            Directory.CreateDirectory(logDir);
-            Console.SetOut(new CategorizedLogWriter(originalOut, logDir));
 
             // Pick the ROM to run: first command-line argument if given (e.g.
             // `dotnet run -- /path/to/game.smc`), otherwise fall back to the
@@ -57,6 +47,25 @@ namespace EmuSen.Frontend
                 // copy shared with EmulatorSession/the Avalonia frontend,
                 // not a second hand-maintained copy here).
                 VenusCore core = new VenusCore(headless: false);
+
+                // Timestamped per-session subfolder, nested under the core's
+                // own name (Logs/<CoreName>/console_<timestamp>/) rather than
+                // a flat Logs/ - so once a second core exists, its logs don't
+                // mix with this one's. Output is further split by category
+                // (see CategorizedLogWriter) rather than one ever-growing
+                // combined file - that file routinely reached hundreds of
+                // thousands of lines in a single play session, too large to
+                // search or hand off for review. Set up here (after
+                // VenusCore exists but before LoadRom) so core.CoreName is
+                // available without hardcoding "SNES" a second time - the
+                // one console line printed before this point (ROM loading,
+                // above) only reaches the terminal, not the file, as a
+                // result; a ROM-not-found early exit likewise never creates
+                // an empty log folder.
+                string logDir = Path.Combine(Directory.GetCurrentDirectory(), "Logs", core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
+                Directory.CreateDirectory(logDir);
+                Console.SetOut(new CategorizedLogWriter(originalOut, logDir));
+
                 core.LoadRom(romPath);
                 DebugSettings.CpuVerboseLogging = false;
                 DebugSettings.Spc700VerboseLogging = false;
@@ -157,7 +166,7 @@ namespace EmuSen.Frontend
                 }
                 else
                 {
-                    string dir = frameRecorder.Start(Path.Combine("Logs", "Recordings"));
+                    string dir = frameRecorder.Start(Path.Combine("Logs", debugTarget.CoreName, "Recordings"));
                     Console.WriteLine($"[RECORD] Started -> {dir}");
                 }
             }
@@ -249,10 +258,11 @@ namespace EmuSen.Frontend
             // correct unchanged if a future core is swapped in.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F3))
             {
-                Directory.CreateDirectory("Logs");
+                string coreLogDir = Path.Combine("Logs", debugTarget.CoreName);
+                Directory.CreateDirectory(coreLogDir);
                 string baseName = $"screenshot_frame{debugTarget.FrameCount}";
-                string shotPath = Path.Combine("Logs", baseName + ".png");
-                string metaPath = Path.Combine("Logs", baseName + ".txt");
+                string shotPath = Path.Combine(coreLogDir, baseName + ".png");
+                string metaPath = Path.Combine(coreLogDir, baseName + ".txt");
 
                 Raylib_cs.Raylib.TakeScreenshot(shotPath);
                 File.WriteAllText(metaPath,

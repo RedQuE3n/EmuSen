@@ -15,7 +15,7 @@ namespace EmuSen.Debug.Commands
         public string Name => "load";
         public string Usage => string.Join('\n', new[]
         {
-            "  load <space> <addr> <file>    write Logs/<file>'s raw bytes into <space> starting at <addr>",
+            "  load <space> <addr> <file>    write Logs/<CoreName>/<file>'s raw bytes into <space> starting at <addr>",
         });
 
         public string Execute(IDebugTarget target, string[] parts)
@@ -30,7 +30,7 @@ namespace EmuSen.Debug.Commands
                 return $"{space.Name} is read-only - refusing to load into it.";
             }
 
-            string path = Path.Combine("Logs", file);
+            string path = Path.Combine("Logs", target.CoreName, file);
             if (!File.Exists(path))
             {
                 return $"No file at {path}.";

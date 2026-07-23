@@ -14,7 +14,7 @@ These all live in the same per-frame hotkey block in `Program.cs`, checked once 
 |---|---|
 | **F1** | Full CPU + PPU state snapshot. Formatted to be directly comparable to MesenCE's Status panel. |
 | **F2** | Dumps every active OAM sprite's X/Y/tile/attribute bytes — ground truth for sprite investigations. |
-| **F3** | Saves the current frame as a PNG (`Logs/screenshot_frame<N>.png`), plus a companion metadata file (`Logs/screenshot_frame<N>.txt`) with the core name, frame number, and wall-clock time — see §3.6. |
+| **F3** | Saves the current frame as a PNG (`Logs/<CoreName>/screenshot_frame<N>.png`), plus a companion metadata file (`Logs/<CoreName>/screenshot_frame<N>.txt`) with the core name, frame number, and wall-clock time — see §3.6. |
 | **F4** | Opens the interactive debug command prompt (see §3). |
 | **F6** | Toggles a continuous frame recording on/off — same idea as F3 but for a whole span of frames instead of one instant. See §3.8. |
 | **F5** | Save state. |
@@ -198,7 +198,7 @@ Continuous version of F3's screenshot-plus-metadata pattern (§3.6): instead of 
 F6   toggle recording on/off
 ```
 
-Starts a new session folder under `Logs/Recordings/<CoreName>_<timestamp>/` each time it's turned on; `[RECORD] Started -> <path>` / `[RECORD] Stopped: <path>` confirm state in the console log. Supports an optional frame stride (capture every Nth frame rather than every single one — a long recording at every frame gets large fast) via `FrameRecorder.Start(baseDir, frameStride)`; the F6 hotkey itself uses the default of every frame, intended for short, targeted captures around a specific moment (e.g. wrapping the whole span of a suspected rendering bug) rather than recording an entire play session.
+Starts a new session folder under `Logs/<CoreName>/Recordings/<CoreName>_<timestamp>/` each time it's turned on (the F6 hotkey passes `Logs/<CoreName>/Recordings` as the base directory; `FrameRecorder` itself still prefixes its own session folder name with the core name too, so it stays self-sufficient even for a caller that doesn't already organize by core); `[RECORD] Started -> <path>` / `[RECORD] Stopped: <path>` confirm state in the console log. Supports an optional frame stride (capture every Nth frame rather than every single one — a long recording at every frame gets large fast) via `FrameRecorder.Start(baseDir, frameStride)`; the F6 hotkey itself uses the default of every frame, intended for short, targeted captures around a specific moment (e.g. wrapping the whole span of a suspected rendering bug) rather than recording an entire play session.
 
 **Core-agnostic by the same pattern as the rest of this toolchain:** `FrameRecorder` only touches `IDebugTarget` (`CoreName`/`FrameCount`, same as F3 uses via `debugTarget`) and never anything console- or renderer-specific. The one Raylib-specific piece — actually grabbing a frame's pixels — is supplied by the frontend as a callback (`path => Raylib_cs.Raylib.TakeScreenshot(path)` in `Program.cs`'s F6 handler) rather than living inside `FrameRecorder` itself, so a future frontend using a different rendering API reuses this class unchanged and only needs to supply its own capture callback.
 
@@ -259,11 +259,11 @@ diff <name> [<count>]        compare snapshot <name> against that space's CURREN
 Takes a `snapshot`-style capture out of the process entirely, to disk, as raw bytes — for handing off to an external hex editor, diffing against a known-good ROM's own data, or just keeping a capture around after the session that took it ends (unlike `snapshot`, which lives only in memory for that session). `load` is the reverse: poke a raw byte file back into a memory space at a given address.
 
 ```
-dump <space> <addr> <len> <file>   write raw bytes to Logs/<file>
-load <space> <addr> <file>         write Logs/<file>'s raw bytes into <space> starting at <addr>
+dump <space> <addr> <len> <file>   write raw bytes to Logs/<CoreName>/<file>
+load <space> <addr> <file>         write Logs/<CoreName>/<file>'s raw bytes into <space> starting at <addr>
 ```
 
-Both always resolve `<file>` under `Logs/` — the same directory F3 screenshots and their companion `.txt` files already use, so debug artifacts from a session end up in one predictable place rather than scattered relative to wherever the process happened to be launched from.
+Both always resolve `<file>` under `Logs/<CoreName>/` (via `IDebugTarget.CoreName`, §3.1) — the same core-scoped directory F3 screenshots and their companion `.txt` files already use, so debug artifacts from a session end up in one predictable, per-core place rather than scattered relative to wherever the process happened to be launched from, or mixed in with a different core's output once a second core exists.
 
 **Same `HasSideEffects` guard as `search`/`snapshot`** on `dump` — refuses a bulk read over `CpuBus` or any other space where reading can disturb live hardware state. `load` has no equivalent read-side concern but does check `IsWritable`, refusing to write into a read-only space.
 

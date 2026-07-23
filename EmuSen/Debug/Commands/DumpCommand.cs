@@ -15,7 +15,7 @@ namespace EmuSen.Debug.Commands
         public string Name => "dump";
         public string Usage => string.Join('\n', new[]
         {
-            "  dump <space> <addr> <len> <file> write raw bytes to Logs/<file>",
+            "  dump <space> <addr> <len> <file> write raw bytes to Logs/<CoreName>/<file>",
         });
 
         public string Execute(IDebugTarget target, string[] parts)
@@ -38,8 +38,9 @@ namespace EmuSen.Debug.Commands
             var data = new byte[len];
             for (int i = 0; i < len; i++) data[i] = space.Read(addr + i);
 
-            Directory.CreateDirectory("Logs");
-            string path = Path.Combine("Logs", file);
+            string coreLogDir = Path.Combine("Logs", target.CoreName);
+            Directory.CreateDirectory(coreLogDir);
+            string path = Path.Combine(coreLogDir, file);
             File.WriteAllBytes(path, data);
             return $"Dumped {space.Name} 0x{addr:X}-0x{addr + len - 1:X} ({len} bytes) to {path}";
         }

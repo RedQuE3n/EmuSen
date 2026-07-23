@@ -1,4 +1,7 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 
 namespace EmuSen.Debug
@@ -59,11 +62,101 @@ namespace EmuSen.Debug
             return _sessionDir;
         }
 
+        // Approximate SNES/NES-class refresh rate this project already
+        // treats as "close enough" elsewhere (see Program.cs's
+        // SaveEveryNFrames comment, "~5 seconds at 60fps") - real hardware
+        // is closer to 60.0988Hz, but this is a debug-tool convenience
+        // encode, not a timing-accurate export, so the same approximation
+        // already used throughout the codebase is fine here too.
+        private const double AssumedFps = 60.0;
+
+        // Blocks synchronously while ffmpeg encodes (if available) - for a
+        // long recording this means a visible freeze when stopping, same
+        // general tradeoff the F4 debug prompt already has (the execution
+        // loop can't pause mid-frame independent of this either way).
+        // Acceptable for a debug tool; would need to move off the main
+        // thread if this ever needs to not block real-time play.
         public void Stop()
         {
             _ledger?.Dispose();
             _ledger = null;
+
+            string? dirToEncode = _sessionDir;
+            int stride = _frameStride;
             _sessionDir = null;
+
+            if (dirToEncode != null) TryEncodeVideo(dirToEncode, stride);
+        }
+
+        // Muxes the just-captured PNG sequence into a single lossless
+        // video file via ffmpeg, if it's available on PATH - never
+        // required (the PNG sequence + frames.log ledger stand on their
+        // own either way, and are never deleted by this), just a
+        // convenience so a recording doesn't have to be reviewed as a
+        // folder of thousands of loose images.
+        //
+        // FFV1-in-Matroska specifically, not a lossy codec like VP9/H.264:
+        // this exists to inspect exact pixel-level rendering bugs, and a
+        // lossy codec's own compression artifacts would undermine that -
+        // trading file size for fidelity is the wrong tradeoff for a
+        // debugging tool. Both FFV1 and Matroska are open formats.
+        //
+        // HONESTY NOTE: built carefully against ffmpeg's documented
+        // image2/glob demuxer and FFV1 encoder options, but not verified
+        // by actually running it - this project's build/run environment
+        // couldn't do that from where this was written. Report back if
+        // the exact invocation needs adjusting.
+        private void TryEncodeVideo(string sessionDir, int frameStride)
+        {
+            string outputPath = Path.Combine(sessionDir, "recording.mkv");
+            double fps = AssumedFps / Math.Max(1, frameStride);
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                WorkingDirectory = sessionDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("-y");
+            psi.ArgumentList.Add("-pattern_type");
+            psi.ArgumentList.Add("glob");
+            psi.ArgumentList.Add("-framerate");
+            psi.ArgumentList.Add(fps.ToString(CultureInfo.InvariantCulture));
+            psi.ArgumentList.Add("-i");
+            psi.ArgumentList.Add("frame_*.png");
+            psi.ArgumentList.Add("-c:v");
+            psi.ArgumentList.Add("ffv1");
+            psi.ArgumentList.Add("-pix_fmt");
+            psi.ArgumentList.Add("rgb24");
+            psi.ArgumentList.Add(outputPath);
+
+            try
+            {
+                using Process proc = Process.Start(psi)!;
+                string stderr = proc.StandardError.ReadToEnd();
+                proc.WaitForExit();
+
+                if (proc.ExitCode == 0)
+                {
+                    Console.WriteLine($"[RECORD] Video encoded -> {outputPath}");
+                }
+                else
+                {
+                    Console.WriteLine($"[RECORD] ffmpeg exited with code {proc.ExitCode}; PNG sequence + frames.log are still in {sessionDir}");
+                    Console.WriteLine(stderr);
+                }
+            }
+            catch (Win32Exception)
+            {
+                // ffmpeg isn't on PATH - not an error condition for this
+                // tool, just means the convenience encode step is
+                // unavailable. The PNG sequence and ledger are already
+                // complete and useful on their own.
+                Console.WriteLine($"[RECORD] ffmpeg not found on PATH - leaving the PNG sequence + frames.log as-is in {sessionDir}. Install ffmpeg for automatic video output.");
+            }
         }
 
         // Called once per rendered frame by whatever owns the frame loop,

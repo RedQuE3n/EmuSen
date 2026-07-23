@@ -184,6 +184,16 @@ Starts a new session folder under `Logs/Recordings/<CoreName>_<timestamp>/` each
 
 **Core-agnostic by the same pattern as the rest of this toolchain:** `FrameRecorder` only touches `IDebugTarget` (`CoreName`/`FrameCount`, same as F3 uses via `debugTarget`) and never anything console- or renderer-specific. The one Raylib-specific piece — actually grabbing a frame's pixels — is supplied by the frontend as a callback (`path => Raylib_cs.Raylib.TakeScreenshot(path)` in `Program.cs`'s F6 handler) rather than living inside `FrameRecorder` itself, so a future frontend using a different rendering API reuses this class unchanged and only needs to supply its own capture callback.
 
+**Automatic video encode on stop, via `ffmpeg`.** A PNG-per-frame folder is a hot mess to actually review, so `Stop()` shells out to `ffmpeg` (if it's on `PATH`) to mux the just-captured sequence into `recording.mkv` in the same session folder, using `ffmpeg`'s glob image2 demuxer (`-pattern_type glob -i "frame_*.png"`, which only needs lexically-increasing filenames — already true since they're named from `FrameCount`, zero-padded — not strictly-sequential integers, so this works unchanged even with a frame stride > 1). Framerate passed to `ffmpeg` is `60.0 / frameStride`, the same "~60fps" approximation already used elsewhere in this codebase (see `Program.cs`'s `SaveEveryNFrames` comment), not a timing-accurate real-hardware rate.
+
+**Codec choice: FFV1-in-Matroska, deliberately lossless, not VP9/H.264.** This exists to inspect exact pixel-level rendering bugs (the whole reason it exists — Yoshi's invisible-sprite investigation); a lossy codec's own compression artifacts would work against that exact purpose. Both FFV1 and Matroska are open formats. The PNG sequence and `frames.log` are never deleted after encoding — the video is purely additive convenience, not a replacement.
+
+**Not required.** If `ffmpeg` isn't on `PATH`, `Stop()` catches that (`Win32Exception`) and just logs that the PNG sequence + ledger are the usable result, same as before this existed — this is a convenience layer, not a hard dependency of the recording feature itself.
+
+**Blocks synchronously while encoding.** `Stop()` waits for `ffmpeg` to finish before returning, so stopping a long recording will visibly freeze the emulator for the encode duration — same class of tradeoff the F4 debug prompt already has (the execution loop can't pause mid-frame independent of this either way). Would need to move off the main thread if this ever needs to not block real-time play.
+
+**HONESTY NOTE, same standard as everything else in this reference:** the exact `ffmpeg` invocation (glob demuxer flags, FFV1 encoder options) was built carefully against `ffmpeg`'s documented CLI, but has not been run and verified — this project couldn't be built/run from wherever this was written. Treat it as a solid first draft, not a proven-working reference, until confirmed against a real recording.
+
 ---
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)

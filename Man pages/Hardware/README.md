@@ -22,4 +22,15 @@ One page per piece of hardware being abstracted, rather than the long inline `//
 - [`Venus_PPU.md`](Venus%20-%20SNES/Venus_PPU.md) — register dispatch, scroll-latch fix, Mode 7, compositing order, color math, sprite budget, windowing, hi-res, status registers.
 - [`Venus_APU.md`](Venus%20-%20SNES/Venus_APU.md) — SPC700 boot/ports/timers, instruction-set quirks, S-DSP register handling, ADSR/GAIN envelopes, BRR decoding.
 
-Future cores get their own `<CoreCodename> - <Console>/` subfolder here as they're built.
+### Stub folders — not started yet
+
+Every other core already has a reserved `<CoreCodename> - <Console>/` folder here, one per `EmuSen/Cores/<Manufacturer>/<CoreCodename> - <Console>/`, so the doc tree always mirrors the code tree instead of playing catch-up once a core actually starts. Each stub folder holds a single placeholder `README.md`; real pages (`<CoreCodename>_CPU.md`, `_PPU.md`, etc.) get added the same way `Venus - SNES/`'s were, once there's a core here to document.
+
+**Nintendo** — `Moon - NES/`, `Mercury - GB-GBC/`, `Jupiter - GBA/`, `Mars - N64/`, `Saturn - Virtual Boy/`, `Uranus - GameCube/`, `Neptune - Wii/`, `Pluto - Wii U/`
+**Sega** — `Jadeite - Game Gear/`, `Nephrite - 32X/`, `Endymion - Master System/`, `Beryl - Genesis/`, `Zoisite - Saturn/`, `Kunzite - Dreamcast/`
+**Sony** — `Diamond - PlayStation/`, `Sapphire - PlayStation 2/`, `Rubeus - PlayStation 3/`, `Esmeraude - PSP/`, `Wiseman - PS Vita/`
+**Atari** — `Eudial - Atari 2600/`, `Mimete - Atari 5200/`, `Tellu - Atari 7800/`, `Viluy - Atari Lynx/`, `Cyprine & Ptilol - Atari Jaguar/`
+**Microsoft** — `CereCere - Xbox/`, `JunJun - Xbox 360/`, `PallaPalla - Xbox One/`, `VesVes - Xbox Series/`
+**NEC** — `Tigers Eye - PC Engine/`, `Fish Eye - SuperGrafx/`, `Hawks Eye - PC-FX/`
+
+(Folder names drop apostrophes the same way the corresponding `EmuSen/Cores/` folder does — e.g. `Hawks Eye`, not `Hawk's Eye` — for the same filesystem-portability reasons. See each stub's own `README.md` for the fully-punctuated display name.)

@@ -17,15 +17,16 @@ namespace EmuSen.Frontend
         static void Main(string[] args)
         {
             TextWriter originalOut = Console.Out;
-            string logDir = Path.Combine(Directory.GetCurrentDirectory(), "Logs");
-            Directory.CreateDirectory(logDir); // no-op if it already exists
-            // Timestamped per launch (not a fixed "console.log") so a new
-            // session doesn't overwrite the previous one's log - each capture
-            // sent for investigation is now self-identifying by filename
-            // alone, without needing to check the upload time separately.
-            string logPath = Path.Combine(logDir, $"console_{DateTime.Now:yyyyMMdd_HHmmss}.log");
-            StreamWriter fileWriter = new StreamWriter(logPath, append: false) { AutoFlush = true };
-            Console.SetOut(new TeeTextWriter(originalOut, fileWriter));
+            // Timestamped per-session subfolder (not a fixed "console.log")
+            // so a new launch doesn't overwrite the previous one's logs -
+            // each capture is self-identifying by folder name alone. Output
+            // is further split by category (see CategorizedLogWriter) rather
+            // than one ever-growing combined file - that file routinely
+            // reached hundreds of thousands of lines in a single play
+            // session, too large to search or hand off for review.
+            string logDir = Path.Combine(Directory.GetCurrentDirectory(), "Logs", $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
+            Directory.CreateDirectory(logDir);
+            Console.SetOut(new CategorizedLogWriter(originalOut, logDir));
 
             // Pick the ROM to run: first command-line argument if given (e.g.
             // `dotnet run -- /path/to/game.smc`), otherwise fall back to the

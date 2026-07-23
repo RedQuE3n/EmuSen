@@ -13,7 +13,7 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as two sibling pro
 
 **Licensing stance:** the SNESdev wiki (mirrored at both `snes.nesdev.org` and `snesdev.mesen.ca` — maintained by the Mesen/MesenCE team) is the primary hardware-reference source. Mesen/MesenCE's own *documentation* gets read to understand hardware behavior; their source code does not — every implementation here is original. `SourMesen/Mesen2` is archived; `nesdev-org/MesenCE` is the actively maintained continuation and gets cited, not "Mesen2."
 
-**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with sibling folders already reserved for every other planned core (`Cores/Nintendo/{SailorMoon,Mercury,Jupiter,Mars}/`, `Cores/Sega/{Endymion,Beryl,Jadeite,Nephrite,Zoisite,Kunzite}/`), each with a placeholder `README.md` until real work starts there. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
+**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with sibling folders already reserved for every other planned core (`Cores/Nintendo/{SailorMoon,Mercury,Jupiter,Mars}/`, `Cores/Sega/{Endymion,Beryl,Jadeite,Nephrite,Zoisite,Kunzite}/`), each with a placeholder `README.md` until real work starts there. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
 
 **Naming scheme:** every core is named after an *EmuSen* = **Emu**lator **Sen**shi (Sailor Moon) character, grouped by manufacturer (`Cores/Nintendo/`, `Cores/Sega/`) — full mapping and rationale in `EmuSen_Core_Naming_Scheme.md`. The SNES core is `Venus`; still called "SNES" in prose/comments/log output/class names (`SnesDebugTarget`, `Snes65816Disassembler`, etc.) since that's the accurate hardware name — the codename governs the folder/namespace only, not every mention of the actual console.
 
@@ -39,15 +39,15 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 
 **Layering, roughly bottom-to-top:**
 
-- **Hardware simulation** (`Cores/Nintendo/Venus/Cpu`, `Cores/Nintendo/Venus/Apu`, `Cores/Nintendo/Venus/Ppu`, `Cores/Nintendo/Venus/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
+- **Hardware simulation** (`Cores/Nintendo/Venus - SNES/Cpu`, `Cores/Nintendo/Venus - SNES/Apu`, `Cores/Nintendo/Venus - SNES/Ppu`, `Cores/Nintendo/Venus - SNES/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
 - **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by the Avalonia frontend), `StateSerializer` (reflective save states), `TeeTextWriter` (console+file logging).
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight.
-- **The debug toolchain** (`Debug/`, plus `Cores/Nintendo/Venus/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus/Debug/SnesDebugTarget.cs` is the SNES implementation; `Debug/DebugCommandProcessor.cs` is a Unix-toolchain-style command layer on top of that. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
+- **The debug toolchain** (`Debug/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Debug/DebugCommandProcessor.cs` is a Unix-toolchain-style command layer on top of that. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Frontends** (`Frontend/Program.cs` in `EmuSen/`, all of `EmuSen.Frontend/`) — presentation only. The Raylib console build and the Avalonia GUI are two independent entry points into the same core; neither owns emulation logic itself.
 
 **A concrete example of the layering working as intended:** `MemoryBus` (hardware simulation) exposes a tiny, debug-agnostic `IWriteObserver` hook that it calls on every WRAM write, with no idea what's listening. `SnesDebugTarget` (debug toolchain) implements that interface and is the thing that actually knows what a "watchpoint" is. `MemoryBus` could be reused by a completely different debug story (or none at all) without any changes — the coupling only exists in one direction, and it's the debug layer depending on the core, not the reverse. This wasn't always true — a `WatchRegistry` field and a `Cpu` back-reference used to live directly on `MemoryBus` itself, mixing the two layers together, until a later architecture-focused pass (see §4 and §7) untangled it.
 
-**Multi-core intent:** `Cores/Nintendo/Venus/` (SNES) sits alongside reserved sibling folders for every other planned core (see §3's directory map, and `EmuSen_Core_Naming_Scheme.md` for the full manufacturer/codename mapping). The C# namespaces now match the folder structure (`EmuSen.Cores.Nintendo.Venus.*`, not a generic `EmuSen.*`) — the drive-by rename that used to be a §7 TODO item is done. The debug toolchain's core-agnostic design (`IDebugTarget` et al.) is the one piece of this multi-core intent that's actually been proven under real use, rather than just structural.
+**Multi-core intent:** `Cores/Nintendo/Venus - SNES/` (SNES) sits alongside reserved sibling folders for every other planned core (see §3's directory map, and `EmuSen_Core_Naming_Scheme.md` for the full manufacturer/codename mapping). The C# namespaces now match the folder structure (`EmuSen.Cores.Nintendo.Venus.*`, not a generic `EmuSen.*`) — the drive-by rename that used to be a §7 TODO item is done. The debug toolchain's core-agnostic design (`IDebugTarget` et al.) is the one piece of this multi-core intent that's actually been proven under real use, rather than just structural.
 
 ---
 
@@ -63,10 +63,10 @@ EmuSen Project/
 │   │   └── TeeTextWriter.cs                  # Console + file log tee
 │   ├── Cores/
 │   │   ├── Nintendo/
-│   │   │   ├── Venus/                        # SNES core - namespaces now match the folder
-│   │   │   │   │                              #   structure (EmuSen.Cores.Nintendo.Venus.Memory,
-│   │   │   │   │                              #   not the old generic EmuSen.Memory) - see
-│   │   │   │   │                              #   EmuSen_Core_Naming_Scheme.md for the full scheme.
+│   │   │   ├── Venus - SNES/                 # Namespace stays plain "Venus" (C# identifiers can't
+│   │   │   │   │                              #   contain spaces/dashes) - EmuSen.Cores.Nintendo.
+│   │   │   │   │                              #   Venus.Memory, not the old generic EmuSen.Memory.
+│   │   │   │   │                              #   See EmuSen_Core_Naming_Scheme.md for the full scheme.
 │   │   │   │   ├── Cpu/
 │   │   │   │   │   ├── Core/Cpu.cs           # 65816 execution core
 │   │   │   │   │   ├── Opcodes/
@@ -112,17 +112,17 @@ EmuSen Project/
 │   │   │   │   │                              #   EmuSen.Cores.Nintendo.Venus.Debug)
 │   │   │   │   └── Input/
 │   │   │   │       └── Input.cs
-│   │   │   ├── SailorMoon/README.md          # Reserved - future NES core
-│   │   │   ├── Mercury/README.md             # Reserved - future GB/GBC core
-│   │   │   ├── Jupiter/README.md             # Reserved - future GBA core
-│   │   │   └── Mars/README.md                # Reserved - future N64 core
+│   │   │   ├── SailorMoon - NES/README.md    # Reserved - future NES core
+│   │   │   ├── Mercury - GB-GBC/README.md    # Reserved - future GB/GBC core
+│   │   │   ├── Jupiter - GBA/README.md       # Reserved - future GBA core
+│   │   │   └── Mars - N64/README.md          # Reserved - future N64 core
 │   │   └── Sega/
-│   │       ├── Endymion/README.md            # Reserved - future Master System core
-│   │       ├── Beryl/README.md               # Reserved - future Genesis/Mega Drive core
-│   │       ├── Jadeite/README.md             # Reserved - future Game Gear core
-│   │       ├── Nephrite/README.md            # Reserved - future 32X core
-│   │       ├── Zoisite/README.md             # Reserved - future Saturn core
-│   │       └── Kunzite/README.md             # Reserved - future Dreamcast core
+│   │       ├── Endymion - Master System/README.md  # Reserved - future Master System core
+│   │       ├── Beryl - Genesis/README.md     # Reserved - future Genesis/Mega Drive core
+│   │       ├── Jadeite - Game Gear/README.md # Reserved - future Game Gear core
+│   │       ├── Nephrite - 32X/README.md      # Reserved - future 32X core
+│   │       ├── Zoisite - Saturn/README.md    # Reserved - future Saturn core
+│   │       └── Kunzite - Dreamcast/README.md # Reserved - future Dreamcast core
 │   ├── Debug/                                # Core-agnostic debug toolchain (see companion doc)
 │   │   ├── IDebugTarget.cs
 │   │   ├── DebugCommandProcessor.cs
@@ -239,7 +239,7 @@ Roughly in order of "cheap and likely valuable" to "bigger, deliberately-deferre
 2. **Get an actual test ROM for Mode 7 EXTBG and offset-per-tile** to confirm those implementations against real content rather than documentation alone (same category of "implemented but unexercised" as tile16/mosaic were before SMW's own logs confirmed them safe).
 3. **A verification pass on the new disassembler** (`Snes65816Disassembler`) — built carefully but not given the oxyron.de-level scrutiny the execution opcode table got. See the debugging tools reference, §3.7.
 4. **Watchpoints beyond WRAM** — report writes from `Ppu`'s VRAM/CGRAM/OAM paths and the general CPU-bus/SRAM path through `MemoryBus`'s `IWriteObserver` hook the same way WRAM already does.
-5. ~~The drive-by namespace rename~~ — done: `Cores/Snes/` → `Cores/Nintendo/Venus/`, `EmuSen.Memory`/`.Apu`/`.Processor`/`.Video`/`.Controllers` → `EmuSen.Cores.Nintendo.Venus.*`. See `EmuSen_Core_Naming_Scheme.md`.
+5. ~~The drive-by namespace rename~~ — done: `Cores/Snes/` → `Cores/Nintendo/Venus - SNES/`, `EmuSen.Memory`/`.Apu`/`.Processor`/`.Video`/`.Controllers` → `EmuSen.Cores.Nintendo.Venus.*`. See `EmuSen_Core_Naming_Scheme.md`.
 6. **The rest of the `MemoryBus` decoupling** — the multiply/divide unit and the debug-toolchain plumbing are out (§2, §4); H/V-IRQ/NMI/vblank state is not. On closer inspection this cluster turned out more entangled than it first looked (the same `_vblankFlag` feeds NMI edge-detection *and* the RDNMI/HVBJOY register reads, and $4200 sets both NMI and IRQ enable in one write) — forcing a clean split risked adding more cross-object coupling than it removed, in genuinely delicate, already-hard-won timing logic. Worth revisiting deliberately, not as a quick follow-on.
 7. **The `Renderer`/Raylib split** — `Renderer` still mixes pure pixel computation with Raylib window/texture ownership even in headless mode. Real, but risky enough (core rendering code, many delicate accuracy fixes riding on it) to treat as its own dedicated future pass rather than bundling into a quick cleanup.
 8. **Audio output** — connect the already-correct S-DSP synthesis to an actual playback device.

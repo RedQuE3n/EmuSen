@@ -1,7 +1,7 @@
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {
     // A minimal hook for observing bus writes, deliberately living here
-    // (under Cores/Nintendo/Venus/Memory, not Debug/) rather than being a debug-
+    // (under Cores/Nintendo/Venus - SNES/Memory, not Debug/) rather than being a debug-
     // toolchain type that MemoryBus would need to reference. Whoever wants
     // to observe writes - SnesDebugTarget's watch registry today, anything
     // else later - implements this and registers itself via

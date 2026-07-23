@@ -67,6 +67,12 @@ namespace EmuSen.Frontend
                 SnesDebugTarget debugTarget = new SnesDebugTarget(cpu, bus);
                 DebugCommandProcessor debugCmd = new DebugCommandProcessor(debugTarget);
 
+                // Continuous version of the F3 screenshot utility - see
+                // Debug/FrameRecorder.cs. Core-agnostic itself; only the
+                // capture callback wired in at the F6 hotkey below is
+                // Raylib-specific.
+                FrameRecorder frameRecorder = new FrameRecorder(debugTarget);
+
                 // Yoshi/coin WRAM-staging investigation: registered here
                 // instead of via the F4 prompt so it's active from the very
                 // first CPU instruction, not from whenever a human can
@@ -182,7 +188,7 @@ namespace EmuSen.Frontend
                         // emulation timing loop above isn't buried under debug UI
                         // dispatch. totalFrames/currentScanline are passed by ref
                         // since F9 (load state) reassigns both from the save file.
-                        RunHotkeys(cpu, bus, spc700, cart, renderer, debugTarget, debugCmd,
+                        RunHotkeys(cpu, bus, spc700, cart, renderer, debugTarget, debugCmd, frameRecorder,
                             statePath, ref totalFrames, ref currentScanline);
                     }
                 }
@@ -204,9 +210,31 @@ namespace EmuSen.Frontend
         // state and F3 screenshot side effects, same as before the extraction.
         private static void RunHotkeys(
             Cpu cpu, MemoryBus bus, Spc700 spc700, Cartridge cart, Renderer renderer,
-            SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd,
+            SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, FrameRecorder frameRecorder,
             string statePath, ref long totalFrames, ref int currentScanline)
         {
+            // Called every completed frame, recording or not - CaptureFrame
+            // is a cheap no-op when IsRecording is false, so no gating
+            // needed here. Has to run unconditionally like this (not just
+            // on a keypress) so every frame while recording gets a chance
+            // to be captured, not only the frame F6 happened to be pressed
+            // on.
+            frameRecorder.CaptureFrame(path => Raylib_cs.Raylib.TakeScreenshot(path));
+
+            if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F6))
+            {
+                if (frameRecorder.IsRecording)
+                {
+                    Console.WriteLine($"[RECORD] Stopped: {frameRecorder.SessionDir}");
+                    frameRecorder.Stop();
+                }
+                else
+                {
+                    string dir = frameRecorder.Start(Path.Combine("Logs", "Recordings"));
+                    Console.WriteLine($"[RECORD] Started -> {dir}");
+                }
+            }
+
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.P))
             {
                 _bgScrollTrace.Start(300);

@@ -70,6 +70,7 @@ namespace EmuSen.Debug
                 new TileCommand(),
                 new DisasmCommand(),
                 new TraceCommand(),
+                new CallersCommand(),
             };
             _commands = _orderedCommands.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         }

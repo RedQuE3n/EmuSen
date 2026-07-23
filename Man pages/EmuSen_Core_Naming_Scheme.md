@@ -41,6 +41,15 @@ Sailor Moon herself (codename **Moon**, not the character's full title) anchors 
 
 **Note on "Saturn" the codename vs. "Saturn" the console:** Sega's own Saturn hardware is codenamed **Zoisite** (§3), not Sailor Saturn — the codename "Saturn" here refers only to the *character*, paired with Nintendo's Virtual Boy. No collision in practice since codenames are scoped per-manufacturer-folder, but worth being explicit about given how easy this is to misread at a glance.
 
+### Guardian cats — handheld companion lineage
+
+| Console | Codename | Folder | Status |
+|---|---|---|---|
+| Nintendo DS | **Luna** | `Cores/Nintendo/Luna - DS/` | Not started — reserved |
+| Nintendo 3DS / New Nintendo 3DS | **Artemis** | `Cores/Nintendo/Artemis - 3DS-New3DS/` | Not started — reserved. Open question whether the 3DS and New 3DS are different enough hardware to warrant two separate cores rather than one (same shape as the GB/GBC question under Mercury — revisit once there's a real basis for comparison) |
+
+**Luna and Artemis aren't Sailor Senshi themselves** — they're the two guardian cats who mentor and advise the Sailor Guardians throughout the series (Luna mentors Sailor Moon directly; Artemis mentors Sailor Venus and later the whole team). Deliberately kept as their own small group rather than folded into Inner or Outer Senshi above, since they're a different kind of character entirely — fitting company for the *handheld* wing of Nintendo's lineup specifically, companions alongside the main console generations the way the DS/3DS families themselves sit alongside (rather than replacing) Nintendo's home consoles.
+
 ---
 
 ## 3. Sega consoles → Dark Kingdom / Shitennou

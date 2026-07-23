@@ -83,6 +83,22 @@ namespace EmuSen.Frontend
                 // missing it." Remove once the investigation concludes.
                 debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
 
+                // Same investigation, one level upstream: a ground-truth CPU
+                // trace found the real DMA-trigger routine at $00A300 (not
+                // $00A317, which was just partway through it) reads a job
+                // table at $0D80-$0D9F (source pointer + pending-item counts
+                // for both a palette-upload branch and a graphics-upload
+                // branch) but never writes it - so whatever queues a job
+                // (and would determine whether Yoshi's slot points at valid
+                // WRAM data) does so somewhere else entirely. Zero writes to
+                // this range showed up in a 20480-instruction ground-truth
+                // trace that otherwise spanned many frames of active
+                // dispatching, meaning this table is very likely populated
+                // once, before that trace started - same shape as the
+                // original $8000-$97FF finding. Watching from power-on
+                // closes that gap here too.
+                debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
+
                 int currentScanline = 0;
                 long totalFrames = 0;
 

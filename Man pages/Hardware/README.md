@@ -18,4 +18,5 @@ One page per piece of hardware being abstracted, rather than the long inline `//
 - [`Venus_Memory.md`](Venus_Memory.md) — CPU address bus, LoROM cartridge mapping, DMA/HDMA, NMI/IRQ subsystem, hardware math unit.
 - [`Venus_CPU.md`](Venus_CPU.md) — 65816 core: fetch/execute loop, interrupt entry sequences, WAI/STP, addressing modes, opcode table verification status.
 - [`Venus_PPU.md`](Venus_PPU.md) — register dispatch, scroll-latch fix, Mode 7, compositing order, color math, sprite budget, windowing, hi-res, status registers.
-- More to follow, one hardware component at a time (APU next).
+- [`Venus_APU.md`](Venus_APU.md) — SPC700 boot/ports/timers, instruction-set quirks, S-DSP register handling, ADSR/GAIN envelopes, BRR decoding.
+- Core CPU/PPU/APU/Memory coverage complete for Venus (SNES). Future cores get their own pages as they're built.

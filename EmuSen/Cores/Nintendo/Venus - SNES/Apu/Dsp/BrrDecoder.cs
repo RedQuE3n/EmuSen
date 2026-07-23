@@ -2,15 +2,7 @@ using System;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
-    // Decodes SNES BRR (Bit Rate Reduction) compressed audio, the format all SPC700
-    // sample-based instruments are stored in. One instance per voice (holds the
-    // rolling prev1/prev2 state the prediction filters need), fed one 9-byte block
-    // at a time as playback advances.
-    //
-    // Algorithm confirmed against the SNESdev wiki
-    // (https://snes.nesdev.org/wiki/BRR_samples) rather than reconstructed from
-    // memory - the filter coefficients in particular are precise fractions (e.g.
-    // 61/32, 115/64) that are easy to get subtly wrong.
+    // Decodes SNES BRR (Bit Rate Reduction) compressed audio - see Venus_APU.md §5.
     public class BrrDecoder
     {
         // The two most recently decoded samples - required by filters 1-3 to predict
@@ -48,9 +40,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 // Sign-extend the 4-bit nibble to a signed value in -8..7.
                 if (nibble >= 8) nibble -= 16;
 
-                // Shift 13-15 is a documented hardware quirk, not a normal magnitude -
-                // it collapses to just the sign of the nibble scaled up, rather than
-                // an actual left shift by that many bits.
+                // Shift 13-15 is a documented hardware quirk - see Venus_APU.md §5.
                 int raw;
                 if (shift <= 12)
                 {
@@ -82,9 +72,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                         break;
                 }
 
-                // Real hardware's accumulator overflows by wrapping through a 16-bit
-                // signed range rather than saturating - a plain cast to short
-                // reproduces that truncation/wraparound behavior exactly.
+                // Wraps, doesn't saturate - see Venus_APU.md §5.
                 short sample = (short)predicted;
 
                 output[i] = sample;

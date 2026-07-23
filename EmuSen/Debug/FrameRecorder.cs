@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 
 namespace EmuSen.Debug
 {
@@ -154,6 +155,7 @@ namespace EmuSen.Debug
                 if (proc.ExitCode == 0)
                 {
                     Console.WriteLine($"[RECORD] Video encoded -> {outputPath}");
+                    ZipAndCleanupFrames(sessionDir);
                 }
                 else
                 {
@@ -168,6 +170,46 @@ namespace EmuSen.Debug
                 // unavailable. The PNG sequence and ledger are already
                 // complete and useful on their own.
                 Console.WriteLine($"[RECORD] ffmpeg not found on PATH - leaving the PNG sequence + frames.log as-is in {sessionDir}. Install ffmpeg for automatic video output.");
+            }
+        }
+
+        // Only called after a confirmed-successful encode (ExitCode == 0)
+        // - at that point the loose PNGs are fully redundant (FFV1 is
+        // lossless, so recording.mkv already has everything they do), and
+        // a folder of potentially thousands of individual image files is
+        // exactly the "hot mess" this whole video-encode step exists to
+        // avoid. Zipped rather than deleted outright so the raw frames
+        // stay recoverable (just compressed) instead of gone - frames.log
+        // (the frame/timestamp ledger) is left alone either way, it's
+        // small and still useful for cross-referencing without needing to
+        // unzip anything.
+        private static void ZipAndCleanupFrames(string sessionDir)
+        {
+            string[] pngFiles = Directory.GetFiles(sessionDir, "frame_*.png");
+            if (pngFiles.Length == 0) return;
+
+            string zipPath = Path.Combine(sessionDir, "frames.zip");
+            try
+            {
+                using (var zipStream = new FileStream(zipPath, FileMode.Create))
+                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create))
+                {
+                    foreach (string png in pngFiles)
+                    {
+                        archive.CreateEntryFromFile(png, Path.GetFileName(png), CompressionLevel.Optimal);
+                    }
+                }
+
+                foreach (string png in pngFiles) File.Delete(png);
+                Console.WriteLine($"[RECORD] Archived {pngFiles.Length} frame PNGs -> {zipPath}");
+            }
+            catch (Exception ex)
+            {
+                // Non-critical: the video already succeeded, so this is
+                // purely tidiness. Leave the loose PNGs in place (don't
+                // delete anything a failed zip didn't actually capture)
+                // rather than risk losing data over a cleanup step.
+                Console.WriteLine($"[RECORD] Zipping frame PNGs failed ({ex.Message}); leaving them as loose files in {sessionDir}");
             }
         }
 

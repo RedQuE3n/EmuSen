@@ -55,6 +55,7 @@ namespace EmuSen.Debug
                     "watch" => CmdWatch(parts),
                     "tile" => CmdTile(parts),
                     "disasm" => CmdDisasm(parts),
+                    "trace" => CmdTrace(parts),
                     "summary" => _target.GetSummaryText(),
                     _ => $"Unknown command '{cmd}'. Type 'help' for a list.",
                 };
@@ -87,6 +88,8 @@ namespace EmuSen.Debug
                 "  watch remove <id>             remove a watch entirely",
                 "  tile <space> <addr> <bpp>     ASCII-decode one 8x8 tile (bpp: 2, 4, or 8)",
                 "  disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)",
+                "  trace <count>                 arm a live CPU instruction trace for the next <count> instructions",
+                "  trace off                     cancel an in-progress trace early",
                 "  summary                       free-text state dump (whatever isn't structured above yet)",
                 "",
                 "Addresses/values are hex; an optional 0x or $ prefix is fine either way.",
@@ -333,6 +336,30 @@ namespace EmuSen.Debug
                 sb.AppendLine($"  {instr.Address:X6}: {bytesHex,-9} {instr.Mnemonic} {instr.OperandText}".TrimEnd());
             }
             return sb.ToString().TrimEnd();
+        }
+
+        // Arms/disarms DebugSettings.CpuVerboseLogging live from the F4
+        // prompt, instead of requiring a rebuild and a boot-time flag - the
+        // countdown is instruction-count-based and starts from whenever
+        // this command runs, not from power-on, so it can be aimed at a
+        // specific moment in a play session (e.g. "right before the thing
+        // I want to see happens") rather than burning its whole budget
+        // during the boot/reset routine.
+        private string CmdTrace(string[] parts)
+        {
+            if (parts.Length < 2) return "Usage: trace <count> | trace off";
+
+            if (parts[1].Equals("off", StringComparison.OrdinalIgnoreCase))
+            {
+                DebugSettings.CpuVerboseLogging = false;
+                DebugSettings.CpuTraceCountdown = 0;
+                return "Trace disabled.";
+            }
+
+            int count = ParseHex(parts[1]);
+            DebugSettings.CpuTraceCountdown = count;
+            DebugSettings.CpuVerboseLogging = true;
+            return $"Trace armed for the next {count} instructions.";
         }
     }
 }

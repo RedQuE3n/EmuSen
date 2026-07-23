@@ -706,20 +706,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         private void OpCLD(uint address) { SetFlag(CpuFlags.D, false); }
         private void OpSED(uint address) { SetFlag(CpuFlags.D, true); }
 
-        // WAI: halts instruction fetch/execute until any interrupt condition
-        // wakes the CPU. Per documented 65816 behavior (verified via
-        // 6502.org/apprize.best's "Programming the 65816" excerpt and the
-        // NESDev WAI thread), NMI always wakes AND services it; IRQ wakes it
-        // even while masked (I=1), but only actually jumps to the vector if
-        // unmasked - if masked, execution just resumes at the instruction
-        // after WAI with no interrupt serviced. See Step()/Nmi()/Irq() in
-        // Cpu.cs for where _waitingForInterrupt is checked/cleared.
+        // WAI/STP - see Venus_CPU.md §4.
         private void OpWAI(uint address) { _waitingForInterrupt = true; }
-
-        // STP: stops the CPU entirely. Real hardware only wakes on a hardware
-        // RESET; here that's Cpu.Reset(), which clears _stopped. No other
-        // instruction or interrupt clears this - matches real hardware, where
-        // STP is meant for power-down, not a resumable pause.
         private void OpSTP(uint address) { _stopped = true; }
 
         private void OpTCS(uint address)
@@ -1027,7 +1015,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             }
         }
 
-        // UPDATED: CMP with Targeted APU Debugger
         private void OpCMP(uint address)
         {
             if (DebugSettings.CpuVerboseLogging && address == 0x002140)

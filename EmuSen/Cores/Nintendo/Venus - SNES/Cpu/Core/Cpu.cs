@@ -46,26 +46,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         public byte PB;   
         public byte DB;   
 
-        // The PC/PB of whichever instruction is CURRENTLY executing, as
-        // opposed to the live PC/PB fields above which point at the NEXT
-        // instruction the moment Fetch8() advances past the opcode/operand
-        // bytes (i.e. almost immediately, well before that instruction's
-        // side effects - like a memory write - actually happen). Debug
-        // tooling that wants "which instruction just wrote this value"
-        // (see Dma.cs's LogSourceAddrWrite) needs these, not the live PC/PB
-        // - using the live ones was a real bug caught mid-investigation:
-        // every DMA source-address write was showing the SAME next-
-        // instruction bytes regardless of which actual STA had just fired,
-        // because by the time the write's side effect ran, PC had already
-        // moved on.
+        // Snapshotted at instruction start, unlike the live PC/PB above -
+        // see Venus_CPU.md §2.
         public ushort LastInstructionPC;
         public byte LastInstructionPB;
         
         public byte P;    
         public bool E;    
 
-        // WAI/STP state - see OpWAI/OpSTP in Cpu.Opcodes.cs for how these get
-        // set, and Step()/Nmi()/Irq() below for how they get checked/cleared.
+        // WAI/STP state - see Venus_CPU.md §4.
         private bool _waitingForInterrupt;
         private bool _stopped;
 
@@ -158,14 +147,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             return inst.Cycles; 
         }
 
-        // Runs the real 65816 NMI entry sequence: push PB (native mode only), PC, and P,
-        // clear D, set I, then jump to the NMI vector ($FFEA native / $FFFA emulation).
-        // The handler is expected to end with RTI. This is triggered externally (from the
-        // main loop) when a simulated vblank occurs and NMITIMEN's enable bit is set.
+        // NMI entry sequence - see Venus_CPU.md §3. Triggered externally
+        // from the main loop on simulated vblank when NMITIMEN's enable bit is set.
         public void Nmi()
         {
-            // NMI always wakes a WAI-halted CPU, same as it always services
-            // regardless of the I flag (NMI is non-maskable).
             _waitingForInterrupt = false;
 
             if (!E)
@@ -192,21 +177,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             }
         }
 
-        // Runs the real 65816 IRQ entry sequence - identical structure to NMI, but
-        // MASKABLE: it only actually fires if the I (interrupt disable) flag is
-        // clear, matching real hardware where the CPU itself holds off IRQs while
-        // that flag is set. Uses the IRQ vector, which is genuinely different from
-        // NMI's in native mode ($FFEE vs $FFEA) but shares BRK's vector in
-        // emulation mode ($FFFE) - a real, documented 6502/65816 quirk, not a typo.
-        // Returns whether the interrupt actually fired, so the caller (which decides
-        // WHEN to attempt this, based on H/V-IRQ timer conditions) knows whether to
-        // also acknowledge/clear the pending condition.
+        // IRQ entry sequence - see Venus_CPU.md §3.
         public bool Irq()
         {
-            // WAI wakes on ANY interrupt condition, masked or not - only
-            // whether it's actually SERVICED (jumps to the vector) respects
-            // the I flag. So this clears _waitingForInterrupt unconditionally,
-            // before the mask check below.
             _waitingForInterrupt = false;
 
             if (GetFlag(CpuFlags.I)) return false;

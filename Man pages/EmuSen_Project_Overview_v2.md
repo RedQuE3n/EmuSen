@@ -73,8 +73,12 @@ EmuSen Project/
 │   │   │   │   │   ├── Core/Cpu.cs           # 65816 execution core
 │   │   │   │   │   ├── Opcodes/
 │   │   │   │   │   │   ├── Cpu.AddressModes.cs
-│   │   │   │   │   │   ├── Cpu.OpcodeTable.cs
-│   │   │   │   │   │   └── Cpu.Opcodes.cs
+│   │   │   │   │   │   ├── Cpu.OpcodeTable.cs         # 256-entry dispatch table - kept as ONE file
+│   │   │   │   │   │   │                              #   on purpose, see Venus_CPU.md §1
+│   │   │   │   │   │   └── Cpu.Opcodes.{System,Stack,LoadStoreTransfer,
+│   │   │   │   │   │       Arithmetic,Logical,Shift,Branch,Flags}.cs
+│   │   │   │   │   │                                  # Op* bodies, split by instruction category -
+│   │   │   │   │   │                                  #   was one 1229-line Cpu.Opcodes.cs
 │   │   │   │   │   └── Disassembler/
 │   │   │   │   │       └── Snes65816Disassembler.cs  # Separate, read-only mnemonic table - NOT
 │   │   │   │   │                                       #   built from the execution opcode table

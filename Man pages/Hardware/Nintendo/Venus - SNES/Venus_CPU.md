@@ -1,6 +1,6 @@
 # Venus (SNES) — CPU (65816)
 
-Covers `Cores/Nintendo/Venus - SNES/Cpu/`: the 65816 core (`Cpu.cs`), addressing modes (`Cpu.AddressModes.cs`), the execution opcode table (`Cpu.OpcodeTable.cs`), opcode implementations (`Cpu.Opcodes.cs`), and the standalone disassembler. See `Man pages/Hardware/README.md` for what this doc set is and how it relates to the rest of `Man pages/`.
+Covers `Cores/Nintendo/Venus - SNES/Cpu/`: the 65816 core (`Cpu.cs`), addressing modes (`Cpu.AddressModes.cs`), the execution opcode table (`Cpu.OpcodeTable.cs`), opcode implementations (eight `Cpu.Opcodes.*.cs` files, one per instruction category — §1), and the standalone disassembler. See `Man pages/Hardware/README.md` for what this doc set is and how it relates to the rest of `Man pages/`.
 
 The disassembler's own quirks and caveats are documented in depth in `Man pages/EmuSen_Debugging_Tools_Reference_v5.md` §3.7 (it's a debug-tooling consumer as much as a CPU component) — this page only covers what's specific to it as a *second, independent* opcode table living alongside the execution one.
 
@@ -8,7 +8,24 @@ The disassembler's own quirks and caveats are documented in depth in `Man pages/
 
 ## 1. Structure
 
-`Cpu` is a `partial class` split by concern, not by convenience: `Cpu.cs` holds core state and the fetch/execute loop, `Cpu.AddressModes.cs` holds every `AddrXxx` addressing-mode delegate, `Cpu.OpcodeTable.cs` builds the 256-entry dispatch table, and `Cpu.Opcodes.cs` holds every `OpXxx` operation. Each `Instruction` entry pairs an addressing-mode delegate (computes an effective address, may consume operand bytes) with an operate delegate (does the actual work at that address) — mirroring how real 6502/65816 opcode references describe instructions as (addressing mode × operation).
+`Cpu` is a `partial class` split by concern, not by convenience: `Cpu.cs` holds core state and the fetch/execute loop, `Cpu.AddressModes.cs` holds every `AddrXxx` addressing-mode delegate, `Cpu.OpcodeTable.cs` builds the 256-entry dispatch table, and every `OpXxx` operation lives in one of eight `Cpu.Opcodes.*.cs` files, split by instruction category the way most 65816 references group them:
+
+| File | Covers |
+|---|---|
+| `Cpu.Opcodes.System.cs` | NOP/unknown-opcode fallback, BRK/COP/RTI, WAI/STP, MVN/MVP |
+| `Cpu.Opcodes.Stack.cs` | PHP/PLP, PHA/PLA, PHX/PLX, PHY/PLY, PHB/PLB, PHK, PHD/PLD, PEA/PEI/PER |
+| `Cpu.Opcodes.LoadStoreTransfer.cs` | LDA/LDX/LDY, STA/STX/STY/STZ, every T__ register transfer, XBA |
+| `Cpu.Opcodes.Arithmetic.cs` | INC/DEC (A, memory, X, Y), CMP/CPX/CPY, ADC/SBC |
+| `Cpu.Opcodes.Logical.cs` | ORA/AND/EOR, TRB/TSB, BIT/BIT-immediate |
+| `Cpu.Opcodes.Shift.cs` | ASL/LSR/ROL/ROR, accumulator and memory forms |
+| `Cpu.Opcodes.Branch.cs` | JMP/JML/JSR/JSL/RTS/RTL/BRA/BRL, every conditional branch |
+| `Cpu.Opcodes.Flags.cs` | CLC/SEC/CLI/SEI/CLV/CLD/SED, REP/SEP, XCE |
+
+This used to be one 1229-line `Cpu.Opcodes.cs` — split for the same reason `DebugCommandProcessor` and the PPU renderer were: a monolith the size of "every CPU operation in one file" stopped being something you could hold in your head at once, and none of the split boundaries needed to touch any actual instruction logic to fix that. `Cpu.OpcodeTable.cs` and `Cpu.AddressModes.cs` were deliberately **not** split the same way — see the note at the end of this section.
+
+Each `Instruction` entry (built once, in `Cpu.OpcodeTable.cs`) pairs an addressing-mode delegate (computes an effective address, may consume operand bytes) with an operate delegate (does the actual work at that address) — mirroring how real 6502/65816 opcode references describe instructions as (addressing mode × operation).
+
+**Why `Cpu.OpcodeTable.cs` stays one file.** Unlike the `Op*` method bodies, its 256 entries are already terse one-liners — the file is long because there are 256 opcodes, not because any individual entry is hard to read. It's also organically grown in registration order (see its own inline comments — "fills gaps... after the ROM halted on 0x9E," "0xE6 is what the ROM halted on," etc.), not opcode-category order, and this exact table got a dedicated verification pass against oxyron.de (§7) before being trusted. Re-deriving a per-category split for all 256 entries would risk introducing a transcription error into a table that's already been verified once — real risk for a benefit this table doesn't actually need, since it's already scannable as a flat list. `Cpu.AddressModes.cs` (243 lines) was left alone for a simpler reason: it's already a single, cohesive category (every `AddrXxx` delegate) and isn't especially large to begin with.
 
 ---
 

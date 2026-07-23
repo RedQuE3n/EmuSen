@@ -85,9 +85,11 @@ Two small helper classes back the memory spaces:
 
 `Watches` here just returns `SnesDebugTarget`'s own `WatchRegistry` instance. **This changed since first built:** the registry (and a `Cpu` back-reference, `DebugCpu`) used to live directly on `MemoryBus`, which mixed real emulation state with debug-toolchain plumbing in the same class — a coupling issue caught during a later architecture review. Now `MemoryBus` exposes only a tiny, debug-agnostic `IWriteObserver` hook (`Cores/Nintendo/Venus - SNES/Memory/IWriteObserver.cs`) that it calls on every write with no idea what's listening; `SnesDebugTarget` implements that interface, owns the `WatchRegistry` itself, and supplies the PC context from its own already-held `Cpu` reference. `MemoryBus` no longer references `Cpu` or the debug toolchain at all.
 
-### 3.3 `DebugCommandProcessor` (`Debug/DebugCommandProcessor.cs`)
+### 3.3 `DebugCommandProcessor` (`Debug/DebugCommandProcessor.cs`) + `Debug/Commands/`
 
 A small, composable command layer over `IDebugTarget` — modeled on Unix toolchain conventions (`ls`/`xxd`/`objdump`: small single-purpose commands) rather than one monolithic dump. Takes a line of text, returns a line of text — it doesn't know or care whether that text came from a console prompt, a future headless CLI, or eventually a GUI debug window's command box.
+
+**Restructured from a growing pile of `Cmd*` methods into one small class per command**, each under `Debug/Commands/` implementing `IDebugCommand` (`Name`, `Usage`, `Execute(target, parts)`). This applies the exact "small composable tools instead of a monolith" idea the commands themselves were always designed around to the *implementation* too — `DebugCommandProcessor` had been quietly turning into the monolith its own commands were built to avoid, one tool at a time. `DebugCommandProcessor` itself is now a thin dispatcher: builds a `Name -> IDebugCommand` lookup once in its constructor, routes `Execute(commandLine)` to whichever command matches, and assembles `help`'s output from each command's own `Usage` text rather than one hand-maintained string. `search`/`snapshot`'s per-session state (§3.9, §3.10) now lives as private fields directly on `SearchCommand`/shared via `SnapshotStore` between `SnapshotCommand`/`DiffCommand`, instead of on `DebugCommandProcessor` — each command owns exactly the state it needs and nothing it doesn't. Same pattern `IDebugTarget` (core-agnostic contract, swappable per-core implementation) and `ICore` already proved works well in this codebase, applied one layer down.
 
 | Command | Usage |
 |---|---|
@@ -105,11 +107,18 @@ A small, composable command layer over `IDebugTarget` — modeled on Unix toolch
 | `watch log <id> [<count>]` | Show a watchpoint's recorded events (default 20) |
 | `watch clear <id>` | Clear a watchpoint's stored events (keeps the watch registered) |
 | `watch remove <id>` | Remove a watchpoint entirely |
+| `search <space> <val> [<width>]` | Start a memory search — see §3.9 |
+| `search refine\|changed\|unchanged\|increased\|decreased\|list\|reset` | Narrow/inspect/clear the active search — see §3.9 |
+| `snapshot <space> <name>` / `snapshot list\|remove <name>` | Capture/manage a named memory baseline — see §3.10 |
+| `diff <name> [<count>]` | Compare a snapshot against current contents — see §3.10 |
+| `trace <count>` / `trace off` | Arm/cancel a live CPU instruction trace |
 | `summary` | Free-text fallback (delegates to `StateDump.DumpAll`) |
 
 Addresses/values accept `0x`, `$`, or bare hex.
 
 **`tile`** generalizes what used to be `DebugTools.DecodeTileAscii` plus `CoinTileDumpLogging`'s hardcoded call site — works against *any* memory space (not just VRAM) and now supports 8bpp too (relevant since Mode 3/4's 8bpp BG1 and Direct Color exist now, which didn't when the original helper was written).
+
+**Shared, stateless helpers** (`ParseHex`, `FindSpace`, `ReadValue`) live in `Debug/Commands/DebugCommandHelpers.cs`, a static class in the same spirit as `DebugTools.cs` — used via `using static` in whichever commands need them, rather than duplicated per command or hung off `DebugCommandProcessor` itself.
 
 **Not interactive in the pause-emulation sense** — same reason as §3.1: each call to `Execute()` is one-shot, runs against current state, returns immediately. The console's F4 prompt just calls this in a loop.
 
@@ -196,7 +205,7 @@ Starts a new session folder under `Logs/Recordings/<CoreName>_<timestamp>/` each
 
 **Verified against a real run (Fedora 44, ffmpeg 8.1.2)** — and it caught a real bug on the first attempt: `outputPath` was passed to `ffmpeg` as the full `sessionDir/recording.mkv` path *while `ProcessStartInfo.WorkingDirectory` was already set to `sessionDir`*, so `ffmpeg` tried to resolve it relative to a directory it was already inside, landing on a doubly-nested path that doesn't exist (`Error opening output ...: No such file or directory`). Fixed by passing just the bare filename (`recording.mkv`) as the output argument, since `WorkingDirectory` already puts `ffmpeg` in the right place. Also dropped the forced `-pix_fmt rgb24` — Raylib's screenshots are RGBA, `ffmpeg` flagged `rgb24` as incompatible with FFV1 and auto-selected `bgr0` anyway (successfully), so removing the forced flag in favor of that auto-negotiation is both simpler and matches what actually worked.
 
-### 3.9 Memory search (`search`, `Debug/DebugCommandProcessor.cs`)
+### 3.9 Memory search (`search`, `Debug/Commands/SearchCommand.cs`)
 
 Classic "first scan, then narrow" memory search — Cheat Engine's model, adapted to this console: find where a game stores something (a score, a life counter, a flag) without already knowing the address, which none of `mem`/`write`/`watch`/`tile` cover on their own (they all need an address up front). Pure `IDebugMemorySpace.Read()` scans; no SNES-specific logic, so it works unchanged for a future core's memory spaces.
 
@@ -216,7 +225,7 @@ One active search session at a time — starting a new `search <space> <value>` 
 
 **One real bug caught before this ever shipped, not after:** `ParseHex` returns a signed `int`, so a width-4 search value with the high bit set (e.g. `FFFFFFFF`) would parse as `-1` and never match `ReadValue`'s always-non-negative multi-byte accumulation. Both the initial-search and `refine` value parses mask with `& 0xFFFFFFFFL` to reinterpret the bit pattern as unsigned before comparing — caught during review, not by a failed run, so flagged here in case the same shape of bug (`ParseHex` feeding a signed value into an unsigned comparison) shows up again in a future command.
 
-### 3.10 Memory snapshot/diff (`snapshot`, `diff`, `Debug/DebugCommandProcessor.cs`)
+### 3.10 Memory snapshot/diff (`snapshot`, `diff`, `Debug/Commands/{SnapshotCommand,DiffCommand,SnapshotStore}.cs`)
 
 The general-case complement to `search`'s `changed`/`unchanged`/`increased`/`decreased`: those narrow a *fixed set of candidate addresses* search already found. `snapshot`/`diff` need no prior candidates at all — capture an entire memory space's contents now, compare against its later contents whenever, see every address that's different. The exact "what changed between frame X and frame Y" shape most investigations in this project (including the Yoshi/coin one) end up asking by hand via log-grepping; this makes it a real command instead.
 

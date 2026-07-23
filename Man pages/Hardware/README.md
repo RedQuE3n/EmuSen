@@ -16,4 +16,5 @@ One page per piece of hardware being abstracted, rather than the long inline `//
 ## Pages
 
 - [`Venus_Memory.md`](Venus_Memory.md) — CPU address bus, LoROM cartridge mapping, DMA/HDMA, NMI/IRQ subsystem, hardware math unit.
-- More to follow, one hardware component at a time (CPU, PPU, APU next).
+- [`Venus_CPU.md`](Venus_CPU.md) — 65816 core: fetch/execute loop, interrupt entry sequences, WAI/STP, addressing modes, opcode table verification status.
+- More to follow, one hardware component at a time (PPU, APU next).

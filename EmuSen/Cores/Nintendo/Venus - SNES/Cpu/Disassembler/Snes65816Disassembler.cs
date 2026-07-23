@@ -24,25 +24,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         BlockMove,
     }
 
-    // Standalone 65816 disassembler. Deliberately NOT a part of Cpu.cs
-    // itself and NOT built from Cpu's execution opcode table (Cpu.OpcodeTable.cs)
-    // - that table's AddrMode/Operate delegates execute real side effects
-    // (advancing PC, consuming cycles, touching memory) and have no way to
-    // report "how many bytes would this consume" without actually running
-    // the instruction. This is a completely separate, read-only mnemonic +
-    // addressing-mode table built specifically for display.
-    //
-    // IMPORTANT HONESTY NOTE: this project's execution opcode table
-    // (Cpu.OpcodeTable.cs) got a dedicated verification pass against
-    // oxyron.de before being trusted (see the original project handoff -
-    // "completed 236->256/256, verified against oxyron.de, caught one
-    // cross-reference typo"). This table has NOT had the equivalent
-    // treatment - there's no way to build/run this project from here to
-    // cross-check it the same way. It's built carefully against the
-    // standard, well-documented 65816 opcode matrix (the same one
-    // oxyron.de and every other 65816 reference describe identically), but
-    // should get a real spot-check pass against a handful of known
-    // instructions before being trusted for anything beyond casual use.
+    // Standalone 65816 disassembler, deliberately separate from Cpu's
+    // execution opcode table - see Venus_CPU.md §1 and §7, and
+    // EmuSen_Debugging_Tools_Reference_v5.md §3.7 for the full verification
+    // status and caveats.
     public static class Snes65816Disassembler
     {
         private static readonly (string Mnemonic, Snes65816AddrMode Mode)[] Table = new (string, Snes65816AddrMode)[256]
@@ -320,30 +305,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             /*FF*/ ("SBC", Snes65816AddrMode.AbsoluteLongX),
         };
 
-        // eFlag: emulation mode forces 8-bit M/X regardless of the P
-        // register bits (65816 hardware behavior) - REP/SEP still write to
-        // P in emulation mode, but the width is hardware-forced to 8-bit
-        // either way, so eFlag always wins over the tracked M/X state
-        // below. mFlagSet/xFlagSet: the P register M/X bits *at
-        // <address>*, used as the starting point when eFlag is false.
-        //
-        // M/X are then tracked live as REP/SEP instructions are decoded
-        // within the same call, so a range that crosses one disassembles
-        // correctly on both sides of it instead of desyncing every
-        // instruction after it (found via the Yoshi/coin WRAM
-        // investigation - a REP/SEP inside a requested range silently
-        // produced garbage past that point until decoding happened to
-        // resync on a real opcode boundary by luck).
-        //
-        // Known remaining gap, NOT fixed by this: XCE (opcode 0xFB) can
-        // change eFlag itself mid-stream (emulation vs. native mode) by
-        // swapping E with the carry flag - the disassembler has no carry
-        // flag to swap with, so a range that crosses an XCE will still use
-        // whatever eFlag was passed in for everything after it. Rare in
-        // practice (mode switches happen once near reset, essentially
-        // never mid-routine), but a real, documented limitation rather
-        // than a silent one - same honesty standard as the M/X fix this
-        // replaces.
+        // eFlag forces 8-bit M/X regardless of P (real hardware behavior);
+        // mFlagSet/xFlagSet seed the starting M/X when eFlag is false, then
+        // get tracked live as REP/SEP are decoded within this call. XCE
+        // mid-range is a known remaining gap. See
+        // EmuSen_Debugging_Tools_Reference_v5.md §3.7 for the full story.
         public static List<DisassembledInstruction> Disassemble(Func<int, byte> readByte, int address, int count, bool eFlag, bool mFlagSet, bool xFlagSet)
         {
             var result = new List<DisassembledInstruction>(count);

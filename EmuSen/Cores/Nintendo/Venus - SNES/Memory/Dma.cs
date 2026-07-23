@@ -57,17 +57,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
         }
 
-        // Logs which instruction (PC) wrote a DMA channel's source address,
-        // gated separately from DmaVerboseLogging since this is a narrower,
-        // more targeted trace - added specifically to investigate why
-        // Yoshi's sprite-graphics DMA (channel targeting VRAM $C0C0/$C100)
-        // always uses a suspiciously constant source address ($7E0000)
-        // instead of a varying one the way the confirmed-working coin
-        // tile-animation transfers do. A constant, never-changing source
-        // address is the signature of an uninitialized or wrongly-computed
-        // pointer - if that's what's happening, this should show which PC
-        // is responsible so the actual CPU-side bug (not a DMA or
-        // rendering bug - both already ruled out for this) can be found.
+        // Logs which PC wrote a DMA channel's source address - see
+        // Venus_Memory.md §3.3.
         private void LogSourceAddrWrite(int channel, DmaChannel ch)
         {
             if (!DebugSettings.DmaSourceAddrLogging) return;
@@ -77,10 +68,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             {
                 (byte pb, ushort pcVal) = _bus.DebugPcProvider();
                 pc = $"0x{pb:X2}{pcVal:X4}";
-                // Raw bytes at PC, for manually identifying the actual
-                // instruction without needing a full disassembler or ROM
-                // symbol map - up to 4 bytes covers every 65816 instruction
-                // length (opcode + up to 3 operand bytes).
+                // Up to 4 bytes covers every 65816 instruction length.
                 var b = new byte[4];
                 for (int k = 0; k < 4; k++) b[k] = _bus.Read8((uint)((pb << 16) | ((pcVal + k) & 0xFFFF)));
                 instrBytes = $" bytes={b[0]:X2} {b[1]:X2} {b[2]:X2} {b[3]:X2}";

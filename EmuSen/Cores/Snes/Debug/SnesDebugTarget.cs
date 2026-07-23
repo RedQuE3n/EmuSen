@@ -106,10 +106,24 @@ namespace EmuSen.Debug
         public long FrameCount => _bus.FrameCount;
 
         // Uses the CPU's CURRENT E (emulation mode) and M/X (accumulator/
-        // index width) flags to decide immediate-mode operand lengths for
-        // the whole requested range - see Snes65816Disassembler's comment
-        // on why that's a snapshot, not something that tracks a REP/SEP
-        // instruction partway through the disassembled range.
+        // index width) flags as the starting point for <address> - the
+        // disassembler itself now tracks REP/SEP as it walks forward, so a
+        // requested range that crosses one decodes correctly on both
+        // sides (see Snes65816Disassembler's comment for the remaining
+        // XCE/eFlag gap that isn't covered by that fix).
+        //
+        // IMPORTANT REMAINING CAVEAT, not fixed by the above: M/X are
+        // properties of a specific point in the CPU's actual control flow,
+        // not global constants - if <address> isn't the CPU's current PC
+        // (the normal case: disassembling some other routine while
+        // emulation is paused elsewhere), the flags in effect when that
+        // code *actually* runs could differ from the CPU's flags *right
+        // now*, and there's no way to know that without either tracing
+        // real execution to that address or doing full control-flow
+        // analysis - neither of which a static, read-only disassembler
+        // does. Treat disassembly of anywhere other than the current PC
+        // as best-effort for immediate-mode operand widths specifically;
+        // opcode/addressing-mode decoding itself is unaffected.
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
         {
             IDebugMemorySpace space = GetMemorySpaces().First(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));

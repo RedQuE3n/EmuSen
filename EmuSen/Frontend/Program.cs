@@ -67,6 +67,15 @@ namespace EmuSen.Frontend
                 SnesDebugTarget debugTarget = new SnesDebugTarget(cpu, bus);
                 DebugCommandProcessor debugCmd = new DebugCommandProcessor(debugTarget);
 
+                // Yoshi/coin WRAM-staging investigation: registered here
+                // instead of via the F4 prompt so it's active from the very
+                // first CPU instruction, not from whenever a human can
+                // press F4 after the window opens (hundreds of frames in).
+                // Every prior trace of this range started after boot; this
+                // rules out "the population happens very early and we keep
+                // missing it." Remove once the investigation concludes.
+                debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
+
                 int currentScanline = 0;
                 long totalFrames = 0;
 

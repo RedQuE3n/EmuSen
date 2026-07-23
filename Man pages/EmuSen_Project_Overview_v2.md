@@ -119,7 +119,9 @@ EmuSen Project/
 │   │   │   ├── Saturn - Virtual Boy/README.md   # Reserved - future Virtual Boy core (Outer Senshi)
 │   │   │   ├── Uranus - GameCube/README.md      # Reserved - future GameCube core (Outer Senshi)
 │   │   │   ├── Neptune - Wii/README.md          # Reserved - future Wii core (Outer Senshi)
-│   │   │   └── Pluto - Wii U/README.md          # Reserved - future Wii U core (Outer Senshi)
+│   │   │   ├── Pluto - Wii U/README.md          # Reserved - future Wii U core (Outer Senshi)
+│   │   │   ├── Luna - DS/README.md              # Reserved - future DS core (guardian cat)
+│   │   │   └── Artemis - 3DS-New3DS/README.md   # Reserved - future 3DS/New 3DS core (guardian cat)
 │   │   ├── Sega/                             # Dark Kingdom / Shitennou codenames
 │   │   │   ├── Endymion - Master System/README.md  # Reserved - future Master System core
 │   │   │   ├── Beryl - Genesis/README.md     # Reserved - future Genesis/Mega Drive core

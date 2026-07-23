@@ -15,6 +15,8 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as two sibling pro
 
 **Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Snes/` is already folder-scoped for this, though the C# *namespaces* underneath it haven't caught up yet (still generic names like `EmuSen.Memory` rather than `EmuSen.Cores.Snes.Memory` — a cheap, low-risk rename planned as a drive-by whenever those files are touched anyway, not yet done as its own pass). The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
 
+**Naming scheme for future cores:** every core will eventually be named after an *EmuSen* = **Emu**lator **Sen**shi (Sailor Moon) character, grouped by manufacturer (`Cores/Nintendo/`, `Cores/Sega/`) — full mapping in `EmuSen_Core_Naming_Scheme.md`. Not yet applied to the codebase (the current SNES core is still `Cores/Snes/`, correctly, not yet `Cores/Nintendo/Venus/`) — see that doc's §4 for when the actual rename happens.
+
 ---
 
 ## 1a. Development environment

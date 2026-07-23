@@ -279,6 +279,7 @@ namespace EmuSen.Memory
                 // bank $7E/$7F access already uses.
                 if (offset == 0x2180)
                 {
+                    WriteObserver?.OnWrite("WRAM", (int)_wmAddr, data);
                     Ram[_wmAddr] = data;
                     _wmAddr = (_wmAddr + 1) & 0x1FFFF;
                     return;

@@ -13,7 +13,7 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as two sibling pro
 
 **Licensing stance:** the SNESdev wiki (mirrored at both `snes.nesdev.org` and `snesdev.mesen.ca` — maintained by the Mesen/MesenCE team) is the primary hardware-reference source. Mesen/MesenCE's own *documentation* gets read to understand hardware behavior; their source code does not — every implementation here is original. `SourMesen/Mesen2` is archived; `nesdev-org/MesenCE` is the actively maintained continuation and gets cited, not "Mesen2."
 
-**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with sibling folders already reserved for every other planned core (`Cores/Nintendo/{SailorMoon,Mercury,Jupiter,Mars}/`, `Cores/Sega/{Endymion,Beryl,Jadeite,Nephrite,Zoisite,Kunzite}/`), each with a placeholder `README.md` until real work starts there. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
+**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with sibling folders already reserved for every other planned core (`Cores/Nintendo/{Moon,Mercury,Jupiter,Mars}/`, `Cores/Sega/{Endymion,Beryl,Jadeite,Nephrite,Zoisite,Kunzite}/`), each with a placeholder `README.md` until real work starts there. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
 
 **Naming scheme:** every core is named after an *EmuSen* = **Emu**lator **Sen**shi (Sailor Moon) character, grouped by manufacturer (`Cores/Nintendo/`, `Cores/Sega/`) — full mapping and rationale in `EmuSen_Core_Naming_Scheme.md`. The SNES core is `Venus`; still called "SNES" in prose/comments/log output/class names (`SnesDebugTarget`, `Snes65816Disassembler`, etc.) since that's the accurate hardware name — the codename governs the folder/namespace only, not every mention of the actual console.
 
@@ -112,7 +112,7 @@ EmuSen Project/
 │   │   │   │   │                              #   EmuSen.Cores.Nintendo.Venus.Debug)
 │   │   │   │   └── Input/
 │   │   │   │       └── Input.cs
-│   │   │   ├── SailorMoon - NES/README.md    # Reserved - future NES core
+│   │   │   ├── Moon - NES/README.md          # Reserved - future NES core
 │   │   │   ├── Mercury - GB-GBC/README.md    # Reserved - future GB/GBC core
 │   │   │   ├── Jupiter - GBA/README.md       # Reserved - future GBA core
 │   │   │   └── Mars - N64/README.md          # Reserved - future N64 core

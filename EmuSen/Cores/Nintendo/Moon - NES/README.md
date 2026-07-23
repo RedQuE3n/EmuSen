@@ -1,4 +1,4 @@
-# SailorMoon (NES)
+# Moon (NES)
 
 Reserved for the future NES core. Not started yet.
 

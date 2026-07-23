@@ -16,13 +16,13 @@ Folder: `Cores/Nintendo/`
 
 | Console | Codename | Folder | Status |
 |---|---|---|---|
-| NES | **Sailor Moon** | `Cores/Nintendo/SailorMoon - NES/` | Not started — reserved |
+| NES | **Moon** | `Cores/Nintendo/Moon - NES/` | Not started — reserved |
 | SNES | **Venus** | `Cores/Nintendo/Venus - SNES/` | Active development — `EmuSen.Cores.Nintendo.Venus.*` (see §4) |
 | Game Boy / Game Boy Color | **Mercury** | `Cores/Nintendo/Mercury - GB-GBC/` | Not started — reserved. Open question whether GB and GBC are different enough hardware to warrant two separate cores rather than one (undecided; revisit once Venus work is further along and there's a real basis for comparison) |
 | Game Boy Advance | **Jupiter** | `Cores/Nintendo/Jupiter - GBA/` | Not started — reserved |
 | N64 | **Mars** | `Cores/Nintendo/Mars - N64/` | Not started — reserved |
 
-Sailor Moon herself anchors the console the project's own name-lineage effectively starts from (NES, the originator generation) — Venus/Mercury/Mars/Jupiter are her fellow Inner Senshi, extending outward to later Nintendo hardware in the order they line up with here.
+Sailor Moon herself (codename **Moon**, not the character's full title) anchors the console the project's own name-lineage effectively starts from (NES, the originator generation) — Venus/Mercury/Mars/Jupiter are her fellow Inner Senshi, extending outward to later Nintendo hardware in the order they line up with here.
 
 ---
 

@@ -9,36 +9,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 {
     public partial class Renderer
     {
-        // Mode 7: BG1 becomes a single affine-transformed 1024x1024-pixel
-        // layer instead of a normal scrolled tilemap. No priority-bit split
-        // (unlike RenderBg1-4), no bit-depth variation (always 8bpp) - this
-        // is genuinely a different rendering algorithm, not a variant of the
-        // tilemap path the other RenderBg* methods share.
-        //
-        // Formula verified against two independent sources (SNESdev wiki's
-        // "Mode 7 transform" page and a NESDev forum matrix-form writeup)
-        // that agree byte-for-byte:
-        //   [X]   [A B]   [SX + HOFS - CX]   [CX]
-        //   [ ] = [   ] * [                ] + [  ]
-        //   [Y]   [C D]   [SY + VOFS - CY]   [CY]
-        // where (SX,SY) is the screen pixel, (CX,CY) = (M7X,M7Y) is the
-        // pivot point, (HOFS,VOFS) = (M7HOFS,M7VOFS) is Mode 7's own scroll,
-        // and A/B/C/D are signed 8.8 fixed-point (raw value / 256.0).
-        //
-        // VRAM layout is also genuinely different from every other mode:
-        // the 128x128-tile tilemap lives in the LOW byte of each VRAM word
-        // starting at word 0 (one byte per entry - just an 8-bit tile
-        // index, no flip/priority/palette bits), and the 8bpp tile/character
-        // data lives in the HIGH byte of those same words, interleaved.
-        // Confirmed against the SNESdev wiki's Tilemaps and Tiles pages and
-        // SnesLab's Mode 7 VRAM Map page independently.
-        //
-        // Not implemented in this pass: the documented 13-bit CLIP()
-        // precision quirk on the intermediate SX+HOFS-CX/SY+VOFS-CY values
-        // (an obscure edge case that only matters for extreme
-        // rotation/scale parameters) - flagged rather than silently
-        // approximated. EXTBG (see RenderMode7Bg2Extbg below) IS now
-        // implemented, unlike the note that used to be here.
+        // Mode 7 - BG1 as a single affine-transformed layer. See
+        // Venus_PPU.md §3 for the transform formula, VRAM layout, and what's
+        // not implemented.
         private void RenderMode7(Ppu ppu, int py, float brightness, Color[] target, int[] targetLayer, int layerId, bool isMainScreen)
         {
             bool hFlip = (ppu.M7Sel & 0x01) != 0;
@@ -66,23 +39,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        // EXTBG (SETINI $2133 bit 6) gives Mode 7 a second layer, BG2, which
-        // samples the EXACT SAME affine-transformed texture as BG1 -
-        // identical tilemap, identical tile data, identical M7 matrix and
-        // scroll registers ($210D/$210E - not the normal BG2 scroll
-        // registers) - confirmed via the Super Famicom Dev wiki's
-        // Backgrounds page. The only difference is interpretation: BG2
-        // reinterprets the sampled pixel byte's high bit as a priority flag
-        // instead of a color bit, so it only has 128 distinct colors (0-127)
-        // where BG1 has the full 256. That same page documents the resulting
-        // priority order this creates - BG2's priority-1 pixels sit above
-        // BG1, its priority-0 pixels sit below BG1, with sprites interleaved
-        // at their usual 4 priority levels around both - which is why this
-        // needs its own two-pass call (see the isMode7 branch in
-        // RenderScanline, which places these two passes at the correct
-        // points relative to BG1 and the sprite priority levels, rather
-        // than reusing the normal-mode BG1/BG2/OBJ interleave order that
-        // doesn't apply here).
+        // EXTBG (SETINI bit 6) - see Venus_PPU.md §3.4.
         private void RenderMode7Bg2Extbg(Ppu ppu, int py, float brightness, Color[] target, int[] targetLayer, int layerId, bool isMainScreen, bool highPriorityOnly)
         {
             bool hFlip = (ppu.M7Sel & 0x01) != 0;

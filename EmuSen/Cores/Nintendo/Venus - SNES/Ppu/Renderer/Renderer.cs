@@ -14,35 +14,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private const int SheetW = 256;  
         private const int SheetH = 512;  
 
-        // Phase A of hi-res support: real pseudo-hi-res column interleave
-        // (SETINI $2133 bit 3, outside Modes 5/6) - confirmed via the
-        // SNESdev wiki's Backgrounds page ("the main-screen appears on
-        // every even column, and the sub-screen appears on every odd
-        // column"). This does NOT touch how BG1-4/OBJ render - they still
-        // compute a normal 256-wide _mainLineBuf/_subLineBuf exactly as
-        // before (Mesen's own hi-res output confirms real hardware
-        // interleaves two already-independently-rendered screens, it
-        // doesn't render new/different content at 512-wide density for
-        // this case - that's specifically a Mode 5/6 thing, see below).
-        // Only RenderScanline's final compositing step needs to know about
-        // the wider output.
-        //
-        // Mode 5/6 (true forced hi-res) is deliberately NOT part of this
-        // pass - Mesen's own hi-res output is genuinely 512 pixels of
-        // distinct tile content there, from BG1/BG2 rendering at double
-        // horizontal density (16x8 tiles), not a reused 256-wide buffer.
-        // That needs real changes to RenderBg1/RenderBg2's tile-fetch math
-        // (Phase B, not yet done) - Mode 5/6 still uses the same 50% blend
-        // approximation as before for now, unchanged, tracked separately
-        // from this pass so it's not confused with genuine hi-res support.
+        // Pseudo-hi-res column interleave (Phase A) vs. true Mode 5/6
+        // hi-res (Phase B, not yet done) - see Venus_PPU.md §8.
         private const int MaxOutputW = 512;
         private int _frameWidth = ScreenW;
 
-        // Current output frame's actual pixel width (256 normally, 512
-        // during pseudo-hi-res). Frontends should check this - via
-        // EmulatorSession.ScreenWidth in the Avalonia frontend - rather
-        // than assuming a fixed size, since it can now change frame to
-        // frame if a game toggles SETINI bit 3.
+        // Current output frame's actual pixel width - see Venus_PPU.md §8.
         public int FrameWidth => _frameWidth;
 
         // Layer IDs used to track which layer "won" each pixel while building a
@@ -59,11 +36,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private Texture2D _screenTex;
         private Texture2D _sheetTex;
         
-        // Allocated at the max possible output width so a mid-session
-        // hi-res toggle never needs a reallocation - indexed with a fixed
-        // MaxOutputW row stride regardless of the current _frameWidth (see
-        // GetFrameBufferRgba and DrawFrame, which both only read the first
-        // _frameWidth columns of each row).
+        // Allocated at max width so a hi-res toggle never needs
+        // reallocation - see Venus_PPU.md §8.
         private Color[] _screenPixels = new Color[MaxOutputW * ScreenH];
         private Color[] _sheetPixels = new Color[SheetW * SheetH];
 
@@ -121,17 +95,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             Raylib.CloseWindow();
         }
 
-        // Plain RGBA8888 copy of the finished frame (FrameWidth*ScreenH*4
-        // bytes - FrameWidth, not a fixed constant, now that pseudo-hi-res
-        // can make a frame 512 wide instead of 256), populated purely by
-        // RenderScanline - valid to call in headless mode without ever
-        // touching DrawFrame/Raylib presentation at all. This is the
-        // boundary non-Raylib frontends should use instead of reaching for
-        // _screenPixels/Color directly, so they don't need a Raylib_cs
-        // reference just to display a frame. Callers MUST check FrameWidth
-        // (or the returned array's length) rather than assuming a fixed
-        // size - a fixed-size consumer (e.g. a pre-allocated bitmap) needs
-        // to detect a width change and resize itself.
+        // Plain RGBA8888 copy of the finished frame - the boundary non-
+        // Raylib frontends should use instead of reaching for
+        // _screenPixels/Color directly. Callers MUST check FrameWidth
+        // rather than assuming a fixed size - see Venus_PPU.md §8.
         public byte[] GetFrameBufferRgba()
         {
             byte[] buffer = new byte[_frameWidth * ScreenH * 4];
@@ -182,16 +149,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 case LayerBg2: return (cgadsub & 0x02) != 0;
                 case LayerBg3: return (cgadsub & 0x04) != 0;
                 case LayerBg4: return (cgadsub & 0x08) != 0;
-                // Real hardware restricts OBJ color math on the MAIN screen
-                // to sprites using OBJ-relative palettes 4-7 - palettes 0-3
-                // stay opaque even with CGADSUB's OBJ-math bit set, letting a
-                // game keep some sprites always-opaque and others blending
-                // purely by palette choice, no extra per-sprite flag needed.
-                // Confirmed via the SNESdev wiki's Sprites page. The sub
-                // screen has no such restriction (any sprite there can act as
-                // a blend source) - already naturally handled since this
-                // method is only ever consulted for the MAIN screen's
-                // winning layer, never the sub screen's.
+                // OBJ color math restriction - see Venus_PPU.md §5.
                 case LayerObj: return (cgadsub & 0x10) != 0 && objPalette >= 4;
                 case LayerBackdrop: return (cgadsub & 0x20) != 0;
                 default: return false;
@@ -214,22 +172,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     r /= 2; g /= 2; b /= 2;
                 }
 
-                // CRITICAL: Force Alpha back to 255! If this drops to 0, Yoshi goes invisible.
-                return new Color((byte)r, (byte)g, (byte)b, (byte)255); 
+                // CRITICAL: alpha must stay 255 here - see Venus_PPU.md §5.
+                return new Color((byte)r, (byte)g, (byte)b, (byte)255);
             }
             else
             {
-                // Additive Math
                 int r = Math.Min(255, main.R + sub.R);
                 int g = Math.Min(255, main.G + sub.G);
                 int b = Math.Min(255, main.B + sub.B);
-                
+
                 if (half)
                 {
                     r /= 2; g /= 2; b /= 2;
                 }
 
-                // Force Alpha back to 255 here as well to be safe
                 return new Color((byte)r, (byte)g, (byte)b, (byte)255);
             }
         }
@@ -292,17 +248,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 Raylib.DrawText($"FixedColor R={ppu.FixedColorR} G={ppu.FixedColorG} B={ppu.FixedColorB}   CGRAM[0]=0x{ppu.Cgram[0]:X2}{ppu.Cgram[1]:X2}", 16, 585, 16, label);
                 Raylib.DrawText("BG1", 16, 40, 16, label);
             }
-            // Source rect limited to the actual current frame width -
-            // _screenTex is always allocated at the max (512) width to
-            // match _screenPixels' fixed row stride, but only the first
-            // FrameWidth columns of each row are meaningful this frame.
-            // Known cosmetic-only limitation: at a hi-res frame's 512
-            // width, this still draws at the same fixed 2x scale as
-            // always, so it'll visually run into the VRAM sheet panel
-            // (drawn at x=560) - not adjusted for, since this is the
-            // debug console view specifically and hi-res is rare; the
-            // Avalonia frontend (the actual gameplay UI) sizes its bitmap
-            // to FrameWidth directly instead and doesn't have this issue.
+            // Source rect limited to the actual current frame width. Known
+            // cosmetic-only limitation: a hi-res 512-wide frame still draws
+            // at the same fixed 2x scale here and visually runs into the
+            // VRAM sheet panel - debug-console view only; the Avalonia
+            // frontend sizes its bitmap to FrameWidth directly instead.
             Rectangle screenSourceRec = new Rectangle(0, 0, _frameWidth, ScreenH);
             Raylib.DrawTexturePro(_screenTex, screenSourceRec, new Rectangle(16, 60, _frameWidth * 2, ScreenH * 2), new Vector2(0, 0), 0f, new Color(255, 255, 255, 255));
 

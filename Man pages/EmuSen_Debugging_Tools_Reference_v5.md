@@ -64,7 +64,7 @@ This is the newer, generalized layer — built specifically so it isn't SNES-onl
 
 The core-agnostic contract. Any emulated console implements this to plug into the rest of the toolchain. Deliberately modeled around generic concepts, not SNES-specific ones:
 
-- **`GetMemorySpaces()`** — a list of named, sized, byte-addressable regions (`IDebugMemorySpace`: `Name`, `Size`, `IsWritable`, `HasSideEffects`, `Read(addr)`, `Write(addr, value)`). A generic memory viewer just lists whatever a target reports — SNES reports `CpuBus / WRAM / VRAM / CGRAM / OAM / SRAM`; an eventual NES target would report its own different set through the exact same shape. `HasSideEffects` (added alongside §3.9's `search` command) flags spaces where `Read()` can do more than return a byte — SNES's `CpuBus` routes through live `MemoryBus.Read8`, which includes registers like RDNMI (clears the pending-NMI flag on read) or OPHCT/OPVCT (toggle a byte-order latch on read); `WRAM`/`VRAM`/`CGRAM`/`OAM` are plain arrays and always report `false`, and `SRAM` reports `false` too despite being bus-routed, since its address range never reaches an actual hardware register. Exists so a bulk, read-every-address tool can refuse to scan a space where doing so would silently perturb running emulation state.
+- **`GetMemorySpaces()`** — a list of named, sized, byte-addressable regions (`IDebugMemorySpace`: `Name`, `Size`, `IsWritable`, `HasSideEffects`, `Read(addr)`, `Write(addr, value)`). A generic memory viewer just lists whatever a target reports — SNES reports `CpuBus / WRAM / VRAM / CGRAM / OAM / SRAM`; an eventual NES target would report its own different set through the exact same shape. `HasSideEffects` (added alongside §3.9's `search` command, also used by §3.10's `snapshot`) flags spaces where `Read()` can do more than return a byte — SNES's `CpuBus` routes through live `MemoryBus.Read8`, which includes registers like RDNMI (clears the pending-NMI flag on read) or OPHCT/OPVCT (toggle a byte-order latch on read); `WRAM`/`VRAM`/`CGRAM`/`OAM` are plain arrays and always report `false`, and `SRAM` reports `false` too despite being bus-routed, since its address range never reaches an actual hardware register. Exists so a bulk, read-every-address tool can refuse to scan a space where doing so would silently perturb running emulation state.
 - **`GetCpuRegisters()` / `GetVideoRegisters()`** — lists of `DebugRegisterValue` (name, value, bit-width for display formatting), not fixed struct fields — because different CPUs have wildly different register sets.
 - **`GetSprites()`** — `DebugSpriteInfo` records (index, x, y, width, height, tile, palette, priority, flip flags) — generic enough to cover very different sprite hardware.
 - **`GetPalettes()`** — `DebugPaletteInfo` records, colors *already converted* to display-ready RGB, so nothing downstream needs to know a console's native color format (SNES BGR555, etc.).
@@ -215,6 +215,26 @@ One active search session at a time — starting a new `search <space> <value>` 
 **Refuses to scan a space where `HasSideEffects` is true** (see §3.1) — SNES's `CpuBus` is the concrete case: a full-range scan would sequentially read every hardware register, including ones with real read side effects (RDNMI clearing the pending-NMI flag, the manual joypad port shifting its serial data on every read), silently corrupting whatever's actually running. There's no legitimate reason to bulk-search live registers anyway — real game state lives in `WRAM`/`SRAM`, both of which are safe (`HasSideEffects == false`) and where every realistic use of this command should be pointed.
 
 **One real bug caught before this ever shipped, not after:** `ParseHex` returns a signed `int`, so a width-4 search value with the high bit set (e.g. `FFFFFFFF`) would parse as `-1` and never match `ReadValue`'s always-non-negative multi-byte accumulation. Both the initial-search and `refine` value parses mask with `& 0xFFFFFFFFL` to reinterpret the bit pattern as unsigned before comparing — caught during review, not by a failed run, so flagged here in case the same shape of bug (`ParseHex` feeding a signed value into an unsigned comparison) shows up again in a future command.
+
+### 3.10 Memory snapshot/diff (`snapshot`, `diff`, `Debug/DebugCommandProcessor.cs`)
+
+The general-case complement to `search`'s `changed`/`unchanged`/`increased`/`decreased`: those narrow a *fixed set of candidate addresses* search already found. `snapshot`/`diff` need no prior candidates at all — capture an entire memory space's contents now, compare against its later contents whenever, see every address that's different. The exact "what changed between frame X and frame Y" shape most investigations in this project (including the Yoshi/coin one) end up asking by hand via log-grepping; this makes it a real command instead.
+
+```
+snapshot <space> <name>      capture <space>'s full current contents under <name>
+snapshot list                list saved snapshots (name, space, size)
+snapshot remove <name>       delete a saved snapshot
+diff <name> [<count>]        compare snapshot <name> against that space's CURRENT contents,
+                              print addresses that changed (default 20 shown)
+```
+
+**Multiple named snapshots can coexist**, unlike `search`'s single session — stored in a `Dictionary<string, (SpaceName, Data)>` rather than plain fields, since there's real value in keeping more than one baseline around (e.g. one taken right before Yoshi's block opens, another right after, each diffable independently and repeatedly without disturbing the other).
+
+**`diff` never mutates the saved snapshot.** Running `diff` twice against the same name, with real time passing in between, always compares against the *original* capture — not the last `diff` call's result the way `search`'s `changed`/`unchanged` chains forward each time. Re-`snapshot` with the same name if a new baseline is actually wanted; otherwise the same snapshot is a stable reference point for as many `diff` calls as needed.
+
+**Same `HasSideEffects` guard as `search`, same reasoning** — a full-space capture of `CpuBus` would sequentially read every hardware register, some with real side effects on read. `snapshot` refuses outright for any space where `HasSideEffects` is true.
+
+**Byte-granularity only, unlike `search`'s configurable width.** A "what changed" comparison doesn't need to already know a value's byte width the way a value-search does — any single byte differing is itself the useful signal, and a wider changed *value* just shows up as multiple adjacent single-byte diffs in the output. Kept deliberately simpler than `search` for that reason, not as an oversight.
 
 ---
 

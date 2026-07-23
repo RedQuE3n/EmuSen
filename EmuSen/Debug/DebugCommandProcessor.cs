@@ -42,6 +42,13 @@ namespace EmuSen.Debug
         private List<int>? _searchCandidates;
         private Dictionary<int, long>? _searchLastValues;
 
+        // `snapshot`/`diff` state - named, non-mutating baselines. Unlike
+        // `search`'s single active session, there's real value in keeping
+        // more than one around at once (e.g. "before Yoshi's block opens"
+        // and "right after", compared independently later), so this is a
+        // dictionary instead of a single set of fields.
+        private readonly Dictionary<string, (string SpaceName, byte[] Data)> _snapshots = new();
+
         public DebugCommandProcessor(IDebugTarget target)
         {
             _target = target;
@@ -66,6 +73,8 @@ namespace EmuSen.Debug
                     "pal" => CmdPal(parts),
                     "watch" => CmdWatch(parts),
                     "search" => CmdSearch(parts),
+                    "snapshot" => CmdSnapshot(parts),
+                    "diff" => CmdDiff(parts),
                     "tile" => CmdTile(parts),
                     "disasm" => CmdDisasm(parts),
                     "trace" => CmdTrace(parts),
@@ -106,6 +115,11 @@ namespace EmuSen.Debug
                 "  search increased|decreased    narrow to addresses whose value went up/down since last search/refine",
                 "  search list [<count>]         list current candidate addresses + values (default 20)",
                 "  search reset                  clear the current search",
+                "  snapshot <space> <name>       capture <space>'s full current contents under <name>",
+                "  snapshot list                 list saved snapshots (name, space, size)",
+                "  snapshot remove <name>        delete a saved snapshot",
+                "  diff <name> [<count>]         compare snapshot <name> against that space's CURRENT contents,",
+                "                                print addresses that changed (default 20 shown)",
                 "  tile <space> <addr> <bpp>     ASCII-decode one 8x8 tile (bpp: 2, 4, or 8)",
                 "  disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)",
                 "  trace <count>                 arm a live CPU instruction trace for the next <count> instructions",
@@ -413,6 +427,86 @@ namespace EmuSen.Debug
             }
             UpdateSearchLastValues(newSpace);
             return $"{_searchCandidates.Count} candidate(s) found in {newSpace.Name} matching 0x{value:X} (width {width}).";
+        }
+
+        // Captures a named, non-mutating baseline of a memory space's
+        // full current contents - the other half of the "what changed"
+        // workflow `search`'s changed/unchanged/increased/decreased
+        // covers for a fixed set of candidate addresses. `diff` (below)
+        // is the general case: no need to already know which addresses
+        // might be interesting, just "what's different from before" over
+        // an entire space. Same HasSideEffects guard as `search`, for
+        // the same reason - a full-space read-every-address capture of a
+        // live-hardware-routed space (SNES's CpuBus) could disturb real
+        // emulation state.
+        private string CmdSnapshot(string[] parts)
+        {
+            if (parts.Length < 2)
+            {
+                return "Usage: snapshot <space> <name> | snapshot list | snapshot remove <name>";
+            }
+
+            string first = parts[1].ToLowerInvariant();
+
+            if (first == "list")
+            {
+                if (_snapshots.Count == 0) return "No saved snapshots.";
+                return string.Join('\n', _snapshots.Select(kv => $"  {kv.Key}: {kv.Value.SpaceName} ({kv.Value.Data.Length} bytes)"));
+            }
+
+            if (first == "remove")
+            {
+                if (parts.Length < 3) return "Usage: snapshot remove <name>";
+                bool removed = _snapshots.Remove(parts[2]);
+                return removed ? $"Snapshot '{parts[2]}' removed." : $"No snapshot named '{parts[2]}'.";
+            }
+
+            // Otherwise: parts[1] is a space name, parts[2] is the name to
+            // save this capture under.
+            if (parts.Length < 3) return "Usage: snapshot <space> <name>";
+            IDebugMemorySpace space = FindSpace(parts[1]);
+
+            if (space.HasSideEffects)
+            {
+                return $"{space.Name} can have real side effects on read (live hardware registers) - refusing a bulk snapshot there. Try WRAM (or another plain-memory space) instead.";
+            }
+
+            var data = new byte[space.Size];
+            for (int addr = 0; addr < space.Size; addr++) data[addr] = space.Read(addr);
+
+            string name = parts[2];
+            _snapshots[name] = (space.Name, data);
+            return $"Snapshot '{name}' saved: {space.Name}, {data.Length} bytes.";
+        }
+
+        // Compares a saved snapshot against that same space's CURRENT
+        // contents and reports every address that's different now -
+        // doesn't touch or replace the saved snapshot, so the same
+        // baseline can be diffed again later against a further-along
+        // state (unlike `search`'s changed/unchanged, which narrows the
+        // candidate set and moves its own baseline forward each time).
+        private string CmdDiff(string[] parts)
+        {
+            if (parts.Length < 2) return "Usage: diff <name> [<count>]";
+            if (!_snapshots.TryGetValue(parts[1], out var snap))
+            {
+                return $"No snapshot named '{parts[1]}'. Try 'snapshot list'.";
+            }
+
+            IDebugMemorySpace space = FindSpace(snap.SpaceName);
+            int count = parts.Length >= 3 ? ParseHex(parts[2]) : 20;
+
+            var changes = new List<(int Addr, byte Old, byte New)>();
+            for (int addr = 0; addr < snap.Data.Length; addr++)
+            {
+                byte now = space.Read(addr);
+                if (now != snap.Data[addr]) changes.Add((addr, snap.Data[addr], now));
+            }
+
+            if (changes.Count == 0) return $"No differences from snapshot '{parts[1]}'.";
+
+            var shown = changes.Take(count).Select(c => $"  0x{c.Addr:X}: 0x{c.Old:X2} -> 0x{c.New:X2}");
+            return $"{changes.Count} byte(s) differ from snapshot '{parts[1]}' ({snap.SpaceName}), showing up to {count}:\n" + string.Join('\n', shown);
         }
 
         // Generalizes DebugTools.DecodeTileAscii (which only ever worked

@@ -5,26 +5,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
     internal enum EnvelopeStage { Attack, Decay, Sustain, Release, Off }
 
     // One S-DSP voice: BRR sample playback and the ADSR/GAIN envelope that
-    // scales it. Register field values (VolL/VolR/Srcn/Adsr1/Adsr2/Gain/Pitch)
-    // are kept in sync by SDsp whenever the corresponding DSP register is
-    // written; this class only reacts to KeyOn/KeyOff and produces samples.
-    //
-    // Deliberately NOT implemented in this pass (documented rather than
-    // silently wrong):
-    //   - Echo (EON, FIR filter, echo buffer) - entirely separate subsystem.
-    //   - Noise generation (NON) - voices always play their BRR sample.
-    //   - Pitch modulation from the previous voice's output (PMON).
-    //   - The real 4-tap Gaussian interpolation filter - this uses
-    //     nearest-neighbor resampling instead, which gets the playback RATE
-    //     right but sounds rougher than hardware on pitched-up/down samples.
-    //   - Exact period-table phase alignment across voices (see SDsp.cs's
-    //     comment on RateDue below) - envelope RATES are correct, exact
-    //     per-clock PHASE isn't.
+    // scales it. Register field values are kept in sync by SDsp. See
+    // Venus_APU.md §4 for what's not implemented.
     internal class DspVoice
     {
-        // 32-entry rate/period table, in S-SMP clocks per envelope step.
-        // Verified against the SNESdev DSP_envelopes page. Index 0 ("Infinite")
-        // means the corresponding stage never advances on its own.
+        // Rate/period table - see Venus_APU.md §4.4.
         private static readonly int[] PeriodTable =
         {
             int.MaxValue, 2048, 1536, 1280, 1024, 768, 640, 512, 384, 320, 256, 192,
@@ -65,9 +50,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             Ended = false;
         }
 
-        // Called when the game writes to ENDX ($7C) - real hardware clears
-        // ALL voices' end flags on any write to that register, regardless of
-        // the value written.
+        // Called on any write to ENDX - see Venus_APU.md §3.2.
         public void ClearEndedFlag() => Ended = false;
 
         public void AttachMemory(byte[] ram) => _ram = ram;
@@ -112,11 +95,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             {
                 if (BrrDecoder.IsLoopBlock(header))
                 {
-                    // Real hardware carries the prediction filter's history
-                    // straight into the loop block rather than resetting it -
-                    // whether that matters depends on the loop block's own
-                    // filter type, same as it would mid-stream. No _brr.Reset()
-                    // here on purpose.
+                    // No _brr.Reset() here on purpose - see Venus_APU.md §4.2.
                     _blockAddr = _loopAddr;
                 }
                 else
@@ -136,9 +115,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             _blockPos = 0;
         }
 
-        // Produces one output-rate sample (called once per generated stereo
-        // frame - see SDsp.GenerateSample). Returns the envelope-scaled,
-        // still-unpanned sample; SDsp applies VolL/VolR and mixes.
+        // Produces one output-rate sample; SDsp applies VolL/VolR and mixes.
         public short GetNextSample()
         {
             if (!_active) return 0;
@@ -160,11 +137,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             return (short)Math.Clamp(scaled, short.MinValue, short.MaxValue);
         }
 
-        // Gates envelope steps to the rate the period table specifies,
-        // approximated in output samples (32 S-SMP clocks per generated
-        // sample - matches SDsp.Tick's own 32-cycle-per-sample timing exactly,
-        // so the RATE this produces is correct; only the exact clock-level
-        // PHASE relative to other voices isn't modeled).
+        // Gates envelope steps to the period table's rate - see Venus_APU.md §4.4.
         private bool RateDue(int periodIndex)
         {
             if (periodIndex == 0) return false;
@@ -250,11 +223,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             if ((Gain & 0x80) == 0)
             {
-                // Direct gain: set the envelope immediately from the 7-bit
-                // value. This scaling (value * 16) is the one detail in this
-                // file not independently cross-checked against a second
-                // source - worth revisiting first if a direct-gain-mode
-                // sound effect sounds off.
+                // Direct gain scaling - not independently cross-checked, see
+                // Venus_APU.md §4.5.
                 _envelope = (Gain & 0x7F) * 16;
                 return;
             }

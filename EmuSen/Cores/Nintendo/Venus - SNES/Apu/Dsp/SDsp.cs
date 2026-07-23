@@ -5,13 +5,7 @@ using EmuSen.Audio;
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
     // The S-DSP: register file, the 8 voices (DspVoice.cs), and final stereo
-    // mixing. BRR decoding and per-voice envelope logic live in DspVoice -
-    // this class owns register decode (turning raw register bytes into the
-    // fields DspVoice actually uses), KON/KOFF edge detection, ENDX, and the
-    // MVOL-scaled mix down to the output buffer.
-    //
-    // Not implemented (see DspVoice's header comment for the full list):
-    // echo, noise, pitch modulation, Gaussian interpolation.
+    // mixing - see Venus_APU.md §3.
     public class SDsp
     {
         private byte[] _registers = new byte[128];
@@ -66,8 +60,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         public byte ReadRegister()
         {
-            // ENDX ($7C) reads the live per-voice end flags; everything else
-            // just reads back whatever was last written.
+            // ENDX - see Venus_APU.md §3.2.
             if (_registerAddress == 0x7C)
             {
                 byte endx = 0;
@@ -84,8 +77,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             _registers[_registerAddress] = data;
 
-            // Any write to ENDX clears all its bits, regardless of the value
-            // written - documented hardware behavior, not a typo.
+            // Any write to ENDX clears all its bits - see Venus_APU.md §3.2.
             if (_registerAddress == 0x7C)
             {
                 foreach (var voice in _voices) ClearEnded(voice);
@@ -107,10 +99,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                     case 0x5: v.Adsr1 = data; break;
                     case 0x6: v.Adsr2 = data; break;
                     case 0x7: v.Gain = data; break;
-                    // 0x8 (ENVX) and 0x9 (OUTX) are read-only from the game's
-                    // perspective on real hardware; writes are accepted (it's
-                    // just RAM) but ignored here since nothing reads them back
-                    // for voice logic.
+                    // 0x8 (ENVX)/0x9 (OUTX) writes accepted but ignored - unused for voice logic.
                 }
             }
         }
@@ -163,8 +152,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
             else
             {
-                // Still advance voice playback state even when muted/disabled,
-                // so audio doesn't "jump ahead" the moment it's re-enabled.
+                // Still advance voice playback state when muted - see Venus_APU.md §3.4.
                 foreach (var voice in _voices) voice.GetNextSample();
             }
 
@@ -178,13 +166,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
         }
 
-        // KON/KOFF are edge-triggered here (fires on a bit newly set since
-        // last sample) rather than level-triggered, so a game holding a KON
-        // bit set across multiple writes doesn't re-key the voice every
-        // sample. Real hardware processes these every 2nd internal pass
-        // (~every 64 SPC clocks per fullsnes); gating on the same per-sample
-        // cadence GenerateSample already runs at is close enough for this
-        // pass without modeling that separately.
+        // KON/KOFF edge detection - see Venus_APU.md §3.3.
         private void ProcessKeyEvents()
         {
             byte kon = _registers[0x4C];
@@ -201,10 +183,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 bool koffBit = (koffRising & (1 << v)) != 0;
 
                 if (konBit) _voices[v].KeyOn(dirTableAddr);
-                // If both KON and KOFF are newly set for the same voice in
-                // the same sample, KeyOff wins (matches documented hardware
-                // behavior: key-on immediately followed by key-off silences
-                // the channel).
+                // KeyOff wins if both are newly set - see Venus_APU.md §3.3.
                 if (koffBit) _voices[v].KeyOff();
             }
 

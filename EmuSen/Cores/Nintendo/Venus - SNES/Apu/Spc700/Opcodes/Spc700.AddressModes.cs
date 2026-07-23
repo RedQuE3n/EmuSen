@@ -54,15 +54,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             return (ushort)(wrappedOffset + (GetFlag(SpcFlags.P) ? 0x0100 : 0x0000));
         }
 
-        // m.b: the operand for AND1/OR1/EOR1/MOV1/NOT1 packs a 13-bit
-        // absolute memory address (bits 0-12) and a 3-bit bit index (bits
-        // 13-15) into one 16-bit operand word - verified against documented
-        // hardware encoding (sneslab.net's MOV1 page: "the low 13 bits of
-        // the operand byte specify an absolute address, the high 3 bits
-        // specify which bit"). That's a perfect fit for the existing
-        // Func<ushort> AddrMode signature, so no changes needed there -
-        // callers just unpack it: `addr = raw & 0x1FFF`, `bit = (raw >> 13)
-        // & 0x07`. See the Op*1 handlers in Spc700.Opcodes.cs.
+        // m.b operand packing - see Venus_APU.md §2.3.
         private ushort AddrMemBit()
         {
             byte low = Read8(PC);

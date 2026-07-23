@@ -916,14 +916,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             PC = address;
         }
 
-        // --- dd,ds family: (dd) = (dd) OP (ds) ---
-        // The AddrMode (AddrDirectPage) fetches and resolves the FIRST
-        // operand byte in the instruction stream, which is actually the
-        // SOURCE address (ds) despite the mnemonic being written "dd, ds" -
-        // this is the real, documented SPC700 byte-encoding quirk, and
-        // matches the existing OpOR_dp_dp/OpCMP_dp_dp implementations this
-        // family is modeled on. The second operand byte (destination, dd) is
-        // fetched from PC inside each handler, same as those two.
+        // --- dd,ds family: (dd) = (dd) OP (ds) - see Venus_APU.md §2.1 ---
 
         private void OpAND_dp_dp(ushort srcAddress)
         {
@@ -997,11 +990,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private void OpMOV_dp_dp(ushort srcAddress)
         {
-            // MOV dd,ds is documented as "(no read)" of the destination
-            // (unlike OR/AND/EOR/ADC/SBC dd,ds above, which read-modify-write
-            // it) - doesn't matter functionally here since nothing in this
-            // emulator models bus read side-effects, so this is just a
-            // straight copy. No flags affected.
+            // "(no read)" of destination per hardware docs - see Venus_APU.md §2.1.
             byte srcVal = Read8(srcAddress);
 
             byte destOffset = Read8(PC);
@@ -1011,13 +1000,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             Write8(destAddress, srcVal);
         }
 
-        // --- (X),(Y) family: (X) = (X) OP (Y), both operands direct-page
-        // addresses given by the X and Y registers themselves (SPC700's
-        // (X)/(Y) notation means "direct page address = register value",
-        // same convention AddrIndirectX already uses for the single-operand
-        // (X) forms - mirrored here by hand since these opcodes need both
-        // addresses at once, which doesn't fit the single-AddrMode table
-        // shape). ---
+        // --- (X),(Y) family: (X) = (X) OP (Y) - see Venus_APU.md §2.2 ---
 
         private void OpOR_IndX_IndY(ushort address)
         {
@@ -1097,8 +1080,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             UpdateZN(resultByte);
         }
 
-        // --- m.b family: single-bit test/set/move against a 13-bit absolute
-        // address + 3-bit index, packed into the operand by AddrMemBit. ---
+        // --- m.b family - see Venus_APU.md §2.3 ---
 
         private void OpOR1(ushort raw)
         {
@@ -1192,14 +1174,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             UpdateZN(A);
         }
 
-        // DAA/DAS: notoriously easy to get subtly wrong, so this follows the
-        // structure independently verified against real SPC700 test vectors
-        // in the community (Overload/anomie, cross-checked on the ZSNES
-        // forums: "SPC700" thread) rather than a generic x86-style DAA/DAS,
-        // which uses different flag polarity. DAS mirrors DAA with inverted
-        // flag checks (H/C clear = borrow occurred), consistent with how
-        // this codebase's own OpSBC_A/OpADC_A already treat H/C for
-        // subtraction vs addition.
+        // DAA/DAS - see Venus_APU.md §2.4.
         private void OpDAA_A(ushort address)
         {
             if ((A & 0x0F) > 9 || GetFlag(SpcFlags.H))

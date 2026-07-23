@@ -27,10 +27,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
     public partial class Spc700
     {
-        // When true, logs the CPU<->APU port conversation - but only on VALUE CHANGES,
-        // so the driver's idle loop re-reading the same ports doesn't flood the console.
-        // Program.cs flips this on a few frames in, after the initial ~24k-write upload
-        // is already done.
+        // Logs CPU<->APU port traffic on value changes only - see Venus_APU.md §1.2.
         public bool LogPortTraffic = false;
         private byte[] _lastCpuWrite = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF };
         private byte[] _lastSpcWrite = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF };
@@ -50,9 +47,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         public ushort PC;
         public byte PSW; 
 
-        // Set by SLEEP/STOP (see OpHalt in Spc700.Opcodes.cs). Real hardware
-        // only wakes on a hardware reset, same as the 65816's STP - so this
-        // only clears in Reset(), nothing else touches it.
+        // Set by SLEEP/STOP - see Venus_APU.md §1.4.
         private bool _halted;
 
         private byte[] _inPorts = new byte[4];
@@ -78,7 +73,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         [EmuSen.Common.SkipInState] private SpcInstruction[] _instructions = null!;
 
-        private static readonly byte[] IplRom = new byte[] 
+        // Real SNES boot ROM, hardcoded - see Venus_APU.md §1.1.
+        private static readonly byte[] IplRom = new byte[]
         {
             0xCD, 0xEF, 0xBD, 0xE8, 0x00, 0xC6, 0x1D, 0xD0, 0xFC, 0x8F, 0xAA, 0xF4, 0x8F, 0xBB, 0xF5, 0x78,
             0xCC, 0xF4, 0xD0, 0xFB, 0x2F, 0x19, 0xEB, 0xF4, 0xD0, 0xFC, 0x7E, 0xF4, 0xD0, 0x0B, 0xE4, 0xF5,
@@ -160,12 +156,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (address == 0x00F2) return Dsp.GetRegisterAddress();
             if (address == 0x00F3) return Dsp.ReadRegister();
 
-            // Intercept Hardware Timer Output Counters
+            // Timer counters - reading clears them, see Venus_APU.md §1.3.
             switch (address)
             {
                 case 0x00FD:
                     byte t0 = _timer0Counter;
-                    _timer0Counter = 0; // Hardware clears counter on read
+                    _timer0Counter = 0;
                     return t0;
                 case 0x00FE:
                     byte t1 = _timer1Counter;
@@ -214,12 +210,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             {
                 case 0x00F1:
                     _timerControl = data;
-                    // If a timer is disabled, its internal timing resets
+                    // Disabling a timer resets its prescaler - see Venus_APU.md §1.3.
                     if ((data & 0x01) == 0) { _timer0Cycles = 0; _timer0Internal = 0; }
                     if ((data & 0x02) == 0) { _timer1Cycles = 0; _timer1Internal = 0; }
                     if ((data & 0x04) == 0) { _timer2Cycles = 0; _timer2Internal = 0; }
 
-                    // Bits 4/5 clear the CPU->APU input latches (PC10 / PC32).
+                    // Bits 4/5 clear the CPU->APU input latches - see Venus_APU.md §1.3.
                     if ((data & 0x10) != 0) { _inPorts[0] = 0; _inPorts[1] = 0; }
                     if ((data & 0x20) != 0) { _inPorts[2] = 0; _inPorts[3] = 0; }
                     break;
@@ -267,8 +263,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             if (CycleBudget <= 0) return;
 
-            // SLEEP/STOP: halted until Reset() clears this. Idle only - still
-            // consumes budget so the caller's cycle accounting keeps moving.
+            // SLEEP/STOP - see Venus_APU.md §1.4.
             if (_halted)
             {
                 CycleBudget -= 2;
@@ -276,7 +271,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
 
             byte opcode = Read8(PC);
-            // --- One-shot dispatch-chain tracer (active alongside port logging) ---
+            // One-shot dispatch-chain tracer - see Venus_APU.md §1.5.
             if (LogPortTraffic)
             {
                 switch (PC)

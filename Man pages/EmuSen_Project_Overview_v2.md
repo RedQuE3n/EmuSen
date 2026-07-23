@@ -17,6 +17,22 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as two sibling pro
 
 ---
 
+## 1a. Development environment
+
+The machine this project is actually built and run on, kept current here so anything environment-specific (paths, package manager, GPU driver quirks) can be cross-checked against real conditions rather than assumed:
+
+- **OS:** Fedora Linux 44, KDE Plasma Desktop Edition (Wayland)
+- **Kernel:** 7.1.4-200.fc44.x86_64
+- **KDE Plasma:** 6.7.3 / **KDE Frameworks:** 6.28.0 / **Qt:** 6.11.1
+- **CPU:** AMD Ryzen 7 7700X (8-core / 16-thread)
+- **RAM:** 32 GiB
+- **GPU:** AMD Radeon RX 6800 (discrete) + Ryzen 7700X integrated graphics
+- **Motherboard/system manufacturer:** ASUS
+
+Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any install instructions given for this project (e.g. `ffmpeg` for the frame-recording tool's video encode step — see the debugging tools reference, §3.8 — is `sudo dnf install ffmpeg` here, not the Debian/Ubuntu-style command).
+
+---
+
 ## 2. Architecture
 
 **Layering, roughly bottom-to-top:**

@@ -3,23 +3,13 @@ using EmuSen.Debug;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {
-    // The SNES hardware multiply/divide unit ($4202-$4206 write, $4214-
-    // $4217 read) - a genuinely distinct piece of hardware, extracted out
-    // of MemoryBus so the bus doesn't have to carry register-specific
-    // state and logic that has nothing to do with its actual job (address
-    // decode/dispatch). Computed instantly on the triggering write
-    // (WRMPYB/WRDIVB) rather than modeling the real 8/16-cycle delay -
-    // correct for any game that waits before reading the result, which is
-    // how this hardware is always used in practice.
+    // The SNES hardware multiply/divide unit - see Venus_Memory.md §5.
     public class MathUnit
     {
         private byte _mpyA = 0xFF;             // WRMPYA ($4202), power-on default per docs
         private ushort _divDividend = 0xFFFF;  // WRDIV ($4204/4205), power-on default per docs
         private ushort _divQuotient;           // read via $4214/4215
-        private ushort _rdMpy;                 // read via $4216/4217 - holds the last multiply's
-                                                // product OR the last divide's remainder,
-                                                // whichever operation ran most recently, since
-                                                // they're the same physical registers on real hardware
+        private ushort _rdMpy;                 // read via $4216/4217 - shared with multiply's product, see §5
 
         public void WriteMpyA(byte data) => _mpyA = data;
 
@@ -36,8 +26,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             if (data == 0)
             {
-                // Documented hardware behavior: divide by zero gives a
-                // quotient of $FFFF and a remainder equal to the dividend.
+                // Divide by zero - see Venus_Memory.md §5.
                 _divQuotient = 0xFFFF;
                 _rdMpy = _divDividend;
             }

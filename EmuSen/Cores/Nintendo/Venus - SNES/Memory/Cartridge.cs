@@ -9,13 +9,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         private byte[] _sram;
         public int SramSize => _sram.Length;
 
-        // Saves/<rom-name>.srm - a dedicated folder sibling to Roms/ and Logs/,
-        // not derived from the ROM's own directory (which could be anywhere on
-        // disk, possibly read-only, and isn't necessarily "ours" to write into -
-        // ROMs can be loaded from any path via the CLI arg or the Avalonia
-        // frontend's file picker). Only the save FILENAME comes from the ROM;
-        // the folder itself is always relative to where the emulator runs from,
-        // same convention Logs/ already uses.
+        // Saves/<rom-name>.srm - see Venus_Memory.md §2.4.
         public string SavePath { get; }
 
         public Cartridge(string romPath)
@@ -34,27 +28,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             _rom = new byte[fileBytes.Length - headerSize];
             Array.Copy(fileBytes, headerSize, _rom, 0, _rom.Length);
 
-            // RAM Size byte lives at SNES address $00:FFD8, which for LoROM
-            // maps to ROM file offset $7FD8 (bank 0, offset 0xFFD8 - 0x8000).
-            // 0 means "no SRAM"; any other value N means the cart has
-            // 1KB << N of SRAM (verified via SNESdev wiki's ROM header page
-            // and a WLA-DX header example using SRAMSIZE $00 for "no SRAM").
-            // Previously this was hardcoded to 2KB for every game, which
-            // happens to match SMW but is wrong for anything else - Super
-            // Metroid's RAM Size byte is 3 (8KB), and its anti-piracy boot
-            // check specifically writes/reads across the $702000-$703FFF
-            // vs $700000-$701FFF mirror that only exists at the *real*
-            // chip size, so an undersized array made that check fail.
+            // SRAM size from the ROM header ($00:FFD8) - see Venus_Memory.md §2.2.
             int sramSize = 0;
             if (_rom.Length > 0x7FD8)
             {
                 int ramSizeExponent = _rom[0x7FD8];
                 if (ramSizeExponent > 0)
                 {
-                    // Clamp defensively - SnesLab documents 7 (512KB) as the
-                    // maximum value real hardware/games use; a corrupt or
-                    // unusual header shouldn't be able to make us allocate
-                    // something absurd.
+                    // Clamp to SnesLab's documented real-hardware max (512KB).
                     ramSizeExponent = Math.Min(ramSizeExponent, 7);
                     sramSize = 1024 << ramSizeExponent;
                 }
@@ -73,13 +54,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             Console.WriteLine("========================");
         }
 
-        // Reads an existing .srm into _sram if one exists. Tolerant of a
-        // save file that doesn't exactly match the allocated SRAM size
-        // (copies whichever is smaller) rather than failing outright - a
-        // mismatch most likely means this ROM's header-reported SRAM size
-        // differs from whatever created the file (e.g. re-dumped with a
-        // different header, or an old save from before header-based sizing),
-        // not a corrupted save.
+        // Tolerant of a save file that doesn't match the allocated SRAM
+        // size - see Venus_Memory.md §2.4.
         private void LoadSram()
         {
             try
@@ -100,11 +76,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
         }
 
-        // Writes the current SRAM contents to disk. Safe to call frequently -
-        // SRAM is a few KB at most, and this is a plain overwrite, not an
-        // append. Called periodically and on shutdown (see Program.cs /
-        // EmulatorSession.cs) rather than on every single SRAM write, since
-        // some games touch SRAM quite often during normal play.
+        // Called periodically + on shutdown, not on every write - see
+        // Venus_Memory.md §2.4.
         public void SaveSram()
         {
             try
@@ -137,19 +110,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 }
             }
             
-            // --- LoROM SRAM Mapping ---
-            // SRAM is mapped to the lower 32KB ($0000-$7FFF) of banks $70-$7D and $F0-$FF.
-            // Real SRAM chips only decode as many address lines as their actual
-            // size needs, so a chip smaller than the full 32KB window mirrors
-            // repeatedly within it - modulo addressing reproduces that for free.
-            // This matters beyond just correctness: Super Metroid's boot-time
-            // anti-piracy check deliberately writes a test pattern through one
-            // mirror address and reads it back through another, specifically to
-            // detect cartridges/emulators that DON'T mirror correctly (see
-            // tcrf.net/Super_Metroid). Previously this used a hard range check
-            // against the array length instead of wrapping, so anything past
-            // the (also wrong, hardcoded-2KB) array size silently read as open
-            // bus rather than mirroring - failing that check.
+            // SRAM mirroring (modulo, not a hard range check) - see
+            // Venus_Memory.md §2.3 for why this matters beyond correctness.
             if (offset < 0x8000 && ((bank >= 0x70 && bank <= 0x7D) || (bank >= 0xF0 && bank <= 0xFF)) && _sram.Length > 0)
             {
                 return _sram[offset % _sram.Length];
@@ -164,11 +126,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             byte bank = (byte)(address >> 16);
             ushort offset = (ushort)(address & 0xFFFF);
 
-            // --- LoROM SRAM Mapping ---
-            // ROM is read-only, so we only need to handle writes to SRAM.
-            // Same mirroring rationale as Read8 above - modulo instead of a
-            // hard size cutoff, and an explicit offset<0x8000 bound since
-            // only the lower 32KB of these banks is SRAM.
+            // ROM is read-only; only SRAM is writable. Same mirroring as Read8.
             if (offset < 0x8000 && ((bank >= 0x70 && bank <= 0x7D) || (bank >= 0xF0 && bank <= 0xFF)) && _sram.Length > 0)
             {
                 _sram[offset % _sram.Length] = data;

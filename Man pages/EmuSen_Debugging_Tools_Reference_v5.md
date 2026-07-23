@@ -271,6 +271,19 @@ Both always resolve `<file>` under `Logs/` — the same directory F3 screenshots
 
 **Distinct from save states.** `EmulatorSession`/`VenusCore`'s `SaveState`/`LoadState` (F5/F9 in the frontend) capture *everything* needed to resume execution — CPU, PPU, full bus state — as one opaque blob. `dump`/`load` capture *one named memory space* as plain bytes, readable and editable by anything, with no claim to being a complete or resumable snapshot of emulation state. Different tools for different jobs: F5/F9 for "come back to this later," `dump`/`load` for "take this data somewhere else and look at it."
 
+### 3.12 "Who calls this address" (`callers`, `Debug/Commands/CallersCommand.cs`)
+
+The static-analysis counterpart to a write watch: instead of running the game and waiting to observe an access, `callers` reads the code itself and reports every `JSR`/`JSL`/`JMP`/`JML` whose target matches a given address. Generalizes the exact manual step the Yoshi investigation used to find the real DMA-trigger dispatcher — grepping an already-captured CPU trace for `JSR`/`JSL` instructions targeting a known range (see `EmuSen_Core_Gameplan.md`'s current-status section) — into a real command that doesn't need a trace captured first.
+
+```
+callers <addr> [<scanstart> <scanlen>]   find JSR/JSL/JMP/JML targeting <addr>, scanning CpuBus
+                                           (default: <addr>'s own bank, $8000-$FFFF)
+```
+
+Reuses `IDebugTarget.Disassemble` rather than re-decoding opcodes itself, so a `callers` result and the equivalent `disasm` output for the same address always agree — same disassembler, same bytes. Matches on the **raw opcode byte**, not the mnemonic: `JMP $nnnn` (absolute, direct — opcode `$4C`), `JMP ($nnnn)` (indirect — `$6C`), and `JMP ($nnnn,X)` (indexed indirect — `$7C`) all disassemble to the mnemonic `"JMP"` with the same 3-byte length, but only the direct form has a target `callers` can know without actually running the code. Indirect forms are deliberately excluded rather than guessed at.
+
+**Same "best-effort, may misalign through data mixed with code" caveat as `disasm`.** A linear disassembler walking forward byte-by-byte has no way to know which bytes in a scanned range are really instructions versus embedded data (graphics, tables, text) — if the scan range includes non-code bytes, everything after the first misaligned read can decode to garbage opcodes, including spurious `callers` matches or missed real ones. Best used on a range that's actually known to be code.
+
 ---
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)

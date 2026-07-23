@@ -1,0 +1,40 @@
+# EmuSen Frontend Driver (`Frontend/Program.cs`)
+
+Covers the Raylib console frontend's `Main`/`RunHotkeys` — the actual emulator driver: ROM selection, log setup, wiring the debug toolchain together, the per-frame loop, and every F-key/dev hotkey. Same reorganization as `Man pages/Hardware/` and `EmuSen_Settings_Reference.md`: long inline comments move here, code keeps only short local pointers back to this doc.
+
+Not hardware-specific (that's `Man pages/Hardware/`) and not configuration (`EmuSen_Settings_Reference.md`) — this is the thing that actually drives the emulator frame by frame, so it gets its own page directly under `Man pages/`.
+
+---
+
+## 1. `Main` — startup sequence
+
+1. **ROM path resolution.** First CLI arg if given (`dotnet run -- /path/to/game.smc`), else a hardcoded default. Raylib has no built-in file picker, so a CLI arg is the standard way to make this pickable for a console build — the Avalonia frontend (`EmuSen.Frontend`) has a real "Open ROM..." dialog instead, for anyone who prefers that.
+2. **`VenusCore` construction.** This is the actual emulation driver — CPU/PPU/APU/memory, the per-scanline timing loop, save states, SRAM — not `Main` itself. See `Cores/ICore.cs`: this used to be duplicated between `Program.cs` and `Common/EmulatorSession.cs` as two hand-maintained copies; now both call the same `RunFrame()`.
+3. **Log directory setup — deliberately placed here, not earlier.** `Logs/<CoreName>/console_<timestamp>/` needs `core.CoreName`, which only exists after `VenusCore` is constructed. This means the one console line printed before this point ("ROM Loading: ...") only reaches the terminal, not the file — an accepted, minor loss — and a ROM-not-found early exit never creates an empty log folder at all, since it returns before `VenusCore` (and therefore the log dir) exists.
+4. **Debug toolchain wiring.** `SnesDebugTarget` and `DebugCommandProcessor` are built once here, so both the F1 hotkey and the F4 interactive prompt go through the *same* underlying data rather than each reaching into `cpu`/`bus`/`ppu` independently.
+5. **Power-on watch registration (Yoshi/coin investigation).** Two `WatchRegistry` entries — `WRAM 0x8000` (0x1800 bytes, the graphics-upload staging buffer) and `WRAM 0x0D80` (0x80 bytes, the job-table region near the DMA dispatcher) — are registered here instead of via the F4 prompt, specifically so they're active from the very first CPU instruction rather than from whenever a human gets around to pressing F4 (hundreds of frames in). Every earlier trace of these ranges started after boot, which left open the possibility that whatever populates them runs very early and was simply being missed. Confirmed via a real dump: the `$8000` buffer is genuinely never written (128 bytes of zero, direct evidence); `$0D80` region *is* written, frequently — remove or adjust these once the investigation concludes.
+6. **The main loop.** Once per iteration: `core.RunFrame()` (drives one frame of actual emulation), `InputBindings.ApplyInput` (must happen *before* the next `RunFrame()`'s own `LatchAutoJoypad`, hence its position right after a frame completes, not before), `core.Renderer.DrawFrame(...)`, then `RunHotkeys(...)` (all debug/dev key handling, kept out of this loop body — see §2).
+7. **Shutdown.** `core.SaveSram()` on clean exit (final flush beyond the periodic autosave already inside `RunFrame()`), then `core.Renderer.Shutdown()`.
+8. **Top-level `catch`.** Any unhandled exception prints `[CPU HALT] <message>` rather than crashing silently — the CPU's own `NotImplementedException` for an unimplemented opcode is the most common thing this actually catches in practice.
+
+---
+
+## 2. `RunHotkeys` — why it's a separate method
+
+Everything triggered by a keypress (or a bounded background trace) lives in one method, called once per completed frame from `Main`'s loop. Deliberately extracted out of that loop — `Main`'s ~170 lines of hotkey dispatch would otherwise bury the actual emulation-driving code (step 6 above) underneath UI concerns that have nothing to do with running the emulator. Nothing in `RunHotkeys` changes emulation behavior; it's read-only inspection plus the F5/F9 save-state and F3 screenshot side effects.
+
+### Hotkeys
+
+| Key | Does |
+|---|---|
+| *(every frame)* | `frameRecorder.CaptureFrame(...)` — cheap no-op when not recording; has to run unconditionally (not gated on a keypress) so every frame during an active F6 recording gets captured, not just the frame F6 happened to be pressed on. |
+| **F6** | Toggle continuous frame recording — see `Debug/FrameRecorder.cs` and `EmuSen_Debugging_Tools_Reference_v5.md` §3.8. |
+| **P** | Starts a bounded 300-frame BG scroll trace (`DebugTools.BoundedTrace`), turning on `AllScrollWriteLogging` for exactly that span and back off automatically when it ends — built for the historical BG2 parallax-jitter investigation (see `Venus_PPU.md` §2), left in as a reusable pattern for the next scroll-timing question. |
+| **F1** | Full CPU+PPU state snapshot via `debugTarget.GetSummaryText()` (→ `StateDump.DumpAll`). Formatted to be directly comparable to MesenCE's own Status panel, since that's exactly what used to get hand-transcribed from screenshots during the scroll-jitter investigation. |
+| **F2** | Dumps every active OAM sprite's exact X/Y/tile/attribute bytes via `renderer.DumpActiveOam` directly (not through the debug toolchain) — that method also returns rects used by the "O" key's overlay, a second responsibility `SnesDebugTarget.GetSprites()` deliberately doesn't take on. The `sprites` command (F4) is the generalized, toolchain-routed equivalent of just this dump's printed output. |
+| **F4** | Interactive debug command prompt (`Debug/DebugCommandProcessor.cs`) — see `EmuSen_Debugging_Tools_Reference_v5.md` §3. Blocking by design: there's no way to pause emulation mid-frame, so this just blocks the console for as long as it takes to type commands. `help` for the command list, `exit`/`quit`/an empty line to resume. |
+| **F3** | Saves the current frame as a PNG plus a companion `.txt` (core name, frame number, wall-clock) under `Logs/<CoreName>/` — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.6. Added specifically because a coin/Yoshi investigation once hit a wall console-log text alone couldn't resolve: the DMA/VRAM trace confirmed real, changing pixel data landing at the right VRAM address, so the next question ("does the screen actually look right here") needed an actual image. |
+| **F5 / F9** | Save/load state, one slot per ROM (named to match its `.srm`). Both go straight through `VenusCore.SaveState`/`LoadState` (via `ICore`) — this used to be duplicated against `EmulatorSession`'s near-identical version before that interface existed. |
+| *(status line)* | Every `StatusEveryNFrames` (60) frames: current frame count, PC, and a few PPU registers (`TM`/`BGMODE`/`INIDISP`), tagged `[STATUS]` — a cheap heartbeat for "is this still running and roughly where."|
+
+**Periodic SRAM autosave is not here** — it moved inside `VenusCore.RunFrame()` itself once `ICore` existed, no longer duplicated in the frontend.

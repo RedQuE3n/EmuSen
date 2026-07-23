@@ -18,12 +18,7 @@ namespace EmuSen.Frontend
         {
             TextWriter originalOut = Console.Out;
 
-            // Pick the ROM to run: first command-line argument if given (e.g.
-            // `dotnet run -- /path/to/game.smc`), otherwise fall back to the
-            // hardcoded default below. Raylib itself has no built-in file-picker
-            // dialog, so a CLI arg is the standard way to make this pickable for
-            // a console-launched build - the Avalonia frontend (EmuSen.Frontend)
-            // has a real Open ROM... file picker instead, if that's preferred.
+            // ROM path resolution - see EmuSen_Frontend_Driver.md §1.
             string defaultRomPath = "/home/red/Documents/Roms/SMW.smc"; // temporary location
             string romPath = args.Length > 0 ? args[0] : defaultRomPath;
 
@@ -39,29 +34,11 @@ namespace EmuSen.Frontend
             {
                 string statePath = Path.Combine(Directory.GetCurrentDirectory(), "Saves", Path.GetFileNameWithoutExtension(romPath) + ".state");
 
-                // Drives the whole emulation - CPU/PPU/APU/memory, the
-                // per-scanline timing loop, save states, SRAM. See
-                // Cores/ICore.cs and this class's own header comment for
-                // why this exists instead of Main owning that loop
-                // directly the way it used to (that loop is now the ONE
-                // copy shared with EmulatorSession/the Avalonia frontend,
-                // not a second hand-maintained copy here).
+                // VenusCore drives the whole emulation - see EmuSen_Frontend_Driver.md §1.
                 VenusCore core = new VenusCore(headless: false);
 
-                // Timestamped per-session subfolder, nested under the core's
-                // own name (Logs/<CoreName>/console_<timestamp>/) rather than
-                // a flat Logs/ - so once a second core exists, its logs don't
-                // mix with this one's. Output is further split by category
-                // (see CategorizedLogWriter) rather than one ever-growing
-                // combined file - that file routinely reached hundreds of
-                // thousands of lines in a single play session, too large to
-                // search or hand off for review. Set up here (after
-                // VenusCore exists but before LoadRom) so core.CoreName is
-                // available without hardcoding "SNES" a second time - the
-                // one console line printed before this point (ROM loading,
-                // above) only reaches the terminal, not the file, as a
-                // result; a ROM-not-found early exit likewise never creates
-                // an empty log folder.
+                // Log dir setup - deliberately placed here, not earlier. See
+                // EmuSen_Frontend_Driver.md §1.
                 string logDir = Path.Combine(Directory.GetCurrentDirectory(), "Logs", core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
                 Directory.CreateDirectory(logDir);
                 Console.SetOut(new CategorizedLogWriter(originalOut, logDir));
@@ -70,63 +47,28 @@ namespace EmuSen.Frontend
                 DebugSettings.CpuVerboseLogging = false;
                 DebugSettings.Spc700VerboseLogging = false;
 
-                // The reusable debug toolchain - see Debug/IDebugTarget.cs
-                // and Debug/DebugCommandProcessor.cs. Built once here so
-                // both the F1 dump below and the new F4 interactive prompt
-                // go through the exact same underlying data, rather than
-                // each hotkey reaching into cpu/bus/ppu on its own.
+                // Debug toolchain, built once - see EmuSen_Frontend_Driver.md §1.
                 SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!);
                 DebugCommandProcessor debugCmd = new DebugCommandProcessor(debugTarget);
 
-                // Continuous version of the F3 screenshot utility - see
-                // Debug/FrameRecorder.cs. Core-agnostic itself; only the
-                // capture callback wired in at the F6 hotkey below is
-                // Raylib-specific.
                 FrameRecorder frameRecorder = new FrameRecorder(debugTarget);
 
-                // Yoshi/coin WRAM-staging investigation: registered here
-                // instead of via the F4 prompt so it's active from the very
-                // first CPU instruction, not from whenever a human can
-                // press F4 after the window opens (hundreds of frames in).
-                // Every prior trace of this range started after boot; this
-                // rules out "the population happens very early and we keep
-                // missing it." Remove once the investigation concludes.
+                // Power-on watch registration (Yoshi/coin investigation) -
+                // see EmuSen_Frontend_Driver.md §1.
                 debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
-
-                // Same investigation, one level upstream: a ground-truth CPU
-                // trace found the real DMA-trigger routine at $00A300 (not
-                // $00A317, which was just partway through it) reads a job
-                // table at $0D80-$0D9F (source pointer + pending-item counts
-                // for both a palette-upload branch and a graphics-upload
-                // branch) but never writes it - so whatever queues a job
-                // (and would determine whether Yoshi's slot points at valid
-                // WRAM data) does so somewhere else entirely. Zero writes to
-                // this range showed up in a 20480-instruction ground-truth
-                // trace that otherwise spanned many frames of active
-                // dispatching, meaning this table is very likely populated
-                // once, before that trace started - same shape as the
-                // original $8000-$97FF finding. Watching from power-on
-                // closes that gap here too.
                 debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
 
                 while (core.Renderer!.IsOpen())
                 {
                     core.RunFrame();
 
-                    // Poll real keyboard/gamepad state once per frame and feed it
-                    // into the emulated controller. This has to happen before the
-                    // next RunFrame() call (i.e. before that frame's own
-                    // LatchAutoJoypad), so doing it here - right after a frame
-                    // completes - keeps the timing correct. The actual key/pad
-                    // mapping lives in InputBindings.cs, not here.
+                    // Must happen before the next RunFrame()'s own
+                    // LatchAutoJoypad - see EmuSen_Frontend_Driver.md §1.
                     InputBindings.ApplyInput(core.Bus!);
 
                     core.Renderer.DrawFrame(core.Bus!, core.TotalFrames);
 
-                    // All debug/dev hotkeys (F1-F6, F9, P) live in one place -
-                    // see RunHotkeys below. Kept separate from the per-frame
-                    // loop above so the actual emulation driving isn't buried
-                    // under debug UI dispatch.
+                    // All debug/dev hotkeys - see EmuSen_Frontend_Driver.md §2.
                     RunHotkeys(core, debugTarget, debugCmd, frameRecorder, statePath);
                 }
                 core.SaveSram(); // final flush on clean exit
@@ -138,23 +80,13 @@ namespace EmuSen.Frontend
             }
         }
 
-        // Everything triggered by a keypress or a bounded background trace,
-        // checked once per completed frame. Deliberately separate from
-        // Main's per-frame loop - that loop is the actual emulation driver
-        // and reads much more clearly without ~170 lines of debug-hotkey
-        // dispatch interleaved into it. Nothing here changes emulation
-        // behavior; it's read-only inspection plus the F5/F9 save-state
-        // and F3 screenshot side effects, same as before the extraction.
+        // Every debug/dev hotkey - see EmuSen_Frontend_Driver.md §2.
         private static void RunHotkeys(
             VenusCore core, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, FrameRecorder frameRecorder,
             string statePath)
         {
-            // Called every completed frame, recording or not - CaptureFrame
-            // is a cheap no-op when IsRecording is false, so no gating
-            // needed here. Has to run unconditionally like this (not just
-            // on a keypress) so every frame while recording gets a chance
-            // to be captured, not only the frame F6 happened to be pressed
-            // on.
+            // Every frame, cheap no-op when not recording - see
+            // EmuSen_Frontend_Driver.md §2.
             frameRecorder.CaptureFrame(path => Raylib_cs.Raylib.TakeScreenshot(path));
 
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F6))
@@ -178,48 +110,19 @@ namespace EmuSen.Frontend
                 Console.WriteLine("[BG SCROLL] --- Starting 300-frame scroll trace ---");
             }
 
-            // On-demand full CPU+PPU snapshot - see StateDump.cs.
-            // Formatted to be directly comparable to MesenCE's own
-            // Status panel, since that's exactly what got
-            // hand-transcribed from screenshots repeatedly during
-            // the scroll-jitter investigation. Now goes through
-            // debugTarget.GetSummaryText() (which itself just
-            // delegates to StateDump.DumpAll - nothing lost),
-            // rather than calling StateDump directly, so this
-            // hotkey uses the same toolchain the new F4 prompt
-            // does instead of its own separate path.
+            // Full CPU+PPU snapshot - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F1))
             {
                 Console.WriteLine(debugTarget.GetSummaryText());
             }
 
-            // Dumps every active OAM sprite's exact X/Y/tile/attr -
-            // ground truth for checking whether an apparent
-            // "duplicate sprite" is really the same OAM entry
-            // rendered more than once, or genuinely separate OAM
-            // entries (i.e. a game-logic question, not a
-            // rendering bug). Left calling renderer.DumpActiveOam
-            // directly rather than routing through the new
-            // toolchain - that method also returns rects used
-            // elsewhere (the "O" key's overlay), a second
-            // responsibility SnesDebugTarget.GetSprites()
-            // deliberately doesn't take on. The new `sprites`
-            // command (via F4) is the generalized equivalent of
-            // just this dump's printed part, going forward.
+            // OAM sprite dump - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F2))
             {
                 core.Renderer!.DumpActiveOam(core.Bus!.Ppu);
             }
 
-            // Interactive debug command prompt - see
-            // Debug/DebugCommandProcessor.cs. Blocking by design:
-            // there's no way to pause emulation mid-frame yet (see
-            // that file's header comment), so this just blocks the
-            // console for as long as it takes to type commands,
-            // the same way the F1/F2 hotkeys already block for the
-            // instant it takes to print their output - just for
-            // longer, and interactively. Type 'help' for the
-            // command list, 'exit' or an empty line to resume.
+            // Interactive debug prompt - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F4))
             {
                 Console.WriteLine("--- Debug prompt (type 'help', 'exit' to resume) ---");
@@ -238,24 +141,7 @@ namespace EmuSen.Frontend
                 Console.WriteLine("--- Resuming ---");
             }
 
-            // Saves the current frame as a PNG. Added because the
-            // coin investigation hit a wall that console-log text
-            // alone can't resolve any further: the DMA/VRAM trace
-            // confirmed real, changing tile pixel data is landing
-            // at $C000, which means the upload path looks healthy
-            // - so the next question ("is this even the coin
-            // tile, and what does the screen actually look like
-            // where a coin should be") needs an actual image, not
-            // more log analysis.
-            //
-            // Also writes a companion .txt with the same frame
-            // count (plus a wall-clock timestamp) so the PNG can
-            // be directly and reliably cross-referenced against
-            // console.log lines that mention the same frame
-            // number, without depending on line-proximity
-            // guessing. Uses debugTarget.CoreName/FrameCount
-            // rather than anything SNES-specific, so this stays
-            // correct unchanged if a future core is swapped in.
+            // Timestamped screenshot - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F3))
             {
                 string coreLogDir = Path.Combine("Logs", debugTarget.CoreName);
@@ -273,12 +159,7 @@ namespace EmuSen.Frontend
                 Console.WriteLine($"[SCREENSHOT] Saved {shotPath} (Core={debugTarget.CoreName} Frame={debugTarget.FrameCount})");
             }
 
-            // Save states (F5 save, F9 load) - one slot per ROM, named to
-            // match its .srm save. Both now go straight through
-            // VenusCore.SaveState/LoadState (via ICore) rather than each
-            // frontend hand-rolling its own BinaryWriter/StateSerializer
-            // dance - this used to be duplicated against EmulatorSession's
-            // near-identical version.
+            // Save/load state - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F5))
             {
                 try

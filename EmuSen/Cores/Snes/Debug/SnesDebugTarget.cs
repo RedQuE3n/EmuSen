@@ -122,7 +122,7 @@ namespace EmuSen.Debug
         {
             return new IDebugMemorySpace[]
             {
-                new BusDebugMemorySpace("CPU Bus", _bus, 0x000000, 0x1000000),
+                new BusDebugMemorySpace("CpuBus", _bus, 0x000000, 0x1000000),
                 new ByteArrayDebugMemorySpace("WRAM", _bus.Ram),
                 new ByteArrayDebugMemorySpace("VRAM", _ppu.Vram),
                 new ByteArrayDebugMemorySpace("CGRAM", _ppu.Cgram),

@@ -5,6 +5,7 @@ using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
 using EmuSen.Bindings;
+using EmuSen.Presentation;
 
 namespace EmuSen.Frontend
 {

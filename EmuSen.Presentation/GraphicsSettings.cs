@@ -4,7 +4,11 @@ namespace EmuSen.Graphics
 {
     // Central hub for display/presentation options - see
     // Man pages/EmuSen_Settings_Reference.md §3. None of this affects
-    // emulation correctness - that's DebugSettings.
+    // emulation correctness - that's DebugSettings (EmuSen/Settings/).
+    // Lives in EmuSen.Presentation, not EmuSen/Settings/, alongside
+    // FramePresenter/BuiltInShaders - these are all presentation-layer
+    // concerns any frontend can share, unlike DebugSettings/AudioSettings
+    // which stay next to the emulation core they configure.
     public static class GraphicsSettings
     {
         public static int WindowWidth = 1060;

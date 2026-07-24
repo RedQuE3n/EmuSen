@@ -34,11 +34,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         // Debug-panel-only texture (VRAM tile sheet). The actual game
         // screen no longer gets its own Raylib texture/window here - that
-        // moved to EmuSen.Frontend.FramePresenter, which drives every core
-        // through the agnostic GetFrameBufferRgba() contract below instead
-        // of reaching into this class's internals. This texture is created
-        // lazily on first DrawDebugPanels() call, once FramePresenter's
-        // window already exists.
+        // moved to EmuSen.Presentation.FramePresenter, which drives every
+        // core through the agnostic GetFrameBufferRgba() contract below
+        // instead of reaching into this class's internals. This texture is
+        // created lazily on first DrawDebugPanels() call, once
+        // FramePresenter's window already exists.
         private Texture2D _sheetTex;
         private bool _sheetTexReady;
 
@@ -65,8 +65,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // just means DrawDebugPanels() no-ops - nothing elsewhere changes.
         //
         // No window/screen-texture setup happens here anymore - the console
-        // build creates its window via EmuSen.Frontend.FramePresenter before
-        // driving any frames, so by the time DrawDebugPanels() lazily
+        // build creates its window via EmuSen.Presentation.FramePresenter
+        // before driving any frames, so by the time DrawDebugPanels() lazily
         // allocates _sheetTex a window is already guaranteed to exist.
         private readonly bool _headless;
 

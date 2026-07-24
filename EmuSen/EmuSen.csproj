@@ -11,4 +11,11 @@
     <PackageReference Include="Raylib-cs" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- FramePresenter/GraphicsSettings/BuiltInShaders live here now, not
+         in this project - see EmuSen.Presentation.csproj's own note on why
+         presentation-layer code moved out to its own shared project. -->
+    <ProjectReference Include="..\EmuSen.Presentation\EmuSen.Presentation.csproj" />
+  </ItemGroup>
+
 </Project>

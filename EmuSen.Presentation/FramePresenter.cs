@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Raylib_cs;
-using EmuSen.Frontend.Shaders;
+using EmuSen.Presentation.Shaders;
 using EmuSen.Graphics;
 
-namespace EmuSen.Frontend
+namespace EmuSen.Presentation
 {
     // Built-in post-processing effects, applied as a single GLSL fragment
     // shader pass on the upscaled game screen before it's composited with
@@ -23,15 +23,19 @@ namespace EmuSen.Frontend
     // Core-agnostic on-screen presentation: takes any ICore's raw RGBA8888
     // frame buffer (ICore.GetFrameBufferRgba(), ICore.ScreenWidth/Height)
     // and gets it on screen via Raylib, with no knowledge of which console
-    // produced it. Window/render-target ownership lives here now, not on
-    // Renderer, specifically so a future post-processing shader pass chain
-    // has one place to hook in - between the texture upload and the final
-    // blit below - that works for every core, not just Venus/SNES.
+    // produced it. Lives in its own project (EmuSen.Presentation), separate
+    // from both the emulation core (EmuSen.csproj) and any one frontend, so
+    // every frontend depends on the same presentation/shader code instead
+    // of a hand-copied duplicate - the console build (EmuSen.csproj's
+    // Frontend/Program.cs) is the first consumer; Avalonia's EmulatorSession
+    // already goes through the same ICore contract and can adopt this once
+    // it has a GPU-capable rendering surface of its own (it currently
+    // presents via a CPU-side WriteableBitmap, which has no shader hook).
     //
     // drawOverlay in Present() is the seam for core-specific debug drawing
     // (VRAM sheet, CGRAM swatches, register text) that still needs direct
-    // access to a concrete core's internals - see ICore.cs's own note on
-    // why that stays out of the agnostic contract. It runs while this
+    // access to a concrete core's internals - see Cores/ICore.cs's own note
+    // on why that stays out of the agnostic contract. It runs while this
     // class's offscreen render target is still the active Raylib draw
     // target, so it can free-draw into the same frame this presents.
     // Deliberately runs AFTER the shader pass below, so debug text/panels

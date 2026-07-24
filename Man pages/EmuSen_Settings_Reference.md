@@ -1,6 +1,6 @@
 # EmuSen Settings Reference
 
-Covers `EmuSen/Settings/`: `DebugSettings.cs`, `AudioSettings.cs`, `GraphicsSettings.cs` — the three static, plain-field "central hub" classes the rest of the codebase reads instead of hardcoding constants or scattering `Console.WriteLine` gates through individual files. Same reorganization as `Man pages/Hardware/` (see that folder's `README.md` for the full rationale): the long inline WHY-comments that used to live next to each flag now live here, and code comments stay short.
+Covers three static, plain-field "central hub" classes the rest of the codebase reads instead of hardcoding constants or scattering `Console.WriteLine` gates through individual files: `DebugSettings.cs` and `AudioSettings.cs` (both `EmuSen/Settings/`), and `GraphicsSettings.cs`, which lives in `EmuSen.Presentation/` instead — it moved there alongside `FramePresenter`/`BuiltInShaders` since it's presentation-layer config any frontend can share, not something coupled to the emulation core the way `DebugSettings`/`AudioSettings` are. Same reorganization as `Man pages/Hardware/` (see that folder's `README.md` for the full rationale): the long inline WHY-comments that used to live next to each flag now live here, and code comments stay short.
 
 Unlike `Man pages/Hardware/`, these aren't hardware-abstraction notes — none of `DebugSettings`/`AudioSettings`/`GraphicsSettings` model real SNES hardware; they're this emulator's own configuration surface. That's why this page sits directly under `Man pages/` rather than under `Hardware/`.
 
@@ -66,7 +66,7 @@ These flags predate — and still coexist with — the core-agnostic `Debug/` to
 
 ## 3. `GraphicsSettings.cs` — display/presentation configuration
 
-Window size, title, vsync, target frame rate, texture filtering, and whether to show the debug side panels. **None of this affects emulation correctness** — that's `DebugSettings`'s domain. This is purely "how the output window looks," read by `Renderer.cs` instead of being hardcoded there.
+Window size, title, vsync, target frame rate, texture filtering, and whether to show the debug side panels. **None of this affects emulation correctness** — that's `DebugSettings`'s domain. This is purely "how the output window looks." Lives in `EmuSen.Presentation/GraphicsSettings.cs` (namespace stays `EmuSen.Graphics`) and is read by both `EmuSen.Presentation.FramePresenter` (window/render-target/letterbox setup) and `Renderer.Debug.cs`'s `DrawDebugPanels` (the `ShowDebugPanels` gate) — the split exists because `Renderer` stayed in the emulation-core project while window ownership moved out to `FramePresenter`, see `EmuSen_Frontend_Driver.md` §1 step 6.
 
 - **`WindowWidth`/`WindowHeight`** (default 1060x580) — window/canvas size in pixels. The real SNES resolution (256x224) is fixed hardware fact and lives in `Renderer.cs` as `ScreenW`/`ScreenH`, not here — these settings just control how big the window is on screen, with room for the debug side panels alongside the game view.
 - **`WindowTitle`** — default `"EmuSen"`.

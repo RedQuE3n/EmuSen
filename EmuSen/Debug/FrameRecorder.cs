@@ -117,14 +117,23 @@ namespace EmuSen.Debug
         // HONESTY NOTE: the FFV1 version above was verified against a
         // real run on the project's own dev machine (Fedora 44, ffmpeg
         // 8.1.2) - see git history for that verification and the
-        // WorkingDirectory/pix_fmt bugs it caught. This libx264rgb
-        // replacement has NOT yet had the equivalent real-run
-        // verification (no ffmpeg available in the environment writing
-        // this change) - the CRF-0/RGB-colorspace losslessness claim is
-        // well-documented x264 behavior, not something assumed from
-        // scratch, but confirm output plays correctly and file size
-        // actually improved on a real recording before trusting this
-        // blind.
+        // WorkingDirectory/pix_fmt bugs it caught. The libx264rgb
+        // replacement regressed on a real machine whose ffmpeg build
+        // doesn't include libx264 (see CodecAttempts below for the fix -
+        // automatic fallback to ffv1) - confirmed real, not hypothetical.
+        // libx264 is patent-encumbered and left out of some distros' default
+        // ffmpeg builds (e.g. plain Fedora repo, as opposed to RPM Fusion's)
+        // even though ffv1 (unencumbered, always built in) is present - a
+        // real regression caught this way: libx264rgb alone worked on the
+        // dev machine that verified it, but not on every machine. Try the
+        // smaller lossless codec first, fall back to the always-available
+        // one automatically rather than requiring per-machine setup.
+        private static readonly string[][] CodecAttempts =
+        {
+            new[] { "-c:v", "libx264rgb", "-crf", "0", "-preset", "slow" }, // RGB colorspace, mathematically lossless
+            new[] { "-c:v", "ffv1" },
+        };
+
         private void TryEncodeVideo(string sessionDir, int frameStride)
         {
             // Output filename only, NOT sessionDir/recording.mkv - the
@@ -137,54 +146,57 @@ namespace EmuSen.Debug
             string outputPath = Path.Combine(sessionDir, outputFile);
             double fps = AssumedFps / Math.Max(1, frameStride);
 
-            var psi = new ProcessStartInfo
+            for (int attempt = 0; attempt < CodecAttempts.Length; attempt++)
             {
-                FileName = "ffmpeg",
-                WorkingDirectory = sessionDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add("-y");
-            psi.ArgumentList.Add("-pattern_type");
-            psi.ArgumentList.Add("glob");
-            psi.ArgumentList.Add("-framerate");
-            psi.ArgumentList.Add(fps.ToString(CultureInfo.InvariantCulture));
-            psi.ArgumentList.Add("-i");
-            psi.ArgumentList.Add("frame_*.png");
-            psi.ArgumentList.Add("-c:v");
-            psi.ArgumentList.Add("libx264rgb"); // RGB colorspace - see this method's header comment for why
-            psi.ArgumentList.Add("-crf");
-            psi.ArgumentList.Add("0"); // mathematically lossless, not just visually
-            psi.ArgumentList.Add("-preset");
-            psi.ArgumentList.Add("slow"); // compression-ratio-favoring; raise to "veryslow" if encode time isn't a concern
-            psi.ArgumentList.Add(outputFile);
-
-            try
-            {
-                using Process proc = Process.Start(psi)!;
-                string stderr = proc.StandardError.ReadToEnd();
-                proc.WaitForExit();
-
-                if (proc.ExitCode == 0)
+                var psi = new ProcessStartInfo
                 {
-                    Console.WriteLine($"[RECORD] Video encoded -> {outputPath}");
-                    ZipAndCleanupFrames(sessionDir);
-                }
-                else
+                    FileName = "ffmpeg",
+                    WorkingDirectory = sessionDir,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
+                psi.ArgumentList.Add("-y");
+                psi.ArgumentList.Add("-pattern_type");
+                psi.ArgumentList.Add("glob");
+                psi.ArgumentList.Add("-framerate");
+                psi.ArgumentList.Add(fps.ToString(CultureInfo.InvariantCulture));
+                psi.ArgumentList.Add("-i");
+                psi.ArgumentList.Add("frame_*.png");
+                foreach (string arg in CodecAttempts[attempt]) psi.ArgumentList.Add(arg);
+                psi.ArgumentList.Add(outputFile);
+
+                try
                 {
-                    Console.WriteLine($"[RECORD] ffmpeg exited with code {proc.ExitCode}; PNG sequence + frames.log are still in {sessionDir}");
-                    Console.WriteLine(stderr);
+                    using Process proc = Process.Start(psi)!;
+                    string stderr = proc.StandardError.ReadToEnd();
+                    proc.WaitForExit();
+
+                    if (proc.ExitCode == 0)
+                    {
+                        Console.WriteLine($"[RECORD] Video encoded ({CodecAttempts[attempt][1]}) -> {outputPath}");
+                        ZipAndCleanupFrames(sessionDir);
+                        return;
+                    }
+
+                    bool moreAttemptsLeft = attempt < CodecAttempts.Length - 1;
+                    Console.WriteLine($"[RECORD] ffmpeg -c:v {CodecAttempts[attempt][1]} exited with code {proc.ExitCode}{(moreAttemptsLeft ? " - trying fallback codec" : "")}");
+                    if (!moreAttemptsLeft)
+                    {
+                        Console.WriteLine(stderr);
+                        Console.WriteLine($"[RECORD] PNG sequence + frames.log are still in {sessionDir}");
+                    }
                 }
-            }
-            catch (Win32Exception)
-            {
-                // ffmpeg isn't on PATH - not an error condition for this
-                // tool, just means the convenience encode step is
-                // unavailable. The PNG sequence and ledger are already
-                // complete and useful on their own.
-                Console.WriteLine($"[RECORD] ffmpeg not found on PATH - leaving the PNG sequence + frames.log as-is in {sessionDir}. Install ffmpeg for automatic video output.");
+                catch (Win32Exception)
+                {
+                    // ffmpeg isn't on PATH at all - not an error condition
+                    // for this tool, just means the convenience encode step
+                    // is unavailable. No point trying the fallback codec if
+                    // ffmpeg itself can't even be started.
+                    Console.WriteLine($"[RECORD] ffmpeg not found on PATH - leaving the PNG sequence + frames.log as-is in {sessionDir}. Install ffmpeg for automatic video output.");
+                    return;
+                }
             }
         }
 

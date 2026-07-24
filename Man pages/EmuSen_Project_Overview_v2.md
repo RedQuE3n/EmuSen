@@ -6,10 +6,11 @@
 
 ## 1. What this is
 
-EmuSen is a SNES emulator written in C# / .NET 10, structured as two sibling projects:
+EmuSen is a SNES emulator written in C# / .NET 10, structured as three sibling projects:
 
-- **`EmuSen/`** — the core (CPU/PPU/APU/memory) plus a Raylib-based console frontend (`Frontend/Program.cs`). This is the primary development/debugging environment — cores get built and verified here first, standalone, before the GUI frontend is the main way of running them.
-- **`EmuSen.Frontend/`** — an Avalonia GUI frontend, referencing `EmuSen` via project reference. ROM picker, ~~ad hoc~~ rebindable keyboard+gamepad input, Save/Load State menu items.
+- **`EmuSen/`** — the core (CPU/PPU/APU/memory) plus a Raylib-based console frontend's driver loop (`Frontend/Program.cs`). This is the primary development/debugging environment — cores get built and verified here first, standalone, before the GUI frontend is the main way of running them.
+- **`EmuSen.Presentation/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `FramePresenter` (owns the Raylib window/render-target, presents any core via `ICore.GetFrameBufferRgba()`), `Shaders/BuiltInShaders.cs` (embedded GLSL for the prototype shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). `EmuSen/`'s console frontend is the first real consumer; `EmuSen.Frontend/`'s Avalonia GUI references this project too but doesn't use it yet - see that project's own note on why (CPU-side `WriteableBitmap` presentation, no GPU/shader hook).
+- **`EmuSen.Frontend/`** — an Avalonia GUI frontend, referencing `EmuSen` (and, for the reason above, `EmuSen.Presentation`) via project reference. ROM picker, ~~ad hoc~~ rebindable keyboard+gamepad input, Save/Load State menu items.
 
 **Licensing stance:** the SNESdev wiki (mirrored at both `snes.nesdev.org` and `snesdev.mesen.ca` — maintained by the Mesen/MesenCE team) is the primary hardware-reference source. Mesen/MesenCE's own *documentation* gets read to understand hardware behavior; their source code does not — every implementation here is original. `SourMesen/Mesen2` is archived; `nesdev-org/MesenCE` is the actively maintained continuation and gets cited, not "Mesen2."
 
@@ -43,7 +44,8 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 - **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by the Avalonia frontend), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (what `Program.cs` actually uses — routes console output into per-category files under a `Logs/<CoreName>/console_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's).
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
 - **The debug toolchain** (`Debug/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Debug/DebugCommandProcessor.cs` is a Unix-toolchain-style command layer on top of that. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
-- **Frontends** (`Frontend/Program.cs` in `EmuSen/`, all of `EmuSen.Frontend/`) — presentation only. The Raylib console build and the Avalonia GUI are two independent entry points into the same core; neither owns emulation logic itself.
+- **Presentation** (`EmuSen.Presentation/`) — window/GPU-texture ownership and the prototype shader pipeline, shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1 step 6.
+- **Frontends** (`Frontend/Program.cs` in `EmuSen/`, all of `EmuSen.Frontend/`) — presentation *driving*, not the presentation code itself anymore. The Raylib console build and the Avalonia GUI are two independent entry points into the same core; neither owns emulation logic itself.
 
 **A concrete example of the layering working as intended:** `MemoryBus` (hardware simulation) exposes a tiny, debug-agnostic `IWriteObserver` hook that it calls on every WRAM write, with no idea what's listening. `SnesDebugTarget` (debug toolchain) implements that interface and is the thing that actually knows what a "watchpoint" is. `MemoryBus` could be reused by a completely different debug story (or none at all) without any changes — the coupling only exists in one direction, and it's the debug layer depending on the core, not the reverse. This wasn't always true — a `WatchRegistry` field and a `Cpu` back-reference used to live directly on `MemoryBus` itself, mixing the two layers together, until a later architecture-focused pass (see §4 and §7) untangled it.
 
@@ -163,13 +165,22 @@ EmuSen Project/
 │   │   └── DebugTools.cs                     # Older generic helpers (hexdump, tile-ASCII, etc.)
 │   ├── Frontend/
 │   │   └── Program.cs                        # Raylib console frontend; Main = timing loop,
-│   │                                          #   RunHotkeys = all F1-F5/F9/P dispatch (extracted
-│   │                                          #   from Main in a later decoupling pass - see §7)
+│   │                                          #   RunHotkeys = all F1-F5/F9/P/O/F8 dispatch
+│   │                                          #   (extracted from Main - see §7). Presents via
+│   │                                          #   EmuSen.Presentation.FramePresenter, not its
+│   │                                          #   own window/texture code - see that project.
 │   └── Settings/
 │       ├── AudioSettings.cs
 │       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md
-│       ├── GraphicsSettings.cs
 │       └── InputBindings.cs
+│
+├── EmuSen.Presentation/                       # Shared presentation layer (both frontends reference)
+│   ├── EmuSen.Presentation.csproj
+│   ├── FramePresenter.cs                     # Window/render-target ownership; presents any core via
+│   │                                          #   ICore.GetFrameBufferRgba(); runs the shader pass below
+│   ├── GraphicsSettings.cs                   # Moved out of EmuSen/Settings/ - see EmuSen_Settings_Reference.md §3
+│   └── Shaders/
+│       └── BuiltInShaders.cs                 # Embedded GLSL for the prototype shader pass (F8 hotkey)
 │
 └── EmuSen.Frontend/                           # Avalonia GUI frontend
     ├── EmuSen.Frontend.csproj
@@ -181,7 +192,10 @@ EmuSen Project/
     ├── Program.cs
     └── Views/
         ├── MainWindow.axaml / .axaml.cs       # ScreenWidth now an instance property tracking
-        │                                       #   the renderer's actual FrameWidth (hi-res support)
+        │                                       #   the renderer's actual FrameWidth (hi-res support).
+        │                                       #   Still presents via a CPU-side WriteableBitmap,
+        │                                       #   not EmuSen.Presentation.FramePresenter - no GPU
+        │                                       #   surface here yet, so no shader support either.
         └── InputSettingsWindow.axaml / .axaml.cs
 ```
 

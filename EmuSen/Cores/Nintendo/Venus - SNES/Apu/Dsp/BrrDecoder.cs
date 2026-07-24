@@ -22,7 +22,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         // followed by 8 bytes of packed 4-bit nibbles (high nibble first per byte).
         public short[] DecodeBlock(byte[] block, int offset = 0)
         {
-            byte header = block[offset];
+            byte header = block[offset & 0xFFFF];
             int shift = (header >> 4) & 0x0F;
             int filter = (header >> 2) & 0x03;
             // Loop/end flags (bits 1 and 0) are playback-control metadata, not
@@ -34,7 +34,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
             for (int i = 0; i < 16; i++)
             {
-                byte dataByte = block[offset + 1 + (i / 2)];
+                byte dataByte = block[(offset + 1 + (i / 2)) & 0xFFFF];
                 int nibble = (i % 2 == 0) ? (dataByte >> 4) & 0x0F : dataByte & 0x0F;
 
                 // Sign-extend the 4-bit nibble to a signed value in -8..7.

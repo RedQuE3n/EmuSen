@@ -13,8 +13,9 @@ namespace EmuSen.Cores.Nintendo.Venus
     // The SNES's ICore implementation - owns and drives Cpu/MemoryBus/
     // Spc700/Renderer frame-by-frame. This is the ONE place the per-
     // scanline timing loop lives now; it used to exist as two separately-
-    // maintained copies (Frontend/Program.cs's Main loop and
-    // Common/EmulatorSession.cs's RunFrame()) that had to be kept in sync
+    // maintained copies (the console frontend's Main loop, now
+    // EmuSen.RaylibFrontend/Program.cs, and Common/EmulatorSession.cs's
+    // RunFrame()) that had to be kept in sync
     // by hand - EmulatorSession's own header comment even said so
     // explicitly. Both now construct a VenusCore and call RunFrame() on
     // it instead.

@@ -1,8 +1,10 @@
-# EmuSen Frontend Driver (`Frontend/Program.cs`)
+# EmuSen Frontend Driver (`EmuSen.RaylibFrontend/Program.cs`)
 
 Covers the Raylib console frontend's `Main`/`RunHotkeys` — the actual emulator driver: ROM selection, log setup, wiring the debug toolchain together, the per-frame loop, and every F-key/dev hotkey. Same reorganization as `Man pages/Hardware/` and `EmuSen_Settings_Reference.md`: long inline comments move here, code keeps only short local pointers back to this doc.
 
 Not hardware-specific (that's `Man pages/Hardware/`) and not configuration (`EmuSen_Settings_Reference.md`) — this is the thing that actually drives the emulator frame by frame, so it gets its own page directly under `Man pages/`.
+
+Lives in its own project, `EmuSen.RaylibFrontend/`, not inside `EmuSen.csproj` — that split happened once `EmuSen.csproj` stopped being allowed to have a `Main`/window of its own at all: the Avalonia frontend (`EmuSen.Frontend/`) used to inherit this project's `Main`/Raylib-`Exe`-ness just by referencing `EmuSen.csproj` to reach the emulation core, which is backwards (one frontend depending on the other's frontend-specific baggage). `EmuSen.csproj` is a pure library now; `EmuSen.RaylibFrontend` and `EmuSen.Frontend` are true siblings, each independently referencing it (and `EmuSen.Presentation`) — see `EmuSen_Project_Overview_v2.md` §1/§2.
 
 ---
 

@@ -38,19 +38,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Pulls in the emulation core (Cores/Nintendo/Venus - SNES/*, Settings/*, etc). Note this
-         references EmuSen.csproj as-is (still an Exe with its own Main/Raylib
-         loop) - see the accompanying notes on why that's fine for now and what
-         splitting it apart later would look like. -->
+    <!-- Pulls in the emulation core (Cores/Nintendo/Venus - SNES/*, Settings/*, etc).
+         EmuSen.csproj is a pure library (no Main, no window ownership) - the Raylib
+         console frontend's own Main/hotkey loop lives in the sibling
+         EmuSen.RaylibFrontend project instead, so this reference no longer drags
+         in another frontend's Exe/window-ownership baggage, just the core. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
     <!-- Not consumed yet - this project still presents via a CPU-side
          WriteableBitmap (see Views/MainWindow.axaml.cs), which has no
-         shader hook. Referenced explicitly now so the dependency is
-         intentional rather than incidental (it's already pulled in
-         transitively through EmuSen.csproj above), and so this frontend
-         can adopt FramePresenter/ShaderEffect directly once it has a
-         GPU-capable rendering surface of its own - see the shader
-         game-plan discussion. -->
+         shader hook. Referenced explicitly so this frontend can adopt
+         FramePresenter/ShaderEffect directly once it has a GPU-capable
+         rendering surface of its own - see the shader game-plan discussion. -->
     <ProjectReference Include="..\EmuSen.Presentation\EmuSen.Presentation.csproj" />
   </ItemGroup>
 

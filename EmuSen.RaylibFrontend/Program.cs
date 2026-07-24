@@ -7,7 +7,7 @@ using EmuSen.Debug;
 using EmuSen.Bindings;
 using EmuSen.Presentation;
 
-namespace EmuSen.Frontend
+namespace EmuSen.RaylibFrontend
 {
     class Program
     {

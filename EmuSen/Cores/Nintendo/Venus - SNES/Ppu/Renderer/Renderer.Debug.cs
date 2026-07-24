@@ -105,6 +105,41 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return rects;
         }
 
+        // Moved out of DrawFrame (now gone - see FramePresenter/DrawDebugPanels)
+        // since this is pure Console logging with no render-target dependency;
+        // it just needs to run once per O keypress like every other hotkey.
+        public void DumpBackdropAndWindowDebugInfo(Ppu ppu, long frame)
+        {
+            Console.WriteLine($"[OAM DUMP] --- Frame {frame} ---");
+            DumpActiveOam(ppu);
+            DumpBlackBg1Tiles(ppu);
+
+            // Log the exact backdrop compositing math, since we now suspect the
+            // "black squares" are actually transparent BG1 pixels correctly
+            // revealing a WRONG backdrop, not bad tile/palette data (both of
+            // which just checked out fine).
+            float brightness = (ppu.Inidisp & 0x0F) / 15f;
+            Color mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
+            Color subBackdrop = new Color(
+                (byte)(((ppu.FixedColorR & 0x1F) << 3) * brightness),
+                (byte)(((ppu.FixedColorG & 0x1F) << 3) * brightness),
+                (byte)(((ppu.FixedColorB & 0x1F) << 3) * brightness),
+                (byte)255
+            );
+            bool subtractMode = (ppu.Cgadsub & 0x80) != 0;
+            bool halfMode = (ppu.Cgadsub & 0x40) != 0;
+            bool backdropMathEnabled = (ppu.Cgadsub & 0x20) != 0;
+            Color blended = backdropMathEnabled ? BlendColors(mainBackdrop, subBackdrop, subtractMode, halfMode) : mainBackdrop;
+
+            Console.WriteLine($"[BACKDROP] CGRAM[0]=0x{ppu.Cgram[0]:X2}{ppu.Cgram[1]:X2} (ever written: {ppu.WasCgramTouched(0) || ppu.WasCgramTouched(1)}) -> mainBackdrop=({mainBackdrop.R},{mainBackdrop.G},{mainBackdrop.B})");
+            Console.WriteLine($"[BACKDROP] FixedColor R={ppu.FixedColorR} G={ppu.FixedColorG} B={ppu.FixedColorB} (2132 ever written: {ppu.FixedColorEverWritten}) -> subBackdrop=({subBackdrop.R},{subBackdrop.G},{subBackdrop.B})");
+            Console.WriteLine($"[BACKDROP] CGADSUB=0x{ppu.Cgadsub:X2} backdropMathEnabled={backdropMathEnabled} subtract={subtractMode} half={halfMode} -> FINAL BACKDROP=({blended.R},{blended.G},{blended.B})");
+
+            Console.WriteLine($"[WINDOW] W12SEL=0x{ppu.W12Sel:X2} W34SEL=0x{ppu.W34Sel:X2} WOBJSEL=0x{ppu.WObjSel:X2}");
+            Console.WriteLine($"[WINDOW] WH0(w1left)={ppu.Wh0} WH1(w1right)={ppu.Wh1} WH2(w2left)={ppu.Wh2} WH3(w2right)={ppu.Wh3}");
+            Console.WriteLine($"[WINDOW] WBGLOG=0x{ppu.WBgLog:X2} WOBJLOG=0x{ppu.WObjLog:X2} TMW=0x{ppu.Tmw:X2} TSW=0x{ppu.Tsw:X2}");
+        }
+
         private void DumpBlackBg1Tiles(Ppu ppu)
         {
             // Scan the just-rendered frame for pure black pixels and, for each

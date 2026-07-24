@@ -58,7 +58,17 @@ namespace EmuSen.Frontend
                 debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
                 debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
 
-                while (core.Renderer!.IsOpen())
+                // FramePresenter owns the window and drives every core
+                // through the agnostic ICore.GetFrameBufferRgba() contract
+                // instead of Renderer.DrawFrame reaching into Venus-specific
+                // internals directly - see FramePresenter's own comment.
+                // Renderer.DrawDebugPanels still needs bus.Ppu for its
+                // VRAM/CGRAM/register overlays, which is exactly the kind
+                // of concrete-core debug access ICore.cs says is expected
+                // to stay off the agnostic interface.
+                using FramePresenter presenter = new FramePresenter();
+
+                while (presenter.IsOpen())
                 {
                     core.RunFrame();
 
@@ -66,13 +76,14 @@ namespace EmuSen.Frontend
                     // LatchAutoJoypad - see EmuSen_Frontend_Driver.md §1.
                     InputBindings.ApplyInput(core.Bus!);
 
-                    core.Renderer.DrawFrame(core.Bus!, core.TotalFrames);
+                    presenter.Present(core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight,
+                        () => core.Renderer!.DrawDebugPanels(core.Bus!, core.TotalFrames));
 
                     // All debug/dev hotkeys - see EmuSen_Frontend_Driver.md §2.
                     RunHotkeys(core, debugTarget, debugCmd, frameRecorder, statePath);
                 }
                 core.SaveSram(); // final flush on clean exit
-                core.Renderer.Shutdown();
+                presenter.Shutdown();
             }
             catch (Exception ex)
             {
@@ -108,6 +119,14 @@ namespace EmuSen.Frontend
                 _bgScrollTrace.Start(300);
                 DebugSettings.AllScrollWriteLogging = true;
                 Console.WriteLine("[BG SCROLL] --- Starting 300-frame scroll trace ---");
+            }
+
+            // Full backdrop/window/OAM debug dump - moved here from the old
+            // Renderer.DrawFrame (now gone, see FramePresenter) since it's
+            // pure Console logging with no render-target dependency.
+            if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.O))
+            {
+                core.Renderer!.DumpBackdropAndWindowDebugInfo(core.Bus!.Ppu, core.TotalFrames);
             }
 
             // Full CPU+PPU snapshot - see EmuSen_Frontend_Driver.md §2.

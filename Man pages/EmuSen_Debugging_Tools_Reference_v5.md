@@ -8,7 +8,7 @@ This document covers every debugging tool currently in the project: what it does
 
 ## 1. Console hotkeys (Raylib console build, `Frontend/Program.cs`)
 
-These all live in the same per-frame hotkey block in `Program.cs`, checked once per frame after `renderer.DrawFrame()`.
+These all live in the same per-frame hotkey block in `Program.cs`, checked once per frame after `presenter.Present(...)` (`FramePresenter` — see `EmuSen_Frontend_Driver.md` §1 step 6).
 
 | Key | Does |
 |---|---|

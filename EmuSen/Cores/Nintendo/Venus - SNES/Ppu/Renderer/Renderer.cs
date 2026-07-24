@@ -32,10 +32,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private const int LayerBg4 = 4;
         private const int LayerObj = 5;
 
-        private RenderTexture2D _renderTarget;
-        private Texture2D _screenTex;
+        // Debug-panel-only texture (VRAM tile sheet). The actual game
+        // screen no longer gets its own Raylib texture/window here - that
+        // moved to EmuSen.Frontend.FramePresenter, which drives every core
+        // through the agnostic GetFrameBufferRgba() contract below instead
+        // of reaching into this class's internals. This texture is created
+        // lazily on first DrawDebugPanels() call, once FramePresenter's
+        // window already exists.
         private Texture2D _sheetTex;
-        
+        private bool _sheetTexReady;
+
         // Allocated at max width so a hi-res toggle never needs
         // reallocation - see Venus_PPU.md §8.
         private Color[] _screenPixels = new Color[MaxOutputW * ScreenH];
@@ -56,43 +62,24 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // GetFrameBufferRgba(), not an on-screen Raylib window. RenderScanline
         // and the Bg/Obj compositing it calls have no Raylib dependency at all
         // (they only touch the plain Color[] buffers below), so headless mode
-        // is exactly this constructor doing less - nothing elsewhere changes.
+        // just means DrawDebugPanels() no-ops - nothing elsewhere changes.
+        //
+        // No window/screen-texture setup happens here anymore - the console
+        // build creates its window via EmuSen.Frontend.FramePresenter before
+        // driving any frames, so by the time DrawDebugPanels() lazily
+        // allocates _sheetTex a window is already guaranteed to exist.
         private readonly bool _headless;
 
         public Renderer(bool headless = false)
         {
             _headless = headless;
-            if (headless) return;
-
-            ConfigFlags flags = 0;
-            if (GraphicsSettings.WindowResizable) flags |= ConfigFlags.ResizableWindow;
-            if (GraphicsSettings.VSyncEnabled) flags |= ConfigFlags.VSyncHint;
-            Raylib.SetConfigFlags(flags);
-
-            Raylib.InitWindow(GraphicsSettings.WindowWidth, GraphicsSettings.WindowHeight, GraphicsSettings.WindowTitle);
-            Raylib.SetTargetFPS(GraphicsSettings.TargetFps);
-
-            _renderTarget = Raylib.LoadRenderTexture(GraphicsSettings.WindowWidth, GraphicsSettings.WindowHeight);
-            Raylib.SetTextureFilter(_renderTarget.Texture, GraphicsSettings.BilinearFiltering ? TextureFilter.Bilinear : TextureFilter.Point);
-
-            Image img = Raylib.GenImageColor(MaxOutputW, ScreenH, new Color(0, 0, 0, 255));
-            _screenTex = Raylib.LoadTextureFromImage(img);
-            Raylib.UnloadImage(img);
-
-            Image sheet = Raylib.GenImageColor(SheetW, SheetH, new Color(0, 0, 0, 255));
-            _sheetTex = Raylib.LoadTextureFromImage(sheet);
-            Raylib.UnloadImage(sheet);
         }
-
-        public bool IsOpen() => _headless || !Raylib.WindowShouldClose();
 
         public void Shutdown()
         {
-            if (_headless) return;
-            Raylib.UnloadRenderTexture(_renderTarget);
-            Raylib.UnloadTexture(_screenTex);
+            if (_headless || !_sheetTexReady) return;
             Raylib.UnloadTexture(_sheetTex);
-            Raylib.CloseWindow();
+            _sheetTexReady = false;
         }
 
         // Plain RGBA8888 copy of the finished frame - the boundary non-
@@ -190,99 +177,46 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        public void DrawFrame(MemoryBus bus, long frame)
+        // Draws debug-only overlays (VRAM tile sheet, CGRAM swatches, PPU
+        // register text) into whichever Raylib render target is currently
+        // active. Meant to run as FramePresenter.Present()'s drawOverlay
+        // callback, after the game screen itself has already been drawn
+        // there - see FramePresenter for why the game screen no longer
+        // goes through this class at all. No-ops if debug panels are
+        // switched off or this Renderer is headless (Avalonia).
+        public void DrawDebugPanels(MemoryBus bus, long frame)
         {
-            if (_headless) return;
+            if (_headless || !GraphicsSettings.ShowDebugPanels) return;
 
             Ppu ppu = bus.Ppu;
 
-            if (Raylib.IsKeyPressed(KeyboardKey.O))
+            if (!_sheetTexReady)
             {
-                Console.WriteLine($"[OAM DUMP] --- Frame {frame} ---");
-                DumpActiveOam(ppu);
-                DumpBlackBg1Tiles(ppu);
-
-                // Log the exact backdrop compositing math, since we now suspect the
-                // "black squares" are actually transparent BG1 pixels correctly
-                // revealing a WRONG backdrop, not bad tile/palette data (both of
-                // which just checked out fine).
-                float brightness = (ppu.Inidisp & 0x0F) / 15f;
-                Color mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
-                Color subBackdrop = new Color(
-                    (byte)(((ppu.FixedColorR & 0x1F) << 3) * brightness),
-                    (byte)(((ppu.FixedColorG & 0x1F) << 3) * brightness),
-                    (byte)(((ppu.FixedColorB & 0x1F) << 3) * brightness),
-                    (byte)255
-                );
-                bool subtractMode = (ppu.Cgadsub & 0x80) != 0;
-                bool halfMode = (ppu.Cgadsub & 0x40) != 0;
-                bool backdropMathEnabled = (ppu.Cgadsub & 0x20) != 0;
-                Color blended = backdropMathEnabled ? BlendColors(mainBackdrop, subBackdrop, subtractMode, halfMode) : mainBackdrop;
-
-                Console.WriteLine($"[BACKDROP] CGRAM[0]=0x{ppu.Cgram[0]:X2}{ppu.Cgram[1]:X2} (ever written: {ppu.WasCgramTouched(0) || ppu.WasCgramTouched(1)}) -> mainBackdrop=({mainBackdrop.R},{mainBackdrop.G},{mainBackdrop.B})");
-                Console.WriteLine($"[BACKDROP] FixedColor R={ppu.FixedColorR} G={ppu.FixedColorG} B={ppu.FixedColorB} (2132 ever written: {ppu.FixedColorEverWritten}) -> subBackdrop=({subBackdrop.R},{subBackdrop.G},{subBackdrop.B})");
-                Console.WriteLine($"[BACKDROP] CGADSUB=0x{ppu.Cgadsub:X2} backdropMathEnabled={backdropMathEnabled} subtract={subtractMode} half={halfMode} -> FINAL BACKDROP=({blended.R},{blended.G},{blended.B})");
-
-                Console.WriteLine($"[WINDOW] W12SEL=0x{ppu.W12Sel:X2} W34SEL=0x{ppu.W34Sel:X2} WOBJSEL=0x{ppu.WObjSel:X2}");
-                Console.WriteLine($"[WINDOW] WH0(w1left)={ppu.Wh0} WH1(w1right)={ppu.Wh1} WH2(w2left)={ppu.Wh2} WH3(w2right)={ppu.Wh3}");
-                Console.WriteLine($"[WINDOW] WBGLOG=0x{ppu.WBgLog:X2} WOBJLOG=0x{ppu.WObjLog:X2} TMW=0x{ppu.Tmw:X2} TSW=0x{ppu.Tsw:X2}");
+                Image sheet = Raylib.GenImageColor(SheetW, SheetH, new Color(0, 0, 0, 255));
+                _sheetTex = Raylib.LoadTextureFromImage(sheet);
+                Raylib.UnloadImage(sheet);
+                _sheetTexReady = true;
             }
 
-            if (GraphicsSettings.ShowDebugPanels)
-            {
-                RenderVramSheet(ppu);
-            }
-
-            Raylib.UpdateTexture(_screenTex, _screenPixels);
+            RenderVramSheet(ppu);
             Raylib.UpdateTexture(_sheetTex, _sheetPixels);
-
-            Raylib.BeginTextureMode(_renderTarget);
-            Raylib.ClearBackground(GraphicsSettings.PanelBackgroundColor);
 
             Color label = new Color(200, 200, 210, 255);
 
-            if (GraphicsSettings.ShowDebugPanels)
+            Raylib.DrawText($"Frame {frame}   BGMODE={ppu.Bgmode:X2}  TM={ppu.Tm:X2}  TS={ppu.Ts:X2}  CGWSEL={ppu.Cgwsel:X2}  CGADSUB={ppu.Cgadsub:X2}  INIDISP={ppu.Inidisp:X2}", 16, 12, 18, label);
+            Raylib.DrawText($"W12SEL={ppu.W12Sel:X2} W34SEL={ppu.W34Sel:X2} WOBJSEL={ppu.WObjSel:X2} WH0={ppu.Wh0} WH1={ppu.Wh1} WH2={ppu.Wh2} WH3={ppu.Wh3} WBGLOG={ppu.WBgLog:X2} WOBJLOG={ppu.WObjLog:X2} TMW={ppu.Tmw:X2} TSW={ppu.Tsw:X2}", 16, 590, 14, label);
+            Raylib.DrawText($"FixedColor R={ppu.FixedColorR} G={ppu.FixedColorG} B={ppu.FixedColorB}   CGRAM[0]=0x{ppu.Cgram[0]:X2}{ppu.Cgram[1]:X2}", 16, 585, 16, label);
+            Raylib.DrawText("BG1", 16, 40, 16, label);
+
+            Raylib.DrawText("VRAM tiles (4bpp)", 560, 40, 16, label);
+            Raylib.DrawTextureEx(_sheetTex, new Vector2(560, 60), 0f, 1f, new Color(255, 255, 255, 255));
+            Raylib.DrawText("CGRAM", 850, 40, 16, label);
+
+            for (int i = 0; i < 256; i++)
             {
-                Raylib.DrawText($"Frame {frame}   BGMODE={ppu.Bgmode:X2}  TM={ppu.Tm:X2}  TS={ppu.Ts:X2}  CGWSEL={ppu.Cgwsel:X2}  CGADSUB={ppu.Cgadsub:X2}  INIDISP={ppu.Inidisp:X2}", 16, 12, 18, label);
-                Raylib.DrawText($"W12SEL={ppu.W12Sel:X2} W34SEL={ppu.W34Sel:X2} WOBJSEL={ppu.WObjSel:X2} WH0={ppu.Wh0} WH1={ppu.Wh1} WH2={ppu.Wh2} WH3={ppu.Wh3} WBGLOG={ppu.WBgLog:X2} WOBJLOG={ppu.WObjLog:X2} TMW={ppu.Tmw:X2} TSW={ppu.Tsw:X2}", 16, 590, 14, label);
-                Raylib.DrawText($"FixedColor R={ppu.FixedColorR} G={ppu.FixedColorG} B={ppu.FixedColorB}   CGRAM[0]=0x{ppu.Cgram[0]:X2}{ppu.Cgram[1]:X2}", 16, 585, 16, label);
-                Raylib.DrawText("BG1", 16, 40, 16, label);
+                Color c = SnesColor(ppu.Cgram[i * 2], ppu.Cgram[i * 2 + 1], 1f);
+                Raylib.DrawRectangle(850 + (i % 16) * 12, 60 + (i / 16) * 12, 11, 11, c);
             }
-            // Source rect limited to the actual current frame width. Known
-            // cosmetic-only limitation: a hi-res 512-wide frame still draws
-            // at the same fixed 2x scale here and visually runs into the
-            // VRAM sheet panel - debug-console view only; the Avalonia
-            // frontend sizes its bitmap to FrameWidth directly instead.
-            Rectangle screenSourceRec = new Rectangle(0, 0, _frameWidth, ScreenH);
-            Raylib.DrawTexturePro(_screenTex, screenSourceRec, new Rectangle(16, 60, _frameWidth * 2, ScreenH * 2), new Vector2(0, 0), 0f, new Color(255, 255, 255, 255));
-
-            if (GraphicsSettings.ShowDebugPanels)
-            {
-                Raylib.DrawText("VRAM tiles (4bpp)", 560, 40, 16, label);
-                Raylib.DrawTextureEx(_sheetTex, new Vector2(560, 60), 0f, 1f, new Color(255, 255, 255, 255));
-                Raylib.DrawText("CGRAM", 850, 40, 16, label);
-
-                for (int i = 0; i < 256; i++)
-                {
-                    Color c = SnesColor(ppu.Cgram[i * 2], ppu.Cgram[i * 2 + 1], 1f);
-                    Raylib.DrawRectangle(850 + (i % 16) * 12, 60 + (i / 16) * 12, 11, 11, c);
-                }
-            }
-            Raylib.EndTextureMode();
-
-            Raylib.BeginDrawing();
-            Raylib.ClearBackground(GraphicsSettings.LetterboxColor);
-
-            float scale = Math.Min((float)Raylib.GetScreenWidth() / GraphicsSettings.WindowWidth, (float)Raylib.GetScreenHeight() / GraphicsSettings.WindowHeight);
-            Rectangle sourceRec = new Rectangle(0, 0, (float)_renderTarget.Texture.Width, -(float)_renderTarget.Texture.Height);
-            Rectangle destRec = new Rectangle(
-                (Raylib.GetScreenWidth() - (GraphicsSettings.WindowWidth * scale)) * 0.5f,
-                (Raylib.GetScreenHeight() - (GraphicsSettings.WindowHeight * scale)) * 0.5f,
-                GraphicsSettings.WindowWidth * scale, GraphicsSettings.WindowHeight * scale
-            );
-
-            Raylib.DrawTexturePro(_renderTarget.Texture, sourceRec, destRec, new Vector2(0, 0), 0.0f, new Color(255, 255, 255, 255));
-            Raylib.EndDrawing();
         }
     }
 }

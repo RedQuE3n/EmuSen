@@ -95,6 +95,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly Ppu _ppu;
         private readonly WatchRegistry _watches = new WatchRegistry();
         private readonly FrameLogRegistry _frameLog = new FrameLogRegistry();
+        private readonly CheatRegistry _cheats = new CheatRegistry();
 
         public SnesDebugTarget(Cpu cpu, MemoryBus bus)
         {
@@ -113,6 +114,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         public FrameLogRegistry FrameLog => _frameLog;
 
+        public CheatRegistry Cheats => _cheats;
+
         // Reads a (space, address, width) value the same way
         // DebugCommandHelpers.ReadValue does (little-endian accumulation)
         // - duplicated rather than shared since that helper lives in
@@ -130,6 +133,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 long value = 0;
                 for (int i = 0; i < width; i++) value |= (long)space.Read(address + i) << (8 * i);
                 return value;
+            });
+
+            // Re-poke every enabled cheat, once per frame - see
+            // CheatRegistry's own comment on why this needs to happen
+            // every frame rather than once when a cheat is added.
+            _cheats.ApplyAll((spaceName, address, value) =>
+            {
+                var space = GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+                space?.Write(address, value);
             });
         }
 

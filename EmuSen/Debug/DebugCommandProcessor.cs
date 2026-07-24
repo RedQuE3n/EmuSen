@@ -63,6 +63,7 @@ namespace EmuSen.Debug
                 new PalCommand(),
                 new WatchCommand(),
                 new FrameLogCommand(),
+                new CheatCommand(),
                 new SearchCommand(),
                 new SnapshotCommand(snapshotStore),
                 new DiffCommand(snapshotStore),

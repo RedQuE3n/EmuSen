@@ -165,6 +165,17 @@ namespace EmuSen.Debug
         // per-frame boundary hook feeds.
         FrameLogRegistry FrameLog { get; }
 
+        // The RAM-poke cheat engine (see CheatRegistry.cs) - same exposure
+        // pattern as Watches/FrameLog, but the data flow runs the other
+        // direction: instead of the core feeding data into the registry,
+        // the implementation re-applies every enabled cheat FROM this
+        // registry INTO its own memory spaces once per frame (see
+        // CheatRegistry.ApplyAll's own comment). Exposed here so it works
+        // without the debug toolchain being otherwise active - a player
+        // enabling a cheat shouldn't require opening the F4 prompt for
+        // anything except adding the cheat itself.
+        CheatRegistry Cheats { get; }
+
         // Monotonic frame counter, incremented once per rendered frame -
         // the shared "what moment is this" reference used to correlate a
         // screenshot, a log line, or a future GUI debugger's state all

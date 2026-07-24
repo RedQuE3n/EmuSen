@@ -80,7 +80,7 @@ namespace EmuSen.Frontend
                         () => core.Renderer!.DrawDebugPanels(core.Bus!, core.TotalFrames));
 
                     // All debug/dev hotkeys - see EmuSen_Frontend_Driver.md §2.
-                    RunHotkeys(core, debugTarget, debugCmd, frameRecorder, statePath);
+                    RunHotkeys(core, presenter, debugTarget, debugCmd, frameRecorder, statePath);
                 }
                 core.SaveSram(); // final flush on clean exit
                 presenter.Shutdown();
@@ -93,7 +93,7 @@ namespace EmuSen.Frontend
 
         // Every debug/dev hotkey - see EmuSen_Frontend_Driver.md §2.
         private static void RunHotkeys(
-            VenusCore core, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, FrameRecorder frameRecorder,
+            VenusCore core, FramePresenter presenter, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, FrameRecorder frameRecorder,
             string statePath)
         {
             // Every frame, cheap no-op when not recording - see
@@ -127,6 +127,15 @@ namespace EmuSen.Frontend
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.O))
             {
                 core.Renderer!.DumpBackdropAndWindowDebugInfo(core.Bus!.Ppu, core.TotalFrames);
+            }
+
+            // Cycles the prototype post-processing shader pass (None ->
+            // Scanlines -> Crt -> None) - manual A/B testing until there's
+            // a real settings UI for this. See FramePresenter/ShaderEffect.
+            if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F8))
+            {
+                ShaderEffect effect = presenter.CycleEffect();
+                Console.WriteLine($"[SHADER] Active effect: {effect}");
             }
 
             // Full CPU+PPU snapshot - see EmuSen_Frontend_Driver.md §2.

@@ -78,10 +78,9 @@ namespace EmuSen.Cores.Nintendo.Venus
         // Runs exactly one frame's worth of scanlines: CPU/APU stepping,
         // HDMA, NMI, and PPU scanline compositing into the renderer's
         // pixel buffer. Doesn't touch any window/presentation surface -
-        // callers that want an on-screen draw (Program.cs) call
-        // Renderer.DrawFrame() themselves afterward; callers that just
-        // want pixels (EmulatorSession, headless) call
-        // GetFrameBufferRgba() instead.
+        // every caller (Program.cs's FramePresenter, Avalonia's
+        // EmulatorSession) gets pixels via GetFrameBufferRgba() afterward
+        // and presents them itself.
         public void RunFrame()
         {
             if (Bus is null || Cpu is null || Spc700 is null || Renderer is null)

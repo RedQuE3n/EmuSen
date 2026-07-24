@@ -6,7 +6,7 @@ This document covers every debugging tool currently in the project: what it does
 
 ---
 
-## 1. Console hotkeys (Raylib console build, `Frontend/Program.cs`)
+## 1. Console hotkeys (Raylib console build, `EmuSen.RaylibFrontend/Program.cs`)
 
 These all live in the same per-frame hotkey block in `Program.cs`, checked once per frame after `presenter.Present(...)` (`FramePresenter` — see `EmuSen_Frontend_Driver.md` §1 step 6).
 
@@ -157,7 +157,7 @@ watch add WRAM D80 20 both
 ```
 The first only logs reads of the $0D80-$0D9F job table; the second logs both directions. `watch list` shows each watch's kind alongside its range.
 
-### 3.6 Screenshot timestamping (F3, `Frontend/Program.cs`)
+### 3.6 Screenshot timestamping (F3, `EmuSen.RaylibFrontend/Program.cs`)
 
 F3 saves a PNG the same way it always has, but now also writes a companion `screenshot_frame<N>.txt` next to it, and the `[SCREENSHOT]` console log line states the same information explicitly:
 
@@ -190,7 +190,7 @@ disasm <space> <addr> [<count>]     disassemble <count> instructions (default 10
 
 **Remaining, still-real gap:** M/X (and E itself, via `XCE`) are properties of a specific point in the CPU's actual control flow, not global constants. The fix above only tracks changes *within* the requested range — it still starts from the CPU's flags *right now*, which may not match the flags actually in effect when the code at `<addr>` really executes, if `<addr>` isn't the current PC (the normal case when disassembling some other routine while paused elsewhere). There's no way to know that without either tracing real execution to that address or full control-flow analysis, neither of which a static, read-only disassembler does. `XCE` changing emulation mode mid-range is a related, separate gap: the disassembler has no carry flag to swap with, so it can't follow an `XCE`-driven mode change even within one call. Treat immediate-mode operand widths as best-effort for anywhere other than the current PC; opcode/addressing-mode decoding itself is unaffected either way. **Confirmed live** against the Yoshi investigation's ground-truth CPU trace: real execution at `$00A31F` proved the accumulator genuinely is 16-bit there (`LDA #$imm` really is 3 bytes), while `disasm`'s starting guess — taken from wherever the CPU happened to be paused when F4 was pressed — assumed 8-bit and produced the same "garbage, then lucky resync" pattern four separate times in that one routine. The `REP`/`SEP`-tracking fix itself worked correctly throughout (proven by a later `LDA #$1801` in the same dump decoding right once it saw the preceding `REP #$20`); the remaining garbage is entirely this documented, harder, not-yet-solved gap, not a regression in the fix.
 
-### 3.8 Frame recording (F6, `Debug/FrameRecorder.cs` + `Frontend/Program.cs`)
+### 3.8 Frame recording (F6, `Debug/FrameRecorder.cs` + `EmuSen.RaylibFrontend/Program.cs`)
 
 Continuous version of F3's screenshot-plus-metadata pattern (§3.6): instead of one PNG for a single instant, captures a whole span of frames into a session folder, with one ledger file (`frames.log`, tab-separated: `Frame`, `WallClock`, `Core`, `ImageFile`) mapping every captured image back to exactly when it happened — the same cross-reference purpose F3's companion `.txt` already served, spread across a sequence instead of one moment.
 

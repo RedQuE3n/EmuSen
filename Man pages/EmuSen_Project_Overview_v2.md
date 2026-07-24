@@ -6,11 +6,12 @@
 
 ## 1. What this is
 
-EmuSen is a SNES emulator written in C# / .NET 10, structured as three sibling projects:
+EmuSen is a SNES emulator written in C# / .NET 10, structured as four sibling projects:
 
-- **`EmuSen/`** — the core (CPU/PPU/APU/memory) plus a Raylib-based console frontend's driver loop (`Frontend/Program.cs`). This is the primary development/debugging environment — cores get built and verified here first, standalone, before the GUI frontend is the main way of running them.
-- **`EmuSen.Presentation/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `FramePresenter` (owns the Raylib window/render-target, presents any core via `ICore.GetFrameBufferRgba()`), `Shaders/BuiltInShaders.cs` (embedded GLSL for the prototype shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). `EmuSen/`'s console frontend is the first real consumer; `EmuSen.Frontend/`'s Avalonia GUI references this project too but doesn't use it yet - see that project's own note on why (CPU-side `WriteableBitmap` presentation, no GPU/shader hook).
-- **`EmuSen.Frontend/`** — an Avalonia GUI frontend, referencing `EmuSen` (and, for the reason above, `EmuSen.Presentation`) via project reference. ROM picker, ~~ad hoc~~ rebindable keyboard+gamepad input, Save/Load State menu items.
+- **`EmuSen/`** — the emulation core only (CPU/PPU/APU/memory, `Common/`, `Debug/`, `Settings/`). A pure library — no `Main`, no window ownership of its own. This is the primary development/debugging environment — cores get built and verified here first, standalone, before either frontend is the main way of running them. It still has a `Raylib-cs` package dependency, because `Renderer.cs` uses `Raylib_cs.Color`/`Image`/`Texture2D` directly as its internal pixel representation and for debug-panel drawing - a real dependency of the core's own rendering logic, not something inherited from a frontend.
+- **`EmuSen.RaylibFrontend/`** — the Raylib console frontend's actual driver loop (`Program.cs`: `Main`/`RunHotkeys`). Used to live inside `EmuSen.csproj` as its own `Exe`, which meant `EmuSen.Frontend/` (Avalonia) inherited this project's `Main`/Raylib-window-ownership just by referencing `EmuSen.csproj` to reach the emulation core - backwards, since the two frontends have nothing to do with each other. Split out specifically to fix that: both frontends are now true siblings, each independently referencing `EmuSen.csproj` for the core and `EmuSen.Presentation` for presentation. (Named `RaylibFrontend`, not `Console` - naming it `EmuSen.Console` would make every bare `Console.WriteLine` in the file ambiguous with the namespace itself, a real C# gotcha, not just a style choice.)
+- **`EmuSen.Presentation/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `FramePresenter` (owns the Raylib window/render-target, presents any core via `ICore.GetFrameBufferRgba()`), `Shaders/BuiltInShaders.cs` (embedded GLSL for the prototype shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). `EmuSen.RaylibFrontend/` is the first real consumer; `EmuSen.Frontend/`'s Avalonia GUI references this project too but doesn't use it yet - see that project's own note on why (CPU-side `WriteableBitmap` presentation, no GPU/shader hook).
+- **`EmuSen.Frontend/`** — an Avalonia GUI frontend, referencing `EmuSen` and `EmuSen.Presentation` via project reference (as a sibling of `EmuSen.RaylibFrontend`, not through it). ROM picker, ~~ad hoc~~ rebindable keyboard+gamepad input, Save/Load State menu items.
 
 **Licensing stance:** the SNESdev wiki (mirrored at both `snes.nesdev.org` and `snesdev.mesen.ca` — maintained by the Mesen/MesenCE team) is the primary hardware-reference source. Mesen/MesenCE's own *documentation* gets read to understand hardware behavior; their source code does not — every implementation here is original. `SourMesen/Mesen2` is archived; `nesdev-org/MesenCE` is the actively maintained continuation and gets cited, not "Mesen2."
 
@@ -45,7 +46,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
 - **The debug toolchain** (`Debug/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Debug/DebugCommandProcessor.cs` is a Unix-toolchain-style command layer on top of that. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Presentation** (`EmuSen.Presentation/`) — window/GPU-texture ownership and the prototype shader pipeline, shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1 step 6.
-- **Frontends** (`Frontend/Program.cs` in `EmuSen/`, all of `EmuSen.Frontend/`) — presentation *driving*, not the presentation code itself anymore. The Raylib console build and the Avalonia GUI are two independent entry points into the same core; neither owns emulation logic itself.
+- **Frontends** (`EmuSen.RaylibFrontend/`, `EmuSen.Frontend/`) — presentation *driving*, not the presentation code itself anymore. The Raylib console build and the Avalonia GUI are two independent, sibling entry points into the same core; neither owns emulation logic itself, and neither depends on the other.
 
 **A concrete example of the layering working as intended:** `MemoryBus` (hardware simulation) exposes a tiny, debug-agnostic `IWriteObserver` hook that it calls on every WRAM write, with no idea what's listening. `SnesDebugTarget` (debug toolchain) implements that interface and is the thing that actually knows what a "watchpoint" is. `MemoryBus` could be reused by a completely different debug story (or none at all) without any changes — the coupling only exists in one direction, and it's the debug layer depending on the core, not the reverse. This wasn't always true — a `WatchRegistry` field and a `Cpu` back-reference used to live directly on `MemoryBus` itself, mixing the two layers together, until a later architecture-focused pass (see §4 and §7) untangled it.
 
@@ -163,16 +164,24 @@ EmuSen Project/
 │   │   ├── DebugCommandProcessor.cs
 │   │   ├── WatchRegistry.cs
 │   │   └── DebugTools.cs                     # Older generic helpers (hexdump, tile-ASCII, etc.)
-│   ├── Frontend/
-│   │   └── Program.cs                        # Raylib console frontend; Main = timing loop,
-│   │                                          #   RunHotkeys = all F1-F5/F9/P/O/F8 dispatch
-│   │                                          #   (extracted from Main - see §7). Presents via
-│   │                                          #   EmuSen.Presentation.FramePresenter, not its
-│   │                                          #   own window/texture code - see that project.
 │   └── Settings/
 │       ├── AudioSettings.cs
 │       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md
 │       └── InputBindings.cs
+│                                              # No Frontend/ here anymore - EmuSen.csproj is a pure
+│                                              #   library (no OutputType, no Main). See EmuSen.RaylibFrontend/
+│                                              #   below and EmuSen_Project_Overview_v2.md §1/§2.
+│
+├── EmuSen.RaylibFrontend/                     # Raylib console frontend (sibling of EmuSen.Frontend/, not
+│   │                                          #   layered inside EmuSen.csproj anymore)
+│   ├── EmuSen.RaylibFrontend.csproj
+│   └── Program.cs                            # Main = timing loop, RunHotkeys = all F1-F5/F9/P/O/F8
+│                                              #   dispatch (extracted from Main - see §7). Presents via
+│                                              #   EmuSen.Presentation.FramePresenter, not its own
+│                                              #   window/texture code - see that project. Namespace is
+│                                              #   EmuSen.RaylibFrontend, not EmuSen.Console - a namespace
+│                                              #   literally named Console would shadow every bare
+│                                              #   Console.WriteLine call in this file.
 │
 ├── EmuSen.Presentation/                       # Shared presentation layer (both frontends reference)
 │   ├── EmuSen.Presentation.csproj

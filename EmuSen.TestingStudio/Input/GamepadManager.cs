@@ -2,7 +2,7 @@ using System;
 using Silk.NET.SDL;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 
-namespace EmuSen.Frontend.Input
+namespace EmuSen.TestingStudio.Input
 {
     // Polls the first connected SDL game controller and reports SNES button
     // state, based on a rebindable GamepadBindingMap (Input/GamepadBindingMap.cs)

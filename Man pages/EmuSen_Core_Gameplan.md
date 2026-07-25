@@ -6,7 +6,7 @@
 
 ## 0. Orientation, if you're new to this
 
-**EmuSen** is a SNES emulator in C# / .NET 10 — full 65816 CPU, SPC700+S-DSP audio, PPU (all 7 background modes plus Mode 7, sprites, hi-res, mosaic, windowing, color math), memory/DMA. Two sibling projects: `EmuSen/` (this doc's subject — the core, plus a Raylib console frontend used for development) and `EmuSen.Frontend/` (an Avalonia GUI; see its own game plan doc for that side's separate, later-stage multi-core/launcher ambitions).
+**EmuSen** is a SNES emulator in C# / .NET 10 — full 65816 CPU, SPC700+S-DSP audio, PPU (all 7 background modes plus Mode 7, sprites, hi-res, mosaic, windowing, color math), memory/DMA. Several sibling projects on disk (see `EmuSen_Project_Overview_v2.md` §1 for the full current list): `EmuSen/` (this doc's subject — the core), `EmuSen.RaylibFrontend/` (the console build used for development), `EmuSen.Presentation/` (shared presentation/shader code), and `EmuSen.TestingStudio/` (an Avalonia GUI purpose-built for bug testers, renamed from `EmuSen.Frontend/`). The separate, later-stage multi-core/launcher ambition (an EmulationStation-style browsing UI) is deliberately **not** being built into `EmuSen.TestingStudio` — that vision is scoped for a distinct, not-yet-created project, so bug-testing tooling and a future polished launcher never have to share one codebase. See `EmuSen_Launcher_Multicore_Gameplan.md` (renamed from `EmuSen.Frontend_Multicore_Gameplan.md`) for that plan.
 
 **Licensing/reference stance:** the SNESdev wiki (mirrored at `snes.nesdev.org` and `snesdev.mesen.ca`, maintained by the Mesen/MesenCE team) is the primary hardware reference. Mesen/MesenCE's *documentation* gets read to understand hardware behavior; their source code never does — everything here is an original implementation. Cite `nesdev-org/MesenCE`, not the archived `SourMesen/Mesen2`.
 
@@ -64,13 +64,13 @@ None of these are architecturally risky; they're just not done yet:
 ### Phase 6 — The Avalonia GUI debug window
 
 - Gated on Phase 5 existing (or at least on deciding it's not needed for a first version — a read-only, Mesen-style multi-pane viewer *could* be built against today's query-only `IDebugTarget` without pause/step, if that's judged useful enough on its own).
-- The Avalonia frontend currently has *zero* debug-tooling integration — see `EmuSen.Frontend_Debugging_Tools_Reference_STUB.md` for the honest starting point on that side, including an explicitly-unverified question (does `EmulatorSession` expose enough state to construct a debug target the way it already exposes `Bus` for input?).
+- `EmuSen.TestingStudio` (the Avalonia GUI, renamed from `EmuSen.Frontend`) currently has *zero* debug-tooling integration — no watch/cheat/disasm/command-prompt UI, only ROM loading, save states, controller rebinding, and (as of the log/ROM-directory + ROM-browser work) session preferences. This phase is specifically about giving *that* project a real debug window, not the separate future EmulationStation-style launcher - a stub reference doc for this was planned (`EmuSen.Frontend_Debugging_Tools_Reference_STUB.md`) but never actually written; treat this bullet as the current honest starting point instead, including an explicitly-unverified question (does `EmulatorSession` expose enough state to construct a debug target the way it already exposes `Bus` for input?).
 
 ### Phase 7 — A second `IDebugTarget` implementation, and NES core work generally
 
 - **This is the big one, and it's the thing everything else has been implicitly building toward.** The debug toolchain's core-agnostic design has never been proven against a second implementation — only asserted to be generic.
 - Per earlier project discussion, NES core work is planned to begin only once SNES + the Avalonia frontend are stable — not a new decision, a standing one.
-- **This phase is also the trigger for `EmuSen.Frontend`'s own Phase 2** (see that project's game plan doc) — the frontend's multi-core abstraction work is explicitly gated on a second real core existing to validate it against, and this is that core.
+- **This phase is also the trigger for the launcher vision's own Phase 2** (see `EmuSen_Launcher_Multicore_Gameplan.md`) — that plan's multi-core abstraction work is explicitly gated on a second real core existing to validate it against, and this is that core. Note that plan now targets a distinct future launcher project, not `EmuSen.TestingStudio`.
 
 ---
 

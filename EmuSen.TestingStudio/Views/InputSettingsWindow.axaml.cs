@@ -7,9 +7,9 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Silk.NET.SDL;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
-using EmuSen.Frontend.Input;
+using EmuSen.TestingStudio.Input;
 
-namespace EmuSen.Frontend.Views
+namespace EmuSen.TestingStudio.Views
 {
     public partial class InputSettingsWindow : Avalonia.Controls.Window
     {

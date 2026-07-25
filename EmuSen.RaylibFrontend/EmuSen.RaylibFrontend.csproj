@@ -19,7 +19,7 @@
          Settings/) - EmuSen.csproj is a pure library now, no Main/window
          ownership of its own. See EmuSen_Project_Overview_v2.md for why
          this project exists separately from EmuSen.csproj: Avalonia's
-         EmuSen.Frontend used to inherit this project's Main/Raylib-Exe-ness
+         EmuSen.TestingStudio used to inherit this project's Main/Raylib-Exe-ness
          just by referencing EmuSen.csproj to reach the core - now both
          frontends are true siblings referencing EmuSen.csproj
          independently, neither depending on the other. -->

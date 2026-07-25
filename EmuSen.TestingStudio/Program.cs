@@ -1,7 +1,7 @@
 using System;
 using Avalonia;
 
-namespace EmuSen.Frontend
+namespace EmuSen.TestingStudio
 {
     internal class Program
     {

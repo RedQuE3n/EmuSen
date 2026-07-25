@@ -5,7 +5,7 @@ using System.Text.Json;
 using Avalonia.Input;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 
-namespace EmuSen.Frontend.Input
+namespace EmuSen.TestingStudio.Input
 {
     // Keyboard -> SnesButton mapping for this frontend specifically. This is
     // deliberately separate from EmuSen/Settings/InputBindings.cs, which reads

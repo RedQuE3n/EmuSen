@@ -60,6 +60,7 @@ None of these are architecturally risky; they're just not done yet:
 ### Phase 5 — Debugger infrastructure (foundation for Phase 6/7)
 
 - **Breakpoints / single-step / pause-resume.** Doesn't exist today — the execution loop runs a whole frame at a time with no mid-frame pause capability. This is real, separate engineering work, not a quick add, and is a prerequisite for a proper interactive debugger (as opposed to today's one-shot query commands).
+- **Headless harness for AI-agent-driven debugging.** Idea, not yet built: a small console entry point that loads a ROM and wires up `SnesDebugTarget`/`DebugCommandProcessor` the same way `EmuSen.RaylibFrontend`'s F4 prompt already does, but fed commands programmatically instead of via `Console.ReadLine()` from a human at a keyboard. Every investigation in this project so far (including the Yoshi/coin/block one) has required a human to run F4 prompt commands and manually relay the output back — this would let an AI assistant working in a `dotnet`-capable sandbox run `disasm`/`watch`/`break`/`writers`/etc. directly against a loaded ROM itself. Not attempted or build-tested yet; recorded here because a `dotnet` SDK was confirmed installable and working in at least one execution environment during unrelated CPU-validation work, which is what makes this newly plausible rather than purely hypothetical.
 
 ### Phase 6 — The Avalonia GUI debug window
 

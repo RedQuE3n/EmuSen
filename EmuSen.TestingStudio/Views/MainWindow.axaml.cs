@@ -398,27 +398,22 @@ namespace EmuSen.TestingStudio.Views
             }
         }
 
-        // Thread.Sleep(TimeSpan) alone systematically overshoots its target
-        // on Linux by roughly 1-2ms per call (OS scheduler wakeup latency,
-        // not something this process controls) - at a 16.67ms frame budget
-        // that overshoot alone is enough to cost several fps every single
-        // frame, which is exactly the "averaging 55fps, small steady frame
-        // drops" symptom this was added to fix (as opposed to occasional
-        // large drops, which would point at GC pauses or a genuinely slow
-        // frame instead). Sleeping for most of the remaining time (cheap,
-        // yields the CPU) and then busy-spinning only the last couple of
-        // milliseconds recovers that precision at a negligible, bounded CPU
-        // cost - a standard game-loop technique, not specific to this core.
-        private static readonly TimeSpan SpinMargin = TimeSpan.FromMilliseconds(2);
-
+        // A hybrid Sleep-then-spin (sleep for most of the remaining time,
+        // busy-spin only the last ~2ms) turned out not to be enough here -
+        // measured CPU usage while stuck at ~56fps was only ~5%, meaning
+        // the process is nowhere near compute-bound; the shortfall is
+        // entirely from oversleeping, not slow work. That means
+        // Thread.Sleep's wakeup latency in this environment is bigger than
+        // the 2ms margin the hybrid approach budgeted for it - rather than
+        // guess at a bigger margin, spin-wait the ENTIRE remaining time
+        // instead of calling Thread.Sleep at all. With this much headroom
+        // (a handful of percent of one core, going by that measurement),
+        // pegging a single core for the ~14ms/frame this spins is a
+        // perfectly reasonable trade for hitting the 60fps target
+        // precisely - the same tradeoff real-time audio/emulation loops
+        // routinely make, at the cost of that one core's power draw.
         private static void SleepUntil(TimeSpan target, Stopwatch clock)
         {
-            TimeSpan remaining = target - clock.Elapsed;
-            if (remaining > SpinMargin)
-            {
-                Thread.Sleep(remaining - SpinMargin);
-            }
-
             while (clock.Elapsed < target)
             {
                 Thread.SpinWait(100);

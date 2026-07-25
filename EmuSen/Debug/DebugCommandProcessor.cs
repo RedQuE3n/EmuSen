@@ -73,6 +73,7 @@ namespace EmuSen.Debug
                 new DisasmCommand(),
                 new TraceCommand(),
                 new CallersCommand(),
+                new LogCommand(),
             };
             _commands = _orderedCommands.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         }

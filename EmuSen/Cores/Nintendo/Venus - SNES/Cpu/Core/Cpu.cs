@@ -96,7 +96,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             BuildOpcodeTable();
             _verboseTrace = new DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
-                key => $"[CPU] 0x{key.Pb:X2}{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X6}");
+                key => $"[CPU] 0x{key.Pb:X2}{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X6}",
+                (cycleLength, repeats) => cycleLength == 1
+                    ? $"[CPU]     ^ repeated {repeats}x total"
+                    : $"[CPU]     ^ {cycleLength}-instruction loop above repeated {repeats}x total");
             Reset();
         }
 

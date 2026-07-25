@@ -220,16 +220,26 @@ namespace EmuSen.Debug
 
             private readonly Action<string> _sink;
             private readonly Func<TKey, string> _render;
+            private readonly Func<int, int, string> _renderMarker;
             private readonly List<TKey> _pending = new();
 
             private TKey[]? _confirmedCycle;
             private int _posInCycle;
             private int _cycleRepeats;
 
-            public RepeatCollapsingTrace(Action<string> sink, Func<TKey, string> render)
+            // renderMarker(cycleLength, repeats) builds the "collapsed"
+            // summary line - callers must give it the same [TAG] prefix
+            // render() uses. A tagless marker (the original version of
+            // this just hardcoded "    ^ ...") can't be routed by
+            // CategorizedLogWriter's prefix table, so it falls through to
+            // the "general" category - which isn't in the cpu/apu
+            // console-echo suppression list, so every collapsed loop
+            // ended up blasting the live console again despite that fix.
+            public RepeatCollapsingTrace(Action<string> sink, Func<TKey, string> render, Func<int, int, string> renderMarker)
             {
                 _sink = sink;
                 _render = render;
+                _renderMarker = renderMarker;
             }
 
             public void Log(TKey key)
@@ -308,9 +318,7 @@ namespace EmuSen.Debug
                 else
                 {
                     foreach (TKey key in _confirmedCycle) _sink(_render(key));
-                    _sink(_confirmedCycle.Length == 1
-                        ? $"    ^ repeated {_cycleRepeats}x total"
-                        : $"    ^ {_confirmedCycle.Length}-instruction loop above repeated {_cycleRepeats}x total");
+                    _sink(_renderMarker(_confirmedCycle.Length, _cycleRepeats));
                 }
 
                 // Partial trailing repeat - lines that matched again but the

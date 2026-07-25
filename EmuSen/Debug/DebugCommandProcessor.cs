@@ -62,6 +62,7 @@ namespace EmuSen.Debug
                 new SpritesCommand(),
                 new PalCommand(),
                 new WatchCommand(),
+                new BreakCommand(),
                 new FrameLogCommand(),
                 new CheatCommand(),
                 new SearchCommand(),

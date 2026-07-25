@@ -88,6 +88,52 @@ namespace EmuSen.Cores.Nintendo.Venus
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
 
+        // True from the instant RunFrame() halts on a breakpoint (or an
+        // armed single-step - see BreakpointRegistry) until the next
+        // RunFrame() call resumes past it. Kept on the concrete type
+        // rather than ICore, same call EmulatorSession's own comment
+        // already makes for the LastFrame*Ms profiling properties: nothing
+        // consumes this except the console frontend's own debug prompt
+        // (EmuSen.RaylibFrontend/Program.cs), which already holds a
+        // concrete VenusCore, not just an ICore.
+        public bool IsHaltedAtBreakpoint { get; private set; }
+
+        // The 24-bit CPU address RunFrame() halted in front of - only
+        // meaningful while IsHaltedAtBreakpoint is true.
+        public int HaltedAddress { get; private set; }
+
+        // Mid-scanline resume state - see RunFrame()'s own comment on why
+        // these are fields instead of locals. Reset once a scanline's
+        // instruction loop actually finishes (not on every RunFrame() call,
+        // since a breakpoint can return out of this method partway through
+        // a scanline and a later call needs to pick up exactly where it
+        // left off rather than redoing that scanline's start-of-line work).
+        private bool _scanlineStarted;
+        private int _lineCycles;
+        private long _phaseStart;
+
+        // Skips exactly one breakpoint check right after resuming from a
+        // halt, so `continue`ing past a breakpoint executes the instruction
+        // it's sitting on instead of instantly re-halting on the same PC
+        // forever. Set for exactly one instruction each time RunFrame() is
+        // (re)entered while IsHaltedAtBreakpoint is true.
+        private bool _justResumedFromBreakpoint;
+
+        // Per-frame phase-timing accumulators - promoted from RunFrame()
+        // locals to fields for the same mid-frame-resume reason as
+        // _lineCycles above: a breakpoint can pause a frame partway through,
+        // so these need to keep accumulating across however many RunFrame()
+        // calls it actually takes to finish one frame, only resetting once
+        // the frame genuinely completes. NOTE: if a breakpoint halt sits
+        // open for a while (the user inspecting state at the F4 prompt),
+        // the wall-clock gap while halted gets counted into whichever
+        // phase's Stopwatch span was in progress at the time - an accepted
+        // distortion of that one frame's LastFrame*Ms numbers, since this
+        // is a debug/profiling readout, not anything gameplay-affecting.
+        private long _cpuSpc700TicksAccum;
+        private long _ppuTicksAccum;
+        private long _hdmaTicksAccum;
+
         // headless: true skips window/texture creation entirely (see
         // Renderer.cs) - the console/Raylib build (Program.cs) wants a
         // real on-screen window, the Avalonia frontend (via
@@ -110,12 +156,21 @@ namespace EmuSen.Cores.Nintendo.Venus
             TotalFrames = 0;
         }
 
-        // Runs exactly one frame's worth of scanlines: CPU/APU stepping,
+        // Runs up to one frame's worth of scanlines: CPU/APU stepping,
         // HDMA, NMI, and PPU scanline compositing into the renderer's
         // pixel buffer. Doesn't touch any window/presentation surface -
         // every caller (Program.cs's FramePresenter, Avalonia's
         // EmulatorSession) gets pixels via GetFrameBufferRgba() afterward
         // and presents them itself.
+        //
+        // Can now return EARLY, mid-frame, if a breakpoint (or an armed
+        // single-step) halts execution - check IsHaltedAtBreakpoint after
+        // every call. When that happens, _currentScanline/_lineCycles/the
+        // phase-timing accumulators are all left exactly as they were so
+        // the NEXT call to RunFrame() resumes this same in-progress frame
+        // instead of restarting it - see _scanlineStarted's own comment for
+        // why the top-of-scanline block below only runs once per scanline
+        // even across a halt/resume.
         public void RunFrame()
         {
             if (Bus is null || Cpu is null || Spc700 is null || Renderer is null)
@@ -123,60 +178,79 @@ namespace EmuSen.Cores.Nintendo.Venus
                 throw new InvalidOperationException("RunFrame() called before LoadRom().");
             }
 
-            long cpuSpc700Ticks = 0;
-            long ppuTicks = 0;
-            long hdmaTicks = 0;
+            // Resuming from a prior halt: let exactly the instruction we
+            // stopped in front of execute before re-arming breakpoint
+            // checks, or `continue` would just instantly re-halt on the
+            // same PC every time.
+            if (IsHaltedAtBreakpoint)
+            {
+                IsHaltedAtBreakpoint = false;
+                _justResumedFromBreakpoint = true;
+            }
 
             while (true)
             {
-                if (_currentScanline == 0)
+                if (!_scanlineStarted)
                 {
-                    Bus.Interrupts.EndVBlank();
-                    Bus.Dma.InitHdma();
-                }
-
-                // Documented NMI-enable-during-vblank quirk - see
-                // PendingImmediateNmi's comment in InterruptController.cs.
-                // Checked here at the same once-per-scanline granularity
-                // as the H/V-IRQ check just below, for the same reason.
-                if (Bus.Interrupts.PendingImmediateNmi)
-                {
-                    Bus.Interrupts.PendingImmediateNmi = false;
-                    Cpu.Nmi();
-                }
-
-                // H/V-IRQ trigger check, done here (before this scanline's
-                // CPU code runs) so a handler's register changes - e.g.
-                // SMW's classic status-bar screen split - take effect in
-                // time for THIS scanline's render, not the next one.
-                // H-only fires every line; V-only and HV fire once per
-                // frame at the target scanline. This approximates real
-                // hardware's dot-precise H-position check as "the whole
-                // target scanline", since our timing runs at
-                // per-scanline granularity rather than per-dot.
-                if (DebugSettings.HvIrqEnabled)
-                {
-                    if (Bus.Interrupts.HIrqEnabled && !Bus.Interrupts.VIrqEnabled)
+                    if (_currentScanline == 0)
                     {
-                        Bus.Interrupts.RaiseTimerIrq();
-                        Cpu.Irq();
+                        Bus.Interrupts.EndVBlank();
+                        Bus.Dma.InitHdma();
                     }
-                    else if (Bus.Interrupts.VIrqEnabled && _currentScanline == Bus.Interrupts.VTime)
+
+                    // Documented NMI-enable-during-vblank quirk - see
+                    // PendingImmediateNmi's comment in InterruptController.cs.
+                    // Checked here at the same once-per-scanline granularity
+                    // as the H/V-IRQ check just below, for the same reason.
+                    if (Bus.Interrupts.PendingImmediateNmi)
                     {
-                        Bus.Interrupts.RaiseTimerIrq();
-                        Cpu.Irq();
+                        Bus.Interrupts.PendingImmediateNmi = false;
+                        Cpu.Nmi();
                     }
+
+                    // H/V-IRQ trigger check, done here (before this scanline's
+                    // CPU code runs) so a handler's register changes - e.g.
+                    // SMW's classic status-bar screen split - take effect in
+                    // time for THIS scanline's render, not the next one.
+                    // H-only fires every line; V-only and HV fire once per
+                    // frame at the target scanline. This approximates real
+                    // hardware's dot-precise H-position check as "the whole
+                    // target scanline", since our timing runs at
+                    // per-scanline granularity rather than per-dot.
+                    if (DebugSettings.HvIrqEnabled)
+                    {
+                        if (Bus.Interrupts.HIrqEnabled && !Bus.Interrupts.VIrqEnabled)
+                        {
+                            Bus.Interrupts.RaiseTimerIrq();
+                            Cpu.Irq();
+                        }
+                        else if (Bus.Interrupts.VIrqEnabled && _currentScanline == Bus.Interrupts.VTime)
+                        {
+                            Bus.Interrupts.RaiseTimerIrq();
+                            Cpu.Irq();
+                        }
+                    }
+
+                    _phaseStart = Stopwatch.GetTimestamp();
+                    _lineCycles = 0;
+                    Bus.LineCycles = 0;
+                    _scanlineStarted = true;
                 }
 
-                long phaseStart = Stopwatch.GetTimestamp();
-
-                int lineCycles = 0;
-                Bus.LineCycles = 0;
-                while (lineCycles < CyclesPerScanline)
+                while (_lineCycles < CyclesPerScanline)
                 {
+                    int pc24 = (Cpu.PB << 16) | Cpu.PC;
+                    if (!_justResumedFromBreakpoint && Bus.BreakpointChecker != null && Bus.BreakpointChecker(pc24))
+                    {
+                        IsHaltedAtBreakpoint = true;
+                        HaltedAddress = pc24;
+                        return; // halted mid-scanline - _scanlineStarted/_lineCycles carry over to the next call
+                    }
+                    _justResumedFromBreakpoint = false;
+
                     int cpuCycles = Cpu.Step();
-                    lineCycles += cpuCycles;
-                    Bus.LineCycles = lineCycles;
+                    _lineCycles += cpuCycles;
+                    Bus.LineCycles = _lineCycles;
 
                     Spc700.CycleBudget += cpuCycles;
                     while (Spc700.CycleBudget >= 21)
@@ -186,7 +260,7 @@ namespace EmuSen.Cores.Nintendo.Venus
                 }
 
                 long afterCpuSpc700 = Stopwatch.GetTimestamp();
-                cpuSpc700Ticks += afterCpuSpc700 - phaseStart;
+                _cpuSpc700TicksAccum += afterCpuSpc700 - _phaseStart;
 
                 Bus.CurrentScanline = _currentScanline;
 
@@ -197,10 +271,10 @@ namespace EmuSen.Cores.Nintendo.Venus
                         Renderer.RenderScanline(Bus, _currentScanline);
                     }
                     long afterPpu = Stopwatch.GetTimestamp();
-                    ppuTicks += afterPpu - afterCpuSpc700;
+                    _ppuTicksAccum += afterPpu - afterCpuSpc700;
 
                     Bus.Dma.ExecuteHdma();
-                    hdmaTicks += Stopwatch.GetTimestamp() - afterPpu;
+                    _hdmaTicksAccum += Stopwatch.GetTimestamp() - afterPpu;
                 }
 
                 if (_currentScanline == 225)
@@ -215,6 +289,7 @@ namespace EmuSen.Cores.Nintendo.Venus
                     Bus.Input.LatchAutoJoypad();
                 }
 
+                _scanlineStarted = false;
                 _currentScanline++;
                 if (_currentScanline >= TotalScanlines)
                 {
@@ -228,9 +303,12 @@ namespace EmuSen.Cores.Nintendo.Venus
                     if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
 
                     double ticksToMs = 1000.0 / Stopwatch.Frequency;
-                    LastFrameCpuSpc700Ms = cpuSpc700Ticks * ticksToMs;
-                    LastFramePpuMs = ppuTicks * ticksToMs;
-                    LastFrameHdmaMs = hdmaTicks * ticksToMs;
+                    LastFrameCpuSpc700Ms = _cpuSpc700TicksAccum * ticksToMs;
+                    LastFramePpuMs = _ppuTicksAccum * ticksToMs;
+                    LastFrameHdmaMs = _hdmaTicksAccum * ticksToMs;
+                    _cpuSpc700TicksAccum = 0;
+                    _ppuTicksAccum = 0;
+                    _hdmaTicksAccum = 0;
 
                     return; // one full frame done - hand control back to the caller
                 }

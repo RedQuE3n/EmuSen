@@ -336,6 +336,17 @@ namespace EmuSen.TestingStudio.Views
             Stopwatch clock = Stopwatch.StartNew();
             TimeSpan nextTick = clock.Elapsed;
 
+            // Measured emulated FPS (TotalFrames delta / real elapsed time),
+            // updated once a second - a diagnostic for telling "RunFrame()
+            // itself is running behind real time" apart from "presentation
+            // is just choppy but emulation is on schedule". Deliberately
+            // counts completed RunFrame() calls, not presented frames -
+            // SubmitFrame()/PresentPendingFrame's coalescing can legitimately
+            // drop presented frames without that meaning emulation itself
+            // is slow.
+            TimeSpan fpsWindowStart = clock.Elapsed;
+            int framesInWindow = 0;
+
             while (_running)
             {
                 nextTick += FrameInterval;
@@ -348,6 +359,16 @@ namespace EmuSen.TestingStudio.Views
                     session.RunFrame();
                     byte[] frame = session.GetFrameBufferRgba();
                     SubmitFrame(frame, session.ScreenWidth);
+
+                    framesInWindow++;
+                    TimeSpan windowElapsed = clock.Elapsed - fpsWindowStart;
+                    if (windowElapsed >= TimeSpan.FromSeconds(1))
+                    {
+                        double fps = framesInWindow / windowElapsed.TotalSeconds;
+                        Dispatcher.UIThread.Post(() => FpsText.Text = $"{fps:F1} fps");
+                        framesInWindow = 0;
+                        fpsWindowStart = clock.Elapsed;
+                    }
                 }
                 catch (Exception ex)
                 {

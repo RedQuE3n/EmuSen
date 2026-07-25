@@ -49,12 +49,21 @@ class Program
         var extraWatches = new List<string>();
         string? scriptPath = null;
         string? outPath = null;
+        bool verbose = false;
         for (int i = 2; i < args.Length; i++)
         {
             if (args[i] == "--watch" && i + 1 < args.Length) extraWatches.Add(args[++i]);
             else if (args[i] == "--script" && i + 1 < args.Length) scriptPath = args[++i];
             else if (args[i] == "--out" && i + 1 < args.Length) outPath = args[++i];
+            else if (args[i] == "--verbose") verbose = true;
         }
+
+        // Off by default (matches DebugSettings.MasterLoggingEnabled's own
+        // default) - only flip it on when explicitly asked, since it turns
+        // on every individually-enabled *Logging flag's live console spam
+        // (DmaSourceAddrLogging etc.), useful for a short, targeted run but
+        // far too noisy over a long one.
+        if (verbose) EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
 
         var log = new List<string>();
         void Emit(string line)

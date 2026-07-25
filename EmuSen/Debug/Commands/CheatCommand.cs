@@ -4,11 +4,15 @@ using static EmuSen.Debug.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Debug.Commands
 {
-    // `cheat` sub-commands - RAM-poke cheats (Pro Action Replay/Game
-    // Wizard style, see ActionReplayCodec) applied every frame via
-    // CheatRegistry. Game Genie's ROM-intercept codes are a different
-    // mechanism entirely and aren't handled here yet - see the phased
-    // cheat-engine plan for that separate addition.
+    // `cheat` sub-commands - both cheat mechanisms this project supports,
+    // unified under one command since a player thinks of both as just
+    // "my cheats" (see CheatRegistry's own comment for the full
+    // explanation of each):
+    //   - RAM pokes (Pro Action Replay/Game Wizard style, decoded by
+    //     ActionReplayCodec) - `add`/`poke`.
+    //   - ROM patches (Game Genie style) - `rompatch` for now, added
+    //     manually until a Game Genie code decoder exists (a later,
+    //     separate addition to this same command).
     public class CheatCommand : IDebugCommand
     {
         public string Name => "cheat";
@@ -17,25 +21,32 @@ namespace EmuSen.Debug.Commands
             "  cheat add <code> [description]    decode a Pro Action Replay/Game Wizard",
             "                                     code (8 hex digits) and add it, enabled",
             "  cheat poke <space> <addr> <value> [description]",
-            "                                     add a raw poke cheat directly, bypassing",
+            "                                     add a raw RAM-poke cheat directly, bypassing",
             "                                     code decoding (e.g. an address you already",
             "                                     found with `search`)",
-            "  cheat list                         list every cheat with its ID and state",
+            "  cheat rompatch <addr> <value> [<compare>|-] [description]",
+            "                                     add a Game Genie-style ROM-read intercept:",
+            "                                     substitute <value> for reads of cartridge",
+            "                                     address <addr>. <compare> gates the patch to",
+            "                                     only apply while the real byte there equals",
+            "                                     it (pass - to skip, an unconditional patch -",
+            "                                     the equivalent of a 6-character code)",
+            "  cheat list                         list every cheat with its ID, kind, and state",
             "  cheat enable <id>                  turn a cheat back on",
             "  cheat disable <id>                 turn a cheat off without removing it",
             "  cheat remove <id>                  remove a cheat entirely",
             "  cheat clear                        remove every cheat",
         });
 
-        // Decoded codes always target this space, not a raw WRAM array
-        // offset - see ActionReplayCodec's own comment on why a CPU-bus
-        // address is the correct target (mirroring resolves the same way
-        // real hardware's does).
+        // Decoded Pro Action Replay/Game Wizard codes always target this
+        // space, not a raw WRAM array offset - see ActionReplayCodec's own
+        // comment on why a CPU-bus address is the correct target
+        // (mirroring resolves the same way real hardware's does).
         private const string DecodedCodeSpace = "CpuBus";
 
         public string Execute(IDebugTarget target, string[] parts)
         {
-            if (parts.Length < 2) return "Usage: cheat add|poke|list|enable|disable|remove|clear ...";
+            if (parts.Length < 2) return "Usage: cheat add|poke|rompatch|list|enable|disable|remove|clear ...";
             string sub = parts[1].ToLowerInvariant();
             var cheats = target.Cheats;
 
@@ -46,7 +57,7 @@ namespace EmuSen.Debug.Commands
                     if (parts.Length < 3) return "Usage: cheat add <code> [description]";
                     (int address, byte value) = ActionReplayCodec.Decode(parts[2]);
                     string description = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : parts[2];
-                    int id = cheats.AddCheat(DecodedCodeSpace, address, value, description);
+                    int id = cheats.AddRamPoke(DecodedCodeSpace, address, value, description);
                     return $"Cheat #{id} added: {DecodedCodeSpace} 0x{address:X6} = 0x{value:X2} ({description})";
                 }
                 case "poke":
@@ -56,14 +67,40 @@ namespace EmuSen.Debug.Commands
                     int addr = ParseHex(parts[3]);
                     byte value = (byte)ParseHex(parts[4]);
                     string description = parts.Length > 5 ? string.Join(' ', parts.Skip(5)) : $"{parts[2]} 0x{addr:X}";
-                    int id = cheats.AddCheat(parts[2], addr, value, description);
+                    int id = cheats.AddRamPoke(parts[2], addr, value, description);
                     return $"Cheat #{id} added: {parts[2]} 0x{addr:X} = 0x{value:X2} ({description})";
+                }
+                case "rompatch":
+                {
+                    if (parts.Length < 4) return "Usage: cheat rompatch <addr> <value> [<compare>|-] [description]";
+                    int addr = ParseHex(parts[2]);
+                    byte value = (byte)ParseHex(parts[3]);
+                    byte? compare = null;
+                    int descStart = 4;
+                    if (parts.Length > 4)
+                    {
+                        if (parts[4] != "-") compare = (byte)ParseHex(parts[4]);
+                        descStart = 5;
+                    }
+                    string description = parts.Length > descStart ? string.Join(' ', parts.Skip(descStart)) : $"ROM 0x{addr:X6}";
+                    int id = cheats.AddRomPatch(addr, value, compare, description);
+                    string compareText = compare.HasValue ? $" if==0x{compare.Value:X2}" : "";
+                    return $"Cheat #{id} added: ROM 0x{addr:X6} = 0x{value:X2}{compareText} ({description})";
                 }
                 case "list":
                 {
                     var list = cheats.GetCheats();
                     if (list.Count == 0) return "No cheats added.";
-                    return string.Join('\n', list.Select(c => $"  #{c.Id}: [{(c.Enabled ? "on " : "off")}] {c.SpaceName} 0x{c.Address:X} = 0x{c.Value:X2}  {c.Description}"));
+                    return string.Join('\n', list.Select(c =>
+                    {
+                        string state = c.Enabled ? "on " : "off";
+                        if (c.Kind == CheatKind.RamPoke)
+                        {
+                            return $"  #{c.Id}: [{state}] RAM  {c.SpaceName} 0x{c.Address:X} = 0x{c.Value:X2}  {c.Description}";
+                        }
+                        string compareText = c.Compare.HasValue ? $" if==0x{c.Compare.Value:X2}" : "";
+                        return $"  #{c.Id}: [{state}] ROM  0x{c.Address:X6} = 0x{c.Value:X2}{compareText}  {c.Description}";
+                    }));
                 }
                 case "enable":
                 {
@@ -89,7 +126,7 @@ namespace EmuSen.Debug.Commands
                     return "All cheats removed.";
                 }
                 default:
-                    return $"Unknown 'cheat' subcommand '{sub}'. Try add/poke/list/enable/disable/remove/clear.";
+                    return $"Unknown 'cheat' subcommand '{sub}'. Try add/poke/rompatch/list/enable/disable/remove/clear.";
             }
         }
     }

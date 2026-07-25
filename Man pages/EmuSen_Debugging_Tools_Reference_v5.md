@@ -310,31 +310,41 @@ Then, any time later, `framelog show 1` lists however many of the most recent pe
 
 ### 3.14 Cheat engine (`cheat`, `Debug/CheatRegistry.cs`, `Debug/Cheats/ActionReplayCodec.cs`, `Debug/Commands/CheatCommand.cs`)
 
-RAM-poke cheats - the mechanism real era devices like **Pro Action Replay** and **Game Wizard** (both Datel) use: rewrite one fixed CPU-bus address to one fixed byte every frame, cheaply overpowering whatever the game itself writes there. A "999 lives" code is nothing more than "make this address always read back as 0x09" - no ROM patching, no read interception, just a write that keeps winning. This is a separate, later-planned addition from **Game Genie**, which works completely differently (substitutes the byte the CPU reads from a specific *ROM* address, via its own per-console letter cipher) - not implemented yet, see the phased cheat-engine plan.
+Two fundamentally different mechanisms era cheat devices used, unified behind one `CheatRegistry` (one ID space, one `list`/`enable`/`disable`/`remove` UX) since a player thinks of both as just "my cheats":
+
+- **RAM pokes** (`CheatKind.RamPoke`) - the **Pro Action Replay**/**Game Wizard** (both Datel) mechanism: rewrite one fixed CPU-bus address to one fixed byte every frame, cheaply overpowering whatever the game itself writes there. A "999 lives" code is nothing more than "make this address always read back as 0x09" - no ROM patching, no read interception, just a write that keeps winning.
+- **ROM patches** (`CheatKind.RomPatch`) - the **Game Genie** mechanism: substitutes the byte a specific *cartridge* read returns, optionally only while the real byte there matches a compare value. The underlying ROM is never touched - the substitution happens at read time. A Game Genie code *decoder* (the letter-cipher → address/data/compare step) isn't implemented yet - `rompatch` below adds one manually until that exists, see the phased cheat-engine plan.
 
 ```
 cheat add <code> [description]              decode a Pro Action Replay/Game Wizard code
                                              (8 hex digits) and add it, enabled
-cheat poke <space> <addr> <value> [desc]    add a raw poke cheat directly, bypassing
+cheat poke <space> <addr> <value> [desc]    add a raw RAM-poke cheat directly, bypassing
                                              code decoding (e.g. an address already found
                                              with `search`)
-cheat list                                  list every cheat with its ID and state
+cheat rompatch <addr> <value> [<cmp>|-] [desc]
+                                             add a Game Genie-style ROM-read intercept;
+                                             <cmp> gates it to only apply while the real
+                                             byte there equals it (- = unconditional,
+                                             like a 6-character code)
+cheat list                                  list every cheat with its ID, kind, and state
 cheat enable <id> / cheat disable <id>      toggle a cheat without removing it
 cheat remove <id>                           remove a cheat entirely
 cheat clear                                 remove every cheat
 ```
 
-**Code format.** `ActionReplayCodec` decodes the plain 8-hex-digit wire format both devices publish - a 24-bit CPU-bus address (bank + 16-bit offset) followed by the one byte to hold there, e.g. `7E01F663` means "poke CPU address `$7E:01F6` to `0x63`". No cipher, unlike Game Genie. Non-hex separators (`7E01F6:63`, `7E01F6-63`) are stripped before decoding, since that's how some published code lists format them.
+**Pro Action Replay/Game Wizard code format.** `ActionReplayCodec` decodes the plain 8-hex-digit wire format both devices publish - a 24-bit CPU-bus address (bank + 16-bit offset) followed by the one byte to hold there, e.g. `7E01F663` means "poke CPU address `$7E:01F6` to `0x63`". No cipher, unlike Game Genie. Non-hex separators (`7E01F6:63`, `7E01F6-63`) are stripped before decoding, since that's how some published code lists format them.
 
-**Targets `CpuBus`, not a raw WRAM array offset.** A decoded code (or a manual `cheat poke` against `CpuBus`) resolves through `MemoryBus.Write8`, so address mirroring (WRAM's `$7E`/`$7F` pair, the `$00-$3F` low-page mirror, etc.) behaves the same way it would on real hardware. `cheat poke` can still target any other named space (`WRAM`, `SRAM`, ...) directly when that's genuinely what's wanted.
+**RAM pokes target `CpuBus`, not a raw WRAM array offset.** A decoded code (or a manual `cheat poke` against `CpuBus`) resolves through `MemoryBus.Write8`, so address mirroring (WRAM's `$7E`/`$7F` pair, the `$00-$3F` low-page mirror, etc.) behaves the same way it would on real hardware. `cheat poke` can still target any other named space (`WRAM`, `SRAM`, ...) directly when that's genuinely what's wanted.
 
-**Fed from the same per-frame hook as `framelog` (§3.13), not a new one.** `CheatRegistry.ApplyAll` runs inside `SnesDebugTarget.OnFrame` (`IFrameObserver`), right alongside `FrameLogRegistry.RecordFrame` - re-writing every *enabled* cheat's byte once per frame, resolving the target space the same `GetMemorySpaces()` lookup `framelog`'s per-frame callback already uses.
+**RAM pokes are fed from the same per-frame hook as `framelog` (§3.13), not a new one.** `CheatRegistry.ApplyAll` runs inside `SnesDebugTarget.OnFrame` (`IFrameObserver`), right alongside `FrameLogRegistry.RecordFrame` - re-writing every *enabled* `RamPoke` cheat's byte once per frame, resolving the target space the same `GetMemorySpaces()` lookup `framelog`'s per-frame callback already uses.
 
-**Works without the debug toolchain otherwise being used.** `IDebugTarget.Cheats` exposes the same `CheatRegistry` instance `SnesDebugTarget` applies every frame - unlike `Watches`/`FrameLog`, which the core only *feeds*, `Cheats` is applied *from* the registry *into* the core's own memory, so a cheat someone added and then never touched again keeps working for the rest of the session with no further F4 interaction required.
+**ROM patches use a different, new hook - `IRomReadPatcher` (`Cores/Nintendo/Venus - SNES/Memory/IRomReadPatcher.cs`, see `Venus_Memory.md` §6).** Unlike every other observer hook `MemoryBus` calls (`WriteObserver`/`ReadObserver`/`FrameObserver`, all pure notifications), this one can override what the CPU actually reads. `MemoryBus.ReadInternal` consults it exactly where it falls through to `_cartridge.Read8(address)` - the one place that ever reaches the cartridge at all, matching a real Game Genie device's own physical placement on the cartridge edge connector. `SnesDebugTarget.TryPatch` forwards to `CheatRegistry.TryPatchRom`, which only ever matches `RomPatch`-kind entries, checking address and (if present) the compare byte against what the cartridge itself returned.
 
-Core-agnostic on purpose, same as `WatchRegistry`/`FrameLogRegistry` - lives under `Debug/`, not `Cores/Nintendo/Venus - SNES/`. A future core's `IDebugTarget` implementation owns its own `CheatRegistry` instance and applies it the same way, from its own per-frame hook.
+**Works without the debug toolchain otherwise being used.** `IDebugTarget.Cheats` exposes the same `CheatRegistry` instance `SnesDebugTarget` applies every frame (for `RamPoke`) and consults every cartridge read (for `RomPatch`) - unlike `Watches`/`FrameLog`, which the core only *feeds*, `Cheats` acts *on* the core's own memory/reads, so a cheat someone added and then never touched again keeps working for the rest of the session with no further F4 interaction required.
 
-**Example — a simple infinite-lives-style poke**, assuming a hypothetical lives counter at WRAM `$7E:0DC0`:
+Core-agnostic on purpose, same as `WatchRegistry`/`FrameLogRegistry` - lives under `Debug/`, not `Cores/Nintendo/Venus - SNES/`. A future core's `IDebugTarget` implementation owns its own `CheatRegistry` instance, calls `ApplyAll` from its own per-frame hook, and implements its own core's `IRomReadPatcher`-equivalent forwarding to `TryPatchRom`.
+
+**Example — a simple infinite-lives-style RAM poke**, assuming a hypothetical lives counter at WRAM `$7E:0DC0`:
 ```
 cheat poke WRAM DC0 9 infinite lives
 ```
@@ -342,7 +352,13 @@ Or, given a real published Pro Action Replay code for the same effect:
 ```
 cheat add 7E0DC009 infinite lives
 ```
-Both add an enabled cheat; `cheat list` shows it as `#1: [on ] WRAM 0xDC0 = 0x9  infinite lives` (or `CpuBus` for the decoded version).
+Both add an enabled cheat; `cheat list` shows it as `#1: [on ] RAM  WRAM 0xDC0 = 0x9  infinite lives` (or `CpuBus` for the decoded version).
+
+**Example — a manual Game Genie-equivalent ROM patch**, substituting a specific ROM byte only when it still holds its original value:
+```
+cheat rompatch 8091F2 A9 EA looks-safer-if-guarded
+```
+`cheat list` shows it as `#2: [on ] ROM  0x8091F2 = 0xA9 if==0xEA  looks-safer-if-guarded`.
 
 ---
 

@@ -88,7 +88,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
     // this class supplies the actual watch-recording logic AND the PC
     // context (from its own _cpu reference, already held for other
     // reasons) in one place.
-    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver
+    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver, IRomReadPatcher
     {
         private readonly Cpu _cpu;
         private readonly MemoryBus _bus;
@@ -105,6 +105,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             bus.WriteObserver = this;
             bus.ReadObserver = this;
             bus.FrameObserver = this;
+            bus.RomPatcher = this;
             bus.DebugPcProvider = () => (_cpu.LastInstructionPB, _cpu.LastInstructionPC);
         }
 
@@ -143,6 +144,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 var space = GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
                 space?.Write(address, value);
             });
+        }
+
+        // Game Genie-style ROM-read intercept - see IRomReadPatcher and
+        // CheatRegistry.TryPatchRom. Called from MemoryBus.RomPatcher for
+        // every cartridge-routed read, so this has to stay cheap when no
+        // RomPatch cheat is active, same "cheap when nothing matches"
+        // contract WatchRegistry's Record already has.
+        public bool TryPatch(uint address, byte originalValue, out byte patchedValue)
+        {
+            return _cheats.TryPatchRom(address, originalValue, out patchedValue);
         }
 
         public void OnWrite(string spaceName, int address, byte value)

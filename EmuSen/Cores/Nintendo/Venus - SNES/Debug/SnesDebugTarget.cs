@@ -263,6 +263,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new DebugRegisterValue("FixedColorR", _ppu.FixedColorR, 8),
                 new DebugRegisterValue("FixedColorG", _ppu.FixedColorG, 8),
                 new DebugRegisterValue("FixedColorB", _ppu.FixedColorB, 8),
+                new DebugRegisterValue("BG1ScrollX", _ppu.BgScrollX[0], 16),
+                new DebugRegisterValue("BG1ScrollY", _ppu.BgScrollY[0], 16),
+                new DebugRegisterValue("BG2ScrollX", _ppu.BgScrollX[1], 16),
+                new DebugRegisterValue("BG2ScrollY", _ppu.BgScrollY[1], 16),
             };
         }
 

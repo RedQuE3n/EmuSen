@@ -167,6 +167,8 @@ namespace EmuSen.RaylibFrontend
                 double hdmaMsInWindow = 0;
                 double objEvalMsInWindow = 0;
                 double blendMsInWindow = 0;
+                double mainCompositeMsInWindow = 0;
+                double subCompositeMsInWindow = 0;
 
                 while (presenter.IsOpen())
                 {
@@ -180,6 +182,8 @@ namespace EmuSen.RaylibFrontend
                     hdmaMsInWindow += core.LastFrameHdmaMs;
                     objEvalMsInWindow += core.LastFrameObjEvalMs;
                     blendMsInWindow += core.LastFrameBlendMs;
+                    mainCompositeMsInWindow += core.LastFrameMainCompositeMs;
+                    subCompositeMsInWindow += core.LastFrameSubCompositeMs;
 
                     // Must happen before the next RunFrame()'s own
                     // LatchAutoJoypad - see EmuSen_Frontend_Driver.md §1.
@@ -206,10 +210,13 @@ namespace EmuSen.RaylibFrontend
                         double hdmaMs = hdmaMsInWindow / fpsFramesInWindow;
                         double objEvalMs = objEvalMsInWindow / fpsFramesInWindow;
                         double blendMs = blendMsInWindow / fpsFramesInWindow;
+                        double mainCompositeMs = mainCompositeMsInWindow / fpsFramesInWindow;
+                        double subCompositeMs = subCompositeMsInWindow / fpsFramesInWindow;
                         Console.WriteLine(
                             $"[FPS] {fps:F1} fps (run {runMs:F2}ms / total {totalMs:F2}ms) " +
                             $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms] " +
-                            $"(ppu breakdown: objEval {objEvalMs:F2}ms / blend {blendMs:F2}ms)");
+                            $"(ppu breakdown: objEval {objEvalMs:F2}ms / main {mainCompositeMs:F2}ms / " +
+                            $"sub {subCompositeMs:F2}ms / blend {blendMs:F2}ms)");
                         fpsFramesInWindow = 0;
                         runFrameTimeInWindow = TimeSpan.Zero;
                         totalTimeInWindow = TimeSpan.Zero;
@@ -218,6 +225,8 @@ namespace EmuSen.RaylibFrontend
                         hdmaMsInWindow = 0;
                         objEvalMsInWindow = 0;
                         blendMsInWindow = 0;
+                        mainCompositeMsInWindow = 0;
+                        subCompositeMsInWindow = 0;
                         fpsWindowStart = fpsClock.Elapsed;
                     }
                 }

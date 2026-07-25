@@ -21,8 +21,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // same convention RangeOver/TimeOver already use above).
         private long _objEvalTicksAccum;
         private long _blendTicksAccum;
+        private long _mainCompositeTicksAccum;
+        private long _subCompositeTicksAccum;
         public double LastFrameObjEvalMs { get; private set; }
         public double LastFrameBlendMs { get; private set; }
+        public double LastFrameMainCompositeMs { get; private set; }
+        public double LastFrameSubCompositeMs { get; private set; }
 
         public void RenderScanline(MemoryBus bus, int py)
         {
@@ -41,6 +45,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                 _objEvalTicksAccum = 0;
                 _blendTicksAccum = 0;
+                _mainCompositeTicksAccum = 0;
+                _subCompositeTicksAccum = 0;
             }
 
             if (forceBlank)
@@ -76,6 +82,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
             bool bg3ForcedTop = (ppu.Bgmode & 0x08) != 0;
             bool isMode7 = (ppu.Bgmode & 0x07) == 7;
+
+            long mainCompositeStart = Stopwatch.GetTimestamp();
 
             if (isMode7)
             {
@@ -129,6 +137,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 RenderBg3(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg3, true);
             }
 
+            long subCompositeStart = Stopwatch.GetTimestamp();
+            _mainCompositeTicksAccum += subCompositeStart - mainCompositeStart;
+
             if (isMode7)
             {
                 bool extbgEnabled = (ppu.Setini & 0x40) != 0;
@@ -152,8 +163,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 for (int p = 0; p <= 3; p++) RenderObj(ppu, py, brightness, _subLineBuf, _subLineLayer, LayerObj, p, false);
             }
 
-            // --- FINAL BLEND ---
             long blendStart = Stopwatch.GetTimestamp();
+            _subCompositeTicksAccum += blendStart - subCompositeStart;
+
+            // --- FINAL BLEND ---
             bool subtractMode = (ppu.Cgadsub & 0x80) != 0;
             bool halfMode = (ppu.Cgadsub & 0x40) != 0;
 
@@ -215,6 +228,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             double ticksToMs = 1000.0 / Stopwatch.Frequency;
             LastFrameObjEvalMs = _objEvalTicksAccum * ticksToMs;
             LastFrameBlendMs = _blendTicksAccum * ticksToMs;
+            LastFrameMainCompositeMs = _mainCompositeTicksAccum * ticksToMs;
+            LastFrameSubCompositeMs = _subCompositeTicksAccum * ticksToMs;
         }
 
         private static bool IsWindowMasked(Ppu ppu, int layerId, bool isMainScreen, int px)

@@ -70,6 +70,14 @@ namespace EmuSen.Cores.Nintendo.Venus
         public double LastFrameObjEvalMs => Renderer?.LastFrameObjEvalMs ?? 0;
         public double LastFrameBlendMs => Renderer?.LastFrameBlendMs ?? 0;
 
+        // objEval+blend turned out tiny (~0.6ms) against ~13ms of total ppu
+        // time - these two split the rest (per-scanline BG/OBJ compositing)
+        // into main-screen vs sub-screen, to check whether sub-screen
+        // rendering (often skippable/cheap if a scene doesn't really use
+        // it) is doubling the real per-pixel BG decode cost unnecessarily.
+        public double LastFrameMainCompositeMs => Renderer?.LastFrameMainCompositeMs ?? 0;
+        public double LastFrameSubCompositeMs => Renderer?.LastFrameSubCompositeMs ?? 0;
+
         // Not a fixed constant - pseudo-hi-res (SETINI bit 3) can make a
         // frame 512 pixels wide instead of 256. See Renderer.cs's
         // FrameWidth field for the full citation. Defaults to 256 before

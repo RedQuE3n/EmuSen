@@ -15,7 +15,16 @@ namespace EmuSen.Debug
         // that aren't about logging output (HvIrqEnabled, WindowingEnabled)
         // are deliberately NOT gated by this - this only silences trace
         // output, it doesn't change emulation behavior.
-        public static bool MasterLoggingEnabled = true;
+        //
+        // Defaults to off - several individual flags below default to true
+        // (leftover from the investigations that added them), which meant
+        // a stock build logged a steady stream of DMA/scroll/math-unit
+        // traces on every run whether anyone asked for it or not. This is
+        // the actual on/off switch for that; the individual flags keep
+        // whatever value they're set to underneath, so re-enabling this
+        // brings back exactly what was configured before, per this
+        // comment's own original design.
+        public static bool MasterLoggingEnabled = false;
 
         // --- Cpu.cs ---
         private static bool _cpuVerboseLogging = false;

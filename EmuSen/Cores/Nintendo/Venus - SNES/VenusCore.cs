@@ -299,15 +299,29 @@ namespace EmuSen.Cores.Nintendo.Venus
 
                 if (_currentScanline < 225)
                 {
+                    // Real hardware runs each scanline's HDMA transfer
+                    // during H-blank, BEFORE that same scanline's active
+                    // display period - so whatever a scanline's own HDMA
+                    // table entry changes (a window edge, a VRAM byte, a
+                    // CGRAM color) is already in effect by the time that
+                    // scanline's pixels are actually drawn. This used to
+                    // render first and run HDMA after, which fed every
+                    // scanline the PREVIOUS scanline's HDMA update instead
+                    // of its own - invisible for anything that changes
+                    // slowly or not at all frame-to-frame, but a visible,
+                    // wrong band of color for any effect that changes
+                    // rapidly per scanline (found via a Zelda: A Link to
+                    // the Past bridge/rain scene using indirect HDMA to
+                    // drive per-scanline window/VRAM updates).
+                    Bus.Dma.ExecuteHdma();
+                    long afterPpu = Stopwatch.GetTimestamp();
+                    _hdmaTicksAccum += afterPpu - afterCpuSpc700;
+
                     if (_currentScanline < 224)
                     {
                         Renderer.RenderScanline(Bus, _currentScanline);
                     }
-                    long afterPpu = Stopwatch.GetTimestamp();
-                    _ppuTicksAccum += afterPpu - afterCpuSpc700;
-
-                    Bus.Dma.ExecuteHdma();
-                    _hdmaTicksAccum += Stopwatch.GetTimestamp() - afterPpu;
+                    _ppuTicksAccum += Stopwatch.GetTimestamp() - afterPpu;
                 }
 
                 if (_currentScanline == 225)

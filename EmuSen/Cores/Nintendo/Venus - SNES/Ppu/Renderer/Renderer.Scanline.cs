@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Numerics;
 using Raylib_cs;
 using EmuSen.Cores.Nintendo.Venus.Memory;
@@ -9,6 +10,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 {
     public partial class Renderer
     {
+        // Sub-phase breakdown within RenderScanline, for the same
+        // gameplay-slowdown investigation as VenusCore's LastFramePpuMs -
+        // that number stopped dropping as much as expected once BG1-4's
+        // redundant double-decode was fixed (RenderBg1-4's BgLineCache),
+        // meaning something else in here - sprite evaluation, or the
+        // final color-math/window blend loop, neither of which that fix
+        // touched - is the actual dominant cost. Accumulated across every
+        // scanline of one frame, reset when a new frame starts (py==0,
+        // same convention RangeOver/TimeOver already use above).
+        private long _objEvalTicksAccum;
+        private long _blendTicksAccum;
+        public double LastFrameObjEvalMs { get; private set; }
+        public double LastFrameBlendMs { get; private set; }
+
         public void RenderScanline(MemoryBus bus, int py)
         {
             if (py < 0 || py >= ScreenH) return;
@@ -23,6 +38,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 ppu.TimeOver = false;
                 bool hiRes = mode == 5 || mode == 6 || (ppu.Setini & 0x08) != 0;
                 _frameWidth = hiRes ? MaxOutputW : ScreenW;
+
+                _objEvalTicksAccum = 0;
+                _blendTicksAccum = 0;
             }
 
             if (forceBlank)
@@ -33,7 +51,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
             float brightness = (ppu.Inidisp & 0x0F) / 15f;
 
+            long objEvalStart = Stopwatch.GetTimestamp();
             EvaluateSpritesForScanline(ppu, py, brightness);
+            _objEvalTicksAccum += Stopwatch.GetTimestamp() - objEvalStart;
 
             // Main screen backdrop: plain CGRAM color 0, as always.
             Color mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
@@ -133,6 +153,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
 
             // --- FINAL BLEND ---
+            long blendStart = Stopwatch.GetTimestamp();
             bool subtractMode = (ppu.Cgadsub & 0x80) != 0;
             bool halfMode = (ppu.Cgadsub & 0x40) != 0;
 
@@ -189,6 +210,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     }
                 }
             }
+
+            _blendTicksAccum += Stopwatch.GetTimestamp() - blendStart;
+            double ticksToMs = 1000.0 / Stopwatch.Frequency;
+            LastFrameObjEvalMs = _objEvalTicksAccum * ticksToMs;
+            LastFrameBlendMs = _blendTicksAccum * ticksToMs;
         }
 
         private static bool IsWindowMasked(Ppu ppu, int layerId, bool isMainScreen, int px)

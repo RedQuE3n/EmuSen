@@ -313,16 +313,28 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     }
                 }
 
-                // --- 7-BIT LINE COUNTER FIX ---
-                bool repeat = (ch.LineCounter & 0x80) != 0;
-                byte lower7 = (byte)(ch.LineCounter & 0x7F);
-                lower7--; // Only decrement the 7-bit counter
-                
-                ch.LineCounter = (byte)((repeat ? 0x80 : 0x00) | (lower7 & 0x7F));
-                ch.HdmaDoTransfer = repeat; // If repeat is active, do transfer every line
+                // Real hardware decrements the WHOLE 8-bit byte (repeat flag
+                // and 7-bit count together) as one unit, not the 7-bit count
+                // in isolation with the repeat flag held aside - confirmed
+                // against Mesen2's SnesDmaController.cpp. That matters
+                // specifically when the 7-bit count is already 0 going into
+                // this decrement: a plain byte-- naturally borrows from bit
+                // 7 (0x80 -> 0x7F), correctly signaling "fetch a new header
+                // this line" via the 7-bit-is-zero check below. The previous
+                // "7-bit only" version instead underflowed just the 7-bit
+                // count to 0x7F while leaving the repeat bit untouched,
+                // producing 0xFF instead of 0x7F and missing that fetch for
+                // a full extra 127-line cycle - a real, exploitable-by-any-
+                // game divergence, not a corner case that only theory
+                // reaches: found via a Zelda: A Link to the Past bridge/rain
+                // scene where indirect-HDMA channels desynced from the
+                // scanline they were meant to affect and painted a wrong
+                // horizontal band of color across part of the screen.
+                ch.LineCounter--;
+                ch.HdmaDoTransfer = (ch.LineCounter & 0x80) != 0;
 
                 // If the block is finished, fetch the next one
-                if (lower7 == 0)
+                if ((ch.LineCounter & 0x7F) == 0)
                 {
                     ushort fetchedFrom = ch.TableAddress;
                     ch.LineCounter = _bus.Read8((uint)((ch.SourceBank << 16) | ch.TableAddress++));

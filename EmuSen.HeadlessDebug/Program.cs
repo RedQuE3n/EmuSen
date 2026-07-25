@@ -66,11 +66,26 @@ class Program
         string? saveStatePath = null;
         bool verbose = false;
         long cpuLogStart = -1, cpuLogEnd = -1;
+        var flagsToEnable = new List<string>();
         var taps = new List<(long Start, long End, EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton Button)>();
         var screenshots = new List<(long Frame, string Path)>();
         for (int i = 2; i < args.Length; i++)
         {
-            if (args[i] == "--cpulog" && i + 1 < args.Length)
+            if (args[i] == "--flag" && i + 1 < args.Length)
+            {
+                // Sets any DebugSettings.<Name> bool property to true by
+                // reflection - dozens of these exist (one per investigation
+                // that ever needed a targeted trace, e.g. WindowHdmaLogging),
+                // and hardcoding a CLI switch per flag isn't worth it when
+                // this harness's whole point is not needing a rebuild per
+                // investigation. MasterLoggingEnabled is set alongside it
+                // since every individual *Logging flag's own getter is
+                // gated by that master switch (see DebugSettings' own
+                // comment) - setting one without the other is a silent
+                // no-op that looks identical to "nothing happened."
+                flagsToEnable.Add(args[++i]);
+            }
+            else if (args[i] == "--cpulog" && i + 1 < args.Length)
             {
                 // startFrame:endFrame - windows DebugSettings.CpuVerboseLogging
                 // to just the frames given, instead of the F4 prompt's
@@ -122,6 +137,18 @@ class Program
         // (DmaSourceAddrLogging etc.), useful for a short, targeted run but
         // far too noisy over a long one.
         if (verbose) EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
+
+        foreach (string flagName in flagsToEnable)
+        {
+            var prop = typeof(EmuSen.Debug.DebugSettings).GetProperty(flagName);
+            if (prop == null || prop.PropertyType != typeof(bool))
+            {
+                Console.WriteLine($"[WARN] No bool DebugSettings.{flagName} property found - ignoring --flag {flagName}.");
+                continue;
+            }
+            prop.SetValue(null, true);
+            EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
+        }
 
         var log = new List<string>();
         void Emit(string line)

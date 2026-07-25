@@ -260,6 +260,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new DebugRegisterValue("CGADSUB", _ppu.Cgadsub, 8),
                 new DebugRegisterValue("SETINI", _ppu.Setini, 8),
                 new DebugRegisterValue("MOSAIC", _ppu.Mosaic, 8),
+                new DebugRegisterValue("FixedColorR", _ppu.FixedColorR, 8),
+                new DebugRegisterValue("FixedColorG", _ppu.FixedColorG, 8),
+                new DebugRegisterValue("FixedColorB", _ppu.FixedColorB, 8),
             };
         }
 

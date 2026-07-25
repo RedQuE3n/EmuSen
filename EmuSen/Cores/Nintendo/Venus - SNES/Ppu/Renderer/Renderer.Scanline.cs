@@ -163,6 +163,27 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 for (int p = 0; p <= 3; p++) RenderObj(ppu, py, brightness, _subLineBuf, _subLineLayer, LayerObj, p, false);
             }
 
+            // BG3's "forced top" priority mode (BGMODE bit 3 - the classic
+            // bridge-crossing trick) applies to the whole PPU's compositing,
+            // not just the main screen - real hardware draws BG3's high-
+            // priority tiles above everything else in BOTH the main and
+            // sub screen stacks. The main-screen composite above already
+            // does this (the bg3ForcedTop block right after it), but the
+            // subscreen composite only ever rendered BG3's low-priority
+            // tiles (line ~157), silently dropping the high-priority ones
+            // entirely from the subscreen. Since the subscreen is the
+            // color-math blend operand whenever CGWSEL selects it, a scene
+            // color-math-blending a BG3 high-priority tile (e.g. a fence
+            // rendered semi-transparent over terrain) added the correct
+            // main-screen tile color to whatever was left behind on the
+            // subscreen instead of that same tile - producing a visibly
+            // wrong blended color. Found via a Zelda: A Link to the Past
+            // overworld fence that rendered as a solid yellow band.
+            if (bg3ForcedTop && (ppu.Ts & 0x04) != 0)
+            {
+                RenderBg3(ppu, py, true, brightness, _subLineBuf, _subLineLayer, LayerBg3, false);
+            }
+
             long blendStart = Stopwatch.GetTimestamp();
             _subCompositeTicksAccum += blendStart - subCompositeStart;
 

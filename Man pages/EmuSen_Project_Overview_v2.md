@@ -71,7 +71,10 @@ EmuSen Project/
 │   │                                          #   bounded queue, single consumer) now, not the calling
 │   │                                          #   thread - see the class's own comment for why, and why
 │   │                                          #   callers now have to Dispose() it explicitly on every
-│   │                                          #   exit path instead of relying on AutoFlush.
+│   │                                          #   exit path instead of relying on AutoFlush. Also
+│   │                                          #   flushes to disk on its own during idle gaps (every
+│   │                                          #   500ms), so a hard kill or crash that skips Dispose()
+│   │                                          #   only loses a fraction of a second of output.
 │   ├── Cores/
 │   │   ├── Nintendo/
 │   │   │   ├── Venus - SNES/                 # Namespace stays plain "Venus" (C# identifiers can't

@@ -291,7 +291,10 @@ EmuSen Project/
         │                                #   optional per-session file logging (Settings >
         │                                #   Preferences...), same categorized log files the
         │                                #   console build already produces.
-        ├── InputSettingsWindow.axaml / .axaml.cs
+        ├── InputSettingsWindow.axaml / .axaml.cs # Widened (680px, resizable) after key/pad
+        │                                #   labels ("RightBracket", "Rightshoulder", ...)
+        │                                #   routinely overflowed the original 90px columns
+        │                                #   and rendered underneath the next column's button
         ├── PreferencesWindow.axaml / .axaml.cs # Log directory / ROM directory / core picker (the
         │                                #   last one is scaffolding - only one core exists)
         └── RomBrowserWindow.axaml / .axaml.cs  # Lists .smc/.sfc files from the configured ROM

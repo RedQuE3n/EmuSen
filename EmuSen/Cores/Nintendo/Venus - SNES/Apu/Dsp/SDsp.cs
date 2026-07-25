@@ -48,9 +48,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             AudioBuffer.Clear();
         }
 
+        // Stores the RAW byte written, unmasked - only 7 bits are actually
+        // used to index the 128-entry register file (masked at each point
+        // of use below), but real hardware's address latch still holds
+        // and echoes back the full 8 bits on a subsequent read, including
+        // the otherwise-unused top bit. Previously masked at write time,
+        // which was unrecoverable on read - caught via the SpcValidation
+        // harness (an "OR A, dp" test reading this port back got the
+        // masked value XORed against the real one, differing by exactly
+        // bit 7). Almost certainly inaudible in any real game (nothing
+        // sane relies on this bit surviving a round trip), fixed anyway
+        // since it was cheap once found.
         public void SetRegisterAddress(byte address)
         {
-            _registerAddress = (byte)(address & 0x7F);
+            _registerAddress = address;
         }
 
         public byte GetRegisterAddress()
@@ -60,8 +71,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         public byte ReadRegister()
         {
+            int index = _registerAddress & 0x7F;
             // ENDX - see Venus_APU.md §3.2.
-            if (_registerAddress == 0x7C)
+            if (index == 0x7C)
             {
                 byte endx = 0;
                 for (int v = 0; v < 8; v++)
@@ -70,22 +82,23 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 }
                 return endx;
             }
-            return _registers[_registerAddress];
+            return _registers[index];
         }
 
         public void WriteRegister(byte data)
         {
-            _registers[_registerAddress] = data;
+            int index = _registerAddress & 0x7F;
+            _registers[index] = data;
 
             // Any write to ENDX clears all its bits - see Venus_APU.md §3.2.
-            if (_registerAddress == 0x7C)
+            if (index == 0x7C)
             {
                 foreach (var voice in _voices) ClearEnded(voice);
                 return;
             }
 
-            int voiceIdx = _registerAddress >> 4;
-            int voiceReg = _registerAddress & 0x0F;
+            int voiceIdx = index >> 4;
+            int voiceReg = index & 0x0F;
             if (voiceIdx < 8)
             {
                 DspVoice v = _voices[voiceIdx];

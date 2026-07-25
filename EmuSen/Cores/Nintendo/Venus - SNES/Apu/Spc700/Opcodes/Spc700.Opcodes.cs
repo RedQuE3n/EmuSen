@@ -234,23 +234,33 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private void OpDIV_YA_X(ushort address)
         {
+            // Real hardware does NOT compute a plain ya/X - the SPC700's
+            // DIV instruction emulates a specific bit-by-bit restoring
+            // division circuit, which only produces a plain quotient/
+            // remainder when Y < (X<<1); otherwise it overflows partway
+            // through and produces a different (still fully documented,
+            // deterministic) result. Ported from the widely-referenced
+            // algorithm (matches bsnes/higan's implementation) and
+            // verified against the TomHarte/ProcessorTests spc700 ground-
+            // truth vectors via the SpcValidation harness - a previous
+            // "just do ya/X always" version failed ~23% of DIV's own test
+            // vectors, exactly the fraction where Y >= (X<<1) doesn't hold.
             ushort ya = (ushort)((Y << 8) | A);
-            
+
             SetFlag(SpcFlags.H, (Y & 0x0F) >= (X & 0x0F));
-            
             SetFlag(SpcFlags.V, Y >= X);
-            
-            if (X != 0)
+
+            if (Y < (X << 1))
             {
-                A = (byte)((ya / X) & 0xFF);
-                Y = (byte)((ya % X) & 0xFF);
+                A = (byte)(ya / X);
+                Y = (byte)(ya % X);
             }
             else
             {
-                A = 0xFF; 
-                Y = (byte)(ya & 0xFF); 
+                A = (byte)(255 - (ya - (X << 9)) / (256 - X));
+                Y = (byte)(X + (ya - (X << 9)) % (256 - X));
             }
-            
+
             UpdateZN(A);
         }
         private void OpADDW_YA_dp(ushort address)

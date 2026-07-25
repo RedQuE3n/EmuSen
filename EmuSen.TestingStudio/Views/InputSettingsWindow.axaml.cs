@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Silk.NET.SDL;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
@@ -57,12 +58,26 @@ namespace EmuSen.TestingStudio.Views
 
             foreach (SnesButton button in Enum.GetValues<SnesButton>())
             {
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("70,90,Auto,90,Auto") };
+                // Key labels are Avalonia Key.ToString() ("RightBracket",
+                // "LeftShift", ...) and pad labels are SDL
+                // GameControllerButton.ToString() ("Leftshoulder",
+                // "Rightshoulder", ...) - both routinely longer than the
+                // original 90px columns, which let them visually overflow
+                // underneath the next column's button (added later in
+                // Children, so it painted on top) instead of wrapping or
+                // clipping. Widened columns plus TextTrimming below are
+                // the fix; the window itself was widened to match.
+                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("80,110,Auto,150,Auto") };
 
                 var nameText = new TextBlock { Text = button.ToString(), VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(nameText, 0);
 
-                var keyText = new TextBlock { Text = CurrentKeyLabel(button), VerticalAlignment = VerticalAlignment.Center };
+                var keyText = new TextBlock
+                {
+                    Text = CurrentKeyLabel(button),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                };
                 Grid.SetColumn(keyText, 1);
                 _keyLabels[button] = keyText;
 
@@ -71,7 +86,12 @@ namespace EmuSen.TestingStudio.Views
                 rebindKeyButton.Click += (_, _) => StartListeningForKey(button);
                 _rebindKeyButtons[button] = rebindKeyButton;
 
-                var padText = new TextBlock { Text = CurrentPadLabel(button), VerticalAlignment = VerticalAlignment.Center };
+                var padText = new TextBlock
+                {
+                    Text = CurrentPadLabel(button),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                };
                 Grid.SetColumn(padText, 3);
                 _padLabels[button] = padText;
 

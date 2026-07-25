@@ -2,8 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="EmuSen.TestingStudio.Views.InputSettingsWindow"
         Title="Controller Settings"
-        Width="520" Height="480"
-        CanResize="False">
+        Width="680" Height="480"
+        MinWidth="680" MinHeight="360"
+        CanResize="True">
 
     <DockPanel Margin="16">
 

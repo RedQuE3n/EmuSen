@@ -198,6 +198,9 @@ EmuSen Project/
     │   ├── ControllerKeyMap.cs
     │   ├── GamepadBindingMap.cs
     │   └── GamepadManager.cs
+    ├── Settings/
+    │   └── AppSettings.cs                     # Log/ROM directory + selected-core preferences -
+    │                                           #   same JSON-under-%AppData% pattern as Input/*.cs
     ├── Program.cs
     └── Views/
         ├── MainWindow.axaml / .axaml.cs       # ScreenWidth now an instance property tracking
@@ -205,7 +208,16 @@ EmuSen Project/
         │                                       #   Still presents via a CPU-side WriteableBitmap,
         │                                       #   not EmuSen.Presentation.FramePresenter - no GPU
         │                                       #   surface here yet, so no shader support either.
-        └── InputSettingsWindow.axaml / .axaml.cs
+        │                                       #   Reuses EmuSen.Common.CategorizedLogWriter for
+        │                                       #   optional per-session file logging (Settings >
+        │                                       #   Preferences...), same categorized log files the
+        │                                       #   console build already produces.
+        ├── InputSettingsWindow.axaml / .axaml.cs
+        ├── PreferencesWindow.axaml / .axaml.cs # Log directory / ROM directory / core picker (the
+        │                                       #   last one is scaffolding - only one core exists)
+        └── RomBrowserWindow.axaml / .axaml.cs  # Lists .smc/.sfc files from the configured ROM
+                                                 #   directory as a quicker alternative to the OS
+                                                 #   file picker (File > Browse ROMs...)
 ```
 
 Not shown: `Saves/*.srm`/`*.state`, `Logs/`, `bin/`, `obj/` — build artifacts and user data, excluded from any packaging.

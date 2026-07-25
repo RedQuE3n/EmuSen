@@ -30,6 +30,11 @@ namespace EmuSen.Common
         public int ScreenWidth => _core?.ScreenWidth ?? 256;
         public const int ScreenHeight = 224;
 
+        // "SNES" before LoadRom() is called too - there's only one core to
+        // report today, but this exists so a caller (e.g. a log directory
+        // path) doesn't need its own core-specific fallback string.
+        public string CoreName => _core?.CoreName ?? "SNES";
+
         public long TotalFrames => _core?.TotalFrames ?? 0;
         public bool IsRomLoaded => _core?.IsRomLoaded ?? false;
 

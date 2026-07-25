@@ -86,6 +86,14 @@ EmuSen Project/
 │   │                                          #   truncated last lines even on a clean window-close.
 │   │                                          #   A timeout now just leaves the handles open (and
 │   │                                          #   prints a console warning) instead of risking that.
+│   │                                          #   Console echo also moved off the calling thread onto
+│   │                                          #   the same queue as file writes - it used to stay
+│   │                                          #   synchronous on the assumption it was cheap, which
+│   │                                          #   broke down hard once CpuVerboseLogging/
+│   │                                          #   Spc700VerboseLogging got left on for a whole session
+│   │                                          #   (one WriteLine per instruction executed) and FPS
+│   │                                          #   collapsed. Queue capacity raised to 100k accordingly
+│   │                                          #   (each line now enqueues two entries, file + echo).
 │   ├── Cores/
 │   │   ├── Nintendo/
 │   │   │   ├── Venus - SNES/                 # Namespace stays plain "Venus" (C# identifiers can't

@@ -39,30 +39,50 @@ namespace EmuSen.Common
     // fraction of a second of output instead of the whole session -
     // every category, not just whichever ones happen to be high-volume
     // enough to fill their own internal buffer (see FlushIntervalMs's own
-    // comment for the real session that exposed this). Console echo
-    // stays synchronous and un-queued on purpose - it's cheap relative to
-    // disk I/O, and live debugging benefits from seeing output
-    // immediately rather than delayed behind a queue.
+    // comment for the real session that exposed this).
+    //
+    // Console echo used to stay synchronous on the calling thread on the
+    // assumption that it's cheap relative to disk I/O - true for normal
+    // play, false the moment CpuVerboseLogging/Spc700VerboseLogging are
+    // left on for a whole session: that's one Console.WriteLine per
+    // instruction executed, hundreds of thousands to over a million a
+    // second at real gameplay speed, and a synchronous terminal write is
+    // far slower per call than an in-memory enqueue. A real session
+    // showed exactly that - FPS collapsed with both flags left on. Echo
+    // now goes through the same queue/background-thread path as file
+    // writes (LogEntry.Target is TextWriter specifically so _console can
+    // share it), so the calling/emulation thread only ever does cheap
+    // string formatting + two enqueues per line, never a live console
+    // syscall. This doesn't remove the cost of formatting a string for
+    // every single instruction in the first place - that's inherent to
+    // logging at that granularity regardless of where the write ends up -
+    // it only removes the extra synchronous-I/O tax on top of it.
     public class CategorizedLogWriter : System.IO.TextWriter
     {
-        // A queue this deep would mean tens of thousands of log lines
-        // backed up behind disk I/O - past any burst this project's own
-        // verbose flags realistically produce against normal storage.
-        // BlockingCollection<T>.Add blocks the calling (producer) thread
-        // once full rather than growing without bound - an intentional
-        // safety valve against unbounded memory growth if disk I/O ever
-        // falls catastrophically behind, accepted even though it
-        // reintroduces the exact blocking this class exists to avoid,
-        // because the alternative (unbounded growth) is worse.
-        private const int QueueCapacity = 10_000;
+        // Sized up from the original 10,000 now that every Write/WriteLine
+        // enqueues two entries (file + console echo, see those overrides)
+        // and CpuVerboseLogging/Spc700VerboseLogging can realistically run
+        // for a whole session instead of a short trace burst - that's one
+        // instruction's worth of entries at real gameplay speed arriving
+        // far faster than the old estimate assumed. BlockingCollection<T>.Add
+        // still blocks the calling (producer) thread once full rather than
+        // growing without bound - an intentional safety valve against
+        // unbounded memory growth if disk I/O ever falls catastrophically
+        // behind, accepted even though it reintroduces the exact blocking
+        // this class exists to avoid, because the alternative (unbounded
+        // growth) is worse.
+        private const int QueueCapacity = 100_000;
 
+        // Target is TextWriter, not StreamWriter, specifically so the live
+        // console (also just a TextWriter) can share this same queued path
+        // - see the Write/WriteLine overrides below for why that matters.
         private readonly struct LogEntry
         {
-            public readonly StreamWriter Target;
+            public readonly TextWriter Target;
             public readonly string? Text;
             public readonly bool IsLine;
 
-            public LogEntry(StreamWriter target, string? text, bool isLine)
+            public LogEntry(TextWriter target, string? text, bool isLine)
             {
                 Target = target;
                 Text = text;
@@ -205,28 +225,32 @@ namespace EmuSen.Common
 
         public override System.Text.Encoding Encoding => _console.Encoding;
 
+        // Each override enqueues the console copy alongside the file copy
+        // instead of writing to _console synchronously - see this class's
+        // own comment for why that stopped being safe to assume was cheap.
         public override void Write(char value)
         {
-            _console.Write(value);
-            _queue.Add(new LogEntry(_general, value.ToString(), isLine: false));
+            string text = value.ToString();
+            _queue.Add(new LogEntry(_general, text, isLine: false));
+            _queue.Add(new LogEntry(_console, text, isLine: false));
         }
 
         public override void Write(string? value)
         {
-            _console.Write(value);
             _queue.Add(new LogEntry(ResolveFile(value), value, isLine: false));
+            _queue.Add(new LogEntry(_console, value, isLine: false));
         }
 
         public override void WriteLine(string? value)
         {
-            _console.WriteLine(value);
             _queue.Add(new LogEntry(ResolveFile(value), value, isLine: true));
+            _queue.Add(new LogEntry(_console, value, isLine: true));
         }
 
         public override void WriteLine()
         {
-            _console.WriteLine();
             _queue.Add(new LogEntry(_general, null, isLine: true));
+            _queue.Add(new LogEntry(_console, null, isLine: true));
         }
 
         // Deliberately does NOT wait for the background thread to catch up

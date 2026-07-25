@@ -316,13 +316,14 @@ Two fundamentally different mechanisms era cheat devices used, unified behind on
 - **ROM patches** (`CheatKind.RomPatch`) - the **Game Genie** mechanism: substitutes the byte a specific *cartridge* read returns, optionally only while the real byte there matches a compare value. The underlying ROM is never touched - the substitution happens at read time.
 
 ```
-cheat add <code> [description]              decode a Pro Action Replay/Game Wizard code
-                                             (8 hex digits) and add it, enabled
+cheat add <code> [description]              decode a code, guessing whether it's Pro Action
+                                             Replay/Game Wizard or Game Genie from its
+                                             formatting (see `gg` if it guesses wrong)
 cheat poke <space> <addr> <value> [desc]    add a raw RAM-poke cheat directly, bypassing
                                              code decoding (e.g. an address already found
                                              with `search`)
-cheat gg <code> [description]               decode a real SNES Game Genie code (8 letters)
-                                             and add it as a ROM patch, enabled
+cheat gg <code> [description]               decode a real SNES Game Genie code (8
+                                             characters) and add it as a ROM patch, enabled
 cheat rompatch <addr> <value> [<cmp>|-] [desc]
                                              add a Game Genie-style ROM-read intercept
                                              directly, bypassing code decoding; <cmp> gates
@@ -334,9 +335,11 @@ cheat remove <id>                           remove a cheat entirely
 cheat clear                                 remove every cheat
 ```
 
-**SNES Game Genie is a real two-stage transposition cipher, not a straight hex substitution** (`GameGenieCodec.cs`). Each of a code's 8 letters decodes to a scrambled 4-bit nibble via a SNES-specific 16-letter alphabet (`DF4709156BC8A23E` - different from NES/Genesis/Game Boy's own Game Genie alphabets); those 32 scrambled bits then get reassembled into 8 output nibbles by pulling from specific, non-contiguous bit positions - a real cipher, not just a different letter-to-hex mapping. Unlike NES/Genesis Game Genie, **real SNES codes never carry a compare byte** - Galoob's SNES device patches ROM instructions directly using 3 full address bytes instead of 2, so it never needed one; every `cheat gg`-decoded patch is unconditional (`Compare = null`).
+**SNES Game Genie is a real two-stage transposition cipher, not a straight hex substitution** (`GameGenieCodec.cs`). Each of a code's 8 characters decodes to a scrambled 4-bit nibble via a SNES-specific 16-character alphabet (`DF4709156BC8A23E` - different from NES/Genesis/Game Boy's own Game Genie alphabets); those 32 scrambled bits then get reassembled into 8 output nibbles by pulling from specific, non-contiguous bit positions - a real cipher, not just a different letter-to-hex mapping. Unlike NES/Genesis Game Genie, **real SNES codes never carry a compare byte** - Galoob's SNES device patches ROM instructions directly using 3 full address bytes instead of 2, so it never needed one; every `cheat gg`-decoded patch is unconditional (`Compare = null`).
 
 **Verified before writing, not implemented from memory.** Getting this cipher subtly wrong would silently corrupt whatever ROM byte a mistranslated address happened to land on - worse than not having the feature at all, since it would look like it worked. The bit-offset logic was checked against an independently-published, MIT-licensed reference implementation by hand-tracing a full encode→decode round-trip, then fuzz-verified by replicating both the reference algorithm and this project's port in a throwaway script and round-tripping 2000 random (address, value) pairs through both - all 2000 passed and both implementations agreed on every one, before any of this landed in the actual codebase.
+
+**`cheat add`'s format guess is a heuristic, not a guarantee - and it can't be otherwise.** The original plan for a unified `add` assumed Game Genie codes were letters-only and Pro Action Replay codes were plain hex, the way it works on NES - but SNES Game Genie's own alphabet (`DF4709156BC8A23E`, verified above) turned out to be a scrambled *ordering* of the same `0-9A-F` characters `ActionReplayCodec` already accepts, not a distinct letter set. Both formats decode from identical 8-hex-digit input, so there is genuinely no way to tell them apart from content alone. `CheatCommand.LooksLikeGameGenieFormat` falls back to how each device's codes are conventionally *published* instead: a separator right after the 4th character (`XXXX-XXXX`) reads as Game Genie; anything else (no separator, or one after the 6th character, `AAAAAA-VV`) reads as Pro Action Replay/Game Wizard. This matches real-world cheat lists' own formatting most of the time, but it's a guess - `cheat gg`/`cheat poke` are the reliable, unambiguous fallback whenever a code is copied without its original punctuation or formatted unconventionally.
 
 **Pro Action Replay/Game Wizard code format.** `ActionReplayCodec` decodes the plain 8-hex-digit wire format both devices publish - a 24-bit CPU-bus address (bank + 16-bit offset) followed by the one byte to hold there, e.g. `7E01F663` means "poke CPU address `$7E:01F6` to `0x63`". No cipher, unlike Game Genie. Non-hex separators (`7E01F6:63`, `7E01F6-63`) are stripped before decoding, since that's how some published code lists format them.
 
@@ -358,7 +361,7 @@ Or, given a real published Pro Action Replay code for the same effect:
 ```
 cheat add 7E0DC009 infinite lives
 ```
-Both add an enabled cheat; `cheat list` shows it as `#1: [on ] RAM  WRAM 0xDC0 = 0x9  infinite lives` (or `CpuBus` for the decoded version).
+No separator at all, so `cheat add` guesses Pro Action Replay/Game Wizard correctly and routes to `ActionReplayCodec` automatically - both add an enabled cheat; `cheat list` shows it as `#1: [on ] RAM  WRAM 0xDC0 = 0x9  infinite lives` (or `CpuBus` for the decoded version).
 
 **Example — a manual Game Genie-equivalent ROM patch**, substituting a specific ROM byte only when it still holds its original value:
 ```
@@ -368,9 +371,9 @@ cheat rompatch 8091F2 A9 EA looks-safer-if-guarded
 
 **Example — decoding a Game Genie-format code** (illustrative, not a verified real published code - swap in an actual one from a game-specific cheat list):
 ```
-cheat gg DF4709-15 example code
+cheat add DF47-0915 example code
 ```
-Decodes through the cipher above into a raw ROM address/value pair, then adds it exactly like `rompatch` would (unconditional, since real SNES codes never carry a compare) - `cheat list` shows it the same way, `#3: [on ] ROM  0x... = 0x...  example code`.
+The dash lands right after the 4th character, so `cheat add` guesses Game Genie and routes to `GameGenieCodec` automatically - equivalent to `cheat gg DF47-0915 example code` directly. Decodes through the cipher above into a raw ROM address/value pair, then adds it exactly like `rompatch` would (unconditional, since real SNES codes never carry a compare) - `cheat list` shows it the same way, `#3: [on ] ROM  0x... = 0x...  example code`.
 
 ---
 

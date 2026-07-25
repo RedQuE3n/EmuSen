@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using EmuSen.Debug.Cheats;
 using static EmuSen.Debug.Commands.DebugCommandHelpers;
@@ -9,22 +10,29 @@ namespace EmuSen.Debug.Commands
     // "my cheats" (see CheatRegistry's own comment for the full
     // explanation of each):
     //   - RAM pokes (Pro Action Replay/Game Wizard style, decoded by
-    //     ActionReplayCodec) - `add`/`poke`.
+    //     ActionReplayCodec) - `poke`, or `add` when it guesses that's
+    //     the format (see LooksLikeGameGenieFormat).
     //   - ROM patches (Game Genie style, decoded by GameGenieCodec) -
-    //     `gg`/`rompatch`.
+    //     `rompatch`, or `add`/`gg` (see below).
     public class CheatCommand : IDebugCommand
     {
         public string Name => "cheat";
         public string Usage => string.Join('\n', new[]
         {
-            "  cheat add <code> [description]    decode a Pro Action Replay/Game Wizard",
-            "                                     code (8 hex digits) and add it, enabled",
+            "  cheat add <code> [description]    decode a code, guessing whether it's Pro",
+            "                                     Action Replay/Game Wizard or Game Genie from",
+            "                                     its formatting (see `gg` if it guesses wrong -",
+            "                                     both formats use the same 8 hex-digit",
+            "                                     characters, so this is a best-effort guess,",
+            "                                     not a guarantee)",
             "  cheat poke <space> <addr> <value> [description]",
             "                                     add a raw RAM-poke cheat directly, bypassing",
             "                                     code decoding (e.g. an address you already",
             "                                     found with `search`)",
             "  cheat gg <code> [description]     decode a real SNES Game Genie code (8",
-            "                                     letters) and add it as a ROM patch, enabled",
+            "                                     characters) and add it as a ROM patch, enabled",
+            "                                     - use this instead of `add` when its guess is",
+            "                                     wrong for a code formatted unconventionally",
             "  cheat rompatch <addr> <value> [<compare>|-] [description]",
             "                                     add a Game Genie-style ROM-read intercept",
             "                                     directly, bypassing code decoding: substitute",
@@ -47,6 +55,28 @@ namespace EmuSen.Debug.Commands
         // (mirroring resolves the same way real hardware's does).
         private const string DecodedCodeSpace = "CpuBus";
 
+        // `cheat add`'s format guess. Both codecs decode from the exact
+        // same 8 hex-digit character set - SNES Game Genie's own alphabet
+        // (see GameGenieCodec) is a scrambled ordering of 0-9A-F, not a
+        // distinct letter set the way NES Game Genie's is - so there is no
+        // way to tell the two formats apart from their characters alone.
+        // Falls back to how each device's codes are conventionally
+        // published instead: a separator right after the 4th character
+        // ("XXXX-XXXX") matches Game Genie's own convention; anything
+        // else (no separator at all, or one after the 6th character, e.g.
+        // "AAAAAA-VV"/"AAAAAA:VV") is treated as Pro Action Replay/Game
+        // Wizard's. Best-effort only, NOT a guarantee - `cheat gg`/`cheat
+        // poke` are the reliable fallback for a code formatted
+        // unconventionally (or copied without its original punctuation).
+        private static bool LooksLikeGameGenieFormat(string code)
+        {
+            for (int i = 0; i < code.Length; i++)
+            {
+                if (!Uri.IsHexDigit(code[i])) return i == 4;
+            }
+            return false; // no separator at all - assume Pro Action Replay/Game Wizard
+        }
+
         public string Execute(IDebugTarget target, string[] parts)
         {
             if (parts.Length < 2) return "Usage: cheat add|poke|gg|rompatch|list|enable|disable|remove|clear ...";
@@ -58,10 +88,19 @@ namespace EmuSen.Debug.Commands
                 case "add":
                 {
                     if (parts.Length < 3) return "Usage: cheat add <code> [description]";
-                    (int address, byte value) = ActionReplayCodec.Decode(parts[2]);
-                    string description = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : parts[2];
+                    string code = parts[2];
+                    string description = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : code;
+
+                    if (LooksLikeGameGenieFormat(code))
+                    {
+                        (int ggAddress, byte ggValue) = GameGenieCodec.Decode(code);
+                        int ggId = cheats.AddRomPatch(ggAddress, ggValue, null, description);
+                        return $"Cheat #{ggId} added (detected Game Genie format): ROM 0x{ggAddress:X6} = 0x{ggValue:X2} ({description})";
+                    }
+
+                    (int address, byte value) = ActionReplayCodec.Decode(code);
                     int id = cheats.AddRamPoke(DecodedCodeSpace, address, value, description);
-                    return $"Cheat #{id} added: {DecodedCodeSpace} 0x{address:X6} = 0x{value:X2} ({description})";
+                    return $"Cheat #{id} added (detected Pro Action Replay/Game Wizard format): {DecodedCodeSpace} 0x{address:X6} = 0x{value:X2} ({description})";
                 }
                 case "poke":
                 {

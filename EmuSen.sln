@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Presentation", "EmuS
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.RaylibFrontend", "EmuSen.RaylibFrontend\EmuSen.RaylibFrontend.csproj", "{7EFE3253-C275-4845-8C09-C710153A2475}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Frontend", "EmuSen.Frontend\EmuSen.Frontend.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.TestingStudio", "EmuSen.TestingStudio\EmuSen.TestingStudio.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

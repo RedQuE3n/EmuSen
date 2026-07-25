@@ -5,7 +5,7 @@ using EmuSen.Cores.Nintendo.Venus.Memory;
 namespace EmuSen.Common
 {
     // Thin, mostly core-agnostic wrapper around ICore for a non-Raylib
-    // frontend (the Avalonia EmuSen.Frontend project) to drive a core on
+    // frontend (the Avalonia EmuSen.TestingStudio project) to drive a core on
     // its own schedule, independent of any particular windowing/UI
     // toolkit - call LoadRom() once and RunFrame() whenever the UI's own
     // render loop wants a new frame.

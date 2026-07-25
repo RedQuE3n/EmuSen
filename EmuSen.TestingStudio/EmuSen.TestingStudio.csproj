@@ -1,5 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- The Avalonia GUI, purpose-built for bug testers: ROM loading, save
+       states, controller rebinding, and (Settings > Preferences...) a
+       configurable log directory + ROM directory + a scaffolding-only core
+       picker, plus a ROM browser (File > Browse ROMs...) - see
+       EmuSen_Project_Overview_v2.md and this project's Views/ for the
+       individual pieces. Deliberately its own project (renamed from
+       EmuSen.Frontend), NOT shared with whatever polished, EmulationStation-
+       style frontend eventually gets built - that's expected to be a
+       separate project when it exists, so building it never risks touching
+       (or awkwardly inheriting menu bars/preferences plumbing from) this
+       one. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>

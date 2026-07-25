@@ -3,9 +3,9 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using EmuSen.Frontend.Settings;
+using EmuSen.TestingStudio.Settings;
 
-namespace EmuSen.Frontend.Views
+namespace EmuSen.TestingStudio.Views
 {
     // Log directory / ROM directory / core selection - see AppSettings for
     // the persisted shape. Saves immediately on every change (same pattern

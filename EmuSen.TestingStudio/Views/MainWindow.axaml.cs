@@ -12,10 +12,10 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
-using EmuSen.Frontend.Input;
-using EmuSen.Frontend.Settings;
+using EmuSen.TestingStudio.Input;
+using EmuSen.TestingStudio.Settings;
 
-namespace EmuSen.Frontend.Views
+namespace EmuSen.TestingStudio.Views
 {
     public partial class MainWindow : Window
     {

@@ -5,7 +5,7 @@ using System.Text.Json;
 using Silk.NET.SDL;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 
-namespace EmuSen.Frontend.Input
+namespace EmuSen.TestingStudio.Input
 {
     // Gamepad-button -> SnesButton mapping, same shape and persistence
     // approach as ControllerKeyMap (Input/ControllerKeyMap.cs) but for

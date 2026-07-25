@@ -42,7 +42,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 **Layering, roughly bottom-to-top:**
 
 - **Hardware simulation** (`Cores/Nintendo/Venus - SNES/Cpu`, `Cores/Nintendo/Venus - SNES/Apu`, `Cores/Nintendo/Venus - SNES/Ppu`, `Cores/Nintendo/Venus - SNES/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
-- **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by the Avalonia frontend), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (what `Program.cs` actually uses — routes console output into per-category files under a `Logs/<CoreName>/console_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's).
+- **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by `EmuSen.TestingStudio`), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (used by both `EmuSen.RaylibFrontend`'s `Program.cs` and `EmuSen.TestingStudio`'s `MainWindow` — routes console output into per-category files under a `Logs/<CoreName>/<console|gui>_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's; file writes run on a background thread now, not the caller's).
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
 - **The debug toolchain** (`Debug/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Debug/DebugCommandProcessor.cs` is a Unix-toolchain-style command layer on top of that. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Presentation** (`EmuSen.Presentation/`) — window/GPU-texture ownership and the prototype shader pipeline, shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1 step 6.
@@ -65,7 +65,13 @@ EmuSen Project/
 │   │   ├── StateSerializer.cs                # Reflective save-state serializer
 │   │   ├── TeeTextWriter.cs                  # Console + single-file log tee (generic, reusable)
 │   │   └── CategorizedLogWriter.cs           # Console + per-category log files (cpu/ppu/apu/memory/
-│   │                                          #   debug/general) - what Program.cs actually uses now
+│   │                                          #   debug/general) - used by both EmuSen.RaylibFrontend's
+│   │                                          #   Program.cs and EmuSen.TestingStudio's MainWindow. File
+│   │                                          #   writes happen on a dedicated background thread (a
+│   │                                          #   bounded queue, single consumer) now, not the calling
+│   │                                          #   thread - see the class's own comment for why, and why
+│   │                                          #   callers now have to Dispose() it explicitly on every
+│   │                                          #   exit path instead of relying on AutoFlush.
 │   ├── Cores/
 │   │   ├── Nintendo/
 │   │   │   ├── Venus - SNES/                 # Namespace stays plain "Venus" (C# identifiers can't

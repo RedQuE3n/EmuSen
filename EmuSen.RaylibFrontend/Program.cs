@@ -152,7 +152,13 @@ namespace EmuSen.RaylibFrontend
                 // between latency (smaller = less audible lag behind the
                 // picture) and safety margin against an occasional slow
                 // frame starving the stream into an audible glitch/pop.
-                Raylib_cs.Raylib.SetAudioStreamBufferSizeDefault(2048);
+                // Must be >= PumpAudio's own per-call cap (4096 frames,
+                // used to drain a backlog after a stall like the F4 debug
+                // prompt) - a smaller buffer than that made every catch-up
+                // push exceed the stream's actual capacity, which is what
+                // raylib's "Attempting to write too many frames to buffer"
+                // warning was reporting on every such call.
+                Raylib_cs.Raylib.SetAudioStreamBufferSizeDefault(4096);
                 Raylib_cs.Raylib.InitAudioDevice();
                 Raylib_cs.AudioStream audioStream = Raylib_cs.Raylib.LoadAudioStream((uint)AudioSettings.SampleRate, 16, 2);
                 Raylib_cs.Raylib.PlayAudioStream(audioStream);

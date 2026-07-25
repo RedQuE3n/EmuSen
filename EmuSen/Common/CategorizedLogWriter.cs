@@ -261,17 +261,41 @@ namespace EmuSen.Common
         // guaranteeing every line queued before Dispose() was called
         // actually reaches its file before the handles get closed
         // underneath it. Bounded to 5 seconds so a stuck disk can't hang
-        // process/ROM-switch shutdown forever; if it times out, the
-        // Dispose calls below still run and close what they can.
+        // process/ROM-switch shutdown forever.
+        //
+        // The original version of this closed the files unconditionally
+        // even when Join() timed out - "close what they can" - but that's
+        // a real cross-thread race, not a graceful degradation: if
+        // _worker is still mid-write when file.Dispose() runs on this
+        // thread, the two race on the same FileStream, and the result is
+        // exactly the truncated-mid-line tails a real session turned up
+        // (a line cut off partway through, no trailing newline) even on a
+        // clean window-close that went through this exact path. Only
+        // closing the files once Join() confirms the worker actually
+        // exited removes that race; a timeout now leaves the handles open
+        // for the OS to reclaim on process exit instead, which loses
+        // whatever was still mid-flight but never corrupts what's already
+        // on disk.
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
                 _queue.CompleteAdding();
-                _worker.Join(TimeSpan.FromSeconds(5));
+                bool drained = _worker.Join(TimeSpan.FromSeconds(5));
 
-                foreach (var file in _files.Values) file.Dispose();
-                _general.Dispose();
+                if (drained)
+                {
+                    foreach (var file in _files.Values) file.Dispose();
+                    _general.Dispose();
+                }
+                else
+                {
+                    // Visible on the real console (not routed through the
+                    // queue - the worker that would drain it is the very
+                    // thing that didn't finish) so this doesn't disappear
+                    // silently if it ever actually happens.
+                    _console.WriteLine("[LOG] Warning: background log writer did not finish draining within 5s; some log output may be incomplete.");
+                }
                 _queue.Dispose();
             }
             base.Dispose(disposing);

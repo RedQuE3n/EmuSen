@@ -33,6 +33,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         public IReadObserver? ReadObserver;
         public IFrameObserver? FrameObserver;
 
+        // Cartridge-read intercept hook (Game Genie-style ROM patches) -
+        // see IRomReadPatcher's own comment and Venus_Memory.md §6. Unlike
+        // the three observers above, this one can override the byte the
+        // CPU actually sees, so it's consulted (not just notified) at the
+        // one place in ReadInternal that reaches the cartridge at all.
+        public IRomReadPatcher? RomPatcher;
+
         // "What instruction is currently executing" - lets a caller like
         // Dma.cs report PC context without MemoryBus needing to know what
         // a Cpu is. Returns (bank, address) as plain primitives so callers
@@ -143,7 +150,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 ReadObserver?.OnRead("WRAM", (int)(address - 0x7E0000), val);
                 return val;
             }
-            return _cartridge.Read8(address);
+
+            byte cartValue = _cartridge.Read8(address);
+            if (RomPatcher != null && RomPatcher.TryPatch(address, cartValue, out byte patchedValue)) return patchedValue;
+            return cartValue;
         }
 
         public void Write8(uint address, byte data)

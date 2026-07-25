@@ -147,13 +147,15 @@ Real hardware clears RDNMI's vblank flag at the *end* of vblank regardless of wh
 
 ---
 
-## 6. Debug-toolchain observer hooks (`Memory/IWriteObserver.cs`, `IReadObserver.cs`, `IFrameObserver.cs`)
+## 6. Debug-toolchain observer hooks (`Memory/IWriteObserver.cs`, `IReadObserver.cs`, `IFrameObserver.cs`, `IRomReadPatcher.cs`)
 
-Three minimal interfaces `MemoryBus` calls through (`WriteObserver`, `ReadObserver`, `FrameObserver` fields) with no idea what's listening on the other end — real emulation state and debug-toolchain plumbing stay separate. `SnesDebugTarget` (see `Man pages/EmuSen_Debugging_Tools_Reference_v5.md` §3.2) implements all three and owns the `WatchRegistry`/`FrameLogRegistry` instances that actually do something with the calls.
+Four minimal interfaces `MemoryBus` calls through (`WriteObserver`, `ReadObserver`, `FrameObserver`, `RomPatcher` fields) with no idea what's listening on the other end — real emulation state and debug-toolchain plumbing stay separate. `SnesDebugTarget` (see `Man pages/EmuSen_Debugging_Tools_Reference_v5.md` §3.2) implements all four and owns the `WatchRegistry`/`FrameLogRegistry`/`CheatRegistry` instances that actually do something with the calls.
 
-Kept as **three separate interfaces** rather than one combined one — a future implementer that only cares about one kind of event can implement just what it needs, and adding a new one (as `IFrameObserver` was, most recently) is additive rather than a breaking change to an existing contract.
+Kept as **separate interfaces** rather than one combined one — a future implementer that only cares about one kind of event can implement just what it needs, and adding a new one (as `IFrameObserver` was, and `IRomReadPatcher` most recently) is additive rather than a breaking change to an existing contract.
 
 `ReadObserver`/`WriteObserver` are called on every matching memory access and have to stay cheap when nothing is registered (a null-conditional call, no allocation) — `OnRead` especially, since a read happens on every instruction fetch and operand read that touches a watched space, not just the writes a game actually makes. `FrameObserver` is only called once per frame, so its implementation can afford real work (see `FrameLogRegistry.RecordFrame`).
+
+**`IRomReadPatcher` is the odd one out - it can change what the CPU sees, not just observe.** Called once, right where `ReadInternal` falls through to `_cartridge.Read8(address)` (ROM or SRAM - never WRAM or a hardware register, since those never route to the cartridge on real hardware either), with the byte the cartridge actually returned. If it returns true, that substituted byte replaces the cartridge's own value for that read - the exact mechanism a real Game Genie device uses (an interposer on the cartridge edge connector overriding specific addresses), as opposed to `RamPoke`-style cheats (see `EmuSen_Debugging_Tools_Reference_v5.md` §3.14), which write real bytes into real RAM every frame instead of intercepting a read. `SnesDebugTarget.TryPatch` forwards to `CheatRegistry.TryPatchRom`, which only ever matches `RomPatch`-kind entries - `RamPoke` entries are invisible to this hook entirely.
 
 This class of field previously lived as concrete debug types directly on `MemoryBus` (a `WatchRegistry` field, a `Cpu` back-reference for PC context) — debug-toolchain plumbing that had no business on the bus itself, added there only because it was the convenient place at the time. The observer-interface pattern replaced that: `MemoryBus` knows nothing about `WatchRegistry`, `SnesDebugTarget`, or even that a debug console exists.
 

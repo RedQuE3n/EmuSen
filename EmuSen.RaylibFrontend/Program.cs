@@ -103,7 +103,14 @@ namespace EmuSen.RaylibFrontend
 
             try
             {
-                string statePath = Path.Combine(Directory.GetCurrentDirectory(), "Saves", Path.GetFileNameWithoutExtension(romPath) + ".state");
+                // Separate from Saves/ (battery-backed cartridge SRAM,
+                // owned by Cartridge.SavePath) - a save state is a full
+                // snapshot of emulator state, a different kind of artifact
+                // with a different lifetime (SRAM persists across sessions
+                // like real hardware; a save state is a debugging/
+                // convenience tool), so the two shouldn't land in the same
+                // folder just because they're both "saves".
+                string statePath = Path.Combine(Directory.GetCurrentDirectory(), "SaveStates", Path.GetFileNameWithoutExtension(romPath) + ".state");
 
                 // VenusCore drives the whole emulation - see EmuSen_Frontend_Driver.md §1.
                 core = new VenusCore(headless: false);

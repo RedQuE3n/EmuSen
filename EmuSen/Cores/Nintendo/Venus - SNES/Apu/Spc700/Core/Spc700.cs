@@ -119,7 +119,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             Dsp.AttachMemory(Ram);
             _verboseTrace = new EmuSen.Debug.DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
-                key => $"[SPC700] 0x{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X4}");
+                key => $"[SPC700] 0x{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X4}",
+                (cycleLength, repeats) => cycleLength == 1
+                    ? $"[SPC700]     ^ repeated {repeats}x total"
+                    : $"[SPC700]     ^ {cycleLength}-instruction loop above repeated {repeats}x total");
             Reset();
         }
 

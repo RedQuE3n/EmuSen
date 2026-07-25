@@ -213,10 +213,26 @@ EmuSen Project/
 │   │                                          #   off (Cpu.Step()/Spc700.Step()'s _wasVerboseLogging
 │   │                                          #   check); EmulatorSession.FlushVerboseLogs() and
 │   │                                          #   Program.cs's shutdown path cover process exit, the
-│   │                                          #   one case Step() can't see coming on its own.
+│   │                                          #   one case Step() can't see coming on its own. The
+│   │                                          #   collapsed-loop marker line is built via a
+│   │                                          #   caller-supplied renderMarker(cycleLength, repeats)
+│   │                                          #   delegate, not hardcoded - it MUST carry the same
+│   │                                          #   [TAG] prefix render() uses, or CategorizedLogWriter's
+│   │                                          #   prefix table can't route it to the cpu/apu category
+│   │                                          #   and it falls through to "general", which isn't in
+│   │                                          #   the console-echo suppression list - a real session
+│   │                                          #   hit exactly this and got the console blasted again.
 │   └── Settings/
 │       ├── AudioSettings.cs
-│       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md
+│       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md.
+│       │                                      #   Every *Logging flag is a property, not a plain field,
+│       │                                      #   ANDed against MasterLoggingEnabled in its getter - one
+│       │                                      #   switch silences everything at once without touching
+│       │                                      #   any individually-set flag, and every call site
+│       │                                      #   throughout the codebase needed zero changes since they
+│       │                                      #   already just read e.g. DebugSettings.CpuVerboseLogging.
+│       │                                      #   Toggle live from the F4 prompt via the `log` command
+│       │                                      #   (Debug/Commands/LogCommand.cs).
 │       └── InputBindings.cs
 │                                              # No Frontend/ here anymore - EmuSen.csproj is a pure
 │                                              #   library (no OutputType, no Main). See EmuSen.RaylibFrontend/

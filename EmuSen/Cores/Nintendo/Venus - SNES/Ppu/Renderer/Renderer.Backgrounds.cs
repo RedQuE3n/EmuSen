@@ -183,6 +183,27 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int mapH = ((sizeBits & 0x02) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
 
+                // Reactive VRAM-read caching: consecutive screen pixels very
+                // often land in the same 8x8 tile (a tile spans 8 WORLD
+                // pixels regardless of scroll/mosaic/offset-per-tile, so
+                // tx/ty - and therefore the tilemap entry and the sampled
+                // tile row - typically only change once every ~8 pixels).
+                // Reusing the last VRAM read when this pixel's address
+                // matches the previous one skips real, repeated VRAM
+                // traffic without assuming anything about tile alignment -
+                // every branch below (mosaic, offset-per-tile, flip,
+                // hi-res pairing, priority) is still computed exactly as
+                // before, for every pixel; only the two actual VRAM reads
+                // (tilemap entry, tile row bitplanes) are memoized.
+                int lastEntryAddr = -1;
+                int cachedEntry = 0;
+                int lastTileAddr = -1;
+                int lastRow = -1;
+                // BG1 alone can reach 8bpp (Direct Color, modes 3/4 - see
+                // GetBgBpp), so all 8 plane bytes need caching here, unlike
+                // BG2-4 which never exceed 4bpp.
+                byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0, cachedP4 = 0, cachedP5 = 0, cachedP6 = 0, cachedP7 = 0;
+
                 for (int px = 0; px < ScreenW; px++)
                 {
                     int samplePx = mosaicOn ? px - (px % mosaicSize) : px;
@@ -200,7 +221,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int ty = wy >> (tile16 ? 4 : 3);
 
                     int entryAddr = BgTilemapEntryAddress(mapBase, sizeBits, tx, ty);
-                    int entry = ppu.Vram[entryAddr] | (ppu.Vram[(entryAddr + 1) & 0xFFFF] << 8);
+                    int entry;
+                    if (entryAddr == lastEntryAddr)
+                    {
+                        entry = cachedEntry;
+                    }
+                    else
+                    {
+                        entry = ppu.Vram[entryAddr] | (ppu.Vram[(entryAddr + 1) & 0xFFFF] << 8);
+                        lastEntryAddr = entryAddr;
+                        cachedEntry = entry;
+                    }
 
                     cache.HighPriority[px] = (entry & 0x2000) != 0;
 
@@ -213,7 +244,38 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, wx, wy, flipX, flipY);
                     tileIndex = ResolveHiResPairedTile(tileIndex, mode, tile16, flipX, isMainScreen);
                     int tileAddr = (chrBase + tileIndex * tileStride) & 0xFFFF;
-                    int pixel = SampleBgPixel(ppu.Vram, tileAddr, r, cbit, bpp);
+
+                    byte p0, p1, p2 = 0, p3 = 0, p4 = 0, p5 = 0, p6 = 0, p7 = 0;
+                    if (tileAddr == lastTileAddr && r == lastRow)
+                    {
+                        p0 = cachedP0; p1 = cachedP1; p2 = cachedP2; p3 = cachedP3;
+                        p4 = cachedP4; p5 = cachedP5; p6 = cachedP6; p7 = cachedP7;
+                    }
+                    else
+                    {
+                        p0 = ppu.Vram[(tileAddr + r * 2) & 0xFFFF];
+                        p1 = ppu.Vram[(tileAddr + r * 2 + 1) & 0xFFFF];
+                        if (bpp >= 4)
+                        {
+                            p2 = ppu.Vram[(tileAddr + 16 + r * 2) & 0xFFFF];
+                            p3 = ppu.Vram[(tileAddr + 16 + r * 2 + 1) & 0xFFFF];
+                        }
+                        if (bpp == 8)
+                        {
+                            p4 = ppu.Vram[(tileAddr + 32 + r * 2) & 0xFFFF];
+                            p5 = ppu.Vram[(tileAddr + 32 + r * 2 + 1) & 0xFFFF];
+                            p6 = ppu.Vram[(tileAddr + 48 + r * 2) & 0xFFFF];
+                            p7 = ppu.Vram[(tileAddr + 48 + r * 2 + 1) & 0xFFFF];
+                        }
+                        lastTileAddr = tileAddr;
+                        lastRow = r;
+                        cachedP0 = p0; cachedP1 = p1; cachedP2 = p2; cachedP3 = p3;
+                        cachedP4 = p4; cachedP5 = p5; cachedP6 = p6; cachedP7 = p7;
+                    }
+
+                    int pixel = ((p0 >> cbit) & 1) | (((p1 >> cbit) & 1) << 1);
+                    if (bpp >= 4) pixel |= ((p2 >> cbit) & 1) << 2 | ((p3 >> cbit) & 1) << 3;
+                    if (bpp == 8) pixel |= ((p4 >> cbit) & 1) << 4 | ((p5 >> cbit) & 1) << 5 | ((p6 >> cbit) & 1) << 6 | ((p7 >> cbit) & 1) << 7;
 
                     cache.Opaque[px] = pixel != 0;
 
@@ -283,6 +345,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int mapH = ((sizeBits & 0x02) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
 
+                // Reactive VRAM-read caching - see RenderBg1's own comment.
+                // BG2 never exceeds 4bpp (GetBgBpp), so only p0-p3 are
+                // needed here.
+                int lastEntryAddr = -1;
+                int cachedEntry = 0;
+                int lastTileAddr = -1;
+                int lastRow = -1;
+                byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0;
+
                 for (int px = 0; px < ScreenW; px++)
                 {
                     int samplePx = mosaicOn ? px - (px % mosaicSize) : px;
@@ -300,7 +371,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int ty = wy >> (tile16 ? 4 : 3);
 
                     int entryAddr = BgTilemapEntryAddress(mapBase, sizeBits, tx, ty);
-                    int entry = ppu.Vram[entryAddr] | (ppu.Vram[(entryAddr + 1) & 0xFFFF] << 8);
+                    int entry;
+                    if (entryAddr == lastEntryAddr)
+                    {
+                        entry = cachedEntry;
+                    }
+                    else
+                    {
+                        entry = ppu.Vram[entryAddr] | (ppu.Vram[(entryAddr + 1) & 0xFFFF] << 8);
+                        lastEntryAddr = entryAddr;
+                        cachedEntry = entry;
+                    }
 
                     cache.HighPriority[px] = (entry & 0x2000) != 0;
 
@@ -313,7 +394,28 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, wx, wy, flipX, flipY);
                     tileIndex = ResolveHiResPairedTile(tileIndex, mode, tile16, flipX, isMainScreen);
                     int tileAddr = (chrBase + tileIndex * tileStride) & 0xFFFF;
-                    int pixel = SampleBgPixel(ppu.Vram, tileAddr, r, cbit, bpp);
+
+                    byte p0, p1, p2 = 0, p3 = 0;
+                    if (tileAddr == lastTileAddr && r == lastRow)
+                    {
+                        p0 = cachedP0; p1 = cachedP1; p2 = cachedP2; p3 = cachedP3;
+                    }
+                    else
+                    {
+                        p0 = ppu.Vram[(tileAddr + r * 2) & 0xFFFF];
+                        p1 = ppu.Vram[(tileAddr + r * 2 + 1) & 0xFFFF];
+                        if (bpp >= 4)
+                        {
+                            p2 = ppu.Vram[(tileAddr + 16 + r * 2) & 0xFFFF];
+                            p3 = ppu.Vram[(tileAddr + 16 + r * 2 + 1) & 0xFFFF];
+                        }
+                        lastTileAddr = tileAddr;
+                        lastRow = r;
+                        cachedP0 = p0; cachedP1 = p1; cachedP2 = p2; cachedP3 = p3;
+                    }
+
+                    int pixel = ((p0 >> cbit) & 1) | (((p1 >> cbit) & 1) << 1);
+                    if (bpp >= 4) pixel |= ((p2 >> cbit) & 1) << 2 | ((p3 >> cbit) & 1) << 3;
 
                     cache.Opaque[px] = pixel != 0;
 
@@ -366,6 +468,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
 
+                // Reactive VRAM-read caching - see RenderBg1's own comment.
+                // BG3 never exceeds 2bpp, but the bpp>=4 guard is kept for
+                // structural consistency with the other RenderBg* methods.
+                int lastEntryAddr = -1;
+                int cachedEntry = 0;
+                int lastTileAddr = -1;
+                int lastRow = -1;
+                byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0;
+
                 for (int px = 0; px < ScreenW; px++)
                 {
                     int samplePx = mosaicOn ? px - (px % mosaicSize) : px;
@@ -373,7 +484,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int tx = wx >> (tile16 ? 4 : 3);
 
                     int entryAddr = BgTilemapEntryAddress(mapBase, sizeBits, tx, ty);
-                    int entry = ppu.Vram[entryAddr] | (ppu.Vram[(entryAddr + 1) & 0xFFFF] << 8);
+                    int entry;
+                    if (entryAddr == lastEntryAddr)
+                    {
+                        entry = cachedEntry;
+                    }
+                    else
+                    {
+                        entry = ppu.Vram[entryAddr] | (ppu.Vram[(entryAddr + 1) & 0xFFFF] << 8);
+                        lastEntryAddr = entryAddr;
+                        cachedEntry = entry;
+                    }
 
                     cache.HighPriority[px] = (entry & 0x2000) != 0;
 
@@ -385,7 +506,28 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                     int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, wx, wy, flipX, flipY);
                     int tileAddr = (chrBase + tileIndex * tileStride) & 0xFFFF;
-                    int pixel = SampleBgPixel(ppu.Vram, tileAddr, r, cbit, bpp);
+
+                    byte p0, p1, p2 = 0, p3 = 0;
+                    if (tileAddr == lastTileAddr && r == lastRow)
+                    {
+                        p0 = cachedP0; p1 = cachedP1; p2 = cachedP2; p3 = cachedP3;
+                    }
+                    else
+                    {
+                        p0 = ppu.Vram[(tileAddr + r * 2) & 0xFFFF];
+                        p1 = ppu.Vram[(tileAddr + r * 2 + 1) & 0xFFFF];
+                        if (bpp >= 4)
+                        {
+                            p2 = ppu.Vram[(tileAddr + 16 + r * 2) & 0xFFFF];
+                            p3 = ppu.Vram[(tileAddr + 16 + r * 2 + 1) & 0xFFFF];
+                        }
+                        lastTileAddr = tileAddr;
+                        lastRow = r;
+                        cachedP0 = p0; cachedP1 = p1; cachedP2 = p2; cachedP3 = p3;
+                    }
+
+                    int pixel = ((p0 >> cbit) & 1) | (((p1 >> cbit) & 1) << 1);
+                    if (bpp >= 4) pixel |= ((p2 >> cbit) & 1) << 2 | ((p3 >> cbit) & 1) << 3;
 
                     cache.Opaque[px] = pixel != 0;
 
@@ -438,6 +580,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
 
+                // Reactive VRAM-read caching - see RenderBg1's own comment.
+                // BG4 never exceeds 2bpp, but the bpp>=4 guard is kept for
+                // structural consistency with the other RenderBg* methods.
+                int lastEntryAddr = -1;
+                int cachedEntry = 0;
+                int lastTileAddr = -1;
+                int lastRow = -1;
+                byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0;
+
                 for (int px = 0; px < ScreenW; px++)
                 {
                     int samplePx = mosaicOn ? px - (px % mosaicSize) : px;
@@ -445,7 +596,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int tx = wx >> (tile16 ? 4 : 3);
 
                     int entryAddr = BgTilemapEntryAddress(mapBase, sizeBits, tx, ty);
-                    int entry = ppu.Vram[entryAddr] | (ppu.Vram[(entryAddr + 1) & 0xFFFF] << 8);
+                    int entry;
+                    if (entryAddr == lastEntryAddr)
+                    {
+                        entry = cachedEntry;
+                    }
+                    else
+                    {
+                        entry = ppu.Vram[entryAddr] | (ppu.Vram[(entryAddr + 1) & 0xFFFF] << 8);
+                        lastEntryAddr = entryAddr;
+                        cachedEntry = entry;
+                    }
 
                     cache.HighPriority[px] = (entry & 0x2000) != 0;
 
@@ -457,7 +618,28 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                     int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, wx, wy, flipX, flipY);
                     int tileAddr = (chrBase + tileIndex * tileStride) & 0xFFFF;
-                    int pixel = SampleBgPixel(ppu.Vram, tileAddr, r, cbit, bpp);
+
+                    byte p0, p1, p2 = 0, p3 = 0;
+                    if (tileAddr == lastTileAddr && r == lastRow)
+                    {
+                        p0 = cachedP0; p1 = cachedP1; p2 = cachedP2; p3 = cachedP3;
+                    }
+                    else
+                    {
+                        p0 = ppu.Vram[(tileAddr + r * 2) & 0xFFFF];
+                        p1 = ppu.Vram[(tileAddr + r * 2 + 1) & 0xFFFF];
+                        if (bpp >= 4)
+                        {
+                            p2 = ppu.Vram[(tileAddr + 16 + r * 2) & 0xFFFF];
+                            p3 = ppu.Vram[(tileAddr + 16 + r * 2 + 1) & 0xFFFF];
+                        }
+                        lastTileAddr = tileAddr;
+                        lastRow = r;
+                        cachedP0 = p0; cachedP1 = p1; cachedP2 = p2; cachedP3 = p3;
+                    }
+
+                    int pixel = ((p0 >> cbit) & 1) | (((p1 >> cbit) & 1) << 1);
+                    if (bpp >= 4) pixel |= ((p2 >> cbit) & 1) << 2 | ((p3 >> cbit) & 1) << 3;
 
                     cache.Opaque[px] = pixel != 0;
 

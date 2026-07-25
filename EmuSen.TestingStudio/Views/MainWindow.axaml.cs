@@ -147,6 +147,11 @@ namespace EmuSen.TestingStudio.Views
             new PreferencesWindow(_appSettings).Show(this);
         }
 
+        private void OnDebugLoggingClick(object? sender, RoutedEventArgs e)
+        {
+            new DebugSettingsWindow().Show(this);
+        }
+
         private string? CurrentStatePath =>
             _currentRomPath is null
                 ? null

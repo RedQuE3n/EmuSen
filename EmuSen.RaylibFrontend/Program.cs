@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
+using EmuSen.Audio;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
@@ -142,6 +143,20 @@ namespace EmuSen.RaylibFrontend
                 // to stay off the agnostic interface.
                 using FramePresenter presenter = new FramePresenter();
 
+                // Audio output - see EmuSen_Frontend_Driver.md §1. SDsp
+                // already generates correct samples into
+                // core.Spc700.Dsp.AudioBuffer at AudioSettings.SampleRate
+                // (32kHz stereo, interleaved L/R shorts) - this is the only
+                // piece that was missing: draining that queue into a real
+                // output device. Buffer size chosen as a middle ground
+                // between latency (smaller = less audible lag behind the
+                // picture) and safety margin against an occasional slow
+                // frame starving the stream into an audible glitch/pop.
+                Raylib_cs.Raylib.SetAudioStreamBufferSizeDefault(2048);
+                Raylib_cs.Raylib.InitAudioDevice();
+                Raylib_cs.AudioStream audioStream = Raylib_cs.Raylib.LoadAudioStream((uint)AudioSettings.SampleRate, 16, 2);
+                Raylib_cs.Raylib.PlayAudioStream(audioStream);
+
                 // Same measured-fps diagnostic Testing Studio's status bar
                 // has (EmuSen.TestingStudio/Views/MainWindow.axaml.cs), added
                 // here to answer the same question for this build: does
@@ -192,6 +207,8 @@ namespace EmuSen.RaylibFrontend
                         RunDebugPrompt(core, debugTarget, debugCmd);
                         continue;
                     }
+
+                    PumpAudio(core, audioStream);
 
                     TimeSpan runFrameElapsed = frameStopwatch.Elapsed;
                     cpuSpc700MsInWindow += core.LastFrameCpuSpc700Ms;
@@ -248,6 +265,8 @@ namespace EmuSen.RaylibFrontend
                     }
                 }
                 core.SaveSram(); // final flush on clean exit
+                Raylib_cs.Raylib.UnloadAudioStream(audioStream);
+                Raylib_cs.Raylib.CloseAudioDevice();
                 presenter.Shutdown();
             }
             catch (Exception ex)
@@ -262,6 +281,36 @@ namespace EmuSen.RaylibFrontend
                 // this finally at all. FlushAndDispose's own guard makes
                 // it safe if one of those already ran first.
                 FlushAndDispose();
+            }
+        }
+
+        // Drains whatever SDsp has queued into core.Spc700.Dsp.AudioBuffer
+        // (interleaved L/R shorts at AudioSettings.SampleRate - see that
+        // class's own comment) into the actual output device, once per
+        // RunFrame() call. Only pulls when Raylib says its internal buffer
+        // is ready for more (IsAudioStreamProcessed) - pushing data it
+        // hasn't asked for yet isn't how raylib's streaming API is meant to
+        // be driven. Capped at 4096 frames per call so a stall (e.g. time
+        // spent in the F4 debug prompt) that lets the queue build up
+        // doesn't dump an enormous, laggy chunk in one call - AudioBuffer's
+        // own 1-second cap (AudioSettings.AudioBufferMaxSamples) already
+        // discards the oldest samples once that fills, so the rest is
+        // simply left queued for the next call(s) rather than lost.
+        private static unsafe void PumpAudio(VenusCore core, Raylib_cs.AudioStream stream)
+        {
+            if (!Raylib_cs.Raylib.IsAudioStreamProcessed(stream)) return;
+
+            var buffer = core.Spc700!.Dsp.AudioBuffer;
+            int framesAvailable = buffer.Count / 2; // interleaved L/R
+            if (framesAvailable == 0) return;
+
+            int framesToSend = Math.Min(framesAvailable, 4096);
+            short[] data = new short[framesToSend * 2];
+            for (int i = 0; i < data.Length; i++) data[i] = buffer.Dequeue();
+
+            fixed (short* p = data)
+            {
+                Raylib_cs.Raylib.UpdateAudioStream(stream, p, framesToSend);
             }
         }
 

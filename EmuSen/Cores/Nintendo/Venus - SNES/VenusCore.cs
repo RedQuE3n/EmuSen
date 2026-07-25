@@ -37,6 +37,24 @@ namespace EmuSen.Cores.Nintendo.Venus
         private readonly bool _headless;
         private int _currentScanline;
 
+        // Zelda: A Link to the Past - stuck-subscreen-torch quirk. See
+        // Man pages/Hardware/Nintendo/Venus - SNES/Venus_PPU.md "Known
+        // per-game quirks" section for the full investigation writeup.
+        // Short version: closing an item-get dialog (e.g. the Lamp chest)
+        // runs through the same handler as closing the equipment menu,
+        // which unconditionally calls the game's RestoreTorchBackground
+        // routine - a routine the public alttp-disassembly project's own
+        // comment flags as missing a check that the player is indoors.
+        // That can leave WRAM $1D (and therefore TS, $2124 - copied from
+        // $1D every frame by the game's own code) stuck enabling BG1 on
+        // the subscreen outdoors, which then permanently color-math-blends
+        // a torch light-circle overlay tile into the overworld, seen as a
+        // solid yellow band. This flag/enforcement is a targeted,
+        // documented compatibility patch for that one game, not a general
+        // emulation change - see ApplyLttpOverworldSubscreenQuirk's own
+        // comment for exactly what it does and does not touch.
+        private bool _isLttp;
+
         public Cartridge? Cart { get; private set; }
         public Spc700? Spc700 { get; private set; }
         public MemoryBus? Bus { get; private set; }
@@ -162,6 +180,48 @@ namespace EmuSen.Cores.Nintendo.Venus
 
             _currentScanline = 0;
             TotalFrames = 0;
+
+            // "THE LEGEND OF ZELDA" is the SNES header title for every
+            // release of A Link to the Past (US/EU) - see Cartridge.Title's
+            // comment. Good enough for an opt-in per-game quirk; not a
+            // general ROM-identification scheme.
+            _isLttp = Cart.Title.StartsWith("THE LEGEND OF ZELDA", StringComparison.Ordinal);
+        }
+
+        // See _isLttp's comment for the bug this works around. Mirrors
+        // exactly the logic in the game's own Bank00 $DA63 state (part of
+        // the overworld module's area-load state machine): while the
+        // overworld module is active, WRAM $1D should be 0 UNLESS the
+        // current overworld area ($8A) is one of the handful that
+        // legitimately want BG1 forced onto the subscreen. Real hardware
+        // re-derives this once per full module transition (indoors ->
+        // overworld); running the same check every frame here is a no-op
+        // whenever $1D is already correct, and self-heals it on whatever
+        // frame it goes wrong instead - so it doesn't matter whether the
+        // stuck state comes from RestoreTorchBackground's missing-indoors-
+        // check (most likely, per the disassembly's own comment) or from
+        // some still-unidentified gap in this project's own module-
+        // transition handling. Module $10 == 0x09 is the overworld; the
+        // $8A allowlist is transcribed directly from Bank00.asm's
+        // "$5A63-$5ABA JUMP LOCATION" routine.
+        //
+        // Deliberately scoped to module 0x09 only - dungeons/houses use a
+        // completely different, legitimate mechanism to drive $1D for the
+        // lamp's actual light-circle effect, and this must never touch
+        // that.
+        private void ApplyLttpOverworldSubscreenQuirk()
+        {
+            if (Bus is null) return;
+            if (Bus.Ram[0x10] != 0x09) return;
+
+            int area = Bus.Ram[0x8A];
+            bool areaWantsSubscreen = area == 0x00 || area == 0x70 || area == 0x40 || area == 0x5B ||
+                                       area == 0x03 || area == 0x05 || area == 0x07 || area == 0x43 ||
+                                       area == 0x45 || area == 0x47;
+            if (!areaWantsSubscreen && Bus.Ram[0x1D] != 0)
+            {
+                Bus.Ram[0x1D] = 0;
+            }
         }
 
         // Runs up to one frame's worth of scanlines: CPU/APU stepping,
@@ -204,6 +264,8 @@ namespace EmuSen.Cores.Nintendo.Venus
                     {
                         Bus.Interrupts.EndVBlank();
                         Bus.Dma.InitHdma();
+
+                        if (_isLttp) ApplyLttpOverworldSubscreenQuirk();
                     }
 
                     // Documented NMI-enable-during-vblank quirk - see

@@ -19,6 +19,17 @@ namespace EmuSen.RaylibFrontend
         {
             TextWriter originalOut = Console.Out;
 
+            // Disposed in the finally block below on every exit path
+            // (normal completion or the catch block's own CPU-HALT print)
+            // - CategorizedLogWriter's file writes now happen on a
+            // background thread with no AutoFlush, so something has to
+            // explicitly wait for that queue to drain before the process
+            // exits, or the last batch of buffered log lines is silently
+            // lost. The old synchronous, AutoFlush=true design never
+            // needed this; this is the correctness cost of moving file
+            // I/O off the emulation thread.
+            CategorizedLogWriter? logWriter = null;
+
             // ROM path resolution - see EmuSen_Frontend_Driver.md §1.
             string defaultRomPath = "/home/red/Documents/Roms/SMW.smc"; // temporary location
             string romPath = args.Length > 0 ? args[0] : defaultRomPath;
@@ -42,7 +53,8 @@ namespace EmuSen.RaylibFrontend
                 // EmuSen_Frontend_Driver.md §1.
                 string logDir = Path.Combine(Directory.GetCurrentDirectory(), "Logs", core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
                 Directory.CreateDirectory(logDir);
-                Console.SetOut(new CategorizedLogWriter(originalOut, logDir));
+                logWriter = new CategorizedLogWriter(originalOut, logDir);
+                Console.SetOut(logWriter);
 
                 core.LoadRom(romPath);
                 DebugSettings.CpuVerboseLogging = false;
@@ -89,6 +101,18 @@ namespace EmuSen.RaylibFrontend
             catch (Exception ex)
             {
                 Console.WriteLine($"\n[CPU HALT] {ex.Message}");
+            }
+            finally
+            {
+                // See logWriter's own declaration comment above for why
+                // this can't just be left to the OS reclaiming handles on
+                // process exit anymore. Restoring Console.Out first isn't
+                // load-bearing here (nothing runs after this), but avoids
+                // leaving the global Console.Out pointed at a disposed
+                // object even briefly, matching EmuSen.TestingStudio's
+                // own StopLogging() convention.
+                Console.SetOut(originalOut);
+                logWriter?.Dispose();
             }
         }
 

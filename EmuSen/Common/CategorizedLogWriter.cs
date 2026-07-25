@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 
 namespace EmuSen.Common
 {
@@ -20,11 +22,53 @@ namespace EmuSen.Common
     // Still writes everything to the real console too (same as
     // TeeTextWriter, which this otherwise mirrors) - nothing about live
     // viewing changes, only where the file copy of each line ends up.
+    //
+    // File writes happen on a dedicated background thread, not the
+    // calling thread. Every Console.WriteLine in the emulation core's hot
+    // path (every instruction under CpuVerboseLogging, every write under
+    // DmaVerboseLogging, etc.) used to route straight into a StreamWriter
+    // with AutoFlush=true - a real disk write/OS syscall per line, on
+    // whichever thread is driving emulation (the Avalonia GUI's 60fps
+    // DispatcherTimer tick, in EmuSen.TestingStudio's case). The calling
+    // thread now just resolves which category a line belongs to (cheap -
+    // a prefix match against an in-memory table) and hands the line to a
+    // bounded queue; a single consumer thread drains it and does the
+    // actual buffered file I/O. Console echo stays synchronous and
+    // un-queued on purpose - it's cheap relative to disk I/O, and live
+    // debugging benefits from seeing output immediately rather than
+    // delayed behind a queue.
     public class CategorizedLogWriter : System.IO.TextWriter
     {
+        // A queue this deep would mean tens of thousands of log lines
+        // backed up behind disk I/O - past any burst this project's own
+        // verbose flags realistically produce against normal storage.
+        // BlockingCollection<T>.Add blocks the calling (producer) thread
+        // once full rather than growing without bound - an intentional
+        // safety valve against unbounded memory growth if disk I/O ever
+        // falls catastrophically behind, accepted even though it
+        // reintroduces the exact blocking this class exists to avoid,
+        // because the alternative (unbounded growth) is worse.
+        private const int QueueCapacity = 10_000;
+
+        private readonly struct LogEntry
+        {
+            public readonly StreamWriter Target;
+            public readonly string? Text;
+            public readonly bool IsLine;
+
+            public LogEntry(StreamWriter target, string? text, bool isLine)
+            {
+                Target = target;
+                Text = text;
+                IsLine = isLine;
+            }
+        }
+
         private readonly TextWriter _console;
         private readonly Dictionary<string, StreamWriter> _files;
         private readonly StreamWriter _general;
+        private readonly BlockingCollection<LogEntry> _queue = new(QueueCapacity);
+        private readonly Thread _worker;
 
         // Longer/more specific prefixes aren't needed here since every tag
         // below is a distinct literal string - first match wins, order
@@ -56,11 +100,24 @@ namespace EmuSen.Common
                 _files[category] = OpenFile(logDir, category);
             }
             _general = OpenFile(logDir, "general");
+
+            // Background, not foreground - if something skips Dispose(),
+            // this thread must never be the reason the process won't exit.
+            // Dispose() still drains it properly for the normal path (see
+            // its own comment on why that matters for a long-lived
+            // frontend switching ROMs mid-session).
+            _worker = new Thread(ConsumeQueue) { IsBackground = true, Name = "EmuSen-LogWriter" };
+            _worker.Start();
         }
 
+        // Deliberately no AutoFlush here, unlike the old synchronous
+        // design - StreamWriter's own internal buffer is what makes
+        // batched background writes actually cheaper than the old
+        // flush-every-line behavior. Flushed explicitly on Dispose (and,
+        // best-effort, whenever Flush() is called - see that override).
         private static StreamWriter OpenFile(string logDir, string category)
         {
-            return new StreamWriter(Path.Combine(logDir, category + ".log"), append: false) { AutoFlush = true };
+            return new StreamWriter(Path.Combine(logDir, category + ".log"), append: false);
         }
 
         private StreamWriter ResolveFile(string? value)
@@ -74,52 +131,90 @@ namespace EmuSen.Common
             return _general;
         }
 
+        // Runs entirely on _worker. GetConsumingEnumerable() blocks
+        // whenever the queue is empty and returns cleanly once
+        // CompleteAdding() has been called AND every already-queued entry
+        // has been drained - exactly the "finish everything, then stop"
+        // behavior Dispose() needs.
+        private void ConsumeQueue()
+        {
+            foreach (LogEntry entry in _queue.GetConsumingEnumerable())
+            {
+                if (entry.IsLine) entry.Target.WriteLine(entry.Text);
+                else entry.Target.Write(entry.Text);
+            }
+        }
+
         public override System.Text.Encoding Encoding => _console.Encoding;
 
         public override void Write(char value)
         {
             _console.Write(value);
-            _general.Write(value);
+            _queue.Add(new LogEntry(_general, value.ToString(), isLine: false));
         }
 
         public override void Write(string? value)
         {
             _console.Write(value);
-            ResolveFile(value).Write(value);
+            _queue.Add(new LogEntry(ResolveFile(value), value, isLine: false));
         }
 
         public override void WriteLine(string? value)
         {
             _console.WriteLine(value);
-            ResolveFile(value).WriteLine(value);
+            _queue.Add(new LogEntry(ResolveFile(value), value, isLine: true));
         }
 
         public override void WriteLine()
         {
             _console.WriteLine();
-            _general.WriteLine();
+            _queue.Add(new LogEntry(_general, null, isLine: true));
         }
 
+        // Deliberately does NOT wait for the background thread to catch up
+        // and actually flush the files - nothing in this codebase calls
+        // Flush() explicitly today (verified before making this async;
+        // TextWriter requires the override regardless), so there's no
+        // existing caller relying on a synchronous guarantee here. Only
+        // the console copy is flushed synchronously. Dispose() is the one
+        // place with a real, waited-for guarantee - see its own comment.
         public override void Flush()
         {
             _console.Flush();
-            _general.Flush();
-            foreach (var file in _files.Values) file.Flush();
         }
 
-        // The console/Raylib build never needed this - it constructs
-        // exactly one of these per process and lets the OS reclaim the
-        // handles on exit. A long-lived frontend that can load more than
-        // one ROM per process (the Avalonia build, switching to a fresh
-        // per-load log directory) needs the previous instance's files
-        // actually closed first, or repeated ROM loads leak open
-        // StreamWriter handles for the rest of the session.
+        // Both frontends now call this explicitly on every exit path
+        // (EmuSen.RaylibFrontend's Program.cs in a finally block;
+        // EmuSen.TestingStudio's MainWindow on window-close and before
+        // starting a fresh session for the next loaded ROM). That used to
+        // only matter for the long-lived Avalonia build - the console
+        // build got away with never disposing at all, back when
+        // AutoFlush=true meant every write already reached disk
+        // immediately and there was nothing buffered to lose. Now that
+        // file writes are queued to a background thread with no
+        // AutoFlush, skipping Dispose() on process exit would silently
+        // drop however much was still sitting in the queue/StreamWriter
+        // buffers - a real behavior change this refactor had to account
+        // for, not just an optional cleanup.
+        //
+        // This is the one place a synchronous wait is actually correct:
+        // CompleteAdding() lets ConsumeQueue's loop drain the rest of the
+        // queue and exit on its own, and Join() blocks until it does -
+        // guaranteeing every line queued before Dispose() was called
+        // actually reaches its file before the handles get closed
+        // underneath it. Bounded to 5 seconds so a stuck disk can't hang
+        // process/ROM-switch shutdown forever; if it times out, the
+        // Dispose calls below still run and close what they can.
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                _queue.CompleteAdding();
+                _worker.Join(TimeSpan.FromSeconds(5));
+
                 foreach (var file in _files.Values) file.Dispose();
                 _general.Dispose();
+                _queue.Dispose();
             }
             base.Dispose(disposing);
         }

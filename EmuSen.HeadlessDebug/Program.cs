@@ -14,7 +14,7 @@ using EmuSen.Debug;
 // results to a plain log file.
 //
 // Usage:
-//   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]...
+//   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--loadstate path] [--savestate path]
 //
 // --watch registers an extra watch before the run starts (kind is
 // write/read/both, default write) - space/addr/len match `watch add`'s own
@@ -27,7 +27,12 @@ using EmuSen.Debug;
 // for <duration> frames (default 4) starting at frame <frame> - a
 // headless run otherwise sends no input at all, which is fine for a game
 // with its own idle-timeout demo (SMW) but leaves others (LttP's
-// file-select screen) stuck at a "press Start" prompt forever.
+// file-select screen) stuck at a "press Start" prompt forever. --loadstate
+// loads a VenusCore.SaveState() file (same format the RaylibFrontend's
+// F5/F9 hotkeys and its F4 prompt's own `state save|load` command use)
+// before frame 0, for starting directly from an already-reached scene
+// instead of re-deriving it via --tap every run. --savestate writes one
+// out after the frame loop finishes, to capture a moment for reuse later.
 class Program
 {
     static int Main(string[] args)
@@ -53,6 +58,8 @@ class Program
         var extraWatches = new List<string>();
         string? scriptPath = null;
         string? outPath = null;
+        string? loadStatePath = null;
+        string? saveStatePath = null;
         bool verbose = false;
         var taps = new List<(long Start, long End, EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton Button)>();
         for (int i = 2; i < args.Length; i++)
@@ -61,6 +68,8 @@ class Program
             else if (args[i] == "--script" && i + 1 < args.Length) scriptPath = args[++i];
             else if (args[i] == "--out" && i + 1 < args.Length) outPath = args[++i];
             else if (args[i] == "--verbose") verbose = true;
+            else if (args[i] == "--loadstate" && i + 1 < args.Length) loadStatePath = args[++i];
+            else if (args[i] == "--savestate" && i + 1 < args.Length) saveStatePath = args[++i];
             else if (args[i] == "--tap" && i + 1 < args.Length)
             {
                 // frame:button[:durationFrames] - a scripted button press,
@@ -93,6 +102,21 @@ class Program
         Emit($"[ROM] Loading: {romPath}");
         var core = new VenusCore(headless: true);
         core.LoadRom(romPath);
+
+        // Jumping straight to a saved moment (e.g. Link already standing
+        // in a room) sidesteps blindly scripting menu-navigation input
+        // with --tap, which only works when the exact input timing is
+        // already known.
+        if (loadStatePath != null)
+        {
+            if (!File.Exists(loadStatePath))
+            {
+                Emit($"[ERROR] State file not found: {loadStatePath}");
+                return 1;
+            }
+            core.LoadState(loadStatePath);
+            Emit($"[STATE] Loaded: {loadStatePath}");
+        }
 
         var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!);
         var debugCmd = new DebugCommandProcessor(debugTarget);
@@ -133,6 +157,16 @@ class Program
             }
         }
         Emit($"[RUN] Done, {core.TotalFrames} total frames executed.");
+
+        // Captures whatever scene --tap/frame-count navigation just
+        // reached, so a promising moment (found once, maybe after a lot of
+        // trial and error) can be jumped back to instantly with
+        // --loadstate on every later run instead of re-deriving it.
+        if (saveStatePath != null)
+        {
+            core.SaveState(saveStatePath);
+            Emit($"[STATE] Saved: {saveStatePath}");
+        }
 
         List<string> commands;
         if (scriptPath != null)

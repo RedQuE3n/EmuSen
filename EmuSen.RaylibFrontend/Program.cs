@@ -204,7 +204,7 @@ namespace EmuSen.RaylibFrontend
                     {
                         Console.WriteLine($"\n[BREAKPOINT] Halted at ${core.HaltedAddress:X6}");
                         Console.WriteLine(debugTarget.GetSummaryText());
-                        RunDebugPrompt(core, debugTarget, debugCmd);
+                        RunDebugPrompt(core, debugTarget, debugCmd, statePath);
                         continue;
                     }
 
@@ -327,7 +327,7 @@ namespace EmuSen.RaylibFrontend
         // command only ever returns a string to print, it has no way to
         // affect control flow one level up. 'exit'/'quit' already worked
         // this same way before breakpoints existed at all.
-        private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd)
+        private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, string statePath)
         {
             Console.WriteLine("--- Debug prompt (type 'help', 'exit' to resume, 'step'/'s' to single-step) ---");
             while (true)
@@ -343,6 +343,48 @@ namespace EmuSen.RaylibFrontend
                     || trimmed.Equals("c", StringComparison.OrdinalIgnoreCase))
                 {
                     break;
+                }
+                // Text-command equivalent of the F5/F9 hotkeys - added
+                // specifically because F5/F9 depend on the Raylib window
+                // having keyboard focus, which is easy to lose track of,
+                // while this prompt (already reliably reachable via F4)
+                // gives an unambiguous confirmation line either way. Same
+                // statePath both hotkeys use, so a state made one way loads
+                // fine the other.
+                if (trimmed.StartsWith("state ", StringComparison.OrdinalIgnoreCase))
+                {
+                    string[] stateParts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    string sub = stateParts.Length >= 2 ? stateParts[1].ToLowerInvariant() : "";
+                    string path = stateParts.Length >= 3 ? stateParts[2] : statePath;
+                    if (sub == "save")
+                    {
+                        try
+                        {
+                            core.SaveState(path);
+                            Console.WriteLine($"[STATE] Saved: {path}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[STATE] Save failed: {ex.Message}");
+                        }
+                    }
+                    else if (sub == "load")
+                    {
+                        try
+                        {
+                            core.LoadState(path);
+                            Console.WriteLine($"[STATE] Loaded: {path}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[STATE] Load failed: {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Usage: state save|load [path]  (defaults to the F5/F9 path if omitted)");
+                    }
+                    continue;
                 }
                 if (trimmed.Equals("step", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("s", StringComparison.OrdinalIgnoreCase))
                 {
@@ -426,7 +468,7 @@ namespace EmuSen.RaylibFrontend
             // Interactive debug prompt - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F4))
             {
-                RunDebugPrompt(core, debugTarget, debugCmd);
+                RunDebugPrompt(core, debugTarget, debugCmd, statePath);
             }
 
             // Timestamped screenshot - see EmuSen_Frontend_Driver.md §2.

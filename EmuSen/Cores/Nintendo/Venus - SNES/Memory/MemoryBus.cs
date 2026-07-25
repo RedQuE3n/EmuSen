@@ -28,23 +28,38 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
 
         public Ppu Ppu = new Ppu();
 
-        // Debug-toolchain observer hooks - see Venus_Memory.md §6.
-        public IWriteObserver? WriteObserver;
-        public IReadObserver? ReadObserver;
-        public IFrameObserver? FrameObserver;
+        // Debug-toolchain observer hooks - see Venus_Memory.md §6. Back-
+        // references to the debug target (SnesDebugTarget), the same
+        // category StateSerializer's own doc comment already calls out as
+        // exempt (case 2) - walking into it drags in the entire debug
+        // toolchain (watches, breakpoints, cheats, frame log, and via the
+        // debug target's own Renderer access, a live Texture2D), none of
+        // which is game state and some of which StateSerializer can't
+        // represent at all. Surfaced by the headless debug harness's
+        // --savestate/--loadstate smoke test throwing
+        // "unsupported field type System.IntPtr" on every save.
+        [EmuSen.Common.SkipInState] public IWriteObserver? WriteObserver;
+        [EmuSen.Common.SkipInState] public IReadObserver? ReadObserver;
+        [EmuSen.Common.SkipInState] public IFrameObserver? FrameObserver;
 
         // Cartridge-read intercept hook (Game Genie-style ROM patches) -
         // see IRomReadPatcher's own comment and Venus_Memory.md §6. Unlike
         // the three observers above, this one can override the byte the
         // CPU actually sees, so it's consulted (not just notified) at the
         // one place in ReadInternal that reaches the cartridge at all.
-        public IRomReadPatcher? RomPatcher;
+        // Another back-reference into the debug toolchain (same category
+        // as WriteObserver/ReadObserver/FrameObserver above), and
+        // DebugPcProvider/BreakpointChecker below are delegates - all
+        // three hit the same StateSerializer IntPtr failure (a delegate's
+        // private method-pointer field) the moment anything is actually
+        // wired up to them, which every real F4-console session does.
+        [EmuSen.Common.SkipInState] public IRomReadPatcher? RomPatcher;
 
         // "What instruction is currently executing" - lets a caller like
         // Dma.cs report PC context without MemoryBus needing to know what
         // a Cpu is. Returns (bank, address) as plain primitives so callers
         // can also read raw bytes at that PC themselves if they want to.
-        public Func<(byte bank, ushort address)>? DebugPcProvider;
+        [EmuSen.Common.SkipInState] public Func<(byte bank, ushort address)>? DebugPcProvider;
 
         // "Should execution halt before running the instruction at this
         // 24-bit CPU address" - pull hook consulted by VenusCore.RunFrame()
@@ -54,7 +69,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // (the default, before any debug target is wired up) means "never
         // halt" - RunFrame()'s call site treats a null checker the same as
         // one that always returns false.
-        public Func<int, bool>? BreakpointChecker;
+        [EmuSen.Common.SkipInState] public Func<int, bool>? BreakpointChecker;
 
         // Monotonic frame counter - see IDebugTarget.FrameCount. Incremented
         // by VenusCore.RunFrame.

@@ -39,7 +39,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // instead of reaching into this class's internals. This texture is
         // created lazily on first DrawDebugPanels() call, once
         // FramePresenter's window already exists.
-        private Texture2D _sheetTex;
+        // A raw GPU handle, not emulated state - nothing to restore it TO
+        // even in windowed mode (there's no "sheet texture" content that
+        // isn't already re-derivable from VRAM), and StateSerializer has
+        // no case for Texture2D's underlying IntPtr regardless. Surfaced
+        // by the headless debug harness's own --savestate/--loadstate
+        // smoke test: SaveState() threw on every headless run before this,
+        // since Renderer (and this field) exist unconditionally even with
+        // headless: true.
+        [EmuSen.Common.SkipInState] private Texture2D _sheetTex;
         private bool _sheetTexReady;
 
         // Allocated at max width so a hi-res toggle never needs

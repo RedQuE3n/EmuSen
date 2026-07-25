@@ -110,7 +110,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             public override int GetHashCode() => HashCode.Combine(Pc, Opcode, TargetAddr);
         }
 
-        private readonly EmuSen.Debug.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
+        // Holds delegates internally - not serializable. See Cpu.cs's
+        // identical _verboseTrace field for the full explanation; both
+        // were missing [SkipInState] for the same reason.
+        [EmuSen.Common.SkipInState] private readonly EmuSen.Debug.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
         public Spc700()

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Real VenusCore + SnesDebugTarget/DebugCommandProcessor, run
+         headless (no window/audio) and driven by a script of commands
+         instead of a human at the F4 prompt. -->
+    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+  </ItemGroup>
+
+</Project>

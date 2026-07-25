@@ -4,15 +4,14 @@ using static EmuSen.Debug.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Debug.Commands
 {
-    // `cheat` sub-commands - both cheat mechanisms this project supports,
+    // `cheat` sub-commands - every cheat mechanism this project supports,
     // unified under one command since a player thinks of both as just
     // "my cheats" (see CheatRegistry's own comment for the full
     // explanation of each):
     //   - RAM pokes (Pro Action Replay/Game Wizard style, decoded by
     //     ActionReplayCodec) - `add`/`poke`.
-    //   - ROM patches (Game Genie style) - `rompatch` for now, added
-    //     manually until a Game Genie code decoder exists (a later,
-    //     separate addition to this same command).
+    //   - ROM patches (Game Genie style, decoded by GameGenieCodec) -
+    //     `gg`/`rompatch`.
     public class CheatCommand : IDebugCommand
     {
         public string Name => "cheat";
@@ -24,13 +23,17 @@ namespace EmuSen.Debug.Commands
             "                                     add a raw RAM-poke cheat directly, bypassing",
             "                                     code decoding (e.g. an address you already",
             "                                     found with `search`)",
+            "  cheat gg <code> [description]     decode a real SNES Game Genie code (8",
+            "                                     letters) and add it as a ROM patch, enabled",
             "  cheat rompatch <addr> <value> [<compare>|-] [description]",
-            "                                     add a Game Genie-style ROM-read intercept:",
-            "                                     substitute <value> for reads of cartridge",
-            "                                     address <addr>. <compare> gates the patch to",
-            "                                     only apply while the real byte there equals",
-            "                                     it (pass - to skip, an unconditional patch -",
-            "                                     the equivalent of a 6-character code)",
+            "                                     add a Game Genie-style ROM-read intercept",
+            "                                     directly, bypassing code decoding: substitute",
+            "                                     <value> for reads of cartridge address <addr>.",
+            "                                     <compare> gates the patch to only apply while",
+            "                                     the real byte there equals it (pass - to skip,",
+            "                                     an unconditional patch - what every real SNES",
+            "                                     Game Genie code decodes to; unlike NES/Genesis,",
+            "                                     SNES Game Genie codes never carry a compare)",
             "  cheat list                         list every cheat with its ID, kind, and state",
             "  cheat enable <id>                  turn a cheat back on",
             "  cheat disable <id>                 turn a cheat off without removing it",
@@ -46,7 +49,7 @@ namespace EmuSen.Debug.Commands
 
         public string Execute(IDebugTarget target, string[] parts)
         {
-            if (parts.Length < 2) return "Usage: cheat add|poke|rompatch|list|enable|disable|remove|clear ...";
+            if (parts.Length < 2) return "Usage: cheat add|poke|gg|rompatch|list|enable|disable|remove|clear ...";
             string sub = parts[1].ToLowerInvariant();
             var cheats = target.Cheats;
 
@@ -69,6 +72,14 @@ namespace EmuSen.Debug.Commands
                     string description = parts.Length > 5 ? string.Join(' ', parts.Skip(5)) : $"{parts[2]} 0x{addr:X}";
                     int id = cheats.AddRamPoke(parts[2], addr, value, description);
                     return $"Cheat #{id} added: {parts[2]} 0x{addr:X} = 0x{value:X2} ({description})";
+                }
+                case "gg":
+                {
+                    if (parts.Length < 3) return "Usage: cheat gg <code> [description]";
+                    (int ggAddress, byte ggValue) = GameGenieCodec.Decode(parts[2]);
+                    string ggDescription = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : parts[2];
+                    int ggId = cheats.AddRomPatch(ggAddress, ggValue, null, ggDescription);
+                    return $"Cheat #{ggId} added: ROM 0x{ggAddress:X6} = 0x{ggValue:X2} ({ggDescription})";
                 }
                 case "rompatch":
                 {
@@ -126,7 +137,7 @@ namespace EmuSen.Debug.Commands
                     return "All cheats removed.";
                 }
                 default:
-                    return $"Unknown 'cheat' subcommand '{sub}'. Try add/poke/rompatch/list/enable/disable/remove/clear.";
+                    return $"Unknown 'cheat' subcommand '{sub}'. Try add/poke/gg/rompatch/list/enable/disable/remove/clear.";
             }
         }
     }

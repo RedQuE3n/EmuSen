@@ -359,6 +359,15 @@ namespace EmuSen.TestingStudio.Views
             TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
             var frameStopwatch = new Stopwatch();
 
+            // VenusCore's own per-scanline-granularity phase breakdown
+            // (VenusCore.RunFrame()'s own comment) - averaged the same way
+            // as runFrameTimeInWindow above, to see which subsystem
+            // (CPU+SPC700 stepping, PPU rendering, HDMA) actually accounts
+            // for RunFrame() itself getting slower during real gameplay.
+            double cpuSpc700MsInWindow = 0;
+            double ppuMsInWindow = 0;
+            double hdmaMsInWindow = 0;
+
             while (_running)
             {
                 nextTick += FrameInterval;
@@ -371,6 +380,9 @@ namespace EmuSen.TestingStudio.Views
                     frameStopwatch.Restart();
                     session.RunFrame();
                     runFrameTimeInWindow += frameStopwatch.Elapsed;
+                    cpuSpc700MsInWindow += session.LastFrameCpuSpc700Ms;
+                    ppuMsInWindow += session.LastFramePpuMs;
+                    hdmaMsInWindow += session.LastFrameHdmaMs;
 
                     byte[] frame = session.GetFrameBufferRgba();
                     SubmitFrame(frame, session.ScreenWidth);
@@ -382,8 +394,16 @@ namespace EmuSen.TestingStudio.Views
                         double fps = framesInWindow / windowElapsed.TotalSeconds;
                         double runFrameMs = runFrameTimeInWindow.TotalMilliseconds / framesInWindow;
                         double totalMs = windowElapsed.TotalMilliseconds / framesInWindow;
-                        Dispatcher.UIThread.Post(() => FpsText.Text = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)");
+                        double cpuSpc700Ms = cpuSpc700MsInWindow / framesInWindow;
+                        double ppuMs = ppuMsInWindow / framesInWindow;
+                        double hdmaMs = hdmaMsInWindow / framesInWindow;
+                        Dispatcher.UIThread.Post(() => FpsText.Text =
+                            $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms) " +
+                            $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms]");
                         framesInWindow = 0;
+                        cpuSpc700MsInWindow = 0;
+                        ppuMsInWindow = 0;
+                        hdmaMsInWindow = 0;
                         runFrameTimeInWindow = TimeSpan.Zero;
                         fpsWindowStart = clock.Elapsed;
                     }

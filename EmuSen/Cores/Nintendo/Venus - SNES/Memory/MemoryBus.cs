@@ -108,7 +108,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // controller's own registers via the A-bus port.
         public byte LastBusValue => _lastBusValue;
 
-        public byte Read8(uint address)
+        // Virtual purely for testability: a flat-memory test double (used
+        // by a CPU-validation harness run against the SingleStepTests/65816
+        // ground-truth test vectors - github.com/SingleStepTests/65816)
+        // overrides these two to bypass all SNES-specific bank/register
+        // decoding entirely and treat the full 24-bit space as plain RAM,
+        // matching that suite's own methodology ("a full 16mb of RAM...
+        // single address space"). Production code (VenusCore, everything
+        // else in this project) only ever constructs a real MemoryBus, so
+        // this has zero effect on actual emulation - the base
+        // implementation is unchanged, just now overridable.
+        public virtual byte Read8(uint address)
         {
             byte value = ReadInternal(address);
             _lastBusValue = value;
@@ -188,7 +198,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             return cartValue;
         }
 
-        public void Write8(uint address, byte data)
+        // Virtual for the same testability reason as Read8 above.
+        public virtual void Write8(uint address, byte data)
         {
             // Every write drives the open-bus latch, even to a nonexistent
             // register - see Venus_Memory.md §1.4.

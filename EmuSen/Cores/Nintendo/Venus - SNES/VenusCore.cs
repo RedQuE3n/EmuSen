@@ -134,6 +134,14 @@ namespace EmuSen.Cores.Nintendo.Venus
         private long _ppuTicksAccum;
         private long _hdmaTicksAccum;
 
+        // Fractional carry for the CPU-cycle -> SPC700-cycle conversion
+        // just below - see that call site's own comment for why this is
+        // needed at all. Kept as a field (not a RunFrame local) so the
+        // remainder isn't silently discarded/reset every RunFrame() call,
+        // which would reintroduce slow, cumulative drift over a long play
+        // session even after the per-call scaling itself was fixed.
+        private int _spc700CycleRemainder;
+
         // headless: true skips window/texture creation entirely (see
         // Renderer.cs) - the console/Raylib build (Program.cs) wants a
         // real on-screen window, the Avalonia frontend (via
@@ -252,8 +260,33 @@ namespace EmuSen.Cores.Nintendo.Venus
                     _lineCycles += cpuCycles;
                     Bus.LineCycles = _lineCycles;
 
-                    Spc700.CycleBudget += cpuCycles;
-                    while (Spc700.CycleBudget >= 21)
+                    // Cpu.Step()'s returned cycle count is in 65816 CPU
+                    // cycles (the standard oxyron.de-style counts the
+                    // opcode table is verified against), NOT master clocks
+                    // and NOT SPC700 cycles - those are three different
+                    // units. Real hardware: CPU cycle (SlowROM, the common
+                    // case; this project doesn't yet track FastROM/region
+                    // speed separately) = 8 master clocks; SPC700 cycle
+                    // (its own independent 1.024MHz crystal, universally
+                    // approximated as master/21 since it isn't derived from
+                    // the main clock at all) = ~21 master clocks. So 1 CPU
+                    // cycle is worth 8/21 of an SPC700 cycle - scaled here
+                    // with an explicit remainder carry (not float math) so
+                    // the fractional part isn't silently dropped every
+                    // single call, which previously left Spc700.CycleBudget
+                    // being compared against a flat "21" using raw,
+                    // unscaled CPU cycles - since Spc700.Step() already
+                    // drains its own real per-instruction cost (typically
+                    // well under 21) rather than a fixed 21, that let the
+                    // SPC700 run roughly 3x too fast (confirmed: a 10-
+                    // second capture produced ~30 seconds of audio),
+                    // which is what made played-back audio sound like
+                    // scrambled noise once the overflowing buffer started
+                    // dropping samples.
+                    int scaledSpc700Cycles = cpuCycles * 8 + _spc700CycleRemainder;
+                    _spc700CycleRemainder = scaledSpc700Cycles % 21;
+                    Spc700.CycleBudget += scaledSpc700Cycles / 21;
+                    while (Spc700.CycleBudget > 0)
                     {
                         Spc700.Step();
                     }

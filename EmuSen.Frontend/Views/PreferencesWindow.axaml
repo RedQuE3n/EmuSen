@@ -11,7 +11,7 @@
         <TextBlock Text="Where per-session log files are written. Leave blank to disable file logging entirely."
                    TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,-8,0,0" />
         <Grid ColumnDefinitions="*,Auto">
-            <TextBox x:Name="LogDirectoryBox" Grid.Column="0" IsReadOnly="True" Watermark="(not set)" />
+            <TextBox x:Name="LogDirectoryBox" Grid.Column="0" IsReadOnly="True" PlaceholderText="(not set)" />
             <Button x:Name="BrowseLogDirectoryButton" Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Click="OnBrowseLogDirectoryClick" />
         </Grid>
 
@@ -19,7 +19,7 @@
         <TextBlock Text="Default folder for Open ROM... and the ROM list in File > Browse ROMs...."
                    TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,-8,0,0" />
         <Grid ColumnDefinitions="*,Auto">
-            <TextBox x:Name="RomDirectoryBox" Grid.Column="0" IsReadOnly="True" Watermark="(not set)" />
+            <TextBox x:Name="RomDirectoryBox" Grid.Column="0" IsReadOnly="True" PlaceholderText="(not set)" />
             <Button x:Name="BrowseRomDirectoryButton" Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Click="OnBrowseRomDirectoryClick" />
         </Grid>
 

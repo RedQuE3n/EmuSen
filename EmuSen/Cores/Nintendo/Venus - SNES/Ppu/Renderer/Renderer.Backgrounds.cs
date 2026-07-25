@@ -300,6 +300,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         {
                             int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp);
                             cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+
+                            if (DebugSettings.ColorMathBlendLogging && !isMainScreen && layerId == LayerBg1 && py == DebugSettings.ColorMathBlendScanline)
+                            {
+                                Console.WriteLine($"[BG1TILE] px={px} wx={wx} wy={wy} tx={tx} ty={ty} entryAddr=0x{entryAddr:X4} entry=0x{entry:X4} tileIndex={entry & 0x3FF} palRow={(entry >> 10) & 0x07} pixel={pixel} cgIdx=0x{cgIdx:X3} chrBase=0x{chrBase:X4} tileAddr=0x{tileAddr:X4}");
+                            }
                         }
                     }
                 }

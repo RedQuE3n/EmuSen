@@ -198,7 +198,22 @@ EmuSen Project/
 │   │   ├── IDebugTarget.cs
 │   │   ├── DebugCommandProcessor.cs
 │   │   ├── WatchRegistry.cs
-│   │   └── DebugTools.cs                     # Older generic helpers (hexdump, tile-ASCII, etc.)
+│   │   └── DebugTools.cs                     # Older generic helpers (hexdump, tile-ASCII, etc.) plus
+│   │                                          #   RepeatCollapsingTrace<TKey> - collapses a repeating
+│   │                                          #   1-8 instruction cycle (polling/delay loops - VBlank
+│   │                                          #   wait, DMA busy-wait, the APU handshake) into one
+│   │                                          #   summary line instead of writing every repeat, since
+│   │                                          #   a real session produced a 1GB cpu.log almost
+│   │                                          #   entirely from exactly that. Used by Cpu.cs/Spc700.cs
+│   │                                          #   for CpuVerboseLogging/Spc700VerboseLogging - compares
+│   │                                          #   a small struct key, not the rendered string, so a
+│   │                                          #   locked-in loop costs one comparison, no string
+│   │                                          #   allocation, per instruction. Both cores auto-flush a
+│   │                                          #   still-open cycle the moment their verbose flag turns
+│   │                                          #   off (Cpu.Step()/Spc700.Step()'s _wasVerboseLogging
+│   │                                          #   check); EmulatorSession.FlushVerboseLogs() and
+│   │                                          #   Program.cs's shutdown path cover process exit, the
+│   │                                          #   one case Step() can't see coming on its own.
 │   └── Settings/
 │       ├── AudioSettings.cs
 │       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md

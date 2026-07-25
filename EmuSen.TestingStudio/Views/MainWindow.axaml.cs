@@ -204,6 +204,10 @@ namespace EmuSen.TestingStudio.Views
         {
             _timer?.Stop();
             _session?.SaveSram(); // flush whatever was previously running before switching
+            // Must happen on the OLD session, before it's replaced below -
+            // StartLogging()'s call to StopLogging() runs against whatever
+            // _session currently is, which would already be the new one.
+            _session?.FlushVerboseLogs();
 
             try
             {
@@ -333,6 +337,10 @@ namespace EmuSen.TestingStudio.Views
         private void StopLogging()
         {
             if (_activeLogWriter is null) return;
+
+            // Must happen before Console.SetOut/Dispose below - see
+            // EmulatorSession.FlushVerboseLogs()'s own comment.
+            _session?.FlushVerboseLogs();
 
             Console.SetOut(_originalConsoleOut);
             _activeLogWriter.Dispose();

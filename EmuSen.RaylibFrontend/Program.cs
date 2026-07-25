@@ -33,6 +33,11 @@ namespace EmuSen.RaylibFrontend
             // moving file I/O off the emulation thread.
             CategorizedLogWriter? logWriter = null;
 
+            // Needed by FlushAndDispose to flush Cpu/Spc700's
+            // RepeatCollapsingTrace state before the log writer closes -
+            // see that call's own comment below.
+            VenusCore? core = null;
+
             // Guards FlushAndDispose against running twice - Ctrl+C alone
             // can reach it via both the SIGINT registration below and the
             // ProcessExit that follows once the default handler decides to
@@ -46,6 +51,15 @@ namespace EmuSen.RaylibFrontend
             void FlushAndDispose()
             {
                 if (Interlocked.Exchange(ref shutdownGuard, 1) != 0) return;
+
+                // Must run before logWriter.Dispose() below, while
+                // Console.Out is still routed through it - otherwise a
+                // loop CpuVerboseLogging/Spc700VerboseLogging was still
+                // mid-repeat on would never reach the file at all. See
+                // DebugTools.RepeatCollapsingTrace<TKey>.Flush().
+                core?.Cpu?.FlushVerboseTrace();
+                core?.Spc700?.FlushVerboseTrace();
+
                 Console.SetOut(originalOut);
                 logWriter?.Dispose();
             }
@@ -90,7 +104,7 @@ namespace EmuSen.RaylibFrontend
                 string statePath = Path.Combine(Directory.GetCurrentDirectory(), "Saves", Path.GetFileNameWithoutExtension(romPath) + ".state");
 
                 // VenusCore drives the whole emulation - see EmuSen_Frontend_Driver.md §1.
-                VenusCore core = new VenusCore(headless: false);
+                core = new VenusCore(headless: false);
 
                 // Log dir setup - deliberately placed here, not earlier. See
                 // EmuSen_Frontend_Driver.md §1.

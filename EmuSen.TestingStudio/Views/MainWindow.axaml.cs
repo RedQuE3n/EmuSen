@@ -347,6 +347,18 @@ namespace EmuSen.TestingStudio.Views
             TimeSpan fpsWindowStart = clock.Elapsed;
             int framesInWindow = 0;
 
+            // Split timing: RunFrame() alone vs. the rest of this loop's own
+            // per-frame work (GetFrameBufferRgba's copy + SubmitFrame's
+            // hand-off). Boot/title screens hitting 60fps while gameplay
+            // drops below it could mean either RunFrame() itself getting
+            // more expensive under a heavier scene (shared core code -
+            // would cost the console build the same) or this loop's own
+            // wrapper overhead scaling up with scene complexity (frontend-
+            // specific, e.g. more per-frame allocation/GC pressure) -
+            // reporting both separately is how to tell which.
+            long runFrameTicksInWindow = 0;
+            var frameStopwatch = new Stopwatch();
+
             while (_running)
             {
                 nextTick += FrameInterval;
@@ -356,7 +368,10 @@ namespace EmuSen.TestingStudio.Views
 
                 try
                 {
+                    frameStopwatch.Restart();
                     session.RunFrame();
+                    runFrameTicksInWindow += frameStopwatch.ElapsedTicks;
+
                     byte[] frame = session.GetFrameBufferRgba();
                     SubmitFrame(frame, session.ScreenWidth);
 
@@ -365,8 +380,11 @@ namespace EmuSen.TestingStudio.Views
                     if (windowElapsed >= TimeSpan.FromSeconds(1))
                     {
                         double fps = framesInWindow / windowElapsed.TotalSeconds;
-                        Dispatcher.UIThread.Post(() => FpsText.Text = $"{fps:F1} fps");
+                        double runFrameMs = TimeSpan.FromTicks(runFrameTicksInWindow).TotalMilliseconds / framesInWindow;
+                        double totalMs = windowElapsed.TotalMilliseconds / framesInWindow;
+                        Dispatcher.UIThread.Post(() => FpsText.Text = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)");
                         framesInWindow = 0;
+                        runFrameTicksInWindow = 0;
                         fpsWindowStart = clock.Elapsed;
                     }
                 }

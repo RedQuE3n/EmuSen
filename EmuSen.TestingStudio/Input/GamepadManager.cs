@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Silk.NET.SDL;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 
@@ -32,6 +33,12 @@ namespace EmuSen.TestingStudio.Input
         private GameController* _controller;
         private bool _available;
         private readonly bool _sdlInitialized;
+
+        // Rate-limits the hot-plug rescan in Poll() below - see that
+        // method's own comment for why this exists.
+        private static readonly TimeSpan RescanInterval = TimeSpan.FromSeconds(1);
+        private readonly Stopwatch _rescanClock = Stopwatch.StartNew();
+        private TimeSpan _lastRescan = TimeSpan.MinValue;
 
         public GamepadManager(GamepadBindingMap bindings)
         {
@@ -67,11 +74,34 @@ namespace EmuSen.TestingStudio.Input
         // Call once per frame tick. Re-checks for a controller if none was
         // connected yet (hot-plug), so plugging one in mid-session works
         // without restarting the app.
+        //
+        // Rate-limited to once per RescanInterval while no controller is
+        // connected, rather than every single call - this method runs on a
+        // 60Hz UI-thread timer (MainWindow's gamepad-poll DispatcherTimer),
+        // and TryOpenFirstController() underneath does a real SDL joystick
+        // enumeration (NumJoysticks() + a per-joystick IsGameController()
+        // check), not a cheap state read. On a common "no controller
+        // plugged in" setup that's a genuine hardware/driver-level scan
+        // happening 60 times a second for no reason, for the entire
+        // session - a real, measurable, constant tax that has nothing to
+        // do with whatever the emulated game is doing, which is exactly
+        // the profile a steady below-target FPS (identical whether the
+        // game is active or sitting idle) points at. A 1-second rescan
+        // interval still notices a hot-plugged controller quickly without
+        // paying that cost every frame.
         public void Poll()
         {
             if (!_sdlInitialized) return;
 
-            if (!_available) TryOpenFirstController();
+            if (!_available)
+            {
+                TimeSpan now = _rescanClock.Elapsed;
+                if (now - _lastRescan >= RescanInterval)
+                {
+                    _lastRescan = now;
+                    TryOpenFirstController();
+                }
+            }
             _sdl.GameControllerUpdate();
         }
 

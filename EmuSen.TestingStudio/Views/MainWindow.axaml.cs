@@ -367,6 +367,8 @@ namespace EmuSen.TestingStudio.Views
             double cpuSpc700MsInWindow = 0;
             double ppuMsInWindow = 0;
             double hdmaMsInWindow = 0;
+            double objEvalMsInWindow = 0;
+            double blendMsInWindow = 0;
 
             while (_running)
             {
@@ -383,6 +385,8 @@ namespace EmuSen.TestingStudio.Views
                     cpuSpc700MsInWindow += session.LastFrameCpuSpc700Ms;
                     ppuMsInWindow += session.LastFramePpuMs;
                     hdmaMsInWindow += session.LastFrameHdmaMs;
+                    objEvalMsInWindow += session.LastFrameObjEvalMs;
+                    blendMsInWindow += session.LastFrameBlendMs;
 
                     byte[] frame = session.GetFrameBufferRgba();
                     SubmitFrame(frame, session.ScreenWidth);
@@ -397,13 +401,18 @@ namespace EmuSen.TestingStudio.Views
                         double cpuSpc700Ms = cpuSpc700MsInWindow / framesInWindow;
                         double ppuMs = ppuMsInWindow / framesInWindow;
                         double hdmaMs = hdmaMsInWindow / framesInWindow;
+                        double objEvalMs = objEvalMsInWindow / framesInWindow;
+                        double blendMs = blendMsInWindow / framesInWindow;
                         Dispatcher.UIThread.Post(() => FpsText.Text =
                             $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms) " +
-                            $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms]");
+                            $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms] " +
+                            $"(ppu breakdown: objEval {objEvalMs:F2}ms / blend {blendMs:F2}ms)");
                         framesInWindow = 0;
                         cpuSpc700MsInWindow = 0;
                         ppuMsInWindow = 0;
                         hdmaMsInWindow = 0;
+                        objEvalMsInWindow = 0;
+                        blendMsInWindow = 0;
                         runFrameTimeInWindow = TimeSpan.Zero;
                         fpsWindowStart = clock.Elapsed;
                     }

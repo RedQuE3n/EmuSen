@@ -165,6 +165,8 @@ namespace EmuSen.RaylibFrontend
                 double cpuSpc700MsInWindow = 0;
                 double ppuMsInWindow = 0;
                 double hdmaMsInWindow = 0;
+                double objEvalMsInWindow = 0;
+                double blendMsInWindow = 0;
 
                 while (presenter.IsOpen())
                 {
@@ -176,6 +178,8 @@ namespace EmuSen.RaylibFrontend
                     cpuSpc700MsInWindow += core.LastFrameCpuSpc700Ms;
                     ppuMsInWindow += core.LastFramePpuMs;
                     hdmaMsInWindow += core.LastFrameHdmaMs;
+                    objEvalMsInWindow += core.LastFrameObjEvalMs;
+                    blendMsInWindow += core.LastFrameBlendMs;
 
                     // Must happen before the next RunFrame()'s own
                     // LatchAutoJoypad - see EmuSen_Frontend_Driver.md §1.
@@ -200,15 +204,20 @@ namespace EmuSen.RaylibFrontend
                         double cpuSpc700Ms = cpuSpc700MsInWindow / fpsFramesInWindow;
                         double ppuMs = ppuMsInWindow / fpsFramesInWindow;
                         double hdmaMs = hdmaMsInWindow / fpsFramesInWindow;
+                        double objEvalMs = objEvalMsInWindow / fpsFramesInWindow;
+                        double blendMs = blendMsInWindow / fpsFramesInWindow;
                         Console.WriteLine(
                             $"[FPS] {fps:F1} fps (run {runMs:F2}ms / total {totalMs:F2}ms) " +
-                            $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms]");
+                            $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms] " +
+                            $"(ppu breakdown: objEval {objEvalMs:F2}ms / blend {blendMs:F2}ms)");
                         fpsFramesInWindow = 0;
                         runFrameTimeInWindow = TimeSpan.Zero;
                         totalTimeInWindow = TimeSpan.Zero;
                         cpuSpc700MsInWindow = 0;
                         ppuMsInWindow = 0;
                         hdmaMsInWindow = 0;
+                        objEvalMsInWindow = 0;
+                        blendMsInWindow = 0;
                         fpsWindowStart = fpsClock.Elapsed;
                     }
                 }

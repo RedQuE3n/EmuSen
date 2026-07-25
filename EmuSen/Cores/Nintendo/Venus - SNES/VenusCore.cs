@@ -61,6 +61,15 @@ namespace EmuSen.Cores.Nintendo.Venus
         public double LastFramePpuMs { get; private set; }
         public double LastFrameHdmaMs { get; private set; }
 
+        // Sub-breakdown of LastFramePpuMs, sourced straight from Renderer -
+        // see that class's own comment (Renderer.Scanline.cs) for why this
+        // exists: LastFramePpuMs stopped dropping as much as expected once
+        // the BG1-4 double-decode fix landed, meaning sprite evaluation or
+        // the final color-math/blend loop (neither touched by that fix) is
+        // the actual dominant cost within it.
+        public double LastFrameObjEvalMs => Renderer?.LastFrameObjEvalMs ?? 0;
+        public double LastFrameBlendMs => Renderer?.LastFrameBlendMs ?? 0;
+
         // Not a fixed constant - pseudo-hi-res (SETINI bit 3) can make a
         // frame 512 pixels wide instead of 256. See Renderer.cs's
         // FrameWidth field for the full citation. Defaults to 256 before

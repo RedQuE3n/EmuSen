@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
@@ -19,16 +21,57 @@ namespace EmuSen.RaylibFrontend
         {
             TextWriter originalOut = Console.Out;
 
-            // Disposed in the finally block below on every exit path
-            // (normal completion or the catch block's own CPU-HALT print)
-            // - CategorizedLogWriter's file writes now happen on a
-            // background thread with no AutoFlush, so something has to
-            // explicitly wait for that queue to drain before the process
-            // exits, or the last batch of buffered log lines is silently
-            // lost. The old synchronous, AutoFlush=true design never
-            // needed this; this is the correctness cost of moving file
-            // I/O off the emulation thread.
+            // Disposed by FlushAndDispose() below on every exit path
+            // (normal completion, the catch block's own CPU-HALT print,
+            // Ctrl+C, `kill <pid>`, or an unhandled exception on some
+            // other thread) - CategorizedLogWriter's file writes now
+            // happen on a background thread with no AutoFlush, so
+            // something has to explicitly wait for that queue to drain
+            // before the process exits, or the last batch of buffered log
+            // lines is silently lost. The old synchronous, AutoFlush=true
+            // design never needed this; this is the correctness cost of
+            // moving file I/O off the emulation thread.
             CategorizedLogWriter? logWriter = null;
+
+            // Guards FlushAndDispose against running twice - Ctrl+C alone
+            // can reach it via both the SIGINT registration below and the
+            // ProcessExit that follows once the default handler decides to
+            // terminate, and a crash can reach it via both
+            // UnhandledException and the finally block. Dispose() itself
+            // isn't safe to call twice (CategorizedLogWriter closes file
+            // handles the second call would touch again), so only the
+            // first caller should actually run it.
+            int shutdownGuard = 0;
+
+            void FlushAndDispose()
+            {
+                if (Interlocked.Exchange(ref shutdownGuard, 1) != 0) return;
+                Console.SetOut(originalOut);
+                logWriter?.Dispose();
+            }
+
+            // Covers every exit path the try/finally below can't reach on
+            // its own: `kill <pid>` (SIGTERM) or Ctrl+C (SIGINT) from a
+            // terminal, and an unhandled exception thrown on a thread
+            // other than this one (e.g. inside Raylib's native callbacks).
+            // None of those unwind through Main's own try/finally, so
+            // without this, whatever CategorizedLogWriter still had
+            // queued would be silently lost - exactly the kind of
+            // ungraceful exit that produced the empty/truncated log files
+            // diagnosed earlier. Cannot catch a hard `kill -9`/SIGKILL -
+            // nothing in userspace can intercept that signal at all.
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => FlushAndDispose();
+            AppDomain.CurrentDomain.UnhandledException += (_, _) => FlushAndDispose();
+            using PosixSignalRegistration sigTerm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, ctx =>
+            {
+                FlushAndDispose();
+                ctx.Cancel = false; // let the process actually terminate after flushing
+            });
+            using PosixSignalRegistration sigInt = PosixSignalRegistration.Create(PosixSignal.SIGINT, ctx =>
+            {
+                FlushAndDispose();
+                ctx.Cancel = false;
+            });
 
             // ROM path resolution - see EmuSen_Frontend_Driver.md §1.
             string defaultRomPath = "/home/red/Documents/Roms/SMW.smc"; // temporary location
@@ -104,15 +147,12 @@ namespace EmuSen.RaylibFrontend
             }
             finally
             {
-                // See logWriter's own declaration comment above for why
-                // this can't just be left to the OS reclaiming handles on
-                // process exit anymore. Restoring Console.Out first isn't
-                // load-bearing here (nothing runs after this), but avoids
-                // leaving the global Console.Out pointed at a disposed
-                // object even briefly, matching EmuSen.TestingStudio's
-                // own StopLogging() convention.
-                Console.SetOut(originalOut);
-                logWriter?.Dispose();
+                // Normal completion and the catch block's own CPU-HALT
+                // print both funnel through here; the signal/ProcessExit
+                // handlers above cover the exit paths that never reach
+                // this finally at all. FlushAndDispose's own guard makes
+                // it safe if one of those already ran first.
+                FlushAndDispose();
             }
         }
 

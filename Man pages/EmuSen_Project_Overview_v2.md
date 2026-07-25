@@ -194,7 +194,16 @@ EmuSen Project/
 │                                         #   window/texture code - see that project. Namespace is
 │                                         #   EmuSen.RaylibFrontend, not EmuSen.Console - a namespace
 │                                         #   literally named Console would shadow every bare
-│                                         #   Console.WriteLine call in this file.
+│                                         #   Console.WriteLine call in this file. Registers
+│                                         #   AppDomain.ProcessExit/UnhandledException and
+│                                         #   PosixSignalRegistration handlers for SIGTERM/SIGINT so
+│                                         #   `kill <pid>`, Ctrl+C, and unhandled background-thread
+│                                         #   exceptions all flush/dispose CategorizedLogWriter before
+│                                         #   the process actually exits, not just the normal
+│                                         #   try/finally path - closes the gap a hard-killed session
+│                                         #   used to leave (truncated/empty log files, see that
+│                                         #   class's own comments). Can't catch SIGKILL - nothing in
+│                                         #   userspace can.
 │
 ├── EmuSen.Presentation/                  # Shared presentation layer (both frontends reference)
 │   ├── EmuSen.Presentation.csproj

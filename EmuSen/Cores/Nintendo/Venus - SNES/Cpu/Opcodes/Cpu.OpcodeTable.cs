@@ -173,7 +173,21 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             _instructions[0x19] = new Instruction { Name = "ORA", AddrMode = AddrAbsoluteY, Operate = OpORA, Cycles = 4 };
             _instructions[0x5D] = new Instruction { Name = "EOR", AddrMode = AddrAbsoluteX, Operate = OpEOR, Cycles = 4 };
             _instructions[0x59] = new Instruction { Name = "EOR", AddrMode = AddrAbsoluteY, Operate = OpEOR, Cycles = 4 };
-            _instructions[0x87] = new Instruction { Name = "STA", AddrMode = AddrDirectIndirect, Operate = OpSTA, Cycles = 6 };
+            // 0x87 is STA [dp] - the 24-bit long-indirect store (3-byte
+            // pointer read from the direct page, no DBR involved at all) -
+            // NOT the same addressing mode as 0x92's STA (dp) (16-bit
+            // pointer + current DBR). Was wired to AddrDirectIndirect (the
+            // short/DBR-relative mode) instead of AddrDirectIndirectLong,
+            // the same long-pointer mode LDA's own 0xA7 already uses
+            // correctly. Real-world effect: any code doing STA [dp] with
+            // DBR != the pointer's own bank byte (common - e.g. ALTTP's
+            // AddReceivedItem sets DBR to its own bank via PHK:PLB, then
+            // writes an item's equipment-table byte through a pointer
+            // whose bank byte is $7E) silently wrote to the wrong bank
+            // instead, with the real target address never touched -
+            // found via the LttP "lamp appears then never enters
+            // inventory" investigation.
+            _instructions[0x87] = new Instruction { Name = "STA", AddrMode = AddrDirectIndirectLong, Operate = OpSTA, Cycles = 6 };
             // --- Added: read-modify-write memory family + close relatives ---
             // 0xE6 (INC dp) is what the ROM halted on; INC/DEC on memory in all four
             // common addressing modes come as a set, and DEC A / ROR A / BIT round out

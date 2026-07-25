@@ -51,6 +51,8 @@ namespace EmuSen.Common
         public double LastFramePpuMs => _core?.LastFramePpuMs ?? 0;
         public double LastFrameObjEvalMs => _core?.LastFrameObjEvalMs ?? 0;
         public double LastFrameBlendMs => _core?.LastFrameBlendMs ?? 0;
+        public double LastFrameMainCompositeMs => _core?.LastFrameMainCompositeMs ?? 0;
+        public double LastFrameSubCompositeMs => _core?.LastFrameSubCompositeMs ?? 0;
         public double LastFrameHdmaMs => _core?.LastFrameHdmaMs ?? 0;
 
         public void LoadRom(string path)

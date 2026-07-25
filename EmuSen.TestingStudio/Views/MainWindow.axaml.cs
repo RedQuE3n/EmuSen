@@ -369,6 +369,8 @@ namespace EmuSen.TestingStudio.Views
             double hdmaMsInWindow = 0;
             double objEvalMsInWindow = 0;
             double blendMsInWindow = 0;
+            double mainCompositeMsInWindow = 0;
+            double subCompositeMsInWindow = 0;
 
             while (_running)
             {
@@ -387,6 +389,8 @@ namespace EmuSen.TestingStudio.Views
                     hdmaMsInWindow += session.LastFrameHdmaMs;
                     objEvalMsInWindow += session.LastFrameObjEvalMs;
                     blendMsInWindow += session.LastFrameBlendMs;
+                    mainCompositeMsInWindow += session.LastFrameMainCompositeMs;
+                    subCompositeMsInWindow += session.LastFrameSubCompositeMs;
 
                     byte[] frame = session.GetFrameBufferRgba();
                     SubmitFrame(frame, session.ScreenWidth);
@@ -403,16 +407,21 @@ namespace EmuSen.TestingStudio.Views
                         double hdmaMs = hdmaMsInWindow / framesInWindow;
                         double objEvalMs = objEvalMsInWindow / framesInWindow;
                         double blendMs = blendMsInWindow / framesInWindow;
+                        double mainCompositeMs = mainCompositeMsInWindow / framesInWindow;
+                        double subCompositeMs = subCompositeMsInWindow / framesInWindow;
                         Dispatcher.UIThread.Post(() => FpsText.Text =
                             $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms) " +
                             $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms] " +
-                            $"(ppu breakdown: objEval {objEvalMs:F2}ms / blend {blendMs:F2}ms)");
+                            $"(ppu breakdown: objEval {objEvalMs:F2}ms / main {mainCompositeMs:F2}ms / " +
+                            $"sub {subCompositeMs:F2}ms / blend {blendMs:F2}ms)");
                         framesInWindow = 0;
                         cpuSpc700MsInWindow = 0;
                         ppuMsInWindow = 0;
                         hdmaMsInWindow = 0;
                         objEvalMsInWindow = 0;
                         blendMsInWindow = 0;
+                        mainCompositeMsInWindow = 0;
+                        subCompositeMsInWindow = 0;
                         runFrameTimeInWindow = TimeSpan.Zero;
                         fpsWindowStart = clock.Elapsed;
                     }

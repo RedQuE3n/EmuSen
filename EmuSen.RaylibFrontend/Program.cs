@@ -176,6 +176,23 @@ namespace EmuSen.RaylibFrontend
 
                     frameStopwatch.Restart();
                     core.RunFrame();
+
+                    // A breakpoint (or an armed single-step - see
+                    // BreakpointRegistry) halted RunFrame() before it
+                    // finished this frame - the frame buffer is only
+                    // partially rendered, so skip presenting/hotkeys this
+                    // iteration entirely and go straight to the same prompt
+                    // F4 already uses. Looping back to the top afterward
+                    // calls RunFrame() again, which resumes exactly where
+                    // it left off (see that method's own comment).
+                    if (core.IsHaltedAtBreakpoint)
+                    {
+                        Console.WriteLine($"\n[BREAKPOINT] Halted at ${core.HaltedAddress:X6}");
+                        Console.WriteLine(debugTarget.GetSummaryText());
+                        RunDebugPrompt(core, debugTarget, debugCmd);
+                        continue;
+                    }
+
                     TimeSpan runFrameElapsed = frameStopwatch.Elapsed;
                     cpuSpc700MsInWindow += core.LastFrameCpuSpc700Ms;
                     ppuMsInWindow += core.LastFramePpuMs;
@@ -248,6 +265,56 @@ namespace EmuSen.RaylibFrontend
             }
         }
 
+        // Shared by the F4 hotkey and the main loop's own breakpoint-halt
+        // check, so both funnel through the exact same interactive
+        // command loop rather than keeping two copies in sync (the same
+        // reasoning VenusCore's own header comment gives for why RunFrame()
+        // itself isn't duplicated between frontends).
+        //
+        // 'step'/'s' and 'continue'/'c' are handled here, not registered as
+        // DebugCommandProcessor commands, because they need to make this
+        // loop return control to the OUTER per-frame loop so it can
+        // actually call core.RunFrame() again - a DebugCommandProcessor
+        // command only ever returns a string to print, it has no way to
+        // affect control flow one level up. 'exit'/'quit' already worked
+        // this same way before breakpoints existed at all.
+        private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd)
+        {
+            Console.WriteLine("--- Debug prompt (type 'help', 'exit' to resume, 'step'/'s' to single-step) ---");
+            while (true)
+            {
+                Console.Write("debug> ");
+                string? line = Console.ReadLine();
+                if (line is null) break;
+                string trimmed = line.Trim();
+                if (trimmed.Length == 0
+                    || trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase)
+                    || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)
+                    || trimmed.Equals("continue", StringComparison.OrdinalIgnoreCase)
+                    || trimmed.Equals("c", StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+                if (trimmed.Equals("step", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("s", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Arms a one-shot halt-before-next-instruction (see
+                    // BreakpointRegistry.ArmSingleStep) and hands control
+                    // back to the outer loop, which is the only thing that
+                    // can actually call RunFrame() to let that instruction
+                    // run. If we're resuming from an existing breakpoint
+                    // halt, RunFrame() executes exactly the halted-at
+                    // instruction before re-checking, so this correctly
+                    // steps ONE instruction forward either way - see
+                    // RunFrame()'s own _justResumedFromBreakpoint comment.
+                    debugTarget.Breakpoints.ArmSingleStep();
+                    Console.WriteLine("Stepping one instruction...");
+                    break;
+                }
+                Console.WriteLine(debugCmd.Execute(trimmed));
+            }
+            Console.WriteLine("--- Resuming ---");
+        }
+
         // Every debug/dev hotkey - see EmuSen_Frontend_Driver.md §2.
         private static void RunHotkeys(
             VenusCore core, FramePresenter presenter, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, FrameRecorder frameRecorder,
@@ -310,20 +377,7 @@ namespace EmuSen.RaylibFrontend
             // Interactive debug prompt - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F4))
             {
-                Console.WriteLine("--- Debug prompt (type 'help', 'exit' to resume) ---");
-                while (true)
-                {
-                    Console.Write("debug> ");
-                    string? line = Console.ReadLine();
-                    if (line is null) break;
-                    string trimmed = line.Trim();
-                    if (trimmed.Length == 0 || trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase))
-                    {
-                        break;
-                    }
-                    Console.WriteLine(debugCmd.Execute(trimmed));
-                }
-                Console.WriteLine("--- Resuming ---");
+                RunDebugPrompt(core, debugTarget, debugCmd);
             }
 
             // Timestamped screenshot - see EmuSen_Frontend_Driver.md §2.

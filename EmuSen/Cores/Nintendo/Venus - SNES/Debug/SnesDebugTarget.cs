@@ -96,6 +96,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly WatchRegistry _watches = new WatchRegistry();
         private readonly FrameLogRegistry _frameLog = new FrameLogRegistry();
         private readonly CheatRegistry _cheats = new CheatRegistry();
+        private readonly BreakpointRegistry _breakpoints = new BreakpointRegistry();
 
         public SnesDebugTarget(Cpu cpu, MemoryBus bus)
         {
@@ -107,6 +108,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             bus.FrameObserver = this;
             bus.RomPatcher = this;
             bus.DebugPcProvider = () => (_cpu.LastInstructionPB, _cpu.LastInstructionPC);
+
+            // Pull hook, same shape as DebugPcProvider just above - VenusCore's
+            // RunFrame() loop calls this once per instruction (before it
+            // executes) with the CPU's current 24-bit PC, with no idea what's
+            // behind it beyond "a bool that means halt here". Keeps
+            // BreakpointRegistry itself off MemoryBus/Cpu entirely, same
+            // reasoning as the WriteObserver/ReadObserver split documented
+            // in this class's own header comment.
+            bus.BreakpointChecker = pc24 => _breakpoints.ShouldBreak(pc24);
         }
 
         public string CoreName => "SNES";
@@ -116,6 +126,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public FrameLogRegistry FrameLog => _frameLog;
 
         public CheatRegistry Cheats => _cheats;
+
+        public BreakpointRegistry Breakpoints => _breakpoints;
 
         // Reads a (space, address, width) value the same way
         // DebugCommandHelpers.ReadValue does (little-endian accumulation)

@@ -46,6 +46,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // can also read raw bytes at that PC themselves if they want to.
         public Func<(byte bank, ushort address)>? DebugPcProvider;
 
+        // "Should execution halt before running the instruction at this
+        // 24-bit CPU address" - pull hook consulted by VenusCore.RunFrame()
+        // once per instruction, before it executes. Same shape/reasoning as
+        // DebugPcProvider above: MemoryBus has no idea a BreakpointRegistry
+        // exists behind this, it just calls a bool-returning Func. Null
+        // (the default, before any debug target is wired up) means "never
+        // halt" - RunFrame()'s call site treats a null checker the same as
+        // one that always returns false.
+        public Func<int, bool>? BreakpointChecker;
+
         // Monotonic frame counter - see IDebugTarget.FrameCount. Incremented
         // by VenusCore.RunFrame.
         public long FrameCount;

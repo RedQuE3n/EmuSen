@@ -126,14 +126,13 @@ namespace EmuSen.Debug
     }
 
     // The contract a console core implements to plug into the shared debug
-    // toolchain. Deliberately scoped to read/query capabilities only for
-    // now - breakpoints, single-stepping, and disassembly are planned as a
-    // separate future extension to this same interface once the execution
-    // loop actually supports pausing mid-frame (it currently only runs a
-    // whole frame at a time), and once a real disassembler exists (today
-    // there's only an opcode *executor*, nothing that turns bytes back into
-    // mnemonics for display). Adding those later as new interface members
-    // is expected to be additive, not a breaking change to what's here.
+    // toolchain. Started out scoped to read/query capabilities only, with
+    // breakpoints and single-stepping called out as a future extension
+    // pending the execution loop supporting a mid-frame pause - that's now
+    // done (see Breakpoints below and VenusCore.RunFrame()'s halt/resume
+    // handling), added the same additive way this comment originally
+    // anticipated: a new property, no breaking change to what was already
+    // here.
     public interface IDebugTarget
     {
         // Short console name for display ("SNES", "NES", etc).
@@ -164,6 +163,15 @@ namespace EmuSen.Debug
         // Every core's implementation owns the same instance its
         // per-frame boundary hook feeds.
         FrameLogRegistry FrameLog { get; }
+
+        // The execution-breakpoint mechanism (see BreakpointRegistry.cs) -
+        // same exposure pattern as Watches/FrameLog. Every core's
+        // implementation owns the same instance its own instruction-step
+        // loop consults before executing each instruction. Unlike Watches
+        // (which only sees memory access), this catches control flow
+        // reaching an address at all, including register-only conditions
+        // (a CMP/branch pair) that never touch memory.
+        BreakpointRegistry Breakpoints { get; }
 
         // The RAM-poke cheat engine (see CheatRegistry.cs) - same exposure
         // pattern as Watches/FrameLog, but the data flow runs the other

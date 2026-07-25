@@ -356,7 +356,7 @@ namespace EmuSen.TestingStudio.Views
             // wrapper overhead scaling up with scene complexity (frontend-
             // specific, e.g. more per-frame allocation/GC pressure) -
             // reporting both separately is how to tell which.
-            long runFrameTicksInWindow = 0;
+            TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
             var frameStopwatch = new Stopwatch();
 
             while (_running)
@@ -370,7 +370,7 @@ namespace EmuSen.TestingStudio.Views
                 {
                     frameStopwatch.Restart();
                     session.RunFrame();
-                    runFrameTicksInWindow += frameStopwatch.ElapsedTicks;
+                    runFrameTimeInWindow += frameStopwatch.Elapsed;
 
                     byte[] frame = session.GetFrameBufferRgba();
                     SubmitFrame(frame, session.ScreenWidth);
@@ -380,11 +380,11 @@ namespace EmuSen.TestingStudio.Views
                     if (windowElapsed >= TimeSpan.FromSeconds(1))
                     {
                         double fps = framesInWindow / windowElapsed.TotalSeconds;
-                        double runFrameMs = TimeSpan.FromTicks(runFrameTicksInWindow).TotalMilliseconds / framesInWindow;
+                        double runFrameMs = runFrameTimeInWindow.TotalMilliseconds / framesInWindow;
                         double totalMs = windowElapsed.TotalMilliseconds / framesInWindow;
                         Dispatcher.UIThread.Post(() => FpsText.Text = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms)");
                         framesInWindow = 0;
-                        runFrameTicksInWindow = 0;
+                        runFrameTimeInWindow = TimeSpan.Zero;
                         fpsWindowStart = clock.Elapsed;
                     }
                 }

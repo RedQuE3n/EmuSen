@@ -120,8 +120,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
         }
 
+        // Diagnostic only (see DebugSettings.DspKeyOnLogging) - lets a
+        // KeyOn log line show how far apart consecutive triggers actually
+        // are, to distinguish a legitimate fast rhythmic pattern from a
+        // suspicious retrigger burst.
+        private long _sampleCounter;
+
         private void GenerateSample()
         {
+            _sampleCounter++;
             ProcessKeyEvents();
 
             short leftSample = 0;
@@ -182,7 +189,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 bool konBit = (konRising & (1 << v)) != 0;
                 bool koffBit = (koffRising & (1 << v)) != 0;
 
-                if (konBit) _voices[v].KeyOn(dirTableAddr);
+                if (konBit) _voices[v].KeyOn(dirTableAddr, _sampleCounter);
                 // KeyOff wins if both are newly set - see Venus_APU.md §3.3.
                 if (koffBit) _voices[v].KeyOff();
             }

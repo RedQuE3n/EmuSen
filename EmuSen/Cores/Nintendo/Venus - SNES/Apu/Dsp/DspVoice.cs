@@ -1,12 +1,21 @@
 using System;
+using EmuSen.Audio;
+using EmuSen.Debug;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
     internal enum EnvelopeStage { Attack, Decay, Sustain, Release, Off }
 
-    // One S-DSP voice: BRR sample playback and the ADSR/GAIN envelope that
-    // scales it. Register field values are kept in sync by SDsp. See
-    // Venus_APU.md §4 for what's not implemented.
+    // One S-DSP voice: BRR sample playback (with real Gaussian
+    // interpolation and the hardware's KeyOn startup delay - both ported
+    // from Mesen2's DspVoice.cpp after the first pass at this, which
+    // decoded a whole 16-sample block up front and picked the nearest raw
+    // sample with no interpolation at all, turned out to still sound
+    // garbled once the separate SPC700 clock-rate bug was fixed) and the
+    // ADSR/GAIN envelope that scales it. See Venus_APU.md §4 for what's
+    // still not implemented - echo/FIR is the big remaining gap, not
+    // attempted here; it's a genuinely separate subsystem, not something
+    // that would explain garbled *voice* output.
     internal class DspVoice
     {
         // Rate/period table - see Venus_APU.md §4.4.
@@ -19,11 +28,35 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private readonly BrrDecoder _brr = new BrrDecoder();
         private byte[] _ram = null!;
 
-        private ushort _blockAddr;
-        private short[] _currentBlock = new short[16];
-        private int _blockPos;
-        private int _sampleFrac; // 12-bit fractional playback position; 0x1000 = one full source sample
-        private ushort _loopAddr;
+        // Circular buffer of the last 12 decoded (doubled-representation -
+        // see BrrDecoder.DecodeQuad) samples - holds more than just the
+        // current quad specifically so Gaussian interpolation has real
+        // lookback samples available right at a quad/block boundary,
+        // matching real hardware rather than starting each new block from
+        // a clean slate.
+        private readonly short[] _sampleBuffer = new short[12];
+        private int _bufferPos; // cycles 0, 4, 8 - see DecodeNextQuad's own comment
+
+        private ushort _brrAddress;   // current 9-byte BRR block's address
+        private int _brrOffset;       // 1,3,5,7 - byte offset of the next quad to decode within the block
+        private byte _brrHeader;      // header byte of the current block (bytes/filter/shift/end/loop flags)
+        private ushort _pendingStartAddr;
+        private ushort _pendingLoopAddr;
+
+        // 15-bit fixed-point playback position within the current quad -
+        // bits 12-13 select which of the last 4 decoded samples to center
+        // interpolation on, bits 0-11 are the Gaussian fractional weight.
+        // Wraps by masking off bit 14 (not a full mod), matching hardware -
+        // see GetNextSample's own comment on the exact sequence this
+        // mirrors from Mesen's Step3c/Step4.
+        private int _interpolationPos;
+
+        // Real hardware delays a newly key-on'd voice by 5 samples before
+        // it outputs anything real (envelope pinned to 0 the whole time) -
+        // skipping this previously meant a note's very first samples came
+        // from a not-yet-properly-primed decode state.
+        private int _keyOnDelay;
+
         private bool _active;
 
         private EnvelopeStage _stage = EnvelopeStage.Off;
@@ -39,10 +72,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         public void Reset()
         {
             _brr.Reset();
-            _blockAddr = 0;
-            _blockPos = 0;
-            _sampleFrac = 0;
-            _loopAddr = 0;
+            _brrAddress = 0;
+            _brrOffset = 1;
+            _brrHeader = 0;
+            _pendingStartAddr = 0;
+            _pendingLoopAddr = 0;
+            Array.Clear(_sampleBuffer, 0, _sampleBuffer.Length);
+            _bufferPos = 0;
+            _interpolationPos = 0;
+            _keyOnDelay = 0;
             _active = false;
             _stage = EnvelopeStage.Off;
             _envelope = 0;
@@ -55,19 +93,37 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         public void AttachMemory(byte[] ram) => _ram = ram;
 
+        private long _lastKeyOnSample = long.MinValue;
+
         // dirTableAddr is the resolved Sample Directory base (DIR register * 0x100).
         // Each entry is 4 bytes: 16-bit start address, 16-bit loop address.
-        public void KeyOn(int dirTableAddr)
+        public void KeyOn(int dirTableAddr, long sampleCounter = 0)
         {
             int entry = (dirTableAddr + Srcn * 4) & 0xFFFF;
-            ushort startAddr = (ushort)(_ram[entry] | (_ram[(entry + 1) & 0xFFFF] << 8));
-            _loopAddr = (ushort)(_ram[(entry + 2) & 0xFFFF] | (_ram[(entry + 3) & 0xFFFF] << 8));
+            _pendingStartAddr = (ushort)(_ram[entry] | (_ram[(entry + 1) & 0xFFFF] << 8));
+            _pendingLoopAddr = (ushort)(_ram[(entry + 2) & 0xFFFF] | (_ram[(entry + 3) & 0xFFFF] << 8));
 
-            _blockAddr = startAddr;
+            if (DebugSettings.DspKeyOnLogging)
+            {
+                byte header = _ram[_pendingStartAddr];
+                long deltaSamples = _lastKeyOnSample == long.MinValue ? -1 : sampleCounter - _lastKeyOnSample;
+                _lastKeyOnSample = sampleCounter;
+                Console.WriteLine(
+                    $"[DSP-KEYON] t={sampleCounter / (double)AudioSettings.SampleRate:F3}s (+{deltaSamples} samples since this voice's last) Srcn=0x{Srcn:X2} dir=0x{dirTableAddr:X4} entry=0x{entry:X4} " +
+                    $"startAddr=0x{_pendingStartAddr:X4} loopAddr=0x{_pendingLoopAddr:X4} header=0x{header:X2} " +
+                    $"(shift={(header >> 4) & 0xF} filter={(header >> 2) & 3} end={header & 1} loop={(header >> 1) & 1}) " +
+                    $"pitch=0x{Pitch:X4} volL={(sbyte)VolL} volR={(sbyte)VolR} adsr1=0x{Adsr1:X2} adsr2=0x{Adsr2:X2} gain=0x{Gain:X2}");
+            }
+
             _brr.Reset();
-            DecodeCurrentBlock();
-            _blockPos = 0;
-            _sampleFrac = 0;
+            _brrAddress = _pendingStartAddr;
+            _brrOffset = 1;
+            _brrHeader = _ram[_brrAddress];
+            Array.Clear(_sampleBuffer, 0, _sampleBuffer.Length);
+            _bufferPos = 0;
+            _interpolationPos = 0;
+            _keyOnDelay = 5;
+
             _envelope = 0;
             _envelopeCounter = 0;
             _stage = EnvelopeStage.Attack;
@@ -80,39 +136,51 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (_active) _stage = EnvelopeStage.Release;
         }
 
-        private void DecodeCurrentBlock()
+        // Decodes the next 4 samples (one nibble-pair) into the circular
+        // buffer and advances _brrOffset/_brrAddress to the following
+        // quad/block - ported from Mesen's DecodeBrrSample + the
+        // block-advance logic in its Step4. _bufferPos cycles 0/4/8
+        // (matching Mesen's own `if(_bufferPos<=4) _bufferPos+=4; else
+        // _bufferPos=0;`, not a plain modulo) so the buffer always keeps
+        // the 3 most recent quads (12 samples) available for interpolation
+        // lookback even right at a block boundary.
+        private void DecodeNextQuad()
         {
-            _currentBlock = _brr.DecodeBlock(_ram, _blockAddr);
-        }
+            byte b0 = _ram[(_brrAddress + _brrOffset) & 0xFFFF];
+            byte b1 = _ram[(_brrAddress + _brrOffset + 1) & 0xFFFF];
+            short[] quad = _brr.DecodeQuad(_brrHeader, b0, b1);
+            for (int i = 0; i < 4; i++) _sampleBuffer[_bufferPos + i] = quad[i];
 
-        private void AdvanceSourceSample()
-        {
-            _blockPos++;
-            if (_blockPos < 16) return;
+            if (_bufferPos <= 4) _bufferPos += 4;
+            else _bufferPos = 0;
 
-            byte header = _ram[_blockAddr];
-            if (BrrDecoder.IsEndBlock(header))
+            if (_brrOffset >= 7)
             {
-                if (BrrDecoder.IsLoopBlock(header))
+                if (BrrDecoder.IsEndBlock(_brrHeader))
                 {
-                    // No _brr.Reset() here on purpose - see Venus_APU.md §4.2.
-                    _blockAddr = _loopAddr;
+                    if (BrrDecoder.IsLoopBlock(_brrHeader))
+                    {
+                        _brrAddress = _pendingLoopAddr;
+                    }
+                    else
+                    {
+                        _active = false;
+                        Ended = true;
+                        _stage = EnvelopeStage.Off;
+                        return;
+                    }
                 }
                 else
                 {
-                    _active = false;
-                    Ended = true;
-                    _stage = EnvelopeStage.Off;
-                    return;
+                    _brrAddress = (ushort)(_brrAddress + 9);
                 }
+                _brrOffset = 1;
+                _brrHeader = _ram[_brrAddress];
             }
             else
             {
-                _blockAddr = (ushort)(_blockAddr + 9);
+                _brrOffset += 2;
             }
-
-            DecodeCurrentBlock();
-            _blockPos = 0;
         }
 
         // Produces one output-rate sample; SDsp applies VolL/VolR and mixes.
@@ -120,18 +188,49 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             if (!_active) return 0;
 
-            _sampleFrac += Pitch;
-            while (_sampleFrac >= 0x1000 && _active)
+            // Silent during the 5-sample KeyOn startup delay - real
+            // hardware pins envelope/pitch to 0 the whole time. The
+            // circular buffer is primed (zeroed at KeyOn) so interpolation
+            // right at the end of the delay has real, if silent, history
+            // to reference instead of stale data from a previous note.
+            if (_keyOnDelay > 0)
             {
-                _sampleFrac -= 0x1000;
-                AdvanceSourceSample();
+                _keyOnDelay--;
+                if (_keyOnDelay == 0)
+                {
+                    // Force an immediate decode on the very next call
+                    // instead of wasting one more sample on an empty
+                    // buffer - matches the observable effect of hardware
+                    // already having the sample pointer ready to go the
+                    // instant the delay elapses.
+                    _interpolationPos = 0x4000;
+                }
+                return 0;
             }
 
-            if (!_active) return 0;
+            // Interpolate using the CURRENT position (i.e. from wherever
+            // the previous call's advance left it) before touching
+            // anything else this call - matches the real chip evaluating
+            // output from the position it already has, then deciding
+            // whether a new quad is needed, then advancing for next time.
+            short raw = DspInterpolation.Gauss4Point(_interpolationPos, _sampleBuffer, _bufferPos);
 
-            int raw = _currentBlock[_blockPos];
+            if (_interpolationPos >= 0x4000)
+            {
+                DecodeNextQuad();
+            }
+
+            _interpolationPos = (_interpolationPos & 0x3FFF) + Pitch;
+            if (_interpolationPos > 0x7FFF) _interpolationPos = 0x7FFF;
+
+            if (!_active)
+            {
+                // DecodeNextQuad just hit a non-looping end block.
+                StepEnvelope();
+                return 0;
+            }
+
             int scaled = (raw * _envelope) >> 11;
-
             StepEnvelope();
 
             return (short)Math.Clamp(scaled, short.MinValue, short.MaxValue);

@@ -148,8 +148,20 @@ namespace EmuSen.Debug
                 w.Events.Add(ev);
                 if (w.Events.Count > Watch.MaxStoredEvents) w.Events.RemoveAt(0);
 
-                string tag = accessKind == WatchKind.Write ? "W" : "R";
-                Console.WriteLine($"[WATCH #{w.Id}] {tag} {spaceName}:0x{address:X} = 0x{value:X2} ({context})");
+                // Storing the event above always happens regardless of
+                // MasterLoggingEnabled - watch/log commands querying stored
+                // events (`watch log <id>`) should keep working even with
+                // logging silenced. Only the live console echo respects the
+                // master switch, matching every DebugSettings.*Logging flag's
+                // own behavior - previously this printed unconditionally,
+                // which meant "turn all logging off" didn't actually silence
+                // an active watch, a real gap from every other trace in the
+                // project respecting that switch.
+                if (DebugSettings.MasterLoggingEnabled)
+                {
+                    string tag = accessKind == WatchKind.Write ? "W" : "R";
+                    Console.WriteLine($"[WATCH #{w.Id}] {tag} {spaceName}:0x{address:X} = 0x{value:X2} ({context})");
+                }
             }
         }
     }

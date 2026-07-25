@@ -188,7 +188,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
         }
 
-        private byte Read8(ushort address)
+        // Public purely for testability - see SpcValidation harness (or
+        // wherever this ends up documented). A raw poke into Ram[] isn't
+        // equivalent to a real write for $00F2-$00F7 (DSP register access,
+        // APU communication ports) - those never touch Ram at all, they
+        // live only in Dsp's register file / _inPorts/_outPorts - so a
+        // test harness needs the real Read8/Write8 semantics to set up and
+        // verify state for any test touching that range. No effect on
+        // production callers, which already only ever called these from
+        // within this class.
+        public byte Read8(ushort address)
         {
             // Intercept APU Communication Ports
             if (address >= 0x00F4 && address <= 0x00F7)
@@ -220,7 +229,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             return Ram[address];
         }
 
-        private void Write8(ushort address, byte data)
+        // Public for the same testability reason as Read8 above.
+        public void Write8(ushort address, byte data)
         {
             // Intercept APU Communication Ports
             if (address >= 0x00F4 && address <= 0x00F7)

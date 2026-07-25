@@ -43,7 +43,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             _instructions[0xDB] = new SpcInstruction { Name = "MOV dp+X, Y", AddrMode = AddrDirectPageX, Operate = OpMOV_dp_Y, Cycles = 5 };
             _instructions[0xDE] = new SpcInstruction { Name = "CBNE dp+X, rel", AddrMode = AddrDirectPageX, Operate = OpCBNE_dp_rel, Cycles = 6 };
             _instructions[0x2E] = new SpcInstruction { Name = "CBNE dp, rel", AddrMode = AddrDirectPage, Operate = OpCBNE_dp_rel, Cycles = 5 };
-            _instructions[0x08] = new SpcInstruction { Name = "OR A, dp", AddrMode = AddrDirectPage, Operate = OpOR_A_dp, Cycles = 3 };
+            _instructions[0x08] = new SpcInstruction { Name = "OR A, #imm", AddrMode = AddrImmediate, Operate = OpOR_A_dp, Cycles = 2 };
             _instructions[0xB0] = new SpcInstruction { Name = "BCS rel", AddrMode = AddrRelative, Operate = OpBCS, Cycles = 2 };
             
             // --- Port Polling & Memory Mapping ---

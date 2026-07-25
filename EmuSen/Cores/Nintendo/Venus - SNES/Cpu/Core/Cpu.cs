@@ -87,7 +87,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             public override int GetHashCode() => HashCode.Combine(Pb, Pc, Opcode, TargetAddr);
         }
 
-        private readonly DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
+        // Holds delegates (a Console.WriteLine reference plus two closures)
+        // internally - not serializable, same reasoning as _instructions
+        // above (case 1 in StateSerializer's own doc comment), just not
+        // caught at the time this field was added. Surfaced by the
+        // headless debug harness's own --savestate/--loadstate smoke test:
+        // reflecting into a delegate hits its private method-pointer field
+        // (a raw IntPtr), which StateSerializer has no case for.
+        [EmuSen.Common.SkipInState] private readonly DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
         public Cpu(MemoryBus bus)

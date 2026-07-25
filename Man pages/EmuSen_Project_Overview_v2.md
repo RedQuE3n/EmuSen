@@ -79,6 +79,13 @@ EmuSen Project/
 │   │                                          #   ones of any flush at all), so a hard kill or crash
 │   │                                          #   that skips Dispose() only loses a fraction of a
 │   │                                          #   second of output, for every category alike.
+│   │                                          #   Dispose() only closes the per-category files once
+│   │                                          #   Join() confirms the worker thread actually drained
+│   │                                          #   and exited - closing them on a Join timeout used to
+│   │                                          #   race the worker mid-write, which is what produced
+│   │                                          #   truncated last lines even on a clean window-close.
+│   │                                          #   A timeout now just leaves the handles open (and
+│   │                                          #   prints a console warning) instead of risking that.
 │   ├── Cores/
 │   │   ├── Nintendo/
 │   │   │   ├── Venus - SNES/                 # Namespace stays plain "Venus" (C# identifiers can't

@@ -100,8 +100,11 @@ namespace EmuSen.RaylibFrontend
                 Console.SetOut(logWriter);
 
                 core.LoadRom(romPath);
-                DebugSettings.CpuVerboseLogging = false;
-                DebugSettings.Spc700VerboseLogging = false;
+                // On by default for the current test pass - previously
+                // forced off right after load, which is why cpu.log/apu.log
+                // only ever had the one-time startup lines.
+                DebugSettings.CpuVerboseLogging = true;
+                DebugSettings.Spc700VerboseLogging = true;
 
                 // Debug toolchain, built once - see EmuSen_Frontend_Driver.md §1.
                 SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!);

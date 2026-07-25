@@ -12,8 +12,7 @@
                   Content="Enable Logging (master switch)"
                   FontWeight="Bold"
                   Margin="0,0,0,4"
-                  Checked="OnMasterLoggingChanged"
-                  Unchecked="OnMasterLoggingChanged" />
+                  IsCheckedChanged="OnMasterLoggingChanged" />
 
         <TextBlock DockPanel.Dock="Top"
                    Text="Turns every flag below on/off at once without changing any of them individually - flip it back on to restore whatever was checked before. Individual flags are disabled while this is off."

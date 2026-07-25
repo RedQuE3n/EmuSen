@@ -90,8 +90,7 @@ namespace EmuSen.TestingStudio.Views
                 foreach (Flag flag in flags)
                 {
                     var checkBox = new CheckBox { Content = flag.Label, IsChecked = flag.Get() };
-                    checkBox.Checked += (_, _) => flag.Set(true);
-                    checkBox.Unchecked += (_, _) => flag.Set(false);
+                    checkBox.IsCheckedChanged += (_, _) => flag.Set(checkBox.IsChecked == true);
                     _flagCheckBoxes.Add(checkBox);
 
                     FlagsPanel.Children.Add(checkBox);

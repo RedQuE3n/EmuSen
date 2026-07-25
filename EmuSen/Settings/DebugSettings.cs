@@ -64,6 +64,22 @@ namespace EmuSen.Debug
             set => _spc700VerboseLogging = value;
         }
 
+        // --- DspVoice.cs ---
+        // Logs every KeyOn (note trigger): SRCN, the resolved sample-
+        // directory entry, computed start/loop address, the BRR header
+        // byte actually found there, and the voice's pitch/volume - added
+        // for the "audio still sounds garbled after fixing SPC700 timing"
+        // investigation, to check whether the SPC700 sound driver is
+        // triggering voices with sane-looking sample pointers at all,
+        // independent of whatever BrrDecoder/DspVoice do with them
+        // afterward.
+        private static bool _dspKeyOnLogging = false;
+        public static bool DspKeyOnLogging
+        {
+            get => MasterLoggingEnabled && _dspKeyOnLogging;
+            set => _dspKeyOnLogging = value;
+        }
+
         // --- Ppu.cs ---
         private static bool _cgWriteLogging = false;
         public static bool CgWriteLogging

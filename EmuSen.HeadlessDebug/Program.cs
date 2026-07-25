@@ -14,7 +14,7 @@ using EmuSen.Debug;
 // results to a plain log file.
 //
 // Usage:
-//   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--loadstate path] [--savestate path]
+//   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...
 //
 // --watch registers an extra watch before the run starts (kind is
 // write/read/both, default write) - space/addr/len match `watch add`'s own
@@ -33,6 +33,10 @@ using EmuSen.Debug;
 // before frame 0, for starting directly from an already-reached scene
 // instead of re-deriving it via --tap every run. --savestate writes one
 // out after the frame loop finishes, to capture a moment for reuse later.
+// --screenshot dumps an uncompressed BMP of GetFrameBufferRgba() right
+// after the given frame runs - the only way to actually see what a
+// headless run reached, short of guessing from RAM addresses and sprite
+// dumps alone.
 class Program
 {
     static int Main(string[] args)
@@ -61,15 +65,42 @@ class Program
         string? loadStatePath = null;
         string? saveStatePath = null;
         bool verbose = false;
+        long cpuLogStart = -1, cpuLogEnd = -1;
         var taps = new List<(long Start, long End, EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton Button)>();
+        var screenshots = new List<(long Frame, string Path)>();
         for (int i = 2; i < args.Length; i++)
         {
-            if (args[i] == "--watch" && i + 1 < args.Length) extraWatches.Add(args[++i]);
+            if (args[i] == "--cpulog" && i + 1 < args.Length)
+            {
+                // startFrame:endFrame - windows DebugSettings.CpuVerboseLogging
+                // to just the frames given, instead of the F4 prompt's
+                // instruction-count-based `trace` command (which has no way
+                // to be armed for a future frame in a script that isn't
+                // interactive). Every instruction's disassembly prints
+                // straight to Console.Out, same as the DMA logging --verbose
+                // already enables, so it shows up in --out like everything
+                // else - just very high-volume, hence windowing it tightly.
+                string[] p = args[++i].Split(':');
+                cpuLogStart = long.Parse(p[0]);
+                cpuLogEnd = long.Parse(p[1]);
+            }
+            else if (args[i] == "--watch" && i + 1 < args.Length) extraWatches.Add(args[++i]);
             else if (args[i] == "--script" && i + 1 < args.Length) scriptPath = args[++i];
             else if (args[i] == "--out" && i + 1 < args.Length) outPath = args[++i];
             else if (args[i] == "--verbose") verbose = true;
             else if (args[i] == "--loadstate" && i + 1 < args.Length) loadStatePath = args[++i];
             else if (args[i] == "--savestate" && i + 1 < args.Length) saveStatePath = args[++i];
+            else if (args[i] == "--screenshot" && i + 1 < args.Length)
+            {
+                // frame:path - dumps GetFrameBufferRgba() as an uncompressed
+                // BMP right after that frame runs, since a headless run has
+                // no window to look at otherwise. BMP (not PNG) specifically
+                // because it needs zero compression/encoding logic - just a
+                // header in front of the same top-down-flipped RGBA bytes
+                // ICore already hands back.
+                string[] p = args[++i].Split(new[] { ':' }, 2);
+                screenshots.Add((long.Parse(p[0]), p[1]));
+            }
             else if (args[i] == "--tap" && i + 1 < args.Length)
             {
                 // frame:button[:durationFrames] - a scripted button press,
@@ -150,12 +181,31 @@ class Program
                 bool pressed = frame >= tap.Start && frame < tap.End;
                 core.Bus!.Input.SetButton(tap.Button, pressed);
             }
+            if (cpuLogStart >= 0)
+            {
+                // CpuVerboseLogging's own getter is gated by
+                // MasterLoggingEnabled (same pattern as DmaVerboseLogging -
+                // see --verbose's comment above), so both need setting for
+                // this window to actually produce output.
+                bool inWindow = frame >= cpuLogStart && frame < cpuLogEnd;
+                EmuSen.Debug.DebugSettings.MasterLoggingEnabled = inWindow || verbose;
+                EmuSen.Debug.DebugSettings.CpuVerboseLogging = inWindow;
+            }
             core.RunFrame();
             if (frame > 0 && frame % progressEvery == 0)
             {
                 Emit($"[frame {frame}/{frameCount}]");
             }
+            foreach (var shot in screenshots)
+            {
+                if (shot.Frame == frame)
+                {
+                    WriteBmp(shot.Path, core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight);
+                    Emit($"[SCREENSHOT] Frame {frame} -> {shot.Path}");
+                }
+            }
         }
+        core.Cpu?.FlushVerboseTrace();
         Emit($"[RUN] Done, {core.TotalFrames} total frames executed.");
 
         // Captures whatever scene --tap/frame-count navigation just
@@ -202,5 +252,48 @@ class Program
         }
 
         return 0;
+    }
+
+    // Minimal uncompressed 32bpp BMP writer - no case for PNG's DEFLATE
+    // needed just to look at a frame. BMP rows are stored bottom-up and
+    // BGRA rather than RGBA, both handled by walking rgba backwards a row
+    // at a time and swapping R/B per pixel; everything else about the
+    // format is a fixed-size header.
+    private static void WriteBmp(string path, byte[] rgba, int width, int height)
+    {
+        int rowSize = width * 4;
+        int imageSize = rowSize * height;
+        int fileSize = 54 + imageSize;
+
+        using var fs = new FileStream(path, FileMode.Create);
+        using var w = new BinaryWriter(fs);
+
+        w.Write((byte)'B'); w.Write((byte)'M');
+        w.Write(fileSize);
+        w.Write(0); // reserved
+        w.Write(54); // pixel data offset
+
+        w.Write(40); // DIB header size
+        w.Write(width);
+        w.Write(height);
+        w.Write((short)1); // planes
+        w.Write((short)32); // bits per pixel
+        w.Write(0); // no compression
+        w.Write(imageSize);
+        w.Write(2835); w.Write(2835); // ~72 DPI
+        w.Write(0); w.Write(0); // colors used/important
+
+        for (int y = height - 1; y >= 0; y--)
+        {
+            int rowStart = y * rowSize;
+            for (int x = 0; x < width; x++)
+            {
+                int i = rowStart + x * 4;
+                w.Write(rgba[i + 2]); // B
+                w.Write(rgba[i + 1]); // G
+                w.Write(rgba[i + 0]); // R
+                w.Write(rgba[i + 3]); // A
+            }
+        }
     }
 }

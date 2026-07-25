@@ -37,7 +37,16 @@
         <Border DockPanel.Dock="Bottom"
                 Padding="6,3"
                 Background="{DynamicResource SystemChromeLowColor}">
-            <TextBlock x:Name="StatusText" Text="No ROM loaded" />
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" x:Name="StatusText" Text="No ROM loaded" />
+                <!-- Measured emulated frames/sec (TotalFrames delta over real
+                     elapsed time), not a presentation/paint-rate counter -
+                     see MainWindow.axaml.cs's EmulationLoop. Diagnostic for
+                     telling "RunFrame() itself is behind real time" apart
+                     from "presentation is just choppy" during the Testing
+                     Studio slowdown investigation. -->
+                <TextBlock Grid.Column="1" x:Name="FpsText" Text="" />
+            </Grid>
         </Border>
 
         <!-- Game viewport. GameView shows the live frame once a ROM is

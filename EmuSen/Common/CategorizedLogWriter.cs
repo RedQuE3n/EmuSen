@@ -33,13 +33,16 @@ namespace EmuSen.Common
     // thread now just resolves which category a line belongs to (cheap -
     // a prefix match against an in-memory table) and hands the line to a
     // bounded queue; a single consumer thread drains it and does the
-    // actual buffered file I/O, flushing to disk on its own during idle
-    // gaps (see FlushIntervalMs) rather than after every line, so a hard
-    // kill or crash that never reaches Dispose() only loses a fraction of
-    // a second of output instead of the whole session. Console echo stays
-    // synchronous and un-queued on purpose - it's cheap relative to disk
-    // I/O, and live debugging benefits from seeing output immediately
-    // rather than delayed behind a queue.
+    // actual buffered file I/O, flushing every category to disk on a
+    // fixed timer (see FlushIntervalMs) rather than after every line, so
+    // a hard kill or crash that never reaches Dispose() only loses a
+    // fraction of a second of output instead of the whole session -
+    // every category, not just whichever ones happen to be high-volume
+    // enough to fill their own internal buffer (see FlushIntervalMs's own
+    // comment for the real session that exposed this). Console echo
+    // stays synchronous and un-queued on purpose - it's cheap relative to
+    // disk I/O, and live debugging benefits from seeing output
+    // immediately rather than delayed behind a queue.
     public class CategorizedLogWriter : System.IO.TextWriter
     {
         // A queue this deep would mean tens of thousands of log lines
@@ -116,9 +119,9 @@ namespace EmuSen.Common
         // Deliberately no AutoFlush here, unlike the old synchronous
         // design - StreamWriter's own internal buffer is what makes
         // batched background writes actually cheaper than the old
-        // flush-every-line behavior. Flushed periodically during idle
-        // gaps by ConsumeQueue (see FlushIntervalMs) and unconditionally
-        // on Dispose.
+        // flush-every-line behavior. Flushed on a fixed timer by
+        // ConsumeQueue (see FlushIntervalMs) and unconditionally on
+        // Dispose.
         private static StreamWriter OpenFile(string logDir, string category)
         {
             return new StreamWriter(Path.Combine(logDir, category + ".log"), append: false);
@@ -135,27 +138,49 @@ namespace EmuSen.Common
             return _general;
         }
 
-        // Idle gaps get an actual disk flush at most this often - frequent
-        // enough that a hard kill or native crash (a Raylib segfault, a
-        // Ctrl+C that skips .NET's normal unwind, anything that never
-        // reaches Dispose()) loses at most a fraction of a second of
-        // buffered lines, rare enough that it's nowhere near the per-line
-        // syscall cost AutoFlush=true used to pay during a real burst
-        // (CpuVerboseLogging etc.). Dispose()'s own drain-then-flush is
-        // still the real guarantee for a graceful shutdown; this is
-        // damage control for the ungraceful ones.
+        // Every category gets an actual disk flush at least this often -
+        // frequent enough that a hard kill or native crash (a Raylib
+        // segfault, a Ctrl+C that skips .NET's normal unwind, anything
+        // that never reaches Dispose()) loses at most a fraction of a
+        // second of buffered lines, rare enough that it's nowhere near
+        // the per-line syscall cost AutoFlush=true used to pay during a
+        // real burst (CpuVerboseLogging etc.). Dispose()'s own
+        // drain-then-flush is still the real guarantee for a graceful
+        // shutdown; this is damage control for the ungraceful ones.
+        //
+        // Deliberately time-based, not "flush whenever the queue happens
+        // to go idle" (the first version of this did that, via TryTake's
+        // own timeout) - a real session showed why that's not good
+        // enough: with one shared queue across every category, a handful
+        // of high-volume categories (ppu/memory/debug under their normal
+        // default-on trace flags) can keep the queue non-empty
+        // continuously for an entire play session, so an idle-triggered
+        // flush might never fire even once. .NET's own internal
+        // StreamWriter/FileStream buffers happened to flush those
+        // high-volume files anyway purely from sheer data volume - but
+        // low-volume categories (cpu/apu/general, often just a session's
+        // one-time startup banner) never filled that buffer and got
+        // flushed exactly zero times before a non-graceful exit, ending
+        // up completely empty. A plain elapsed-time check on every loop
+        // iteration - independent of whether TryTake found anything -
+        // flushes all categories on the same cadence regardless of how
+        // busy any single one of them is.
         private const int FlushIntervalMs = 500;
 
         // Runs entirely on _worker. TryTake blocks up to FlushIntervalMs
-        // waiting for the next entry - if one arrives, write it (no flush
-        // yet, that's what makes batching cheaper than the old per-line
-        // AutoFlush); if the wait times out because nothing new showed up,
-        // treat that idle gap as a good moment to flush what's already
-        // been written. IsCompleted (Complete Adding() called AND the
-        // queue is empty) is what actually ends the loop - see Dispose()
-        // for why that combination matters.
+        // waiting for the next entry (bounding how long a flush check can
+        // be delayed even if the queue's truly empty); if one arrives,
+        // write it - no flush yet, that's what makes batching cheaper
+        // than the old per-line AutoFlush. The elapsed-time check runs on
+        // every iteration regardless of whether TryTake found something,
+        // which is what fixes the starvation case above. IsCompleted
+        // (CompleteAdding() called AND the queue is empty) is what
+        // actually ends the loop - see Dispose() for why that combination
+        // matters.
         private void ConsumeQueue()
         {
+            var sinceLastFlush = System.Diagnostics.Stopwatch.StartNew();
+
             while (!_queue.IsCompleted)
             {
                 if (_queue.TryTake(out LogEntry entry, FlushIntervalMs))
@@ -163,9 +188,11 @@ namespace EmuSen.Common
                     if (entry.IsLine) entry.Target.WriteLine(entry.Text);
                     else entry.Target.Write(entry.Text);
                 }
-                else
+
+                if (sinceLastFlush.ElapsedMilliseconds >= FlushIntervalMs)
                 {
                     FlushAllFiles();
+                    sinceLastFlush.Restart();
                 }
             }
         }

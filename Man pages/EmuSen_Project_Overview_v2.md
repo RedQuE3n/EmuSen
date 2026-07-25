@@ -72,9 +72,13 @@ EmuSen Project/
 │   │                                          #   thread - see the class's own comment for why, and why
 │   │                                          #   callers now have to Dispose() it explicitly on every
 │   │                                          #   exit path instead of relying on AutoFlush. Also
-│   │                                          #   flushes to disk on its own during idle gaps (every
-│   │                                          #   500ms), so a hard kill or crash that skips Dispose()
-│   │                                          #   only loses a fraction of a second of output.
+│   │                                          #   flushes every category to disk on a fixed 500ms
+│   │                                          #   timer (not just when the shared queue happens to go
+│   │                                          #   idle - a real session showed high-volume categories
+│   │                                          #   can keep it busy continuously, starving low-volume
+│   │                                          #   ones of any flush at all), so a hard kill or crash
+│   │                                          #   that skips Dispose() only loses a fraction of a
+│   │                                          #   second of output, for every category alike.
 │   ├── Cores/
 │   │   ├── Nintendo/
 │   │   │   ├── Venus - SNES/                 # Namespace stays plain "Venus" (C# identifiers can't

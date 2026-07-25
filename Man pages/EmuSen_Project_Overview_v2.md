@@ -297,6 +297,18 @@ EmuSen Project/
         │                                #   and rendered underneath the next column's button
         ├── PreferencesWindow.axaml / .axaml.cs # Log directory / ROM directory / core picker (the
         │                                #   last one is scaffolding - only one core exists)
+        ├── DebugSettingsWindow.axaml / .axaml.cs # GUI on/off toggles for every DebugSettings
+        │                                #   *Logging flag, grouped by CPU/APU/DMA/PPU/Memory
+        │                                #   Bus, plus a bold master checkbox at the top bound
+        │                                #   to MasterLoggingEnabled - individual checkboxes
+        │                                #   disable themselves while it's off (see the
+        │                                #   window's own comment on why: DebugSettings only
+        │                                #   exposes each flag's post-AND effective value, not
+        │                                #   its raw pre-master setting, so a checkbox toggled
+        │                                #   while master is off wouldn't read back checked).
+        │                                #   Settings > Debug Logging..., available even before
+        │                                #   a ROM is loaded, in addition to the existing F4
+        │                                #   `log`/`trace` prompt commands.
         └── RomBrowserWindow.axaml / .axaml.cs  # Lists .smc/.sfc files from the configured ROM
                                          #   directory as a quicker alternative to the OS
                                          #   file picker (File > Browse ROMs...)

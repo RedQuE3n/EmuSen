@@ -14,7 +14,7 @@ using EmuSen.Debug;
 // results to a plain log file.
 //
 // Usage:
-//   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path]
+//   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]...
 //
 // --watch registers an extra watch before the run starts (kind is
 // write/read/both, default write) - space/addr/len match `watch add`'s own
@@ -23,7 +23,11 @@ using EmuSen.Debug;
 // `writers`, etc.) run once after the frame loop finishes; if omitted, a
 // default script just dumps every registered watch's full event log,
 // which is exactly what the Yoshi/coin investigation needs. --out mirrors
-// all output to a file in addition to stdout.
+// all output to a file in addition to stdout. --tap holds a button down
+// for <duration> frames (default 4) starting at frame <frame> - a
+// headless run otherwise sends no input at all, which is fine for a game
+// with its own idle-timeout demo (SMW) but leaves others (LttP's
+// file-select screen) stuck at a "press Start" prompt forever.
 class Program
 {
     static int Main(string[] args)
@@ -50,12 +54,26 @@ class Program
         string? scriptPath = null;
         string? outPath = null;
         bool verbose = false;
+        var taps = new List<(long Start, long End, EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton Button)>();
         for (int i = 2; i < args.Length; i++)
         {
             if (args[i] == "--watch" && i + 1 < args.Length) extraWatches.Add(args[++i]);
             else if (args[i] == "--script" && i + 1 < args.Length) scriptPath = args[++i];
             else if (args[i] == "--out" && i + 1 < args.Length) outPath = args[++i];
             else if (args[i] == "--verbose") verbose = true;
+            else if (args[i] == "--tap" && i + 1 < args.Length)
+            {
+                // frame:button[:durationFrames] - a scripted button press,
+                // since a headless run otherwise has no input at all and
+                // several games (LttP's file-select screen, unlike SMW's
+                // own idle-timeout demo) never progress past a "press
+                // Start" prompt without one.
+                string[] p = args[++i].Split(':');
+                long start = long.Parse(p[0]);
+                var button = Enum.Parse<EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton>(p[1], ignoreCase: true);
+                long duration = p.Length >= 3 ? long.Parse(p[2]) : 4;
+                taps.Add((start, start + duration, button));
+            }
         }
 
         // Off by default (matches DebugSettings.MasterLoggingEnabled's own
@@ -103,6 +121,11 @@ class Program
         const int progressEvery = 600; // ~10s of real 60fps gameplay
         for (long frame = 0; frame < frameCount; frame++)
         {
+            foreach (var tap in taps)
+            {
+                bool pressed = frame >= tap.Start && frame < tap.End;
+                core.Bus!.Input.SetButton(tap.Button, pressed);
+            }
             core.RunFrame();
             if (frame > 0 && frame % progressEvery == 0)
             {

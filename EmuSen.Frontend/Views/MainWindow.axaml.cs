@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -12,6 +13,7 @@ using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Frontend.Input;
+using EmuSen.Frontend.Settings;
 
 namespace EmuSen.Frontend.Views
 {
@@ -30,7 +32,16 @@ namespace EmuSen.Frontend.Views
         private string? _currentRomPath;
         private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
         private readonly GamepadBindingMap _gamepadBindings = GamepadBindingMap.Load();
+        private readonly AppSettings _appSettings = AppSettings.Load();
         private readonly GamepadManager _gamepad;
+
+        // Captured once at startup, before anything ever redirects
+        // Console.Out - restoring this (rather than whatever
+        // _activeLogWriter happened to be at the time) is what lets logging
+        // be turned off again (or repointed) without leaving Console.Out
+        // pointed at a disposed writer.
+        private readonly TextWriter _originalConsoleOut = Console.Out;
+        private CategorizedLogWriter? _activeLogWriter;
 
         // Keyboard and gamepad are tracked separately and combined with OR
         // logic - matches the console/Raylib build's own InputBindings.cs
@@ -50,6 +61,7 @@ namespace EmuSen.Frontend.Views
                 _timer?.Stop();
                 _session?.SaveSram();
                 _gamepad.Dispose();
+                StopLogging();
             };
 
             KeyDown += (_, e) => SetButtonFromKey(e.Key, pressed: true);
@@ -88,10 +100,18 @@ namespace EmuSen.Frontend.Views
 
         private async void OnOpenRomClick(object? sender, RoutedEventArgs e)
         {
+            IStorageFolder? startLocation = null;
+            if (!string.IsNullOrWhiteSpace(_appSettings.RomDirectory) && Directory.Exists(_appSettings.RomDirectory))
+            {
+                // TryGetFolderFromPathAsync takes a Uri, not a plain path string.
+                startLocation = await StorageProvider.TryGetFolderFromPathAsync(new Uri(_appSettings.RomDirectory));
+            }
+
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
                 Title = "Open ROM",
                 AllowMultiple = false,
+                SuggestedStartLocation = startLocation,
                 FileTypeFilter = new[]
                 {
                     new FilePickerFileType("SNES ROMs") { Patterns = new[] { "*.smc", "*.sfc" } },
@@ -105,9 +125,26 @@ namespace EmuSen.Frontend.Views
             LoadRom(file.Path.LocalPath, file.Name);
         }
 
+        // Alternative to the OS file picker above - lists .smc/.sfc files
+        // straight from AppSettings.RomDirectory, for anyone reloading
+        // different ROMs from the same test folder repeatedly. See
+        // RomBrowserWindow's own comment.
+        private async void OnBrowseRomsClick(object? sender, RoutedEventArgs e)
+        {
+            string? selected = await new RomBrowserWindow(_appSettings.RomDirectory).ShowDialog<string?>(this);
+            if (selected is null) return;
+
+            LoadRom(selected, Path.GetFileName(selected));
+        }
+
         private void OnControllerBindingsClick(object? sender, RoutedEventArgs e)
         {
             new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad).Show(this);
+        }
+
+        private void OnPreferencesClick(object? sender, RoutedEventArgs e)
+        {
+            new PreferencesWindow(_appSettings).Show(this);
         }
 
         private string? CurrentStatePath =>
@@ -171,6 +208,7 @@ namespace EmuSen.Frontend.Views
             try
             {
                 _session = new EmulatorSession();
+                StartLogging(_session.CoreName); // before LoadRom() so Cartridge's own load-time output is captured too
                 _session.LoadRom(path);
 
                 _bitmap = new WriteableBitmap(
@@ -250,6 +288,55 @@ namespace EmuSen.Frontend.Views
         private void OnExitClick(object? sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        // Reuses the console/Raylib build's own CategorizedLogWriter
+        // (Common/CategorizedLogWriter.cs) rather than building a second
+        // logging mechanism - it works by redirecting Console.Out, and
+        // the emulation core already writes every diagnostic message
+        // (Cartridge load info, DebugSettings-gated traces, etc.) via
+        // plain Console.WriteLine, so this frontend gets the exact same
+        // categorized cpu/ppu/apu/memory/debug/general log files the
+        // console build does, for free. No-ops if AppSettings.LogDirectory
+        // isn't set - logging is opt-in, not on by default, since a bug
+        // tester's whole point in configuring this is choosing where the
+        // files land.
+        //
+        // Called once per LoadRom() (not once at app startup) since,
+        // unlike the console build (one ROM per process), this frontend
+        // can load several ROMs across one running session - each gets
+        // its own timestamped directory, mirroring the console build's
+        // Logs/<CoreName>/console_<timestamp>/ convention but under the
+        // user-configured root and with a "gui_" prefix instead.
+        private void StartLogging(string coreName)
+        {
+            StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
+
+            if (string.IsNullOrWhiteSpace(_appSettings.LogDirectory)) return;
+
+            try
+            {
+                string logDir = Path.Combine(_appSettings.LogDirectory, coreName, $"gui_{DateTime.Now:yyyyMMdd_HHmmss}");
+                Directory.CreateDirectory(logDir);
+                _activeLogWriter = new CategorizedLogWriter(_originalConsoleOut, logDir);
+                Console.SetOut(_activeLogWriter);
+            }
+            catch (Exception ex)
+            {
+                // Best-effort - an unwritable log directory shouldn't block
+                // loading the ROM itself, just leave logging off for this
+                // session and say why in the status bar.
+                StatusText.Text = $"Logging disabled: {ex.Message}";
+            }
+        }
+
+        private void StopLogging()
+        {
+            if (_activeLogWriter is null) return;
+
+            Console.SetOut(_originalConsoleOut);
+            _activeLogWriter.Dispose();
+            _activeLogWriter = null;
         }
     }
 }

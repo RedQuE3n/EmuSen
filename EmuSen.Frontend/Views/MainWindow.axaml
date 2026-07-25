@@ -10,6 +10,7 @@
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
                 <MenuItem Header="_Open ROM..." Click="OnOpenRomClick" />
+                <MenuItem Header="_Browse ROMs..." Click="OnBrowseRomsClick" />
                 <Separator />
                 <MenuItem Header="E_xit" Click="OnExitClick" />
             </MenuItem>
@@ -28,6 +29,7 @@
 
             <MenuItem Header="_Settings">
                 <MenuItem Header="_Controller Bindings..." Click="OnControllerBindingsClick" />
+                <MenuItem Header="_Preferences..." Click="OnPreferencesClick" />
             </MenuItem>
         </Menu>
 

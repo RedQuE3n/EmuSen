@@ -106,5 +106,22 @@ namespace EmuSen.Common
             _general.Flush();
             foreach (var file in _files.Values) file.Flush();
         }
+
+        // The console/Raylib build never needed this - it constructs
+        // exactly one of these per process and lets the OS reclaim the
+        // handles on exit. A long-lived frontend that can load more than
+        // one ROM per process (the Avalonia build, switching to a fresh
+        // per-load log directory) needs the previous instance's files
+        // actually closed first, or repeated ROM loads leak open
+        // StreamWriter handles for the rest of the session.
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (var file in _files.Values) file.Dispose();
+                _general.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 }

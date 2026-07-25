@@ -1,7 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -20,15 +22,53 @@ namespace EmuSen.TestingStudio.Views
     public partial class MainWindow : Window
     {
         // ~60fps. Not synced to the core's actual scanline timing yet - this
-        // is a fixed-interval UI timer, which is fine for a first pass but
-        // will drift from real SNES frame timing over long sessions. Worth
-        // revisiting (e.g. accumulator-based stepping) once this is otherwise
-        // working.
+        // is a fixed-interval pacing target, which is fine for a first pass
+        // but will drift from real SNES frame timing over long sessions.
+        // Worth revisiting (e.g. accumulator-based stepping) once this is
+        // otherwise working.
         private static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / 60.0);
 
         private EmulatorSession? _session;
         private WriteableBitmap? _bitmap;
+
+        // Gamepad polling stays on the UI thread, on its own timer, separate
+        // from emulation itself (see _emuThread below) - GamepadManager.cs's
+        // own comment flags Silk.NET.SDL's exact API surface as unverified,
+        // and SDL's threading rules are platform-specific enough (some
+        // platforms expect event/controller polling to stay on the thread
+        // that called SDL_Init, which is this constructor's thread, i.e. the
+        // UI thread) that keeping it here is the safe default rather than
+        // something worth risking on a perf pass.
         private DispatcherTimer? _timer;
+
+        // Runs RunFrame() + frame-buffer readout off the UI thread entirely -
+        // previously both lived inside the DispatcherTimer tick above, which
+        // meant emulation work (and the WriteableBitmap copy after it)
+        // blocked Avalonia's UI/input/paint pump every single frame. This is
+        // the actual fix for Testing Studio running much slower than the
+        // console build, which always ran its equivalent loop off of any UI
+        // event pump to begin with (it doesn't have one). See
+        // EmulationLoop()/StartEmulationThread()/StopEmulationThread() below.
+        private Thread? _emuThread;
+        private volatile bool _running;
+
+        // Coalescing hand-off from _emuThread to the UI thread: the
+        // emulation thread can produce frames faster than Avalonia can
+        // present them, and posting one Dispatcher action per emulated frame
+        // would just queue them up and make the UI thread fall further and
+        // further behind. Instead, only ever have at most one Present
+        // dispatched at a time - _emuThread always overwrites _pendingFrame
+        // with the newest frame and only schedules a new Present if one
+        // isn't already in flight, so a slow UI thread simply drops
+        // intermediate frames rather than backing up a queue of them.
+        private sealed class FrameData
+        {
+            public required byte[] Pixels;
+            public required int Width;
+        }
+        private FrameData? _pendingFrame;
+        private int _presentScheduled;
+
         private string? _currentRomPath;
         private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
         private readonly GamepadBindingMap _gamepadBindings = GamepadBindingMap.Load();
@@ -59,6 +99,7 @@ namespace EmuSen.TestingStudio.Views
             Closing += (_, _) =>
             {
                 _timer?.Stop();
+                StopEmulationThread();
                 _session?.SaveSram();
                 _gamepad.Dispose();
                 StopLogging();
@@ -208,6 +249,7 @@ namespace EmuSen.TestingStudio.Views
         private void LoadRom(string path, string displayName)
         {
             _timer?.Stop();
+            StopEmulationThread(); // must fully stop before _session is replaced below - see that method's own comment
             _session?.SaveSram(); // flush whatever was previously running before switching
             // Must happen on the OLD session, before it's replaced below -
             // StartLogging()'s call to StopLogging() runs against whatever
@@ -233,9 +275,13 @@ namespace EmuSen.TestingStudio.Views
                 StatusText.Text = $"Running: {displayName}";
                 _currentRomPath = path;
 
+                // Gamepad polling only - see _timer's own field comment for
+                // why this stays separate from emulation itself.
                 _timer = new DispatcherTimer { Interval = FrameInterval };
-                _timer.Tick += (_, _) => RunOneFrame();
+                _timer.Tick += (_, _) => PollGamepad();
                 _timer.Start();
+
+                StartEmulationThread();
             }
             catch (Exception ex)
             {
@@ -244,17 +290,117 @@ namespace EmuSen.TestingStudio.Views
             }
         }
 
-        private void RunOneFrame()
+        private void StartEmulationThread()
         {
-            if (_session is null || _bitmap is null) return;
+            _running = true;
+            _emuThread = new Thread(EmulationLoop) { IsBackground = true, Name = "EmuSen-Emulation" };
+            _emuThread.Start();
+        }
 
+        // Signals the loop to stop and waits for it to actually exit before
+        // returning - callers (LoadRom, window Closing) need this to be
+        // synchronous since they go on to replace/dispose _session right
+        // after. Safe to call from the UI thread: EmulationLoop checks
+        // _running once per paced ~16ms frame interval at most, so Join()
+        // here never blocks for long, and it never blocks indefinitely since
+        // the loop has no other blocking wait.
+        private void StopEmulationThread()
+        {
+            if (_emuThread is null) return;
+            _running = false;
+            _emuThread.Join();
+            _emuThread = null;
+        }
+
+        // Runs entirely off the UI thread: RunFrame() (the actual CPU/PPU/
+        // APU work) and the frame-buffer readout no longer compete with
+        // Avalonia's input/paint pump the way they did inside the old
+        // DispatcherTimer tick. Only the final bitmap copy + present
+        // (PresentPendingFrame, dispatched below) needs the UI thread,
+        // since WriteableBitmap is UI-thread-affine.
+        //
+        // Input note: keyboard/gamepad button state is applied straight to
+        // _session.Bus.Input from the UI thread (SetButtonFromKey,
+        // PollGamepad's ApplyButtonState calls) while this thread
+        // concurrently calls RunFrame(), which reads that same state
+        // (Input.cs's LatchAutoJoypad/live-state fields). Deliberately left
+        // unsynchronized: each field involved is a single ushort/bool
+        // read-modify-write with exactly one writer (the UI thread), so the
+        // worst case is a button's state being observed one frame later
+        // than it otherwise would - not a torn read or a crash - which is
+        // an acceptable, already-inherent latency for a frame-latched input
+        // model like this one, not a new correctness risk introduced by
+        // moving emulation to its own thread.
+        private void EmulationLoop()
+        {
+            Stopwatch clock = Stopwatch.StartNew();
+            TimeSpan nextTick = clock.Elapsed;
+
+            while (_running)
+            {
+                nextTick += FrameInterval;
+
+                EmulatorSession? session = _session;
+                if (session is null) break;
+
+                try
+                {
+                    session.RunFrame();
+                    byte[] frame = session.GetFrameBufferRgba();
+                    SubmitFrame(frame, session.ScreenWidth);
+                }
+                catch (Exception ex)
+                {
+                    _running = false;
+                    string message = ex.Message;
+                    // Stop rather than spamming the same exception every
+                    // tick - matches the console/Raylib build's behavior of
+                    // halting and printing on a core exception rather than
+                    // trying to recover. StatusText is a UI element, so the
+                    // update has to go through the UI thread.
+                    Dispatcher.UIThread.Post(() => StatusText.Text = $"[CPU HALT] {message}");
+                    break;
+                }
+
+                TimeSpan remaining = nextTick - clock.Elapsed;
+                if (remaining > TimeSpan.Zero)
+                {
+                    Thread.Sleep(remaining);
+                }
+                else
+                {
+                    // Fell behind - resync to "now" instead of trying to
+                    // burst-catch-up, which would just run a pile of frames
+                    // back-to-back with no pacing at all.
+                    nextTick = clock.Elapsed;
+                }
+            }
+        }
+
+        // Called from the emulation thread. Publishes the newest frame and
+        // schedules a UI-thread Present only if one isn't already pending -
+        // see _pendingFrame's own field comment for why.
+        private void SubmitFrame(byte[] pixels, int width)
+        {
+            Interlocked.Exchange(ref _pendingFrame, new FrameData { Pixels = pixels, Width = width });
+
+            if (Interlocked.CompareExchange(ref _presentScheduled, 1, 0) == 0)
+            {
+                Dispatcher.UIThread.Post(PresentPendingFrame);
+            }
+        }
+
+        // Runs on the UI thread. Always presents whatever the newest frame
+        // is at the moment it actually runs, which may not be the same
+        // frame that triggered this dispatch if the emulation thread has
+        // since produced newer ones - that's the intended drop-stale-frames
+        // behavior, not a bug.
+        private void PresentPendingFrame()
+        {
             try
             {
-                PollGamepad();
-
-                _session.RunFrame();
-
-                byte[] frame = _session.GetFrameBufferRgba();
+                FrameData? frame = Interlocked.Exchange(ref _pendingFrame, null);
+                if (frame is null || _bitmap is null) return;
 
                 // The frame can now be a different width than the bitmap
                 // was created with - pseudo-hi-res (SETINI bit 3) makes a
@@ -267,10 +413,10 @@ namespace EmuSen.TestingStudio.Views
                 // just a cosmetic issue, since Marshal.Copy has no bounds
                 // checking of its own.
                 int expectedBytes = _bitmap.PixelSize.Width * _bitmap.PixelSize.Height * 4;
-                if (frame.Length != expectedBytes)
+                if (frame.Pixels.Length != expectedBytes)
                 {
                     _bitmap = new WriteableBitmap(
-                        new PixelSize(_session.ScreenWidth, EmulatorSession.ScreenHeight),
+                        new PixelSize(frame.Width, EmulatorSession.ScreenHeight),
                         new Vector(96, 96),
                         Avalonia.Platform.PixelFormat.Rgba8888,
                         AlphaFormat.Opaque);
@@ -279,18 +425,18 @@ namespace EmuSen.TestingStudio.Views
 
                 using (ILockedFramebuffer fb = _bitmap.Lock())
                 {
-                    Marshal.Copy(frame, 0, fb.Address, frame.Length);
+                    Marshal.Copy(frame.Pixels, 0, fb.Address, frame.Pixels.Length);
                 }
 
                 GameView.InvalidateVisual();
             }
-            catch (Exception ex)
+            finally
             {
-                // Stop rather than spamming the same exception every tick -
-                // matches the console/Raylib build's behavior of halting and
-                // printing on a core exception rather than trying to recover.
-                _timer?.Stop();
-                StatusText.Text = $"[CPU HALT] {ex.Message}";
+                // Reset only after the copy/invalidate above finishes, so
+                // while a Present is actually running, _emuThread keeps
+                // overwriting _pendingFrame without scheduling another one -
+                // the coalescing this whole mechanism exists for.
+                Interlocked.Exchange(ref _presentScheduled, 0);
             }
         }
 

@@ -216,10 +216,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int pixel = SampleBgPixel(ppu.Vram, tileAddr, r, cbit, bpp);
 
                     cache.Opaque[px] = pixel != 0;
-                    cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
 
+                    // IsWindowMasked deliberately only runs for opaque
+                    // pixels, matching the original short-circuited
+                    // "pixel != 0 && !IsWindowMasked(...)" check - calling
+                    // it unconditionally for every pixel (including fully
+                    // transparent ones, common for parallax/sky/background
+                    // gaps) was tried here first and made PPU rendering
+                    // slower than before this cache existed at all, not
+                    // faster - a real regression caught by the same [FPS]
+                    // readout this whole change was built to satisfy.
                     if (pixel != 0)
                     {
+                        cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
+
                         if (directColor)
                         {
                             cache.PixelColor[px] = DirectColor(pixel, (entry >> 10) & 0x07, brightness);
@@ -306,10 +316,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int pixel = SampleBgPixel(ppu.Vram, tileAddr, r, cbit, bpp);
 
                     cache.Opaque[px] = pixel != 0;
-                    cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
 
+                    // See RenderBg1's own comment on why this only runs for
+                    // opaque pixels.
                     if (pixel != 0)
                     {
+                        cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
+
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp);
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
                     }
@@ -375,10 +388,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int pixel = SampleBgPixel(ppu.Vram, tileAddr, r, cbit, bpp);
 
                     cache.Opaque[px] = pixel != 0;
-                    cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
 
+                    // See RenderBg1's own comment on why this only runs for
+                    // opaque pixels.
                     if (pixel != 0)
                     {
+                        cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
+
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp);
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
                     }
@@ -444,10 +460,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int pixel = SampleBgPixel(ppu.Vram, tileAddr, r, cbit, bpp);
 
                     cache.Opaque[px] = pixel != 0;
-                    cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
 
+                    // See RenderBg1's own comment on why this only runs for
+                    // opaque pixels.
                     if (pixel != 0)
                     {
+                        cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
+
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp);
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
                     }

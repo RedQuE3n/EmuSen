@@ -225,6 +225,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         mathAllowed = (colorMathEnable == 1) ? inWindow : !inWindow;
                     }
 
+                    Color resultColor;
                     if (participates && mathAllowed)
                     {
                         // Half-color-math-disabled-for-fixed-color quirk - see Venus_PPU.md §5.
@@ -236,11 +237,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         }
 
                         Color mathOperand = useSubScreen ? _subLineBuf[px] : subBackdrop;
-                        _screenPixels[py * MaxOutputW + px] = BlendColors(_mainLineBuf[px], mathOperand, subtractMode, actualHalfMode);
+                        resultColor = BlendColors(_mainLineBuf[px], mathOperand, subtractMode, actualHalfMode);
                     }
                     else
                     {
-                        _screenPixels[py * MaxOutputW + px] = _mainLineBuf[px];
+                        resultColor = _mainLineBuf[px];
+                    }
+                    _screenPixels[py * MaxOutputW + px] = resultColor;
+
+                    if (DebugSettings.ColorMathBlendLogging && py == DebugSettings.ColorMathBlendScanline)
+                    {
+                        Color mc = _mainLineBuf[px];
+                        Color sc = _subLineBuf[px];
+                        Console.WriteLine($"[COLORMATH] px={px} mainLayer={winningLayer} main=({mc.R},{mc.G},{mc.B}) subLayer={_subLineLayer[px]} sub=({sc.R},{sc.G},{sc.B}) participates={participates} mathAllowed={mathAllowed} -> ({resultColor.R},{resultColor.G},{resultColor.B})");
                     }
                 }
             }

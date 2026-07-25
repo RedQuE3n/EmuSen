@@ -73,16 +73,22 @@ class Program
         {
             if (args[i] == "--flag" && i + 1 < args.Length)
             {
-                // Sets any DebugSettings.<Name> bool property to true by
-                // reflection - dozens of these exist (one per investigation
-                // that ever needed a targeted trace, e.g. WindowHdmaLogging),
-                // and hardcoding a CLI switch per flag isn't worth it when
-                // this harness's whole point is not needing a rebuild per
-                // investigation. MasterLoggingEnabled is set alongside it
-                // since every individual *Logging flag's own getter is
-                // gated by that master switch (see DebugSettings' own
-                // comment) - setting one without the other is a silent
-                // no-op that looks identical to "nothing happened."
+                // Sets any DebugSettings.<Name> field/property by
+                // reflection - dozens of bool *Logging flags exist (one per
+                // investigation that ever needed a targeted trace, e.g.
+                // WindowHdmaLogging) plus the occasional non-bool sidecar
+                // (e.g. ColorMathBlendScanline, which scopes
+                // ColorMathBlendLogging's output to one scanline) - and
+                // hardcoding a CLI switch per flag isn't worth it when this
+                // harness's whole point is not needing a rebuild per
+                // investigation. Plain "Name" sets a bool to true (the
+                // common case); "Name=value" parses value as whatever
+                // that member's actual type is. MasterLoggingEnabled is set
+                // alongside every one of these since each individual
+                // *Logging flag's own getter is gated by that master switch
+                // (see DebugSettings' own comment) - setting one without
+                // the other is a silent no-op that looks identical to
+                // "nothing happened."
                 flagsToEnable.Add(args[++i]);
             }
             else if (args[i] == "--cpulog" && i + 1 < args.Length)
@@ -138,15 +144,27 @@ class Program
         // far too noisy over a long one.
         if (verbose) EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
 
-        foreach (string flagName in flagsToEnable)
+        foreach (string flagSpec in flagsToEnable)
         {
-            var prop = typeof(EmuSen.Debug.DebugSettings).GetProperty(flagName);
-            if (prop == null || prop.PropertyType != typeof(bool))
+            string[] parts = flagSpec.Split(new[] { '=' }, 2);
+            string flagName = parts[0];
+            string? rawValue = parts.Length >= 2 ? parts[1] : null;
+
+            var settingsType = typeof(EmuSen.Debug.DebugSettings);
+            var prop = settingsType.GetProperty(flagName);
+            var field = prop == null ? settingsType.GetField(flagName) : null;
+            Type? memberType = prop?.PropertyType ?? field?.FieldType;
+
+            if (memberType == null)
             {
-                Console.WriteLine($"[WARN] No bool DebugSettings.{flagName} property found - ignoring --flag {flagName}.");
+                Console.WriteLine($"[WARN] No DebugSettings.{flagName} property or field found - ignoring --flag {flagSpec}.");
                 continue;
             }
-            prop.SetValue(null, true);
+
+            object value = rawValue == null ? true : Convert.ChangeType(rawValue, memberType);
+            if (prop != null) prop.SetValue(null, value);
+            else field!.SetValue(null, value);
+
             EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
         }
 

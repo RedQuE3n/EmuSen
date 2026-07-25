@@ -56,6 +56,23 @@ namespace EmuSen.Debug
             set => _windowHdmaLogging = value;
         }
 
+        // --- Renderer.Scanline.cs ---
+        // Dumps the exact per-pixel main/sub compositing state (winning
+        // layer, raw colors, color-math participation, blend result) for
+        // one target scanline - added for the Zelda: A Link to the Past
+        // color-math investigation, where the aggregate symptom (a wrong
+        // blended color) gave no way to see which of the two blend
+        // operands was actually wrong without this. ColorMathBlendScanline
+        // defaults to -1 (never matches a real py) so this stays inert
+        // until both a scanline AND MasterLoggingEnabled are set.
+        private static bool _colorMathBlendLogging = false;
+        public static bool ColorMathBlendLogging
+        {
+            get => MasterLoggingEnabled && _colorMathBlendLogging;
+            set => _colorMathBlendLogging = value;
+        }
+        public static int ColorMathBlendScanline = -1;
+
         // --- Spc700.cs ---
         private static bool _spc700VerboseLogging = false;
         public static bool Spc700VerboseLogging

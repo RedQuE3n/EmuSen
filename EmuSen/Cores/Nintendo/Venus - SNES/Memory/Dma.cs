@@ -116,6 +116,55 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             new[] { 0, 0, 1, 1 },
         };
 
+        // Real hardware's WRAM/$2180 (WMDATA) bus-conflict handling, ported
+        // from Mesen2's SnesDmaController::CopyDmaByte (the reference this
+        // was compared against directly). WRAM can't simultaneously be the
+        // DMA's A-bus address AND accept a write through its own $2180 port
+        // in the same cycle: a WRAM->$2180 transfer silently drops the
+        // write (no write happens at all), while $2180->WRAM still writes,
+        // but garbage ($FF) rather than whatever the DMA "read". Previously
+        // unhandled entirely - we'd have performed the WRAM->$2180 write
+        // real hardware drops, which (if this path is ever actually hit)
+        // means our prior bug ran the OPPOSITE direction of the Yoshi/coin/
+        // block symptom (writing MORE than hardware would, not less) -
+        // fixed anyway since it's a real correctness gap independent of
+        // that investigation.
+        //
+        // Shared by both ExecuteGeneralDma and ExecuteHdma (mirroring
+        // Mesen's own CopyDmaByte being called from both RunDma and
+        // RunHdmaTransfer) - HDMA can target $2180 too, however rarely a
+        // real game does that, so the same conflict applies there.
+        //
+        // Returns the byte actually "transferred" (the real value on a
+        // normal transfer, 0xFF on the $2180->WRAM garbage case, or an
+        // unspecified 0 on the WRAM->$2180 no-write case where there's
+        // nothing meaningful to report) - callers that only care about the
+        // write (e.g. HDMA's window-register log) can still show a value.
+        private byte CopyDmaByte(uint aBusAddress, uint bBusAddress, bool fromBtoA)
+        {
+            bool conflict = bBusAddress == 0x2180 && MemoryBus.IsWorkRam(aBusAddress);
+
+            if (fromBtoA)
+            {
+                if (!conflict)
+                {
+                    byte value = _bus.Read8(bBusAddress);
+                    _bus.Write8(aBusAddress, value);
+                    return value;
+                }
+                _bus.Write8(aBusAddress, 0xFF);
+                return 0xFF;
+            }
+
+            if (!conflict)
+            {
+                byte value = _bus.Read8(aBusAddress);
+                _bus.Write8(bBusAddress, value);
+                return value;
+            }
+            return 0; // WRAM -> $2180 conflict: no write occurs at all.
+        }
+
         public void ExecuteGeneralDma(byte channelMask)
         {
             for (int i = 0; i < 8; i++)
@@ -144,15 +193,22 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     Console.WriteLine($"[DMA] Ch{i}: {(bToA ? "PPU->CPU" : "CPU->PPU")} src=0x{ch.SourceBank:X2}{ch.SourceAddress:X4} destReg=0x{destB:X4}{targetInfo} size={remaining} pattern={ch.Control & 0x07} step={aStep}");
                 }
 
-                if (bToA) continue; 
-
+                // Previously "if (bToA) continue;" here - a device-to-CPU
+                // transfer (reading a hardware register, writing into
+                // SourceBank:SourceAddress, which can legitimately be WRAM)
+                // was silently skipped in full: no read, no write,
+                // SourceAddress/TransferSize left untouched. Real hardware
+                // (and Mesen) executes this direction the same as the other
+                // one, just with the read/write sides swapped - see
+                // CopyDmaByte above.
                 ushort addr = ch.SourceAddress;
                 int patternIdx = 0;
 
                 while (remaining > 0)
                 {
-                    byte value = _bus.Read8((uint)((ch.SourceBank << 16) | addr));
-                    _bus.Write8((uint)(destB + pattern[patternIdx]), value);
+                    uint aBusAddr = (uint)((ch.SourceBank << 16) | addr);
+                    uint bBusAddr = destB + (uint)pattern[patternIdx];
+                    CopyDmaByte(aBusAddr, bBusAddr, bToA);
 
                     addr = (ushort)(addr + aStep);
                     patternIdx = (patternIdx + 1) % pattern.Length;
@@ -200,25 +256,25 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
 
                 if (ch.HdmaDoTransfer)
                 {
+                    bool bToA = (ch.Control & 0x80) != 0; // real hardware honors this bit for HDMA too, however rarely a game sets it
                     int[] pattern = TransferPatterns[ch.Control & 0x07];
                     for (int p = 0; p < pattern.Length; p++)
                     {
-                        uint addr;
-                        if ((ch.Control & 0x40) != 0) 
-                            addr = (uint)((ch.IndirectBank << 16) | ch.IndirectAddress++);
-                        else 
-                            addr = (uint)((ch.SourceBank << 16) | ch.TableAddress++);
-                        
-                        byte val = _bus.Read8(addr);
-                        uint destReg = (uint)(0x2100 + ch.DestinationReg + pattern[p]);
-                        _bus.Write8(destReg, val);
+                        uint aBusAddr;
+                        if ((ch.Control & 0x40) != 0)
+                            aBusAddr = (uint)((ch.IndirectBank << 16) | ch.IndirectAddress++);
+                        else
+                            aBusAddr = (uint)((ch.SourceBank << 16) | ch.TableAddress++);
+
+                        uint bBusAddr = (uint)(0x2100 + ch.DestinationReg + pattern[p]);
+                        byte val = CopyDmaByte(aBusAddr, bBusAddr, bToA);
 
                         // Targeted check: is anything driving the window position
                         // registers via HDMA? That's the standard mechanism for an
                         // animated wipe/reveal effect (growing window per scanline).
-                        if (destReg >= 0x2126 && destReg <= 0x2129 && DebugSettings.WindowHdmaLogging)
+                        if (bBusAddr >= 0x2126 && bBusAddr <= 0x2129 && DebugSettings.WindowHdmaLogging)
                         {
-                            Console.WriteLine($"[HDMA-WINDOW] Ch{i} wrote 0x{val:X2} to $21{destReg & 0xFF:X2} (scanline={_bus.CurrentScanline})");
+                            Console.WriteLine($"[HDMA-WINDOW] Ch{i} wrote 0x{val:X2} to $21{bBusAddr & 0xFF:X2} (scanline={_bus.CurrentScanline})");
                         }
                     }
                 }

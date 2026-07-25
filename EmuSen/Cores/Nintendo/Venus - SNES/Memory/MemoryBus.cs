@@ -83,6 +83,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             Dma = new Dma(this);
             Input = new Input();        }
 
+        // Is this 24-bit CPU address WRAM (bank $7E/$7F, or the low $2000
+        // WRAM-mirror window of banks $00-$3F/$80-$BF)? Same classification
+        // Read8/Write8 already apply inline below, pulled out as a static
+        // helper for Dma.cs's own WRAM/$2180 (WMDATA) bus-conflict check -
+        // see Dma.CopyDmaByte's comment for why that needs this.
+        public static bool IsWorkRam(uint address)
+        {
+            byte bank = (byte)(address >> 16);
+            ushort offset = (ushort)(address & 0xFFFF);
+            if (bank == 0x7E || bank == 0x7F) return true;
+            bool isHardwareBank = (bank >= 0x00 && bank <= 0x3F) || (bank >= 0x80 && bank <= 0xBF);
+            return isHardwareBank && offset < 0x2000;
+        }
+
         // Open-bus tracking - see Venus_Memory.md §1.4.
         private byte _lastBusValue;
 

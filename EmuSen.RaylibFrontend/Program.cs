@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -141,9 +142,29 @@ namespace EmuSen.RaylibFrontend
                 // to stay off the agnostic interface.
                 using FramePresenter presenter = new FramePresenter();
 
+                // Same measured-fps diagnostic Testing Studio's status bar
+                // has (EmuSen.TestingStudio/Views/MainWindow.axaml.cs), added
+                // here to answer the same question for this build: does
+                // RunFrame() itself slow down under real gameplay the same
+                // way it does there, or is that slowdown specific to the
+                // Avalonia frontend? Since RunFrame() is identical shared
+                // code (VenusCore.cs), the expectation is this build pays
+                // the same cost - just never visible before since nothing
+                // here measured real wall-clock fps.
+                Stopwatch fpsClock = Stopwatch.StartNew();
+                TimeSpan fpsWindowStart = fpsClock.Elapsed;
+                int fpsFramesInWindow = 0;
+                TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
+                TimeSpan totalTimeInWindow = TimeSpan.Zero;
+                Stopwatch frameStopwatch = new Stopwatch();
+
                 while (presenter.IsOpen())
                 {
+                    TimeSpan iterationStart = fpsClock.Elapsed;
+
+                    frameStopwatch.Restart();
                     core.RunFrame();
+                    TimeSpan runFrameElapsed = frameStopwatch.Elapsed;
 
                     // Must happen before the next RunFrame()'s own
                     // LatchAutoJoypad - see EmuSen_Frontend_Driver.md §1.
@@ -154,6 +175,23 @@ namespace EmuSen.RaylibFrontend
 
                     // All debug/dev hotkeys - see EmuSen_Frontend_Driver.md §2.
                     RunHotkeys(core, presenter, debugTarget, debugCmd, frameRecorder, statePath);
+
+                    fpsFramesInWindow++;
+                    runFrameTimeInWindow += runFrameElapsed;
+                    totalTimeInWindow += fpsClock.Elapsed - iterationStart;
+
+                    TimeSpan fpsWindowElapsed = fpsClock.Elapsed - fpsWindowStart;
+                    if (fpsWindowElapsed >= TimeSpan.FromSeconds(1))
+                    {
+                        double fps = fpsFramesInWindow / fpsWindowElapsed.TotalSeconds;
+                        double runMs = runFrameTimeInWindow.TotalMilliseconds / fpsFramesInWindow;
+                        double totalMs = totalTimeInWindow.TotalMilliseconds / fpsFramesInWindow;
+                        Console.WriteLine($"[FPS] {fps:F1} fps (run {runMs:F2}ms / total {totalMs:F2}ms)");
+                        fpsFramesInWindow = 0;
+                        runFrameTimeInWindow = TimeSpan.Zero;
+                        totalTimeInWindow = TimeSpan.Zero;
+                        fpsWindowStart = fpsClock.Elapsed;
+                    }
                 }
                 core.SaveSram(); // final flush on clean exit
                 presenter.Shutdown();

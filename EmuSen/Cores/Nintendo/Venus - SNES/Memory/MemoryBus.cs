@@ -100,6 +100,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // Open-bus tracking - see Venus_Memory.md §1.4.
         private byte _lastBusValue;
 
+        // Public read of the same open-bus latch Read8/Write8 already
+        // maintain internally - needed by Dma.cs's A-bus arbitration
+        // check (see CopyDmaByte's comment): real hardware returns
+        // whatever's on open bus, not a real read/write, for a DMA
+        // access blocked from reaching a $21xx register or the DMA
+        // controller's own registers via the A-bus port.
+        public byte LastBusValue => _lastBusValue;
+
         public byte Read8(uint address)
         {
             byte value = ReadInternal(address);

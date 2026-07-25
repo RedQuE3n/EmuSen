@@ -130,18 +130,52 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // fixed anyway since it's a real correctness gap independent of
         // that investigation.
         //
+        // Also ports Mesen's SnesMemoryManager::ReadDma/WriteDma A-bus
+        // arbitration restriction: a DMA channel's A-bus address
+        // (SourceBank:SourceAddress, whichever role it's playing this
+        // transfer) can never reach a $21xx register - only the B-bus port
+        // can - or the DMA controller's own registers ($420B, $420C,
+        // $4300-437F). Both are silently blocked on real hardware (open
+        // bus on the "read" side, no-op on the "write" side) rather than
+        // actually performed; we'd previously have performed them normally
+        // since Dma.cs used the same plain Read8/Write8 as any regular CPU
+        // access, with no idea it was a DMA access at all.
+        //
         // Shared by both ExecuteGeneralDma and ExecuteHdma (mirroring
         // Mesen's own CopyDmaByte being called from both RunDma and
-        // RunHdmaTransfer) - HDMA can target $2180 too, however rarely a
-        // real game does that, so the same conflict applies there.
+        // RunHdmaTransfer) - HDMA can target $2180 (or, in principle, hit
+        // this same arbitration case) too, however rarely a real game does
+        // that, so both apply there as well.
         //
         // Returns the byte actually "transferred" (the real value on a
-        // normal transfer, 0xFF on the $2180->WRAM garbage case, or an
+        // normal transfer, 0xFF on the $2180->WRAM garbage case, the
+        // current open-bus value on an arbitration-blocked case, or an
         // unspecified 0 on the WRAM->$2180 no-write case where there's
         // nothing meaningful to report) - callers that only care about the
         // write (e.g. HDMA's window-register log) can still show a value.
         private byte CopyDmaByte(uint aBusAddress, uint bBusAddress, bool fromBtoA)
         {
+            ushort aBusOffset = (ushort)(aBusAddress & 0xFFFF);
+            bool aBusBlocked = (aBusOffset >= 0x2100 && aBusOffset <= 0x21FF)
+                || aBusOffset == 0x420B
+                || aBusOffset == 0x420C
+                || (aBusOffset >= 0x4300 && aBusOffset <= 0x437F);
+
+            if (aBusBlocked)
+            {
+                byte openBus = _bus.LastBusValue;
+                if (!fromBtoA)
+                {
+                    // A-bus "read" side blocked - the B-bus destination
+                    // still receives a byte, just whatever's on open bus
+                    // rather than a real read from the A-bus address.
+                    _bus.Write8(bBusAddress, openBus);
+                }
+                // A-bus "write" side blocked (fromBtoA case): nothing is
+                // actually written to the A-bus address at all.
+                return openBus;
+            }
+
             bool conflict = bBusAddress == 0x2180 && MemoryBus.IsWorkRam(aBusAddress);
 
             if (fromBtoA)

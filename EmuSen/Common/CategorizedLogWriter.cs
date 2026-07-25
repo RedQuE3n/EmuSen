@@ -147,15 +147,36 @@ namespace EmuSen.Common
             return new StreamWriter(Path.Combine(logDir, category + ".log"), append: false);
         }
 
-        private StreamWriter ResolveFile(string? value)
+        // cpu/apu specifically, not just "whatever's high-volume" - a real
+        // session froze solid within a handful of frames once console echo
+        // moved onto the same background thread as file writes, with both
+        // CpuVerboseLogging and Spc700VerboseLogging on. Putting echo on a
+        // background thread only fixed the emulation thread blocking on a
+        // slow console write directly; it didn't fix the console itself
+        // being too slow to keep up with one WriteLine per instruction
+        // executed (hundreds of thousands to over a million a second) -
+        // that single worker thread now had to do both buffered disk I/O
+        // (which can keep up) and terminal rendering (which fundamentally
+        // cannot, on any thread) serially, so the bounded queue filled
+        // solid and blocked the emulation thread on Add() instead - a
+        // freeze, not just reduced FPS. ppu/memory/debug/general don't
+        // have this problem (proven by earlier sessions running fully
+        // clean with those always on) because nothing else in this
+        // codebase logs at literally every-instruction granularity.
+        private static readonly HashSet<string> NoConsoleEchoCategories = new(StringComparer.Ordinal) { "cpu", "apu" };
+
+        private (StreamWriter File, bool EchoToConsole) Resolve(string? value)
         {
-            if (value == null) return _general;
+            if (value == null) return (_general, true);
             string trimmed = value.TrimStart('\n', '\r', ' ');
             foreach (var (prefix, category) in Routes)
             {
-                if (trimmed.StartsWith(prefix, StringComparison.Ordinal)) return _files[category];
+                if (trimmed.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    return (_files[category], !NoConsoleEchoCategories.Contains(category));
+                }
             }
-            return _general;
+            return (_general, true);
         }
 
         // Every category gets an actual disk flush at least this often -
@@ -237,14 +258,16 @@ namespace EmuSen.Common
 
         public override void Write(string? value)
         {
-            _queue.Add(new LogEntry(ResolveFile(value), value, isLine: false));
-            _queue.Add(new LogEntry(_console, value, isLine: false));
+            var (file, echo) = Resolve(value);
+            _queue.Add(new LogEntry(file, value, isLine: false));
+            if (echo) _queue.Add(new LogEntry(_console, value, isLine: false));
         }
 
         public override void WriteLine(string? value)
         {
-            _queue.Add(new LogEntry(ResolveFile(value), value, isLine: true));
-            _queue.Add(new LogEntry(_console, value, isLine: true));
+            var (file, echo) = Resolve(value);
+            _queue.Add(new LogEntry(file, value, isLine: true));
+            if (echo) _queue.Add(new LogEntry(_console, value, isLine: true));
         }
 
         public override void WriteLine()

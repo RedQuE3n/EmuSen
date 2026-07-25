@@ -94,6 +94,13 @@ EmuSen Project/
 │   │                                          #   (one WriteLine per instruction executed) and FPS
 │   │                                          #   collapsed. Queue capacity raised to 100k accordingly
 │   │                                          #   (each line now enqueues two entries, file + echo).
+│   │                                          #   cpu/apu specifically skip the console-echo entry
+│   │                                          #   entirely (file-only) - moving echo to the background
+│   │                                          #   thread fixed the emulation thread blocking on a slow
+│   │                                          #   console write, but a real session then froze solid,
+│   │                                          #   because the terminal itself can't render a
+│   │                                          #   million-lines/sec instruction trace on any thread,
+│   │                                          #   so the shared queue filled and blocked anyway.
 │   ├── Cores/
 │   │   ├── Nintendo/
 │   │   │   ├── Venus - SNES/                 # Namespace stays plain "Venus" (C# identifiers can't

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using EmuSen.Common;
 using EmuSen.Cores;
@@ -43,6 +44,22 @@ namespace EmuSen.Cores.Nintendo.Venus
         public Renderer? Renderer { get; private set; }
 
         public string CoreName => "SNES";
+
+        // Per-phase breakdown of the last completed RunFrame() call -
+        // a temporary profiling aid for the "why is gameplay slower than
+        // 60fps" investigation (both frontends print an [FPS] readout
+        // showing RunFrame() itself taking ~17-18ms during real gameplay).
+        // Timed at per-scanline granularity, not per-instruction - timing
+        // every single Cpu.Step() call would add Stopwatch overhead
+        // comparable to the work being measured (a fast interpreter's
+        // per-instruction cost and Stopwatch.GetTimestamp()'s own cost are
+        // the same order of magnitude), which would distort the very
+        // numbers this exists to produce. CpuSpc700 bundles CPU+SPC700
+        // stepping as one phase for the same reason - splitting further
+        // would mean timing individual Cpu.Step() calls again.
+        public double LastFrameCpuSpc700Ms { get; private set; }
+        public double LastFramePpuMs { get; private set; }
+        public double LastFrameHdmaMs { get; private set; }
 
         // Not a fixed constant - pseudo-hi-res (SETINI bit 3) can make a
         // frame 512 pixels wide instead of 256. See Renderer.cs's
@@ -89,6 +106,10 @@ namespace EmuSen.Cores.Nintendo.Venus
                 throw new InvalidOperationException("RunFrame() called before LoadRom().");
             }
 
+            long cpuSpc700Ticks = 0;
+            long ppuTicks = 0;
+            long hdmaTicks = 0;
+
             while (true)
             {
                 if (_currentScanline == 0)
@@ -130,6 +151,8 @@ namespace EmuSen.Cores.Nintendo.Venus
                     }
                 }
 
+                long phaseStart = Stopwatch.GetTimestamp();
+
                 int lineCycles = 0;
                 Bus.LineCycles = 0;
                 while (lineCycles < CyclesPerScanline)
@@ -145,6 +168,9 @@ namespace EmuSen.Cores.Nintendo.Venus
                     }
                 }
 
+                long afterCpuSpc700 = Stopwatch.GetTimestamp();
+                cpuSpc700Ticks += afterCpuSpc700 - phaseStart;
+
                 Bus.CurrentScanline = _currentScanline;
 
                 if (_currentScanline < 225)
@@ -153,7 +179,11 @@ namespace EmuSen.Cores.Nintendo.Venus
                     {
                         Renderer.RenderScanline(Bus, _currentScanline);
                     }
+                    long afterPpu = Stopwatch.GetTimestamp();
+                    ppuTicks += afterPpu - afterCpuSpc700;
+
                     Bus.Dma.ExecuteHdma();
+                    hdmaTicks += Stopwatch.GetTimestamp() - afterPpu;
                 }
 
                 if (_currentScanline == 225)
@@ -179,6 +209,11 @@ namespace EmuSen.Cores.Nintendo.Venus
                     // Periodic autosave - see Cartridge.SaveSram's own
                     // comment for why this is safe to call this often.
                     if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
+
+                    double ticksToMs = 1000.0 / Stopwatch.Frequency;
+                    LastFrameCpuSpc700Ms = cpuSpc700Ticks * ticksToMs;
+                    LastFramePpuMs = ppuTicks * ticksToMs;
+                    LastFrameHdmaMs = hdmaTicks * ticksToMs;
 
                     return; // one full frame done - hand control back to the caller
                 }

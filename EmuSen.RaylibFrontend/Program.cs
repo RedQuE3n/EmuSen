@@ -158,6 +158,14 @@ namespace EmuSen.RaylibFrontend
                 TimeSpan totalTimeInWindow = TimeSpan.Zero;
                 Stopwatch frameStopwatch = new Stopwatch();
 
+                // VenusCore's own per-scanline-granularity phase breakdown
+                // (VenusCore.RunFrame()'s own comment) - which subsystem
+                // (CPU+SPC700 stepping, PPU rendering, HDMA) actually
+                // accounts for RunFrame() getting slower during gameplay.
+                double cpuSpc700MsInWindow = 0;
+                double ppuMsInWindow = 0;
+                double hdmaMsInWindow = 0;
+
                 while (presenter.IsOpen())
                 {
                     TimeSpan iterationStart = fpsClock.Elapsed;
@@ -165,6 +173,9 @@ namespace EmuSen.RaylibFrontend
                     frameStopwatch.Restart();
                     core.RunFrame();
                     TimeSpan runFrameElapsed = frameStopwatch.Elapsed;
+                    cpuSpc700MsInWindow += core.LastFrameCpuSpc700Ms;
+                    ppuMsInWindow += core.LastFramePpuMs;
+                    hdmaMsInWindow += core.LastFrameHdmaMs;
 
                     // Must happen before the next RunFrame()'s own
                     // LatchAutoJoypad - see EmuSen_Frontend_Driver.md §1.
@@ -186,10 +197,18 @@ namespace EmuSen.RaylibFrontend
                         double fps = fpsFramesInWindow / fpsWindowElapsed.TotalSeconds;
                         double runMs = runFrameTimeInWindow.TotalMilliseconds / fpsFramesInWindow;
                         double totalMs = totalTimeInWindow.TotalMilliseconds / fpsFramesInWindow;
-                        Console.WriteLine($"[FPS] {fps:F1} fps (run {runMs:F2}ms / total {totalMs:F2}ms)");
+                        double cpuSpc700Ms = cpuSpc700MsInWindow / fpsFramesInWindow;
+                        double ppuMs = ppuMsInWindow / fpsFramesInWindow;
+                        double hdmaMs = hdmaMsInWindow / fpsFramesInWindow;
+                        Console.WriteLine(
+                            $"[FPS] {fps:F1} fps (run {runMs:F2}ms / total {totalMs:F2}ms) " +
+                            $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms]");
                         fpsFramesInWindow = 0;
                         runFrameTimeInWindow = TimeSpan.Zero;
                         totalTimeInWindow = TimeSpan.Zero;
+                        cpuSpc700MsInWindow = 0;
+                        ppuMsInWindow = 0;
+                        hdmaMsInWindow = 0;
                         fpsWindowStart = fpsClock.Elapsed;
                     }
                 }

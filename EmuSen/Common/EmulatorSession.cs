@@ -43,6 +43,14 @@ namespace EmuSen.Common
         // of the generic interface.
         public MemoryBus Bus => _core?.Bus ?? throw new InvalidOperationException("LoadRom() hasn't been called yet.");
 
+        // Temporary profiling pass-through - see VenusCore's own comment on
+        // these. Not promoted onto ICore for the same reason input/debug
+        // access aren't: this is Venus-specific instrumentation, not a
+        // general execution-contract concern.
+        public double LastFrameCpuSpc700Ms => _core?.LastFrameCpuSpc700Ms ?? 0;
+        public double LastFramePpuMs => _core?.LastFramePpuMs ?? 0;
+        public double LastFrameHdmaMs => _core?.LastFrameHdmaMs ?? 0;
+
         public void LoadRom(string path)
         {
             _core = new VenusCore(headless: true);

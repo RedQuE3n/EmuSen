@@ -33,10 +33,13 @@ namespace EmuSen.Common
     // thread now just resolves which category a line belongs to (cheap -
     // a prefix match against an in-memory table) and hands the line to a
     // bounded queue; a single consumer thread drains it and does the
-    // actual buffered file I/O. Console echo stays synchronous and
-    // un-queued on purpose - it's cheap relative to disk I/O, and live
-    // debugging benefits from seeing output immediately rather than
-    // delayed behind a queue.
+    // actual buffered file I/O, flushing to disk on its own during idle
+    // gaps (see FlushIntervalMs) rather than after every line, so a hard
+    // kill or crash that never reaches Dispose() only loses a fraction of
+    // a second of output instead of the whole session. Console echo stays
+    // synchronous and un-queued on purpose - it's cheap relative to disk
+    // I/O, and live debugging benefits from seeing output immediately
+    // rather than delayed behind a queue.
     public class CategorizedLogWriter : System.IO.TextWriter
     {
         // A queue this deep would mean tens of thousands of log lines
@@ -113,8 +116,9 @@ namespace EmuSen.Common
         // Deliberately no AutoFlush here, unlike the old synchronous
         // design - StreamWriter's own internal buffer is what makes
         // batched background writes actually cheaper than the old
-        // flush-every-line behavior. Flushed explicitly on Dispose (and,
-        // best-effort, whenever Flush() is called - see that override).
+        // flush-every-line behavior. Flushed periodically during idle
+        // gaps by ConsumeQueue (see FlushIntervalMs) and unconditionally
+        // on Dispose.
         private static StreamWriter OpenFile(string logDir, string category)
         {
             return new StreamWriter(Path.Combine(logDir, category + ".log"), append: false);
@@ -131,18 +135,45 @@ namespace EmuSen.Common
             return _general;
         }
 
-        // Runs entirely on _worker. GetConsumingEnumerable() blocks
-        // whenever the queue is empty and returns cleanly once
-        // CompleteAdding() has been called AND every already-queued entry
-        // has been drained - exactly the "finish everything, then stop"
-        // behavior Dispose() needs.
+        // Idle gaps get an actual disk flush at most this often - frequent
+        // enough that a hard kill or native crash (a Raylib segfault, a
+        // Ctrl+C that skips .NET's normal unwind, anything that never
+        // reaches Dispose()) loses at most a fraction of a second of
+        // buffered lines, rare enough that it's nowhere near the per-line
+        // syscall cost AutoFlush=true used to pay during a real burst
+        // (CpuVerboseLogging etc.). Dispose()'s own drain-then-flush is
+        // still the real guarantee for a graceful shutdown; this is
+        // damage control for the ungraceful ones.
+        private const int FlushIntervalMs = 500;
+
+        // Runs entirely on _worker. TryTake blocks up to FlushIntervalMs
+        // waiting for the next entry - if one arrives, write it (no flush
+        // yet, that's what makes batching cheaper than the old per-line
+        // AutoFlush); if the wait times out because nothing new showed up,
+        // treat that idle gap as a good moment to flush what's already
+        // been written. IsCompleted (Complete Adding() called AND the
+        // queue is empty) is what actually ends the loop - see Dispose()
+        // for why that combination matters.
         private void ConsumeQueue()
         {
-            foreach (LogEntry entry in _queue.GetConsumingEnumerable())
+            while (!_queue.IsCompleted)
             {
-                if (entry.IsLine) entry.Target.WriteLine(entry.Text);
-                else entry.Target.Write(entry.Text);
+                if (_queue.TryTake(out LogEntry entry, FlushIntervalMs))
+                {
+                    if (entry.IsLine) entry.Target.WriteLine(entry.Text);
+                    else entry.Target.Write(entry.Text);
+                }
+                else
+                {
+                    FlushAllFiles();
+                }
             }
+        }
+
+        private void FlushAllFiles()
+        {
+            foreach (var file in _files.Values) file.Flush();
+            _general.Flush();
         }
 
         public override System.Text.Encoding Encoding => _console.Encoding;

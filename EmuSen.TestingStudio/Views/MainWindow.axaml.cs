@@ -386,7 +386,7 @@ namespace EmuSen.TestingStudio.Views
                 TimeSpan remaining = nextTick - clock.Elapsed;
                 if (remaining > TimeSpan.Zero)
                 {
-                    Thread.Sleep(remaining);
+                    SleepUntil(nextTick, clock);
                 }
                 else
                 {
@@ -395,6 +395,33 @@ namespace EmuSen.TestingStudio.Views
                     // back-to-back with no pacing at all.
                     nextTick = clock.Elapsed;
                 }
+            }
+        }
+
+        // Thread.Sleep(TimeSpan) alone systematically overshoots its target
+        // on Linux by roughly 1-2ms per call (OS scheduler wakeup latency,
+        // not something this process controls) - at a 16.67ms frame budget
+        // that overshoot alone is enough to cost several fps every single
+        // frame, which is exactly the "averaging 55fps, small steady frame
+        // drops" symptom this was added to fix (as opposed to occasional
+        // large drops, which would point at GC pauses or a genuinely slow
+        // frame instead). Sleeping for most of the remaining time (cheap,
+        // yields the CPU) and then busy-spinning only the last couple of
+        // milliseconds recovers that precision at a negligible, bounded CPU
+        // cost - a standard game-loop technique, not specific to this core.
+        private static readonly TimeSpan SpinMargin = TimeSpan.FromMilliseconds(2);
+
+        private static void SleepUntil(TimeSpan target, Stopwatch clock)
+        {
+            TimeSpan remaining = target - clock.Elapsed;
+            if (remaining > SpinMargin)
+            {
+                Thread.Sleep(remaining - SpinMargin);
+            }
+
+            while (clock.Elapsed < target)
+            {
+                Thread.SpinWait(100);
             }
         }
 

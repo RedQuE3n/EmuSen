@@ -82,12 +82,53 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             0xF6, 0xDA, 0x00, 0xBA, 0xF4, 0xC4, 0xF4, 0xDD, 0x5D, 0xD0, 0xDB, 0x1F, 0x00, 0x00, 0xC0, 0xFF
         };
 
+        // Equality key for one executed instruction, used only by
+        // _verboseTrace to detect repeating polling/delay loops (the APU
+        // handshake being the canonical example - see the comment near
+        // Step()'s use of Spc700VerboseLogging). Same rationale as Cpu's
+        // own StepKey: compare a small struct instead of the rendered
+        // string, and only look Name up again in Render() for lines that
+        // actually get emitted.
+        private readonly struct StepKey : IEquatable<StepKey>
+        {
+            public readonly ushort Pc;
+            public readonly byte Opcode;
+            public readonly ushort TargetAddr;
+
+            public StepKey(ushort pc, byte opcode, ushort targetAddr)
+            {
+                Pc = pc;
+                Opcode = opcode;
+                TargetAddr = targetAddr;
+            }
+
+            public bool Equals(StepKey other) =>
+                Pc == other.Pc && Opcode == other.Opcode && TargetAddr == other.TargetAddr;
+
+            public override bool Equals(object? obj) => obj is StepKey other && Equals(other);
+
+            public override int GetHashCode() => HashCode.Combine(Pc, Opcode, TargetAddr);
+        }
+
+        private readonly EmuSen.Debug.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
+        private bool _wasVerboseLogging;
+
         public Spc700()
         {
             BuildOpcodeTable();
             Dsp.AttachMemory(Ram);
+            _verboseTrace = new EmuSen.Debug.DebugTools.RepeatCollapsingTrace<StepKey>(
+                Console.WriteLine,
+                key => $"[SPC700] 0x{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X4}");
             Reset();
         }
+
+        // Step() already flushes automatically the moment it notices
+        // Spc700VerboseLogging went from on to off (see _wasVerboseLogging)
+        // - this is for the one case Step() can't see coming: the process
+        // exiting while logging is still on. Program.cs's shutdown path
+        // calls this before disposing the log writer.
+        public void FlushVerboseTrace() => _verboseTrace.Flush();
 
         public void Reset()
         {
@@ -270,6 +311,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 return;
             }
 
+            ushort executedAtPC = PC;
             byte opcode = Read8(PC);
             // One-shot dispatch-chain tracer - see Venus_APU.md §1.5.
             if (LogPortTraffic)
@@ -296,9 +338,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
             if (DebugSettings.Spc700VerboseLogging)
             {
-                Console.WriteLine($"[SPC700] Executed: {inst.Name} (Opcode 0x{opcode:X2}) -> Target Addr: 0x{targetAddr:X4}");
+                _verboseTrace.Log(new StepKey(executedAtPC, opcode, targetAddr));
+                _wasVerboseLogging = true;
             }
-            
+            else if (_wasVerboseLogging)
+            {
+                // Verbose logging just turned off - flush whatever
+                // loop/tail _verboseTrace was still holding rather than
+                // stranding it. See Cpu.Step()'s identical pattern.
+                _verboseTrace.Flush();
+                _wasVerboseLogging = false;
+            }
+
+
             TickTimers(inst.Cycles);
             
             // Tick the DSP along with the timers

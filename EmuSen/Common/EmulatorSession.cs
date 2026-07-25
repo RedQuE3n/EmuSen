@@ -60,6 +60,16 @@ namespace EmuSen.Common
 
         public void SaveSram() => _core?.SaveSram();
 
+        // Must be called before the caller's log writer is disposed, while
+        // CpuVerboseLogging/Spc700VerboseLogging might still be on - see
+        // DebugTools.RepeatCollapsingTrace<TKey>.Flush() for why a
+        // still-in-progress loop/tail would otherwise never reach the log.
+        public void FlushVerboseLogs()
+        {
+            _core?.Cpu?.FlushVerboseTrace();
+            _core?.Spc700?.FlushVerboseTrace();
+        }
+
         public void SaveState(string path)
         {
             if (_core is null) throw new InvalidOperationException("SaveState() called before LoadRom().");

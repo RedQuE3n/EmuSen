@@ -58,12 +58,56 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         private bool _waitingForInterrupt;
         private bool _stopped;
 
+        // Equality key for one executed instruction, used only by
+        // _verboseTrace to detect repeating polling/delay loops - see
+        // DebugTools.RepeatCollapsingTrace<TKey> for why a struct key
+        // instead of comparing the rendered strings. Name isn't part of
+        // the key: it's a deterministic function of Opcode, looked up
+        // again in Render() only when a line is actually emitted.
+        private readonly struct StepKey : IEquatable<StepKey>
+        {
+            public readonly byte Pb;
+            public readonly ushort Pc;
+            public readonly byte Opcode;
+            public readonly uint TargetAddr;
+
+            public StepKey(byte pb, ushort pc, byte opcode, uint targetAddr)
+            {
+                Pb = pb;
+                Pc = pc;
+                Opcode = opcode;
+                TargetAddr = targetAddr;
+            }
+
+            public bool Equals(StepKey other) =>
+                Pb == other.Pb && Pc == other.Pc && Opcode == other.Opcode && TargetAddr == other.TargetAddr;
+
+            public override bool Equals(object? obj) => obj is StepKey other && Equals(other);
+
+            public override int GetHashCode() => HashCode.Combine(Pb, Pc, Opcode, TargetAddr);
+        }
+
+        private readonly DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
+        private bool _wasVerboseLogging;
+
         public Cpu(MemoryBus bus)
         {
             _bus = bus;
-            BuildOpcodeTable(); 
+            BuildOpcodeTable();
+            _verboseTrace = new DebugTools.RepeatCollapsingTrace<StepKey>(
+                Console.WriteLine,
+                key => $"[CPU] 0x{key.Pb:X2}{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X6}");
             Reset();
         }
+
+        // Step() already flushes automatically the moment it notices
+        // CpuVerboseLogging went from on to off (see _wasVerboseLogging),
+        // which covers `trace off` and the countdown running out - this is
+        // for the one case Step() can't see coming: the process exiting
+        // while logging is still on, where nothing calls Step() again to
+        // notice. Program.cs's shutdown path calls this before disposing
+        // the log writer.
+        public void FlushVerboseTrace() => _verboseTrace.Flush();
 
         public void Reset()
         {
@@ -133,14 +177,25 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             if (DebugSettings.CpuVerboseLogging)
             {
-                Console.WriteLine($"[CPU] 0x{executedAtPB:X2}{executedAtPC:X4}: {inst.Name} (Opcode 0x{opcode:X2}) -> Target Addr: 0x{targetAddr:X6}");
+                _verboseTrace.Log(new StepKey(executedAtPB, executedAtPC, opcode, targetAddr));
                 if (DebugSettings.CpuTraceCountdown > 0)
                 {
                     DebugSettings.CpuTraceCountdown--;
                     if (DebugSettings.CpuTraceCountdown == 0) DebugSettings.CpuVerboseLogging = false;
                 }
+                _wasVerboseLogging = DebugSettings.CpuVerboseLogging;
             }
-            
+            else if (_wasVerboseLogging)
+            {
+                // Verbose logging just turned off - by the countdown above,
+                // by `trace off`, or by anything else flipping the flag -
+                // flush whatever loop/tail _verboseTrace was still holding
+                // so it isn't stranded until the next time logging happens
+                // to turn back on (or lost entirely if it never does).
+                _verboseTrace.Flush();
+                _wasVerboseLogging = false;
+            }
+
             // Return the cycles consumed by this instruction
             // Note: In a fully accurate emulator, we would multiply this by 6, 8, or 12 
             // depending on the memory region, but for now, base cycles are fine.
@@ -173,6 +228,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             if (DebugSettings.CpuVerboseLogging)
             {
+                // Flush first so a loop the NMI interrupted (still pending
+                // in _verboseTrace, possibly mid-repeat) is written out
+                // before this line, keeping the file in execution order.
+                _verboseTrace.Flush();
                 Console.WriteLine($"[CPU] NMI -> PC = 0x00{PC:X4}");
             }
         }
@@ -207,6 +266,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             if (DebugSettings.CpuVerboseLogging)
             {
+                _verboseTrace.Flush(); // see Nmi()'s own comment on why
                 Console.WriteLine($"[IRQ FIRE] interrupted at 0x{interruptedPB:X2}{interruptedPC:X4} -> vector@0x{vectorAddr:X4}={low:X2}{high:X2} -> jumping to 0x00{PC:X4}");
             }
 

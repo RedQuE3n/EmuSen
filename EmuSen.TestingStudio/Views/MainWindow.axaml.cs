@@ -306,26 +306,42 @@ namespace EmuSen.TestingStudio.Views
         // (Cartridge load info, DebugSettings-gated traces, etc.) via
         // plain Console.WriteLine, so this frontend gets the exact same
         // categorized cpu/ppu/apu/memory/debug/general log files the
-        // console build does, for free. No-ops if AppSettings.LogDirectory
-        // isn't set - logging is opt-in, not on by default, since a bug
-        // tester's whole point in configuring this is choosing where the
-        // files land.
+        // console build does, for free.
+        //
+        // Unconditional, same as the console/Raylib build
+        // (RaylibFrontend/Program.cs) - several DebugSettings.*Logging
+        // flags default to true (Dma/CameraRam/RenderRead/AllScrollWrite/
+        // MathUnit/BgModeChange/MosaicWrite), so the core writes a steady
+        // stream of Console.WriteLine calls regardless of whether anyone
+        // asked for logging. Leaving Console.Out un-redirected in that
+        // case doesn't turn logging off - it just sends the same volume
+        // of lines to the raw, synchronous console writer one syscall at
+        // a time instead of CategorizedLogWriter's batched background
+        // thread, which is exactly the gap that made this frontend so
+        // much slower than the console build. Falling back to an
+        // AppSettings.LogDirectory default under %AppData% (rather than
+        // skipping the redirect) keeps the fast path always on; the user
+        // only needs to set LogDirectory in Preferences if they want the
+        // files somewhere specific.
         //
         // Called once per LoadRom() (not once at app startup) since,
         // unlike the console build (one ROM per process), this frontend
         // can load several ROMs across one running session - each gets
         // its own timestamped directory, mirroring the console build's
         // Logs/<CoreName>/console_<timestamp>/ convention but under the
-        // user-configured root and with a "gui_" prefix instead.
+        // user-configured (or default) root and with a "gui_" prefix
+        // instead.
         private void StartLogging(string coreName)
         {
             StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
 
-            if (string.IsNullOrWhiteSpace(_appSettings.LogDirectory)) return;
+            string logRoot = string.IsNullOrWhiteSpace(_appSettings.LogDirectory)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", "Logs")
+                : _appSettings.LogDirectory;
 
             try
             {
-                string logDir = Path.Combine(_appSettings.LogDirectory, coreName, $"gui_{DateTime.Now:yyyyMMdd_HHmmss}");
+                string logDir = Path.Combine(logRoot, coreName, $"gui_{DateTime.Now:yyyyMMdd_HHmmss}");
                 Directory.CreateDirectory(logDir);
                 _activeLogWriter = new CategorizedLogWriter(_originalConsoleOut, logDir);
                 Console.SetOut(_activeLogWriter);

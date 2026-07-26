@@ -107,6 +107,7 @@ A small, composable command layer over `IDebugTarget` — modeled on Unix toolch
 | `watch add <space> <addr> <len> [write\|read\|both]` | Register a watchpoint (default write-only) |
 | `watch list` | List active watchpoints with their IDs |
 | `watch log <id> [<count>]` | Show a watchpoint's recorded events (default 20) |
+| `watch summary <id>` | Group a watchpoint's recorded events by access site (`Context`) with hit counts, instead of one line per event — the dynamic, addressing-mode-agnostic equivalent of `readers`/`writers` (§3.12) |
 | `watch clear <id>` | Clear a watchpoint's stored events (keeps the watch registered) |
 | `watch remove <id>` | Remove a watchpoint entirely |
 | `break add <addr>` / `break list` / `break remove <id>` | Manage execution breakpoints (24-bit CPU address) — see §3.1's breakpoints note |
@@ -296,6 +297,8 @@ Reuses `IDebugTarget.Disassemble` rather than re-decoding opcodes itself, so a `
 **Same "best-effort, may misalign through data mixed with code" caveat as `disasm`.** A linear disassembler walking forward byte-by-byte has no way to know which bytes in a scanned range are really instructions versus embedded data (graphics, tables, text) — if the scan range includes non-code bytes, everything after the first misaligned read can decode to garbage opcodes, including spurious `callers` matches or missed real ones. Best used on a range that's actually known to be code.
 
 **`writers`/`readers`** (`Debug/Commands/WritersCommand.cs`/`ReadersCommand.cs`) are the store/load-side counterparts to `callers` - "what code is capable of writing/reading this address," independent of whether that path was ever actually exercised in a traced run (the gap `writers` was built to close: watching an address live can show exactly one write from one PC and nothing else, which only proves what a specific run did, not what the ROM's code is capable of doing). Deliberately narrower in scope than `callers`: only `STA`/`STX`/`STY`/`STZ` (for `writers`) or `LDA`/`LDX`/`LDY` (for `readers`) in **absolute or absolute-long** addressing are matched - direct-page, indexed, and indirect forms are excluded outright rather than guessed at, since their real target depends on runtime register/D-register state a static scan can't know. Same bank-assumed-equals-PB convention as `callers`' indirect-`JMP` exclusion.
+
+**`watch summary <id>` (§3.5) is the dynamic complement to `writers`/`readers`, not a replacement.** It only reports what actually executed during a traced run, but unlike a static scan it doesn't care what addressing mode got it there - an indexed `LDA addr,X` or an indirect `STA (dp),Y` shows up in a summary exactly like an absolute one would, since it operates on the resolved runtime address rather than parsing the instruction's operand form. Neither subsumes the other: `writers`/`readers` finds code paths that exist but may never have been reached yet; `watch summary` finds exactly what a specific run actually did, including forms `writers`/`readers` structurally can't see.
 
 ### 3.13 Frame-scoped value logging (`framelog`, `Debug/FrameLogRegistry.cs`, `Debug/Commands/FrameLogCommand.cs`)
 

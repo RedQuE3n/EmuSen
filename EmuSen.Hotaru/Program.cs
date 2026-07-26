@@ -346,7 +346,7 @@ namespace EmuSen.Hotaru
         // this same way before breakpoints existed at all.
         private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, ShellInterpreter debugCmd, string statePath)
         {
-            Console.WriteLine("--- Debug prompt (type 'help', 'exit' to resume, 'step'/'s' to single-step) ---");
+            Console.WriteLine("--- DianaOS (type 'help', 'exit' to resume, 'step'/'s' to single-step) ---");
             while (true)
             {
                 // Bash-style secondary prompt while a quote/"$(...)"/
@@ -362,7 +362,7 @@ namespace EmuSen.Hotaru
                 // same way a real bash prompt never mistakes a `continue`
                 // typed inside an unfinished `if` for the reader's own
                 // control commands.
-                Console.Write(debugCmd.IsAwaitingMoreInput ? "> " : "debug> ");
+                Console.Write(debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS#: ");
                 string? line = ConsoleLineReader.ReadLine(debugCmd.History.Entries);
                 if (line is null) break;
                 string trimmed = line.Trim();

@@ -148,35 +148,51 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             byte bank = (byte)(address >> 16);
             ushort offset = (ushort)(address & 0xFFFF);
-            
+
             bool isHardwareBank = (bank >= 0x00 && bank <= 0x3F) || (bank >= 0x80 && bank <= 0xBF);
+
+            // Tags every real hardware-register read (DMA/HVIRQ/math/input/
+            // APU-port/PPU) as "IO" for WatchRegistry, the register-side
+            // counterpart to the "WRAM" tag below - added specifically
+            // because `watch add` had no way to observe $4016-$421B/etc at
+            // all before this (a real gap hit investigating Super Mario
+            // All-Stars' controller-2 quirk: a --watch on $4016/$4218
+            // recorded zero events despite the CPU trace proving they were
+            // read every frame). Excludes the two open-bus passthroughs
+            // below (`_lastBusValue` echoes) since those aren't a real
+            // register's content, just whatever last drove the bus.
+            byte ObserveRead(byte val)
+            {
+                ReadObserver?.OnRead("IO", offset, val);
+                return val;
+            }
 
             if (isHardwareBank)
             {
-                if (offset >= 0x4300 && offset <= 0x437F) return Dma.ReadRegister(offset);
-                
-                if (offset == 0x4210) return Interrupts.ReadRDNMI(_lastBusValue);
+                if (offset >= 0x4300 && offset <= 0x437F) return ObserveRead(Dma.ReadRegister(offset));
+
+                if (offset == 0x4210) return ObserveRead(Interrupts.ReadRDNMI(_lastBusValue));
 
                 if (offset == 0x4212)
                 {
                     // H-blank approximation - see Venus_Memory.md §1.5.
                     bool inHBlank = LineCycles >= 183;
-                    return Interrupts.ReadHVBJOY(inHBlank, _lastBusValue);
+                    return ObserveRead(Interrupts.ReadHVBJOY(inHBlank, _lastBusValue));
                 }
 
-                if (offset == 0x4211) return Interrupts.ReadTIMEUP(_lastBusValue);
+                if (offset == 0x4211) return ObserveRead(Interrupts.ReadTIMEUP(_lastBusValue));
 
-                if (offset == 0x4214) return MathUnit.ReadQuotientLow();
-                if (offset == 0x4215) return MathUnit.ReadQuotientHigh();
-                if (offset == 0x4216) return MathUnit.ReadProductOrRemainderLow();
-                if (offset == 0x4217) return MathUnit.ReadProductOrRemainderHigh();
+                if (offset == 0x4214) return ObserveRead(MathUnit.ReadQuotientLow());
+                if (offset == 0x4215) return ObserveRead(MathUnit.ReadQuotientHigh());
+                if (offset == 0x4216) return ObserveRead(MathUnit.ReadProductOrRemainderLow());
+                if (offset == 0x4217) return ObserveRead(MathUnit.ReadProductOrRemainderHigh());
 
-                if (offset == 0x4016) return Input.ReadJoy1Serial();
-                if (offset == 0x4017) return Input.ReadJoy2Serial();
-                if (offset == 0x4218) return Input.ReadJoy1Low();
-                if (offset == 0x4219) return Input.ReadJoy1High();
-                if (offset == 0x421A) return Input.ReadJoy2Low();
-                if (offset == 0x421B) return Input.ReadJoy2High();
+                if (offset == 0x4016) return ObserveRead(Input.ReadJoy1Serial());
+                if (offset == 0x4017) return ObserveRead(Input.ReadJoy2Serial());
+                if (offset == 0x4218) return ObserveRead(Input.ReadJoy1Low());
+                if (offset == 0x4219) return ObserveRead(Input.ReadJoy1High());
+                if (offset == 0x421A) return ObserveRead(Input.ReadJoy2Low());
+                if (offset == 0x421B) return ObserveRead(Input.ReadJoy2High());
                 if (offset >= 0x421C && offset <= 0x421F) return _lastBusValue;
 
                 // WMDATA - see Venus_Memory.md §1.3.
@@ -189,8 +205,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 }
 
                 // APU port - mirrored across $2140-$217F, not just $2140-$2143.
-                if (offset >= 0x2140 && offset <= 0x217F) return _spc700.ReadPort((byte)(offset & 0x03));
-                if (offset >= 0x2100 && offset <= 0x213F) return Ppu.ReadRegister(offset);
+                if (offset >= 0x2140 && offset <= 0x217F) return ObserveRead(_spc700.ReadPort((byte)(offset & 0x03)));
+                if (offset >= 0x2100 && offset <= 0x213F) return ObserveRead(Ppu.ReadRegister(offset));
                 if (offset < 0x2000)
                 {
                     byte val = Ram[offset];
@@ -228,48 +244,60 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             ushort offset = (ushort)(address & 0xFFFF);
             bool isHardwareBank = (bank >= 0x00 && bank <= 0x3F) || (bank >= 0x80 && bank <= 0xBF);
 
+            // Register-write counterpart to ObserveRead in ReadInternal
+            // above - same "IO" tag, same rationale (see that method's
+            // comment). Called before each branch's actual side effect,
+            // matching the existing WRAM write sites' own observe-then-
+            // mutate order below.
+            void ObserveWrite() => WriteObserver?.OnWrite("IO", offset, data);
+
             if (isHardwareBank)
             {
                 if (offset >= 0x4300 && offset <= 0x437F)
                 {
+                    ObserveWrite();
                     Dma.WriteRegister(offset, data);
                     return;
                 }
 
                 if (offset == 0x4016)
                 {
+                    ObserveWrite();
                     Input.WriteStrobe(data);
                     return;
                 }
 
                 if (offset == 0x420B)
                 {
+                    ObserveWrite();
                     Dma.ExecuteGeneralDma(data);
                     return;
                 }
 
                 if (offset == 0x420C)
                 {
+                    ObserveWrite();
                     Dma.HdmaEnable = data;
                     return;
                 }
 
                 // Math unit - see Venus_Memory.md §5.
-                if (offset == 0x4202) { MathUnit.WriteMpyA(data); return; }
-                if (offset == 0x4203) { MathUnit.WriteMpyBTrigger(data); return; }
-                if (offset == 0x4204) { MathUnit.WriteDivL(data); return; }
-                if (offset == 0x4205) { MathUnit.WriteDivH(data); return; }
-                if (offset == 0x4206) { MathUnit.WriteDivBTrigger(data); return; }
+                if (offset == 0x4202) { ObserveWrite(); MathUnit.WriteMpyA(data); return; }
+                if (offset == 0x4203) { ObserveWrite(); MathUnit.WriteMpyBTrigger(data); return; }
+                if (offset == 0x4204) { ObserveWrite(); MathUnit.WriteDivL(data); return; }
+                if (offset == 0x4205) { ObserveWrite(); MathUnit.WriteDivH(data); return; }
+                if (offset == 0x4206) { ObserveWrite(); MathUnit.WriteDivBTrigger(data); return; }
 
-                if (offset == 0x4200) { Interrupts.Write4200(data); return; }
-                if (offset == 0x4207) { Interrupts.WriteHTimeL(data); return; }
-                if (offset == 0x4208) { Interrupts.WriteHTimeH(data); return; }
-                if (offset == 0x4209) { Interrupts.WriteVTimeL(data); return; }
-                if (offset == 0x420A) { Interrupts.WriteVTimeH(data); return; }
+                if (offset == 0x4200) { ObserveWrite(); Interrupts.Write4200(data); return; }
+                if (offset == 0x4207) { ObserveWrite(); Interrupts.WriteHTimeL(data); return; }
+                if (offset == 0x4208) { ObserveWrite(); Interrupts.WriteHTimeH(data); return; }
+                if (offset == 0x4209) { ObserveWrite(); Interrupts.WriteVTimeL(data); return; }
+                if (offset == 0x420A) { ObserveWrite(); Interrupts.WriteVTimeH(data); return; }
 
                 if (offset >= 0x2140 && offset <= 0x217F)
                 {
                     // Same $2140-$217F mirror as Read8 above.
+                    ObserveWrite();
                     _spc700.WritePort((byte)(offset & 0x03), data);
                     return;
                 }
@@ -282,12 +310,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     _wmAddr = (_wmAddr + 1) & 0x1FFFF;
                     return;
                 }
-                if (offset == 0x2181) { _wmAddr = (_wmAddr & 0x1FF00u) | data; return; }
-                if (offset == 0x2182) { _wmAddr = (_wmAddr & 0x100FFu) | ((uint)data << 8); return; }
-                if (offset == 0x2183) { _wmAddr = (_wmAddr & 0x0FFFFu) | ((uint)(data & 0x01) << 16); return; }
+                if (offset == 0x2181) { ObserveWrite(); _wmAddr = (_wmAddr & 0x1FF00u) | data; return; }
+                if (offset == 0x2182) { ObserveWrite(); _wmAddr = (_wmAddr & 0x100FFu) | ((uint)data << 8); return; }
+                if (offset == 0x2183) { ObserveWrite(); _wmAddr = (_wmAddr & 0x0FFFFu) | ((uint)(data & 0x01) << 16); return; }
 
                 if (offset >= 0x2100 && offset <= 0x213F)
                 {
+                    ObserveWrite();
                     Ppu.WriteRegister(offset, data);
                     return;
                 }

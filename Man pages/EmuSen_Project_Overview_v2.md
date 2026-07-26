@@ -401,7 +401,7 @@ Covered in full in the companion document. Summary: a core-agnostic `IDebugTarge
 
 Roughly in order of "cheap and likely valuable" to "bigger, deliberately-deferred":
 
-1. **Continue the coin/Yoshi WRAM investigation** (above) — the immediate active thread.
+1. **Continue the coin/Yoshi WRAM investigation** (above) — status since last touched here is unconfirmed; subsequent sessions moved on to other games/bugs (ALTTP lamp/inventory bug, LttP overworld-subscreen bug, Super Metroid boot hang - see `EmuSen_Games_Tested.md` and `Venus_PPU.md`/`Venus_APU.md`'s own writeups) without a recorded resolution of this one. Worth checking whether it's still actually open before resuming it as "the immediate active thread" - it almost certainly no longer is.
 2. **Get an actual test ROM for Mode 7 EXTBG and offset-per-tile** to confirm those implementations against real content rather than documentation alone (same category of "implemented but unexercised" as tile16/mosaic were before SMW's own logs confirmed them safe).
 3. **A verification pass on the new disassembler** (`Snes65816Disassembler`) — built carefully but not given the oxyron.de-level scrutiny the execution opcode table got. See the debugging tools reference, §3.7.
 4. **Watchpoints beyond WRAM** — report writes from `Ppu`'s VRAM/CGRAM/OAM paths and the general CPU-bus/SRAM path through `MemoryBus`'s `IWriteObserver` hook the same way WRAM already does.
@@ -411,7 +411,7 @@ Roughly in order of "cheap and likely valuable" to "bigger, deliberately-deferre
 8. **Audio output** — connect the already-correct S-DSP synthesis to an actual playback device.
 9. **Decimal (BCD) mode** on the 65816 (ADC/SBC currently ignore the D flag).
 10. **The stuck HDMA title-screen window bug** — dedicated investigation, now that windowing is confirmed safe to leave on globally.
-11. **Breakpoints / single-step / pause-resume** — needs real execution-loop support for pausing mid-frame, which doesn't exist today. A real, separate piece of work, not a quick add.
+11. ~~Breakpoints / single-step / pause-resume~~ — done (`VenusCore.RunFrame()` mid-frame halt/resume, `BreakpointRegistry`, F4 prompt `step`/`continue`). See `EmuSen_Debugging_Tools_Reference_v5.md` §3.1/§3.3. Not yet wired into `EmuSen.HeadlessDebug` or the Avalonia GUI (item 12 below).
 12. **The Avalonia GUI debug window** — the actual Mesen-style multi-pane debugger, built against `IDebugTarget` once enough of the above exists to make it worthwhile.
 13. **A second `IDebugTarget` implementation (NES or otherwise)** — to actually prove out the core-agnostic design rather than just asserting it.
 14. **True doubled-resolution interlace output** — explicitly deferred (§4) given its rarity in real games versus its engineering cost; revisit only if a specific ROM actually needs it.

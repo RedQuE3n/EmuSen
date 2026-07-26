@@ -2,7 +2,7 @@
 
 This document covers every debugging tool currently in the project: what it does, where it lives, how to trigger it, and how the pieces fit together. It's organized from "things you press a key for" down to "the underlying reusable toolchain," since that's roughly the order you'd reach for them in.
 
-*(Living document — updated as the toolchain grows. This revision adds the watchpoint mechanism, the generalized `tile` command, the shared `FrameCount`/screenshot timestamping, and a full 65816 disassembler — retiring `CoinTileDumpLogging` along the way. Also reflects a later decoupling pass: `WatchRegistry` moved from being owned by `MemoryBus` to being owned by `SnesDebugTarget`, communicating through a new, debug-agnostic `IWriteObserver` hook instead of `MemoryBus` holding a concrete `WatchRegistry`/`Cpu` reference directly.)*
+*(Living document — updated as the toolchain grows. This revision: corrects the breakpoints/single-stepping section, which existed by the time this doc was last touched but was still described as future work; documents `GetApuRegisters()`/`regs`' new APU section; fills in the command table's missing rows (`break`, `framelog`, `callers`/`writers`/`readers`, `dump`/`load`, `cheat`); and adds the two harness-level tools that had no coverage at all despite becoming primary tools in practice - `EmuSen.HeadlessDebug` (§3.15) and `EmuSen.Validation` (§3.16). Previous revision added the watchpoint mechanism, the generalized `tile` command, the shared `FrameCount`/screenshot timestamping, and a full 65816 disassembler — retiring `CoinTileDumpLogging` along the way. Also reflects a later decoupling pass: `WatchRegistry` moved from being owned by `MemoryBus` to being owned by `SnesDebugTarget`, communicating through a new, debug-agnostic `IWriteObserver` hook instead of `MemoryBus` holding a concrete `WatchRegistry`/`Cpu` reference directly.)*
 
 ---
 
@@ -73,7 +73,7 @@ The core-agnostic contract. Any emulated console implements this to plug into th
 - **`Disassemble(spaceName, address, count)`** — returns plain `DisassembledInstruction` records (address, raw bytes, mnemonic, formatted operand text). The interface knows nothing about a given CPU's addressing modes or operand-formatting conventions; all of that lives inside each core's implementation (§3.7). A target with no disassembler can legitimately return an empty list.
 - **`GetSummaryText()`** — a free-text escape hatch for whatever isn't (yet) modeled as structured data above.
 
-**Deliberately not included yet:** breakpoints and single-stepping. The execution loop can't pause mid-frame today (it runs a whole frame at a time) — that's real, separate future work, expected to be *additive* to this interface rather than a rework of it. Disassembly (previously in this same "not yet" list) now exists — see §3.7.
+**Breakpoints and mid-frame halt/resume now exist** (this used to be the "not included yet" item in this list, alongside disassembly - disassembly landed first, see §3.7). `IDebugTarget.Breakpoints` exposes a `BreakpointRegistry` (`break add/list/remove` - §3.3's table), the same add/list/remove-only shape `Watches`/`FrameLog` already use; actually halting/resuming is NOT part of `IDebugTarget` itself (a registry edit doesn't know or care whether anything is currently running), it lives on `VenusCore.RunFrame()`: a breakpoint hit sets `IsHaltedAtBreakpoint`/`HaltedAddress` and returns immediately, mid-scanline if necessary, with all the scanline-loop's own state (`_scanlineStarted`, `_lineCycles`, etc.) left exactly as it was so the *next* `RunFrame()` call resumes the same in-progress frame instead of restarting it. The console's F4 prompt (`step`/`s`, `continue`/`c`) drives this by checking `IsHaltedAtBreakpoint` after each `RunFrame()` call and deciding whether to call it again immediately (continue) or wait for the next hotkey press (step) - see `EmuSen.RaylibFrontend/Program.cs`. `EmuSen.HeadlessDebug` (§3.15) doesn't drive halting at all today; its `break add` support is hit-counting only, useful for "did execution ever reach this address" questions in a scripted run without needing the halt/resume loop a live frontend provides.
 
 ### 3.2 `SnesDebugTarget` (`Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs`)
 
@@ -84,6 +84,8 @@ Two small helper classes back the memory spaces:
 - `BusDebugMemorySpace` — routes through `MemoryBus.Read8`/`Write8` at a fixed bank offset (used for the raw CpuBus space, and for SRAM, which is more naturally viewed at its mapped CPU address `$70:0000`).
 
 `Watches` here just returns `SnesDebugTarget`'s own `WatchRegistry` instance. **This changed since first built:** the registry (and a `Cpu` back-reference, `DebugCpu`) used to live directly on `MemoryBus`, which mixed real emulation state with debug-toolchain plumbing in the same class — a coupling issue caught during a later architecture review. Now `MemoryBus` exposes only a tiny, debug-agnostic `IWriteObserver` hook (`Cores/Nintendo/Venus - SNES/Memory/IWriteObserver.cs`) that it calls on every write with no idea what's listening; `SnesDebugTarget` implements that interface, owns the `WatchRegistry` itself, and supplies the PC context from its own already-held `Cpu` reference. `MemoryBus` no longer references `Cpu` or the debug toolchain at all.
+
+**`GetApuRegisters()`** (added investigating a Super Metroid boot hang - `Venus_APU.md` §2.7) exposes the SPC700's own A/X/Y/SP/PC/PSW plus both directions of the CPU↔APU communication ports (`InPort0-3` = what the CPU last wrote, `OutPort0-3` = what the SPC700 last wrote - see `Venus_APU.md` §1.2 for why those are two independent latches per port, not one). `regs` (§3.3's table) prints this as a third "APU registers" section whenever a target's list is non-empty; a core with no distinct sound co-processor just returns an empty list and `regs` skips the section. Before this existed, the only way to see SPC700 state at all was reading raw `Spc700VerboseLogging` trace text.
 
 ### 3.3 `DebugCommandProcessor` (`Debug/DebugCommandProcessor.cs`) + `Debug/Commands/`
 
@@ -97,21 +99,28 @@ A small, composable command layer over `IDebugTarget` — modeled on Unix toolch
 | `spaces` | List memory spaces (name, size, writable) |
 | `mem <space> <addr> [<len>]` | xxd-style hexdump, default length 16 |
 | `write <space> <addr> <value>` | Write one byte, if the space is writable |
-| `regs` | CPU + video registers |
+| `regs` | CPU + video registers, plus an APU section when a target has one (§3.2) |
 | `sprites` | Active sprite/OBJ table |
 | `pal [<index>]` | One palette, or all 16 if omitted |
 | `tile <space> <addr> <bpp>` | ASCII-decode one 8x8 tile from any space (bpp 2, 4, or 8) |
 | `disasm <space> <addr> [<count>]` | Disassemble `<count>` instructions (default 10) — see §3.7 |
-| `watch add <space> <addr> <len>` | Register a watchpoint |
+| `watch add <space> <addr> <len> [write\|read\|both]` | Register a watchpoint (default write-only) |
 | `watch list` | List active watchpoints with their IDs |
 | `watch log <id> [<count>]` | Show a watchpoint's recorded events (default 20) |
 | `watch clear <id>` | Clear a watchpoint's stored events (keeps the watch registered) |
 | `watch remove <id>` | Remove a watchpoint entirely |
+| `break add <addr>` / `break list` / `break remove <id>` | Manage execution breakpoints (24-bit CPU address) — see §3.1's breakpoints note |
+| `framelog add <space> <addr> [<width>]` / `list` / `show <id> [<count>]` / `clear <id>` / `remove <id>` | Per-frame value sampling, independent of reads/writes — see §3.13 |
+| `callers <addr> [<scanstart> <scanlen>]` | Find JSR/JSL/JMP instructions targeting `<addr>` — see §3.12 |
+| `writers <addr> [<scanstart> <scanlen>]` | Find STA/STX/STY/STZ instructions targeting `<addr>` (absolute/absolute-long only — see that command's own usage text for why direct-page/indexed/indirect forms are excluded) |
+| `readers <addr> [<scanstart> <scanlen>]` | Find LDA/LDX/LDY instructions reading `<addr>` (same absolute-only scope as `writers`) |
+| `dump <space> <addr> <len> <path>` / `load <space> <addr> <path>` | Save/restore a memory range to/from a file — see §3.11 |
 | `search <space> <val> [<width>]` | Start a memory search — see §3.9 |
 | `search refine\|changed\|unchanged\|increased\|decreased\|list\|reset` | Narrow/inspect/clear the active search — see §3.9 |
 | `snapshot <space> <name>` / `snapshot list\|remove <name>` | Capture/manage a named memory baseline — see §3.10 |
 | `diff <name> [<count>]` | Compare a snapshot against current contents — see §3.10 |
 | `trace <count>` / `trace off` | Arm/cancel a live CPU instruction trace |
+| `cheat add\|poke\|gg\|rompatch\|list\|enable\|disable\|remove\|clear ...` | RAM-poke/ROM-patch cheat engine — see §3.14 |
 | `summary` | Free-text fallback (delegates to `StateDump.DumpAll`) |
 
 Addresses/values accept `0x`, `$`, or bare hex.
@@ -286,6 +295,8 @@ Reuses `IDebugTarget.Disassemble` rather than re-decoding opcodes itself, so a `
 
 **Same "best-effort, may misalign through data mixed with code" caveat as `disasm`.** A linear disassembler walking forward byte-by-byte has no way to know which bytes in a scanned range are really instructions versus embedded data (graphics, tables, text) — if the scan range includes non-code bytes, everything after the first misaligned read can decode to garbage opcodes, including spurious `callers` matches or missed real ones. Best used on a range that's actually known to be code.
 
+**`writers`/`readers`** (`Debug/Commands/WritersCommand.cs`/`ReadersCommand.cs`) are the store/load-side counterparts to `callers` - "what code is capable of writing/reading this address," independent of whether that path was ever actually exercised in a traced run (the gap `writers` was built to close: watching an address live can show exactly one write from one PC and nothing else, which only proves what a specific run did, not what the ROM's code is capable of doing). Deliberately narrower in scope than `callers`: only `STA`/`STX`/`STY`/`STZ` (for `writers`) or `LDA`/`LDX`/`LDY` (for `readers`) in **absolute or absolute-long** addressing are matched - direct-page, indexed, and indirect forms are excluded outright rather than guessed at, since their real target depends on runtime register/D-register state a static scan can't know. Same bank-assumed-equals-PB convention as `callers`' indirect-`JMP` exclusion.
+
 ### 3.13 Frame-scoped value logging (`framelog`, `Debug/FrameLogRegistry.cs`, `Debug/Commands/FrameLogCommand.cs`)
 
 The complement to `watch` for values that don't reliably *trigger* an access-based watch — a counter written once at level start and only ever read afterward would show exactly one write event forever; `framelog` instead samples a value **once per frame, unconditionally**, so its evolution over time is visible even when nothing about how it's touched would make a good watch.
@@ -375,6 +386,47 @@ cheat add DF47-0915 example code
 ```
 The dash lands right after the 4th character, so `cheat add` guesses Game Genie and routes to `GameGenieCodec` automatically - equivalent to `cheat gg DF47-0915 example code` directly. Decodes through the cipher above into a raw ROM address/value pair, then adds it exactly like `rompatch` would (unconditional, since real SNES codes never carry a compare) - `cheat list` shows it the same way, `#3: [on ] ROM  0x... = 0x...  example code`.
 
+### 3.15 `EmuSen.HeadlessDebug` — scripted CLI harness
+
+A third consumer of `DebugCommandProcessor` alongside the console's F4 prompt (§3.3) and F1 hotkey — no window, no real-time input, built specifically for an AI agent (or any non-interactive caller) to drive an emulation session, script a repro, and read back structured results in one shot instead of needing a human at a keyboard. This has become the primary tool for investigating anything that needs precise, repeatable setup (a specific save state, a specific input sequence, a specific frame to screenshot) — most of the LttP color-math/subscreen investigation and the Super Metroid boot-hang investigation (`Venus_APU.md` §2.7) were done entirely through this, not the interactive console.
+
+```
+dotnet run --project EmuSen.HeadlessDebug -- <rom> <frames> [options...]
+```
+
+| Option | Does |
+|---|---|
+| `--loadstate <path>` | Load a save state before running any frames |
+| `--savestate <path>` | Save a state after the run completes |
+| `--tap <frame>:<button>[:duration]` (repeatable) | Hold `<button>` from `<frame>` for `<duration>` frames (default 1) — scripted input, e.g. `--tap 0:Right:60` |
+| `--screenshot <frame>:<path>` (repeatable) | Write an uncompressed BMP of the frame buffer at `<frame>` (no PNG library available; convert externally if needed) |
+| `--script <path>` | A text file of newline-separated `DebugCommandProcessor` commands (§3.3's table), run once after all frames finish. **Only the last `--script` wins** — passing it more than once silently drops the earlier ones rather than merging, since each flag just overwrites the same variable. Comment lines (`# ...`) and blank lines are skipped. If omitted, defaults to `watch list` + a `watch log` for every still-registered watch. |
+| `--watch <space>:<addr>:<len>[:write\|read\|both]` (repeatable) | Register a watch **before** the run starts (unlike `watch add` inside `--script`, which only takes effect for whatever's left of the run *after* the script executes — since the script runs last). Two default watches are always active: `WRAM:0x8000:0x1800` and `WRAM:0xD80:0x80`, matching what the Raylib frontend registers from power-on. |
+| `--cpulog <start>:<end>` | Enables `CpuVerboseLogging` (+ `MasterLoggingEnabled`) only for frames in `[start, end)` — avoids capturing a trace of the entire run when only a narrow window matters. |
+| `--flag <Name>[=<value>]` (repeatable) | Set any `DebugSettings` property or field by name via reflection (bool if no `=value`, otherwise `Convert.ChangeType`'d to the member's real type) — also forces `MasterLoggingEnabled = true`, since most `DebugSettings` flags are gated behind it (`Settings/DebugSettings.cs`, §2) and setting the individual flag alone is otherwise a silent no-op. |
+| `--verbose` | Shortcut for `MasterLoggingEnabled = true` for the whole run. |
+| `--out <path>` | Write this harness's own `Emit()`-based log lines (`[ROM]`, `[RUN]`, `[SCREENSHOT]`, the `--script` output, etc.) to a file. |
+
+**Two separate output streams, easy to conflate.** `--out` only captures this harness's own `Emit()` calls. Everything the *emulator itself* prints via raw `Console.WriteLine` — `CpuVerboseLogging`/`Spc700VerboseLogging` traces, `[DMA]`/`[PORT]`/etc. `DebugSettings` output, the `[FRAME] N` marker (`Venus_Memory.md`/`VenusCore.RunFrame`) — bypasses `Emit()` entirely and goes straight to real stdout. Redirecting shell output to `/dev/null` while relying on `--out` for everything discards all of that silently; capture real stdout to a file (`> file.log 2>&1`) instead whenever any `DebugSettings` trace flag is in play.
+
+**`break add` inside a script only counts hits — it never halts.** Headless has no frontend loop to resume from a halt (§3.1's breakpoints note), so a breakpoint here answers "did execution ever reach this address, and how many times" (via `break list`'s hit count) rather than pausing anything.
+
+### 3.16 `EmuSen.Validation` — ground-truth single-step validation
+
+Not part of the `IDebugTarget` toolchain above (it doesn't run a full emulation session at all) — a separate, permanent harness that validates one CPU's opcode/addressing-mode/flag behavior in isolation against third-party ground-truth test vectors, independent of whatever a real ROM happens to exercise.
+
+```
+dotnet run --project EmuSen.Validation -- <target> <test-dir> [max-examples-per-file]
+```
+
+`<target>` is a registered `ISingleStepTarget` name (currently `65816` and `spc700`); `<test-dir>` holds the target's JSON test files (one per opcode, from [TomHarte/ProcessorTests](https://github.com/TomHarte/ProcessorTests) — not vendored into this repo, fetch separately). Each test sets up initial registers/memory, single-steps the real emulation code exactly once via the target's `ISingleStepTarget` adapter, and compares final registers/memory byte-for-byte against the vector's expected result.
+
+**Why this matters more than it might look:** this is how the real, shipped 65816 `STA [dp]` addressing-mode bug (wired to the wrong function, breaking the ALTTP lamp/inventory bug it was chased down from) and two real SPC700 bugs (direct-page word wraparound, DAA/DAS high-byte-checked-post-adjustment — `Venus_APU.md` §2.4/§2.5) were all found and confirmed fixed. A ROM exercising the exact wrong opcode/addressing-mode/operand combination that exposes a bug like this is rare and easy to miss by playtesting alone (small movements, most values); 10,000 randomized cases per opcode is not.
+
+**Adding a target is: implement `ISingleStepTarget` once** (`Reset`, `SetRegister`/`GetRegister`, `SetMemory`/`GetMemory`, `Step`), **write a small JSON-shape loader** for however that test suite's author formatted their vectors (see `Cpu65816SingleStepTarget.cs`/`Spc700SingleStepTarget.cs` and their paired loaders for the two existing examples — SPC700's loader differs from 65816's because TomHarte's two suites use different JSON field names for the same concepts), and register both in `Program.cs`'s `Targets` dictionary. No changes needed to the runner itself.
+
+**A target whose chip has memory-mapped I/O needs to route `SetMemory`/`GetMemory` through real `Read8`/`Write8`, not a raw array poke** — `Spc700SingleStepTarget`'s own comment covers this in detail: a raw poke into `Ram[]` would silently miss `$00F2-$00F7` entirely (DSP register access, APU communication ports never touch `Ram[]` at all), producing spurious failures that look like emulation bugs but are really just test-setup gaps. Even with that in place, TomHarte's vectors model flat, uninstrumented RAM with no peripherals at all - any test case whose randomly-generated address happens to land on a *real* hardware register EmuSen correctly special-cases (SPC700's `$F0-F3`/`$FD-FF` timers/DSP-address port, not yet routed through this same seeding) will still show as a "failure" that's actually the test harness disagreeing with correct emulated hardware behavior, not a bug — see `Venus_APU.md` §2.6 for the full accounting of which failures are which, the last time this was run.
+
 ---
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)
@@ -420,7 +472,7 @@ This is roughly how the toolchain got used across the coin/Yoshi rendering inves
 
 ## 7. Roadmap (things this doc deliberately doesn't cover because they don't exist yet)
 
-- **Breakpoints / single-step / pause-resume** — needs real execution-loop support for pausing mid-frame, which doesn't exist today. (The watch registry in §3.5 covers *observing* writes; the disassembler in §3.7 covers *displaying* code; neither pauses anything.)
+- **Breakpoints / single-step / pause-resume** — done (§3.1's breakpoints note, §3.3's `break` row). Still open: `EmuSen.HeadlessDebug` doesn't drive the halt/resume loop at all (its `break add` is hit-counting only, §3.15) — a scripted, non-interactive equivalent of `step`/`continue` would need the harness to check `IsHaltedAtBreakpoint` and decide what to do next, which nothing does today.
 - **A verification pass on the disassembler** (§3.7) — it exists now, but hasn't had the equivalent scrutiny the execution opcode table got against oxyron.de. Worth a dedicated pass rather than trusting it blind.
 - **Watchpoints beyond WRAM** — VRAM/CGRAM/OAM and the general CPU-bus/SRAM write paths don't report to `MemoryBus`'s `IWriteObserver` hook yet (§3.4).
 - **The Avalonia GUI debug window** — the actual Mesen-style multi-pane debugger (register panels, hex viewer, disassembly view, sprite/palette viewers, event log, watch panel), built against `IDebugTarget` once the above exist. Everything in §3 was built with this as the eventual consumer, but it isn't built yet.

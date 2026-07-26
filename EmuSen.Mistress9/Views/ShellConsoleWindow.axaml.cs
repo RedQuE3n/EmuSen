@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input;
 using EmuSen.Shell;
@@ -23,6 +24,14 @@ namespace EmuSen.Mistress9.Views
     {
         private ShellInterpreter _shell;
 
+        // Mistress9-only builtins (pause/resume today) that ShellInterpreter's
+        // own CreateDefault doesn't know about and shouldn't - see
+        // EmulationControlCommands.cs's own comment. Held onto here (rather
+        // than only passed once, at construction) because UpdateTarget
+        // below rebuilds _shell from scratch on every ROM change and needs
+        // to re-add them each time too.
+        private readonly IEnumerable<IShellCommand> _extraCommands;
+
         // -1 = "not currently recalling, editing whatever's live in the
         // box." Same recall algorithm ConsoleLineReader uses, just driven
         // by TextBox key events instead of raw console ones.
@@ -33,12 +42,13 @@ namespace EmuSen.Mistress9.Views
         // other parameterized window in this project (InputSettingsWindow,
         // RomBrowserWindow, PreferencesWindow) - real code always uses the
         // one below with an actual (possibly null) target.
-        public ShellConsoleWindow() : this(null) { }
+        public ShellConsoleWindow() : this(null, null) { }
 
-        public ShellConsoleWindow(IDebugTarget? target)
+        public ShellConsoleWindow(IDebugTarget? target, IEnumerable<IShellCommand>? extraCommands = null)
         {
             InitializeComponent();
-            _shell = ShellInterpreter.CreateDefault(target);
+            _extraCommands = extraCommands ?? System.Array.Empty<IShellCommand>();
+            _shell = ShellInterpreter.CreateDefault(target, _extraCommands);
 
             AppendLine("EmuSen shell console - type 'help' for a list of commands.");
             if (target is null) AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
@@ -56,10 +66,15 @@ namespace EmuSen.Mistress9.Views
         // mutable state) - so this does mean history/variables reset
         // across a ROM swap. Accepted: the alternative is a shell command
         // silently running against a Cpu/Bus/Renderer from a core that
-        // already stopped running the moment a new ROM loaded.
+        // already stopped running the moment a new ROM loaded. pause/resume
+        // are re-added here too since they're carried by the rebuilt
+        // ShellInterpreter itself, not this window - they aren't
+        // target-specific to begin with (pausing works with or without a
+        // ROM loaded), but rebuilding the interpreter loses them just the
+        // same as any other command unless they're passed again.
         public void UpdateTarget(IDebugTarget? target, string? romDisplayName)
         {
-            _shell = ShellInterpreter.CreateDefault(target);
+            _shell = ShellInterpreter.CreateDefault(target, _extraCommands);
             _historyIndex = -1;
             AppendLine(romDisplayName != null ? $"--- ROM changed: {romDisplayName} ---" : "--- ROM unloaded ---");
         }

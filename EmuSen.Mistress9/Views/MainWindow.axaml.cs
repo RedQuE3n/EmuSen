@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -55,6 +56,21 @@ namespace EmuSen.Mistress9.Views
         private Thread? _emuThread;
         private volatile bool _running;
 
+        // Pause/resume for the emulation thread, added so a shell command
+        // typed into _consoleWindow can safely read/write Cpu/Bus/Renderer
+        // state without racing RunFrame() on _emuThread - see
+        // EmulationControlCommands.cs's own comment for why this exists.
+        // Signaled (Set) = running, unsignaled (Reset) = paused; starts
+        // signaled so a freshly-started thread doesn't block before
+        // anyone's had a chance to pause it. EmulationLoop blocks on this
+        // at the top of every iteration rather than busy-polling a bool,
+        // and StopEmulationThread always Sets it before Join()ing so a
+        // paused thread can still wake up, notice _running is false, and
+        // exit - otherwise stopping while paused would deadlock forever.
+        private readonly ManualResetEventSlim _pauseSignal = new(initialState: true);
+
+        public bool IsPaused => !_pauseSignal.IsSet;
+
         // Coalescing hand-off from _emuThread to the UI thread: the
         // emulation thread can produce frames faster than Avalonia can
         // present them, and posting one Dispatcher action per emulated frame
@@ -89,6 +105,7 @@ namespace EmuSen.Mistress9.Views
         private ShellConsoleWindow? _consoleWindow;
 
         private string? _currentRomPath;
+        private string? _currentDisplayName; // for restoring StatusText's "Running: ..." text exactly after a pause, without reformatting from _currentRomPath
         private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
         private readonly GamepadBindingMap _gamepadBindings = GamepadBindingMap.Load();
         private readonly AppSettings _appSettings = AppSettings.Load();
@@ -230,10 +247,21 @@ namespace EmuSen.Mistress9.Views
                 return;
             }
 
-            _consoleWindow = new ShellConsoleWindow(_debugTarget);
+            _consoleWindow = new ShellConsoleWindow(_debugTarget, MakeEmulationControlCommands());
             _consoleWindow.Closed += (_, _) => _consoleWindow = null;
             _consoleWindow.Show(this);
         }
+
+        // Built fresh per ShellConsoleWindow construction (not cached) -
+        // each PauseCommand/ResumeCommand instance only needs to close
+        // over `this`, so there's no real cost to re-creating them, and
+        // it avoids the two commands' delegates ever accidentally
+        // outliving a MainWindow instance.
+        private IEnumerable<IShellCommand> MakeEmulationControlCommands() => new IShellCommand[]
+        {
+            new PauseCommand(PauseEmulation, () => IsPaused),
+            new ResumeCommand(ResumeEmulation, () => IsPaused),
+        };
 
         private string? CurrentStatePath =>
             _currentRomPath is null
@@ -319,6 +347,7 @@ namespace EmuSen.Mistress9.Views
 
                 StatusText.Text = $"Running: {displayName}";
                 _currentRomPath = path;
+                _currentDisplayName = displayName;
 
                 // Gamepad polling only - see _timer's own field comment for
                 // why this stays separate from emulation itself.
@@ -333,6 +362,24 @@ namespace EmuSen.Mistress9.Views
                 _session = null;
                 StatusText.Text = $"Failed to load {displayName}: {ex.Message}";
             }
+        }
+
+        // Called from _consoleWindow's PauseCommand/ResumeCommand (both run
+        // on the UI thread, same as this method) - ManualResetEventSlim's
+        // Set/Reset are thread-safe regardless, so there's nothing else to
+        // guard here. StatusText is only ever touched from the UI thread
+        // in either case, so no Dispatcher.UIThread.Post is needed the way
+        // EmulationLoop needs one for its own cross-thread updates.
+        public void PauseEmulation()
+        {
+            _pauseSignal.Reset();
+            if (_session is { IsRomLoaded: true }) StatusText.Text = "Paused";
+        }
+
+        public void ResumeEmulation()
+        {
+            _pauseSignal.Set();
+            if (_session is { IsRomLoaded: true }) StatusText.Text = $"Running: {_currentDisplayName}";
         }
 
         private void StartEmulationThread()
@@ -353,6 +400,7 @@ namespace EmuSen.Mistress9.Views
         {
             if (_emuThread is null) return;
             _running = false;
+            _pauseSignal.Set(); // wake the thread if it's currently paused, so it can observe _running=false and exit rather than deadlocking Join() below
             _emuThread.Join();
             _emuThread = null;
         }
@@ -419,6 +467,28 @@ namespace EmuSen.Mistress9.Views
 
             while (_running)
             {
+                // Blocks here, not inside the try below, while paused -
+                // see _pauseSignal's own field comment. StopEmulationThread
+                // always Sets this before Join()ing, so this can never
+                // block forever even if a console command pauses and the
+                // window is then closed without resuming first. Checked
+                // before waiting (rather than always calling Wait(), which
+                // would also be correct but always costs a syscall even
+                // when never paused) so the by-far-more-common unpaused
+                // case stays a plain volatile-ish read.
+                if (!_pauseSignal.IsSet)
+                {
+                    _pauseSignal.Wait();
+                    if (!_running) break;
+
+                    // Otherwise nextTick would still be wherever it was
+                    // when the pause began, and the "fell behind" branch
+                    // at the bottom of this loop would attribute the
+                    // entire paused duration to a single artificially slow
+                    // frame in the fps window above.
+                    nextTick = clock.Elapsed;
+                }
+
                 nextTick += FrameInterval;
 
                 EmulatorSession? session = _session;

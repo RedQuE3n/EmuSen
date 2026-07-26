@@ -251,6 +251,7 @@ class Program
             }
         }
         core.Cpu?.FlushVerboseTrace();
+        core.Spc700?.FlushVerboseTrace();
         Emit($"[RUN] Done, {core.TotalFrames} total frames executed.");
 
         // Captures whatever scene --tap/frame-count navigation just

@@ -63,6 +63,19 @@ namespace EmuSen.DianaOS
         private int _sourceDepth;
         private const int MaxSourceDepth = 20;
 
+        // The last HostAction any command produced while executing the
+        // statement list currently being run by SubmitCore below - "last
+        // one wins" within a single Submit()/SubmitCore() call, same as
+        // $? already works for exit codes; a host action is delivered
+        // after the whole line finishes, not mid-statement-list (see
+        // ExecuteSimpleCommand's own comment for why nothing upstream of
+        // it - ExecuteStatementList/ExecuteIf/ExecuteFor/ExecuteWhile/
+        // ExecuteAndOrList/ExecutePipeline - needed touching for this).
+        // Reset immediately before each real execution in SubmitCore, so
+        // a stale value from an earlier call can never leak into a later
+        // one's returned tuple.
+        private HostAction? _pendingHostAction;
+
         public CommandHistory History { get; }
 
         // True between Submit() calls while a multi-line construct (an
@@ -233,7 +246,7 @@ namespace EmuSen.DianaOS
         // (which also feeds one raw file line per call) get correct
         // multi-line control-flow support for free from this, without
         // either caller needing to know anything about the grammar.
-        public (bool NeedsMoreInput, string Output) Submit(string rawLine) => SubmitCore(rawLine, interactive: true);
+        public (bool NeedsMoreInput, string Output, HostAction? Action) Submit(string rawLine) => SubmitCore(rawLine, interactive: true);
 
         // `source`/`.` (RunScript below) feeds a script file's lines
         // through this same interpreter one at a time too, sharing this
@@ -246,7 +259,7 @@ namespace EmuSen.DianaOS
         // (a script referencing "the interactive session's last command"
         // would be confusing at best, since a script wasn't typed
         // interactively at all).
-        private (bool NeedsMoreInput, string Output) SubmitCore(string rawLine, bool interactive)
+        private (bool NeedsMoreInput, string Output, HostAction? Action) SubmitCore(string rawLine, bool interactive)
         {
             string line = rawLine ?? "";
 
@@ -256,7 +269,7 @@ namespace EmuSen.DianaOS
             if (interactive && _pendingInput.Length == 0 && line.TrimStart().StartsWith('!'))
             {
                 try { line = ExpandHistoryReference(line.Trim()); }
-                catch (Exception ex) { return (false, $"Error: {ex.Message}"); }
+                catch (Exception ex) { return (false, $"Error: {ex.Message}", null); }
             }
 
             string combined = _pendingInput.Length > 0 ? _pendingInput + "\n" + line : line;
@@ -269,13 +282,13 @@ namespace EmuSen.DianaOS
             catch (Exception ex)
             {
                 _pendingInput = "";
-                return (false, $"Error: {ex.Message}");
+                return (false, $"Error: {ex.Message}", null);
             }
 
             if (lexResult.NeedsMoreInput)
             {
                 _pendingInput = combined;
-                return (true, "");
+                return (true, "", null);
             }
 
             StatementList script;
@@ -286,21 +299,22 @@ namespace EmuSen.DianaOS
             catch (ShellIncompleteException)
             {
                 _pendingInput = combined;
-                return (true, "");
+                return (true, "", null);
             }
             catch (ShellSyntaxException ex)
             {
                 _pendingInput = "";
-                return (false, $"Syntax error: {ex.Message}");
+                return (false, $"Syntax error: {ex.Message}", null);
             }
 
             _pendingInput = "";
             string finalText = combined.Trim();
-            if (finalText.Length == 0) return (false, "");
+            if (finalText.Length == 0) return (false, "", null);
 
             if (interactive) History.Add(finalText);
             if (_isRoot) _stopwatch = Stopwatch.StartNew();
 
+            _pendingHostAction = null;
             var sb = new StringBuilder();
             try
             {
@@ -316,7 +330,7 @@ namespace EmuSen.DianaOS
 
             string result = sb.ToString();
             if (result.EndsWith('\n')) result = result[..^1];
-            return (false, result);
+            return (false, result, _pendingHostAction);
         }
 
         // Bash-style history expansion: "!!" re-runs the last command,
@@ -494,6 +508,17 @@ namespace EmuSen.DianaOS
 
             DianaOSResult result = Dispatch(name, args.ToArray(), effectiveStdin);
 
+            // Last one wins if this statement list runs several commands
+            // (a pipeline, a sequenced line, a loop body) - see
+            // _pendingHostAction's own field comment. Deliberately not
+            // threaded through this method's own (string, int) return
+            // type or any of its callers (ExecutePipeline,
+            // ExecuteStatementList, ExecuteIf/For/While) - a field read
+            // once at the end of SubmitCore keeps this a one-line addition
+            // instead of a signature change rippling through six methods
+            // for a signal only SubmitCore's caller ever needs.
+            if (result.Action is not null) _pendingHostAction = result.Action;
+
             string visibleOutput = result.Output;
             if (outputRedirectPath != null)
             {
@@ -616,6 +641,7 @@ namespace EmuSen.DianaOS
             catch (Exception ex) { return DianaOSResult.Fail($"{args[0]}: {ex.Message}"); }
 
             var sb = new StringBuilder();
+            HostAction? scriptAction = null;
             _sourceDepth++;
             try
             {
@@ -624,9 +650,21 @@ namespace EmuSen.DianaOS
                     string trimmed = rawLine.TrimStart();
                     if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
 
-                    (bool needsMore, string output) = SubmitCore(rawLine, interactive: false);
+                    (bool needsMore, string output, HostAction? action) = SubmitCore(rawLine, interactive: false);
                     if (needsMore) continue; // still buffering a multi-line if/for/while block
                     if (output.Length > 0) { sb.Append(output); sb.Append('\n'); }
+
+                    // A sourced script IS allowed to trigger a host action
+                    // (e.g. 'shutdown'), matching real bash - 'exit' inside
+                    // a sourced script exits the calling shell too. Stop
+                    // processing the rest of the script the moment one
+                    // appears, same as bash would never run the lines
+                    // after 'exit' - the action itself is returned below,
+                    // so ExecuteSimpleCommand's own caller (the outer
+                    // SubmitCore call that dispatched 'source' in the
+                    // first place) picks it up the same way it would from
+                    // any other command's DianaOSResult.
+                    if (action is not null) { scriptAction = action; break; }
                 }
             }
             finally
@@ -647,7 +685,7 @@ namespace EmuSen.DianaOS
 
             string result = sb.ToString();
             if (result.EndsWith('\n')) result = result[..^1];
-            return result;
+            return new DianaOSResult(result, 0, scriptAction);
         }
 
         // `man [command]` - with no argument, falls back to the exact
@@ -859,7 +897,13 @@ namespace EmuSen.DianaOS
         private string RunCommandSubstitution(string source)
         {
             DianaOSInterpreter sub = CreateSubshell();
-            (bool needsMore, string output) = sub.Submit(source);
+            // A real bash subshell's 'exit' doesn't affect the parent
+            // shell - `sub` is a genuinely separate DianaOSInterpreter
+            // instance with its own _pendingHostAction field, so any host
+            // action produced inside $(...) is already isolated just by
+            // virtue of never being read back out here; the discard below
+            // is only about the tuple's arity, not extra logic.
+            (bool needsMore, string output, _) = sub.Submit(source);
             if (needsMore)
             {
                 throw new ShellSyntaxException("Command substitution \"$(...)\" isn't syntactically complete (e.g. a missing 'fi'/'done') - finish the block outside the substitution instead.");

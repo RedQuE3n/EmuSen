@@ -175,7 +175,13 @@ namespace EmuSen.Mistress9.Views
             string enteredPrompt = _shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ";
             AppendLine(enteredPrompt + line);
 
-            (bool needsMore, string output) = _shell.Submit(line);
+            // Action is discarded here for now - this window doesn't react
+            // to a HostAction yet (Mistress9 keeps its own pause/resume on
+            // the already-proven PauseCommand/ResumeCommand delegate
+            // pattern instead - see EmulationControlCommands.cs's own
+            // header comment on why). Behavior-neutral: reacting to a
+            // HostAction here is a deliberately separate, later decision.
+            (bool needsMore, string output, _) = _shell.Submit(line);
             PromptText.Text = _shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ";
             if (needsMore) return;
             if (output.Length > 0) AppendLine(output);

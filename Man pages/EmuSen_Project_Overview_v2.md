@@ -156,6 +156,14 @@ EmuSen Project/
 │   │   │   │   │   ├── StateDump.cs          # Pre-toolchain CPU+PPU snapshot formatter
 │   │   │   │   │   └── SnesDebugTarget.cs    # SNES's IDebugTarget implementation (namespace
 │   │   │   │   │                              #   EmuSen.Cores.Nintendo.Venus.Debug)
+│   │   │   │   ├── Cheats/                   # ActionReplayCodec/GameGenieCodec - SNES-specific
+│   │   │   │   │                              #   cheat-code decoders (namespace EmuSen.Cores.
+│   │   │   │   │                              #   Nintendo.Venus.Cheats), moved here from Shell/
+│   │   │   │   │                              #   Cheats/ during a core-agnosticism pass - the
+│   │   │   │   │                              #   generic RAM-poke/ROM-patch mechanism they feed
+│   │   │   │   │                              #   (CheatRegistry) stayed in Shell/, only the SNES
+│   │   │   │   │                              #   Game Genie/Pro Action Replay code-string
+│   │   │   │   │                              #   decoding moved.
 │   │   │   │   └── Input/
 │   │   │   │       └── Input.cs
 │   │   │   ├── Moon - NES/README.md          # Reserved - future NES core
@@ -211,7 +219,7 @@ EmuSen Project/
 │   │   ├── IDebugTarget.cs                     # core-agnostic debug-target contract (see companion doc)
 │   │   ├── WatchRegistry.cs / BreakpointRegistry.cs / CheatRegistry.cs / FrameLogRegistry.cs
 │   │   ├── FrameRecorder.cs
-│   │   ├── DebugTools.cs                     # Older generic helpers (hexdump, tile-ASCII, etc.) plus
+│   │   ├── DebugTools.cs                     # BoundedTrace ("run N more frames/steps then stop") plus
 │   │   │                                      #   RepeatCollapsingTrace<TKey> - collapses a repeating
 │   │   │                                      #   1-8 instruction cycle (polling/delay loops - VBlank
 │   │   │                                      #   wait, DMA busy-wait, the APU handshake) into one
@@ -235,7 +243,6 @@ EmuSen Project/
 │   │   │                                      #   and it falls through to "general", which isn't in
 │   │   │                                      #   the console-echo suppression list - a real session
 │   │   │                                      #   hit exactly this and got the console blasted again.
-│   │   ├── Cheats/                             # ActionReplayCodec/GameGenieCodec - RAM-poke/ROM-patch decoders
 │   │   └── Commands/                           # Every shell command, one class each: echo/sed/history/true/
 │   │                                            #   false/test (core-agnostic builtins) alongside mem/regs/
 │   │                                            #   watch/bp/cheat/etc. (SNES-facing, need a real IDebugTarget)

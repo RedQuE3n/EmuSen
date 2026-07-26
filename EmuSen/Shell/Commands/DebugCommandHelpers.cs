@@ -78,30 +78,16 @@ namespace EmuSen.Shell.Commands
 
         // Shared scan-and-match skeleton for CallersCommand/WritersCommand/
         // ReadersCommand: walk every disassembled instruction in
-        // [scanStart, scanStart+scanLen), ask `resolveTarget` whether it has
-        // a statically-known target address (returning null for anything it
-        // doesn't recognize or can't resolve from the instruction bytes
-        // alone), and collect the ones matching <targetAddr>. `resolveTarget`
-        // is where each command's own opcode knowledge lives - this helper
-        // only owns the walking/formatting/not-found-message part all three
+        // [scanStart, scanStart+scanLen) and ask the target itself (via
+        // IDebugTarget.ClassifyStaticReference - see that method's own
+        // comment) whether each one statically references <targetAddr> as
+        // the given <kind>. Fully core-agnostic now - the ISA-specific
+        // opcode knowledge this used to hardcode (which bytes mean "this is
+        // a call/store/load with a known target") lives entirely in each
+        // core's own ClassifyStaticReference implementation; this helper
+        // only owns the walking/matching/formatting all three commands
         // share verbatim.
-        //
-        // NOTE: `resolveTarget` is necessarily ISA-specific (each command
-        // passes its own 65816 opcode-byte switch) - this helper removes the
-        // three commands' literal duplication of the scan loop, but does NOT
-        // make the scan itself core-agnostic. A non-65816 core would need
-        // its own opcode table here, or (better, if a second core ever
-        // lands) this would want to move into IDebugTarget itself, the way
-        // Disassemble()/DecodeTilemapEntry() already delegate their own
-        // ISA-specific decoding to the core rather than hardcoding it here.
-        public static string ScanForStaticReferences(
-            IDebugTarget target,
-            int scanStart,
-            int scanLen,
-            int targetAddr,
-            string notFoundMnemonics,
-            Func<byte, DisassembledInstruction, int?> resolveTarget,
-            string notFoundSuffix = "")
+        public static string ScanForStaticReferences(IDebugTarget target, int scanStart, int scanLen, int targetAddr, StaticReferenceKind kind)
         {
             var instrs = target.Disassemble("CpuBus", scanStart, scanLen);
 
@@ -109,8 +95,8 @@ namespace EmuSen.Shell.Commands
             foreach (var instr in instrs)
             {
                 if (instr.Address >= scanStart + scanLen) break;
-                int? refTarget = resolveTarget(instr.Bytes[0], instr);
-                if (refTarget.HasValue && refTarget.Value == targetAddr)
+                var reference = target.ClassifyStaticReference(instr);
+                if (reference is { } r && r.Kind == kind && r.Target == targetAddr)
                 {
                     matches.Add($"  ${instr.Address:X6}: {instr.Mnemonic} {instr.OperandText}");
                 }
@@ -118,7 +104,14 @@ namespace EmuSen.Shell.Commands
 
             if (matches.Count == 0)
             {
-                return $"No {notFoundMnemonics} found targeting ${targetAddr:X6} in ${scanStart:X6}-${scanStart + scanLen - 1:X6}{notFoundSuffix}.";
+                string verb = kind switch
+                {
+                    StaticReferenceKind.Call => "calls of",
+                    StaticReferenceKind.Write => "writes to",
+                    StaticReferenceKind.Read => "reads of",
+                    _ => "references to",
+                };
+                return $"No statically-resolvable {verb} ${targetAddr:X6} found in ${scanStart:X6}-${scanStart + scanLen - 1:X6}.";
             }
             return string.Join('\n', matches);
         }

@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using EmuSen.Shell.Cheats;
+using EmuSen.Cores.Nintendo.Venus.Cheats;
 using static EmuSen.Shell.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Shell.Commands
@@ -14,6 +14,17 @@ namespace EmuSen.Shell.Commands
     //     the format (see LooksLikeGameGenieFormat).
     //   - ROM patches (Game Genie style, decoded by GameGenieCodec) -
     //     `rompatch`, or `add`/`gg` (see below).
+    //
+    // NOT core-agnostic, and deliberately not pretending to be: `add`/`gg`
+    // hardcode calls to SNES Game Genie/Pro Action Replay's own code
+    // formats (EmuSen.Cores.Nintendo.Venus.Cheats - moved out of Shell/
+    // specifically because they aren't core-agnostic infrastructure, they're
+    // SNES-specific format decoders that happened to live in the shared
+    // folder). `poke`/`rompatch`/`list`/`enable`/`disable`/`remove`/`clear`
+    // stay genuinely core-agnostic - they only ever touch the generic
+    // CheatRegistry (IDebugTarget.Cheats), never a codec. A future core
+    // wanting its own code-format decoding would need its own equivalent of
+    // `add`/`gg`, the same way it needs its own IDebugTarget implementation.
     public class CheatCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "cheat";

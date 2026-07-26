@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using EmuSen.Audio;
@@ -363,6 +364,7 @@ namespace EmuSen.Hotaru
         private static string? RunStandaloneShell(string? initialRomPath)
         {
             DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null);
+            Console.WriteLine(shell.GetWelcomeBanner(_coreRegistry.Values.Select(d => d.DisplayName).Distinct()));
             Console.WriteLine("--- DianaOS (type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
 
             if (initialRomPath != null)

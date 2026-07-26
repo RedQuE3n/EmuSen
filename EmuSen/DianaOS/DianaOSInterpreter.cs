@@ -708,6 +708,73 @@ namespace EmuSen.DianaOS
             return string.Join('\n', lines);
         }
 
+        // The version shown in GetWelcomeBanner(), below - bump this
+        // alongside any release-worthy milestone. Public so a frontend
+        // could show it elsewhere (a window title, an "about" dialog)
+        // without needing to know it's really just a banner detail.
+        public const string Version = "0.1a";
+
+        // Printed once, at actual shell launch - EmuSen.Hotaru's
+        // RunStandaloneShell (now the very first thing any launch does,
+        // ROM arg or not) and EmuSen.Mistress9's DianaOSConsoleWindow
+        // constructor (opening that window IS "launching" its shell) -
+        // NOT on every subsequent reopen of an already-running shell
+        // (EmuSen.Hotaru's F4/RunDebugPrompt keeps its own short
+        // contextual banner instead; printing this whole thing again on
+        // every F4 press would bury actual command output in noise).
+        //
+        // `supportedCores` is supplied by the caller rather than
+        // hardcoded here on purpose - EmuSen.DianaOS is deliberately
+        // core-agnostic (same reasoning IDebugTarget/ClassifyStaticReference
+        // exist for), and "which cores exist" is exactly the kind of
+        // frontend-owned fact that would violate that if it lived in this
+        // class instead (see EmuSen.Hotaru/Program.cs's own
+        // `_coreRegistry` comment). The commands section below reuses
+        // Help() directly (not Execute("help")) specifically so building
+        // this banner never pollutes the caller's own command history
+        // with a "help" entry nobody typed.
+        public string GetWelcomeBanner(IEnumerable<string> supportedCores)
+        {
+            const string border = "+------------------------------------------------------------------------+";
+            var lines = new List<string>
+            {
+                border,
+                CenterInBanner($"Welcome to DianaOS v{Version}"),
+                CenterInBanner("A bash-like shell for driving and inspecting EmuSen cores"),
+                border,
+                "",
+                "Supported cores:",
+            };
+            foreach (string core in supportedCores) lines.Add("  - " + core);
+            lines.Add("");
+            lines.Add("Features:");
+            lines.Add("  - Pipes, redirection, $(...) command substitution, shell variables");
+            lines.Add("  - Control flow: if/for/while, break/continue");
+            lines.Add("  - Scripting: source <path> to run scripts, nano <path> to edit them");
+            lines.Add("  - Live hardware inspection: regs, mem, watch, bp, disasm, trace");
+            lines.Add("  - Cheats (Action Replay / Game Genie), snapshot/diff, dump/load");
+            lines.Add("  - coretop: live htop-style hardware dashboard (-w opens a window)");
+            lines.Add("  - feed / feed -w: watch gameplay without losing the shell");
+            lines.Add("  - clear, nano, history, and the rest of a real shell's toolkit");
+            lines.Add("");
+            lines.Add(Help());
+            return string.Join('\n', lines);
+        }
+
+        // Matches the border's own width in GetWelcomeBanner (72 columns
+        // of interior space between the '|'s) - a plain, static banner
+        // with fixed, known text, so a hand-computed constant width is
+        // simpler and more obviously correct than measuring the border
+        // string at runtime.
+        private static string CenterInBanner(string text)
+        {
+            const int innerWidth = 72;
+            int pad = innerWidth - text.Length;
+            int left = pad / 2;
+            int right = pad - left;
+            return "|" + new string(' ', left) + text + new string(' ', right) + "|";
+        }
+
         // --- Word expansion ---
 
         // Full bash-style expansion: substitutes $VAR/${VAR}/$?/$(...),

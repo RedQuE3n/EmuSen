@@ -735,6 +735,29 @@ namespace EmuSen.DianaOS
                 "DESCRIPTION\n" +
                 "    Prints the process's current working directory - see 'cd'.",
 
+            ["nano"] =
+                "NAME\n" +
+                "    nano - simple full-screen text editor\n\n" +
+                "SYNOPSIS\n" +
+                "    nano <path>\n\n" +
+                "DESCRIPTION\n" +
+                "    A small full-screen editor for creating/editing a real file (a 'source'\n" +
+                "    script, say) without leaving the shell for an external editor. NOT a\n" +
+                "    full GNU nano clone - no search, no cut/paste ring, no syntax\n" +
+                "    highlighting - just arrow-key movement, insert/Backspace/Delete, and\n" +
+                "    Ctrl+O to save / Ctrl+X to exit (prompting to save first if there are\n" +
+                "    unsaved changes). <path> is created if it doesn't exist yet, and is\n" +
+                "    walled to the project's own directory tree like every other real-file\n" +
+                "    command here (see 'cd'). Needs a REAL interactive terminal - it takes\n" +
+                "    over the console with raw key reads and full-screen redraws the same\n" +
+                "    way this shell's own line editor does for a single line, just for a\n" +
+                "    whole buffer - so it refuses cleanly (rather than failing strangely) when\n" +
+                "    stdin/stdout is redirected (a piped script, a 'source'd file, a headless\n" +
+                "    test) or when there's no real terminal at all (EmuSen.Mistress9's GUI\n" +
+                "    console window).\n\n" +
+                "EXAMPLES\n" +
+                "    nano setup.txt",
+
             ["mv"] =
                 "NAME\n" +
                 "    mv - move or rename a file or directory\n\n" +

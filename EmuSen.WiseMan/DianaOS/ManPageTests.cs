@@ -29,7 +29,7 @@ namespace EmuSen.WiseMan.DianaOS
             "watch", "bp", "framelog", "cheat", "search", "snapshot", "diff", "dump",
             "load", "tile", "tilemap", "disasm", "trace", "callers", "writers",
             "readers", "log", "echo", "sed", "grep", "wc", "sort", "uniq", "awk",
-            "ls", "cd", "mv", "pwd", "true", "false", "test", "[", "history",
+            "ls", "cd", "mv", "pwd", "nano", "true", "false", "test", "[", "history",
         };
 
         // The special builtins Dispatch handles directly (help/man

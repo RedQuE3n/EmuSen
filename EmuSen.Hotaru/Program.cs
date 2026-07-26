@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -20,6 +21,36 @@ namespace EmuSen.Hotaru
         private const int StatusEveryNFrames = 60;
 
         private static readonly DebugTools.BoundedTrace _bgScrollTrace = new();
+
+        // Backs the standalone shell's `core <corename> <path>` command
+        // (RunStandaloneShell, below) - deliberately a small, private,
+        // Hotaru-only registry rather than something shared through
+        // EmuSen.DianaOS: picking which concrete ICore implementation to
+        // construct for a given ROM is exactly the kind of frontend-owned
+        // decision that namespace stays agnostic about on purpose (same
+        // reasoning `IDebugTarget`/`ICore` themselves exist - core-
+        // specific knowledge lives in the frontend or the core, never in
+        // the shell). Only one entry today because only one core is
+        // actually implemented (`VenusCore`, SNES) - registered under
+        // both its internal codename and the console name most people
+        // would actually type. Extensions gate what `core` will accept:
+        // trying to load, say, a `.nes` file against `venus` is a clear
+        // user error worth catching here rather than handing bytes that
+        // aren't really an SNES ROM to `Cartridge`, which has no format
+        // validation of its own at all (see that class's own comment on
+        // copier-header stripping - it assumes SNES-shaped bytes,
+        // unconditionally).
+        private sealed record CoreDescriptor(string DisplayName, string[] Extensions)
+        {
+            public bool SupportsExtension(string extension) =>
+                Array.Exists(Extensions, e => e.Equals(extension, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static readonly Dictionary<string, CoreDescriptor> _coreRegistry = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["venus"] = new CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["snes"] = new CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+        };
 
         static void Main(string[] args)
         {
@@ -96,13 +127,23 @@ namespace EmuSen.Hotaru
             // into DianaOS with no ROM loaded (same interpreter/prompt
             // the F4 hotkey uses, just with a null IDebugTarget) rather
             // than falling back to some hardcoded default path that only
-            // ever made sense on one dev machine.
+            // ever made sense on one dev machine. That shell's own
+            // `core <corename> <path>` command (RunStandaloneShell, below)
+            // is the other way to reach a game from here - it returns the
+            // validated ROM path to launch, or null if the user typed
+            // 'shutdown'/'quit' instead, in which case there's nothing
+            // left to do.
+            string romPath;
             if (args.Length == 0)
             {
-                RunStandaloneShell();
-                return;
+                string? romPathFromShell = RunStandaloneShell();
+                if (romPathFromShell is null) return;
+                romPath = romPathFromShell;
             }
-            string romPath = args[0];
+            else
+            {
+                romPath = args[0];
+            }
 
             if (!File.Exists(romPath))
             {
@@ -356,15 +397,25 @@ namespace EmuSen.Hotaru
         // anything here, and threading null-core checks through it
         // would make the actually-in-a-game case harder to follow for
         // no real benefit.
-        private static void RunStandaloneShell()
+        //
+        // Returns the ROM path to actually launch (once `core` picks and
+        // validates one - see below), or null if the user asked to shut
+        // down instead (or hit EOF) - `Main` treats null as "nothing more
+        // to do" and returns. `core` is handled here, not as a
+        // DianaOSInterpreter command, for the same reason 'resume'/
+        // 'shutdown' are: it needs to hand control back to THIS loop's
+        // caller (to actually go build a VenusCore/window/audio device
+        // and start running), which a command's own "return a string"
+        // contract has no way to do.
+        private static string? RunStandaloneShell()
         {
             DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null);
-            Console.WriteLine("--- DianaOS (no ROM loaded - type 'help', 'shutdown' to quit) ---");
+            Console.WriteLine("--- DianaOS (no ROM loaded - type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
             while (true)
             {
                 Console.Write(shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
                 string? line = ConsoleLineReader.ReadLine(shell.History.Entries);
-                if (line is null) break;
+                if (line is null) return null;
                 string trimmed = line.Trim();
 
                 // Same 'shutdown'/'quit' keywords RunDebugPrompt recognizes -
@@ -377,12 +428,60 @@ namespace EmuSen.Hotaru
                 if (!shell.IsAwaitingMoreInput
                     && (trimmed.Equals("shutdown", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)))
                 {
-                    break;
+                    return null;
+                }
+
+                if (!shell.IsAwaitingMoreInput && trimmed.StartsWith("core ", StringComparison.OrdinalIgnoreCase))
+                {
+                    string? validatedRomPath = TryResolveCoreCommand(trimmed);
+                    if (validatedRomPath != null) return validatedRomPath;
+                    continue; // TryResolveCoreCommand already printed why it failed
                 }
 
                 string output = shell.Execute(line);
                 if (output.Length > 0) Console.WriteLine(output);
             }
+        }
+
+        // `core <corename> <path>` - not a DianaOSInterpreter command
+        // (see RunStandaloneShell's own comment); handled as plain string
+        // parsing here instead, the same way 'state save|load' is inside
+        // RunDebugPrompt. Prints its own error and returns null for
+        // anything wrong (usage, unknown core, missing file, unsupported
+        // extension) so the caller can just loop back to the prompt -
+        // only a fully validated ROM path is ever returned.
+        private static string? TryResolveCoreCommand(string trimmedLine)
+        {
+            string[] parts = trimmedLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 3)
+            {
+                Console.WriteLine("Usage: core <corename> <path-to-rom>");
+                return null;
+            }
+
+            string coreName = parts[1];
+            string romPath = parts[2];
+
+            if (!_coreRegistry.TryGetValue(coreName, out CoreDescriptor? descriptor))
+            {
+                Console.WriteLine($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_coreRegistry.Keys, StringComparer.OrdinalIgnoreCase))}");
+                return null;
+            }
+
+            if (!File.Exists(romPath))
+            {
+                Console.WriteLine($"core: ROM not found: {romPath}");
+                return null;
+            }
+
+            string extension = Path.GetExtension(romPath);
+            if (!descriptor.SupportsExtension(extension))
+            {
+                Console.WriteLine($"core: '{(extension.Length > 0 ? extension : "(no extension)")}' is not a supported ROM type for {descriptor.DisplayName} - expected: {string.Join(", ", descriptor.Extensions)}");
+                return null;
+            }
+
+            return romPath;
         }
 
         // Shared by the F4 hotkey and the main loop's own breakpoint-halt

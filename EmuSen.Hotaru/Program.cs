@@ -362,7 +362,7 @@ namespace EmuSen.Hotaru
                 // same way a real bash prompt never mistakes a `continue`
                 // typed inside an unfinished `if` for the reader's own
                 // control commands.
-                Console.Write(debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS#: ");
+                Console.Write(debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
                 string? line = ConsoleLineReader.ReadLine(debugCmd.History.Entries);
                 if (line is null) break;
                 string trimmed = line.Trim();

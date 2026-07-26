@@ -11,7 +11,7 @@
         <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*" Margin="0,8,0,0">
             <TextBlock x:Name="PromptText"
                        Grid.Column="0"
-                       Text="DianaOS#: "
+                       Text="DianaOS #: "
                        VerticalAlignment="Center"
                        FontFamily="Consolas,Menlo,monospace"
                        Foreground="#D4D4D4"

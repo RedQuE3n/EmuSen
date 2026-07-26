@@ -146,11 +146,11 @@ namespace EmuSen.Mistress9.Views
 
         private void Submit(string line)
         {
-            string enteredPrompt = _shell.IsAwaitingMoreInput ? "> " : "DianaOS#: ";
+            string enteredPrompt = _shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ";
             AppendLine(enteredPrompt + line);
 
             (bool needsMore, string output) = _shell.Submit(line);
-            PromptText.Text = _shell.IsAwaitingMoreInput ? "> " : "DianaOS#: ";
+            PromptText.Text = _shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ";
             if (needsMore) return;
             if (output.Length > 0) AppendLine(output);
         }

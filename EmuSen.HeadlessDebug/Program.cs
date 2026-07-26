@@ -64,6 +64,14 @@ using EmuSen.Debug;
 //   tap[2] <button> [dur]   - press (tap2 = controller 2) for <dur> frames (default 4), release, same as --tap/--tap2 but inline
 //   hold/release <button> [controller]  - set a button's held state without advancing any frames (controller defaults to 1)
 //   screenshot <path>       - capture the current frame right now, not tied to a frame number
+//   waitstable [maxframes=300] [quietframes=10] - advance one frame at a time until the
+//                             framebuffer hash stops changing for <quietframes> in a row (or
+//                             <maxframes> is hit) - removes the remaining "run N frames and
+//                             hope it settled" guesswork plain `frames` still needs.
+//   contactsheet <path> <count> [every=1] [cols=8] [scale=4] - capture <count> frames spaced
+//                             <every> apart, downsample each by <scale>, tile into one grid
+//                             image - for "is this actually moving" questions across a span of
+//                             frames without reviewing N separate screenshots one at a time.
 //   anything else           - passed straight to DebugCommandProcessor.Execute, same as --script
 // <frames> is still required and still means what it always did in every
 // other mode - here it becomes a hard safety cap (a script's `frames`
@@ -71,10 +79,32 @@ using EmuSen.Debug;
 // indefinitely. --tap/--tap2/--screenshot/--script are ignored when
 // --commands is given; everything else (--watch, --flag, --loadstate,
 // --savestate, --verbose, --cpulog, --out) still applies normally.
+//
+// A separate standalone mode, unrelated to running a ROM at all:
+//   dotnet run -- --diffshot <bmp1> <bmp2> <outpath>
+// Reads back two of this harness's own BMPs (screenshot/autoshot/contact
+// sheet output - not arbitrary external images), highlights every
+// differing pixel in magenta over a dimmed copy of the second frame, and
+// prints the changed-pixel count/percentage and bounding box - answering
+// "what specifically changed" between two frames without eyeballing them
+// side by side or improvising an image-diff script per investigation.
 class Program
 {
     static int Main(string[] args)
     {
+        // Standalone utility mode - no ROM/core involved, so it's checked
+        // before the usual <rom> <frames> positional-argument validation
+        // below even looks at args[0].
+        if (args.Length >= 1 && args[0] == "--diffshot")
+        {
+            if (args.Length < 4)
+            {
+                Console.WriteLine("Usage: dotnet run -- --diffshot <bmp1> <bmp2> <outpath>");
+                return 1;
+            }
+            return RunDiffShot(args[1], args[2], args[3]);
+        }
+
         if (args.Length < 2)
         {
             Console.WriteLine("Usage: dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path]");
@@ -331,6 +361,41 @@ class Program
                 }
             }
 
+            // Advances one frame at a time (reusing RunFrames(1) so held
+            // input/cpuLog windowing/autoshot all still apply exactly as
+            // they would for a plain `frames` line) until the framebuffer
+            // hash stops changing for <quietFrames> in a row, or
+            // <maxFrames> is reached - whichever comes first.
+            //
+            // Requires seeing at least one real change before a quiet
+            // streak counts as "settled" - a real bug caught testing this
+            // against the actual SMAS investigation: called right after a
+            // `tap Start` while still sitting on the static Nintendo boot
+            // logo, the naive "N identical frames in a row" version
+            // reported stable after only ~16 frames, because the logo
+            // itself doesn't animate and was already "stable" the instant
+            // it was checked - long before the tap's own transition had
+            // even started, let alone finished. It can't tell "hasn't
+            // reacted yet" apart from "finished reacting" without this.
+            long WaitStable(long maxFrames, long quietFrames)
+            {
+                ulong? lastHash = null;
+                long quietCount = 0;
+                long stepped = 0;
+                bool sawChange = false;
+                while (stepped < maxFrames && currentFrame < frameCount)
+                {
+                    RunFrames(1);
+                    stepped++;
+                    ulong hash = Fnv1aHash(core.GetFrameBufferRgba());
+                    if (lastHash.HasValue && hash != lastHash.Value) sawChange = true;
+                    if (hash == lastHash) quietCount++;
+                    else { quietCount = 0; lastHash = hash; }
+                    if (sawChange && quietCount >= quietFrames) break;
+                }
+                return stepped;
+            }
+
             Emit($"[COMMANDS] Running {commandsPath} (safety cap {frameCount} frames)...");
             Emit("");
             Emit("=== Command output ===");
@@ -371,6 +436,40 @@ class Program
                 {
                     WriteBmp(parts[1], core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight);
                     Emit($"[SCREENSHOT] Frame {currentFrame} -> {parts[1]}");
+                }
+                else if (verb == "waitstable")
+                {
+                    long maxFrames = parts.Length >= 2 ? long.Parse(parts[1]) : 300;
+                    long quietFrames = parts.Length >= 3 ? long.Parse(parts[2]) : 10;
+                    Emit($"> {cmdLine}");
+                    long stepped = WaitStable(maxFrames, quietFrames);
+                    Emit($"[WAITSTABLE] Advanced {stepped} frame(s) (cap {maxFrames}, quiet threshold {quietFrames}) - now at frame {currentFrame}.");
+                }
+                else if (verb == "contactsheet" && parts.Length >= 3)
+                {
+                    // <path> <count> [every=1] [cols=8] [scale=4] - captures
+                    // <count> frames spaced <every> apart, downsamples each
+                    // by <scale>, tiles them into one grid image. Built for
+                    // "is this actually animating/moving" questions once
+                    // past a menu and into real gameplay, where N separate
+                    // --screenshot/screenshot calls would mean N separate
+                    // file reads to review instead of one.
+                    Emit($"> {cmdLine}");
+                    string path = parts[1];
+                    int count = int.Parse(parts[2]);
+                    long every = parts.Length >= 4 ? long.Parse(parts[3]) : 1;
+                    int cols = parts.Length >= 5 ? int.Parse(parts[4]) : 8;
+                    int scale = parts.Length >= 6 ? int.Parse(parts[5]) : 4;
+
+                    var thumbs = new List<byte[]>();
+                    int thumbW = 0, thumbH = 0;
+                    for (int i = 0; i < count; i++)
+                    {
+                        RunFrames(every);
+                        thumbs.Add(Downsample(core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight, scale, out thumbW, out thumbH));
+                    }
+                    WriteContactSheet(path, thumbs, thumbW, thumbH, cols);
+                    Emit($"[CONTACTSHEET] {count} frame(s), every {every}, {thumbW}x{thumbH} each -> {path}");
                 }
                 else
                 {
@@ -543,5 +642,149 @@ class Program
                 w.Write(rgba[i + 3]); // A
             }
         }
+    }
+
+    // Reads back exactly what WriteBmp writes - the fixed 54-byte header,
+    // bottom-up BGRA rows - since --diffshot only ever needs to read this
+    // harness's own screenshots/autoshots/contact sheets back, not
+    // arbitrary externally-authored BMPs.
+    private static (byte[] Rgba, int Width, int Height) ReadBmp(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+        using var r = new BinaryReader(fs);
+
+        fs.Position = 10;
+        int dataOffset = r.ReadInt32();
+        fs.Position = 18;
+        int width = r.ReadInt32();
+        int height = r.ReadInt32();
+
+        fs.Position = dataOffset;
+        int rowSize = width * 4;
+        byte[] rgba = new byte[rowSize * height];
+        for (int y = height - 1; y >= 0; y--)
+        {
+            int rowStart = y * rowSize;
+            for (int x = 0; x < width; x++)
+            {
+                int i = rowStart + x * 4;
+                rgba[i + 2] = r.ReadByte(); // B
+                rgba[i + 1] = r.ReadByte(); // G
+                rgba[i + 0] = r.ReadByte(); // R
+                rgba[i + 3] = r.ReadByte(); // A
+            }
+        }
+        return (rgba, width, height);
+    }
+
+    // Nearest-neighbor downsample - a debugging contact sheet needs
+    // "can I tell this changed shape/position," not photographic
+    // fidelity, so there's no reason to pull in a real resampling filter
+    // for this.
+    private static byte[] Downsample(byte[] src, int srcWidth, int srcHeight, int scale, out int dstWidth, out int dstHeight)
+    {
+        dstWidth = Math.Max(1, srcWidth / scale);
+        dstHeight = Math.Max(1, srcHeight / scale);
+        byte[] dst = new byte[dstWidth * dstHeight * 4];
+
+        for (int y = 0; y < dstHeight; y++)
+        {
+            int srcY = Math.Min(srcHeight - 1, y * scale);
+            for (int x = 0; x < dstWidth; x++)
+            {
+                int srcX = Math.Min(srcWidth - 1, x * scale);
+                int srcIdx = (srcY * srcWidth + srcX) * 4;
+                int dstIdx = (y * dstWidth + x) * 4;
+                Array.Copy(src, srcIdx, dst, dstIdx, 4);
+            }
+        }
+        return dst;
+    }
+
+    // Tiles a list of equally-sized RGBA thumbnails into one grid image,
+    // <cols> per row - empty trailing cells in the last row stay whatever
+    // `new byte[]`'s zero-fill default is (opaque black, since alpha is
+    // also 0... actually fully transparent black, harmless either way for
+    // a debugging aid).
+    private static void WriteContactSheet(string path, List<byte[]> thumbs, int thumbWidth, int thumbHeight, int cols)
+    {
+        int count = thumbs.Count;
+        int rows = (count + cols - 1) / cols;
+        int sheetWidth = cols * thumbWidth;
+        int sheetHeight = rows * thumbHeight;
+        byte[] sheet = new byte[sheetWidth * sheetHeight * 4];
+
+        for (int i = 0; i < count; i++)
+        {
+            int originX = (i % cols) * thumbWidth;
+            int originY = (i / cols) * thumbHeight;
+            byte[] thumb = thumbs[i];
+            for (int y = 0; y < thumbHeight; y++)
+            {
+                int srcRowStart = y * thumbWidth * 4;
+                int dstRowStart = ((originY + y) * sheetWidth + originX) * 4;
+                Array.Copy(thumb, srcRowStart, sheet, dstRowStart, thumbWidth * 4);
+            }
+        }
+
+        WriteBmp(path, sheet, sheetWidth, sheetHeight);
+    }
+
+    // Standalone utility mode - operates purely on two already-rendered
+    // BMP files, no ROM/core involved at all, so it's dispatched before
+    // Main even looks at the usual <rom> <frames> positional arguments.
+    // Highlights every differing pixel in magenta over a dimmed/grayed
+    // copy of the second frame, so the change stands out at a glance
+    // instead of needing two screenshots held side by side.
+    private static int RunDiffShot(string path1, string path2, string outPath)
+    {
+        var (rgbaA, widthA, heightA) = ReadBmp(path1);
+        var (rgbaB, widthB, heightB) = ReadBmp(path2);
+        if (widthA != widthB || heightA != heightB)
+        {
+            Console.WriteLine($"[ERROR] Size mismatch: {path1} is {widthA}x{heightA}, {path2} is {widthB}x{heightB}");
+            return 1;
+        }
+
+        byte[] outRgba = new byte[rgbaA.Length];
+        int changedCount = 0;
+        int minX = widthA, minY = heightA, maxX = -1, maxY = -1;
+
+        for (int y = 0; y < heightA; y++)
+        {
+            for (int x = 0; x < widthA; x++)
+            {
+                int i = (y * widthA + x) * 4;
+                bool changed = rgbaA[i] != rgbaB[i] || rgbaA[i + 1] != rgbaB[i + 1] || rgbaA[i + 2] != rgbaB[i + 2];
+                if (changed)
+                {
+                    changedCount++;
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                    outRgba[i] = 255; outRgba[i + 1] = 0; outRgba[i + 2] = 255; outRgba[i + 3] = 255; // magenta
+                }
+                else
+                {
+                    byte gray = (byte)((rgbaB[i] + rgbaB[i + 1] + rgbaB[i + 2]) / 3 / 2);
+                    outRgba[i] = gray; outRgba[i + 1] = gray; outRgba[i + 2] = gray; outRgba[i + 3] = 255;
+                }
+            }
+        }
+
+        WriteBmp(outPath, outRgba, widthA, heightA);
+
+        int totalPixels = widthA * heightA;
+        if (changedCount == 0)
+        {
+            Console.WriteLine($"[DIFFSHOT] No differences found ({widthA}x{heightA}, identical) -> {outPath}");
+        }
+        else
+        {
+            double pct = 100.0 * changedCount / totalPixels;
+            Console.WriteLine($"[DIFFSHOT] {changedCount}/{totalPixels} pixels changed ({pct:F2}%), bounding box ({minX},{minY})-({maxX},{maxY}) -> {outPath}");
+        }
+        return 0;
     }
 }

@@ -71,6 +71,7 @@ namespace EmuSen.Debug
                 new DumpCommand(),
                 new LoadCommand(),
                 new TileCommand(),
+                new TilemapCommand(),
                 new DisasmCommand(),
                 new TraceCommand(),
                 new CallersCommand(),

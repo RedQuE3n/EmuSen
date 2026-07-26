@@ -87,6 +87,8 @@ Two small helper classes back the memory spaces:
 
 **`GetApuRegisters()`** (added investigating a Super Metroid boot hang - `Venus_APU.md` §2.7) exposes the SPC700's own A/X/Y/SP/PC/PSW plus both directions of the CPU↔APU communication ports (`InPort0-3` = what the CPU last wrote, `OutPort0-3` = what the SPC700 last wrote - see `Venus_APU.md` §1.2 for why those are two independent latches per port, not one). `regs` (§3.3's table) prints this as a third "APU registers" section whenever a target's list is non-empty; a core with no distinct sound co-processor just returns an empty list and `regs` skips the section. Before this existed, the only way to see SPC700 state at all was reading raw `Spc700VerboseLogging` trace text.
 
+**`TilemapEntryStride`/`DecodeTilemapEntry`** back the `tilemap` command (§3.3's table) - added so a menu cursor's position or a HUD tile change can be confirmed by comparing tilemap entries as text instead of eyeballing screenshots. Deliberately NOT a generic bit-layout `IDebugTarget` parses itself: an NES core's nametable+attribute-table split isn't even the same shape as the SNES's single packed word (one byte per tile, plus a separate, coarser attribute byte covering a 2x2 tile block), so every core decides both how many bytes make up "one entry" (`TilemapEntryStride`) and how to render one (`DecodeTilemapEntry`) - same "core does the decoding, the command does the grid-walking" split as `Disassemble()`/`GetCpuRegisters()`. `SnesDebugTarget`'s implementation decodes the standard SNES BG screen word (2 bytes: bits 0-9 tile index, 10-12 palette, 13 priority, 14 h-flip, 15 v-flip) into a fixed 7-character label - 3 hex digits (tile index) + 1 digit (palette 0-7) + one character each for priority/h-flip/v-flip (`P`/`H`/`V` if set, `.` if not) - e.g. `1A32PHV` = tile `$1A3`, palette 2, priority set, both flips set; `1A32...` = same tile/palette with none of those three set.
+
 ### 3.3 `DebugCommandProcessor` (`Debug/DebugCommandProcessor.cs`) + `Debug/Commands/`
 
 A small, composable command layer over `IDebugTarget` — modeled on Unix toolchain conventions (`ls`/`xxd`/`objdump`: small single-purpose commands) rather than one monolithic dump. Takes a line of text, returns a line of text — it doesn't know or care whether that text came from a console prompt, a future headless CLI, or eventually a GUI debug window's command box.
@@ -103,6 +105,7 @@ A small, composable command layer over `IDebugTarget` — modeled on Unix toolch
 | `sprites` | Active sprite/OBJ table |
 | `pal [<index>]` | One palette, or all 16 if omitted |
 | `tile <space> <addr> <bpp>` | ASCII-decode one 8x8 tile from any space (bpp 2, 4, or 8) |
+| `tilemap <space> <addr> <cols> <rows>` | Decode a grid of raw tilemap entries as text (tile index/palette/priority/flip on SNES) — core-agnostic at the command level, see §3.2's `TilemapEntryStride`/`DecodeTilemapEntry` note |
 | `disasm <space> <addr> [<count>]` | Disassemble `<count>` instructions (default 10) — see §3.7 |
 | `watch add <space> <addr> <len> [write\|read\|both]` | Register a watchpoint (default write-only) |
 | `watch list` | List active watchpoints with their IDs |
@@ -417,6 +420,8 @@ dotnet run --project EmuSen.HeadlessDebug -- <rom> <frames> [options...]
 - `tap <button> [duration]` / `tap2 <button> [duration]` — press (P1/P2) for `duration` frames (default 4), then release. Inline equivalent of `--tap`/`--tap2`.
 - `hold <button> [controller]` / `release <button> [controller]` — set a button's held state without advancing any frames (`controller` defaults to 1) - for holding something across several `frames`/other-command lines rather than one fixed-duration tap.
 - `screenshot <path>` — capture the current frame right now, unlike `--screenshot`'s frame-number binding.
+- `waitstable [maxframes=300] [quietframes=10]` — advance one frame at a time until the framebuffer hash stops changing for `quietframes` in a row (or `maxframes` is hit), removing the remaining "run N frames and hope it settled" guesswork plain `frames` still needs. Requires seeing at least one real change first - calling it while already sitting on a static screen (e.g. right after a `tap` whose transition hasn't started yet) would otherwise report "stable" instantly, since nothing was moving at the moment it was checked. A single multi-stage cutscene/menu sequence with several automatic pauses along the way needs one `waitstable` call per pause, not one call for the whole thing - confirmed against SMAS's own boot sequence, which turned out to need four separate real `Start` presses (each followed by its own `waitstable`) to reach Select Game, not the two originally assumed from an earlier, more manually-timed run.
+- `contactsheet <path> <count> [every=1] [cols=8] [scale=4]` — capture `count` frames spaced `every` apart, downsample each by `scale` (nearest-neighbor - a debugging aid needs "did this move," not photographic fidelity), tile into one grid image. For confirming actual animation/movement across a span of frames without reviewing several separate screenshots one at a time.
 - anything else — passed straight to `DebugCommandProcessor.Execute`, exactly like `--script`'s lines.
 
 Example (the actual script that confirmed SMAS's Select Game screen needs Player 2's Start, in one run instead of six):
@@ -431,6 +436,12 @@ tap2 Start 4
 frames 250
 screenshot file_select.bmp
 ```
+
+**`--diffshot`: a standalone mode, unrelated to running a ROM.**
+```
+dotnet run --project EmuSen.HeadlessDebug -- --diffshot <bmp1> <bmp2> <outpath>
+```
+Reads back two of this harness's own BMPs (`--screenshot`/`--autoshot`/`contactsheet` output - not arbitrary external images, since it relies on the exact fixed 54-byte header `WriteBmp` always produces) and writes a third: every differing pixel highlighted in magenta over a dimmed/grayed copy of the second frame, so a change stands out at a glance instead of two screenshots held side by side. Also prints the changed-pixel count/percentage and bounding box to stdout. Dispatched before `Main` even looks at the usual `<rom> <frames>` positional arguments, since no core/ROM is involved at all.
 
 **Two separate output streams, easy to conflate.** `--out` only captures this harness's own `Emit()` calls. Everything the *emulator itself* prints via raw `Console.WriteLine` — `CpuVerboseLogging`/`Spc700VerboseLogging` traces, `[DMA]`/`[PORT]`/etc. `DebugSettings` output, the `[FRAME] N` marker (`Venus_Memory.md`/`VenusCore.RunFrame`) — bypasses `Emit()` entirely and goes straight to real stdout. Redirecting shell output to `/dev/null` while relying on `--out` for everything discards all of that silently; capture real stdout to a file (`> file.log 2>&1`) instead whenever any `DebugSettings` trace flag is in play.
 

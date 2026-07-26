@@ -402,5 +402,26 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // rather than re-deriving the same text - this is exactly the
         // "free-text escape hatch" case the interface comment describes.
         public string GetSummaryText() => StateDump.DumpAll(_cpu, _bus);
+
+        // SNES BG screen entry: 2 bytes, bits 0-9 tile index, 10-12
+        // palette, 13 priority, 14 h-flip, 15 v-flip - the same layout
+        // for every BG mode's tilemap. See Venus_PPU.md for the real
+        // hardware reference this matches.
+        public int TilemapEntryStride => 2;
+
+        public string DecodeTilemapEntry(IDebugMemorySpace space, int address)
+        {
+            byte lo = space.Read(address);
+            byte hi = space.Read(address + 1);
+            int entry = lo | (hi << 8);
+
+            int tileIndex = entry & 0x3FF;
+            int palette = (entry >> 10) & 0x7;
+            bool priority = (entry & 0x2000) != 0;
+            bool hFlip = (entry & 0x4000) != 0;
+            bool vFlip = (entry & 0x8000) != 0;
+
+            return $"{tileIndex:X3}{palette}{(priority ? 'P' : '.')}{(hFlip ? 'H' : '.')}{(vFlip ? 'V' : '.')}";
+        }
     }
 }

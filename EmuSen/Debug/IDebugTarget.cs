@@ -220,5 +220,26 @@ namespace EmuSen.Debug
         // one without needing every possible piece of state modeled
         // up front. A generic UI can render this in a fallback text panel.
         string GetSummaryText();
+
+        // How many bytes one DecodeTilemapEntry() call consumes - 2 for
+        // the SNES's packed BG screen word (tile index/palette/priority/
+        // flip all in one 16-bit entry). Lets the generic `tilemap`
+        // command compute each grid cell's address without knowing the
+        // entry format itself.
+        int TilemapEntryStride { get; }
+
+        // Decodes one raw tilemap/nametable entry into a short, already-
+        // formatted label. Deliberately NOT a generic bit-layout the
+        // interface parses itself - an NES core's nametable+attribute-
+        // table split isn't even the same shape as the SNES's single
+        // packed word (one byte per tile, plus a separate, coarser
+        // attribute byte covering a 2x2 tile block), so every core
+        // decides for itself what "one entry" looks like and how to
+        // render it. Same "core does the decoding, the command does the
+        // grid-walking/formatting" split as Disassemble()/
+        // GetCpuRegisters() above - built specifically so a menu cursor's
+        // position or a HUD tile change can be confirmed by comparing
+        // tilemap entries as text instead of eyeballing two screenshots.
+        string DecodeTilemapEntry(IDebugMemorySpace space, int address);
     }
 }

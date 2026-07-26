@@ -267,6 +267,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new DebugRegisterValue("BG1ScrollY", _ppu.BgScrollY[0], 16),
                 new DebugRegisterValue("BG2ScrollX", _ppu.BgScrollX[1], 16),
                 new DebugRegisterValue("BG2ScrollY", _ppu.BgScrollY[1], 16),
+                new DebugRegisterValue("BG3ScrollX", _ppu.BgScrollX[2], 16),
+                new DebugRegisterValue("BG3ScrollY", _ppu.BgScrollY[2], 16),
+                new DebugRegisterValue("BG4ScrollX", _ppu.BgScrollX[3], 16),
+                new DebugRegisterValue("BG4ScrollY", _ppu.BgScrollY[3], 16),
+                new DebugRegisterValue("BG3SC", _ppu.BgSc[2], 8),
+                new DebugRegisterValue("Bg34Nba", _ppu.Bg34Nba, 8),
+                new DebugRegisterValue("W12Sel", _ppu.W12Sel, 8),
+                new DebugRegisterValue("W34Sel", _ppu.W34Sel, 8),
+                new DebugRegisterValue("WObjSel", _ppu.WObjSel, 8),
+                new DebugRegisterValue("Wh0", _ppu.Wh0, 8),
+                new DebugRegisterValue("Wh1", _ppu.Wh1, 8),
+                new DebugRegisterValue("Wh2", _ppu.Wh2, 8),
+                new DebugRegisterValue("Wh3", _ppu.Wh3, 8),
             };
         }
 

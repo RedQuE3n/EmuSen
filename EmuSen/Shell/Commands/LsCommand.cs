@@ -13,7 +13,8 @@ namespace EmuSen.Shell.Commands
     // real ls's full permission-bits/owner/group/link-count listing -
     // this project has no concept of file permissions or ownership to
     // show (see this shell's own header comment on why permissions are
-    // out of scope entirely).
+    // out of scope entirely). Walled to ShellSandbox.RootDirectory - see
+    // that file's own comment.
     public class LsCommand : IShellCommand
     {
         public string Name => "ls";
@@ -38,24 +39,29 @@ namespace EmuSen.Shell.Commands
                 }
             }
 
-            // A single file path (not a directory) is listed as itself,
-            // matching real `ls somefile`, rather than treated as an error.
-            if (File.Exists(path))
+            if (!ShellSandbox.TryResolve(path, out string resolved))
             {
-                return FormatEntry(Path.GetDirectoryName(path) is { Length: > 0 } dir ? dir : ".", Path.GetFileName(path), longFormat);
+                return ShellResult.Fail($"ls: '{path}' is outside the project sandbox ({ShellSandbox.RootDirectory})");
             }
 
-            if (!Directory.Exists(path))
+            // A single file path (not a directory) is listed as itself,
+            // matching real `ls somefile`, rather than treated as an error.
+            if (File.Exists(resolved))
+            {
+                return FormatEntry(Path.GetDirectoryName(resolved) is { Length: > 0 } dir ? dir : ".", Path.GetFileName(resolved), longFormat);
+            }
+
+            if (!Directory.Exists(resolved))
             {
                 return ShellResult.Fail($"ls: no such file or directory: {path}");
             }
 
-            IEnumerable<string> entries = Directory.EnumerateFileSystemEntries(path)
+            IEnumerable<string> entries = Directory.EnumerateFileSystemEntries(resolved)
                 .Select(Path.GetFileName)
                 .Where(name => showAll || !name!.StartsWith('.'))
                 .OrderBy(name => name, StringComparer.Ordinal)!;
 
-            var lines = entries.Select(name => FormatEntry(path, name!, longFormat)).ToList();
+            var lines = entries.Select(name => FormatEntry(resolved, name!, longFormat)).ToList();
             return string.Join('\n', lines);
         }
 

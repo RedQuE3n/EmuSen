@@ -5,18 +5,14 @@ using System.Text.Json;
 using Silk.NET.SDL;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 
-namespace EmuSen.Mistress9.Input
+namespace EmuSen.Hotaru.Input
 {
-    // Gamepad-button -> SnesButton mapping, same shape and persistence
-    // approach as ControllerKeyMap (Input/ControllerKeyMap.cs) but for
-    // GameControllerButton instead of Avalonia's Key. Kept as a separate
-    // class/file rather than merged into ControllerKeyMap since keyboard and
-    // gamepad are different device types with different rebind-capture flows
-    // (KeyDown event vs polling - see InputSettingsWindow).
-    //
-    // Defaults match GamepadManager's previous hardcoded mapping: physical
-    // button POSITION rather than label (bottom/right/left/top face buttons
-    // -> B/A/Y/X), same reasoning as EmuSen.Hotaru's own HotaruKeyMap.cs.
+    // Duplicated from EmuSen.Mistress9/Input/GamepadBindingMap.cs (same
+    // shape, same ConfigPath - the two frontends share one bindings file
+    // under %AppData%/EmuSen since they're mapping the same physical pad
+    // to the same SnesButton set) rather than factored into a shared
+    // library project - see EmuSen.Hotaru's own migration plan for why a
+    // small duplicated file costs less than standing one up.
     public class GamepadBindingMap
     {
         public Dictionary<SnesButton, GameControllerButton> ButtonToPad { get; private set; } = DefaultBindings();

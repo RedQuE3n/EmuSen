@@ -24,6 +24,13 @@ namespace EmuSen.Mistress9.Views
     {
         private DianaOSInterpreter _shell;
 
+        // Same single-entry list PreferencesWindow.AvailableCores already
+        // hardcodes for its own core-selection combo - kept as its own
+        // small copy here rather than a shared reference since it's just
+        // display text for the welcome banner (GetWelcomeBanner, below),
+        // not anything either window actually needs to stay in sync on.
+        private static readonly string[] SupportedCores = { "SNES (Venus)" };
+
         // Mistress9-only builtins (pause/resume today) that DianaOSInterpreter's
         // own CreateDefault doesn't know about and shouldn't - see
         // EmulationControlCommands.cs's own comment. Held onto here (rather
@@ -50,7 +57,13 @@ namespace EmuSen.Mistress9.Views
             _extraCommands = Combine(extraCommands);
             _shell = DianaOSInterpreter.CreateDefault(target, _extraCommands);
 
-            AppendLine("DianaOS - type 'help' for a list of commands.");
+            // Printed once, right here - opening this window IS
+            // "launching" this frontend's shell, the same one-time event
+            // EmuSen.Hotaru's RunStandaloneShell prints its own copy of
+            // this banner for. NOT re-printed by UpdateTarget below (a
+            // ROM (re)load) - that's reopening/retargeting an
+            // already-launched shell, not a fresh launch.
+            AppendLine(_shell.GetWelcomeBanner(SupportedCores));
             if (target is null) AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
 
             InputBox.KeyDown += OnInputKeyDown;

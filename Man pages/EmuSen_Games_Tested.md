@@ -23,9 +23,13 @@ A game's category reflects its *current* state, not a permanent verdict — entr
 ### Fair
 
 - **The Legend of Zelda: A Link to the Past** — real, reproducible bugs found during testing, none of them blocking progress:
-  - Stuck overworld subscreen ("yellow bar"): closing an item-get dialog (e.g. the Lamp chest) can leave WRAM `$1D`/`TS` stuck enabling BG1 on the subscreen outdoors, permanently color-math-blending a torch overlay tile into the overworld as a solid yellow band. Root cause and investigation history in `Hardware/Nintendo/Venus - SNES/Venus_PPU.md` §12.1. Two attempted fixes were tried and both reverted — the current build has this bug present, unpatched, since the more targeted attempt still wasn't confirmed correct and a broader one caused a worse regression (see below). Still open.
-  - Missing rain overlay: the overworld storm-intro rain doesn't always render, and can visibly appear then disappear again while walking. Root-caused as far as BG3's raindrop tilemap not being consistently populated/maintained in VRAM; likely related to the per-scanline indirect-HDMA VRAM streaming this same bridge/rain scene was already implicated in for an earlier, separate (fixed) HDMA-ordering bug. Not yet root-caused. Details in `Venus_PPU.md` §12.2.
+  - Stuck overworld subscreen ("yellow bar"): closing an item-get dialog (e.g. the Lamp chest) can leave WRAM `$1D`/`TS` stuck enabling BG1 on the subscreen outdoors, permanently color-math-blending a torch overlay tile into the overworld as a solid yellow band. Root cause and investigation history (including two reverted fix attempts) in `Hardware/Nintendo/Venus - SNES/Venus_PPU.md` §12.1. Still open, unpatched.
+  - Missing rain overlay: the overworld storm-intro rain doesn't always render on a fresh save, and on other saves can appear briefly then disappear while walking. Root-caused as far as BG3's raindrop tilemap not being consistently populated/maintained in VRAM. Not yet root-caused further. Details in `Venus_PPU.md` §12.2.
   - (Fixed, no longer an issue as of this testing pass) Picking up the Lamp from a chest showed the "You got the Lamp!" dialog but the item never entered permanent inventory — root-caused to a 65816 CPU emulation bug (opcode `0x87`, `STA [dp]`, wired to the wrong addressing-mode function), fixed and verified against ground-truth CPU test vectors.
+
+### Unplayable
+
+- **Super Metroid** — hangs before reaching the title screen; never gets further than the Nintendo logo boot splash. Root cause not found despite extensive investigation - full writeup, everything ruled out so far, and the current best lead in `Hardware/Nintendo/Venus - SNES/Venus_APU.md` §2.7. Two real, independently-useful bugs were found and fixed while chasing this (general-DMA cycle accounting, `Venus_Memory.md` §3.1; two SPC700 opcode bugs, `Venus_APU.md` §2.4/§2.5) but neither turned out to be the cause - confirmed via direct before/after comparison at the exact hang point.
 
 ---
 

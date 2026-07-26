@@ -41,6 +41,7 @@ namespace EmuSen.WiseMan.DianaOS
         [InlineData("pal")]
         [InlineData("channels")]
         [InlineData("mute 0 on")]
+        [InlineData("clear")]
         [InlineData("echo hi | sed s/hi/bye/")]
         [InlineData("export X=5; echo $X")]
         [InlineData("for i in 1 2 3; do echo $i; done")]

@@ -47,7 +47,7 @@ namespace EmuSen.Mistress9.Views
         public DianaOSConsoleWindow(IDebugTarget? target, IEnumerable<IDianaOSCommand>? extraCommands = null)
         {
             InitializeComponent();
-            _extraCommands = extraCommands ?? System.Array.Empty<IDianaOSCommand>();
+            _extraCommands = Combine(extraCommands);
             _shell = DianaOSInterpreter.CreateDefault(target, _extraCommands);
 
             AppendLine("DianaOS - type 'help' for a list of commands.");
@@ -55,6 +55,19 @@ namespace EmuSen.Mistress9.Views
 
             InputBox.KeyDown += OnInputKeyDown;
             Opened += (_, _) => InputBox.Focus();
+        }
+
+        // Adds this window's own `clear` override (below) onto whatever
+        // MainWindow passed in (pause/resume/coretop/feed) - the caller
+        // has no way to know about OutputText, so this window has to be
+        // the one to supply a `clear` that actually does something here,
+        // same as it's the one place that could ever plug in a
+        // TextBox-clearing delegate.
+        private System.Collections.Generic.IEnumerable<IDianaOSCommand> Combine(IEnumerable<IDianaOSCommand>? extraCommands)
+        {
+            var combined = new List<IDianaOSCommand>(extraCommands ?? System.Array.Empty<IDianaOSCommand>());
+            combined.Add(new ClearConsoleWindowCommand(() => OutputText.Text = string.Empty));
+            return combined;
         }
 
         // Called by MainWindow whenever the loaded ROM changes, including
@@ -159,6 +172,35 @@ namespace EmuSen.Mistress9.Views
         {
             OutputText.Text = string.IsNullOrEmpty(OutputText.Text) ? text : OutputText.Text + "\n" + text;
             OutputScroll.ScrollToEnd();
+        }
+    }
+
+    // Replaces (not adds alongside - same extraCommands override-by-name
+    // mechanism `coretop`/`pause`/`resume`/`feed` already use here)
+    // EmuSen.DianaOS.Commands.ClearCommand's `Console.Clear()`, which does
+    // nothing useful against this window's own console - a TextBox, not a
+    // real terminal, same reason `coretop`/`feed` needed replacements
+    // rather than just refusing outright. Local to this file rather than
+    // EmulationControlCommands.cs (which holds the commands that act on
+    // MainWindow's own emulation thread/session) since this one only ever
+    // needs a single window's own OutputText, supplied as a plain
+    // delegate from Combine, above.
+    public class ClearConsoleWindowCommand : IDianaOSCommand
+    {
+        private readonly System.Action _clearOutput;
+
+        public ClearConsoleWindowCommand(System.Action clearOutput)
+        {
+            _clearOutput = clearOutput;
+        }
+
+        public string Name => "clear";
+        public string Usage => "  clear                         clear this console window's output";
+
+        public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        {
+            _clearOutput();
+            return DianaOSResult.Ok(string.Empty);
         }
     }
 }

@@ -758,6 +758,25 @@ namespace EmuSen.DianaOS
                 "EXAMPLES\n" +
                 "    nano setup.txt",
 
+            ["clear"] =
+                "NAME\n" +
+                "    clear - clear the terminal screen\n\n" +
+                "SYNOPSIS\n" +
+                "    clear\n\n" +
+                "DESCRIPTION\n" +
+                "    Wipes whatever's currently on screen (a real Console.Clear(), not just\n" +
+                "    printing blank lines) so the next prompt starts at the top instead of at\n" +
+                "    the bottom of a long scrollback. Only does anything against a real\n" +
+                "    interactive console; a redirected/nonexistent one (a piped script, a\n" +
+                "    'source'd file, a headless test) is silently a no-op rather than an\n" +
+                "    error, since there was never a real screen to clear in the first place.\n\n" +
+                "    In EmuSen.Mistress9's own console window (a TextBox, not a real\n" +
+                "    terminal), 'clear' is replaced with a windowed equivalent instead: it\n" +
+                "    empties that window's own output text rather than touching a system\n" +
+                "    console that doesn't exist there.\n\n" +
+                "EXAMPLES\n" +
+                "    clear",
+
             ["coretop"] =
                 "NAME\n" +
                 "    coretop - live htop-style dashboard of the loaded core's hardware\n\n" +

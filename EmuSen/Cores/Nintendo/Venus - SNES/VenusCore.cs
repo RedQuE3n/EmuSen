@@ -345,6 +345,26 @@ namespace EmuSen.Cores.Nintendo.Venus
                     Bus.FrameCount = TotalFrames;
                     Bus.FrameObserver?.OnFrame(TotalFrames);
 
+                    // A frame-boundary marker in the raw trace stream -
+                    // added for a Super Metroid boot-hang investigation
+                    // where the question was "what was the CPU doing
+                    // relative to what the SPC700 was doing, in real
+                    // time" and CpuVerboseLogging/Spc700VerboseLogging
+                    // write to the same Console stream but with no shared
+                    // reference point, making that correlation only
+                    // possible by separately re-running with each flag on
+                    // and cross-referencing by eye. Gated on the same
+                    // flags that would otherwise be producing trace
+                    // output at all - this is a no-op (and prints
+                    // nothing) unless at least one of them is on, so it
+                    // can't add noise to a run that isn't already tracing
+                    // CPU/SPC700 execution.
+                    if (DebugSettings.MasterLoggingEnabled &&
+                        (DebugSettings.CpuVerboseLogging || DebugSettings.Spc700VerboseLogging))
+                    {
+                        Console.WriteLine($"[FRAME] {TotalFrames}");
+                    }
+
                     // Periodic autosave - see Cartridge.SaveSram's own
                     // comment for why this is safe to call this often.
                     if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();

@@ -148,6 +148,17 @@ namespace EmuSen.Debug
         IReadOnlyList<DebugRegisterValue> GetCpuRegisters();
         IReadOnlyList<DebugRegisterValue> GetVideoRegisters();
 
+        // The sound co-processor's own registers (65816-side cores: the
+        // SPC700) plus the CPU<->APU communication ports (both
+        // directions - see Spc700.ReadPort/WritePort's own comments on
+        // why those are two independent one-byte latches per port, not
+        // one). Added investigating a Super Metroid boot hang where the
+        // only prior way to see SPC700 state at all was reading raw
+        // verbose-trace text - there was no structured equivalent of
+        // `regs` for it. A core without a distinct sound co-processor
+        // (or one not yet modeled this way) can return an empty list.
+        IReadOnlyList<DebugRegisterValue> GetApuRegisters();
+
         IReadOnlyList<DebugSpriteInfo> GetSprites();
         IReadOnlyList<DebugPaletteInfo> GetPalettes();
 

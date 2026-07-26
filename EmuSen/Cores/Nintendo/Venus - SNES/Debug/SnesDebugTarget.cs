@@ -283,6 +283,35 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             };
         }
 
+        // See IDebugTarget.GetApuRegisters's own comment for why this
+        // exists. InPort<n> is what the CPU most recently wrote (what the
+        // SPC700 reads back at $00F4-F7) - OutPort<n> is what the SPC700
+        // most recently wrote (what the CPU reads back at $2140-2143).
+        // Same asymmetric-direction split as Spc700.ReadPort/WritePort;
+        // printing both together is the point, since a stuck handshake
+        // typically shows as one direction moving and the other not.
+        public IReadOnlyList<DebugRegisterValue> GetApuRegisters()
+        {
+            var spc = _bus.Spc700;
+            return new[]
+            {
+                new DebugRegisterValue("A", spc.A, 8),
+                new DebugRegisterValue("X", spc.X, 8),
+                new DebugRegisterValue("Y", spc.Y, 8),
+                new DebugRegisterValue("SP", spc.SP, 8),
+                new DebugRegisterValue("PC", spc.PC, 16),
+                new DebugRegisterValue("PSW", spc.PSW, 8),
+                new DebugRegisterValue("InPort0", spc.GetInPort(0), 8),
+                new DebugRegisterValue("InPort1", spc.GetInPort(1), 8),
+                new DebugRegisterValue("InPort2", spc.GetInPort(2), 8),
+                new DebugRegisterValue("InPort3", spc.GetInPort(3), 8),
+                new DebugRegisterValue("OutPort0", spc.ReadPort(0), 8),
+                new DebugRegisterValue("OutPort1", spc.ReadPort(1), 8),
+                new DebugRegisterValue("OutPort2", spc.ReadPort(2), 8),
+                new DebugRegisterValue("OutPort3", spc.ReadPort(3), 8),
+            };
+        }
+
         // Same size-select/high-table decoding DumpActiveOam already does
         // (Renderer.Debug.cs) - reshaped into structured records instead of
         // printed lines. Parked sprites (Y=$E0/$F0, the same heuristic

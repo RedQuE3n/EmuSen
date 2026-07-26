@@ -22,6 +22,16 @@ namespace EmuSen.Debug.Commands
             {
                 sb.AppendLine($"  {r.Name,-8} = 0x{r.Value:X2}");
             }
+            var apuRegs = target.GetApuRegisters();
+            if (apuRegs.Count > 0)
+            {
+                sb.AppendLine("APU registers:");
+                foreach (var r in apuRegs)
+                {
+                    int digits = Math.Max(1, r.BitWidth / 4);
+                    sb.AppendLine($"  {r.Name,-9} = 0x{r.Value.ToString("X" + digits)}");
+                }
+            }
             return sb.ToString().TrimEnd();
         }
     }

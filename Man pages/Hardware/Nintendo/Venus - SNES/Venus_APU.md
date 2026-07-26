@@ -105,6 +105,14 @@ Read returns the *live* per-voice end flags (one bit per voice, set when that vo
 
 When `AudioSettings.AudioEnabled` is false or muted, `GenerateSample` still calls `voice.GetNextSample()` for every voice (discarding the result) rather than skipping voice processing entirely — so playback position doesn't "jump ahead" the instant audio is re-enabled mid-sound.
 
+### 3.5 DSP debug toolchain (`channels`, `mute`, `regs`'s DSP_* rows)
+
+Added diagnosing the "part of the music is missing" report (§4.4) - previously the debug toolchain could only see the *final mixed* audio output (`audiodump`/`GetAudioSamples`) or a KeyOn event as it happened (console-only `DebugSettings.DspKeyOnLogging`); neither answers "is voice N active right now, and what's its envelope actually doing."
+
+- **`regs`'s APU section** now also reports the S-DSP's global (non-per-voice) registers - `DSP_MVOLL/R`, `DSP_EVOLL/R`, `DSP_EFB`, `DSP_KON`, `DSP_KOFF`, `DSP_ENDX`, `DSP_EON`, `DSP_NON`, `DSP_PMON`, `DSP_DIR`, `DSP_FLG`, `DSP_ESA`, `DSP_EDL` - via `SDsp.PeekRegister()`, a non-mutating read that (unlike `ReadRegister()`) never touches `_registerAddress`, so inspecting DSP state can't disturb whatever multi-step address/data sequence the actual sound driver is mid-way through. Used to directly rule NON/PMON out as the cause here (both stayed 0x00 throughout normal music playback in testing) before the real cause (§4.4) was found.
+- **`channels`** (core-agnostic `IDebugTarget.GetAudioChannels()`/`DebugAudioChannelInfo`, same "generic shape, core does the reshaping" pattern as `sprites`/`pal`) lists all 8 S-DSP voices: active flag, envelope level rescaled to 0-100 (from the SNES's native 0-2047 range), muted flag, and a free-text detail string (Srcn, pitch, vol, ADSR stage/registers, ended flag, KeyOn count, samples since last KeyOn). `DspVoice.KeyOnCount`/`LastKeyOnSample` are now tracked unconditionally (not just when `DspKeyOnLogging` is on), so this works without needing that console-logging flag enabled first.
+- **`mute <index> <on|off>`** (`IDebugTarget.SetChannelMuted`) excludes one voice from the final mix (and from feeding the echo buffer) without pausing its own playback/envelope state - matching real muting semantics (§3.4's "still advance playback" behavior) rather than a separate solo-rendering pipeline. Lets a suspected-broken instrument be isolated (mute every other voice, then `audiodump`) or ruled out (mute just it, confirm the rest of the mix is unaffected). Backed by `SDsp._debugMuteMask`, explicitly not real hardware state (`[SkipInState]`, same reasoning as `_audioBuffer`/`Renderer._sheetPixels`).
+
 ---
 
 ## 4. `DspVoice` — BRR playback + ADSR/GAIN envelope
@@ -127,7 +135,9 @@ A BRR block's header carries independent end and loop flags (see `BrrDecoder.IsE
 
 ### 4.4 Envelope rate gating (`RateDue`)
 
-The 32-entry period table (`PeriodTable`, verified against the SNESdev DSP_envelopes page) is denominated in S-SMP clocks per envelope step; index 0 ("Infinite") means that stage never advances on its own. `RateDue` approximates this in **output samples** rather than raw clocks — 32 S-SMP clocks per generated sample, matching `SDsp.Tick`'s own per-sample timing exactly, so the *rate* this produces is correct; only the exact clock-level *phase* relative to other voices isn't modeled (documented gap, §4.1).
+The 32-entry period table (`PeriodTable`, verified against the SNESdev DSP_envelopes page) is denominated directly in **audio samples per envelope step** - the same table appears verbatim (2048, 1536, ..., 1) in essentially every reference S-DSP implementation (bsnes, snes9x, Mesen2), always used as a sample-count period with no further conversion; index 0 ("Infinite") means that stage never advances on its own.
+
+**Fixed bug: `RateDue` divided the table's value by 32 before using it**, on the mistaken assumption the table was denominated in raw S-SMP clock cycles needing conversion to samples via `SDsp.Tick`'s 32-cycles-per-sample constant - it wasn't; the table's values are already in samples. That extra division made every envelope step (attack ramp, decay, sustain decay) advance up to 32x too fast, and for most rate indices (table value already under 32) the `Math.Max(1, ...)` clamp made it fire on literally every generated sample regardless of the real intended rate. Reported as "you can hear part of the music, but there's missing sounds" (after the separate CPU->SPC700 pacing fix, §2.8, resolved a related "too fast" complaint) - confirmed via the new `channels` debug command (§3.5): a voice sitting in Sustain stage had already decayed to envelope level 0 within ~5900 samples (~0.18s) of KeyOn, when real hardware would still be clearly audible there. This is exactly a "some of the music is missing" symptom rather than total silence - sharp one-shot percussion (little or no meaningful sustain/decay phase) still played close to normally, while any note relying on its sustain to actually ring out collapsed to silence almost immediately. Fixed by using the table's value directly, no division.
 
 ### 4.5 ADSR vs. GAIN mode
 

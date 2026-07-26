@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using static EmuSen.Shell.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Shell.Commands
@@ -41,47 +40,16 @@ namespace EmuSen.Shell.Commands
             target = EmuSen.Shell.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: readers <addr> [<scanstart> <scanlen>]";
             int targetAddr = ParseHex(parts[1]);
+            var (scanStart, scanLen) = DefaultScanRange(parts, 2, targetAddr);
 
-            int scanStart, scanLen;
-            if (parts.Length >= 4)
+            return ScanForStaticReferences(target, scanStart, scanLen, targetAddr, "LDA/LDX/LDY", (opcode, instr) => opcode switch
             {
-                scanStart = ParseHex(parts[2]);
-                scanLen = ParseHex(parts[3]);
-            }
-            else
-            {
-                scanStart = (targetAddr & 0xFF0000) | 0x8000;
-                scanLen = 0x8000;
-            }
-
-            var instrs = target.Disassemble("CpuBus", scanStart, scanLen);
-
-            var matches = new List<string>();
-            foreach (var instr in instrs)
-            {
-                if (instr.Address >= scanStart + scanLen) break;
-                byte opcode = instr.Bytes[0];
-
-                int? readTarget = opcode switch
-                {
-                    0xAD => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // LDA absolute
-                    0xAF => instr.Bytes[1] | (instr.Bytes[2] << 8) | (instr.Bytes[3] << 16), // LDA absolute long
-                    0xAE => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // LDX absolute
-                    0xAC => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // LDY absolute
-                    _ => null
-                };
-
-                if (readTarget.HasValue && readTarget.Value == targetAddr)
-                {
-                    matches.Add($"  ${instr.Address:X6}: {instr.Mnemonic} {instr.OperandText}");
-                }
-            }
-
-            if (matches.Count == 0)
-            {
-                return $"No LDA/LDX/LDY found targeting ${targetAddr:X6} in ${scanStart:X6}-${scanStart + scanLen - 1:X6} (absolute/absolute-long only).";
-            }
-            return string.Join('\n', matches);
+                0xAD => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // LDA absolute
+                0xAF => instr.Bytes[1] | (instr.Bytes[2] << 8) | (instr.Bytes[3] << 16), // LDA absolute long
+                0xAE => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // LDX absolute
+                0xAC => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // LDY absolute
+                _ => null
+            }, notFoundSuffix: " (absolute/absolute-long only)");
         }
     }
 }

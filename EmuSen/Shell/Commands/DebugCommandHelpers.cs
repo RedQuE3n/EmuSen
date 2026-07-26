@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace EmuSen.Shell.Commands
@@ -58,6 +59,68 @@ namespace EmuSen.Shell.Commands
             long v = 0;
             for (int i = 0; i < width; i++) v |= (long)space.Read(addr + i) << (8 * i);
             return v;
+        }
+
+        // Shared by CallersCommand/WritersCommand/ReadersCommand: absent an
+        // explicit <scanstart> <scanlen>, default to <addr>'s own bank's
+        // upper 32KB - the conventional LoROM code region (see MemoryBus's
+        // own "offset >= 0x8000 is ROM" comment) and a reasonable "just show
+        // me this bank's hits" starting point without needing to already
+        // know a scan range.
+        public static (int ScanStart, int ScanLen) DefaultScanRange(string[] parts, int argOffset, int targetAddr)
+        {
+            if (parts.Length >= argOffset + 2)
+            {
+                return (ParseHex(parts[argOffset]), ParseHex(parts[argOffset + 1]));
+            }
+            return ((targetAddr & 0xFF0000) | 0x8000, 0x8000);
+        }
+
+        // Shared scan-and-match skeleton for CallersCommand/WritersCommand/
+        // ReadersCommand: walk every disassembled instruction in
+        // [scanStart, scanStart+scanLen), ask `resolveTarget` whether it has
+        // a statically-known target address (returning null for anything it
+        // doesn't recognize or can't resolve from the instruction bytes
+        // alone), and collect the ones matching <targetAddr>. `resolveTarget`
+        // is where each command's own opcode knowledge lives - this helper
+        // only owns the walking/formatting/not-found-message part all three
+        // share verbatim.
+        //
+        // NOTE: `resolveTarget` is necessarily ISA-specific (each command
+        // passes its own 65816 opcode-byte switch) - this helper removes the
+        // three commands' literal duplication of the scan loop, but does NOT
+        // make the scan itself core-agnostic. A non-65816 core would need
+        // its own opcode table here, or (better, if a second core ever
+        // lands) this would want to move into IDebugTarget itself, the way
+        // Disassemble()/DecodeTilemapEntry() already delegate their own
+        // ISA-specific decoding to the core rather than hardcoding it here.
+        public static string ScanForStaticReferences(
+            IDebugTarget target,
+            int scanStart,
+            int scanLen,
+            int targetAddr,
+            string notFoundMnemonics,
+            Func<byte, DisassembledInstruction, int?> resolveTarget,
+            string notFoundSuffix = "")
+        {
+            var instrs = target.Disassemble("CpuBus", scanStart, scanLen);
+
+            var matches = new List<string>();
+            foreach (var instr in instrs)
+            {
+                if (instr.Address >= scanStart + scanLen) break;
+                int? refTarget = resolveTarget(instr.Bytes[0], instr);
+                if (refTarget.HasValue && refTarget.Value == targetAddr)
+                {
+                    matches.Add($"  ${instr.Address:X6}: {instr.Mnemonic} {instr.OperandText}");
+                }
+            }
+
+            if (matches.Count == 0)
+            {
+                return $"No {notFoundMnemonics} found targeting ${targetAddr:X6} in ${scanStart:X6}-${scanStart + scanLen - 1:X6}{notFoundSuffix}.";
+            }
+            return string.Join('\n', matches);
         }
     }
 }

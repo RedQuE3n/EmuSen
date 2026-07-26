@@ -158,6 +158,7 @@ namespace EmuSen.DianaOS
                 new Commands.PwdCommand(),
                 new Commands.NanoCommand(),
                 new Commands.CoretopCommand(),
+                new Commands.ClearCommand(),
                 new Commands.TrueCommand(),
                 new Commands.FalseCommand(),
                 new Commands.TestCommand(),

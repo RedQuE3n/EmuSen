@@ -740,7 +740,9 @@ namespace EmuSen.DianaOS
             {
                 border,
                 CenterInBanner($"Welcome to DianaOS v{Version}"),
-                CenterInBanner("A bash-like shell for driving and inspecting EmuSen cores"),
+                CenterInBanner("A virtualized micro operating system centered around emulation."),
+                CenterInBanner("DianaOS is also a functional cross-platform Bash-like shell"),
+                CenterInBanner("that accepts scripting."),
                 border,
                 "",
                 "Supported cores:",

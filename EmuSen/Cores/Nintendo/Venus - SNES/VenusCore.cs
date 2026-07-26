@@ -264,26 +264,34 @@ namespace EmuSen.Cores.Nintendo.Venus
                     // cycles (the standard oxyron.de-style counts the
                     // opcode table is verified against), NOT master clocks
                     // and NOT SPC700 cycles - those are three different
-                    // units. Real hardware: CPU cycle (SlowROM, the common
-                    // case; this project doesn't yet track FastROM/region
-                    // speed separately) = 8 master clocks; SPC700 cycle
-                    // (its own independent 1.024MHz crystal, universally
+                    // units. This project's own master-clock calibration is
+                    // set by CyclesPerScanline above (227 CPU-cycle-units x
+                    // 262 scanlines = 59474/frame), which - matched against
+                    // the real NTSC frame rate (~60.0988Hz) and master
+                    // clock (~21.477272MHz, ~357366 master clocks/frame) -
+                    // implies 1 CPU-cycle-unit is worth ~6 master clocks
+                    // here (FastROM's ratio), NOT the 8 (SlowROM) a prior
+                    // version of this comment assumed. SPC700 cycle (its
+                    // own independent 1.024MHz crystal, universally
                     // approximated as master/21 since it isn't derived from
                     // the main clock at all) = ~21 master clocks. So 1 CPU
-                    // cycle is worth 8/21 of an SPC700 cycle - scaled here
+                    // cycle is worth 6/21 of an SPC700 cycle - scaled here
                     // with an explicit remainder carry (not float math) so
                     // the fractional part isn't silently dropped every
-                    // single call, which previously left Spc700.CycleBudget
-                    // being compared against a flat "21" using raw,
-                    // unscaled CPU cycles - since Spc700.Step() already
-                    // drains its own real per-instruction cost (typically
-                    // well under 21) rather than a fixed 21, that let the
-                    // SPC700 run roughly 3x too fast (confirmed: a 10-
-                    // second capture produced ~30 seconds of audio),
-                    // which is what made played-back audio sound like
-                    // scrambled noise once the overflowing buffer started
-                    // dropping samples.
-                    int scaledSpc700Cycles = cpuCycles * 8 + _spc700CycleRemainder;
+                    // single call.
+                    //
+                    // Using 8 instead of 6 here (this project's actual bug,
+                    // not just a hypothetical) fed the SPC700 roughly 8/6 =
+                    // 1.33x too many cycles per real elapsed video frame -
+                    // confirmed via EmuSen.HeadlessDebug's `audiodump`
+                    // verb: a steady-state 5-frame window produced ~6564
+                    // interleaved samples where ~2662 (5 x 532.45 stereo
+                    // pairs x 2) was expected, matching this exact ratio.
+                    // That's what made music sound sped up with notes
+                    // seemingly missing once the buffer's overflow-drop
+                    // (SDsp's own AudioBufferMaxSamples cap) started
+                    // discarding the oldest queued samples.
+                    int scaledSpc700Cycles = cpuCycles * 6 + _spc700CycleRemainder;
                     _spc700CycleRemainder = scaledSpc700Cycles % 21;
                     Spc700.CycleBudget += scaledSpc700Cycles / 21;
                     while (Spc700.CycleBudget > 0)

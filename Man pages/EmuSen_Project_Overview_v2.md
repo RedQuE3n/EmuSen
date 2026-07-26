@@ -70,6 +70,16 @@ EmuSen Project/
 │   │   │                                      #   LoadRom() unlike this class's throwing GetFrameBufferRgba
 │   │   ├── StateSerializer.cs                # Reflective save-state serializer
 │   │   ├── TeeTextWriter.cs                  # Console + single-file log tee (generic, reusable)
+│   │   ├── Imaging/                          # Moved out of EmuSen.HeadlessDebug/Program.cs (was ~270
+│   │   │   │                                  #   lines of private static helpers with zero test
+│   │   │   │                                  #   coverage and zero reuse anywhere else) - see
+│   │   │   │                                  #   EmuSen_Debugging_Tools_Reference_v5.md §3.15's revision
+│   │   │   │                                  #   note. Genuinely general-purpose, not HeadlessDebug-
+│   │   │   │                                  #   specific, hence living here rather than in that project.
+│   │   │   ├── BmpFile.cs                    # Minimal uncompressed 32bpp BMP write/read
+│   │   │   ├── FrameHash.cs                  # 64-bit FNV-1a over raw RGBA bytes (--autoshot's change check)
+│   │   │   ├── ContactSheet.cs               # Nearest-neighbor downsample + grid tiling
+│   │   │   └── SpriteOverlay.cs              # Green bounding-box outline from IDebugTarget.DebugSpriteInfo
 │   │   └── CategorizedLogWriter.cs           # Console + per-category log files (cpu/ppu/apu/memory/
 │   │                                          #   debug/general) - used by both EmuSen.RaylibFrontend's
 │   │                                          #   Program.cs and EmuSen.TestingStudio's MainWindow. File
@@ -250,6 +260,12 @@ EmuSen Project/
 │   │   └── Commands/                           # Every shell command, one class each: echo/sed/history/true/
 │   │                                            #   false/test (core-agnostic builtins) alongside mem/regs/
 │   │                                            #   watch/bp/cheat/etc. (SNES-facing, need a real IDebugTarget)
+│   ├── Audio/
+│   │   └── WavFile.cs                         # Minimal uncompressed PCM WAV writer, moved out of
+│   │                                           #   EmuSen.HeadlessDebug/Program.cs alongside the Imaging/
+│   │                                           #   move above - namespace EmuSen.Audio, same namespace
+│   │                                           #   Settings/AudioSettings.cs already uses despite living
+│   │                                           #   in a different folder
 │   └── Settings/
 │       ├── AudioSettings.cs
 │       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md.

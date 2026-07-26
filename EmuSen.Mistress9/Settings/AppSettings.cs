@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 
-namespace EmuSen.TestingStudio.Settings
+namespace EmuSen.Mistress9.Settings
 {
     // General app preferences (log/ROM directories, selected core) - same
     // shape and persistence approach as ControllerKeyMap/GamepadBindingMap

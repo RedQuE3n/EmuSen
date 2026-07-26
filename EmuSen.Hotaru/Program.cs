@@ -173,7 +173,7 @@ namespace EmuSen.Hotaru
                 Raylib_cs.Raylib.PlayAudioStream(audioStream);
 
                 // Same measured-fps diagnostic Testing Studio's status bar
-                // has (EmuSen.TestingStudio/Views/MainWindow.axaml.cs), added
+                // has (EmuSen.Mistress9/Views/MainWindow.axaml.cs), added
                 // here to answer the same question for this build: does
                 // RunFrame() itself slow down under real gameplay the same
                 // way it does there, or is that slowdown specific to the
@@ -315,7 +315,7 @@ namespace EmuSen.Hotaru
         // into core.Spc700.Dsp.AudioBuffer directly - the same
         // core-agnostic split GetFrameBufferRgba() already established for
         // video (see FramePresenter's own comment), closed here too during
-        // a pass adding real audio output to EmuSen.TestingStudio, which
+        // a pass adding real audio output to EmuSen.Mistress9, which
         // needed this exact same drain logic and had no Venus-specific
         // access of its own to duplicate it against.
         private static unsafe void PumpAudio(ICore core, Raylib_cs.AudioStream stream)

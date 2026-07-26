@@ -34,7 +34,7 @@
          Audio/AudioPlayerTests.cs. Pulls in Avalonia/Silk.NET.SDL
          transitively, which is fine for a test project; nothing here
          opens an actual Avalonia window. -->
-    <ProjectReference Include="..\EmuSen.TestingStudio\EmuSen.TestingStudio.csproj" />
+    <ProjectReference Include="..\EmuSen.Mistress9\EmuSen.Mistress9.csproj" />
     <!-- HeadlessDebugOptions.Parse and FrameRunner - see
          HeadlessDebug/HeadlessDebugOptionsTests.cs and
          HeadlessDebug/FrameRunnerTests.cs. Referencing an OutputType=Exe

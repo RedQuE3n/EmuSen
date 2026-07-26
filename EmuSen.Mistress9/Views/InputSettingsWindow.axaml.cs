@@ -8,10 +8,10 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Silk.NET.SDL;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
-using EmuSen.TestingStudio.Input;
-using EmuSen.TestingStudio.Settings;
+using EmuSen.Mistress9.Input;
+using EmuSen.Mistress9.Settings;
 
-namespace EmuSen.TestingStudio.Views
+namespace EmuSen.Mistress9.Views
 {
     public partial class InputSettingsWindow : Avalonia.Controls.Window
     {

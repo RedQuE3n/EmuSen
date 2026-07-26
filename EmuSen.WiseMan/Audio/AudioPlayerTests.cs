@@ -1,5 +1,5 @@
 using EmuSen.Common;
-using EmuSen.TestingStudio.Audio;
+using EmuSen.Mistress9.Audio;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Audio

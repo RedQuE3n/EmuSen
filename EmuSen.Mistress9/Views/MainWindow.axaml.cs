@@ -14,11 +14,11 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
-using EmuSen.TestingStudio.Audio;
-using EmuSen.TestingStudio.Input;
-using EmuSen.TestingStudio.Settings;
+using EmuSen.Mistress9.Audio;
+using EmuSen.Mistress9.Input;
+using EmuSen.Mistress9.Settings;
 
-namespace EmuSen.TestingStudio.Views
+namespace EmuSen.Mistress9.Views
 {
     public partial class MainWindow : Window
     {

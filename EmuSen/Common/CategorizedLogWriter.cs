@@ -29,7 +29,7 @@ namespace EmuSen.Common
     // DmaVerboseLogging, etc.) used to route straight into a StreamWriter
     // with AutoFlush=true - a real disk write/OS syscall per line, on
     // whichever thread is driving emulation (the Avalonia GUI's 60fps
-    // DispatcherTimer tick, in EmuSen.TestingStudio's case). The calling
+    // DispatcherTimer tick, in EmuSen.Mistress9's case). The calling
     // thread now just resolves which category a line belongs to (cheap -
     // a prefix match against an in-memory table) and hands the line to a
     // bounded queue; a single consumer thread drains it and does the
@@ -290,7 +290,7 @@ namespace EmuSen.Common
 
         // Both frontends now call this explicitly on every exit path
         // (EmuSen.Hotaru's Program.cs in a finally block;
-        // EmuSen.TestingStudio's MainWindow on window-close and before
+        // EmuSen.Mistress9's MainWindow on window-close and before
         // starting a fresh session for the next loaded ROM). That used to
         // only matter for the long-lived Avalonia build - the console
         // build got away with never disposing at all, back when

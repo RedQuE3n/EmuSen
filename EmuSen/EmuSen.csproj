@@ -2,7 +2,7 @@
 
   <!-- Pure library now - no Main, no window ownership. The Raylib console
        frontend's Main/hotkey loop lives in EmuSen.Hotaru instead,
-       so this project and EmuSen.TestingStudio (Avalonia) are true sibling
+       so this project and EmuSen.Mistress9 (Avalonia) are true sibling
        consumers of the emulation core, neither depending on the other's
        frontend-specific code. See EmuSen_Project_Overview_v2.md. -->
   <PropertyGroup>

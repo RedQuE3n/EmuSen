@@ -104,6 +104,11 @@ namespace EmuSen.Mistress9.Views
         // disposed window.
         private DianaOSConsoleWindow? _consoleWindow;
 
+        // Same at-most-one/reuse/clear-on-Closed pattern as _consoleWindow
+        // above - opened from inside the console window itself (typing
+        // `coretop`, via CoretopWindowCommand), not from a menu item.
+        private CoretopWindow? _coretopWindow;
+
         private string? _currentRomPath;
         private string? _currentDisplayName; // for restoring StatusText's "Running: ..." text exactly after a pause, without reformatting from _currentRomPath
         private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
@@ -261,7 +266,26 @@ namespace EmuSen.Mistress9.Views
         {
             new PauseCommand(PauseEmulation, () => IsPaused),
             new ResumeCommand(ResumeEmulation, () => IsPaused),
+            new CoretopWindowCommand(OpenCoretopWindow),
         };
+
+        // Opens (or brings forward/updates) CoretopWindow - same at-most-
+        // one/reuse pattern as OnShellConsoleClick uses for
+        // _consoleWindow, just triggered from inside the console window
+        // itself (typing `coretop`) rather than a menu item.
+        private void OpenCoretopWindow(IDebugTarget? target)
+        {
+            if (_coretopWindow is not null)
+            {
+                _coretopWindow.UpdateTarget(target);
+                _coretopWindow.Activate();
+                return;
+            }
+
+            _coretopWindow = new CoretopWindow(target);
+            _coretopWindow.Closed += (_, _) => _coretopWindow = null;
+            _coretopWindow.Show(this);
+        }
 
         private string? CurrentStatePath =>
             _currentRomPath is null
@@ -337,6 +361,7 @@ namespace EmuSen.Mistress9.Views
                 _debugTarget = new SnesDebugTarget(_session.Cpu!, _session.Bus, _session.Renderer!,
                     () => (_session.LastFrameCpuSpc700Ms, _session.LastFramePpuMs, _session.LastFrameHdmaMs));
                 _consoleWindow?.UpdateTarget(_debugTarget, displayName);
+                _coretopWindow?.UpdateTarget(_debugTarget);
 
                 _bitmap = new WriteableBitmap(
                     new PixelSize(_session.ScreenWidth, EmulatorSession.ScreenHeight),

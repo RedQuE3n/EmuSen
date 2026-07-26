@@ -222,6 +222,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return new IDebugMemorySpace[]
             {
                 new BusDebugMemorySpace("CpuBus", _bus, 0x000000, 0x1000000),
+                // Registers mirror identically across every hardware bank,
+                // so bank 0's 64KB is the whole address space that matters
+                // here - `watch add IO 4016 1` (or `mem IO 4218 4`) means
+                // exactly the $4016/$4218 a CPU trace's Target Addr already
+                // shows, no bank prefix needed. Exists specifically so
+                // MemoryBus's "IO"-tagged ObserveRead/ObserveWrite calls
+                // (ReadInternal/Write8's own comments) pass FindSpace's
+                // validation - before this, `watch add IO ...` failed
+                // outright with "No memory space named 'IO'" even though
+                // the observer hook itself was already wired up.
+                new BusDebugMemorySpace("IO", _bus, 0x000000, 0x10000),
                 new ByteArrayDebugMemorySpace("WRAM", _bus.Ram),
                 new ByteArrayDebugMemorySpace("VRAM", _ppu.Vram),
                 new ByteArrayDebugMemorySpace("CGRAM", _ppu.Cgram),

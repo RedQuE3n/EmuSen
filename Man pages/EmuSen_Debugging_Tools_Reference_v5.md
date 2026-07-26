@@ -81,7 +81,7 @@ The SNES implementation. Almost entirely a *reshaping* of already-existing, alre
 
 Two small helper classes back the memory spaces:
 - `ByteArrayDebugMemorySpace` — wraps a `byte[]` directly (WRAM, VRAM, CGRAM, OAM).
-- `BusDebugMemorySpace` — routes through `MemoryBus.Read8`/`Write8` at a fixed bank offset (used for the raw CpuBus space, and for SRAM, which is more naturally viewed at its mapped CPU address `$70:0000`).
+- `BusDebugMemorySpace` — routes through `MemoryBus.Read8`/`Write8` at a fixed bank offset (used for the raw CpuBus space, for SRAM at its mapped CPU address `$70:0000`, and for the `IO` space at bank 0 - `watch add IO 4016 1`/`mem IO 4218 4` target hardware registers directly, added after a real investigation found `watch add` silently rejected them since nothing had registered that space name - see `Venus_Memory.md` §6/§7).
 
 `Watches` here just returns `SnesDebugTarget`'s own `WatchRegistry` instance. **This changed since first built:** the registry (and a `Cpu` back-reference, `DebugCpu`) used to live directly on `MemoryBus`, which mixed real emulation state with debug-toolchain plumbing in the same class — a coupling issue caught during a later architecture review. Now `MemoryBus` exposes only a tiny, debug-agnostic `IWriteObserver` hook (`Cores/Nintendo/Venus - SNES/Memory/IWriteObserver.cs`) that it calls on every write with no idea what's listening; `SnesDebugTarget` implements that interface, owns the `WatchRegistry` itself, and supplies the PC context from its own already-held `Cpu` reference. `MemoryBus` no longer references `Cpu` or the debug toolchain at all.
 

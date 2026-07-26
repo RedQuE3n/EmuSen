@@ -9,6 +9,17 @@ namespace EmuSen.Bindings
     // frame and doesn't need to know the specifics.
     public static class InputBindings
     {
+        // Off by default - forcing this on unconditionally would break any
+        // real two-controller game by feeding Controller 2 the same input
+        // as Controller 1 even when a genuine second pad is plugged in.
+        // Exists specifically for compatibility with games that read
+        // Controller 2 instead of Controller 1 for classic-game-in-a-
+        // compilation reasons (Super Mario All-Stars' SMB1/2/3 being the
+        // known example - see Man pages/EmuSen_Games_Tested.md) - toggle it
+        // on only while playing one of those, same workaround real hardware
+        // players and other emulators use (mapping their one pad to
+        // "player 2"), not a general input redesign.
+        public static bool MirrorPlayer1ToPlayer2 = false;
         // Keyboard side: a fairly standard convention across SNES emulators -
         // Z/X sit where B/A would be on a real pad, A/S (row above) line up with
         // Y/X, matching the pad's physical layout reasonably well on a keyboard.
@@ -45,6 +56,7 @@ namespace EmuSen.Bindings
             {
                 bool pressed = Raylib.IsKeyDown(key) || (padConnected && Raylib.IsGamepadButtonDown(0, pad));
                 bus.Input.SetButton(button, pressed);
+                if (MirrorPlayer1ToPlayer2) bus.Input.SetButton(button, pressed, controller: 2);
             }
         }
     }

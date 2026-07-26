@@ -466,6 +466,17 @@ namespace EmuSen.RaylibFrontend
                 Console.WriteLine($"[SHADER] Active effect: {effect}");
             }
 
+            // Compatibility toggle for games that read Controller 2 instead
+            // of Controller 1 (Super Mario All-Stars' classic sub-games
+            // being the known case - see InputBindings.MirrorPlayer1ToPlayer2's
+            // own comment). Off by default; leave off for real two-player
+            // sessions.
+            if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F7))
+            {
+                InputBindings.MirrorPlayer1ToPlayer2 = !InputBindings.MirrorPlayer1ToPlayer2;
+                Console.WriteLine($"[INPUT] Mirror Player 1 -> Player 2: {(InputBindings.MirrorPlayer1ToPlayer2 ? "ON" : "OFF")}");
+            }
+
             // Full CPU+PPU snapshot - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F1))
             {

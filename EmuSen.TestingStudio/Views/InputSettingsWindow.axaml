@@ -22,6 +22,17 @@
             <Button Content="Close" Click="OnCloseClick" />
         </StackPanel>
 
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,4">
+            <CheckBox x:Name="MirrorPlayer1ToPlayer2CheckBox"
+                      Content="Mirror Player 1 input to Player 2"
+                      IsCheckedChanged="OnMirrorPlayer1ToPlayer2Changed" />
+            <TextBlock Text="Compatibility option for games that read Controller 2 instead of Controller 1 (e.g. Super Mario All-Stars' classic Mario games). Leave off for real two-player sessions."
+                       TextWrapping="Wrap"
+                       Foreground="Gray"
+                       FontSize="11"
+                       Margin="24,2,0,0" />
+        </StackPanel>
+
         <ScrollViewer>
             <StackPanel x:Name="BindingsPanel" Spacing="6" />
         </ScrollViewer>

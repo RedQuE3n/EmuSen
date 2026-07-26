@@ -1,6 +1,6 @@
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 
-namespace EmuSen.HeadlessDebug.Cli
+namespace EmuSen.Pharaoh90.Cli
 {
     // Everything the classic-loop/--commands entry points need out of argv,
     // pulled out of Program.cs's old inline parsing loop so it's a plain

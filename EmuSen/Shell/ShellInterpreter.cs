@@ -72,7 +72,7 @@ namespace EmuSen.Shell
         // Builds the standard, full command registry (every debug command
         // under EmuSen.Shell.Commands plus this namespace's own shell
         // builtins) - the one-stop constructor call every frontend
-        // (EmuSen.Hotaru, EmuSen.HeadlessDebug) actually wants,
+        // (EmuSen.Hotaru, EmuSen.Pharaoh90) actually wants,
         // rather than each independently re-listing 30-odd command
         // classes and risking them drifting out of sync with each other.
         public static ShellInterpreter CreateDefault(IDebugTarget? target)
@@ -173,7 +173,7 @@ namespace EmuSen.Shell
         // lexer or parser reports "not finished yet" (an open quote, an
         // unbalanced "$(...)", or an if/for/while block missing its
         // closing keyword) - both an interactive frontend feeding one line
-        // at a time and EmuSen.HeadlessDebug's `--commands` script reader
+        // at a time and EmuSen.Pharaoh90's `--commands` script reader
         // (which also feeds one raw file line per call) get correct
         // multi-line control-flow support for free from this, without
         // either caller needing to know anything about the grammar.

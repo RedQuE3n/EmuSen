@@ -13,7 +13,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Mistress9", "EmuSen.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Validation", "EmuSen.Validation\EmuSen.Validation.csproj", "{B85BD116-4F6F-4BC7-AE89-90F60316685A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.HeadlessDebug", "EmuSen.HeadlessDebug\EmuSen.HeadlessDebug.csproj", "{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Pharaoh90", "EmuSen.Pharaoh90\EmuSen.Pharaoh90.csproj", "{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.WiseMan", "EmuSen.WiseMan\EmuSen.WiseMan.csproj", "{8A373964-284F-40E7-A19D-2C922DD602F1}"
 EndProject

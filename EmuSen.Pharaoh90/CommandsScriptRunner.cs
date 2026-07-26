@@ -3,14 +3,14 @@ using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Shell;
 
-namespace EmuSen.HeadlessDebug
+namespace EmuSen.Pharaoh90
 {
     // --commands mode's script interpreter: an ordered list of verbs
     // (frames/tap/tap2/hold/release/screenshot/waitstable/contactsheet/
     // vramsheet/paletteswatch/spriteoverlay/audiodump) executed one line at
     // a time against a shared FrameRunner, so frame-stepping, input,
     // screenshots, and debug commands can interleave freely in one script -
-    // see EmuSen.HeadlessDebug's own header comment for the full syntax.
+    // see EmuSen.Pharaoh90's own header comment for the full syntax.
     // Anything not recognized as one of those verbs falls through to the
     // real ShellInterpreter, same as before.
     public sealed class CommandsScriptRunner

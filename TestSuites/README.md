@@ -39,7 +39,7 @@ TomHarte/ProcessorTests-based single-step validation** (see
 `EmuSen_Debugging_Tools_Reference_v5.md` §3.16) - that harness single-steps
 one instruction at a time against JSON ground-truth vectors and checks
 register/memory state byte-for-byte; these are real, bootable ROMs meant to
-run end-to-end inside the emulator itself (`EmuSen.HeadlessDebug`'s
+run end-to-end inside the emulator itself (`EmuSen.Pharaoh90`'s
 `--commands` scripting, §3.15, is the natural way to drive one - boot, run
 frames, read back a pass/fail indicator) and catch a different class of bug:
 anything that only shows up running as real 65816/SPC700 machine code

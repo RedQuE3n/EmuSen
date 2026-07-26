@@ -321,7 +321,7 @@ namespace EmuSen.Shell
 
         // Exports the current tile/character memory as a plain RGBA image,
         // for a headless harness to write straight to disk (see
-        // EmuSen.HeadlessDebug's `vramsheet` verb) without ever needing a
+        // EmuSen.Pharaoh90's `vramsheet` verb) without ever needing a
         // Raylib window. Deliberately not "VRAM sheet" at the interface
         // level - an NES core's CHR-ROM/CHR-RAM pattern tables aren't VRAM
         // in the SNES sense, but the shape (some tile memory, decoded to a

@@ -496,7 +496,16 @@ namespace EmuSen.DianaOS
         private DianaOSResult Dispatch(string name, string[] args, string? stdin)
         {
             string cmd = name.ToLowerInvariant();
-            if (cmd == "help") return Help();
+
+            // `man [command]` is the real command now; `help` is kept as
+            // a plain alias for it (`help` alone still lists everything,
+            // `help <command>` forwards to `man <command>`) for anyone
+            // typing out of habit from a real shell or from before this
+            // command existed. See ManPages.cs for why the actual manual
+            // text lives in its own module rather than on IDianaOSCommand.
+            if (cmd == "man") return Man(args);
+            if (cmd == "help") return args.Length >= 2 ? Man(args) : Help();
+
             if (cmd == "summary") return _target?.GetSummaryText() ?? "No target attached.";
 
             // `export NAME[=value]` - real bash exports a variable into
@@ -617,12 +626,39 @@ namespace EmuSen.DianaOS
             return result;
         }
 
+        // `man [command]` - with no argument, falls back to the exact
+        // same listing `help` alone always showed (kept as one Help()
+        // method, not duplicated, since the two really are the same
+        // output). With a command name, looks up ManPages first; a
+        // command with no page there yet falls back to just its own
+        // Usage line rather than a hard failure, so a newly-added
+        // command isn't actually broken by 'man' before anyone's gotten
+        // around to writing its full page - see ManPages.cs's own
+        // comment. Only a genuinely unknown name (not registered as a
+        // command OR a special builtin like 'source'/'export') is a
+        // real error.
+        private DianaOSResult Man(string[] args)
+        {
+            if (args.Length < 2) return Help();
+
+            string target = args[1].ToLowerInvariant();
+            string? page = ManPages.Lookup(target);
+            if (page != null) return page;
+
+            if (_commands.TryGetValue(target, out IDianaOSCommand? command))
+            {
+                return $"{target}\n\n{command.Usage}\n\n(No detailed manual page yet for this command - showing its one-line usage above.)";
+            }
+
+            return DianaOSResult.Fail($"No manual entry for '{target}'. Type 'help' for a list of commands.");
+        }
+
         private string Help()
         {
             var lines = new List<string>
             {
                 "Available commands:",
-                "  help                          this text",
+                "  help / man [command]         this text, or a command's full manual page",
             };
             lines.AddRange(_orderedCommands.Select(c => c.Usage));
             lines.Add("  summary                       free-text state dump (whatever isn't structured above yet)");

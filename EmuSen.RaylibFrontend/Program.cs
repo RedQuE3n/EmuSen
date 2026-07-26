@@ -8,6 +8,7 @@ using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
+using EmuSen.Shell;
 using EmuSen.Bindings;
 using EmuSen.Presentation;
 
@@ -131,7 +132,7 @@ namespace EmuSen.RaylibFrontend
 
                 // Debug toolchain, built once - see EmuSen_Frontend_Driver.md §1.
                 SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-                DebugCommandProcessor debugCmd = new DebugCommandProcessor(debugTarget);
+                ShellInterpreter debugCmd = ShellInterpreter.CreateDefault(debugTarget);
 
                 FrameRecorder frameRecorder = new FrameRecorder(debugTarget);
 
@@ -334,28 +335,45 @@ namespace EmuSen.RaylibFrontend
         // itself isn't duplicated between frontends).
         //
         // 'step'/'s' and 'continue'/'c' are handled here, not registered as
-        // DebugCommandProcessor commands, because they need to make this
+        // ShellInterpreter commands, because they need to make this
         // loop return control to the OUTER per-frame loop so it can
-        // actually call core.RunFrame() again - a DebugCommandProcessor
+        // actually call core.RunFrame() again - a ShellInterpreter
         // command only ever returns a string to print, it has no way to
         // affect control flow one level up. 'exit'/'quit' already worked
         // this same way before breakpoints existed at all.
-        private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, string statePath)
+        private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, ShellInterpreter debugCmd, string statePath)
         {
             Console.WriteLine("--- Debug prompt (type 'help', 'exit' to resume, 'step'/'s' to single-step) ---");
             while (true)
             {
-                Console.Write("debug> ");
+                // Bash-style secondary prompt while a quote/"$(...)"/
+                // if-else-fi/for-do-done block is still open (see
+                // ShellInterpreter.IsAwaitingMoreInput's own comment) -
+                // and, just as importantly, every one of the single-word
+                // REPL shortcuts below (exit/quit/continue/c/step/s/
+                // "state ...") is suppressed while awaiting more input, so
+                // typing the shell's own `continue`/`break` keywords (or
+                // any other word that happens to collide with one of
+                // these) while composing a loop body reaches the shell
+                // instead of being hijacked as "resume emulation" - the
+                // same way a real bash prompt never mistakes a `continue`
+                // typed inside an unfinished `if` for the reader's own
+                // control commands.
+                Console.Write(debugCmd.IsAwaitingMoreInput ? "> " : "debug> ");
                 string? line = ConsoleLineReader.ReadLine(debugCmd.History.Entries);
                 if (line is null) break;
                 string trimmed = line.Trim();
-                if (trimmed.Length == 0
-                    || trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase)
-                    || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)
-                    || trimmed.Equals("continue", StringComparison.OrdinalIgnoreCase)
-                    || trimmed.Equals("c", StringComparison.OrdinalIgnoreCase))
+
+                if (!debugCmd.IsAwaitingMoreInput)
                 {
-                    break;
+                    if (trimmed.Length == 0
+                        || trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase)
+                        || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)
+                        || trimmed.Equals("continue", StringComparison.OrdinalIgnoreCase)
+                        || trimmed.Equals("c", StringComparison.OrdinalIgnoreCase))
+                    {
+                        break;
+                    }
                 }
                 // Text-command equivalent of the F5/F9 hotkeys - added
                 // specifically because F5/F9 depend on the Raylib window
@@ -364,7 +382,7 @@ namespace EmuSen.RaylibFrontend
                 // gives an unambiguous confirmation line either way. Same
                 // statePath both hotkeys use, so a state made one way loads
                 // fine the other.
-                if (trimmed.StartsWith("state ", StringComparison.OrdinalIgnoreCase))
+                if (!debugCmd.IsAwaitingMoreInput && trimmed.StartsWith("state ", StringComparison.OrdinalIgnoreCase))
                 {
                     string[] stateParts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                     string sub = stateParts.Length >= 2 ? stateParts[1].ToLowerInvariant() : "";
@@ -399,7 +417,7 @@ namespace EmuSen.RaylibFrontend
                     }
                     continue;
                 }
-                if (trimmed.Equals("step", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("s", StringComparison.OrdinalIgnoreCase))
+                if (!debugCmd.IsAwaitingMoreInput && (trimmed.Equals("step", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("s", StringComparison.OrdinalIgnoreCase)))
                 {
                     // Arms a one-shot halt-before-next-instruction (see
                     // BreakpointRegistry.ArmSingleStep) and hands control
@@ -421,7 +439,7 @@ namespace EmuSen.RaylibFrontend
 
         // Every debug/dev hotkey - see EmuSen_Frontend_Driver.md §2.
         private static void RunHotkeys(
-            VenusCore core, FramePresenter presenter, SnesDebugTarget debugTarget, DebugCommandProcessor debugCmd, FrameRecorder frameRecorder,
+            VenusCore core, FramePresenter presenter, SnesDebugTarget debugTarget, ShellInterpreter debugCmd, FrameRecorder frameRecorder,
             string statePath)
         {
             // Every frame, cheap no-op when not recording - see

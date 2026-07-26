@@ -3,7 +3,7 @@ using static EmuSen.Debug.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Debug.Commands
 {
-    public class WatchCommand : IDebugCommand
+    public class WatchCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "watch";
         public string Usage => string.Join('\n', new[]
@@ -24,8 +24,9 @@ namespace EmuSen.Debug.Commands
             "  watch remove <id>             remove a watch entirely",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: watch add|list|log|clear|remove ...";
             string sub = parts[1].ToLowerInvariant();
             var watches = target.Watches;

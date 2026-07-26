@@ -8,7 +8,7 @@ namespace EmuSen.Debug.Commands
     // Doesn't touch the IDebugTarget at all, same as TraceCommand - a
     // global settings toggle, not something scoped to a particular core
     // instance.
-    public class LogCommand : IDebugCommand
+    public class LogCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "log";
         public string Usage => string.Join('\n', new[]
@@ -18,7 +18,7 @@ namespace EmuSen.Debug.Commands
             "  log status                    show whether the master switch is currently on or off",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 2) return Usage;
 

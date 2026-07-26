@@ -3,7 +3,7 @@ namespace EmuSen.Cores
     // The core-agnostic execution contract - the missing counterpart to
     // Debug/IDebugTarget.cs. IDebugTarget already proved this pattern works:
     // a narrow interface any core implements, with everything built on top
-    // of it (DebugCommandProcessor, WatchRegistry, FrameRecorder) written
+    // of it (ShellInterpreter, WatchRegistry, FrameRecorder) written
     // once and reused unchanged for whatever core is plugged in. This is
     // the same idea applied to actually *running* a core, not just
     // inspecting it.

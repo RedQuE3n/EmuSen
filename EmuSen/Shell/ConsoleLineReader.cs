@@ -1,7 +1,7 @@
 using System;
 using System.Text;
 
-namespace EmuSen.Debug
+namespace EmuSen.Shell
 {
     // A small, "basic" readline-alike for the F4 console debug prompt -
     // Console.ReadLine() on its own gives you no line editing beyond
@@ -17,19 +17,19 @@ namespace EmuSen.Debug
     // recall, which is what actually makes the F4 prompt feel less
     // painful day to day.
     //
-    // Lives in EmuSen.Debug (not EmuSen.RaylibFrontend) even though only
+    // Lives in EmuSen.Shell (not EmuSen.RaylibFrontend) even though only
     // the Raylib console-window prompt uses it today, specifically so a
     // future console-based entry point doesn't have to duplicate it - the
-    // same reasoning DebugCommandProcessor's own header comment gives for
+    // same reasoning ShellInterpreter's own header comment gives for
     // staying frontend-agnostic. A GUI textbox (the eventual Avalonia
     // debug window) wouldn't use this at all - it would read
-    // DebugCommandProcessor.History directly from its own KeyDown handler
+    // ShellInterpreter.History directly from its own KeyDown handler
     // instead, since a real widget already owns its text editing.
     public static class ConsoleLineReader
     {
         // `history` is read live (Count/indexer only) - a line just typed
         // and submitted becomes recallable on the very next call, since
-        // DebugCommandProcessor.Execute appends to the same list before
+        // ShellInterpreter.Execute appends to the same list before
         // this method is ever called again.
         //
         // Falls back to plain Console.ReadLine() when stdin is redirected

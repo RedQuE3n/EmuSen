@@ -26,7 +26,7 @@ namespace EmuSen.Debug.Commands
     // need to duplicate exactly what Renderer.Backgrounds.cs already does
     // for real rendering (per-mode/per-layer 32x32/64x32/32x64/64x64
     // mirroring) - not worth it for a debug dump.
-    public class TilemapCommand : IDebugCommand
+    public class TilemapCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "tilemap";
         public string Usage => string.Join('\n', new[]
@@ -40,8 +40,9 @@ namespace EmuSen.Debug.Commands
             "                                BG-layer-to-tilemap-address mapping itself.",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 5) return Usage;
             var space = FindSpace(target, parts[1]);
             int addr = ParseHex(parts[2]);

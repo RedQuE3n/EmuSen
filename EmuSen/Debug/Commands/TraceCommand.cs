@@ -12,7 +12,7 @@ namespace EmuSen.Debug.Commands
     // boot/reset routine. Doesn't touch the IDebugTarget at all - a
     // global settings toggle, not something scoped to a particular core
     // instance.
-    public class TraceCommand : IDebugCommand
+    public class TraceCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "trace";
         public string Usage => string.Join('\n', new[]
@@ -21,7 +21,7 @@ namespace EmuSen.Debug.Commands
             "  trace off                     cancel an in-progress trace early",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 2) return "Usage: trace <count> | trace off";
 

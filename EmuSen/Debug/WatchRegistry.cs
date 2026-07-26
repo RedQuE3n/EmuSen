@@ -62,7 +62,7 @@ namespace EmuSen.Debug
     // access gets recorded - both printed live (so the existing "play,
     // then grep the console log" workflow keeps working unchanged) and
     // kept in a bounded per-watch buffer so it's also queryable on demand
-    // (via DebugCommandProcessor's `watch` commands today, and eventually
+    // (via ShellInterpreter's `watch` commands today, and eventually
     // a GUI debug window's watch panel, without needing its own new
     // mechanism).
     //

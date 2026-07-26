@@ -2,13 +2,14 @@ using System.Text;
 
 namespace EmuSen.Debug.Commands
 {
-    public class SpritesCommand : IDebugCommand
+    public class SpritesCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "sprites";
         public string Usage => "  sprites                       active sprite/OBJ table";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             var sprites = target.GetSprites();
             var sb = new StringBuilder();
             sb.AppendLine($"{sprites.Count} active sprite(s):");

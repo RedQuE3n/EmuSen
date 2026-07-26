@@ -23,7 +23,7 @@ namespace EmuSen.Cores.Nintendo.Venus
     //
     // Exposes Cart/Spc700/Bus/Cpu/Renderer as public properties beyond
     // what ICore requires. This is deliberate, not a leaky abstraction:
-    // Program.cs's debug toolchain (SnesDebugTarget, DebugCommandProcessor,
+    // Program.cs's debug toolchain (SnesDebugTarget, ShellInterpreter,
     // the F1-F9 hotkeys, the F4 prompt) all need real SNES-specific access
     // a core-agnostic interface has no business providing - see
     // ICore.cs's own comment for why input and debug-toolchain wiring

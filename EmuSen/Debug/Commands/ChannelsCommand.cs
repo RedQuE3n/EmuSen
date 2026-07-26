@@ -12,13 +12,14 @@ namespace EmuSen.Debug.Commands
     // mixed audio (`audiodump`) or a KeyOn event as it happened
     // (console-only DspKeyOnLogging) - neither answers "is this voice
     // active right now, and what's its envelope actually doing."
-    public class ChannelsCommand : IDebugCommand
+    public class ChannelsCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "channels";
         public string Usage => "  channels                      list audio channels/voices - index, active, envelope level (0-100), muted, core-specific detail (see `mute` to isolate one)";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             var channels = target.GetAudioChannels();
             if (channels.Count == 0) return "(this core reports no audio channels)";
 

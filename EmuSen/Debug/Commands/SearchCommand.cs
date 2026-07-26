@@ -10,7 +10,7 @@ namespace EmuSen.Debug.Commands
     // rest of this toolchain (mem/write/watch/tile) doesn't cover on its
     // own. Pure IDebugMemorySpace.Read() scans - no SNES-specific logic,
     // works the same for any future core's memory spaces.
-    public class SearchCommand : IDebugCommand
+    public class SearchCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "search";
         public string Usage => string.Join('\n', new[]
@@ -30,7 +30,7 @@ namespace EmuSen.Debug.Commands
         // session at a time is exactly what the command's own UX
         // implies (starting a new `search <space> ...` replaces
         // whatever was active), so there's nothing a richer structure
-        // would buy here. DebugCommandProcessor constructs this command
+        // would buy here. ShellInterpreter constructs this command
         // once and reuses the same instance for every call, so this
         // state persists across F4 prompt invocations exactly the way
         // it did as private fields directly on the processor before.
@@ -39,7 +39,7 @@ namespace EmuSen.Debug.Commands
         private List<int>? _searchCandidates;
         private Dictionary<int, long>? _searchLastValues;
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 2)
             {

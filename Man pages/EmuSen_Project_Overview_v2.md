@@ -46,7 +46,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 - **Hardware simulation** (`Cores/Nintendo/Venus - SNES/Cpu`, `Cores/Nintendo/Venus - SNES/Apu`, `Cores/Nintendo/Venus - SNES/Ppu`, `Cores/Nintendo/Venus - SNES/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
 - **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by `EmuSen.TestingStudio`), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (used by both `EmuSen.RaylibFrontend`'s `Program.cs` and `EmuSen.TestingStudio`'s `MainWindow` — routes console output into per-category files under a `Logs/<CoreName>/<console|gui>_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's; file writes run on a background thread now, not the caller's).
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
-- **The debug toolchain** (`Debug/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Debug/DebugCommandProcessor.cs` is a Unix-toolchain-style command layer on top of that. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
+- **The debug toolchain** (`Debug/`, `Shell/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Shell/ShellInterpreter.cs` is a genuine bash-alike shell (quoting, variables, `$(...)`, pipes, redirection, if/for/while) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) still living under `Debug/Commands/`. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Presentation** (`EmuSen.Presentation/`) — window/GPU-texture ownership and the prototype shader pipeline, shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1 step 6.
 - **Frontends** (`EmuSen.RaylibFrontend/`, `EmuSen.TestingStudio/`) — presentation *driving*, not the presentation code itself anymore. The Raylib console build and the Avalonia GUI are two independent, sibling entry points into the same core; neither owns emulation logic itself, and neither depends on the other.
 
@@ -196,9 +196,17 @@ EmuSen Project/
 │   │       ├── Tigers Eye - PC Engine/README.md
 │   │       ├── Hawks Eye - PC-FX/README.md
 │   │       └── Fish Eye - SuperGrafx/README.md
-│   ├── Debug/                                # Core-agnostic debug toolchain (see companion doc)
+│   ├── Shell/                                 # General-purpose bash-alike shell (see companion doc §3.3/§3.17) -
+│   │   │                                      #   was Debug/DebugCommandProcessor.cs; renamed/moved once it grew
+│   │   │                                      #   quoting, variables, $(...), pipes, redirection, if/for/while
+│   │   ├── ShellInterpreter.cs                # dispatcher + variable/history state + statement execution
+│   │   ├── Lexer.cs / Parser.cs / Ast.cs       # hand-written tokenizer/recursive-descent parser/AST
+│   │   ├── ConsoleLineReader.cs                # up/down-arrow history recall at the F4 prompt
+│   │   └── Commands/                           # echo/sed/history/true/false/test - core-agnostic shell builtins
+│   ├── Debug/                                # Core-agnostic debug toolchain (see companion doc) - the SNES-
+│   │   │                                      #   facing commands (mem/regs/watch/...) registered into Shell/
 │   │   ├── IDebugTarget.cs
-│   │   ├── DebugCommandProcessor.cs
+│   │   ├── Commands/                           # mem/regs/watch/etc. - implement Shell.IShellCommand
 │   │   ├── WatchRegistry.cs
 │   │   └── DebugTools.cs                     # Older generic helpers (hexdump, tile-ASCII, etc.) plus
 │   │                                          #   RepeatCollapsingTrace<TKey> - collapses a repeating
@@ -381,7 +389,7 @@ Not shown: `Saves/*.srm`/`*.state`, `Logs/`, `bin/`, `obj/` — build artifacts 
 - Console frontend's `Program.cs` decoupled: `Main` used to be a single ~350-line method containing ROM loading, the timing loop, and all six hotkeys inline. Hotkey dispatch (F1-F5, F9, P) is now its own `RunHotkeys` method, separate from the actual per-scanline emulation loop.
 
 ### Debug toolchain
-Covered in full in the companion document. Summary: a core-agnostic `IDebugTarget` interface (memory spaces, registers, sprites, palettes, watchpoints, frame counter, disassembly), a `SnesDebugTarget` implementation, and a Unix-toolchain-style command layer (`DebugCommandProcessor`) reachable via the console's F4 prompt. Built specifically so it isn't SNES-only and can eventually back a real GUI debugger.
+Covered in full in the companion document. Summary: a core-agnostic `IDebugTarget` interface (memory spaces, registers, sprites, palettes, watchpoints, frame counter, disassembly), a `SnesDebugTarget` implementation, and a general-purpose bash-alike shell (`ShellInterpreter`, `EmuSen.Shell`) reachable via the console's F4 prompt - quoting, `$VAR`/`$(...)` expansion, pipes, `>`/`>>`/`<` redirection to real files, `;`/`&&`/`||` sequencing, if/for/while control flow, and up/down-arrow history recall, on top of the same `mem`/`regs`/`watch`/etc. debug commands it always had. Built specifically so it isn't SNES-only and can eventually back a real GUI debugger.
 
 ---
 

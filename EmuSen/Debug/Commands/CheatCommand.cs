@@ -14,7 +14,7 @@ namespace EmuSen.Debug.Commands
     //     the format (see LooksLikeGameGenieFormat).
     //   - ROM patches (Game Genie style, decoded by GameGenieCodec) -
     //     `rompatch`, or `add`/`gg` (see below).
-    public class CheatCommand : IDebugCommand
+    public class CheatCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "cheat";
         public string Usage => string.Join('\n', new[]
@@ -77,8 +77,9 @@ namespace EmuSen.Debug.Commands
             return false; // no separator at all - assume Pro Action Replay/Game Wizard
         }
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: cheat add|poke|gg|rompatch|list|enable|disable|remove|clear ...";
             string sub = parts[1].ToLowerInvariant();
             var cheats = target.Cheats;

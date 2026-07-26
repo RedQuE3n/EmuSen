@@ -23,7 +23,7 @@ namespace EmuSen.Debug.Commands
     //
     // Core-agnostic like CallersCommand/WritersCommand: works purely off
     // IDebugTarget.Disassemble.
-    public class ReadersCommand : IDebugCommand
+    public class ReadersCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "readers";
         public string Usage => string.Join('\n', new[]
@@ -36,8 +36,9 @@ namespace EmuSen.Debug.Commands
             "                                bank, $8000-$FFFF)",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: readers <addr> [<scanstart> <scanlen>]";
             int targetAddr = ParseHex(parts[1]);
 

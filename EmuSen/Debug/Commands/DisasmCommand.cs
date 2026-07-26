@@ -4,13 +4,14 @@ using static EmuSen.Debug.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Debug.Commands
 {
-    public class DisasmCommand : IDebugCommand
+    public class DisasmCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "disasm";
         public string Usage => "  disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 3) return "Usage: disasm <space> <addr> [<count>]";
             FindSpace(target, parts[1]); // validates the space name, or throws a helpful error
             int addr = ParseHex(parts[2]);

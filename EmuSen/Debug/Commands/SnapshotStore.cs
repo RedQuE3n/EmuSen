@@ -7,7 +7,7 @@ namespace EmuSen.Debug.Commands
     // command directly, since neither command "owns" saved snapshots
     // more than the other does (snapshot creates/lists/removes them,
     // diff only reads them). Both commands hold a reference to the same
-    // instance, constructed once by DebugCommandProcessor - same
+    // instance, constructed once by ShellInterpreter - same
     // approach WatchRegistry already uses to let multiple things share
     // one piece of state without either owning the other.
     public class SnapshotStore

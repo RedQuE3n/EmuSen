@@ -7,13 +7,14 @@ namespace EmuSen.Debug.Commands
     // `audiodump`/GetAudioSamples: mute every voice except one suspect,
     // dump audio, and hear (or measure) exactly what that voice produces
     // in isolation, without needing a separate solo-rendering pipeline.
-    public class MuteCommand : IDebugCommand
+    public class MuteCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "mute";
         public string Usage => "  mute <index> <on|off>         mute/unmute one audio channel - channel's own playback state still advances, it's just excluded from the mix";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 3) return Usage;
             if (!int.TryParse(parts[1], out int index)) return Usage;
             bool on = parts[2].Equals("on", System.StringComparison.OrdinalIgnoreCase);

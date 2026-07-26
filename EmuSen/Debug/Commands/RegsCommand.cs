@@ -3,13 +3,14 @@ using System.Text;
 
 namespace EmuSen.Debug.Commands
 {
-    public class RegsCommand : IDebugCommand
+    public class RegsCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "regs";
         public string Usage => "  regs                          CPU + video registers";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             var sb = new StringBuilder();
             sb.AppendLine($"{target.CoreName} CPU registers:");
             foreach (var r in target.GetCpuRegisters())

@@ -10,7 +10,7 @@ namespace EmuSen.Debug.Commands
     // easier to describe as "this file's bytes at this address" than as
     // a sequence of individual `write` commands, or for restoring a
     // `dump`ped range after poking around with `write`.
-    public class LoadCommand : IDebugCommand
+    public class LoadCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "load";
         public string Usage => string.Join('\n', new[]
@@ -18,8 +18,9 @@ namespace EmuSen.Debug.Commands
             "  load <space> <addr> <file>    write Logs/<CoreName>/<file>'s raw bytes into <space> starting at <addr>",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 4) return "Usage: load <space> <addr> <file>";
             IDebugMemorySpace space = FindSpace(target, parts[1]);
             int addr = ParseHex(parts[2]);

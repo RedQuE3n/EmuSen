@@ -1,13 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
+using EmuSen.Debug;
 
-namespace EmuSen.Debug.Commands
+namespace EmuSen.Shell.Commands
 {
     // A basic `sed`-style substitution filter: `s/pattern/replacement/[gi]`.
-    // Real value is as a pipeline stage - `regs | sed s/PC=/pc=/` - see
-    // ITextFilterCommand's own comment on why that interface exists.
-    // Also callable standalone (`sed <expr> <text...>`) for scripting
+    // Real value is as a pipeline stage - `regs | sed s/PC=/pc=/`. Also
+    // callable standalone (`sed <expr> <text...>`) for scripting
     // convenience when there's nothing worth piping from.
     //
     // Deliberately minimal, not a full sed clone: only the `s///` command
@@ -29,7 +30,7 @@ namespace EmuSen.Debug.Commands
     // not just the first match in the whole piped blob. Matters here
     // because most command output this actually gets used on (`regs`,
     // `snapshot list`, `channels`...) is multi-line.
-    public class SedCommand : IDebugCommand, ITextFilterCommand
+    public class SedCommand : IShellCommand
     {
         public string Name => "sed";
         public string Usage => string.Join('\n', new[]
@@ -39,18 +40,19 @@ namespace EmuSen.Debug.Commands
             "                                Real use is as a pipeline stage: <command> | sed s/pat/repl/",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public ShellResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
-            if (parts.Length < 2) return Usage;
-            if (parts.Length < 3) return "Nothing to operate on - pipe a command's output in, or pass literal text: sed <expr> <text...>";
-            string text = string.Join(' ', parts, 2, parts.Length - 2);
-            return Apply(parts[1], text);
-        }
+            if (args.Length < 2) return Usage;
 
-        public string Filter(IDebugTarget target, string input, string[] parts)
-        {
-            if (parts.Length < 2) return input;
-            return Apply(parts[1], input);
+            // Piped input (stdin != null, even if empty) always wins over
+            // any trailing literal-text arguments, matching real sed
+            // preferring stdin/a file over inline text.
+            string? text = stdin ?? (args.Length >= 3 ? string.Join(' ', args, 2, args.Length - 2) : null);
+            if (text == null)
+            {
+                return ShellResult.Fail("Nothing to operate on - pipe a command's output in, or pass literal text: sed <expr> <text...>");
+            }
+            return Apply(args[1], text);
         }
 
         private static string Apply(string expression, string text)
@@ -89,7 +91,7 @@ namespace EmuSen.Debug.Commands
         // would be unparseable.
         private static string[] SplitOnDelimiter(string s, char delim)
         {
-            var fields = new System.Collections.Generic.List<string>();
+            var fields = new List<string>();
             var current = new StringBuilder();
             for (int i = 0; i < s.Length; i++)
             {

@@ -10,7 +10,7 @@ Lives in its own project, `EmuSen.Hotaru/`, not inside `EmuSen.csproj` — that 
 
 ## 1. `Main` — startup sequence
 
-1. **ROM path resolution.** First CLI arg if given (`dotnet run -- /path/to/game.smc`), else a hardcoded default. Raylib has no built-in file picker, so a CLI arg is the standard way to make this pickable for a console build — the Avalonia frontend (`EmuSen.Mistress9`) has a real "Open ROM..." dialog (plus a "Browse ROMs..." list and a configurable default directory) instead, for anyone who prefers that.
+1. **ROM path resolution.** First CLI arg if given (`dotnet run -- /path/to/game.smc`); with **no** arg at all, `Main` calls `RunStandaloneShell()` and returns immediately, before any of the `VenusCore`/window/audio setup below ever runs — no ROM, no core, no Raylib window, just DianaOS on its own against a null `IDebugTarget` (§3, below). This replaced an earlier hardcoded fallback ROM path that only ever made sense on one dev machine. Raylib has no built-in file picker, so a CLI arg is the standard way to pick a ROM for a console build — the Avalonia frontend (`EmuSen.Mistress9`) has a real "Open ROM..." dialog (plus a "Browse ROMs..." list and a configurable default directory) instead, for anyone who prefers that.
 2. **`VenusCore` construction.** This is the actual emulation driver — CPU/PPU/APU/memory, the per-scanline timing loop, save states, SRAM — not `Main` itself. See `Cores/ICore.cs`: this used to be duplicated between `Program.cs` and `Common/EmulatorSession.cs` as two hand-maintained copies; now both call the same `RunFrame()`.
 3. **Log directory setup — deliberately placed here, not earlier.** `Logs/<CoreName>/console_<timestamp>/` needs `core.CoreName`, which only exists after `VenusCore` is constructed. This means the one console line printed before this point ("ROM Loading: ...") only reaches the terminal, not the file — an accepted, minor loss — and a ROM-not-found early exit never creates an empty log folder at all, since it returns before `VenusCore` (and therefore the log dir) exists.
 4. **Debug toolchain wiring.** `SnesDebugTarget` and `DebugCommandProcessor` are built once here, so both the F1 hotkey and the F4 interactive prompt go through the *same* underlying data rather than each reaching into `cpu`/`bus`/`ppu` independently.
@@ -46,7 +46,17 @@ Everything triggered by a keypress (or a bounded background trace) lives in one 
 
 ---
 
-## 3. Audio output — core-agnostic drain, per-frontend sink
+## 3. `RunStandaloneShell` — no ROM path, no ROM loaded
+
+Launching with zero CLI args no longer tries a ROM at all - `Main` calls this and returns before any of §1's `VenusCore`/log/window/audio setup runs. No core, no `SnesDebugTarget`, no Raylib window - just `DianaOSInterpreter.CreateDefault(null)` and a plain read-eval-print loop reusing `ConsoleLineReader` (the same Up/Down-history-aware line reader the F4 prompt uses) for input.
+
+Deliberately its own small method rather than calling `RunDebugPrompt` with a null core: that method's `'step'`/`'state save|load'` shortcuts and its whole "resume the game" framing (an empty line resumes; `'exit'`/`'quit'`/`'continue'`/`'c'` are all synonyms for the same thing) don't mean anything without a game running, and threading null-core checks through every one of those branches would make the actually-in-a-game path harder to follow for no real benefit. `RunStandaloneShell`'s own exit conditions are just `'exit'`/`'quit'` (case-insensitive) or EOF (`ConsoleLineReader.ReadLine` returning `null`, e.g. Ctrl-D) - an empty line does nothing here, matching a real shell's own behavior, not "resume" (there's nothing to resume).
+
+Every general-purpose DianaOS command (`echo`/`sed`/`grep`/`awk`/`ls`/`cd`/`source`/`if`/`for`/`while`/`test`/...) works exactly the same with no target as it would mid-game - only commands needing real hardware access (`mem`/`regs`/`watch`/...) report a clean `"No ROM loaded"` via their own `RequireTarget` guard (`EmuSen_Debugging_Tools_Reference_v5.md` §3.3) instead of a crash. In practice this makes a bare `dotnet run --project EmuSen.Hotaru` (no ROM argument) a quick way to poke around the shell itself - run a `source`d script, check `awk`/`sed` behavior, browse `man` pages - without needing a ROM on disk at all.
+
+---
+
+## 4. Audio output — core-agnostic drain, per-frontend sink
 
 The DSP mixing itself has been correct and complete since earlier work (`Venus_APU.md`) - `SDsp.GenerateSample` mixes all 8 voices plus echo/FIR and `AudioSettings.MasterVolume`, respecting `AudioSettings.AudioEnabled`/`Muted` (silence is still enqueued when either is off, not skipped - keeps buffer timing continuous), and enqueues interleaved 16-bit signed PCM stereo frames into `Spc700.Dsp.AudioBuffer` (a plain `Queue<short>`, capped at `AudioSettings.AudioBufferMaxSamples` - oldest samples drop once full) at `AudioSettings.SampleRate` (32kHz). What was missing for a long time was the connective piece: draining that queue into a real output device.
 

@@ -91,9 +91,18 @@ namespace EmuSen.Hotaru
                 ctx.Cancel = false;
             });
 
-            // ROM path resolution - see EmuSen_Frontend_Driver.md §1.
-            string defaultRomPath = "/home/red/Documents/Roms/SMW.smc"; // temporary location
-            string romPath = args.Length > 0 ? args[0] : defaultRomPath;
+            // ROM path resolution - see EmuSen_Frontend_Driver.md §1. No
+            // path at all means "just give me the shell" - drop straight
+            // into DianaOS with no ROM loaded (same interpreter/prompt
+            // the F4 hotkey uses, just with a null IDebugTarget) rather
+            // than falling back to some hardcoded default path that only
+            // ever made sense on one dev machine.
+            if (args.Length == 0)
+            {
+                RunStandaloneShell();
+                return;
+            }
+            string romPath = args[0];
 
             if (!File.Exists(romPath))
             {
@@ -328,6 +337,44 @@ namespace EmuSen.Hotaru
             fixed (short* p = data)
             {
                 Raylib_cs.Raylib.UpdateAudioStream(stream, p, data.Length / 2);
+            }
+        }
+
+        // No ROM path given at all - rather than a game-halted debug
+        // session (RunDebugPrompt below, which needs a real core for its
+        // own 'step'/'state save|load' shortcuts), this is DianaOS on
+        // its own: no core, no window, no audio device, just the shell
+        // against a null IDebugTarget. Every general-purpose command
+        // (echo/sed/grep/awk/ls/cd/source/if/for/while/...) works
+        // exactly as it would with a ROM loaded; anything needing real
+        // hardware access (mem/regs/watch/...) reports a clean "No ROM
+        // loaded" instead of erroring, the same graceful-degradation
+        // every command's own RequireTarget guard already provides.
+        // Deliberately its own small loop rather than reusing
+        // RunDebugPrompt with a null core - that method's 'step'/'state'
+        // shortcuts and its "resume the game" framing don't mean
+        // anything here, and threading null-core checks through it
+        // would make the actually-in-a-game case harder to follow for
+        // no real benefit.
+        private static void RunStandaloneShell()
+        {
+            DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null);
+            Console.WriteLine("--- DianaOS (no ROM loaded - type 'help', 'exit' to quit) ---");
+            while (true)
+            {
+                Console.Write(shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
+                string? line = ConsoleLineReader.ReadLine(shell.History.Entries);
+                if (line is null) break;
+                string trimmed = line.Trim();
+
+                if (!shell.IsAwaitingMoreInput
+                    && (trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)))
+                {
+                    break;
+                }
+
+                string output = shell.Execute(line);
+                if (output.Length > 0) Console.WriteLine(output);
             }
         }
 

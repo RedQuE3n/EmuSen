@@ -228,7 +228,7 @@ namespace EmuSen.Hotaru
                     {
                         Console.WriteLine($"\n[BREAKPOINT] Halted at ${core.HaltedAddress:X6}");
                         Console.WriteLine(debugTarget.GetSummaryText());
-                        RunDebugPrompt(core, debugTarget, debugCmd, statePath);
+                        if (RunDebugPrompt(core, debugTarget, debugCmd, statePath)) break; // 'shutdown' typed - fall through to the same clean shutdown as closing the window
                         continue;
                     }
 
@@ -251,7 +251,7 @@ namespace EmuSen.Hotaru
                         () => core.Renderer!.DrawDebugPanels(core.Bus!, core.TotalFrames));
 
                     // All debug/dev hotkeys - see EmuSen_Frontend_Driver.md §2.
-                    RunHotkeys(core, presenter, debugTarget, debugCmd, frameRecorder, statePath);
+                    if (RunHotkeys(core, presenter, debugTarget, debugCmd, frameRecorder, statePath)) break; // 'shutdown' typed at the F4 prompt
 
                     fpsFramesInWindow++;
                     runFrameTimeInWindow += runFrameElapsed;
@@ -359,7 +359,7 @@ namespace EmuSen.Hotaru
         private static void RunStandaloneShell()
         {
             DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null);
-            Console.WriteLine("--- DianaOS (no ROM loaded - type 'help', 'exit' to quit) ---");
+            Console.WriteLine("--- DianaOS (no ROM loaded - type 'help', 'shutdown' to quit) ---");
             while (true)
             {
                 Console.Write(shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
@@ -367,8 +367,15 @@ namespace EmuSen.Hotaru
                 if (line is null) break;
                 string trimmed = line.Trim();
 
+                // Same 'shutdown'/'quit' keywords RunDebugPrompt recognizes -
+                // see that method's own comment on why this is 'shutdown',
+                // not 'exit', and why both loops use the exact same word
+                // for "actually terminate the process" now. There's no
+                // 'resume' here (nothing to resume without a game running),
+                // so unlike RunDebugPrompt this loop only ever has the one
+                // way out besides EOF.
                 if (!shell.IsAwaitingMoreInput
-                    && (trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)))
+                    && (trimmed.Equals("shutdown", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)))
                 {
                     break;
                 }
@@ -384,45 +391,55 @@ namespace EmuSen.Hotaru
         // reasoning VenusCore's own header comment gives for why RunFrame()
         // itself isn't duplicated between frontends).
         //
-        // 'step'/'s' and 'continue'/'c' are handled here, not registered as
-        // DianaOSInterpreter commands, because they need to make this
-        // loop return control to the OUTER per-frame loop so it can
-        // actually call core.RunFrame() again - a DianaOSInterpreter
-        // command only ever returns a string to print, it has no way to
-        // affect control flow one level up. 'exit'/'quit' already worked
-        // this same way before breakpoints existed at all.
-        private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, string statePath)
+        // 'resume'/'continue'/'c' and 'shutdown'/'quit' are handled here,
+        // not registered as DianaOSInterpreter commands, because they need
+        // to make this loop return control to the OUTER per-frame loop so
+        // it can actually call core.RunFrame() again (to resume) or break
+        // its own while loop (to shut down) - a DianaOSInterpreter command
+        // only ever returns a string to print, it has no way to affect
+        // control flow one level up. Returns true if the caller should
+        // shut down the whole process instead of resuming the game -
+        // 'shutdown' is the SAME word RunStandaloneShell recognizes for
+        // the same "actually quit" meaning, so it means one consistent
+        // thing everywhere in this frontend, unlike the old 'exit' (which
+        // used to mean "resume the game" here but "quit the process" in
+        // RunStandaloneShell - the same word, two different actions,
+        // exactly the inconsistency 'resume'/'shutdown' now removes).
+        private static bool RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, string statePath)
         {
-            Console.WriteLine("--- DianaOS (type 'help', 'exit' to resume, 'step'/'s' to single-step) ---");
+            Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'shutdown' to quit, 'step'/'s' to single-step) ---");
             while (true)
             {
                 // Bash-style secondary prompt while a quote/"$(...)"/
                 // if-else-fi/for-do-done block is still open (see
                 // DianaOSInterpreter.IsAwaitingMoreInput's own comment) -
                 // and, just as importantly, every one of the single-word
-                // REPL shortcuts below (exit/quit/continue/c/step/s/
-                // "state ...") is suppressed while awaiting more input, so
-                // typing the shell's own `continue`/`break` keywords (or
-                // any other word that happens to collide with one of
-                // these) while composing a loop body reaches the shell
-                // instead of being hijacked as "resume emulation" - the
-                // same way a real bash prompt never mistakes a `continue`
-                // typed inside an unfinished `if` for the reader's own
-                // control commands.
+                // REPL shortcuts below (resume/continue/c/shutdown/quit/
+                // step/s/"state ...") is suppressed while awaiting more
+                // input, so typing the shell's own `continue`/`break`
+                // keywords (or any other word that happens to collide with
+                // one of these) while composing a loop body reaches the
+                // shell instead of being hijacked as "resume emulation" -
+                // the same way a real bash prompt never mistakes a
+                // `continue` typed inside an unfinished `if` for the
+                // reader's own control commands.
                 Console.Write(debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
                 string? line = ConsoleLineReader.ReadLine(debugCmd.History.Entries);
-                if (line is null) break;
+                if (line is null) return false;
                 string trimmed = line.Trim();
 
                 if (!debugCmd.IsAwaitingMoreInput)
                 {
                     if (trimmed.Length == 0
-                        || trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase)
-                        || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)
+                        || trimmed.Equals("resume", StringComparison.OrdinalIgnoreCase)
                         || trimmed.Equals("continue", StringComparison.OrdinalIgnoreCase)
                         || trimmed.Equals("c", StringComparison.OrdinalIgnoreCase))
                     {
                         break;
+                    }
+                    if (trimmed.Equals("shutdown", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
                     }
                 }
                 // Text-command equivalent of the F5/F9 hotkeys - added
@@ -485,10 +502,15 @@ namespace EmuSen.Hotaru
                 Console.WriteLine(debugCmd.Execute(trimmed));
             }
             Console.WriteLine("--- Resuming ---");
+            return false;
         }
 
-        // Every debug/dev hotkey - see EmuSen_Frontend_Driver.md §2.
-        private static void RunHotkeys(
+        // Every debug/dev hotkey - see EmuSen_Frontend_Driver.md §2. Returns
+        // true if the F4 prompt was used to request a shutdown (see
+        // RunDebugPrompt's own comment) - the caller (Main's own per-frame
+        // loop) breaks out and falls through to the same clean shutdown
+        // sequence closing the window normally takes.
+        private static bool RunHotkeys(
             VenusCore core, FramePresenter presenter, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, FrameRecorder frameRecorder,
             string statePath)
         {
@@ -560,7 +582,7 @@ namespace EmuSen.Hotaru
             // Interactive debug prompt - see EmuSen_Frontend_Driver.md §2.
             if (Raylib_cs.Raylib.IsKeyPressed(Raylib_cs.KeyboardKey.F4))
             {
-                RunDebugPrompt(core, debugTarget, debugCmd, statePath);
+                if (RunDebugPrompt(core, debugTarget, debugCmd, statePath)) return true; // 'shutdown' typed
             }
 
             // Timestamped screenshot - see EmuSen_Frontend_Driver.md §2.
@@ -622,6 +644,7 @@ namespace EmuSen.Hotaru
 
             // Periodic SRAM autosave now happens inside VenusCore.RunFrame()
             // itself (see that class) - no longer duplicated here.
+            return false;
         }
     }
 }

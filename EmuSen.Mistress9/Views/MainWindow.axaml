@@ -31,6 +31,8 @@
                 <MenuItem Header="_Controller Bindings..." Click="OnControllerBindingsClick" />
                 <MenuItem Header="_Debug Logging..." Click="OnDebugLoggingClick" />
                 <MenuItem Header="_Preferences..." Click="OnPreferencesClick" />
+                <Separator />
+                <MenuItem Header="_Shell Console..." Click="OnShellConsoleClick" />
             </MenuItem>
         </Menu>
 

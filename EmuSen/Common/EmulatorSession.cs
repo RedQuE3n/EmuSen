@@ -1,6 +1,8 @@
 using System;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Memory;
+using EmuSen.Cores.Nintendo.Venus.Processor;
+using EmuSen.Cores.Nintendo.Venus.Video;
 
 namespace EmuSen.Common
 {
@@ -42,6 +44,18 @@ namespace EmuSen.Common
         // header comment and ICore.cs's comment on why input isn't part
         // of the generic interface.
         public MemoryBus Bus => _core?.Bus ?? throw new InvalidOperationException("LoadRom() hasn't been called yet.");
+
+        // Same escape-hatch pattern as Bus above, added so a caller (the
+        // Avalonia frontend's shell console window) can construct a real
+        // SnesDebugTarget(Cpu, Bus, Renderer) - the exact constructor
+        // shape EmuSen.Hotaru/EmuSen.Pharaoh90 already use - without this
+        // class needing to grow its own IDebugTarget-building logic. Null
+        // before LoadRom() the same way Bus throws, rather than throwing
+        // itself, since "no target yet" is a normal condition a shell
+        // command dispatch already treats as such (see
+        // Shell/Commands/DebugCommandHelpers.RequireTarget).
+        public Cpu? Cpu => _core?.Cpu;
+        public Renderer? Renderer => _core?.Renderer;
 
         // Temporary profiling pass-through - see VenusCore's own comment on
         // these. Not promoted onto ICore for the same reason input/debug

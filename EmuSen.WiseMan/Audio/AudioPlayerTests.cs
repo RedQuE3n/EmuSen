@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using EmuSen.Common;
 using EmuSen.TestingStudio.Audio;
 using EmuSen.WiseMan.Fixtures;
@@ -20,19 +19,14 @@ namespace EmuSen.WiseMan.Audio
     // without a marshaling crash, which is what these checks are for.
     public class AudioPlayerTests
     {
-        // Environment.SetEnvironmentVariable does NOT reach the real libc
-        // environment on this runtime - verified directly: a subsequent
-        // native getenv("SDL_AUDIODRIVER") call still returned empty after
-        // calling it, which meant SDL kept trying ALSA (absent in this
-        // sandbox - "cannot find card '0'") and every test here failed
-        // with IsAvailable == false. setenv(3) via P/Invoke is the only
-        // thing that actually landed for a native SDL call to see.
-        [DllImport("libc")]
-        private static extern int setenv(string name, string value, int overwrite);
-
+        // NativeEnvironment.Set, not Environment.SetEnvironmentVariable -
+        // see that class's own comment for why (verified directly on this
+        // runtime: SDL kept trying ALSA, absent in this sandbox, instead
+        // of seeing the requested "dummy" driver at all) and for the
+        // per-platform reasoning behind how it's actually fixed.
         static AudioPlayerTests()
         {
-            setenv("SDL_AUDIODRIVER", "dummy", 1);
+            NativeEnvironment.Set("SDL_AUDIODRIVER", "dummy");
         }
 
         [Fact]

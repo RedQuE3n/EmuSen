@@ -22,6 +22,17 @@ namespace EmuSen.TestingStudio.Settings
         public string? RomDirectory { get; set; }
         public string SelectedCore { get; set; } = "SNES (Venus)";
 
+        // Off by default - forcing this on unconditionally would break any
+        // real two-controller game by feeding Controller 2 the same input
+        // as Controller 1 even when a genuine second pad is plugged in.
+        // Exists for games that read Controller 2 instead of Controller 1
+        // for classic-game-in-a-compilation reasons (Super Mario All-Stars'
+        // SMB1/2/3 being the known example - see
+        // Man pages/EmuSen_Games_Tested.md), toggled from
+        // InputSettingsWindow - the same workaround real hardware players
+        // and other emulators use, not a general input redesign.
+        public bool MirrorPlayer1ToPlayer2 { get; set; } = false;
+
         private static string ConfigPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "EmuSen", "appsettings.json");

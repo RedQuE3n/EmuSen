@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using Silk.NET.SDL;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.TestingStudio.Input;
+using EmuSen.TestingStudio.Settings;
 
 namespace EmuSen.TestingStudio.Views
 {
@@ -17,6 +18,7 @@ namespace EmuSen.TestingStudio.Views
         private readonly ControllerKeyMap _keyBindings;
         private readonly GamepadBindingMap _gamepadBindings;
         private readonly GamepadManager _gamepad;
+        private readonly AppSettings _appSettings;
 
         // At most one row listens for a key, and independently at most one
         // row listens for a pad button - a key rebind and a pad rebind could
@@ -35,17 +37,25 @@ namespace EmuSen.TestingStudio.Views
         // Parameterless constructor exists only so Avalonia's XAML tooling
         // (previewer, generated InitializeComponent) is happy - always use
         // the full constructor in real code (see MainWindow's menu handler).
-        public InputSettingsWindow() : this(new ControllerKeyMap(), new GamepadBindingMap(), null!) { }
+        public InputSettingsWindow() : this(new ControllerKeyMap(), new GamepadBindingMap(), null!, new AppSettings()) { }
 
-        public InputSettingsWindow(ControllerKeyMap keyBindings, GamepadBindingMap gamepadBindings, GamepadManager gamepad)
+        public InputSettingsWindow(ControllerKeyMap keyBindings, GamepadBindingMap gamepadBindings, GamepadManager gamepad, AppSettings appSettings)
         {
             InitializeComponent();
             _keyBindings = keyBindings;
             _gamepadBindings = gamepadBindings;
             _gamepad = gamepad;
+            _appSettings = appSettings;
             BuildRows();
+            MirrorPlayer1ToPlayer2CheckBox.IsChecked = _appSettings.MirrorPlayer1ToPlayer2;
             KeyDown += OnWindowKeyDown;
             Closing += (_, _) => _padPollTimer?.Stop();
+        }
+
+        private void OnMirrorPlayer1ToPlayer2Changed(object? sender, RoutedEventArgs e)
+        {
+            _appSettings.MirrorPlayer1ToPlayer2 = MirrorPlayer1ToPlayer2CheckBox.IsChecked == true;
+            _appSettings.Save();
         }
 
         private void BuildRows()

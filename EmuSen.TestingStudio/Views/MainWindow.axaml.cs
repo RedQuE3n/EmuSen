@@ -123,6 +123,7 @@ namespace EmuSen.TestingStudio.Views
             if (_session is not { IsRomLoaded: true }) return;
             bool held = _keyboardHeld[(int)button] || _gamepadHeld[(int)button];
             _session.Bus.Input.SetButton(button, held);
+            if (_appSettings.MirrorPlayer1ToPlayer2) _session.Bus.Input.SetButton(button, held, controller: 2);
         }
 
         private void PollGamepad()
@@ -180,7 +181,7 @@ namespace EmuSen.TestingStudio.Views
 
         private void OnControllerBindingsClick(object? sender, RoutedEventArgs e)
         {
-            new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad).Show(this);
+            new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings).Show(this);
         }
 
         private void OnPreferencesClick(object? sender, RoutedEventArgs e)

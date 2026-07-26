@@ -346,7 +346,7 @@ namespace EmuSen.RaylibFrontend
             while (true)
             {
                 Console.Write("debug> ");
-                string? line = Console.ReadLine();
+                string? line = ConsoleLineReader.ReadLine(debugCmd.History.Entries);
                 if (line is null) break;
                 string trimmed = line.Trim();
                 if (trimmed.Length == 0

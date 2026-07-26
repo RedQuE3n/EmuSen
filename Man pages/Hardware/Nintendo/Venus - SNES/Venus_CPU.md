@@ -80,3 +80,40 @@ Neither fetches or executes anything while active — `Step()` just returns idle
 The *execution* opcode table (`Cpu.OpcodeTable.cs`) got a dedicated verification pass against oxyron.de before being trusted — completed 236→256/256, verified against oxyron.de, caught one cross-reference typo (from the original project handoff). This is the table `Step()` actually dispatches through; treat it as verified.
 
 The *disassembly* table (`Snes65816Disassembler`, separate by design — see this page's intro) has **not** had the equivalent treatment, per its own header comment and `EmuSen_Debugging_Tools_Reference_v5.md` §3.7 — no way to build/run this project from wherever it's being edited to cross-check it the same way. Built carefully against the same standard 65816 opcode matrix, spot-checked against a couple of real captured instruction bytes, but short of a real verification pass. Treat disassembly output as a solid first draft, not a verified reference, until it gets one.
+
+---
+
+## 8. Dynamic cycle-penalty tracking — `Step()` returns real master clocks, not an opaque "CPU cycle" count
+
+Investigated chasing an SMW audio report ("coin chime sounds off, breaks in the title music") — see `Venus_APU.md` §2.9 for the full audio-side story. This section covers the CPU-side change: replacing a single flat "1 CPU cycle = 6 master clocks" assumption (see `Venus_Memory.md` §3.1's older text, and `Venus_APU.md` §2.8) with real, per-instruction, region-aware master-clock accounting.
+
+### 8.1 Why `inst.Cycles` alone was never going to be accurate
+
+`Cpu.OpcodeTable.cs`'s `Instruction.Cycles` is a fixed `byte` per opcode — a correct total *access count* (verified against oxyron.de, §7), but real 65816 hardware doesn't run every access at the same speed. Each of those accesses costs 6, 8, or 12 *master clocks* depending purely on which memory region it touches (Nocash's fullsnes "Memory Access Speed" table) — WRAM and most of the `$8000-FFFF` ROM window are 8 (SlowROM) or 6 (FastROM, region-dependent on the `$420D` MEMSEL bit), the old-style joypad registers (`$4000-41FF`) are a slow 12, and the `$2000-3FFF`/`$4200-5FFF` register windows are a fast 6 regardless of ROM speed. A single flat multiplier applied to the whole machine can only ever be correct for games that happen to match whichever one rate it assumes.
+
+### 8.2 `MemoryBus.GetAccessSpeedCycles(address)`
+
+New method implementing that region-speed table directly, including the `$420D` bit-0 FastROM enable (previously entirely unhandled — writes to it silently fell into the open-bus fallback, so this project always behaved as SlowROM regardless of what a game actually wrote there). `MemoryBus.FastRomEnabled` is the live state; banks `$40-$7D`/`$7E-$7F` are always slow, banks `$00-$3F`/`$80-$BF`'s `$8000-FFFF` window and all of `$C0-FF` depend on the bit, everything else is a fixed speed by offset range.
+
+### 8.3 `Cpu.Step()`'s master-clock conversion
+
+Per instruction: `bytesFetched` (however far `PC` actually advanced — opcode + operand bytes) is charged at the *opcode's own* region speed; any remaining cycles (`inst.Cycles + _addrModeExtraCycles - bytesFetched` — the instruction's real memory read/write plus internal/dummy cycles) are charged at the *addressing target's* region speed. This correctly splits the common case where a ROM-resident instruction reads or writes WRAM (or vice versa) at two different real speeds, rather than pretending the whole instruction ran at one rate.
+
+**Known, accepted approximation**: implied/register-only opcodes and branches have no separate memory target (`AddrImplied` returns 0, `AddrRelative*` returns a same-bank branch destination) — their "remainder" cycles get charged at whatever `GetAccessSpeedCycles(targetAddr)` says about that address instead of the opcode's own bank. For `AddrImplied` specifically this coincidentally lands on WRAM's speed (8), which happens to equal SlowROM's speed too — so this only actually diverges from correct for a handful of pure-register (no real stack/memory access) opcodes running from FastROM code, a narrow residual accepted rather than threading a same-bank flag through every implied-addressing opcode for it.
+
+### 8.4 New addressing-mode-level penalties (`_addrModeExtraCycles`)
+
+Two of the four commonly-documented dynamic 65816 cycle penalties are now modeled, reported by the addressing-mode methods themselves (in `Cpu.AddressModes.cs`) via a per-instruction side-channel field rather than a per-opcode table entry, since both are properties of the addressing mode, not the opcode using it:
+
+- **+1 for a nonzero Direct Page register low byte** (`ChargeDirectPagePenalty`) — every direct-page-relative addressing mode (`AddrDirectPage[X/Y]`, `AddrDirectIndirect[X/Y]`, `AddrDirectIndirectLong[Y]`) charges this when `(D & 0xFF) != 0`.
+- **+1 for indexed addressing crossing a page boundary** (`ChargePageCrossingPenalty`) — `AddrAbsoluteX`/`AddrAbsoluteY`/`AddrDirectIndirectY` (`(dp),Y`) charge this when adding the index carries into a different high byte. Applied unconditionally on a crossing; real hardware's actual rule is narrower (no penalty for a 16-bit index in some cases, and store instructions don't always take it) — accepted as a simplification rather than threading opcode-level read/write and index-width flags through every addressing mode for it.
+
+**Not implemented**: the third commonly-documented penalty, +1 for a 16-bit (`M`/`X`=0) memory operand on non-immediate addressing modes, is already captured automatically for *immediate* addressing (`AddrImmediateM`/`AddrImmediateX` fetch an extra byte when 16-bit, which `bytesFetched` picks up for free) but not for memory-operand forms (e.g. `LDA $1234` reading 2 bytes instead of 1 when `M=0` doesn't change the opcode's fixed 3-byte length). Itemizing which of the ALU/load/store/compare opcode family needs this, per operand width (`M` for accumulator-sized ops, `X` for index-sized ones), across every non-immediate addressing mode they support, is a real remaining gap — deferred as a larger, mechanical per-opcode tagging exercise rather than folded into this pass.
+
+### 8.5 Downstream unit changes
+
+`VenusCore.CyclesPerScanline` changed from `227` (a CPU-cycle-unit figure back-derived assuming FastROM's 6-master-clock rate uniformly) to `1364` (real master clocks per scanline: 341 dots × 4). The CPU→SPC700 pacing conversion (`Venus_APU.md` §1) dropped its `*6` factor accordingly, since `Cpu.Step()`'s return value is already real master clocks now. `MemoryBus`'s H-blank approximation (`Venus_Memory.md` §1.5) and `Dma.PendingCpuCycles`'s drain-side conversion (`Venus_Memory.md` §3.1) were rescaled to match — see those sections.
+
+### 8.6 Validation
+
+Re-run against the SingleStepTests/65816 ground-truth suite (§7) after this change — no regressions (state-only checks, since that suite's vectors don't assert cycle counts, only resulting registers/memory). This change's actual timing effect was cross-checked separately by re-measuring SPC700 audio pacing (`Venus_APU.md` §2.9): the per-frame master-clock budget turned out to already be correctly calibrated either way (see that section for why), so this is a genuine general CPU/PPU timing accuracy improvement, but it did **not** turn out to be the fix for the audio symptom that motivated it.

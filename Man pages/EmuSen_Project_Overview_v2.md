@@ -326,13 +326,16 @@ Not shown: `Saves/*.srm`/`*.state`, `Logs/`, `bin/`, `obj/` — build artifacts 
 ### CPU (65816)
 - Full 256/256 opcode table, verified against oxyron.de during initial development (one cross-reference typo caught and fixed).
 - WAI/STP real halt states.
+- **Real dynamic cycle-penalty tracking**: `Cpu.Step()` returns actual elapsed master clocks per instruction (region-aware, 6/8/12 master clocks by SNES memory region, tracking the `$420D` FastROM/SlowROM bit), not a flat per-opcode count scaled by one assumed rate for the whole machine. Includes the direct-page-low-byte-nonzero and indexed-page-crossing dynamic penalties. See `Venus_CPU.md` §8.
 - **Known gap:** decimal (BCD) mode — SED/CLD correctly toggle the D flag, but ADC/SBC never check it. Rare in practice (few SNES games use decimal mode) but not implemented.
+- **Known gap:** the 16-bit M/X-width dynamic cycle penalty for non-immediate memory-operand addressing modes isn't itemized per-opcode yet (immediate addressing already gets this for free) — see `Venus_CPU.md` §8.4.
 - `LastInstructionPC`/`LastInstructionPB` — the pre-execution PC, exposed for debug tooling (distinct from the live `PC`/`PB`, which advance almost immediately after fetch — see the debugging tools reference, §2, for the bug this fixed).
 
 ### APU (SPC700 + S-DSP)
 - Full 256/256 SPC700 opcode table.
-- Real S-DSP audio synthesis: BRR decoding, pitch resampling (nearest-neighbor, not Gaussian — documented simplification), full ADSR/GAIN envelopes, 8-voice mixing.
+- Real S-DSP audio synthesis: BRR decoding, real 4-tap Gaussian pitch resampling (confirmed byte-for-byte identical to the MesenCE reference's table/formula this session — see `Venus_APU.md` §2.9/§4.1), full ADSR/GAIN envelopes, 8-voice mixing.
 - **Known gap:** synthesized samples are never sent to an actual audio output device. The DSP is "correct but silent."
+- **Open issue:** a real, reproducible ~7.5-8.7% SPC700 audio-sample-generation-rate undershoot vs. the expected NTSC rate, root cause not yet found — survived a from-scratch rewrite of the 65816-side cycle accounting untouched, so it most likely lives in the SPC700/S-DSP's own cycle-to-sample pipeline. See `Venus_APU.md` §2.9 and §6 below.
 
 ### PPU — background rendering
 - **All 7 BG modes implemented**, including correct per-mode bit depth (2/4/8bpp as appropriate) and per-mode compositing/priority order — verified this session against the SNESdev wiki's Backgrounds page priority table for every mode (0 through 6; Mode 7 has its own separate compositing path). Two real bugs found and fixed in this pass: Mode 0's BG4 was missing its priority-bit split entirely, and Modes 2-5 were incorrectly reusing Mode 0/1's compositing order instead of their own (genuinely different) interleave pattern.
@@ -386,7 +389,6 @@ Covered in full in the companion document. Summary: a core-agnostic `IDebugTarge
 
 - No per-dot H-position timing — scanline granularity throughout (affects OPHCT and a few edge cases).
 - Offset-per-tile's exact sub-tile alignment (see above).
-- BRR pitch resampling is nearest-neighbor, not Gaussian.
 - Mosaic/mode-change/HDMA-timing all operate at scanline granularity, with documented per-feature latching behavior where hardware specifically requires it (mosaic's starting-scanline latch, the immediate-NMI-on-vblank-rising-edge case, etc.) rather than true per-cycle accuracy.
 - Frame timer in the Avalonia frontend is a fixed 60fps UI timer, not accumulator-driven — will drift over long sessions.
 
@@ -396,6 +398,7 @@ Covered in full in the companion document. Summary: a core-agnostic `IDebugTarge
 
 - **Coins and Yoshi not rendering in SMW.** Long investigation this session — ruled out: sprite/tile rendering logic (verified correct against docs and against the exact tile+palette data dumped from a real session), the general DMA transfer mechanism (proven correct via adjacent, working animated-tile transfers), and the DMA source-address computation itself (confirmed varying correctly in the most recent session, not stuck). Currently narrowed to: **whatever's supposed to write real graphics data into the WRAM staging buffer before the DMA copies it out doesn't seem to be doing so** — a targeted watch (`watch add WRAM 8000 1800` via F4) is in place to confirm this directly. Not yet resolved.
 - **A stuck HDMA window on the title screen** (freezes at a single pixel) — isolated but never root-caused; windowing was previously disabled globally to work around it, then re-enabled once judged lower-risk than leaving every window-based effect broken everywhere. Worth a dedicated pass now that windowing is back on.
+- **SPC700 audio pacing runs ~7.5-8.7% slower than real elapsed time** (fewer samples generated per emulated frame than the NTSC frame rate implies), reported as "coin chime sounds off, breaks in the title music" in SMW. A from-scratch rewrite of the 65816's own cycle accounting (real per-instruction, per-region master-clock tracking instead of a flat assumed rate — `Venus_CPU.md` §8) produced **no change** to this measurement, which rules out the CPU→SPC700 budget hand-off as the cause and points at the SPC700/S-DSP's own cycle-to-sample pipeline instead. One real, unrelated bug was found and fixed along the way (SLEEP/STOP wasn't ticking the DSP - `Venus_APU.md` §2.9) but confirmed not to explain SMW's specific gap. Next angle: audit the SPC700's own per-opcode cycle table and `SDsp.Tick`'s cycles-per-sample conversion the same way the 65816's was just audited, and a direct side-by-side trace against MesenCE's `Spc.cpp` master-clock-driven pacing loop rather than comparing formulas on paper. See `Venus_APU.md` §2.9 for the full writeup, including what's already been ruled out (Gaussian interpolation, ADSR envelope math, and a couple of self-inflicted measurement artifacts along the way).
 
 ---
 
@@ -411,6 +414,7 @@ Roughly in order of "cheap and likely valuable" to "bigger, deliberately-deferre
 6. **The rest of the `MemoryBus` decoupling** — the multiply/divide unit and the debug-toolchain plumbing are out (§2, §4); H/V-IRQ/NMI/vblank state is not. On closer inspection this cluster turned out more entangled than it first looked (the same `_vblankFlag` feeds NMI edge-detection *and* the RDNMI/HVBJOY register reads, and $4200 sets both NMI and IRQ enable in one write) — forcing a clean split risked adding more cross-object coupling than it removed, in genuinely delicate, already-hard-won timing logic. Worth revisiting deliberately, not as a quick follow-on.
 7. **The `Renderer`/Raylib split** — `Renderer` still mixes pure pixel computation with Raylib window/texture ownership even in headless mode. Real, but risky enough (core rendering code, many delicate accuracy fixes riding on it) to treat as its own dedicated future pass rather than bundling into a quick cleanup.
 8. **Audio output** — connect the already-correct S-DSP synthesis to an actual playback device.
+8a. **Find the real cause of the ~7.5-8.7% SPC700 audio-pacing undershoot** (§6) — the 65816-side cycle accounting is now believed correct (just rewritten and re-measured with no effect on this symptom), so the remaining suspects are the SPC700's own per-opcode cycle table and `SDsp.Tick`'s cycle-to-sample conversion. Worth doing before audio output (item 8) is wired up, since driving a real audio device with audio that's already running slow just makes the slowness audible instead of fixing it.
 9. **Decimal (BCD) mode** on the 65816 (ADC/SBC currently ignore the D flag).
 10. **The stuck HDMA title-screen window bug** — dedicated investigation, now that windowing is confirmed safe to leave on globally.
 11. ~~Breakpoints / single-step / pause-resume~~ — done (`VenusCore.RunFrame()` mid-frame halt/resume, `BreakpointRegistry`, F4 prompt `step`/`continue`). See `EmuSen_Debugging_Tools_Reference_v5.md` §3.1/§3.3. Not yet wired into `EmuSen.HeadlessDebug` or the Avalonia GUI (item 12 below).

@@ -108,6 +108,8 @@ A small, composable command layer over `IDebugTarget` — modeled on Unix toolch
 | `regs` | CPU + video registers, plus an APU section when a target has one (§3.2) |
 | `sprites` | Active sprite/OBJ table |
 | `pal [<index>]` | One palette, or all 16 if omitted |
+| `channels` | Audio channel/voice table (active, envelope level 0-100, muted, core-specific detail) - core-agnostic (`IDebugTarget.GetAudioChannels()`), SNES reports its 8 S-DSP voices - see `Venus_APU.md` §3.5 |
+| `mute <index> <on|off>` | Mute/unmute one audio channel for isolation testing - its own playback state still advances, just excluded from the final mix - see `Venus_APU.md` §3.5 |
 | `tile <space> <addr> <bpp>` | ASCII-decode one 8x8 tile from any space (bpp 2, 4, or 8) |
 | `tilemap <space> <addr> <cols> <rows>` | Decode a grid of raw tilemap entries as text (tile index/palette/priority/flip on SNES) — core-agnostic at the command level, see §3.2's `TilemapEntryStride`/`DecodeTilemapEntry` note |
 | `disasm <space> <addr> [<count>]` | Disassemble `<count>` instructions (default 10) — see §3.7 |

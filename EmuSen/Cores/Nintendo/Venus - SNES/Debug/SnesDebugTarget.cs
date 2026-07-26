@@ -322,6 +322,32 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new DebugRegisterValue("OutPort1", spc.ReadPort(1), 8),
                 new DebugRegisterValue("OutPort2", spc.ReadPort(2), 8),
                 new DebugRegisterValue("OutPort3", spc.ReadPort(3), 8),
+
+                // The S-DSP's own global (non-per-voice) register file -
+                // previously entirely invisible to the debug toolchain
+                // (this method only ever exposed the SPC700 CPU's own
+                // regs/ports, never anything from SDsp itself). Added
+                // diagnosing a "part of the music is missing" report -
+                // NON/PMON specifically are documented as unimplemented
+                // (Venus_APU.md §4.1), so seeing whether a game actually
+                // sets them non-zero is the fastest way to confirm or
+                // rule that out as the cause, instead of guessing from
+                // audio output alone.
+                new DebugRegisterValue("DSP_MVOLL", spc.Dsp.PeekRegister(0x0C), 8),
+                new DebugRegisterValue("DSP_MVOLR", spc.Dsp.PeekRegister(0x1C), 8),
+                new DebugRegisterValue("DSP_EVOLL", spc.Dsp.PeekRegister(0x2C), 8),
+                new DebugRegisterValue("DSP_EVOLR", spc.Dsp.PeekRegister(0x3C), 8),
+                new DebugRegisterValue("DSP_EFB", spc.Dsp.PeekRegister(0x0D), 8),
+                new DebugRegisterValue("DSP_KON", spc.Dsp.PeekRegister(0x4C), 8),
+                new DebugRegisterValue("DSP_KOFF", spc.Dsp.PeekRegister(0x5C), 8),
+                new DebugRegisterValue("DSP_ENDX", spc.Dsp.PeekRegister(0x7C), 8),
+                new DebugRegisterValue("DSP_EON", spc.Dsp.PeekRegister(0x4D), 8),
+                new DebugRegisterValue("DSP_NON", spc.Dsp.PeekRegister(0x3D), 8),
+                new DebugRegisterValue("DSP_PMON", spc.Dsp.PeekRegister(0x2D), 8),
+                new DebugRegisterValue("DSP_DIR", spc.Dsp.PeekRegister(0x5D), 8),
+                new DebugRegisterValue("DSP_FLG", spc.Dsp.PeekRegister(0x6C), 8),
+                new DebugRegisterValue("DSP_ESA", spc.Dsp.PeekRegister(0x6D), 8),
+                new DebugRegisterValue("DSP_EDL", spc.Dsp.PeekRegister(0x7D), 8),
             };
         }
 
@@ -441,5 +467,27 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             short[] samples = _bus.Spc700.Dsp.AudioBuffer.ToArray();
             return (samples, EmuSen.Audio.AudioSettings.SampleRate);
         }
+
+        // Reshapes SDsp's own per-voice debug snapshot into the generic
+        // DebugAudioChannelInfo shape - see that struct's and
+        // IDebugTarget.GetAudioChannels's own comments for why. Level is
+        // the voice's 0-2047 envelope value rescaled to 0-100 so a generic
+        // viewer doesn't need to know that range is SNES-specific.
+        public IReadOnlyList<DebugAudioChannelInfo> GetAudioChannels()
+        {
+            var dsp = _bus.Spc700.Dsp;
+            var result = new List<DebugAudioChannelInfo>(8);
+            for (int i = 0; i < 8; i++)
+            {
+                var v = dsp.GetVoiceDebugInfo(i);
+                int level = (int)Math.Round(v.Envelope / 2047.0 * 100.0);
+                string lastKeyOn = v.LastKeyOnSample < 0 ? "never" : $"{(dsp.SampleCounter - v.LastKeyOnSample)} samples ago";
+                string info = $"Srcn=0x{v.Srcn:X2} Pitch=0x{v.Pitch:X4} VolL={(sbyte)v.VolL} VolR={(sbyte)v.VolR} Stage={v.Stage} ADSR1=0x{v.Adsr1:X2} ADSR2=0x{v.Adsr2:X2} GAIN=0x{v.Gain:X2} Ended={v.Ended} KeyOns={v.KeyOnCount} LastKeyOn={lastKeyOn}";
+                result.Add(new DebugAudioChannelInfo(i, $"Voice{i}", v.Active, level, v.Muted, info));
+            }
+            return result;
+        }
+
+        public void SetChannelMuted(int index, bool muted) => _bus.Spc700.Dsp.SetVoiceMuted(index, muted);
     }
 }

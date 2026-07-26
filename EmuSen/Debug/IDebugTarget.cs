@@ -102,6 +102,38 @@ namespace EmuSen.Debug
         }
     }
 
+    // One audio channel/voice's current debug-relevant state, generic
+    // enough to cover very different sound hardware - a SNES core reports
+    // its 8 S-DSP voices through this shape, an eventual NES core would
+    // report its 5 APU channels (2 pulse, triangle, noise, DMC) the same
+    // way, even though the underlying synthesis (BRR sample playback vs.
+    // simple waveform generators) has nothing in common. `Level` is
+    // deliberately a plain 0-100 scale rather than the SNES's native
+    // 0-2047 envelope range, so a generic channel-viewer UI doesn't need
+    // to know any one core's internal units; `Info` is a free-text escape
+    // hatch for whatever's too core-specific to model generically (ADSR
+    // stage, current sample source, pitch) - same "structured where cheap,
+    // free-text where not" split GetSummaryText() already uses.
+    public readonly struct DebugAudioChannelInfo
+    {
+        public int Index { get; }
+        public string Name { get; }
+        public bool Active { get; }
+        public int Level { get; }
+        public bool Muted { get; }
+        public string Info { get; }
+
+        public DebugAudioChannelInfo(int index, string name, bool active, int level, bool muted, string info)
+        {
+            Index = index;
+            Name = name;
+            Active = active;
+            Level = level;
+            Muted = muted;
+            Info = info;
+        }
+    }
+
     // One disassembled instruction, already fully formatted - a generic
     // disassembly viewer just prints Address/Bytes/Mnemonic/OperandText for
     // each entry without needing to know anything about the source CPU's
@@ -269,5 +301,27 @@ namespace EmuSen.Debug
         // about the source sound co-processor. A core with no audio output
         // modeled yet can return an empty array.
         (short[] Samples, int SampleRate) GetAudioSamples();
+
+        // Live per-channel/voice state - see DebugAudioChannelInfo's own
+        // comment for why this is modeled generically. Built diagnosing a
+        // "part of the music is missing" report, where the existing
+        // toolchain could only inspect the final mixed audio output
+        // (GetAudioSamples) or a KeyOn event as it happened (console-only
+        // DspKeyOnLogging) - neither answers "is voice N currently active,
+        // and what's its envelope actually doing right now." A core with
+        // no distinct channel/voice concept can return an empty list.
+        IReadOnlyList<DebugAudioChannelInfo> GetAudioChannels();
+
+        // Mutes/unmutes one channel/voice for isolation testing - the
+        // channel's own playback/envelope state keeps advancing normally
+        // (matching real hardware muting semantics, same reasoning as
+        // AudioSettings.Muted's "still advance playback state" behavior -
+        // Venus_APU.md §3.4), it's just excluded from the final mixed
+        // output. Lets a suspected-broken instrument be isolated (mute
+        // everything else, then GetAudioSamples/`audiodump`) or ruled out
+        // (mute just it, confirm the rest of the mix is unaffected)
+        // without needing a separate solo-rendering pipeline. A core with
+        // no such channel can no-op.
+        void SetChannelMuted(int index, bool muted);
     }
 }

@@ -72,13 +72,26 @@ namespace EmuSen.Cores.Nintendo.Venus.Controllers
         // $4016 write: bit 0 is the strobe line. While held high, the shift
         // registers continuously re-latch the live state; the read sequence only
         // advances once strobe goes low.
+        //
+        // Seeds from _liveJoy1/_liveJoy2, not _latchedJoy1/_latchedJoy2 - a
+        // real bug found investigating why SMAS's classic NES-style games
+        // (manual $4016/4017 polling) don't respond to input while SMW
+        // (auto-joypad) does: VenusCore.RunFrame() fires NMI before calling
+        // LatchAutoJoypad() for the frame (matches real hardware's own
+        // ordering), so a game that manually polls $4016 during its own NMI
+        // handler - the standard place to do it - would seed the shift
+        // register from LAST frame's auto-joypad latch, not this frame's
+        // live state, on every single frame consistently. ReadJoy1Serial()
+        // below already correctly reads _liveJoy1 while strobe is high (per
+        // this same comment's own description) - this just brings the
+        // strobe-high snapshot in line with that.
         public void WriteStrobe(byte data)
         {
             _strobe = (data & 0x01) != 0;
             if (_strobe)
             {
-                _shiftJoy1 = _latchedJoy1;
-                _shiftJoy2 = _latchedJoy2;
+                _shiftJoy1 = _liveJoy1;
+                _shiftJoy2 = _liveJoy2;
             }
         }
 

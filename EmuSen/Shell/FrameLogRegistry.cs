@@ -47,7 +47,7 @@ namespace EmuSen.Shell
     // WatchRegistry's GetEvents already provides.
     //
     // Core-agnostic on purpose, same as WatchRegistry - lives under
-    // Debug/, not Cores/Nintendo/Venus - SNES/. A future core's IDebugTarget would
+    // Shell/, not Cores/Nintendo/Venus - SNES/. A future core's IDebugTarget would
     // own its own instance and feed it from its own per-frame boundary,
     // whatever that core's equivalent of MemoryBus.FrameObserver is.
     public class FrameLogRegistry

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using static EmuSen.Shell.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Shell.Commands
@@ -53,48 +52,17 @@ namespace EmuSen.Shell.Commands
             target = EmuSen.Shell.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: writers <addr> [<scanstart> <scanlen>]";
             int targetAddr = ParseHex(parts[1]);
+            var (scanStart, scanLen) = DefaultScanRange(parts, 2, targetAddr);
 
-            int scanStart, scanLen;
-            if (parts.Length >= 4)
+            return ScanForStaticReferences(target, scanStart, scanLen, targetAddr, "STA/STX/STY/STZ", (opcode, instr) => opcode switch
             {
-                scanStart = ParseHex(parts[2]);
-                scanLen = ParseHex(parts[3]);
-            }
-            else
-            {
-                scanStart = (targetAddr & 0xFF0000) | 0x8000;
-                scanLen = 0x8000;
-            }
-
-            var instrs = target.Disassemble("CpuBus", scanStart, scanLen);
-
-            var matches = new List<string>();
-            foreach (var instr in instrs)
-            {
-                if (instr.Address >= scanStart + scanLen) break;
-                byte opcode = instr.Bytes[0];
-
-                int? writeTarget = opcode switch
-                {
-                    0x8D => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // STA absolute
-                    0x8F => instr.Bytes[1] | (instr.Bytes[2] << 8) | (instr.Bytes[3] << 16), // STA absolute long
-                    0x8E => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // STX absolute
-                    0x8C => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // STY absolute
-                    0x9C => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // STZ absolute
-                    _ => null
-                };
-
-                if (writeTarget.HasValue && writeTarget.Value == targetAddr)
-                {
-                    matches.Add($"  ${instr.Address:X6}: {instr.Mnemonic} {instr.OperandText}");
-                }
-            }
-
-            if (matches.Count == 0)
-            {
-                return $"No STA/STX/STY/STZ found targeting ${targetAddr:X6} in ${scanStart:X6}-${scanStart + scanLen - 1:X6} (absolute/absolute-long only).";
-            }
-            return string.Join('\n', matches);
+                0x8D => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // STA absolute
+                0x8F => instr.Bytes[1] | (instr.Bytes[2] << 8) | (instr.Bytes[3] << 16), // STA absolute long
+                0x8E => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // STX absolute
+                0x8C => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // STY absolute
+                0x9C => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8)), // STZ absolute
+                _ => null
+            }, notFoundSuffix: " (absolute/absolute-long only)");
         }
     }
 }

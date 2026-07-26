@@ -15,6 +15,7 @@ using EmuSen.Debug;
 //
 // Usage:
 //   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--tap2 frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...
+//   dotnet run -- <rom> <maxframes> --commands path [other flags above except --tap/--tap2/--screenshot/--script]
 //
 // --watch registers an extra watch before the run starts (kind is
 // write/read/both, default write) - space/addr/len match `watch add`'s own
@@ -37,6 +38,28 @@ using EmuSen.Debug;
 // after the given frame runs - the only way to actually see what a
 // headless run reached, short of guessing from RAM addresses and sprite
 // dumps alone.
+//
+// --commands is a fundamentally different mode from all of the above:
+// instead of pre-declaring every tap/screenshot by frame number before the
+// run starts (fine when the exact timing is already known, unworkable for
+// open-ended exploration), it reads an ordered script and executes each
+// line as it's reached, so frame-stepping, input, screenshots, and debug
+// commands can interleave freely in one process. Investigating Super Mario
+// All-Stars' Select Game menu needed a separate full relaunch (reboot +
+// replay the whole boot sequence) for every single button guess - this
+// collapses an entire investigation into one script, one process, one
+// `--out` log. Lines:
+//   frames <n>              - advance <n> frames, applying whatever's currently held
+//   tap[2] <button> [dur]   - press (tap2 = controller 2) for <dur> frames (default 4), release, same as --tap/--tap2 but inline
+//   hold/release <button> [controller]  - set a button's held state without advancing any frames (controller defaults to 1)
+//   screenshot <path>       - capture the current frame right now, not tied to a frame number
+//   anything else           - passed straight to DebugCommandProcessor.Execute, same as --script
+// <frames> is still required and still means what it always did in every
+// other mode - here it becomes a hard safety cap (a script's `frames`
+// requests refuse to advance past it) so a typo can't hang the process
+// indefinitely. --tap/--tap2/--screenshot/--script are ignored when
+// --commands is given; everything else (--watch, --flag, --loadstate,
+// --savestate, --verbose, --cpulog, --out) still applies normally.
 class Program
 {
     static int Main(string[] args)
@@ -61,6 +84,7 @@ class Program
 
         var extraWatches = new List<string>();
         string? scriptPath = null;
+        string? commandsPath = null;
         string? outPath = null;
         string? loadStatePath = null;
         string? saveStatePath = null;
@@ -107,6 +131,7 @@ class Program
             }
             else if (args[i] == "--watch" && i + 1 < args.Length) extraWatches.Add(args[++i]);
             else if (args[i] == "--script" && i + 1 < args.Length) scriptPath = args[++i];
+            else if (args[i] == "--commands" && i + 1 < args.Length) commandsPath = args[++i];
             else if (args[i] == "--out" && i + 1 < args.Length) outPath = args[++i];
             else if (args[i] == "--verbose") verbose = true;
             else if (args[i] == "--loadstate" && i + 1 < args.Length) loadStatePath = args[++i];
@@ -230,8 +255,118 @@ class Program
             Emit(debugCmd.Execute(cmd));
         }
 
-        Emit($"[RUN] Executing {frameCount} frames...");
         const int progressEvery = 600; // ~10s of real 60fps gameplay
+
+        // --commands takes over the whole run - see this file's own header
+        // comment for the script syntax and why this exists (collapsing an
+        // entire multi-guess investigation into one process/one log
+        // instead of a full relaunch per experiment).
+        if (commandsPath != null)
+        {
+            if (!File.Exists(commandsPath))
+            {
+                Emit($"[ERROR] Commands file not found: {commandsPath}");
+                return 1;
+            }
+
+            long currentFrame = 0;
+            var held = new Dictionary<(EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton Button, int Controller), bool>();
+
+            void ApplyHeld()
+            {
+                foreach (var kv in held) core.Bus!.Input.SetButton(kv.Key.Button, kv.Value, kv.Key.Controller);
+            }
+
+            void RunFrames(long count)
+            {
+                for (long i = 0; i < count; i++)
+                {
+                    if (currentFrame >= frameCount)
+                    {
+                        Emit($"[WARN] Hit the {frameCount}-frame safety cap - ignoring the rest of this 'frames' request.");
+                        return;
+                    }
+                    ApplyHeld();
+                    if (cpuLogStart >= 0)
+                    {
+                        bool inWindow = currentFrame >= cpuLogStart && currentFrame < cpuLogEnd;
+                        EmuSen.Debug.DebugSettings.MasterLoggingEnabled = inWindow || verbose;
+                        EmuSen.Debug.DebugSettings.CpuVerboseLogging = inWindow;
+                    }
+                    core.RunFrame();
+                    currentFrame++;
+                    if (currentFrame % progressEvery == 0) Emit($"[frame {currentFrame}/{frameCount}]");
+                }
+            }
+
+            Emit($"[COMMANDS] Running {commandsPath} (safety cap {frameCount} frames)...");
+            Emit("");
+            Emit("=== Command output ===");
+
+            foreach (string rawLine in File.ReadAllLines(commandsPath))
+            {
+                string cmdLine = rawLine.Trim();
+                if (cmdLine.Length == 0 || cmdLine.StartsWith('#')) continue;
+
+                string[] parts = cmdLine.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                string verb = parts[0].ToLowerInvariant();
+
+                if (verb == "frames" && parts.Length >= 2)
+                {
+                    Emit($"> {cmdLine}");
+                    RunFrames(long.Parse(parts[1]));
+                }
+                else if ((verb == "tap" || verb == "tap2") && parts.Length >= 2)
+                {
+                    Emit($"> {cmdLine}");
+                    int controller = verb == "tap2" ? 2 : 1;
+                    var button = Enum.Parse<EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton>(parts[1], ignoreCase: true);
+                    long duration = parts.Length >= 3 ? long.Parse(parts[2]) : 4;
+                    held[(button, controller)] = true;
+                    RunFrames(duration);
+                    held[(button, controller)] = false;
+                    ApplyHeld();
+                }
+                else if ((verb == "hold" || verb == "release") && parts.Length >= 2)
+                {
+                    Emit($"> {cmdLine}");
+                    var button = Enum.Parse<EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton>(parts[1], ignoreCase: true);
+                    int controller = parts.Length >= 3 ? int.Parse(parts[2]) : 1;
+                    held[(button, controller)] = verb == "hold";
+                    ApplyHeld();
+                }
+                else if (verb == "screenshot" && parts.Length >= 2)
+                {
+                    WriteBmp(parts[1], core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight);
+                    Emit($"[SCREENSHOT] Frame {currentFrame} -> {parts[1]}");
+                }
+                else
+                {
+                    Emit($"> {cmdLine}");
+                    Emit(debugCmd.Execute(cmdLine));
+                }
+            }
+
+            core.Cpu?.FlushVerboseTrace();
+            core.Spc700?.FlushVerboseTrace();
+            Emit($"[RUN] Done, {core.TotalFrames} total frames executed.");
+
+            if (saveStatePath != null)
+            {
+                core.SaveState(saveStatePath);
+                Emit($"[STATE] Saved: {saveStatePath}");
+            }
+
+            if (outPath != null)
+            {
+                File.WriteAllLines(outPath, log);
+                Console.WriteLine($"[OUT] Wrote log to {outPath}");
+            }
+
+            return 0;
+        }
+
+        Emit($"[RUN] Executing {frameCount} frames...");
         for (long frame = 0; frame < frameCount; frame++)
         {
             foreach (var tap in taps)

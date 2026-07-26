@@ -114,6 +114,62 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return buffer;
         }
 
+        // Headless-safe VRAM tile-sheet export - same 4bpp grayscale decode
+        // DrawDebugPanels already uses for its on-screen texture, just
+        // returned as a plain RGBA buffer instead of pushed into a Raylib
+        // Texture2D. RenderVramSheet itself makes no GPU calls (it only
+        // writes _sheetPixels), so calling it here works fine even with no
+        // window at all - see the headless-mode comment on _headless above.
+        public (byte[] Rgba, int Width, int Height) GetVramTileSheetRgba(Ppu ppu)
+        {
+            RenderVramSheet(ppu);
+            byte[] buffer = new byte[SheetW * SheetH * 4];
+            int o = 0;
+            for (int i = 0; i < _sheetPixels.Length; i++)
+            {
+                Color c = _sheetPixels[i];
+                buffer[o] = c.R;
+                buffer[o + 1] = c.G;
+                buffer[o + 2] = c.B;
+                buffer[o + 3] = c.A;
+                o += 4;
+            }
+            return (buffer, SheetW, SheetH);
+        }
+
+        // Headless-safe CGRAM palette export - same 256-color, 16-column
+        // grid and SnesColor conversion DrawDebugPanels uses for its swatch
+        // panel, just written straight into an RGBA byte array instead of
+        // Raylib.DrawRectangle calls (which need an active render target).
+        public (byte[] Rgba, int Width, int Height) GetPaletteSwatchRgba(Ppu ppu, int swatchSize = 12)
+        {
+            const int cols = 16;
+            const int rows = 16;
+            int width = cols * swatchSize;
+            int height = rows * swatchSize;
+            byte[] buffer = new byte[width * height * 4];
+
+            for (int i = 0; i < 256; i++)
+            {
+                Color c = SnesColor(ppu.Cgram[i * 2], ppu.Cgram[i * 2 + 1], 1f);
+                int originX = (i % cols) * swatchSize;
+                int originY = (i / cols) * swatchSize;
+                for (int y = 0; y < swatchSize; y++)
+                {
+                    int rowStart = ((originY + y) * width + originX) * 4;
+                    for (int x = 0; x < swatchSize; x++)
+                    {
+                        int o = rowStart + x * 4;
+                        buffer[o] = c.R;
+                        buffer[o + 1] = c.G;
+                        buffer[o + 2] = c.B;
+                        buffer[o + 3] = c.A;
+                    }
+                }
+            }
+            return (buffer, width, height);
+        }
+
         private static Color SnesColor(byte lo, byte hi, float brightness)
         {
             int c = lo | (hi << 8);

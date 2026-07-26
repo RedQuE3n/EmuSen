@@ -72,6 +72,17 @@ using EmuSen.Debug;
 //                             <every> apart, downsample each by <scale>, tile into one grid
 //                             image - for "is this actually moving" questions across a span of
 //                             frames without reviewing N separate screenshots one at a time.
+//   vramsheet <path>        - export the current tile/character memory as a BMP (via
+//                             IDebugTarget.RenderTileSheet() - core-agnostic; a core with
+//                             nothing analogous returns a 0x0 empty image).
+//   paletteswatch <path>    - export the current color palette memory as a BMP grid (via
+//                             IDebugTarget.RenderPaletteSwatch(), same core-agnostic contract).
+//   spriteoverlay <path>    - capture the current frame and draw a green bounding-box outline
+//                             for every entry IDebugTarget.GetSprites() reports (already
+//                             core-agnostic, no interface change needed for this verb).
+//   audiodump <path> [maxsamples] - write whatever's currently buffered in
+//                             IDebugTarget.GetAudioSamples() (non-destructive - it never
+//                             dequeues) out as a standard 16-bit PCM .wav file.
 //   anything else           - passed straight to DebugCommandProcessor.Execute, same as --script
 // <frames> is still required and still means what it always did in every
 // other mode - here it becomes a hard safety cap (a script's `frames`
@@ -275,7 +286,7 @@ class Program
             Emit($"[STATE] Loaded: {loadStatePath}");
         }
 
-        var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!);
+        var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
         var debugCmd = new DebugCommandProcessor(debugTarget);
 
         // Same two ranges registered from power-on in RaylibFrontend's
@@ -470,6 +481,49 @@ class Program
                     }
                     WriteContactSheet(path, thumbs, thumbW, thumbH, cols);
                     Emit($"[CONTACTSHEET] {count} frame(s), every {every}, {thumbW}x{thumbH} each -> {path}");
+                }
+                else if (verb == "vramsheet" && parts.Length >= 2)
+                {
+                    // Delegates to IDebugTarget.RenderTileSheet() rather
+                    // than reaching into the core's Renderer directly -
+                    // works the same regardless of which core is loaded,
+                    // per the standing core-agnostic instruction.
+                    Emit($"> {cmdLine}");
+                    var (rgba, w, h) = debugTarget.RenderTileSheet();
+                    WriteBmp(parts[1], rgba, w, h);
+                    Emit($"[VRAMSHEET] {w}x{h} -> {parts[1]}");
+                }
+                else if (verb == "paletteswatch" && parts.Length >= 2)
+                {
+                    Emit($"> {cmdLine}");
+                    var (rgba, w, h) = debugTarget.RenderPaletteSwatch();
+                    WriteBmp(parts[1], rgba, w, h);
+                    Emit($"[PALETTESWATCH] {w}x{h} -> {parts[1]}");
+                }
+                else if (verb == "spriteoverlay" && parts.Length >= 2)
+                {
+                    // Draws a bounding-box outline for every active sprite
+                    // IDebugTarget.GetSprites() reports directly onto the
+                    // current frame buffer - no new interface method needed
+                    // since GetSprites() was already generic/core-agnostic.
+                    Emit($"> {cmdLine}");
+                    byte[] rgba = core.GetFrameBufferRgba();
+                    var sprites = debugTarget.GetSprites();
+                    foreach (var s in sprites)
+                    {
+                        DrawSpriteOutline(rgba, core.ScreenWidth, core.ScreenHeight, s);
+                    }
+                    WriteBmp(parts[1], rgba, core.ScreenWidth, core.ScreenHeight);
+                    Emit($"[SPRITEOVERLAY] {sprites.Count} sprite(s) outlined -> {parts[1]}");
+                }
+                else if (verb == "audiodump" && parts.Length >= 2)
+                {
+                    Emit($"> {cmdLine}");
+                    int maxSamples = parts.Length >= 3 ? int.Parse(parts[2]) : int.MaxValue;
+                    var (samples, sampleRate) = debugTarget.GetAudioSamples();
+                    if (samples.Length > maxSamples) samples = samples[..maxSamples];
+                    WriteWav(parts[1], samples, sampleRate);
+                    Emit($"[AUDIODUMP] {samples.Length} sample(s) @ {sampleRate}Hz -> {parts[1]}");
                 }
                 else
                 {
@@ -728,6 +782,66 @@ class Program
         }
 
         WriteBmp(path, sheet, sheetWidth, sheetHeight);
+    }
+
+    // Draws a rectangle outline (not filled - a filled box would hide the
+    // very sprite pixels you're trying to locate) directly into an RGBA
+    // buffer. Works from IDebugTarget.DebugSpriteInfo alone, so this has
+    // no idea what console produced it - same core-agnostic split as
+    // every other harness verb here.
+    private static void DrawSpriteOutline(byte[] rgba, int width, int height, EmuSen.Debug.DebugSpriteInfo s)
+    {
+        void SetPixel(int x, int y)
+        {
+            if (x < 0 || x >= width || y < 0 || y >= height) return;
+            int i = (y * width + x) * 4;
+            rgba[i] = 0; rgba[i + 1] = 255; rgba[i + 2] = 0; rgba[i + 3] = 255; // green
+        }
+
+        for (int x = s.X; x < s.X + s.Width; x++)
+        {
+            SetPixel(x, s.Y);
+            SetPixel(x, s.Y + s.Height - 1);
+        }
+        for (int y = s.Y; y < s.Y + s.Height; y++)
+        {
+            SetPixel(s.X, y);
+            SetPixel(s.X + s.Width - 1, y);
+        }
+    }
+
+    // Minimal uncompressed PCM WAV writer, mirroring WriteBmp's style -
+    // no external audio library needed just to inspect what the DSP's
+    // buffer currently holds. Samples are already interleaved L/R 16-bit
+    // PCM (see IDebugTarget.GetAudioSamples), so this is a fixed 44-byte
+    // header plus the raw sample bytes, nothing more.
+    private static void WriteWav(string path, short[] samples, int sampleRate)
+    {
+        const int channels = 2;
+        const int bitsPerSample = 16;
+        int byteRate = sampleRate * channels * bitsPerSample / 8;
+        int blockAlign = channels * bitsPerSample / 8;
+        int dataSize = samples.Length * sizeof(short);
+
+        using var fs = new FileStream(path, FileMode.Create);
+        using var w = new BinaryWriter(fs);
+
+        w.Write(new[] { 'R', 'I', 'F', 'F' });
+        w.Write(36 + dataSize);
+        w.Write(new[] { 'W', 'A', 'V', 'E' });
+
+        w.Write(new[] { 'f', 'm', 't', ' ' });
+        w.Write(16); // fmt chunk size
+        w.Write((short)1); // PCM
+        w.Write((short)channels);
+        w.Write(sampleRate);
+        w.Write(byteRate);
+        w.Write((short)blockAlign);
+        w.Write((short)bitsPerSample);
+
+        w.Write(new[] { 'd', 'a', 't', 'a' });
+        w.Write(dataSize);
+        foreach (short sample in samples) w.Write(sample);
     }
 
     // Standalone utility mode - operates purely on two already-rendered

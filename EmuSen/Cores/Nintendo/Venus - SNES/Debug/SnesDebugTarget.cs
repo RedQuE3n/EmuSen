@@ -93,16 +93,18 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly Cpu _cpu;
         private readonly MemoryBus _bus;
         private readonly Ppu _ppu;
+        private readonly Renderer _renderer;
         private readonly WatchRegistry _watches = new WatchRegistry();
         private readonly FrameLogRegistry _frameLog = new FrameLogRegistry();
         private readonly CheatRegistry _cheats = new CheatRegistry();
         private readonly BreakpointRegistry _breakpoints = new BreakpointRegistry();
 
-        public SnesDebugTarget(Cpu cpu, MemoryBus bus)
+        public SnesDebugTarget(Cpu cpu, MemoryBus bus, Renderer renderer)
         {
             _cpu = cpu;
             _bus = bus;
             _ppu = bus.Ppu;
+            _renderer = renderer;
             bus.WriteObserver = this;
             bus.ReadObserver = this;
             bus.FrameObserver = this;
@@ -422,6 +424,22 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             bool vFlip = (entry & 0x8000) != 0;
 
             return $"{tileIndex:X3}{palette}{(priority ? 'P' : '.')}{(hFlip ? 'H' : '.')}{(vFlip ? 'V' : '.')}";
+        }
+
+        // Delegates straight to Renderer's own headless-safe export -
+        // see that method's comment for why it's safe to call with no
+        // window at all (it only ever touches plain C# arrays).
+        public (byte[] Rgba, int Width, int Height) RenderTileSheet() => _renderer.GetVramTileSheetRgba(_ppu);
+
+        public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => _renderer.GetPaletteSwatchRgba(_ppu);
+
+        // ToArray() rather than dequeuing - see IDebugTarget.GetAudioSamples's
+        // own comment on why this must never steal samples from a live
+        // audio-playback consumer of the same queue.
+        public (short[] Samples, int SampleRate) GetAudioSamples()
+        {
+            short[] samples = _bus.Spc700.Dsp.AudioBuffer.ToArray();
+            return (samples, EmuSen.Audio.AudioSettings.SampleRate);
         }
     }
 }

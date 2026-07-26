@@ -41,7 +41,7 @@ namespace EmuSen.DianaOS
             if (Console.IsInputRedirected) return Console.ReadLine();
 
             // Anchor to wherever the cursor already was (right after
-            // whatever prompt text - "DianaOS#: " - the caller already
+            // whatever prompt text - "DianaOS #: " - the caller already
             // printed) rather than column 0, or every redraw below would
             // overwrite the prompt itself. Captured once: this reader
             // doesn't handle a line long enough to wrap past the terminal

@@ -5,7 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using EmuSen.Debug;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Mistress9.Views
 {

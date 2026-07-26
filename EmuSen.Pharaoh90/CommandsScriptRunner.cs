@@ -1,7 +1,7 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Pharaoh90
 {
@@ -12,15 +12,15 @@ namespace EmuSen.Pharaoh90
     // screenshots, and debug commands can interleave freely in one script -
     // see EmuSen.Pharaoh90's own header comment for the full syntax.
     // Anything not recognized as one of those verbs falls through to the
-    // real ShellInterpreter, same as before.
+    // real DianaOSInterpreter, same as before.
     public sealed class CommandsScriptRunner
     {
         private readonly FrameRunner runner;
         private readonly SnesDebugTarget debugTarget;
-        private readonly ShellInterpreter debugCmd;
+        private readonly DianaOSInterpreter debugCmd;
         private readonly Action<string> emit;
 
-        public CommandsScriptRunner(FrameRunner runner, SnesDebugTarget debugTarget, ShellInterpreter debugCmd, Action<string> emit)
+        public CommandsScriptRunner(FrameRunner runner, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, Action<string> emit)
         {
             this.runner = runner;
             this.debugTarget = debugTarget;

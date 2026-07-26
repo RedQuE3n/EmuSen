@@ -19,7 +19,7 @@ using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Mistress9.Audio;
 using EmuSen.Mistress9.Input;
 using EmuSen.Mistress9.Settings;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Mistress9.Views
 {
@@ -102,7 +102,7 @@ namespace EmuSen.Mistress9.Views
         // is clicked again while one's still open. Cleared on Closed so a
         // later LoadRom() doesn't try to push a target update into a
         // disposed window.
-        private ShellConsoleWindow? _consoleWindow;
+        private DianaOSConsoleWindow? _consoleWindow;
 
         private string? _currentRomPath;
         private string? _currentDisplayName; // for restoring StatusText's "Running: ..." text exactly after a pause, without reformatting from _currentRomPath
@@ -247,17 +247,17 @@ namespace EmuSen.Mistress9.Views
                 return;
             }
 
-            _consoleWindow = new ShellConsoleWindow(_debugTarget, MakeEmulationControlCommands());
+            _consoleWindow = new DianaOSConsoleWindow(_debugTarget, MakeEmulationControlCommands());
             _consoleWindow.Closed += (_, _) => _consoleWindow = null;
             _consoleWindow.Show(this);
         }
 
-        // Built fresh per ShellConsoleWindow construction (not cached) -
+        // Built fresh per DianaOSConsoleWindow construction (not cached) -
         // each PauseCommand/ResumeCommand instance only needs to close
         // over `this`, so there's no real cost to re-creating them, and
         // it avoids the two commands' delegates ever accidentally
         // outliving a MainWindow instance.
-        private IEnumerable<IShellCommand> MakeEmulationControlCommands() => new IShellCommand[]
+        private IEnumerable<IDianaOSCommand> MakeEmulationControlCommands() => new IDianaOSCommand[]
         {
             new PauseCommand(PauseEmulation, () => IsPaused),
             new ResumeCommand(ResumeEmulation, () => IsPaused),

@@ -1,4 +1,4 @@
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Common.Imaging
 {

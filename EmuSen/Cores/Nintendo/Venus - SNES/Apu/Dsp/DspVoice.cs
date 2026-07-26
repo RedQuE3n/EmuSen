@@ -1,7 +1,7 @@
 using System;
 using EmuSen.Audio;
 using EmuSen.Debug;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {

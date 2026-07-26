@@ -8,7 +8,7 @@ using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.Debug;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Cores.Nintendo.Venus
 {
@@ -24,7 +24,7 @@ namespace EmuSen.Cores.Nintendo.Venus
     //
     // Exposes Cart/Spc700/Bus/Cpu/Renderer as public properties beyond
     // what ICore requires. This is deliberate, not a leaky abstraction:
-    // Program.cs's debug toolchain (SnesDebugTarget, ShellInterpreter,
+    // Program.cs's debug toolchain (SnesDebugTarget, DianaOSInterpreter,
     // the F1-F9 hotkeys, the F4 prompt) all need real SNES-specific access
     // a core-agnostic interface has no business providing - see
     // ICore.cs's own comment for why input and debug-toolchain wiring

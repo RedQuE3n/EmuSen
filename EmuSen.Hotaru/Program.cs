@@ -9,7 +9,7 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 using EmuSen.Bindings;
 using EmuSen.Serenity;
 
@@ -133,7 +133,7 @@ namespace EmuSen.Hotaru
 
                 // Debug toolchain, built once - see EmuSen_Frontend_Driver.md §1.
                 SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-                ShellInterpreter debugCmd = ShellInterpreter.CreateDefault(debugTarget);
+                DianaOSInterpreter debugCmd = DianaOSInterpreter.CreateDefault(debugTarget);
 
                 FrameRecorder frameRecorder = new FrameRecorder(debugTarget);
 
@@ -338,20 +338,20 @@ namespace EmuSen.Hotaru
         // itself isn't duplicated between frontends).
         //
         // 'step'/'s' and 'continue'/'c' are handled here, not registered as
-        // ShellInterpreter commands, because they need to make this
+        // DianaOSInterpreter commands, because they need to make this
         // loop return control to the OUTER per-frame loop so it can
-        // actually call core.RunFrame() again - a ShellInterpreter
+        // actually call core.RunFrame() again - a DianaOSInterpreter
         // command only ever returns a string to print, it has no way to
         // affect control flow one level up. 'exit'/'quit' already worked
         // this same way before breakpoints existed at all.
-        private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, ShellInterpreter debugCmd, string statePath)
+        private static void RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, string statePath)
         {
             Console.WriteLine("--- DianaOS (type 'help', 'exit' to resume, 'step'/'s' to single-step) ---");
             while (true)
             {
                 // Bash-style secondary prompt while a quote/"$(...)"/
                 // if-else-fi/for-do-done block is still open (see
-                // ShellInterpreter.IsAwaitingMoreInput's own comment) -
+                // DianaOSInterpreter.IsAwaitingMoreInput's own comment) -
                 // and, just as importantly, every one of the single-word
                 // REPL shortcuts below (exit/quit/continue/c/step/s/
                 // "state ...") is suppressed while awaiting more input, so
@@ -442,7 +442,7 @@ namespace EmuSen.Hotaru
 
         // Every debug/dev hotkey - see EmuSen_Frontend_Driver.md §2.
         private static void RunHotkeys(
-            VenusCore core, FramePresenter presenter, SnesDebugTarget debugTarget, ShellInterpreter debugCmd, FrameRecorder frameRecorder,
+            VenusCore core, FramePresenter presenter, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, FrameRecorder frameRecorder,
             string statePath)
         {
             // Every frame, cheap no-op when not recording - see

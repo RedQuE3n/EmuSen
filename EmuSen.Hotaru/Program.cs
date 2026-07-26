@@ -7,7 +7,6 @@ using System.Threading;
 using Avalonia;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
 using EmuSen.Hotaru.Views;
@@ -16,34 +15,21 @@ namespace EmuSen.Hotaru
 {
     class Program
     {
-        // Backs the standalone shell's `core <corename> <path>` command
-        // (RunStandaloneShell, below) - deliberately a small, private,
-        // Hotaru-only registry rather than something shared through
-        // EmuSen.DianaOS: picking which concrete ICore implementation to
-        // construct for a given ROM is exactly the kind of frontend-owned
-        // decision that namespace stays agnostic about on purpose (same
-        // reasoning `IDebugTarget`/`ICore` themselves exist - core-
-        // specific knowledge lives in the frontend or the core, never in
-        // the shell). Only one entry today because only one core is
-        // actually implemented (`VenusCore`, SNES) - registered under
-        // both its internal codename and the console name most people
-        // would actually type. Extensions gate what `core` will accept:
-        // trying to load, say, a `.nes` file against `venus` is a clear
-        // user error worth catching here rather than handing bytes that
-        // aren't really an SNES ROM to `Cartridge`, which has no format
-        // validation of its own at all (see that class's own comment on
-        // copier-header stripping - it assumes SNES-shaped bytes,
-        // unconditionally).
-        private sealed record CoreDescriptor(string DisplayName, string[] Extensions)
+        // Backs both `core <corename> <path>` code paths: RunStandaloneShell's
+        // own pre-window handling below (TryResolveCoreCommand), and, once a
+        // window exists, EmuSen.DianaOS.Commands.CoreCommand (registered as
+        // part of debugCmd's own extraCommands in Main). One shared registry,
+        // not two - `CoreDescriptor` itself lives in EmuSen.DianaOS.Commands
+        // now (promoted there for CoreCommand's own use, see that file's own
+        // comment on why it's core-agnostic despite the name) rather than
+        // staying a private nested type here. Only one entry today because
+        // only one core is actually implemented (`VenusCore`, SNES) -
+        // registered under both its internal codename and the console name
+        // most people would actually type.
+        private static readonly Dictionary<string, EmuSen.DianaOS.Commands.CoreDescriptor> _coreRegistry = new(StringComparer.OrdinalIgnoreCase)
         {
-            public bool SupportsExtension(string extension) =>
-                Array.Exists(Extensions, e => e.Equals(extension, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static readonly Dictionary<string, CoreDescriptor> _coreRegistry = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["venus"] = new CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
-            ["snes"] = new CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["venus"] = new EmuSen.DianaOS.Commands.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["snes"] = new EmuSen.DianaOS.Commands.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
         };
 
         static void Main(string[] args)
@@ -138,34 +124,29 @@ namespace EmuSen.Hotaru
                 DebugSettings.CpuVerboseLogging = true;
                 DebugSettings.Spc700VerboseLogging = true;
 
-                // Debug toolchain, built once - see EmuSen_Frontend_Driver.md §1.
-                SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!,
-                    () => (core.LastFrameCpuSpc700Ms, core.LastFramePpuMs, core.LastFrameHdmaMs));
-                // Wires `coretop -w` up to a real window (DebugWindows) -
-                // replaces the standard registry's plain CoretopCommand
-                // (no window support) via extraCommands' override-by-name
-                // behavior, same mechanism EmuSen.Mistress9 uses. StateCommand
-                // is new here too - it wasn't in the standard registry at all
-                // before, and closes over `core`/`statePath` directly (both
-                // already in scope) rather than GameWindow's own SaveState/
-                // LoadState wrapper methods, since debugCmd is built before
-                // GameWindow exists - see GameWindow.axaml.cs's own F5/F9
-                // handlers for the console-message-printing wrapper this
-                // command doesn't need (it returns its own result text
-                // instead, same as every other command).
-                DianaOSInterpreter debugCmd = DianaOSInterpreter.CreateDefault(debugTarget,
-                    new IDianaOSCommand[]
-                    {
-                        new EmuSen.DianaOS.Commands.CoretopCommand(DebugWindows.ShowCoretopWindow),
-                        new EmuSen.DianaOS.Commands.StateCommand(core.SaveState, core.LoadState, () => statePath),
-                    });
-
-                FrameRecorder frameRecorder = new FrameRecorder(debugTarget);
-
-                // Power-on watch registration (Yoshi/coin investigation) -
-                // see EmuSen_Frontend_Driver.md §1.
-                debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
-                debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
+                // The debug toolchain itself (SnesDebugTarget,
+                // DianaOSInterpreter, the power-on watch registration) is
+                // built inside GameWindow now, not here - it has to be
+                // REBUILDABLE after a `core <name> <path>` swap
+                // (HostAction.LoadCore), and GameWindow is the only thing
+                // that ever reacts to that signal. Main just builds the
+                // extraCommands list once: none of these three commands'
+                // own delegates depend on anything that changes across a
+                // swap - `core` itself is never replaced, only reloaded in
+                // place (VenusCore.LoadRom is a re-initializer, not a
+                // constructor-only step), so CoretopCommand/StateCommand's
+                // closures over `core`/`statePath` and CoreCommand's own
+                // static registry all stay valid for the whole process.
+                // CoretopCommand replaces the standard registry's plain,
+                // window-less default via extraCommands' override-by-name
+                // behavior, same mechanism EmuSen.Mistress9 uses; State/
+                // CoreCommand are both new registrations, not overrides.
+                IDianaOSCommand[] extraCommands =
+                {
+                    new EmuSen.DianaOS.Commands.CoretopCommand(DebugWindows.ShowCoretopWindow),
+                    new EmuSen.DianaOS.Commands.StateCommand(core.SaveState, core.LoadState, () => statePath),
+                    new EmuSen.DianaOS.Commands.CoreCommand(_coreRegistry),
+                };
 
                 // Everything below hands off to GameWindow (Views/GameWindow.axaml.cs) -
                 // the window, emulation thread, audio, input, and every
@@ -173,14 +154,14 @@ namespace EmuSen.Hotaru
                 // Raylib-driven loop in this method. AppBuilder.Configure<App>
                 // with a factory Func<App> (rather than the parameterless
                 // Configure<App>()) is what lets the already-constructed
-                // core/debugTarget/debugCmd/frameRecorder/statePath above
-                // get threaded into the Avalonia app instead of
-                // reconstructed inside OnFrameworkInitializationCompleted.
-                // Blocks until the window closes. GameWindow's own Closing
-                // handler already runs core.SaveSram() and disposes
-                // audio/gamepad before this returns - see
-                // Views/GameWindow.axaml.cs's own Shutdown().
-                BuildAvaloniaApp(core, debugTarget, debugCmd, frameRecorder, statePath)
+                // core/extraCommands/statePath above get threaded into the
+                // Avalonia app instead of reconstructed inside
+                // OnFrameworkInitializationCompleted. Blocks until the
+                // window closes. GameWindow's own Closing handler already
+                // runs core.SaveSram() and disposes audio/gamepad before
+                // this returns - see Views/GameWindow.axaml.cs's own
+                // Shutdown().
+                BuildAvaloniaApp(core, extraCommands, statePath)
                     .StartWithClassicDesktopLifetime(args);
             }
             catch (Exception ex)
@@ -205,9 +186,9 @@ namespace EmuSen.Hotaru
         // of being called parameterlessly, so App's constructor can
         // receive the state Main already built above.
         private static AppBuilder BuildAvaloniaApp(
-            VenusCore core, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, FrameRecorder frameRecorder, string statePath)
+            VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
-            var builder = AppBuilder.Configure(() => new App(core, debugTarget, debugCmd, frameRecorder, statePath))
+            var builder = AppBuilder.Configure(() => new App(core, extraCommands, statePath))
                 .UsePlatformDetect()
                 .WithInterFont()
                 .LogToTrace();
@@ -296,7 +277,7 @@ namespace EmuSen.Hotaru
             string coreName = parts[1];
             string romPath = parts[2];
 
-            if (!_coreRegistry.TryGetValue(coreName, out CoreDescriptor? descriptor))
+            if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaOS.Commands.CoreDescriptor? descriptor))
             {
                 Console.WriteLine($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_coreRegistry.Keys, StringComparer.OrdinalIgnoreCase))}");
                 return null;

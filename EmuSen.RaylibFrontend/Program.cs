@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using EmuSen.Audio;
 using EmuSen.Common;
+using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
@@ -298,33 +299,35 @@ namespace EmuSen.RaylibFrontend
             }
         }
 
-        // Drains whatever SDsp has queued into core.Spc700.Dsp.AudioBuffer
-        // (interleaved L/R shorts at AudioSettings.SampleRate - see that
-        // class's own comment) into the actual output device, once per
-        // RunFrame() call. Only pulls when Raylib says its internal buffer
-        // is ready for more (IsAudioStreamProcessed) - pushing data it
-        // hasn't asked for yet isn't how raylib's streaming API is meant to
-        // be driven. Capped at 4096 frames per call so a stall (e.g. time
-        // spent in the F4 debug prompt) that lets the queue build up
-        // doesn't dump an enormous, laggy chunk in one call - AudioBuffer's
-        // own 1-second cap (AudioSettings.AudioBufferMaxSamples) already
-        // discards the oldest samples once that fills, so the rest is
-        // simply left queued for the next call(s) rather than lost.
-        private static unsafe void PumpAudio(VenusCore core, Raylib_cs.AudioStream stream)
+        // Drains whatever's queued into the core's own audio buffer into
+        // the actual output device, once per RunFrame() call. Only pulls
+        // when Raylib says its internal buffer is ready for more
+        // (IsAudioStreamProcessed) - pushing data it hasn't asked for yet
+        // isn't how raylib's streaming API is meant to be driven. Capped
+        // at 4096 frames per call so a stall (e.g. time spent in the F4
+        // debug prompt) that lets the queue build up doesn't dump an
+        // enormous, laggy chunk in one call - the core's own buffer cap
+        // (AudioSettings.AudioBufferMaxSamples) already discards the
+        // oldest samples once that fills, so the rest is simply left
+        // queued for the next call(s) rather than lost.
+        //
+        // Goes through ICore.DequeueAudioSamples() rather than reaching
+        // into core.Spc700.Dsp.AudioBuffer directly - the same
+        // core-agnostic split GetFrameBufferRgba() already established for
+        // video (see FramePresenter's own comment), closed here too during
+        // a pass adding real audio output to EmuSen.TestingStudio, which
+        // needed this exact same drain logic and had no Venus-specific
+        // access of its own to duplicate it against.
+        private static unsafe void PumpAudio(ICore core, Raylib_cs.AudioStream stream)
         {
             if (!Raylib_cs.Raylib.IsAudioStreamProcessed(stream)) return;
 
-            var buffer = core.Spc700!.Dsp.AudioBuffer;
-            int framesAvailable = buffer.Count / 2; // interleaved L/R
-            if (framesAvailable == 0) return;
-
-            int framesToSend = Math.Min(framesAvailable, 4096);
-            short[] data = new short[framesToSend * 2];
-            for (int i = 0; i < data.Length; i++) data[i] = buffer.Dequeue();
+            short[] data = core.DequeueAudioSamples(4096);
+            if (data.Length == 0) return;
 
             fixed (short* p = data)
             {
-                Raylib_cs.Raylib.UpdateAudioStream(stream, p, framesToSend);
+                Raylib_cs.Raylib.UpdateAudioStream(stream, p, data.Length / 2);
             }
         }
 

@@ -99,5 +99,22 @@ namespace EmuSen.Common
             if (_core is null) throw new InvalidOperationException("GetFrameBufferRgba() called before LoadRom().");
             return _core.GetFrameBufferRgba();
         }
+
+        // AudioSampleRate falls back to the same AudioSettings default
+        // CoreName above falls back to "SNES" for - a caller opening its
+        // output device before any ROM is loaded yet (or between loads)
+        // still needs a sample rate to open it at.
+        public int AudioSampleRate => _core?.AudioSampleRate ?? EmuSen.Audio.AudioSettings.SampleRate;
+
+        // Straight pass-through to ICore.DequeueAudioSamples() - see that
+        // method's own comment. Returns an empty array rather than
+        // throwing when no ROM is loaded yet, unlike GetFrameBufferRgba()
+        // above - an audio pump callable every tick regardless of session
+        // state (the same "no ROM loaded is a normal condition, not an
+        // error" convention Shell/Commands/DebugCommandHelpers.
+        // RequireTarget's callers avoid on their own read paths) is
+        // simpler for a caller than needing its own IsRomLoaded guard
+        // around every single pump call.
+        public short[] DequeueAudioSamples(int maxFrames) => _core?.DequeueAudioSamples(maxFrames) ?? Array.Empty<short>();
     }
 }

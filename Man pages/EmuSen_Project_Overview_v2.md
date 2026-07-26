@@ -63,7 +63,11 @@ EmuSen Project/
 ├── EmuSen/                                   # Core emulator + Raylib console frontend
 │   ├── EmuSen.csproj
 │   ├── Common/
-│   │   ├── EmulatorSession.cs                # Headless per-frame driver (used by Avalonia frontend)
+│   │   ├── EmulatorSession.cs                # Headless per-frame driver (used by Avalonia frontend) -
+│   │   │                                      #   also passes through ICore.AudioSampleRate/
+│   │   │                                      #   DequeueAudioSamples now (see EmuSen_Frontend_Driver.md
+│   │   │                                      #   §3), null-safe (empty array / 32000 fallback) before
+│   │   │                                      #   LoadRom() unlike this class's throwing GetFrameBufferRgba
 │   │   ├── StateSerializer.cs                # Reflective save-state serializer
 │   │   ├── TeeTextWriter.cs                  # Console + single-file log tee (generic, reusable)
 │   │   └── CategorizedLogWriter.cs           # Console + per-category log files (cpu/ppu/apu/memory/
@@ -297,10 +301,22 @@ EmuSen Project/
     │                                     #   EmuSen_Launcher_Multicore_Gameplan.md)
     ├── EmuSen.TestingStudio.csproj
     ├── App.axaml / App.axaml.cs
+    ├── Audio/
+    │   └── AudioPlayer.cs                 # Real audio output via SDL's queue-based audio API
+    │                                     #   (SDL_OpenAudioDevice/SDL_QueueAudio) - reuses the
+    │                                     #   Silk.NET.SDL dependency Input/GamepadManager.cs
+    │                                     #   already brought in, rather than a second audio
+    │                                     #   backend. Core-agnostic (only calls
+    │                                     #   ICore.AudioSampleRate/DequeueAudioSamples via
+    │                                     #   EmulatorSession) - see EmuSen_Frontend_Driver.md's
+    │                                     #   audio section for the full pipeline.
     ├── Input/
     │   ├── ControllerKeyMap.cs
     │   ├── GamepadBindingMap.cs
-    │   └── GamepadManager.cs
+    │   └── GamepadManager.cs             # Dispose() uses QuitSubSystem, not Quit() - SDL_Quit()
+    │                                     #   tears down the whole library regardless of which
+    │                                     #   subsystem asked, which would break Audio/
+    │                                     #   AudioPlayer.cs's still-open device otherwise
     ├── Settings/
     │   └── AppSettings.cs                # Log/ROM directory + selected-core preferences -
     │                                     #   same JSON-under-%AppData% pattern as Input/*.cs
@@ -314,7 +330,11 @@ EmuSen Project/
         │                                #   Reuses EmuSen.Common.CategorizedLogWriter for
         │                                #   optional per-session file logging (Settings >
         │                                #   Preferences...), same categorized log files the
-        │                                #   console build already produces.
+        │                                #   console build already produces. Audio now plays
+        │                                #   for real too (Audio/AudioPlayer.cs, Pump()d once
+        │                                #   per RunFrame() from the emulation thread, same
+        │                                #   call-site placement as the console build's own
+        │                                #   PumpAudio) - see EmuSen_Frontend_Driver.md.
         ├── InputSettingsWindow.axaml / .axaml.cs # Widened (680px, resizable) after key/pad
         │                                #   labels ("RightBracket", "Rightshoulder", ...)
         │                                #   routinely overflowed the original 90px columns

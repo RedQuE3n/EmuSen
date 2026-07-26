@@ -46,8 +46,11 @@ namespace EmuSen.TestingStudio.Input
             _sdl = Sdl.GetApi();
 
             // Gamepad subsystem only - deliberately not Sdl.InitVideo, so SDL
-            // never touches windowing/rendering at all.
-            _sdlInitialized = _sdl.Init(Sdl.InitGamecontroller) == 0;
+            // never touches windowing/rendering at all. InitSubSystem, not
+            // Init, since Audio/AudioPlayer.cs also touches SDL now (for
+            // real audio output) - see this class's own Dispose() for why
+            // that pairing matters.
+            _sdlInitialized = _sdl.InitSubSystem(Sdl.InitGamecontroller) == 0;
             if (!_sdlInitialized) return;
 
             TryOpenFirstController();
@@ -139,7 +142,13 @@ namespace EmuSen.TestingStudio.Input
                 _sdl.GameControllerClose(_controller);
                 _controller = null;
             }
-            if (_sdlInitialized) _sdl.Quit();
+            // QuitSubSystem, not Quit() - Quit() unconditionally shuts down
+            // the ENTIRE SDL library regardless of which subsystem asked
+            // for it, which would break Audio/AudioPlayer.cs's still-open
+            // audio device if this disposed first (or vice versa, if
+            // AudioPlayer used Quit() too). QuitSubSystem is refcounted
+            // per-subsystem and doesn't have that problem.
+            if (_sdlInitialized) _sdl.QuitSubSystem(Sdl.InitGamecontroller);
         }
     }
 }

@@ -410,6 +410,31 @@ namespace EmuSen.Cores.Nintendo.Venus
             return Renderer.GetFrameBufferRgba();
         }
 
+        public int AudioSampleRate => EmuSen.Audio.AudioSettings.SampleRate;
+
+        // Moved from EmuSen.RaylibFrontend/Program.cs's own PumpAudio,
+        // which used to reach directly into Spc700.Dsp.AudioBuffer (a real
+        // SNES/S-DSP-specific type) - the exact same "core-agnostic caller
+        // shouldn't touch Venus-specific internals" gap GetFrameBufferRgba
+        // above already closed for video. Same drain logic, unchanged:
+        // AudioBuffer is interleaved L/R shorts, so framesAvailable is
+        // half its Count; capped at <maxFrames> so a caller with its own
+        // per-call limit (avoiding a huge dump after a stall) doesn't need
+        // to slice the result down itself.
+        public short[] DequeueAudioSamples(int maxFrames)
+        {
+            if (Spc700 is null) return Array.Empty<short>();
+
+            var buffer = Spc700.Dsp.AudioBuffer;
+            int framesAvailable = buffer.Count / 2;
+            int framesToSend = Math.Min(framesAvailable, maxFrames);
+            if (framesToSend == 0) return Array.Empty<short>();
+
+            var data = new short[framesToSend * 2];
+            for (int i = 0; i < data.Length; i++) data[i] = buffer.Dequeue();
+            return data;
+        }
+
         // Full point-in-time snapshot of everything except the renderer
         // (which holds Raylib texture/window handles that have no
         // business in a save file, and is fully re-derivable from PPU

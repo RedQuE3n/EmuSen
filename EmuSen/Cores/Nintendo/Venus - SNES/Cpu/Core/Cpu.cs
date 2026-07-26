@@ -58,6 +58,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         private bool _waitingForInterrupt;
         private bool _stopped;
 
+        // Side channel for the handful of addressing-mode-level cycle
+        // penalties real hardware charges that don't fit the static
+        // per-opcode Instruction.Cycles model: a direct-page access with a
+        // nonzero D low byte, and an indexed access whose effective
+        // address crosses a page boundary. The addressing-mode methods in
+        // Cpu.AddressModes.cs increment this directly (they're instance
+        // methods with access to D/X/Y already); Step() reads and resets
+        // it once per instruction, in "CPU cycle units" (added to
+        // inst.Cycles before the master-clock conversion below).
+        private int _addrModeExtraCycles;
+
         // Equality key for one executed instruction, used only by
         // _verboseTrace to detect repeating polling/delay loops - see
         // DebugTools.RepeatCollapsingTrace<TKey> for why a struct key
@@ -175,13 +186,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             // (Dma.PendingCpuCycles accumulates the instant $420B is
             // written, mid-instruction, so it can already be nonzero the
             // moment this method is entered).
-            if (_stopped) return 3 + DrainPendingDmaCycles();
-            if (_waitingForInterrupt) return 2 + DrainPendingDmaCycles();
+            if (_stopped) return _bus.GetAccessSpeedCycles(((uint)PB << 16) | PC) * 3 + DrainPendingDmaCycles();
+            if (_waitingForInterrupt) return _bus.GetAccessSpeedCycles(((uint)PB << 16) | PC) * 2 + DrainPendingDmaCycles();
 
             ushort executedAtPC = PC;
             byte executedAtPB = PB;
             LastInstructionPC = executedAtPC;
             LastInstructionPB = executedAtPB;
+            uint opcodeAddr = ((uint)executedAtPB << 16) | executedAtPC;
+            _addrModeExtraCycles = 0;
             byte opcode = Fetch8();
             Instruction inst = _instructions[opcode];
 
@@ -214,22 +227,54 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
                 _wasVerboseLogging = false;
             }
 
-            // Return the cycles consumed by this instruction
-            // Note: In a fully accurate emulator, we would multiply this by 6, 8, or 12
-            // depending on the memory region, but for now, base cycles are fine.
-            return inst.Cycles + DrainPendingDmaCycles();
+            // Convert this instruction's cycle count into real elapsed
+            // master clocks instead of returning inst.Cycles as an opaque
+            // "CPU cycle" unit. inst.Cycles (plus _addrModeExtraCycles from
+            // the D-register/page-crossing penalties addressing-mode
+            // methods report directly) is still the total access count,
+            // but each access is now charged at the real region-dependent
+            // speed (6/8/12 master clocks - see MemoryBus.GetAccessSpeedCycles)
+            // instead of a single flat rate assumed for the whole machine.
+            //
+            // The opcode+operand-fetch portion (bytesFetched, i.e. however
+            // far PC actually advanced) is charged at the opcode's own
+            // region speed; any remaining cycles - the instruction's actual
+            // memory read/write plus internal/dummy cycles - are charged at
+            // the addressing target's region speed, since for most
+            // memory-accessing instructions that's a genuinely different
+            // address (e.g. a ROM-resident LDA reading WRAM). Implied/
+            // register-only opcodes and branches have no separate target
+            // (AddrImplied/AddrRelative* return 0 or a same-bank branch
+            // destination), so this slightly overcharges a handful of
+            // pure-register FastROM opcodes whose real dead-cycle re-reads
+            // the opcode bank rather than bank 0 - accepted as a known,
+            // narrow residual rather than threading a same-bank flag
+            // through every implied-addressing opcode for it.
+            int totalCycleUnits = inst.Cycles + _addrModeExtraCycles;
+            int bytesFetched = (ushort)(PC - executedAtPC);
+            if (bytesFetched > totalCycleUnits) bytesFetched = totalCycleUnits;
+            int remainderUnits = totalCycleUnits - bytesFetched;
+
+            int masterClocks = bytesFetched * _bus.GetAccessSpeedCycles(opcodeAddr);
+            if (remainderUnits > 0)
+            {
+                masterClocks += remainderUnits * _bus.GetAccessSpeedCycles(targetAddr);
+            }
+
+            return masterClocks + DrainPendingDmaCycles();
         }
 
         // See Dma.PendingCpuCycles's own comment for why this exists and
-        // its unit convention. Drained (read then zeroed) rather than
-        // just read, so a DMA's cost is attributed exactly once, to
-        // whichever Step() call notices it first.
+        // its unit convention (1 unit = 8 master clocks, the SlowROM
+        // baseline it assumes uniformly) - converted to real master clocks
+        // here since Step() now returns master clocks directly rather than
+        // abstract "CPU cycle" units.
         private int DrainPendingDmaCycles()
         {
             int cycles = _bus.Dma.PendingCpuCycles;
             if (cycles == 0) return 0;
             _bus.Dma.PendingCpuCycles = 0;
-            return cycles;
+            return cycles * 8;
         }
 
         // NMI entry sequence - see Venus_CPU.md §3. Triggered externally

@@ -320,9 +320,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             if (CycleBudget <= 0) return;
 
-            // SLEEP/STOP - see Venus_APU.md §1.4.
+            // SLEEP/STOP - see Venus_APU.md §1.4. Real hardware: STOP/SLEEP
+            // only halts the SPC700 CPU core - the DSP is a separate chip
+            // and keeps generating samples (and the timers keep ticking)
+            // regardless. Previously this branch just burned CycleBudget
+            // without calling Dsp.Tick/TickTimers at all, so any stretch of
+            // real time spent halted silently vanished from the audio
+            // output instead of continuing to produce samples.
             if (_halted)
             {
+                TickTimers(2);
+                Dsp.Tick(2);
                 CycleBudget -= 2;
                 return;
             }

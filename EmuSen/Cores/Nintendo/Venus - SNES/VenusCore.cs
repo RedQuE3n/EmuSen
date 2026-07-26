@@ -37,38 +37,6 @@ namespace EmuSen.Cores.Nintendo.Venus
         private readonly bool _headless;
         private int _currentScanline;
 
-        // Zelda: A Link to the Past - stuck-subscreen-torch quirk. See
-        // Man pages/Hardware/Nintendo/Venus - SNES/Venus_PPU.md "Known
-        // per-game quirks" section for the full investigation writeup.
-        // Short version: closing an item-get dialog (e.g. the Lamp chest)
-        // runs through the same handler as closing the equipment menu,
-        // which unconditionally calls the game's RestoreTorchBackground
-        // routine - a routine the public alttp-disassembly project's own
-        // comment flags as missing a check that the player is indoors.
-        // That can leave WRAM $1D (and therefore TS, $2124 - copied from
-        // $1D every frame by the game's own code) stuck enabling BG1 on
-        // the subscreen outdoors, which then permanently color-math-blends
-        // a torch light-circle overlay tile into the overworld, seen as a
-        // solid yellow band.
-        //
-        // A first attempt at this fix cleared $1D every single frame
-        // while the overworld module was active. That broke something
-        // else: $1D is a shared scratch variable reused by multiple
-        // unrelated systems - e.g. Bank00.asm's PaletteFilter_WishPonds/
-        // PaletteFilter_Crystal also write it (subscreen/color-math setup
-        // for their own effects), and the storm-intro sequence's rain
-        // overlay depends on one of these. Clearing $1D every frame,
-        // forever, stomped that too and made rain stop rendering entirely
-        // for the rest of a playthrough - a real regression, confirmed by
-        // reverting and reproducing rain's absence disappearing along
-        // with the fix.
-        //
-        // Fixed by making the correction edge-triggered instead of
-        // continuous, mirroring what the real game code actually does:
-        // see ApplyLttpOverworldSubscreenQuirk's own comment.
-        private bool _isLttp;
-        private int _prevModule = -1;
-
         public Cartridge? Cart { get; private set; }
         public Spc700? Spc700 { get; private set; }
         public MemoryBus? Bus { get; private set; }
@@ -194,53 +162,6 @@ namespace EmuSen.Cores.Nintendo.Venus
 
             _currentScanline = 0;
             TotalFrames = 0;
-
-            // "THE LEGEND OF ZELDA" is the SNES header title for every
-            // release of A Link to the Past (US/EU) - see Cartridge.Title's
-            // comment. Good enough for an opt-in per-game quirk; not a
-            // general ROM-identification scheme.
-            _isLttp = Cart.Title.StartsWith("THE LEGEND OF ZELDA", StringComparison.Ordinal);
-            _prevModule = -1;
-        }
-
-        // See _isLttp's comment for the bug this works around and why an
-        // earlier, continuous version of this check was wrong. This one
-        // is edge-triggered: it only runs on the exact frame WRAM $10
-        // (the main module index) transitions TO 0x09 (overworld) FROM
-        // something else - e.g. leaving a house or dungeon. That mirrors
-        // exactly when the game's own Bank00 $DA63 state runs (part of
-        // the overworld module's one-time area-load state machine), so
-        // it can only ever correct the same moment real hardware would,
-        // never anything mid-playthrough while $1D is legitimately in use
-        // for something unrelated (palette filters, the storm's rain
-        // overlay, etc. - see _isLttp's comment for why that distinction
-        // matters). $10 != -1 excludes the very first frame after
-        // LoadRom()/LoadState() so loading a save that already has $10==9
-        // doesn't spuriously fire - this is a going-forward correction,
-        // not a retroactive fix for a save already made mid-bug.
-        //
-        // The $8A allowlist is transcribed directly from Bank00.asm's
-        // "$5A63-$5ABA JUMP LOCATION" routine: $1D should be 0 for every
-        // overworld area except this handful, which legitimately want
-        // BG1 forced onto the subscreen.
-        private void ApplyLttpOverworldSubscreenQuirk()
-        {
-            if (Bus is null) return;
-
-            int module = Bus.Ram[0x10];
-            int prevModule = _prevModule;
-            _prevModule = module;
-
-            if (module != 0x09 || prevModule == 0x09 || prevModule == -1) return;
-
-            int area = Bus.Ram[0x8A];
-            bool areaWantsSubscreen = area == 0x00 || area == 0x70 || area == 0x40 || area == 0x5B ||
-                                       area == 0x03 || area == 0x05 || area == 0x07 || area == 0x43 ||
-                                       area == 0x45 || area == 0x47;
-            if (!areaWantsSubscreen && Bus.Ram[0x1D] != 0)
-            {
-                Bus.Ram[0x1D] = 0;
-            }
         }
 
         // Runs up to one frame's worth of scanlines: CPU/APU stepping,
@@ -283,8 +204,6 @@ namespace EmuSen.Cores.Nintendo.Venus
                     {
                         Bus.Interrupts.EndVBlank();
                         Bus.Dma.InitHdma();
-
-                        if (_isLttp) ApplyLttpOverworldSubscreenQuirk();
                     }
 
                     // Documented NMI-enable-during-vblank quirk - see

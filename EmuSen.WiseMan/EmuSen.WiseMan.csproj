@@ -35,6 +35,12 @@
          transitively, which is fine for a test project; nothing here
          opens an actual Avalonia window. -->
     <ProjectReference Include="..\EmuSen.TestingStudio\EmuSen.TestingStudio.csproj" />
+    <!-- HeadlessDebugOptions.Parse and FrameRunner - see
+         HeadlessDebug/HeadlessDebugOptionsTests.cs and
+         HeadlessDebug/FrameRunnerTests.cs. Referencing an OutputType=Exe
+         project works the same as any other ProjectReference; its Main
+         just never runs from here. -->
+    <ProjectReference Include="..\EmuSen.HeadlessDebug\EmuSen.HeadlessDebug.csproj" />
   </ItemGroup>
 
 </Project>

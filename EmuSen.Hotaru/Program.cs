@@ -188,7 +188,13 @@ namespace EmuSen.Hotaru
                 // off Cpu/Bus/Renderer directly.
                 SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!,
                     () => (core.LastFrameCpuSpc700Ms, core.LastFramePpuMs, core.LastFrameHdmaMs));
-                DianaOSInterpreter debugCmd = DianaOSInterpreter.CreateDefault(debugTarget);
+                // Wires `coretop -w` up to a real window (AvaloniaHost) -
+                // replaces the standard registry's plain CoretopCommand
+                // (no window support) via extraCommands' override-by-name
+                // behavior, same mechanism EmuSen.Mistress9 uses to
+                // replace `coretop` outright.
+                DianaOSInterpreter debugCmd = DianaOSInterpreter.CreateDefault(debugTarget,
+                    new IDianaOSCommand[] { new EmuSen.DianaOS.Commands.CoretopCommand(AvaloniaHost.ShowCoretopWindow) });
 
                 FrameRecorder frameRecorder = new FrameRecorder(debugTarget);
 

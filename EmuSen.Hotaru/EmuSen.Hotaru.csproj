@@ -8,6 +8,7 @@
     <!-- Needed for PumpAudio's fixed-pointer hand-off to Raylib's
          UpdateAudioStream (a raw void* parameter) - see Program.cs. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +16,21 @@
          (IsKeyPressed, TakeScreenshot) - a real, intentional dependency for
          a Raylib console frontend, not something to abstract away. -->
     <PackageReference Include="Raylib-cs" Version="8.0.0" />
+    <!-- Solely for `coretop -w` (AvaloniaHost.cs, Views/CoretopWindow.axaml)
+         - a real, separate GUI window so a console-build user can keep
+         playing (Raylib owns this process's actual game window/input/
+         rendering) while watching live hardware state in its own window,
+         since the plain `coretop` command's raw-terminal dashboard
+         necessarily blocks this same thread. Runs on its own dedicated
+         thread with its own Avalonia dispatcher loop, entirely separate
+         from Raylib's main loop - see AvaloniaHost's own comment. Same
+         package versions as EmuSen.Mistress9, which already carries the
+         full weight of this dependency; this project only ever
+         constructs one simple window with it. -->
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
   </ItemGroup>
 
   <ItemGroup>

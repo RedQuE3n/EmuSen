@@ -762,7 +762,7 @@ namespace EmuSen.DianaOS
                 "NAME\n" +
                 "    coretop - live htop-style dashboard of the loaded core's hardware\n\n" +
                 "SYNOPSIS\n" +
-                "    coretop\n\n" +
+                "    coretop [-w]\n\n" +
                 "DESCRIPTION\n" +
                 "    A live, auto-refreshing (4x/second) dashboard, styled after htop: per-\n" +
                 "    subsystem hardware load bars, CPU registers, a sprite-capacity gauge,\n" +
@@ -789,8 +789,22 @@ namespace EmuSen.DianaOS
                 "    VRAM tile sheet render as real pictures there, not ANSI blocks) that\n" +
                 "    refreshes on its own timer while gameplay keeps running - Ctrl+C doesn't\n" +
                 "    apply there, just close the window.\n\n" +
+                "    -w  Open the same dashboard in a separate window instead of taking over\n" +
+                "        the terminal, so you can dismiss it and keep playing. In\n" +
+                "        EmuSen.Mistress9, coretop is already windowed by default, so -w is\n" +
+                "        accepted and simply has no additional effect there. In EmuSen.Hotaru\n" +
+                "        (a Raylib console build with no window of its own to reuse), -w spins\n" +
+                "        up a small dedicated Avalonia UI thread the first time it's used and\n" +
+                "        opens a real second OS window from it, entirely separate from the\n" +
+                "        Raylib game window and its main loop - gameplay keeps running behind\n" +
+                "        it. Closing that window is -w's equivalent of Ctrl+C: it's the whole\n" +
+                "        'stop watching coretop' action, nothing else to press. If the current\n" +
+                "        frontend has no window to open at all, -w fails cleanly with\n" +
+                "        \"not supported by this frontend\" rather than falling back to the\n" +
+                "        terminal dashboard.\n\n" +
                 "EXAMPLES\n" +
-                "    coretop",
+                "    coretop\n" +
+                "    coretop -w",
 
             ["mv"] =
                 "NAME\n" +

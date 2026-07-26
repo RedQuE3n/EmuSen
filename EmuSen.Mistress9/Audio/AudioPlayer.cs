@@ -3,13 +3,13 @@ using Silk.NET.SDL;
 using EmuSen.Audio;
 using EmuSen.Common;
 
-namespace EmuSen.TestingStudio.Audio
+namespace EmuSen.Mistress9.Audio
 {
     // Real audio output for the Avalonia frontend, via SDL's queue-based
     // audio API (SDL_OpenAudioDevice + SDL_QueueAudio, no callback) - the
     // same approach EmuSen.Hotaru's PumpAudio takes with Raylib's
     // AudioStream, just against SDL instead, since Silk.NET.SDL was
-    // already a TestingStudio dependency for gamepad input
+    // already a Mistress9 dependency for gamepad input
     // (Input/GamepadManager.cs) and pulling in Raylib-cs here too, just
     // for audio, would be a second audio backend for no reason.
     //
@@ -92,7 +92,7 @@ namespace EmuSen.TestingStudio.Audio
         // model, which is what the backlog throttle below exists to
         // replace.
         //
-        // Safe to call from a non-UI thread (EmuSen.TestingStudio drives
+        // Safe to call from a non-UI thread (EmuSen.Mistress9 drives
         // RunFrame() on its own _emuThread, not the UI thread that opened
         // this device) - SDL_QueueAudio is explicitly documented
         // thread-safe, unlike the joystick/controller polling

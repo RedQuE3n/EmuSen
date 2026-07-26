@@ -1,9 +1,9 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using EmuSen.TestingStudio.Views;
+using EmuSen.Mistress9.Views;
 
-namespace EmuSen.TestingStudio
+namespace EmuSen.Mistress9
 {
     public partial class App : Application
     {

@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="EmuSen.TestingStudio.Views.DebugSettingsWindow"
+        x:Class="EmuSen.Mistress9.Views.DebugSettingsWindow"
         Title="Debug Logging"
         Width="480" Height="560"
         MinWidth="420" MinHeight="360">

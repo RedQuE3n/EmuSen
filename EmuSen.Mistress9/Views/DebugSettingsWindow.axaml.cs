@@ -7,7 +7,7 @@ using Avalonia.Media;
 using EmuSen.Debug;
 using EmuSen.Shell;
 
-namespace EmuSen.TestingStudio.Views
+namespace EmuSen.Mistress9.Views
 {
     // Live GUI for DebugSettings' *Logging flags - previously only
     // reachable by editing DebugSettings.cs and rebuilding, or via the F4

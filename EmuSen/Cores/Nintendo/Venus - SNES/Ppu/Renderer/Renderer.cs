@@ -65,7 +65,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private int[] _subLineLayer = new int[ScreenW];
 
         // headless=true skips window/texture creation entirely - used when a
-        // non-Raylib frontend (e.g. the Avalonia EmuSen.TestingStudio project) is
+        // non-Raylib frontend (e.g. the Avalonia EmuSen.Mistress9 project) is
         // driving frames itself and just wants the finished pixel buffer via
         // GetFrameBufferRgba(), not an on-screen Raylib window. RenderScanline
         // and the Bg/Obj compositing it calls have no Raylib dependency at all

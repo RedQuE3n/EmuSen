@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="EmuSen.TestingStudio.Views.MainWindow"
+        x:Class="EmuSen.Mistress9.Views.MainWindow"
         Title="EmuSen Testing Studio"
         Width="1024" Height="768"
         MinWidth="512" MinHeight="480">

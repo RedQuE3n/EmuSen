@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Serenity", "EmuSen.S
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Hotaru", "EmuSen.Hotaru\EmuSen.Hotaru.csproj", "{7EFE3253-C275-4845-8C09-C710153A2475}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.TestingStudio", "EmuSen.TestingStudio\EmuSen.TestingStudio.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Mistress9", "EmuSen.Mistress9\EmuSen.Mistress9.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Validation", "EmuSen.Validation\EmuSen.Validation.csproj", "{B85BD116-4F6F-4BC7-AE89-90F60316685A}"
 EndProject

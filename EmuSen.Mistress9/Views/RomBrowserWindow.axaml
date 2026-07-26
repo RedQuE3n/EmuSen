@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="EmuSen.TestingStudio.Views.RomBrowserWindow"
+        x:Class="EmuSen.Mistress9.Views.RomBrowserWindow"
         Title="Browse ROMs"
         Width="420" Height="480">
 

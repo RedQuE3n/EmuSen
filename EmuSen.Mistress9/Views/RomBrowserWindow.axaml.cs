@@ -6,7 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 
-namespace EmuSen.TestingStudio.Views
+namespace EmuSen.Mistress9.Views
 {
     // Lists ROM files from a configured directory (AppSettings.RomDirectory,
     // see PreferencesWindow) as a quicker alternative to the OS file picker

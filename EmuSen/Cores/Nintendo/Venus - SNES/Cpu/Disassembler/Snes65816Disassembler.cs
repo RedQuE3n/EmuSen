@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.Debug;
+using EmuSen.Shell;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {

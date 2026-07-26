@@ -1,11 +1,13 @@
-using EmuSen.Debug;
 
 namespace EmuSen.Shell.Commands
 {
     // Unix `echo` - prints its arguments back, joined by single spaces.
     // Doesn't touch IDebugTarget at all - pure text plumbing, not a
-    // debugging tool, which is why it lives here (EmuSen.Shell.Commands)
-    // rather than alongside mem/regs/watch/etc. in EmuSen.Debug.Commands.
+    // debugging tool, unlike most of its neighbors here (mem/regs/watch/
+    // etc.) - EmuSen.Debug.Commands and EmuSen.Shell.Commands used to be
+    // two separate namespaces for exactly that distinction, merged into
+    // one (EmuSen.Shell.Commands) since every one of them is a shell
+    // command regardless of whether it happens to touch a debug target.
     // Its real use is scripting: a marker/separator line in a
     // `--commands` file, or the natural pipeline *source* for `sed`
     // ("echo <text> | sed s/.../.../").

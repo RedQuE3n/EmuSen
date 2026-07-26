@@ -1,5 +1,5 @@
 using System;
-using EmuSen.Debug;
+using EmuSen.Shell;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {

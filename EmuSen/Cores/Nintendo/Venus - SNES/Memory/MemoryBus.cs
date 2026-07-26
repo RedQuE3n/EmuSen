@@ -3,6 +3,7 @@ using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Debug;
+using EmuSen.Shell;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {

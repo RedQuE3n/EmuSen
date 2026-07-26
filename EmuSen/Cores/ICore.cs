@@ -58,6 +58,32 @@ namespace EmuSen.Cores
         // to know anything about this core's native pixel format.
         byte[] GetFrameBufferRgba();
 
+        // Sample rate this core's audio is generated at, fixed for the
+        // whole session - a caller opening a real output device needs this
+        // once up front, before any samples exist to read a rate off of,
+        // so it's its own property rather than folded into
+        // DequeueAudioSamples' return the way IDebugTarget.GetAudioSamples
+        // bundles (Samples, SampleRate) together for a one-shot snapshot.
+        int AudioSampleRate { get; }
+
+        // The audio counterpart to GetFrameBufferRgba() above: drains up
+        // to <maxFrames> interleaved stereo frames (maxFrames*2 shorts,
+        // L then R, 16-bit signed PCM) of already-synthesized audio out of
+        // this core's internal buffer, so a caller can push real sound to
+        // its own output device (a Raylib AudioStream, an SDL audio
+        // device, whatever) without knowing anything about this core's
+        // synthesis hardware. Destructive - removes exactly what it
+        // returns - and never blocks: returns fewer frames than requested,
+        // or an empty array, if less is currently buffered. Deliberately
+        // NOT the same method as IDebugTarget.GetAudioSamples(), which is
+        // a non-destructive ToArray() snapshot built for one-shot WAV
+        // export (`audiodump`) - real-time playback needs to actually
+        // drain the queue as it consumes it, or the buffer would just grow
+        // until it hits its own cap and starts dropping the oldest
+        // samples. A core with no audio output modeled can return an
+        // empty array unconditionally.
+        short[] DequeueAudioSamples(int maxFrames);
+
         void SaveState(string path);
         void LoadState(string path);
 

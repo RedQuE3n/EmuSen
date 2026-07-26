@@ -14,6 +14,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.TestingStudio.Audio;
 using EmuSen.TestingStudio.Input;
 using EmuSen.TestingStudio.Settings;
 
@@ -75,6 +76,13 @@ namespace EmuSen.TestingStudio.Views
         private readonly AppSettings _appSettings = AppSettings.Load();
         private readonly GamepadManager _gamepad;
 
+        // Constructed once at startup and reused across every ROM load,
+        // same lifetime as _gamepad above (and for the same reason -
+        // Pump() below just no-ops via EmulatorSession's own null-session
+        // fallback when nothing's loaded, so there's no need to
+        // open/close the output device per load).
+        private readonly AudioPlayer _audioPlayer;
+
         // Captured once at startup, before anything ever redirects
         // Console.Out - restoring this (rather than whatever
         // _activeLogWriter happened to be at the time) is what lets logging
@@ -96,12 +104,14 @@ namespace EmuSen.TestingStudio.Views
         {
             InitializeComponent();
             _gamepad = new GamepadManager(_gamepadBindings);
+            _audioPlayer = new AudioPlayer();
             Closing += (_, _) =>
             {
                 _timer?.Stop();
                 StopEmulationThread();
                 _session?.SaveSram();
                 _gamepad.Dispose();
+                _audioPlayer.Dispose();
                 StopLogging();
             };
 
@@ -385,6 +395,13 @@ namespace EmuSen.TestingStudio.Views
                     frameStopwatch.Restart();
                     session.RunFrame();
                     runFrameTimeInWindow += frameStopwatch.Elapsed;
+
+                    // Same call-site placement as PumpAudio() in
+                    // EmuSen.RaylibFrontend/Program.cs - right after
+                    // RunFrame(), since that's what actually produces new
+                    // samples to drain. Safe here on _emuThread rather than
+                    // the UI thread - see AudioPlayer.Pump's own comment.
+                    _audioPlayer.Pump(session);
                     cpuSpc700MsInWindow += session.LastFrameCpuSpc700Ms;
                     ppuMsInWindow += session.LastFramePpuMs;
                     hdmaMsInWindow += session.LastFrameHdmaMs;

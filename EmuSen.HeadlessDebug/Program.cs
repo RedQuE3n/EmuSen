@@ -14,7 +14,7 @@ using EmuSen.Debug;
 // results to a plain log file.
 //
 // Usage:
-//   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...
+//   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--tap2 frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...
 //
 // --watch registers an extra watch before the run starts (kind is
 // write/read/both, default write) - space/addr/len match `watch add`'s own
@@ -67,7 +67,7 @@ class Program
         bool verbose = false;
         long cpuLogStart = -1, cpuLogEnd = -1;
         var flagsToEnable = new List<string>();
-        var taps = new List<(long Start, long End, EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton Button)>();
+        var taps = new List<(long Start, long End, EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton Button, int Controller)>();
         var screenshots = new List<(long Frame, string Path)>();
         for (int i = 2; i < args.Length; i++)
         {
@@ -133,7 +133,20 @@ class Program
                 long start = long.Parse(p[0]);
                 var button = Enum.Parse<EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton>(p[1], ignoreCase: true);
                 long duration = p.Length >= 3 ? long.Parse(p[2]) : 4;
-                taps.Add((start, start + duration, button));
+                taps.Add((start, start + duration, button, 1));
+            }
+            else if (args[i] == "--tap2" && i + 1 < args.Length)
+            {
+                // Same as --tap but for controller 2 - added specifically to
+                // test the widely-reported real-world quirk where Super
+                // Mario All-Stars' classic NES-style games (SMB1/2/3, unlike
+                // native SMW) read Player 2's controller instead of
+                // Player 1's.
+                string[] p = args[++i].Split(':');
+                long start = long.Parse(p[0]);
+                var button = Enum.Parse<EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton>(p[1], ignoreCase: true);
+                long duration = p.Length >= 3 ? long.Parse(p[2]) : 4;
+                taps.Add((start, start + duration, button, 2));
             }
         }
 
@@ -224,7 +237,7 @@ class Program
             foreach (var tap in taps)
             {
                 bool pressed = frame >= tap.Start && frame < tap.End;
-                core.Bus!.Input.SetButton(tap.Button, pressed);
+                core.Bus!.Input.SetButton(tap.Button, pressed, tap.Controller);
             }
             if (cpuLogStart >= 0)
             {

@@ -17,7 +17,7 @@ namespace EmuSen.Shell
     // recall, which is what actually makes the F4 prompt feel less
     // painful day to day.
     //
-    // Lives in EmuSen.Shell (not EmuSen.RaylibFrontend) even though only
+    // Lives in EmuSen.Shell (not EmuSen.Hotaru) even though only
     // the Raylib console-window prompt uses it today, specifically so a
     // future console-based entry point doesn't have to duplicate it - the
     // same reasoning ShellInterpreter's own header comment gives for

@@ -7,7 +7,7 @@ namespace EmuSen.Shell.Commands
     // control-flow counterpart to `watch`. Deliberately just add/list/
     // remove here: actually halting and resuming execution requires
     // re-entering a core's own RunFrame() loop, which only the frontend's
-    // own main loop can do (see EmuSen.RaylibFrontend/Program.cs's
+    // own main loop can do (see EmuSen.Hotaru/Program.cs's
     // IsHaltedAtBreakpoint check and its `step`/`continue` handling in the
     // F4 prompt) - same reason `exit`/`step` aren't ShellInterpreter
     // commands either. This command only edits the registry any frontend

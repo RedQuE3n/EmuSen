@@ -26,7 +26,7 @@ namespace EmuSen.Serenity
     // produced it. Lives in its own project (EmuSen.Serenity), separate
     // from both the emulation core (EmuSen.csproj) and any one frontend, so
     // every frontend depends on the same presentation/shader code instead
-    // of a hand-copied duplicate - the console build (EmuSen.RaylibFrontend/
+    // of a hand-copied duplicate - the console build (EmuSen.Hotaru/
     // Program.cs) is the first consumer; Avalonia's EmulatorSession
     // already goes through the same ICore contract and can adopt this once
     // it has a GPU-capable rendering surface of its own (it currently

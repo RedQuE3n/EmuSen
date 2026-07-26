@@ -13,7 +13,7 @@ using EmuSen.Shell;
 using EmuSen.Bindings;
 using EmuSen.Serenity;
 
-namespace EmuSen.RaylibFrontend
+namespace EmuSen.Hotaru
 {
     class Program
     {

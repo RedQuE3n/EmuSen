@@ -196,7 +196,12 @@ class Program
             Emit($"[STATE] Loaded: {options.LoadStatePath}");
         }
 
-        var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+        // See SnesDebugTarget's own constructor comment - feeds
+        // `coretop`'s hardware-load bars (not that this headless entry
+        // point has any interactive use for them today, but there's no
+        // reason for it to report less than the other two frontends do).
+        var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!,
+            () => (core.LastFrameCpuSpc700Ms, core.LastFramePpuMs, core.LastFrameHdmaMs));
         var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget);
 
         // Same two ranges registered from power-on in Hotaru's

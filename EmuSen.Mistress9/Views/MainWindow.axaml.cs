@@ -332,7 +332,10 @@ namespace EmuSen.Mistress9.Views
                 StartLogging(_session.CoreName); // before LoadRom() so Cartridge's own load-time output is captured too
                 _session.LoadRom(path);
 
-                _debugTarget = new SnesDebugTarget(_session.Cpu!, _session.Bus, _session.Renderer!);
+                // See SnesDebugTarget's own constructor comment - feeds
+                // `coretop`'s hardware-load bars.
+                _debugTarget = new SnesDebugTarget(_session.Cpu!, _session.Bus, _session.Renderer!,
+                    () => (_session.LastFrameCpuSpc700Ms, _session.LastFramePpuMs, _session.LastFrameHdmaMs));
                 _consoleWindow?.UpdateTarget(_debugTarget, displayName);
 
                 _bitmap = new WriteableBitmap(

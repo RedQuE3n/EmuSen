@@ -99,12 +99,27 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly CheatRegistry _cheats = new CheatRegistry();
         private readonly BreakpointRegistry _breakpoints = new BreakpointRegistry();
 
-        public SnesDebugTarget(Cpu cpu, MemoryBus bus, Renderer renderer)
+        // Optional - VenusCore.LastFrameCpuSpc700Ms/LastFramePpuMs/
+        // LastFrameHdmaMs (or EmulatorSession's identical pass-through
+        // properties) live on the concrete core/session, not on anything
+        // this class already holds a reference to (Cpu/MemoryBus/
+        // Renderer), so a caller that wants GetHardwareLoad() to report
+        // real numbers passes a delegate reading them; a caller that
+        // doesn't care (the WiseMan test fixtures, anything constructing
+        // this without a live per-frame loop behind it) just omits it,
+        // and GetHardwareLoad() reports "not modeled" the same way
+        // GetApuRegisters/GetAudioChannels do for a core with nothing to
+        // show, rather than every caller needing to pass real-looking
+        // stand-in numbers just to satisfy the constructor.
+        private readonly Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? _frameTimings;
+
+        public SnesDebugTarget(Cpu cpu, MemoryBus bus, Renderer renderer, Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? frameTimings = null)
         {
             _cpu = cpu;
             _bus = bus;
             _ppu = bus.Ppu;
             _renderer = renderer;
+            _frameTimings = frameTimings;
             bus.WriteObserver = this;
             bus.ReadObserver = this;
             bus.FrameObserver = this;
@@ -585,5 +600,33 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         }
 
         public void SetChannelMuted(int index, bool muted) => _bus.Spc700.Dsp.SetVoiceMuted(index, muted);
+
+        // Normalizes each raw millisecond timing against a 60fps frame's
+        // real wall-clock budget (~16.67ms) - the same "percent of one
+        // frame" framing VenusCore's own profiling comments already use
+        // internally, just exposed generically here. Clamped to 100 since
+        // a frame running behind (dropped frames, a debug prompt having
+        // just eaten wall-clock time) can otherwise report over 100%,
+        // which would look like a rendering bug in a bar that's only
+        // ever meant to go up to "full."
+        public IReadOnlyList<DebugLoadInfo> GetHardwareLoad()
+        {
+            if (_frameTimings is null) return Array.Empty<DebugLoadInfo>();
+
+            var (cpuMs, ppuMs, hdmaMs) = _frameTimings();
+            const double frameBudgetMs = 1000.0 / 60.0;
+            double ToPercent(double ms) => Math.Min(100.0, ms / frameBudgetMs * 100.0);
+
+            return new[]
+            {
+                new DebugLoadInfo("CPU+SPC700", ToPercent(cpuMs)),
+                new DebugLoadInfo("PPU", ToPercent(ppuMs)),
+                new DebugLoadInfo("HDMA", ToPercent(hdmaMs)),
+            };
+        }
+
+        // 128 sprites total in OAM - a fixed, documented real-hardware
+        // constant, not something derived from live state.
+        public int MaxSprites => 128;
     }
 }

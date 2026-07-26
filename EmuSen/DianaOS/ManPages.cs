@@ -40,24 +40,25 @@ namespace EmuSen.DianaOS
                 "SYNOPSIS\n" +
                 "    man [command]\n\n" +
                 "DESCRIPTION\n" +
-                "    With no argument, same as 'help' - lists every command with its one-line\n" +
-                "    usage. With a command name, prints that command's full manual page\n" +
-                "    (this text) instead of just its one-liner. 'help' is now just an alias\n" +
-                "    for this: 'help' alone still lists everything, and 'help <command>' is\n" +
-                "    the same as 'man <command>'.\n\n" +
+                "    The detail lookup: with a command name, prints that command's full\n" +
+                "    manual page (this text) instead of just its one-line usage. With no\n" +
+                "    argument, there's nothing else useful to show, so it falls back to the\n" +
+                "    same overview 'help' prints. 'help' and 'man' are two separate commands,\n" +
+                "    not aliases of each other - 'help' always lists everything and never\n" +
+                "    shows a single command's full page; 'man' is the other way around.\n\n" +
                 "EXAMPLES\n" +
                 "    man\n" +
-                "    man watch\n" +
-                "    help mem",
+                "    man watch",
 
             ["help"] =
                 "NAME\n" +
-                "    help - alias for 'man'\n\n" +
+                "    help - list every command with a brief explanation\n\n" +
                 "SYNOPSIS\n" +
-                "    help [command]\n\n" +
+                "    help\n\n" +
                 "DESCRIPTION\n" +
-                "    See 'man man' - 'help' and 'man' are the same command under two names,\n" +
-                "    kept for anyone typing out of habit from a real shell.",
+                "    Prints every command, one line each, with a brief explanation of what it\n" +
+                "    does - the quick \"what's available\" overview. Ignores any arguments;\n" +
+                "    for a specific command's full manual page, use 'man <command>' instead.",
 
             ["summary"] =
                 "NAME\n" +

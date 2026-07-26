@@ -1,5 +1,5 @@
 using System;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Cores.Nintendo.Venus.Video
 {

@@ -3,7 +3,7 @@ using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh90;
 using EmuSen.Pharaoh90.Cli;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 // Headless AI-agent-driven debugging harness - the "not yet built" item
 // from Man pages/EmuSen_Core_Gameplan.md §1's backlog. Every investigation
@@ -12,7 +12,7 @@ using EmuSen.Shell;
 // and manually relay the console output back. This loads a ROM, runs the
 // real VenusCore for a fixed number of frames with no window/audio/human
 // involved, then feeds a script of the exact same debug commands the F4
-// prompt accepts (ShellInterpreter.Execute doesn't care where a
+// prompt accepts (DianaOSInterpreter.Execute doesn't care where a
 // command line comes from - see that class's own comment) and writes the
 // results to a plain log file.
 //
@@ -23,7 +23,7 @@ using EmuSen.Shell;
 // --watch registers an extra watch before the run starts (kind is
 // write/read/both, default write) - space/addr/len match `watch add`'s own
 // arguments. --script is a text file of newline-separated debug commands
-// (anything ShellInterpreter understands - `watch log`, `disasm`,
+// (anything DianaOSInterpreter understands - `watch log`, `disasm`,
 // `writers`, etc.) run once after the frame loop finishes; if omitted, a
 // default script just dumps every registered watch's full event log,
 // which is exactly what the Yoshi/coin investigation needs. --out mirrors
@@ -86,7 +86,7 @@ using EmuSen.Shell;
 //   audiodump <path> [maxsamples] - write whatever's currently buffered in
 //                             IDebugTarget.GetAudioSamples() (non-destructive - it never
 //                             dequeues) out as a standard 16-bit PCM .wav file.
-//   anything else           - passed straight to ShellInterpreter.Execute, same as --script
+//   anything else           - passed straight to DianaOSInterpreter.Execute, same as --script
 // <frames> is still required and still means what it always did in every
 // other mode - here it becomes a hard safety cap (a script's `frames`
 // requests refuse to advance past it) so a typo can't hang the process
@@ -197,7 +197,7 @@ class Program
         }
 
         var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
-        var debugCmd = ShellInterpreter.CreateDefault(debugTarget);
+        var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget);
 
         // Same two ranges registered from power-on in Hotaru's
         // Program.cs for the Yoshi/coin investigation - duplicated here

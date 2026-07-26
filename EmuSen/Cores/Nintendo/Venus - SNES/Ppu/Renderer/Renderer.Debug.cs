@@ -2,7 +2,7 @@ using System;
 using System.Numerics;
 using Raylib_cs;
 using EmuSen.Cores.Nintendo.Venus.Memory;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 using EmuSen.Graphics;
 
 namespace EmuSen.Cores.Nintendo.Venus.Video

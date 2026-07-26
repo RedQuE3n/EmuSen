@@ -1,7 +1,7 @@
 using System;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Debug;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {

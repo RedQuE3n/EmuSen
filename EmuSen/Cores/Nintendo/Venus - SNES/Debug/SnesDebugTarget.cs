@@ -4,7 +4,7 @@ using System.Linq;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
-using EmuSen.Shell;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {

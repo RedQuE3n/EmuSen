@@ -28,7 +28,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Cheats
         // isn't exactly 8 hex digits once non-hex separators (spaces,
         // dashes, colons - some published code lists format them
         // "7E01F6:63" or "7E01F6-63") are stripped. Callers (CheatCommand)
-        // let this propagate up to ShellInterpreter's existing
+        // let this propagate up to DianaOSInterpreter's existing
         // catch-and-stringify handling, same as every other command's
         // parse errors.
         public static (int Address, byte Value) Decode(string code)

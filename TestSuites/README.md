@@ -34,7 +34,7 @@ vendored release snapshot; keeping them would have silently dropped the
 upstream README explicitly lists as part of what a release zip contains)
 from this repo's own tracked files.
 
-**Complementary to, not a replacement for, `EmuSen.Validation`'s existing
+**Complementary to, not a replacement for, `EmuSen.Tomoe`'s existing
 TomHarte/ProcessorTests-based single-step validation** (see
 `EmuSen_Debugging_Tools_Reference_v5.md` §3.16) - that harness single-steps
 one instruction at a time against JSON ground-truth vectors and checks
@@ -44,6 +44,6 @@ run end-to-end inside the emulator itself (`EmuSen.Pharaoh90`'s
 frames, read back a pass/fail indicator) and catch a different class of bug:
 anything that only shows up running as real 65816/SPC700 machine code
 through the full CPU/APU pipeline, not just via the single-step adapter
-`EmuSen.Validation` drives directly. Not wired into either harness yet -
+`EmuSen.Tomoe` drives directly. Not wired into either harness yet -
 vendored here so that integration is a follow-up, not blocked on
 re-sourcing the ROMs.

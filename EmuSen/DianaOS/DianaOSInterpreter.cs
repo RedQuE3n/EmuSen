@@ -50,6 +50,19 @@ namespace EmuSen.DianaOS
         // comment for the full flow.
         private string _pendingInput = "";
 
+        // Guards RunScript (source/.) against a self-referential or
+        // mutually-recursive script (`a.txt` sourcing itself, or `a.txt`
+        // sourcing `b.txt` sourcing `a.txt`, ...) - each nested `source`
+        // call recurses through the C# call stack (SubmitCore ->
+        // ExecuteStatementList -> ... -> Dispatch -> RunScript ->
+        // SubmitCore -> ...), and unlike a runaway while/for loop
+        // (caught by CheckTimeout's wall-clock budget), that recursion
+        // has no other circuit breaker - left unchecked it would end in
+        // an uncatchable StackOverflowException that takes the whole
+        // process down instead of a clean error message.
+        private int _sourceDepth;
+        private const int MaxSourceDepth = 20;
+
         public CommandHistory History { get; }
 
         // True between Submit() calls while a multi-line construct (an
@@ -200,14 +213,27 @@ namespace EmuSen.DianaOS
         // (which also feeds one raw file line per call) get correct
         // multi-line control-flow support for free from this, without
         // either caller needing to know anything about the grammar.
-        public (bool NeedsMoreInput, string Output) Submit(string rawLine)
+        public (bool NeedsMoreInput, string Output) Submit(string rawLine) => SubmitCore(rawLine, interactive: true);
+
+        // `source`/`.` (RunScript below) feeds a script file's lines
+        // through this same interpreter one at a time too, sharing this
+        // exact buffering/execution path (and, crucially, its variables -
+        // real bash `source` runs in the CURRENT shell's scope, not a
+        // subprocess) rather than duplicating it. `interactive: false`
+        // keeps a sourced script out of `history`/`!N` recall (real bash
+        // doesn't record a sourced script's own lines into the calling
+        // shell's history either) and disables `!`/`!!` expansion for it
+        // (a script referencing "the interactive session's last command"
+        // would be confusing at best, since a script wasn't typed
+        // interactively at all).
+        private (bool NeedsMoreInput, string Output) SubmitCore(string rawLine, bool interactive)
         {
             string line = rawLine ?? "";
 
             // '!N'/'!!' history recall only makes sense as the START of a
             // brand-new command, never mid-block - a continuation line
             // inside an open "if" typed as "!!" is just a literal word.
-            if (_pendingInput.Length == 0 && line.TrimStart().StartsWith('!'))
+            if (interactive && _pendingInput.Length == 0 && line.TrimStart().StartsWith('!'))
             {
                 try { line = ExpandHistoryReference(line.Trim()); }
                 catch (Exception ex) { return (false, $"Error: {ex.Message}"); }
@@ -252,7 +278,7 @@ namespace EmuSen.DianaOS
             string finalText = combined.Trim();
             if (finalText.Length == 0) return (false, "");
 
-            History.Add(finalText);
+            if (interactive) History.Add(finalText);
             if (_isRoot) _stopwatch = Stopwatch.StartNew();
 
             var sb = new StringBuilder();
@@ -497,6 +523,15 @@ namespace EmuSen.DianaOS
                 return "";
             }
 
+            // `source <path>` (alias `. <path>`) - runs a script file's
+            // lines in THIS interpreter's own scope (variables set by the
+            // script are still set afterward, same as real bash `source`,
+            // and unlike running a separate process would be) rather than
+            // an isolated one. See RunScript's own comment for why this
+            // needs to be special-cased here rather than an ordinary
+            // IDianaOSCommand.
+            if (cmd == "source" || cmd == ".") return RunScript(args);
+
             if (!_commands.TryGetValue(cmd, out IDianaOSCommand? command))
             {
                 return DianaOSResult.Fail($"Unknown command '{cmd}'. Type 'help' for a list.");
@@ -516,6 +551,72 @@ namespace EmuSen.DianaOS
             }
         }
 
+        // Backs `source`/`.` (special-cased in Dispatch, not an ordinary
+        // IDianaOSCommand, because it needs to feed lines back through
+        // THIS interpreter's own SubmitCore - an IDianaOSCommand only
+        // ever gets a target/args/stdin, with no way to reach the
+        // interpreter driving it at all). Walled to DianaOSSandbox like
+        // every other real-file command here; each non-blank, non-comment
+        // (`#`) line runs exactly as if it had been typed at the prompt,
+        // in this same interpreter's own variable/history scope.
+        private DianaOSResult RunScript(string[] args)
+        {
+            if (args.Length < 2) return DianaOSResult.Fail($"{args[0]}: usage: {args[0]} <path>");
+
+            if (_sourceDepth >= MaxSourceDepth)
+            {
+                return DianaOSResult.Fail($"{args[0]}: too many nested source calls (>{MaxSourceDepth}) - probably a self-referential script.");
+            }
+
+            string requested = args[1];
+            if (!DianaOSSandbox.TryResolve(requested, out string resolved))
+            {
+                return DianaOSResult.Fail($"{args[0]}: '{requested}' is outside the project sandbox ({DianaOSSandbox.RootDirectory})");
+            }
+            if (!File.Exists(resolved))
+            {
+                return DianaOSResult.Fail($"{args[0]}: no such file: {requested}");
+            }
+
+            string[] lines;
+            try { lines = File.ReadAllLines(resolved); }
+            catch (Exception ex) { return DianaOSResult.Fail($"{args[0]}: {ex.Message}"); }
+
+            var sb = new StringBuilder();
+            _sourceDepth++;
+            try
+            {
+                foreach (string rawLine in lines)
+                {
+                    string trimmed = rawLine.TrimStart();
+                    if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
+
+                    (bool needsMore, string output) = SubmitCore(rawLine, interactive: false);
+                    if (needsMore) continue; // still buffering a multi-line if/for/while block
+                    if (output.Length > 0) { sb.Append(output); sb.Append('\n'); }
+                }
+            }
+            finally
+            {
+                _sourceDepth--;
+            }
+
+            // A script that ends mid-block (an "if" with no matching "fi",
+            // say) would otherwise leave _pendingInput populated for
+            // whatever's typed into the console NEXT, silently treating
+            // it as a continuation of the broken script - surface it as
+            // an error and reset instead.
+            if (IsAwaitingMoreInput)
+            {
+                _pendingInput = "";
+                sb.Append($"{args[0]}: unexpected end of file - unterminated block in {requested}");
+            }
+
+            string result = sb.ToString();
+            if (result.EndsWith('\n')) result = result[..^1];
+            return result;
+        }
+
         private string Help()
         {
             var lines = new List<string>
@@ -528,6 +629,7 @@ namespace EmuSen.DianaOS
             lines.Add("  export NAME[=value]           set a shell variable (no real subprocess env to export TO -");
             lines.Add("                                kept for script compatibility with real bash habits)");
             lines.Add("  unset NAME                    remove a shell variable");
+            lines.Add("  source <path> (alias: .)      run a script file's lines in this same shell (variables/history scope)");
             lines.Add("  if/then/elif/else/fi, for/in/do/done, while|until/do/done, break, continue");
             lines.Add("                                control flow - see the reference doc for the full grammar");
             lines.Add("");

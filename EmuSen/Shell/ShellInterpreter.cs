@@ -75,7 +75,17 @@ namespace EmuSen.Shell
         // (EmuSen.Hotaru, EmuSen.Pharaoh90) actually wants,
         // rather than each independently re-listing 30-odd command
         // classes and risking them drifting out of sync with each other.
-        public static ShellInterpreter CreateDefault(IDebugTarget? target)
+        // `extraCommands` lets a specific frontend (e.g. Mistress9's GUI
+        // console) register a handful of host-specific commands - things
+        // that need to reach outside IDebugTarget entirely (pausing the
+        // host's own emulation thread, say) and so can't live in
+        // EmuSen.Shell.Commands alongside the core-agnostic ones below -
+        // without that frontend having to hand-roll its own copy of this
+        // entire ~30-command registry just to add a couple more. Names
+        // must not collide with the standard set or with each other -
+        // the constructor's Dictionary build throws on a duplicate key,
+        // same as it always has for the standard list alone.
+        public static ShellInterpreter CreateDefault(IDebugTarget? target, IEnumerable<IShellCommand>? extraCommands = null)
         {
             // snapshot/diff share one SnapshotStore (see that file's own
             // comment) - constructed once here, same lifetime as every
@@ -122,6 +132,8 @@ namespace EmuSen.Shell
                 new Commands.BracketCommand(),
                 new Commands.HistoryCommand(history),
             };
+
+            if (extraCommands is not null) commands.AddRange(extraCommands);
 
             return new ShellInterpreter(target, commands, history);
         }

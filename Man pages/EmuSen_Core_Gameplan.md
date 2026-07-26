@@ -45,7 +45,7 @@
 
 Two items were identified in an architecture review and deliberately *not* rushed:
 
-- **The `Renderer`/Raylib split.** `Renderer` still mixes pure pixel computation with Raylib window/texture ownership, even in headless mode. Real coupling issue, but this is core rendering code with a lot of delicate, hard-won accuracy work riding on it (the entire Mode 0-7 reconciliation, hi-res, mosaic, etc.) — treat as its own dedicated, carefully-planned pass, not a quick cleanup alongside something else.
+- ~~The `Renderer`/Raylib split.~~ Done, as part of `EmuSen.Hotaru`'s Raylib→Avalonia migration (see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note): `Renderer.DrawDebugPanels`/`Shutdown()` (the on-window debug-overlay drawing and its GPU texture) are gone entirely, so `Renderer` no longer owns any window/texture at all. It still keeps `Raylib_cs.Color` as its internal pixel type (91 uses) — a separate, deliberate decision (`EmuSen.csproj` keeps a lightweight `Raylib-cs` reference purely for that struct) rather than a full `Rgba32` migration, since the actual coupling this item worried about was window/texture ownership, not the struct itself.
 - **Watchpoints beyond WRAM.** `MemoryBus`'s `IWriteObserver` hook (used by the debug toolchain's watch mechanism) is only wired into the WRAM write path today. Extending it to `Ppu`'s VRAM/CGRAM/OAM writes and the general CPU-bus/SRAM path is a natural, low-risk, additive follow-up whenever a specific investigation needs to watch one of those.
 - ~~The drive-by namespace rename~~ — done: `Cores/Snes/` → `Cores/Nintendo/Venus - SNES/`, matching namespace rename applied throughout.
 

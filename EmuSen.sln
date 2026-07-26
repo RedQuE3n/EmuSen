@@ -11,7 +11,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Hotaru", "EmuSen.Hot
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Mistress9", "EmuSen.Mistress9\EmuSen.Mistress9.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Validation", "EmuSen.Validation\EmuSen.Validation.csproj", "{B85BD116-4F6F-4BC7-AE89-90F60316685A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Tomoe", "EmuSen.Tomoe\EmuSen.Tomoe.csproj", "{B85BD116-4F6F-4BC7-AE89-90F60316685A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Pharaoh90", "EmuSen.Pharaoh90\EmuSen.Pharaoh90.csproj", "{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}"
 EndProject

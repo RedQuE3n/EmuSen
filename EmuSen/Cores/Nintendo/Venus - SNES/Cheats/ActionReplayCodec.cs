@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace EmuSen.Shell.Cheats
+namespace EmuSen.Cores.Nintendo.Venus.Cheats
 {
     // Decodes Pro Action Replay / Game Wizard style RAM-poke codes - both
     // Datel devices, and (per published documentation of the format) using

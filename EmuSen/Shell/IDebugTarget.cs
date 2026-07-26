@@ -157,6 +157,14 @@ namespace EmuSen.Shell
         public int Length => Bytes.Count;
     }
 
+    // Which kind of static code-to-address reference an instruction makes -
+    // see IDebugTarget.ClassifyStaticReference for the full picture. Named
+    // after the shell commands each kind backs (`callers`/`writers`/
+    // `readers`), not after any one CPU's own mnemonics, since a future
+    // core's equivalent "this is a call"/"this stores to X"/"this loads
+    // from X" instructions won't share the 65816's mnemonic names either.
+    public enum StaticReferenceKind { Call, Write, Read }
+
     // The contract a console core implements to plug into the shared debug
     // toolchain. Started out scoped to read/query capabilities only, with
     // breakpoints and single-stepping called out as a future extension
@@ -247,6 +255,27 @@ namespace EmuSen.Shell
         // at all can legitimately return an empty list.
         IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count);
 
+        // Classifies whether a disassembled instruction statically
+        // references an address - the code-only counterpart to
+        // Disassemble() above, backing the `callers`/`writers`/`readers`
+        // commands' "who could call/write/read this address" static scans.
+        // Deliberately returns null for anything whose target ISN'T
+        // knowable from the instruction bytes alone (a 65816 direct-page,
+        // indexed, or indirect form, whose real address depends on runtime
+        // register/D-register state) rather than guessing - same principle
+        // Disassemble()'s own formatting already follows.
+        //
+        // Moved here from the shell layer specifically because it's pure
+        // ISA knowledge (which opcodes are calls/stores/loads, and which of
+        // *those* have a statically-resolvable operand) - exactly the same
+        // "core does the decoding, the command does the scanning/matching"
+        // split TilemapEntryStride/DecodeTilemapEntry and DecodeTilePixels
+        // below already use, so `callers`/`writers`/`readers` don't need to
+        // know anything about a specific CPU's opcode table. A target with
+        // no meaningful concept of this (or that just hasn't implemented it
+        // yet) can always return null for every instruction.
+        (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(DisassembledInstruction instr);
+
         // Free-text escape hatch covering whatever isn't (yet) exposed as
         // structured data above - lets a target be genuinely useful on day
         // one without needing every possible piece of state modeled
@@ -273,6 +302,22 @@ namespace EmuSen.Shell
         // position or a HUD tile change can be confirmed by comparing
         // tilemap entries as text instead of eyeballing two screenshots.
         string DecodeTilemapEntry(IDebugMemorySpace space, int address);
+
+        // Decodes one 8x8 tile's pixel-index grid (64 entries, row-major,
+        // each a palette index 0..2^bpp-1, 0 = transparent by this
+        // toolchain's own convention) from raw bytes at <address> in
+        // <space> - backs the `tile` command's ASCII rendering. Same "core
+        // does the decoding, the command does the formatting" split as
+        // DecodeTilemapEntry above: an SNES tile is bpp/2 bitplane pairs of
+        // 16 bytes each (this core's own planar format), but nothing
+        // guarantees a future core's tile format looks anything like that
+        // (a bitmap-tile format wouldn't be planar at all), so the shell
+        // layer has no business assuming one shape here either. <bpp>
+        // values this target doesn't support should throw a clear
+        // ArgumentException rather than silently returning garbage - the
+        // command surfaces that message as-is, matching how a bad <space>
+        // name already fails via FindSpace.
+        byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp);
 
         // Exports the current tile/character memory as a plain RGBA image,
         // for a headless harness to write straight to disk (see

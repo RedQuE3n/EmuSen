@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace EmuSen.Shell.Cheats
+namespace EmuSen.Cores.Nintendo.Venus.Cheats
 {
     // Decodes real SNES Game Genie codes (Galoob) - a completely different
     // mechanism from ActionReplayCodec, and not just a different letter

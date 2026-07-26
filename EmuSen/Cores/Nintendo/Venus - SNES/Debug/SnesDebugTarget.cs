@@ -219,6 +219,55 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return Snes65816Disassembler.Disassemble(a => space.Read(a), address, count, _cpu.E, mFlagSet, xFlagSet);
         }
 
+        // Moved from CallersCommand/WritersCommand/ReadersCommand (which
+        // used to hardcode this exact opcode-byte switch directly in the
+        // "core-agnostic" shell layer, despite their own doc comments
+        // claiming otherwise) - see IDebugTarget.ClassifyStaticReference's
+        // own comment for the full rationale. Deliberately only matches
+        // addressing modes whose target is knowable from the instruction
+        // bytes alone:
+        //   - Absolute (JSR/JMP/STA/STX/STY/STZ/LDA/LDX/LDY $nnnn) - bank
+        //     assumed to equal the instruction's own bank (DBR-as-PB for
+        //     stores/loads, PB-as-PB for JSR/JMP, both the same convention
+        //     this scan always used). Not always true at runtime (DBR can
+        //     differ from PB) but it's the same best-effort assumption this
+        //     mechanism has always made, not a new one introduced by this
+        //     move.
+        //   - Absolute long (JSL/STA/LDA $nnnnnn) - exact 24-bit target, no
+        //     assumption needed. LDX/LDY/STX/STY/STZ have no long form on
+        //     the 65816, so they only ever contribute the absolute case.
+        // Everything else (direct-page, indexed, indirect, stack-relative,
+        // immediate) is excluded rather than guessed at - their real target
+        // depends on runtime register/D-register/S-register state a static
+        // scan has no way to know. JMP ($nnnn)/JMP ($nnnn,X) (indirect
+        // forms - same 3-byte length and "JMP" mnemonic as the direct form,
+        // but opcodes 0x6C/0x7C, not matched below) are the same kind of
+        // deliberate exclusion.
+        public (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(DisassembledInstruction instr)
+        {
+            byte opcode = instr.Bytes[0];
+            int Abs() => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8));
+            int Long() => instr.Bytes[1] | (instr.Bytes[2] << 8) | (instr.Bytes[3] << 16);
+
+            return opcode switch
+            {
+                0x20 => (StaticReferenceKind.Call, Abs()),  // JSR absolute
+                0x22 => (StaticReferenceKind.Call, Long()), // JSL absolute long
+                0x4C => (StaticReferenceKind.Call, Abs()),  // JMP absolute
+                0x5C => (StaticReferenceKind.Call, Long()), // JMP absolute long
+                0x8D => (StaticReferenceKind.Write, Abs()),  // STA absolute
+                0x8F => (StaticReferenceKind.Write, Long()), // STA absolute long
+                0x8E => (StaticReferenceKind.Write, Abs()),  // STX absolute
+                0x8C => (StaticReferenceKind.Write, Abs()),  // STY absolute
+                0x9C => (StaticReferenceKind.Write, Abs()),  // STZ absolute
+                0xAD => (StaticReferenceKind.Read, Abs()),   // LDA absolute
+                0xAF => (StaticReferenceKind.Read, Long()),  // LDA absolute long
+                0xAE => (StaticReferenceKind.Read, Abs()),   // LDX absolute
+                0xAC => (StaticReferenceKind.Read, Abs()),   // LDY absolute
+                _ => null,
+            };
+        }
+
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces()
         {
             return new IDebugMemorySpace[]
@@ -450,6 +499,53 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             bool vFlip = (entry & 0x8000) != 0;
 
             return $"{tileIndex:X3}{palette}{(priority ? 'P' : '.')}{(hFlip ? 'H' : '.')}{(vFlip ? 'V' : '.')}";
+        }
+
+        // Moved from TileCommand (which used to hardcode this exact
+        // bitplane layout directly in the "core-agnostic" shell layer) -
+        // see IDebugTarget.DecodeTilePixels's own comment for the full
+        // rationale. Standard SNES planar tile format, consistent across
+        // every BG/OBJ layer: bpp/2 bitplane pairs of 16 bytes each (2bpp =
+        // 1 pair/16 bytes, 4bpp = 2 pairs/32 bytes, 8bpp = 4 pairs/64
+        // bytes), each pair row-interleaved (2 bytes per row, low bit of
+        // each byte contributing one bitplane) - same layout SampleBgPixel
+        // in Renderer.Backgrounds.cs uses for real rendering.
+        public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp)
+        {
+            if (bpp != 2 && bpp != 4 && bpp != 8)
+            {
+                throw new ArgumentException($"bpp must be 2, 4, or 8 (got {bpp}) - the SNES has no other planar tile depth.");
+            }
+
+            var pixels = new byte[64];
+            for (int row = 0; row < 8; row++)
+            {
+                byte p0 = space.Read(address + row * 2);
+                byte p1 = space.Read(address + row * 2 + 1);
+                byte p2 = 0, p3 = 0, p4 = 0, p5 = 0, p6 = 0, p7 = 0;
+                if (bpp >= 4)
+                {
+                    p2 = space.Read(address + 16 + row * 2);
+                    p3 = space.Read(address + 16 + row * 2 + 1);
+                }
+                if (bpp == 8)
+                {
+                    p4 = space.Read(address + 32 + row * 2);
+                    p5 = space.Read(address + 32 + row * 2 + 1);
+                    p6 = space.Read(address + 48 + row * 2);
+                    p7 = space.Read(address + 48 + row * 2 + 1);
+                }
+
+                for (int col = 0; col < 8; col++)
+                {
+                    int bit = 7 - col;
+                    int val = ((p0 >> bit) & 1) | (((p1 >> bit) & 1) << 1);
+                    if (bpp >= 4) val |= (((p2 >> bit) & 1) << 2) | (((p3 >> bit) & 1) << 3);
+                    if (bpp == 8) val |= (((p4 >> bit) & 1) << 4) | (((p5 >> bit) & 1) << 5) | (((p6 >> bit) & 1) << 6) | (((p7 >> bit) & 1) << 7);
+                    pixels[row * 8 + col] = (byte)val;
+                }
+            }
+            return pixels;
         }
 
         // Delegates straight to Renderer's own headless-safe export -

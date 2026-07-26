@@ -419,16 +419,6 @@ namespace EmuSen.Hotaru.Views
                         break;
                     }
                 }
-                if (!_debugCmd.IsAwaitingMoreInput && trimmed.StartsWith("state ", StringComparison.OrdinalIgnoreCase))
-                {
-                    string[] stateParts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    string sub = stateParts.Length >= 2 ? stateParts[1].ToLowerInvariant() : "";
-                    string path = stateParts.Length >= 3 ? stateParts[2] : _statePath;
-                    if (sub == "save") SaveState(path);
-                    else if (sub == "load") LoadState(path);
-                    else Console.WriteLine("Usage: state save|load [path]  (defaults to the F5/F9 path if omitted)");
-                    continue;
-                }
                 if (!_debugCmd.IsAwaitingMoreInput && (trimmed.Equals("step", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("s", StringComparison.OrdinalIgnoreCase)))
                 {
                     _debugTarget.Breakpoints.ArmSingleStep();

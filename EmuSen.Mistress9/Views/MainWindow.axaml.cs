@@ -268,7 +268,32 @@ namespace EmuSen.Mistress9.Views
             new ResumeCommand(ResumeEmulation, () => IsPaused),
             new CoretopWindowCommand(OpenCoretopWindow),
             new FeedCommand(() => Activate()),
+            new EmuSen.DianaOS.Commands.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
         };
+
+        // StateCommand's save/load delegates - can't just be
+        // `_session.SaveState`/`LoadState` method groups the way
+        // MakeEmulationControlCommands() reuses PauseEmulation/
+        // ResumeEmulation directly, since `_session` can still be null the
+        // first time this window's console is opened (before any ROM has
+        // ever loaded) - a method-group conversion would dereference it
+        // immediately, at command-construction time, not when the command
+        // actually runs. These defer that check to call time instead, and
+        // throw the same clean message CoretopWindowCommand's own
+        // RequireTarget-backed "No ROM loaded" case already establishes,
+        // rather than letting StateCommand's try/catch surface a bare
+        // NullReferenceException's own unhelpful message.
+        private void SaveStateFromConsole(string path)
+        {
+            if (_session is null) throw new InvalidOperationException("No ROM loaded.");
+            _session.SaveState(path);
+        }
+
+        private void LoadStateFromConsole(string path)
+        {
+            if (_session is null) throw new InvalidOperationException("No ROM loaded.");
+            _session.LoadState(path);
+        }
 
         // Opens (or brings forward/updates) CoretopWindow - same at-most-
         // one/reuse pattern as OnShellConsoleClick uses for

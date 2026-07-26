@@ -35,6 +35,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         public int CycleBudget { get; set; }
         public int TotalBytesStored { get; private set; }
 
+        // Side channel for the "+2 cycles if a conditional branch is taken"
+        // penalty (BCC/BCS/BEQ/BNE/BMI/BPL/BVC/BVS, CBNE, DBNZ, BBS/BBC-style
+        // bit-branches) - real SPC700 timing, but not a fixed per-opcode
+        // cost since it only applies when the branch is actually taken.
+        // Opcode handlers in Spc700.Opcodes.cs set this instead of touching
+        // CycleBudget directly, so Step() can tick the DSP/timers for the
+        // real total (base + penalty) in one place - see §2.9's own bug
+        // writeup in Venus_APU.md for why this matters: DSP.Tick() has to
+        // see every elapsed SPC700 cycle to keep sample generation paced
+        // correctly, and a decrement that bypasses it is silently lost
+        // audio time, not just a bookkeeping quirk.
+        private int _branchExtraCycles;
+
         public byte[] Ram = new byte[65536]; 
         
         // --- S-DSP Instance ---
@@ -357,6 +370,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 throw new NotImplementedException($"Unimplemented SPC700 Opcode: 0x{opcode:X2} at PC: 0x{(PC - 1):X4}");
             }
 
+            _branchExtraCycles = 0;
             ushort targetAddr = inst.AddrMode();
             inst.Operate(targetAddr);
 
@@ -375,12 +389,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
 
 
-            TickTimers(inst.Cycles);
-            
-            // Tick the DSP along with the timers
-            Dsp.Tick(inst.Cycles);
+            // inst.Cycles is this opcode's fixed base cost; _branchExtraCycles
+            // is the dynamic "+2 if taken" penalty a branch/CBNE/DBNZ handler
+            // may have reported during Operate() above (see its own field
+            // comment) - both need to reach the DSP/timers, not just
+            // CycleBudget, or real elapsed SPC700 time silently doesn't
+            // advance the audio clock to match.
+            int totalCycles = inst.Cycles + _branchExtraCycles;
 
-            CycleBudget -= inst.Cycles;
+            TickTimers(totalCycles);
+
+            // Tick the DSP along with the timers
+            Dsp.Tick(totalCycles);
+
+            CycleBudget -= totalCycles;
         }
 
         private void TickTimers(int cycles)

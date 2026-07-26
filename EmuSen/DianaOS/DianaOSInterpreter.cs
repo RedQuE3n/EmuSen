@@ -177,6 +177,9 @@ namespace EmuSen.DianaOS
                 new Commands.TestCommand(),
                 new Commands.BracketCommand(),
                 new Commands.HistoryCommand(history),
+                new Commands.ResumeCommand(),
+                new Commands.ShutdownCommand(),
+                new Commands.StepCommand(),
             };
 
             if (extraCommands is not null)
@@ -321,7 +324,25 @@ namespace EmuSen.DianaOS
                 ExecuteStatementList(script, sb);
             }
             catch (BreakSignal) { /* bare 'break' outside any loop - bash silently no-ops this */ }
-            catch (ContinueSignal) { /* likewise for a bare 'continue' */ }
+            catch (ContinueSignal)
+            {
+                // A bare 'continue' (no enclosing loop) never reaches
+                // Dispatch at all - the parser recognizes it as a loop-
+                // control keyword and ExecuteStatementList throws this
+                // signal directly, unwinding straight past
+                // ExecuteSimpleCommand's own "set _pendingHostAction from
+                // the dispatched command's result" logic. ResumeCommand's
+                // own 'continue' alias (normalized in Dispatch) can
+                // therefore only ever be reached from INSIDE a loop, where
+                // ExecuteFor/ExecuteWhile already catch and handle this
+                // signal themselves - so this is the only place a bare,
+                // top-level 'continue' can ever actually signal Resume,
+                // matching this shell's own established convention (see
+                // ResumeCommand's own comment) that 'continue' typed at an
+                // interactive prompt means "resume gameplay," not real
+                // bash's plain no-op.
+                _pendingHostAction = new HostAction.Resume();
+            }
             catch (Exception ex)
             {
                 if (sb.Length > 0 && sb[^1] != '\n') sb.Append('\n');
@@ -589,6 +610,20 @@ namespace EmuSen.DianaOS
             // needs to be special-cased here rather than an ordinary
             // IDianaOSCommand.
             if (cmd == "source" || cmd == ".") return RunScript(args);
+
+            // Alias normalization for ResumeCommand/ShutdownCommand/
+            // StepCommand - same "map the word, then fall through to the
+            // ordinary registry lookup" shape 'source'/'.' would use if it
+            // didn't ALSO need RunScript's own special access (these three
+            // don't - they're ordinary IDianaOSCommands). Keeps 'help'
+            // from printing the same Usage line two or three times, which
+            // one registry entry per alias would do. NOT 'continue' - that
+            // one's a real parser-level loop-control keyword that never
+            // reaches Dispatch at all when used bare; see SubmitCore's own
+            // ContinueSignal catch for how it signals Resume instead.
+            if (cmd == "c") cmd = "resume";
+            else if (cmd == "quit") cmd = "shutdown";
+            else if (cmd == "s") cmd = "step";
 
             if (!_commands.TryGetValue(cmd, out IDianaOSCommand? command))
             {

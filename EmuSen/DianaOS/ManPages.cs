@@ -926,6 +926,53 @@ namespace EmuSen.DianaOS
                 "    state save\n" +
                 "    state load\n" +
                 "    state save SaveStates/before-boss.state",
+
+            ["resume"] =
+                "NAME\n" +
+                "    resume - resume emulation after an interactive halt\n\n" +
+                "SYNOPSIS\n" +
+                "    resume\n" +
+                "    continue\n" +
+                "    c\n\n" +
+                "DESCRIPTION\n" +
+                "    Resumes emulation after a halt (an interactive debug prompt, a\n" +
+                "    breakpoint, a single-step) - 'continue' and 'c' are recognized as plain\n" +
+                "    aliases, not separate commands. EmuSen.Mistress9 registers its own\n" +
+                "    pause/resume-aware 'resume' instead (its console window runs on a\n" +
+                "    separate thread from emulation, unlike EmuSen.Hotaru's console, which\n" +
+                "    shares the emulation thread and needs no pause/resume signal at all).\n\n" +
+                "EXAMPLES\n" +
+                "    resume\n" +
+                "    c",
+
+            ["shutdown"] =
+                "NAME\n" +
+                "    shutdown - terminate the process\n\n" +
+                "SYNOPSIS\n" +
+                "    shutdown\n" +
+                "    quit\n\n" +
+                "DESCRIPTION\n" +
+                "    Terminates the whole process - 'quit' is recognized as a plain alias,\n" +
+                "    not a separate command. Works the same whether typed at the initial\n" +
+                "    no-ROM shell or the in-game debug prompt.\n\n" +
+                "EXAMPLES\n" +
+                "    shutdown\n" +
+                "    quit",
+
+            ["step"] =
+                "NAME\n" +
+                "    step - single-step one CPU instruction\n\n" +
+                "SYNOPSIS\n" +
+                "    step\n" +
+                "    s\n\n" +
+                "DESCRIPTION\n" +
+                "    Arms a one-shot halt-before-next-instruction and lets emulation run just\n" +
+                "    long enough for exactly one CPU instruction to execute, then halts again\n" +
+                "    at the same interactive prompt - 's' is recognized as a plain alias, not\n" +
+                "    a separate command. Needs a ROM loaded (an active debug target).\n\n" +
+                "EXAMPLES\n" +
+                "    step\n" +
+                "    s",
         };
     }
 }

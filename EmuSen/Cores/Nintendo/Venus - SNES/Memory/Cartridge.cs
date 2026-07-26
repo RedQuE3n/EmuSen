@@ -9,26 +9,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         private byte[] _sram;
         public int SramSize => _sram.Length;
 
-        // Internal cartridge title from the LoROM header ($00:FFC0, i.e.
-        // file offset 0x7FC0 - 21 ASCII bytes, space-padded) - see
-        // Venus_Memory.md. Not used for ROM mapping/timing (this project
-        // doesn't yet distinguish HiROM), only as an opt-in identity check
-        // for the handful of documented per-game compatibility quirks (see
-        // VenusCore's LttP overworld-subscreen quirk for the first one) -
-        // same "named, narrow, documented" spirit as any other emulator's
-        // game-specific hack list, not a general-purpose game-detection
-        // framework. [SkipInState]: derived from ROM bytes (already
-        // [SkipInState] via _rom), and StateSerializer walks fields
-        // positionally with no versioning - a save state made before this
-        // field existed would otherwise desync every field read after it.
-        // Re-derived fresh from _rom on every LoadRom() regardless of what
-        // a loaded state does or doesn't restore. A plain field (not an
-        // auto-property) so [SkipInState] actually lands on the field
-        // StateSerializer's reflection sees, matching every other
-        // [SkipInState] member in this codebase (an auto-property's
-        // attribute stays on the property, not its hidden backing field).
-        [EmuSen.Common.SkipInState] public readonly string Title = "";
-
         // Saves/<rom-name>.srm - see Venus_Memory.md §2.4.
         public string SavePath { get; }
 
@@ -61,11 +41,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 }
             }
             _sram = new byte[sramSize];
-
-            if (_rom.Length >= 0x7FC0 + 21)
-            {
-                Title = System.Text.Encoding.ASCII.GetString(_rom, 0x7FC0, 21).TrimEnd();
-            }
 
             string saveDir = Path.Combine(Directory.GetCurrentDirectory(), "Saves");
             string romName = Path.GetFileNameWithoutExtension(romPath);

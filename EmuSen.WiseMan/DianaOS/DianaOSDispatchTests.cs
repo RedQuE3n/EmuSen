@@ -91,5 +91,36 @@ namespace EmuSen.WiseMan.DianaOS
             var result = shell.Submit("regs");
             Assert.Contains("No ROM loaded", result.Output);
         }
+
+        // A frontend-supplied extraCommand sharing a name with one of the
+        // standard registry (e.g. EmuSen.Mistress9 replacing `coretop`'s
+        // raw-terminal implementation with a windowed one) should REPLACE
+        // the default rather than throwing on a duplicate key - see
+        // CreateDefault's own comment.
+        private sealed class FakeOverrideCommand : IDianaOSCommand
+        {
+            public string Name => "echo";
+            public string Usage => "  echo (overridden for this test)";
+            public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin) => "overridden";
+        }
+
+        [Fact]
+        public void ExtraCommand_sharing_a_default_name_replaces_the_default_instead_of_throwing()
+        {
+            var ex = Record.Exception(() => DianaOSInterpreter.CreateDefault(null, new IDianaOSCommand[] { new FakeOverrideCommand() }));
+            Assert.Null(ex);
+
+            var shell = DianaOSInterpreter.CreateDefault(null, new IDianaOSCommand[] { new FakeOverrideCommand() });
+            Assert.Equal("overridden", shell.Submit("echo hi").Output.Trim());
+        }
+
+        [Fact]
+        public void Unrelated_extra_commands_still_add_normally_alongside_the_defaults()
+        {
+            var shell = DianaOSInterpreter.CreateDefault(null, new IDianaOSCommand[] { new FakeOverrideCommand() });
+            // A non-colliding default command is untouched by an
+            // unrelated override.
+            Assert.Contains("No ROM loaded", shell.Submit("regs").Output);
+        }
     }
 }

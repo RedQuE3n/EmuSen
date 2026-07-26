@@ -94,10 +94,20 @@ namespace EmuSen.DianaOS
         // host's own emulation thread, say) and so can't live in
         // EmuSen.DianaOS.Commands alongside the core-agnostic ones below -
         // without that frontend having to hand-roll its own copy of this
-        // entire ~30-command registry just to add a couple more. Names
-        // must not collide with the standard set or with each other -
-        // the constructor's Dictionary build throws on a duplicate key,
-        // same as it always has for the standard list alone.
+        // entire ~30-command registry just to add a couple more. An extra
+        // command whose Name matches one already in the standard list
+        // REPLACES it (case-insensitive), rather than erroring on a
+        // duplicate key - deliberately, for cases like `coretop`, whose
+        // default raw-terminal implementation flatly can't work inside a
+        // GUI-hosted console (EmuSen.Mistress9's own console window is a
+        // TextBox, not a real terminal) and needs a host-specific
+        // replacement instead, not just an addition alongside it. Any
+        // other extra command name (one that doesn't collide) is just
+        // appended, same as before this override behavior existed.
+        // Extra commands colliding with EACH OTHER (not with the
+        // standard list) still isn't supported - that's a caller bug,
+        // not a use case, so it's left to throw from the Dictionary
+        // build below same as always.
         public static DianaOSInterpreter CreateDefault(IDebugTarget? target, IEnumerable<IDianaOSCommand>? extraCommands = null)
         {
             DianaOSSandbox.EnsureInitialWorkingDirectory();
@@ -155,7 +165,14 @@ namespace EmuSen.DianaOS
                 new Commands.HistoryCommand(history),
             };
 
-            if (extraCommands is not null) commands.AddRange(extraCommands);
+            if (extraCommands is not null)
+            {
+                foreach (IDianaOSCommand extra in extraCommands)
+                {
+                    commands.RemoveAll(c => string.Equals(c.Name, extra.Name, StringComparison.OrdinalIgnoreCase));
+                    commands.Add(extra);
+                }
+            }
 
             return new DianaOSInterpreter(target, commands, history);
         }

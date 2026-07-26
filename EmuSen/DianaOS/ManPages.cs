@@ -781,8 +781,14 @@ namespace EmuSen.DianaOS
                 "    coretop exits. Needs a REAL interactive terminal, same as 'nano' and\n" +
                 "    for the same reason - refuses cleanly rather than trying to draw\n" +
                 "    anywhere when stdin/stdout is redirected or there's no real terminal at\n" +
-                "    all (a piped script, a 'source'd file, a headless test, or\n" +
-                "    EmuSen.Mistress9's GUI console window).\n\n" +
+                "    all (a piped script, a 'source'd file, a headless test).\n\n" +
+                "    In EmuSen.Mistress9's own console window (a TextBox, not a real\n" +
+                "    terminal - the above wouldn't work there at all), 'coretop' is replaced\n" +
+                "    with a windowed equivalent instead: a real, non-blocking Avalonia window\n" +
+                "    showing the same data as actual widgets and live images (the palette and\n" +
+                "    VRAM tile sheet render as real pictures there, not ANSI blocks) that\n" +
+                "    refreshes on its own timer while gameplay keeps running - Ctrl+C doesn't\n" +
+                "    apply there, just close the window.\n\n" +
                 "EXAMPLES\n" +
                 "    coretop",
 

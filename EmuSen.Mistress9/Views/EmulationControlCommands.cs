@@ -65,4 +65,37 @@ namespace EmuSen.Mistress9.Views
             return DianaOSResult.Ok("Emulation resumed.");
         }
     }
+
+    // Replaces (not adds alongside - see DianaOSInterpreter.CreateDefault's
+    // own comment on extraCommands overriding a same-named default)
+    // EmuSen.DianaOS.Commands.CoretopCommand's raw-terminal implementation,
+    // which flatly cannot work here: it takes over a real console with
+    // ANSI escape codes and Console.ReadKey, and this window's own
+    // console is a TextBox with no terminal underneath it at all. Opens
+    // CoretopWindow instead - a real, non-blocking Avalonia window that
+    // polls the same IDebugTarget data on its own timer, so gameplay
+    // keeps running exactly like it does while the shell console window
+    // itself is open. Takes `target` straight from Execute's own
+    // parameter (the live target this command line is running against)
+    // rather than needing its own separate reference to MainWindow's
+    // _debugTarget field.
+    public class CoretopWindowCommand : IDianaOSCommand
+    {
+        private readonly Action<IDebugTarget?> _openWindow;
+
+        public CoretopWindowCommand(Action<IDebugTarget?> openWindow)
+        {
+            _openWindow = openWindow;
+        }
+
+        public string Name => "coretop";
+        public string Usage => "  coretop                       open a live hardware dashboard window (non-blocking - gameplay keeps running)";
+
+        public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        {
+            if (target is null) return DianaOSResult.Fail("No ROM loaded - this command needs an active debug target.");
+            _openWindow(target);
+            return DianaOSResult.Ok("coretop: opened in a separate window.");
+        }
+    }
 }

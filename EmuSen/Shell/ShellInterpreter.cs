@@ -87,6 +87,8 @@ namespace EmuSen.Shell
         // same as it always has for the standard list alone.
         public static ShellInterpreter CreateDefault(IDebugTarget? target, IEnumerable<IShellCommand>? extraCommands = null)
         {
+            ShellSandbox.EnsureInitialWorkingDirectory();
+
             // snapshot/diff share one SnapshotStore (see that file's own
             // comment) - constructed once here, same lifetime as every
             // other command's own state.
@@ -422,17 +424,23 @@ namespace EmuSen.Shell
             bool append = false;
             foreach (Redirection r in cmd.Redirections)
             {
+                string target = ExpandWordSingle(r.Target);
+                if (!ShellSandbox.TryResolve(target, out string resolved))
+                {
+                    throw new IOException($"'{target}' is outside the project sandbox ({ShellSandbox.RootDirectory})");
+                }
+
                 switch (r.Kind)
                 {
                     case RedirectKind.Input:
-                        effectiveStdin = File.ReadAllText(ExpandWordSingle(r.Target));
+                        effectiveStdin = File.ReadAllText(resolved);
                         break;
                     case RedirectKind.Truncate:
-                        outputRedirectPath = ExpandWordSingle(r.Target);
+                        outputRedirectPath = resolved;
                         append = false;
                         break;
                     case RedirectKind.Append:
-                        outputRedirectPath = ExpandWordSingle(r.Target);
+                        outputRedirectPath = resolved;
                         append = true;
                         break;
                 }

@@ -30,7 +30,10 @@ namespace EmuSen.Shell.Commands
     // a literal separator string instead (not a regex, unlike real
     // awk's non-single-char `-F` - a documented simplification), with
     // `\t`/`\n` unescaped in the -F argument itself since real awk does
-    // the same escape processing there.
+    // the same escape processing there. A trailing file path argument is
+    // walled to ShellSandbox.RootDirectory, same as every other real-file
+    // command in this shell (see that file's own comment) - piped stdin
+    // is unaffected either way, since that never touches the filesystem.
     public class AwkCommand : IShellCommand
     {
         public string Name => "awk";
@@ -58,6 +61,11 @@ namespace EmuSen.Shell.Commands
             List<AwkRule> rules;
             try { rules = ParseProgram(program); }
             catch (FormatException ex) { return ShellResult.Fail($"awk: {ex.Message}"); }
+
+            if (stdin is null && path != null && !ShellSandbox.TryResolve(path, out path))
+            {
+                return ShellResult.Fail($"awk: '{args[^1]}' is outside the project sandbox ({ShellSandbox.RootDirectory})");
+            }
 
             string text = stdin ?? (path != null ? File.ReadAllText(path) : "");
             string[] lines = text.Length == 0 ? Array.Empty<string>() : text.Split('\n');

@@ -35,7 +35,16 @@ namespace EmuSen.Shell.Commands
                 }
             }
 
-            string text = stdin ?? (path != null ? File.ReadAllText(path) : "");
+            string? resolvedPath = null;
+            if (stdin is null && path != null)
+            {
+                if (!ShellSandbox.TryResolve(path, out resolvedPath))
+                {
+                    return ShellResult.Fail($"wc: '{path}' is outside the project sandbox ({ShellSandbox.RootDirectory})");
+                }
+            }
+
+            string text = stdin ?? (resolvedPath != null ? File.ReadAllText(resolvedPath) : "");
 
             // wc counts a trailing-newline-free last line too (real wc
             // counts newline CHARACTERS, not lines-with-content) - close

@@ -12,7 +12,8 @@ namespace EmuSen.Shell.Commands
     // (non-`-i`, non-`-n`) behavior. An existing destination DIRECTORY
     // isn't overwritten, it's moved INTO - `mv foo.txt logs/` behaves
     // like real `mv`, landing at `logs/foo.txt`, not replacing `logs`
-    // itself.
+    // itself. Walled to ShellSandbox.RootDirectory - both src and dst
+    // must resolve inside it (see that file's own comment).
     public class MvCommand : IShellCommand
     {
         public string Name => "mv";
@@ -22,8 +23,14 @@ namespace EmuSen.Shell.Commands
         {
             if (args.Length < 3) return ShellResult.Fail("mv: usage: mv <src> <dst>");
 
-            string src = args[1];
-            string dst = args[2];
+            if (!ShellSandbox.TryResolve(args[1], out string src))
+            {
+                return ShellResult.Fail($"mv: '{args[1]}' is outside the project sandbox ({ShellSandbox.RootDirectory})");
+            }
+            if (!ShellSandbox.TryResolve(args[2], out string dst))
+            {
+                return ShellResult.Fail($"mv: '{args[2]}' is outside the project sandbox ({ShellSandbox.RootDirectory})");
+            }
 
             if (Directory.Exists(dst)) dst = Path.Combine(dst, Path.GetFileName(src.TrimEnd('/', '\\')));
 

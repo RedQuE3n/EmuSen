@@ -11,7 +11,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         [EmuSen.Common.SkipInState] private Cartridge _cartridge;
         public int SramSize => _cartridge.SramSize;
         [EmuSen.Common.SkipInState] private Spc700 _spc700;
-        
+        // Read-only debug-toolchain accessor - same purpose/pattern as
+        // Ppu below (a public reference the debug target can read
+        // registers off of), added for SnesDebugTarget.GetApuRegisters().
+        public Spc700 Spc700 => _spc700;
+
         public Dma Dma { get; private set; }
         public Input Input { get; private set; }
 

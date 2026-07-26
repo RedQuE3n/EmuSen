@@ -959,6 +959,28 @@ namespace EmuSen.DianaOS
                 "    shutdown\n" +
                 "    quit",
 
+            ["core"] =
+                "NAME\n" +
+                "    core - load or swap the running ROM\n\n" +
+                "SYNOPSIS\n" +
+                "    core <corename> <path>\n\n" +
+                "DESCRIPTION\n" +
+                "    Validates <corename> against the known core registry and <path> against\n" +
+                "    that core's supported file extensions, then loads it - reloading\n" +
+                "    VenusCore in place if a ROM is already running (a fresh SnesDebugTarget/\n" +
+                "    DianaOSInterpreter/FrameRecorder get rebuilt afterward; watches/\n" +
+                "    breakpoints/cheats registered against the OLD ROM don't survive a swap,\n" +
+                "    matching EmuSen.Mistress9's own already-accepted 'shell-level state\n" +
+                "    resets on reload' convention). Refuses to swap while a frame recording\n" +
+                "    is in progress - stop it first (F6). Only registered where a session\n" +
+                "    actually exists to reload - EmuSen.Hotaru's own pre-window launch shell\n" +
+                "    has a separate, simpler 'core' handler of its own for resolving the\n" +
+                "    FIRST ROM (see EmuSen_Frontend_Driver.md §3), since there's nothing to\n" +
+                "    reload yet at that point.\n\n" +
+                "EXAMPLES\n" +
+                "    core venus game2.smc\n" +
+                "    core snes /path/to/other-game.sfc",
+
             ["step"] =
                 "NAME\n" +
                 "    step - single-step one CPU instruction\n\n" +

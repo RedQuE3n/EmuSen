@@ -49,9 +49,32 @@ namespace EmuSen.Hotaru.Views
     public partial class GameWindow : Window
     {
         private readonly VenusCore _core;
-        private readonly SnesDebugTarget _debugTarget;
-        private readonly DianaOSInterpreter _debugCmd;
-        private readonly FrameRecorder _frameRecorder;
+
+        // Not readonly, unlike every other field this window was
+        // originally handed - all three get rebuilt from scratch by
+        // RebuildDebugTargetAndCommands() after a `core <name> <path>`
+        // swap (HostAction.LoadCore, see SwapCore below), the same
+        // "fresh SnesDebugTarget per load" discipline
+        // EmuSen.Mistress9/Views/MainWindow.axaml.cs's own LoadRom
+        // already established - VenusCore.LoadRom rebuilds Cpu/Bus/
+        // Renderer as brand-new objects in place, so anything still
+        // holding the OLD ones (this class's own _debugTarget, and
+        // DianaOSInterpreter, which captures its target at construction
+        // with no UpdateTarget of its own - unlike EmuSen.Mistress9's
+        // console WINDOW) would otherwise go stale.
+        private SnesDebugTarget _debugTarget = null!;
+        private DianaOSInterpreter _debugCmd = null!;
+        private FrameRecorder _frameRecorder = null!;
+
+        // Reused, unchanged, across every RebuildDebugTargetAndCommands()
+        // call - none of these commands' own delegates depend on
+        // anything that changes across a swap (CoretopCommand/
+        // StateCommand close over _core/DebugWindows, both stable across
+        // reloads; CoreCommand's own registry is static data), only on
+        // whatever _debugTarget DianaOSInterpreter.CreateDefault is
+        // handed each time.
+        private readonly IEnumerable<IDianaOSCommand> _extraCommands;
+
         private readonly string _statePath;
 
         private readonly GamepadBindingMap _gamepadBindings = GamepadBindingMap.Load();
@@ -113,15 +136,23 @@ namespace EmuSen.Hotaru.Views
         private FrameData? _pendingFrame;
         private int _presentScheduled;
 
-        public GameWindow(VenusCore core, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, FrameRecorder frameRecorder, string statePath)
+        public GameWindow(VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
             InitializeComponent();
 
             _core = core;
-            _debugTarget = debugTarget;
-            _debugCmd = debugCmd;
-            _frameRecorder = frameRecorder;
+            _extraCommands = extraCommands;
             _statePath = statePath;
+
+            RebuildDebugTargetAndCommands();
+            // Power-on watch registration (Yoshi/coin investigation) -
+            // only on this very first load, not re-added by SwapCore on a
+            // later `core` swap - matches the same "shell-level state
+            // resets on reload" precedent RebuildDebugTargetAndCommands's
+            // own fresh SnesDebugTarget already establishes for watches/
+            // breakpoints/cheats in general.
+            _debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
+            _debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
 
             Title = GraphicsSettings.WindowTitle;
             Width = GraphicsSettings.WindowWidth;
@@ -207,6 +238,50 @@ namespace EmuSen.Hotaru.Views
             ShaderEffect effect = FramePresenter.NextEffect(GameFrame.ActiveEffect);
             GameFrame.ActiveEffect = effect;
             Console.WriteLine($"[SHADER] Active effect: {effect}");
+        }
+
+        // (Re)builds _debugTarget/_debugCmd/_frameRecorder from _core's
+        // CURRENT Cpu/Bus/Renderer - called once from the constructor and
+        // again from SwapCore below after every `core <name> <path>`
+        // reload. DianaOSInterpreter has no way to repoint an existing
+        // instance at a new IDebugTarget (it captures its target once, at
+        // construction, and is otherwise immutable by design) - unlike
+        // EmuSen.Mistress9's console WINDOW, which owns that rebuild
+        // itself via UpdateTarget(), this class has to build a whole new
+        // DianaOSInterpreter directly, same as that window does
+        // internally.
+        private void RebuildDebugTargetAndCommands()
+        {
+            _debugTarget = new SnesDebugTarget(_core.Cpu!, _core.Bus!, _core.Renderer!,
+                () => (_core.LastFrameCpuSpc700Ms, _core.LastFramePpuMs, _core.LastFrameHdmaMs));
+            _debugCmd = DianaOSInterpreter.CreateDefault(_debugTarget, _extraCommands);
+            _frameRecorder = new FrameRecorder(_debugTarget);
+        }
+
+        // Reached from RunDebugPrompt's own dispatch loop when
+        // EmuSen.DianaOS.Commands.CoreCommand signals HostAction.LoadCore
+        // - the actual ROM swap this migration's whole point was to
+        // enable (Hotaru had NO way to change ROMs mid-session before
+        // this). coreName isn't needed here at all: Hotaru only has one
+        // ICore implementation today (VenusCore), so every registered
+        // core alias ('venus'/'snes') reloads the exact same way -
+        // CoreCommand already validated the name/file/extension before
+        // ever emitting this action. Deliberately this narrow (reload the
+        // one existing core in place, no real multi-core dispatch) rather
+        // than building toward a general ICoreSession abstraction ahead
+        // of a second core actually existing - see
+        // EmuSen_Launcher_Multicore_Gameplan.md's own guidance on that.
+        private void SwapCore(string romPath)
+        {
+            if (_frameRecorder.IsRecording)
+            {
+                Console.WriteLine("[CORE] Refusing to swap ROM while a recording is in progress - stop it first (F6).");
+                return;
+            }
+
+            _core.LoadRom(romPath);
+            RebuildDebugTargetAndCommands();
+            Console.WriteLine($"[CORE] Loaded: {romPath}");
         }
 
         // Runs entirely off the UI thread - see this file's own header
@@ -384,7 +459,7 @@ namespace EmuSen.Hotaru.Views
         {
             DisarmFeedWatch();
 
-            Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'feed'/'feed -w' to resume and watch gameplay, 'shutdown' to quit, 'step'/'s' to single-step) ---");
+            Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'feed'/'feed -w' to resume and watch gameplay, 'shutdown' to quit, 'step'/'s' to single-step, 'core <name> <path>' to swap ROMs) ---");
             while (true)
             {
                 Console.Write(_debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
@@ -417,17 +492,21 @@ namespace EmuSen.Hotaru.Views
                         break;
                     }
                 }
-                // 'resume'/'continue'/'c', 'shutdown'/'quit', and
-                // 'step'/'s' are real DianaOS commands now
-                // (EmuSen.DianaOS.Commands.ResumeCommand/ShutdownCommand/
-                // StepCommand) - Submit's own HostAction is what lets them
-                // reach back out to this loop's control flow, the same
-                // thing the old hand-rolled string matches used to do
-                // directly.
+                // 'resume'/'continue'/'c', 'shutdown'/'quit', 'step'/'s',
+                // and 'core <name> <path>' are all real DianaOS commands
+                // now (EmuSen.DianaOS.Commands.ResumeCommand/
+                // ShutdownCommand/StepCommand/CoreCommand) - Submit's own
+                // HostAction is what lets them reach back out to this
+                // loop's control flow, the same thing the old hand-rolled
+                // string matches used to do directly. A successful swap
+                // resumes gameplay immediately against the new ROM, same
+                // as Resume/Step - SwapCore itself prints why if it
+                // refuses (a recording in progress).
                 (_, string output, HostAction? action) = _debugCmd.Submit(trimmed);
                 Console.WriteLine(output);
                 if (action is HostAction.Shutdown) return true;
                 if (action is HostAction.Resume or HostAction.Step) break;
+                if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); break; }
             }
             Console.WriteLine("--- Resuming ---");
             return false;

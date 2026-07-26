@@ -182,7 +182,12 @@ namespace EmuSen.Hotaru
                 DebugSettings.Spc700VerboseLogging = true;
 
                 // Debug toolchain, built once - see EmuSen_Frontend_Driver.md §1.
-                SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+                // The frame-timings delegate feeds `coretop`'s hardware-load
+                // bars (IDebugTarget.GetHardwareLoad) - see SnesDebugTarget's
+                // own constructor comment for why this can't just read them
+                // off Cpu/Bus/Renderer directly.
+                SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!,
+                    () => (core.LastFrameCpuSpc700Ms, core.LastFramePpuMs, core.LastFrameHdmaMs));
                 DianaOSInterpreter debugCmd = DianaOSInterpreter.CreateDefault(debugTarget);
 
                 FrameRecorder frameRecorder = new FrameRecorder(debugTarget);

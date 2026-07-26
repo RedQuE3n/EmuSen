@@ -758,6 +758,34 @@ namespace EmuSen.DianaOS
                 "EXAMPLES\n" +
                 "    nano setup.txt",
 
+            ["coretop"] =
+                "NAME\n" +
+                "    coretop - live htop-style dashboard of the loaded core's hardware\n\n" +
+                "SYNOPSIS\n" +
+                "    coretop\n\n" +
+                "DESCRIPTION\n" +
+                "    A live, auto-refreshing (4x/second) dashboard, styled after htop: per-\n" +
+                "    subsystem hardware load bars, CPU registers, a sprite-capacity gauge,\n" +
+                "    per-voice audio channel meters, a live color-RAM palette swatch, and (if\n" +
+                "    this core has a tilemap concept) a downsampled live preview of VRAM's\n" +
+                "    tile sheet - all in one screen, refreshing on its own clock rather than\n" +
+                "    waiting for input. Every number comes from IDebugTarget, so a core with\n" +
+                "    nothing to report for a given section (no hardware-load breakdown wired\n" +
+                "    up, no fixed sprite capacity, no palettes) just makes that section\n" +
+                "    shrink or disappear rather than showing something fake.\n\n" +
+                "    Load bars are colored green/yellow/red under 60% / 60-85% / over 85%,\n" +
+                "    the same rough 'getting busy' convention real htop's CPU bars use.\n\n" +
+                "    Press Ctrl+C to exit - unlike everywhere else in this shell, Ctrl+C is\n" +
+                "    read as a key here (via Console.TreatControlCAsInput) rather than\n" +
+                "    raising a process-level interrupt, restored to normal the moment\n" +
+                "    coretop exits. Needs a REAL interactive terminal, same as 'nano' and\n" +
+                "    for the same reason - refuses cleanly rather than trying to draw\n" +
+                "    anywhere when stdin/stdout is redirected or there's no real terminal at\n" +
+                "    all (a piped script, a 'source'd file, a headless test, or\n" +
+                "    EmuSen.Mistress9's GUI console window).\n\n" +
+                "EXAMPLES\n" +
+                "    coretop",
+
             ["mv"] =
                 "NAME\n" +
                 "    mv - move or rename a file or directory\n\n" +

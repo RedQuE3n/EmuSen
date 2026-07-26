@@ -165,6 +165,27 @@ namespace EmuSen.DianaOS
     // from X" instructions won't share the 65816's mnemonic names either.
     public enum StaticReferenceKind { Call, Write, Read }
 
+    // One named "how hard is this piece of hardware working right now"
+    // meter - backs the `coretop` command's htop-style load bars.
+    // Percent is 0-100, already normalized against whatever this core
+    // considers "full" for that piece (typically the wall-clock budget
+    // of one native frame at this console's real refresh rate) - a
+    // generic dashboard just draws a bar, it doesn't need to know what
+    // "CPU+SPC700" vs "PPU" vs "HDMA" actually measure for a given core,
+    // the same way GetAudioChannels' 0-100 `Level` scale means whatever
+    // is loudest, not any one core's native envelope units.
+    public readonly struct DebugLoadInfo
+    {
+        public string Name { get; }
+        public double Percent { get; }
+
+        public DebugLoadInfo(string name, double percent)
+        {
+            Name = name;
+            Percent = percent;
+        }
+    }
+
     // The contract a console core implements to plug into the shared debug
     // toolchain. Started out scoped to read/query capabilities only, with
     // breakpoints and single-stepping called out as a future extension
@@ -368,5 +389,19 @@ namespace EmuSen.DianaOS
         // without needing a separate solo-rendering pipeline. A core with
         // no such channel can no-op.
         void SetChannelMuted(int index, bool muted);
+
+        // Per-subsystem load, backing `coretop`'s htop-style bars - see
+        // DebugLoadInfo's own comment. A core with no per-subsystem
+        // timing breakdown modeled (or not wired up to whatever produces
+        // one - see SnesDebugTarget's own constructor comment) returns an
+        // empty list; `coretop` just skips that section rather than
+        // showing empty/fake bars.
+        IReadOnlyList<DebugLoadInfo> GetHardwareLoad();
+
+        // The hardware's real total sprite/OAM capacity (128 on the
+        // SNES), or 0 if this core doesn't model a fixed limit - lets a
+        // generic dashboard show "N/max active" as a real percentage-of-
+        // capacity bar instead of just a bare, context-free count.
+        int MaxSprites { get; }
     }
 }

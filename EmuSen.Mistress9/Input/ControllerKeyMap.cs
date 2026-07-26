@@ -8,12 +8,13 @@ using EmuSen.Cores.Nintendo.Venus.Controllers;
 namespace EmuSen.Mistress9.Input
 {
     // Keyboard -> SnesButton mapping for this frontend specifically. This is
-    // deliberately separate from EmuSen/Settings/InputBindings.cs, which reads
-    // Raylib key state directly and only works with the console/Raylib build's
-    // own window - this class uses Avalonia's Key enum and gets fed from the
-    // MainWindow's KeyDown/KeyUp events instead (see MainWindow.axaml.cs).
+    // deliberately separate from EmuSen.Hotaru/Input/HotaruKeyMap.cs, which
+    // has no rebind/persistence support and gets fed from GameWindow's own
+    // KeyDown/KeyUp events instead (see that project's GameWindow.axaml.cs) -
+    // this class supports rebinding/saving, which Hotaru's console-first
+    // frontend has no settings UI to drive.
     //
-    // Defaults match InputBindings.cs's keyboard scheme for consistency
+    // Defaults match HotaruKeyMap's keyboard scheme for consistency
     // between the two frontends, even though the two Key enums (Raylib_cs vs
     // Avalonia.Input) aren't the same type.
     public class ControllerKeyMap

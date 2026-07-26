@@ -132,8 +132,8 @@ namespace EmuSen.Mistress9.Views
         private CategorizedLogWriter? _activeLogWriter;
 
         // Keyboard and gamepad are tracked separately and combined with OR
-        // logic - matches the console/Raylib build's own InputBindings.cs
-        // convention ("either device works at any time, no need to pick
+        // logic - matches EmuSen.Hotaru's own GameWindow convention
+        // ("either device works at any time, no need to pick
         // one"). Without this, a gamepad poll finding a button NOT pressed
         // would incorrectly release a button still being held on the
         // keyboard, and vice versa.

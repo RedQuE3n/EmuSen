@@ -45,6 +45,11 @@
          ShaderEffect.CycleEffect() - see Serenity/*Tests.cs. Nothing here
          opens an actual Avalonia window either. -->
     <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
+    <!-- HotaruKeyMap's default bindings and FrameImageWriter's PNG
+         encoding - see Input/HotaruKeyMapTests.cs and
+         Imaging/FrameImageWriterTests.cs. Nothing here constructs a
+         GameWindow or opens an actual Avalonia window. -->
+    <ProjectReference Include="..\EmuSen.Hotaru\EmuSen.Hotaru.csproj" />
   </ItemGroup>
 
 </Project>

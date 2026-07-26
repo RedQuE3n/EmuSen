@@ -406,6 +406,27 @@ dotnet run --project EmuSen.HeadlessDebug -- <rom> <frames> [options...]
 | `--flag <Name>[=<value>]` (repeatable) | Set any `DebugSettings` property or field by name via reflection (bool if no `=value`, otherwise `Convert.ChangeType`'d to the member's real type) — also forces `MasterLoggingEnabled = true`, since most `DebugSettings` flags are gated behind it (`Settings/DebugSettings.cs`, §2) and setting the individual flag alone is otherwise a silent no-op. |
 | `--verbose` | Shortcut for `MasterLoggingEnabled = true` for the whole run. |
 | `--out <path>` | Write this harness's own `Emit()`-based log lines (`[ROM]`, `[RUN]`, `[SCREENSHOT]`, the `--script` output, etc.) to a file. |
+| `--commands <path>` | Takes over the whole run - see below. Ignores `--tap`/`--tap2`/`--screenshot`/`--script` when present; `<frames>` becomes a hard safety cap instead of an exact count. |
+
+**`--commands`: an interleaved script, for open-ended exploration `--tap`/`--screenshot` can't do.** Every other flag pre-declares its frame numbers before the run starts, which only works when the exact timing is already known. `--commands` reads an ordered text file and executes each line as it's reached instead, so frame-stepping, input, screenshots, and arbitrary debug commands can freely interleave in one process - built after the Super Mario All-Stars Select Game investigation needed a full relaunch (reboot + replay the whole boot sequence) for every single button guessed. Lines:
+- `frames <n>` — advance `<n>` frames, applying whatever's currently held.
+- `tap <button> [duration]` / `tap2 <button> [duration]` — press (P1/P2) for `duration` frames (default 4), then release. Inline equivalent of `--tap`/`--tap2`.
+- `hold <button> [controller]` / `release <button> [controller]` — set a button's held state without advancing any frames (`controller` defaults to 1) - for holding something across several `frames`/other-command lines rather than one fixed-duration tap.
+- `screenshot <path>` — capture the current frame right now, unlike `--screenshot`'s frame-number binding.
+- anything else — passed straight to `DebugCommandProcessor.Execute`, exactly like `--script`'s lines.
+
+Example (the actual script that confirmed SMAS's Select Game screen needs Player 2's Start, in one run instead of six):
+```
+frames 120
+tap Start 4
+frames 180
+tap Start 4
+frames 300
+screenshot select_game.bmp
+tap2 Start 4
+frames 250
+screenshot file_select.bmp
+```
 
 **Two separate output streams, easy to conflate.** `--out` only captures this harness's own `Emit()` calls. Everything the *emulator itself* prints via raw `Console.WriteLine` — `CpuVerboseLogging`/`Spc700VerboseLogging` traces, `[DMA]`/`[PORT]`/etc. `DebugSettings` output, the `[FRAME] N` marker (`Venus_Memory.md`/`VenusCore.RunFrame`) — bypasses `Emit()` entirely and goes straight to real stdout. Redirecting shell output to `/dev/null` while relying on `--out` for everything discards all of that silently; capture real stdout to a file (`> file.log 2>&1`) instead whenever any `DebugSettings` trace flag is in play.
 

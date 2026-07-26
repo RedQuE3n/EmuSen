@@ -4,7 +4,7 @@ using System.Linq;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
-using EmuSen.Debug;
+using EmuSen.Shell;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
@@ -134,7 +134,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // Reads a (space, address, width) value the same way
         // DebugCommandHelpers.ReadValue does (little-endian accumulation)
         // - duplicated rather than shared since that helper lives in
-        // Debug/Commands and takes an already-resolved IDebugMemorySpace,
+        // Shell/Commands and takes an already-resolved IDebugMemorySpace,
         // while this needs to resolve the space by name itself. Called
         // once per registered frame-log entry, once per frame - cheap
         // even with several entries active, since GetMemorySpaces()

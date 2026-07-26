@@ -1,5 +1,4 @@
 using System;
-using EmuSen.Debug;
 
 namespace EmuSen.Shell.Commands
 {

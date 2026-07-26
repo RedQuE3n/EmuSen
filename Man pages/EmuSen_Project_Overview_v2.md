@@ -8,7 +8,7 @@
 
 EmuSen is a SNES emulator written in C# / .NET 10, structured as four sibling projects:
 
-- **`EmuSen/`** — the emulation core only (CPU/PPU/APU/memory, `Common/`, `Debug/`, `Settings/`). A pure library — no `Main`, no window ownership of its own. This is the primary development/debugging environment — cores get built and verified here first, standalone, before either frontend is the main way of running them. It still has a `Raylib-cs` package dependency, because `Renderer.cs` uses `Raylib_cs.Color`/`Image`/`Texture2D` directly as its internal pixel representation and for debug-panel drawing - a real dependency of the core's own rendering logic, not something inherited from a frontend.
+- **`EmuSen/`** — the emulation core only (CPU/PPU/APU/memory, `Common/`, `Shell/`, `Settings/`). A pure library — no `Main`, no window ownership of its own. This is the primary development/debugging environment — cores get built and verified here first, standalone, before either frontend is the main way of running them. It still has a `Raylib-cs` package dependency, because `Renderer.cs` uses `Raylib_cs.Color`/`Image`/`Texture2D` directly as its internal pixel representation and for debug-panel drawing - a real dependency of the core's own rendering logic, not something inherited from a frontend.
 - **`EmuSen.RaylibFrontend/`** — the Raylib console frontend's actual driver loop (`Program.cs`: `Main`/`RunHotkeys`). Used to live inside `EmuSen.csproj` as its own `Exe`, which meant `EmuSen.TestingStudio/` (Avalonia) inherited this project's `Main`/Raylib-window-ownership just by referencing `EmuSen.csproj` to reach the emulation core - backwards, since the two frontends have nothing to do with each other. Split out specifically to fix that: both frontends are now true siblings, each independently referencing `EmuSen.csproj` for the core and `EmuSen.Presentation` for presentation. (Named `RaylibFrontend`, not `Console` - naming it `EmuSen.Console` would make every bare `Console.WriteLine` in the file ambiguous with the namespace itself, a real C# gotcha, not just a style choice.)
 - **`EmuSen.Presentation/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `FramePresenter` (owns the Raylib window/render-target, presents any core via `ICore.GetFrameBufferRgba()`), `Shaders/BuiltInShaders.cs` (embedded GLSL for the prototype shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). `EmuSen.RaylibFrontend/` is the first real consumer; `EmuSen.TestingStudio/`'s Avalonia GUI references this project too but doesn't use it yet - see that project's own note on why (CPU-side `WriteableBitmap` presentation, no GPU/shader hook).
 - **`EmuSen.TestingStudio/`** — an Avalonia GUI, renamed from `EmuSen.Frontend` and deliberately scoped as bug-testing tooling: ROM picker (plus a ROM browser and a configurable default ROM directory), rebindable keyboard+gamepad input, Save/Load State menu items, and (Settings > Preferences...) a configurable log directory that reuses `EmuSen.Common.CategorizedLogWriter` for real per-session file logging, plus a scaffolding-only core picker. Referencing `EmuSen` and `EmuSen.Presentation` via project reference (as a sibling of `EmuSen.RaylibFrontend`, not through it). Deliberately **not** where the eventual EmulationStation-style launcher gets built — see `EmuSen_Launcher_Multicore_Gameplan.md` for that separate, not-yet-created project's plan.
@@ -17,7 +17,7 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as four sibling pr
 
 **Licensing stance on other emulators' source:** the SNESdev wiki (mirrored at both `snes.nesdev.org` and `snesdev.mesen.ca` — maintained by the Mesen/MesenCE team) is the primary hardware-reference source. Historically, Mesen/MesenCE's own *documentation* got read to understand hardware behavior while their source code did not, specifically to keep every implementation here original and avoid any GPL-compatibility question. Now that EmuSen itself is GPL-3.0 - the same license `SourMesen/Mesen2` uses - that compatibility concern no longer applies, and Mesen2's source can be consulted directly as an architecture/implementation reference (see `EmuSen_Games_Tested.md`-adjacent investigation notes for anything drawn from it). `SourMesen/Mesen2` is archived; `nesdev-org/MesenCE` is the actively maintained continuation - forked for this project's own reference use at [`RedQuE3n/MesenCE-refernece`](https://github.com/RedQuE3n/MesenCE-refernece) (note the upstream typo preserved in the fork's own name), with its SNES core under `Core/SNES`. Still worth writing original code rather than transcribing verbatim where reasonable - referencing for correctness/design, not copy-pasting - but the hard legal barrier that used to rule out even looking is gone.
 
-**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with reserved sibling folders (placeholder `README.md` only, no code) for every other planned core across five manufacturers: `Cores/Nintendo/` (the rest of the Sailor Guardians), `Cores/Sega/` (Dark Kingdom), `Cores/Sony/` (Black Moon Clan), `Cores/Atari/` (Death Busters), `Cores/Microsoft/` and `Cores/NEC/` (Dead Moon Circus's two subordinate groups). Full mapping in `EmuSen_Core_Naming_Scheme.md`. The debug toolchain (`Debug/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
+**Multi-core intent:** the project is meant to eventually support more than one console. `Cores/Nintendo/Venus - SNES/` (the SNES core) is folder-scoped and namespaced for this — `EmuSen.Cores.Nintendo.Venus.Memory`, not a generic `EmuSen.Memory` — with reserved sibling folders (placeholder `README.md` only, no code) for every other planned core across five manufacturers: `Cores/Nintendo/` (the rest of the Sailor Guardians), `Cores/Sega/` (Dark Kingdom), `Cores/Sony/` (Black Moon Clan), `Cores/Atari/` (Death Busters), `Cores/Microsoft/` and `Cores/NEC/` (Dead Moon Circus's two subordinate groups). Full mapping in `EmuSen_Core_Naming_Scheme.md`. The debug toolchain (`Shell/IDebugTarget.cs` and everything built on it) was deliberately designed core-agnostic from day one for the same reason — see the debugging tools reference doc.
 
 **Naming scheme:** every core is named after an *EmuSen* = **Emu**lator **Sen**shi (Sailor Moon) character, grouped by manufacturer — Nintendo gets the heroes (Sailor Guardians), every other manufacturer gets a villain faction (Sega = Dark Kingdom, Sony = Black Moon Clan, Atari = Death Busters, Microsoft/NEC = Dead Moon Circus's two subgroups). Full mapping and rationale in `EmuSen_Core_Naming_Scheme.md`. The SNES core is `Venus`; still called "SNES" in prose/comments/log output/class names (`SnesDebugTarget`, `Snes65816Disassembler`, etc.) since that's the accurate hardware name — the codename governs the folder/namespace only, not every mention of the actual console.
 
@@ -46,7 +46,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 - **Hardware simulation** (`Cores/Nintendo/Venus - SNES/Cpu`, `Cores/Nintendo/Venus - SNES/Apu`, `Cores/Nintendo/Venus - SNES/Ppu`, `Cores/Nintendo/Venus - SNES/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
 - **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by `EmuSen.TestingStudio`), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (used by both `EmuSen.RaylibFrontend`'s `Program.cs` and `EmuSen.TestingStudio`'s `MainWindow` — routes console output into per-category files under a `Logs/<CoreName>/<console|gui>_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's; file writes run on a background thread now, not the caller's).
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
-- **The debug toolchain** (`Debug/`, `Shell/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Debug/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Shell/ShellInterpreter.cs` is a genuine bash-alike shell (quoting, variables, `$(...)`, pipes, redirection, if/for/while) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) still living under `Debug/Commands/`. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
+- **The debug toolchain** (`Shell/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `Shell/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `Shell/ShellInterpreter.cs` is a genuine bash-alike shell (quoting, variables, `$(...)`, pipes, redirection, if/for/while) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) merged into `Shell/Commands/` alongside the shell's own builtins — no more `EmuSen.Debug.Commands` split. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Presentation** (`EmuSen.Presentation/`) — window/GPU-texture ownership and the prototype shader pipeline, shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1 step 6.
 - **Frontends** (`EmuSen.RaylibFrontend/`, `EmuSen.TestingStudio/`) — presentation *driving*, not the presentation code itself anymore. The Raylib console build and the Avalonia GUI are two independent, sibling entry points into the same core; neither owns emulation logic itself, and neither depends on the other.
 
@@ -196,42 +196,49 @@ EmuSen Project/
 │   │       ├── Tigers Eye - PC Engine/README.md
 │   │       ├── Hawks Eye - PC-FX/README.md
 │   │       └── Fish Eye - SuperGrafx/README.md
-│   ├── Shell/                                 # General-purpose bash-alike shell (see companion doc §3.3/§3.17) -
-│   │   │                                      #   was Debug/DebugCommandProcessor.cs; renamed/moved once it grew
-│   │   │                                      #   quoting, variables, $(...), pipes, redirection, if/for/while
+│   ├── Shell/                                 # General-purpose bash-alike shell (see companion doc §3.3/§3.17)
+│   │   │                                      #   AND the core-agnostic debug toolchain it was originally split
+│   │   │                                      #   from - was Debug/DebugCommandProcessor.cs; renamed/moved once
+│   │   │                                      #   it grew quoting, variables, $(...), pipes, redirection,
+│   │   │                                      #   if/for/while. EmuSen.Debug.Commands/Debug/ (IDebugTarget, every
+│   │   │                                      #   registry, DebugTools, FrameRecorder, and the SNES-facing
+│   │   │                                      #   commands themselves - mem/regs/watch/...) merged in here later,
+│   │   │                                      #   once "registered into the shell rather than merged away" turned
+│   │   │                                      #   out to serve no purpose - see the companion doc's §3.3.
 │   │   ├── ShellInterpreter.cs                # dispatcher + variable/history state + statement execution
 │   │   ├── Lexer.cs / Parser.cs / Ast.cs       # hand-written tokenizer/recursive-descent parser/AST
 │   │   ├── ConsoleLineReader.cs                # up/down-arrow history recall at the F4 prompt
-│   │   └── Commands/                           # echo/sed/history/true/false/test - core-agnostic shell builtins
-│   ├── Debug/                                # Core-agnostic debug toolchain (see companion doc) - the SNES-
-│   │   │                                      #   facing commands (mem/regs/watch/...) registered into Shell/
-│   │   ├── IDebugTarget.cs
-│   │   ├── Commands/                           # mem/regs/watch/etc. - implement Shell.IShellCommand
-│   │   ├── WatchRegistry.cs
-│   │   └── DebugTools.cs                     # Older generic helpers (hexdump, tile-ASCII, etc.) plus
-│   │                                          #   RepeatCollapsingTrace<TKey> - collapses a repeating
-│   │                                          #   1-8 instruction cycle (polling/delay loops - VBlank
-│   │                                          #   wait, DMA busy-wait, the APU handshake) into one
-│   │                                          #   summary line instead of writing every repeat, since
-│   │                                          #   a real session produced a 1GB cpu.log almost
-│   │                                          #   entirely from exactly that. Used by Cpu.cs/Spc700.cs
-│   │                                          #   for CpuVerboseLogging/Spc700VerboseLogging - compares
-│   │                                          #   a small struct key, not the rendered string, so a
-│   │                                          #   locked-in loop costs one comparison, no string
-│   │                                          #   allocation, per instruction. Both cores auto-flush a
-│   │                                          #   still-open cycle the moment their verbose flag turns
-│   │                                          #   off (Cpu.Step()/Spc700.Step()'s _wasVerboseLogging
-│   │                                          #   check); EmulatorSession.FlushVerboseLogs() and
-│   │                                          #   Program.cs's shutdown path cover process exit, the
-│   │                                          #   one case Step() can't see coming on its own. The
-│   │                                          #   collapsed-loop marker line is built via a
-│   │                                          #   caller-supplied renderMarker(cycleLength, repeats)
-│   │                                          #   delegate, not hardcoded - it MUST carry the same
-│   │                                          #   [TAG] prefix render() uses, or CategorizedLogWriter's
-│   │                                          #   prefix table can't route it to the cpu/apu category
-│   │                                          #   and it falls through to "general", which isn't in
-│   │                                          #   the console-echo suppression list - a real session
-│   │                                          #   hit exactly this and got the console blasted again.
+│   │   ├── IDebugTarget.cs                     # core-agnostic debug-target contract (see companion doc)
+│   │   ├── WatchRegistry.cs / BreakpointRegistry.cs / CheatRegistry.cs / FrameLogRegistry.cs
+│   │   ├── FrameRecorder.cs
+│   │   ├── DebugTools.cs                     # Older generic helpers (hexdump, tile-ASCII, etc.) plus
+│   │   │                                      #   RepeatCollapsingTrace<TKey> - collapses a repeating
+│   │   │                                      #   1-8 instruction cycle (polling/delay loops - VBlank
+│   │   │                                      #   wait, DMA busy-wait, the APU handshake) into one
+│   │   │                                      #   summary line instead of writing every repeat, since
+│   │   │                                      #   a real session produced a 1GB cpu.log almost
+│   │   │                                      #   entirely from exactly that. Used by Cpu.cs/Spc700.cs
+│   │   │                                      #   for CpuVerboseLogging/Spc700VerboseLogging - compares
+│   │   │                                      #   a small struct key, not the rendered string, so a
+│   │   │                                      #   locked-in loop costs one comparison, no string
+│   │   │                                      #   allocation, per instruction. Both cores auto-flush a
+│   │   │                                      #   still-open cycle the moment their verbose flag turns
+│   │   │                                      #   off (Cpu.Step()/Spc700.Step()'s _wasVerboseLogging
+│   │   │                                      #   check); EmulatorSession.FlushVerboseLogs() and
+│   │   │                                      #   Program.cs's shutdown path cover process exit, the
+│   │   │                                      #   one case Step() can't see coming on its own. The
+│   │   │                                      #   collapsed-loop marker line is built via a
+│   │   │                                      #   caller-supplied renderMarker(cycleLength, repeats)
+│   │   │                                      #   delegate, not hardcoded - it MUST carry the same
+│   │   │                                      #   [TAG] prefix render() uses, or CategorizedLogWriter's
+│   │   │                                      #   prefix table can't route it to the cpu/apu category
+│   │   │                                      #   and it falls through to "general", which isn't in
+│   │   │                                      #   the console-echo suppression list - a real session
+│   │   │                                      #   hit exactly this and got the console blasted again.
+│   │   ├── Cheats/                             # ActionReplayCodec/GameGenieCodec - RAM-poke/ROM-patch decoders
+│   │   └── Commands/                           # Every shell command, one class each: echo/sed/history/true/
+│   │                                            #   false/test (core-agnostic builtins) alongside mem/regs/
+│   │                                            #   watch/bp/cheat/etc. (SNES-facing, need a real IDebugTarget)
 │   └── Settings/
 │       ├── AudioSettings.cs
 │       ├── DebugSettings.cs                  # Every logging toggle - see EmuSen_Settings_Reference.md.
@@ -242,7 +249,7 @@ EmuSen Project/
 │       │                                      #   throughout the codebase needed zero changes since they
 │       │                                      #   already just read e.g. DebugSettings.CpuVerboseLogging.
 │       │                                      #   Toggle live from the F4 prompt via the `log` command
-│       │                                      #   (Debug/Commands/LogCommand.cs).
+│       │                                      #   (Shell/Commands/LogCommand.cs).
 │       └── InputBindings.cs
 │                                              # No Frontend/ here anymore - EmuSen.csproj is a pure
 │                                              #   library (no OutputType, no Main). See EmuSen.RaylibFrontend/

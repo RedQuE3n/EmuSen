@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using EmuSen.Debug;
 using EmuSen.Shell.Ast;
 
 namespace EmuSen.Shell
@@ -71,7 +70,7 @@ namespace EmuSen.Shell
         }
 
         // Builds the standard, full command registry (every debug command
-        // under EmuSen.Debug.Commands plus this namespace's own shell
+        // under EmuSen.Shell.Commands plus this namespace's own shell
         // builtins) - the one-stop constructor call every frontend
         // (EmuSen.RaylibFrontend, EmuSen.HeadlessDebug) actually wants,
         // rather than each independently re-listing 30-odd command
@@ -81,36 +80,36 @@ namespace EmuSen.Shell
             // snapshot/diff share one SnapshotStore (see that file's own
             // comment) - constructed once here, same lifetime as every
             // other command's own state.
-            var snapshotStore = new EmuSen.Debug.Commands.SnapshotStore();
+            var snapshotStore = new EmuSen.Shell.Commands.SnapshotStore();
             var history = new CommandHistory();
 
             var commands = new List<IShellCommand>
             {
-                new EmuSen.Debug.Commands.SpacesCommand(),
-                new EmuSen.Debug.Commands.MemCommand(),
-                new EmuSen.Debug.Commands.WriteCommand(),
-                new EmuSen.Debug.Commands.RegsCommand(),
-                new EmuSen.Debug.Commands.SpritesCommand(),
-                new EmuSen.Debug.Commands.PalCommand(),
-                new EmuSen.Debug.Commands.ChannelsCommand(),
-                new EmuSen.Debug.Commands.MuteCommand(),
-                new EmuSen.Debug.Commands.WatchCommand(),
-                new EmuSen.Debug.Commands.BreakCommand(),
-                new EmuSen.Debug.Commands.FrameLogCommand(),
-                new EmuSen.Debug.Commands.CheatCommand(),
-                new EmuSen.Debug.Commands.SearchCommand(),
-                new EmuSen.Debug.Commands.SnapshotCommand(snapshotStore),
-                new EmuSen.Debug.Commands.DiffCommand(snapshotStore),
-                new EmuSen.Debug.Commands.DumpCommand(),
-                new EmuSen.Debug.Commands.LoadCommand(),
-                new EmuSen.Debug.Commands.TileCommand(),
-                new EmuSen.Debug.Commands.TilemapCommand(),
-                new EmuSen.Debug.Commands.DisasmCommand(),
-                new EmuSen.Debug.Commands.TraceCommand(),
-                new EmuSen.Debug.Commands.CallersCommand(),
-                new EmuSen.Debug.Commands.WritersCommand(),
-                new EmuSen.Debug.Commands.ReadersCommand(),
-                new EmuSen.Debug.Commands.LogCommand(),
+                new EmuSen.Shell.Commands.SpacesCommand(),
+                new EmuSen.Shell.Commands.MemCommand(),
+                new EmuSen.Shell.Commands.WriteCommand(),
+                new EmuSen.Shell.Commands.RegsCommand(),
+                new EmuSen.Shell.Commands.SpritesCommand(),
+                new EmuSen.Shell.Commands.PalCommand(),
+                new EmuSen.Shell.Commands.ChannelsCommand(),
+                new EmuSen.Shell.Commands.MuteCommand(),
+                new EmuSen.Shell.Commands.WatchCommand(),
+                new EmuSen.Shell.Commands.BreakCommand(),
+                new EmuSen.Shell.Commands.FrameLogCommand(),
+                new EmuSen.Shell.Commands.CheatCommand(),
+                new EmuSen.Shell.Commands.SearchCommand(),
+                new EmuSen.Shell.Commands.SnapshotCommand(snapshotStore),
+                new EmuSen.Shell.Commands.DiffCommand(snapshotStore),
+                new EmuSen.Shell.Commands.DumpCommand(),
+                new EmuSen.Shell.Commands.LoadCommand(),
+                new EmuSen.Shell.Commands.TileCommand(),
+                new EmuSen.Shell.Commands.TilemapCommand(),
+                new EmuSen.Shell.Commands.DisasmCommand(),
+                new EmuSen.Shell.Commands.TraceCommand(),
+                new EmuSen.Shell.Commands.CallersCommand(),
+                new EmuSen.Shell.Commands.WritersCommand(),
+                new EmuSen.Shell.Commands.ReadersCommand(),
+                new EmuSen.Shell.Commands.LogCommand(),
                 new Commands.EchoCommand(),
                 new Commands.SedCommand(),
                 new Commands.TrueCommand(),

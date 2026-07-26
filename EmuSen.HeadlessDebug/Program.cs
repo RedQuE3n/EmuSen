@@ -790,7 +790,7 @@ class Program
     // buffer. Works from IDebugTarget.DebugSpriteInfo alone, so this has
     // no idea what console produced it - same core-agnostic split as
     // every other harness verb here.
-    private static void DrawSpriteOutline(byte[] rgba, int width, int height, EmuSen.Debug.DebugSpriteInfo s)
+    private static void DrawSpriteOutline(byte[] rgba, int width, int height, EmuSen.Shell.DebugSpriteInfo s)
     {
         void SetPixel(int x, int y)
         {

@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using EmuSen.Debug;
+using EmuSen.Shell;
 
 namespace EmuSen.TestingStudio.Views
 {

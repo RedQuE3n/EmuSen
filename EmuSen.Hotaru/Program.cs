@@ -144,9 +144,21 @@ namespace EmuSen.Hotaru
                 // Wires `coretop -w` up to a real window (DebugWindows) -
                 // replaces the standard registry's plain CoretopCommand
                 // (no window support) via extraCommands' override-by-name
-                // behavior, same mechanism EmuSen.Mistress9 uses.
+                // behavior, same mechanism EmuSen.Mistress9 uses. StateCommand
+                // is new here too - it wasn't in the standard registry at all
+                // before, and closes over `core`/`statePath` directly (both
+                // already in scope) rather than GameWindow's own SaveState/
+                // LoadState wrapper methods, since debugCmd is built before
+                // GameWindow exists - see GameWindow.axaml.cs's own F5/F9
+                // handlers for the console-message-printing wrapper this
+                // command doesn't need (it returns its own result text
+                // instead, same as every other command).
                 DianaOSInterpreter debugCmd = DianaOSInterpreter.CreateDefault(debugTarget,
-                    new IDianaOSCommand[] { new EmuSen.DianaOS.Commands.CoretopCommand(DebugWindows.ShowCoretopWindow) });
+                    new IDianaOSCommand[]
+                    {
+                        new EmuSen.DianaOS.Commands.CoretopCommand(DebugWindows.ShowCoretopWindow),
+                        new EmuSen.DianaOS.Commands.StateCommand(core.SaveState, core.LoadState, () => statePath),
+                    });
 
                 FrameRecorder frameRecorder = new FrameRecorder(debugTarget);
 

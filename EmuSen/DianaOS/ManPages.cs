@@ -909,6 +909,23 @@ namespace EmuSen.DianaOS
                 "    history\n" +
                 "    !!\n" +
                 "    !12",
+
+            ["state"] =
+                "NAME\n" +
+                "    state - save or load emulator state\n\n" +
+                "SYNOPSIS\n" +
+                "    state save [path]\n" +
+                "    state load [path]\n\n" +
+                "DESCRIPTION\n" +
+                "    Saves or loads a full snapshot of emulator state (not battery-backed\n" +
+                "    cartridge SRAM, which persists separately) - the same operation each\n" +
+                "    frontend's own Save State/Load State hotkey or menu item performs.\n" +
+                "    'path' defaults to this frontend's own save-state path (one slot per\n" +
+                "    ROM) if omitted.\n\n" +
+                "EXAMPLES\n" +
+                "    state save\n" +
+                "    state load\n" +
+                "    state save SaveStates/before-boss.state",
         };
     }
 }

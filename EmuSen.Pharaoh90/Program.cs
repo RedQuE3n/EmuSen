@@ -1,8 +1,8 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.HeadlessDebug;
-using EmuSen.HeadlessDebug.Cli;
+using EmuSen.Pharaoh90;
+using EmuSen.Pharaoh90.Cli;
 using EmuSen.Shell;
 
 // Headless AI-agent-driven debugging harness - the "not yet built" item

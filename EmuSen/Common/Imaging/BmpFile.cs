@@ -4,7 +4,7 @@ namespace EmuSen.Common.Imaging
     // DEFLATE needed just to look at a frame. BMP rows are stored bottom-up
     // and BGRA rather than RGBA, both handled by walking rgba backwards a
     // row at a time and swapping R/B per pixel; everything else about the
-    // format is a fixed-size header. Moved out of EmuSen.HeadlessDebug's
+    // format is a fixed-size header. Moved out of EmuSen.Pharaoh90's
     // Program.cs - general-purpose, not specific to that one CLI tool.
     public static class BmpFile
     {

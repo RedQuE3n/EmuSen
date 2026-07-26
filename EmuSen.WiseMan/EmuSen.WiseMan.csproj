@@ -40,7 +40,7 @@
          HeadlessDebug/FrameRunnerTests.cs. Referencing an OutputType=Exe
          project works the same as any other ProjectReference; its Main
          just never runs from here. -->
-    <ProjectReference Include="..\EmuSen.HeadlessDebug\EmuSen.HeadlessDebug.csproj" />
+    <ProjectReference Include="..\EmuSen.Pharaoh90\EmuSen.Pharaoh90.csproj" />
   </ItemGroup>
 
 </Project>

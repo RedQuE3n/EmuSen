@@ -2,7 +2,7 @@ using EmuSen.Common.Imaging;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 
-namespace EmuSen.HeadlessDebug
+namespace EmuSen.Pharaoh90
 {
     // The one shared frame-stepping primitive both the classic frame loop
     // and --commands mode drive - replaces two implementations

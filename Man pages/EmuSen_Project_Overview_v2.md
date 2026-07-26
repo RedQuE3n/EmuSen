@@ -70,11 +70,11 @@ EmuSen Project/
 │   │   │                                      #   LoadRom() unlike this class's throwing GetFrameBufferRgba
 │   │   ├── StateSerializer.cs                # Reflective save-state serializer
 │   │   ├── TeeTextWriter.cs                  # Console + single-file log tee (generic, reusable)
-│   │   ├── Imaging/                          # Moved out of EmuSen.HeadlessDebug/Program.cs (was ~270
+│   │   ├── Imaging/                          # Moved out of EmuSen.Pharaoh90/Program.cs (was ~270
 │   │   │   │                                  #   lines of private static helpers with zero test
 │   │   │   │                                  #   coverage and zero reuse anywhere else) - see
 │   │   │   │                                  #   EmuSen_Debugging_Tools_Reference_v5.md §3.15's revision
-│   │   │   │                                  #   note. Genuinely general-purpose, not HeadlessDebug-
+│   │   │   │                                  #   note. Genuinely general-purpose, not Pharaoh90-
 │   │   │   │                                  #   specific, hence living here rather than in that project.
 │   │   │   ├── BmpFile.cs                    # Minimal uncompressed 32bpp BMP write/read
 │   │   │   ├── FrameHash.cs                  # 64-bit FNV-1a over raw RGBA bytes (--autoshot's change check)
@@ -262,7 +262,7 @@ EmuSen Project/
 │   │                                            #   watch/bp/cheat/etc. (SNES-facing, need a real IDebugTarget)
 │   ├── Audio/
 │   │   └── WavFile.cs                         # Minimal uncompressed PCM WAV writer, moved out of
-│   │                                           #   EmuSen.HeadlessDebug/Program.cs alongside the Imaging/
+│   │                                           #   EmuSen.Pharaoh90/Program.cs alongside the Imaging/
 │   │                                           #   move above - namespace EmuSen.Audio, same namespace
 │   │                                           #   Settings/AudioSettings.cs already uses despite living
 │   │                                           #   in a different folder
@@ -473,7 +473,7 @@ Roughly in order of "cheap and likely valuable" to "bigger, deliberately-deferre
 8. **Audio output** — connect the already-correct S-DSP synthesis to an actual playback device. The SPC700 audio-pacing undershoot that would have made this audible as "running slow" is fixed (§4's APU section, `Venus_APU.md` §2.9) — no longer a blocker for this item.
 9. **Decimal (BCD) mode** on the 65816 (ADC/SBC currently ignore the D flag).
 10. **The stuck HDMA title-screen window bug** — dedicated investigation, now that windowing is confirmed safe to leave on globally.
-11. ~~Breakpoints / single-step / pause-resume~~ — done (`VenusCore.RunFrame()` mid-frame halt/resume, `BreakpointRegistry`, F4 prompt `step`/`continue`). See `EmuSen_Debugging_Tools_Reference_v5.md` §3.1/§3.3. Not yet wired into `EmuSen.HeadlessDebug` or the Avalonia GUI (item 12 below).
+11. ~~Breakpoints / single-step / pause-resume~~ — done (`VenusCore.RunFrame()` mid-frame halt/resume, `BreakpointRegistry`, F4 prompt `step`/`continue`). See `EmuSen_Debugging_Tools_Reference_v5.md` §3.1/§3.3. Not yet wired into `EmuSen.Pharaoh90` or the Avalonia GUI (item 12 below).
 12. **The Avalonia GUI debug window** — the actual Mesen-style multi-pane debugger, built against `IDebugTarget` once enough of the above exists to make it worthwhile.
 13. **A second `IDebugTarget` implementation (NES or otherwise)** — to actually prove out the core-agnostic design rather than just asserting it.
 14. **True doubled-resolution interlace output** — explicitly deferred (§4) given its rarity in real games versus its engineering cost; revisit only if a specific ROM actually needs it.

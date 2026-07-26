@@ -1,6 +1,6 @@
 using EmuSen.Common.Imaging;
 
-namespace EmuSen.HeadlessDebug
+namespace EmuSen.Pharaoh90
 {
     // The standalone `--diffshot <bmp1> <bmp2> <outpath>` mode - unrelated
     // to running a ROM at all, operates purely on two already-rendered BMP

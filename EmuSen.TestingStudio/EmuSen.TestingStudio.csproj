@@ -60,7 +60,7 @@
          shader hook. Referenced explicitly so this frontend can adopt
          FramePresenter/ShaderEffect directly once it has a GPU-capable
          rendering surface of its own - see the shader game-plan discussion. -->
-    <ProjectReference Include="..\EmuSen.Presentation\EmuSen.Presentation.csproj" />
+    <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
   </ItemGroup>
 
 </Project>

@@ -27,8 +27,8 @@
          frontends are true siblings referencing EmuSen.csproj
          independently, neither depending on the other. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
-    <!-- FramePresenter/ShaderEffect/BuiltInShaders - see EmuSen.Presentation.csproj. -->
-    <ProjectReference Include="..\EmuSen.Presentation\EmuSen.Presentation.csproj" />
+    <!-- FramePresenter/ShaderEffect/BuiltInShaders - see EmuSen.Serenity.csproj. -->
+    <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
   </ItemGroup>
 
 </Project>

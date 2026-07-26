@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen", "EmuSen\EmuSen.csproj", "{A38C3BCD-5A38-48D5-9C1C-8858F9D65ECB}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Presentation", "EmuSen.Presentation\EmuSen.Presentation.csproj", "{0379B889-6F6C-4037-AF1E-1A6F807E0872}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Serenity", "EmuSen.Serenity\EmuSen.Serenity.csproj", "{0379B889-6F6C-4037-AF1E-1A6F807E0872}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.RaylibFrontend", "EmuSen.RaylibFrontend\EmuSen.RaylibFrontend.csproj", "{7EFE3253-C275-4845-8C09-C710153A2475}"
 EndProject

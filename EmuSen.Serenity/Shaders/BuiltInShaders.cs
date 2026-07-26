@@ -1,4 +1,4 @@
-namespace EmuSen.Presentation.Shaders
+namespace EmuSen.Serenity.Shaders
 {
     // Embedded GLSL source for the first working shader passes - prototype
     // for RetroArch-style post-processing (see the shader game-plan

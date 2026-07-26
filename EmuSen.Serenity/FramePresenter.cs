@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Raylib_cs;
-using EmuSen.Presentation.Shaders;
+using EmuSen.Serenity.Shaders;
 using EmuSen.Graphics;
 
-namespace EmuSen.Presentation
+namespace EmuSen.Serenity
 {
     // Built-in post-processing effects, applied as a single GLSL fragment
     // shader pass on the upscaled game screen before it's composited with
@@ -23,7 +23,7 @@ namespace EmuSen.Presentation
     // Core-agnostic on-screen presentation: takes any ICore's raw RGBA8888
     // frame buffer (ICore.GetFrameBufferRgba(), ICore.ScreenWidth/Height)
     // and gets it on screen via Raylib, with no knowledge of which console
-    // produced it. Lives in its own project (EmuSen.Presentation), separate
+    // produced it. Lives in its own project (EmuSen.Serenity), separate
     // from both the emulation core (EmuSen.csproj) and any one frontend, so
     // every frontend depends on the same presentation/shader code instead
     // of a hand-copied duplicate - the console build (EmuSen.RaylibFrontend/

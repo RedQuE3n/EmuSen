@@ -397,7 +397,7 @@ namespace EmuSen.TestingStudio.Views
                     runFrameTimeInWindow += frameStopwatch.Elapsed;
 
                     // Same call-site placement as PumpAudio() in
-                    // EmuSen.RaylibFrontend/Program.cs - right after
+                    // EmuSen.Hotaru/Program.cs - right after
                     // RunFrame(), since that's what actually produces new
                     // samples to drain. Safe here on _emuThread rather than
                     // the UI thread - see AudioPlayer.Pump's own comment.
@@ -572,7 +572,7 @@ namespace EmuSen.TestingStudio.Views
         // console build does, for free.
         //
         // Unconditional, same as the console/Raylib build
-        // (RaylibFrontend/Program.cs) - several DebugSettings.*Logging
+        // (Hotaru/Program.cs) - several DebugSettings.*Logging
         // flags default to true (Dma/CameraRam/RenderRead/AllScrollWrite/
         // MathUnit/BgModeChange/MosaicWrite), so the core writes a steady
         // stream of Console.WriteLine calls regardless of whether anyone

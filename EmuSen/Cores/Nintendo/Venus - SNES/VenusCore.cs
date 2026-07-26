@@ -16,7 +16,7 @@ namespace EmuSen.Cores.Nintendo.Venus
     // Spc700/Renderer frame-by-frame. This is the ONE place the per-
     // scanline timing loop lives now; it used to exist as two separately-
     // maintained copies (the console frontend's Main loop, now
-    // EmuSen.RaylibFrontend/Program.cs, and Common/EmulatorSession.cs's
+    // EmuSen.Hotaru/Program.cs, and Common/EmulatorSession.cs's
     // RunFrame()) that had to be kept in sync
     // by hand - EmulatorSession's own header comment even said so
     // explicitly. Both now construct a VenusCore and call RunFrame() on
@@ -105,7 +105,7 @@ namespace EmuSen.Cores.Nintendo.Venus
         // rather than ICore, same call EmulatorSession's own comment
         // already makes for the LastFrame*Ms profiling properties: nothing
         // consumes this except the console frontend's own debug prompt
-        // (EmuSen.RaylibFrontend/Program.cs), which already holds a
+        // (EmuSen.Hotaru/Program.cs), which already holds a
         // concrete VenusCore, not just an ICore.
         public bool IsHaltedAtBreakpoint { get; private set; }
 
@@ -412,7 +412,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         public int AudioSampleRate => EmuSen.Audio.AudioSettings.SampleRate;
 
-        // Moved from EmuSen.RaylibFrontend/Program.cs's own PumpAudio,
+        // Moved from EmuSen.Hotaru/Program.cs's own PumpAudio,
         // which used to reach directly into Spc700.Dsp.AudioBuffer (a real
         // SNES/S-DSP-specific type) - the exact same "core-agnostic caller
         // shouldn't touch Venus-specific internals" gap GetFrameBufferRgba

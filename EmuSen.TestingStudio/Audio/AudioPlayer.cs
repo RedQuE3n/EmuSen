@@ -7,7 +7,7 @@ namespace EmuSen.TestingStudio.Audio
 {
     // Real audio output for the Avalonia frontend, via SDL's queue-based
     // audio API (SDL_OpenAudioDevice + SDL_QueueAudio, no callback) - the
-    // same approach EmuSen.RaylibFrontend's PumpAudio takes with Raylib's
+    // same approach EmuSen.Hotaru's PumpAudio takes with Raylib's
     // AudioStream, just against SDL instead, since Silk.NET.SDL was
     // already a TestingStudio dependency for gamepad input
     // (Input/GamepadManager.cs) and pulling in Raylib-cs here too, just
@@ -34,7 +34,7 @@ namespace EmuSen.TestingStudio.Audio
 
         // SDL wants a fixed sample-count-per-chunk hint (its own internal
         // buffer size), not a per-call cap - chosen to match
-        // EmuSen.RaylibFrontend's own 4096-frame Raylib stream buffer
+        // EmuSen.Hotaru's own 4096-frame Raylib stream buffer
         // exactly, so both frontends carry the same latency/underrun-safety
         // tradeoff under the same load (see that file's own comment on
         // the reasoning: small enough to not lag audibly behind the
@@ -42,7 +42,7 @@ namespace EmuSen.TestingStudio.Audio
         // the stream).
         private const ushort BufferFrames = 4096;
 
-        // Matches PumpAudio's own per-call drain cap (RaylibFrontend/
+        // Matches PumpAudio's own per-call drain cap (Hotaru/
         // Program.cs) - bounds how much of a stall's backlog gets pushed
         // to the device in one Pump() call.
         private const int MaxFramesPerPump = 4096;
@@ -84,7 +84,7 @@ namespace EmuSen.TestingStudio.Audio
         }
 
         // Call once per RunFrame(), mirroring PumpAudio's own call site
-        // and per-frame cadence in EmuSen.RaylibFrontend/Program.cs - see
+        // and per-frame cadence in EmuSen.Hotaru/Program.cs - see
         // that method's comment for the full reasoning behind the
         // buffering/capping approach. Same algorithm, just pushed through
         // SDL's "always accepts more, no readiness check" queue model

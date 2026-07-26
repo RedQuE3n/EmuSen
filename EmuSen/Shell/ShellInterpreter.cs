@@ -72,7 +72,7 @@ namespace EmuSen.Shell
         // Builds the standard, full command registry (every debug command
         // under EmuSen.Shell.Commands plus this namespace's own shell
         // builtins) - the one-stop constructor call every frontend
-        // (EmuSen.RaylibFrontend, EmuSen.HeadlessDebug) actually wants,
+        // (EmuSen.Hotaru, EmuSen.HeadlessDebug) actually wants,
         // rather than each independently re-listing 30-odd command
         // classes and risking them drifting out of sync with each other.
         public static ShellInterpreter CreateDefault(IDebugTarget? target)

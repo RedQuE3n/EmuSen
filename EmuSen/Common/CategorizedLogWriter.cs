@@ -289,7 +289,7 @@ namespace EmuSen.Common
         }
 
         // Both frontends now call this explicitly on every exit path
-        // (EmuSen.RaylibFrontend's Program.cs in a finally block;
+        // (EmuSen.Hotaru's Program.cs in a finally block;
         // EmuSen.TestingStudio's MainWindow on window-close and before
         // starting a fresh session for the next loaded ROM). That used to
         // only matter for the long-lived Avalonia build - the console

@@ -52,7 +52,7 @@
     <!-- Pulls in the emulation core (Cores/Nintendo/Venus - SNES/*, Settings/*, etc).
          EmuSen.csproj is a pure library (no Main, no window ownership) - the Raylib
          console frontend's own Main/hotkey loop lives in the sibling
-         EmuSen.RaylibFrontend project instead, so this reference no longer drags
+         EmuSen.Hotaru project instead, so this reference no longer drags
          in another frontend's Exe/window-ownership baggage, just the core. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
     <!-- Not consumed yet - this project still presents via a CPU-side

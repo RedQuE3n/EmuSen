@@ -32,7 +32,7 @@ using EmuSen.Shell;
 // headless run otherwise sends no input at all, which is fine for a game
 // with its own idle-timeout demo (SMW) but leaves others (LttP's
 // file-select screen) stuck at a "press Start" prompt forever. --loadstate
-// loads a VenusCore.SaveState() file (same format the RaylibFrontend's
+// loads a VenusCore.SaveState() file (same format the Hotaru's
 // F5/F9 hotkeys and its F4 prompt's own `state save|load` command use)
 // before frame 0, for starting directly from an already-reached scene
 // instead of re-deriving it via --tap every run. --savestate writes one
@@ -199,7 +199,7 @@ class Program
         var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
         var debugCmd = ShellInterpreter.CreateDefault(debugTarget);
 
-        // Same two ranges registered from power-on in RaylibFrontend's
+        // Same two ranges registered from power-on in Hotaru's
         // Program.cs for the Yoshi/coin investigation - duplicated here
         // rather than shared, since this entry point has no window/input
         // loop to hang that wiring off of and needs them active before the

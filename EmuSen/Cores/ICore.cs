@@ -17,7 +17,7 @@ namespace EmuSen.Cores
     // interface now would be a much bigger, riskier piece of work than
     // this contract's actual purpose - eliminating the duplicated
     // frame-timing loop that used to exist separately in both the console
-    // frontend's Program.cs (now EmuSen.RaylibFrontend/Program.cs) and
+    // frontend's Program.cs (now EmuSen.Hotaru/Program.cs) and
     // Common/EmulatorSession.cs. A core's
     // concrete implementation (e.g. VenusCore) is free to expose its own
     // real input surface beyond this interface; callers that need it

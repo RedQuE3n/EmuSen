@@ -37,6 +37,7 @@ namespace EmuSen.Hotaru
         private static Thread? _uiThread;
         private static readonly ManualResetEventSlim _ready = new(false);
         private static CoretopWindow? _coretopWindow;
+        private static FeedWindow? _feedWindow;
 
         // Called from CoretopCommand's own `-w` handling (via a plain
         // Action<IDebugTarget> delegate - see that class's own comment on
@@ -61,6 +62,38 @@ namespace EmuSen.Hotaru
                 {
                     _coretopWindow.UpdateTarget(target);
                     _coretopWindow.Activate();
+                }
+            });
+        }
+
+        // Called from the `feed -w` handling in Program.cs's own
+        // RunDebugPrompt - a live mirror of the actual game picture
+        // (ICore.GetFrameBufferRgba()), not hardware/debug data the way
+        // ShowCoretopWindow's target is. Takes a plain frame-provider
+        // delegate instead of an ICore/VenusCore reference so this class
+        // (and FeedWindow itself) stay just as core-agnostic as
+        // ShowCoretopWindow already is via IDebugTarget - Program.cs
+        // supplies `() => (core.GetFrameBufferRgba(), core.ScreenWidth,
+        // core.ScreenHeight)` as that provider. Same at-most-one/reuse
+        // pattern as ShowCoretopWindow: the provider closure is only
+        // ever bound once per process (Hotaru has no ROM-hot-swap - a
+        // new ROM means a new process), so reusing an existing window
+        // just needs to bring it forward, never rebind it to a new
+        // target the way coretop's UpdateTarget does.
+        public static void ShowFeedWindow(Func<(byte[] Rgba, int Width, int Height)> frameProvider)
+        {
+            EnsureStarted();
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_feedWindow is null)
+                {
+                    _feedWindow = new FeedWindow(frameProvider);
+                    _feedWindow.Closed += (_, _) => _feedWindow = null;
+                    _feedWindow.Show();
+                }
+                else
+                {
+                    _feedWindow.Activate();
                 }
             });
         }

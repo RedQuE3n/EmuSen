@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -18,9 +17,34 @@ namespace EmuSen.Hotaru
 {
     class Program
     {
-        private const int StatusEveryNFrames = 60;
-
         private static readonly DebugTools.BoundedTrace _bgScrollTrace = new();
+
+        // Set while `feed`'s no-window mode is watching for Ctrl+C at
+        // the terminal (see RunDebugPrompt's own 'feed' handling and
+        // RunHotkeys' polling of it, below) - lets Ctrl+C reopen the
+        // debug prompt from the terminal alone, without needing the
+        // Raylib window focused to press F4. Console.TreatControlCAsInput
+        // has to be true for that Ctrl+C to arrive as a readable key
+        // instead of the process-terminating signal Main's own
+        // PosixSignalRegistration handlers treat it as normally - reset
+        // to false the moment the prompt reopens (ArmFeedWatch/
+        // DisarmFeedWatch, below), by any path, so a plain Ctrl+C outside
+        // 'feed' mode still means "shut down" everywhere else in this
+        // frontend, the same as before 'feed' existed.
+        private static bool _feedWatchActive;
+
+        private static void ArmFeedWatch()
+        {
+            try { Console.TreatControlCAsInput = true; } catch { }
+            _feedWatchActive = true;
+        }
+
+        private static void DisarmFeedWatch()
+        {
+            if (!_feedWatchActive) return;
+            try { Console.TreatControlCAsInput = false; } catch { }
+            _feedWatchActive = false;
+        }
 
         // Backs the standalone shell's `core <corename> <path>` command
         // (RunStandaloneShell, below) - deliberately a small, private,
@@ -122,36 +146,22 @@ namespace EmuSen.Hotaru
                 ctx.Cancel = false;
             });
 
-            // ROM path resolution - see EmuSen_Frontend_Driver.md §1. No
-            // path at all means "just give me the shell" - drop straight
-            // into DianaOS with no ROM loaded (same interpreter/prompt
-            // the F4 hotkey uses, just with a null IDebugTarget) rather
-            // than falling back to some hardcoded default path that only
-            // ever made sense on one dev machine. That shell's own
-            // `core <corename> <path>` command (RunStandaloneShell, below)
-            // is the other way to reach a game from here - it returns the
-            // validated ROM path to launch, or null if the user typed
-            // 'shutdown'/'quit' instead, in which case there's nothing
-            // left to do.
-            string romPath;
-            if (args.Length == 0)
-            {
-                string? romPathFromShell = RunStandaloneShell();
-                if (romPathFromShell is null) return;
-                romPath = romPathFromShell;
-            }
-            else
-            {
-                romPath = args[0];
-            }
-
-            if (!File.Exists(romPath))
-            {
-                Console.WriteLine($"[ERROR] ROM not found: {romPath}");
-                Console.WriteLine("Usage: dotnet run -- <path-to-rom.smc>");
-                return;
-            }
-            Console.WriteLine($"[ROM] Loading: {romPath}");
+            // ROM path resolution - see EmuSen_Frontend_Driver.md §1.
+            // DianaOS is now the ONLY thing shown at launch, whether or
+            // not a ROM path was given on the command line - a CLI arg is
+            // just a shortcut for typing 'core <name> <path>' at the
+            // shell prompt yourself, not a separate way to skip the shell
+            // entirely. RunStandaloneShell prints the shell banner either
+            // way and, given a starting path, either returns it
+            // immediately (valid file - go straight to gameplay) or
+            // reports why not and falls through into the same interactive
+            // loop a bare launch gets, so a typo'd CLI arg doesn't just
+            // dead-end the process. Returns null only if the user actually
+            // asked to shut down (or hit EOF) with no ROM ever resolved,
+            // in which case there's nothing left to do.
+            string? romPathFromShell = RunStandaloneShell(args.Length > 0 ? args[0] : null);
+            if (romPathFromShell is null) return;
+            string romPath = romPathFromShell;
 
             try
             {
@@ -233,39 +243,8 @@ namespace EmuSen.Hotaru
                 Raylib_cs.AudioStream audioStream = Raylib_cs.Raylib.LoadAudioStream((uint)AudioSettings.SampleRate, 16, 2);
                 Raylib_cs.Raylib.PlayAudioStream(audioStream);
 
-                // Same measured-fps diagnostic Testing Studio's status bar
-                // has (EmuSen.Mistress9/Views/MainWindow.axaml.cs), added
-                // here to answer the same question for this build: does
-                // RunFrame() itself slow down under real gameplay the same
-                // way it does there, or is that slowdown specific to the
-                // Avalonia frontend? Since RunFrame() is identical shared
-                // code (VenusCore.cs), the expectation is this build pays
-                // the same cost - just never visible before since nothing
-                // here measured real wall-clock fps.
-                Stopwatch fpsClock = Stopwatch.StartNew();
-                TimeSpan fpsWindowStart = fpsClock.Elapsed;
-                int fpsFramesInWindow = 0;
-                TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
-                TimeSpan totalTimeInWindow = TimeSpan.Zero;
-                Stopwatch frameStopwatch = new Stopwatch();
-
-                // VenusCore's own per-scanline-granularity phase breakdown
-                // (VenusCore.RunFrame()'s own comment) - which subsystem
-                // (CPU+SPC700 stepping, PPU rendering, HDMA) actually
-                // accounts for RunFrame() getting slower during gameplay.
-                double cpuSpc700MsInWindow = 0;
-                double ppuMsInWindow = 0;
-                double hdmaMsInWindow = 0;
-                double objEvalMsInWindow = 0;
-                double blendMsInWindow = 0;
-                double mainCompositeMsInWindow = 0;
-                double subCompositeMsInWindow = 0;
-
                 while (presenter.IsOpen())
                 {
-                    TimeSpan iterationStart = fpsClock.Elapsed;
-
-                    frameStopwatch.Restart();
                     core.RunFrame();
 
                     // A breakpoint (or an armed single-step - see
@@ -286,15 +265,6 @@ namespace EmuSen.Hotaru
 
                     PumpAudio(core, audioStream);
 
-                    TimeSpan runFrameElapsed = frameStopwatch.Elapsed;
-                    cpuSpc700MsInWindow += core.LastFrameCpuSpc700Ms;
-                    ppuMsInWindow += core.LastFramePpuMs;
-                    hdmaMsInWindow += core.LastFrameHdmaMs;
-                    objEvalMsInWindow += core.LastFrameObjEvalMs;
-                    blendMsInWindow += core.LastFrameBlendMs;
-                    mainCompositeMsInWindow += core.LastFrameMainCompositeMs;
-                    subCompositeMsInWindow += core.LastFrameSubCompositeMs;
-
                     // Must happen before the next RunFrame()'s own
                     // LatchAutoJoypad - see EmuSen_Frontend_Driver.md §1.
                     InputBindings.ApplyInput(core.Bus!);
@@ -304,41 +274,6 @@ namespace EmuSen.Hotaru
 
                     // All debug/dev hotkeys - see EmuSen_Frontend_Driver.md §2.
                     if (RunHotkeys(core, presenter, debugTarget, debugCmd, frameRecorder, statePath)) break; // 'shutdown' typed at the F4 prompt
-
-                    fpsFramesInWindow++;
-                    runFrameTimeInWindow += runFrameElapsed;
-                    totalTimeInWindow += fpsClock.Elapsed - iterationStart;
-
-                    TimeSpan fpsWindowElapsed = fpsClock.Elapsed - fpsWindowStart;
-                    if (fpsWindowElapsed >= TimeSpan.FromSeconds(1))
-                    {
-                        double fps = fpsFramesInWindow / fpsWindowElapsed.TotalSeconds;
-                        double runMs = runFrameTimeInWindow.TotalMilliseconds / fpsFramesInWindow;
-                        double totalMs = totalTimeInWindow.TotalMilliseconds / fpsFramesInWindow;
-                        double cpuSpc700Ms = cpuSpc700MsInWindow / fpsFramesInWindow;
-                        double ppuMs = ppuMsInWindow / fpsFramesInWindow;
-                        double hdmaMs = hdmaMsInWindow / fpsFramesInWindow;
-                        double objEvalMs = objEvalMsInWindow / fpsFramesInWindow;
-                        double blendMs = blendMsInWindow / fpsFramesInWindow;
-                        double mainCompositeMs = mainCompositeMsInWindow / fpsFramesInWindow;
-                        double subCompositeMs = subCompositeMsInWindow / fpsFramesInWindow;
-                        Console.WriteLine(
-                            $"[FPS] {fps:F1} fps (run {runMs:F2}ms / total {totalMs:F2}ms) " +
-                            $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms] " +
-                            $"(ppu breakdown: objEval {objEvalMs:F2}ms / main {mainCompositeMs:F2}ms / " +
-                            $"sub {subCompositeMs:F2}ms / blend {blendMs:F2}ms)");
-                        fpsFramesInWindow = 0;
-                        runFrameTimeInWindow = TimeSpan.Zero;
-                        totalTimeInWindow = TimeSpan.Zero;
-                        cpuSpc700MsInWindow = 0;
-                        ppuMsInWindow = 0;
-                        hdmaMsInWindow = 0;
-                        objEvalMsInWindow = 0;
-                        blendMsInWindow = 0;
-                        mainCompositeMsInWindow = 0;
-                        subCompositeMsInWindow = 0;
-                        fpsWindowStart = fpsClock.Elapsed;
-                    }
                 }
                 core.SaveSram(); // final flush on clean exit
                 Raylib_cs.Raylib.UnloadAudioStream(audioStream);
@@ -392,25 +327,32 @@ namespace EmuSen.Hotaru
             }
         }
 
-        // No ROM path given at all - rather than a game-halted debug
-        // session (RunDebugPrompt below, which needs a real core for its
-        // own 'step'/'state save|load' shortcuts), this is DianaOS on
-        // its own: no core, no window, no audio device, just the shell
-        // against a null IDebugTarget. Every general-purpose command
-        // (echo/sed/grep/awk/ls/cd/source/if/for/while/...) works
-        // exactly as it would with a ROM loaded; anything needing real
-        // hardware access (mem/regs/watch/...) reports a clean "No ROM
-        // loaded" instead of erroring, the same graceful-degradation
-        // every command's own RequireTarget guard already provides.
-        // Deliberately its own small loop rather than reusing
-        // RunDebugPrompt with a null core - that method's 'step'/'state'
-        // shortcuts and its "resume the game" framing don't mean
-        // anything here, and threading null-core checks through it
-        // would make the actually-in-a-game case harder to follow for
-        // no real benefit.
+        // Hotaru's entire launch experience now: no core, no window, no
+        // audio device yet, just DianaOS against a null IDebugTarget -
+        // the shell is the first and only thing shown, whether Hotaru was
+        // launched bare or with a ROM path on the command line. Every
+        // general-purpose command (echo/sed/grep/awk/ls/cd/source/if/
+        // for/while/...) works exactly as it would with a ROM loaded;
+        // anything needing real hardware access (mem/regs/watch/...)
+        // reports a clean "No ROM loaded" instead of erroring, the same
+        // graceful-degradation every command's own RequireTarget guard
+        // already provides. Deliberately its own small loop rather than
+        // reusing RunDebugPrompt with a null core - that method's
+        // 'step'/'state' shortcuts and its "resume the game" framing
+        // don't mean anything here, and threading null-core checks
+        // through it would make the actually-in-a-game case harder to
+        // follow for no real benefit.
         //
-        // Returns the ROM path to actually launch (once `core` picks and
-        // validates one - see below), or null if the user asked to shut
+        // `initialRomPath` is whatever came in as a CLI arg, if anything -
+        // treated purely as a shortcut for typing 'core <name> <path>'
+        // yourself, not a separate launch path that bypasses the shell: a
+        // valid file resolves and returns immediately (no interactive
+        // loop needed), an invalid one just reports why and falls through
+        // into the same loop a bare launch gets, so a typo'd CLI arg
+        // still lands you at a usable prompt instead of a dead process.
+        //
+        // Returns the ROM path to actually launch (once `core` - or the
+        // initial arg - resolves one), or null if the user asked to shut
         // down instead (or hit EOF) - `Main` treats null as "nothing more
         // to do" and returns. `core` is handled here, not as a
         // DianaOSInterpreter command, for the same reason 'resume'/
@@ -418,10 +360,21 @@ namespace EmuSen.Hotaru
         // caller (to actually go build a VenusCore/window/audio device
         // and start running), which a command's own "return a string"
         // contract has no way to do.
-        private static string? RunStandaloneShell()
+        private static string? RunStandaloneShell(string? initialRomPath)
         {
             DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null);
-            Console.WriteLine("--- DianaOS (no ROM loaded - type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
+            Console.WriteLine("--- DianaOS (type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
+
+            if (initialRomPath != null)
+            {
+                if (File.Exists(initialRomPath))
+                {
+                    Console.WriteLine($"[ROM] Loading: {initialRomPath}");
+                    return initialRomPath;
+                }
+                Console.WriteLine($"[ERROR] ROM not found: {initialRomPath}");
+            }
+
             while (true)
             {
                 Console.Write(shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
@@ -517,7 +470,13 @@ namespace EmuSen.Hotaru
         // exactly the inconsistency 'resume'/'shutdown' now removes).
         private static bool RunDebugPrompt(VenusCore core, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, string statePath)
         {
-            Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'shutdown' to quit, 'step'/'s' to single-step) ---");
+            // Whatever got us back into this prompt - F4, a breakpoint
+            // halt, or 'feed's own Ctrl+C watch below reopening it - none
+            // of them should leave Ctrl+C meaning anything other than
+            // "shut down" once we're actually sitting at a prompt again.
+            DisarmFeedWatch();
+
+            Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'feed'/'feed -w' to resume and watch gameplay, 'shutdown' to quit, 'step'/'s' to single-step) ---");
             while (true)
             {
                 // Bash-style secondary prompt while a quote/"$(...)"/
@@ -550,6 +509,30 @@ namespace EmuSen.Hotaru
                     if (trimmed.Equals("shutdown", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
+                    }
+                    // 'feed'/'feed -w' - like 'resume' (below), but also
+                    // arms a way back into this prompt that doesn't need
+                    // the Raylib window focused: Ctrl+C at the terminal
+                    // (RunHotkeys polls for it every frame while armed -
+                    // see ArmFeedWatch's own comment). '-w' additionally
+                    // opens a live-mirrored Avalonia window
+                    // (AvaloniaHost.ShowFeedWindow) showing the actual
+                    // game picture, not hardware/debug data the way
+                    // `coretop -w` does - same reasoning as that command
+                    // for why this needs its own window/thread at all
+                    // (Raylib supports exactly one native window).
+                    if (trimmed.Equals("feed", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("feed ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string[] feedParts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        bool windowed = feedParts.Length >= 2 && feedParts[1].Equals("-w", StringComparison.OrdinalIgnoreCase);
+                        if (windowed)
+                        {
+                            AvaloniaHost.ShowFeedWindow(() => (core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight));
+                            Console.WriteLine("[FEED] Opened in a separate window.");
+                        }
+                        ArmFeedWatch();
+                        Console.WriteLine("Resuming - press Ctrl+C in this terminal to reopen the prompt.");
+                        break;
                     }
                 }
                 // Text-command equivalent of the F5/F9 hotkeys - added
@@ -624,6 +607,24 @@ namespace EmuSen.Hotaru
             VenusCore core, FramePresenter presenter, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, FrameRecorder frameRecorder,
             string statePath)
         {
+            // 'feed's own way back into the prompt - see ArmFeedWatch's
+            // own comment. A cheap non-blocking poll (Console.KeyAvailable),
+            // same technique `coretop`'s own dashboard uses for Ctrl+C,
+            // just spread across frames here instead of a dedicated
+            // blocking loop, since this has to coexist with gameplay
+            // actually running rather than pausing it. Guarded on
+            // IsInputRedirected the same way coretop's own Execute is -
+            // KeyAvailable throws if there's no real console to poll.
+            if (_feedWatchActive && !Console.IsInputRedirected && Console.KeyAvailable)
+            {
+                ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+                if ((key.Modifiers & ConsoleModifiers.Control) != 0 && key.Key == ConsoleKey.C)
+                {
+                    Console.WriteLine();
+                    if (RunDebugPrompt(core, debugTarget, debugCmd, statePath)) return true; // 'shutdown' typed after reopening via 'feed's Ctrl+C
+                }
+            }
+
             // Every frame, cheap no-op when not recording - see
             // EmuSen_Frontend_Driver.md §2.
             frameRecorder.CaptureFrame(path => Raylib_cs.Raylib.TakeScreenshot(path));
@@ -742,14 +743,6 @@ namespace EmuSen.Hotaru
             {
                 Console.WriteLine($"[BG SCROLL] Frame {core.TotalFrames}: BG1 X={core.Bus!.Ppu.BgScrollX[0]} Y={core.Bus.Ppu.BgScrollY[0]}  |  BG2 X={core.Bus.Ppu.BgScrollX[1]} Y={core.Bus.Ppu.BgScrollY[1]}");
                 if (!_bgScrollTrace.IsActive) DebugSettings.AllScrollWriteLogging = false;
-            }
-
-            if (core.TotalFrames % StatusEveryNFrames == 0)
-            {
-                Console.WriteLine(
-                    $"[STATUS] Frame {core.TotalFrames} | PC=0x{core.Cpu!.PB:X2}{core.Cpu.PC:X4} | " +
-                    $"TM={core.Bus!.Ppu.Tm:X2} BGMODE={core.Bus.Ppu.Bgmode:X2} INIDISP={core.Bus.Ppu.Inidisp:X2}"
-                );
             }
 
             // Periodic SRAM autosave now happens inside VenusCore.RunFrame()

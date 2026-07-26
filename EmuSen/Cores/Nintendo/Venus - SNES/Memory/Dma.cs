@@ -27,6 +27,40 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         
         public byte HdmaEnable;
 
+        // General-purpose DMA ($420B) previously transferred every byte
+        // "for free" - ExecuteGeneralDma() ran its whole byte loop
+        // without the CPU's own Step() ever seeing any of that time
+        // elapse, so a big transfer (a full VRAM graphics upload, common
+        // during a game's boot sequence) cost the same handful of cycles
+        // as the STA $420B instruction that triggered it, real hardware's
+        // ~8-master-cycles-per-byte transfer time notwithstanding.
+        //
+        // That silently under-counted elapsed time specifically during
+        // the parts of a frame doing the most DMA work - and this
+        // project's CPU->SPC700 pacing (VenusCore.RunFrame's
+        // scaledSpc700Cycles calculation) is driven entirely by
+        // Cpu.Step()'s returned cycle count, so any period where DMA
+        // cycles go uncounted is a period where the SPC700 gets shorted
+        // its proportionate share of cycles too - found chasing a Super
+        // Metroid boot hang where the SPC700 was still mid-transfer on an
+        // earlier audio-upload stage while the 65816 had already moved on
+        // to a later stage's handshake wait and timed out, consistent
+        // with the SPC700 having fallen behind real elapsed time during
+        // the CPU's (uncounted-cost) graphics DMA bursts in between.
+        //
+        // Accumulated here in "CPU cycle" units (this project's existing
+        // convention - see VenusCore.RunFrame's own comment on
+        // Cpu.Step()'s return value - where 1 unit = 8 master clocks,
+        // the SlowROM baseline this project uses uniformly since it
+        // doesn't yet track FastROM separately) and drained by
+        // Cpu.Step() into its own return value after every instruction,
+        // so a DMA triggered by this instruction is attributed to it the
+        // same way a real 65816 stalls on the triggering STA until the
+        // transfer finishes. Formula: real hardware charges ~8 master
+        // cycles of per-channel setup overhead plus ~8 master cycles per
+        // byte transferred = 1 + bytes in this project's cycle units.
+        public int PendingCpuCycles;
+
         public Dma(MemoryBus bus)
         {
             _bus = bus;
@@ -235,6 +269,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 // (and Mesen) executes this direction the same as the other
                 // one, just with the read/write sides swapped - see
                 // CopyDmaByte above.
+                // See PendingCpuCycles's own comment for the formula -
+                // charged up front using this channel's actual transfer
+                // size, before `remaining` gets decremented by the loop
+                // below.
+                PendingCpuCycles += 1 + remaining;
+
                 ushort addr = ch.SourceAddress;
                 int patternIdx = 0;
 

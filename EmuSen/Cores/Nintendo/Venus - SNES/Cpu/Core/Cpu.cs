@@ -167,8 +167,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             // _waitingForInterrupt (see those methods below). Neither fetches
             // or executes anything while active - just consumes idle cycles
             // so the caller's per-scanline cycle budget still advances.
-            if (_stopped) return 3;
-            if (_waitingForInterrupt) return 2;
+            //
+            // DrainPendingDmaCycles() covers both early-return cases too,
+            // not just the normal instruction path below - a general-
+            // purpose DMA triggered by the instruction immediately before
+            // a WAI/STP would otherwise have its cost silently dropped
+            // (Dma.PendingCpuCycles accumulates the instant $420B is
+            // written, mid-instruction, so it can already be nonzero the
+            // moment this method is entered).
+            if (_stopped) return 3 + DrainPendingDmaCycles();
+            if (_waitingForInterrupt) return 2 + DrainPendingDmaCycles();
 
             ushort executedAtPC = PC;
             byte executedAtPB = PB;
@@ -207,9 +215,21 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             }
 
             // Return the cycles consumed by this instruction
-            // Note: In a fully accurate emulator, we would multiply this by 6, 8, or 12 
+            // Note: In a fully accurate emulator, we would multiply this by 6, 8, or 12
             // depending on the memory region, but for now, base cycles are fine.
-            return inst.Cycles; 
+            return inst.Cycles + DrainPendingDmaCycles();
+        }
+
+        // See Dma.PendingCpuCycles's own comment for why this exists and
+        // its unit convention. Drained (read then zeroed) rather than
+        // just read, so a DMA's cost is attributed exactly once, to
+        // whichever Step() call notices it first.
+        private int DrainPendingDmaCycles()
+        {
+            int cycles = _bus.Dma.PendingCpuCycles;
+            if (cycles == 0) return 0;
+            _bus.Dma.PendingCpuCycles = 0;
+            return cycles;
         }
 
         // NMI entry sequence - see Venus_CPU.md §3. Triggered externally

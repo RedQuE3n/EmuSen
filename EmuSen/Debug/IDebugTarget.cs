@@ -241,5 +241,33 @@ namespace EmuSen.Debug
         // position or a HUD tile change can be confirmed by comparing
         // tilemap entries as text instead of eyeballing two screenshots.
         string DecodeTilemapEntry(IDebugMemorySpace space, int address);
+
+        // Exports the current tile/character memory as a plain RGBA image,
+        // for a headless harness to write straight to disk (see
+        // EmuSen.HeadlessDebug's `vramsheet` verb) without ever needing a
+        // Raylib window. Deliberately not "VRAM sheet" at the interface
+        // level - an NES core's CHR-ROM/CHR-RAM pattern tables aren't VRAM
+        // in the SNES sense, but the shape (some tile memory, decoded to a
+        // grayscale/indexed sheet image) is the same across consoles. A
+        // core with nothing analogous can return a 0x0 empty buffer.
+        (byte[] Rgba, int Width, int Height) RenderTileSheet();
+
+        // Exports the current color palette memory as a plain RGBA swatch
+        // grid image, same rationale as RenderTileSheet() above - SNES
+        // CGRAM vs an NES core's completely different palette RAM shape
+        // are both just "N colors, already resolved to RGB" once decoded.
+        // A core with no palette memory can return a 0x0 empty buffer.
+        (byte[] Rgba, int Width, int Height) RenderPaletteSwatch();
+
+        // Non-destructive snapshot of whatever audio samples are currently
+        // buffered for output - Queue<short>.ToArray() under the hood on
+        // the SNES side, specifically so this never steals samples out from
+        // under a live audio-playback consumer of the same queue (see
+        // Spc700.Dsp.AudioBuffer). Returned as already-interleaved 16-bit
+        // PCM plus the sample rate it was produced at, so a headless
+        // harness can write a standard .wav file without knowing anything
+        // about the source sound co-processor. A core with no audio output
+        // modeled yet can return an empty array.
+        (short[] Samples, int SampleRate) GetAudioSamples();
     }
 }

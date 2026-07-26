@@ -130,7 +130,7 @@ namespace EmuSen.RaylibFrontend
                 DebugSettings.Spc700VerboseLogging = true;
 
                 // Debug toolchain, built once - see EmuSen_Frontend_Driver.md §1.
-                SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!);
+                SnesDebugTarget debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
                 DebugCommandProcessor debugCmd = new DebugCommandProcessor(debugTarget);
 
                 FrameRecorder frameRecorder = new FrameRecorder(debugTarget);

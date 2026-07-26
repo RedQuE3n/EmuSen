@@ -98,4 +98,39 @@ namespace EmuSen.Mistress9.Views
             return DianaOSResult.Ok("coretop: opened in a separate window.");
         }
     }
+
+    // EmuSen.Hotaru's `feed`/`feed -w` (Program.cs) exists to solve a
+    // problem this frontend never had in the first place: Raylib has
+    // exactly one native window, so a Raylib build needs a second one
+    // just to see gameplay while the console is doing something else.
+    // MainWindow's own GameView already shows the live picture
+    // continuously, in the same window the whole time DianaOSConsoleWindow
+    // is open (they're just two ordinary, independent Avalonia windows) -
+    // there's no separate "feed" to open here. `feed` still exists as a
+    // command for cross-frontend consistency (same word means "let me
+    // see the game" everywhere DianaOS runs), it just does the one thing
+    // that actually matters in this frontend: bring the game window that
+    // was already showing the feed the whole time back to the front, in
+    // case the console window (or something else) is covering it.
+    // Ignores '-w' entirely, the same way this frontend's own `coretop`
+    // ignores it - there's only one mode here, same reasoning as that
+    // command's own entry in EmuSen_Debugging_Tools_Reference_v5.md §3.17.
+    public class FeedCommand : IDianaOSCommand
+    {
+        private readonly Action _bringGameWindowForward;
+
+        public FeedCommand(Action bringGameWindowForward)
+        {
+            _bringGameWindowForward = bringGameWindowForward;
+        }
+
+        public string Name => "feed";
+        public string Usage => "  feed [-w]                     bring the game window to the front (already showing the live feed - '-w' is accepted and ignored here)";
+
+        public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        {
+            _bringGameWindowForward();
+            return DianaOSResult.Ok("feed: game window brought to the front.");
+        }
+    }
 }

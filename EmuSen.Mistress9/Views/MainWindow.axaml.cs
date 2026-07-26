@@ -267,6 +267,7 @@ namespace EmuSen.Mistress9.Views
             new PauseCommand(PauseEmulation, () => IsPaused),
             new ResumeCommand(ResumeEmulation, () => IsPaused),
             new CoretopWindowCommand(OpenCoretopWindow),
+            new FeedCommand(() => Activate()),
         };
 
         // Opens (or brings forward/updates) CoretopWindow - same at-most-

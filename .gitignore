@@ -13,3 +13,8 @@ SaveStates/
 Logs/
 *.srm
 *.state
+
+# Copyrighted commercial ROMs dropped here for local debugging/testing -
+# never belongs in version control (redistribution), regardless of who
+# added it or why.
+TestRoms/

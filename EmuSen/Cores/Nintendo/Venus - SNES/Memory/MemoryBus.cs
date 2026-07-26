@@ -116,6 +116,41 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             return isHardwareBank && offset < 0x2000;
         }
 
+        // MEMSEL bit 0 - see the $420D write handler below. Read by
+        // Cpu.Step()'s dynamic cycle-penalty accounting (GetAccessSpeedCycles)
+        // to pick 6 vs 8 master clocks for the $8000-FFFF ROM window.
+        public bool FastRomEnabled { get; private set; }
+
+        // Real 65816 bus timing: every access costs 6, 8, or 12 master
+        // clocks depending purely on the address region (Nocash's
+        // fullsnes "Memory Access Speed" table), not a single flat rate
+        // for the whole system. Used by Cpu.Step() to convert its
+        // per-instruction byte/cycle counts into actual elapsed master
+        // clocks, replacing the old fixed "1 CPU cycle = 6 master clocks"
+        // assumption that implicitly (and incorrectly) treated every game
+        // as FastROM.
+        public int GetAccessSpeedCycles(uint address)
+        {
+            byte bank = (byte)(address >> 16);
+            ushort offset = (ushort)(address & 0xFFFF);
+            bool isLowBank = bank <= 0x3F || (bank >= 0x80 && bank <= 0xBF);
+
+            if (isLowBank)
+            {
+                if (offset < 0x2000) return 8;
+                if (offset < 0x4000) return 6;
+                if (offset < 0x4200) return 12;
+                if (offset < 0x6000) return 6;
+                if (offset < 0x8000) return 8;
+                return FastRomEnabled ? 6 : 8;
+            }
+
+            // Banks 40-7D and 7E-7F: always slow. Banks C0-FF: same
+            // FastROM-dependent speed as the 8000-FFFF window above.
+            if (bank >= 0xC0) return FastRomEnabled ? 6 : 8;
+            return 8;
+        }
+
         // Open-bus tracking - see Venus_Memory.md §1.4.
         private byte _lastBusValue;
 
@@ -176,7 +211,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 if (offset == 0x4212)
                 {
                     // H-blank approximation - see Venus_Memory.md §1.5.
-                    bool inHBlank = LineCycles >= 183;
+                    // Threshold is in master clocks now (LineCycles tracks
+                    // real elapsed master clocks per scanline, out of 1364 -
+                    // see VenusCore.CyclesPerScanline), not the old
+                    // 227-CPU-cycle-unit scale this constant (183) was
+                    // originally tuned against; 1099 keeps the same ~80.6%-
+                    // through-the-scanline HBlank point (183/227 * 1364),
+                    // matching real hardware's HBlank start around dot 274.
+                    bool inHBlank = LineCycles >= 1099;
                     return ObserveRead(Interrupts.ReadHVBJOY(inHBlank, _lastBusValue));
                 }
 
@@ -278,6 +320,18 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 {
                     ObserveWrite();
                     Dma.HdmaEnable = data;
+                    return;
+                }
+
+                // MEMSEL ($420D) bit 0 - FastROM enable. Only affects the
+                // $8000-FFFF window of banks 00-3F/80-BF and all of C0-FF
+                // (see GetAccessSpeedCycles); everywhere else is a fixed
+                // speed regardless of this bit. Defaults to 0 (SlowROM) at
+                // reset, matching real hardware and this project's Reset().
+                if (offset == 0x420D)
+                {
+                    ObserveWrite();
+                    FastRomEnabled = (data & 0x01) != 0;
                     return;
                 }
 

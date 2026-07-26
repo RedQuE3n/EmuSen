@@ -30,7 +30,17 @@ namespace EmuSen.Cores.Nintendo.Venus
     // deliberately stay on the concrete type instead of the interface.
     public class VenusCore : ICore
     {
-        private const int CyclesPerScanline = 227;
+        // Real master clocks per scanline (341 dots x 4 master-clocks/dot),
+        // not an abstract "CPU cycle" count - Cpu.Step() now returns actual
+        // elapsed master clocks directly (see its own comment), computed
+        // from real per-access region speeds instead of a flat assumed
+        // rate. This used to be 227, a CPU-cycle-unit figure back-derived
+        // assuming every access ran at FastROM's 6-master-clock rate
+        // uniformly (227 = 1364/6) - wrong for the common SlowROM case
+        // (real hardware only fits ~1364/8 ≈ 170 CPU cycles per scanline
+        // there), and the source of this project's ~8% SPC700 audio-pacing
+        // undershoot (see Venus_APU.md).
+        private const int CyclesPerScanline = 1364;
         private const int TotalScanlines = 262;
         private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
@@ -260,38 +270,35 @@ namespace EmuSen.Cores.Nintendo.Venus
                     _lineCycles += cpuCycles;
                     Bus.LineCycles = _lineCycles;
 
-                    // Cpu.Step()'s returned cycle count is in 65816 CPU
-                    // cycles (the standard oxyron.de-style counts the
-                    // opcode table is verified against), NOT master clocks
-                    // and NOT SPC700 cycles - those are three different
-                    // units. This project's own master-clock calibration is
-                    // set by CyclesPerScanline above (227 CPU-cycle-units x
-                    // 262 scanlines = 59474/frame), which - matched against
-                    // the real NTSC frame rate (~60.0988Hz) and master
-                    // clock (~21.477272MHz, ~357366 master clocks/frame) -
-                    // implies 1 CPU-cycle-unit is worth ~6 master clocks
-                    // here (FastROM's ratio), NOT the 8 (SlowROM) a prior
-                    // version of this comment assumed. SPC700 cycle (its
-                    // own independent 1.024MHz crystal, universally
-                    // approximated as master/21 since it isn't derived from
-                    // the main clock at all) = ~21 master clocks. So 1 CPU
-                    // cycle is worth 6/21 of an SPC700 cycle - scaled here
-                    // with an explicit remainder carry (not float math) so
-                    // the fractional part isn't silently dropped every
-                    // single call.
+                    // Cpu.Step()'s returned cycle count is real elapsed
+                    // master clocks now (see its own comment) - each
+                    // instruction's byte/cycle accounting is converted
+                    // through the actual region speed of whatever address
+                    // it touched (MemoryBus.GetAccessSpeedCycles), instead
+                    // of this loop assuming a single flat "1 CPU cycle-unit
+                    // = 6 master clocks" rate for the whole machine. SPC700
+                    // cycle (its own independent 1.024MHz crystal,
+                    // universally approximated as master/21 since it isn't
+                    // derived from the main clock at all) = ~21 master
+                    // clocks, so master clocks convert straight to SPC700
+                    // cycles by dividing by 21 - scaled here with an
+                    // explicit remainder carry (not float math) so the
+                    // fractional part isn't silently dropped every single
+                    // call.
                     //
-                    // Using 8 instead of 6 here (this project's actual bug,
-                    // not just a hypothetical) fed the SPC700 roughly 8/6 =
-                    // 1.33x too many cycles per real elapsed video frame -
-                    // confirmed via EmuSen.HeadlessDebug's `audiodump`
-                    // verb: a steady-state 5-frame window produced ~6564
-                    // interleaved samples where ~2662 (5 x 532.45 stereo
-                    // pairs x 2) was expected, matching this exact ratio.
-                    // That's what made music sound sped up with notes
-                    // seemingly missing once the buffer's overflow-drop
-                    // (SDsp's own AudioBufferMaxSamples cap) started
-                    // discarding the oldest queued samples.
-                    int scaledSpc700Cycles = cpuCycles * 6 + _spc700CycleRemainder;
+                    // Before this dynamic per-access accounting existed,
+                    // the whole machine was scaled at a flat FastROM-style
+                    // 6-master-clocks-per-cycle rate regardless of the
+                    // ROM's actual (usually SlowROM, 8mc) speed, which fed
+                    // the SPC700 a fixed ~59474*6/21 SPC cycles/frame no
+                    // matter what the CPU actually executed - a systematic
+                    // ~7.5-8% audio-pacing undershoot relative to the real
+                    // NTSC frame rate, confirmed via EmuSen.HeadlessDebug's
+                    // `audiodump` verb (see Venus_APU.md). Master clocks are
+                    // now real per-instruction quantities, so SPC700 pacing
+                    // tracks actual elapsed hardware time directly, the
+                    // same approach MesenCE's Spc.cpp uses.
+                    int scaledSpc700Cycles = cpuCycles + _spc700CycleRemainder;
                     _spc700CycleRemainder = scaledSpc700Cycles % 21;
                     Spc700.CycleBudget += scaledSpc700Cycles / 21;
                     while (Spc700.CycleBudget > 0)

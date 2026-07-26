@@ -218,10 +218,12 @@ namespace EmuSen.Hotaru
                 // through the agnostic ICore.GetFrameBufferRgba() contract
                 // instead of Renderer.DrawFrame reaching into Venus-specific
                 // internals directly - see FramePresenter's own comment.
-                // Renderer.DrawDebugPanels still needs bus.Ppu for its
-                // VRAM/CGRAM/register overlays, which is exactly the kind
-                // of concrete-core debug access ICore.cs says is expected
-                // to stay off the agnostic interface.
+                // The on-window Raylib debug overlay (VRAM tile sheet, CGRAM
+                // swatch, PPU register text) this used to composite in via
+                // Renderer.DrawDebugPanels is gone - DianaOS's regs/sprites/
+                // pal/tile/vramsheet/paletteswatch commands and the coretop
+                // dashboard already cover the same data, and EmuSen.Mistress9
+                // (always headless: true) never had this overlay at all.
                 using FramePresenter presenter = new FramePresenter();
 
                 // Audio output - see EmuSen_Frontend_Driver.md §1. SDsp
@@ -270,8 +272,7 @@ namespace EmuSen.Hotaru
                     // LatchAutoJoypad - see EmuSen_Frontend_Driver.md §1.
                     InputBindings.ApplyInput(core.Bus!);
 
-                    presenter.Present(core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight,
-                        () => core.Renderer!.DrawDebugPanels(core.Bus!, core.TotalFrames));
+                    presenter.Present(core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight);
 
                     // All debug/dev hotkeys - see EmuSen_Frontend_Driver.md §2.
                     if (RunHotkeys(core, presenter, debugTarget, debugCmd, frameRecorder, statePath)) break; // 'shutdown' typed at the F4 prompt

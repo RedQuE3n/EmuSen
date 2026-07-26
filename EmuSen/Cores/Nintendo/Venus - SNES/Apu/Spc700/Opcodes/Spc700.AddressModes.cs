@@ -9,6 +9,29 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private ushort AddrImplied() { return 0; }
 
+        // Direct-page 16-bit accesses (CMPW/ADDW/SUBW/MOVW/INCW/DECW dp,
+        // and the pointer fetch in [dp]+Y indirect-indexed addressing)
+        // read/write two consecutive bytes, but real hardware wraps the
+        // high byte's offset within the SAME 256-byte page rather than
+        // spilling into the next one - e.g. dp=$FF, P=0 reads its high
+        // byte from $00, not $100. AddrDirectPageIndexedXIndirect (just
+        // below) already gets this right by wrapping the offset as a
+        // byte before adding the page base back in; every direct-page
+        // word op below this comment previously used a plain
+        // `address + 1`, which is correct for PC-relative and absolute
+        // addressing (no page to wrap within) but wrong for an address
+        // that's already page-based - confirmed via the TomHarte/
+        // ProcessorTests spc700 ground-truth suite, where every failure
+        // left unexplained by this project's memory-mapped $F0-FF I/O
+        // registers (a separate, expected divergence from that suite's
+        // flat-RAM model) turned out to be exactly this: a direct-page
+        // word op whose test case happened to use a dp offset near a
+        // page boundary ($xFF/$x00).
+        private static ushort DpWrapNextByte(ushort address)
+        {
+            return (ushort)((address & 0xFF00) | (byte)(address + 1));
+        }
+
         // --- Addressing Modes ---
         private ushort AddrIndX() 
         {
@@ -131,7 +154,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             ushort dpAddress = (ushort)(dpOffset + (GetFlag(SpcFlags.P) ? 0x0100 : 0x0000));
             
             byte low = Read8(dpAddress);
-            byte high = Read8((ushort)(dpAddress + 1));
+            byte high = Read8(DpWrapNextByte(dpAddress));
             ushort baseAddress = (ushort)((high << 8) | low);
             
             return (ushort)(baseAddress + Y);

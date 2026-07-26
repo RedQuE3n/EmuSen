@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Named WiseMan, not EmuSen.Tests - see CLAUDE.md's own naming note.
+       A committed, permanent home for verification that used to be
+       reinvented as throwaway scratch code every session: shell/debug-
+       toolchain dispatch, the core-agnostic IDebugTarget hooks
+       (ClassifyStaticReference, DecodeTilePixels), the ICore audio drain
+       path, and AudioPlayer's actual SDL calls (against SDL's dummy
+       driver - see Fixtures/SyntheticRom.cs and Audio/AudioPlayerTests.cs
+       for why a real audio device isn't needed to test this for real). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The emulation core + shell/debug toolchain (ShellInterpreter,
+         IDebugTarget, SnesDebugTarget, VenusCore/ICore). -->
+    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+    <!-- AudioPlayer (SDL-backed real audio output) lives here - see
+         Audio/AudioPlayerTests.cs. Pulls in Avalonia/Silk.NET.SDL
+         transitively, which is fine for a test project; nothing here
+         opens an actual Avalonia window. -->
+    <ProjectReference Include="..\EmuSen.TestingStudio\EmuSen.TestingStudio.csproj" />
+  </ItemGroup>
+
+</Project>

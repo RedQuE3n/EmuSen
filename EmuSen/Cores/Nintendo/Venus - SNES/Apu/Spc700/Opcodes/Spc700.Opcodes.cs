@@ -139,7 +139,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private void OpSUBW_YA_dp(ushort address)
         {
             // Read 16-bit word (little-endian) from the direct page
-            ushort operand = (ushort)(Read8(address) | (Read8((ushort)(address + 1)) << 8));
+            ushort operand = (ushort)(Read8(address) | (Read8(DpWrapNextByte(address)) << 8));
             
             // Reconstruct the 16-bit YA register
             ushort ya = (ushort)((Y << 8) | A);
@@ -162,7 +162,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private void OpCMPW_YA_dp(ushort address)
         {
             // Read 16-bit word (little-endian) from the direct page
-            ushort memVal = (ushort)(Read8(address) | (Read8((ushort)(address + 1)) << 8));
+            ushort memVal = (ushort)(Read8(address) | (Read8(DpWrapNextByte(address)) << 8));
             
             // Reconstruct the 16-bit YA register
             ushort ya = (ushort)((Y << 8) | A);
@@ -265,7 +265,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         }
         private void OpADDW_YA_dp(ushort address)
         {
-            ushort operand = (ushort)(Read8(address) | (Read8((ushort)(address + 1)) << 8));
+            ushort operand = (ushort)(Read8(address) | (Read8(DpWrapNextByte(address)) << 8));
             
             ushort ya = (ushort)((Y << 8) | A);
             
@@ -483,12 +483,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private void OpINCW_dp(ushort address)
         {
-            ushort val = (ushort)(Read8(address) | (Read8((ushort)(address + 1)) << 8));
+            ushort val = (ushort)(Read8(address) | (Read8(DpWrapNextByte(address)) << 8));
             
             val++;
             
             Write8(address, (byte)(val & 0xFF));
-            Write8((ushort)(address + 1), (byte)(val >> 8));
+            Write8(DpWrapNextByte(address), (byte)(val >> 8));
             SetFlag(SpcFlags.Z, val == 0);
             SetFlag(SpcFlags.N, (val & 0x8000) != 0);
         }
@@ -496,14 +496,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private void OpDECW_dp(ushort address)
         {
             // Read the 16-bit word (little-endian) from the direct page
-            ushort val = (ushort)(Read8(address) | (Read8((ushort)(address + 1)) << 8));
+            ushort val = (ushort)(Read8(address) | (Read8(DpWrapNextByte(address)) << 8));
             
             // Decrement the word
             val--;
             
             // Write it back
             Write8(address, (byte)(val & 0xFF));
-            Write8((ushort)(address + 1), (byte)(val >> 8));
+            Write8(DpWrapNextByte(address), (byte)(val >> 8));
             
             // Update flags based on the 16-bit result
             SetFlag(SpcFlags.Z, val == 0);
@@ -823,7 +823,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private void OpMOVW_YA_dp(ushort address)
         {
             A = Read8(address);
-            Y = Read8((ushort)(address + 1));
+            Y = Read8(DpWrapNextByte(address));
             
             ushort ya = (ushort)((Y << 8) | A);
             
@@ -834,7 +834,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private void OpMOVW_dp_YA(ushort address)
         {
             Write8(address, A);
-            Write8((ushort)(address + 1), Y);
+            Write8(DpWrapNextByte(address), Y);
         }
 
         private void OpMOV_dp_A(ushort address)
@@ -1187,11 +1187,21 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         // DAA/DAS - see Venus_APU.md §2.4.
         private void OpDAA_A(ushort address)
         {
+            // The high-byte check (">99 or C") tests A's value BEFORE the
+            // low-nibble adjustment above it, not after - real hardware's
+            // adjust logic evaluates both conditions off the original
+            // operand, it doesn't chain them sequentially. Confirmed via
+            // the TomHarte/ProcessorTests spc700 ground-truth suite: e.g.
+            // A=$9C, H=1, C=1 must add $66 total (both adjustments fire
+            // off the original $9C) to reach the correct $02, not the
+            // wrong $08 you get by adding $06 first and then re-checking
+            // the already-adjusted $A2 against the >$99 threshold.
+            byte original = A;
             if ((A & 0x0F) > 9 || GetFlag(SpcFlags.H))
             {
                 A = (byte)(A + 0x06);
             }
-            if (A > 0x99 || GetFlag(SpcFlags.C))
+            if (original > 0x99 || GetFlag(SpcFlags.C))
             {
                 A = (byte)(A + 0x60);
                 SetFlag(SpcFlags.C, true);
@@ -1201,11 +1211,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private void OpDAS_A(ushort address)
         {
+            // See OpDAA_A's own comment - same bug, mirrored for
+            // subtraction: the high-byte check must test A's original
+            // value, not the value already decremented by the low-nibble
+            // adjustment just above it.
+            byte original = A;
             if ((A & 0x0F) > 9 || !GetFlag(SpcFlags.H))
             {
                 A = (byte)(A - 0x06);
             }
-            if (A > 0x99 || !GetFlag(SpcFlags.C))
+            if (original > 0x99 || !GetFlag(SpcFlags.C))
             {
                 A = (byte)(A - 0x60);
                 SetFlag(SpcFlags.C, false);

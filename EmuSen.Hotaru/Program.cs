@@ -260,12 +260,6 @@ namespace EmuSen.Hotaru
                 if (line is null) return null;
                 string trimmed = line.Trim();
 
-                if (!shell.IsAwaitingMoreInput
-                    && (trimmed.Equals("shutdown", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase)))
-                {
-                    return null;
-                }
-
                 if (!shell.IsAwaitingMoreInput && trimmed.StartsWith("core ", StringComparison.OrdinalIgnoreCase))
                 {
                     string? validatedRomPath = TryResolveCoreCommand(trimmed);
@@ -273,8 +267,15 @@ namespace EmuSen.Hotaru
                     continue; // TryResolveCoreCommand already printed why it failed
                 }
 
-                string output = shell.Execute(line);
+                // 'shutdown'/'quit' is a real DianaOS command now
+                // (EmuSen.DianaOS.Commands.ShutdownCommand, already in the
+                // standard registry CreateDefault built above) - no
+                // separate bypass needed here anymore, just react to the
+                // same HostAction.Shutdown GameWindow's own RunDebugPrompt
+                // reacts to (see that method's own comment).
+                (_, string output, HostAction? action) = shell.Submit(line);
                 if (output.Length > 0) Console.WriteLine(output);
+                if (action is HostAction.Shutdown) return null;
             }
         }
 

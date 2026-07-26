@@ -394,16 +394,14 @@ namespace EmuSen.Hotaru.Views
 
                 if (!_debugCmd.IsAwaitingMoreInput)
                 {
-                    if (trimmed.Length == 0
-                        || trimmed.Equals("resume", StringComparison.OrdinalIgnoreCase)
-                        || trimmed.Equals("continue", StringComparison.OrdinalIgnoreCase)
-                        || trimmed.Equals("c", StringComparison.OrdinalIgnoreCase))
+                    // Empty-line-means-resume stays pre-dispatch, same as
+                    // before - an empty line isn't really "a command," the
+                    // same way SubmitCore itself already treats one as a
+                    // no-op, so there's nothing gained by routing it
+                    // through ResumeCommand too.
+                    if (trimmed.Length == 0)
                     {
                         break;
-                    }
-                    if (trimmed.Equals("shutdown", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
                     }
                     if (trimmed.Equals("feed", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("feed ", StringComparison.OrdinalIgnoreCase))
                     {
@@ -419,13 +417,17 @@ namespace EmuSen.Hotaru.Views
                         break;
                     }
                 }
-                if (!_debugCmd.IsAwaitingMoreInput && (trimmed.Equals("step", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("s", StringComparison.OrdinalIgnoreCase)))
-                {
-                    _debugTarget.Breakpoints.ArmSingleStep();
-                    Console.WriteLine("Stepping one instruction...");
-                    break;
-                }
-                Console.WriteLine(_debugCmd.Execute(trimmed));
+                // 'resume'/'continue'/'c', 'shutdown'/'quit', and
+                // 'step'/'s' are real DianaOS commands now
+                // (EmuSen.DianaOS.Commands.ResumeCommand/ShutdownCommand/
+                // StepCommand) - Submit's own HostAction is what lets them
+                // reach back out to this loop's control flow, the same
+                // thing the old hand-rolled string matches used to do
+                // directly.
+                (_, string output, HostAction? action) = _debugCmd.Submit(trimmed);
+                Console.WriteLine(output);
+                if (action is HostAction.Shutdown) return true;
+                if (action is HostAction.Resume or HostAction.Step) break;
             }
             Console.WriteLine("--- Resuming ---");
             return false;

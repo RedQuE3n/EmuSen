@@ -21,6 +21,12 @@ namespace EmuSen.DianaOS.Commands
     // (and exit the dashboard cleanly) instead of raising a process-level
     // signal the way it normally would.
     //
+    // `-w` opens a separate window instead, if the frontend running this
+    // supports one (see the `_openWindow` constructor parameter below) -
+    // lets a console-build user keep playing (the raw-terminal path
+    // above necessarily blocks input/rendering on this same thread)
+    // while still watching live hardware state update in its own window.
+    //
     // Fully core-agnostic: every number on screen comes from IDebugTarget
     // (GetHardwareLoad/GetCpuRegisters/GetSprites/MaxSprites/
     // GetAudioChannels/GetPalettes/RenderTileSheet/TilemapEntryStride) -
@@ -31,14 +37,45 @@ namespace EmuSen.DianaOS.Commands
     // already gives a "not modeled yet" capability.
     public class CoretopCommand : IDianaOSCommand
     {
+        // Optional - lets a frontend that CAN open a real window (the
+        // console build, via a small Avalonia-backed helper of its own;
+        // EmuSen.Mistress9 doesn't use this constructor parameter at all,
+        // since it replaces this whole command outright - see
+        // DianaOSInterpreter.CreateDefault's own comment on
+        // extraCommands overriding a same-named default) wire up `-w`
+        // without EmuSen.DianaOS (a core-agnostic library with no UI
+        // toolkit dependency of its own) needing to know Avalonia, or
+        // any other windowing toolkit, exists. A plain
+        // Action<IDebugTarget>, same shape EmuSen.Mistress9's own
+        // Pause/ResumeCommand delegates already use for the same reason.
+        private readonly Action<IDebugTarget>? _openWindow;
+
+        public CoretopCommand(Action<IDebugTarget>? openWindow = null)
+        {
+            _openWindow = openWindow;
+        }
+
         public string Name => "coretop";
-        public string Usage => "  coretop                       live htop-style dashboard of the loaded core's hardware (Ctrl+C to exit - interactive terminal only)";
+        public string Usage => "  coretop [-w]                  live htop-style dashboard of the loaded core's hardware (Ctrl+C to exit - interactive terminal only;\n" +
+                                "                                -w opens it in a separate window instead, if this frontend supports one)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
             IDebugTarget resolved;
             try { resolved = RequireTarget(target); }
             catch (Exception ex) { return DianaOSResult.Fail(ex.Message); }
+
+            bool windowed = args.Any(a => a.Equals("-w", StringComparison.OrdinalIgnoreCase));
+
+            if (windowed)
+            {
+                if (_openWindow is null)
+                {
+                    return DianaOSResult.Fail("coretop: -w is not supported by this frontend.");
+                }
+                _openWindow(resolved);
+                return DianaOSResult.Ok("coretop: opened in a separate window.");
+            }
 
             if (Console.IsInputRedirected || Console.IsOutputRedirected)
             {

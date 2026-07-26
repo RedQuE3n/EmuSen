@@ -39,6 +39,17 @@ using EmuSen.Debug;
 // headless run reached, short of guessing from RAM addresses and sprite
 // dumps alone.
 //
+// --autoshot <dir> works alongside every mode above (classic frame loop
+// and --commands both): instead of guessing a frame number and hoping it
+// landed on something interesting - the exact "screenshot every N frames,
+// eyeball it, adjust" cycle the SMAS Select Game investigation spent many
+// rounds on before --commands existed - it hashes GetFrameBufferRgba()
+// every frame and only writes a BMP when the hash actually changes from
+// the last saved one, to <dir>/frame_<n>.bmp. Cheap enough for a debugging
+// tool (one FNV-1a pass over a ~230KB buffer/frame) even though it means
+// paying GetFrameBufferRgba()'s existing per-frame allocation cost on
+// every frame rather than only the ones a caller explicitly asked for.
+//
 // --commands is a fundamentally different mode from all of the above:
 // instead of pre-declaring every tap/screenshot by frame number before the
 // run starts (fine when the exact timing is already known, unworkable for
@@ -85,6 +96,7 @@ class Program
         var extraWatches = new List<string>();
         string? scriptPath = null;
         string? commandsPath = null;
+        string? autoshotDir = null;
         string? outPath = null;
         string? loadStatePath = null;
         string? saveStatePath = null;
@@ -132,6 +144,7 @@ class Program
             else if (args[i] == "--watch" && i + 1 < args.Length) extraWatches.Add(args[++i]);
             else if (args[i] == "--script" && i + 1 < args.Length) scriptPath = args[++i];
             else if (args[i] == "--commands" && i + 1 < args.Length) commandsPath = args[++i];
+            else if (args[i] == "--autoshot" && i + 1 < args.Length) autoshotDir = args[++i];
             else if (args[i] == "--out" && i + 1 < args.Length) outPath = args[++i];
             else if (args[i] == "--verbose") verbose = true;
             else if (args[i] == "--loadstate" && i + 1 < args.Length) loadStatePath = args[++i];
@@ -257,6 +270,24 @@ class Program
 
         const int progressEvery = 600; // ~10s of real 60fps gameplay
 
+        // Shared between both frame-loop modes below (only one of which
+        // actually runs per invocation) - see this file's own header
+        // comment on --autoshot for why this exists.
+        ulong? lastAutoshotHash = null;
+        if (autoshotDir != null) Directory.CreateDirectory(autoshotDir);
+
+        void CheckAutoshot(long frameNum)
+        {
+            if (autoshotDir == null) return;
+            byte[] frame = core.GetFrameBufferRgba();
+            ulong hash = Fnv1aHash(frame);
+            if (lastAutoshotHash == hash) return;
+            lastAutoshotHash = hash;
+            string path = Path.Combine(autoshotDir, $"frame_{frameNum}.bmp");
+            WriteBmp(path, frame, core.ScreenWidth, core.ScreenHeight);
+            Emit($"[AUTOSHOT] Frame {frameNum} changed -> {path}");
+        }
+
         // --commands takes over the whole run - see this file's own header
         // comment for the script syntax and why this exists (collapsing an
         // entire multi-guess investigation into one process/one log
@@ -295,6 +326,7 @@ class Program
                     }
                     core.RunFrame();
                     currentFrame++;
+                    CheckAutoshot(currentFrame);
                     if (currentFrame % progressEvery == 0) Emit($"[frame {currentFrame}/{frameCount}]");
                 }
             }
@@ -385,6 +417,7 @@ class Program
                 EmuSen.Debug.DebugSettings.CpuVerboseLogging = inWindow;
             }
             core.RunFrame();
+            CheckAutoshot(frame);
             if (frame > 0 && frame % progressEvery == 0)
             {
                 Emit($"[frame {frame}/{frameCount}]");
@@ -446,6 +479,27 @@ class Program
         }
 
         return 0;
+    }
+
+    // 64-bit FNV-1a over the raw RGBA bytes - used by --autoshot to decide
+    // whether the current frame differs from the last one it saved,
+    // without needing a full pixel-by-pixel comparison. Not
+    // cryptographically anything; a frame-to-frame "did this change at
+    // all" check has no adversarial input to worry about, and FNV-1a's
+    // avalanche behavior is more than enough to make two visually
+    // different SNES frames collide by chance a non-concern in practice.
+    private static ulong Fnv1aHash(byte[] data)
+    {
+        const ulong FnvOffsetBasis = 14695981039346656037;
+        const ulong FnvPrime = 1099511628211;
+
+        ulong hash = FnvOffsetBasis;
+        foreach (byte b in data)
+        {
+            hash ^= b;
+            hash *= FnvPrime;
+        }
+        return hash;
     }
 
     // Minimal uncompressed 32bpp BMP writer - no case for PNG's DEFLATE

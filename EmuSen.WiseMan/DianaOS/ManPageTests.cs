@@ -4,12 +4,15 @@ using EmuSen.DianaOS;
 namespace EmuSen.WiseMan.DianaOS
 {
     // `man`/`help` (DianaOSInterpreter.Man/Help, backed by ManPages.cs) -
-    // 'help' is now just an alias for 'man' (see Dispatch's own
-    // comment), and every command DianaOSInterpreter.CreateDefault
-    // registers is expected to have a real ManPages entry, not just a
-    // fallback to its one-line Usage - this is the regression test that
-    // catches a newly-added command (or one that gets renamed) quietly
-    // falling through to that fallback and staying that way forever.
+    // two separate commands, not aliases of each other (see Dispatch's
+    // own comment): `help` always lists every command with a brief
+    // explanation, ignoring any arguments; `man [command]` is the detail
+    // lookup, falling back to that same listing only when given no
+    // argument. Every command DianaOSInterpreter.CreateDefault registers
+    // is expected to have a real ManPages entry, not just a fallback to
+    // its one-line Usage - this is the regression test that catches a
+    // newly-added command (or one that gets renamed) quietly falling
+    // through to that fallback and staying that way forever.
     public class ManPageTests
     {
         // The exact Name every command DianaOSInterpreter.CreateDefault
@@ -77,11 +80,12 @@ namespace EmuSen.WiseMan.DianaOS
         }
 
         [Fact]
-        public void Help_with_an_argument_forwards_to_man()
+        public void Help_ignores_arguments_and_always_lists_everything()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            Assert.Equal(shell.Submit("man mem").Output, shell.Submit("help mem").Output);
+            Assert.Equal(shell.Submit("help").Output, shell.Submit("help mem").Output);
+            Assert.NotEqual(shell.Submit("man mem").Output, shell.Submit("help mem").Output);
         }
 
         [Fact]

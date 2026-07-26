@@ -497,14 +497,18 @@ namespace EmuSen.DianaOS
         {
             string cmd = name.ToLowerInvariant();
 
-            // `man [command]` is the real command now; `help` is kept as
-            // a plain alias for it (`help` alone still lists everything,
-            // `help <command>` forwards to `man <command>`) for anyone
-            // typing out of habit from a real shell or from before this
-            // command existed. See ManPages.cs for why the actual manual
-            // text lives in its own module rather than on IDianaOSCommand.
+            // `help` and `man` are two separate commands with two separate
+            // jobs, not one aliased to the other: `help` always lists
+            // every command with a brief explanation, full stop, ignoring
+            // any arguments - the quick "what's available" overview.
+            // `man [command]` is the detail lookup - with no argument it
+            // shows that same overview (there's nothing else useful to
+            // show), but `man <command>` prints that command's full
+            // manual page, which `help` deliberately does NOT do. See
+            // ManPages.cs for why the actual manual text lives in its own
+            // module rather than on IDianaOSCommand.
+            if (cmd == "help") return Help();
             if (cmd == "man") return Man(args);
-            if (cmd == "help") return args.Length >= 2 ? Man(args) : Help();
 
             if (cmd == "summary") return _target?.GetSummaryText() ?? "No target attached.";
 
@@ -627,16 +631,16 @@ namespace EmuSen.DianaOS
         }
 
         // `man [command]` - with no argument, falls back to the exact
-        // same listing `help` alone always showed (kept as one Help()
-        // method, not duplicated, since the two really are the same
-        // output). With a command name, looks up ManPages first; a
-        // command with no page there yet falls back to just its own
-        // Usage line rather than a hard failure, so a newly-added
-        // command isn't actually broken by 'man' before anyone's gotten
-        // around to writing its full page - see ManPages.cs's own
-        // comment. Only a genuinely unknown name (not registered as a
-        // command OR a special builtin like 'source'/'export') is a
-        // real error.
+        // same listing `help` shows (kept as one Help() method, not
+        // duplicated, since there's nothing more useful to show with no
+        // target - this is the only overlap between the two commands).
+        // With a command name, looks up ManPages first; a command with
+        // no page there yet falls back to just its own Usage line rather
+        // than a hard failure, so a newly-added command isn't actually
+        // broken by 'man' before anyone's gotten around to writing its
+        // full page - see ManPages.cs's own comment. Only a genuinely
+        // unknown name (not registered as a command OR a special builtin
+        // like 'source'/'export') is a real error.
         private DianaOSResult Man(string[] args)
         {
             if (args.Length < 2) return Help();
@@ -653,12 +657,20 @@ namespace EmuSen.DianaOS
             return DianaOSResult.Fail($"No manual entry for '{target}'. Type 'help' for a list of commands.");
         }
 
+        // `help` - always just this listing, ignoring any arguments.
+        // Deliberately does NOT forward to a per-command manual page the
+        // way it briefly did in an earlier revision - that made 'help'
+        // and 'man' the same command under two names, when they're
+        // better as two separate, single-purpose ones: 'help' is the
+        // one-shot "what's available" overview, 'man <command>' is the
+        // detail lookup (Man(), above).
         private string Help()
         {
             var lines = new List<string>
             {
                 "Available commands:",
-                "  help / man [command]         this text, or a command's full manual page",
+                "  help                          this text - every command, one line each, with a brief explanation",
+                "  man [command]                 with no argument, same as 'help'; with a command name, its full manual page",
             };
             lines.AddRange(_orderedCommands.Select(c => c.Usage));
             lines.Add("  summary                       free-text state dump (whatever isn't structured above yet)");

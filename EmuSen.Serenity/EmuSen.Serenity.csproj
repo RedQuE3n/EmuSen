@@ -4,17 +4,26 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- FramePresenter drives an actual Raylib window/GPU texture pipeline
-         directly - see FramePresenter.cs's own notes on why this can't be
-         a truly rendering-API-agnostic abstraction. What IS shared here is
-         the core-agnostic INPUT contract (byte[] rgba, width, height, via
-         ICore) and the built-in shader source, so any frontend consuming
-         this project gets the same effects/behavior instead of a
-         hand-copied duplicate. -->
-    <PackageReference Include="Raylib-cs" Version="8.0.0" />
+    <!-- FramePresenter/GameFrameControl drive a real Avalonia window +
+         Skia-backed rendering directly - see those files' own comments.
+         What's shared here is the core-agnostic INPUT contract (byte[]
+         rgba, width, height, via ICore) and the built-in shader source,
+         so any frontend consuming this project gets the same effects/
+         behavior instead of a hand-copied duplicate. Package versions
+         match EmuSen.Mistress9's own Avalonia references exactly.
+         Avalonia.Skia/SkiaSharp are referenced explicitly (not left
+         purely transitive via Avalonia.Desktop) since GameFrameControl
+         calls directly into ISkiaSharpApiLeaseFeature/SKCanvas/
+         SKRuntimeEffect. -->
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.0" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 
 </Project>

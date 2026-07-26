@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The emulation core + shell/debug toolchain (ShellInterpreter,
+    <!-- The emulation core + debug toolchain (DianaOSInterpreter,
          IDebugTarget, SnesDebugTarget, VenusCore/ICore). -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
     <!-- AudioPlayer (SDL-backed real audio output) lives here - see
@@ -41,6 +41,10 @@
          project works the same as any other ProjectReference; its Main
          just never runs from here. -->
     <ProjectReference Include="..\EmuSen.Pharaoh90\EmuSen.Pharaoh90.csproj" />
+    <!-- GameFrameControl.ComputeLetterboxRect, BuiltInShaders' SkSL source,
+         ShaderEffect.CycleEffect() - see Serenity/*Tests.cs. Nothing here
+         opens an actual Avalonia window either. -->
+    <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
   </ItemGroup>
 
 </Project>

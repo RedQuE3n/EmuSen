@@ -5,13 +5,14 @@ using static EmuSen.Debug.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Debug.Commands
 {
-    public class PalCommand : IDebugCommand
+    public class PalCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "pal";
         public string Usage => "  pal [<index>]                 one palette, or all of them if omitted";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             var palettes = target.GetPalettes();
             var sb = new StringBuilder();
 

@@ -10,7 +10,7 @@ namespace EmuSen.Debug.Commands
     // `diff` against a later state). Deliberately raw bytes, no header
     // or metadata - a hex editor or `xxd` should be able to open the
     // output directly.
-    public class DumpCommand : IDebugCommand
+    public class DumpCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "dump";
         public string Usage => string.Join('\n', new[]
@@ -18,8 +18,9 @@ namespace EmuSen.Debug.Commands
             "  dump <space> <addr> <len> <file> write raw bytes to Logs/<CoreName>/<file>",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 5) return "Usage: dump <space> <addr> <len> <file>";
             IDebugMemorySpace space = FindSpace(target, parts[1]);
             int addr = ParseHex(parts[2]);

@@ -36,7 +36,7 @@ namespace EmuSen.Debug.Commands
     // Core-agnostic like CallersCommand: works purely off
     // IDebugTarget.Disassemble, so any core that implements IDebugTarget
     // gets this command for free.
-    public class WritersCommand : IDebugCommand
+    public class WritersCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "writers";
         public string Usage => string.Join('\n', new[]
@@ -48,8 +48,9 @@ namespace EmuSen.Debug.Commands
             "                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: writers <addr> [<scanstart> <scanlen>]";
             int targetAddr = ParseHex(parts[1]);
 

@@ -11,7 +11,7 @@ namespace EmuSen.Debug.Commands
     // level start and then left alone while other code reads it every
     // frame - a write watch would show exactly one event; a frame log
     // shows the value at every frame in between.
-    public class FrameLogCommand : IDebugCommand
+    public class FrameLogCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "framelog";
         public string Usage => string.Join('\n', new[]
@@ -24,8 +24,9 @@ namespace EmuSen.Debug.Commands
             "  framelog remove <id>          remove a frame log entirely",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: framelog add|list|show|clear|remove ...";
             string sub = parts[1].ToLowerInvariant();
             var frameLog = target.FrameLog;

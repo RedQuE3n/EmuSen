@@ -2,13 +2,14 @@ using System.Text;
 
 namespace EmuSen.Debug.Commands
 {
-    public class SpacesCommand : IDebugCommand
+    public class SpacesCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "spaces";
         public string Usage => "  spaces                        list available memory spaces";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             var sb = new StringBuilder();
             sb.AppendLine($"{target.CoreName} memory spaces:");
             foreach (var s in target.GetMemorySpaces())

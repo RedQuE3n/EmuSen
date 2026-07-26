@@ -12,12 +12,12 @@ namespace EmuSen.Debug.Commands
     // 3/4's 8bpp BG1 and Direct Color are implemented) - same
     // bitplane-pair-every-16-bytes layout as SampleBgPixel in
     // Renderer.Backgrounds.cs.
-    public class TileCommand : IDebugCommand
+    public class TileCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "tile";
         public string Usage => "  tile <space> <addr> <bpp>     ASCII-decode one 8x8 tile (bpp: 2, 4, or 8)";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 4) return "Usage: tile <space> <addr> <bpp>";
             IDebugMemorySpace space = FindSpace(target, parts[1]);

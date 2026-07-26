@@ -1,20 +1,21 @@
 using System;
+using EmuSen.Debug;
 
-namespace EmuSen.Debug.Commands
+namespace EmuSen.Shell.Commands
 {
     // Unix `history` - lists previously executed command lines, numbered
     // like bash's own builtin. Reads CommandHistory, which
-    // DebugCommandProcessor.Execute writes to on every call - see that
-    // class's own comment for why it's a separate shared object rather
-    // than a field directly on this command.
+    // ShellInterpreter.Submit writes to on every completed (non-buffered)
+    // command line - see that class's own comment for why it's a separate
+    // shared object rather than a field directly on this command.
     //
     // `!N` and `!!` (bash's "re-run history entry N" / "re-run the last
-    // command") are handled by DebugCommandProcessor.Execute itself,
-    // before dispatch ever reaches here - by the time any IDebugCommand
-    // sees a command line, a `!`-reference has already been expanded into
-    // the real command text it refers to, the same way a shell expands
-    // `!!` before the resulting line is parsed at all.
-    public class HistoryCommand : IDebugCommand
+    // command") are handled by ShellInterpreter.Submit itself, before
+    // lexing/parsing ever happens - by the time any IShellCommand sees a
+    // command line, a `!`-reference has already been expanded into the
+    // real command text it refers to, the same way a shell expands `!!`
+    // before the resulting line is parsed at all.
+    public class HistoryCommand : IShellCommand
     {
         public string Name => "history";
         public string Usage => string.Join('\n', new[]
@@ -31,9 +32,9 @@ namespace EmuSen.Debug.Commands
             _history = history;
         }
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public ShellResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
-            if (parts.Length >= 2 && parts[1].Equals("clear", StringComparison.OrdinalIgnoreCase))
+            if (args.Length >= 2 && args[1].Equals("clear", StringComparison.OrdinalIgnoreCase))
             {
                 _history.Clear();
                 return "History cleared.";

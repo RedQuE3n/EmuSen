@@ -10,7 +10,7 @@ namespace EmuSen.Debug.Commands
     // sharing this one's SnapshotStore) is the general case: no need to
     // already know which addresses might be interesting, just "what's
     // different from before" over an entire space.
-    public class SnapshotCommand : IDebugCommand
+    public class SnapshotCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "snapshot";
         public string Usage => string.Join('\n', new[]
@@ -27,7 +27,7 @@ namespace EmuSen.Debug.Commands
             _store = store;
         }
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 2)
             {

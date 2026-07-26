@@ -3,12 +3,12 @@ using static EmuSen.Debug.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Debug.Commands
 {
-    public class MemCommand : IDebugCommand
+    public class MemCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "mem";
         public string Usage => "  mem <space> <addr> [<len>]    hexdump <len> bytes (default 16) from <space> at <addr>";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 3) return "Usage: mem <space> <addr> [<len>]";
             IDebugMemorySpace space = FindSpace(target, parts[1]);

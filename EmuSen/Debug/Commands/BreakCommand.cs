@@ -9,11 +9,11 @@ namespace EmuSen.Debug.Commands
     // re-entering a core's own RunFrame() loop, which only the frontend's
     // own main loop can do (see EmuSen.RaylibFrontend/Program.cs's
     // IsHaltedAtBreakpoint check and its `step`/`continue` handling in the
-    // F4 prompt) - same reason `exit`/`step` aren't DebugCommandProcessor
+    // F4 prompt) - same reason `exit`/`step` aren't ShellInterpreter
     // commands either. This command only edits the registry any frontend
     // consults; it doesn't know or care whether emulation is currently
     // halted.
-    public class BreakCommand : IDebugCommand
+    public class BreakCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "break";
         public string Usage => string.Join('\n', new[]
@@ -22,12 +22,13 @@ namespace EmuSen.Debug.Commands
             "  break list                     list active breakpoints with their IDs and hit counts",
             "  break remove <id>              remove a breakpoint entirely",
             "  (see also: the F4 prompt's own 'step'/'s' and 'continue'/'c' - not",
-            "  DebugCommandProcessor commands, since they need to resume the core's",
+            "  ShellInterpreter commands, since they need to resume the core's",
             "  own frame loop, not just edit the breakpoint list)",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: break add|list|remove ...";
             string sub = parts[1].ToLowerInvariant();
             var breakpoints = target.Breakpoints;

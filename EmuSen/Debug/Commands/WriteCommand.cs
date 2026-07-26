@@ -2,12 +2,12 @@ using static EmuSen.Debug.Commands.DebugCommandHelpers;
 
 namespace EmuSen.Debug.Commands
 {
-    public class WriteCommand : IDebugCommand
+    public class WriteCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "write";
         public string Usage => "  write <space> <addr> <value>  write one byte (only if <space> is writable)";
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 4) return "Usage: write <space> <addr> <value>";
             IDebugMemorySpace space = FindSpace(target, parts[1]);

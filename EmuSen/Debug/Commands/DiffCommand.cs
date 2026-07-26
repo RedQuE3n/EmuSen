@@ -9,7 +9,7 @@ namespace EmuSen.Debug.Commands
     // contents and reports every address that's different now - doesn't
     // touch or replace the saved snapshot, so the same baseline can be
     // diffed again later against a further-along state.
-    public class DiffCommand : IDebugCommand
+    public class DiffCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "diff";
         public string Usage => string.Join('\n', new[]
@@ -25,7 +25,7 @@ namespace EmuSen.Debug.Commands
             _store = store;
         }
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             if (parts.Length < 2) return "Usage: diff <name> [<count>]";
             if (!_store.Snapshots.TryGetValue(parts[1], out var snap))

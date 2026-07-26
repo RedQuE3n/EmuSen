@@ -3,8 +3,8 @@ using System.Linq;
 
 namespace EmuSen.Debug.Commands
 {
-    // Small, stateless helpers shared across multiple IDebugCommand
-    // implementations - the same role DebugCommandProcessor's private
+    // Small, stateless helpers shared across multiple IShellCommand
+    // implementations - the same role ShellInterpreter's private
     // static methods used to serve before commands moved into their own
     // classes. Kept as plain static methods (not an instance/DI thing)
     // since none of them need any state of their own beyond their
@@ -20,9 +20,22 @@ namespace EmuSen.Debug.Commands
             return Convert.ToInt32(s, 16);
         }
 
-        public static IDebugMemorySpace FindSpace(IDebugTarget target, string name)
+        // Every debug command (mem, regs, watch, ...) fundamentally needs
+        // a real emulator session to do anything - unlike the shell-level
+        // commands (echo, sed, true/false...) that work with target ==
+        // null just fine. Centralizes the null check so each command gets
+        // a clean "no ROM loaded" error instead of a NullReferenceException,
+        // without every single command file needing its own guard.
+        public static IDebugTarget RequireTarget(IDebugTarget? target)
         {
-            var spaces = target.GetMemorySpaces();
+            if (target == null) throw new InvalidOperationException("No ROM loaded - this command needs an active debug target.");
+            return target;
+        }
+
+        public static IDebugMemorySpace FindSpace(IDebugTarget? target, string name)
+        {
+            IDebugTarget t = RequireTarget(target);
+            var spaces = t.GetMemorySpaces();
             var match = spaces.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
             if (match == null)
             {

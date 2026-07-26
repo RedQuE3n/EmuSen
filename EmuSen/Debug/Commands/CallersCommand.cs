@@ -22,7 +22,7 @@ namespace EmuSen.Debug.Commands
     // all three decode to the same "JMP" mnemonic and the same 3-byte
     // length, but only the first has a statically-known target. Indirect
     // forms are deliberately excluded rather than guessed at.
-    public class CallersCommand : IDebugCommand
+    public class CallersCommand : EmuSen.Shell.IShellCommand
     {
         public string Name => "callers";
         public string Usage => string.Join('\n', new[]
@@ -32,8 +32,9 @@ namespace EmuSen.Debug.Commands
             "                                scanning CpuBus (default: <addr>'s own bank, $8000-$FFFF)",
         });
 
-        public string Execute(IDebugTarget target, string[] parts)
+        public EmuSen.Shell.ShellResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
+            target = EmuSen.Debug.Commands.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: callers <addr> [<scanstart> <scanlen>]";
             int targetAddr = ParseHex(parts[1]);
 

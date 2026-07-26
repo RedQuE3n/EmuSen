@@ -14,9 +14,11 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Mistress9.Audio;
 using EmuSen.Mistress9.Input;
 using EmuSen.Mistress9.Settings;
+using EmuSen.Shell;
 
 namespace EmuSen.Mistress9.Views
 {
@@ -69,6 +71,22 @@ namespace EmuSen.Mistress9.Views
         }
         private FrameData? _pendingFrame;
         private int _presentScheduled;
+
+        // Rebuilt on every LoadRom() call (see LoadRom below) so a shell
+        // command run in _consoleWindow always sees whatever core is
+        // actually running now, never a Cpu/Bus/Renderer left over from a
+        // ROM that's since been swapped out. Null before the first ROM
+        // loads - the console window (and every shell command's own
+        // RequireTarget guard) already treats that as a normal condition.
+        private SnesDebugTarget? _debugTarget;
+
+        // At most one console window at a time - Show()n non-modally (same
+        // pattern DebugSettingsWindow/InputSettingsWindow already use), and
+        // reused (brought to front) rather than duplicated if the menu item
+        // is clicked again while one's still open. Cleared on Closed so a
+        // later LoadRom() doesn't try to push a target update into a
+        // disposed window.
+        private ShellConsoleWindow? _consoleWindow;
 
         private string? _currentRomPath;
         private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
@@ -204,6 +222,19 @@ namespace EmuSen.Mistress9.Views
             new DebugSettingsWindow().Show(this);
         }
 
+        private void OnShellConsoleClick(object? sender, RoutedEventArgs e)
+        {
+            if (_consoleWindow is not null)
+            {
+                _consoleWindow.Activate();
+                return;
+            }
+
+            _consoleWindow = new ShellConsoleWindow(_debugTarget);
+            _consoleWindow.Closed += (_, _) => _consoleWindow = null;
+            _consoleWindow.Show(this);
+        }
+
         private string? CurrentStatePath =>
             _currentRomPath is null
                 ? null
@@ -272,6 +303,9 @@ namespace EmuSen.Mistress9.Views
                 _session = new EmulatorSession();
                 StartLogging(_session.CoreName); // before LoadRom() so Cartridge's own load-time output is captured too
                 _session.LoadRom(path);
+
+                _debugTarget = new SnesDebugTarget(_session.Cpu!, _session.Bus, _session.Renderer!);
+                _consoleWindow?.UpdateTarget(_debugTarget, displayName);
 
                 _bitmap = new WriteableBitmap(
                     new PixelSize(_session.ScreenWidth, EmulatorSession.ScreenHeight),

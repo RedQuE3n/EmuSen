@@ -50,7 +50,7 @@ namespace EmuSen.Mistress9.Views
             _extraCommands = extraCommands ?? System.Array.Empty<IShellCommand>();
             _shell = ShellInterpreter.CreateDefault(target, _extraCommands);
 
-            AppendLine("EmuSen shell console - type 'help' for a list of commands.");
+            AppendLine("DianaOS - type 'help' for a list of commands.");
             if (target is null) AppendLine("No ROM loaded yet - commands needing a real target will report so until one is.");
 
             InputBox.KeyDown += OnInputKeyDown;
@@ -146,11 +146,11 @@ namespace EmuSen.Mistress9.Views
 
         private void Submit(string line)
         {
-            string enteredPrompt = _shell.IsAwaitingMoreInput ? "> " : "debug> ";
+            string enteredPrompt = _shell.IsAwaitingMoreInput ? "> " : "DianaOS#: ";
             AppendLine(enteredPrompt + line);
 
             (bool needsMore, string output) = _shell.Submit(line);
-            PromptText.Text = _shell.IsAwaitingMoreInput ? "> " : "debug> ";
+            PromptText.Text = _shell.IsAwaitingMoreInput ? "> " : "DianaOS#: ";
             if (needsMore) return;
             if (output.Length > 0) AppendLine(output);
         }

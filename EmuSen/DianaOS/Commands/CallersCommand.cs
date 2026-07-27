@@ -21,6 +21,7 @@ namespace EmuSen.DianaOS.Commands
     public class CallersCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "callers";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  callers <addr> [<scanstart> <scanlen>]",

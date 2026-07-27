@@ -24,6 +24,7 @@ namespace EmuSen.DianaOS.Commands
     public class ClearCommand : IDianaOSCommand
     {
         public string Name => "clear";
+        public bool IsReadOnly => true;
         public string Usage => "  clear                         clear the terminal screen";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

@@ -18,6 +18,7 @@ namespace EmuSen.DianaOS.Commands
     public class LsCommand : IDianaOSCommand
     {
         public string Name => "ls";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  ls [-a] [-l] [path]           list directory entries (default: current directory);",

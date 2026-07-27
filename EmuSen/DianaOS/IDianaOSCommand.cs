@@ -15,6 +15,19 @@ namespace EmuSen.DianaOS
         // matched case-insensitively by DianaOSInterpreter's registry.
         string Name { get; }
 
+        // True if this command never mutates core/session/interpreter
+        // state for ANY invocation of it - only inspects and reports.
+        // Drives whether a frontend's live (non-halted) terminal may run
+        // this command immediately, off the emulation thread, instead of
+        // queuing it for the next frame (see
+        // DianaOSInterpreter.TryGetReadOnlyFastPath and
+        // EmuSen.Hotaru's GameWindow console reader thread). A command
+        // with a mixed read/write sub-verb surface (e.g. `watch add` vs
+        // `watch list`) must report false here - this is a per-class
+        // property, not something that can vary by args - which only
+        // costs its read-only sub-verbs one frame of latency.
+        bool IsReadOnly { get; }
+
         // Help text for this command, formatted to match the rest of
         // `help`'s output (two-space indent, aligned columns) - can be
         // multiple lines for a command with several sub-verbs.

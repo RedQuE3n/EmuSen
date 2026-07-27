@@ -15,6 +15,7 @@ namespace EmuSen.DianaOS.Commands
     public class ChannelsCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "channels";
+        public bool IsReadOnly => true;
         public string Usage => "  channels                      list audio channels/voices - index, active, envelope level (0-100), muted, core-specific detail (see `mute` to isolate one)";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

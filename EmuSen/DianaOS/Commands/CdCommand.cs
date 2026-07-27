@@ -21,6 +21,7 @@ namespace EmuSen.DianaOS.Commands
     public class CdCommand : IDianaOSCommand
     {
         public string Name => "cd";
+        public bool IsReadOnly => false;
         public string Usage => "  cd [dir]                      change directory, walled to the project root (no arg: go there)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

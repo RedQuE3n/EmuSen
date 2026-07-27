@@ -10,6 +10,7 @@ namespace EmuSen.DianaOS.Commands
     public class UniqCommand : IDianaOSCommand
     {
         public string Name => "uniq";
+        public bool IsReadOnly => true;
         public string Usage => "  uniq [-c]                     collapse adjacent duplicate lines (-c prefixes each with its\n" +
                                 "                                repeat count) - sort first for global dedup, not just adjacent";
 

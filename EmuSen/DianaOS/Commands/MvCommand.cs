@@ -17,6 +17,7 @@ namespace EmuSen.DianaOS.Commands
     public class MvCommand : IDianaOSCommand
     {
         public string Name => "mv";
+        public bool IsReadOnly => false;
         public string Usage => "  mv <src> <dst>                move/rename a file or directory (dst may be an existing directory)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

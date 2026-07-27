@@ -27,6 +27,7 @@ namespace EmuSen.DianaOS.Commands
     public class ResumeCommand : IDianaOSCommand
     {
         public string Name => "resume";
+        public bool IsReadOnly => false;
         public string Usage => "  resume | continue | c         resume emulation after an interactive halt (F4/breakpoint/single-step)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

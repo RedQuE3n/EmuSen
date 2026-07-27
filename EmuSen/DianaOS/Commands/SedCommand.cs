@@ -32,6 +32,7 @@ namespace EmuSen.DianaOS.Commands
     public class SedCommand : IDianaOSCommand
     {
         public string Name => "sed";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  sed s/pat/repl/[gi]           substitute (first match per line, or every match with 'g';",

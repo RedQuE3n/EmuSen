@@ -22,6 +22,7 @@ namespace EmuSen.DianaOS.Commands
     public class EchoCommand : IDianaOSCommand
     {
         public string Name => "echo";
+        public bool IsReadOnly => true;
         public string Usage => "  echo <text...>                print <text> back, joined by spaces";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin) =>

@@ -27,6 +27,7 @@ namespace EmuSen.DianaOS.Commands
     public class NanoCommand : IDianaOSCommand
     {
         public string Name => "nano";
+        public bool IsReadOnly => false;
         public string Usage => "  nano <path>                   simple full-screen text editor (Ctrl+O save, Ctrl+X exit - interactive terminal only)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

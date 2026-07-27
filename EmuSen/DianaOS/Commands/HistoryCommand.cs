@@ -17,6 +17,7 @@ namespace EmuSen.DianaOS.Commands
     public class HistoryCommand : IDianaOSCommand
     {
         public string Name => "history";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  history                       list previously executed commands, numbered",

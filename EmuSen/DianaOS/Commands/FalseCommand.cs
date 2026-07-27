@@ -7,6 +7,7 @@ namespace EmuSen.DianaOS.Commands
     public class FalseCommand : IDianaOSCommand
     {
         public string Name => "false";
+        public bool IsReadOnly => true;
         public string Usage => "  false                         do nothing, fail (exit code 1) - for while/if conditions";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin) => DianaOSResult.Fail("");

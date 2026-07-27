@@ -17,6 +17,7 @@ namespace EmuSen.WiseMan.DianaOS
         private sealed class FakeShutdownCommand : IDianaOSCommand
         {
             public string Name => "fakeshutdown";
+            public bool IsReadOnly => false;
             public string Usage => "  fakeshutdown    test-only command that always signals HostAction.Shutdown";
 
             public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
@@ -26,6 +27,7 @@ namespace EmuSen.WiseMan.DianaOS
         private sealed class FakeResumeCommand : IDianaOSCommand
         {
             public string Name => "fakeresume";
+            public bool IsReadOnly => false;
             public string Usage => "  fakeresume    test-only command that always signals HostAction.Resume";
 
             public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

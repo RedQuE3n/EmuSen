@@ -34,6 +34,7 @@ namespace EmuSen.Mistress9.Views
         }
 
         public string Name => "pause";
+        public bool IsReadOnly => false;
         public string Usage => "  pause                         pause the emulation thread (safe to read/write emulator state while paused)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
@@ -56,6 +57,7 @@ namespace EmuSen.Mistress9.Views
         }
 
         public string Name => "resume";
+        public bool IsReadOnly => false;
         public string Usage => "  resume                        resume the emulation thread after a pause";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
@@ -89,6 +91,7 @@ namespace EmuSen.Mistress9.Views
         }
 
         public string Name => "coretop";
+        public bool IsReadOnly => true;
         public string Usage => "  coretop                       open a live hardware dashboard window (non-blocking - gameplay keeps running)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
@@ -125,6 +128,7 @@ namespace EmuSen.Mistress9.Views
         }
 
         public string Name => "feed";
+        public bool IsReadOnly => true;
         public string Usage => "  feed [-w]                     bring the game window to the front (already showing the live feed - '-w' is accepted and ignored here)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

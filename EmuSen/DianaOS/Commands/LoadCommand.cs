@@ -13,6 +13,7 @@ namespace EmuSen.DianaOS.Commands
     public class LoadCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "load";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  load <space> <addr> <file>    write Logs/<CoreName>/<file>'s raw bytes into <space> starting at <addr>",

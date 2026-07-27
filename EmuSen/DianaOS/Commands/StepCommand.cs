@@ -18,6 +18,7 @@ namespace EmuSen.DianaOS.Commands
     public class StepCommand : IDianaOSCommand
     {
         public string Name => "step";
+        public bool IsReadOnly => false;
         public string Usage => "  step | s                      single-step one CPU instruction, then halt again";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

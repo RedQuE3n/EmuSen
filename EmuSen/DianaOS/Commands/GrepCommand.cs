@@ -21,6 +21,7 @@ namespace EmuSen.DianaOS.Commands
     public class GrepCommand : IDianaOSCommand
     {
         public string Name => "grep";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  grep [-i] [-v] [-n] [-c] [-q] <pattern> [text...]",

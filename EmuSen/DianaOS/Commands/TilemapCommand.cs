@@ -29,6 +29,7 @@ namespace EmuSen.DianaOS.Commands
     public class TilemapCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "tilemap";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  tilemap <space> <addr> <cols> <rows>",

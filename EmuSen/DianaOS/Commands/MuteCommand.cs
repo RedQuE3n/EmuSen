@@ -10,6 +10,7 @@ namespace EmuSen.DianaOS.Commands
     public class MuteCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "mute";
+        public bool IsReadOnly => false;
         public string Usage => "  mute <index> <on|off>         mute/unmute one audio channel - channel's own playback state still advances, it's just excluded from the mix";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

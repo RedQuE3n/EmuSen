@@ -11,6 +11,7 @@ namespace EmuSen.DianaOS.Commands
     public class SortCommand : IDianaOSCommand
     {
         public string Name => "sort";
+        public bool IsReadOnly => true;
         public string Usage => "  sort [-n] [-r]                sort input lines (numeric with -n, reversed with -r) -\n" +
                                 "                                reads piped stdin, or trailing literal text";
 

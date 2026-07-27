@@ -13,6 +13,7 @@ namespace EmuSen.DianaOS.Commands
     public class SnapshotCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "snapshot";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  snapshot <space> <name>       capture <space>'s full current contents under <name>",

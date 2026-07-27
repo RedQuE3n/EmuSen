@@ -9,12 +9,17 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Hotaru.Views
 {
     // The `coretop -w` window for the console (Raylib) build - see
     // AvaloniaHost.cs for how this runs at all alongside a Raylib main
-    // loop, and EmuSen.DianaOS.Commands.CoretopCommand's own comment for
+    // loop, and EmuSen.DianaOS.DianaOS.Bin.Commands.CoretopCommand's own comment for
     // why `-w` exists: the plain `coretop` command's raw-terminal
     // dashboard necessarily blocks this same console/thread for as long
     // as it runs, so there was previously no way to watch live hardware

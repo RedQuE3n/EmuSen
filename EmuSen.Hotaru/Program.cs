@@ -9,6 +9,11 @@ using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 using EmuSen.Hotaru.Views;
 
 namespace EmuSen.Hotaru
@@ -17,19 +22,19 @@ namespace EmuSen.Hotaru
     {
         // Backs both `core <corename> <path>` code paths: RunStandaloneShell's
         // own pre-window handling below (TryResolveCoreCommand), and, once a
-        // window exists, EmuSen.DianaOS.Commands.EmuSen.CoreCommand (registered as
+        // window exists, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreCommand (registered as
         // part of debugCmd's own extraCommands in Main). One shared registry,
-        // not two - `CoreDescriptor` itself lives in EmuSen.DianaOS.Commands
+        // not two - `CoreDescriptor` itself lives in EmuSen.DianaOS.DianaOS.Bin.Commands
         // now (promoted there for CoreCommand's own use, see that file's own
         // comment on why it's core-agnostic despite the name) rather than
         // staying a private nested type here. Only one entry today because
         // only one core is actually implemented (`VenusCore`, SNES) -
         // registered under both its internal codename and the console name
         // most people would actually type.
-        private static readonly Dictionary<string, EmuSen.DianaOS.Commands.EmuSen.CoreDescriptor> _coreRegistry = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor> _coreRegistry = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["venus"] = new EmuSen.DianaOS.Commands.EmuSen.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
-            ["snes"] = new EmuSen.DianaOS.Commands.EmuSen.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["venus"] = new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["snes"] = new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
         };
 
         static void Main(string[] args)
@@ -143,9 +148,9 @@ namespace EmuSen.Hotaru
                 // CoreCommand are both new registrations, not overrides.
                 IDianaOSCommand[] extraCommands =
                 {
-                    new EmuSen.DianaOS.Commands.EmuSen.CoretopCommand(DebugWindows.ShowCoretopWindow),
-                    new EmuSen.DianaOS.Commands.EmuSen.StateCommand(core.SaveState, core.LoadState, () => statePath),
-                    new EmuSen.DianaOS.Commands.EmuSen.CoreCommand(_coreRegistry),
+                    new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoretopCommand(DebugWindows.ShowCoretopWindow),
+                    new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.StateCommand(core.SaveState, core.LoadState, () => statePath),
+                    new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreCommand(_coreRegistry),
                 };
 
                 // Everything below hands off to GameWindow (Views/GameWindow.axaml.cs) -
@@ -245,7 +250,7 @@ namespace EmuSen.Hotaru
                 }
 
                 // 'shutdown'/'quit' is a real DianaOS command now
-                // (EmuSen.DianaOS.Commands.Unix.ShutdownCommand, already in the
+                // (EmuSen.DianaOS.DianaOS.Bin.Commands.Unix.ShutdownCommand, already in the
                 // standard registry CreateDefault built above) - no
                 // separate bypass needed here anymore, just react to the
                 // same HostAction.Shutdown GameWindow's own RunDebugPrompt
@@ -273,7 +278,7 @@ namespace EmuSen.Hotaru
             string coreName = parts[1];
             string romPath = parts[2];
 
-            if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaOS.Commands.EmuSen.CoreDescriptor? descriptor))
+            if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor? descriptor))
             {
                 Console.WriteLine($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_coreRegistry.Keys, StringComparer.OrdinalIgnoreCase))}");
                 return null;

@@ -4,6 +4,11 @@ using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh90;
 using EmuSen.Pharaoh90.Cli;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 // Headless AI-agent-driven debugging harness - loads a ROM, runs the
 // real VenusCore for a fixed number of frames with no window/audio/human

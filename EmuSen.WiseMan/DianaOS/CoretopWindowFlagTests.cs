@@ -1,11 +1,16 @@
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaOS;
-using EmuSen.DianaOS.Commands.EmuSen;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaOS
 {
-    // `coretop -w` (EmuSen.DianaOS.Commands.CoretopCommand's optional
+    // `coretop -w` (EmuSen.DianaOS.DianaOS.Bin.Commands.CoretopCommand's optional
     // Action<IDebugTarget> openWindow constructor parameter) - covers
     // the part of the feature that doesn't need a real console/GUI: the
     // -w flag parsing and the "not supported by this frontend" fallback

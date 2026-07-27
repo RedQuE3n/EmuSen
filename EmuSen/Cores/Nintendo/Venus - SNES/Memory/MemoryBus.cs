@@ -4,6 +4,11 @@ using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {

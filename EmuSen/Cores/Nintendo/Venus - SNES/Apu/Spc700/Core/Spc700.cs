@@ -1,6 +1,11 @@
 using System;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
@@ -127,14 +132,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         // Holds delegates internally - not serializable. See Cpu.cs's
         // identical _verboseTrace field for the full explanation; both
         // were missing [SkipInState] for the same reason.
-        [EmuSen.Common.SkipInState] private readonly EmuSen.DianaOS.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
+        [EmuSen.Common.SkipInState] private readonly EmuSen.DianaOS.DianaOS.Lib.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
         public Spc700()
         {
             BuildOpcodeTable();
             Dsp.AttachMemory(Ram);
-            _verboseTrace = new EmuSen.DianaOS.DebugTools.RepeatCollapsingTrace<StepKey>(
+            _verboseTrace = new EmuSen.DianaOS.DianaOS.Lib.DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
                 key => $"[SPC700] 0x{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X4}",
                 (cycleLength, repeats) => cycleLength == 1

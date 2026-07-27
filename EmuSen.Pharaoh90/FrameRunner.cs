@@ -5,20 +5,12 @@ using EmuSen.Cores.Nintendo.Venus.Controllers;
 namespace EmuSen.Pharaoh90
 {
     // The one shared frame-stepping primitive both the classic frame loop
-    // and --commands mode drive - replaces two implementations
-    // (Program.cs's old inline for-loop, and --commands mode's own
-    // closure-based RunFrames/ApplyHeld) that did the same "apply held
-    // input, apply cpuLog windowing, RunFrame(), autoshot check, progress
-    // emit" sequence slightly differently, with real risk of drifting
-    // further apart every time one got a bugfix the other didn't.
-    //
-    // CurrentFrame follows a post-increment "frames completed so far"
-    // convention (matching --commands mode's pre-existing, already-more-
-    // correct semantic) - callers that need the classic loop's old
-    // pre-increment "frame about to run" numbering (tap/screenshot
-    // frame-indexing, autoshot filenames) capture CurrentFrame themselves
-    // before calling RunFrames(1), same as this class's own cpuLog window
-    // check does internally.
+    // and --commands mode drive - replaces two separately-drifting
+    // implementations that used to do this same sequence slightly
+    // differently. CurrentFrame is post-increment ("frames completed so
+    // far"); a caller needing the classic loop's old pre-increment
+    // numbering captures CurrentFrame before calling RunFrames(1). Full
+    // design reasoning: Man pages/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
     public sealed class FrameRunner
     {
         private const int ProgressEvery = 600; // ~10s of real 60fps gameplay
@@ -102,22 +94,12 @@ namespace EmuSen.Pharaoh90
             }
         }
 
-        // Advances one frame at a time (reusing RunFrames(1) so held
-        // input/cpuLog windowing/autoshot all still apply exactly as they
-        // would for a plain `frames` line) until the framebuffer hash stops
-        // changing for <quietFrames> in a row, or <maxFrames> is reached -
-        // whichever comes first.
-        //
-        // Requires seeing at least one real change before a quiet streak
-        // counts as "settled" - a real bug caught testing this against the
-        // actual SMAS investigation: called right after a `tap Start` while
-        // still sitting on the static Nintendo boot logo, the naive "N
-        // identical frames in a row" version reported stable after only
-        // ~16 frames, because the logo itself doesn't animate and was
-        // already "stable" the instant it was checked - long before the
-        // tap's own transition had even started, let alone finished. It
-        // can't tell "hasn't reacted yet" apart from "finished reacting"
-        // without this.
+        // Advances one frame at a time (via RunFrames(1), so held input/
+        // cpuLog windowing/autoshot all still apply) until the framebuffer
+        // hash stops changing for <quietFrames> in a row, or <maxFrames> is
+        // reached. Requires seeing a real change first, not just N identical
+        // frames - a real bug this once shipped with, see §3.15's own
+        // waitstable note for the failure case that caught it.
         public long WaitStable(long maxFrames, long quietFrames)
         {
             ulong? lastHash = null;

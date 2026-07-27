@@ -179,15 +179,22 @@ namespace EmuSen.Hotaru
         }
 
         // Mirrors EmuSen.Mistress9's own Program.cs/BuildAvaloniaApp idiom.
-        // See Man pages/EmuSen_Project_Overview_v2.md §2a for why there's
-        // no UseWayland() call here.
+        // See Man pages/EmuSen_Project_Overview_v2.md §2a for why Linux
+        // stays on UseWayland() for now.
         private static AppBuilder BuildAvaloniaApp(
             VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
-            return AppBuilder.Configure(() => new App(core, extraCommands, statePath))
+            var builder = AppBuilder.Configure(() => new App(core, extraCommands, statePath))
                 .UsePlatformDetect()
                 .WithInterFont()
                 .LogToTrace();
+
+            if (OperatingSystem.IsLinux())
+            {
+                builder = builder.UseWayland();
+            }
+
+            return builder;
         }
 
         // Hotaru's entire launch experience: no core, no window, no audio

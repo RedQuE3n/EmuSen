@@ -20,6 +20,14 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- Real Avalonia render passes with no display/GPU needed - see
+         Serenity/GameFrameControlRenderTests.cs. Not Avalonia.Headless.XUnit -
+         that package pins xunit.v3, which collides (CS0433, duplicate
+         Fact/Theory/InlineData types) with this project's existing xunit
+         2.9.3 tests. HeadlessUnitTestSession (in plain Avalonia.Headless)
+         gives the same capability against ordinary [Fact]/async Task
+         instead. -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.0" />
   </ItemGroup>
 
   <ItemGroup>

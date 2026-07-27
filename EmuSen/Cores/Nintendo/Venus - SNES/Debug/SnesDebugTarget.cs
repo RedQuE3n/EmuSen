@@ -5,6 +5,7 @@ using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.DianaOS;
+using EmuSen.Providers;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
@@ -103,15 +104,32 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // LastFrameHdmaMs (or EmulatorSession's identical pass-through
         // properties) live on the concrete core/session, not on anything
         // this class already holds a reference to (Cpu/MemoryBus/
-        // Renderer), so a caller that wants GetHardwareLoad() to report
+        // Renderer), so a caller that wants HardwareLoad to report
         // real numbers passes a delegate reading them; a caller that
         // doesn't care (the WiseMan test fixtures, anything constructing
         // this without a live per-frame loop behind it) just omits it,
-        // and GetHardwareLoad() reports "not modeled" the same way
-        // GetApuRegisters/GetAudioChannels do for a core with nothing to
+        // and HardwareLoad reports "not modeled" the same way
+        // ApuRegisters/AudioChannels do for a core with nothing to
         // show, rather than every caller needing to pass real-looking
         // stand-in numbers just to satisfy the constructor.
         private readonly Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? _frameTimings;
+
+        // Real-time providers backing IDebugTarget's provider properties
+        // below - see EmuSen.Providers.IRealtimeProvider's own comment.
+        // Each wraps the same live-read logic this class always had (now
+        // the private ReadXLive methods), just no longer re-run on every
+        // single call - Refresh() is expected to be called once per frame
+        // by whatever owns this target's core (see each host's own
+        // EmulationLoop), and Current then serves any number of reads -
+        // from any thread - against that one snapshot until the next
+        // Refresh().
+        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegistersProvider;
+        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _videoRegistersProvider;
+        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _apuRegistersProvider;
+        private readonly PollingProvider<IReadOnlyList<DebugSpriteInfo>> _spritesProvider;
+        private readonly PollingProvider<IReadOnlyList<DebugPaletteInfo>> _palettesProvider;
+        private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannelsProvider;
+        private readonly PollingProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoadProvider;
 
         public SnesDebugTarget(Cpu cpu, MemoryBus bus, Renderer renderer, Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? frameTimings = null)
         {
@@ -134,9 +152,46 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // reasoning as the WriteObserver/ReadObserver split documented
             // in this class's own header comment.
             bus.BreakpointChecker = pc24 => _breakpoints.ShouldBreak(pc24);
+
+            // Each provider's initial snapshot is read right here, not left
+            // default/empty - a caller reading Current before this target's
+            // owner ever calls Refresh() (every WiseMan test fixture, for
+            // instance) should still see real, current state, not "nothing
+            // published yet".
+            _cpuRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadCpuRegistersLive, ReadCpuRegistersLive());
+            _videoRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadVideoRegistersLive, ReadVideoRegistersLive());
+            _apuRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadApuRegistersLive, ReadApuRegistersLive());
+            _spritesProvider = new PollingProvider<IReadOnlyList<DebugSpriteInfo>>(ReadSpritesLive, ReadSpritesLive());
+            _palettesProvider = new PollingProvider<IReadOnlyList<DebugPaletteInfo>>(ReadPalettesLive, ReadPalettesLive());
+            _audioChannelsProvider = new PollingProvider<IReadOnlyList<DebugAudioChannelInfo>>(ReadAudioChannelsLive, ReadAudioChannelsLive());
+            _hardwareLoadProvider = new PollingProvider<IReadOnlyList<DebugLoadInfo>>(ReadHardwareLoadLive, ReadHardwareLoadLive());
         }
 
         public string CoreName => "SNES";
+
+        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CpuRegisters => _cpuRegistersProvider;
+        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters => _videoRegistersProvider;
+        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters => _apuRegistersProvider;
+        public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites => _spritesProvider;
+        public IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes => _palettesProvider;
+        public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels => _audioChannelsProvider;
+        public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad => _hardwareLoadProvider;
+
+        // Refreshes every provider above from live core state in one call -
+        // the one method a host's per-frame loop needs to know about (see
+        // each host's own EmulationLoop) rather than seven individual
+        // Refresh() calls. Must only run on the thread that owns this
+        // target's core, same contract as every individual Refresh().
+        public void RefreshProviders()
+        {
+            _cpuRegistersProvider.Refresh();
+            _videoRegistersProvider.Refresh();
+            _apuRegistersProvider.Refresh();
+            _spritesProvider.Refresh();
+            _palettesProvider.Refresh();
+            _audioChannelsProvider.Refresh();
+            _hardwareLoadProvider.Refresh();
+        }
 
         public WatchRegistry Watches => _watches;
 
@@ -307,7 +362,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             };
         }
 
-        public IReadOnlyList<DebugRegisterValue> GetCpuRegisters()
+        private IReadOnlyList<DebugRegisterValue> ReadCpuRegistersLive()
         {
             return new[]
             {
@@ -324,7 +379,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             };
         }
 
-        public IReadOnlyList<DebugRegisterValue> GetVideoRegisters()
+        private IReadOnlyList<DebugRegisterValue> ReadVideoRegistersLive()
         {
             return new[]
             {
@@ -360,14 +415,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             };
         }
 
-        // See IDebugTarget.GetApuRegisters's own comment for why this
+        // See IDebugTarget.ApuRegisters's own comment for why this
         // exists. InPort<n> is what the CPU most recently wrote (what the
         // SPC700 reads back at $00F4-F7) - OutPort<n> is what the SPC700
         // most recently wrote (what the CPU reads back at $2140-2143).
         // Same asymmetric-direction split as Spc700.ReadPort/WritePort;
         // printing both together is the point, since a stuck handshake
         // typically shows as one direction moving and the other not.
-        public IReadOnlyList<DebugRegisterValue> GetApuRegisters()
+        private IReadOnlyList<DebugRegisterValue> ReadApuRegistersLive()
         {
             var spc = _bus.Spc700;
             return new[]
@@ -422,7 +477,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // reason: a generic sprite viewer showing 128 entries where ~120
         // are conventionally-parked filler isn't more informative, just
         // noisier.
-        public IReadOnlyList<DebugSpriteInfo> GetSprites()
+        private IReadOnlyList<DebugSpriteInfo> ReadSpritesLive()
         {
             var result = new List<DebugSpriteInfo>();
             int sizeSelect = (_ppu.Obsel >> 5) & 0x07;
@@ -468,7 +523,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // at the interface level, since that split is itself an SNES-
         // specific convention; a generic palette-viewer just shows however
         // many DebugPaletteInfo entries a target reports.
-        public IReadOnlyList<DebugPaletteInfo> GetPalettes()
+        private IReadOnlyList<DebugPaletteInfo> ReadPalettesLive()
         {
             var result = new List<DebugPaletteInfo>();
             for (int p = 0; p < 16; p++)
@@ -581,10 +636,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         // Reshapes SDsp's own per-voice debug snapshot into the generic
         // DebugAudioChannelInfo shape - see that struct's and
-        // IDebugTarget.GetAudioChannels's own comments for why. Level is
+        // IDebugTarget.AudioChannels's own comments for why. Level is
         // the voice's 0-2047 envelope value rescaled to 0-100 so a generic
         // viewer doesn't need to know that range is SNES-specific.
-        public IReadOnlyList<DebugAudioChannelInfo> GetAudioChannels()
+        private IReadOnlyList<DebugAudioChannelInfo> ReadAudioChannelsLive()
         {
             var dsp = _bus.Spc700.Dsp;
             var result = new List<DebugAudioChannelInfo>(8);
@@ -609,7 +664,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // just eaten wall-clock time) can otherwise report over 100%,
         // which would look like a rendering bug in a bar that's only
         // ever meant to go up to "full."
-        public IReadOnlyList<DebugLoadInfo> GetHardwareLoad()
+        private IReadOnlyList<DebugLoadInfo> ReadHardwareLoadLive()
         {
             if (_frameTimings is null) return Array.Empty<DebugLoadInfo>();
 

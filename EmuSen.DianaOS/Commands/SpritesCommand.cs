@@ -11,7 +11,7 @@ namespace EmuSen.DianaOS.Commands
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = EmuSen.DianaOS.Commands.DebugCommandHelpers.RequireTarget(target);
-            var sprites = target.GetSprites();
+            var sprites = target.Sprites.Current;
             var sb = new StringBuilder();
             sb.AppendLine($"{sprites.Count} active sprite(s):");
             foreach (var s in sprites)

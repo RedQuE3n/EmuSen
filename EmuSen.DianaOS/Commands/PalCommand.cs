@@ -14,7 +14,7 @@ namespace EmuSen.DianaOS.Commands
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = EmuSen.DianaOS.Commands.DebugCommandHelpers.RequireTarget(target);
-            var palettes = target.GetPalettes();
+            var palettes = target.Palettes.Current;
             var sb = new StringBuilder();
 
             IEnumerable<DebugPaletteInfo> toShow = palettes;

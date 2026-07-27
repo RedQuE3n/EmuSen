@@ -117,7 +117,10 @@ class Program
         // reason for it to report less than the other two frontends do).
         var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!,
             () => (core.LastFrameCpuSpc700Ms, core.LastFramePpuMs, core.LastFrameHdmaMs));
-        var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget);
+        var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget, null,
+            new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
+            new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
+            new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
 
         // Same two ranges registered from power-on in Hotaru's
         // Program.cs for the Yoshi/coin investigation - duplicated here
@@ -161,7 +164,11 @@ class Program
         {
             // CheckAutoshot(n) directly - post-increment, matching this
             // mode's own autoshot filename convention (see §3.15).
-            var runner = new FrameRunner(core, options.FrameCount, Emit, n => CheckAutoshot(n))
+            // debugTarget.RefreshProviders() runs here too, once per frame,
+            // so the --commands verbs this scriptRunner drives (`spriteoverlay`,
+            // any future one reading a provider) see the frame that just ran,
+            // not whatever was live at debugTarget's construction.
+            var runner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n); })
             {
                 CpuLogStart = options.CpuLogStart,
                 CpuLogEnd = options.CpuLogEnd,
@@ -184,7 +191,9 @@ class Program
         // CheckAutoshot(n - 1) - the classic loop's autoshot filenames use
         // the frame *about to run* (0-indexed, pre-increment), not
         // FrameRunner's own post-increment CurrentFrame (see §3.15).
-        var classicRunner = new FrameRunner(core, options.FrameCount, Emit, n => CheckAutoshot(n - 1))
+        // debugTarget.RefreshProviders() runs here too, once per frame -
+        // see the --commands runner's own comment above.
+        var classicRunner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n - 1); })
         {
             CpuLogStart = options.CpuLogStart,
             CpuLogEnd = options.CpuLogEnd,

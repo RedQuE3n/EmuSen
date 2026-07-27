@@ -4,7 +4,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaOS
 {
-    // IDebugTarget.GetHardwareLoad/MaxSprites - backs the `coretop`
+    // IDebugTarget.HardwareLoad/MaxSprites - backs the `coretop`
     // command's hardware-load bars and sprite-capacity gauge. Covers
     // SnesDebugTarget's own two behaviors: no frame-timings delegate
     // means "not modeled" (an empty list, not fake/zero numbers), and a
@@ -23,7 +23,7 @@ namespace EmuSen.WiseMan.DianaOS
         public void No_frame_timings_delegate_reports_not_modeled()
         {
             var target = BuildTarget();
-            Assert.Empty(target.GetHardwareLoad());
+            Assert.Empty(target.HardwareLoad.Current);
         }
 
         [Fact]
@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.DianaOS
             // roughly 50% load.
             var target = BuildTarget(() => (8.33, 4.0, 0.5));
 
-            var load = target.GetHardwareLoad();
+            var load = target.HardwareLoad.Current;
 
             var cpu = Assert.Single(load, l => l.Name == "CPU+SPC700");
             Assert.InRange(cpu.Percent, 49.0, 51.0);
@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.DianaOS
             // prompt ate real wall-clock time) must not report 300%.
             var target = BuildTarget(() => (50.0, 50.0, 50.0));
 
-            var load = target.GetHardwareLoad();
+            var load = target.HardwareLoad.Current;
 
             Assert.All(load, l => Assert.Equal(100.0, l.Percent));
         }

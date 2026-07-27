@@ -2,7 +2,7 @@ using System.Text;
 
 namespace EmuSen.DianaOS.Commands
 {
-    // Lists whatever audio channels/voices IDebugTarget.GetAudioChannels()
+    // Lists whatever audio channels/voices IDebugTarget.AudioChannels
     // reports - core-agnostic on purpose, same split as `sprites`/`pal`:
     // this command just formats a table, it has no idea whether it's
     // looking at 8 SNES DSP voices or some other core's completely
@@ -21,7 +21,7 @@ namespace EmuSen.DianaOS.Commands
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = EmuSen.DianaOS.Commands.DebugCommandHelpers.RequireTarget(target);
-            var channels = target.GetAudioChannels();
+            var channels = target.AudioChannels.Current;
             if (channels.Count == 0) return "(this core reports no audio channels)";
 
             var sb = new StringBuilder();

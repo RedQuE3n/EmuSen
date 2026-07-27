@@ -163,7 +163,11 @@ class Program
         {
             // CheckAutoshot(n) directly - post-increment, matching this
             // mode's own autoshot filename convention (see §3.15).
-            var runner = new FrameRunner(core, options.FrameCount, Emit, n => CheckAutoshot(n))
+            // debugTarget.RefreshProviders() runs here too, once per frame,
+            // so the --commands verbs this scriptRunner drives (`spriteoverlay`,
+            // any future one reading a provider) see the frame that just ran,
+            // not whatever was live at debugTarget's construction.
+            var runner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n); })
             {
                 CpuLogStart = options.CpuLogStart,
                 CpuLogEnd = options.CpuLogEnd,
@@ -186,7 +190,9 @@ class Program
         // CheckAutoshot(n - 1) - the classic loop's autoshot filenames use
         // the frame *about to run* (0-indexed, pre-increment), not
         // FrameRunner's own post-increment CurrentFrame (see §3.15).
-        var classicRunner = new FrameRunner(core, options.FrameCount, Emit, n => CheckAutoshot(n - 1))
+        // debugTarget.RefreshProviders() runs here too, once per frame -
+        // see the --commands runner's own comment above.
+        var classicRunner = new FrameRunner(core, options.FrameCount, Emit, n => { debugTarget.RefreshProviders(); CheckAutoshot(n - 1); })
         {
             CpuLogStart = options.CpuLogStart,
             CpuLogEnd = options.CpuLogEnd,

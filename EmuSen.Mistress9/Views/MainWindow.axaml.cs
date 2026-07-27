@@ -554,6 +554,14 @@ namespace EmuSen.Mistress9.Views
                     session.RunFrame();
                     runFrameTimeInWindow += frameStopwatch.Elapsed;
 
+                    // Publishes this frame's register/sprite/palette/audio/
+                    // hardware-load snapshots via IDebugTarget's provider
+                    // properties - see EmuSen.Providers.IRealtimeProvider's
+                    // own comment. Null-conditional since _debugTarget isn't
+                    // atomically tied to _session (a ROM swap in flight
+                    // could momentarily leave one set without the other).
+                    _debugTarget?.RefreshProviders();
+
                     // Same call-site placement as PumpAudio() in
                     // EmuSen.Hotaru/Program.cs - right after
                     // RunFrame(), since that's what actually produces new

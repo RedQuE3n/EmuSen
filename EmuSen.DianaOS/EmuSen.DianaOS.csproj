@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The core-agnostic debug/scripting shell - see this project's own
+       README/header comments (DianaOSInterpreter.cs, IDebugTarget.cs) for
+       the full design. OutputType=Exe so `dotnet run` here launches a
+       standalone shell with no core loaded at all (see Program.cs) -
+       every other project just references this like any other library;
+       its Main only runs when this project is the one actually launched. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
+         comment on why these live in their own project, separate from
+         DianaOS, rather than being DianaOS-owned. -->
+    <ProjectReference Include="..\EmuSen.Providers\EmuSen.Providers.csproj" />
+  </ItemGroup>
+
+</Project>

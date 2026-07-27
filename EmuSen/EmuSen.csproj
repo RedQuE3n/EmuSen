@@ -25,6 +25,16 @@
          in this project - see EmuSen.Serenity.csproj's own note on why
          presentation-layer code moved out to its own shared project. -->
     <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
+    <!-- SnesDebugTarget implements IDebugTarget and its
+         ICheatCodeCodec/ICpuTraceSwitch adapter classes plug into
+         DianaOS's own extension points - see IDebugTarget.cs's own
+         header comment on why DianaOS itself has zero reference back to
+         this project. EmuSen.Providers is referenced transitively through
+         this (SnesDebugTarget builds PollingProvider<T> instances
+         directly), listed explicitly anyway to match this project's own
+         "be explicit about what's actually used" convention. -->
+    <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
+    <ProjectReference Include="..\EmuSen.Providers\EmuSen.Providers.csproj" />
   </ItemGroup>
 
 </Project>

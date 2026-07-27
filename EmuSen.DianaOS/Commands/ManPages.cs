@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace EmuSen.DianaOS
+namespace EmuSen.DianaOS.Commands
 {
     // Long-form manual pages for `man <command>` (DianaOSInterpreter.Dispatch's
     // own special case, alongside `help`/`export`/`unset`/`source` -
@@ -14,7 +14,9 @@ namespace EmuSen.DianaOS
     // file, one place to keep this in sync, no per-command interface
     // churn - the same reasoning DebugCommandHelpers already uses for
     // shared, stateless command-support code that doesn't belong wedged
-    // into any one command class.
+    // into any one command class. Lives directly under Commands/ rather
+    // than Commands/Unix or Commands/EmuSen - it documents commands from
+    // both, and isn't an IDianaOSCommand itself, so neither subfolder fits.
     //
     // Each page follows the same loose structure a real Unix man page
     // does (NAME/SYNOPSIS/DESCRIPTION, EXAMPLES where an example

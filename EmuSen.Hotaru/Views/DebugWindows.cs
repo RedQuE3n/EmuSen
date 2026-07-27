@@ -40,6 +40,21 @@ namespace EmuSen.Hotaru.Views
             });
         }
 
+        // Keeps an already-open coretop window from silently going stale
+        // after a `core <name> <path>` swap (GameWindow.SwapCore) rebuilds
+        // _debugTarget - unlike ShowCoretopWindow above, this never
+        // CREATES the window (a swap shouldn't pop one up for a user who
+        // never asked for one) and never Activate()s it (stealing window
+        // focus on every swap, mid-gameplay, would be its own new
+        // annoyance) - it only refreshes whatever's already open, so it's
+        // safe to call unconditionally on every swap regardless of
+        // whether coretop is even in use this session.
+        public static void UpdateCoretopWindowTargetIfOpen(IDebugTarget target)
+        {
+            if (_coretopWindow is null) return;
+            Dispatcher.UIThread.Post(() => _coretopWindow?.UpdateTarget(target));
+        }
+
         public static void ShowFeedWindow(Func<(byte[] Rgba, int Width, int Height)> frameProvider)
         {
             Dispatcher.UIThread.Post(() =>

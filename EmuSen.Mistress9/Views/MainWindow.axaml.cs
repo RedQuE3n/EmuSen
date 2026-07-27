@@ -562,6 +562,17 @@ namespace EmuSen.Mistress9.Views
                     // could momentarily leave one set without the other).
                     _debugTarget?.RefreshProviders();
 
+                    // Runs whatever _consoleWindow queued (a mutating
+                    // command typed while not fast-path-eligible - see
+                    // DianaOSConsoleWindow.Submit and
+                    // EmuSen.DianaOS.DianaOSInterpreterScheduler's own
+                    // comment) against the core we just finished a frame
+                    // on - null-conditional since the console window is
+                    // opened on demand and may not exist at all. Must run
+                    // on this (the emulation) thread, same reasoning as
+                    // RefreshProviders() just above.
+                    _consoleWindow?.DrainPendingFromEmulationThread();
+
                     // Same call-site placement as PumpAudio() in
                     // EmuSen.Hotaru/Program.cs - right after
                     // RunFrame(), since that's what actually produces new

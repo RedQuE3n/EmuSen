@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -42,10 +43,36 @@ namespace EmuSen.Hotaru.Views
     // constructor) owns RunFrame(), audio, hotkey dispatch, and the
     // blocking F4 DianaOS console prompt itself; the Avalonia UI thread
     // (this class's event handlers) owns the window, keyboard capture,
-    // and gamepad polling. No pause/resume mechanism is needed - unlike
-    // EmuSen.Mistress9's console window, F4 and RunFrame() never run
-    // concurrently here, because they share the one emulation thread by
-    // construction.
+    // and gamepad polling. No pause/resume mechanism is needed for
+    // THOSE two threads - unlike EmuSen.Mistress9's console window, F4
+    // and RunFrame() never run concurrently, because they share the one
+    // emulation thread by construction.
+    //
+    // A third thread joins this picture as of the "Diana always live"
+    // work: _consoleReaderThread (ConsoleReaderLoop below) is the sole
+    // owner of ConsoleLineReader.ReadLine for the whole life of the
+    // window, whether or not F4/a breakpoint is currently halted. While
+    // running normally, it classifies each typed line via
+    // DianaOSInterpreter.TryGetReadOnlyFastPath: a read-only line runs
+    // right there on the reader thread (never touching the emulation
+    // thread at all - the same "a read-only view of live core state,
+    // unsynchronized, is an accepted race" precedent CoretopWindow's own
+    // polling already relies on); anything else is queued and drained
+    // once per frame by ProcessPendingConsoleCommands, alongside
+    // ProcessHotkeys. While halted (RunDebugPrompt, F4/breakpoint), the
+    // reader thread instead just forwards each line into
+    // _haltedLineQueue and RunDebugPrompt blocks reading from THAT -
+    // still fully synchronous with RunFrame(), exactly as before this
+    // work, just fed by a different thread than the one running the
+    // prompt loop. _interpreterLock serializes the two things that can
+    // ever call _debugCmd.Submit (the reader thread's fast path, and
+    // whichever thread - emulation, via the frame-tick drain or
+    // RunDebugPrompt - is executing a line for real) so a single
+    // DianaOSInterpreter instance, which has real mutable state beyond
+    // core reads (variables, history, $?), is never entered from two
+    // threads at once. It's held only for the duration of one command's
+    // Execute, never across a blocking read, so it can't turn into "the
+    // emulation thread waits on the console" through the back door.
     public partial class GameWindow : Window
     {
         private readonly VenusCore _core;
@@ -63,7 +90,17 @@ namespace EmuSen.Hotaru.Views
         // with no UpdateTarget of its own - unlike EmuSen.Mistress9's
         // console WINDOW) would otherwise go stale.
         private SnesDebugTarget _debugTarget = null!;
-        private DianaOSInterpreter _debugCmd = null!;
+
+        // volatile: as of the "Diana always live" work, _consoleReaderThread
+        // reads this field too (see ConsoleReaderLoop below), on top of the
+        // emulation thread that already reassigns it from SwapCore -
+        // without this, a swap's new reference isn't guaranteed to become
+        // visible to the reader thread promptly. Every read site captures
+        // it into a local once per line processed (never re-reads the
+        // field mid-line), so a swap landing between a line's
+        // classification and its execution can't split the two across
+        // different interpreter instances.
+        private volatile DianaOSInterpreter _debugCmd = null!;
         private FrameRecorder _frameRecorder = null!;
 
         // Reused, unchanged, across every RebuildDebugTargetAndCommands()
@@ -93,6 +130,41 @@ namespace EmuSen.Hotaru.Views
 
         private volatile bool _running = true;
         private readonly Thread _emuThread;
+
+        // See this file's own header comment on the "Diana always live"
+        // threading model. _consoleReaderThread is started once, in the
+        // constructor, and runs for the window's whole life - it isn't
+        // tied to F4 the way console reading used to be.
+        private readonly Thread _consoleReaderThread;
+
+        // True only while RunDebugPrompt (F4/breakpoint) is actually
+        // blocked waiting for input - toggled by that method itself.
+        // Read by the reader thread on every iteration; a stale read by
+        // at most one loop iteration is fine (the same accepted-race
+        // shape this file's volatile _request* flags already use), so
+        // this is a plain volatile bool, not anything heavier.
+        private volatile bool _halted;
+
+        // Lines the reader thread forwards while _halted, instead of
+        // handling them itself - RunDebugPrompt blocks reading from this
+        // instead of calling ConsoleLineReader.ReadLine directly, since
+        // the reader thread is now the sole owner of that call.
+        private readonly BlockingCollection<string> _haltedLineQueue = new();
+
+        // Lines that classified as NOT fast-path-eligible (mutating, or
+        // just not a single bare simple command) while running normally -
+        // drained once per frame by ProcessPendingConsoleCommands, the
+        // same "set on one thread, drained once per frame on another"
+        // shape this file's own _request* flags already use, just for an
+        // unbounded stream of lines instead of a handful of named flags.
+        private readonly ConcurrentQueue<string> _pendingCommandQueue = new();
+
+        // Serializes every _debugCmd.Submit call, whichever thread makes
+        // it (the reader thread's fast path, ProcessPendingConsoleCommands
+        // on the emulation thread, or RunDebugPrompt while halted) - see
+        // this file's own header comment for why this is needed and why
+        // it's safe to never hold across a blocking console read.
+        private readonly object _interpreterLock = new();
 
         // Every non-gameplay hotkey (F1-F9, O, P) - edge-detected in
         // OnKeyDown below (never on an OS key-repeat) and consumed once
@@ -170,6 +242,100 @@ namespace EmuSen.Hotaru.Views
 
             _emuThread = new Thread(EmulationLoop) { IsBackground = true, Name = "EmuSen-Emulation" };
             _emuThread.Start();
+
+            _consoleReaderThread = new Thread(ConsoleReaderLoop) { IsBackground = true, Name = "EmuSen-ConsoleReader" };
+            _consoleReaderThread.Start();
+        }
+
+        // Sole owner of ConsoleLineReader.ReadLine for the whole life of
+        // this window - see this file's own header comment. Runs on its
+        // own dedicated thread so a blocking console read is never on the
+        // emulation thread's critical path while running normally.
+        private void ConsoleReaderLoop()
+        {
+            while (_running)
+            {
+                // Captured once per line, never re-read mid-line - see
+                // this field's own comment on why (a `core` swap
+                // reassigning it partway through a line's own
+                // classify-then-execute sequence must not split that
+                // sequence across two different interpreter instances).
+                DianaOSInterpreter shell = _debugCmd;
+
+                if (!_halted) Console.Write("DianaOS $ ");
+
+                string[] historySnapshot;
+                lock (_interpreterLock) historySnapshot = new List<string>(shell.History.Entries).ToArray();
+
+                string? line;
+                try { line = ConsoleLineReader.ReadLine(historySnapshot); }
+                catch (Exception ex)
+                {
+                    // No real console to read from (e.g. stdin closed
+                    // out from under this thread during shutdown) - stop
+                    // quietly rather than spinning on a repeating error.
+                    Console.WriteLine($"[CONSOLE] Reader thread stopped: {ex.Message}");
+                    return;
+                }
+                // EOF (stdin closed/redirected input exhausted) - nothing
+                // more will ever come from Console.ReadLine again, so
+                // stop rather than busy-looping on an instantly-null
+                // read. If this happens while halted, RunDebugPrompt's
+                // own _haltedLineQueue.Take() below simply has nothing
+                // left to receive - bounded by Shutdown's own timeout on
+                // window close, same as any other "prompt never got an
+                // answer" case already was before this thread existed.
+                if (line is null) return;
+
+                if (_halted)
+                {
+                    _haltedLineQueue.Add(line);
+                    continue;
+                }
+
+                string trimmed = line.Trim();
+                if (trimmed.Length == 0) continue;
+
+                if (shell.TryGetReadOnlyFastPath(trimmed, out _))
+                {
+                    lock (_interpreterLock)
+                    {
+                        (_, string output, _) = shell.Submit(trimmed);
+                        Console.WriteLine(output);
+                    }
+                }
+                else
+                {
+                    _pendingCommandQueue.Enqueue(trimmed);
+                }
+            }
+        }
+
+        // Drains lines the reader thread queued because they weren't
+        // fast-path-eligible (mutating, or not a single bare simple
+        // command) - called once per frame from EmulationLoop, alongside
+        // ProcessHotkeys, so a mutating command typed at the live
+        // terminal runs inline on the emulation thread's own next tick
+        // instead of needing F4. Returns true on HostAction.Shutdown,
+        // matching ProcessHotkeys' own return-true-means-close contract.
+        private bool ProcessPendingConsoleCommands()
+        {
+            while (_pendingCommandQueue.TryDequeue(out string? line))
+            {
+                HostAction? action;
+                string output;
+                lock (_interpreterLock) (_, output, action) = _debugCmd.Submit(line);
+                Console.WriteLine(output);
+
+                if (action is HostAction.Shutdown) return true;
+                if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); continue; }
+                // HostAction.Resume/Step with nothing halted: nothing to
+                // resume from (Resume is a no-op) / StepCommand already
+                // armed the single-step itself, which the next RunFrame()
+                // iteration's own IsHaltedAtBreakpoint check picks up the
+                // same way an F4-armed step already does.
+            }
+            return false;
         }
 
         private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -319,6 +485,7 @@ namespace EmuSen.Hotaru.Views
                     SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
 
                     if (ProcessHotkeys()) { RequestClose(); return; }
+                    if (ProcessPendingConsoleCommands()) { RequestClose(); return; }
                 }
             }
             catch (Exception ex)
@@ -458,65 +625,80 @@ namespace EmuSen.Hotaru.Views
         // breakpoint-halt check - see the old Program.cs's own comment on
         // why (both funnel through the exact same interactive command
         // loop rather than keeping two copies in sync). Blocks THIS
-        // (emulation) thread on Console.ReadLine() - never the UI thread -
-        // which is exactly what lets the window stay movable/resizable/
-        // closable while F4 is open, unlike the old Raylib build where
-        // the window and this prompt shared one thread.
+        // (emulation) thread on _haltedLineQueue.Take() - never the UI
+        // thread - which is exactly what lets the window stay movable/
+        // resizable/closable while F4 is open, unlike the old Raylib
+        // build where the window and this prompt shared one thread.
+        // Doesn't read the console directly any more - see this file's
+        // own header comment on why _consoleReaderThread now owns that,
+        // and forwards lines here (instead of handling them itself)
+        // whenever _halted is set.
         private bool RunDebugPrompt()
         {
             DisarmFeedWatch();
-
-            Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'feed'/'feed -w' to resume and watch gameplay, 'shutdown' to quit, 'step'/'s' to single-step, 'core <name> <path>' to swap ROMs) ---");
-            while (true)
+            _halted = true;
+            try
             {
-                Console.Write(_debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
-                string? line = ConsoleLineReader.ReadLine(_debugCmd.History.Entries);
-                if (line is null) return false;
-                string trimmed = line.Trim();
-
-                if (!_debugCmd.IsAwaitingMoreInput)
+                Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'feed'/'feed -w' to resume and watch gameplay, 'shutdown' to quit, 'step'/'s' to single-step, 'core <name> <path>' to swap ROMs) ---");
+                while (true)
                 {
-                    // Empty-line-means-resume stays pre-dispatch, same as
-                    // before - an empty line isn't really "a command," the
-                    // same way SubmitCore itself already treats one as a
-                    // no-op, so there's nothing gained by routing it
-                    // through ResumeCommand too.
-                    if (trimmed.Length == 0)
+                    Console.Write(_debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
+                    string line = _haltedLineQueue.Take();
+                    string trimmed = line.Trim();
+
+                    if (!_debugCmd.IsAwaitingMoreInput)
                     {
-                        break;
-                    }
-                    if (trimmed.Equals("feed", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("feed ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string[] feedParts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                        bool windowed = feedParts.Length >= 2 && feedParts[1].Equals("-w", StringComparison.OrdinalIgnoreCase);
-                        if (windowed)
+                        // Empty-line-means-resume stays pre-dispatch, same as
+                        // before - an empty line isn't really "a command," the
+                        // same way SubmitCore itself already treats one as a
+                        // no-op, so there's nothing gained by routing it
+                        // through ResumeCommand too.
+                        if (trimmed.Length == 0)
                         {
-                            DebugWindows.ShowFeedWindow(() => (_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight));
-                            Console.WriteLine("[FEED] Opened in a separate window.");
+                            break;
                         }
-                        ArmFeedWatch();
-                        Console.WriteLine("Resuming - press Ctrl+C in this terminal to reopen the prompt.");
-                        break;
+                        if (trimmed.Equals("feed", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("feed ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string[] feedParts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                            bool windowed = feedParts.Length >= 2 && feedParts[1].Equals("-w", StringComparison.OrdinalIgnoreCase);
+                            if (windowed)
+                            {
+                                DebugWindows.ShowFeedWindow(() => (_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight));
+                                Console.WriteLine("[FEED] Opened in a separate window.");
+                            }
+                            ArmFeedWatch();
+                            Console.WriteLine("Resuming - press Ctrl+C in this terminal to reopen the prompt.");
+                            break;
+                        }
                     }
+                    // 'resume'/'continue'/'c', 'shutdown'/'quit', 'step'/'s',
+                    // and 'core <name> <path>' are all real DianaOS commands
+                    // now (EmuSen.DianaOS.Commands.ResumeCommand/
+                    // ShutdownCommand/StepCommand/CoreCommand) - Submit's own
+                    // HostAction is what lets them reach back out to this
+                    // loop's control flow, the same thing the old hand-rolled
+                    // string matches used to do directly. A successful swap
+                    // resumes gameplay immediately against the new ROM, same
+                    // as Resume/Step - SwapCore itself prints why if it
+                    // refuses (a recording in progress). Locked (see this
+                    // file's own header comment) so this can never overlap a
+                    // fast-path Submit from the reader thread - only
+                    // relevant for the brief window right as a halt begins.
+                    HostAction? action;
+                    string output;
+                    lock (_interpreterLock) (_, output, action) = _debugCmd.Submit(trimmed);
+                    Console.WriteLine(output);
+                    if (action is HostAction.Shutdown) return true;
+                    if (action is HostAction.Resume or HostAction.Step) break;
+                    if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); break; }
                 }
-                // 'resume'/'continue'/'c', 'shutdown'/'quit', 'step'/'s',
-                // and 'core <name> <path>' are all real DianaOS commands
-                // now (EmuSen.DianaOS.Commands.ResumeCommand/
-                // ShutdownCommand/StepCommand/CoreCommand) - Submit's own
-                // HostAction is what lets them reach back out to this
-                // loop's control flow, the same thing the old hand-rolled
-                // string matches used to do directly. A successful swap
-                // resumes gameplay immediately against the new ROM, same
-                // as Resume/Step - SwapCore itself prints why if it
-                // refuses (a recording in progress).
-                (_, string output, HostAction? action) = _debugCmd.Submit(trimmed);
-                Console.WriteLine(output);
-                if (action is HostAction.Shutdown) return true;
-                if (action is HostAction.Resume or HostAction.Step) break;
-                if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); break; }
+                Console.WriteLine("--- Resuming ---");
+                return false;
             }
-            Console.WriteLine("--- Resuming ---");
-            return false;
+            finally
+            {
+                _halted = false;
+            }
         }
 
         private void ArmFeedWatch()
@@ -561,7 +743,7 @@ namespace EmuSen.Hotaru.Views
             _running = false;
 
             // Bounded, not indefinite: the emulation thread can be
-            // blocked inside RunDebugPrompt()'s Console.ReadLine() if
+            // blocked inside RunDebugPrompt()'s _haltedLineQueue.Take() if
             // F4's prompt is open when the window is closed - unlike the
             // old Raylib build, where the window and the console prompt
             // shared one thread and this situation could never even be
@@ -573,6 +755,17 @@ namespace EmuSen.Hotaru.Views
             // without risking an indefinite hang for the rare
             // "closed mid-prompt" case.
             _emuThread.Join(TimeSpan.FromMilliseconds(500));
+
+            // _consoleReaderThread is very likely blocked in
+            // ConsoleLineReader.ReadLine right now, with no cooperative
+            // way to cancel a blocking console read - same
+            // accept-it's-background-and-move-on treatment as _emuThread
+            // above, just with no Join at all (IsBackground = true
+            // already means process exit won't wait on it either way, and
+            // there's nothing further this thread needs to have finished
+            // before the window can close). _running is already false by
+            // this point (set above), so it'll notice and stop on its
+            // very next loop iteration if it isn't blocked on a read.
 
             _core.SaveSram();
             _gamepad.Dispose();

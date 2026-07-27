@@ -17,6 +17,7 @@ namespace EmuSen.DianaOS.Commands
     public class WcCommand : IDianaOSCommand
     {
         public string Name => "wc";
+        public bool IsReadOnly => true;
         public string Usage => "  wc [-l] [-w] [-c] [path]     count lines/words/bytes (all three if no flag given);\n" +
                                 "                                reads piped stdin, or a real file if <path> is given";
 

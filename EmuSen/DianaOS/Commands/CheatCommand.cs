@@ -28,6 +28,7 @@ namespace EmuSen.DianaOS.Commands
     public class CheatCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "cheat";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  cheat add <code> [description]    decode a code, guessing whether it's Pro",

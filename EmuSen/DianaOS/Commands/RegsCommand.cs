@@ -6,6 +6,7 @@ namespace EmuSen.DianaOS.Commands
     public class RegsCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "regs";
+        public bool IsReadOnly => true;
         public string Usage => "  regs                          CPU + video registers";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

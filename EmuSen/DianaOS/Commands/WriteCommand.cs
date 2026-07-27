@@ -5,6 +5,7 @@ namespace EmuSen.DianaOS.Commands
     public class WriteCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "write";
+        public bool IsReadOnly => false;
         public string Usage => "  write <space> <addr> <value>  write one byte (only if <space> is writable)";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

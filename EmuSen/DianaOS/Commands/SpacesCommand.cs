@@ -5,6 +5,7 @@ namespace EmuSen.DianaOS.Commands
     public class SpacesCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "spaces";
+        public bool IsReadOnly => true;
         public string Usage => "  spaces                        list available memory spaces";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

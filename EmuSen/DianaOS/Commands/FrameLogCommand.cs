@@ -14,6 +14,7 @@ namespace EmuSen.DianaOS.Commands
     public class FrameLogCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "framelog";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  framelog add <space> <addr> [<width>]",

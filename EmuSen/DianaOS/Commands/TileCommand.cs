@@ -19,6 +19,7 @@ namespace EmuSen.DianaOS.Commands
     public class TileCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "tile";
+        public bool IsReadOnly => true;
         public string Usage => "  tile <space> <addr> <bpp>     ASCII-decode one 8x8 tile (bpp meaning is core-specific - 2/4/8 on SNES)";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

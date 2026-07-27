@@ -56,6 +56,7 @@ namespace EmuSen.DianaOS.Commands
         }
 
         public string Name => "coretop";
+        public bool IsReadOnly => false;
         public string Usage => "  coretop [-w]                  live htop-style dashboard of the loaded core's hardware (Ctrl+C to exit - interactive terminal only;\n" +
                                 "                                -w opens it in a separate window instead, if this frontend supports one)";
 

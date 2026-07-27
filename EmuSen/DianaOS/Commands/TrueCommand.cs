@@ -7,6 +7,7 @@ namespace EmuSen.DianaOS.Commands
     public class TrueCommand : IDianaOSCommand
     {
         public string Name => "true";
+        public bool IsReadOnly => true;
         public string Usage => "  true                          do nothing, succeed (exit code 0) - for while/if conditions";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin) => DianaOSResult.Ok("");

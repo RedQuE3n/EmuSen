@@ -48,6 +48,7 @@ namespace EmuSen.DianaOS.Commands
         }
 
         public string Name => "core";
+        public bool IsReadOnly => false;
         public string Usage => "  core <corename> <path>        load or swap the running ROM (validated against the known core registry)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

@@ -16,6 +16,7 @@ namespace EmuSen.DianaOS.Commands
     public class TraceCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "trace";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  trace <count>                 arm a live CPU instruction trace for the next <count> instructions",

@@ -214,6 +214,7 @@ namespace EmuSen.Mistress9.Views
         }
 
         public string Name => "clear";
+        public bool IsReadOnly => true;
         public string Usage => "  clear                         clear this console window's output";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

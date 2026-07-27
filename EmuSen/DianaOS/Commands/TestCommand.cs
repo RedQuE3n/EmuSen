@@ -69,6 +69,7 @@ namespace EmuSen.DianaOS.Commands
     public class TestCommand : IDianaOSCommand
     {
         public string Name => "test";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  test EXPR / [ EXPR ]         VALUE (true if non-empty) | -z/-n VALUE | -f/-d PATH | !",
@@ -89,6 +90,7 @@ namespace EmuSen.DianaOS.Commands
     public class BracketCommand : IDianaOSCommand
     {
         public string Name => "[";
+        public bool IsReadOnly => true;
         public string Usage => "  [ EXPR ]                      alias for 'test EXPR' - the ']' is required";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

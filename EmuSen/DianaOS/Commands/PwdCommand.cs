@@ -8,6 +8,7 @@ namespace EmuSen.DianaOS.Commands
     public class PwdCommand : IDianaOSCommand
     {
         public string Name => "pwd";
+        public bool IsReadOnly => true;
         public string Usage => "  pwd                           print the current working directory";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin) =>

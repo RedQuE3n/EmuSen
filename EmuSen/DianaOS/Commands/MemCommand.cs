@@ -6,6 +6,7 @@ namespace EmuSen.DianaOS.Commands
     public class MemCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "mem";
+        public bool IsReadOnly => true;
         public string Usage => "  mem <space> <addr> [<len>]    hexdump <len> bytes (default 16) from <space> at <addr>";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

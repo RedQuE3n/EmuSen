@@ -12,6 +12,7 @@ namespace EmuSen.DianaOS.Commands
     public class LogCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "log";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  log off                       silence every logging flag at once, without changing them",

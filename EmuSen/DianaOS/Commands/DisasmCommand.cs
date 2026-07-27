@@ -7,6 +7,7 @@ namespace EmuSen.DianaOS.Commands
     public class DisasmCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "disasm";
+        public bool IsReadOnly => true;
         public string Usage => "  disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

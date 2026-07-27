@@ -13,6 +13,7 @@ namespace EmuSen.DianaOS.Commands
     public class DumpCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "dump";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  dump <space> <addr> <len> <file> write raw bytes to Logs/<CoreName>/<file>",

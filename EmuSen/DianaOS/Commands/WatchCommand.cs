@@ -6,6 +6,7 @@ namespace EmuSen.DianaOS.Commands
     public class WatchCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "watch";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  watch add <space> <addr> <len> [write|read|both]",

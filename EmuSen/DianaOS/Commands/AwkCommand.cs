@@ -37,6 +37,7 @@ namespace EmuSen.DianaOS.Commands
     public class AwkCommand : IDianaOSCommand
     {
         public string Name => "awk";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  awk [-F sep] 'prog' [path]   run a small AWK subset over stdin or <path>, line by line",

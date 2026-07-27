@@ -56,6 +56,7 @@ namespace EmuSen.WiseMan.DianaOS
         private sealed class FakeExtraCommand : IDianaOSCommand
         {
             public string Name => "faketest";
+            public bool IsReadOnly => false;
             public string Usage => "  faketest                      totally-not-a-real-command, just here to prove extraCommands show up";
 
             public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin) => DianaOSResult.Ok("");

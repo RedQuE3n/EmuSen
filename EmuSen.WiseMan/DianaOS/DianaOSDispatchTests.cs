@@ -101,6 +101,7 @@ namespace EmuSen.WiseMan.DianaOS
         private sealed class FakeOverrideCommand : IDianaOSCommand
         {
             public string Name => "echo";
+            public bool IsReadOnly => true;
             public string Usage => "  echo (overridden for this test)";
             public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin) => "overridden";
         }

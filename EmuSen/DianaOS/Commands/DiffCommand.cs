@@ -12,6 +12,7 @@ namespace EmuSen.DianaOS.Commands
     public class DiffCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "diff";
+        public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
             "  diff <name> [<count>]         compare snapshot <name> against that space's CURRENT contents,",

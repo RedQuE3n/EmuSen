@@ -24,6 +24,7 @@ namespace EmuSen.DianaOS.Commands
     public class BreakCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "bp";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  bp add <addr>                 halt execution just before <addr> runs (24-bit CPU address)",

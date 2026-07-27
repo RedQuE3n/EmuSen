@@ -5,6 +5,7 @@ namespace EmuSen.DianaOS.Commands
     public class SpritesCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "sprites";
+        public bool IsReadOnly => true;
         public string Usage => "  sprites                       active sprite/OBJ table";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

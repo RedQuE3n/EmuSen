@@ -31,6 +31,7 @@ namespace EmuSen.DianaOS.Commands
         }
 
         public string Name => "state";
+        public bool IsReadOnly => false;
         public string Usage => "  state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

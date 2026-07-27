@@ -8,6 +8,7 @@ namespace EmuSen.DianaOS.Commands
     public class PalCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "pal";
+        public bool IsReadOnly => true;
         public string Usage => "  pal [<index>]                 one palette, or all of them if omitted";
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

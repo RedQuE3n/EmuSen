@@ -11,6 +11,7 @@ namespace EmuSen.DianaOS.Commands
     public class ShutdownCommand : IDianaOSCommand
     {
         public string Name => "shutdown";
+        public bool IsReadOnly => false;
         public string Usage => "  shutdown | quit               terminate the process";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)

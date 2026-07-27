@@ -13,6 +13,7 @@ namespace EmuSen.DianaOS.Commands
     public class SearchCommand : EmuSen.DianaOS.IDianaOSCommand
     {
         public string Name => "search";
+        public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
             "  search <space> <val> [<w>]    start a new search: find every address currently equal to <val>",

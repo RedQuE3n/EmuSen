@@ -6,13 +6,11 @@ using EmuSen.DianaOS;
 namespace EmuSen.Pharaoh90
 {
     // --commands mode's script interpreter: an ordered list of verbs
-    // (frames/tap/tap2/hold/release/screenshot/waitstable/contactsheet/
-    // vramsheet/paletteswatch/spriteoverlay/audiodump) executed one line at
-    // a time against a shared FrameRunner, so frame-stepping, input,
-    // screenshots, and debug commands can interleave freely in one script -
-    // see EmuSen.Pharaoh90's own header comment for the full syntax.
-    // Anything not recognized as one of those verbs falls through to the
-    // real DianaOSInterpreter, same as before.
+    // executed one line at a time against a shared FrameRunner, so
+    // frame-stepping, input, screenshots, and debug commands can interleave
+    // freely in one script. Full verb syntax: Man pages/
+    // EmuSen_Debugging_Tools_Reference_v5.md §3.15. Anything not recognized
+    // as one of those verbs falls through to the real DianaOSInterpreter.
     public sealed class CommandsScriptRunner
     {
         private readonly FrameRunner runner;
@@ -92,13 +90,7 @@ namespace EmuSen.Pharaoh90
                 }
                 else if (verb == "contactsheet" && parts.Length >= 3)
                 {
-                    // <path> <count> [every=1] [cols=8] [scale=4] - captures
-                    // <count> frames spaced <every> apart, downsamples each
-                    // by <scale>, tiles them into one grid image. Built for
-                    // "is this actually animating/moving" questions once
-                    // past a menu and into real gameplay, where N separate
-                    // screenshot calls would mean N separate file reads to
-                    // review instead of one.
+                    // <path> <count> [every=1] [cols=8] [scale=4] - see §3.15.
                     emit($"> {cmdLine}");
                     string path = parts[1];
                     int count = int.Parse(parts[2]);
@@ -118,10 +110,7 @@ namespace EmuSen.Pharaoh90
                 }
                 else if (verb == "vramsheet" && parts.Length >= 2)
                 {
-                    // Delegates to IDebugTarget.RenderTileSheet() rather than
-                    // reaching into the core's Renderer directly - works the
-                    // same regardless of which core is loaded, per the
-                    // standing core-agnostic instruction.
+                    // IDebugTarget.RenderTileSheet(), not Renderer directly - core-agnostic.
                     emit($"> {cmdLine}");
                     var (rgba, w, h) = debugTarget.RenderTileSheet();
                     BmpFile.Write(parts[1], rgba, w, h);
@@ -136,10 +125,7 @@ namespace EmuSen.Pharaoh90
                 }
                 else if (verb == "spriteoverlay" && parts.Length >= 2)
                 {
-                    // Draws a bounding-box outline for every active sprite
-                    // IDebugTarget.GetSprites() reports directly onto the
-                    // current frame buffer - no new interface method needed
-                    // since GetSprites() was already generic/core-agnostic.
+                    // Outlines every IDebugTarget.GetSprites() entry - already core-agnostic.
                     emit($"> {cmdLine}");
                     byte[] rgba = core.GetFrameBufferRgba();
                     var sprites = debugTarget.GetSprites();

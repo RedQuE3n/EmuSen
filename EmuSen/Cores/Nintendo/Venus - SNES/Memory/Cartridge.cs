@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using EmuSen.DianaOS;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {
@@ -42,7 +43,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
             _sram = new byte[sramSize];
 
-            string saveDir = Path.Combine(Directory.GetCurrentDirectory(), "var", "games");
+            string saveDir = Path.Combine(DianaOSSandbox.RootDirectory, "var", "games");
             string romName = Path.GetFileNameWithoutExtension(romPath);
             SavePath = Path.Combine(saveDir, romName + ".srm");
             LoadSram();

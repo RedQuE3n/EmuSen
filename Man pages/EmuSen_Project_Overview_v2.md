@@ -44,9 +44,9 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 **Layering, roughly bottom-to-top:**
 
 - **Hardware simulation** (`Cores/Nintendo/Venus - SNES/Cpu`, `Cores/Nintendo/Venus - SNES/Apu`, `Cores/Nintendo/Venus - SNES/Ppu`, `Cores/Nintendo/Venus - SNES/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
-- **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by `EmuSen.Mistress9`), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (used by both `EmuSen.Hotaru`'s `Program.cs` and `EmuSen.Mistress9`'s `MainWindow` — routes console output into per-category files under a `Logs/<CoreName>/<console|gui>_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's; file writes run on a background thread now, not the caller's).
+- **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by `EmuSen.Mistress9`), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (used by both `EmuSen.Hotaru`'s `Program.cs` and `EmuSen.Mistress9`'s `MainWindow` — routes console output into per-category files under a `<CoreName>/<console|gui>_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's; file writes run on a background thread now, not the caller's. Hotaru's own root for this is `var/log/` inside DianaOS's sandboxed project tree - see `EmuSen_Debugging_Tools_Reference_v5.md` §3.3/`man hier` - while Mistress9's is `ApplicationData/EmuSen/Logs/`, never inside that sandbox to begin with).
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
-- **The debug toolchain** (`DianaOS/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `DianaOS/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `DianaOS/DianaOSInterpreter.cs` is a genuine bash-alike shell, user-facing name **DianaOS** (quoting, variables, `$(...)`, pipes, redirection, if/for/while, plus a coreutils subset - `ls`/`cd`/`grep`/`awk`/`nano`/`coretop`/...) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) merged into `DianaOS/Commands/` alongside the shell's own builtins — no more `EmuSen.Debug.Commands` split. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
+- **The debug toolchain** (`DianaOS/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `DianaOS/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `DianaOS/DianaOSInterpreter.cs` is a genuine bash-alike shell, user-facing name **DianaOS** (quoting, variables, `$(...)`, pipes, redirection, if/for/while, plus a coreutils subset - `ls`/`cd`/`grep`/`awk`/`nano`/`coretop`/...) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) living in `DianaOS/Commands/` alongside the shell's own builtins - split into `Commands/Unix/` (`EmuSen.DianaOS.Commands.Unix`, core-agnostic) and `Commands/EmuSen/` (`EmuSen.DianaOS.Commands.EmuSen`, needs a real `IDebugTarget`) so a future standalone "Diana" build has a clean, compiler-enforced line to register only the former. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Presentation** (`EmuSen.Serenity/`) — window/GPU-surface ownership and the shader pipeline (Avalonia + Skia, not Raylib), shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1.
 - **Frontends** (`EmuSen.Hotaru/`, `EmuSen.Mistress9/`) — presentation *driving*, not the presentation code itself anymore. Both are now Avalonia frontends into the same core (Hotaru moved off Raylib entirely - see `EmuSen_Frontend_Driver.md`'s own revision note); neither owns emulation logic itself, and neither depends on the other.
 
@@ -62,8 +62,8 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 
 - **Windows** — OpenGL via ANGLE, which translates those calls to Direct3D 11 underneath. No native Direct3D Skia backend is used by default.
 - **macOS** — Metal, Avalonia's own default there. Vulkan-over-Metal (MoltenVK) isn't wired into Avalonia's GPU-interop layer for macOS at all, so this isn't a live option.
-- **Linux — Wayland (`.UseWayland()`, both `Program.cs` files).** Briefly tried X11's default detection instead, on the theory that X11 is the more mature/Vulkan-capable backend (`Avalonia.Wayland` 12.1.0 has no Vulkan support at all; `Avalonia.X11` 12.1.0 does). That looked like it regressed to a black game window on both frontends - but see the bug story below: it wasn't actually an X11-vs-Wayland issue at all, so this reverted to `.UseWayland()` more by coincidence-of-timing than because Wayland was ever the real fix. Left on Wayland since it's the configuration this was actually last verified against.
-- **Vulkan isn't enabled anywhere** - would need the X11 backend regardless (Wayland has no Vulkan support in this Avalonia version), and hasn't been revisited since the bug below turned out to be unrelated to the windowing backend entirely.
+- **Linux — X11 (`.UseX11()`, both `Program.cs` files).** Originally tried X11 on the theory that it's the more mature/Vulkan-capable backend (`Avalonia.Wayland` 12.1.0 has no Vulkan support at all; `Avalonia.X11` 12.1.0 does), then reverted to `.UseWayland()` when it looked like X11 had regressed to a black game window - but per the bug story below, that black-screen/flicker symptom reproduced on **both** backends and had nothing to do with windowing at all. Now that the real cause (a fresh GPU surface allocated every frame) is fixed and verified, moved back onto `.UseX11()` for real, on the original rationale: X11 is the more mature backend in this Avalonia version and the only one with a path to Vulkan. `Avalonia.Wayland`'s `PackageReference` was replaced with `Avalonia.X11` in both frontends' `.csproj` files since nothing uses the Wayland backend anymore.
+- **Vulkan still isn't enabled** - X11 is now the backend in use, which is the prerequisite for it (Wayland has no Vulkan support in this Avalonia version), but actually turning Vulkan on hasn't been revisited yet.
 
 ### The real bug: `GameFrameControl` was allocating a fresh GPU surface every frame
 
@@ -90,6 +90,14 @@ The completed fix, done together rather than patched separately:
 - **The offscreen upscale `SKSurface` is gone from the shader path too** - `DrawOp.Render()` now builds the shader's `"image"` child directly from `sourceImage.ToShader(..., SKMatrix.CreateScale(scaleX, scaleY))`, a local matrix that maps the shader's `coord` (already in destination-pixel space, per `BuiltInShaders.cs`'s own comment) straight back onto the native-resolution source image - no intermediate GPU render target at all, for either the shader or no-shader path now.
 
 Verified two ways: `GameFrameControlRenderTests.cs`'s shader tests (byte-identical repeated output, 120-consecutive-frames-no-throw, stress-tested manually to 2000 iterations with no degradation) all still pass, and a new `Scanlines_darkens_odd_output_rows_by_the_exact_documented_factor` test checks the *exact* pixel math (a solid-color frame's even output rows stay full brightness, odd rows darken by precisely the documented 0.78 factor) - proving the local-matrix rewrite is correct, not just "produces some different output than before."
+
+### `EmuSen.Hotaru`'s `EmulationLoop` had no frame pacing at all - found while switching to X11, unrelated to the switch itself
+
+Manually launching `EmuSen.Hotaru` with a real ROM (to sanity-check the X11 switch above) showed both video and audio running at a much higher rate than real time. The cause has nothing to do with X11 vs. Wayland: `GameWindow.axaml.cs`'s `EmulationLoop` was a bare `while (_running) { RunFrame(); ...; _audioPlayer.Pump(); SubmitFrame(); }` with no timer, `Stopwatch`, or sleep anywhere in it - it ran `RunFrame()` (and drained real audio samples via `AudioPlayer.Pump`) as fast as the host CPU allowed. `SubmitFrame`/`PresentPendingFrame` is a fire-and-forget, coalescing hand-off to the UI thread (`Dispatcher.UIThread.Post`), so nothing about presentation - or which windowing backend sits under it - ever throttled this thread either; this would have reproduced identically on Wayland.
+
+`EmuSen.Mistress9/Views/MainWindow.axaml.cs`'s own `EmulationLoop` already paces itself correctly (`FrameInterval = 1/60s`, a `Stopwatch`, and a spin-wait `SleepUntil` that targets real time, resyncing to "now" rather than burst-catching-up if a frame runs long) - this pacing was never ported over when Hotaru was rebuilt onto Avalonia (`ad55199`, dropping Raylib entirely), most likely because the old Raylib loop got its pacing for free from `SetTargetFPS` and nothing replaced that when the loop was rewritten.
+
+Fixed by porting the identical `FrameInterval`/`Stopwatch`/`SleepUntil` pattern into `EmuSen.Hotaru/Views/GameWindow.axaml.cs`'s `EmulationLoop`, including the same "resync instead of burst-catch-up" behavior after a long stall - `nextTick` is explicitly reset to "now" right after `RunDebugPrompt()` returns from a breakpoint halt (F4/breakpoint stalls can be arbitrarily long), and the general fell-behind branch at the loop's tail covers every other stall path (F4 via `ProcessHotkeys`, halted console commands) without needing its own special case. Not covered by a `EmuSen.WiseMan` test - this loop's pacing is tightly coupled to a real `Window` + background thread, the same reason `EmuSen.Mistress9`'s identical pre-existing logic was never covered either; `GameFrameControlRenderTests.cs`'s headless tests target render-path correctness, not wall-clock thread timing.
 
 ---
 
@@ -301,10 +309,22 @@ EmuSen Project/
 │   │   │                                      #   and it falls through to "general", which isn't in
 │   │   │                                      #   the console-echo suppression list - a real session
 │   │   │                                      #   hit exactly this and got the console blasted again.
-│   │   └── Commands/                           # Every shell command, one class each: echo/sed/grep/wc/sort/
-│   │                                            #   uniq/awk/ls/cd/mv/nano/coretop/history/true/false/test
-│   │                                            #   (core-agnostic builtins) alongside mem/regs/watch/bp/
-│   │                                            #   cheat/etc. (SNES-facing, need a real IDebugTarget)
+│   │   └── Commands/                           # Every shell command, one class each, split into two
+│   │       ├── Unix/                           #   namespaces/folders along the same "core-agnostic
+│   │       │                                    #   builtin vs. needs a real IDebugTarget" line the old
+│   │       │                                    #   flat folder's comment already drew: Commands.Unix
+│   │       │                                    #   (echo/sed/grep/wc/sort/uniq/awk/ls/cd/mv/nano/coretop/
+│   │       │                                    #   history/true/false/test/ps/kill/su/useradd/tmux/...) is
+│   │       │                                    #   everything a real Unix shell already has a name for -
+│   │       │                                    #   the intended seam for a future standalone "Diana" build
+│   │       │                                    #   that never links against an emulator core at all.
+│   │       └── EmuSen/                         #   Commands.EmuSen (mem/regs/watch/bp/cheat/dump/load/
+│   │                                            #   state/core/trace/tile/... ) is everything SNES-facing,
+│   │                                            #   bespoke to this project, and genuinely needs a live
+│   │                                            #   IDebugTarget - the set a "Diana standalone" build would
+│   │                                            #   exclude from its registry entirely. Also holds
+│   │                                            #   DebugCommandHelpers/SnapshotStore, the two non-command
+│   │                                            #   helper types this half of the split actually needs.
 │   ├── Audio/
 │   │   └── WavFile.cs                         # Minimal uncompressed PCM WAV writer, moved out of
 │   │                                           #   EmuSen.Pharaoh90/Program.cs alongside the Imaging/
@@ -468,7 +488,7 @@ EmuSen Project/
                                          #   file picker (File > Browse ROMs...)
 ```
 
-Not shown: `Saves/*.srm`/`*.state`, `Logs/`, `bin/`, `obj/` — build artifacts and user data, excluded from any packaging.
+Not shown: DianaOS's own `var/`/`home/`/`etc/`/`tmp/` (Unix-shaped runtime tree - see `man hier`), `bin/`, `obj/` — build artifacts and user data, excluded from any packaging.
 
 ---
 

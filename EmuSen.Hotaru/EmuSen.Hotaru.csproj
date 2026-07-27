@@ -30,9 +30,9 @@
          (Audio/AudioPlayer.cs) - both duplicated from EmuSen.Mistress9's
          own copies, which already carry this exact dependency. -->
     <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
-    <!-- Native Wayland backend - opted into explicitly in Program.cs
+    <!-- Native X11 backend - opted into explicitly in Program.cs
          (Linux only), matching EmuSen.Mistress9's own Program.cs. -->
-    <PackageReference Include="Avalonia.Wayland" Version="12.1.0" />
+    <PackageReference Include="Avalonia.X11" Version="12.1.0" />
     <!-- Imaging/FrameImageWriter.cs encodes screenshots/frame-recording
          PNGs directly via SKImage.Encode, not Avalonia's
          WriteableBitmap.Save - see that file's own comment for why.

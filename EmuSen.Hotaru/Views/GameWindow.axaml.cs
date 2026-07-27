@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -433,14 +434,22 @@ namespace EmuSen.Hotaru.Views
             Console.WriteLine($"[CORE] Loaded: {romPath}");
         }
 
+        // Paces RunFrame() to real time - see man pages/EmuSen_Project_Overview_v2.md §2a.
+        private static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / 60.0);
+
         // Runs entirely off the UI thread - see this file's own header
         // comment on the threading model.
         private void EmulationLoop()
         {
+            Stopwatch clock = Stopwatch.StartNew();
+            TimeSpan nextTick = clock.Elapsed;
+
             try
             {
                 while (_running)
                 {
+                    nextTick += FrameInterval;
+
                     _core.RunFrame();
 
                     // Publishes this frame's register/sprite/palette/audio/
@@ -463,6 +472,7 @@ namespace EmuSen.Hotaru.Views
                         Console.WriteLine($"\n[BREAKPOINT] Halted at ${_core.HaltedAddress:X6}");
                         Console.WriteLine(_debugTarget.GetSummaryText());
                         if (RunDebugPrompt()) { RequestClose(); return; }
+                        nextTick = clock.Elapsed; // don't burst-catch-up for time spent at the prompt
                         continue;
                     }
 
@@ -472,6 +482,19 @@ namespace EmuSen.Hotaru.Views
 
                     if (ProcessHotkeys()) { RequestClose(); return; }
                     if (ProcessPendingConsoleCommands()) { RequestClose(); return; }
+
+                    TimeSpan remaining = nextTick - clock.Elapsed;
+                    if (remaining > TimeSpan.Zero)
+                    {
+                        SleepUntil(nextTick, clock);
+                    }
+                    else
+                    {
+                        // Fell behind - resync to "now" instead of trying to
+                        // burst-catch-up, which would just run a pile of
+                        // frames back-to-back with no pacing at all.
+                        nextTick = clock.Elapsed;
+                    }
                 }
             }
             catch (Exception ex)
@@ -483,6 +506,17 @@ namespace EmuSen.Hotaru.Views
                 // is what covers a crash, not this catch block.
                 Console.WriteLine($"\n[CPU HALT] {ex.Message}");
                 RequestClose();
+            }
+        }
+
+        // Spin-waits rather than Thread.Sleep - see EmuSen.Mistress9's own
+        // identical SleepUntil for the measured reasoning (Sleep's wakeup
+        // latency was bigger than the 60fps budget allows for).
+        private static void SleepUntil(TimeSpan target, Stopwatch clock)
+        {
+            while (clock.Elapsed < target)
+            {
+                Thread.SpinWait(100);
             }
         }
 
@@ -539,7 +573,7 @@ namespace EmuSen.Hotaru.Views
 
         private void TakeScreenshot()
         {
-            string coreLogDir = Path.Combine("var", "log", _debugTarget.CoreName);
+            string coreLogDir = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", _debugTarget.CoreName);
             Directory.CreateDirectory(coreLogDir);
             string baseName = $"screenshot_frame{_debugTarget.FrameCount}";
             string shotPath = Path.Combine(coreLogDir, baseName + ".png");
@@ -589,7 +623,7 @@ namespace EmuSen.Hotaru.Views
             }
             else
             {
-                string dir = _frameRecorder.Start(Path.Combine("var", "log", _debugTarget.CoreName, "Recordings"));
+                string dir = _frameRecorder.Start(Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", _debugTarget.CoreName, "Recordings"));
                 Console.WriteLine($"[RECORD] Started -> {dir}");
             }
         }

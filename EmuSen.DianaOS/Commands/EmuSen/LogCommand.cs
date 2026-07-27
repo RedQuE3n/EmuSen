@@ -1,0 +1,46 @@
+using System;
+
+namespace EmuSen.DianaOS.Commands.EmuSen
+{
+    // Live control for DianaOSLogging.MasterEnabled - the single switch
+    // that silences every *Logging flag at once (see that class's own
+    // comment) without touching any of their individually-set values.
+    // Doesn't touch the IDebugTarget at all, same as TraceCommand - a
+    // global settings toggle, not something scoped to a particular core
+    // instance.
+    public class LogCommand : global::EmuSen.DianaOS.IDianaOSCommand
+    {
+        public string Name => "log";
+        public bool IsReadOnly => false;
+        public string Usage => string.Join('\n', new[]
+        {
+            "  log off                       silence every logging flag at once, without changing them",
+            "  log on                        restore whatever each logging flag was individually set to",
+            "  log status                    show whether the master switch is currently on or off",
+        });
+
+        public global::EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
+        {
+            if (parts.Length < 2) return Usage;
+
+            if (parts[1].Equals("off", StringComparison.OrdinalIgnoreCase))
+            {
+                DianaOSLogging.MasterEnabled = false;
+                return "Logging disabled (individual flags unchanged).";
+            }
+
+            if (parts[1].Equals("on", StringComparison.OrdinalIgnoreCase))
+            {
+                DianaOSLogging.MasterEnabled = true;
+                return "Logging enabled.";
+            }
+
+            if (parts[1].Equals("status", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Logging is {(DianaOSLogging.MasterEnabled ? "on" : "off")}.";
+            }
+
+            return Usage;
+        }
+    }
+}

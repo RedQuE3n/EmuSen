@@ -17,7 +17,7 @@ namespace EmuSen.Hotaru
     {
         // Backs both `core <corename> <path>` code paths: RunStandaloneShell's
         // own pre-window handling below (TryResolveCoreCommand), and, once a
-        // window exists, EmuSen.DianaOS.Commands.CoreCommand (registered as
+        // window exists, EmuSen.DianaOS.Commands.EmuSen.CoreCommand (registered as
         // part of debugCmd's own extraCommands in Main). One shared registry,
         // not two - `CoreDescriptor` itself lives in EmuSen.DianaOS.Commands
         // now (promoted there for CoreCommand's own use, see that file's own
@@ -26,10 +26,10 @@ namespace EmuSen.Hotaru
         // only one core is actually implemented (`VenusCore`, SNES) -
         // registered under both its internal codename and the console name
         // most people would actually type.
-        private static readonly Dictionary<string, EmuSen.DianaOS.Commands.CoreDescriptor> _coreRegistry = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, EmuSen.DianaOS.Commands.EmuSen.CoreDescriptor> _coreRegistry = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["venus"] = new EmuSen.DianaOS.Commands.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
-            ["snes"] = new EmuSen.DianaOS.Commands.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["venus"] = new EmuSen.DianaOS.Commands.EmuSen.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
+            ["snes"] = new EmuSen.DianaOS.Commands.EmuSen.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
         };
 
         static void Main(string[] args)
@@ -111,11 +111,11 @@ namespace EmuSen.Hotaru
                 // owned by Cartridge.SavePath) - a save state is a full
                 // snapshot of emulator state, a different kind of artifact
                 // with a different lifetime.
-                string statePath = Path.Combine(Directory.GetCurrentDirectory(), "var", "lib", Path.GetFileNameWithoutExtension(romPath) + ".state");
+                string statePath = Path.Combine(DianaOSSandbox.RootDirectory, "var", "lib", Path.GetFileNameWithoutExtension(romPath) + ".state");
 
                 core = new VenusCore(headless: false);
 
-                string logDir = Path.Combine(Directory.GetCurrentDirectory(), "var", "log", core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
+                string logDir = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
                 Directory.CreateDirectory(logDir);
                 logWriter = new CategorizedLogWriter(originalOut, logDir);
                 Console.SetOut(logWriter);
@@ -143,9 +143,9 @@ namespace EmuSen.Hotaru
                 // CoreCommand are both new registrations, not overrides.
                 IDianaOSCommand[] extraCommands =
                 {
-                    new EmuSen.DianaOS.Commands.CoretopCommand(DebugWindows.ShowCoretopWindow),
-                    new EmuSen.DianaOS.Commands.StateCommand(core.SaveState, core.LoadState, () => statePath),
-                    new EmuSen.DianaOS.Commands.CoreCommand(_coreRegistry),
+                    new EmuSen.DianaOS.Commands.EmuSen.CoretopCommand(DebugWindows.ShowCoretopWindow),
+                    new EmuSen.DianaOS.Commands.EmuSen.StateCommand(core.SaveState, core.LoadState, () => statePath),
+                    new EmuSen.DianaOS.Commands.EmuSen.CoreCommand(_coreRegistry),
                 };
 
                 // Everything below hands off to GameWindow (Views/GameWindow.axaml.cs) -
@@ -180,7 +180,7 @@ namespace EmuSen.Hotaru
 
         // Mirrors EmuSen.Mistress9's own Program.cs/BuildAvaloniaApp idiom.
         // See Man pages/EmuSen_Project_Overview_v2.md §2a for why Linux
-        // stays on UseWayland() for now.
+        // is forced onto UseX11() now.
         private static AppBuilder BuildAvaloniaApp(
             VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
@@ -191,7 +191,7 @@ namespace EmuSen.Hotaru
 
             if (OperatingSystem.IsLinux())
             {
-                builder = builder.UseWayland();
+                builder = builder.UseX11();
             }
 
             return builder;
@@ -245,7 +245,7 @@ namespace EmuSen.Hotaru
                 }
 
                 // 'shutdown'/'quit' is a real DianaOS command now
-                // (EmuSen.DianaOS.Commands.ShutdownCommand, already in the
+                // (EmuSen.DianaOS.Commands.Unix.ShutdownCommand, already in the
                 // standard registry CreateDefault built above) - no
                 // separate bypass needed here anymore, just react to the
                 // same HostAction.Shutdown GameWindow's own RunDebugPrompt
@@ -273,7 +273,7 @@ namespace EmuSen.Hotaru
             string coreName = parts[1];
             string romPath = parts[2];
 
-            if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaOS.Commands.CoreDescriptor? descriptor))
+            if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaOS.Commands.EmuSen.CoreDescriptor? descriptor))
             {
                 Console.WriteLine($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_coreRegistry.Keys, StringComparer.OrdinalIgnoreCase))}");
                 return null;

@@ -40,42 +40,58 @@ namespace EmuSen.DianaOS
             return Path.GetFullPath(AppContext.BaseDirectory);
         }
 
-        // Forces the process's cwd to the sandbox root exactly once, the
-        // first time any DianaOSInterpreter is created (see CreateDefault) -
-        // whatever the OS/launcher happened to start the process in
-        // otherwise (a GUI app's launch directory is not something this
-        // project controls) isn't a directory this shell should ever be
-        // sitting in by default. Deliberately NOT re-applied on every
-        // call (Mistress9 rebuilds its DianaOSInterpreter on every ROM
-        // (re)load) - that would silently kick a user back to the root
-        // after every ROM swap even though they're still safely inside
-        // the sandbox and didn't ask to be moved.
+        // The real directories this shell's Unix-shaped tree needs - see `man hier`.
+        private static void EnsureSkeleton()
+        {
+            string root = RootDirectory;
+            Directory.CreateDirectory(Path.Combine(root, "var", "log"));
+            Directory.CreateDirectory(Path.Combine(root, "var", "lib"));
+            Directory.CreateDirectory(Path.Combine(root, "var", "games"));
+            Directory.CreateDirectory(Path.Combine(root, "home", "root"));
+            Directory.CreateDirectory(Path.Combine(root, "etc"));
+            Directory.CreateDirectory(Path.Combine(root, "tmp"));
+        }
+
+        public static string HomeDirectory(string userName) => Path.Combine(RootDirectory, "home", userName);
+
+        // Forces the process's cwd to root's own home dir exactly once - see `man cd` and EmuSen_Debugging_Tools_Reference_v5.md §3.18.
         private static readonly Lazy<bool> _initialized = new(() =>
         {
-            Environment.CurrentDirectory = RootDirectory;
+            EnsureSkeleton();
+            Environment.CurrentDirectory = HomeDirectory("root");
             return true;
         });
 
         public static void EnsureInitialWorkingDirectory() => _ = _initialized.Value;
 
-        // Resolves `requestedPath` the same way any real filesystem API
-        // would (relative to the process's current directory) and reports
-        // whether the result stays at or under RootDirectory. Every shell
-        // command that touches a real path should route through this
-        // rather than calling File/Directory APIs on a raw argument.
-        // Case-insensitive comparison even on Linux - simpler than
-        // special-casing per platform, and erring toward treating a
-        // same-path-different-case as "still inside" costs nothing here
-        // (this is a walled garden against typos/accidents, not a
-        // security control someone would try to defeat via case tricks).
+        // Resolves requestedPath (chroot-style leading '/' - see `man hier`); an already-real path inside root is honored as-is.
         public static bool TryResolve(string requestedPath, out string resolvedPath)
         {
-            string candidate = Path.GetFullPath(requestedPath, Environment.CurrentDirectory);
             string root = RootDirectory;
+            bool looksRooted = requestedPath.Length > 0 && (requestedPath[0] == '/' || requestedPath[0] == '\\');
+
+            if (looksRooted)
+            {
+                string asIs = Path.GetFullPath(requestedPath);
+                if (IsInsideRoot(asIs, root))
+                {
+                    resolvedPath = asIs;
+                    return true;
+                }
+            }
+
+            string basePath = looksRooted ? root : Environment.CurrentDirectory;
+            string effectivePath = looksRooted ? requestedPath.TrimStart('/', '\\') : requestedPath;
+            if (effectivePath.Length == 0) effectivePath = "."; // bare '/' means this sandbox's own root
+
+            string candidate = Path.GetFullPath(effectivePath, basePath);
 
             resolvedPath = candidate;
-            return candidate.Equals(root, StringComparison.OrdinalIgnoreCase)
-                || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            return IsInsideRoot(candidate, root);
         }
+
+        private static bool IsInsideRoot(string candidate, string root) =>
+            candidate.Equals(root, StringComparison.OrdinalIgnoreCase)
+                || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 }

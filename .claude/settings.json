@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(mkdir -p var/log var/lib var/games)",
+      "Bash(mv Logs/* var/log/)",
+      "Bash(mv Saves/*.srm var/games/)",
+      "Bash(rmdir Logs Saves)",
+      "Bash(dotnet script *)",
+      "Bash(awk '{print $2}')"
+    ]
+  }
+}

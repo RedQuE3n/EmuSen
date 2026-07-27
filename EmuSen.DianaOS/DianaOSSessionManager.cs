@@ -75,14 +75,23 @@ namespace EmuSen.DianaOS
         // why a DianaOSInterpreter can't just be repointed instead).
         // buildInterpreter is called once per existing session, in the
         // same order Sessions reports them today.
+        //
+        // CurrentUser DOES survive this rebuild (unlike variables/
+        // history) - explicitly carried forward alongside each session's
+        // Name, same shape Name's own survival already uses. A ROM swap
+        // resetting every session back to root would be a silent
+        // privilege escalation once a future permission system actually
+        // enforces what a non-root account can do (see `man su`).
         public void RebuildAll(Func<DianaOSInterpreter> buildInterpreter)
         {
             string? currentName = _current?.Name;
-            List<string> names = _sessions.Select(s => s.Name).ToList();
+            List<(string Name, string CurrentUser)> saved = _sessions.Select(s => (s.Name, s.Interpreter.CurrentUser)).ToList();
             _sessions.Clear();
-            foreach (string name in names)
+            foreach ((string name, string currentUser) in saved)
             {
-                _sessions.Add(new DianaOSSession(name, buildInterpreter()));
+                DianaOSInterpreter interpreter = buildInterpreter();
+                interpreter.CurrentUser = currentUser;
+                _sessions.Add(new DianaOSSession(name, interpreter));
             }
             _current = _sessions.FirstOrDefault(s => s.Name == currentName) ?? _sessions.FirstOrDefault();
         }

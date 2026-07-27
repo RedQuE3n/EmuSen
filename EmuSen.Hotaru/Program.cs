@@ -107,15 +107,15 @@ namespace EmuSen.Hotaru
 
             try
             {
-                // Separate from Saves/ (battery-backed cartridge SRAM,
+                // Separate from var/games/ (battery-backed cartridge SRAM,
                 // owned by Cartridge.SavePath) - a save state is a full
                 // snapshot of emulator state, a different kind of artifact
                 // with a different lifetime.
-                string statePath = Path.Combine(Directory.GetCurrentDirectory(), "SaveStates", Path.GetFileNameWithoutExtension(romPath) + ".state");
+                string statePath = Path.Combine(Directory.GetCurrentDirectory(), "var", "lib", Path.GetFileNameWithoutExtension(romPath) + ".state");
 
                 core = new VenusCore(headless: false);
 
-                string logDir = Path.Combine(Directory.GetCurrentDirectory(), "Logs", core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
+                string logDir = Path.Combine(Directory.GetCurrentDirectory(), "var", "log", core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
                 Directory.CreateDirectory(logDir);
                 logWriter = new CategorizedLogWriter(originalOut, logDir);
                 Console.SetOut(logWriter);

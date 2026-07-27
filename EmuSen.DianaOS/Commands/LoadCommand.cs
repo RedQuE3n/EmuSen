@@ -16,7 +16,7 @@ namespace EmuSen.DianaOS.Commands
         public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
         {
-            "  load <space> <addr> <file>    write Logs/<CoreName>/<file>'s raw bytes into <space> starting at <addr>",
+            "  load <space> <addr> <file>    write var/log/<CoreName>/<file>'s raw bytes into <space> starting at <addr>",
         });
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
@@ -32,7 +32,7 @@ namespace EmuSen.DianaOS.Commands
                 return $"{space.Name} is read-only - refusing to load into it.";
             }
 
-            string path = Path.Combine("Logs", target.CoreName, file);
+            string path = Path.Combine("var", "log", target.CoreName, file);
             if (!File.Exists(path))
             {
                 return $"No file at {path}.";

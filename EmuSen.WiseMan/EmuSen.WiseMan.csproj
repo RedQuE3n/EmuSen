@@ -27,9 +27,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The emulation core + debug toolchain (DianaOSInterpreter,
-         IDebugTarget, SnesDebugTarget, VenusCore/ICore). -->
+    <!-- The emulation core (VenusCore/ICore, SnesDebugTarget). -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+    <!-- DianaOSInterpreter/IDebugTarget/the whole shell+command surface -
+         its own project as of the standalone-shell packaging work, no
+         longer bundled inside EmuSen.csproj. -->
+    <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
+    <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
+         comment on why these live separately from DianaOS. -->
+    <ProjectReference Include="..\EmuSen.Providers\EmuSen.Providers.csproj" />
     <!-- AudioPlayer (SDL-backed real audio output) lives here - see
          Audio/AudioPlayerTests.cs. Pulls in Avalonia/Silk.NET.SDL
          transitively, which is fine for a test project; nothing here

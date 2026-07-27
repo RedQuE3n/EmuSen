@@ -119,7 +119,7 @@ namespace EmuSen.WiseMan.DianaOS
             {
                 var shell = NewShell();
 
-                var result = shell.Submit($"source {scriptPath}");
+                var result = shell.Submit($"source \"{scriptPath}\"");
 
                 Assert.Contains("before", result.Output);
                 Assert.Contains("shutdown-triggered", result.Output);
@@ -143,7 +143,7 @@ namespace EmuSen.WiseMan.DianaOS
             {
                 var shell = NewShell();
 
-                var result = shell.Submit($"source {scriptPath}");
+                var result = shell.Submit($"source \"{scriptPath}\"");
 
                 Assert.Equal("one\ntwo", result.Output.Trim());
                 Assert.Null(result.Action);

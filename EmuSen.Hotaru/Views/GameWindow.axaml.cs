@@ -383,7 +383,8 @@ namespace EmuSen.Hotaru.Views
                 () => (_core.LastFrameCpuSpc700Ms, _core.LastFramePpuMs, _core.LastFrameHdmaMs));
             _debugCmd = DianaOSInterpreter.CreateDefault(_debugTarget, _extraCommands,
                 new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec());
+                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
+                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
             _frameRecorder = new FrameRecorder(_debugTarget);
         }
 

@@ -24,7 +24,19 @@ namespace EmuSen.Debug
         // whatever value they're set to underneath, so re-enabling this
         // brings back exactly what was configured before, per this
         // comment's own original design.
-        public static bool MasterLoggingEnabled = false;
+        //
+        // Forwards to EmuSen.DianaOS.DianaOSLogging.MasterEnabled rather
+        // than holding its own field - DianaOS's own `log` command and
+        // WatchRegistry's live echo need to read/write this without
+        // depending on this (or any other core's) settings class, so the
+        // actual flag lives there; every caller here (VenusCore,
+        // Mistress9's DebugSettingsWindow, Pharaoh90) keeps working
+        // against this same property name unchanged.
+        public static bool MasterLoggingEnabled
+        {
+            get => EmuSen.DianaOS.DianaOSLogging.MasterEnabled;
+            set => EmuSen.DianaOS.DianaOSLogging.MasterEnabled = value;
+        }
 
         // --- Cpu.cs ---
         private static bool _cpuVerboseLogging = false;

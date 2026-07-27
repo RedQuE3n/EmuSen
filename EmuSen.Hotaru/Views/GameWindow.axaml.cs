@@ -420,7 +420,9 @@ namespace EmuSen.Hotaru.Views
         {
             _debugTarget = new SnesDebugTarget(_core.Cpu!, _core.Bus!, _core.Renderer!,
                 () => (_core.LastFrameCpuSpc700Ms, _core.LastFramePpuMs, _core.LastFrameHdmaMs));
-            _debugCmd = DianaOSInterpreter.CreateDefault(_debugTarget, _extraCommands);
+            _debugCmd = DianaOSInterpreter.CreateDefault(_debugTarget, _extraCommands,
+                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
+                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec());
             _frameRecorder = new FrameRecorder(_debugTarget);
         }
 

@@ -127,12 +127,15 @@ namespace EmuSen.DianaOS
         // both default to null (no decoding available, `poke`/`rompatch`/
         // etc. still work) so a core with no code-format decoder of its
         // own, or a standalone launch with no core at all, doesn't need
-        // to pass anything.
+        // to pass anything. cpuTraceSwitch backs TraceCommand's `trace`
+        // command the same way - null means "not available for this
+        // target," not a missing feature.
         public static DianaOSInterpreter CreateDefault(
             IDebugTarget? target,
             IEnumerable<IDianaOSCommand>? extraCommands = null,
             ICheatCodeCodec? cheatAutoDetectCodec = null,
-            ICheatCodeCodec? cheatExplicitCodec = null)
+            ICheatCodeCodec? cheatExplicitCodec = null,
+            ICpuTraceSwitch? cpuTraceSwitch = null)
         {
             DianaOSSandbox.EnsureInitialWorkingDirectory();
 
@@ -164,7 +167,7 @@ namespace EmuSen.DianaOS
                 new EmuSen.DianaOS.Commands.TileCommand(),
                 new EmuSen.DianaOS.Commands.TilemapCommand(),
                 new EmuSen.DianaOS.Commands.DisasmCommand(),
-                new EmuSen.DianaOS.Commands.TraceCommand(),
+                new EmuSen.DianaOS.Commands.TraceCommand(cpuTraceSwitch),
                 new EmuSen.DianaOS.Commands.CallersCommand(),
                 new EmuSen.DianaOS.Commands.WritersCommand(),
                 new EmuSen.DianaOS.Commands.ReadersCommand(),

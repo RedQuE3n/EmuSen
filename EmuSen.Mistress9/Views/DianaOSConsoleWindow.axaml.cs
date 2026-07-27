@@ -87,7 +87,8 @@ namespace EmuSen.Mistress9.Views
             _extraCommands = Combine(extraCommands);
             _shell = DianaOSInterpreter.CreateDefault(target, _extraCommands,
                 new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec());
+                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
+                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
 
             // Printed once, right here - opening this window IS
             // "launching" this frontend's shell, the same one-time event
@@ -134,7 +135,8 @@ namespace EmuSen.Mistress9.Views
         {
             _shell = DianaOSInterpreter.CreateDefault(target, _extraCommands,
                 new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec());
+                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
+                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
             _historyIndex = -1;
             AppendLine(romDisplayName != null ? $"--- ROM changed: {romDisplayName} ---" : "--- ROM unloaded ---");
         }

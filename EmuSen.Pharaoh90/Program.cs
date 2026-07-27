@@ -119,7 +119,8 @@ class Program
             () => (core.LastFrameCpuSpc700Ms, core.LastFramePpuMs, core.LastFrameHdmaMs));
         var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget, null,
             new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-            new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec());
+            new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
+            new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
 
         // Same two ranges registered from power-on in Hotaru's
         // Program.cs for the Yoshi/coin investigation - duplicated here

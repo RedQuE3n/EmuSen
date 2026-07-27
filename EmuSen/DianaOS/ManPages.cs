@@ -508,12 +508,12 @@ namespace EmuSen.DianaOS
                 "    trace <count>\n" +
                 "    trace off\n\n" +
                 "DESCRIPTION\n" +
-                "    Arms DebugSettings.CpuVerboseLogging for the next <count> instructions,\n" +
-                "    counted from whenever this command runs (not from power-on) - so a\n" +
-                "    trace can be aimed at a specific moment in a play session instead of\n" +
-                "    burning its whole budget during boot. 'trace off' cancels an in-progress\n" +
-                "    trace early. A global settings toggle, not scoped to a particular core\n" +
-                "    instance.\n\n" +
+                "    Arms this core's own live CPU instruction trace for the next <count>\n" +
+                "    instructions, counted from whenever this command runs (not from\n" +
+                "    power-on) - so a trace can be aimed at a specific moment in a play\n" +
+                "    session instead of burning its whole budget during boot. 'trace off'\n" +
+                "    cancels an in-progress trace early. Not available for a core with no\n" +
+                "    equivalent trace mechanism, or a standalone launch with no core loaded.\n\n" +
                 "EXAMPLES\n" +
                 "    trace 500\n" +
                 "    trace off",
@@ -570,10 +570,10 @@ namespace EmuSen.DianaOS
                 "    log on\n" +
                 "    log status\n\n" +
                 "DESCRIPTION\n" +
-                "    Silences (or restores) every DebugSettings *Logging flag at once,\n" +
-                "    without changing any of their individually-set values - 'log on'\n" +
-                "    afterward brings back exactly whatever was individually enabled before.\n" +
-                "    A global settings toggle, not scoped to a particular core instance.",
+                "    Silences (or restores) every trace/diagnostic logging flag across the\n" +
+                "    project at once, without changing any of their individually-set values -\n" +
+                "    'log on' afterward brings back exactly whatever was individually enabled\n" +
+                "    before. A global settings toggle, not scoped to a particular core instance.",
 
             ["echo"] =
                 "NAME\n" +

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using EmuSen.DianaOS;
-using EmuSen.DianaOS.Commands;
+using EmuSen.DianaOS.Commands.EmuSen;
 
 namespace EmuSen.WiseMan.DianaOS
 {

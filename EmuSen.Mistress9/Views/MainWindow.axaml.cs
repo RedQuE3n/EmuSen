@@ -265,7 +265,7 @@ namespace EmuSen.Mistress9.Views
             new ResumeCommand(ResumeEmulation, () => IsPaused),
             new CoretopWindowCommand(OpenCoretopWindow),
             new FeedCommand(() => Activate()),
-            new EmuSen.DianaOS.Commands.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
+            new EmuSen.DianaOS.Commands.EmuSen.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
         };
 
         // StateCommand's save/load delegates - can't just be

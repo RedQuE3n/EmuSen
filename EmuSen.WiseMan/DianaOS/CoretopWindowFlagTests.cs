@@ -1,6 +1,6 @@
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaOS;
-using EmuSen.DianaOS.Commands;
+using EmuSen.DianaOS.Commands.EmuSen;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaOS

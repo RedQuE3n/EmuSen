@@ -81,7 +81,7 @@ SRAM is mapped to the lower 32KB (`$0000-$7FFF`) of banks `$70-$7D` and `$F0-$FF
 
 ### 2.4 Save file convention
 
-`Saves/<rom-name>.srm` — a dedicated folder sibling to `Roms/`/`Logs/`, deliberately *not* derived from the ROM's own directory (which could be anywhere on disk, possibly read-only, and isn't necessarily "ours" to write into — ROMs can load from any path via the CLI arg or the Avalonia frontend's file picker). Only the save *filename* comes from the ROM; the folder is always relative to where the emulator runs from.
+`var/games/<rom-name>.srm` — a dedicated folder under the project root's Unix-shaped layout (see `EmuSen_Debugging_Tools_Reference_v5.md` §3.3/`man hier` - this was `Saves/` before that layout existed), deliberately *not* derived from the ROM's own directory (which could be anywhere on disk, possibly read-only, and isn't necessarily "ours" to write into — ROMs can load from any path via the CLI arg or the Avalonia frontend's file picker). Only the save *filename* comes from the ROM; the folder is always relative to where the emulator runs from.
 
 `LoadSram()` tolerates a save file that doesn't exactly match the allocated SRAM size (copies whichever is smaller) rather than failing outright — a mismatch most likely means this ROM's header-reported SRAM size differs from whatever created the file, not a corrupted save. A save that fails to load doesn't prevent the game from booting.
 

@@ -18,7 +18,7 @@ namespace EmuSen.Mistress9
         public static AppBuilder BuildAvaloniaApp()
         {
             // See Man pages/EmuSen_Project_Overview_v2.md §2a for why
-            // Linux stays on UseWayland() for now.
+            // Linux is forced onto UseX11() now.
             var builder = AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .WithInterFont()
@@ -26,7 +26,7 @@ namespace EmuSen.Mistress9
 
             if (OperatingSystem.IsLinux())
             {
-                builder = builder.UseWayland();
+                builder = builder.UseX11();
             }
 
             return builder;

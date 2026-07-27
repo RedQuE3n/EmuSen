@@ -33,10 +33,10 @@
          API surface hasn't been independently verified against current docs
          the way everything else has. -->
     <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
-    <!-- Native Wayland backend, shipped in 12.1. Experimental and not picked up
-         by UsePlatformDetect() automatically yet - opted into explicitly in
-         Program.cs (Linux only, see comments there). -->
-    <PackageReference Include="Avalonia.Wayland" Version="12.1.0" />
+    <!-- Native X11 backend, shipped in 12.1. Not picked up by
+         UsePlatformDetect() automatically on a Wayland session - opted into
+         explicitly in Program.cs (Linux only, see comments there). -->
+    <PackageReference Include="Avalonia.X11" Version="12.1.0" />
     <!-- Only needed for the in-app dev inspector (Alt+Shift+F12 at runtime);
          excluded outside Debug builds so it doesn't ship in Release. Note:
          this replaces the old "Avalonia.Diagnostics" package, which was

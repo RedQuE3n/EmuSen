@@ -281,6 +281,13 @@ namespace EmuSen.Hotaru.Views
 
             _core.LoadRom(romPath);
             RebuildDebugTargetAndCommands();
+            // Without this, an already-open `coretop -w` window would
+            // silently keep showing the OLD, now-discarded target forever
+            // - it has no timer of its own that would ever notice a swap
+            // happened, only a refresh timer that re-polls whatever
+            // target it was last told about. No-ops if coretop was never
+            // opened this session - see that method's own comment.
+            DebugWindows.UpdateCoretopWindowTargetIfOpen(_debugTarget);
             Console.WriteLine($"[CORE] Loaded: {romPath}");
         }
 

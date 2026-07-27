@@ -28,10 +28,10 @@ namespace EmuSen.DianaOS.Commands
     // while still watching live hardware state update in its own window.
     //
     // Fully core-agnostic: every number on screen comes from IDebugTarget
-    // (GetHardwareLoad/GetCpuRegisters/GetSprites/MaxSprites/
-    // GetAudioChannels/GetPalettes/RenderTileSheet/TilemapEntryStride) -
-    // this command has no idea it's usually looking at an SNES. A future
-    // core that doesn't model one of these (an empty GetHardwareLoad(),
+    // (HardwareLoad/CpuRegisters/Sprites/MaxSprites/AudioChannels/
+    // Palettes/RenderTileSheet/TilemapEntryStride) - this command has no
+    // idea it's usually looking at an SNES. A future core that doesn't
+    // model one of these (an empty HardwareLoad snapshot,
     // a MaxSprites of 0, no palettes) just makes that section shrink or
     // disappear, the same graceful-degradation every other command here
     // already gives a "not modeled yet" capability.
@@ -166,7 +166,7 @@ namespace EmuSen.DianaOS.Commands
                 WriteLine($" DianaOS coretop  -  {_target.CoreName}  -  frame {_target.FrameCount}  -  Ctrl+C to exit ");
                 WriteLine(new string('-', Math.Min(width, 70)));
 
-                var load = _target.GetHardwareLoad();
+                var load = _target.HardwareLoad.Current;
                 if (load.Count > 0)
                 {
                     WriteLine("Hardware load:");
@@ -177,7 +177,7 @@ namespace EmuSen.DianaOS.Commands
                     WriteLine();
                 }
 
-                var cpuRegs = _target.GetCpuRegisters();
+                var cpuRegs = _target.CpuRegisters.Current;
                 if (cpuRegs.Count > 0)
                 {
                     WriteLine("CPU registers:");
@@ -186,13 +186,13 @@ namespace EmuSen.DianaOS.Commands
                 }
 
                 int maxSprites = _target.MaxSprites;
-                int spriteCount = _target.GetSprites().Count;
+                int spriteCount = _target.Sprites.Current.Count;
                 WriteLine(maxSprites > 0
                     ? $"Sprites:  {ColoredBar(spriteCount * 100.0 / maxSprites, 30)} {spriteCount}/{maxSprites}"
                     : $"Sprites:  {spriteCount} active (this core reports no fixed capacity)");
                 WriteLine();
 
-                var channels = _target.GetAudioChannels();
+                var channels = _target.AudioChannels.Current;
                 if (channels.Count > 0)
                 {
                     WriteLine("Audio channels:");
@@ -205,7 +205,7 @@ namespace EmuSen.DianaOS.Commands
                     WriteLine();
                 }
 
-                var palettes = _target.GetPalettes();
+                var palettes = _target.Palettes.Current;
                 if (palettes.Count > 0 && row < height - 1)
                 {
                     WriteLine("Palette (color RAM):");

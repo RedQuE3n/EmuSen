@@ -469,6 +469,16 @@ namespace EmuSen.Hotaru.Views
                 {
                     _core.RunFrame();
 
+                    // Publishes this frame's register/sprite/palette/audio/
+                    // hardware-load snapshots for any thread to read
+                    // (Diana's console-reader fast path in particular) via
+                    // IDebugTarget's provider properties - see
+                    // EmuSen.Providers.IRealtimeProvider's own comment. Must
+                    // run here, on the emulation thread that just produced
+                    // this frame's state, not from the console-reader
+                    // thread or anywhere else.
+                    _debugTarget.RefreshProviders();
+
                     // A breakpoint (or an armed single-step) halted
                     // RunFrame() before it finished this frame - skip
                     // presenting/hotkeys this iteration and go straight to

@@ -96,7 +96,7 @@ namespace EmuSen.Mistress9.Views
         private void DrawLoadBars()
         {
             LoadPanel.Children.Clear();
-            foreach (DebugLoadInfo l in _target!.GetHardwareLoad())
+            foreach (DebugLoadInfo l in _target!.HardwareLoad.Current)
             {
                 LoadPanel.Children.Add(BuildMeterRow(l.Name, l.Percent, $"{l.Percent:0.0}%"));
             }
@@ -104,7 +104,7 @@ namespace EmuSen.Mistress9.Views
 
         private void DrawCpuRegisters()
         {
-            var regs = _target!.GetCpuRegisters();
+            var regs = _target!.CpuRegisters.Current;
             CpuRegsText.Text = string.Join("  ", regs.Select(r => $"{r.Name}={FormatHex(r.Value, r.BitWidth)}"));
         }
 
@@ -117,7 +117,7 @@ namespace EmuSen.Mistress9.Views
         private void DrawSprites()
         {
             int max = _target!.MaxSprites;
-            int count = _target.GetSprites().Count;
+            int count = _target.Sprites.Current.Count;
             if (max > 0)
             {
                 SpritesBar.Value = Math.Clamp(count * 100.0 / max, 0, 100);
@@ -133,7 +133,7 @@ namespace EmuSen.Mistress9.Views
         private void DrawAudioChannels()
         {
             AudioPanel.Children.Clear();
-            foreach (DebugAudioChannelInfo c in _target!.GetAudioChannels())
+            foreach (DebugAudioChannelInfo c in _target!.AudioChannels.Current)
             {
                 string state = c.Muted ? "muted" : c.Active ? "active" : "idle";
                 double shownLevel = c.Muted ? 0 : c.Level;

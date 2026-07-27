@@ -125,10 +125,10 @@ namespace EmuSen.Pharaoh90
                 }
                 else if (verb == "spriteoverlay" && parts.Length >= 2)
                 {
-                    // Outlines every IDebugTarget.GetSprites() entry - already core-agnostic.
+                    // Outlines every IDebugTarget.Sprites entry - already core-agnostic.
                     emit($"> {cmdLine}");
                     byte[] rgba = core.GetFrameBufferRgba();
-                    var sprites = debugTarget.GetSprites();
+                    var sprites = debugTarget.Sprites.Current;
                     foreach (var s in sprites)
                     {
                         SpriteOverlay.DrawSpriteOutline(rgba, core.ScreenWidth, core.ScreenHeight, s);

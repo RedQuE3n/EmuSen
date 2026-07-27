@@ -157,7 +157,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         }
 
         // Non-mutating register peek for the debug toolchain
-        // (SnesDebugTarget.GetApuRegisters) - unlike ReadRegister() above,
+        // (SnesDebugTarget.ApuRegisters) - unlike ReadRegister() above,
         // this never touches _registerAddress, so a debugger inspecting
         // DSP state can't disturb whatever multi-step address/data
         // sequence the actual sound driver is mid-way through.
@@ -397,7 +397,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         }
 
         // Plain data snapshot of one voice's current debug-relevant state -
-        // backs SnesDebugTarget.GetAudioChannels() (see IDebugTarget's own
+        // backs SnesDebugTarget.AudioChannels (see IDebugTarget's own
         // comment on why that's modeled as a generic "channel" concept
         // rather than SNES-specific). Everything here already exists on
         // DspVoice; this just gathers it into one struct instead of

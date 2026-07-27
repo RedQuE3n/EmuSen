@@ -864,10 +864,10 @@ namespace EmuSen.DianaOS
         // exist for), and "which cores exist" is exactly the kind of
         // frontend-owned fact that would violate that if it lived in this
         // class instead (see EmuSen.Hotaru/Program.cs's own
-        // `_coreRegistry` comment). The commands section below reuses
-        // Help() directly (not Execute("help")) specifically so building
-        // this banner never pollutes the caller's own command history
-        // with a "help" entry nobody typed.
+        // `_coreRegistry` comment). Points at `help`/`man` rather than
+        // dumping the full command listing inline (an earlier version did,
+        // via Help()) - the banner is meant to orient a first-time user,
+        // not repeat what `help` already shows on demand.
         public string GetWelcomeBanner(IEnumerable<string> supportedCores)
         {
             const string border = "+------------------------------------------------------------------------+";
@@ -894,7 +894,7 @@ namespace EmuSen.DianaOS
             lines.Add("  - feed / feed -w: watch gameplay without losing the shell");
             lines.Add("  - clear, nano, history, and the rest of a real shell's toolkit");
             lines.Add("");
-            lines.Add(Help());
+            lines.Add("Type \"help\" for a list of commands. Man is supported for each.");
             return string.Join('\n', lines);
         }
 

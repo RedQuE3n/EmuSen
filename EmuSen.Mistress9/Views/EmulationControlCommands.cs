@@ -1,9 +1,14 @@
 using System;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Mistress9.Views
 {
-    // Mistress9-only shell builtins - can't live in EmuSen.DianaOS.Commands
+    // Mistress9-only shell builtins - can't live in EmuSen.DianaOS.DianaOS.Bin.Commands
     // alongside the core-agnostic ones because they don't act on an
     // IDebugTarget at all. They act on MainWindow's own emulation
     // thread, which IDebugTarget deliberately has no concept of (it's
@@ -70,7 +75,7 @@ namespace EmuSen.Mistress9.Views
 
     // Replaces (not adds alongside - see DianaOSInterpreter.CreateDefault's
     // own comment on extraCommands overriding a same-named default)
-    // EmuSen.DianaOS.Commands.CoretopCommand's raw-terminal implementation,
+    // EmuSen.DianaOS.DianaOS.Bin.Commands.CoretopCommand's raw-terminal implementation,
     // which flatly cannot work here: it takes over a real console with
     // ANSI escape codes and Console.ReadKey, and this window's own
     // console is a TextBox with no terminal underneath it at all. Opens

@@ -13,6 +13,11 @@ using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 using EmuSen.Graphics;
 using EmuSen.Hotaru.Audio;
 using EmuSen.Hotaru.Imaging;
@@ -55,7 +60,7 @@ namespace EmuSen.Hotaru.Views
     // owner of ConsoleLineReader.ReadLine for the whole life of the
     // window, whether or not F4/a breakpoint is currently halted. While
     // running normally, it hands each typed line to _scheduler
-    // (EmuSen.DianaOS.DianaOSInterpreterScheduler - see that class's own
+    // (EmuSen.DianaOS.DianaOS.Bin.DianaOSInterpreterScheduler - see that class's own
     // comment for the full mechanism, since "diana isn't drowning" work
     // lifted it out of this file so EmuSen.Mistress9 could share it): a
     // read-only line runs right there on the reader thread (never
@@ -402,7 +407,7 @@ namespace EmuSen.Hotaru.Views
         }
 
         // Reached from RunDebugPrompt's own dispatch loop when
-        // EmuSen.DianaOS.Commands.CoreCommand signals HostAction.LoadCore
+        // EmuSen.DianaOS.DianaOS.Bin.Commands.CoreCommand signals HostAction.LoadCore
         // - the actual ROM swap this migration's whole point was to
         // enable (Hotaru had NO way to change ROMs mid-session before
         // this). coreName isn't needed here at all: Hotaru only has one
@@ -693,7 +698,7 @@ namespace EmuSen.Hotaru.Views
                     }
                     // 'resume'/'continue'/'c', 'shutdown'/'quit', 'step'/'s',
                     // and 'core <name> <path>' are all real DianaOS commands
-                    // now (EmuSen.DianaOS.Commands.ResumeCommand/
+                    // now (EmuSen.DianaOS.DianaOS.Bin.Commands.ResumeCommand/
                     // ShutdownCommand/StepCommand/CoreCommand) - Submit's own
                     // HostAction is what lets them reach back out to this
                     // loop's control flow, the same thing the old hand-rolled

@@ -5,10 +5,15 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Mistress9.Views
 {
-    // A real terminal-style window onto the same EmuSen.DianaOS.DianaOSInterpreter
+    // A real terminal-style window onto the same EmuSen.DianaOS.DianaOS.Bin.DianaOSInterpreter
     // the F4 console prompt (EmuSen.Hotaru) and EmuSen.Pharaoh90's
     // --commands scripting use - variables, $(...) command substitution,
     // pipes, redirection, if/for/while, the whole thing (see
@@ -279,7 +284,7 @@ namespace EmuSen.Mistress9.Views
 
     // Replaces (not adds alongside - same extraCommands override-by-name
     // mechanism `coretop`/`pause`/`resume`/`feed` already use here)
-    // EmuSen.DianaOS.Commands.ClearCommand's `Console.Clear()`, which does
+    // EmuSen.DianaOS.DianaOS.Bin.Commands.ClearCommand's `Console.Clear()`, which does
     // nothing useful against this window's own console - a TextBox, not a
     // real terminal, same reason `coretop`/`feed` needed replacements
     // rather than just refusing outright. Local to this file rather than

@@ -25,7 +25,7 @@ namespace EmuSen.Debug
         // brings back exactly what was configured before, per this
         // comment's own original design.
         //
-        // Forwards to EmuSen.DianaOS.DianaOSLogging.MasterEnabled rather
+        // Forwards to EmuSen.DianaOS.DianaOS.Etc.DianaOSLogging.MasterEnabled rather
         // than holding its own field - DianaOS's own `log` command and
         // WatchRegistry's live echo need to read/write this without
         // depending on this (or any other core's) settings class, so the
@@ -34,8 +34,8 @@ namespace EmuSen.Debug
         // against this same property name unchanged.
         public static bool MasterLoggingEnabled
         {
-            get => EmuSen.DianaOS.DianaOSLogging.MasterEnabled;
-            set => EmuSen.DianaOS.DianaOSLogging.MasterEnabled = value;
+            get => EmuSen.DianaOS.DianaOS.Etc.DianaOSLogging.MasterEnabled;
+            set => EmuSen.DianaOS.DianaOS.Etc.DianaOSLogging.MasterEnabled = value;
         }
 
         // --- Cpu.cs ---

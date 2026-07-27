@@ -17,6 +17,11 @@ using EmuSen.Mistress9.Audio;
 using EmuSen.Mistress9.Input;
 using EmuSen.Mistress9.Settings;
 using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Mistress9.Views
 {
@@ -265,7 +270,7 @@ namespace EmuSen.Mistress9.Views
             new ResumeCommand(ResumeEmulation, () => IsPaused),
             new CoretopWindowCommand(OpenCoretopWindow),
             new FeedCommand(() => Activate()),
-            new EmuSen.DianaOS.Commands.EmuSen.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
+            new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
         };
 
         // StateCommand's save/load delegates - can't just be
@@ -556,7 +561,7 @@ namespace EmuSen.Mistress9.Views
                     // Runs whatever _consoleWindow queued (a mutating
                     // command typed while not fast-path-eligible - see
                     // DianaOSConsoleWindow.Submit and
-                    // EmuSen.DianaOS.DianaOSInterpreterScheduler's own
+                    // EmuSen.DianaOS.DianaOS.Bin.DianaOSInterpreterScheduler's own
                     // comment) against the core we just finished a frame
                     // on - null-conditional since the console window is
                     // opened on demand and may not exist at all. Must run

@@ -1,5 +1,10 @@
 using EmuSen.DianaOS;
-using EmuSen.DianaOS.Commands.EmuSen;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
 
 namespace EmuSen.WiseMan.DianaOS
 {

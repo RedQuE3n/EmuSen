@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Threading;
 using EmuSen.DianaOS;
 
 namespace EmuSen.Mistress9.Views
@@ -22,7 +23,36 @@ namespace EmuSen.Mistress9.Views
     // class's own doc comment describes for a future GUI debug window.
     public partial class DianaOSConsoleWindow : Window
     {
-        private DianaOSInterpreter _shell;
+        // volatile: UpdateTarget (below) reassigns this from the UI thread
+        // (LoadRom's own callers are both UI click handlers) on every ROM
+        // swap, while DrainPendingFromEmulationThread (below) now reads it
+        // from MainWindow's _emuThread - the exact same "a swap's new
+        // reference must become visible to the other thread promptly"
+        // hazard EmuSen.Hotaru's GameWindow._debugCmd field already
+        // documents and solves the same way. DrainPendingFromEmulationThread
+        // captures it into a local once per call (passed straight into
+        // DianaOSInterpreterScheduler.DrainPending) rather than re-reading
+        // the field mid-drain, so a swap landing mid-drain can't split one
+        // queued line's classification from its execution across two
+        // different interpreter instances - a stale read costs at most one
+        // frame's worth of already-queued lines still running against the
+        // old instance, never a torn read. Submit/RecallHistory read it
+        // directly since they, and UpdateTarget, are all UI-thread-only -
+        // no actual race between those three, volatile only matters for
+        // the emulation-thread read above.
+        private volatile DianaOSInterpreter _shell;
+
+        // Owns the fast-path/pending-queue mechanism that keeps a
+        // mutating command typed here from racing MainWindow's own
+        // _emuThread, which runs concurrently the whole time this window
+        // is open - previously nothing guarded that at all (see
+        // EmuSen.DianaOS.DianaOSInterpreterScheduler's own comment, and
+        // EmuSen.Hotaru's GameWindow, the host this mechanism was lifted
+        // out of). Window-lifetime, same as _extraCommands - NOT rebuilt
+        // by UpdateTarget, since it has no target-specific state of its
+        // own, only in-flight command bookkeeping that should survive a
+        // ROM swap same as this window's own open/closed state does.
+        private readonly DianaOSInterpreterScheduler _scheduler = new();
 
         // Same single-entry list PreferencesWindow.AvailableCores already
         // hardcodes for its own core-selection combo - kept as its own
@@ -179,16 +209,58 @@ namespace EmuSen.Mistress9.Views
             string enteredPrompt = _shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ";
             AppendLine(enteredPrompt + line);
 
-            // Action is discarded here for now - this window doesn't react
-            // to a HostAction yet (Mistress9 keeps its own pause/resume on
-            // the already-proven PauseCommand/ResumeCommand delegate
-            // pattern instead - see EmulationControlCommands.cs's own
-            // header comment on why). Behavior-neutral: reacting to a
-            // HostAction here is a deliberately separate, later decision.
-            (bool needsMore, string output, _) = _shell.Submit(line);
+            // A read-only line runs immediately, right here, safe because
+            // it's reading a lock-free published snapshot (see
+            // EmuSen.Providers.IRealtimeProvider) rather than touching live
+            // core state directly. Anything else queues instead of running
+            // inline on this (the UI) thread - MainWindow's own emulation
+            // thread drains it once per frame via
+            // DrainPendingFromEmulationThread below, the same "never race
+            // RunFrame()" contract EmuSen.Hotaru's GameWindow already
+            // established for its own console. That does mean a mutating
+            // command's result now appears up to one frame later instead
+            // of instantly - imperceptible at 60fps, and the price of this
+            // window no longer racing the emulation thread at all.
+            var result = _scheduler.SubmitFromAnyThread(_shell, line);
+            if (result is { } r) ApplySubmitResult(r.NeedsMoreInput, r.Output);
+            // else: queued - ApplySubmitResult runs later, from
+            // DrainPendingFromEmulationThread, once this line actually executes.
+        }
+
+        // Action is discarded here for now - this window doesn't react to
+        // a HostAction yet (Mistress9 keeps its own pause/resume on the
+        // already-proven PauseCommand/ResumeCommand delegate pattern
+        // instead - see EmulationControlCommands.cs's own header comment
+        // on why). Behavior-neutral: reacting to a HostAction here is a
+        // deliberately separate, later decision - matches Submit's own
+        // pre-scheduler behavior exactly.
+        private void ApplySubmitResult(bool needsMore, string output)
+        {
             PromptText.Text = _shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ";
             if (needsMore) return;
             if (output.Length > 0) AppendLine(output);
+        }
+
+        // Called once per frame from MainWindow's own emulation thread -
+        // runs every command this window queued (typed while not
+        // fast-path-eligible, see DianaOSInterpreterScheduler's own
+        // comment) against the live core, then marshals each result back
+        // to this window's UI thread. Safe to call even when nothing's
+        // queued (a no-op loop). Must only be called from the thread that
+        // actually owns the core, same contract as
+        // DianaOSInterpreterScheduler.DrainPending itself.
+        public void DrainPendingFromEmulationThread()
+        {
+            foreach (var (needsMore, output, _) in _scheduler.DrainPending(_shell))
+            {
+                // Captured per-iteration - Dispatcher.UIThread.Post queues
+                // the closure to run later, it doesn't run it inline, so
+                // each one needs its own copy rather than sharing the loop
+                // variable.
+                bool capturedNeedsMore = needsMore;
+                string capturedOutput = output;
+                Dispatcher.UIThread.Post(() => ApplySubmitResult(capturedNeedsMore, capturedOutput));
+            }
         }
 
         private void AppendLine(string text)

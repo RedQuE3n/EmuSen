@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -52,27 +51,32 @@ namespace EmuSen.Hotaru.Views
     // work: _consoleReaderThread (ConsoleReaderLoop below) is the sole
     // owner of ConsoleLineReader.ReadLine for the whole life of the
     // window, whether or not F4/a breakpoint is currently halted. While
-    // running normally, it classifies each typed line via
-    // DianaOSInterpreter.TryGetReadOnlyFastPath: a read-only line runs
-    // right there on the reader thread (never touching the emulation
-    // thread at all - the same "a read-only view of live core state,
-    // unsynchronized, is an accepted race" precedent CoretopWindow's own
-    // polling already relies on); anything else is queued and drained
-    // once per frame by ProcessPendingConsoleCommands, alongside
-    // ProcessHotkeys. While halted (RunDebugPrompt, F4/breakpoint), the
-    // reader thread instead just forwards each line into
-    // _haltedLineQueue and RunDebugPrompt blocks reading from THAT -
-    // still fully synchronous with RunFrame(), exactly as before this
-    // work, just fed by a different thread than the one running the
-    // prompt loop. _interpreterLock serializes the two things that can
-    // ever call _debugCmd.Submit (the reader thread's fast path, and
-    // whichever thread - emulation, via the frame-tick drain or
-    // RunDebugPrompt - is executing a line for real) so a single
-    // DianaOSInterpreter instance, which has real mutable state beyond
-    // core reads (variables, history, $?), is never entered from two
-    // threads at once. It's held only for the duration of one command's
-    // Execute, never across a blocking read, so it can't turn into "the
-    // emulation thread waits on the console" through the back door.
+    // running normally, it hands each typed line to _scheduler
+    // (EmuSen.DianaOS.DianaOSInterpreterScheduler - see that class's own
+    // comment for the full mechanism, since "diana isn't drowning" work
+    // lifted it out of this file so EmuSen.Mistress9 could share it): a
+    // read-only line runs right there on the reader thread (never
+    // touching the emulation thread at all - the same "a read-only view
+    // of live core state, unsynchronized, is an accepted race" precedent
+    // CoretopWindow's own polling already relies on, though as of the
+    // real-time-provider work most of what a read-only line actually
+    // reads is a lock-free published snapshot, not truly unsynchronized
+    // live state); anything else is queued and drained once per frame by
+    // ProcessPendingConsoleCommands, alongside ProcessHotkeys. While
+    // halted (RunDebugPrompt, F4/breakpoint), the reader thread instead
+    // just forwards each line into the scheduler's halted-line queue and
+    // RunDebugPrompt blocks reading from THAT - still fully synchronous
+    // with RunFrame(), exactly as before this work, just fed by a
+    // different thread than the one running the prompt loop. The
+    // scheduler's own lock serializes the two things that can ever call
+    // _debugCmd.Submit (the reader thread's fast path, and whichever
+    // thread - emulation, via the frame-tick drain or RunDebugPrompt - is
+    // executing a line for real) so a single DianaOSInterpreter instance,
+    // which has real mutable state beyond core reads (variables, history,
+    // $?), is never entered from two threads at once. It's held only for
+    // the duration of one command's Execute, never across a blocking
+    // read, so it can't turn into "the emulation thread waits on the
+    // console" through the back door.
     public partial class GameWindow : Window
     {
         private readonly VenusCore _core;
@@ -137,34 +141,14 @@ namespace EmuSen.Hotaru.Views
         // tied to F4 the way console reading used to be.
         private readonly Thread _consoleReaderThread;
 
-        // True only while RunDebugPrompt (F4/breakpoint) is actually
-        // blocked waiting for input - toggled by that method itself.
-        // Read by the reader thread on every iteration; a stale read by
-        // at most one loop iteration is fine (the same accepted-race
-        // shape this file's volatile _request* flags already use), so
-        // this is a plain volatile bool, not anything heavier.
-        private volatile bool _halted;
-
-        // Lines the reader thread forwards while _halted, instead of
-        // handling them itself - RunDebugPrompt blocks reading from this
-        // instead of calling ConsoleLineReader.ReadLine directly, since
-        // the reader thread is now the sole owner of that call.
-        private readonly BlockingCollection<string> _haltedLineQueue = new();
-
-        // Lines that classified as NOT fast-path-eligible (mutating, or
-        // just not a single bare simple command) while running normally -
-        // drained once per frame by ProcessPendingConsoleCommands, the
-        // same "set on one thread, drained once per frame on another"
-        // shape this file's own _request* flags already use, just for an
-        // unbounded stream of lines instead of a handful of named flags.
-        private readonly ConcurrentQueue<string> _pendingCommandQueue = new();
-
-        // Serializes every _debugCmd.Submit call, whichever thread makes
-        // it (the reader thread's fast path, ProcessPendingConsoleCommands
-        // on the emulation thread, or RunDebugPrompt while halted) - see
-        // this file's own header comment for why this is needed and why
-        // it's safe to never hold across a blocking console read.
-        private readonly object _interpreterLock = new();
+        // Owns the fast-path/pending-queue/halted-line machinery this
+        // file's own header comment describes - see
+        // EmuSen.DianaOS.DianaOSInterpreterScheduler's own comment for the
+        // full mechanism, lifted out of this file into DianaOS itself so
+        // EmuSen.Mistress9 can share the same real-time-safe behavior.
+        // Window-lifetime, same as the fields it replaced - not rebuilt on
+        // a `core` swap, only _debugCmd itself is.
+        private readonly DianaOSInterpreterScheduler _scheduler = new();
 
         // Every non-gameplay hotkey (F1-F9, O, P) - edge-detected in
         // OnKeyDown below (never on an OS key-repeat) and consumed once
@@ -262,10 +246,9 @@ namespace EmuSen.Hotaru.Views
                 // sequence across two different interpreter instances).
                 DianaOSInterpreter shell = _debugCmd;
 
-                if (!_halted) Console.Write("DianaOS $ ");
+                if (!_scheduler.Halted) Console.Write("DianaOS $ ");
 
-                string[] historySnapshot;
-                lock (_interpreterLock) historySnapshot = new List<string>(shell.History.Entries).ToArray();
+                string[] historySnapshot = _scheduler.SnapshotHistory(shell);
 
                 string? line;
                 try { line = ConsoleLineReader.ReadLine(historySnapshot); }
@@ -281,33 +264,14 @@ namespace EmuSen.Hotaru.Views
                 // more will ever come from Console.ReadLine again, so
                 // stop rather than busy-looping on an instantly-null
                 // read. If this happens while halted, RunDebugPrompt's
-                // own _haltedLineQueue.Take() below simply has nothing
+                // own _scheduler.TakeHaltedLine() below simply has nothing
                 // left to receive - bounded by Shutdown's own timeout on
                 // window close, same as any other "prompt never got an
                 // answer" case already was before this thread existed.
                 if (line is null) return;
 
-                if (_halted)
-                {
-                    _haltedLineQueue.Add(line);
-                    continue;
-                }
-
-                string trimmed = line.Trim();
-                if (trimmed.Length == 0) continue;
-
-                if (shell.TryGetReadOnlyFastPath(trimmed, out _))
-                {
-                    lock (_interpreterLock)
-                    {
-                        (_, string output, _) = shell.Submit(trimmed);
-                        Console.WriteLine(output);
-                    }
-                }
-                else
-                {
-                    _pendingCommandQueue.Enqueue(trimmed);
-                }
+                var result = _scheduler.SubmitFromAnyThread(shell, line);
+                if (result is { } r) Console.WriteLine(r.Output);
             }
         }
 
@@ -320,11 +284,8 @@ namespace EmuSen.Hotaru.Views
         // matching ProcessHotkeys' own return-true-means-close contract.
         private bool ProcessPendingConsoleCommands()
         {
-            while (_pendingCommandQueue.TryDequeue(out string? line))
+            foreach (var (_, output, action) in _scheduler.DrainPending(_debugCmd))
             {
-                HostAction? action;
-                string output;
-                lock (_interpreterLock) (_, output, action) = _debugCmd.Submit(line);
                 Console.WriteLine(output);
 
                 if (action is HostAction.Shutdown) return true;
@@ -637,25 +598,25 @@ namespace EmuSen.Hotaru.Views
         // breakpoint-halt check - see the old Program.cs's own comment on
         // why (both funnel through the exact same interactive command
         // loop rather than keeping two copies in sync). Blocks THIS
-        // (emulation) thread on _haltedLineQueue.Take() - never the UI
+        // (emulation) thread on _scheduler.TakeHaltedLine() - never the UI
         // thread - which is exactly what lets the window stay movable/
         // resizable/closable while F4 is open, unlike the old Raylib
         // build where the window and this prompt shared one thread.
         // Doesn't read the console directly any more - see this file's
         // own header comment on why _consoleReaderThread now owns that,
         // and forwards lines here (instead of handling them itself)
-        // whenever _halted is set.
+        // whenever _scheduler.Halted is set.
         private bool RunDebugPrompt()
         {
             DisarmFeedWatch();
-            _halted = true;
+            _scheduler.Halted = true;
             try
             {
                 Console.WriteLine("--- DianaOS (type 'help', 'resume' to resume, 'feed'/'feed -w' to resume and watch gameplay, 'shutdown' to quit, 'step'/'s' to single-step, 'core <name> <path>' to swap ROMs) ---");
                 while (true)
                 {
                     Console.Write(_debugCmd.IsAwaitingMoreInput ? "> " : "DianaOS #: ");
-                    string line = _haltedLineQueue.Take();
+                    string line = _scheduler.TakeHaltedLine();
                     string trimmed = line.Trim();
 
                     if (!_debugCmd.IsAwaitingMoreInput)
@@ -696,9 +657,7 @@ namespace EmuSen.Hotaru.Views
                     // file's own header comment) so this can never overlap a
                     // fast-path Submit from the reader thread - only
                     // relevant for the brief window right as a halt begins.
-                    HostAction? action;
-                    string output;
-                    lock (_interpreterLock) (_, output, action) = _debugCmd.Submit(trimmed);
+                    (_, string output, HostAction? action) = _scheduler.SubmitLocked(_debugCmd, trimmed);
                     Console.WriteLine(output);
                     if (action is HostAction.Shutdown) return true;
                     if (action is HostAction.Resume or HostAction.Step) break;
@@ -709,7 +668,7 @@ namespace EmuSen.Hotaru.Views
             }
             finally
             {
-                _halted = false;
+                _scheduler.Halted = false;
             }
         }
 
@@ -755,7 +714,7 @@ namespace EmuSen.Hotaru.Views
             _running = false;
 
             // Bounded, not indefinite: the emulation thread can be
-            // blocked inside RunDebugPrompt()'s _haltedLineQueue.Take() if
+            // blocked inside RunDebugPrompt()'s _scheduler.TakeHaltedLine() if
             // F4's prompt is open when the window is closed - unlike the
             // old Raylib build, where the window and the console prompt
             // shared one thread and this situation could never even be

@@ -106,7 +106,7 @@ namespace EmuSen.Mistress9.Views
     // problem this frontend never had in the first place: Raylib has
     // exactly one native window, so a Raylib build needs a second one
     // just to see gameplay while the console is doing something else.
-    // MainWindow's own GameView already shows the live picture
+    // MainWindow's own GameFrame already shows the live picture
     // continuously, in the same window the whole time DianaOSConsoleWindow
     // is open (they're just two ordinary, independent Avalonia windows) -
     // there's no separate "feed" to open here. `feed` still exists as a

@@ -178,27 +178,16 @@ namespace EmuSen.Hotaru
             }
         }
 
-        // Mirrors EmuSen.Mistress9's own Program.cs/BuildAvaloniaApp idiom
-        // exactly (UsePlatformDetect/WithInterFont/LogToTrace, plus the
-        // same Linux-only UseWayland() opt-in - Avalonia 12.1's native
-        // Wayland backend isn't picked up by UsePlatformDetect() on its
-        // own yet). Configure<App> takes a factory Func<App> here instead
-        // of being called parameterlessly, so App's constructor can
-        // receive the state Main already built above.
+        // Mirrors EmuSen.Mistress9's own Program.cs/BuildAvaloniaApp idiom.
+        // See Man pages/EmuSen_Project_Overview_v2.md §2a for why there's
+        // no UseWayland() call here.
         private static AppBuilder BuildAvaloniaApp(
             VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
-            var builder = AppBuilder.Configure(() => new App(core, extraCommands, statePath))
+            return AppBuilder.Configure(() => new App(core, extraCommands, statePath))
                 .UsePlatformDetect()
                 .WithInterFont()
                 .LogToTrace();
-
-            if (OperatingSystem.IsLinux())
-            {
-                builder = builder.UseWayland();
-            }
-
-            return builder;
         }
 
         // Hotaru's entire launch experience: no core, no window, no audio

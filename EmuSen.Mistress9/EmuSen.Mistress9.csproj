@@ -55,11 +55,10 @@
          EmuSen.Hotaru project instead, so this reference no longer drags
          in another frontend's Exe/window-ownership baggage, just the core. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
-    <!-- Not consumed yet - this project still presents via a CPU-side
-         WriteableBitmap (see Views/MainWindow.axaml.cs), which has no
-         shader hook. Referenced explicitly so this frontend can adopt
-         FramePresenter/ShaderEffect directly once it has a GPU-capable
-         rendering surface of its own - see the shader game-plan discussion. -->
+    <!-- GameFrameControl (see Views/MainWindow.axaml/.axaml.cs) - the same
+         GPU-accelerated (Skia/Ganesh, when Avalonia negotiates a hardware
+         context) presentation surface EmuSen.Hotaru's GameWindow uses,
+         replacing the old CPU-side WriteableBitmap here. -->
     <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
   </ItemGroup>
 

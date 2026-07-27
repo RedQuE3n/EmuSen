@@ -165,6 +165,19 @@ namespace EmuSen.Serenity
                 var (x, y, w, h) = ComputeLetterboxRect(_width, _height, Bounds.Width, Bounds.Height);
                 int upscaledW = Math.Max(1, (int)Math.Round(w));
                 int upscaledH = Math.Max(1, (int)Math.Round(h));
+                var destRect = new SKRect((float)x, (float)y, (float)x + upscaledW, (float)y + upscaledH);
+
+                // Confirmed fix for a real flicker bug (see Man pages/
+                // EmuSen_Project_Overview_v2.md §2a): allocating/disposing
+                // a fresh GPU-backed SKSurface every single frame (below)
+                // was the cause, on both X11 and Wayland. Skip it entirely
+                // when no shader is active - DrawImage scales straight to
+                // destRect on its own.
+                if (_effect == ShaderEffect.None)
+                {
+                    canvas.DrawImage(sourceImage, destRect, sampling);
+                    return;
+                }
 
                 // Two stages, mirroring the old Raylib pipeline exactly:
                 // (1) scale the native-resolution game frame up to the
@@ -185,16 +198,10 @@ namespace EmuSen.Serenity
                 upscaleSurface.Canvas.DrawImage(sourceImage, new SKRect(0, 0, upscaledW, upscaledH), sampling);
                 using SKImage upscaledImage = upscaleSurface.Snapshot();
 
-                var destRect = new SKRect((float)x, (float)y, (float)x + upscaledW, (float)y + upscaledH);
-
-                if (_effect == ShaderEffect.None)
-                {
-                    canvas.DrawImage(upscaledImage, destRect, sampling);
-                    return;
-                }
-
+                // Not `using` - see Man pages/EmuSen_Project_Overview_v2.md
+                // §2a on why disposing this crashes the process.
                 SKRuntimeEffect compiled = _owner.GetEffect(_effect);
-                using var builder = new SKRuntimeShaderBuilder(compiled);
+                var builder = new SKRuntimeShaderBuilder(compiled);
                 builder.Children["image"] = upscaledImage.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling);
                 builder.Uniforms["outputSize"] = new[] { (float)upscaledW, (float)upscaledH };
 

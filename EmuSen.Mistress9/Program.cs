@@ -18,11 +18,18 @@ namespace EmuSen.Mistress9
         public static AppBuilder BuildAvaloniaApp()
         {
             // See Man pages/EmuSen_Project_Overview_v2.md §2a for why
-            // there's no UseWayland() call here.
-            return AppBuilder.Configure<App>()
+            // Linux stays on UseWayland() for now.
+            var builder = AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .WithInterFont()
                 .LogToTrace();
+
+            if (OperatingSystem.IsLinux())
+            {
+                builder = builder.UseWayland();
+            }
+
+            return builder;
         }
     }
 }

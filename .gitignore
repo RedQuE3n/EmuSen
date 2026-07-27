@@ -1,6 +1,7 @@
 # .NET Build Outputs
 bin/
 obj/
+TestResults/
 
 # OS/IDE generated files (Standard additions)
 .DS_Store

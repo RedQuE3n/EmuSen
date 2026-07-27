@@ -25,12 +25,10 @@ namespace EmuSen.Serenity
     // (EmuSen.Serenity), separate from both the emulation core
     // (EmuSen.csproj) and any one frontend, so every frontend depends on
     // the same presentation/shader code instead of a hand-copied
-    // duplicate - EmuSen.Hotaru is the first real consumer of this
-    // Avalonia-native version (see git history for the Raylib
-    // predecessor); EmuSen.Mistress9 stays on its own CPU-side
-    // WriteableBitmap path for now, but could adopt this directly later
-    // since it now has exactly the "GPU-capable rendering surface" its
-    // own long-standing csproj comment was waiting for.
+    // duplicate - both EmuSen.Hotaru and EmuSen.Mistress9 use
+    // GameFrameControl directly now (see git history for the Raylib/
+    // WriteableBitmap predecessors); this FramePresenter bundle itself
+    // isn't consumed by either yet.
     //
     // Present() may be called from any thread (in practice, a frontend's
     // own background emulation thread - see EmuSen.Hotaru's own comment

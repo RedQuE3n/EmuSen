@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using EmuSen.DianaOS.Ast;
+using EmuSen.DianaOS.Commands;
 using EmuSen.DianaOS.Commands.Unix;
 using EmuSen.DianaOS.Commands.EmuSen;
 

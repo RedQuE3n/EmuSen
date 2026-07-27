@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -95,16 +97,14 @@ namespace EmuSen.Hotaru.Views
         // console WINDOW) would otherwise go stale.
         private SnesDebugTarget _debugTarget = null!;
 
-        // volatile: as of the "Diana always live" work, _consoleReaderThread
-        // reads this field too (see ConsoleReaderLoop below), on top of the
-        // emulation thread that already reassigns it from SwapCore -
-        // without this, a swap's new reference isn't guaranteed to become
-        // visible to the reader thread promptly. Every read site captures
-        // it into a local once per line processed (never re-reads the
-        // field mid-line), so a swap landing between a line's
-        // classification and its execution can't split the two across
-        // different interpreter instances.
-        private volatile DianaOSInterpreter _debugCmd = null!;
+        // See `man tmux`.
+        private readonly DianaOSSessionManager _sessions = new();
+
+        // One scheduler per session - see `man tmux`.
+        private readonly ConcurrentDictionary<DianaOSSession, DianaOSInterpreterScheduler> _schedulers = new();
+        private DianaOSInterpreter _debugCmd => _sessions.Current!.Interpreter;
+        private DianaOSInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];
+
         private FrameRecorder _frameRecorder = null!;
 
         // Reused, unchanged, across every RebuildDebugTargetAndCommands()
@@ -140,15 +140,6 @@ namespace EmuSen.Hotaru.Views
         // constructor, and runs for the window's whole life - it isn't
         // tied to F4 the way console reading used to be.
         private readonly Thread _consoleReaderThread;
-
-        // Owns the fast-path/pending-queue/halted-line machinery this
-        // file's own header comment describes - see
-        // EmuSen.DianaOS.DianaOSInterpreterScheduler's own comment for the
-        // full mechanism, lifted out of this file into DianaOS itself so
-        // EmuSen.Mistress9 can share the same real-time-safe behavior.
-        // Window-lifetime, same as the fields it replaced - not rebuilt on
-        // a `core` swap, only _debugCmd itself is.
-        private readonly DianaOSInterpreterScheduler _scheduler = new();
 
         // Every non-gameplay hotkey (F1-F9, O, P) - edge-detected in
         // OnKeyDown below (never on an OS key-repeat) and consumed once
@@ -290,6 +281,7 @@ namespace EmuSen.Hotaru.Views
 
                 if (action is HostAction.Shutdown) return true;
                 if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); continue; }
+                if (action is HostAction.SwitchSession) SyncSchedulersToSessions();
                 // HostAction.Resume/Step with nothing halted: nothing to
                 // resume from (Resume is a no-op) / StepCommand already
                 // armed the single-step itself, which the next RunFrame()
@@ -367,25 +359,45 @@ namespace EmuSen.Hotaru.Views
             Console.WriteLine($"[SHADER] Active effect: {effect}");
         }
 
-        // (Re)builds _debugTarget/_debugCmd/_frameRecorder from _core's
-        // CURRENT Cpu/Bus/Renderer - called once from the constructor and
-        // again from SwapCore below after every `core <name> <path>`
-        // reload. DianaOSInterpreter has no way to repoint an existing
-        // instance at a new IDebugTarget (it captures its target once, at
-        // construction, and is otherwise immutable by design) - unlike
-        // EmuSen.Mistress9's console WINDOW, which owns that rebuild
-        // itself via UpdateTarget(), this class has to build a whole new
-        // DianaOSInterpreter directly, same as that window does
-        // internally.
+        // Rebuilds _debugTarget/_frameRecorder and every session - see
+        // `man core`/`man tmux`.
         private void RebuildDebugTargetAndCommands()
         {
             _debugTarget = new SnesDebugTarget(_core.Cpu!, _core.Bus!, _core.Renderer!,
                 () => (_core.LastFrameCpuSpc700Ms, _core.LastFramePpuMs, _core.LastFrameHdmaMs));
-            _debugCmd = DianaOSInterpreter.CreateDefault(_debugTarget, _extraCommands,
+            _frameRecorder = new FrameRecorder(_debugTarget);
+
+            if (_sessions.Sessions.Count == 0)
+            {
+                var initial = new DianaOSSession("main", BuildInterpreter());
+                _sessions.RegisterInitial(initial);
+                _schedulers[initial] = new DianaOSInterpreterScheduler();
+                return;
+            }
+
+            _sessions.RebuildAll(BuildInterpreter);
+            SyncSchedulersToSessions();
+        }
+
+        private DianaOSInterpreter BuildInterpreter() =>
+            DianaOSInterpreter.CreateDefault(_debugTarget, _extraCommands,
                 new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
                 new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
-            _frameRecorder = new FrameRecorder(_debugTarget);
+                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch(),
+                _sessions);
+
+        // Syncs _schedulers to whatever sessions currently exist - see `man tmux`.
+        private void SyncSchedulersToSessions()
+        {
+            var live = new HashSet<DianaOSSession>(_sessions.Sessions);
+            foreach (DianaOSSession stale in _schedulers.Keys.Where(s => !live.Contains(s)).ToList())
+            {
+                _schedulers.TryRemove(stale, out _);
+            }
+            foreach (DianaOSSession session in _sessions.Sessions)
+            {
+                if (!_schedulers.ContainsKey(session)) _schedulers[session] = new DianaOSInterpreterScheduler();
+            }
         }
 
         // Reached from RunDebugPrompt's own dispatch loop when
@@ -658,9 +670,28 @@ namespace EmuSen.Hotaru.Views
                     // file's own header comment) so this can never overlap a
                     // fast-path Submit from the reader thread - only
                     // relevant for the brief window right as a halt begins.
-                    (_, string output, HostAction? action) = _scheduler.SubmitLocked(_debugCmd, trimmed);
+                    // Captured before the call, not read again after -
+                    // _scheduler is computed off _sessions.Current, which
+                    // a `tmux switch`/`tmux new` inside this very Submit
+                    // call changes, so the receiver has to be pinned to
+                    // whichever session was actually halted here.
+                    DianaOSInterpreterScheduler haltedScheduler = _scheduler;
+                    (_, string output, HostAction? action) = haltedScheduler.SubmitLocked(_debugCmd, trimmed);
                     Console.WriteLine(output);
                     if (action is HostAction.Shutdown) return true;
+                    if (action is HostAction.SwitchSession)
+                    {
+                        // Halted is per-scheduler, not per-window - without
+                        // this, haltedScheduler (the OLD session) stays
+                        // stuck thinking it's still halted forever, since
+                        // this method's own finally block only ever clears
+                        // whatever _scheduler resolves to when IT runs, and
+                        // that's the NEW session by then.
+                        haltedScheduler.Halted = false;
+                        SyncSchedulersToSessions();
+                        _scheduler.Halted = true;
+                        continue;
+                    }
                     if (action is HostAction.Resume or HostAction.Step) break;
                     if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); break; }
                 }

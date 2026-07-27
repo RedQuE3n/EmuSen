@@ -1007,6 +1007,43 @@ namespace EmuSen.DianaOS
                 "    core venus game2.smc\n" +
                 "    core snes /path/to/other-game.sfc",
 
+            ["tmux"] =
+                "NAME\n" +
+                "    tmux - multiple independent shell sessions\n\n" +
+                "SYNOPSIS\n" +
+                "    tmux new [name]\n" +
+                "    tmux list\n" +
+                "    tmux switch <name>\n" +
+                "    tmux kill <name>\n\n" +
+                "DESCRIPTION\n" +
+                "    Each session is a fully independent DianaOSInterpreter - its own\n" +
+                "    variables, command history, and $?/pending-multiline-input state -\n" +
+                "    that you can create and switch between. 'new' with no name auto-numbers\n" +
+                "    it (session-1, session-2, ...). All sessions observe the same one live\n" +
+                "    core/ROM, the same way several real tmux windows attached to one real\n" +
+                "    machine each get their own independent shell but see the same one\n" +
+                "    machine - this is NOT multiple games running at once, just multiple\n" +
+                "    independent shells watching the one that is.\n\n" +
+                "    Because a DianaOSInterpreter can't be repointed at a new target once\n" +
+                "    built (see 'core'), swapping the ROM rebuilds every session's\n" +
+                "    interpreter from scratch, the same 'shell-level state resets on reload'\n" +
+                "    convention 'core' already documents - it's not just the current session\n" +
+                "    that loses its variables/history on a ROM swap, all of them do.\n\n" +
+                "    Not available everywhere: a host needs to opt in by handing\n" +
+                "    DianaOSInterpreter.CreateDefault a DianaOSSessionManager. Where it IS\n" +
+                "    available, whether switching sessions is itself safe against a\n" +
+                "    concurrently-running emulation thread is that host's own concern, not\n" +
+                "    this command's - EmuSen.Hotaru/EmuSen.Mistress9 each keep a separate\n" +
+                "    DianaOSInterpreterScheduler per session for exactly that reason; the\n" +
+                "    standalone DianaOS shell (no core, no concurrent thread) needs none at\n" +
+                "    all.\n\n" +
+                "EXAMPLES\n" +
+                "    tmux new\n" +
+                "    tmux new investigation\n" +
+                "    tmux list\n" +
+                "    tmux switch investigation\n" +
+                "    tmux kill session-1",
+
             ["step"] =
                 "NAME\n" +
                 "    step - single-step one CPU instruction\n\n" +

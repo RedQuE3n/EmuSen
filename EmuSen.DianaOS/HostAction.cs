@@ -42,5 +42,8 @@ namespace EmuSen.DianaOS
         // issuing command's own job - by the time this reaches whatever's
         // driving the loop, both are already known-good.
         public sealed record LoadCore(string CoreName, string RomPath) : HostAction;
+
+        // 'tmux new/switch/kill' - see `man tmux`.
+        public sealed record SwitchSession(string Name) : HostAction;
     }
 }

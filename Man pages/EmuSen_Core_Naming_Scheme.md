@@ -1,6 +1,6 @@
 # EmuSen — Core Naming Scheme
 
-*(Living document — companion to `EmuSen_Project_Overview` and `EmuSen_Core_Gameplan` in this same `Man pages` folder. This one is purely naming/organizational convention: what a future core is called and where it lives, not what it does.)*
+*(Living document — companion to `EmuSen_Project_Overview_v2.md` and `EmuSen_Core_Gameplan.md` in this same `Man pages` folder. This one is purely naming/organizational convention: what a future core is called and where it lives, not what it does.)*
 
 ---
 
@@ -135,6 +135,7 @@ Every codename in this doc has been checked against the Sailor Moon Wiki (and, f
 - **Sega's Shitennou:** Jadeite, Nephrite, Zoisite, Kunzite — not Jadeite/Nepherite/Zoisite/Kuzite, an earlier draft's misspelling caught and corrected. Kunzite's name was changed to "Malachite" in the DiC English dub; Kunzite is the original/canon name and the one used here.
 - **NEC's Amazon Trio folder names deliberately drop an apostrophe:** canon is "Tiger's Eye" and "Hawk's Eye" (with the possessive apostrophe), folders are `Tigers Eye` / `Hawks Eye` — a pragmatic filesystem/shell-quoting choice, not a spelling correction. The apostrophe is preserved in this doc's prose and in each folder's own `README.md` title.
 - **Atari's `Cyprine & Ptilol` folder name uses a literal `&`** rather than "and" or a slash, matching how the pair is most commonly written together as a single unit.
+- **Sony's PS Vita codename, "Wiseman" (§4), collides in spelling with `EmuSen.WiseMan`**, the unrelated committed xUnit test project (see `EmuSen_Debugging_Tools_Reference_v5.md` §3.18). Purely coincidental - `EmuSen.WiseMan` predates this doc's PS Vita assignment and was named for its own reasons, not after the Black Moon Clan character. No folder/namespace collision in practice (`Cores/Sony/Wiseman - PS Vita/` vs. the top-level `EmuSen.WiseMan/` project), but worth knowing about if either name ever shows up in a search and looks like it might refer to the other.
 
 ---
 

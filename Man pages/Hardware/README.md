@@ -11,7 +11,7 @@ One page per piece of hardware being abstracted, rather than the long inline `//
 - `EmuSen_Debugging_Tools_Reference_v5.md` — the core-agnostic debug toolchain (`WatchRegistry`, `search`, `disasm`, etc.). Also unchanged; these pages are about the hardware *being* debugged, not the tools doing the debugging, though they cross-reference each other where relevant (e.g. this Memory page's observer-hooks section points at the debugging-tools page's `SnesDebugTarget` writeup).
 - `EmuSen_Core_Naming_Scheme.md` — unrelated (naming convention, not technical documentation).
 
-**`DebugSettings` vs. the newer `Debug/` toolchain**: some older ad hoc logging (`DmaVerboseLogging`, `HvIrqChangeLogging`, etc. — plain static bools in `DebugSettings.cs`) predates `WatchRegistry`/`FrameLogRegistry` and hasn't been migrated. Both exist side by side today; a hardware page that references one of these flags is documenting what's actually in the code, not endorsing the pattern going forward. New investigations should prefer the `Debug/` toolchain (`watch`, `framelog`, etc.) where it covers the need.
+**`DebugSettings` vs. the newer `DianaOS/` toolchain**: some older ad hoc logging (`DmaVerboseLogging`, `HvIrqChangeLogging`, etc. — plain static bools in `DebugSettings.cs`) predates `WatchRegistry`/`FrameLogRegistry` and hasn't been migrated. Both exist side by side today; a hardware page that references one of these flags is documenting what's actually in the code, not endorsing the pattern going forward. New investigations should prefer the `DianaOS/` toolchain (`watch`, `framelog`, etc.) where it covers the need - see `EmuSen_Settings_Reference.md` §1.6.
 
 ## Nintendo
 

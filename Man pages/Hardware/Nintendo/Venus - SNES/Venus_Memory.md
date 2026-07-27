@@ -111,7 +111,7 @@ Re-armed once per frame (`InitHdma`) and stepped once per scanline (`ExecuteHdma
 
 ### 3.3 Debug logging gates
 
-All console output here is behind `DebugSettings` flags (`DmaVerboseLogging`, `DmaSourceAddrLogging`, `WindowHdmaLogging`) — see `Man pages/Hardware/README.md`'s note on `DebugSettings` vs. the newer `Debug/` toolchain (WatchRegistry, FrameLogRegistry) for why these older ad hoc flags still exist alongside the newer core-agnostic tools.
+All console output here is behind `DebugSettings` flags (`DmaVerboseLogging`, `DmaSourceAddrLogging`, `WindowHdmaLogging`) — see `Man pages/Hardware/README.md`'s note on `DebugSettings` vs. the newer `DianaOS/` toolchain (WatchRegistry, FrameLogRegistry) for why these older ad hoc flags still exist alongside the newer core-agnostic tools.
 
 `LogSourceAddrWrite` specifically was added to investigate why Yoshi's sprite-graphics DMA channel always used a constant source address instead of a varying one — a constant, never-changing source is the signature of an uninitialized or wrongly-computed pointer. It reports which PC wrote the source address, including the raw 4 bytes at that PC (enough to cover any 65816 instruction length) for manual identification without needing a full disassembler.
 

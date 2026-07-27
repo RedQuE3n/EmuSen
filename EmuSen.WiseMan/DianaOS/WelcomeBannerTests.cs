@@ -22,14 +22,15 @@ namespace EmuSen.WiseMan.DianaOS
         }
 
         [Fact]
-        public void Includes_the_full_command_listing()
+        public void Points_at_help_and_man_instead_of_listing_every_command()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
 
             string banner = shell.GetWelcomeBanner(new[] { "SNES (Venus)" });
 
-            Assert.Contains("Available commands:", banner);
-            Assert.Contains("echo <text...>", banner); // spot-check one real command's own Usage line made it in
+            Assert.Contains("Type \"help\" for a list of commands. Man is supported for each.", banner);
+            Assert.DoesNotContain("Available commands:", banner); // the full listing used to be dumped inline - no longer
+            Assert.DoesNotContain("echo <text...>", banner); // spot-check a real command's own Usage line does NOT leak in
         }
 
         [Fact]
@@ -40,26 +41,6 @@ namespace EmuSen.WiseMan.DianaOS
             shell.GetWelcomeBanner(new[] { "SNES (Venus)" });
 
             Assert.Empty(shell.History.Entries);
-        }
-
-        [Fact]
-        public void Reflects_extra_commands_registered_on_this_shell()
-        {
-            var shell = DianaOSInterpreter.CreateDefault(null,
-                new IDianaOSCommand[] { new FakeExtraCommand() });
-
-            string banner = shell.GetWelcomeBanner(new[] { "SNES (Venus)" });
-
-            Assert.Contains("totally-not-a-real-command", banner);
-        }
-
-        private sealed class FakeExtraCommand : IDianaOSCommand
-        {
-            public string Name => "faketest";
-            public bool IsReadOnly => false;
-            public string Usage => "  faketest                      totally-not-a-real-command, just here to prove extraCommands show up";
-
-            public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin) => DianaOSResult.Ok("");
         }
     }
 }

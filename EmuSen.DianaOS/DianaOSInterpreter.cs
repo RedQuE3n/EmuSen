@@ -130,12 +130,15 @@ namespace EmuSen.DianaOS
         // to pass anything. cpuTraceSwitch backs TraceCommand's `trace`
         // command the same way - null means "not available for this
         // target," not a missing feature.
+        //
+        // sessions backs TmuxCommand - see `man tmux`.
         public static DianaOSInterpreter CreateDefault(
             IDebugTarget? target,
             IEnumerable<IDianaOSCommand>? extraCommands = null,
             ICheatCodeCodec? cheatAutoDetectCodec = null,
             ICheatCodeCodec? cheatExplicitCodec = null,
-            ICpuTraceSwitch? cpuTraceSwitch = null)
+            ICpuTraceSwitch? cpuTraceSwitch = null,
+            DianaOSSessionManager? sessions = null)
         {
             DianaOSSandbox.EnsureInitialWorkingDirectory();
 
@@ -185,6 +188,7 @@ namespace EmuSen.DianaOS
                 new Commands.RmCommand(),
                 new Commands.PwdCommand(),
                 new Commands.NanoCommand(),
+                new Commands.TmuxCommand(sessions, sessions is null ? null : () => CreateDefault(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions)),
                 new Commands.CoretopCommand(),
                 new Commands.ClearCommand(),
                 new Commands.TrueCommand(),

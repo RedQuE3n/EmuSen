@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -23,36 +25,17 @@ namespace EmuSen.Mistress9.Views
     // class's own doc comment describes for a future GUI debug window.
     public partial class DianaOSConsoleWindow : Window
     {
-        // volatile: UpdateTarget (below) reassigns this from the UI thread
-        // (LoadRom's own callers are both UI click handlers) on every ROM
-        // swap, while DrainPendingFromEmulationThread (below) now reads it
-        // from MainWindow's _emuThread - the exact same "a swap's new
-        // reference must become visible to the other thread promptly"
-        // hazard EmuSen.Hotaru's GameWindow._debugCmd field already
-        // documents and solves the same way. DrainPendingFromEmulationThread
-        // captures it into a local once per call (passed straight into
-        // DianaOSInterpreterScheduler.DrainPending) rather than re-reading
-        // the field mid-drain, so a swap landing mid-drain can't split one
-        // queued line's classification from its execution across two
-        // different interpreter instances - a stale read costs at most one
-        // frame's worth of already-queued lines still running against the
-        // old instance, never a torn read. Submit/RecallHistory read it
-        // directly since they, and UpdateTarget, are all UI-thread-only -
-        // no actual race between those three, volatile only matters for
-        // the emulation-thread read above.
-        private volatile DianaOSInterpreter _shell;
+        // See `man tmux`.
+        private readonly DianaOSSessionManager _sessions = new();
 
-        // Owns the fast-path/pending-queue mechanism that keeps a
-        // mutating command typed here from racing MainWindow's own
-        // _emuThread, which runs concurrently the whole time this window
-        // is open - previously nothing guarded that at all (see
-        // EmuSen.DianaOS.DianaOSInterpreterScheduler's own comment, and
-        // EmuSen.Hotaru's GameWindow, the host this mechanism was lifted
-        // out of). Window-lifetime, same as _extraCommands - NOT rebuilt
-        // by UpdateTarget, since it has no target-specific state of its
-        // own, only in-flight command bookkeeping that should survive a
-        // ROM swap same as this window's own open/closed state does.
-        private readonly DianaOSInterpreterScheduler _scheduler = new();
+        // One scheduler per session - see `man tmux`. ConcurrentDictionary
+        // since MainWindow's _emuThread reads _scheduler (via DrainPendingFromEmulationThread)
+        // while the UI thread can add/remove entries (SyncSchedulersToSessions,
+        // off the back of a `tmux` HostAction).
+        private readonly ConcurrentDictionary<DianaOSSession, DianaOSInterpreterScheduler> _schedulers = new();
+
+        private DianaOSInterpreter _shell => _sessions.Current!.Interpreter;
+        private DianaOSInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];
 
         // Same single-entry list PreferencesWindow.AvailableCores already
         // hardcodes for its own core-selection combo - kept as its own
@@ -81,14 +64,16 @@ namespace EmuSen.Mistress9.Views
         // one below with an actual (possibly null) target.
         public DianaOSConsoleWindow() : this(null, null) { }
 
+        private IDebugTarget? _target;
+
         public DianaOSConsoleWindow(IDebugTarget? target, IEnumerable<IDianaOSCommand>? extraCommands = null)
         {
             InitializeComponent();
             _extraCommands = Combine(extraCommands);
-            _shell = DianaOSInterpreter.CreateDefault(target, _extraCommands,
-                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
+            _target = target;
+            var initial = new DianaOSSession("main", BuildInterpreter());
+            _sessions.RegisterInitial(initial);
+            _schedulers[initial] = new DianaOSInterpreterScheduler();
 
             // Printed once, right here - opening this window IS
             // "launching" this frontend's shell, the same one-time event
@@ -133,12 +118,32 @@ namespace EmuSen.Mistress9.Views
         // same as any other command unless they're passed again.
         public void UpdateTarget(IDebugTarget? target, string? romDisplayName)
         {
-            _shell = DianaOSInterpreter.CreateDefault(target, _extraCommands,
-                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
+            _target = target;
+            _sessions.RebuildAll(BuildInterpreter);
+            SyncSchedulersToSessions();
             _historyIndex = -1;
             AppendLine(romDisplayName != null ? $"--- ROM changed: {romDisplayName} ---" : "--- ROM unloaded ---");
+        }
+
+        private DianaOSInterpreter BuildInterpreter() =>
+            DianaOSInterpreter.CreateDefault(_target, _extraCommands,
+                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
+                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
+                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch(),
+                _sessions);
+
+        // Syncs _schedulers to whatever sessions currently exist - see `man tmux`.
+        private void SyncSchedulersToSessions()
+        {
+            var live = new HashSet<DianaOSSession>(_sessions.Sessions);
+            foreach (DianaOSSession stale in _schedulers.Keys.Where(s => !live.Contains(s)).ToList())
+            {
+                _schedulers.TryRemove(stale, out _);
+            }
+            foreach (DianaOSSession session in _sessions.Sessions)
+            {
+                if (!_schedulers.ContainsKey(session)) _schedulers[session] = new DianaOSInterpreterScheduler();
+            }
         }
 
         private void OnInputKeyDown(object? sender, KeyEventArgs e)
@@ -224,20 +229,19 @@ namespace EmuSen.Mistress9.Views
             // of instantly - imperceptible at 60fps, and the price of this
             // window no longer racing the emulation thread at all.
             var result = _scheduler.SubmitFromAnyThread(_shell, line);
-            if (result is { } r) ApplySubmitResult(r.NeedsMoreInput, r.Output);
+            if (result is { } r) ApplySubmitResult(r.NeedsMoreInput, r.Output, r.Action);
             // else: queued - ApplySubmitResult runs later, from
             // DrainPendingFromEmulationThread, once this line actually executes.
         }
 
-        // Action is discarded here for now - this window doesn't react to
-        // a HostAction yet (Mistress9 keeps its own pause/resume on the
-        // already-proven PauseCommand/ResumeCommand delegate pattern
-        // instead - see EmulationControlCommands.cs's own header comment
-        // on why). Behavior-neutral: reacting to a HostAction here is a
-        // deliberately separate, later decision - matches Submit's own
-        // pre-scheduler behavior exactly.
-        private void ApplySubmitResult(bool needsMore, string output)
+        // Every HostAction except SwitchSession is still discarded here -
+        // Mistress9 keeps its own pause/resume on the already-proven
+        // PauseCommand/ResumeCommand delegate pattern (see
+        // EmulationControlCommands.cs), and SwitchSession is the one
+        // action this window itself must react to (see `man tmux`).
+        private void ApplySubmitResult(bool needsMore, string output, HostAction? action)
         {
+            if (action is HostAction.SwitchSession) SyncSchedulersToSessions();
             PromptText.Text = _shell.IsAwaitingMoreInput ? "> " : "DianaOS #: ";
             if (needsMore) return;
             if (output.Length > 0) AppendLine(output);
@@ -253,7 +257,7 @@ namespace EmuSen.Mistress9.Views
         // DianaOSInterpreterScheduler.DrainPending itself.
         public void DrainPendingFromEmulationThread()
         {
-            foreach (var (needsMore, output, _) in _scheduler.DrainPending(_shell))
+            foreach (var (needsMore, output, action) in _scheduler.DrainPending(_shell))
             {
                 // Captured per-iteration - Dispatcher.UIThread.Post queues
                 // the closure to run later, it doesn't run it inline, so
@@ -261,7 +265,8 @@ namespace EmuSen.Mistress9.Views
                 // variable.
                 bool capturedNeedsMore = needsMore;
                 string capturedOutput = output;
-                Dispatcher.UIThread.Post(() => ApplySubmitResult(capturedNeedsMore, capturedOutput));
+                HostAction? capturedAction = action;
+                Dispatcher.UIThread.Post(() => ApplySubmitResult(capturedNeedsMore, capturedOutput, capturedAction));
             }
         }
 

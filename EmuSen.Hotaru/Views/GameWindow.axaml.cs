@@ -539,7 +539,7 @@ namespace EmuSen.Hotaru.Views
 
         private void TakeScreenshot()
         {
-            string coreLogDir = Path.Combine("Logs", _debugTarget.CoreName);
+            string coreLogDir = Path.Combine("var", "log", _debugTarget.CoreName);
             Directory.CreateDirectory(coreLogDir);
             string baseName = $"screenshot_frame{_debugTarget.FrameCount}";
             string shotPath = Path.Combine(coreLogDir, baseName + ".png");
@@ -589,7 +589,7 @@ namespace EmuSen.Hotaru.Views
             }
             else
             {
-                string dir = _frameRecorder.Start(Path.Combine("Logs", _debugTarget.CoreName, "Recordings"));
+                string dir = _frameRecorder.Start(Path.Combine("var", "log", _debugTarget.CoreName, "Recordings"));
                 Console.WriteLine($"[RECORD] Started -> {dir}");
             }
         }

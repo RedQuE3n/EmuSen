@@ -441,8 +441,8 @@ namespace EmuSen.DianaOS
                 "    dump <space> <addr> <len> <file>\n\n" +
                 "DESCRIPTION\n" +
                 "    Writes <len> raw bytes from <space> starting at <addr> to\n" +
-                "    Logs/<CoreName>/<file> - no header or metadata, so a hex editor can open\n" +
-                "    the result directly. The write-side counterpart is 'load'. Same live-\n" +
+                "    var/log/<CoreName>/<file> - no header or metadata, so a hex editor can\n" +
+                "    open the result directly. The write-side counterpart is 'load'. Same live-\n" +
                 "    hardware-space refusal as 'search'/'snapshot'.\n\n" +
                 "EXAMPLES\n" +
                 "    dump WRAM 0 2000 wram.bin",
@@ -453,7 +453,7 @@ namespace EmuSen.DianaOS
                 "SYNOPSIS\n" +
                 "    load <space> <addr> <file>\n\n" +
                 "DESCRIPTION\n" +
-                "    Reads Logs/<CoreName>/<file> (typically one 'dump' produced, or hand-\n" +
+                "    Reads var/log/<CoreName>/<file> (typically one 'dump' produced, or hand-\n" +
                 "    edited afterward) and pokes its raw bytes into <space> starting at\n" +
                 "    <addr>. Refuses if <space> isn't writable.\n\n" +
                 "EXAMPLES\n" +
@@ -718,18 +718,51 @@ namespace EmuSen.DianaOS
                 "DESCRIPTION\n" +
                 "    Changes the process-wide current directory - the same one 'pwd' reads\n" +
                 "    and every relative path elsewhere in this shell (redirection, 'ls', 'mv',\n" +
-                "    'rm', 'source', 'wc <path>', ...) resolves against. No argument goes to the\n" +
-                "    project's own root directory (there's no real $HOME concept here). Walled\n" +
-                "    to that same project root - no amount of 'cd ..', an absolute path like\n" +
-                "    '/etc', or a long '../../..' chain can leave it; this is a deliberate\n" +
-                "    walled garden against accidents, not a security boundary. A directory\n" +
-                "    name with spaces doesn't need quoting ('cd My Folder' works) - cd only\n" +
-                "    ever takes one path, so everything after it is treated as that path\n" +
-                "    literally; quoting ('cd \"My Folder\"') also works if you prefer it.\n\n" +
+                "    'rm', 'source', 'wc <path>', ...) resolves against. No argument goes to\n" +
+                "    the current account's own home directory (see 'whoami'/'hier') - real\n" +
+                "    $HOME semantics, scoped to this shell's own tree. A path starting with\n" +
+                "    '/' means THIS shell's own root, not the real OS filesystem root -\n" +
+                "    'cd /var/log' works from anywhere, the same way a real chroot makes '/'\n" +
+                "    mean the chroot directory (see 'hier'). Walled to the project root no\n" +
+                "    matter how it's spelled - no amount of 'cd ..', a leading '/', or a long\n" +
+                "    '../../..' chain can leave it; this is a deliberate walled garden against\n" +
+                "    accidents, not a security boundary. A directory name with spaces doesn't\n" +
+                "    need quoting ('cd My Folder' works) - cd only ever takes one path, so\n" +
+                "    everything after it is treated as that path literally; quoting\n" +
+                "    ('cd \"My Folder\"') also works if you prefer it.\n\n" +
                 "EXAMPLES\n" +
-                "    cd EmuSen\n" +
+                "    cd EmuSen.DianaOS\n" +
+                "    cd /var/log\n" +
                 "    cd My Folder\n" +
                 "    cd",
+
+            ["hier"] =
+                "NAME\n" +
+                "    hier - this shell's own filesystem layout\n\n" +
+                "SYNOPSIS\n" +
+                "    man hier\n\n" +
+                "DESCRIPTION\n" +
+                "    A real Unix precedent for this exact page: 'man hier' documents a\n" +
+                "    filesystem's layout without 'hier' being a runnable command - same here.\n\n" +
+                "    /home/root        root's own home directory\n" +
+                "    /home/<user>      created by 'useradd <user>'; 'cd' with no argument goes\n" +
+                "                      to the current account's own home - see 'whoami'/'su'\n" +
+                "    /etc              reserved for future shell-level config - empty for now\n" +
+                "    /var/log          was 'Logs/' - 'dump'/'load'/screenshot/recording output\n" +
+                "    /var/lib          was 'SaveStates/' - 'state save'/'state load' snapshots\n" +
+                "    /var/games        was 'Saves/' - battery-backed cartridge SRAM ('.srm')\n" +
+                "    /tmp              scratch space, nothing here is ever auto-deleted\n\n" +
+                "    A leading '/' in any path means THIS root, not the real OS filesystem\n" +
+                "    root - see 'cd'. Candidly: the sandbox's root is the REAL project\n" +
+                "    directory (see 'ls'), not a fully separate synthetic tree, so this\n" +
+                "    project's own real source folders ('EmuSen.Hotaru', '.git', 'Man pages',\n" +
+                "    'EmuSen.sln', ...) are still visible at the top level alongside the\n" +
+                "    layout above - this shell was always meant to let you poke around the\n" +
+                "    project's own files, not hide them.\n\n" +
+                "EXAMPLES\n" +
+                "    man hier\n" +
+                "    ls /\n" +
+                "    cd /var/log && ls",
 
             ["pwd"] =
                 "NAME\n" +
@@ -738,6 +771,101 @@ namespace EmuSen.DianaOS
                 "    pwd\n\n" +
                 "DESCRIPTION\n" +
                 "    Prints the process's current working directory - see 'cd'.",
+
+            ["cat"] =
+                "NAME\n" +
+                "    cat - print a file's contents\n\n" +
+                "SYNOPSIS\n" +
+                "    cat <path>...\n\n" +
+                "DESCRIPTION\n" +
+                "    Prints one or more real files' contents, concatenated in the order\n" +
+                "    given, walled to the project's own directory tree (see 'cd'). With no\n" +
+                "    <path> at all, passes piped stdin straight through unchanged instead -\n" +
+                "    the classic 'cat' idiom for previewing a pipeline mid-stage - rather\n" +
+                "    than erroring for a missing argument.\n\n" +
+                "EXAMPLES\n" +
+                "    cat notes.txt\n" +
+                "    watch log 1 | cat",
+
+            ["head"] =
+                "NAME\n" +
+                "    head - print the first lines of a file or stdin\n\n" +
+                "SYNOPSIS\n" +
+                "    head [-n N] [path]\n\n" +
+                "DESCRIPTION\n" +
+                "    Prints the first N lines (default 10) of piped stdin, or a real file if\n" +
+                "    <path> is given (walled to the project's own directory tree - see 'cd').\n\n" +
+                "EXAMPLES\n" +
+                "    history | head -n 5\n" +
+                "    head notes.txt",
+
+            ["tail"] =
+                "NAME\n" +
+                "    tail - print the last lines of a file or stdin\n\n" +
+                "SYNOPSIS\n" +
+                "    tail [-n N] [path]\n\n" +
+                "DESCRIPTION\n" +
+                "    Prints the last N lines (default 10) of piped stdin, or a real file if\n" +
+                "    <path> is given (walled to the project's own directory tree - see 'cd').\n" +
+                "    No '-f' follow mode - this shell has nothing that appends to a file\n" +
+                "    live while 'tail' is running to follow.\n\n" +
+                "EXAMPLES\n" +
+                "    history | tail -n 5\n" +
+                "    tail notes.txt",
+
+            ["touch"] =
+                "NAME\n" +
+                "    touch - create an empty file, or update its modified time\n\n" +
+                "SYNOPSIS\n" +
+                "    touch <path>\n\n" +
+                "DESCRIPTION\n" +
+                "    Creates <path> as an empty file if it doesn't exist yet, or just updates\n" +
+                "    an existing file's last-modified time otherwise - walled to the\n" +
+                "    project's own directory tree (see 'cd'). Refuses a path that's already\n" +
+                "    a directory.\n\n" +
+                "EXAMPLES\n" +
+                "    touch scratch.txt",
+
+            ["find"] =
+                "NAME\n" +
+                "    find - recursively list files and directories\n\n" +
+                "SYNOPSIS\n" +
+                "    find [path] [-name pattern]\n\n" +
+                "DESCRIPTION\n" +
+                "    Walks <path> (default: current directory) and everything under it,\n" +
+                "    printing one entry per line, each path shown relative the same way it\n" +
+                "    was given (e.g. 'find EmuSen' prints 'EmuSen/...' paths). -name filters\n" +
+                "    to entries whose own name matches a glob ('*'/'?' wildcards only, no\n" +
+                "    regex) - a directory that doesn't match is still walked into, only\n" +
+                "    excluded from the printed list itself, matching real find's own\n" +
+                "    behavior. Walled to the project's own directory tree (see 'cd').\n\n" +
+                "EXAMPLES\n" +
+                "    find\n" +
+                "    find EmuSen.DianaOS -name '*Command.cs'",
+
+            ["xxd"] =
+                "NAME\n" +
+                "    xxd, hexdump - hexdump a real file's raw bytes\n\n" +
+                "SYNOPSIS\n" +
+                "    xxd <path>\n" +
+                "    hexdump <path>\n\n" +
+                "DESCRIPTION\n" +
+                "    Reads <path>'s REAL bytes off disk (not decoded as text the way\n" +
+                "    'cat'/'head'/'tail' do, which would corrupt anything that isn't valid\n" +
+                "    UTF8) and prints them in the same address/hex/ASCII layout 'mem' uses\n" +
+                "    for a live memory space - the on-disk counterpart to 'mem', purpose-\n" +
+                "    built so a 'dump'd capture can be inspected without leaving the shell\n" +
+                "    for an external hex editor. Walled to the project's own directory tree\n" +
+                "    (see 'cd'). With no <path>, hexdumps piped stdin instead - UTF8-encoded\n" +
+                "    first, since a pipeline stage's own output is always already-decoded\n" +
+                "    text here, never raw bytes (this shell's pipes have no byte-stream\n" +
+                "    concept the way a real Unix pipe does). 'hexdump' is a plain alias, not\n" +
+                "    a separate command - and NOT real hexdump's own multi-format output,\n" +
+                "    just this same one layout under a second, equally-reached-for name.\n\n" +
+                "EXAMPLES\n" +
+                "    dump WRAM 0 256 wram.bin\n" +
+                "    xxd var/log/SNES/wram.bin\n" +
+                "    echo hi | xxd",
 
             ["nano"] =
                 "NAME\n" +
@@ -841,7 +969,24 @@ namespace EmuSen.DianaOS
                 "    (no -i prompt anywhere in this shell, by design). Both <src> and <dst>\n" +
                 "    must resolve inside the project's own directory tree - see 'cd'.\n\n" +
                 "EXAMPLES\n" +
-                "    mv scratch.txt Logs/",
+                "    mv scratch.txt var/log/",
+
+            ["cp"] =
+                "NAME\n" +
+                "    cp - copy a file or directory\n\n" +
+                "SYNOPSIS\n" +
+                "    cp <src> <dst>\n" +
+                "    cp -r <src> <dst>\n\n" +
+                "DESCRIPTION\n" +
+                "    Copies a real file. If <dst> is an existing directory, <src> lands\n" +
+                "    inside it ('cp foo.txt logs/' -> 'logs/foo.txt'), matching real cp; an\n" +
+                "    existing destination FILE is silently overwritten (no -i prompt anywhere\n" +
+                "    in this shell, same as 'mv'). A directory requires -r, which copies it\n" +
+                "    and everything inside it. Both <src> and <dst> must resolve inside the\n" +
+                "    project's own directory tree - see 'cd'.\n\n" +
+                "EXAMPLES\n" +
+                "    cp notes.txt notes.bak.txt\n" +
+                "    cp -r var/log/Run1 var/log/Run1Backup",
 
             ["rm"] =
                 "NAME\n" +
@@ -862,7 +1007,7 @@ namespace EmuSen.DianaOS
                 "    optional -r is treated as the literal path.\n\n" +
                 "EXAMPLES\n" +
                 "    rm scratch.txt\n" +
-                "    rm -r Logs/OldRun\n" +
+                "    rm -r var/log/OldRun\n" +
                 "    rm -r My Folder",
 
             ["true"] =
@@ -951,7 +1096,7 @@ namespace EmuSen.DianaOS
                 "EXAMPLES\n" +
                 "    state save\n" +
                 "    state load\n" +
-                "    state save SaveStates/before-boss.state",
+                "    state save var/lib/before-boss.state",
 
             ["resume"] =
                 "NAME\n" +
@@ -1043,6 +1188,141 @@ namespace EmuSen.DianaOS
                 "    tmux list\n" +
                 "    tmux switch investigation\n" +
                 "    tmux kill session-1",
+
+            ["ps"] =
+                "NAME\n" +
+                "    ps, jobs - list active breakpoints, watches, and sessions\n\n" +
+                "SYNOPSIS\n" +
+                "    ps\n" +
+                "    jobs\n\n" +
+                "DESCRIPTION\n" +
+                "    Lists every active breakpoint (see 'bp'), watch (see 'watch'), and tmux\n" +
+                "    session (see 'tmux', if a session manager is registered for this host)\n" +
+                "    as one unified table - the read-only counterpart to 'kill'. 'jobs' is a\n" +
+                "    plain alias, not a separate command. Each row's id column is exactly\n" +
+                "    what 'kill' expects: 'bp<N>' for a breakpoint, 'watch<N>' for a watch, or\n" +
+                "    a session's own name - copy a row's id straight into 'kill' unchanged.\n" +
+                "    Prints nothing wrong, just an empty-looking table, with no ROM loaded and\n" +
+                "    no session manager registered (there's nothing to list, not an error).\n\n" +
+                "EXAMPLES\n" +
+                "    ps\n" +
+                "    jobs",
+
+            ["kill"] =
+                "NAME\n" +
+                "    kill - remove a breakpoint, watch, or session by its 'ps' id\n\n" +
+                "SYNOPSIS\n" +
+                "    kill <id>\n\n" +
+                "DESCRIPTION\n" +
+                "    One verb for tearing down whatever 'ps' just showed, instead of needing\n" +
+                "    to know which of 'bp remove'/'watch remove'/'tmux kill' owns a given id -\n" +
+                "    all three of those still work exactly as before, this just routes to\n" +
+                "    whichever one already owns <id>'s kind of thing, based on its shape:\n" +
+                "    'bp<N>' removes breakpoint N, 'watch<N>' removes watch N, and anything\n" +
+                "    else is looked up as a session name (same rules as 'tmux kill' - can't\n" +
+                "    kill the only remaining session; killing the CURRENT session switches you\n" +
+                "    to whichever one is left, the same hand-off 'tmux kill' already does).\n" +
+                "    A session literally NAMED like 'bp3' or 'watch1' is only reachable this\n" +
+                "    way by accident of that ambiguity - 'kill' always tries the breakpoint/\n" +
+                "    watch reading of an id shaped like one first; use 'tmux kill <name>'\n" +
+                "    directly for a session whose name collides with that shape.\n\n" +
+                "EXAMPLES\n" +
+                "    kill bp1\n" +
+                "    kill watch3\n" +
+                "    kill investigation",
+
+            ["whoami"] =
+                "NAME\n" +
+                "    whoami - print the account this shell is running as\n\n" +
+                "SYNOPSIS\n" +
+                "    whoami\n\n" +
+                "DESCRIPTION\n" +
+                "    Prints THIS shell's own current account (see 'su') - every shell starts\n" +
+                "    as 'root'. Unix flavor, not real access control - see 'su's own man page\n" +
+                "    for what that means today and what's still future work.\n\n" +
+                "EXAMPLES\n" +
+                "    whoami",
+
+            ["who"] =
+                "NAME\n" +
+                "    who - list every session and which account it's running as\n\n" +
+                "SYNOPSIS\n" +
+                "    who\n\n" +
+                "DESCRIPTION\n" +
+                "    A different axis from 'ps': 'ps' lists killable THINGS (breakpoints/\n" +
+                "    watches/sessions); this lists WHO is running each session, if a session\n" +
+                "    manager is registered for this host (see 'tmux'). With none registered,\n" +
+                "    just reports this one shell's own account instead of failing.\n\n" +
+                "EXAMPLES\n" +
+                "    who",
+
+            ["su"] =
+                "NAME\n" +
+                "    su - switch this shell's active account\n\n" +
+                "SYNOPSIS\n" +
+                "    su [name]\n\n" +
+                "DESCRIPTION\n" +
+                "    Switches THIS shell (this tmux session, if any - see 'tmux') to <name>,\n" +
+                "    or back to 'root' with no argument, matching real su's own default\n" +
+                "    target. <name> must already exist (see 'useradd'). Does NOT check\n" +
+                "    'passwd's stored password hash - nothing in this shell enforces\n" +
+                "    anything based on which account is active yet, so su succeeds\n" +
+                "    unconditionally for any existing account. That enforcement (e.g. a\n" +
+                "    restricted account that can't run mutating commands) is real future\n" +
+                "    work, not yet built - this pass is the identity/account plumbing it\n" +
+                "    will eventually sit on top of, nothing more.\n\n" +
+                "    A new session created with 'tmux new' inherits whoever created it\n" +
+                "    (not always 'root') and a ROM swap preserves each session's own current\n" +
+                "    account across the rebuild - see 'tmux'/'core'.\n\n" +
+                "EXAMPLES\n" +
+                "    su\n" +
+                "    su parent",
+
+            ["useradd"] =
+                "NAME\n" +
+                "    useradd - add a new account\n\n" +
+                "SYNOPSIS\n" +
+                "    useradd <name>\n\n" +
+                "DESCRIPTION\n" +
+                "    Adds <name> to the process-wide account directory shared by every tmux\n" +
+                "    session (like a real /etc/passwd) - root only. In-memory only, like\n" +
+                "    every other piece of DianaOS state; accounts don't survive a process\n" +
+                "    restart yet. See 'su' to switch to the new account.\n\n" +
+                "EXAMPLES\n" +
+                "    useradd kid",
+
+            ["userdel"] =
+                "NAME\n" +
+                "    userdel - remove an account\n\n" +
+                "SYNOPSIS\n" +
+                "    userdel <name>\n\n" +
+                "DESCRIPTION\n" +
+                "    Removes <name> from the account directory - root only. Refuses to\n" +
+                "    remove 'root' itself (the one account that always exists), and refuses\n" +
+                "    to remove an account that's currently active in any live session (or\n" +
+                "    this shell itself, with no session manager registered) - 'su' that\n" +
+                "    session to another account first.\n\n" +
+                "EXAMPLES\n" +
+                "    userdel kid",
+
+            ["passwd"] =
+                "NAME\n" +
+                "    passwd - set an account's password\n\n" +
+                "SYNOPSIS\n" +
+                "    passwd <newpassword>\n" +
+                "    passwd <name> <newpassword>\n\n" +
+                "DESCRIPTION\n" +
+                "    Stores a hash of <newpassword> for your OWN account (no other arguments)\n" +
+                "    or, root only, for <name>'s account. NOT checked by 'su' or anything\n" +
+                "    else today - see that command's own man page for why. No masked/\n" +
+                "    interactive prompt either: there's no reliable blocking-input read\n" +
+                "    across every host this shell runs under (a real terminal, a GUI\n" +
+                "    TextBox-driven console, a headless test), so the new password is just a\n" +
+                "    plain trailing argument, the same way 'bp add'/'watch add' take theirs -\n" +
+                "    it will show up in this shell's own 'history' in plain text.\n\n" +
+                "EXAMPLES\n" +
+                "    passwd hunter2\n" +
+                "    passwd kid hunter2",
 
             ["step"] =
                 "NAME\n" +

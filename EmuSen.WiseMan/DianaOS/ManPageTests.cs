@@ -15,28 +15,11 @@ namespace EmuSen.WiseMan.DianaOS
     // through to that fallback and staying that way forever.
     public class ManPageTests
     {
-        // The exact Name every command DianaOSInterpreter.CreateDefault
-        // registers reports (see that method's own command list) - kept
-        // here rather than reflected out of the interpreter itself,
-        // since IDianaOSCommand instances aren't otherwise enumerable
-        // from outside DianaOSInterpreter and reflecting private fields
-        // just to list them would be more fragile than one explicit,
-        // readable list that a reviewer can diff against CreateDefault
-        // by eye when either one changes.
-        private static readonly string[] RegisteredCommandNames =
-        {
-            "spaces", "mem", "write", "regs", "sprites", "pal", "channels", "mute",
-            "watch", "bp", "framelog", "cheat", "search", "snapshot", "diff", "dump",
-            "load", "tile", "tilemap", "disasm", "trace", "callers", "writers",
-            "readers", "log", "echo", "sed", "grep", "wc", "sort", "uniq", "awk",
-            "ls", "cd", "mv", "pwd", "nano", "coretop", "true", "false", "test", "[", "history",
-        };
+        // Read from a live interpreter, not a hand list - see EmuSen_Debugging_Tools_Reference_v5.md §3.18.
+        private static string[] RegisteredCommandNames =>
+            DianaOSInterpreter.CreateDefault(null).CommandNames.ToArray();
 
-        // The special builtins Dispatch handles directly (help/man
-        // itself, plus everything else that isn't an ordinary
-        // IDianaOSCommand - export/unset/source, and the parser-level
-        // control-flow keywords) - man/help should cover these too, not
-        // just the "real" command objects.
+        // Special builtins Dispatch handles directly - not IDianaOSCommand instances, so CommandNames can't cover them.
         private static readonly string[] SpecialBuiltinNames =
         {
             "man", "help", "summary", "export", "unset", "source",
@@ -56,7 +39,7 @@ namespace EmuSen.WiseMan.DianaOS
         }
 
         public static System.Collections.Generic.IEnumerable<object[]> AllNames() =>
-            RegisteredCommandNames.Concat(SpecialBuiltinNames).Select(n => new object[] { n });
+            RegisteredCommandNames.Concat(SpecialBuiltinNames).Distinct().Select(n => new object[] { n });
 
         [Fact]
         public void Help_with_no_argument_still_lists_every_command()

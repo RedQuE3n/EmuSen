@@ -50,7 +50,7 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.False(new WriteCommand().IsReadOnly);
             Assert.False(new LoadCommand().IsReadOnly);
             Assert.False(new MuteCommand().IsReadOnly);
-            Assert.False(new CdCommand().IsReadOnly);
+            Assert.False(new CdCommand(() => DianaOSInterpreter.CreateDefault(null)).IsReadOnly);
             Assert.False(new MvCommand().IsReadOnly);
             Assert.False(new NanoCommand().IsReadOnly);
             Assert.False(new StepCommand().IsReadOnly);

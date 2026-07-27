@@ -78,6 +78,18 @@ namespace EmuSen.DianaOS
 
         public CommandHistory History { get; }
 
+        // Every registered command's own Name - see EmuSen_Debugging_Tools_Reference_v5.md §3.18 on why this exists.
+        public IReadOnlyList<string> CommandNames => _orderedCommands.Select(c => c.Name).ToList();
+
+        // The account this shell is currently "logged in" as (see `man
+        // whoami`/`man su`) - Unix-flavor identity, not real access
+        // control (see DianaOSUserRegistry's own header comment). Every
+        // interpreter starts as root; su/tmux new/a ROM-swap rebuild are
+        // the only things that ever change or propagate it (see
+        // CreateSubshell, TmuxCommand's "new" case, and
+        // DianaOSSessionManager.RebuildAll).
+        public string CurrentUser { get; set; } = "root";
+
         // True between Submit() calls while a multi-line construct (an
         // unterminated quote, "$(...)", or if/for/while block) is still
         // being typed - an interactive frontend can check this to show a
@@ -148,6 +160,17 @@ namespace EmuSen.DianaOS
             var snapshotStore = new EmuSen.DianaOS.Commands.SnapshotStore();
             var history = new CommandHistory();
 
+            // whoami/su/useradd/userdel/passwd need to read/mutate THIS
+            // interpreter's own CurrentUser - something no IDianaOSCommand
+            // gets via its ordinary Execute(target, args, stdin) signature.
+            // `self` is assigned right after the interpreter it refers to
+            // is actually constructed, below - same "local mutable,
+            // captured by a closure, filled in once construction finishes"
+            // shape TmuxCommand's own buildInterpreter callback already
+            // uses for an unrelated reason (rebuilding a session).
+            DianaOSInterpreter? self = null;
+            Func<DianaOSInterpreter> selfAccessor = () => self!;
+
             var commands = new List<IDianaOSCommand>
             {
                 new EmuSen.DianaOS.Commands.SpacesCommand(),
@@ -183,12 +206,27 @@ namespace EmuSen.DianaOS
                 new Commands.UniqCommand(),
                 new Commands.AwkCommand(),
                 new Commands.LsCommand(),
-                new Commands.CdCommand(),
+                new Commands.CdCommand(selfAccessor),
                 new Commands.MvCommand(),
+                new Commands.CpCommand(),
                 new Commands.RmCommand(),
                 new Commands.PwdCommand(),
+                new Commands.CatCommand(),
+                new Commands.HeadCommand(),
+                new Commands.TailCommand(),
+                new Commands.TouchCommand(),
+                new Commands.FindCommand(),
+                new Commands.XxdCommand(),
                 new Commands.NanoCommand(),
                 new Commands.TmuxCommand(sessions, sessions is null ? null : () => CreateDefault(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions)),
+                new Commands.PsCommand(sessions),
+                new Commands.KillCommand(sessions),
+                new Commands.WhoamiCommand(selfAccessor),
+                new Commands.WhoCommand(selfAccessor, sessions),
+                new Commands.SuCommand(selfAccessor),
+                new Commands.UseraddCommand(selfAccessor),
+                new Commands.UserdelCommand(selfAccessor, sessions),
+                new Commands.PasswdCommand(selfAccessor),
                 new Commands.CoretopCommand(),
                 new Commands.ClearCommand(),
                 new Commands.TrueCommand(),
@@ -210,7 +248,9 @@ namespace EmuSen.DianaOS
                 }
             }
 
-            return new DianaOSInterpreter(target, commands, history);
+            var interpreter = new DianaOSInterpreter(target, commands, history);
+            self = interpreter;
+            return interpreter;
         }
 
         private DianaOSInterpreter(
@@ -244,6 +284,7 @@ namespace EmuSen.DianaOS
         {
             var sub = new DianaOSInterpreter(_target, _orderedCommands, _commands, new Dictionary<string, string>(_variables), new CommandHistory(), isRoot: false);
             sub._stopwatch = _stopwatch;
+            sub.CurrentUser = CurrentUser;
             return sub;
         }
 
@@ -322,12 +363,14 @@ namespace EmuSen.DianaOS
 
             // Same alias normalization Dispatch itself applies right
             // before its own registry lookup (see that method's own
-            // comment) - 'c'/'quit'/'s' aren't registered under those
-            // literal names.
+            // comment) - 'c'/'quit'/'s'/'jobs'/'hexdump' aren't registered
+            // under those literal names.
             string cmd = nameWord.Parts[0].Text.ToLowerInvariant();
             if (cmd == "c") cmd = "resume";
             else if (cmd == "quit") cmd = "shutdown";
             else if (cmd == "s") cmd = "step";
+            else if (cmd == "jobs") cmd = "ps";
+            else if (cmd == "hexdump") cmd = "xxd";
 
             return _commands.TryGetValue(cmd, out IDianaOSCommand? command) && command.IsReadOnly;
         }
@@ -693,18 +736,21 @@ namespace EmuSen.DianaOS
             if (cmd == "source" || cmd == ".") return RunScript(args);
 
             // Alias normalization for ResumeCommand/ShutdownCommand/
-            // StepCommand - same "map the word, then fall through to the
-            // ordinary registry lookup" shape 'source'/'.' would use if it
-            // didn't ALSO need RunScript's own special access (these three
-            // don't - they're ordinary IDianaOSCommands). Keeps 'help'
-            // from printing the same Usage line two or three times, which
-            // one registry entry per alias would do. NOT 'continue' - that
-            // one's a real parser-level loop-control keyword that never
-            // reaches Dispatch at all when used bare; see SubmitCore's own
-            // ContinueSignal catch for how it signals Resume instead.
+            // StepCommand/PsCommand/XxdCommand - same "map the word, then
+            // fall through to the ordinary registry lookup" shape
+            // 'source'/'.' would use if it didn't ALSO need RunScript's own
+            // special access (these five don't - they're ordinary
+            // IDianaOSCommands). Keeps 'help' from printing the same Usage
+            // line two or three times, which one registry entry per alias
+            // would do. NOT 'continue' - that one's a real parser-level
+            // loop-control keyword that never reaches Dispatch at all when
+            // used bare; see SubmitCore's own ContinueSignal catch for how
+            // it signals Resume instead.
             if (cmd == "c") cmd = "resume";
             else if (cmd == "quit") cmd = "shutdown";
             else if (cmd == "s") cmd = "step";
+            else if (cmd == "jobs") cmd = "ps";
+            else if (cmd == "hexdump") cmd = "xxd";
 
             if (!_commands.TryGetValue(cmd, out IDianaOSCommand? command))
             {

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using EmuSen.DianaOS;
 
 namespace EmuSen.WiseMan.DianaOS
@@ -38,7 +39,7 @@ namespace EmuSen.WiseMan.DianaOS
 
             public TempScript(Func<string, string> contentFactory)
             {
-                string dir = System.IO.Path.Combine(DianaOSSandbox.RootDirectory, "Logs", "WiseManScriptingTests");
+                string dir = System.IO.Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", "WiseManScriptingTests");
                 Directory.CreateDirectory(dir);
                 Path = System.IO.Path.Combine(dir, $"script_{Guid.NewGuid():N}.txt");
                 File.WriteAllText(Path, contentFactory(Path));
@@ -141,11 +142,8 @@ namespace EmuSen.WiseMan.DianaOS
         [Fact]
         public void Source_of_a_path_outside_the_sandbox_is_rejected()
         {
-            // Deliberately a real OS temp path, not one under
-            // DianaOSSandbox.RootDirectory - doesn't even need to exist,
-            // since the sandbox check runs before the file-existence
-            // check.
-            string outsidePath = Path.Combine(Path.GetTempPath(), $"wiseman_outside_{Guid.NewGuid():N}.txt");
+            // '..'-climbing, not a leading '/' one - see `man hier` on why a real OS absolute path no longer means "outside".
+            string outsidePath = string.Concat(Enumerable.Repeat("../", 15)) + $"wiseman_outside_{Guid.NewGuid():N}.txt";
             var shell = DianaOSInterpreter.CreateDefault(null);
 
             var result = shell.Submit($"source {outsidePath}");
@@ -156,7 +154,7 @@ namespace EmuSen.WiseMan.DianaOS
         [Fact]
         public void Source_of_a_missing_file_reports_a_clean_error()
         {
-            string missingPath = Path.Combine(DianaOSSandbox.RootDirectory, "Logs", "WiseManScriptingTests", $"missing_{Guid.NewGuid():N}.txt");
+            string missingPath = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", "WiseManScriptingTests", $"missing_{Guid.NewGuid():N}.txt");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
             var result = shell.Submit($"source \"{missingPath}\"");

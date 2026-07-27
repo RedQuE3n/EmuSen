@@ -42,7 +42,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
             _sram = new byte[sramSize];
 
-            string saveDir = Path.Combine(Directory.GetCurrentDirectory(), "Saves");
+            string saveDir = Path.Combine(Directory.GetCurrentDirectory(), "var", "games");
             string romName = Path.GetFileNameWithoutExtension(romPath);
             SavePath = Path.Combine(saveDir, romName + ".srm");
             LoadSram();

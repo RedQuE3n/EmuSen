@@ -15,20 +15,25 @@ namespace EmuSen.DianaOS.Commands
     //
     // Walled into DianaOSSandbox.RootDirectory (see that file's own
     // comment) - can't cd above it no matter how many "cd .."s or an
-    // absolute path outside it are used. No-arg `cd` goes to the sandbox
-    // root rather than the real $HOME, since $HOME is exactly the kind
-    // of "outside the project" directory this sandbox exists to keep
-    // this shell out of.
+    // absolute path outside it are used. No-arg `cd` goes to the current
+    // account's own home directory - see `man cd`/`man hier`.
     public class CdCommand : IDianaOSCommand
     {
+        private readonly Func<DianaOSInterpreter> _self;
+
+        public CdCommand(Func<DianaOSInterpreter> self)
+        {
+            _self = self;
+        }
+
         public string Name => "cd";
         public bool IsReadOnly => false;
-        public string Usage => "  cd [dir]                      change directory, walled to the project root (no arg: go there)";
+        public string Usage => "  cd [dir]                      change directory, walled to the project root (no arg: your home directory)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
             // See `man cd` on why this joins every word instead of just args[1].
-            string dir = args.Length >= 2 ? string.Join(' ', args.Skip(1)) : DianaOSSandbox.RootDirectory;
+            string dir = args.Length >= 2 ? string.Join(' ', args.Skip(1)) : $"/home/{_self().CurrentUser}";
 
             if (!DianaOSSandbox.TryResolve(dir, out string resolved))
             {

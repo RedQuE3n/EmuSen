@@ -16,7 +16,7 @@ namespace EmuSen.DianaOS.Commands
         public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
-            "  dump <space> <addr> <len> <file> write raw bytes to Logs/<CoreName>/<file>",
+            "  dump <space> <addr> <len> <file> write raw bytes to var/log/<CoreName>/<file>",
         });
 
         public EmuSen.DianaOS.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
@@ -40,7 +40,7 @@ namespace EmuSen.DianaOS.Commands
             var data = new byte[len];
             for (int i = 0; i < len; i++) data[i] = space.Read(addr + i);
 
-            string coreLogDir = Path.Combine("Logs", target.CoreName);
+            string coreLogDir = Path.Combine("var", "log", target.CoreName);
             Directory.CreateDirectory(coreLogDir);
             string path = Path.Combine(coreLogDir, file);
             File.WriteAllBytes(path, data);

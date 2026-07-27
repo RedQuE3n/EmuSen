@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace EmuSen.DianaOS.Commands
 {
@@ -26,7 +27,8 @@ namespace EmuSen.DianaOS.Commands
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
-            string dir = args.Length >= 2 ? args[1] : DianaOSSandbox.RootDirectory;
+            // See `man cd` on why this joins every word instead of just args[1].
+            string dir = args.Length >= 2 ? string.Join(' ', args.Skip(1)) : DianaOSSandbox.RootDirectory;
 
             if (!DianaOSSandbox.TryResolve(dir, out string resolved))
             {

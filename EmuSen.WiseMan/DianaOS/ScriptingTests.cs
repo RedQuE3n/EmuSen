@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.DianaOS
             using var script = new TempScript("X=42\necho X is $X\n");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            var result = shell.Submit($"source {script.Path}");
+            var result = shell.Submit($"source \"{script.Path}\"");
 
             Assert.Equal("X is 42", result.Output.Trim());
             Assert.Equal("42", shell.Submit("echo $X").Output.Trim());
@@ -65,7 +65,7 @@ namespace EmuSen.WiseMan.DianaOS
             using var script = new TempScript("echo hi\n");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            Assert.Equal("hi", shell.Submit($". {script.Path}").Output.Trim());
+            Assert.Equal("hi", shell.Submit($". \"{script.Path}\"").Output.Trim());
         }
 
         [Fact]
@@ -74,7 +74,7 @@ namespace EmuSen.WiseMan.DianaOS
             using var script = new TempScript("\n# a comment\necho one\n\n# another\necho two\n");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            Assert.Equal("one\ntwo", shell.Submit($"source {script.Path}").Output.Trim());
+            Assert.Equal("one\ntwo", shell.Submit($"source \"{script.Path}\"").Output.Trim());
         }
 
         [Fact]
@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.DianaOS
             using var script = new TempScript("if [ 1 -eq 1 ]; then\n  echo matched\nelse\n  echo nope\nfi\n");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            Assert.Equal("matched", shell.Submit($"source {script.Path}").Output.Trim());
+            Assert.Equal("matched", shell.Submit($"source \"{script.Path}\"").Output.Trim());
         }
 
         [Fact]
@@ -92,7 +92,7 @@ namespace EmuSen.WiseMan.DianaOS
             using var script = new TempScript("echo one\necho two\necho three\n");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            shell.Submit($"source {script.Path}");
+            shell.Submit($"source \"{script.Path}\"");
 
             // Only the "source ..." invocation itself is a real,
             // interactively-typed command line - the three echoed lines
@@ -105,10 +105,10 @@ namespace EmuSen.WiseMan.DianaOS
         public void Nested_source_shares_scope_transitively()
         {
             using var inner = new TempScript("Y=7\necho inner ran\n");
-            using var outer = new TempScript($"echo outer start\nsource {inner.Path}\necho Y is $Y\n");
+            using var outer = new TempScript($"echo outer start\nsource \"{inner.Path}\"\necho Y is $Y\n");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            var result = shell.Submit($"source {outer.Path}");
+            var result = shell.Submit($"source \"{outer.Path}\"");
 
             Assert.Equal("outer start\ninner ran\nY is 7", result.Output.Trim());
         }
@@ -116,10 +116,10 @@ namespace EmuSen.WiseMan.DianaOS
         [Fact]
         public void Self_referential_source_is_rejected_instead_of_overflowing_the_stack()
         {
-            using var script = new TempScript(path => $"source {path}\n");
+            using var script = new TempScript(path => $"source \"{path}\"\n");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            var result = shell.Submit($"source {script.Path}");
+            var result = shell.Submit($"source \"{script.Path}\"");
 
             Assert.Contains("too many nested source calls", result.Output);
         }
@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.DianaOS
             using var script = new TempScript("if true; then\necho stuck\n");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            var result = shell.Submit($"source {script.Path}");
+            var result = shell.Submit($"source \"{script.Path}\"");
             Assert.Contains("unexpected end of file", result.Output);
             Assert.False(shell.IsAwaitingMoreInput);
 
@@ -159,7 +159,7 @@ namespace EmuSen.WiseMan.DianaOS
             string missingPath = Path.Combine(DianaOSSandbox.RootDirectory, "Logs", "WiseManScriptingTests", $"missing_{Guid.NewGuid():N}.txt");
             var shell = DianaOSInterpreter.CreateDefault(null);
 
-            var result = shell.Submit($"source {missingPath}");
+            var result = shell.Submit($"source \"{missingPath}\"");
 
             Assert.Contains("no such file", result.Output);
         }

@@ -718,13 +718,17 @@ namespace EmuSen.DianaOS
                 "DESCRIPTION\n" +
                 "    Changes the process-wide current directory - the same one 'pwd' reads\n" +
                 "    and every relative path elsewhere in this shell (redirection, 'ls', 'mv',\n" +
-                "    'source', 'wc <path>', ...) resolves against. No argument goes to the\n" +
+                "    'rm', 'source', 'wc <path>', ...) resolves against. No argument goes to the\n" +
                 "    project's own root directory (there's no real $HOME concept here). Walled\n" +
                 "    to that same project root - no amount of 'cd ..', an absolute path like\n" +
                 "    '/etc', or a long '../../..' chain can leave it; this is a deliberate\n" +
-                "    walled garden against accidents, not a security boundary.\n\n" +
+                "    walled garden against accidents, not a security boundary. A directory\n" +
+                "    name with spaces doesn't need quoting ('cd My Folder' works) - cd only\n" +
+                "    ever takes one path, so everything after it is treated as that path\n" +
+                "    literally; quoting ('cd \"My Folder\"') also works if you prefer it.\n\n" +
                 "EXAMPLES\n" +
                 "    cd EmuSen\n" +
+                "    cd My Folder\n" +
                 "    cd",
 
             ["pwd"] =
@@ -838,6 +842,28 @@ namespace EmuSen.DianaOS
                 "    must resolve inside the project's own directory tree - see 'cd'.\n\n" +
                 "EXAMPLES\n" +
                 "    mv scratch.txt Logs/",
+
+            ["rm"] =
+                "NAME\n" +
+                "    rm - delete a file or directory\n\n" +
+                "SYNOPSIS\n" +
+                "    rm <path>\n" +
+                "    rm -r <path>\n\n" +
+                "DESCRIPTION\n" +
+                "    Deletes a real file. A directory requires -r (matching real rm's own\n" +
+                "    refusal to remove a directory without it); with -r, the directory and\n" +
+                "    everything inside it is deleted, no further confirmation (no -i prompt\n" +
+                "    anywhere in this shell, by design, same as 'mv'). Must resolve inside\n" +
+                "    the project's own directory tree - see 'cd' - and refuses to remove that\n" +
+                "    root directory itself even with -r, so 'rm -r .' from the project root\n" +
+                "    (or 'rm -r' on the root's own path) can't wipe out the whole project.\n" +
+                "    Like 'cd', rm only ever takes one path, so a directory name with spaces\n" +
+                "    doesn't need quoting ('rm -r My Folder' works) - everything after the\n" +
+                "    optional -r is treated as the literal path.\n\n" +
+                "EXAMPLES\n" +
+                "    rm scratch.txt\n" +
+                "    rm -r Logs/OldRun\n" +
+                "    rm -r My Folder",
 
             ["true"] =
                 "NAME\n" +

@@ -117,7 +117,9 @@ class Program
         // reason for it to report less than the other two frontends do).
         var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!,
             () => (core.LastFrameCpuSpc700Ms, core.LastFramePpuMs, core.LastFrameHdmaMs));
-        var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget);
+        var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget, null,
+            new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
+            new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec());
 
         // Same two ranges registered from power-on in Hotaru's
         // Program.cs for the Yoshi/coin investigation - duplicated here

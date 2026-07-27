@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using EmuSen.Cores.Nintendo.Venus.Cheats;
 using static EmuSen.DianaOS.Commands.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.Commands
@@ -9,24 +8,41 @@ namespace EmuSen.DianaOS.Commands
     // unified under one command since a player thinks of both as just
     // "my cheats" (see CheatRegistry's own comment for the full
     // explanation of each):
-    //   - RAM pokes (Pro Action Replay/Game Wizard style, decoded by
-    //     ActionReplayCodec) - `poke`, or `add` when it guesses that's
-    //     the format (see LooksLikeGameGenieFormat).
-    //   - ROM patches (Game Genie style, decoded by GameGenieCodec) -
-    //     `rompatch`, or `add`/`gg` (see below).
+    //   - RAM pokes (Pro Action Replay/Game Wizard style) - `poke`, or
+    //     `add` when it guesses that's the format (see
+    //     LooksLikeGameGenieFormat).
+    //   - ROM patches (Game Genie style) - `rompatch`, or `add`/`gg`
+    //     (see below).
     //
-    // NOT core-agnostic, and deliberately not pretending to be: `add`/`gg`
-    // hardcode calls to SNES Game Genie/Pro Action Replay's own code
-    // formats (EmuSen.Cores.Nintendo.Venus.Cheats - moved out of Shell/
-    // specifically because they aren't core-agnostic infrastructure, they're
-    // SNES-specific format decoders that happened to live in the shared
-    // folder). `poke`/`rompatch`/`list`/`enable`/`disable`/`remove`/`clear`
-    // stay genuinely core-agnostic - they only ever touch the generic
-    // CheatRegistry (IDebugTarget.Cheats), never a codec. A future core
-    // wanting its own code-format decoding would need its own equivalent of
-    // `add`/`gg`, the same way it needs its own IDebugTarget implementation.
+    // Genuinely core-agnostic now: `add`/`gg` decode through whichever
+    // ICheatCodeCodec instances the host passes in (see
+    // DianaOSInterpreter.CreateDefault's cheatAutoDetectCodec/
+    // cheatExplicitCodec parameters), rather than calling a specific
+    // core's code-format decoders directly - this is the "future
+    // auto-detecting cheat add that tries each known codec in turn" the
+    // codecs' own CanDecode methods were already written for. Without a
+    // codec registered (a future core with no equivalent format, or a
+    // standalone launch with no core at all), `add`/`gg` just report
+    // there's nothing to decode with - `poke`/`rompatch`/`list`/`enable`/
+    // `disable`/`remove`/`clear` keep working regardless, since they only
+    // ever touch the generic CheatRegistry (IDebugTarget.Cheats), never a
+    // codec.
     public class CheatCommand : EmuSen.DianaOS.IDianaOSCommand
     {
+        // `add`'s guessed format (LooksLikeGameGenieFormat == false) and
+        // `poke`'s own raw path both land here; `_explicitCodec` backs
+        // both `gg` and `add`'s other guess. Named by role, not by any
+        // one core's format, since a future core supplies its own
+        // instances for both roles.
+        private readonly ICheatCodeCodec? _autoDetectCodec;
+        private readonly ICheatCodeCodec? _explicitCodec;
+
+        public CheatCommand(ICheatCodeCodec? autoDetectCodec = null, ICheatCodeCodec? explicitCodec = null)
+        {
+            _autoDetectCodec = autoDetectCodec;
+            _explicitCodec = explicitCodec;
+        }
+
         public string Name => "cheat";
         public bool IsReadOnly => false;
         public string Usage => string.Join('\n', new[]
@@ -60,12 +76,6 @@ namespace EmuSen.DianaOS.Commands
             "  cheat remove <id>                  remove a cheat entirely",
             "  cheat clear                        remove every cheat",
         });
-
-        // Decoded Pro Action Replay/Game Wizard codes always target this
-        // space, not a raw WRAM array offset - see ActionReplayCodec's own
-        // comment on why a CPU-bus address is the correct target
-        // (mirroring resolves the same way real hardware's does).
-        private const string DecodedCodeSpace = "CpuBus";
 
         // `cheat add`'s format guess. Both codecs decode from the exact
         // same 8 hex-digit character set - SNES Game Genie's own alphabet
@@ -106,14 +116,17 @@ namespace EmuSen.DianaOS.Commands
 
                     if (LooksLikeGameGenieFormat(code))
                     {
-                        (int ggAddress, byte ggValue) = GameGenieCodec.Decode(code);
+                        if (_explicitCodec is null) return "No Game Genie-style cheat codec is registered for this target.";
+                        (int ggAddress, byte ggValue) = _explicitCodec.Decode(code);
                         int ggId = cheats.AddRomPatch(ggAddress, ggValue, null, description);
-                        return $"Cheat #{ggId} added (detected Game Genie format): ROM 0x{ggAddress:X6} = 0x{ggValue:X2} ({description})";
+                        return $"Cheat #{ggId} added (detected {_explicitCodec.Name} format): ROM 0x{ggAddress:X6} = 0x{ggValue:X2} ({description})";
                     }
 
-                    (int address, byte value) = ActionReplayCodec.Decode(code);
-                    int id = cheats.AddRamPoke(DecodedCodeSpace, address, value, description);
-                    return $"Cheat #{id} added (detected Pro Action Replay/Game Wizard format): {DecodedCodeSpace} 0x{address:X6} = 0x{value:X2} ({description})";
+                    if (_autoDetectCodec is null) return "No cheat codec is registered for this target.";
+                    (int address, byte value) = _autoDetectCodec.Decode(code);
+                    string space = _autoDetectCodec.SpaceName ?? "CpuBus";
+                    int id = cheats.AddRamPoke(space, address, value, description);
+                    return $"Cheat #{id} added (detected {_autoDetectCodec.Name} format): {space} 0x{address:X6} = 0x{value:X2} ({description})";
                 }
                 case "poke":
                 {
@@ -128,7 +141,8 @@ namespace EmuSen.DianaOS.Commands
                 case "gg":
                 {
                     if (parts.Length < 3) return "Usage: cheat gg <code> [description]";
-                    (int ggAddress, byte ggValue) = GameGenieCodec.Decode(parts[2]);
+                    if (_explicitCodec is null) return "No Game Genie-style cheat codec is registered for this target.";
+                    (int ggAddress, byte ggValue) = _explicitCodec.Decode(parts[2]);
                     string ggDescription = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : parts[2];
                     int ggId = cheats.AddRomPatch(ggAddress, ggValue, null, ggDescription);
                     return $"Cheat #{ggId} added: ROM 0x{ggAddress:X6} = 0x{ggValue:X2} ({ggDescription})";

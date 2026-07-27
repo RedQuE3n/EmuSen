@@ -121,7 +121,18 @@ namespace EmuSen.DianaOS
         // standard list) still isn't supported - that's a caller bug,
         // not a use case, so it's left to throw from the Dictionary
         // build below same as always.
-        public static DianaOSInterpreter CreateDefault(IDebugTarget? target, IEnumerable<IDianaOSCommand>? extraCommands = null)
+        //
+        // cheatAutoDetectCodec/cheatExplicitCodec back CheatCommand's
+        // `add`/`gg` decode roles (see that class's own header comment) -
+        // both default to null (no decoding available, `poke`/`rompatch`/
+        // etc. still work) so a core with no code-format decoder of its
+        // own, or a standalone launch with no core at all, doesn't need
+        // to pass anything.
+        public static DianaOSInterpreter CreateDefault(
+            IDebugTarget? target,
+            IEnumerable<IDianaOSCommand>? extraCommands = null,
+            ICheatCodeCodec? cheatAutoDetectCodec = null,
+            ICheatCodeCodec? cheatExplicitCodec = null)
         {
             DianaOSSandbox.EnsureInitialWorkingDirectory();
 
@@ -144,7 +155,7 @@ namespace EmuSen.DianaOS
                 new EmuSen.DianaOS.Commands.WatchCommand(),
                 new EmuSen.DianaOS.Commands.BreakCommand(),
                 new EmuSen.DianaOS.Commands.FrameLogCommand(),
-                new EmuSen.DianaOS.Commands.CheatCommand(),
+                new EmuSen.DianaOS.Commands.CheatCommand(cheatAutoDetectCodec, cheatExplicitCodec),
                 new EmuSen.DianaOS.Commands.SearchCommand(),
                 new EmuSen.DianaOS.Commands.SnapshotCommand(snapshotStore),
                 new EmuSen.DianaOS.Commands.DiffCommand(snapshotStore),

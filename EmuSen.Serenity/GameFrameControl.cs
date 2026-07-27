@@ -40,6 +40,11 @@ namespace EmuSen.Serenity
 
         private readonly Dictionary<ShaderEffect, SKRuntimeEffect> _effects = new();
 
+        // One long-lived, reused SKRuntimeShaderBuilder per effect - see
+        // GetBuilder()'s own comment for why this exists instead of
+        // constructing one fresh in Render() every frame.
+        private readonly Dictionary<ShaderEffect, SKRuntimeShaderBuilder> _builders = new();
+
         // Named ActiveEffect, not Effect - Avalonia's own Visual base
         // class already has an unrelated Effect property (a compositor
         // bitmap effect like blur/drop-shadow), and hiding it would be
@@ -104,6 +109,23 @@ namespace EmuSen.Serenity
 
             _effects[effect] = compiled;
             return compiled;
+        }
+
+        // Reused across every frame for a given effect, not rebuilt in
+        // Render() each time - see Man pages/EmuSen_Project_Overview_v2.md
+        // §2a: a fresh SKRuntimeShaderBuilder per frame meant either
+        // disposing it (which corrupts the shared SKRuntimeEffect - a real
+        // SkiaSharp bug) or leaking a new native object every frame forever
+        // (the original crash fix, functional but not a real foundation).
+        // Only Children/Uniforms are rebound per frame below; the builder
+        // itself, like the compiled effect, is frame-invariant.
+        private SKRuntimeShaderBuilder GetBuilder(ShaderEffect effect)
+        {
+            if (_builders.TryGetValue(effect, out SKRuntimeShaderBuilder? existing)) return existing;
+
+            var builder = new SKRuntimeShaderBuilder(GetEffect(effect));
+            _builders[effect] = builder;
+            return builder;
         }
 
         public override void Render(DrawingContext context)
@@ -179,30 +201,20 @@ namespace EmuSen.Serenity
                     return;
                 }
 
-                // Two stages, mirroring the old Raylib pipeline exactly:
-                // (1) scale the native-resolution game frame up to the
-                // final on-screen size first, into an offscreen surface;
-                // (2) run the shader over THAT already-upscaled image, so
-                // its row/vignette math operates in real output-pixel
-                // space (see BuiltInShaders' own comment). A shader's
-                // child "image" is sampled in the source image's own
-                // native pixel coordinates, not stretched to any
-                // destination rect - skipping this stage would only
-                // shade the frame's native-resolution top-left corner of
-                // the upscaled output, not the whole thing.
-                var upscaledInfo = new SKImageInfo(upscaledW, upscaledH, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                using SKSurface upscaleSurface = lease.GrContext != null
-                    ? SKSurface.Create(lease.GrContext, budgeted: false, upscaledInfo)
-                    : SKSurface.Create(upscaledInfo);
-                upscaleSurface.Canvas.Clear(SKColors.Transparent);
-                upscaleSurface.Canvas.DrawImage(sourceImage, new SKRect(0, 0, upscaledW, upscaledH), sampling);
-                using SKImage upscaledImage = upscaleSurface.Snapshot();
+                // A shader's "image" child is sampled in the source
+                // image's own native pixel coordinates, not stretched to
+                // any destination rect - a local matrix on the shader
+                // (not a separate offscreen upscale surface, see Man pages/
+                // EmuSen_Project_Overview_v2.md §2a) is what makes its
+                // row/vignette math operate in real output-pixel space
+                // instead of shading only the frame's native-resolution
+                // top-left corner of the upscaled output.
+                float scaleX = upscaledW / (float)_width;
+                float scaleY = upscaledH / (float)_height;
 
-                // Not `using` - see Man pages/EmuSen_Project_Overview_v2.md
-                // §2a on why disposing this crashes the process.
-                SKRuntimeEffect compiled = _owner.GetEffect(_effect);
-                var builder = new SKRuntimeShaderBuilder(compiled);
-                builder.Children["image"] = upscaledImage.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling);
+                SKRuntimeShaderBuilder builder = _owner.GetBuilder(_effect);
+                builder.Children["image"] = sourceImage.ToShader(
+                    SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, sampling, SKMatrix.CreateScale(scaleX, scaleY));
                 builder.Uniforms["outputSize"] = new[] { (float)upscaledW, (float)upscaledH };
 
                 using SKShader shader = builder.Build();

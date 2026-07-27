@@ -159,14 +159,13 @@ namespace EmuSen.WiseMan.Serenity
             }, default);
         }
 
-        // The shader-active path (F8 - Scanlines/Crt) still uses the old
-        // per-frame offscreen-SKSurface pattern the no-shader path was just
-        // fixed to avoid (see this file's own header comment and
-        // EmuSen_Project_Overview_v2.md §2a's "known remaining gap"). These
-        // don't reproduce the live-GPU flicker itself (no live GrContext
-        // here), but they do exercise the shader path at all for the first
-        // time, and would catch a logic regression (wrong pixels,
-        // exceptions, non-deterministic output) in it.
+        // The shader-active path (F8 - Scanlines/Crt) is where the
+        // SKRuntimeShaderBuilder crash was actually caught (see
+        // EmuSen_Project_Overview_v2.md §2a). These don't reproduce a
+        // live-GPU flicker itself (no live GrContext here), but they do
+        // exercise the shader path at all, and are the direct regression
+        // guard for that crash (and for a logic regression - wrong
+        // pixels, non-deterministic output - in the shader math itself).
         [Theory]
         [InlineData(ShaderEffect.Scanlines)]
         [InlineData(ShaderEffect.Crt)]
@@ -240,6 +239,54 @@ namespace EmuSen.WiseMan.Serenity
                     // applied at all - a much worse bug than a visual
                     // regression in the shader's own math.
                     Assert.NotEqual(unshadedHash, shadedHash);
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }, default);
+        }
+
+        // Verifies the local-matrix scale (GameFrameControl.cs, replacing
+        // the old offscreen-upscale-surface pass - see this file's own
+        // header comment) puts the shader's "coord" in the right place:
+        // BuiltInShaders.ScanlinesSksl darkens odd output-resolution rows
+        // by exactly 0.78, leaving even rows untouched. A 1:4 upscale (16
+        // native -> 64 window) makes every native pixel exactly 4 output
+        // rows tall, so output rows 0-3 must be full brightness and rows
+        // 4-7 must be darkened - if the scale/alignment were off by even
+        // one row, this would catch it, unlike Shader_effects_actually_
+        // change_the_rendered_output above, which only proves SOMETHING
+        // changed.
+        [Fact]
+        public async Task Scanlines_darkens_odd_output_rows_by_the_exact_documented_factor()
+        {
+            await Session.Dispatch(() =>
+            {
+                byte[] frame = SolidColorFrame(16, 16, 200, 100, 50);
+                (Window window, GameFrameControl control) = NewWindow(64, 64);
+                try
+                {
+                    control.ActiveEffect = ShaderEffect.Scanlines;
+                    control.UpdateFrame(frame, 16, 16);
+                    using WriteableBitmap captured = window.CaptureRenderedFrame()!;
+                    byte[] pixels = ToRgbaBytes(captured);
+                    int width = captured.PixelSize.Width;
+
+                    int PixelIndex(int px, int py) => (py * width + px) * 4;
+
+                    // Even output row (0) - full brightness, unshaded.
+                    int evenRow = PixelIndex(32, 0);
+                    Assert.Equal(200, pixels[evenRow]);
+                    Assert.Equal(100, pixels[evenRow + 1]);
+                    Assert.Equal(50, pixels[evenRow + 2]);
+
+                    // Odd output row (5, safely inside the second native
+                    // pixel's 4-row band) - darkened by exactly 0.78.
+                    int oddRow = PixelIndex(32, 5);
+                    Assert.Equal((byte)(200 * 0.78), pixels[oddRow]);
+                    Assert.Equal((byte)(100 * 0.78), pixels[oddRow + 1]);
+                    Assert.Equal((byte)(50 * 0.78), pixels[oddRow + 2]);
                 }
                 finally
                 {

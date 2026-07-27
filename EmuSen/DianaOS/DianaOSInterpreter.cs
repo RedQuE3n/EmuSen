@@ -251,6 +251,68 @@ namespace EmuSen.DianaOS
         // either caller needing to know anything about the grammar.
         public (bool NeedsMoreInput, string Output, HostAction? Action) Submit(string rawLine) => SubmitCore(rawLine, interactive: true);
 
+        // Answers "would running this line right now be safe off the
+        // caller's own primary thread, with no visible side effects
+        // beyond its own output?" - WITHOUT running it. A frontend with a
+        // live, always-on terminal (see EmuSen.Hotaru's GameWindow console
+        // reader thread) uses this to decide whether a typed line can
+        // answer immediately, or needs to be queued and run inline on the
+        // owning thread's own next tick instead.
+        //
+        // Deliberately narrow: only a single, complete, bare simple
+        // command (no pipes, no '&&'/'||', no assignment, no redirection,
+        // not a continuation of an open quote/if/for/while block, no '!'
+        // history reference) whose literal (non-expanded, non-substituted)
+        // command word resolves to a registered IDianaOSCommand reporting
+        // IsReadOnly. Anything else - including 'help'/'man'/'summary'/
+        // 'source'/'.', which aren't ordinary registry entries at all -
+        // falls through to false. That's always the safe direction: a
+        // false here just costs one frame of latency (see
+        // ProcessPendingConsoleCommands), never a wrong "yes."
+        public bool TryGetReadOnlyFastPath(string rawLine, out string trimmed)
+        {
+            trimmed = (rawLine ?? "").Trim();
+            if (trimmed.Length == 0) return false;
+
+            // Mid multi-line construct, or a '!N'/'!!' history reference -
+            // neither can be classified without actually running Submit.
+            if (_pendingInput.Length > 0) return false;
+            if (trimmed.StartsWith('!')) return false;
+
+            LexResult lexResult;
+            try { lexResult = Lexer.Tokenize(trimmed); }
+            catch { return false; }
+            if (lexResult.NeedsMoreInput) return false;
+
+            StatementList script;
+            try { script = Parser.Parse(lexResult.Tokens); }
+            catch { return false; }
+
+            if (script.Statements.Count != 1) return false;
+            if (script.Statements[0] is not AndOrList andOr) return false;
+            if (andOr.Rest.Count != 0) return false;
+
+            Pipeline pipeline = andOr.First;
+            if (pipeline.Negate || pipeline.Stages.Count != 1) return false;
+
+            SimpleCommand simple = pipeline.Stages[0];
+            if (simple.Assignments.Count != 0 || simple.Redirections.Count != 0 || simple.Words.Count == 0) return false;
+
+            Word nameWord = simple.Words[0];
+            if (nameWord.Parts.Count != 1 || nameWord.Parts[0].Kind != PartKind.Literal) return false;
+
+            // Same alias normalization Dispatch itself applies right
+            // before its own registry lookup (see that method's own
+            // comment) - 'c'/'quit'/'s' aren't registered under those
+            // literal names.
+            string cmd = nameWord.Parts[0].Text.ToLowerInvariant();
+            if (cmd == "c") cmd = "resume";
+            else if (cmd == "quit") cmd = "shutdown";
+            else if (cmd == "s") cmd = "step";
+
+            return _commands.TryGetValue(cmd, out IDianaOSCommand? command) && command.IsReadOnly;
+        }
+
         // `source`/`.` (RunScript below) feeds a script file's lines
         // through this same interpreter one at a time too, sharing this
         // exact buffering/execution path (and, crucially, its variables -

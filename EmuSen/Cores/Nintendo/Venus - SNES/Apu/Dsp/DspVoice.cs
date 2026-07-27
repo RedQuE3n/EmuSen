@@ -71,7 +71,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         public bool Ended { get; private set; }
 
         // Debug-only observability, added building out the DSP toolchain
-        // (see SDsp.GetVoiceDebugInfo/IDebugTarget.GetAudioChannels) -
+        // (see SDsp.GetVoiceDebugInfo/IDebugTarget.AudioChannels) -
         // none of this affects real playback, it just surfaces state that
         // was previously only visible via Console-printed KeyOn logging
         // (DebugSettings.DspKeyOnLogging), which meant "has this voice

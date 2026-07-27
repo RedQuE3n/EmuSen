@@ -554,6 +554,25 @@ namespace EmuSen.Mistress9.Views
                     session.RunFrame();
                     runFrameTimeInWindow += frameStopwatch.Elapsed;
 
+                    // Publishes this frame's register/sprite/palette/audio/
+                    // hardware-load snapshots via IDebugTarget's provider
+                    // properties - see EmuSen.Providers.IRealtimeProvider's
+                    // own comment. Null-conditional since _debugTarget isn't
+                    // atomically tied to _session (a ROM swap in flight
+                    // could momentarily leave one set without the other).
+                    _debugTarget?.RefreshProviders();
+
+                    // Runs whatever _consoleWindow queued (a mutating
+                    // command typed while not fast-path-eligible - see
+                    // DianaOSConsoleWindow.Submit and
+                    // EmuSen.DianaOS.DianaOSInterpreterScheduler's own
+                    // comment) against the core we just finished a frame
+                    // on - null-conditional since the console window is
+                    // opened on demand and may not exist at all. Must run
+                    // on this (the emulation) thread, same reasoning as
+                    // RefreshProviders() just above.
+                    _consoleWindow?.DrainPendingFromEmulationThread();
+
                     // Same call-site placement as PumpAudio() in
                     // EmuSen.Hotaru/Program.cs - right after
                     // RunFrame(), since that's what actually produces new

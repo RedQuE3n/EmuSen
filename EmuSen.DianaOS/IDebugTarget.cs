@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EmuSen.Providers;
 
 namespace EmuSen.DianaOS
 {
@@ -172,7 +173,7 @@ namespace EmuSen.DianaOS
     // of one native frame at this console's real refresh rate) - a
     // generic dashboard just draws a bar, it doesn't need to know what
     // "CPU+SPC700" vs "PPU" vs "HDMA" actually measure for a given core,
-    // the same way GetAudioChannels' 0-100 `Level` scale means whatever
+    // the same way AudioChannels' 0-100 `Level` scale means whatever
     // is loudest, not any one core's native envelope units.
     public readonly struct DebugLoadInfo
     {
@@ -206,8 +207,18 @@ namespace EmuSen.DianaOS
         // keeps a generic register-panel UI able to show two logical
         // sections without needing to know which registers belong to which
         // half itself.
-        IReadOnlyList<DebugRegisterValue> GetCpuRegisters();
-        IReadOnlyList<DebugRegisterValue> GetVideoRegisters();
+        //
+        // Real-time providers (see EmuSen.Providers), not plain get-methods,
+        // as of the "Diana isn't drowning" work: `regs`/`coretop`/etc. no
+        // longer touch live core state on every call (potentially from a
+        // console-reader thread running concurrently with emulation) -
+        // they read whatever snapshot this target's own Refresh() cadence
+        // (see each implementation's own comment on who calls it, and how
+        // often) last published. A target that never calls Refresh() on its
+        // own providers is still correct, just always reporting whatever
+        // its constructor-time initial snapshot was.
+        IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CpuRegisters { get; }
+        IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters { get; }
 
         // The sound co-processor's own registers (65816-side cores: the
         // SPC700) plus the CPU<->APU communication ports (both
@@ -217,11 +228,11 @@ namespace EmuSen.DianaOS
         // only prior way to see SPC700 state at all was reading raw
         // verbose-trace text - there was no structured equivalent of
         // `regs` for it. A core without a distinct sound co-processor
-        // (or one not yet modeled this way) can return an empty list.
-        IReadOnlyList<DebugRegisterValue> GetApuRegisters();
+        // (or one not yet modeled this way) can publish an empty list.
+        IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters { get; }
 
-        IReadOnlyList<DebugSpriteInfo> GetSprites();
-        IReadOnlyList<DebugPaletteInfo> GetPalettes();
+        IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites { get; }
+        IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes { get; }
 
         // The watchpoint mechanism (see WatchRegistry.cs) - exposed
         // directly rather than re-wrapped into more IDebugTarget methods,
@@ -319,7 +330,7 @@ namespace EmuSen.DianaOS
         // decides for itself what "one entry" looks like and how to
         // render it. Same "core does the decoding, the command does the
         // grid-walking/formatting" split as Disassemble()/
-        // GetCpuRegisters() above - built specifically so a menu cursor's
+        // CpuRegisters above - built specifically so a menu cursor's
         // position or a HUD tile change can be confirmed by comparing
         // tilemap entries as text instead of eyeballing two screenshots.
         string DecodeTilemapEntry(IDebugMemorySpace space, int address);
@@ -375,8 +386,8 @@ namespace EmuSen.DianaOS
         // (GetAudioSamples) or a KeyOn event as it happened (console-only
         // DspKeyOnLogging) - neither answers "is voice N currently active,
         // and what's its envelope actually doing right now." A core with
-        // no distinct channel/voice concept can return an empty list.
-        IReadOnlyList<DebugAudioChannelInfo> GetAudioChannels();
+        // no distinct channel/voice concept can publish an empty list.
+        IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels { get; }
 
         // Mutes/unmutes one channel/voice for isolation testing - the
         // channel's own playback/envelope state keeps advancing normally
@@ -393,10 +404,10 @@ namespace EmuSen.DianaOS
         // Per-subsystem load, backing `coretop`'s htop-style bars - see
         // DebugLoadInfo's own comment. A core with no per-subsystem
         // timing breakdown modeled (or not wired up to whatever produces
-        // one - see SnesDebugTarget's own constructor comment) returns an
+        // one - see SnesDebugTarget's own constructor comment) publishes an
         // empty list; `coretop` just skips that section rather than
         // showing empty/fake bars.
-        IReadOnlyList<DebugLoadInfo> GetHardwareLoad();
+        IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad { get; }
 
         // The hardware's real total sprite/OAM capacity (128 on the
         // SNES), or 0 if this core doesn't model a fixed limit - lets a

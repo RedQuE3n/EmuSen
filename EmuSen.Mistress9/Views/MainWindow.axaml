@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:serenity="clr-namespace:EmuSen.Serenity;assembly=EmuSen.Serenity"
         x:Class="EmuSen.Mistress9.Views.MainWindow"
         Title="EmuSen Testing Studio"
         Width="1024" Height="768"
@@ -51,20 +52,20 @@
             </Grid>
         </Border>
 
-        <!-- Game viewport. GameView shows the live frame once a ROM is
+        <!-- Game viewport. GameFrame shows the live frame once a ROM is
              running; NoRomText sits behind it and is only visible until then
              (toggled in code-behind, not a binding, to keep this first pass
-             simple). -->
+             simple). GameFrameControl is EmuSen.Serenity's shared GPU
+             (Skia/Ganesh) presentation surface - same control Hotaru's
+             GameWindow uses - replacing the old WriteableBitmap-backed
+             Image below. -->
         <Grid Background="Black">
             <TextBlock x:Name="NoRomText"
                        Text="No ROM loaded"
                        Foreground="Gray"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center" />
-            <Image x:Name="GameView"
-                   Stretch="Uniform"
-                   RenderOptions.BitmapInterpolationMode="None"
-                   IsVisible="False" />
+            <serenity:GameFrameControl x:Name="GameFrame" IsVisible="False" />
         </Grid>
 
     </DockPanel>

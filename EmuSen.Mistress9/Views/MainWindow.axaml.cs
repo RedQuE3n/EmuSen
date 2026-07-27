@@ -3,14 +3,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EmuSen.Common;
@@ -33,7 +30,6 @@ namespace EmuSen.Mistress9.Views
         private static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / 60.0);
 
         private EmulatorSession? _session;
-        private WriteableBitmap? _bitmap;
 
         // Gamepad polling stays on the UI thread, on its own timer, separate
         // from emulation itself (see _emuThread below) - GamepadManager.cs's
@@ -84,6 +80,7 @@ namespace EmuSen.Mistress9.Views
         {
             public required byte[] Pixels;
             public required int Width;
+            public required int Height;
         }
         private FrameData? _pendingFrame;
         private int _presentScheduled;
@@ -389,14 +386,7 @@ namespace EmuSen.Mistress9.Views
                 _consoleWindow?.UpdateTarget(_debugTarget, displayName);
                 _coretopWindow?.UpdateTarget(_debugTarget);
 
-                _bitmap = new WriteableBitmap(
-                    new PixelSize(_session.ScreenWidth, EmulatorSession.ScreenHeight),
-                    new Vector(96, 96),
-                    Avalonia.Platform.PixelFormat.Rgba8888,
-                    AlphaFormat.Opaque);
-
-                GameView.Source = _bitmap;
-                GameView.IsVisible = true;
+                GameFrame.IsVisible = true;
                 NoRomText.IsVisible = false;
 
                 StatusText.Text = $"Running: {displayName}";
@@ -462,9 +452,10 @@ namespace EmuSen.Mistress9.Views
         // Runs entirely off the UI thread: RunFrame() (the actual CPU/PPU/
         // APU work) and the frame-buffer readout no longer compete with
         // Avalonia's input/paint pump the way they did inside the old
-        // DispatcherTimer tick. Only the final bitmap copy + present
-        // (PresentPendingFrame, dispatched below) needs the UI thread,
-        // since WriteableBitmap is UI-thread-affine.
+        // DispatcherTimer tick. Only the final present (PresentPendingFrame,
+        // dispatched below) needs the UI thread - GameFrame (GameFrameControl)
+        // is a regular Avalonia Control, and Control/Visual are UI-thread-
+        // affine the same way WriteableBitmap used to be.
         //
         // Input note: keyboard/gamepad button state is applied straight to
         // _session.Bus.Input from the UI thread (SetButtonFromKey,
@@ -588,7 +579,7 @@ namespace EmuSen.Mistress9.Views
                     subCompositeMsInWindow += session.LastFrameSubCompositeMs;
 
                     byte[] frame = session.GetFrameBufferRgba();
-                    SubmitFrame(frame, session.ScreenWidth);
+                    SubmitFrame(frame, session.ScreenWidth, EmulatorSession.ScreenHeight);
 
                     framesInWindow++;
                     TimeSpan windowElapsed = clock.Elapsed - fpsWindowStart;
@@ -674,9 +665,9 @@ namespace EmuSen.Mistress9.Views
         // Called from the emulation thread. Publishes the newest frame and
         // schedules a UI-thread Present only if one isn't already pending -
         // see _pendingFrame's own field comment for why.
-        private void SubmitFrame(byte[] pixels, int width)
+        private void SubmitFrame(byte[] pixels, int width, int height)
         {
-            Interlocked.Exchange(ref _pendingFrame, new FrameData { Pixels = pixels, Width = width });
+            Interlocked.Exchange(ref _pendingFrame, new FrameData { Pixels = pixels, Width = width, Height = height });
 
             if (Interlocked.CompareExchange(ref _presentScheduled, 1, 0) == 0)
             {
@@ -688,41 +679,18 @@ namespace EmuSen.Mistress9.Views
         // is at the moment it actually runs, which may not be the same
         // frame that triggered this dispatch if the emulation thread has
         // since produced newer ones - that's the intended drop-stale-frames
-        // behavior, not a bug.
+        // behavior, not a bug. GameFrameControl.UpdateFrame takes the raw
+        // buffer + dimensions directly (see EmuSen.Serenity), so pseudo-
+        // hi-res width changes (SETINI bit 3) just fall out for free -
+        // unlike the old WriteableBitmap this replaced, there's no fixed-
+        // size backing surface to resize.
         private void PresentPendingFrame()
         {
             try
             {
                 FrameData? frame = Interlocked.Exchange(ref _pendingFrame, null);
-                if (frame is null || _bitmap is null) return;
-
-                // The frame can now be a different width than the bitmap
-                // was created with - pseudo-hi-res (SETINI bit 3) makes a
-                // frame 512 pixels wide instead of 256, and a game can
-                // toggle it between frames. Recreate the bitmap whenever
-                // the byte length doesn't match what's currently allocated,
-                // rather than trusting the old fixed 256x224 assumption and
-                // Marshal.Copy-ing past the end of a too-small buffer -
-                // that used to be a real crash/corruption risk here, not
-                // just a cosmetic issue, since Marshal.Copy has no bounds
-                // checking of its own.
-                int expectedBytes = _bitmap.PixelSize.Width * _bitmap.PixelSize.Height * 4;
-                if (frame.Pixels.Length != expectedBytes)
-                {
-                    _bitmap = new WriteableBitmap(
-                        new PixelSize(frame.Width, EmulatorSession.ScreenHeight),
-                        new Vector(96, 96),
-                        Avalonia.Platform.PixelFormat.Rgba8888,
-                        AlphaFormat.Opaque);
-                    GameView.Source = _bitmap;
-                }
-
-                using (ILockedFramebuffer fb = _bitmap.Lock())
-                {
-                    Marshal.Copy(frame.Pixels, 0, fb.Address, frame.Pixels.Length);
-                }
-
-                GameView.InvalidateVisual();
+                if (frame is null) return;
+                GameFrame.UpdateFrame(frame.Pixels, frame.Width, frame.Height);
             }
             finally
             {

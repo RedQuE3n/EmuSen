@@ -190,8 +190,9 @@ namespace EmuSen.Mistress9.Views
         // Real images now, not the console version's downsampled ANSI-
         // block approximation - a GUI window can just show
         // RenderPaletteSwatch()/RenderTileSheet()'s actual output
-        // directly, the same way MainWindow already turns
-        // GetFrameBufferRgba() into GameView's own bitmap.
+        // directly. Stays a plain WriteableBitmap here (unlike MainWindow's
+        // GameFrame) - these are static debug snapshots, not a live video
+        // feed, so there's no GPU-blit/shader case to make for them.
         private static WriteableBitmap? ToBitmap(byte[] rgba, int width, int height)
         {
             if (width <= 0 || height <= 0 || rgba.Length < width * height * 4) return null;

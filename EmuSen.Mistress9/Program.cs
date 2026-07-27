@@ -17,24 +17,12 @@ namespace EmuSen.Mistress9
 
         public static AppBuilder BuildAvaloniaApp()
         {
-            var builder = AppBuilder.Configure<App>()
+            // See Man pages/EmuSen_Project_Overview_v2.md §2a for why
+            // there's no UseWayland() call here.
+            return AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .WithInterFont()
                 .LogToTrace();
-
-            // Native Wayland backend (Avalonia 12.1+): experimental, so it isn't
-            // picked up by UsePlatformDetect() on its own yet - has to be opted
-            // into explicitly. Guarded to Linux only so Windows/macOS builds are
-            // unaffected. Under KDE this currently gets you real Wayland
-            // rendering, but a few KDE-specific niceties (global app menu, window
-            // icons, blur-behind) aren't implemented yet per Avalonia's own 12.1
-            // release notes - cosmetic gaps, not blockers.
-            if (OperatingSystem.IsLinux())
-            {
-                builder = builder.UseWayland();
-            }
-
-            return builder;
         }
     }
 }

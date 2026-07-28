@@ -115,9 +115,9 @@ namespace EmuSen.Hotaru
                 // Separate from Usr/Home/Saves' battery-backed cartridge SRAM
                 // (owned by Cartridge.SavePath) - a save state is a full
                 // snapshot of emulator state, a different kind of artifact
-                // with a different lifetime. Shares the same directory since
-                // both are "saved emulator state" from the user's perspective.
-                string statePath = Path.Combine(DianaOSSandbox.SavesDirectory, Path.GetFileNameWithoutExtension(romPath) + ".state");
+                // with a different lifetime. Nested under its own "Save
+                // States" subfolder so it doesn't mix with the flat .srm files.
+                string statePath = Path.Combine(DianaOSSandbox.SaveStatesDirectory, Path.GetFileNameWithoutExtension(romPath) + ".state");
 
                 core = new VenusCore(headless: false);
 

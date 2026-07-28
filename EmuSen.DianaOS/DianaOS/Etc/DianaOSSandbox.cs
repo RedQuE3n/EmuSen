@@ -51,6 +51,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
         public static string UsrHomeDirectory => Path.Combine(RootDirectory, "EmuSen.DianaOS", "DianaOS", "Usr", "Home");
         public static string LogsDirectory => Path.Combine(UsrHomeDirectory, "Logs");
         public static string SavesDirectory => Path.Combine(UsrHomeDirectory, "Saves");
+        public static string SaveStatesDirectory => Path.Combine(SavesDirectory, "Save States");
 
         // WiseMan test-run scratch space only - dev/test artifacts, not
         // emulator output, kept out of Usr/Home so it isn't mistaken for it.
@@ -62,6 +63,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
             string root = RootDirectory;
             Directory.CreateDirectory(LogsDirectory);
             Directory.CreateDirectory(SavesDirectory);
+            Directory.CreateDirectory(SaveStatesDirectory);
             Directory.CreateDirectory(SourceLogsDirectory);
             Directory.CreateDirectory(Path.Combine(root, "home", "root"));
             Directory.CreateDirectory(Path.Combine(root, "etc"));

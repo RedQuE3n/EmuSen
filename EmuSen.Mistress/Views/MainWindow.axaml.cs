@@ -315,12 +315,17 @@ namespace EmuSen.Mistress.Views
             _coretopWindow.Show(this);
         }
 
+        // Defaults to the same Usr/Home/Saves/Save States/ tree the console
+        // build and DianaOS shell's `state save`/`state load` write to -
+        // overridable in Preferences (AppSettings.StateDirectory) for
+        // anyone who wants states somewhere else.
         private string? CurrentStatePath =>
             _currentRomPath is null
                 ? null
                 : System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "EmuSen", "Saves",
+                    string.IsNullOrWhiteSpace(_appSettings.StateDirectory)
+                        ? DianaOSSandbox.SaveStatesDirectory
+                        : _appSettings.StateDirectory,
                     System.IO.Path.GetFileNameWithoutExtension(_currentRomPath) + ".state");
 
         private void OnSaveStateClick(object? sender, RoutedEventArgs e)

@@ -33,6 +33,7 @@ namespace EmuSen.Mistress.Views
 
             _initializing = true;
             LogDirectoryBox.Text = _settings.LogDirectory;
+            StateDirectoryBox.Text = _settings.StateDirectory;
             RomDirectoryBox.Text = _settings.RomDirectory;
             CoreComboBox.ItemsSource = AvailableCores;
             CoreComboBox.SelectedIndex = System.Math.Max(0, System.Array.IndexOf(AvailableCores, _settings.SelectedCore));
@@ -47,6 +48,16 @@ namespace EmuSen.Mistress.Views
             _settings.LogDirectory = picked;
             _settings.Save();
             LogDirectoryBox.Text = picked;
+        }
+
+        private async void OnBrowseStateDirectoryClick(object? sender, RoutedEventArgs e)
+        {
+            string? picked = await PickFolder("Choose Save State Directory");
+            if (picked is null) return;
+
+            _settings.StateDirectory = picked;
+            _settings.Save();
+            StateDirectoryBox.Text = picked;
         }
 
         private async void OnBrowseRomDirectoryClick(object? sender, RoutedEventArgs e)

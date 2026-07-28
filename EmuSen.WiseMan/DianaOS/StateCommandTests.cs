@@ -10,7 +10,7 @@ namespace EmuSen.WiseMan.DianaOS
 {
     // StateCommand's own logic - fake Action<string>/Func<string>
     // callbacks stand in for a real ICore/EmulatorSession, matching the
-    // pattern EmuSen.Hotaru/EmuSen.Mistress9 actually wire it with (see
+    // pattern EmuSen.Hotaru/EmuSen.Mistress actually wire it with (see
     // that file's own header comment on why it's constructor-injected
     // delegates, not IDebugTarget access).
     public class StateCommandTests

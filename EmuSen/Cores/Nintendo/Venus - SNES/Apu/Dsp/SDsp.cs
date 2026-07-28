@@ -300,10 +300,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             AudioBuffer.Enqueue(leftSample);
             AudioBuffer.Enqueue(rightSample);
 
+            // Active resync, not passive trim - see EmuSen_Settings_Reference.md §2.
             if (AudioBuffer.Count > AudioSettings.AudioBufferMaxSamples)
             {
-                AudioBuffer.Dequeue();
-                AudioBuffer.Dequeue();
+                while (AudioBuffer.Count > AudioSettings.AudioBufferResyncTargetSamples)
+                {
+                    AudioBuffer.Dequeue();
+                }
             }
         }
 

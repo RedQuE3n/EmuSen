@@ -30,7 +30,7 @@ namespace EmuSen.Debug
         // WatchRegistry's live echo need to read/write this without
         // depending on this (or any other core's) settings class, so the
         // actual flag lives there; every caller here (VenusCore,
-        // Mistress9's DebugSettingsWindow, Pharaoh90) keeps working
+        // Mistress's DebugSettingsWindow, Pharaoh) keeps working
         // against this same property name unchanged.
         public static bool MasterLoggingEnabled
         {

@@ -44,14 +44,14 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
     {
         // Optional - lets a frontend that CAN open a real window (the
         // console build, via a small Avalonia-backed helper of its own;
-        // EmuSen.Mistress9 doesn't use this constructor parameter at all,
+        // EmuSen.Mistress doesn't use this constructor parameter at all,
         // since it replaces this whole command outright - see
         // DianaOSInterpreter.CreateDefault's own comment on
         // extraCommands overriding a same-named default) wire up `-w`
         // without EmuSen.DianaOS (a core-agnostic library with no UI
         // toolkit dependency of its own) needing to know Avalonia, or
         // any other windowing toolkit, exists. A plain
-        // Action<IDebugTarget>, same shape EmuSen.Mistress9's own
+        // Action<IDebugTarget>, same shape EmuSen.Mistress's own
         // Pause/ResumeCommand delegates already use for the same reason.
         private readonly Action<IDebugTarget>? _openWindow;
 

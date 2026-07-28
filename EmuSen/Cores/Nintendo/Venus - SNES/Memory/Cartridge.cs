@@ -48,7 +48,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
             _sram = new byte[sramSize];
 
-            string saveDir = Path.Combine(DianaOSSandbox.RootDirectory, "var", "games");
+            string saveDir = DianaOSSandbox.SavesDirectory;
             string romName = Path.GetFileNameWithoutExtension(romPath);
             SavePath = Path.Combine(saveDir, romName + ".srm");
             LoadSram();

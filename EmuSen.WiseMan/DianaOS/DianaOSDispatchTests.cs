@@ -99,7 +99,7 @@ namespace EmuSen.WiseMan.DianaOS
         }
 
         // A frontend-supplied extraCommand sharing a name with one of the
-        // standard registry (e.g. EmuSen.Mistress9 replacing `coretop`'s
+        // standard registry (e.g. EmuSen.Mistress replacing `coretop`'s
         // raw-terminal implementation with a windowed one) should REPLACE
         // the default rather than throwing on a duplicate key - see
         // CreateDefault's own comment.

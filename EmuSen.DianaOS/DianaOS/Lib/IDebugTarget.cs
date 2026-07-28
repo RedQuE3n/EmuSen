@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using EmuSen.Providers;
+using EmuSen.Cauldron;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
@@ -213,7 +213,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // sections without needing to know which registers belong to which
         // half itself.
         //
-        // Real-time providers (see EmuSen.Providers), not plain get-methods,
+        // Real-time providers (see EmuSen.Cauldron), not plain get-methods,
         // as of the "Diana isn't drowning" work: `regs`/`coretop`/etc. no
         // longer touch live core state on every call (potentially from a
         // console-reader thread running concurrently with emulation) -
@@ -358,7 +358,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
 
         // Exports the current tile/character memory as a plain RGBA image,
         // for a headless harness to write straight to disk (see
-        // EmuSen.Pharaoh90's `vramsheet` verb) without ever needing a
+        // EmuSen.Pharaoh's `vramsheet` verb) without ever needing a
         // Raylib window. Deliberately not "VRAM sheet" at the interface
         // level - an NES core's CHR-ROM/CHR-RAM pattern tables aren't VRAM
         // in the SNES sense, but the shape (some tile memory, decoded to a

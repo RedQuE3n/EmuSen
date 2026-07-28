@@ -10,7 +10,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
-using EmuSen.Providers;
+using EmuSen.Cauldron;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
@@ -120,7 +120,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? _frameTimings;
 
         // Real-time providers backing IDebugTarget's provider properties
-        // below - see EmuSen.Providers.IRealtimeProvider's own comment.
+        // below - see EmuSen.Cauldron.IRealtimeProvider's own comment.
         // Each wraps the same live-read logic this class always had (now
         // the private ReadXLive methods), just no longer re-run on every
         // single call - Refresh() is expected to be called once per frame

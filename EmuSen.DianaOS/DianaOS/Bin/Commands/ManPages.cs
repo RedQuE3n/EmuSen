@@ -235,7 +235,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    Writes a single byte to <space> at <addr>. Refuses outright if <space>\n" +
                 "    isn't writable (see 'spaces'). No pause/synchronization with the\n" +
                 "    emulation thread beyond whatever the current frontend provides (see the\n" +
-                "    'pause'/'resume' commands in EmuSen.Mistress9's console window).\n\n" +
+                "    'pause'/'resume' commands in EmuSen.Mistress's console window).\n\n" +
                 "EXAMPLES\n" +
                 "    write WRAM 10 ff",
 
@@ -448,9 +448,10 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    dump <space> <addr> <len> <file>\n\n" +
                 "DESCRIPTION\n" +
                 "    Writes <len> raw bytes from <space> starting at <addr> to\n" +
-                "    var/log/<CoreName>/<file> - no header or metadata, so a hex editor can\n" +
-                "    open the result directly. The write-side counterpart is 'load'. Same live-\n" +
-                "    hardware-space refusal as 'search'/'snapshot'.\n\n" +
+                "    EmuSen.DianaOS/DianaOS/Usr/Home/Logs/<CoreName>/<file> - no header or\n" +
+                "    metadata, so a hex editor can open the result directly. The write-side\n" +
+                "    counterpart is 'load'. Same live-hardware-space refusal as\n" +
+                "    'search'/'snapshot'.\n\n" +
                 "EXAMPLES\n" +
                 "    dump WRAM 0 2000 wram.bin",
 
@@ -460,8 +461,9 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "SYNOPSIS\n" +
                 "    load <space> <addr> <file>\n\n" +
                 "DESCRIPTION\n" +
-                "    Reads var/log/<CoreName>/<file> (typically one 'dump' produced, or hand-\n" +
-                "    edited afterward) and pokes its raw bytes into <space> starting at\n" +
+                "    Reads EmuSen.DianaOS/DianaOS/Usr/Home/Logs/<CoreName>/<file> (typically\n" +
+                "    one 'dump' produced, or hand-edited afterward) and pokes its raw bytes\n" +
+                "    into <space> starting at\n" +
                 "    <addr>. Refuses if <space> isn't writable.\n\n" +
                 "EXAMPLES\n" +
                 "    load WRAM 0 wram.bin",
@@ -729,7 +731,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    the current account's own home directory (see 'whoami'/'hier') - real\n" +
                 "    $HOME semantics, scoped to this shell's own tree. A path starting with\n" +
                 "    '/' means THIS shell's own root, not the real OS filesystem root -\n" +
-                "    'cd /var/log' works from anywhere, the same way a real chroot makes '/'\n" +
+                "    'cd /SourceLogs' works from anywhere, the same way a real chroot makes '/'\n" +
                 "    mean the chroot directory (see 'hier'). Walled to the project root no\n" +
                 "    matter how it's spelled - no amount of 'cd ..', a leading '/', or a long\n" +
                 "    '../../..' chain can leave it; this is a deliberate walled garden against\n" +
@@ -739,7 +741,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    ('cd \"My Folder\"') also works if you prefer it.\n\n" +
                 "EXAMPLES\n" +
                 "    cd EmuSen.DianaOS\n" +
-                "    cd /var/log\n" +
+                "    cd /SourceLogs\n" +
                 "    cd My Folder\n" +
                 "    cd",
 
@@ -755,10 +757,18 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    /home/<user>      created by 'useradd <user>'; 'cd' with no argument goes\n" +
                 "                      to the current account's own home - see 'whoami'/'su'\n" +
                 "    /etc              reserved for future shell-level config - empty for now\n" +
-                "    /var/log          was 'Logs/' - 'dump'/'load'/screenshot/recording output\n" +
-                "    /var/lib          was 'SaveStates/' - 'state save'/'state load' snapshots\n" +
-                "    /var/games        was 'Saves/' - battery-backed cartridge SRAM ('.srm')\n" +
+                "    /SourceLogs       was 'var/log' - WiseMan test-run scratch space only;\n" +
+                "                      dev/test artifacts, not emulator output\n" +
                 "    /tmp              scratch space, nothing here is ever auto-deleted\n\n" +
+                "    EmuSen.DianaOS/DianaOS/Usr/Home/Logs   was 'var/log' (before that,\n" +
+                "                      'Logs/') - 'dump'/'load'/screenshot/recording output\n" +
+                "    EmuSen.DianaOS/DianaOS/Usr/Home/Saves  was 'var/lib' + 'var/games'\n" +
+                "                      (before that, 'SaveStates/' + 'Saves/') - 'state\n" +
+                "                      save'/'state load' snapshots and battery-backed\n" +
+                "                      cartridge SRAM ('.srm')\n\n" +
+                "    Unlike the short mnemonic paths above, Logs and Saves live several\n" +
+                "    levels deep in the real tree, inside the DianaOS project's own source\n" +
+                "    folder - there's no short '/...' alias for them (yet).\n\n" +
                 "    A leading '/' in any path means THIS root, not the real OS filesystem\n" +
                 "    root - see 'cd'. Candidly: the sandbox's root is the REAL project\n" +
                 "    directory (see 'ls'), not a fully separate synthetic tree, so this\n" +
@@ -769,7 +779,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "EXAMPLES\n" +
                 "    man hier\n" +
                 "    ls /\n" +
-                "    cd /var/log && ls",
+                "    cd EmuSen.DianaOS/DianaOS/Usr/Home/Logs && ls",
 
             ["pwd"] =
                 "NAME\n" +
@@ -871,7 +881,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    just this same one layout under a second, equally-reached-for name.\n\n" +
                 "EXAMPLES\n" +
                 "    dump WRAM 0 256 wram.bin\n" +
-                "    xxd var/log/SNES/wram.bin\n" +
+                "    xxd EmuSen.DianaOS/DianaOS/Usr/Home/Logs/SNES/wram.bin\n" +
                 "    echo hi | xxd",
 
             ["nano"] =
@@ -892,7 +902,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    way this shell's own line editor does for a single line, just for a\n" +
                 "    whole buffer - so it refuses cleanly (rather than failing strangely) when\n" +
                 "    stdin/stdout is redirected (a piped script, a 'source'd file, a headless\n" +
-                "    test) or when there's no real terminal at all (EmuSen.Mistress9's GUI\n" +
+                "    test) or when there's no real terminal at all (EmuSen.Mistress's GUI\n" +
                 "    console window).\n\n" +
                 "EXAMPLES\n" +
                 "    nano setup.txt",
@@ -909,7 +919,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    interactive console; a redirected/nonexistent one (a piped script, a\n" +
                 "    'source'd file, a headless test) is silently a no-op rather than an\n" +
                 "    error, since there was never a real screen to clear in the first place.\n\n" +
-                "    In EmuSen.Mistress9's own console window (a TextBox, not a real\n" +
+                "    In EmuSen.Mistress's own console window (a TextBox, not a real\n" +
                 "    terminal), 'clear' is replaced with a windowed equivalent instead: it\n" +
                 "    empties that window's own output text rather than touching a system\n" +
                 "    console that doesn't exist there.\n\n" +
@@ -940,7 +950,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    for the same reason - refuses cleanly rather than trying to draw\n" +
                 "    anywhere when stdin/stdout is redirected or there's no real terminal at\n" +
                 "    all (a piped script, a 'source'd file, a headless test).\n\n" +
-                "    In EmuSen.Mistress9's own console window (a TextBox, not a real\n" +
+                "    In EmuSen.Mistress's own console window (a TextBox, not a real\n" +
                 "    terminal - the above wouldn't work there at all), 'coretop' is replaced\n" +
                 "    with a windowed equivalent instead: a real, non-blocking Avalonia window\n" +
                 "    showing the same data as actual widgets and live images (the palette and\n" +
@@ -949,7 +959,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    apply there, just close the window.\n\n" +
                 "    -w  Open the same dashboard in a separate window instead of taking over\n" +
                 "        the terminal, so you can dismiss it and keep playing. In\n" +
-                "        EmuSen.Mistress9, coretop is already windowed by default, so -w is\n" +
+                "        EmuSen.Mistress, coretop is already windowed by default, so -w is\n" +
                 "        accepted and simply has no additional effect there. In EmuSen.Hotaru\n" +
                 "        (a Raylib console build with no window of its own to reuse), -w spins\n" +
                 "        up a small dedicated Avalonia UI thread the first time it's used and\n" +
@@ -976,7 +986,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    (no -i prompt anywhere in this shell, by design). Both <src> and <dst>\n" +
                 "    must resolve inside the project's own directory tree - see 'cd'.\n\n" +
                 "EXAMPLES\n" +
-                "    mv scratch.txt var/log/",
+                "    mv scratch.txt EmuSen.DianaOS/DianaOS/Usr/Home/Logs/",
 
             ["cp"] =
                 "NAME\n" +
@@ -993,7 +1003,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    project's own directory tree - see 'cd'.\n\n" +
                 "EXAMPLES\n" +
                 "    cp notes.txt notes.bak.txt\n" +
-                "    cp -r var/log/Run1 var/log/Run1Backup",
+                "    cp -r EmuSen.DianaOS/DianaOS/Usr/Home/Logs/Run1 EmuSen.DianaOS/DianaOS/Usr/Home/Logs/Run1Backup",
 
             ["rm"] =
                 "NAME\n" +
@@ -1014,7 +1024,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    optional -r is treated as the literal path.\n\n" +
                 "EXAMPLES\n" +
                 "    rm scratch.txt\n" +
-                "    rm -r var/log/OldRun\n" +
+                "    rm -r EmuSen.DianaOS/DianaOS/Usr/Home/Logs/OldRun\n" +
                 "    rm -r My Folder",
 
             ["true"] =
@@ -1103,7 +1113,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "EXAMPLES\n" +
                 "    state save\n" +
                 "    state load\n" +
-                "    state save var/lib/before-boss.state",
+                "    state save EmuSen.DianaOS/DianaOS/Usr/Home/Saves/before-boss.state",
 
             ["resume"] =
                 "NAME\n" +
@@ -1115,7 +1125,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "DESCRIPTION\n" +
                 "    Resumes emulation after a halt (an interactive debug prompt, a\n" +
                 "    breakpoint, a single-step) - 'continue' and 'c' are recognized as plain\n" +
-                "    aliases, not separate commands. EmuSen.Mistress9 registers its own\n" +
+                "    aliases, not separate commands. EmuSen.Mistress registers its own\n" +
                 "    pause/resume-aware 'resume' instead (its console window runs on a\n" +
                 "    separate thread from emulation, unlike EmuSen.Hotaru's console, which\n" +
                 "    shares the emulation thread and needs no pause/resume signal at all).\n\n" +
@@ -1148,7 +1158,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    VenusCore in place if a ROM is already running (a fresh SnesDebugTarget/\n" +
                 "    DianaOSInterpreter/FrameRecorder get rebuilt afterward; watches/\n" +
                 "    breakpoints/cheats registered against the OLD ROM don't survive a swap,\n" +
-                "    matching EmuSen.Mistress9's own already-accepted 'shell-level state\n" +
+                "    matching EmuSen.Mistress's own already-accepted 'shell-level state\n" +
                 "    resets on reload' convention). Refuses to swap while a frame recording\n" +
                 "    is in progress - stop it first (F6). Only registered where a session\n" +
                 "    actually exists to reload - EmuSen.Hotaru's own pre-window launch shell\n" +
@@ -1185,7 +1195,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    DianaOSInterpreter.CreateDefault a DianaOSSessionManager. Where it IS\n" +
                 "    available, whether switching sessions is itself safe against a\n" +
                 "    concurrently-running emulation thread is that host's own concern, not\n" +
-                "    this command's - EmuSen.Hotaru/EmuSen.Mistress9 each keep a separate\n" +
+                "    this command's - EmuSen.Hotaru/EmuSen.Mistress each keep a separate\n" +
                 "    DianaOSInterpreterScheduler per session for exactly that reason; the\n" +
                 "    standalone DianaOS shell (no core, no concurrent thread) needs none at\n" +
                 "    all.\n\n" +

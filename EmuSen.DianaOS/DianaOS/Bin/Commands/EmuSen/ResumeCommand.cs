@@ -22,13 +22,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
     // 'continue' at an interactive prompt means "resume gameplay" - see
     // that catch block's own comment.
     //
-    // EmuSen.Mistress9 registers its OWN 'resume' (Views/
+    // EmuSen.Mistress registers its OWN 'resume' (Views/
     // EmulationControlCommands.cs's ResumeCommand, pause/resume-aware)
     // via extraCommands' override-by-name mechanism, replacing this
     // default entirely - the two frontends have different threading
     // models (see EmuSen_Frontend_Driver.md's own comment on why Hotaru
     // needs no pause/resume signal at all), so this default is exactly
-    // right for Hotaru and correctly never reached in Mistress9.
+    // right for Hotaru and correctly never reached in Mistress.
     public class ResumeCommand : IDianaOSCommand
     {
         public string Name => "resume";

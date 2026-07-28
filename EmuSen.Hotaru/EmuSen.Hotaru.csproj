@@ -20,18 +20,18 @@
          dependency bootstrapped alongside a separate Raylib main loop the
          way it used to be for `coretop -w` alone - see git history for
          the Raylib/AvaloniaHost predecessor. Package versions match
-         EmuSen.Mistress9's own references exactly, the same convention
+         EmuSen.Mistress's own references exactly, the same convention
          EmuSen.Serenity's csproj already follows. -->
     <PackageReference Include="Avalonia" Version="12.1.0" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
     <!-- Gamepad input (Input/GamepadManager.cs) and real audio output
-         (Audio/AudioPlayer.cs) - both duplicated from EmuSen.Mistress9's
+         (Audio/AudioPlayer.cs) - both duplicated from EmuSen.Mistress's
          own copies, which already carry this exact dependency. -->
     <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
     <!-- Native X11 backend - opted into explicitly in Program.cs
-         (Linux only), matching EmuSen.Mistress9's own Program.cs. -->
+         (Linux only), matching EmuSen.Mistress's own Program.cs. -->
     <PackageReference Include="Avalonia.X11" Version="12.1.0" />
     <!-- Imaging/FrameImageWriter.cs encodes screenshots/frame-recording
          PNGs directly via SKImage.Encode, not Avalonia's

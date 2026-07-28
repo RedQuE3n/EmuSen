@@ -9,9 +9,9 @@
 EmuSen is a SNES emulator written in C# / .NET 10, structured as four sibling projects:
 
 - **`EmuSen/`** — the emulation core only (CPU/PPU/APU/memory, `Common/`, `DianaOS/`, `Settings/`). A pure library — no `Main`, no window ownership of its own. This is the primary development/debugging environment — cores get built and verified here first, standalone, before either frontend is the main way of running them. It still has a `Raylib-cs` package dependency, because `Renderer.cs` uses `Raylib_cs.Color`/`Image`/`Texture2D` directly as its internal pixel representation and for debug-panel drawing - a real dependency of the core's own rendering logic, not something inherited from a frontend.
-- **`EmuSen.Hotaru/`** — the console-first frontend's actual driver (`Program.cs`'s `Main`, `App.axaml.cs`, `Views/GameWindow.axaml.cs`). Used to live inside `EmuSen.csproj` as its own `Exe`, which meant `EmuSen.Mistress9/` (Avalonia) inherited this project's `Main`/window-ownership just by referencing `EmuSen.csproj` to reach the emulation core - backwards, since the two frontends have nothing to do with each other. Split out specifically to fix that: both frontends are now true siblings, each independently referencing `EmuSen.csproj` for the core and `EmuSen.Serenity` for presentation. Moved off Raylib entirely onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note. (Named `Hotaru`, not `Console` - naming it `EmuSen.Console` would make every bare `Console.WriteLine` in the file ambiguous with the namespace itself, a real C# gotcha, not just a style choice.)
-- **`EmuSen.Serenity/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `GameFrameControl` (an Avalonia `Control` presenting any core via `ICore.GetFrameBufferRgba()` straight through Skia, with real shader support), `FramePresenter` (a plain `Window` + `GameFrameControl` bundle for a consumer that needs nothing else from its window), `Shaders/BuiltInShaders.cs` (Skia SkSL for the shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). Both `EmuSen.Hotaru/` and `EmuSen.Mistress9/` are real consumers now - Hotaru uses `GameFrameControl` directly rather than `FramePresenter` (see that project's own `GameWindow.axaml.cs` header comment for why); Mistress9 adopted the same `GameFrameControl` directly too, replacing its old CPU-side `WriteableBitmap` presentation (`MainWindow.axaml`/`.cs`) - the long-standing "no GPU/shader hook of its own" TODO this project existed to answer is closed on both frontends now. See §2a for which actual GPU API `GrContext` resolves to underneath that shared control, per platform.
-- **`EmuSen.Mistress9/`** — an Avalonia GUI, renamed from `EmuSen.Frontend` and deliberately scoped as bug-testing tooling: ROM picker (plus a ROM browser and a configurable default ROM directory), rebindable keyboard+gamepad input, Save/Load State menu items, and (Settings > Preferences...) a configurable log directory that reuses `EmuSen.Common.CategorizedLogWriter` for real per-session file logging, plus a scaffolding-only core picker. Referencing `EmuSen` and `EmuSen.Serenity` via project reference (as a sibling of `EmuSen.Hotaru`, not through it). Deliberately **not** where the eventual EmulationStation-style launcher gets built — see `EmuSen_Launcher_Multicore_Gameplan.md` for that separate, not-yet-created project's plan.
+- **`EmuSen.Hotaru/`** — the console-first frontend's actual driver (`Program.cs`'s `Main`, `App.axaml.cs`, `Views/GameWindow.axaml.cs`). Used to live inside `EmuSen.csproj` as its own `Exe`, which meant `EmuSen.Mistress/` (Avalonia) inherited this project's `Main`/window-ownership just by referencing `EmuSen.csproj` to reach the emulation core - backwards, since the two frontends have nothing to do with each other. Split out specifically to fix that: both frontends are now true siblings, each independently referencing `EmuSen.csproj` for the core and `EmuSen.Serenity` for presentation. Moved off Raylib entirely onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note. (Named `Hotaru`, not `Console` - naming it `EmuSen.Console` would make every bare `Console.WriteLine` in the file ambiguous with the namespace itself, a real C# gotcha, not just a style choice.)
+- **`EmuSen.Serenity/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `GameFrameControl` (an Avalonia `Control` presenting any core via `ICore.GetFrameBufferRgba()` straight through Skia, with real shader support), `FramePresenter` (a plain `Window` + `GameFrameControl` bundle for a consumer that needs nothing else from its window), `Shaders/BuiltInShaders.cs` (Skia SkSL for the shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). Both `EmuSen.Hotaru/` and `EmuSen.Mistress/` are real consumers now - Hotaru uses `GameFrameControl` directly rather than `FramePresenter` (see that project's own `GameWindow.axaml.cs` header comment for why); Mistress adopted the same `GameFrameControl` directly too, replacing its old CPU-side `WriteableBitmap` presentation (`MainWindow.axaml`/`.cs`) - the long-standing "no GPU/shader hook of its own" TODO this project existed to answer is closed on both frontends now. See §2a for which actual GPU API `GrContext` resolves to underneath that shared control, per platform.
+- **`EmuSen.Mistress/`** — an Avalonia GUI, renamed from `EmuSen.Frontend` and deliberately scoped as bug-testing tooling: ROM picker (plus a ROM browser and a configurable default ROM directory), rebindable keyboard+gamepad input, Save/Load State menu items, and (Settings > Preferences...) a configurable log directory that reuses `EmuSen.Common.CategorizedLogWriter` for real per-session file logging, plus a scaffolding-only core picker. Referencing `EmuSen` and `EmuSen.Serenity` via project reference (as a sibling of `EmuSen.Hotaru`, not through it). Deliberately **not** where the eventual EmulationStation-style launcher gets built — see `EmuSen_Launcher_Multicore_Gameplan.md` for that separate, not-yet-created project's plan.
 
 **License:** GNU GPL-3.0 (see `LICENSE` at the repo root) — chosen deliberately over a permissive license (MIT) specifically so anything built on EmuSen's code stays open forever, matching how this project itself was built entirely from openly-provided documentation. Not chosen for commercial reasons; the point is guaranteeing downstream openness, not restricting use.
 
@@ -44,11 +44,11 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 **Layering, roughly bottom-to-top:**
 
 - **Hardware simulation** (`Cores/Nintendo/Venus - SNES/Cpu`, `Cores/Nintendo/Venus - SNES/Apu`, `Cores/Nintendo/Venus - SNES/Ppu`, `Cores/Nintendo/Venus - SNES/Memory`) — the actual 65816/SPC700/S-DSP/PPU/memory-map implementations. This layer knows nothing about debugging, rendering presentation, or frontends; it just simulates hardware, one register/opcode/pixel at a time.
-- **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by `EmuSen.Mistress9`), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (used by both `EmuSen.Hotaru`'s `Program.cs` and `EmuSen.Mistress9`'s `MainWindow` — routes console output into per-category files under a `<CoreName>/<console|gui>_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's; file writes run on a background thread now, not the caller's. Hotaru's own root for this is `var/log/` inside DianaOS's sandboxed project tree - see `EmuSen_Debugging_Tools_Reference_v5.md` §3.3/`man hier` - while Mistress9's is `ApplicationData/EmuSen/Logs/`, never inside that sandbox to begin with).
+- **`Common/`** — cross-cutting, not console-specific: `EmulatorSession` (a headless per-frame driver used by `EmuSen.Mistress`), `StateSerializer` (reflective save states), `TeeTextWriter` (generic console+single-file tee) and `CategorizedLogWriter` (used by both `EmuSen.Hotaru`'s `Program.cs` and `EmuSen.Mistress`'s `MainWindow` — routes console output into per-category files under a `<CoreName>/<console|gui>_<timestamp>/` session folder instead of one ever-growing combined log, nested by core so a future second core's logs never mix with this one's; file writes run on a background thread now, not the caller's. Hotaru's own root for this is `var/log/` inside DianaOS's sandboxed project tree - see `EmuSen_Debugging_Tools_Reference_v5.md` §3.3/`man hier` - while Mistress's is `ApplicationData/EmuSen/Logs/`, never inside that sandbox to begin with).
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
 - **The debug toolchain** (`DianaOS/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `DianaOS/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `DianaOS/DianaOSInterpreter.cs` is a genuine bash-alike shell, user-facing name **DianaOS** (quoting, variables, `$(...)`, pipes, redirection, if/for/while, plus a coreutils subset - `ls`/`cd`/`grep`/`awk`/`nano`/`coretop`/...) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) living in `DianaOS/Commands/` alongside the shell's own builtins - split into `Commands/Unix/` (`EmuSen.DianaOS.Commands.Unix`, core-agnostic) and `Commands/EmuSen/` (`EmuSen.DianaOS.Commands.EmuSen`, needs a real `IDebugTarget`) so a future standalone "Diana" build has a clean, compiler-enforced line to register only the former. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Presentation** (`EmuSen.Serenity/`) — window/GPU-surface ownership and the shader pipeline (Avalonia + Skia, not Raylib), shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1.
-- **Frontends** (`EmuSen.Hotaru/`, `EmuSen.Mistress9/`) — presentation *driving*, not the presentation code itself anymore. Both are now Avalonia frontends into the same core (Hotaru moved off Raylib entirely - see `EmuSen_Frontend_Driver.md`'s own revision note); neither owns emulation logic itself, and neither depends on the other.
+- **Frontends** (`EmuSen.Hotaru/`, `EmuSen.Mistress/`) — presentation *driving*, not the presentation code itself anymore. Both are now Avalonia frontends into the same core (Hotaru moved off Raylib entirely - see `EmuSen_Frontend_Driver.md`'s own revision note); neither owns emulation logic itself, and neither depends on the other.
 
 **A concrete example of the layering working as intended:** `MemoryBus` (hardware simulation) exposes a tiny, debug-agnostic `IWriteObserver` hook that it calls on every WRAM write, with no idea what's listening. `SnesDebugTarget` (debug toolchain) implements that interface and is the thing that actually knows what a "watchpoint" is. `MemoryBus` could be reused by a completely different debug story (or none at all) without any changes — the coupling only exists in one direction, and it's the debug layer depending on the core, not the reverse. This wasn't always true — a `WatchRegistry` field and a `Cpu` back-reference used to live directly on `MemoryBus` itself, mixing the two layers together, until a later architecture-focused pass (see §4 and §7) untangled it.
 
@@ -58,7 +58,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 
 ## 2a. Rendering backend selection — what GPU API `GrContext` actually is, per platform
 
-`GameFrameControl` (§2's `EmuSen.Serenity/` entry) only ever talks to Skia's own backend-agnostic `GRContext`/`SKSurface` types - it has no OpenGL/Vulkan/Metal-specific code anywhere in it. Which real GPU API sits underneath that abstraction is decided entirely by Avalonia's platform backend, configured in `Program.cs` (`BuildAvaloniaApp`, both frontends - `EmuSen.Hotaru/Program.cs` and `EmuSen.Mistress9/Program.cs` use the identical idiom), not by anything in `EmuSen.Serenity` itself:
+`GameFrameControl` (§2's `EmuSen.Serenity/` entry) only ever talks to Skia's own backend-agnostic `GRContext`/`SKSurface` types - it has no OpenGL/Vulkan/Metal-specific code anywhere in it. Which real GPU API sits underneath that abstraction is decided entirely by Avalonia's platform backend, configured in `Program.cs` (`BuildAvaloniaApp`, both frontends - `EmuSen.Hotaru/Program.cs` and `EmuSen.Mistress/Program.cs` use the identical idiom), not by anything in `EmuSen.Serenity` itself:
 
 - **Windows** — OpenGL via ANGLE, which translates those calls to Direct3D 11 underneath. No native Direct3D Skia backend is used by default.
 - **macOS** — Metal, Avalonia's own default there. Vulkan-over-Metal (MoltenVK) isn't wired into Avalonia's GPU-interop layer for macOS at all, so this isn't a live option.
@@ -67,7 +67,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 
 ### The real bug: `GameFrameControl` was allocating a fresh GPU surface every frame
 
-What looked like an X11/Wayland windowing problem (`EmuSen.Hotaru`'s game window either solid black or visibly flickering the instant a ROM's frames started flowing, reproduced on **both** backends) turned out to have nothing to do with the windowing backend at all. Root-caused via `EmuSen.Pharaoh90` (the headless CLI harness, `Man pages/EmuSen_Debugging_Tools_Reference_v5.md` §3.15) run with `--autoshot`: 300 frames of a test ROM, dumping a BMP straight from `VenusCore.GetFrameBufferRgba()` every time the frame hash changed, entirely bypassing Avalonia - the core's own video output was completely clean and stable. That isolated the bug to `GameFrameControl.cs`'s presentation path specifically.
+What looked like an X11/Wayland windowing problem (`EmuSen.Hotaru`'s game window either solid black or visibly flickering the instant a ROM's frames started flowing, reproduced on **both** backends) turned out to have nothing to do with the windowing backend at all. Root-caused via `EmuSen.Pharaoh` (the headless CLI harness, `Man pages/EmuSen_Debugging_Tools_Reference_v5.md` §3.15) run with `--autoshot`: 300 frames of a test ROM, dumping a BMP straight from `VenusCore.GetFrameBufferRgba()` every time the frame hash changed, entirely bypassing Avalonia - the core's own video output was completely clean and stable. That isolated the bug to `GameFrameControl.cs`'s presentation path specifically.
 
 The actual cause: `DrawOp.Render()` was allocating a brand-new GPU-backed `SKSurface` (the offscreen upscale target) via `SKSurface.Create(lease.GrContext, ...)` **every single frame**, drawing into it, snapshotting it, then disposing it - 60 times a second. That much per-frame GPU render-target churn was the source of the black-screen/flicker symptom on both windowing backends. Fixed by skipping that offscreen surface entirely when no shader is active (the default/common case): `DrawImage` now scales `sourceImage` straight to the destination rect on the real canvas, no intermediate GPU surface at all.
 
@@ -95,9 +95,9 @@ Verified two ways: `GameFrameControlRenderTests.cs`'s shader tests (byte-identic
 
 Manually launching `EmuSen.Hotaru` with a real ROM (to sanity-check the X11 switch above) showed both video and audio running at a much higher rate than real time. The cause has nothing to do with X11 vs. Wayland: `GameWindow.axaml.cs`'s `EmulationLoop` was a bare `while (_running) { RunFrame(); ...; _audioPlayer.Pump(); SubmitFrame(); }` with no timer, `Stopwatch`, or sleep anywhere in it - it ran `RunFrame()` (and drained real audio samples via `AudioPlayer.Pump`) as fast as the host CPU allowed. `SubmitFrame`/`PresentPendingFrame` is a fire-and-forget, coalescing hand-off to the UI thread (`Dispatcher.UIThread.Post`), so nothing about presentation - or which windowing backend sits under it - ever throttled this thread either; this would have reproduced identically on Wayland.
 
-`EmuSen.Mistress9/Views/MainWindow.axaml.cs`'s own `EmulationLoop` already paces itself correctly (`FrameInterval = 1/60s`, a `Stopwatch`, and a spin-wait `SleepUntil` that targets real time, resyncing to "now" rather than burst-catching-up if a frame runs long) - this pacing was never ported over when Hotaru was rebuilt onto Avalonia (`ad55199`, dropping Raylib entirely), most likely because the old Raylib loop got its pacing for free from `SetTargetFPS` and nothing replaced that when the loop was rewritten.
+`EmuSen.Mistress/Views/MainWindow.axaml.cs`'s own `EmulationLoop` already paces itself correctly (`FrameInterval = 1/60s`, a `Stopwatch`, and a spin-wait `SleepUntil` that targets real time, resyncing to "now" rather than burst-catching-up if a frame runs long) - this pacing was never ported over when Hotaru was rebuilt onto Avalonia (`ad55199`, dropping Raylib entirely), most likely because the old Raylib loop got its pacing for free from `SetTargetFPS` and nothing replaced that when the loop was rewritten.
 
-Fixed by porting the identical `FrameInterval`/`Stopwatch`/`SleepUntil` pattern into `EmuSen.Hotaru/Views/GameWindow.axaml.cs`'s `EmulationLoop`, including the same "resync instead of burst-catch-up" behavior after a long stall - `nextTick` is explicitly reset to "now" right after `RunDebugPrompt()` returns from a breakpoint halt (F4/breakpoint stalls can be arbitrarily long), and the general fell-behind branch at the loop's tail covers every other stall path (F4 via `ProcessHotkeys`, halted console commands) without needing its own special case. Not covered by a `EmuSen.WiseMan` test - this loop's pacing is tightly coupled to a real `Window` + background thread, the same reason `EmuSen.Mistress9`'s identical pre-existing logic was never covered either; `GameFrameControlRenderTests.cs`'s headless tests target render-path correctness, not wall-clock thread timing.
+Fixed by porting the identical `FrameInterval`/`Stopwatch`/`SleepUntil` pattern into `EmuSen.Hotaru/Views/GameWindow.axaml.cs`'s `EmulationLoop`, including the same "resync instead of burst-catch-up" behavior after a long stall - `nextTick` is explicitly reset to "now" right after `RunDebugPrompt()` returns from a breakpoint halt (F4/breakpoint stalls can be arbitrarily long), and the general fell-behind branch at the loop's tail covers every other stall path (F4 via `ProcessHotkeys`, halted console commands) without needing its own special case. Not covered by a `EmuSen.WiseMan` test - this loop's pacing is tightly coupled to a real `Window` + background thread, the same reason `EmuSen.Mistress`'s identical pre-existing logic was never covered either; `GameFrameControlRenderTests.cs`'s headless tests target render-path correctness, not wall-clock thread timing.
 
 ---
 
@@ -115,11 +115,11 @@ EmuSen Project/
 │   │   │                                      #   LoadRom() unlike this class's throwing GetFrameBufferRgba
 │   │   ├── StateSerializer.cs                # Reflective save-state serializer
 │   │   ├── TeeTextWriter.cs                  # Console + single-file log tee (generic, reusable)
-│   │   ├── Imaging/                          # Moved out of EmuSen.Pharaoh90/Program.cs (was ~270
+│   │   ├── Imaging/                          # Moved out of EmuSen.Pharaoh/Program.cs (was ~270
 │   │   │   │                                  #   lines of private static helpers with zero test
 │   │   │   │                                  #   coverage and zero reuse anywhere else) - see
 │   │   │   │                                  #   EmuSen_Debugging_Tools_Reference_v5.md §3.15's revision
-│   │   │   │                                  #   note. Genuinely general-purpose, not Pharaoh90-
+│   │   │   │                                  #   note. Genuinely general-purpose, not Pharaoh-
 │   │   │   │                                  #   specific, hence living here rather than in that project.
 │   │   │   ├── BmpFile.cs                    # Minimal uncompressed 32bpp BMP write/read
 │   │   │   ├── FrameHash.cs                  # 64-bit FNV-1a over raw RGBA bytes (--autoshot's change check)
@@ -127,7 +127,7 @@ EmuSen Project/
 │   │   │   └── SpriteOverlay.cs              # Green bounding-box outline from IDebugTarget.DebugSpriteInfo
 │   │   └── CategorizedLogWriter.cs           # Console + per-category log files (cpu/ppu/apu/memory/
 │   │                                          #   debug/general) - used by both EmuSen.Hotaru's
-│   │                                          #   Program.cs and EmuSen.Mistress9's MainWindow. File
+│   │                                          #   Program.cs and EmuSen.Mistress's MainWindow. File
 │   │                                          #   writes happen on a dedicated background thread (a
 │   │                                          #   bounded queue, single consumer) now, not the calling
 │   │                                          #   thread - see the class's own comment for why, and why
@@ -327,7 +327,7 @@ EmuSen Project/
 │   │                                            #   helper types this half of the split actually needs.
 │   ├── Audio/
 │   │   └── WavFile.cs                         # Minimal uncompressed PCM WAV writer, moved out of
-│   │                                           #   EmuSen.Pharaoh90/Program.cs alongside the Imaging/
+│   │                                           #   EmuSen.Pharaoh/Program.cs alongside the Imaging/
 │   │                                           #   move above - namespace EmuSen.Audio, same namespace
 │   │                                           #   Settings/AudioSettings.cs already uses despite living
 │   │                                           #   in a different folder
@@ -349,7 +349,7 @@ EmuSen Project/
 │                                              #   is a pure library (no OutputType, no Main). See
 │                                              #   EmuSen.Hotaru/ below and this doc's §1/§2.
 │
-├── EmuSen.Hotaru/                # Avalonia console-first frontend (sibling of EmuSen.Mistress9/,
+├── EmuSen.Hotaru/                # Avalonia console-first frontend (sibling of EmuSen.Mistress/,
 │   │                                     #   not layered inside EmuSen.csproj) - moved off Raylib
 │   │                                     #   entirely; see EmuSen_Frontend_Driver.md's own top-of-
 │   │                                     #   file revision note for the full migration.
@@ -363,7 +363,7 @@ EmuSen Project/
 │   │                                     #   constructs one GameWindow in
 │   │                                     #   OnFrameworkInitializationCompleted.
 │   ├── Audio/
-│   │   └── AudioPlayer.cs               # Duplicated from EmuSen.Mistress9's own SDL-backed copy,
+│   │   └── AudioPlayer.cs               # Duplicated from EmuSen.Mistress's own SDL-backed copy,
 │   │                                     #   adapted for ICore directly (Hotaru has no
 │   │                                     #   EmulatorSession wrapper).
 │   ├── Imaging/
@@ -375,9 +375,9 @@ EmuSen Project/
 │   ├── Input/
 │   │   ├── HotaruKeyMap.cs              # Avalonia-Key port of the deleted InputBindings.cs's
 │   │   │                                 #   keyboard scheme - no rebind/persistence, unlike
-│   │   │                                 #   EmuSen.Mistress9's own ControllerKeyMap.
-│   │   ├── GamepadManager.cs            # Duplicated from EmuSen.Mistress9's own copy.
-│   │   └── GamepadBindingMap.cs         # Duplicated from EmuSen.Mistress9's own copy - same
+│   │   │                                 #   EmuSen.Mistress's own ControllerKeyMap.
+│   │   ├── GamepadManager.cs            # Duplicated from EmuSen.Mistress's own copy.
+│   │   └── GamepadBindingMap.cs         # Duplicated from EmuSen.Mistress's own copy - same
 │   │                                     #   %AppData%/EmuSen/gamepadbindings.json path, shared
 │   │                                     #   between both frontends on purpose.
 │   └── Views/
@@ -414,7 +414,7 @@ EmuSen Project/
 │   │                                     #   handling FramePresenter doesn't expose) and uses
 │   │                                     #   GameFrameControl directly instead - this stays
 │   │                                     #   available for a simpler future consumer (or
-│   │                                     #   EmuSen.Mistress9, which still presents via its own
+│   │                                     #   EmuSen.Mistress, which still presents via its own
 │   │                                     #   CPU-side WriteableBitmap and hasn't adopted this yet).
 │   ├── GraphicsSettings.cs              # Moved out of EmuSen/Settings/ - see EmuSen_Settings_Reference.md §3.
 │   │                                     #   Dropped ShowDebugPanels/PanelBackgroundColor/
@@ -424,12 +424,12 @@ EmuSen Project/
 │                                         #   the same Scanlines/Crt darken-factor and vignette math
 │                                         #   (F8 hotkey, EmuSen_Frontend_Driver.md §2).
 │
-└── EmuSen.Mistress9/                 # Avalonia GUI - renamed from EmuSen.Frontend, deliberately
+└── EmuSen.Mistress/                 # Avalonia GUI - renamed from EmuSen.Frontend, deliberately
     │                                     #   scoped as bug-testing tooling only, NOT the future
     │                                     #   EmulationStation-style launcher (that's a separate,
     │                                     #   not-yet-created project - see
     │                                     #   EmuSen_Launcher_Multicore_Gameplan.md)
-    ├── EmuSen.Mistress9.csproj
+    ├── EmuSen.Mistress.csproj
     ├── App.axaml / App.axaml.cs
     ├── Audio/
     │   └── AudioPlayer.cs                 # Real audio output via SDL's queue-based audio API
@@ -587,7 +587,7 @@ Roughly in order of "cheap and likely valuable" to "bigger, deliberately-deferre
 8. **Audio output** — connect the already-correct S-DSP synthesis to an actual playback device. The SPC700 audio-pacing undershoot that would have made this audible as "running slow" is fixed (§4's APU section, `Venus_APU.md` §2.9) — no longer a blocker for this item.
 9. **Decimal (BCD) mode** on the 65816 (ADC/SBC currently ignore the D flag).
 10. **The stuck HDMA title-screen window bug** — dedicated investigation, now that windowing is confirmed safe to leave on globally.
-11. ~~Breakpoints / single-step / pause-resume~~ — done (`VenusCore.RunFrame()` mid-frame halt/resume, `BreakpointRegistry`, F4 prompt `step`/`continue`). See `EmuSen_Debugging_Tools_Reference_v5.md` §3.1/§3.3. Not yet wired into `EmuSen.Pharaoh90` or the Avalonia GUI (item 12 below).
+11. ~~Breakpoints / single-step / pause-resume~~ — done (`VenusCore.RunFrame()` mid-frame halt/resume, `BreakpointRegistry`, F4 prompt `step`/`continue`). See `EmuSen_Debugging_Tools_Reference_v5.md` §3.1/§3.3. Not yet wired into `EmuSen.Pharaoh` or the Avalonia GUI (item 12 below).
 12. **The Avalonia GUI debug window** — the actual Mesen-style multi-pane debugger, built against `IDebugTarget` once enough of the above exists to make it worthwhile.
 13. **A second `IDebugTarget` implementation (NES or otherwise)** — to actually prove out the core-agnostic design rather than just asserting it.
 14. **True doubled-resolution interlace output** — explicitly deferred (§4) given its rarity in real games versus its engineering cost; revisit only if a specific ROM actually needs it.

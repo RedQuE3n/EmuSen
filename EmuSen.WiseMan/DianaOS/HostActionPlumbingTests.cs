@@ -116,7 +116,7 @@ namespace EmuSen.WiseMan.DianaOS
         [Fact]
         public void Action_propagates_out_of_a_sourced_script_and_halts_it()
         {
-            string dir = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", "WiseManHostActionPlumbingTests");
+            string dir = Path.Combine(DianaOSSandbox.SourceLogsDirectory, "WiseManHostActionPlumbingTests");
             Directory.CreateDirectory(dir);
             string scriptPath = Path.Combine(dir, $"script_{Guid.NewGuid():N}.txt");
             File.WriteAllText(scriptPath, "echo before\nfakeshutdown\necho after\n");
@@ -140,7 +140,7 @@ namespace EmuSen.WiseMan.DianaOS
         [Fact]
         public void No_action_means_a_sourced_script_runs_to_completion()
         {
-            string dir = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", "WiseManHostActionPlumbingTests");
+            string dir = Path.Combine(DianaOSSandbox.SourceLogsDirectory, "WiseManHostActionPlumbingTests");
             Directory.CreateDirectory(dir);
             string scriptPath = Path.Combine(dir, $"script_{Guid.NewGuid():N}.txt");
             File.WriteAllText(scriptPath, "echo one\necho two\n");

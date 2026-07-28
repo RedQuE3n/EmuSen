@@ -5,7 +5,8 @@ namespace EmuSen.Audio
     public static class AudioSettings
     {
         public static int SampleRate = 32000;
-        public static int AudioBufferMaxSamples = 64000;
+        public static int AudioBufferMaxSamples = 16000;
+        public static int AudioBufferResyncTargetSamples = 6400;
 
         public static float MasterVolume = 1.0f;
         public static bool Muted = false;

@@ -112,15 +112,16 @@ namespace EmuSen.Hotaru
 
             try
             {
-                // Separate from var/games/ (battery-backed cartridge SRAM,
-                // owned by Cartridge.SavePath) - a save state is a full
+                // Separate from Usr/Home/Saves' battery-backed cartridge SRAM
+                // (owned by Cartridge.SavePath) - a save state is a full
                 // snapshot of emulator state, a different kind of artifact
-                // with a different lifetime.
-                string statePath = Path.Combine(DianaOSSandbox.RootDirectory, "var", "lib", Path.GetFileNameWithoutExtension(romPath) + ".state");
+                // with a different lifetime. Shares the same directory since
+                // both are "saved emulator state" from the user's perspective.
+                string statePath = Path.Combine(DianaOSSandbox.SavesDirectory, Path.GetFileNameWithoutExtension(romPath) + ".state");
 
                 core = new VenusCore(headless: false);
 
-                string logDir = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
+                string logDir = Path.Combine(DianaOSSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
                 Directory.CreateDirectory(logDir);
                 logWriter = new CategorizedLogWriter(originalOut, logDir);
                 Console.SetOut(logWriter);
@@ -144,7 +145,7 @@ namespace EmuSen.Hotaru
                 // static registry all stay valid for the whole process.
                 // CoretopCommand replaces the standard registry's plain,
                 // window-less default via extraCommands' override-by-name
-                // behavior, same mechanism EmuSen.Mistress9 uses; State/
+                // behavior, same mechanism EmuSen.Mistress uses; State/
                 // CoreCommand are both new registrations, not overrides.
                 IDianaOSCommand[] extraCommands =
                 {
@@ -183,7 +184,7 @@ namespace EmuSen.Hotaru
             }
         }
 
-        // Mirrors EmuSen.Mistress9's own Program.cs/BuildAvaloniaApp idiom.
+        // Mirrors EmuSen.Mistress's own Program.cs/BuildAvaloniaApp idiom.
         // See Man pages/EmuSen_Project_Overview_v2.md §2a for why Linux
         // is forced onto UseX11() now.
         private static AppBuilder BuildAvaloniaApp(

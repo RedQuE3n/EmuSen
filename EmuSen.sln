@@ -9,15 +9,15 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Serenity", "EmuSen.S
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Hotaru", "EmuSen.Hotaru\EmuSen.Hotaru.csproj", "{7EFE3253-C275-4845-8C09-C710153A2475}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Mistress9", "EmuSen.Mistress9\EmuSen.Mistress9.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Mistress", "EmuSen.Mistress\EmuSen.Mistress.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Tomoe", "EmuSen.Tomoe\EmuSen.Tomoe.csproj", "{B85BD116-4F6F-4BC7-AE89-90F60316685A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Pharaoh90", "EmuSen.Pharaoh90\EmuSen.Pharaoh90.csproj", "{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Pharaoh", "EmuSen.Pharaoh\EmuSen.Pharaoh.csproj", "{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.WiseMan", "EmuSen.WiseMan\EmuSen.WiseMan.csproj", "{8A373964-284F-40E7-A19D-2C922DD602F1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Providers", "EmuSen.Providers\EmuSen.Providers.csproj", "{AA49A702-4C1B-462E-A8FF-E90338E12AFA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Cauldron", "EmuSen.Cauldron\EmuSen.Cauldron.csproj", "{AA49A702-4C1B-462E-A8FF-E90338E12AFA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.DianaOS", "EmuSen.DianaOS\EmuSen.DianaOS.csproj", "{A462A496-51EC-4E73-8E02-3C57A88AC352}"
 EndProject

@@ -15,8 +15,8 @@ namespace EmuSen.WiseMan.DianaOS
     // DianaOSInterpreter.CreateDefault(null) at least once per test purely
     // to trigger DianaOSSandbox.EnsureInitialWorkingDirectory() the same
     // way every other test in this assembly already relies on - the
-    // skeleton (var/log, var/lib, var/games, home/root, etc, tmp) only
-    // gets created the first time any shell exists in the process.
+    // skeleton (Usr/Home/Logs, Usr/Home/Saves, SourceLogs, home/root, etc,
+    // tmp) only gets created the first time any shell exists in the process.
     public class DianaOSSandboxTests
     {
         public DianaOSSandboxTests() => DianaOSInterpreter.CreateDefault(null);
@@ -24,16 +24,16 @@ namespace EmuSen.WiseMan.DianaOS
         [Fact]
         public void A_short_virtual_absolute_path_resolves_relative_to_the_sandbox_root()
         {
-            bool ok = DianaOSSandbox.TryResolve("/var/log", out string resolved);
+            bool ok = DianaOSSandbox.TryResolve("/SourceLogs", out string resolved);
 
             Assert.True(ok);
-            Assert.Equal(Path.Combine(DianaOSSandbox.RootDirectory, "var", "log"), resolved);
+            Assert.Equal(DianaOSSandbox.SourceLogsDirectory, resolved);
         }
 
         [Fact]
         public void An_already_real_path_inside_root_is_honored_as_is_not_doubled()
         {
-            string real = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", "SomeCore");
+            string real = Path.Combine(DianaOSSandbox.LogsDirectory, "SomeCore");
 
             bool ok = DianaOSSandbox.TryResolve(real, out string resolved);
 
@@ -65,9 +65,9 @@ namespace EmuSen.WiseMan.DianaOS
         {
             string root = DianaOSSandbox.RootDirectory;
 
-            Assert.True(Directory.Exists(Path.Combine(root, "var", "log")));
-            Assert.True(Directory.Exists(Path.Combine(root, "var", "lib")));
-            Assert.True(Directory.Exists(Path.Combine(root, "var", "games")));
+            Assert.True(Directory.Exists(DianaOSSandbox.LogsDirectory));
+            Assert.True(Directory.Exists(DianaOSSandbox.SavesDirectory));
+            Assert.True(Directory.Exists(DianaOSSandbox.SourceLogsDirectory));
             Assert.True(Directory.Exists(Path.Combine(root, "home", "root")));
             Assert.True(Directory.Exists(Path.Combine(root, "etc")));
             Assert.True(Directory.Exists(Path.Combine(root, "tmp")));

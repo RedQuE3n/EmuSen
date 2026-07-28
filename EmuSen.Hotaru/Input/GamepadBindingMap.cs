@@ -7,7 +7,7 @@ using EmuSen.Cores.Nintendo.Venus.Controllers;
 
 namespace EmuSen.Hotaru.Input
 {
-    // Duplicated from EmuSen.Mistress9/Input/GamepadBindingMap.cs (same
+    // Duplicated from EmuSen.Mistress/Input/GamepadBindingMap.cs (same
     // shape, same ConfigPath - the two frontends share one bindings file
     // under %AppData%/EmuSen since they're mapping the same physical pad
     // to the same SnesButton set) rather than factored into a shared

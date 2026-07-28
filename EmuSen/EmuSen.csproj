@@ -2,7 +2,7 @@
 
   <!-- Pure library now - no Main, no window ownership. The Raylib console
        frontend's Main/hotkey loop lives in EmuSen.Hotaru instead,
-       so this project and EmuSen.Mistress9 (Avalonia) are true sibling
+       so this project and EmuSen.Mistress (Avalonia) are true sibling
        consumers of the emulation core, neither depending on the other's
        frontend-specific code. See EmuSen_Project_Overview_v2.md. -->
   <PropertyGroup>
@@ -29,12 +29,12 @@
          ICheatCodeCodec/ICpuTraceSwitch adapter classes plug into
          DianaOS's own extension points - see IDebugTarget.cs's own
          header comment on why DianaOS itself has zero reference back to
-         this project. EmuSen.Providers is referenced transitively through
+         this project. EmuSen.Cauldron is referenced transitively through
          this (SnesDebugTarget builds PollingProvider<T> instances
          directly), listed explicitly anyway to match this project's own
          "be explicit about what's actually used" convention. -->
     <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
-    <ProjectReference Include="..\EmuSen.Providers\EmuSen.Providers.csproj" />
+    <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
   </ItemGroup>
 
 </Project>

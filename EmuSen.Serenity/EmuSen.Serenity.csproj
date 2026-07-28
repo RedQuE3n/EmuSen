@@ -14,7 +14,7 @@
          rgba, width, height, via ICore) and the built-in shader source,
          so any frontend consuming this project gets the same effects/
          behavior instead of a hand-copied duplicate. Package versions
-         match EmuSen.Mistress9's own Avalonia references exactly.
+         match EmuSen.Mistress's own Avalonia references exactly.
          Avalonia.Skia/SkiaSharp are referenced explicitly (not left
          purely transitive via Avalonia.Desktop) since GameFrameControl
          calls directly into ISkiaSharpApiLeaseFeature/SKCanvas/

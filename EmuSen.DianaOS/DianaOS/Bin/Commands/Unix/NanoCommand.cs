@@ -26,7 +26,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
     // line. That means it only works against a REAL interactive
     // terminal - Console.IsInputRedirected/IsOutputRedirected (a piped
     // script, `source`, a headless test harness, or a GUI-hosted
-    // console like EmuSen.Mistress9's that never had a real terminal
+    // console like EmuSen.Mistress's that never had a real terminal
     // to begin with) all get a clean "needs an interactive terminal"
     // error instead of trying to draw anywhere.
     public class NanoCommand : IDianaOSCommand

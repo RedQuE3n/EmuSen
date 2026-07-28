@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.DianaOS
     // -w flag parsing and the "not supported by this frontend" fallback
     // when no window opener is wired up (the EmuSen.WiseMan/headless
     // case). The actual window (EmuSen.Hotaru's AvaloniaHost/CoretopWindow,
-    // EmuSen.Mistress9's CoretopWindowCommand) can't be exercised
+    // EmuSen.Mistress's CoretopWindowCommand) can't be exercised
     // headlessly - not tested here, same as `coretop`'s own console
     // rendering isn't (both need a real display/terminal).
     public class CoretopWindowFlagTests

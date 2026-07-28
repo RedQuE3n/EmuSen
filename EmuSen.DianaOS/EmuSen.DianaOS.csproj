@@ -17,7 +17,7 @@
     <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
          comment on why these live in their own project, separate from
          DianaOS, rather than being DianaOS-owned. -->
-    <ProjectReference Include="..\EmuSen.Providers\EmuSen.Providers.csproj" />
+    <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
   </ItemGroup>
 
 </Project>

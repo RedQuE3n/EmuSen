@@ -11,10 +11,10 @@ namespace EmuSen.WiseMan.DianaOS
 {
     // DianaOSSandbox's Unix-shaped layout - see `man hier` and
     // EmuSen_Debugging_Tools_Reference_v5.md §3.3. Covers the real
-    // var/log|lib|games + home/<user> + etc + tmp skeleton, the chroot-
-    // style leading-'/' resolution (and the "already a real absolute path
-    // inside root" disambiguation it needs), and cd's no-argument "go to
-    // my own home" behavior.
+    // Usr/Home/Logs|Saves + SourceLogs + home/<user> + etc + tmp skeleton,
+    // the chroot-style leading-'/' resolution (and the "already a real
+    // absolute path inside root" disambiguation it needs), and cd's
+    // no-argument "go to my own home" behavior.
     public class HierTests
     {
         [Fact]
@@ -23,9 +23,9 @@ namespace EmuSen.WiseMan.DianaOS
             DianaOSInterpreter.CreateDefault(null); // triggers EnsureInitialWorkingDirectory
 
             string root = DianaOSSandbox.RootDirectory;
-            Assert.True(Directory.Exists(Path.Combine(root, "var", "log")));
-            Assert.True(Directory.Exists(Path.Combine(root, "var", "lib")));
-            Assert.True(Directory.Exists(Path.Combine(root, "var", "games")));
+            Assert.True(Directory.Exists(DianaOSSandbox.LogsDirectory));
+            Assert.True(Directory.Exists(DianaOSSandbox.SavesDirectory));
+            Assert.True(Directory.Exists(DianaOSSandbox.SourceLogsDirectory));
             Assert.True(Directory.Exists(Path.Combine(root, "home", "root")));
             Assert.True(Directory.Exists(Path.Combine(root, "etc")));
             Assert.True(Directory.Exists(Path.Combine(root, "tmp")));
@@ -43,7 +43,7 @@ namespace EmuSen.WiseMan.DianaOS
         public void Cd_with_no_argument_goes_to_roots_home_by_default()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
-            shell.Submit("cd /var/log"); // move away from home first
+            shell.Submit("cd /SourceLogs"); // move away from home first
 
             shell.Submit("cd");
 
@@ -81,9 +81,9 @@ namespace EmuSen.WiseMan.DianaOS
             string nested = Path.Combine(DianaOSSandbox.RootDirectory, "EmuSen.DianaOS");
             shell.Submit($"cd \"{nested}\""); // start somewhere nested, not the root
 
-            shell.Submit("cd /var/log");
+            shell.Submit("cd /SourceLogs");
 
-            string expected = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log");
+            string expected = DianaOSSandbox.SourceLogsDirectory;
             Assert.Equal(expected, shell.Submit("pwd").Output.Trim());
         }
 
@@ -91,7 +91,7 @@ namespace EmuSen.WiseMan.DianaOS
         public void An_already_real_absolute_path_inside_root_is_honored_as_is()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
-            string real = Path.Combine(DianaOSSandbox.RootDirectory, "var", "lib");
+            string real = DianaOSSandbox.SavesDirectory;
 
             shell.Submit($"cd \"{real}\"");
 
@@ -106,7 +106,7 @@ namespace EmuSen.WiseMan.DianaOS
             var result = shell.Submit("man hier");
 
             Assert.Contains("/home", result.Output);
-            Assert.Contains("/var/log", result.Output);
+            Assert.Contains("/SourceLogs", result.Output);
         }
     }
 }

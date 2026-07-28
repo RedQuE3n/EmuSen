@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.Serenity
 
         // Reads the captured frame back into a plain RGBA8888 byte[] - the
         // same shape FrameHash/BmpFile already work with for the core's own
-        // frame buffer (EmuSen.Pharaoh90's --autoshot), so this is directly
+        // frame buffer (EmuSen.Pharaoh's --autoshot), so this is directly
         // comparable against that same tooling.
         private static byte[] ToRgbaBytes(WriteableBitmap bitmap)
         {

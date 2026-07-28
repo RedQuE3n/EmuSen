@@ -25,7 +25,7 @@ dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/DC.smc
 
 dotnet run --project EmuSen.Hotaru -- /home/red/Documents/Roms/RR.smc
 
-dotnet run --project EmuSen.Mistress9
+dotnet run --project EmuSen.Mistress
 
 /home/red/Documents/Roms/MQSMM.smc
 

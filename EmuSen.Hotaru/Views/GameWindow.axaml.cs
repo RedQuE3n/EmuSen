@@ -36,7 +36,7 @@ namespace EmuSen.Hotaru.Views
     // consumer that needs nothing else from its window, but this window
     // needs real keyboard capture, a Closing handler, and to host every
     // hotkey/debug-prompt concern below, none of which FramePresenter's
-    // generic contract exposes. Mistress9's own MainWindow makes the same
+    // generic contract exposes. Mistress's own MainWindow makes the same
     // choice (it inlines its own coalescing present logic against a
     // WriteableBitmap rather than going through any shared presenter
     // class) - this follows that same established precedent, just against
@@ -51,7 +51,7 @@ namespace EmuSen.Hotaru.Views
     // blocking F4 DianaOS console prompt itself; the Avalonia UI thread
     // (this class's event handlers) owns the window, keyboard capture,
     // and gamepad polling. No pause/resume mechanism is needed for
-    // THOSE two threads - unlike EmuSen.Mistress9's console window, F4
+    // THOSE two threads - unlike EmuSen.Mistress's console window, F4
     // and RunFrame() never run concurrently, because they share the one
     // emulation thread by construction.
     //
@@ -62,7 +62,7 @@ namespace EmuSen.Hotaru.Views
     // running normally, it hands each typed line to _scheduler
     // (EmuSen.DianaOS.DianaOS.Bin.DianaOSInterpreterScheduler - see that class's own
     // comment for the full mechanism, since "diana isn't drowning" work
-    // lifted it out of this file so EmuSen.Mistress9 could share it): a
+    // lifted it out of this file so EmuSen.Mistress could share it): a
     // read-only line runs right there on the reader thread (never
     // touching the emulation thread at all - the same "a read-only view
     // of live core state, unsynchronized, is an accepted race" precedent
@@ -94,12 +94,12 @@ namespace EmuSen.Hotaru.Views
         // RebuildDebugTargetAndCommands() after a `core <name> <path>`
         // swap (HostAction.LoadCore, see SwapCore below), the same
         // "fresh SnesDebugTarget per load" discipline
-        // EmuSen.Mistress9/Views/MainWindow.axaml.cs's own LoadRom
+        // EmuSen.Mistress/Views/MainWindow.axaml.cs's own LoadRom
         // already established - VenusCore.LoadRom rebuilds Cpu/Bus/
         // Renderer as brand-new objects in place, so anything still
         // holding the OLD ones (this class's own _debugTarget, and
         // DianaOSInterpreter, which captures its target at construction
-        // with no UpdateTarget of its own - unlike EmuSen.Mistress9's
+        // with no UpdateTarget of its own - unlike EmuSen.Mistress's
         // console WINDOW) would otherwise go stale.
         private SnesDebugTarget _debugTarget = null!;
 
@@ -130,7 +130,7 @@ namespace EmuSen.Hotaru.Views
         private readonly DispatcherTimer _gamepadTimer;
 
         // Keyboard and gamepad are tracked separately and combined with OR
-        // logic - matches EmuSen.Mistress9's own MainWindow convention
+        // logic - matches EmuSen.Mistress's own MainWindow convention
         // ("either device works at any time, no need to pick one").
         private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<SnesButton>().Length];
         private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<SnesButton>().Length];
@@ -154,7 +154,7 @@ namespace EmuSen.Hotaru.Views
         // volatile bool, not Interlocked: exactly one writer (this
         // window's UI-thread KeyDown handler) and one reader/clearer
         // (EmulationLoop) per flag - the same single-writer/single-reader
-        // race EmuSen.Mistress9's own ApplyButtonState already accepts for
+        // race EmuSen.Mistress's own ApplyButtonState already accepts for
         // continuous button state.
         private volatile bool _requestSummary;
         private volatile bool _requestDumpOam;
@@ -176,7 +176,7 @@ namespace EmuSen.Hotaru.Views
 
         // Coalescing hand-off from the emulation thread to the UI thread -
         // same pattern as EmuSen.Serenity.FramePresenter/
-        // EmuSen.Mistress9's own MainWindow.SubmitFrame, just driven
+        // EmuSen.Mistress's own MainWindow.SubmitFrame, just driven
         // straight against GameFrame (this window's own GameFrameControl)
         // instead of a separate presenter object - see this file's own
         // header comment for why.
@@ -461,7 +461,7 @@ namespace EmuSen.Hotaru.Views
                     // hardware-load snapshots for any thread to read
                     // (Diana's console-reader fast path in particular) via
                     // IDebugTarget's provider properties - see
-                    // EmuSen.Providers.IRealtimeProvider's own comment. Must
+                    // EmuSen.Cauldron.IRealtimeProvider's own comment. Must
                     // run here, on the emulation thread that just produced
                     // this frame's state, not from the console-reader
                     // thread or anywhere else.
@@ -514,7 +514,7 @@ namespace EmuSen.Hotaru.Views
             }
         }
 
-        // Spin-waits rather than Thread.Sleep - see EmuSen.Mistress9's own
+        // Spin-waits rather than Thread.Sleep - see EmuSen.Mistress's own
         // identical SleepUntil for the measured reasoning (Sleep's wakeup
         // latency was bigger than the 60fps budget allows for).
         private static void SleepUntil(TimeSpan target, Stopwatch clock)
@@ -578,7 +578,7 @@ namespace EmuSen.Hotaru.Views
 
         private void TakeScreenshot()
         {
-            string coreLogDir = Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", _debugTarget.CoreName);
+            string coreLogDir = Path.Combine(DianaOSSandbox.LogsDirectory, _debugTarget.CoreName);
             Directory.CreateDirectory(coreLogDir);
             string baseName = $"screenshot_frame{_debugTarget.FrameCount}";
             string shotPath = Path.Combine(coreLogDir, baseName + ".png");
@@ -628,7 +628,7 @@ namespace EmuSen.Hotaru.Views
             }
             else
             {
-                string dir = _frameRecorder.Start(Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", _debugTarget.CoreName, "Recordings"));
+                string dir = _frameRecorder.Start(Path.Combine(DianaOSSandbox.LogsDirectory, _debugTarget.CoreName, "Recordings"));
                 Console.WriteLine($"[RECORD] Started -> {dir}");
             }
         }

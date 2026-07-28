@@ -1,5 +1,5 @@
 using EmuSen.Cores.Nintendo.Venus.Controllers;
-using EmuSen.Pharaoh90;
+using EmuSen.Pharaoh;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.HeadlessDebug

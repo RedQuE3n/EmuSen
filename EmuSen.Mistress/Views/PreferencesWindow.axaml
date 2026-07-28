@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmuSen.Mistress.Views.PreferencesWindow"
+        Title="Preferences"
+        Width="520" Height="260"
+        CanResize="False">
+
+    <StackPanel Margin="16" Spacing="12">
+
+        <TextBlock Text="Log Directory" FontWeight="Bold" />
+        <TextBlock Text="Where per-session log files are written. Leave blank to disable file logging entirely."
+                   TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,-8,0,0" />
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="LogDirectoryBox" Grid.Column="0" IsReadOnly="True" PlaceholderText="(not set)" />
+            <Button x:Name="BrowseLogDirectoryButton" Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Click="OnBrowseLogDirectoryClick" />
+        </Grid>
+
+        <TextBlock Text="ROM Directory" FontWeight="Bold" Margin="0,8,0,0" />
+        <TextBlock Text="Default folder for Open ROM... and the ROM list in File > Browse ROMs...."
+                   TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,-8,0,0" />
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="RomDirectoryBox" Grid.Column="0" IsReadOnly="True" PlaceholderText="(not set)" />
+            <Button x:Name="BrowseRomDirectoryButton" Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Click="OnBrowseRomDirectoryClick" />
+        </Grid>
+
+        <TextBlock Text="Emulator Core" FontWeight="Bold" Margin="0,8,0,0" />
+        <TextBlock Text="Only one core exists today - this is scaffolding for when a second one does."
+                   TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,-8,0,0" />
+        <ComboBox x:Name="CoreComboBox" HorizontalAlignment="Stretch" SelectionChanged="OnCoreSelectionChanged" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+            <Button Content="Close" Click="OnCloseClick" />
+        </StackPanel>
+
+    </StackPanel>
+
+</Window>

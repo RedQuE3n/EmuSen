@@ -1113,7 +1113,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "EXAMPLES\n" +
                 "    state save\n" +
                 "    state load\n" +
-                "    state save EmuSen.DianaOS/DianaOS/Usr/Home/Saves/before-boss.state",
+                "    state save EmuSen.DianaOS/DianaOS/Usr/Home/Saves/Save States/before-boss.state",
 
             ["resume"] =
                 "NAME\n" +

@@ -20,6 +20,7 @@ namespace EmuSen.Mistress.Settings
     {
         public string? LogDirectory { get; set; }
         public string? RomDirectory { get; set; }
+        public string? StateDirectory { get; set; }
         public string SelectedCore { get; set; } = "SNES (Venus)";
 
         // Off by default - forcing this on unconditionally would break any

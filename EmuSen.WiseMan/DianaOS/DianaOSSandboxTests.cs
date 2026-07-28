@@ -67,6 +67,7 @@ namespace EmuSen.WiseMan.DianaOS
 
             Assert.True(Directory.Exists(DianaOSSandbox.LogsDirectory));
             Assert.True(Directory.Exists(DianaOSSandbox.SavesDirectory));
+            Assert.True(Directory.Exists(DianaOSSandbox.SaveStatesDirectory));
             Assert.True(Directory.Exists(DianaOSSandbox.SourceLogsDirectory));
             Assert.True(Directory.Exists(Path.Combine(root, "home", "root")));
             Assert.True(Directory.Exists(Path.Combine(root, "etc")));

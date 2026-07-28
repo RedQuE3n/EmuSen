@@ -185,7 +185,7 @@ namespace EmuSen.Hotaru
         }
 
         // Mirrors EmuSen.Mistress's own Program.cs/BuildAvaloniaApp idiom.
-        // See Man pages/EmuSen_Project_Overview_v2.md §2a for why Linux
+        // See EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Project_Overview_v2.md §2a for why Linux
         // is forced onto UseX11() now.
         private static AppBuilder BuildAvaloniaApp(
             VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)

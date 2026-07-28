@@ -1,7 +1,7 @@
 namespace EmuSen.Graphics
 {
     // Central hub for display/presentation options - see
-    // Man pages/EmuSen_Settings_Reference.md §3. None of this affects
+    // EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Settings_Reference.md §3. None of this affects
     // emulation correctness - that's DebugSettings (EmuSen/Settings/).
     // Lives in EmuSen.Serenity, not EmuSen/Settings/, alongside
     // FramePresenter/BuiltInShaders - these are all presentation-layer
@@ -11,7 +11,7 @@ namespace EmuSen.Graphics
     // ShowDebugPanels and the two Raylib_cs.Color fields (PanelBackground/
     // LetterboxColor) that used to live here were dropped along with the
     // on-window Raylib debug overlay itself (see git history and
-    // Man pages/EmuSen_Debugging_Tools_Reference_v5.md's own revision
+    // EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md's own revision
     // note) - nothing reads them anymore.
     public static class GraphicsSettings
     {

@@ -16,7 +16,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 // prompt accepts and writes the results to a plain log file. Full
 // reference for every flag, both frame-loop modes (classic and
 // --commands), --diffshot, and the design reasoning behind each:
-// Man pages/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
+// EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
 //
 // Usage:
 //   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--tap2 frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...

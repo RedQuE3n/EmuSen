@@ -1,7 +1,7 @@
 namespace EmuSen.Audio
 {
     // Central hub for audio-related settings - see
-    // Man pages/EmuSen_Settings_Reference.md §2.
+    // EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Settings_Reference.md §2.
     public static class AudioSettings
     {
         public static int SampleRate = 32000;

@@ -12,7 +12,7 @@ namespace EmuSen.Common
     // play session (WATCH/SCROLL/DMA-SRC traces are all extremely
     // high-volume), which made the file slow to search and, in practice,
     // too large to hand off for review at all. Categories mirror the same
-    // CPU/PPU/APU/Memory split Man pages/Hardware/ already uses, plus a
+    // CPU/PPU/APU/Memory split EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/ already uses, plus a
     // "debug" bucket for the core-agnostic debug toolchain's own output
     // (watch/state/status/error) and a "general" catch-all for anything
     // that isn't tagged with a recognized bracketed prefix at all (ROM

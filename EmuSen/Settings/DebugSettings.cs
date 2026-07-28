@@ -1,7 +1,7 @@
 namespace EmuSen.Debug
 {
     // Central hub for every debug/diagnostic toggle across the emulator -
-    // see Man pages/EmuSen_Settings_Reference.md §1 for what each flag is
+    // see EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Settings_Reference.md §1 for what each flag is
     // for and the investigation history behind it.
     public static class DebugSettings
     {

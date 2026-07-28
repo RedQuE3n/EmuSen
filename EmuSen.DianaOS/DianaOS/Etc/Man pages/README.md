@@ -1,8 +1,10 @@
 # Man pages — index
 
-This folder is EmuSen's documentation set: project status, architecture, the debug toolchain, settings, and per-hardware reference notes. This page exists purely to help you find the right doc without opening all of them - it doesn't duplicate their content.
+EmuSen's documentation set: project status, architecture, the debug toolchain, settings, and per-hardware reference notes. This page exists purely to help you find the right doc without opening all of them - it doesn't duplicate their content.
 
-## Top-level docs
+The general, top-level docs listed below now live in `EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/`, not alongside this README - only `Hardware/` and `Old/` (below) actually live in this `Etc/Man pages/` folder itself.
+
+## Top-level docs (in `Usr/Home/Documents/EmuSen Manual/`)
 
 - **`EmuSen_Project_Overview_v2.md`** — the architecture reference: current directory/namespace map, what's built vs. planned, the full TODO/roadmap. Start here for "how is this project structured" and "what's left to do."
 - **`EmuSen_Core_Gameplan.md`** — self-contained orientation + a phased plan for the current core (Venus/SNES) specifically: what's verified, what's actively being investigated, phase-by-phase next steps. Start here for "what should I work on next."

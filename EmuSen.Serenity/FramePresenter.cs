@@ -25,7 +25,7 @@ namespace EmuSen.Serenity
     // (EmuSen.Serenity), separate from both the emulation core
     // (EmuSen.csproj) and any one frontend, so every frontend depends on
     // the same presentation/shader code instead of a hand-copied
-    // duplicate - both EmuSen.Hotaru and EmuSen.Mistress9 use
+    // duplicate - both EmuSen.Hotaru and EmuSen.Mistress use
     // GameFrameControl directly now (see git history for the Raylib/
     // WriteableBitmap predecessors); this FramePresenter bundle itself
     // isn't consumed by either yet.
@@ -34,7 +34,7 @@ namespace EmuSen.Serenity
     // own background emulation thread - see EmuSen.Hotaru's own comment
     // on why gameplay and presentation run on separate threads) - it
     // dispatches to the Avalonia UI thread itself, coalescing exactly
-    // like EmuSen.Mistress9's own MainWindow.SubmitFrame/
+    // like EmuSen.Mistress's own MainWindow.SubmitFrame/
     // PresentPendingFrame: only one Present is ever in flight, and a
     // frame that arrives while one's already dispatched just overwrites
     // the pending one rather than queuing - a slow UI thread drops

@@ -258,7 +258,7 @@ namespace EmuSen.WiseMan.DianaOS
             string name = UniqueName("kid");
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
-            shell.Submit("cd /var/log");
+            shell.Submit("cd /SourceLogs");
 
             shell.Submit("cd");
 
@@ -269,7 +269,7 @@ namespace EmuSen.WiseMan.DianaOS
         public void Cd_with_no_argument_defaults_to_roots_own_home()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
-            shell.Submit("cd /var/log");
+            shell.Submit("cd /SourceLogs");
 
             shell.Submit("cd");
 

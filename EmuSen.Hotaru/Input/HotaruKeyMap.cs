@@ -12,7 +12,7 @@ namespace EmuSen.Hotaru.Input
     // match InputBindings.cs's own keyboard scheme exactly (see
     // EmuSen.WiseMan/Input/HotaruKeyMapTests.cs's table-equality
     // assertion against it) - no rebind/persistence support, unlike
-    // EmuSen.Mistress9's own ControllerKeyMap, since Hotaru has no
+    // EmuSen.Mistress's own ControllerKeyMap, since Hotaru has no
     // settings UI to drive one.
     public static class HotaruKeyMap
     {

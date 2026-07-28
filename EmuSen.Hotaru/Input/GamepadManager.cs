@@ -5,7 +5,7 @@ using EmuSen.Cores.Nintendo.Venus.Controllers;
 
 namespace EmuSen.Hotaru.Input
 {
-    // Duplicated from EmuSen.Mistress9/Input/GamepadManager.cs - polls the
+    // Duplicated from EmuSen.Mistress/Input/GamepadManager.cs - polls the
     // first connected SDL game controller and reports SNES button state
     // against a rebindable GamepadBindingMap, initializing SDL with only
     // the gamepad subsystem (no video/audio) so it never tries to open
@@ -13,7 +13,7 @@ namespace EmuSen.Hotaru.Input
     // background input source polled from there (see
     // Views/GameWindow.axaml.cs's own gamepad-poll DispatcherTimer).
     //
-    // See EmuSen.Mistress9's own copy of this file for the confidence
+    // See EmuSen.Mistress's own copy of this file for the confidence
     // note on Silk.NET.SDL's exact API surface - unchanged here, since
     // this is a faithful duplicate, not a rewrite.
     public unsafe class GamepadManager : IDisposable
@@ -68,7 +68,7 @@ namespace EmuSen.Hotaru.Input
         // connected yet (hot-plug), so plugging one in mid-session works
         // without restarting the app. Rate-limited to once per
         // RescanInterval while no controller is connected - see
-        // EmuSen.Mistress9's own copy of this method for the full
+        // EmuSen.Mistress's own copy of this method for the full
         // reasoning (a real SDL joystick enumeration on every 60Hz tick is
         // a measurable constant tax otherwise).
         public void Poll()

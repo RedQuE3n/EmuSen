@@ -43,18 +43,18 @@
     <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
     <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
          comment on why these live separately from DianaOS. -->
-    <ProjectReference Include="..\EmuSen.Providers\EmuSen.Providers.csproj" />
+    <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
     <!-- AudioPlayer (SDL-backed real audio output) lives here - see
          Audio/AudioPlayerTests.cs. Pulls in Avalonia/Silk.NET.SDL
          transitively, which is fine for a test project; nothing here
          opens an actual Avalonia window. -->
-    <ProjectReference Include="..\EmuSen.Mistress9\EmuSen.Mistress9.csproj" />
+    <ProjectReference Include="..\EmuSen.Mistress\EmuSen.Mistress.csproj" />
     <!-- HeadlessDebugOptions.Parse and FrameRunner - see
          HeadlessDebug/HeadlessDebugOptionsTests.cs and
          HeadlessDebug/FrameRunnerTests.cs. Referencing an OutputType=Exe
          project works the same as any other ProjectReference; its Main
          just never runs from here. -->
-    <ProjectReference Include="..\EmuSen.Pharaoh90\EmuSen.Pharaoh90.csproj" />
+    <ProjectReference Include="..\EmuSen.Pharaoh\EmuSen.Pharaoh.csproj" />
     <!-- GameFrameControl.ComputeLetterboxRect, BuiltInShaders' SkSL source,
          ShaderEffect.CycleEffect() - see Serenity/*Tests.cs. Nothing here
          opens an actual Avalonia window either. -->

@@ -118,10 +118,10 @@ namespace EmuSen.DianaOS.DianaOS.Bin
         // Builds the standard, full command registry (every debug command
         // under EmuSen.DianaOS.DianaOS.Bin.Commands plus this namespace's own shell
         // builtins) - the one-stop constructor call every frontend
-        // (EmuSen.Hotaru, EmuSen.Pharaoh90) actually wants,
+        // (EmuSen.Hotaru, EmuSen.Pharaoh) actually wants,
         // rather than each independently re-listing 30-odd command
         // classes and risking them drifting out of sync with each other.
-        // `extraCommands` lets a specific frontend (e.g. Mistress9's GUI
+        // `extraCommands` lets a specific frontend (e.g. Mistress's GUI
         // console) register a handful of host-specific commands - things
         // that need to reach outside IDebugTarget entirely (pausing the
         // host's own emulation thread, say) and so can't live in
@@ -132,7 +132,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
         // REPLACES it (case-insensitive), rather than erroring on a
         // duplicate key - deliberately, for cases like `coretop`, whose
         // default raw-terminal implementation flatly can't work inside a
-        // GUI-hosted console (EmuSen.Mistress9's own console window is a
+        // GUI-hosted console (EmuSen.Mistress's own console window is a
         // TextBox, not a real terminal) and needs a host-specific
         // replacement instead, not just an addition alongside it. Any
         // other extra command name (one that doesn't collide) is just
@@ -313,7 +313,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
         // lexer or parser reports "not finished yet" (an open quote, an
         // unbalanced "$(...)", or an if/for/while block missing its
         // closing keyword) - both an interactive frontend feeding one line
-        // at a time and EmuSen.Pharaoh90's `--commands` script reader
+        // at a time and EmuSen.Pharaoh's `--commands` script reader
         // (which also feeds one raw file line per call) get correct
         // multi-line control-flow support for free from this, without
         // either caller needing to know anything about the grammar.
@@ -924,7 +924,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
 
         // Printed once, at actual shell launch - EmuSen.Hotaru's
         // RunStandaloneShell (now the very first thing any launch does,
-        // ROM arg or not) and EmuSen.Mistress9's DianaOSConsoleWindow
+        // ROM arg or not) and EmuSen.Mistress's DianaOSConsoleWindow
         // constructor (opening that window IS "launching" its shell) -
         // NOT on every subsequent reopen of an already-running shell
         // (EmuSen.Hotaru's F4/RunDebugPrompt keeps its own short

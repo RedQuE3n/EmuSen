@@ -8,7 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 namespace EmuSen.WiseMan.DianaOS
 {
     // GetWelcomeBanner() - the banner both EmuSen.Hotaru's RunStandaloneShell
-    // and EmuSen.Mistress9's DianaOSConsoleWindow print once, at actual
+    // and EmuSen.Mistress's DianaOSConsoleWindow print once, at actual
     // shell launch. Headless-testable content only (text/formatting) -
     // there's no visual rendering to check here, same limitation every
     // other frontend-display feature in this project has.

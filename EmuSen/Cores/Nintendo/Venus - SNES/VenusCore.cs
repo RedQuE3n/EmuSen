@@ -299,7 +299,7 @@ namespace EmuSen.Cores.Nintendo.Venus
                     // the SPC700 a fixed ~59474*6/21 SPC cycles/frame no
                     // matter what the CPU actually executed - a systematic
                     // ~7.5-8% audio-pacing undershoot relative to the real
-                    // NTSC frame rate, confirmed via EmuSen.Pharaoh90's
+                    // NTSC frame rate, confirmed via EmuSen.Pharaoh's
                     // `audiodump` verb (see Venus_APU.md). Master clocks are
                     // now real per-instruction quantities, so SPC700 pacing
                     // tracks actual elapsed hardware time directly, the

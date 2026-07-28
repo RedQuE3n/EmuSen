@@ -13,7 +13,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
     // (originally EmuSen.Hotaru's GameWindow.axaml.cs - see that file's
     // own header comment for the full design history this was extracted
     // from) into DianaOS itself, so every host gets the same real-time-safe
-    // behavior instead of reimplementing it. EmuSen.Mistress9's own console
+    // behavior instead of reimplementing it. EmuSen.Mistress's own console
     // window had none of this until now - it called DianaOSInterpreter.Submit
     // directly from the UI thread with no synchronization at all against
     // its own, separately-running emulation thread.
@@ -21,7 +21,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
     // The shape: a read-only line (DianaOSInterpreter.TryGetReadOnlyFastPath)
     // runs immediately, on whichever thread called SubmitFromAnyThread -
     // never touching whatever thread owns the core - because a read-only
-    // snapshot read (see EmuSen.Providers.IRealtimeProvider) is safe from
+    // snapshot read (see EmuSen.Cauldron.IRealtimeProvider) is safe from
     // anywhere. Anything else queues, to be drained once per frame/tick by
     // DrainPending, called from the thread that actually owns the core -
     // so a mutating command typed at a live console never races RunFrame().

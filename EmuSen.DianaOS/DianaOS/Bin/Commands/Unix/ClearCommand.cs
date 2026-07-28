@@ -20,7 +20,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
     // piped script or a headless test running `clear` shouldn't fail
     // over a screen that was never going to be looked at anyway.
     //
-    // `EmuSen.Mistress9`'s own DianaOS console window isn't a real
+    // `EmuSen.Mistress`'s own DianaOS console window isn't a real
     // terminal at all (a TextBox, same reason `coretop -w`/`feed`
     // needed frontend-specific replacements) - see
     // DianaOSConsoleWindow.axaml.cs's own `clear` override, which

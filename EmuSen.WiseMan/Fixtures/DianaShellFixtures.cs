@@ -26,7 +26,7 @@ namespace EmuSen.WiseMan.Fixtures
 
             public ScratchDir(string subfolder)
             {
-                Path = System.IO.Path.Combine(DianaOSSandbox.RootDirectory, "var", "log", subfolder, $"run_{Guid.NewGuid():N}");
+                Path = System.IO.Path.Combine(DianaOSSandbox.SourceLogsDirectory, subfolder, $"run_{Guid.NewGuid():N}");
                 Directory.CreateDirectory(Path);
             }
 

@@ -28,10 +28,10 @@ namespace EmuSen.Hotaru.Views
     // Raylib window, driven by Program.cs's own main loop on a
     // completely different thread from this one) keeps running.
     //
-    // Deliberately a near-identical copy of EmuSen.Mistress9's own
+    // Deliberately a near-identical copy of EmuSen.Mistress's own
     // CoretopWindow rather than a shared class - these two frontends are
     // already established as intentionally separate, non-sharing UI
-    // (see EmuSen.Mistress9.csproj's own header comment), and this
+    // (see EmuSen.Mistress.csproj's own header comment), and this
     // window has no dependency on anything MainWindow-shaped in either
     // project beyond "an IDebugTarget," so duplicating one small,
     // self-contained ~200-line file costs far less than standing up a

@@ -7,8 +7,8 @@ namespace EmuSen.Hotaru.Audio
 {
     // Real audio output for GameWindow's emulation thread, via SDL's
     // queue-based audio API (SDL_OpenAudioDevice + SDL_QueueAudio, no
-    // callback) - adapted from EmuSen.Mistress9/Audio/AudioPlayer.cs,
-    // whose Pump(EmulatorSession) took Mistress9's own core wrapper type;
+    // callback) - adapted from EmuSen.Mistress/Audio/AudioPlayer.cs,
+    // whose Pump(EmulatorSession) took Mistress's own core wrapper type;
     // Hotaru drives an ICore (VenusCore) directly with no such wrapper,
     // so Pump here takes ICore instead and calls
     // ICore.DequeueAudioSamples() the same way Hotaru's old Raylib-based
@@ -21,7 +21,7 @@ namespace EmuSen.Hotaru.Audio
     // dependency for audio instead of keeping a second backend around
     // just for sound.
     //
-    // See EmuSen.Mistress9's own copy of this file for the confidence
+    // See EmuSen.Mistress's own copy of this file for the confidence
     // note on Silk.NET.SDL's exact API surface (confirmed via reflection
     // against the installed assembly) - unchanged here.
     public unsafe class AudioPlayer : IDisposable

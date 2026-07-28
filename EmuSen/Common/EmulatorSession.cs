@@ -7,7 +7,7 @@ using EmuSen.Cores.Nintendo.Venus.Video;
 namespace EmuSen.Common
 {
     // Thin, mostly core-agnostic wrapper around ICore for a non-Raylib
-    // frontend (the Avalonia EmuSen.Mistress9 project) to drive a core on
+    // frontend (the Avalonia EmuSen.Mistress project) to drive a core on
     // its own schedule, independent of any particular windowing/UI
     // toolkit - call LoadRom() once and RunFrame() whenever the UI's own
     // render loop wants a new frame.
@@ -48,7 +48,7 @@ namespace EmuSen.Common
         // Same escape-hatch pattern as Bus above, added so a caller (the
         // Avalonia frontend's shell console window) can construct a real
         // SnesDebugTarget(Cpu, Bus, Renderer) - the exact constructor
-        // shape EmuSen.Hotaru/EmuSen.Pharaoh90 already use - without this
+        // shape EmuSen.Hotaru/EmuSen.Pharaoh already use - without this
         // class needing to grow its own IDebugTarget-building logic. Null
         // before LoadRom() the same way Bus throws, rather than throwing
         // itself, since "no target yet" is a normal condition a shell

@@ -11,7 +11,7 @@ This folder is EmuSen's documentation set: project status, architecture, the deb
 - **`EmuSen_Frontend_Driver.md`** — `EmuSen.Hotaru`'s actual launch sequence and per-frame driver: `Main`/`App`/`GameWindow`, the emulation thread, the always-live DianaOS console reader thread, and every hotkey's dispatch mechanism.
 - **`EmuSen_Settings_Reference.md`** — the three static config classes (`DebugSettings`, `AudioSettings`, `GraphicsSettings`): every flag, its default, and the historical investigation context behind why it exists.
 - **`EmuSen_Games_Tested.md`** — real-game compatibility tracking (as opposed to the CPU/PPU ground-truth test suites in `EmuSen.Tomoe`, which test opcodes/registers in isolation). Always reflects current, real behavior - a bug fix removes an entry rather than just annotating it.
-- **`EmuSen_Launcher_Multicore_Gameplan.md`** — a separate, later-stage plan for a distinct future multi-core/launcher project (not `EmuSen.Mistress9`, which stays scoped to bug-testing tooling). Gated on a second real core existing.
+- **`EmuSen_Launcher_Multicore_Gameplan.md`** — a separate, later-stage plan for a distinct future multi-core/launcher project (not `EmuSen.Mistress`, which stays scoped to bug-testing tooling). Gated on a second real core existing.
 - **`Commands.txt`** — flat scratch notes: literal shell commands for common branch/build/run sequences. Not prose documentation.
 
 ## Subfolders

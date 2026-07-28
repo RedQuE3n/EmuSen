@@ -9,7 +9,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
     // Save/load emulator state - promoted from being a hand-rolled string
     // match inside EmuSen.Hotaru's own RunDebugPrompt (and, before this,
-    // never reachable from EmuSen.Mistress9's console at all, only its
+    // never reachable from EmuSen.Mistress's console at all, only its
     // Save/Load State menu items) into a real, shared IDianaOSCommand, so
     // DianaOS's own registry is genuinely "everything you can do" rather
     // than "everything except this."

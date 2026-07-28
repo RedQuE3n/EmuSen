@@ -50,7 +50,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // git history for DrawDebugPanels/Shutdown) was removed entirely
         // rather than ported: DianaOS's regs/sprites/pal/tile/vramsheet/
         // paletteswatch commands and the coretop dashboard already cover
-        // the exact same data, and EmuSen.Mistress9 (always headless: true)
+        // the exact same data, and EmuSen.Mistress (always headless: true)
         // never had this overlay to begin with, proving it wasn't load-
         // bearing. RenderScanline and the Bg/Obj compositing it calls have
         // no rendering-API dependency at all (they only touch the plain

@@ -45,13 +45,24 @@ namespace EmuSen.DianaOS.DianaOS.Etc
             return Path.GetFullPath(AppContext.BaseDirectory);
         }
 
+        // The DianaOS project's own "user data" home - emulator-facing
+        // output (dump/load/screenshot/recording logs, SRAM + state
+        // saves) lives here now instead of under var/, see `man hier`.
+        public static string UsrHomeDirectory => Path.Combine(RootDirectory, "EmuSen.DianaOS", "DianaOS", "Usr", "Home");
+        public static string LogsDirectory => Path.Combine(UsrHomeDirectory, "Logs");
+        public static string SavesDirectory => Path.Combine(UsrHomeDirectory, "Saves");
+
+        // WiseMan test-run scratch space only - dev/test artifacts, not
+        // emulator output, kept out of Usr/Home so it isn't mistaken for it.
+        public static string SourceLogsDirectory => Path.Combine(RootDirectory, "SourceLogs");
+
         // The real directories this shell's Unix-shaped tree needs - see `man hier`.
         private static void EnsureSkeleton()
         {
             string root = RootDirectory;
-            Directory.CreateDirectory(Path.Combine(root, "var", "log"));
-            Directory.CreateDirectory(Path.Combine(root, "var", "lib"));
-            Directory.CreateDirectory(Path.Combine(root, "var", "games"));
+            Directory.CreateDirectory(LogsDirectory);
+            Directory.CreateDirectory(SavesDirectory);
+            Directory.CreateDirectory(SourceLogsDirectory);
             Directory.CreateDirectory(Path.Combine(root, "home", "root"));
             Directory.CreateDirectory(Path.Combine(root, "etc"));
             Directory.CreateDirectory(Path.Combine(root, "tmp"));

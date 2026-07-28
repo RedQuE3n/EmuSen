@@ -1,5 +1,5 @@
 using EmuSen.Cores.Nintendo.Venus.Controllers;
-using EmuSen.Pharaoh90.Cli;
+using EmuSen.Pharaoh.Cli;
 
 namespace EmuSen.WiseMan.HeadlessDebug
 {

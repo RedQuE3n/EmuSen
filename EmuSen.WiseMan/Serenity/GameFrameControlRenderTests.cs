@@ -17,7 +17,7 @@ namespace EmuSen.WiseMan.Serenity
     // scaling, exceptions, unstable output across repeated frames) that no
     // test here previously exercised at all. Won't catch a live-GPU/
     // compositor-specific bug like the per-frame-SKSurface flicker fixed in
-    // GameFrameControl.cs (see Man pages/EmuSen_Project_Overview_v2.md
+    // GameFrameControl.cs (see EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Project_Overview_v2.md
     // §2a) - headless rendering has no live GrContext - but it's real
     // coverage for everything else in this file.
     //

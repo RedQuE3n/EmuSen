@@ -13,8 +13,8 @@ namespace EmuSen.Pharaoh
     // --commands mode's script interpreter: an ordered list of verbs
     // executed one line at a time against a shared FrameRunner, so
     // frame-stepping, input, screenshots, and debug commands can interleave
-    // freely in one script. Full verb syntax: Man pages/
-    // EmuSen_Debugging_Tools_Reference_v5.md §3.15. Anything not recognized
+    // freely in one script. Full verb syntax: EmuSen.DianaOS/DianaOS/Usr/Home/Documents/
+    // EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15. Anything not recognized
     // as one of those verbs falls through to the real DianaOSInterpreter.
     public sealed class CommandsScriptRunner
     {

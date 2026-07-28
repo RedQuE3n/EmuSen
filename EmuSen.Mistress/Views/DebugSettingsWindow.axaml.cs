@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Views
     // something persisted to AppSettings or scoped to a session.
     //
     // Descriptions are trimmed summaries of what's in
-    // Man pages/EmuSen_Settings_Reference.md §1 - see that doc for the full
+    // EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Settings_Reference.md §1 - see that doc for the full
     // investigation history behind each flag.
     public partial class DebugSettingsWindow : Window
     {

@@ -17,7 +17,7 @@ namespace EmuSen.Mistress
 
         public static AppBuilder BuildAvaloniaApp()
         {
-            // See Man pages/EmuSen_Project_Overview_v2.md §2a for why
+            // See EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Project_Overview_v2.md §2a for why
             // Linux is forced onto UseX11() now.
             var builder = AppBuilder.Configure<App>()
                 .UsePlatformDetect()

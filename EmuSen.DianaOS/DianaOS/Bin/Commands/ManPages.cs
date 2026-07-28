@@ -772,7 +772,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    A leading '/' in any path means THIS root, not the real OS filesystem\n" +
                 "    root - see 'cd'. Candidly: the sandbox's root is the REAL project\n" +
                 "    directory (see 'ls'), not a fully separate synthetic tree, so this\n" +
-                "    project's own real source folders ('EmuSen.Hotaru', '.git', 'Man pages',\n" +
+                "    project's own real source folders ('EmuSen.Hotaru', '.git',\n" +
                 "    'EmuSen.sln', ...) are still visible at the top level alongside the\n" +
                 "    layout above - this shell was always meant to let you poke around the\n" +
                 "    project's own files, not hide them.\n\n" +

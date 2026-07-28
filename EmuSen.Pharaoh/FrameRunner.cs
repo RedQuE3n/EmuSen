@@ -10,7 +10,7 @@ namespace EmuSen.Pharaoh
     // differently. CurrentFrame is post-increment ("frames completed so
     // far"); a caller needing the classic loop's old pre-increment
     // numbering captures CurrentFrame before calling RunFrames(1). Full
-    // design reasoning: Man pages/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
+    // design reasoning: EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
     public sealed class FrameRunner
     {
         private const int ProgressEvery = 600; // ~10s of real 60fps gameplay

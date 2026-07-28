@@ -25,7 +25,7 @@ namespace EmuSen.Serenity
     // on-window debug overlay (VRAM sheet/CGRAM swatch/register text,
     // drawn at fixed pixel offsets around a small 2x-scaled game view) a
     // fixed layout to share with the game screen. That overlay is gone
-    // (see Man pages/EmuSen_Debugging_Tools_Reference_v5.md's own revision
+    // (see EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md's own revision
     // note on why), so letterboxing the actual game frame's own native
     // aspect ratio directly into the control's real bounds is what "show
     // me the game, scaled to fit the window" now means - the old
@@ -112,7 +112,7 @@ namespace EmuSen.Serenity
         }
 
         // Reused across every frame for a given effect, not rebuilt in
-        // Render() each time - see Man pages/EmuSen_Project_Overview_v2.md
+        // Render() each time - see EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Project_Overview_v2.md
         // §2a: a fresh SKRuntimeShaderBuilder per frame meant either
         // disposing it (which corrupts the shared SKRuntimeEffect - a real
         // SkiaSharp bug) or leaking a new native object every frame forever
@@ -189,8 +189,8 @@ namespace EmuSen.Serenity
                 int upscaledH = Math.Max(1, (int)Math.Round(h));
                 var destRect = new SKRect((float)x, (float)y, (float)x + upscaledW, (float)y + upscaledH);
 
-                // Confirmed fix for a real flicker bug (see Man pages/
-                // EmuSen_Project_Overview_v2.md §2a): allocating/disposing
+                // Confirmed fix for a real flicker bug (see EmuSen.DianaOS/DianaOS/Usr/Home/Documents/
+                // EmuSen Manual/EmuSen_Project_Overview_v2.md §2a): allocating/disposing
                 // a fresh GPU-backed SKSurface every single frame (below)
                 // was the cause, on both X11 and Wayland. Skip it entirely
                 // when no shader is active - DrawImage scales straight to
@@ -204,8 +204,8 @@ namespace EmuSen.Serenity
                 // A shader's "image" child is sampled in the source
                 // image's own native pixel coordinates, not stretched to
                 // any destination rect - a local matrix on the shader
-                // (not a separate offscreen upscale surface, see Man pages/
-                // EmuSen_Project_Overview_v2.md §2a) is what makes its
+                // (not a separate offscreen upscale surface, see EmuSen.DianaOS/DianaOS/Usr/Home/Documents/
+                // EmuSen Manual/EmuSen_Project_Overview_v2.md §2a) is what makes its
                 // row/vignette math operate in real output-pixel space
                 // instead of shading only the frame's native-resolution
                 // top-left corner of the upscaled output.

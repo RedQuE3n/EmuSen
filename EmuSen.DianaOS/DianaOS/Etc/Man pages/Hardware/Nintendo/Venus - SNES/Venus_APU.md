@@ -149,6 +149,10 @@ Read returns the *live* per-voice end flags (one bit per voice, set when that vo
 
 When `AudioSettings.AudioEnabled` is false or muted, `GenerateSample` still calls `voice.GetNextSample()` for every voice (discarding the result) rather than skipping voice processing entirely — so playback position doesn't "jump ahead" the instant audio is re-enabled mid-sound.
 
+### 3.5a Getting samples to a real output device
+
+`SDsp.AudioBuffer` is where generated samples land, but nothing about pacing them to a sound card lives in this core — that is core-agnostic frontend machinery. Clock drift between the SNES's audio clock and the host's is absorbed by resampling within ±0.5% (`DynamicRateControl`), and the buffer here is now only a 2-second safety valve for when nothing is draining at all, such as a headless `EmuSen.Pharaoh` run. It used to discard 150ms in one go whenever it passed 250ms, which is what "audio intermittently skips" was. See **`EmuSen_Audio_Sync.md`** for the whole path, and §2.8/§2.9 above for the clock errors that made the old mechanism fire on a fixed 30-second schedule.
+
 ### 3.5 DSP debug toolchain (`channels`, `mute`, `regs`'s DSP_* rows)
 
 Added diagnosing the "part of the music is missing" report (§4.4) - previously the debug toolchain could only see the *final mixed* audio output (`audiodump`/`GetAudioSamples`) or a KeyOn event as it happened (console-only `DebugSettings.DspKeyOnLogging`); neither answers "is voice N active right now, and what's its envelope actually doing."

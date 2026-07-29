@@ -378,6 +378,7 @@ namespace EmuSen.Mistress.Views
             {
                 _session.LoadState(path);
                 _rewind.Clear(); // a discontinuous jump - see §1.4
+                _audioPlayer.RateControl.Reset();
                 StatusText.Text = $"State loaded: {System.IO.Path.GetFileName(path)}";
             }
             catch (Exception ex)
@@ -402,6 +403,7 @@ namespace EmuSen.Mistress.Views
                 StartLogging(_session.CoreName); // before LoadRom() so Cartridge's own load-time output is captured too
                 _session.LoadRom(path);
                 _rewind.Clear(); // a discontinuous jump - see §1.4
+                _audioPlayer.RateControl.Reset();
 
                 // See SnesDebugTarget's own constructor comment - feeds
                 // `coretop`'s hardware-load bars.
@@ -572,6 +574,7 @@ namespace EmuSen.Mistress.Views
                     // No RunFrame() ran, so these would otherwise be stale - see §3.
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);
+                    _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
                     SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, EmulatorSession.ScreenHeight);
                     SleepUntil(nextTick, clock);
                     continue;
@@ -612,8 +615,15 @@ namespace EmuSen.Mistress.Views
                     if (session.Core is not null) _rewind.OnFrameCompleted(session.Core);
 
                     // Drained, not just unpumped, when speed outruns the device - see §2.3.
-                    if (_speed.ShouldPlayAudio) _audioPlayer.Pump(session);
-                    else session.DequeueAudioSamples(int.MaxValue);
+                    if (_speed.ShouldPlayAudio)
+                    {
+                        _audioPlayer.Pump(session);
+                    }
+                    else
+                    {
+                        session.DequeueAudioSamples(int.MaxValue);
+                        _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
+                    }
 
                     cpuSpc700MsInWindow += session.LastFrameCpuSpc700Ms;
                     ppuMsInWindow += session.LastFramePpuMs;

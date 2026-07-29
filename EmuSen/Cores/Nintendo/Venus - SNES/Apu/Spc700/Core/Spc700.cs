@@ -34,7 +34,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
     public partial class Spc700
     {
         // Logs CPU<->APU port traffic on value changes only - see Venus_APU.md §1.2.
-        public bool LogPortTraffic = false;
+        public bool LogPortTraffic => DebugSettings.ApuPortTrafficLogging;
         private byte[] _lastCpuWrite = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF };
         private byte[] _lastSpcWrite = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF };
 
@@ -157,9 +157,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         public void Reset()
         {
-            Array.Copy(IplRom, 0, Ram, 0xFFC0, IplRom.Length);
-
-            PC = 0xFFC0; 
+            PC = 0xFFC0;
             A = 0x00;
             X = 0x00;
             Y = 0x00;
@@ -170,7 +168,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             Array.Clear(_inPorts, 0, 4);
             Array.Clear(_outPorts, 0, 4);
 
-            _timerControl = 0;
+            // Bit 7 set: IPL ROM overlay on at power-on, so PC=$FFC0 fetches it.
+            _timerControl = 0x80;
             _timer0Cycles = _timer1Cycles = _timer2Cycles = 0;
             _timer0Internal = _timer1Internal = _timer2Internal = 0;
             _timer0Target = _timer1Target = _timer2Target = 0;
@@ -187,6 +186,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         // Debug visibility: what the CPU most recently wrote into each APU-side port.
         public byte GetInPort(int port) => _inPorts[port & 0x03];
+
+        // CONTROL ($00F1) bit 7. Computed, not a field, so save states keep
+        // their existing layout - see Venus_APU.md §1.1.
+        public bool IplRomEnabled
+        {
+            get => (_timerControl & 0x80) != 0;
+            set => _timerControl = (byte)(value ? _timerControl | 0x80 : _timerControl & 0x7F);
+        }
 
         private int[] _milestoneCounts = new int[4];
 
@@ -247,6 +254,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                     _timer2Counter = 0;
                     return t2;
             }
+
+            // Read-only overlay, not a RAM stamp - see Venus_APU.md §1.1.
+            if (address >= 0xFFC0 && IplRomEnabled) return IplRom[address - 0xFFC0];
 
             return Ram[address];
         }

@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace EmuSen.Cores
 {
     // The core-agnostic execution contract - the missing counterpart to
@@ -89,6 +91,15 @@ namespace EmuSen.Cores
 
         void SaveState(string path);
         void LoadState(string path);
+
+        // Same bytes as the path overloads above, without the filesystem - see
+        // EmuSen_Rewind_And_FastForward.md §1.1. Neither closes the stream.
+        void SaveState(Stream stream);
+        void LoadState(Stream stream);
+
+        // Fast-forward-only hint that this frame's pixels are discarded; a core
+        // honoring it may leave render-derived bits stale - see §2.2.
+        bool SkipRendering { get; set; }
 
         // Flushes battery-backed save data (SRAM or whatever this
         // hardware's equivalent is) to disk. A core with no such concept

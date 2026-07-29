@@ -32,6 +32,13 @@ namespace EmuSen.Mistress.Views
 
         private EmulatorSession? _session;
 
+        // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
+        private volatile bool _turboHeld;
+        private volatile bool _rewindHeld;
+
+        private readonly EmuSen.Common.SpeedController _speed = new();
+        private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true };
+
         // Gamepad polling stays on the UI thread, on its own timer, separate
         // from emulation itself (see _emuThread below) - GamepadManager.cs's
         // own comment flags Silk.NET.SDL's exact API surface as unverified,
@@ -153,16 +160,24 @@ namespace EmuSen.Mistress.Views
                 StopLogging();
             };
 
-            KeyDown += (_, e) => SetButtonFromKey(e.Key, pressed: true);
-            KeyUp += (_, e) => SetButtonFromKey(e.Key, pressed: false);
+            KeyDown += (_, e) => SetButtonFromKey(e.Key, pressed: true, e);
+            KeyUp += (_, e) => SetButtonFromKey(e.Key, pressed: false, e);
         }
 
-        private void SetButtonFromKey(Key key, bool pressed)
+        private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
             if (_keyBindings.TryGetButton(key, out var button))
             {
                 _keyboardHeld[(int)button] = pressed;
                 ApplyButtonState(button);
+                return;
+            }
+
+            // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
+            switch (key)
+            {
+                case Key.Tab: _turboHeld = pressed; e.Handled = true; break; // Handled or Avalonia steals Tab for focus traversal
+                case Key.Back: _rewindHeld = pressed; break;
             }
         }
 
@@ -291,6 +306,7 @@ namespace EmuSen.Mistress.Views
         {
             if (_session is null) throw new InvalidOperationException("No ROM loaded.");
             _session.LoadState(path);
+            _rewind.Clear(); // a discontinuous jump - see §1.4
         }
 
         // Opens (or brings forward/updates) CoretopWindow - same at-most-
@@ -361,6 +377,7 @@ namespace EmuSen.Mistress.Views
             try
             {
                 _session.LoadState(path);
+                _rewind.Clear(); // a discontinuous jump - see §1.4
                 StatusText.Text = $"State loaded: {System.IO.Path.GetFileName(path)}";
             }
             catch (Exception ex)
@@ -384,6 +401,7 @@ namespace EmuSen.Mistress.Views
                 _session = new EmulatorSession();
                 StartLogging(_session.CoreName); // before LoadRom() so Cartridge's own load-time output is captured too
                 _session.LoadRom(path);
+                _rewind.Clear(); // a discontinuous jump - see §1.4
 
                 // See SnesDebugTarget's own constructor comment - feeds
                 // `coretop`'s hardware-load bars.
@@ -540,10 +558,26 @@ namespace EmuSen.Mistress.Views
                     nextTick = clock.Elapsed;
                 }
 
-                nextTick += FrameInterval;
-
                 EmulatorSession? session = _session;
                 if (session is null) break;
+
+                _speed.SetTurbo(_turboHeld);
+                nextTick += _speed.FrameInterval(session.FrameRateHz);
+
+                // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
+                if (_rewindHeld && session.Core is not null)
+                {
+                    session.SkipRendering = false;
+                    if (!_rewind.Rewind(session.Core)) nextTick = clock.Elapsed;
+                    // No RunFrame() ran, so these would otherwise be stale - see §3.
+                    _debugTarget?.RefreshProviders();
+                    session.DequeueAudioSamples(int.MaxValue);
+                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, EmulatorSession.ScreenHeight);
+                    SleepUntil(nextTick, clock);
+                    continue;
+                }
+
+                session.SkipRendering = !_speed.ShouldRender(session.TotalFrames);
 
                 try
                 {
@@ -575,7 +609,12 @@ namespace EmuSen.Mistress.Views
                     // RunFrame(), since that's what actually produces new
                     // samples to drain. Safe here on _emuThread rather than
                     // the UI thread - see AudioPlayer.Pump's own comment.
-                    _audioPlayer.Pump(session);
+                    if (session.Core is not null) _rewind.OnFrameCompleted(session.Core);
+
+                    // Drained, not just unpumped, when speed outruns the device - see §2.3.
+                    if (_speed.ShouldPlayAudio) _audioPlayer.Pump(session);
+                    else session.DequeueAudioSamples(int.MaxValue);
+
                     cpuSpc700MsInWindow += session.LastFrameCpuSpc700Ms;
                     ppuMsInWindow += session.LastFramePpuMs;
                     hdmaMsInWindow += session.LastFrameHdmaMs;
@@ -584,8 +623,12 @@ namespace EmuSen.Mistress.Views
                     mainCompositeMsInWindow += session.LastFrameMainCompositeMs;
                     subCompositeMsInWindow += session.LastFrameSubCompositeMs;
 
-                    byte[] frame = session.GetFrameBufferRgba();
-                    SubmitFrame(frame, session.ScreenWidth, EmulatorSession.ScreenHeight);
+                    // Nothing new was drawn on a skipped frame.
+                    if (!session.SkipRendering)
+                    {
+                        byte[] frame = session.GetFrameBufferRgba();
+                        SubmitFrame(frame, session.ScreenWidth, EmulatorSession.ScreenHeight);
+                    }
 
                     framesInWindow++;
                     TimeSpan windowElapsed = clock.Elapsed - fpsWindowStart;

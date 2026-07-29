@@ -27,6 +27,9 @@ namespace EmuSen.Pharaoh
         private readonly Action<long>? onFrameAdvanced;
         private readonly Dictionary<(SnesButton Button, int Controller), bool> held = new();
 
+        // Fed by RunFrames() below - see EmuSen_Rewind_And_FastForward.md §3.
+        public EmuSen.Common.RewindBuffer Rewind { get; } = new();
+
         public FrameRunner(VenusCore core, long frameCap, Action<string> emit, Action<long>? onFrameAdvanced = null)
         {
             Core = core;
@@ -89,9 +92,19 @@ namespace EmuSen.Pharaoh
                 }
                 Core.RunFrame();
                 CurrentFrame++;
+                Rewind.OnFrameCompleted(Core);
                 onFrameAdvanced?.Invoke(CurrentFrame);
                 if (CurrentFrame % ProgressEvery == 0) emit($"[frame {CurrentFrame}/{FrameCap}]");
             }
+        }
+
+        // Returns steps actually taken - see EmuSen_Rewind_And_FastForward.md §3.
+        public int StepBack(int steps)
+        {
+            int done = 0;
+            while (done < steps && Rewind.Rewind(Core)) done++;
+            CurrentFrame = Math.Max(0, CurrentFrame - (long)done * Rewind.IntervalFrames);
+            return done;
         }
 
         // Advances one frame at a time (via RunFrames(1), so held input/

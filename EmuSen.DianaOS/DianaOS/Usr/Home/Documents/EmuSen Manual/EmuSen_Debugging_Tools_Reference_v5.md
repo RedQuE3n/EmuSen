@@ -23,8 +23,12 @@ These all live in `GameWindow`'s per-frame hotkey dispatch, consumed once per fr
 | **F6** | Toggles a continuous frame recording on/off — same idea as F3 but for a whole span of frames instead of one instant. See §3.8. |
 | **F5** | Save state. |
 | **F9** | Load state. |
+| **Tab** *(held)* | Fast-forward at `SpeedController.TurboPercent` (default 300%), with automatic frame skip and audio dropped — see `EmuSen_Rewind_And_FastForward.md` §2/§4. |
+| **Backspace** *(held)* | Rewind — see `EmuSen_Rewind_And_FastForward.md` §1/§4. |
 | **P** | Starts a 300-frame bounded scroll-write trace (`AllScrollWriteLogging`), tagged `[BG SCROLL]`. |
 | **O** *(console debug view only, `Renderer.cs`)* | Legacy combined dump: OAM + a BG1 "black tile" diagnostic + backdrop compositing math. Left over from an early investigation; still assumes 8x8 tiles internally (not tile16-aware), so treat its BG1 output with that caveat if you ever reach for it again. |
+
+**Tab and Backspace are the only *held* hotkeys here** — every other key in this table is edge-detected on `KeyDown` into a `volatile bool` request flag that the emulation loop consumes exactly once. Fast-forward and rewind instead track a key's held state across `KeyDown`/`KeyUp`.
 
 **F1 and F4 both go through the shared debug toolchain** (§3) rather than having their own separate logic — F1 is just `debugTarget.GetSummaryText()` printed once; F4 is the interactive version of the same underlying data, plus more. F2 is intentionally *not* routed through the toolchain — see §3.4 for why.
 
@@ -440,7 +444,7 @@ A third consumer of `DianaOSInterpreter` alongside the console's F4 prompt (§3.
 - `Program.cs` - thin: dispatches to `DiffShotRunner` for `--diffshot`, otherwise parses args via `HeadlessDebugOptions.Parse`, builds a `FrameRunner`, and either drives the classic frame loop itself or hands off to `CommandsScriptRunner`.
 - `Cli/HeadlessDebugOptions.cs` - `Parse(string[] args)` turns argv into a plain options object plus a `Warnings` list, with no I/O of its own (ROM-existence checking stays in `Program.cs`, since that's a filesystem side effect, not parsing) - genuinely unit-testable for the first time (§3.18).
 - `FrameRunner.cs` - the one shared frame-stepping primitive both the classic loop and `--commands` mode drive: apply held input, apply `--cpulog` windowing, `RunFrame()`, bump a post-increment `CurrentFrame` ("frames completed so far" - `--commands` mode's own pre-existing convention), fire an autoshot callback, emit the progress heartbeat, enforce the frame-count safety cap. Replaces what used to be two separately-maintained copies of this same sequence. Owns `Hold`/`Release`/`Tap` and `WaitStable` too; does **not** own `FlushVerboseTrace()` - both callers still call that exactly once after their own loop/script finishes, matching before.
-- `CommandsScriptRunner.cs` - the `--commands` verb interpreter (`frames`/`tap[2]`/`hold`/`release`/`screenshot`/`waitstable`/`waitchange`/`waitvalue`/`contactsheet`/`vramsheet`/`paletteswatch`/`spriteoverlay`/`audiodump`), now driving a shared `FrameRunner` instead of its own closures; unrecognized verbs still fall through to `DianaOSInterpreter.Execute`.
+- `CommandsScriptRunner.cs` - the `--commands` verb interpreter (`frames`/`tap[2]`/`hold`/`release`/`screenshot`/`waitstable`/`waitchange`/`waitvalue`/`contactsheet`/`vramsheet`/`paletteswatch`/`spriteoverlay`/`audiodump`/`fastforward`/`rewind`), now driving a shared `FrameRunner` instead of its own closures; unrecognized verbs still fall through to `DianaOSInterpreter.Execute`.
 - `DiffShotRunner.cs` - the standalone `--diffshot` mode, logic unchanged, now reading/writing BMPs via `EmuSen.Common.Imaging.BmpFile`.
 
 The classic loop's `--tap`/`--screenshot` frame-indexed timing and `--autoshot`'s filenames are bit-for-bit unchanged by this - `Program.cs` captures `FrameRunner.CurrentFrame` *before* each `RunFrames(1)` call for tap/screenshot checks (matching the old for-loop's pre-increment `frame` variable exactly), and passes an autoshot callback that subtracts 1 from `FrameRunner`'s post-increment counter to reproduce the classic loop's original 0-indexed `frame_<n>.bmp` names - only the `--commands` mode's own already-post-increment autoshot numbering (and the progress-log text, called out above) reflect the unified convention directly.
@@ -488,6 +492,29 @@ dotnet run --project EmuSen.Pharaoh -- <rom> <frames> [options...]
 - `paletteswatch <path>` — export the current color palette memory as a 16x16 swatch-grid BMP, via `IDebugTarget.RenderPaletteSwatch()`. On the SNES this reuses the same `SnesColor()` BGR555 conversion `DrawDebugPanels`'s on-screen CGRAM panel already used, just written into a plain RGBA buffer instead of `Raylib.DrawRectangle` calls (which need an active render target this harness doesn't have).
 - `spriteoverlay <path>` — capture the current frame buffer and draw a green bounding-box outline for every entry the already-generic `IDebugTarget.GetSprites()` reports (no interface change needed for this one - `GetSprites()` was core-agnostic from when it was first added). For "is this OAM entry actually where I think it is on screen" questions without needing to cross-reference `sprites`' text output against a plain screenshot by hand.
 - `audiodump <path> [maxsamples]` — write whatever's currently buffered in the new `IDebugTarget.GetAudioSamples()` out as a standard 16-bit PCM `.wav` file (`maxsamples` truncates rather than errors if fewer are actually buffered). On the SNES this is `Spc700.Dsp.AudioBuffer.ToArray()` - `ToArray()` specifically, not dequeuing, so this never steals samples out from under a live audio-playback consumer of the same queue. A core with no audio output modeled yet can return an empty array.
+- `fastforward on|off` (alias `ff`) — toggles `ICore.SkipRendering`. Headless already runs unpaced, so there is no speed multiplier to set here; the win is purely from not compositing frames nobody will look at. Measured at **~2.5x** on SMW (3300 frames: 12.4s -> 5.5s), which makes long boot sequences meaningfully cheaper to script past. Turn it back off before any `screenshot`/`contactsheet`/`spriteoverlay` line — a skipped frame leaves the framebuffer holding whatever was last drawn. See `EmuSen_Rewind_And_FastForward.md` §2.2 for the one accuracy caveat (`RangeOver`/`TimeOver` go stale).
+- `rewind on [interval=4] [budgetMB=96]` / `rewind off` / `rewind back <n>` / `rewind` — a bounded, in-memory history of core states, captured automatically by every frame-advancing verb once switched on. `rewind back <n>` steps back `n` snapshots (i.e. `n * interval` frames) and keeps the harness's own frame counter in sync; bare `rewind` reports depth, seconds held, bytes held, and raw state size. Core-agnostic — built on `ICore` alone, no SNES knowledge. See `EmuSen_Rewind_And_FastForward.md` §1.
+
+  **This turns "when did it break?" from a re-run into a bisection.** Locating the exact frame a glitch appears otherwise means relaunching from boot with a different `--screenshot` frame each attempt. With rewind you overshoot once, then walk back inside a single process:
+
+  ```
+  > rewind on 4 96
+  [REWIND] On - snapshot every 4 frame(s), budget 96MB, 1160KB per raw state.
+  > frames 700
+  > frames 200
+  > rewind back 50
+  [REWIND] Stepped back 50 snapshot(s) - now at frame 700, 175 left.
+  ```
+
+  It reports honestly when the chain runs out rather than silently doing less:
+
+  ```
+  > rewind back 500
+  [REWIND] Only 100 of 500 snapshot(s) available - now at frame 300, chain exhausted.
+  ```
+
+  Cost is ~0.7ms per capture and 4-84KB per snapshot depending on how much the game is churning (a raw state is ~1.15MB). `rewind` on its own is the verb to check that with before setting a long run going.
+
 - anything else — passed straight to `DianaOSInterpreter.Execute`, exactly like `--script`'s lines.
 
 Example (the actual script that confirmed SMAS's Select Game screen needs Player 2's Start, in one run instead of six):
@@ -679,9 +706,11 @@ Generic, dependency-free helpers, kept genuinely reusable for a future core's da
 
 ## 5. Save states
 
-**F5**/**F9** in the console build; Save/Load State menu items in the Avalonia frontend. Backed by `Common/StateSerializer.cs` — a reflective binary serializer that walks fields (not properties), skipping anything marked `[SkipInState]` (dispatch tables, back-references, and debug-only bookkeeping).
+**F5**/**F9** in the console build; Save/Load State menu items in the Avalonia frontend. Backed by `Common/StateSerializer.cs` — a reflective binary serializer that walks fields (not properties), skipping anything marked `[SkipInState]` (dispatch tables, back-references, and debug-only bookkeeping) or `[AliasOfSerializedField]` (a reference to an array another field already writes).
 
-**Known limitation:** no version header — a save state can break across builds if the underlying fields change shape. Not something to fix casually; flagged so it isn't a surprise.
+**Full format reference: `EmuSen_Save_States.md`.** States now carry a magic + version header, and pre-v1 files still load via a legacy read path. The same bytes back `RewindBuffer` in memory (`EmuSen_Rewind_And_FastForward.md` §1).
+
+**Known limitation:** the layout is positional, with no field-name tagging — adding, removing, or reordering a serialized field still needs a version bump plus a read path for the old layout, or older files misalign into garbage rather than failing cleanly. See `EmuSen_Save_States.md` §1/§4.
 
 ---
 

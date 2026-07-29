@@ -108,6 +108,19 @@ namespace EmuSen.Common
             _core.LoadState(path);
         }
 
+        // The ICore this session is driving, for callers that need to hand
+        // a core to something core-agnostic (RewindBuffer) rather than go
+        // through this wrapper's own pass-throughs. Null before LoadRom(),
+        // same convention as Cpu/Renderer above.
+        public EmuSen.Cores.ICore? Core => _core;
+
+        // Fast-forward frame skipping - see ICore.SkipRendering.
+        public bool SkipRendering
+        {
+            get => _core?.SkipRendering ?? false;
+            set { if (_core is not null) _core.SkipRendering = value; }
+        }
+
         public byte[] GetFrameBufferRgba()
         {
             if (_core is null) throw new InvalidOperationException("GetFrameBufferRgba() called before LoadRom().");

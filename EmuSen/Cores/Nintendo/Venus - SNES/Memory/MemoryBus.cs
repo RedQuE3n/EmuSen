@@ -266,7 +266,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 // Venus_Memory.md §1.2. CRITICAL: must NOT catch offset >=
                 // 0x8000 (ROM) - doing so breaks the reset vector fetch and
                 // the CPU never executes a single instruction.
-                if (offset < 0x8000) return _lastBusValue;
+                if (offset < 0x8000 && !_cartridge.MapsAddress(address)) return _lastBusValue;
             }
 
             if (bank == 0x7E || bank == 0x7F)

@@ -61,15 +61,46 @@ Bit 0 selects FastROM (6 master clocks/access) vs. SlowROM (8) for the `$8000-FF
 
 ---
 
-## 2. `Cartridge` (`Memory/Cartridge.cs`) — LoROM mapping + save data
+## 2. `Cartridge` (`Memory/Cartridge.cs`) — cartridge mapping + save data
 
 ### 2.1 ROM loading
 
 Strips a 512-byte copier header if present (detected by `fileBytes.Length % 32768 == 512` — a headerless LoROM divides cleanly by 32KB, a headered one doesn't).
 
+### 2.1a Map modes — `ICartridgeMapper`, and why mapping is not `Cartridge`'s job
+
+`Cartridge` used to *be* the mapper: `Read8`/`Write8` had LoROM's address arithmetic written into them inline, with a `// --- LoROM ROM Mapping ---` comment and no notion that any other map existed. That silently made every HiROM game unbootable, and there was no seam at which to add one.
+
+Mapping now lives behind **`ICartridgeMapper`** (`Memory/Mappers/`), a deliberately tiny interface:
+
+```csharp
+CartridgeAddress Resolve(byte bank, ushort offset);   // -> Unmapped | Rom(offset) | Sram(offset)
+```
+
+A mapper is **pure address arithmetic** — it holds no ROM or SRAM bytes, does no bounds checking, and does no mirroring. `Cartridge` keeps all of that (`Offset < _rom.Length`, `% _sram.Length` per §2.3). The payoff is that a map mode becomes a testable function of `(bank, offset)` with no ROM, no core and no file involved — `EmuSen.WiseMan/Memory/CartridgeMapperTests.cs` asserts the whole table directly, including the exact reset-vector case below.
+
+**`LoRomMapper`** (mode `$20`) — ROM in the upper half of every bank (`bank & 0x7F` folds the `$80-$BF` mirror onto `$00-$3F`); SRAM at `$70-$7D`/`$F0-$FF` below `$8000`. Behaviour is byte-identical to the old inline code.
+
+**`HiRomMapper`** (mode `$21`) — full 64KB ROM banks at `$C0-$FF`, mirrored at `$40-$7D`; the *upper half of those same banks* visible at `$00-$3F`/`$80-$BF`; SRAM in a `$6000-$7FFF` window at `$20-$3F`/`$A0-$BF`. Both ROM windows collapse to one expression, `((bank & 0x3F) << 16) | offset`, because the `$00-$3F` view is literally the top half of the same-numbered `$C0` bank.
+
+**Detection** scores both header locations (`$7FC0` for LoROM, `$FFC0` for HiROM) rather than trusting either blindly: +2 if the map-mode nibble matches that location, +2 if the header's checksum and complement XOR to `$FFFF`. Highest score wins. A single byte read at a fixed offset is not enough — the "header" of a HiROM image at `$7FC0` is ordinary game data that can look plausible.
+
+**Why this mattered — Donkey Kong Country.** DKC (and DKC2, DKC3) are HiROM, cartridge type `$02` = ROM + RAM + battery: **no coprocessor**, contrary to the reasonable first guess given how the game looks. Rare's trick was pre-rendered SGI artwork compressed into ordinary tiles and sprites, which needs no special silicon — only a large ROM, hence HiROM. The failure was one address:
+
+| | `$00:FFFC` resolves to | bytes there | reset PC |
+|---|---|---|---|
+| LoROM (what ran) | file offset `$7FFC` | `00 00` | **`$0000`** |
+| HiROM (correct) | file offset `$FFFC` | `00 80` | `$8000` |
+
+The CPU reset into zeroed WRAM and executed `BRK` forever, so not one instruction of the game ever ran — a black screen with `INIDISP`/`BGMODE`/`TM` all still `0`. With `HiRomMapper` selected, DKC boots through the Rare logo, "Nintendo Presents", the DK/boombox intro cutscene, and reaches its title screen.
+
+**One bus change was needed.** `MemoryBus.ReadInternal` returned open bus for any `offset < 0x8000` in a hardware bank before the cartridge was ever consulted — correct for LoROM, but it swallows HiROM's `$20-$3F:$6000-$7FFF` SRAM window. That early return is now `if (offset < 0x8000 && !_cartridge.MapsAddress(address))`, so the mapper decides. The write path already fell through to the cartridge and needed no change.
+
+**Not yet implemented:** ExHiROM (mode `$25`, the >4MB Star Ocean/Far East of Eden layout) and every coprocessor cart (SA-1, SuperFX, DSP-*, CX4). Those are new `ICartridgeMapper` implementations plus, for the coprocessors, a chip to talk to — the seam now exists, which it did not before.
+
 ### 2.2 SRAM sizing from the ROM header
 
-The RAM Size byte at SNES address `$00:FFD8` (ROM file offset `$7FD8` for LoROM) encodes SRAM size as `1KB << N`; `N=0` means no SRAM. Verified via the SNESdev wiki's ROM header page and a WLA-DX header example. Clamped to `N<=7` (512KB, SnesLab's documented real-hardware maximum) defensively against a corrupt header.
+The RAM Size byte lives at header offset `+$18`, so the file offset depends on which header §2.1a's detection picked: `$7FD8` for LoROM, `$FFD8` for HiROM. It used to be hardcoded to `$7FD8`, which read arbitrary game data as the SRAM size on any HiROM cart. It encodes SRAM size as `1KB << N`; `N=0` means no SRAM. Verified via the SNESdev wiki's ROM header page and a WLA-DX header example. Clamped to `N<=7` (512KB, SnesLab's documented real-hardware maximum) defensively against a corrupt header.
 
 **This used to be hardcoded to 2KB for every game** — happens to match Super Mario World, wrong for anything else. Super Metroid's RAM Size byte is 3 (8KB), and its boot-time anti-piracy check specifically depends on the *real* chip size (see §2.3) — an undersized array made that check fail.
 
@@ -100,6 +131,14 @@ Triggered by a `$420B` write (channel bitmask). Transfer direction (`bToA`), add
 **`PendingCpuCycles` — DMA now charges real CPU time.** `ExecuteGeneralDma` used to transfer every byte "for free": the whole byte loop ran without `Cpu.Step()` ever seeing any of that time elapse, so a large transfer (e.g. a full VRAM graphics upload, common during a game's boot sequence) cost the same handful of cycles as the `STA $420B` instruction that triggered it. Real hardware charges ~8 master cycles of per-channel setup plus ~8 master cycles per byte transferred, so the charge is `1 + bytes` per active channel, accumulated in `Dma.PendingCpuCycles` and drained into `Cpu.Step()`'s own return value on the very next call (covering the `_stopped`/`_waitingForInterrupt` early-return paths too, since a DMA triggered by the instruction immediately before a WAI/STP would otherwise have its cost silently dropped). This matters beyond raw scanline-budget accuracy: this project's CPU→SPC700 pacing (`VenusCore.RunFrame`'s `scaledSpc700Cycles` calculation, §1 of `Venus_APU.md`) is driven entirely by `Cpu.Step()`'s returned cycle count, so any period where DMA cycles went uncounted was a period where the SPC700 was shorted its proportionate share of cycles too. Found chasing (but did not turn out to be the cause of) a Super Metroid boot hang — see `Venus_APU.md`'s own note on that investigation.
 
 **Unit convention, updated alongside `Venus_CPU.md` §8's dynamic cycle-penalty work**: `PendingCpuCycles`'s own units were never rescaled by that change (still `1 + bytes`, an assumed flat "8 master clocks per unit" DMA-specific approximation, not itemized per-channel target region) — but `DrainPendingDmaCycles()` on the `Cpu.cs` side now multiplies by 8 before adding it into `Step()`'s return value, since that return value is real master clocks now (§8.3 of `Venus_CPU.md`) rather than the old abstract "CPU cycle" unit this comment originally assumed 1 DMA-unit already equaled. Net effect on DMA's own real-master-clock cost is unchanged from before that rescaling - only the unit `Step()` hands back to its caller changed.
+
+### 3.1a A-bus arbitration (`CopyDmaByte`) — bank byte matters, not just the offset
+
+Real hardware blocks a DMA channel's A-bus address (whichever side, source or destination, it's playing this transfer) from ever reaching a `$21xx` PPU/APU register or the DMA controller's own registers (`$420B`, `$420C`, `$4300-$437F`) — the read side gets open bus, the write side is simply dropped. `CopyDmaByte` ported this (from Mesen2's `SnesDmaController::CopyDmaByte`) alongside the WRAM/`$2180` bus-conflict case, but the initial port checked only the low 16 bits of the address (`aBusOffset`) against those ranges — **not the bank byte**. `$2100-$21FF` etc. only mean "hardware register" in banks `$00-$3F`/`$80-$BF` (the same `isHardwareBank` convention §1.1 already uses for CPU accesses); the identical offsets in WRAM banks `$7E`/`$7F` are ordinary RAM with no register mirroring at all.
+
+Missing that bank check meant a perfectly normal WRAM source address like `$7E21C0` (bank `$7E`, offset `$21C0` — which happens to fall in `$2100-$21FF`) got wrongly treated as a blocked register access on every transfer, silently replacing real WRAM data with stale open-bus. Found via Super Mario World's spin-jump: SMW shares one OBJ tile slot between Mario's regular pose (staged at `$7E2080`, an address that never collides) and other poses staged at addresses like `$7E21C0` that do — both are DMA'd into the same VRAM tile slot, and on frames where the `$7E21C0`-sourced transfer happened to run last, the whole tile came out as a solid open-bus fill, which decoded through Mario's palette as two bright yellow columns through his torso, intermittently, only on Big Mario (whose spin animation touches two stacked OBJ tiles instead of Small Mario's one, doubling the chance of landing on a colliding source address). Real hardware never sees this because the bank check is implicit in the actual address-decode hardware. Fixed by gating `aBusBlocked` on `aBusIsHardwareBank` first, same as every other bank-sensitive check in this file.
+
+**Worth re-checking**: the still-open "Yoshi/coins don't render" note in `EmuSen_Games_Tested.md` also centers on a WRAM staging buffer (`$7E8000-$7E97FF`) feeding a VRAM DMA — the same general shape as this bug. Not confirmed to be the same root cause, but worth trying again now that this bank check is fixed.
 
 ### 3.2 HDMA
 
@@ -181,3 +220,4 @@ A running list of bugs specifically in this bus/memory layer that shipped once a
 - **SRAM size hardcoded to 2KB** (§2.2) — wrong for every game except the one it was written against.
 - **WMDATA/low-bank-mirror WRAM writes not reaching `WriteObserver`** (§1.3) — the Yoshi/coin investigation's watch tooling showed "zero writes" to a range that demonstrably held real, varying data; the gap was in the tooling, not the game.
 - **Hardware registers ($4016-$421B, DMA/IRQ/math-unit/PPU/APU-port registers) never reached `ReadObserver`/`WriteObserver` at all** (§6) — only WRAM accesses did. Found investigating Super Mario All-Stars' Controller-2 input quirk: `watch add`-ing `$4016`/`$4218` recorded zero events despite a CPU trace proving they were read every single frame. Same class of gap as the WMDATA one above (the tooling, not the game/core logic, which had always computed the right values) - fixed by adding the same observer calls to every register branch in `ReadInternal`/`Write8`, tagged `"IO"`.
+- **`CopyDmaByte`'s A-bus arbitration checked the offset without the bank byte** (§3.1a) — a normal WRAM source address whose low 16 bits happened to land in `$2100-$21FF` (e.g. `$7E21C0`) was wrongly blocked and replaced with open-bus garbage. Found via Super Mario World's spin-jump: two bright yellow vertical bars intermittently through Big Mario's torso.

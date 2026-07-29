@@ -52,24 +52,33 @@ namespace EmuSen.WiseMan.Audio
                 player.Pump(session);
             }
             double postStallBacklog = BacklogMs(session);
+            int postStallQueue = player.QueuedFrames;
 
             RunPaced(session, player, seconds: 3.0, clock);
             double recoveredBacklog = BacklogMs(session);
 
             string report =
                 $"baseline={baselineBacklog:F1}ms, post-stall={postStallBacklog:F1}ms, " +
-                $"after 3s of normal play={recoveredBacklog:F1}ms";
+                $"after 3s of normal play={recoveredBacklog:F1}ms, " +
+                $"output queue={player.QueuedFrames} frames, " +
+                $"ratio={player.RateControl.LastRatio:F5}, shed={player.RateControl.SheddingEvents}";
             Console.WriteLine($"[AudioLatencyDriftTests] {report}");
 
-            Assert.True(postStallBacklog < 400.0,
-                $"expected the active resync to cap the stall's backlog well under the old ~1000ms ceiling; got {report}");
-            // Doesn't return all the way to the pristine baseline - a
-            // separate, expected ~256ms floor from AudioPlayer.Pump()'s own
-            // SDL-queue throttle, not the ratchet this fix targets. What
-            // matters here is staying well clear of the old unbounded,
-            // ever-growing behavior (which reached 600-1000+ms).
-            Assert.True(recoveredBacklog < 400.0,
-                $"expected backlog to stay well under the old ~1000ms ceiling after 3s of normal play; got {report}");
+            // Pump() drains the core buffer completely every call now, so the
+            // core side is no longer a latency reservoir at all - all buffering
+            // lives in the output queue, where rate control can steer it.
+            // See EmuSen_Audio_Sync.md §1.
+            Assert.True(baselineBacklog < 50.0, $"core-side backlog should stay near zero; got {report}");
+            Assert.True(postStallBacklog < 50.0, $"a stall should not leave a core-side backlog; got {report}");
+            Assert.True(recoveredBacklog < 50.0, $"core-side backlog should stay near zero; got {report}");
+
+            // A one-second burst is exactly the gross-backlog case shedding
+            // exists for, so it may engage here - what matters is that it
+            // lets go again and the queue is actually coming back down,
+            // rather than parking at an end stop. See EmuSen_Audio_Sync.md §3.1.
+            Assert.False(player.RateControl.IsShedding, $"still shedding after 3s of normal play; got {report}");
+            Assert.True(player.QueuedFrames < postStallQueue,
+                $"output queue should be draining back toward target; got {report}");
         }
 
         private static double BacklogMs(EmulatorSession session)

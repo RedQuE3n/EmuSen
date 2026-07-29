@@ -101,9 +101,9 @@ Measured headless (`fastforward on`, 3300 frames of SMW): **12.4 s → 5.5 s**, 
 
 At 300% the core produces samples 3x faster than any real output device consumes them; at 25% it starves one. `ShouldPlayAudio` is therefore true only in the 50%–200% band, where the existing buffer throttle can absorb the difference.
 
-Outside that band the frontend does **not** simply stop pumping — it drains the core's buffer and discards the samples (`DequeueAudioSamples(int.MaxValue)`). Stopping the pump alone would let the core's internal queue grow the whole time fast-forward is held, and then dump a large backlog of stale audio the instant normal speed resumed. Rewind drains for the same reason.
+Outside that band the frontend does **not** simply stop pumping — it drains the core's buffer and discards the samples (`DequeueAudioSamples(int.MaxValue)`), and resets the rate controller so its resampler doesn't interpolate across the seam (`EmuSen_Audio_Sync.md` §3.2). Stopping the pump alone would let the core's internal queue grow the whole time fast-forward is held, and then dump a large backlog of stale audio the instant normal speed resumed. Rewind drains and resets for the same reason.
 
-This is deliberately cruder than resampling. Pitch-correct fast-forward audio is a real option (MesenCE resamples), but it belongs with the dynamic-rate-control work the audio pipeline still needs, not bolted onto the speed knob — see `Venus_APU.md`.
+Inside the band, drift is handled by dynamic rate control rather than by dropping anything — see `EmuSen_Audio_Sync.md`. Fast-forward deliberately bypasses that path, since 300% is far outside the ±0.5% the loop has authority over. Pitch-correct fast-forward audio (MesenCE resamples) remains undone and is tracked in `EmuSen_Audio_Sync.md` §6.
 
 ---
 

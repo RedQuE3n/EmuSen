@@ -42,10 +42,15 @@ namespace EmuSen.Mistress.Audio
         // the stream).
         private const ushort BufferFrames = 4096;
 
-        // Matches PumpAudio's own per-call drain cap (Hotaru/
-        // Program.cs) - bounds how much of a stall's backlog gets pushed
-        // to the device in one Pump() call.
-        private const int MaxFramesPerPump = 4096;
+        // Steers the SDL queue toward this and absorbs drift by resampling
+        // rather than dropping - see EmuSen_Audio_Sync.md §1.
+        private readonly DynamicRateControl _rateControl = new(AudioSettings.OutputTargetFrames);
+
+        public DynamicRateControl RateControl => _rateControl;
+
+        // Frames sitting in the output device's queue - what rate control
+        // steers, and the session's real audio latency. See EmuSen_Audio_Sync.md §1.
+        public int QueuedFrames => _deviceOpen ? (int)(_sdl.GetQueuedAudioSize(_device) / (2 * sizeof(short))) : 0;
 
         public bool IsAvailable => _deviceOpen;
 
@@ -105,20 +110,10 @@ namespace EmuSen.Mistress.Audio
         {
             if (!_deviceOpen) return;
 
-            // Throttle against a runaway backlog the way Raylib's
-            // IsAudioStreamProcessed naturally does for PumpAudio - SDL's
-            // queue has no such gate built in (QueueAudio always accepts
-            // more), so this supplies its own: skip pumping while more
-            // than two buffers' worth is still unplayed, so a stall
-            // doesn't have this loop pile latency on top of latency every
-            // tick. AudioSettings.SampleRate frames/sec, so this also
-            // caps steady-state added latency at roughly
-            // 2*BufferFrames/SampleRate seconds.
-            uint queuedBytes = _sdl.GetQueuedAudioSize(_device);
-            uint queuedFrames = queuedBytes / (2 * sizeof(short));
-            if (queuedFrames > (uint)BufferFrames * 2) return;
-
-            short[] data = session.DequeueAudioSamples(MaxFramesPerPump);
+            // Drain everything the core has - the core-side buffer is not a
+            // latency knob any more, the SDL queue is. See §1.
+            uint queuedFrames = _sdl.GetQueuedAudioSize(_device) / (2 * sizeof(short));
+            short[] data = _rateControl.Process(session.DequeueAudioSamples(int.MaxValue), (int)queuedFrames);
             if (data.Length == 0) return;
 
             fixed (short* p = data)

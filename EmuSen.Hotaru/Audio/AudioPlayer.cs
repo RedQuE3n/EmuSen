@@ -36,8 +36,15 @@ namespace EmuSen.Hotaru.Audio
         // same latency/underrun-safety tradeoff as before this migration.
         private const ushort BufferFrames = 4096;
 
-        // Matches the old PumpAudio's own per-call drain cap.
-        private const int MaxFramesPerPump = 4096;
+        // Steers the SDL queue toward this and absorbs drift by resampling
+        // rather than dropping - see EmuSen_Audio_Sync.md §1.
+        private readonly DynamicRateControl _rateControl = new(AudioSettings.OutputTargetFrames);
+
+        public DynamicRateControl RateControl => _rateControl;
+
+        // Frames sitting in the output device's queue - what rate control
+        // steers, and the session's real audio latency. See EmuSen_Audio_Sync.md §1.
+        public int QueuedFrames => _deviceOpen ? (int)(_sdl.GetQueuedAudioSize(_device) / (2 * sizeof(short))) : 0;
 
         public bool IsAvailable => _deviceOpen;
 
@@ -82,15 +89,10 @@ namespace EmuSen.Hotaru.Audio
         {
             if (!_deviceOpen) return;
 
-            // Throttle against a runaway backlog: skip pumping while more
-            // than two buffers' worth is still unplayed, so a stall (e.g.
-            // time spent in the F4 debug prompt) doesn't have this loop
-            // pile latency on top of latency every tick.
-            uint queuedBytes = _sdl.GetQueuedAudioSize(_device);
-            uint queuedFrames = queuedBytes / (2 * sizeof(short));
-            if (queuedFrames > (uint)BufferFrames * 2) return;
-
-            short[] data = core.DequeueAudioSamples(MaxFramesPerPump);
+            // Drain everything the core has - the core-side buffer is not a
+            // latency knob any more, the SDL queue is. See §1.
+            uint queuedFrames = _sdl.GetQueuedAudioSize(_device) / (2 * sizeof(short));
+            short[] data = _rateControl.Process(core.DequeueAudioSamples(int.MaxValue), (int)queuedFrames);
             if (data.Length == 0) return;
 
             fixed (short* p = data)

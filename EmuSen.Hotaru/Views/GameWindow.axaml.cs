@@ -445,6 +445,7 @@ namespace EmuSen.Hotaru.Views
 
             _core.LoadRom(romPath);
             _rewind.Clear(); // a discontinuous jump - see §1.4
+            _audioPlayer.RateControl.Reset();
             RebuildDebugTargetAndCommands();
             // Without this, an already-open `coretop -w` window would
             // silently keep showing the OLD, now-discarded target forever
@@ -479,6 +480,7 @@ namespace EmuSen.Hotaru.Views
                         // No RunFrame() ran, so these would otherwise be stale - see §3.
                         _debugTarget.RefreshProviders();
                         _core.DequeueAudioSamples(int.MaxValue);
+                        _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
                         SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
                         if (ProcessPendingConsoleCommands()) { RequestClose(); return; }
                         SleepUntil(nextTick, clock);
@@ -516,8 +518,15 @@ namespace EmuSen.Hotaru.Views
                     _rewind.OnFrameCompleted(_core);
 
                     // Drained, not just unpumped, when speed outruns the device - see §2.3.
-                    if (_speed.ShouldPlayAudio) _audioPlayer.Pump(_core);
-                    else _core.DequeueAudioSamples(int.MaxValue);
+                    if (_speed.ShouldPlayAudio)
+                    {
+                        _audioPlayer.Pump(_core);
+                    }
+                    else
+                    {
+                        _core.DequeueAudioSamples(int.MaxValue);
+                        _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
+                    }
 
                     // Nothing new was drawn on a skipped frame.
                     if (!_core.SkipRendering) SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
@@ -649,6 +658,7 @@ namespace EmuSen.Hotaru.Views
             {
                 _core.LoadState(path);
                 _rewind.Clear(); // a discontinuous jump - see §1.4
+                _audioPlayer.RateControl.Reset();
                 Console.WriteLine($"[STATE] Loaded: {path}");
             }
             catch (Exception ex)

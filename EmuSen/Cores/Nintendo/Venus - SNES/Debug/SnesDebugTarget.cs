@@ -364,6 +364,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new ByteArrayDebugMemorySpace("CGRAM", _ppu.Cgram),
                 new ByteArrayDebugMemorySpace("OAM", _ppu.Oam),
                 new BusDebugMemorySpace("SRAM", _bus, 0x700000, _bus.SramSize, hasSideEffects: false),
+                // Raw APU RAM, so mem/disasm/watch/snapshot reach the sound
+                // driver the same way they already reach the 65816's world.
+                // Deliberately the underlying array, not Spc700.Read8 - reads
+                // here must not consume timer counters or return the IPL
+                // overlay instead of the RAM beneath it (Venus_APU.md §1.1).
+                new ByteArrayDebugMemorySpace("APURAM", _bus.Spc700.Ram),
             };
         }
 
@@ -408,7 +414,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new DebugRegisterValue("BG3ScrollY", _ppu.BgScrollY[2], 16),
                 new DebugRegisterValue("BG4ScrollX", _ppu.BgScrollX[3], 16),
                 new DebugRegisterValue("BG4ScrollY", _ppu.BgScrollY[3], 16),
+                new DebugRegisterValue("BG1SC", _ppu.BgSc[0], 8),
+                new DebugRegisterValue("BG2SC", _ppu.BgSc[1], 8),
                 new DebugRegisterValue("BG3SC", _ppu.BgSc[2], 8),
+                new DebugRegisterValue("BG4SC", _ppu.BgSc[3], 8),
+                new DebugRegisterValue("Bg12Nba", _ppu.Bg12Nba, 8),
                 new DebugRegisterValue("Bg34Nba", _ppu.Bg34Nba, 8),
                 new DebugRegisterValue("W12Sel", _ppu.W12Sel, 8),
                 new DebugRegisterValue("W34Sel", _ppu.W34Sel, 8),

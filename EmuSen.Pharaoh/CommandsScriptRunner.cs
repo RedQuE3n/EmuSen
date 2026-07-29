@@ -113,6 +113,49 @@ namespace EmuSen.Pharaoh
                     ContactSheet.WriteContactSheet(path, thumbs, thumbW, thumbH, cols);
                     emit($"[CONTACTSHEET] {count} frame(s), every {every}, {thumbW}x{thumbH} each -> {path}");
                 }
+                else if ((verb == "waitchange" || verb == "waitvalue") && parts.Length >= 4)
+                {
+                    // waitstable's memory-side counterpart - see §3.15.
+                    emit($"> {cmdLine}");
+                    string spaceName = parts[1];
+                    var space = debugTarget.GetMemorySpaces()
+                        .FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+                    if (space == null)
+                    {
+                        emit($"[WARN] No memory space named '{spaceName}' - ignoring.");
+                        continue;
+                    }
+
+                    int addr = Convert.ToInt32(parts[2], 16);
+                    bool waitForValue = verb == "waitvalue";
+                    byte[] target = waitForValue ? ParseHexBytes(parts[3]) : new byte[Convert.ToInt32(parts[3], 16)];
+                    int cap = parts.Length >= 5 ? int.Parse(parts[4]) : 600;
+
+                    byte[] Sample()
+                    {
+                        var b = new byte[target.Length];
+                        for (int i = 0; i < b.Length; i++) b[i] = space.Read(addr + i);
+                        return b;
+                    }
+
+                    byte[] start = Sample();
+                    byte[] now = start;
+                    int stepped = 0;
+                    bool Done() => waitForValue ? now.SequenceEqual(target) : !now.SequenceEqual(start);
+
+                    while (!Done() && stepped < cap && runner.CurrentFrame < runner.FrameCap)
+                    {
+                        runner.RunFrames(1);
+                        stepped++;
+                        now = Sample();
+                    }
+
+                    string from = string.Join(' ', start.Select(v => v.ToString("X2")));
+                    string to = string.Join(' ', now.Select(v => v.ToString("X2")));
+                    emit(Done()
+                        ? $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} satisfied after {stepped} frame(s): {from} -> {to} (frame {runner.CurrentFrame})."
+                        : $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} NOT satisfied - still {to} after {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
+                }
                 else if (verb == "vramsheet" && parts.Length >= 2)
                 {
                     // IDebugTarget.RenderTileSheet(), not Renderer directly - core-agnostic.
@@ -158,6 +201,14 @@ namespace EmuSen.Pharaoh
             }
 
             return true;
+        }
+
+        // "1E" or "1E,00" or "1E 00" - see §3.15's waitvalue entry.
+        private static byte[] ParseHexBytes(string spec)
+        {
+            return spec.Split(new[] { ',', ':' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => Convert.ToByte(p, 16))
+                .ToArray();
         }
     }
 }

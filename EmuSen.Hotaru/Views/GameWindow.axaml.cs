@@ -439,8 +439,8 @@ namespace EmuSen.Hotaru.Views
             Console.WriteLine($"[CORE] Loaded: {romPath}");
         }
 
-        // Paces RunFrame() to real time - see man pages/EmuSen_Project_Overview_v2.md §2a.
-        private static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / 60.0);
+        // Paces RunFrame() to real time, off the core's own rate - see Venus_CPU.md §8.5b.
+        private TimeSpan FrameInterval => TimeSpan.FromSeconds(1.0 / _core.FrameRateHz);
 
         // Runs entirely off the UI thread - see this file's own header
         // comment on the threading model.

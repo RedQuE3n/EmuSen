@@ -114,6 +114,55 @@ Two of the four commonly-documented dynamic 65816 cycle penalties are now modele
 
 `VenusCore.CyclesPerScanline` changed from `227` (a CPU-cycle-unit figure back-derived assuming FastROM's 6-master-clock rate uniformly) to `1364` (real master clocks per scanline: 341 dots × 4). The CPU→SPC700 pacing conversion (`Venus_APU.md` §1) dropped its `*6` factor accordingly, since `Cpu.Step()`'s return value is already real master clocks now. `MemoryBus`'s H-blank approximation (`Venus_Memory.md` §1.5) and `Dma.PendingCpuCycles`'s drain-side conversion (`Venus_Memory.md` §3.1) were rescaled to match — see those sections.
 
+### 8.5a Scanline overshoot must be carried, not discarded
+
+`VenusCore`'s scanline loop is `while (_lineCycles < CyclesPerScanline)`, so the instruction that crosses the boundary always overshoots — `_lineCycles` ends the scanline somewhere in `1364 .. 1364 + (that instruction's master clocks - 1)`, never exactly `1364`. The scanline-start block then used to reset `_lineCycles = 0`, **throwing that overshoot away**. Every scanline therefore consumed slightly *more* than 1364 master clocks of emulated machine time while the counter pretended it had consumed exactly 1364.
+
+It now carries the remainder instead (`_lineCycles -= CyclesPerScanline`), the same explicit-remainder discipline `_spc700CycleRemainder` already used a few lines below for the SPC700 conversion — the SPC700 side had it right, the scanline side did not.
+
+**Size of the error:** average overshoot is roughly half an instruction (~10-11 master clocks), across 262 scanlines ≈ **2,800 extra master clocks per frame, ~0.79%**. Emulated frames were that much *longer* than real hardware's 262 × 1364 = 357,368.
+
+**How it was measured.** Audio production is the most sensitive observable available for this, since the DSP emits exactly one sample per 32 SPC700 cycles and SPC700 cycles come straight from the master-clock count. `EmuSen.Pharaoh`'s `audiodump` verb over short runs (short enough that `AudioBuffer`'s resync can't fire and truncate the count — see `EmuSen_Settings_Reference.md` §2):
+
+| frames | before (samples) | per frame | after (samples) | per frame |
+|---|---|---|---|---|
+| 4  | 4266  | 533.3 | 4254  | 531.75 |
+| 8  | 8572  | 535.8 | 8508  | 531.75 |
+| 12 | 12864 | 536.0 | 12762 | 531.75 |
+
+Before, the per-frame figure was both too high *and* not constant (overshoot varies with whichever instruction happens to straddle each boundary). After, it is exactly 531.75 every time, matching the 531.80 predicted by 357,368 / 21 / 32 for the standard master/21 SPC700 approximation. True hardware is 32000 / 60.0988 = 532.457; the residual 0.13% is the `/21` approximation itself (real ratio 20.974), not this bug.
+
+This is a general timing-accuracy fix, not only an audio one — every frame was 0.79% long, so anything paced off emulated frame time (IRQ timing, game speed, DMA budgets) inherited it. It also removes the systematic audio over-production that was driving `AudioBuffer`'s periodic resync discard; see `EmuSen_Settings_Reference.md` §2 for why that discard is still the wrong mechanism regardless.
+
+### 8.5b Two independent crystals, and why frame pacing belongs on the core
+
+The SNES has **two unrelated oscillators**: the main/video clock at 21.477272 MHz and the APU's own at 24.576 MHz (divided to 1.024 MHz for the SPC700). Nothing derives one from the other, which has three consequences this emulator now models explicitly.
+
+**1. The frame rate is 60.0985 Hz, not 60.** `21477272 / (262 x 1364) = 60.0985`. Both frontends previously hardcoded `TimeSpan.FromSeconds(1.0 / 60.0)` for their emulation-loop pacing — a flat 0.164% slow, and duplicated in two places where nothing tied it to the core actually being run. `ICore.FrameRateHz` now reports it, `VenusCore` computes it from `TotalScanlines`/`CyclesPerScanline` rather than restating a magic number, and both `GameWindow` and `MainWindow` pace off that. A future NES/Game Boy core reports its own (the Game Boy's ~59.727 Hz is not the SNES's) with no frontend change. `EmulatorSession` passes it through, falling back to NTSC before a ROM is loaded.
+
+**2. The SPC700 conversion uses the exact ratio.** Master clocks converted to SPC700 cycles by `/ 21`, the near-universal approximation; the true figure is `21477272 / 1024000 = 20.9739`, so `/21` runs the APU **0.125% slow**. It's now exact integer math against both clock constants, with the same remainder carry as before:
+
+```
+long scaled = (long)cpuCycles * ApuClockHz + _spc700CycleRemainder;
+_spc700CycleRemainder = (int)(scaled % MasterClockHz);
+Spc700.CycleBudget    += (int)(scaled / MasterClockHz);
+```
+
+`cpuCycles` never exceeds a few dozen, so `cpuCycles * 1024000` cannot overflow `long`, and the remainder is always `< MasterClockHz` and fits `int`.
+
+**3. Measured effect.** Audio production per real second against the 32000 Hz the output device consumes — the sensitive observable described in §8.5a:
+
+| | production/sec | drift |
+|---|---|---|
+| original | 32160.0 | **+0.500%** |
+| + §8.5a scanline carry | 31905.0 | -0.297% |
+| + core-rate frame pacing | 31957.4 | -0.133% |
+| + exact clock ratio | 31997.4 | **-0.008%** |
+
+A ~60x reduction. The sign flip in the middle row matters: fixing only the scanline carry would have turned a systematic *over*-production into a systematic *under*-production, trading periodic discards for periodic underruns. Both halves are needed.
+
+**What this does not fix.** Because the two crystals are genuinely independent, real hardware drifts too — a residual mismatch is physically correct, not a bug to be eliminated. Any emulator therefore still needs a mechanism to absorb it continuously. `AudioBuffer`'s current discard-based resync is the wrong such mechanism; see `EmuSen_Settings_Reference.md` §2.
+
 ### 8.6 Validation
 
 Re-run against the SingleStepTests/65816 ground-truth suite (§7) after this change — no regressions (state-only checks, since that suite's vectors don't assert cycle counts, only resulting registers/memory). This change's actual timing effect was cross-checked separately by re-measuring SPC700 audio pacing (`Venus_APU.md` §2.9): the per-frame master-clock budget turned out to already be correctly calibrated either way (see that section for why), so this is a genuine general CPU/PPU timing accuracy improvement, but it did **not** turn out to be the fix for the audio symptom that motivated it.

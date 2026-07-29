@@ -27,12 +27,8 @@ namespace EmuSen.Mistress.Views
 {
     public partial class MainWindow : Window
     {
-        // ~60fps. Not synced to the core's actual scanline timing yet - this
-        // is a fixed-interval pacing target, which is fine for a first pass
-        // but will drift from real SNES frame timing over long sessions.
-        // Worth revisiting (e.g. accumulator-based stepping) once this is
-        // otherwise working.
-        private static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / 60.0);
+        // Paced off the core's own rate, not a flat 60 - see Venus_CPU.md §8.5b.
+        private TimeSpan FrameInterval => TimeSpan.FromSeconds(1.0 / (_session?.FrameRateHz ?? 60.0988));
 
         private EmulatorSession? _session;
 

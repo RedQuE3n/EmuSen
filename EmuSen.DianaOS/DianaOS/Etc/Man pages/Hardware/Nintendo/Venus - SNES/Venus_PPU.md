@@ -87,6 +87,27 @@ The sub screen used to be a hand-written, much shorter stack of its own, and it 
 - **Blend clamping**: `BlendColors` clamps subtract to 0 and add to 255 per channel, and **always forces alpha back to 255** regardless of math result — alpha dropping to 0 here was a real regression (documented in-place as "CRITICAL... if this drops to 0, Yoshi goes invisible").
 - **Sub-screen backdrop fallback**: wherever nothing is drawn on the sub screen, real hardware uses the Fixed Color register (`$2132`) as the fallback rather than CGRAM color 0 — modeled directly as `subBackdrop` in `RenderScanline`.
 
+### 5.1 Skipping the sub-screen composite when nothing can read it
+
+`RenderScanline` composites two full screens per scanline: the main screen driven by TM, then the sub screen driven by TS. The sub screen's result is only ever consumed in three places, all in the final blend:
+
+- `_subLineBuf[px]` as the blend operand — reached only when `participates && mathAllowed` **and** CGWSEL bit 1 (use-sub-screen) is set.
+- `_subLineLayer[px]` for the half-color-math quirk — same guard, and short-circuited away entirely when CGWSEL bit 1 is clear.
+- `_subLineBuf[srcX]` in the pseudo-hi-res pass-through, which bypasses color math completely and reads the buffer unconditionally.
+
+So the sub screen is genuinely needed only when **pseudo-hi-res is active**, or when **all three** of these hold: CGWSEL bit 1 set, CGWSEL bits 4-5 ≠ 3 (`never`), and CGADSUB's low six participation bits nonzero. `subScreenUsed` encodes exactly that, and the `CompositeScreen` call for TS is skipped when it is false. The backdrop pre-fill of `_subLineBuf`/`_subLineLayer` still runs unconditionally, so the buffers hold defined values either way.
+
+This is an output-identity optimization, not an accuracy change. It was verified by digesting every frame of a 400-frame window across 20 commercial ROMs and a 2500-frame window across 8 color-math-heavy ones (`framesum`, Debugging Tools Reference §3.21) — byte-identical before and after — and pinned by four cases in `EmuSen.WiseMan/Ppu/SubScreenCompositeTests.cs`, including the pseudo-hi-res case the guard must *not* skip.
+
+**Why it matters.** A game that leaves TS equal to TM while running with color math off pays for a second full layer composite that is thrown away every scanline. Rocky Rodent does exactly this — mode 2, `TM=$17 TS=$17 CGWSEL=$30 CGADSUB=$00`, unchanged across every one of 13,440 scanlines sampled — which made it the most expensive title in the sample by a wide margin, entirely from work with no visible effect. Measured on gameplay:
+
+| Build | Before | After |
+|---|---|---|
+| Release | 5.59 ms/frame (179 fps) | 3.51 ms/frame (285 fps) |
+| Debug | 23.74 ms/frame (42 fps), 300/300 frames over budget | 15.21 ms/frame (66 fps), 0/300 over budget |
+
+Games that really use color math keep their sub-screen cost (SMW 0.75 ms, DKC 0.76 ms, FFVI 0.35 ms) — the guard only removes work that was already being discarded. Games that leave TS at 0 were never paying it in the first place.
+
 ---
 
 ## 6. Sprites (OBJ)

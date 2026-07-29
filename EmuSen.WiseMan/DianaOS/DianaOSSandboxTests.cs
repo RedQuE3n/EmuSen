@@ -74,12 +74,97 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.True(Directory.Exists(Path.Combine(root, "tmp")));
         }
 
+        // Empty in a published build, already populated from source - either way the
+        // shell must find them rather than reporting a missing directory.
+        [Theory]
+        [InlineData("Roms")]
+        [InlineData("Games")]
+        [InlineData("Music")]
+        [InlineData("Pictures")]
+        public void The_usr_home_stub_directories_exist(string name)
+        {
+            Assert.True(Directory.Exists(Path.Combine(DianaOSSandbox.UsrHomeDirectory, name)));
+        }
+
         [Fact]
         public void HomeDirectory_returns_the_real_path_under_home()
         {
             Assert.Equal(
                 Path.Combine(DianaOSSandbox.RootDirectory, "home", "kid"),
                 DianaOSSandbox.HomeDirectory("kid"));
+        }
+
+        // ComputeRootFor's two branches - see `man hier`'s "where the root actually is".
+        // Run against throwaway temp trees so neither touches the real sandbox root.
+
+        private static string NewTempDir()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), $"DianaOSRootTest_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        [Fact]
+        public void Running_from_source_roots_at_the_folder_holding_the_solution_file()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                File.WriteAllText(Path.Combine(temp, "EmuSen.sln"), "");
+                string nested = Path.Combine(temp, "EmuSen.Pharaoh", "bin", "Release", "net10.0");
+                Directory.CreateDirectory(nested);
+
+                Assert.Equal(temp, DianaOSSandbox.ComputeRootFor(nested));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        [Fact]
+        public void A_published_build_roots_at_a_subdirectory_beside_the_binary()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                string expected = Path.Combine(temp, DianaOSSandbox.PublishedRootDirName);
+
+                Assert.Equal(expected, DianaOSSandbox.ComputeRootFor(temp));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        // The bug this subdirectory exists for: a published build ships an apphost
+        // named EmuSen.DianaOS, and the skeleton's own first segment is that same
+        // name - rooting at the binary's folder made the skeleton unbuildable.
+        [Fact]
+        public void The_skeleton_is_creatable_next_to_an_apphost_named_after_the_tree()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                File.WriteAllText(Path.Combine(temp, "EmuSen.DianaOS"), "apphost");
+
+                string root = DianaOSSandbox.ComputeRootFor(temp);
+                Directory.CreateDirectory(Path.Combine(root, "EmuSen.DianaOS", "DianaOS", "Usr", "Home", "Logs"));
+
+                Assert.True(Directory.Exists(Path.Combine(root, "EmuSen.DianaOS", "DianaOS", "Usr", "Home", "Logs")));
+                Assert.True(File.Exists(Path.Combine(temp, "EmuSen.DianaOS")));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        // The published root must still wall the shell off from the install itself.
+        [Fact]
+        public void A_published_root_excludes_the_binaries_beside_it()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                string root = DianaOSSandbox.ComputeRootFor(temp);
+
+                Assert.StartsWith(root, Path.Combine(root, "home", "root"));
+                Assert.False(Path.Combine(temp, "Avalonia.dll").StartsWith(root + Path.DirectorySeparatorChar));
+            }
+            finally { Directory.Delete(temp, true); }
         }
     }
 }

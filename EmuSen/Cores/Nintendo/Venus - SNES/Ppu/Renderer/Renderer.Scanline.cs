@@ -61,6 +61,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 return;
             }
 
+            // -2 sweeps every scanline; >=0 dumps just that one - see §3.19.
+            if (py == DebugSettings.ScanlineRegisterDumpLine || DebugSettings.ScanlineRegisterDumpLine == -2) DumpScanlineRegisters(ppu, py);
+
             float brightness = (ppu.Inidisp & 0x0F) / 15f;
 
             long objEvalStart = Stopwatch.GetTimestamp();
@@ -86,20 +89,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 _subLineLayer[px] = LayerBackdrop;
             }
 
-            long mainCompositeStart = Stopwatch.GetTimestamp();
-
-            CompositeScreen(ppu, py, mode, brightness, ppu.Tm, _mainLineBuf, _mainLineLayer, true);
-
-            long subCompositeStart = Stopwatch.GetTimestamp();
-            _mainCompositeTicksAccum += subCompositeStart - mainCompositeStart;
-
-            // Same layer/priority order as the main screen, driven by TS - see Venus_PPU.md §4.1.
-            CompositeScreen(ppu, py, mode, brightness, ppu.Ts, _subLineBuf, _subLineLayer, false);
-
-            long blendStart = Stopwatch.GetTimestamp();
-            _subCompositeTicksAccum += blendStart - subCompositeStart;
-
-            // --- FINAL BLEND ---
             bool subtractMode = (ppu.Cgadsub & 0x80) != 0;
             bool halfMode = (ppu.Cgadsub & 0x40) != 0;
 
@@ -109,6 +98,27 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             // Check CGWSEL Bit 1: Are we using the Sub Screen or forced Fixed Color?
             bool useSubScreen = (ppu.Cgwsel & 0x02) != 0;
 
+            // The blend below reads _subLine* only under all three of these; pseudo-hi-res
+            // reads _subLineBuf directly regardless. Otherwise the sub screen is composited
+            // and thrown away - a third of the frame cost in games that set TS=TM with color
+            // math off (Rocky Rodent). See Venus_PPU.md §5.1.
+            bool subScreenUsed = _frameWidth == MaxOutputW
+                || (useSubScreen && colorMathEnable != 3 && (ppu.Cgadsub & 0x3F) != 0);
+
+            long mainCompositeStart = Stopwatch.GetTimestamp();
+
+            CompositeScreen(ppu, py, mode, brightness, ppu.Tm, _mainLineBuf, _mainLineLayer, true);
+
+            long subCompositeStart = Stopwatch.GetTimestamp();
+            _mainCompositeTicksAccum += subCompositeStart - mainCompositeStart;
+
+            // Same layer/priority order as the main screen, driven by TS - see Venus_PPU.md §4.1.
+            if (subScreenUsed) CompositeScreen(ppu, py, mode, brightness, ppu.Ts, _subLineBuf, _subLineLayer, false);
+
+            long blendStart = Stopwatch.GetTimestamp();
+            _subCompositeTicksAccum += blendStart - subCompositeStart;
+
+            // --- FINAL BLEND ---
             if (_frameWidth == MaxOutputW)
             {
                 // Hi-res pass-through (skips window/math complexity for now)
@@ -174,9 +184,23 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             LastFrameSubCompositeMs = _subCompositeTicksAccum * ticksToMs;
         }
 
+        // What HDMA has actually done to the registers by this scanline - see §3.19.
+        private static void DumpScanlineRegisters(Ppu ppu, int py)
+        {
+            Console.WriteLine(
+                $"[SCANREGS] py={py,3} BGMODE={ppu.Bgmode:X2} TM={ppu.Tm:X2} TS={ppu.Ts:X2} " +
+                $"CGWSEL={ppu.Cgwsel:X2} CGADSUB={ppu.Cgadsub:X2} MOSAIC={ppu.Mosaic:X2} INIDISP={ppu.Inidisp:X2} " +
+                $"FIXED=({ppu.FixedColorR:X2},{ppu.FixedColorG:X2},{ppu.FixedColorB:X2}) " +
+                $"BG1=({ppu.BgScrollX[0]:X3},{ppu.BgScrollY[0]:X3}) BG2=({ppu.BgScrollX[1]:X3},{ppu.BgScrollY[1]:X3}) " +
+                $"BG3=({ppu.BgScrollX[2]:X3},{ppu.BgScrollY[2]:X3})");
+        }
+
         // One screen's layer stack, main or sub - layerEnable is TM or TS. See Venus_PPU.md §4.1.
         private void CompositeScreen(Ppu ppu, int py, int mode, float brightness, byte layerEnable, Color[] lineBuf, int[] lineLayer, bool isMainScreen)
         {
+            // Diagnostic isolation only; 0x1F normally - see EmuSen_Debugging_Tools_Reference_v5.md §3.19.
+            layerEnable &= (byte)DebugSettings.LayerEnableMask;
+
             bool bg3ForcedTop = (ppu.Bgmode & 0x08) != 0;
 
             if (mode == 7)

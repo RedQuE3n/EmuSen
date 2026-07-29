@@ -39,11 +39,13 @@ namespace EmuSen.WiseMan.Ppu
             return core;
         }
 
-        private static (byte R, byte G, byte B) FirstPixel(VenusCore core)
+        private static (byte R, byte G, byte B) FirstPixel(VenusCore core) => PixelAt(core, 0);
+
+        private static (byte R, byte G, byte B) PixelAt(VenusCore core, int px)
         {
             core.Renderer!.RenderScanline(core.Bus!, 0);
             byte[] rgba = core.Renderer.GetFrameBufferRgba();
-            return (rgba[0], rgba[1], rgba[2]);
+            return (rgba[px * 4], rgba[px * 4 + 1], rgba[px * 4 + 2]);
         }
 
         [Fact]
@@ -77,6 +79,55 @@ namespace EmuSen.WiseMan.Ppu
             ppu.Cgram[(128 + 1) * 2 + 1] = 0x7C; // OBJ palette 0 colour 1 blue
 
             Assert.Equal((Red, (byte)0, (byte)0), FirstPixel(core));
+        }
+
+        // The four cases below pin RenderScanline's subScreenUsed guard, which skips
+        // the whole sub-screen CompositeScreen pass when nothing can read it - see
+        // Venus_PPU.md §5.1. Each asserts the output the full pass would have produced.
+
+        [Fact]
+        public void Color_math_never_shows_the_main_screen_only()
+        {
+            var core = BuildSubScreenOnlyCore(highPriorityTile: true);
+            core.Bus!.Ppu.Cgwsel = 0x32; // CGWSEL bits 4-5 = 3 (never), sub screen still selected
+
+            Assert.Equal(((byte)0, (byte)0, (byte)0), FirstPixel(core));
+        }
+
+        [Fact]
+        public void Cgadsub_with_no_participating_layer_shows_the_main_screen_only()
+        {
+            var core = BuildSubScreenOnlyCore(highPriorityTile: true);
+            core.Bus!.Ppu.Cgadsub = 0x00;
+
+            Assert.Equal(((byte)0, (byte)0, (byte)0), FirstPixel(core));
+        }
+
+        // CGWSEL bit 1 clear: the blend operand is the fixed colour, so the sub
+        // screen's own red must not leak through the skip.
+        [Fact]
+        public void Fixed_colour_operand_ignores_the_sub_screen()
+        {
+            var core = BuildSubScreenOnlyCore(highPriorityTile: true);
+            var ppu = core.Bus!.Ppu;
+            ppu.Cgwsel = 0x00;
+            ppu.FixedColorB = 0x1F;
+
+            Assert.Equal(((byte)0, (byte)0, (byte)248), FirstPixel(core));
+        }
+
+        // Pseudo-hi-res reads _subLineBuf directly, bypassing colour math entirely -
+        // the one case the guard must still composite even with math off.
+        [Fact]
+        public void Pseudo_hi_res_still_composites_the_sub_screen_with_color_math_off()
+        {
+            var core = BuildSubScreenOnlyCore(highPriorityTile: true);
+            var ppu = core.Bus!.Ppu;
+            ppu.Cgwsel = 0x30; // never
+            ppu.Cgadsub = 0x00;
+            ppu.Setini = 0x08; // pseudo-hi-res: odd output columns come from the sub screen
+
+            Assert.Equal((Red, (byte)0, (byte)0), PixelAt(core, 1));
         }
     }
 }

@@ -444,7 +444,7 @@ A third consumer of `DianaOSInterpreter` alongside the console's F4 prompt (§3.
 - `Program.cs` - thin: dispatches to `DiffShotRunner` for `--diffshot`, otherwise parses args via `HeadlessDebugOptions.Parse`, builds a `FrameRunner`, and either drives the classic frame loop itself or hands off to `CommandsScriptRunner`.
 - `Cli/HeadlessDebugOptions.cs` - `Parse(string[] args)` turns argv into a plain options object plus a `Warnings` list, with no I/O of its own (ROM-existence checking stays in `Program.cs`, since that's a filesystem side effect, not parsing) - genuinely unit-testable for the first time (§3.18).
 - `FrameRunner.cs` - the one shared frame-stepping primitive both the classic loop and `--commands` mode drive: apply held input, apply `--cpulog` windowing, `RunFrame()`, bump a post-increment `CurrentFrame` ("frames completed so far" - `--commands` mode's own pre-existing convention), fire an autoshot callback, emit the progress heartbeat, enforce the frame-count safety cap. Replaces what used to be two separately-maintained copies of this same sequence. Owns `Hold`/`Release`/`Tap` and `WaitStable` too; does **not** own `FlushVerboseTrace()` - both callers still call that exactly once after their own loop/script finishes, matching before.
-- `CommandsScriptRunner.cs` - the `--commands` verb interpreter (`frames`/`tap[2]`/`hold`/`release`/`screenshot`/`waitstable`/`waitchange`/`waitvalue`/`contactsheet`/`vramsheet`/`paletteswatch`/`spriteoverlay`/`audiodump`/`fastforward`/`rewind`), now driving a shared `FrameRunner` instead of its own closures; unrecognized verbs still fall through to `DianaOSInterpreter.Execute`.
+- `CommandsScriptRunner.cs` - the `--commands` verb interpreter (`frames`/`tap[2]`/`hold`/`release`/`screenshot`/`waitstable`/`waitchange`/`waitvalue`/`contactsheet`/`vramsheet`/`paletteswatch`/`spriteoverlay`/`audiodump`/`fastforward`/`rewind`/`layers`/`perf`), now driving a shared `FrameRunner` instead of its own closures; unrecognized verbs still fall through to `DianaOSInterpreter.Execute`.
 - `DiffShotRunner.cs` - the standalone `--diffshot` mode, logic unchanged, now reading/writing BMPs via `EmuSen.Common.Imaging.BmpFile`.
 
 The classic loop's `--tap`/`--screenshot` frame-indexed timing and `--autoshot`'s filenames are bit-for-bit unchanged by this - `Program.cs` captures `FrameRunner.CurrentFrame` *before* each `RunFrames(1)` call for tap/screenshot checks (matching the old for-loop's pre-increment `frame` variable exactly), and passes an autoshot callback that subtracts 1 from `FrameRunner`'s post-increment counter to reproduce the classic loop's original 0-indexed `frame_<n>.bmp` names - only the `--commands` mode's own already-post-increment autoshot numbering (and the progress-log text, called out above) reflect the unified convention directly.
@@ -493,6 +493,8 @@ dotnet run --project EmuSen.Pharaoh -- <rom> <frames> [options...]
 - `spriteoverlay <path>` — capture the current frame buffer and draw a green bounding-box outline for every entry the already-generic `IDebugTarget.GetSprites()` reports (no interface change needed for this one - `GetSprites()` was core-agnostic from when it was first added). For "is this OAM entry actually where I think it is on screen" questions without needing to cross-reference `sprites`' text output against a plain screenshot by hand.
 - `audiodump <path> [maxsamples]` — write whatever's currently buffered in the new `IDebugTarget.GetAudioSamples()` out as a standard 16-bit PCM `.wav` file (`maxsamples` truncates rather than errors if fewer are actually buffered). On the SNES this is `Spc700.Dsp.AudioBuffer.ToArray()` - `ToArray()` specifically, not dequeuing, so this never steals samples out from under a live audio-playback consumer of the same queue. A core with no audio output modeled yet can return an empty array.
 - `fastforward on|off` (alias `ff`) — toggles `ICore.SkipRendering`. Headless already runs unpaced, so there is no speed multiplier to set here; the win is purely from not compositing frames nobody will look at. Measured at **~2.5x** on SMW (3300 frames: 12.4s -> 5.5s), which makes long boot sequences meaningfully cheaper to script past. Turn it back off before any `screenshot`/`contactsheet`/`spriteoverlay` line — a skipped frame leaves the framebuffer holding whatever was last drawn. See `EmuSen_Rewind_And_FastForward.md` §2.2 for the one accuracy caveat (`RangeOver`/`TimeOver` go stale).
+- `perf [frames=300] [worstCount=5]` — runs `frames` more frames and reports the wall-clock cost distribution (mean/p50/p95/max, plus a frames-over-budget count), the core's own cpu+spc700 / ppu / hdma attribution with an unattributed remainder, the ppu sub-split, and the worst individual frames by offset. Full write-up, including the Debug-vs-Release finding it was built for: §3.20.
+- `framesum [frames=300]` — runs `frames` more frames and folds every one of their frame-buffer hashes into a single 64-bit digest. One number that stands in for "every pixel of every frame in this window," so a renderer change can be shown to be output-identical rather than spot-checked against a screenshot. Full write-up: §3.21.
 - `rewind on [interval=4] [budgetMB=96]` / `rewind off` / `rewind back <n>` / `rewind` — a bounded, in-memory history of core states, captured automatically by every frame-advancing verb once switched on. `rewind back <n>` steps back `n` snapshots (i.e. `n * interval` frames) and keeps the harness's own frame counter in sync; bare `rewind` reports depth, seconds held, bytes held, and raw state size. Core-agnostic — built on `ICore` alone, no SNES knowledge. See `EmuSen_Rewind_And_FastForward.md` §1.
 
   **This turns "when did it break?" from a re-run into a bisection.** Locating the exact frame a glitch appears otherwise means relaunching from boot with a different `--screenshot` frame each attempt. With rewind you overshoot once, then walk back inside a single process:
@@ -682,6 +684,79 @@ dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj   # or: dotnet test EmuSen.sln
 **Assembly-wide `[CollectionBehavior(DisableTestParallelization = true)]`** (`AssemblyInfo.cs`) - `AudioPlayerTests` opens/closes real SDL audio devices via native calls; SDL's global init/quit state isn't worth risking under concurrent test execution, and this suite is small enough that parallelism wouldn't meaningfully speed it up anyway.
 
 **Not yet done:** the vendored `TestSuites/snes-tests` ROMs (`TestSuites/README.md`) aren't wired in here - `cputest`/`spctest` signal pass/fail by writing "Success"/"Failed" text into the tilemap and looping forever, not via a WRAM flag or a distinct halt address easy to probe directly, so an automated check would need either real screen/tilemap inspection or parsing the linker `.map` files already vendored alongside them to find the `success`/`fail` label addresses and checking CPU PC against those after running enough frames. A real integration test, not attempted in this pass - `EmuSen.Pharaoh`'s `--commands` scripting (§3.15) is the natural driver for it once someone picks this up.
+
+---
+
+### 3.19 Layer isolation and per-scanline registers (`layers`, `ScanlineRegisterDumpLine`)
+
+Two diagnostics added for the Super Metroid landing-site investigation, both aimed at the same blind spot: **`regs` only ever shows end-of-frame state**, which is useless for any SNES scene driven by HDMA — and most interesting scenes are. A game can change BGMODE, TM/TS, CGWSEL/CGADSUB, scroll and windows on every single scanline, then leave the registers holding whatever the last line set. Reading `regs` there tells you about vblank, not about the picture.
+
+- **`layers <spec>`** (`--commands` verb) — sets `DebugSettings.LayerEnableMask`, which is ANDed into both TM and TS inside `CompositeScreen`, so it isolates a layer on the main *and* sub screens at once. `<spec>` is `all`, `none`, `bg1`..`bg4`, `obj`, or a raw hex mask (`layers 13` = BG1+BG2+OBJ). Answers "which layer is that garbage actually in", which otherwise takes guesswork against a tilemap hexdump.
+
+  **Caveat worth knowing before reading the output**: isolation happens at the layer-enable stage, *not* after color math. If the scene has color math on (CGADSUB non-zero), `layers bg3` still shows BG3 blended against whatever the main screen resolves to — which, with everything else masked off, is the backdrop. So a "BG3 only" shot is really `backdrop + BG3`, and if CGRAM[0] is black that happens to equal BG3's raw colors, but it will not in general. Cross-check against `pal 0` before treating an isolated shot as raw layer content.
+
+- **`--flag ScanlineRegisterDumpLine=<n>`** — dumps BGMODE/TM/TS/CGWSEL/CGADSUB/MOSAIC/INIDISP, the fixed color, and BG1-3 scroll as scanline `<n>` is rendered. `-1` (default) is off; **`-2` sweeps every scanline**, which is the useful mode: pipe it through `uniq` on the fields you care about and you get the frame's entire HDMA profile in one run.
+
+  That sweep is what showed Super Metroid's landing site is: BG3-only with no color math for the 31-line HUD band, then `TM=13 TS=04 CGWSEL=02 CGADSUB=33` (BG1+BG2+OBJ on main, BG3 on sub, full additive) for the rest, with BG2's horizontal scroll stepped in ~32-line bands for the parallax mountains and BG3 scrolled equally in X and Y - i.e. diagonally, which is how the rain moves.
+
+### 3.20 `perf` — per-frame cost profile
+
+`perf [frames] [worstCount]` (`--commands` verb, defaults `300 5`) runs `frames` more frames and reports what each one cost. Added for the Rocky Rodent "why is the framerate low" investigation, because until it existed the only frame-cost readout in the project was `EmuSen.Mistress`'s once-a-second `FpsText`, which needs a live GUI to read — exactly what the harness exists to avoid.
+
+It reports three things the FPS text can't:
+
+- **A distribution, not just a mean.** `p50`/`p95`/`max` plus an explicit `over budget: n/N` count against `1000 / core.FrameRateHz` (16.64 ms, from the real 60.10 Hz — not 60). A scene averaging 8 ms with 11% of frames at 17 ms stutters; a mean alone hides that.
+- **The core's own phase attribution**, straight from `VenusCore.LastFrame*Ms` (§ `VenusCore.cs`): cpu+spc700 / ppu / hdma, the ppu sub-split (mainComposite / subComposite / objEval / blend), and an **unattributed** column — wall minus the three phases. A large unattributed figure means the cost is outside `RunFrame`'s instrumented phases, which is itself the finding.
+- **The worst individual frames, by offset into the window**, so a spike can be correlated with what the game was doing.
+
+**Read the first `perf` in a process with suspicion.** Tiered JIT makes the opening ~20 frames materially more expensive, and they land in the "worst frames" list looking like a real spike. The Rocky Rodent run showed exactly this: p95 17.57 ms in the first window, all five worst frames inside the first 17, and 5.9 ms flat forever after. Put a `frames 300` ahead of the first `perf`, or discard that window.
+
+#### What it found: Debug builds are ~3.6x slower, and Rocky Rodent is the first game that cliff pushes under 60
+
+Measured on this machine, gameplay, same scene, same `--commands` script:
+
+| Config | RR ms/frame | fps | over budget |
+|---|---|---|---|
+| Release | 4.6-4.9 | ~210 | 0/300 |
+| Debug | 16.8-17.0 | ~59 | 269/300 |
+| Debug + `-p:Optimize=true` | 4.6-4.9 | ~210 | 0/300 |
+
+The third row is the point: the entire penalty is the **JIT optimizer being off**, not `DEBUG`-conditional code. Nothing in the core is compiled differently between the two configurations — it is purely `Optimize=false`.
+
+Rocky Rodent matters because it is the heaviest title in the sample and therefore the first to cross the line. In Debug: RR 16.9 ms (over the 16.64 ms budget), FFVI 12.4, SMW 12.2, LttP 11.5, DKC 10.5, SM 8.0. In Release every one of those, plus CT/MMX/SoM/EB, sits between 1.9 and 4.9 ms — 3-9x headroom. So a Debug-built frontend is not "a bit slower", it is running with roughly a 1.02x margin on the heaviest game and a 1.4x margin on the next one down: any further renderer cost makes more titles fall under 60, one at a time, which is what "it's an issue in another game too" looks like from the outside.
+
+Two ways to not hit it, with the tradeoff stated rather than picked:
+
+- **Run Release builds.** Zero cost, but no debugger.
+- **`<Optimize>true</Optimize>` in `EmuSen.csproj` only**, leaving the frontends unoptimized. Full-speed emulation while still stepping through frontend code — but the core is precisely where most debugging happens, and optimized code has unreliable locals and inlined frames. Not applied.
+
+#### Follow-up: most of Rocky Rodent's cost was work being thrown away
+
+The table above frames RR as legitimately "the heaviest title in the sample," with the Debug JIT cliff as the whole story. A second pass with the phase attribution showed that was only half right. RR's `subComposite` figure was 1.95 ms against a 2.08 ms `mainComposite` — a full second layer composite per scanline, where every other game in the sample sat far below its own main-screen cost or at a flat 0.00 ms.
+
+The cause was not the game being demanding. RR runs mode 2 with `TM=$17 TS=$17 CGWSEL=$30 CGADSUB=$00` — every layer enabled on the sub screen, with color math switched off entirely — so the renderer composited a sub screen that the final blend then discarded, on all 224 scanlines of every frame. `Venus_PPU.md` §5.1 has the fix and the output-identity verification.
+
+Corrected numbers on the same gameplay scene: Release 5.59 → 3.51 ms, Debug 23.74 → 15.21 ms (42 → 66 fps, from 300/300 frames over budget to 0/300). RR is no longer the outlier — it now sits alongside SMW and FFVI rather than 65% above them.
+
+**The transferable lesson is about reading `perf` output, not about this one game.** A phase that is large *in absolute terms* is not a finding; a phase that is large *relative to the same phase in comparable scenes* is. `subComposite ≈ mainComposite` was visible in the very first RR profile and read as "this game does a lot of work," when the comparison across ten ROMs made it obvious no other title behaved that way. Always profile a suspect game against a cohort, not against its own budget.
+
+---
+
+### 3.21 `framesum` — output-identity digest
+
+`framesum [frames]` (`--commands` verb, default `300`) runs `frames` more frames and FNV-1a-folds each frame's `FrameHash` into one running 64-bit digest, reporting it as a single hex number.
+
+It exists because §3.20 turns performance into a number you can compare, but says nothing about whether a change that made things faster also changed what was drawn. Screenshots and `contactsheet` sample a handful of frames; `framesum` covers every pixel of every frame in the window at a cost of one hash per frame.
+
+**The workflow it's for** — proving a renderer optimization is invisible:
+
+1. Capture the digest for a window on every ROM you care about, on the current code.
+2. `git stash` the change (or apply it) and re-run the identical script.
+3. `diff` the two lists. Any differing line names the ROM to go look at.
+
+This is how §5.1 of `Venus_PPU.md` (skipping the unused sub-screen composite) was verified: 400-frame windows across 20 ROMs, plus 2500-frame windows across 8 color-math-heavy ones, all byte-identical either side of the change. Without it, "the frame rate went up 37%" and "the picture is still right" would have been two separate acts of faith.
+
+**Caveats.** The digest is order-sensitive and window-sensitive — both runs must start from the same state (same ROM, same `--loadstate`, same preceding verbs) and cover the same frame count, or the numbers differ for reasons that have nothing to do with the change under test. It tells you *that* something differs, never *what*: once a ROM's digest moves, fall back to `--autoshot` or `contactsheet` to find the frame. And it is a rendering check only — it says nothing about audio, timing, or save-state contents.
 
 ---
 

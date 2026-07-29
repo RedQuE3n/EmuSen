@@ -20,4 +20,23 @@
     <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
   </ItemGroup>
 
+  <!-- Ships the two read-only doc trees into a published build's own sandbox
+       root, so `man`/`cat`/`find` have the same reference material there that
+       they do running from source. Link= is what places them under
+       DianaOSRoot/ - see `man hier`'s "where the root actually is" for why a
+       published root is a subdirectory rather than the binary's folder.
+       CopyToPublishDirectory only (not CopyToOutputDirectory): running from
+       source already reads these straight out of the repo, so copying them
+       into every bin/ would be ~770KB of duplication nothing ever reads. -->
+  <ItemGroup>
+    <None Include="DianaOS\Etc\Man pages\**\*"
+          Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Etc\Man pages\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="Never"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="DianaOS\Usr\Home\Documents\**\*"
+          Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Usr\Home\Documents\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="Never"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -18,23 +18,20 @@ namespace EmuSen.DianaOS.DianaOS.Etc
     // was only ever meant to poke around this project's own files.
     public static class DianaOSSandbox
     {
-        // Walks upward from wherever this assembly is actually running
-        // from (AppContext.BaseDirectory - NOT Environment.CurrentDirectory,
-        // which is exactly the thing a launcher/shortcut gets to decide
-        // and so can't be trusted as a starting point) looking for
-        // EmuSen.sln, the one file guaranteed to sit at this project's
-        // own root today. Once this project is ever published as a
-        // standalone binary, EmuSen.sln won't ship alongside it - the
-        // walk then falls back to AppContext.BaseDirectory itself, so
-        // "the folder the binary lives in" becomes the walled root,
-        // which is exactly "still the parent directory" for that case.
-        private static readonly Lazy<string> _root = new(ComputeRoot);
+        // The two roots this shell can have, and why the published one is a
+        // subdirectory rather than the binary's own folder: see `man hier`.
+        public const string PublishedRootDirName = "DianaOSRoot";
+
+        private static readonly Lazy<string> _root = new(() => ComputeRootFor(AppContext.BaseDirectory));
 
         public static string RootDirectory => _root.Value;
 
-        private static string ComputeRoot()
+        // baseDirectory is AppContext.BaseDirectory in production - NOT
+        // Environment.CurrentDirectory, which a launcher/shortcut gets to decide.
+        // Parameterized purely so both branches are testable - see DianaOSSandboxTests.
+        public static string ComputeRootFor(string baseDirectory)
         {
-            string dir = Path.GetFullPath(AppContext.BaseDirectory);
+            string dir = Path.GetFullPath(baseDirectory);
             for (int i = 0; i < 10; i++)
             {
                 if (File.Exists(Path.Combine(dir, "EmuSen.sln"))) return dir;
@@ -42,7 +39,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
                 if (parent is null || parent == dir) break;
                 dir = parent;
             }
-            return Path.GetFullPath(AppContext.BaseDirectory);
+            return Path.GetFullPath(Path.Combine(baseDirectory, PublishedRootDirName));
         }
 
         // The DianaOS project's own "user data" home - emulator-facing
@@ -57,6 +54,10 @@ namespace EmuSen.DianaOS.DianaOS.Etc
         // emulator output, kept out of Usr/Home so it isn't mistaken for it.
         public static string SourceLogsDirectory => Path.Combine(RootDirectory, "SourceLogs");
 
+        // The user-facing Usr/Home folders that hold no shipped content - empty in a
+        // published build, already populated when running from source. See `man hier`.
+        private static readonly string[] UsrHomeStubs = { "Roms", "Games", "Music", "Pictures" };
+
         // The real directories this shell's Unix-shaped tree needs - see `man hier`.
         private static void EnsureSkeleton()
         {
@@ -65,6 +66,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
             Directory.CreateDirectory(SavesDirectory);
             Directory.CreateDirectory(SaveStatesDirectory);
             Directory.CreateDirectory(SourceLogsDirectory);
+            foreach (string stub in UsrHomeStubs) Directory.CreateDirectory(Path.Combine(UsrHomeDirectory, stub));
             Directory.CreateDirectory(Path.Combine(root, "home", "root"));
             Directory.CreateDirectory(Path.Combine(root, "etc"));
             Directory.CreateDirectory(Path.Combine(root, "tmp"));

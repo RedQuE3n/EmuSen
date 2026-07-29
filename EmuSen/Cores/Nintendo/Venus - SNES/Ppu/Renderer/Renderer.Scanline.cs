@@ -86,109 +86,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 _subLineLayer[px] = LayerBackdrop;
             }
 
-            bool bg3ForcedTop = (ppu.Bgmode & 0x08) != 0;
-            bool isMode7 = (ppu.Bgmode & 0x07) == 7;
-
             long mainCompositeStart = Stopwatch.GetTimestamp();
 
-            if (isMode7)
-            {
-                bool extbgEnabled = (ppu.Setini & 0x40) != 0;
-                if (extbgEnabled && (ppu.Tm & 0x02) != 0) RenderMode7Bg2Extbg(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerBg2, true, false);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 0, true);
-                if ((ppu.Tm & 0x01) != 0) RenderMode7(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerBg1, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 1, true);
-                if (extbgEnabled && (ppu.Tm & 0x02) != 0) RenderMode7Bg2Extbg(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerBg2, true, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 2, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 3, true);
-            }
-            else if (mode == 6)
-            {
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 0, true);
-                if ((ppu.Tm & 0x01) != 0) RenderBg1(ppu, py, false, brightness, _mainLineBuf, _mainLineLayer, LayerBg1, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 1, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 2, true);
-                if ((ppu.Tm & 0x01) != 0) RenderBg1(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg1, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 3, true);
-            }
-            else if (mode >= 2 && mode <= 5)
-            {
-                if ((ppu.Tm & 0x02) != 0) RenderBg2(ppu, py, false, brightness, _mainLineBuf, _mainLineLayer, LayerBg2, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 0, true);
-                if ((ppu.Tm & 0x01) != 0) RenderBg1(ppu, py, false, brightness, _mainLineBuf, _mainLineLayer, LayerBg1, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 1, true);
-                if ((ppu.Tm & 0x02) != 0) RenderBg2(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg2, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 2, true);
-                if ((ppu.Tm & 0x01) != 0) RenderBg1(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg1, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 3, true);
-            }
-            else
-            {
-                if ((ppu.Tm & 0x08) != 0) RenderBg4(ppu, py, false, brightness, _mainLineBuf, _mainLineLayer, LayerBg4, true);
-                if ((ppu.Tm & 0x04) != 0) RenderBg3(ppu, py, false, brightness, _mainLineBuf, _mainLineLayer, LayerBg3, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 0, true);
-                if ((ppu.Tm & 0x08) != 0) RenderBg4(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg4, true);
-                if (!bg3ForcedTop && (ppu.Tm & 0x04) != 0) RenderBg3(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg3, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 1, true);
-                if ((ppu.Tm & 0x02) != 0) RenderBg2(ppu, py, false, brightness, _mainLineBuf, _mainLineLayer, LayerBg2, true);
-                if ((ppu.Tm & 0x01) != 0) RenderBg1(ppu, py, false, brightness, _mainLineBuf, _mainLineLayer, LayerBg1, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 2, true);
-                if ((ppu.Tm & 0x02) != 0) RenderBg2(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg2, true);
-                if ((ppu.Tm & 0x01) != 0) RenderBg1(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg1, true);
-                if ((ppu.Tm & 0x10) != 0) RenderObj(ppu, py, brightness, _mainLineBuf, _mainLineLayer, LayerObj, 3, true);
-            }
-
-            if (bg3ForcedTop && (ppu.Tm & 0x04) != 0)
-            {
-                RenderBg3(ppu, py, true, brightness, _mainLineBuf, _mainLineLayer, LayerBg3, true);
-            }
+            CompositeScreen(ppu, py, mode, brightness, ppu.Tm, _mainLineBuf, _mainLineLayer, true);
 
             long subCompositeStart = Stopwatch.GetTimestamp();
             _mainCompositeTicksAccum += subCompositeStart - mainCompositeStart;
 
-            if (isMode7)
-            {
-                bool extbgEnabled = (ppu.Setini & 0x40) != 0;
-                if (extbgEnabled && (ppu.Ts & 0x02) != 0)
-                {
-                    RenderMode7Bg2Extbg(ppu, py, brightness, _subLineBuf, _subLineLayer, LayerBg2, false, false);
-                    RenderMode7Bg2Extbg(ppu, py, brightness, _subLineBuf, _subLineLayer, LayerBg2, false, true);
-                }
-                if ((ppu.Ts & 0x01) != 0) RenderMode7(ppu, py, brightness, _subLineBuf, _subLineLayer, LayerBg1, false);
-            }
-            else
-            {
-                if ((ppu.Ts & 0x08) != 0) RenderBg4(ppu, py, false, brightness, _subLineBuf, _subLineLayer, LayerBg4, false);
-                if ((ppu.Ts & 0x08) != 0) RenderBg4(ppu, py, true, brightness, _subLineBuf, _subLineLayer, LayerBg4, false);
-                if ((ppu.Ts & 0x04) != 0) RenderBg3(ppu, py, false, brightness, _subLineBuf, _subLineLayer, LayerBg3, false);
-                if ((ppu.Ts & 0x02) != 0) RenderBg2(ppu, py, false, brightness, _subLineBuf, _subLineLayer, LayerBg2, false);
-                if ((ppu.Ts & 0x01) != 0) RenderBg1(ppu, py, false, brightness, _subLineBuf, _subLineLayer, LayerBg1, false);
-            }
-            if ((ppu.Ts & 0x10) != 0)
-            {
-                for (int p = 0; p <= 3; p++) RenderObj(ppu, py, brightness, _subLineBuf, _subLineLayer, LayerObj, p, false);
-            }
-
-            // BG3's "forced top" priority mode (BGMODE bit 3 - the classic
-            // bridge-crossing trick) applies to the whole PPU's compositing,
-            // not just the main screen - real hardware draws BG3's high-
-            // priority tiles above everything else in BOTH the main and
-            // sub screen stacks. The main-screen composite above already
-            // does this (the bg3ForcedTop block right after it), but the
-            // subscreen composite only ever rendered BG3's low-priority
-            // tiles (line ~157), silently dropping the high-priority ones
-            // entirely from the subscreen. Since the subscreen is the
-            // color-math blend operand whenever CGWSEL selects it, a scene
-            // color-math-blending a BG3 high-priority tile (e.g. a fence
-            // rendered semi-transparent over terrain) added the correct
-            // main-screen tile color to whatever was left behind on the
-            // subscreen instead of that same tile - producing a visibly
-            // wrong blended color. Found via a Zelda: A Link to the Past
-            // overworld fence that rendered as a solid yellow band.
-            if (bg3ForcedTop && (ppu.Ts & 0x04) != 0)
-            {
-                RenderBg3(ppu, py, true, brightness, _subLineBuf, _subLineLayer, LayerBg3, false);
-            }
+            // Same layer/priority order as the main screen, driven by TS - see Venus_PPU.md §4.1.
+            CompositeScreen(ppu, py, mode, brightness, ppu.Ts, _subLineBuf, _subLineLayer, false);
 
             long blendStart = Stopwatch.GetTimestamp();
             _subCompositeTicksAccum += blendStart - subCompositeStart;
@@ -266,6 +172,64 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             LastFrameBlendMs = _blendTicksAccum * ticksToMs;
             LastFrameMainCompositeMs = _mainCompositeTicksAccum * ticksToMs;
             LastFrameSubCompositeMs = _subCompositeTicksAccum * ticksToMs;
+        }
+
+        // One screen's layer stack, main or sub - layerEnable is TM or TS. See Venus_PPU.md §4.1.
+        private void CompositeScreen(Ppu ppu, int py, int mode, float brightness, byte layerEnable, Color[] lineBuf, int[] lineLayer, bool isMainScreen)
+        {
+            bool bg3ForcedTop = (ppu.Bgmode & 0x08) != 0;
+
+            if (mode == 7)
+            {
+                bool extbgEnabled = (ppu.Setini & 0x40) != 0;
+                if (extbgEnabled && (layerEnable & 0x02) != 0) RenderMode7Bg2Extbg(ppu, py, brightness, lineBuf, lineLayer, LayerBg2, isMainScreen, false);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 0, isMainScreen);
+                if ((layerEnable & 0x01) != 0) RenderMode7(ppu, py, brightness, lineBuf, lineLayer, LayerBg1, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 1, isMainScreen);
+                if (extbgEnabled && (layerEnable & 0x02) != 0) RenderMode7Bg2Extbg(ppu, py, brightness, lineBuf, lineLayer, LayerBg2, isMainScreen, true);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 2, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 3, isMainScreen);
+            }
+            else if (mode == 6)
+            {
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 0, isMainScreen);
+                if ((layerEnable & 0x01) != 0) RenderBg1(ppu, py, false, brightness, lineBuf, lineLayer, LayerBg1, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 1, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 2, isMainScreen);
+                if ((layerEnable & 0x01) != 0) RenderBg1(ppu, py, true, brightness, lineBuf, lineLayer, LayerBg1, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 3, isMainScreen);
+            }
+            else if (mode >= 2 && mode <= 5)
+            {
+                if ((layerEnable & 0x02) != 0) RenderBg2(ppu, py, false, brightness, lineBuf, lineLayer, LayerBg2, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 0, isMainScreen);
+                if ((layerEnable & 0x01) != 0) RenderBg1(ppu, py, false, brightness, lineBuf, lineLayer, LayerBg1, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 1, isMainScreen);
+                if ((layerEnable & 0x02) != 0) RenderBg2(ppu, py, true, brightness, lineBuf, lineLayer, LayerBg2, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 2, isMainScreen);
+                if ((layerEnable & 0x01) != 0) RenderBg1(ppu, py, true, brightness, lineBuf, lineLayer, LayerBg1, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 3, isMainScreen);
+            }
+            else
+            {
+                if ((layerEnable & 0x08) != 0) RenderBg4(ppu, py, false, brightness, lineBuf, lineLayer, LayerBg4, isMainScreen);
+                if ((layerEnable & 0x04) != 0) RenderBg3(ppu, py, false, brightness, lineBuf, lineLayer, LayerBg3, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 0, isMainScreen);
+                if ((layerEnable & 0x08) != 0) RenderBg4(ppu, py, true, brightness, lineBuf, lineLayer, LayerBg4, isMainScreen);
+                if (!bg3ForcedTop && (layerEnable & 0x04) != 0) RenderBg3(ppu, py, true, brightness, lineBuf, lineLayer, LayerBg3, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 1, isMainScreen);
+                if ((layerEnable & 0x02) != 0) RenderBg2(ppu, py, false, brightness, lineBuf, lineLayer, LayerBg2, isMainScreen);
+                if ((layerEnable & 0x01) != 0) RenderBg1(ppu, py, false, brightness, lineBuf, lineLayer, LayerBg1, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 2, isMainScreen);
+                if ((layerEnable & 0x02) != 0) RenderBg2(ppu, py, true, brightness, lineBuf, lineLayer, LayerBg2, isMainScreen);
+                if ((layerEnable & 0x01) != 0) RenderBg1(ppu, py, true, brightness, lineBuf, lineLayer, LayerBg1, isMainScreen);
+                if ((layerEnable & 0x10) != 0) RenderObj(ppu, py, brightness, lineBuf, lineLayer, LayerObj, 3, isMainScreen);
+            }
+
+            if (bg3ForcedTop && (layerEnable & 0x04) != 0)
+            {
+                RenderBg3(ppu, py, true, brightness, lineBuf, lineLayer, LayerBg3, isMainScreen);
+            }
         }
 
         private static bool IsWindowMasked(Ppu ppu, int layerId, bool isMainScreen, int px)

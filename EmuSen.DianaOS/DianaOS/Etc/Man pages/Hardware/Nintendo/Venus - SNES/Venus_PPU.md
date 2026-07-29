@@ -66,6 +66,18 @@ Each scanline builds a main-screen buffer and a sub-screen buffer independently 
 
 **Mode 1's BG3-forced-top** (`BGMODE` bit 3): when set, BG3's high-priority tiles draw *after* everything else, unconditionally on top — including a correctly-computed BG1 pixel. Handled as a separate pass after the mode's normal interleave.
 
+### 4.1 The sub screen uses the *same* order (`CompositeScreen`)
+
+There is only one compositing routine, `CompositeScreen`, called twice per scanline: once with `TM` into `_mainLineBuf`/`_mainLineLayer`, once with `TS` into `_subLineBuf`/`_subLineLayer`. Real hardware has one priority resolver and simply feeds it a different layer-enable byte per screen, so anything true of the main screen's ordering (the per-mode BG/OBJ interleave above, both priority passes per BG, BG3-forced-top) is equally true of the sub screen. Keeping them as one function is what makes that structurally guaranteed rather than something two parallel code paths have to remember.
+
+The sub screen used to be a hand-written, much shorter stack of its own, and it was wrong in three separate ways, all of which silently dropped pixels from the color-math blend operand:
+
+- **It only ever ran the low-priority pass for BG1, BG2, and BG3.** Every high-priority BG tile — the tilemap entry's priority bit set — was missing from the sub screen entirely. BG4 was the sole exception (it did get both passes).
+- **It ignored the BG mode.** One fixed BG4→BG3→BG2→BG1 order was used for every non-Mode-7 mode, rather than the mode's real interleave.
+- **It drew all four OBJ priority levels last, after every BG.** Sprites therefore always won on the sub screen regardless of their OAM priority.
+
+**Found via** Zelda: A Link to the Past, the throne-room corridor inside Hyrule Castle: the ornate doorframe over the north door rendered as a solid black silhouette (correct shape, no color). That room composites almost entirely through color math — `TM=0x16` (BG2/BG3/OBJ), `TS=0x01` (BG1), `CGWSEL=0x02` (sub screen is the blend operand), `CGADSUB=0x20` (backdrop only participates) — so nearly every visible pixel is `CGRAM[0]` plus whatever BG1 puts on the sub screen. The doorframe's BG1 tilemap entries have the priority bit set; with only the low-priority sub-screen pass running, they never rendered, the sub screen fell back to the fixed color (black, `$2132` all zero), and `black + black` gave a black doorframe-shaped hole. Anything wearing this signature — right silhouette, no color, in a scene that blends against the sub screen — is worth checking against this class of bug first.
+
 ---
 
 ## 5. Color math

@@ -10,13 +10,23 @@ The SNES APU is a genuinely separate computer: its own CPU (SPC700), its own 64K
 
 ### 1.1 Boot sequence and the IPL ROM
 
-`Spc700.Reset()` copies a hardcoded 64-byte IPL (Initial Program Loader) ROM image into `Ram[0xFFC0..]` and sets `PC = 0xFFC0` — real hardware boots from this same fixed, undumpable-by-software boot ROM every power-on, which is why it's baked into this emulator as a literal byte array rather than loaded from a file. The IPL ROM's job (on real hardware and here identically, since it's the same bytes) is to hand-shake with the main CPU over the 4 ports and receive the actual sound driver/data upload before jumping into it.
+`Spc700.Reset()` sets `PC = 0xFFC0` and enables the IPL (Initial Program Loader) ROM overlay — real hardware boots from this same fixed, undumpable-by-software boot ROM every power-on, which is why the 64-byte image is baked into this emulator as a literal byte array rather than loaded from a file. The IPL ROM's job (on real hardware and here identically, since it's the same bytes) is to hand-shake with the main CPU over the 4 ports and receive the actual sound driver/data upload before jumping into it.
+
+**The overlay is read-only, and it is not a RAM stamp.** `$FFC0-$FFFF` is a *read* overlay over 64 bytes of perfectly ordinary APU RAM:
+
+- **Reads** (including instruction fetch — `Step()` fetches through `Read8`) return the IPL image while the overlay is enabled.
+- **Writes** always go to `Ram[]`, underneath the overlay, and are invisible until it's switched off.
+- **`CONTROL` (`$00F1`) bit 7** enables/disables it, set at power-on. Exposed as `Spc700.IplRomEnabled`, computed from `_timerControl` (which holds the whole `$F1` register) rather than stored in its own field, so adding it did not change the save-state layout — see `StateSerializer`'s own note on the format having no version header.
+
+Modeling this as a plain `Array.Copy` of the image into `Ram[0xFFC0..]` at reset — which is what this emulator did originally — is wrong in a way that stays invisible until a game uploads data into that address range, at which point it overwrites the boot code out from under the running SPC700. That was the Super Metroid boot hang; see §2.7.
 
 ### 1.2 Communication ports
 
 `ReadPort`/`WritePort` (called from `MemoryBus`, see `Venus_Memory.md` §1.2) are the CPU-side view of `_inPorts`/`_outPorts`; `Read8`/`Write8` at `$00F4-$00F7` are the APU-side view of the *same* 4 ports. `_inPorts` is what the CPU wrote and the SPC700 reads; `_outPorts` is what the SPC700 wrote and the CPU reads — two independent one-way latches per port index, not a shared register.
 
-`LogPortTraffic` (off by default, flipped on a few frames into boot by `Program.cs`) logs only on **value changes**, not every read/write — the driver's idle polling loop re-reads the same port value every cycle while waiting for the next command, and logging that unconditionally would flood the console during the ~24k-byte initial upload handshake before any real investigation could see the interesting transitions.
+`LogPortTraffic` reads straight from `DebugSettings.ApuPortTrafficLogging`, so it is reachable as `--flag ApuPortTrafficLogging` from `EmuSen.Pharaoh` like every other logging switch (it used to be a plain public field only `Program.cs` could flip, which meant the one investigation that needed it could not turn it on from the headless harness at all). It logs only on **value changes**, not every read/write — the driver's idle polling loop re-reads the same port value every cycle while waiting for the next command, and logging that unconditionally would flood the console during the ~24k-byte initial upload handshake before any real investigation could see the interesting transitions.
+
+Pairing `--flag ApuPortTrafficLogging` with `--flag Spc700VerboseLogging` is what identified the §2.7 hang: the port log gives the protocol-level story, the instruction trace gives the SPC700's actual PC at each transition, and the two interleaved in one stream show which IPL branch it really took.
 
 ### 1.3 Timers
 
@@ -65,15 +75,19 @@ Notoriously easy to get subtly wrong, and this project's original implementation
 
 `EmuSen.Tomoe`'s `spc700` target (`Spc700SingleStepTarget`/`Spc700TestLoader`) was added alongside the 65816 harness but not exercised until this was run against all 256 TomHarte/ProcessorTests spc700 opcode files (256,000 cases): 255106/256000 passing after the two fixes above (§2.4, §2.5). The remaining ~894 "failures" are a single, well-understood, non-bug cause: TomHarte's vectors model a flat 64KB RAM with no memory-mapped I/O, so any test case whose randomly-generated address happens to land in `$F0-FF` collides with this project's (correct) hardware-register behavior there (DSP register access, timer counters, APU communication ports - see §1.2/§1.3) instead of the test's plain-RAM expectation. `Spc700SingleStepTarget.SetMemory`/`GetMemory` already special-case `$F4-F7` for exactly this reason (see that class's own comment); `$F0-F3`/`$FD-FF` just aren't plugged into that same seeding yet - a real gap in the *test harness*, not in the emulator, and low priority since it doesn't affect anything a real ROM does.
 
-### 2.7 Known open issue: Super Metroid boot hang
+### 2.7 Fixed bug: the audio upload overwrote the IPL ROM, because the IPL ROM was stamped into RAM
 
-A Super Metroid ROM hangs before its title screen, permanently stuck in a `BRA`-to-self trap in the 65816's own boot code (`$80:8077`) after a `DEC A : BNE` countdown times out waiting for the SPC700 to re-present the standard `$AA/$BB` IPL ready-signal on `$2140/$2141` for a *second* audio-upload stage (the first stage's upload, using the same shared routine, completes successfully). Investigated at length without finding the root cause; ruled out so far:
+**Symptom:** Super Metroid showed its Nintendo logo splash, then a permanently black screen, never reaching the title. The SPC700's PC sat in IPL ROM space (`$FFDA`/`$FFDC`/`$FFE9`) forever, with `$2141` still reading the IPL's `$BB` boot signature after 30+ seconds of emulated time.
 
-- **CPU↔SPC700 relative pacing** - tested directly by temporarily running the SPC700 at 7x and then 21x its normal rate (via `VenusCore.RunFrame`'s `scaledSpc700Cycles` scaling); the hang reproduced identically both times.
-- **General-DMA cycle starvation** - fixed as a real bug regardless (`Venus_Memory.md` §3.1), confirmed via direct comparison to have zero effect on this specific hang (identical CPU/SPC700 register state at the hang point before and after).
-- **SPC700 opcode correctness** - the two real bugs in §2.4/§2.5 were found chasing this hang; fixing them had no effect on it either.
+**Root cause:** `Reset()` implemented the IPL ROM by `Array.Copy`ing the 64-byte image into `Ram[0xFFC0..]`, so the boot code lived *in* RAM instead of in a read-only overlay above it (§1.1). Super Metroid's audio-engine upload legitimately targets `$FFC0-$FFFF` — on real hardware those writes land in the RAM hidden beneath the overlay and the IPL keeps executing intact. Here they landed on the IPL's own instructions while it was executing them.
 
-At the hang point, the SPC700's own PC sits at `$FFDC` - still inside the stock IPL ROM, in the `CMP $F4,#$CC : BNE` loop waiting for the CPU to send the transfer-start byte, which the CPU never sends because it's stuck on its own earlier check. Next angle not yet tried: tracing exactly what happens between the first upload's completion and the second one's `JSL` call site (`$80:8F7E`, reading its pointer table from bank `$8F`) - in particular whether anything should be resetting `$F1` (timer control, which also clears the CPU→APU input latches per §1.3) or otherwise re-arming the IPL-style handshake between the two stages, since the second call clearly expects the SPC700 to be back in its post-reset "waiting to receive" state and it never gets there.
+**Exact failure:** the upload's destination pointer walked up through `$FFD7`, `$FFD8`, `$FFD9`, `$FFDA`, and the byte written to `$FFDA` changed `7E F4` (`CMP Y,$F4` — the transfer loop's "has the CPU sent the next index?" test) into `E2 F4` (`SET1 $F4.7`). From that instruction on the IPL was executing the uploaded sample data as code. The corrupted `SET1` also explains the otherwise-baffling `$80` that appears on port 0 mid-transfer: bit 7 of `$F4`, set by the very instruction that replaced the compare.
+
+**Why it looked like a handshake/pacing bug for so long:** everything visible from the CPU side is a *symptom*. The 65816 upload loop at `$80:808A` polls `CMP $002140 : BNE` for the SPC700 to echo each index back before sending the next byte, so once the IPL derailed into its end-of-transfer path (`$FFEF`) the echo stopped matching and the CPU stalled exactly as a pacing or latch problem would. Running the SPC700 at 7x and 21x (the pacing experiment recorded in the previous version of this section) could not help, because the fault is destructive, not timing-dependent — no amount of relative speed stops a write from landing on the instruction being fetched.
+
+**Found with** `--flag ApuPortTrafficLogging --flag Spc700VerboseLogging` interleaved in one stream (§1.2). The decisive line is an `MOV [dp]+Y, A -> Target Addr: 0xFFDA` store immediately followed by `0xFFDA: SET1 dp.7 (Opcode 0xE2)` — the same address, written and then executed.
+
+**Fixed by** making `$FFC0-$FFFF` a real read-only overlay gated on `CONTROL` bit 7 (§1.1). Regression coverage: `EmuSen.WiseMan/Apu/IplRomOverlayTests.cs`. Super Metroid now boots through the Ceres cinematic, the title screen, and into the attract-mode demo.
 
 ### 2.8 Fixed bug: CPU→SPC700 cycle-scaling used the wrong master-clock ratio, making audio play ~1.3x too fast
 

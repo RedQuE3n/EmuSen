@@ -93,6 +93,15 @@ namespace EmuSen.Debug
             set => _spc700VerboseLogging = value;
         }
 
+        // Both directions of the $2140-$2143 / $00F4-$00F7 mailbox, logged
+        // on change only - see Venus_APU.md §1.2.
+        private static bool _apuPortTrafficLogging = false;
+        public static bool ApuPortTrafficLogging
+        {
+            get => MasterLoggingEnabled && _apuPortTrafficLogging;
+            set => _apuPortTrafficLogging = value;
+        }
+
         // --- DspVoice.cs ---
         // Logs every KeyOn (note trigger): SRCN, the resolved sample-
         // directory entry, computed start/loop address, the BRR header

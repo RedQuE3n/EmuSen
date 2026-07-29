@@ -40,6 +40,9 @@ namespace EmuSen.Cores
         int ScreenWidth { get; }
         int ScreenHeight { get; }
 
+        // Hardware refresh rate, for frontend frame pacing - see Venus_CPU.md §8.5b.
+        double FrameRateHz { get; }
+
         bool IsRomLoaded { get; }
         long TotalFrames { get; }
 

@@ -130,5 +130,8 @@ namespace EmuSen.Common
         // simpler for a caller than needing its own IsRomLoaded guard
         // around every single pump call.
         public short[] DequeueAudioSamples(int maxFrames) => _core?.DequeueAudioSamples(maxFrames) ?? Array.Empty<short>();
+
+        // Falls back to NTSC until a ROM is loaded - see Venus_CPU.md §8.5b.
+        public double FrameRateHz => _core?.FrameRateHz ?? 60.0988;
     }
 }

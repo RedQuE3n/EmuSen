@@ -48,6 +48,10 @@ namespace EmuSen.Cores.Nintendo.Venus
         // undershoot (see Venus_APU.md).
         private const int CyclesPerScanline = 1364;
         private const int TotalScanlines = 262;
+
+        // The SNES's two independent crystals - see Venus_CPU.md §8.5b.
+        private const int MasterClockHz = 21477272;
+        private const int ApuClockHz = 1024000;
         private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
         private readonly bool _headless;
@@ -100,6 +104,9 @@ namespace EmuSen.Cores.Nintendo.Venus
         // a ROM is loaded (no renderer exists yet).
         public int ScreenWidth => Renderer?.FrameWidth ?? 256;
         public int ScreenHeight => 224;
+
+        // 21477272 / (262 * 1364) - not 60 - see Venus_CPU.md §8.5b.
+        public double FrameRateHz => 21477272.0 / (TotalScanlines * (double)CyclesPerScanline);
 
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
@@ -256,8 +263,9 @@ namespace EmuSen.Cores.Nintendo.Venus
                     }
 
                     _phaseStart = Stopwatch.GetTimestamp();
-                    _lineCycles = 0;
-                    Bus.LineCycles = 0;
+                    // Carry the boundary-crossing instruction's overshoot - see Venus_CPU.md §8.5a.
+                    _lineCycles = _lineCycles > CyclesPerScanline ? _lineCycles - CyclesPerScanline : 0;
+                    Bus.LineCycles = _lineCycles;
                     _scanlineStarted = true;
                 }
 
@@ -304,9 +312,10 @@ namespace EmuSen.Cores.Nintendo.Venus
                     // now real per-instruction quantities, so SPC700 pacing
                     // tracks actual elapsed hardware time directly, the
                     // same approach MesenCE's Spc.cpp uses.
-                    int scaledSpc700Cycles = cpuCycles + _spc700CycleRemainder;
-                    _spc700CycleRemainder = scaledSpc700Cycles % 21;
-                    Spc700.CycleBudget += scaledSpc700Cycles / 21;
+                    // Exact 1.024MHz/21.477272MHz ratio, not /21 - see Venus_CPU.md §8.5b.
+                    long scaledSpc700Cycles = (long)cpuCycles * ApuClockHz + _spc700CycleRemainder;
+                    _spc700CycleRemainder = (int)(scaledSpc700Cycles % MasterClockHz);
+                    Spc700.CycleBudget += (int)(scaledSpc700Cycles / MasterClockHz);
                     while (Spc700.CycleBudget > 0)
                     {
                         Spc700.Step();

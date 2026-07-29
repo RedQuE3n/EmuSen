@@ -196,10 +196,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         private byte CopyDmaByte(uint aBusAddress, uint bBusAddress, bool fromBtoA)
         {
             ushort aBusOffset = (ushort)(aBusAddress & 0xFFFF);
-            bool aBusBlocked = (aBusOffset >= 0x2100 && aBusOffset <= 0x21FF)
+            // Bank matters here, not just the offset - see Venus_Memory.md §3.1a.
+            byte aBusBank = (byte)(aBusAddress >> 16);
+            bool aBusIsHardwareBank = aBusBank <= 0x3F || (aBusBank >= 0x80 && aBusBank <= 0xBF);
+            bool aBusBlocked = aBusIsHardwareBank && (
+                (aBusOffset >= 0x2100 && aBusOffset <= 0x21FF)
                 || aBusOffset == 0x420B
                 || aBusOffset == 0x420C
-                || (aBusOffset >= 0x4300 && aBusOffset <= 0x437F);
+                || (aBusOffset >= 0x4300 && aBusOffset <= 0x437F));
 
             if (aBusBlocked)
             {

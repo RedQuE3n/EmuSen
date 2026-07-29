@@ -178,5 +178,11 @@ namespace EmuSen.Debug
 
         // --- Renderer.cs ---
         public static bool WindowingEnabled = true;
+
+        // ANDed into TM/TS to isolate one layer at a time - see EmuSen_Debugging_Tools_Reference_v5.md §3.19.
+        public static int LayerEnableMask = 0x1F;
+
+        // Dumps mid-frame PPU register state, which `regs` cannot see - see §3.19.
+        public static int ScanlineRegisterDumpLine = -1;
     }
 }

@@ -765,7 +765,14 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    EmuSen.DianaOS/DianaOS/Usr/Home/Saves  was 'var/lib' + 'var/games'\n" +
                 "                      (before that, 'SaveStates/' + 'Saves/') - 'state\n" +
                 "                      save'/'state load' snapshots and battery-backed\n" +
-                "                      cartridge SRAM ('.srm')\n\n" +
+                "                      cartridge SRAM ('.srm')\n" +
+                "    .../Usr/Home/Documents                 the EmuSen Manual - project\n" +
+                "                      overview, settings, save states, debugging tools\n" +
+                "    .../Etc/Man pages                      the per-console hardware notes\n" +
+                "                      these shell pages cross-reference\n" +
+                "    .../Usr/Home/{Roms,Games,Music,Pictures}\n" +
+                "                      created empty if absent; nothing is shipped into\n" +
+                "                      them, they exist so the paths are always valid\n\n" +
                 "    Unlike the short mnemonic paths above, Logs and Saves live several\n" +
                 "    levels deep in the real tree, inside the DianaOS project's own source\n" +
                 "    folder - there's no short '/...' alias for them (yet).\n\n" +
@@ -776,6 +783,34 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    'EmuSen.sln', ...) are still visible at the top level alongside the\n" +
                 "    layout above - this shell was always meant to let you poke around the\n" +
                 "    project's own files, not hide them.\n\n" +
+                "WHERE THE ROOT ACTUALLY IS\n" +
+                "    Two cases, decided once at startup by walking up from the running\n" +
+                "    assembly's own folder (not the current directory, which a launcher or\n" +
+                "    shortcut gets to choose and so can't be trusted):\n\n" +
+                "    Running from source   the first parent holding 'EmuSen.sln' - the\n" +
+                "                          project root, as described above. A build output\n" +
+                "                          dir ('bin/Release/net10.0') is three levels down,\n" +
+                "                          so Debug and Release both land on the same root\n" +
+                "                          and share one set of saves and logs.\n\n" +
+                "    Published build       'DianaOSRoot/', created NEXT TO the binary. No\n" +
+                "                          'EmuSen.sln' ships with a published app, so the\n" +
+                "                          walk finds nothing and falls back to this.\n\n" +
+                "    The published case is deliberately a subdirectory rather than the\n" +
+                "    binary's own folder, for two reasons. The first is that it flat out\n" +
+                "    did not work: this tree's own first path segment is\n" +
+                "    'EmuSen.DianaOS', and a published build already has a FILE of exactly\n" +
+                "    that name sitting beside the binary - the DianaOS project's apphost\n" +
+                "    executable. Creating the skeleton then died on 'Not a directory'.\n\n" +
+                "    The second is that it makes the walled garden mean more, not less. If\n" +
+                "    the root were the binary's own folder, every shipped .dll and the\n" +
+                "    running executable itself would sit inside the sandbox, in reach of\n" +
+                "    'rm' and 'mv'. Keeping the root one level in means a published app\n" +
+                "    can only ever damage its own data, never its own install.\n\n" +
+                "    A published root is NOT empty. The two read-only doc trees - Documents\n" +
+                "    (the EmuSen Manual) and Etc/Man pages - are copied in at publish time,\n" +
+                "    so 'man', 'cat', 'find' and 'grep' have the same reference material\n" +
+                "    there as they do running from source. Everything else - Roms, Games,\n" +
+                "    Music, Pictures, Logs, Saves - is created empty on first run.\n\n" +
                 "EXAMPLES\n" +
                 "    man hier\n" +
                 "    ls /\n" +

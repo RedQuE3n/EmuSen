@@ -200,6 +200,39 @@ namespace EmuSen.Pharaoh
                              $"{rewind.BufferedBytes / 1024}KB held, {rewind.SnapshotBytes / 1024}KB per raw state, every {rewind.IntervalFrames} frame(s).");
                     }
                 }
+                else if (verb == "perf")
+                {
+                    // Per-frame cost profile over a window - see §3.20.
+                    emit($"> {cmdLine}");
+                    long count = parts.Length >= 2 ? long.Parse(parts[1]) : 300;
+                    int worst = parts.Length >= 3 ? int.Parse(parts[2]) : 5;
+                    emit(RunPerf(count, worst));
+                }
+                else if (verb == "framesum")
+                {
+                    // Output-identity digest over a window - see §3.21.
+                    emit($"> {cmdLine}");
+                    emit(RunFrameSum(parts.Length >= 2 ? long.Parse(parts[1]) : 300));
+                }
+                else if (verb == "layers")
+                {
+                    // Isolates one layer at a time - see §3.19.
+                    emit($"> {cmdLine}");
+                    string spec = parts.Length >= 2 ? parts[1].ToLowerInvariant() : "all";
+                    int mask = spec switch
+                    {
+                        "all" => 0x1F,
+                        "none" => 0x00,
+                        "bg1" => 0x01,
+                        "bg2" => 0x02,
+                        "bg3" => 0x04,
+                        "bg4" => 0x08,
+                        "obj" => 0x10,
+                        _ => Convert.ToInt32(spec, 16)
+                    };
+                    EmuSen.Debug.DebugSettings.LayerEnableMask = mask;
+                    emit($"[LAYERS] Mask 0x{mask:X2} - {(mask == 0x1F ? "all layers" : DescribeLayerMask(mask))}.");
+                }
                 else if (verb == "vramsheet" && parts.Length >= 2)
                 {
                     // IDebugTarget.RenderTileSheet(), not Renderer directly - core-agnostic.
@@ -245,6 +278,90 @@ namespace EmuSen.Pharaoh
             }
 
             return true;
+        }
+
+        // Wall clock per frame plus the core's own phase breakdown, so a
+        // slow game can be attributed rather than just observed - see §3.20.
+        private string RunPerf(long count, int worstCount)
+        {
+            var core = runner.Core;
+            var wall = new double[count];
+            var cpu = new double[count];
+            var ppu = new double[count];
+            var hdma = new double[count];
+            var objEval = new double[count];
+            var blend = new double[count];
+            var mainComp = new double[count];
+            var subComp = new double[count];
+
+            double toMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            long taken = 0;
+            for (long i = 0; i < count; i++)
+            {
+                if (runner.CurrentFrame >= runner.FrameCap) break;
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                runner.RunFrames(1);
+                wall[i] = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * toMs;
+                cpu[i] = core.LastFrameCpuSpc700Ms;
+                ppu[i] = core.LastFramePpuMs;
+                hdma[i] = core.LastFrameHdmaMs;
+                objEval[i] = core.LastFrameObjEvalMs;
+                blend[i] = core.LastFrameBlendMs;
+                mainComp[i] = core.LastFrameMainCompositeMs;
+                subComp[i] = core.LastFrameSubCompositeMs;
+                taken++;
+            }
+            if (taken == 0) return "[PERF] No frames ran - already at the safety cap.";
+
+            var sortedWall = wall.Take((int)taken).OrderBy(v => v).ToArray();
+            double Pct(double p) => sortedWall[Math.Min(sortedWall.Length - 1, (int)(p * sortedWall.Length))];
+            double Mean(double[] a) => a.Take((int)taken).Average();
+            double budget = 1000.0 / core.FrameRateHz;
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"[PERF] {taken} frame(s) to frame {runner.CurrentFrame}, budget {budget:F2}ms/frame at {core.FrameRateHz:F2}Hz.");
+            sb.AppendLine($"  wall  mean {Mean(wall):F2}ms ({1000.0 / Mean(wall):F1} fps)  p50 {Pct(0.50):F2}  p95 {Pct(0.95):F2}  max {sortedWall[^1]:F2}");
+            sb.AppendLine($"  over budget: {sortedWall.Count(v => v > budget)}/{taken} frame(s)");
+            sb.AppendLine($"  cpu+spc700 {Mean(cpu):F2}ms   ppu {Mean(ppu):F2}ms   hdma {Mean(hdma):F2}ms   unattributed {Mean(wall) - Mean(cpu) - Mean(ppu) - Mean(hdma):F2}ms");
+            sb.AppendLine($"  ppu split: mainComposite {Mean(mainComp):F2}ms  subComposite {Mean(subComp):F2}ms  objEval {Mean(objEval):F2}ms  blend {Mean(blend):F2}ms");
+
+            var worst = Enumerable.Range(0, (int)taken).OrderByDescending(i => wall[i]).Take(worstCount);
+            foreach (int i in worst)
+            {
+                sb.AppendLine($"  worst frame +{i}: {wall[i]:F2}ms (cpu {cpu[i]:F2} ppu {ppu[i]:F2} hdma {hdma[i]:F2})");
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        // Folds every frame's FrameHash into one digest, so a renderer change can be
+        // shown pixel-identical across a whole window, not one sampled frame - see §3.21.
+        private string RunFrameSum(long count)
+        {
+            const ulong FnvOffsetBasis = 14695981039346656037;
+            const ulong FnvPrime = 1099511628211;
+
+            var core = runner.Core;
+            ulong digest = FnvOffsetBasis;
+            long taken = 0;
+            for (long i = 0; i < count; i++)
+            {
+                if (runner.CurrentFrame >= runner.FrameCap) break;
+                runner.RunFrames(1);
+                digest = (digest ^ FrameHash.Compute(core.GetFrameBufferRgba())) * FnvPrime;
+                taken++;
+            }
+            return $"[FRAMESUM] {taken} frame(s) to frame {runner.CurrentFrame}: {digest:X16}";
+        }
+
+        private static string DescribeLayerMask(int mask)
+        {
+            var names = new List<string>();
+            if ((mask & 0x01) != 0) names.Add("BG1");
+            if ((mask & 0x02) != 0) names.Add("BG2");
+            if ((mask & 0x04) != 0) names.Add("BG3");
+            if ((mask & 0x08) != 0) names.Add("BG4");
+            if ((mask & 0x10) != 0) names.Add("OBJ");
+            return names.Count == 0 ? "nothing" : string.Join('+', names);
         }
 
         // "1E" or "1E,00" or "1E 00" - see §3.15's waitvalue entry.

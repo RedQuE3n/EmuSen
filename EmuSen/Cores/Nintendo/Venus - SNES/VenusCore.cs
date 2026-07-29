@@ -54,6 +54,10 @@ namespace EmuSen.Cores.Nintendo.Venus
         private const int ApuClockHz = 1024000;
         private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
+        // "SNES" little-endian, then the format version - see EmuSen_Save_States.md §3.
+        private const uint StateMagic = 0x53454E53;
+        private const int StateVersion = 1;
+
         private readonly bool _headless;
         private int _currentScanline;
 
@@ -110,6 +114,9 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
+
+        // Drops the per-scanline pixel pass only - see EmuSen_Rewind_And_FastForward.md §2.2.
+        public bool SkipRendering { get; set; }
 
         // True from the instant RunFrame() halts on a breakpoint (or an
         // armed single-step - see BreakpointRegistry) until the next
@@ -347,7 +354,9 @@ namespace EmuSen.Cores.Nintendo.Venus
                     long afterPpu = Stopwatch.GetTimestamp();
                     _hdmaTicksAccum += afterPpu - afterCpuSpc700;
 
-                    if (_currentScanline < 224)
+                    // HDMA above still runs; only the pixel pass drops - see
+                    // EmuSen_Rewind_And_FastForward.md §2.2.
+                    if (_currentScanline < 224 && !SkipRendering)
                     {
                         Renderer.RenderScanline(Bus, _currentScanline);
                     }
@@ -458,15 +467,29 @@ namespace EmuSen.Cores.Nintendo.Venus
         // loads correctly against the exact build that created it.
         public void SaveState(string path)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            using var stream = new FileStream(path, FileMode.Create);
+            SaveState(stream);
+        }
+
+        public void LoadState(string path)
+        {
+            using var stream = new FileStream(path, FileMode.Open);
+            LoadState(stream);
+        }
+
+        // leaveOpen: the caller owns the stream - see ICore's own comment.
+        public void SaveState(Stream stream)
+        {
             if (Cart is null || Cpu is null || Bus is null || Spc700 is null)
             {
                 throw new InvalidOperationException("SaveState() called before LoadRom().");
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            using var stream = new FileStream(path, FileMode.Create);
-            using var w = new BinaryWriter(stream);
+            using var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
 
+            w.Write(StateMagic);
+            w.Write(StateVersion);
             w.Write(TotalFrames);
             w.Write(_currentScanline);
             StateSerializer.Write(w, Cart);
@@ -475,22 +498,49 @@ namespace EmuSen.Cores.Nintendo.Venus
             StateSerializer.Write(w, Spc700);
         }
 
-        public void LoadState(string path)
+        public void LoadState(Stream stream)
         {
             if (Cart is null || Cpu is null || Bus is null || Spc700 is null)
             {
                 throw new InvalidOperationException("LoadState() called before LoadRom().");
             }
 
-            using var stream = new FileStream(path, FileMode.Open);
-            using var r = new BinaryReader(stream);
+            using var r = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+
+            // Pre-v1 files start straight in on TotalFrames with no header,
+            // and carry the DSP RAM aliases - see EmuSen_Save_States.md §2.
+            bool legacy = !TryReadHeader(r, stream);
 
             TotalFrames = r.ReadInt64();
             _currentScanline = r.ReadInt32();
-            StateSerializer.Read(r, Cart);
-            StateSerializer.Read(r, Cpu);
-            StateSerializer.Read(r, Bus);
-            StateSerializer.Read(r, Spc700);
+            StateSerializer.Read(r, Cart, legacy);
+            StateSerializer.Read(r, Cpu, legacy);
+            StateSerializer.Read(r, Bus, legacy);
+            StateSerializer.Read(r, Spc700, legacy);
+        }
+
+        // Consumes the header if present, rewinds and reports false if not.
+        private static bool TryReadHeader(BinaryReader r, Stream stream)
+        {
+            if (!stream.CanSeek)
+            {
+                throw new NotSupportedException("LoadState() needs a seekable stream to tell a versioned state from a pre-v1 one.");
+            }
+
+            long start = stream.Position;
+            if (stream.Length - start < sizeof(uint) + sizeof(int)) return false;
+
+            if (r.ReadUInt32() != StateMagic) { stream.Position = start; return false; }
+
+            int version = r.ReadInt32();
+            if (version > StateVersion)
+            {
+                throw new InvalidDataException($"Save state is version {version}; this build understands up to {StateVersion}.");
+            }
+            // Magic matched but the version is nonsense - a pre-v1 file whose
+            // TotalFrames happened to collide. Treat it as one.
+            if (version < 1) { stream.Position = start; return false; }
+            return true;
         }
 
         public void SaveSram()

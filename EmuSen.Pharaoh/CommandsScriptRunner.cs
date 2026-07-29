@@ -156,6 +156,50 @@ namespace EmuSen.Pharaoh
                         ? $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} satisfied after {stepped} frame(s): {from} -> {to} (frame {runner.CurrentFrame})."
                         : $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} NOT satisfied - still {to} after {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
                 }
+                else if (verb == "fastforward" || verb == "ff")
+                {
+                    // Headless already runs unpaced, so this is frame skip only - see §3.15.
+                    emit($"> {cmdLine}");
+                    bool on = parts.Length < 2 || parts[1].Equals("on", StringComparison.OrdinalIgnoreCase);
+                    core.SkipRendering = on;
+                    emit($"[FASTFORWARD] Scanline rendering {(on ? "OFF - frames advance without drawing" : "ON")} (frame {runner.CurrentFrame}).");
+                }
+                else if (verb == "rewind")
+                {
+                    emit($"> {cmdLine}");
+                    string mode = parts.Length >= 2 ? parts[1].ToLowerInvariant() : "info";
+                    var rewind = runner.Rewind;
+
+                    if (mode == "on")
+                    {
+                        if (parts.Length >= 3) rewind.IntervalFrames = int.Parse(parts[2]);
+                        if (parts.Length >= 4) rewind.BudgetBytes = long.Parse(parts[3]) * 1024 * 1024;
+                        rewind.Enabled = true;
+                        rewind.CaptureNow(core);
+                        emit($"[REWIND] On - snapshot every {rewind.IntervalFrames} frame(s), budget {rewind.BudgetBytes / (1024 * 1024)}MB, {rewind.SnapshotBytes / 1024}KB per raw state.");
+                    }
+                    else if (mode == "off")
+                    {
+                        rewind.Enabled = false;
+                        rewind.Clear();
+                        emit("[REWIND] Off - chain cleared.");
+                    }
+                    else if (mode == "back")
+                    {
+                        int steps = parts.Length >= 3 ? int.Parse(parts[2]) : 1;
+                        int done = runner.StepBack(steps);
+                        // No RunFrame() ran, so regs/sprites/pal would be stale - see §3.15.
+                        debugTarget.RefreshProviders();
+                        emit(done == steps
+                            ? $"[REWIND] Stepped back {done} snapshot(s) - now at frame {runner.CurrentFrame}, {rewind.Depth} left."
+                            : $"[REWIND] Only {done} of {steps} snapshot(s) available - now at frame {runner.CurrentFrame}, chain exhausted.");
+                    }
+                    else
+                    {
+                        emit($"[REWIND] {(rewind.Enabled ? "On" : "Off")} - depth {rewind.Depth} ({rewind.BufferedSeconds(core.FrameRateHz):F1}s), " +
+                             $"{rewind.BufferedBytes / 1024}KB held, {rewind.SnapshotBytes / 1024}KB per raw state, every {rewind.IntervalFrames} frame(s).");
+                    }
+                }
                 else if (verb == "vramsheet" && parts.Length >= 2)
                 {
                     // IDebugTarget.RenderTileSheet(), not Renderer directly - core-agnostic.

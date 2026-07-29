@@ -10,7 +10,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
     {
         private byte[] _registers = new byte[128];
         private byte _registerAddress;
-        private byte[] _ram = null!;
+        // Spc700.Ram, attached in AttachMemory - see EmuSen_Save_States.md §2.
+        [EmuSen.Common.AliasOfSerializedField] private byte[] _ram = null!;
 
         private readonly DspVoice[] _voices = new DspVoice[8];
         private byte _prevKon;

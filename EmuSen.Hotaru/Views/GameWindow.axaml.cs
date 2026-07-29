@@ -167,6 +167,13 @@ namespace EmuSen.Hotaru.Views
         private volatile bool _requestDumpBackdrop;
         private volatile bool _requestStartBgScrollTrace;
 
+        // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
+        private volatile bool _turboHeld;
+        private volatile bool _rewindHeld;
+
+        private readonly EmuSen.Common.SpeedController _speed = new();
+        private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true };
+
         private readonly HashSet<Key> _heldPhysicalKeys = new();
 
         // 'feed's own way back into the F4 prompt without needing this
@@ -321,6 +328,8 @@ namespace EmuSen.Hotaru.Views
                 case Key.F9: _requestLoadState = true; break;
                 case Key.O: _requestDumpBackdrop = true; break;
                 case Key.P: _requestStartBgScrollTrace = true; break;
+                case Key.Tab: _turboHeld = true; e.Handled = true; break; // Handled or Avalonia steals Tab for focus traversal
+                case Key.Back: _rewindHeld = true; break;
             }
         }
 
@@ -331,6 +340,13 @@ namespace EmuSen.Hotaru.Views
             {
                 _keyboardHeld[(int)button] = false;
                 ApplyButtonState(button);
+                return;
+            }
+
+            switch (e.Key)
+            {
+                case Key.Tab: _turboHeld = false; break;
+                case Key.Back: _rewindHeld = false; break;
             }
         }
 
@@ -428,6 +444,7 @@ namespace EmuSen.Hotaru.Views
             }
 
             _core.LoadRom(romPath);
+            _rewind.Clear(); // a discontinuous jump - see §1.4
             RebuildDebugTargetAndCommands();
             // Without this, an already-open `coretop -w` window would
             // silently keep showing the OLD, now-discarded target forever
@@ -438,9 +455,6 @@ namespace EmuSen.Hotaru.Views
             DebugWindows.UpdateCoretopWindowTargetIfOpen(_debugTarget);
             Console.WriteLine($"[CORE] Loaded: {romPath}");
         }
-
-        // Paces RunFrame() to real time, off the core's own rate - see Venus_CPU.md §8.5b.
-        private TimeSpan FrameInterval => TimeSpan.FromSeconds(1.0 / _core.FrameRateHz);
 
         // Runs entirely off the UI thread - see this file's own header
         // comment on the threading model.
@@ -453,7 +467,25 @@ namespace EmuSen.Hotaru.Views
             {
                 while (_running)
                 {
-                    nextTick += FrameInterval;
+                    _speed.SetTurbo(_turboHeld);
+                    TimeSpan interval = _speed.FrameInterval(_core.FrameRateHz);
+                    nextTick += interval;
+
+                    // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.
+                    if (_rewindHeld)
+                    {
+                        _core.SkipRendering = false;
+                        if (!_rewind.Rewind(_core)) nextTick = clock.Elapsed;
+                        // No RunFrame() ran, so these would otherwise be stale - see §3.
+                        _debugTarget.RefreshProviders();
+                        _core.DequeueAudioSamples(int.MaxValue);
+                        SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
+                        if (ProcessPendingConsoleCommands()) { RequestClose(); return; }
+                        SleepUntil(nextTick, clock);
+                        continue;
+                    }
+
+                    _core.SkipRendering = !_speed.ShouldRender(_core.TotalFrames);
 
                     _core.RunFrame();
 
@@ -481,9 +513,14 @@ namespace EmuSen.Hotaru.Views
                         continue;
                     }
 
-                    _audioPlayer.Pump(_core);
+                    _rewind.OnFrameCompleted(_core);
 
-                    SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
+                    // Drained, not just unpumped, when speed outruns the device - see §2.3.
+                    if (_speed.ShouldPlayAudio) _audioPlayer.Pump(_core);
+                    else _core.DequeueAudioSamples(int.MaxValue);
+
+                    // Nothing new was drawn on a skipped frame.
+                    if (!_core.SkipRendering) SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
 
                     if (ProcessHotkeys()) { RequestClose(); return; }
                     if (ProcessPendingConsoleCommands()) { RequestClose(); return; }
@@ -611,6 +648,7 @@ namespace EmuSen.Hotaru.Views
             try
             {
                 _core.LoadState(path);
+                _rewind.Clear(); // a discontinuous jump - see §1.4
                 Console.WriteLine($"[STATE] Loaded: {path}");
             }
             catch (Exception ex)

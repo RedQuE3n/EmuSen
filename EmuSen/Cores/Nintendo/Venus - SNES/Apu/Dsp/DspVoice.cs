@@ -32,7 +32,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         };
 
         private readonly BrrDecoder _brr = new BrrDecoder();
-        private byte[] _ram = null!;
+        // Spc700.Ram, attached in AttachMemory - see EmuSen_Save_States.md §2.
+        [EmuSen.Common.AliasOfSerializedField] private byte[] _ram = null!;
 
         // Circular buffer of the last 12 decoded (doubled-representation -
         // see BrrDecoder.DecodeQuad) samples - holds more than just the

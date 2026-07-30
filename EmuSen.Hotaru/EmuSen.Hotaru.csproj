@@ -32,6 +32,8 @@
          (Audio/AudioPlayer.cs) - both duplicated from EmuSen.Mistress's
          own copies, which already carry this exact dependency. -->
     <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
+    <!-- The SDL2 binary itself - see EmuSen_Settings_Reference.md §4.9. -->
+    <PackageReference Include="Ultz.Native.SDL" Version="2.32.10" />
     <!-- Native X11 backend - opted into explicitly in Program.cs
          (Linux only), matching EmuSen.Mistress's own Program.cs. -->
     <PackageReference Include="Avalonia.X11" Version="12.1.0" />

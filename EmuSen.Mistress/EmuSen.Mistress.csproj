@@ -33,6 +33,8 @@
          API surface hasn't been independently verified against current docs
          the way everything else has. -->
     <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
+    <!-- The SDL2 binary itself - see EmuSen_Settings_Reference.md §4.9. -->
+    <PackageReference Include="Ultz.Native.SDL" Version="2.32.10" />
     <!-- Native X11 backend, shipped in 12.1. Not picked up by
          UsePlatformDetect() automatically on a Wayland session - opted into
          explicitly in Program.cs (Linux only, see comments there). -->

@@ -173,3 +173,26 @@ Both types are constructed by hand with their real dependencies: `Program.cs` re
 Adding one is not an improvement. `GameWindow`'s constructor starts the emulation thread, the console-reader thread, a 60 Hz gamepad timer and an SDL handle, so a parameterless overload chaining into it would spawn all of that from the previewer — and one that skipped it would leave the class's `readonly` fields unassigned, trading this warning for a fistful of CS8618s and a half-built window.
 
 Scoped to that one project deliberately. `EmuSen.Mistress` satisfies the analyzer naturally (its `MainWindow` and `InputSettingsWindow` both have real parameterless constructors) and keeps the warning live.
+
+### 4.9 Publishing a frontend that actually starts
+
+Two things have to be right or a published build dies on launch, and neither shows up when testing on a development machine.
+
+**SDL2 must be shipped, not assumed.** `Silk.NET.SDL` is bindings only — it contains no native binary. `GamepadManager` and `AudioPlayer` both call `Sdl.GetApi()` from `MainWindow`'s constructor, so without a loadable SDL2 the app throws `FileNotFoundException: Could not load from any of the possible library names!` before a window ever appears. The native lives in a separate package, **`Ultz.Native.SDL`** (Ultz is the Silk.NET org; there is no `Silk.NET.SDL.Native`), which carries `SDL2.dll`, `libSDL2-2.0.so` and a universal `libSDL2-2.0.dylib`. Both `EmuSen.Mistress` and `EmuSen.Hotaru` reference it.
+
+A Linux dev box usually has SDL2 installed system-wide, so this fault is invisible locally and appears only on a clean Windows or macOS machine.
+
+**Do not publish `-p:PublishSingleFile=true`.** It produces one tidy executable that then fails to resolve SDL2 even with the native package referenced — Silk.NET's own loader does not find the library the single-file host extracts. A plain self-contained folder publish puts `libSDL2-2.0.so` next to the executable where it resolves normally. Verified by launching both, same machine, same commit: folder publish runs, single-file throws at `Sdl.GetApi()`.
+
+So the working recipe per RID is:
+
+```
+dotnet publish <app>/<app>.csproj -c Release -r <rid> --self-contained true \
+  -p:DebugType=none -p:ErrorOnDuplicatePublishOutputFiles=false -o <out>
+```
+
+`ErrorOnDuplicatePublishOutputFiles=false` is needed because the `EmuSen.DianaOS` executable project reference gets built twice (§ its own csproj comment), emitting `EmuSen.DianaOS.runtimeconfig.json` from both the target RID and the host.
+
+**Verifying a build launches.** Running it with no `DISPLAY` is *not* a launch test: Avalonia dies at X11 initialisation before `MainWindow`'s constructor runs, so everything SDL-related is never reached and a broken build looks fine. Launch it on a real display and check it is still alive several seconds later.
+
+**macOS cannot be finished from Linux.** Apple Silicon refuses to execute an unsigned arm64 binary outright, so clearing quarantine is not enough; the user must ad-hoc sign (`codesign --force --deep --sign - <name>.app`). There is no signing tool on the Linux build machine.

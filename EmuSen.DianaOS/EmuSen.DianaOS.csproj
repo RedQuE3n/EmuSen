@@ -11,6 +11,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- OutputType=Exe above means a RID-specific publish of a frontend that
+         references this project also builds it for the HOST rid, so restore
+         has to produce assets for every publish target plus the build
+         machine's own - see `man hier`. -->
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>

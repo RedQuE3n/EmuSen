@@ -1,8 +1,5 @@
 using System;
-using System.Numerics;
 using Raylib_cs;
-using EmuSen.Cores.Nintendo.Venus.Memory;
-using EmuSen.Debug;
 using EmuSen.Graphics;
 
 namespace EmuSen.Cores.Nintendo.Venus.Video
@@ -32,24 +29,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private const int LayerBg4 = 4;
         private const int LayerObj = 5;
 
-        // Debug-panel-only texture (VRAM tile sheet). The actual game
-        // screen no longer gets its own Raylib texture/window here - that
-        // moved to EmuSen.Presentation.FramePresenter, which drives every
-        // core through the agnostic GetFrameBufferRgba() contract below
-        // instead of reaching into this class's internals. This texture is
-        // created lazily on first DrawDebugPanels() call, once
-        // FramePresenter's window already exists.
-        // A raw GPU handle, not emulated state - nothing to restore it TO
-        // even in windowed mode (there's no "sheet texture" content that
-        // isn't already re-derivable from VRAM), and StateSerializer has
-        // no case for Texture2D's underlying IntPtr regardless. Surfaced
-        // by the headless debug harness's own --savestate/--loadstate
-        // smoke test: SaveState() threw on every headless run before this,
-        // since Renderer (and this field) exist unconditionally even with
-        // headless: true.
-        [EmuSen.Common.SkipInState] private Texture2D _sheetTex;
-        private bool _sheetTexReady;
-
         // Allocated at max width so a hi-res toggle never needs
         // reallocation - see Venus_PPU.md §8.
         private Color[] _screenPixels = new Color[MaxOutputW * ScreenH];
@@ -64,30 +43,23 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private int[] _mainLineLayer = new int[ScreenW];
         private int[] _subLineLayer = new int[ScreenW];
 
-        // headless=true skips window/texture creation entirely - used when a
-        // non-Raylib frontend (e.g. the Avalonia EmuSen.TestingStudio project) is
-        // driving frames itself and just wants the finished pixel buffer via
-        // GetFrameBufferRgba(), not an on-screen Raylib window. RenderScanline
-        // and the Bg/Obj compositing it calls have no Raylib dependency at all
-        // (they only touch the plain Color[] buffers below), so headless mode
-        // just means DrawDebugPanels() no-ops - nothing elsewhere changes.
-        //
-        // No window/screen-texture setup happens here anymore - the console
-        // build creates its window via EmuSen.Presentation.FramePresenter
-        // before driving any frames, so by the time DrawDebugPanels() lazily
-        // allocates _sheetTex a window is already guaranteed to exist.
+        // headless=true is a no-op flag today - kept for call-site/save-
+        // state-format stability (every VenusCore(headless:) call site and
+        // EmulatorSession still pass one) after the on-window Raylib debug
+        // overlay (VRAM tile sheet, CGRAM swatch, PPU register text - see
+        // git history for DrawDebugPanels/Shutdown) was removed entirely
+        // rather than ported: DianaOS's regs/sprites/pal/tile/vramsheet/
+        // paletteswatch commands and the coretop dashboard already cover
+        // the exact same data, and EmuSen.Mistress (always headless: true)
+        // never had this overlay to begin with, proving it wasn't load-
+        // bearing. RenderScanline and the Bg/Obj compositing it calls have
+        // no rendering-API dependency at all (they only touch the plain
+        // Color[] buffers below), so this flag no longer gates anything.
         private readonly bool _headless;
 
         public Renderer(bool headless = false)
         {
             _headless = headless;
-        }
-
-        public void Shutdown()
-        {
-            if (_headless || !_sheetTexReady) return;
-            Raylib.UnloadTexture(_sheetTex);
-            _sheetTexReady = false;
         }
 
         // Plain RGBA8888 copy of the finished frame - the boundary non-
@@ -241,46 +213,5 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        // Draws debug-only overlays (VRAM tile sheet, CGRAM swatches, PPU
-        // register text) into whichever Raylib render target is currently
-        // active. Meant to run as FramePresenter.Present()'s drawOverlay
-        // callback, after the game screen itself has already been drawn
-        // there - see FramePresenter for why the game screen no longer
-        // goes through this class at all. No-ops if debug panels are
-        // switched off or this Renderer is headless (Avalonia).
-        public void DrawDebugPanels(MemoryBus bus, long frame)
-        {
-            if (_headless || !GraphicsSettings.ShowDebugPanels) return;
-
-            Ppu ppu = bus.Ppu;
-
-            if (!_sheetTexReady)
-            {
-                Image sheet = Raylib.GenImageColor(SheetW, SheetH, new Color(0, 0, 0, 255));
-                _sheetTex = Raylib.LoadTextureFromImage(sheet);
-                Raylib.UnloadImage(sheet);
-                _sheetTexReady = true;
-            }
-
-            RenderVramSheet(ppu);
-            Raylib.UpdateTexture(_sheetTex, _sheetPixels);
-
-            Color label = new Color(200, 200, 210, 255);
-
-            Raylib.DrawText($"Frame {frame}   BGMODE={ppu.Bgmode:X2}  TM={ppu.Tm:X2}  TS={ppu.Ts:X2}  CGWSEL={ppu.Cgwsel:X2}  CGADSUB={ppu.Cgadsub:X2}  INIDISP={ppu.Inidisp:X2}", 16, 12, 18, label);
-            Raylib.DrawText($"W12SEL={ppu.W12Sel:X2} W34SEL={ppu.W34Sel:X2} WOBJSEL={ppu.WObjSel:X2} WH0={ppu.Wh0} WH1={ppu.Wh1} WH2={ppu.Wh2} WH3={ppu.Wh3} WBGLOG={ppu.WBgLog:X2} WOBJLOG={ppu.WObjLog:X2} TMW={ppu.Tmw:X2} TSW={ppu.Tsw:X2}", 16, 590, 14, label);
-            Raylib.DrawText($"FixedColor R={ppu.FixedColorR} G={ppu.FixedColorG} B={ppu.FixedColorB}   CGRAM[0]=0x{ppu.Cgram[0]:X2}{ppu.Cgram[1]:X2}", 16, 585, 16, label);
-            Raylib.DrawText("BG1", 16, 40, 16, label);
-
-            Raylib.DrawText("VRAM tiles (4bpp)", 560, 40, 16, label);
-            Raylib.DrawTextureEx(_sheetTex, new Vector2(560, 60), 0f, 1f, new Color(255, 255, 255, 255));
-            Raylib.DrawText("CGRAM", 850, 40, 16, label);
-
-            for (int i = 0; i < 256; i++)
-            {
-                Color c = SnesColor(ppu.Cgram[i * 2], ppu.Cgram[i * 2 + 1], 1f);
-                Raylib.DrawRectangle(850 + (i % 16) * 12, 60 + (i / 16) * 12, 11, 11, c);
-            }
-        }
     }
 }

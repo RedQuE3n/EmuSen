@@ -23,6 +23,11 @@ namespace EmuSen.Common
     [AttributeUsage(AttributeTargets.Field)]
     public class SkipInStateAttribute : Attribute { }
 
+    // An alias of an array another field already serializes - written by the
+    // pre-v1 format, skipped since. See EmuSen_Save_States.md §2.
+    [AttributeUsage(AttributeTargets.Field)]
+    public class AliasOfSerializedFieldAttribute : Attribute { }
+
     // Walks every instance field (public and private, excluding static/const
     // and anything marked [SkipInState]) of an object graph, in a fixed
     // alphabetical order so write and read always agree. Fields of an
@@ -31,37 +36,34 @@ namespace EmuSen.Common
     // graph is already sized correctly by its owning class's constructor
     // before a save or load ever happens.
     //
-    // Known limitation, stated plainly: this format has no version header
-    // and no field-name tagging. A save state is only guaranteed to load
-    // correctly against the exact build that created it - if a field gets
-    // added, removed, or reordered on either side, loading an old save
-    // state will misalign and produce garbage (or throw) rather than fail
-    // gracefully. That's a real gap, not an oversight; a versioned format
-    // is a reasonable follow-up if save states need to survive across
-    // builds, but isn't attempted here.
+    // Still has no field-name tagging: adding, removing, or reordering a
+    // field breaks older files unless the version is bumped and a read path
+    // kept for the old layout - see EmuSen_Save_States.md §1/§3.
     public static class StateSerializer
     {
         public static void Write(BinaryWriter w, object obj)
         {
-            foreach (FieldInfo field in GetStateFields(obj.GetType()))
+            foreach (FieldInfo field in GetStateFields(obj.GetType(), includeAliases: false))
             {
                 WriteValue(w, field.FieldType, field.GetValue(obj));
             }
         }
 
-        public static void Read(BinaryReader r, object obj)
+        // includeAliases: true only when reading a pre-v1 file - see EmuSen_Save_States.md §2.
+        public static void Read(BinaryReader r, object obj, bool includeAliases = false)
         {
-            foreach (FieldInfo field in GetStateFields(obj.GetType()))
+            foreach (FieldInfo field in GetStateFields(obj.GetType(), includeAliases))
             {
-                ReadValue(r, field, obj);
+                ReadValue(r, field, obj, includeAliases);
             }
         }
 
-        private static FieldInfo[] GetStateFields(Type type)
+        private static FieldInfo[] GetStateFields(Type type, bool includeAliases)
         {
             return type
                 .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 .Where(f => f.GetCustomAttribute<SkipInStateAttribute>() == null)
+                .Where(f => includeAliases || f.GetCustomAttribute<AliasOfSerializedFieldAttribute>() == null)
                 .OrderBy(f => f.Name, StringComparer.Ordinal)
                 .ToArray();
         }
@@ -109,7 +111,7 @@ namespace EmuSen.Common
             throw new NotSupportedException($"StateSerializer: unsupported field type {t} - add a case or mark it [SkipInState].");
         }
 
-        private static void ReadValue(BinaryReader r, FieldInfo field, object owner)
+        private static void ReadValue(BinaryReader r, FieldInfo field, object owner, bool includeAliases)
         {
             Type t = field.FieldType;
 
@@ -140,14 +142,14 @@ namespace EmuSen.Common
 
             if (t.IsArray)
             {
-                foreach (object item in (Array)field.GetValue(owner)!) Read(r, item);
+                foreach (object item in (Array)field.GetValue(owner)!) Read(r, item, includeAliases);
                 return;
             }
 
             if (t.IsClass)
             {
                 bool hasValue = r.ReadBoolean();
-                if (hasValue) Read(r, field.GetValue(owner)!);
+                if (hasValue) Read(r, field.GetValue(owner)!, includeAliases);
                 return;
             }
 

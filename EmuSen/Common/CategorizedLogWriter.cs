@@ -12,7 +12,7 @@ namespace EmuSen.Common
     // play session (WATCH/SCROLL/DMA-SRC traces are all extremely
     // high-volume), which made the file slow to search and, in practice,
     // too large to hand off for review at all. Categories mirror the same
-    // CPU/PPU/APU/Memory split Man pages/Hardware/ already uses, plus a
+    // CPU/PPU/APU/Memory split EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/ already uses, plus a
     // "debug" bucket for the core-agnostic debug toolchain's own output
     // (watch/state/status/error) and a "general" catch-all for anything
     // that isn't tagged with a recognized bracketed prefix at all (ROM
@@ -29,7 +29,7 @@ namespace EmuSen.Common
     // DmaVerboseLogging, etc.) used to route straight into a StreamWriter
     // with AutoFlush=true - a real disk write/OS syscall per line, on
     // whichever thread is driving emulation (the Avalonia GUI's 60fps
-    // DispatcherTimer tick, in EmuSen.TestingStudio's case). The calling
+    // DispatcherTimer tick, in EmuSen.Mistress's case). The calling
     // thread now just resolves which category a line belongs to (cheap -
     // a prefix match against an in-memory table) and hands the line to a
     // bounded queue; a single consumer thread drains it and does the
@@ -289,8 +289,8 @@ namespace EmuSen.Common
         }
 
         // Both frontends now call this explicitly on every exit path
-        // (EmuSen.RaylibFrontend's Program.cs in a finally block;
-        // EmuSen.TestingStudio's MainWindow on window-close and before
+        // (EmuSen.Hotaru's Program.cs in a finally block;
+        // EmuSen.Mistress's MainWindow on window-close and before
         // starting a fresh session for the next loaded ROM). That used to
         // only matter for the long-lived Avalonia build - the console
         // build got away with never disposing at all, back when

@@ -34,11 +34,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Validation
             // internal state that isn't part of a test's own declared
             // registers - without this, one halted test poisons every
             // test after it, the same class of bug the 65816 harness had
-            // with WAI/STP before it was fixed. Reset() also stamps the
-            // IPL ROM into upper RAM, so it must run BEFORE the array
-            // clear below, not after.
+            // with WAI/STP before it was fixed.
             _spc.Reset();
             Array.Clear(_spc.Ram, 0, _spc.Ram.Length);
+            // These vectors model a flat 64K RAM; the overlay Reset() turns
+            // on would shadow $FFC0-$FFFF - see Venus_APU.md §1.1.
+            _spc.IplRomEnabled = false;
         }
 
         public void SetRegister(string name, int value)

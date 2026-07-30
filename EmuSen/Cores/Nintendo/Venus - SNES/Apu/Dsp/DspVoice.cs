@@ -1,6 +1,12 @@
 using System;
 using EmuSen.Audio;
 using EmuSen.Debug;
+using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
@@ -26,7 +32,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         };
 
         private readonly BrrDecoder _brr = new BrrDecoder();
-        private byte[] _ram = null!;
+        // Spc700.Ram, attached in AttachMemory - see EmuSen_Save_States.md §2.
+        [EmuSen.Common.AliasOfSerializedField] private byte[] _ram = null!;
 
         // Circular buffer of the last 12 decoded (doubled-representation -
         // see BrrDecoder.DecodeQuad) samples - holds more than just the
@@ -69,6 +76,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         public bool Ended { get; private set; }
 
+        // Debug-only observability, added building out the DSP toolchain
+        // (see SDsp.GetVoiceDebugInfo/IDebugTarget.AudioChannels) -
+        // none of this affects real playback, it just surfaces state that
+        // was previously only visible via Console-printed KeyOn logging
+        // (DebugSettings.DspKeyOnLogging), which meant "has this voice
+        // ever actually triggered" required grepping console output
+        // instead of a structured query.
+        public bool IsActive => _active;
+        public int EnvelopeLevel => _envelope;
+        public string StageName => _stage.ToString();
+        public int KeyOnCount { get; private set; }
+        public long LastKeyOnSample => _lastKeyOnSample == long.MinValue ? -1 : _lastKeyOnSample;
+
         public void Reset()
         {
             _brr.Reset();
@@ -103,11 +123,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             _pendingStartAddr = (ushort)(_ram[entry] | (_ram[(entry + 1) & 0xFFFF] << 8));
             _pendingLoopAddr = (ushort)(_ram[(entry + 2) & 0xFFFF] | (_ram[(entry + 3) & 0xFFFF] << 8));
 
+            // Tracked unconditionally (cheap - a few field writes), not
+            // just when DspKeyOnLogging is on, so KeyOnCount/LastKeyOnSample
+            // are always available to the `channels` debug command without
+            // needing that console-logging flag enabled first.
+            KeyOnCount++;
+            long deltaSamples = _lastKeyOnSample == long.MinValue ? -1 : sampleCounter - _lastKeyOnSample;
+            _lastKeyOnSample = sampleCounter;
+
             if (DebugSettings.DspKeyOnLogging)
             {
                 byte header = _ram[_pendingStartAddr];
-                long deltaSamples = _lastKeyOnSample == long.MinValue ? -1 : sampleCounter - _lastKeyOnSample;
-                _lastKeyOnSample = sampleCounter;
                 Console.WriteLine(
                     $"[DSP-KEYON] t={sampleCounter / (double)AudioSettings.SampleRate:F3}s (+{deltaSamples} samples since this voice's last) Srcn=0x{Srcn:X2} dir=0x{dirTableAddr:X4} entry=0x{entry:X4} " +
                     $"startAddr=0x{_pendingStartAddr:X4} loopAddr=0x{_pendingLoopAddr:X4} header=0x{header:X2} " +
@@ -237,10 +263,31 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         }
 
         // Gates envelope steps to the period table's rate - see Venus_APU.md §4.4.
+        //
+        // PeriodTable's values (2048, 1536, ..., 1) are the standard SNES
+        // DSP envelope rate table, already expressed directly in AUDIO
+        // SAMPLES per step (verbatim in essentially every reference S-DSP
+        // implementation - bsnes, snes9x, Mesen2 - always used as a
+        // sample-count period with no further conversion). This
+        // previously divided that by 32 on the mistaken assumption the
+        // table was in raw S-SMP clock cycles needing conversion to
+        // samples via SDsp.Tick's 32-cycles-per-sample constant - it
+        // isn't; that division made every envelope step (attack ramp,
+        // decay, sustain decay) fire up to 32x too fast, and for most
+        // rate indices (table value already under 32) the Math.Max(1,...)
+        // clamp made it fire every single sample regardless of the real
+        // rate. Confirmed via the `channels` debug command: a sustaining
+        // voice's envelope had already decayed to 0 within ~5900 samples
+        // (~0.18s) of KeyOn - real hardware would still be audible there.
+        // This is what made sustained notes/chords cut off to silence
+        // almost immediately while sharp one-shot percussion (no
+        // meaningful sustain/decay phase to speak of) still played
+        // normally - i.e. exactly a "some of the music is missing"
+        // symptom, not silence across the board.
         private bool RateDue(int periodIndex)
         {
             if (periodIndex == 0) return false;
-            int periodSamples = Math.Max(1, PeriodTable[periodIndex] / 32);
+            int periodSamples = PeriodTable[periodIndex];
             _envelopeCounter++;
             if (_envelopeCounter >= periodSamples)
             {

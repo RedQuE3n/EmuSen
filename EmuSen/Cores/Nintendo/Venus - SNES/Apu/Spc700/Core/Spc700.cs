@@ -1,5 +1,11 @@
 using System;
 using EmuSen.Debug;
+using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
@@ -28,12 +34,25 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
     public partial class Spc700
     {
         // Logs CPU<->APU port traffic on value changes only - see Venus_APU.md §1.2.
-        public bool LogPortTraffic = false;
+        public bool LogPortTraffic => DebugSettings.ApuPortTrafficLogging;
         private byte[] _lastCpuWrite = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF };
         private byte[] _lastSpcWrite = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF };
 
         public int CycleBudget { get; set; }
         public int TotalBytesStored { get; private set; }
+
+        // Side channel for the "+2 cycles if a conditional branch is taken"
+        // penalty (BCC/BCS/BEQ/BNE/BMI/BPL/BVC/BVS, CBNE, DBNZ, BBS/BBC-style
+        // bit-branches) - real SPC700 timing, but not a fixed per-opcode
+        // cost since it only applies when the branch is actually taken.
+        // Opcode handlers in Spc700.Opcodes.cs set this instead of touching
+        // CycleBudget directly, so Step() can tick the DSP/timers for the
+        // real total (base + penalty) in one place - see §2.9's own bug
+        // writeup in Venus_APU.md for why this matters: DSP.Tick() has to
+        // see every elapsed SPC700 cycle to keep sample generation paced
+        // correctly, and a decrement that bypasses it is silently lost
+        // audio time, not just a bookkeeping quirk.
+        private int _branchExtraCycles;
 
         public byte[] Ram = new byte[65536]; 
         
@@ -113,14 +132,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         // Holds delegates internally - not serializable. See Cpu.cs's
         // identical _verboseTrace field for the full explanation; both
         // were missing [SkipInState] for the same reason.
-        [EmuSen.Common.SkipInState] private readonly EmuSen.Debug.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
+        [EmuSen.Common.SkipInState] private readonly EmuSen.DianaOS.DianaOS.Lib.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
         public Spc700()
         {
             BuildOpcodeTable();
             Dsp.AttachMemory(Ram);
-            _verboseTrace = new EmuSen.Debug.DebugTools.RepeatCollapsingTrace<StepKey>(
+            _verboseTrace = new EmuSen.DianaOS.DianaOS.Lib.DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
                 key => $"[SPC700] 0x{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X4}",
                 (cycleLength, repeats) => cycleLength == 1
@@ -138,9 +157,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         public void Reset()
         {
-            Array.Copy(IplRom, 0, Ram, 0xFFC0, IplRom.Length);
-
-            PC = 0xFFC0; 
+            PC = 0xFFC0;
             A = 0x00;
             X = 0x00;
             Y = 0x00;
@@ -151,7 +168,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             Array.Clear(_inPorts, 0, 4);
             Array.Clear(_outPorts, 0, 4);
 
-            _timerControl = 0;
+            // Bit 7 set: IPL ROM overlay on at power-on, so PC=$FFC0 fetches it.
+            _timerControl = 0x80;
             _timer0Cycles = _timer1Cycles = _timer2Cycles = 0;
             _timer0Internal = _timer1Internal = _timer2Internal = 0;
             _timer0Target = _timer1Target = _timer2Target = 0;
@@ -168,6 +186,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         // Debug visibility: what the CPU most recently wrote into each APU-side port.
         public byte GetInPort(int port) => _inPorts[port & 0x03];
+
+        // CONTROL ($00F1) bit 7. Computed, not a field, so save states keep
+        // their existing layout - see Venus_APU.md §1.1.
+        public bool IplRomEnabled
+        {
+            get => (_timerControl & 0x80) != 0;
+            set => _timerControl = (byte)(value ? _timerControl | 0x80 : _timerControl & 0x7F);
+        }
 
         private int[] _milestoneCounts = new int[4];
 
@@ -228,6 +254,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                     _timer2Counter = 0;
                     return t2;
             }
+
+            // Read-only overlay, not a RAM stamp - see Venus_APU.md §1.1.
+            if (address >= 0xFFC0 && IplRomEnabled) return IplRom[address - 0xFFC0];
 
             return Ram[address];
         }
@@ -320,9 +349,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             if (CycleBudget <= 0) return;
 
-            // SLEEP/STOP - see Venus_APU.md §1.4.
+            // SLEEP/STOP - see Venus_APU.md §1.4. Real hardware: STOP/SLEEP
+            // only halts the SPC700 CPU core - the DSP is a separate chip
+            // and keeps generating samples (and the timers keep ticking)
+            // regardless. Previously this branch just burned CycleBudget
+            // without calling Dsp.Tick/TickTimers at all, so any stretch of
+            // real time spent halted silently vanished from the audio
+            // output instead of continuing to produce samples.
             if (_halted)
             {
+                TickTimers(2);
+                Dsp.Tick(2);
                 CycleBudget -= 2;
                 return;
             }
@@ -349,6 +386,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 throw new NotImplementedException($"Unimplemented SPC700 Opcode: 0x{opcode:X2} at PC: 0x{(PC - 1):X4}");
             }
 
+            _branchExtraCycles = 0;
             ushort targetAddr = inst.AddrMode();
             inst.Operate(targetAddr);
 
@@ -367,12 +405,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
 
 
-            TickTimers(inst.Cycles);
-            
-            // Tick the DSP along with the timers
-            Dsp.Tick(inst.Cycles);
+            // inst.Cycles is this opcode's fixed base cost; _branchExtraCycles
+            // is the dynamic "+2 if taken" penalty a branch/CBNE/DBNZ handler
+            // may have reported during Operate() above (see its own field
+            // comment) - both need to reach the DSP/timers, not just
+            // CycleBudget, or real elapsed SPC700 time silently doesn't
+            // advance the audio clock to match.
+            int totalCycles = inst.Cycles + _branchExtraCycles;
 
-            CycleBudget -= inst.Cycles;
+            TickTimers(totalCycles);
+
+            // Tick the DSP along with the timers
+            Dsp.Tick(totalCycles);
+
+            CycleBudget -= totalCycles;
         }
 
         private void TickTimers(int cycles)

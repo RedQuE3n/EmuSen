@@ -1,0 +1,189 @@
+using System;
+using System.Diagnostics;
+using Silk.NET.SDL;
+using EmuSen.Cores.Nintendo.Venus.Controllers;
+
+namespace EmuSen.Mistress.Input
+{
+    // Polls the first connected SDL game controller and reports SNES button
+    // state, based on a rebindable GamepadBindingMap (Input/GamepadBindingMap.cs)
+    // rather than a hardcoded mapping. Initializes SDL with ONLY the gamepad
+    // subsystem (no video/audio), so it never tries to create its own window -
+    // Avalonia owns the window, this is purely a background input source
+    // polled once per frame from MainWindow (see ApplyButtonState there for
+    // how this combines with keyboard input via OR logic, matching the
+    // console/Raylib build's own "either device works, no need to pick one"
+    // convention).
+    //
+    // Confidence note: everything else touched this session was checked
+    // against a live, current source before being written (Avalonia's own
+    // 12.1 release notes for Wayland, NuGet itself for package versions,
+    // primary hardware docs for the CPU/APU/DSP work). This file is the
+    // exception - Silk.NET.SDL's exact method signatures weren't
+    // independently confirmed the same way, only built carefully against
+    // SDL2's long-stable C API and Silk.NET's typical generated-binding
+    // shape. If this doesn't compile as-is, the mismatch is almost certainly
+    // here (method/enum names, byte vs enum parameters, unsafe pointer
+    // handling) - check Silk.NET.SDL's current docs/IntelliSense first
+    // rather than assuming the underlying design is wrong.
+    public unsafe class GamepadManager : IDisposable
+    {
+        private readonly Sdl _sdl;
+        private readonly GamepadBindingMap _bindings;
+        private GameController* _controller;
+        private bool _available;
+        private readonly bool _sdlInitialized;
+
+        // Rate-limits the hot-plug rescan in Poll() below - see that
+        // method's own comment for why this exists.
+        private static readonly TimeSpan RescanInterval = TimeSpan.FromSeconds(1);
+        private readonly Stopwatch _rescanClock = Stopwatch.StartNew();
+        private TimeSpan _lastRescan = TimeSpan.MinValue;
+
+        public GamepadManager(GamepadBindingMap bindings)
+        {
+            _bindings = bindings;
+            _sdl = Sdl.GetApi();
+
+            // Gamepad subsystem only - deliberately not Sdl.InitVideo, so SDL
+            // never touches windowing/rendering at all. InitSubSystem, not
+            // Init, since Audio/AudioPlayer.cs also touches SDL now (for
+            // real audio output) - see this class's own Dispose() for why
+            // that pairing matters.
+            _sdlInitialized = _sdl.InitSubSystem(Sdl.InitGamecontroller) == 0;
+            if (!_sdlInitialized) return;
+
+            TryOpenFirstController();
+        }
+
+        private void TryOpenFirstController()
+        {
+            int joystickCount = _sdl.NumJoysticks();
+            for (int i = 0; i < joystickCount; i++)
+            {
+                if (_sdl.IsGameController(i) == SdlBool.True)
+                {
+                    _controller = _sdl.GameControllerOpen(i);
+                    if (_controller != null)
+                    {
+                        _available = true;
+                        return;
+                    }
+                }
+            }
+            _available = false;
+        }
+
+        // Call once per frame tick. Re-checks for a controller if none was
+        // connected yet (hot-plug), so plugging one in mid-session works
+        // without restarting the app.
+        //
+        // Rate-limited to once per RescanInterval while no controller is
+        // connected, rather than every single call - this method runs on a
+        // 60Hz UI-thread timer (MainWindow's gamepad-poll DispatcherTimer),
+        // and TryOpenFirstController() underneath does a real SDL joystick
+        // enumeration (NumJoysticks() + a per-joystick IsGameController()
+        // check), not a cheap state read. On a common "no controller
+        // plugged in" setup that's a genuine hardware/driver-level scan
+        // happening 60 times a second for no reason, for the entire
+        // session - a real, measurable, constant tax that has nothing to
+        // do with whatever the emulated game is doing, which is exactly
+        // the profile a steady below-target FPS (identical whether the
+        // game is active or sitting idle) points at. A 1-second rescan
+        // interval still notices a hot-plugged controller quickly without
+        // paying that cost every frame.
+        public void Poll()
+        {
+            if (!_sdlInitialized) return;
+
+            if (!_available)
+            {
+                TimeSpan now = _rescanClock.Elapsed;
+                if (now - _lastRescan >= RescanInterval)
+                {
+                    _lastRescan = now;
+                    TryOpenFirstController();
+                }
+            }
+            _sdl.GameControllerUpdate();
+        }
+
+        // Stick-as-d-pad and its threshold - see EmuSen_Settings_Reference.md §4.4.
+        public bool AnalogStickAsDpad { get; set; } = true;
+        public double StickDeadzone { get; set; } = 0.5;
+
+        public bool IsConnected => _available && _controller != null;
+
+        // Null when nothing is connected - see EmuSen_Settings_Reference.md §4.4.
+        public string? ControllerName
+        {
+            get
+            {
+                if (!IsConnected) return null;
+                byte* name = _sdl.GameControllerName(_controller);
+                return name == null ? "Unknown controller" : System.Runtime.InteropServices.Marshal.PtrToStringUTF8((IntPtr)name);
+            }
+        }
+
+        public bool IsPressed(SnesButton button)
+        {
+            if (!_available || _controller == null) return false;
+
+            if (AnalogStickAsDpad && StickDirectionPressed(button)) return true;
+
+            if (!_bindings.ButtonToPad.TryGetValue(button, out GameControllerButton sdlButton)) return false;
+
+            return _sdl.GameControllerGetButton(_controller, sdlButton) != 0;
+        }
+
+        // Axis range is -32768..32767; the deadzone is a fraction of it.
+        private bool StickDirectionPressed(SnesButton button)
+        {
+            short threshold = (short)(Math.Clamp(StickDeadzone, 0.05, 0.95) * short.MaxValue);
+
+            return button switch
+            {
+                SnesButton.Left => _sdl.GameControllerGetAxis(_controller, GameControllerAxis.Leftx) < -threshold,
+                SnesButton.Right => _sdl.GameControllerGetAxis(_controller, GameControllerAxis.Leftx) > threshold,
+                SnesButton.Up => _sdl.GameControllerGetAxis(_controller, GameControllerAxis.Lefty) < -threshold,
+                SnesButton.Down => _sdl.GameControllerGetAxis(_controller, GameControllerAxis.Lefty) > threshold,
+                _ => false,
+            };
+        }
+
+        // Used by InputSettingsWindow's rebind-capture flow: polled on a
+        // short timer while a row is listening for a pad button, returns the
+        // first currently-held button (excluding Invalid), or null if none
+        // is currently pressed. Calls GameControllerUpdate itself so it works
+        // correctly even if called from a timer separate from the main
+        // per-frame Poll().
+        public GameControllerButton? GetAnyPressedButton()
+        {
+            if (!_available || _controller == null) return null;
+
+            _sdl.GameControllerUpdate();
+            foreach (GameControllerButton b in Enum.GetValues<GameControllerButton>())
+            {
+                if (b == GameControllerButton.Invalid) continue;
+                if (_sdl.GameControllerGetButton(_controller, b) != 0) return b;
+            }
+            return null;
+        }
+
+        public void Dispose()
+        {
+            if (_controller != null)
+            {
+                _sdl.GameControllerClose(_controller);
+                _controller = null;
+            }
+            // QuitSubSystem, not Quit() - Quit() unconditionally shuts down
+            // the ENTIRE SDL library regardless of which subsystem asked
+            // for it, which would break Audio/AudioPlayer.cs's still-open
+            // audio device if this disposed first (or vice versa, if
+            // AudioPlayer used Quit() too). QuitSubSystem is refcounted
+            // per-subsystem and doesn't have that problem.
+            if (_sdlInitialized) _sdl.QuitSubSystem(Sdl.InitGamecontroller);
+        }
+    }
+}

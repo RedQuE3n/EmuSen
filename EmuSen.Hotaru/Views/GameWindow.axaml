@@ -1,0 +1,8 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:serenity="clr-namespace:EmuSen.Serenity;assembly=EmuSen.Serenity"
+        x:Class="EmuSen.Hotaru.Views.GameWindow"
+        Title="EmuSen"
+        Background="Black">
+    <serenity:GameFrameControl x:Name="GameFrame" />
+</Window>

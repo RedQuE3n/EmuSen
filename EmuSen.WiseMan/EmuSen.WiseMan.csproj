@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Named WiseMan, not EmuSen.Tests - see CLAUDE.md's own naming note.
+       A committed, permanent home for verification that used to be
+       reinvented as throwaway scratch code every session: shell/debug-
+       toolchain dispatch, the core-agnostic IDebugTarget hooks
+       (ClassifyStaticReference, DecodeTilePixels), the ICore audio drain
+       path, and AudioPlayer's actual SDL calls (against SDL's dummy
+       driver - see Fixtures/SyntheticRom.cs and Audio/AudioPlayerTests.cs
+       for why a real audio device isn't needed to test this for real). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- Real Avalonia render passes with no display/GPU needed - see
+         Serenity/GameFrameControlRenderTests.cs. Not Avalonia.Headless.XUnit -
+         that package pins xunit.v3, which collides (CS0433, duplicate
+         Fact/Theory/InlineData types) with this project's existing xunit
+         2.9.3 tests. HeadlessUnitTestSession (in plain Avalonia.Headless)
+         gives the same capability against ordinary [Fact]/async Task
+         instead. -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The emulation core (VenusCore/ICore, SnesDebugTarget). -->
+    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+    <!-- DianaOSInterpreter/IDebugTarget/the whole shell+command surface -
+         its own project as of the standalone-shell packaging work, no
+         longer bundled inside EmuSen.csproj. -->
+    <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
+    <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
+         comment on why these live separately from DianaOS. -->
+    <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
+    <!-- AudioPlayer (SDL-backed real audio output) lives here - see
+         Audio/AudioPlayerTests.cs. Pulls in Avalonia/Silk.NET.SDL
+         transitively, which is fine for a test project; nothing here
+         opens an actual Avalonia window. -->
+    <ProjectReference Include="..\EmuSen.Mistress\EmuSen.Mistress.csproj" />
+    <!-- HeadlessDebugOptions.Parse and FrameRunner - see
+         HeadlessDebug/HeadlessDebugOptionsTests.cs and
+         HeadlessDebug/FrameRunnerTests.cs. Referencing an OutputType=Exe
+         project works the same as any other ProjectReference; its Main
+         just never runs from here. -->
+    <ProjectReference Include="..\EmuSen.Pharaoh\EmuSen.Pharaoh.csproj" />
+    <!-- GameFrameControl.ComputeLetterboxRect, BuiltInShaders' SkSL source,
+         ShaderEffect.CycleEffect() - see Serenity/*Tests.cs. Nothing here
+         opens an actual Avalonia window either. -->
+    <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
+    <!-- HotaruKeyMap's default bindings and FrameImageWriter's PNG
+         encoding - see Input/HotaruKeyMapTests.cs and
+         Imaging/FrameImageWriterTests.cs. Nothing here constructs a
+         GameWindow or opens an actual Avalonia window. -->
+    <ProjectReference Include="..\EmuSen.Hotaru\EmuSen.Hotaru.csproj" />
+  </ItemGroup>
+
+</Project>

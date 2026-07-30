@@ -8,6 +8,12 @@ using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.Debug;
+using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus
 {
@@ -15,7 +21,7 @@ namespace EmuSen.Cores.Nintendo.Venus
     // Spc700/Renderer frame-by-frame. This is the ONE place the per-
     // scanline timing loop lives now; it used to exist as two separately-
     // maintained copies (the console frontend's Main loop, now
-    // EmuSen.RaylibFrontend/Program.cs, and Common/EmulatorSession.cs's
+    // EmuSen.Hotaru/Program.cs, and Common/EmulatorSession.cs's
     // RunFrame()) that had to be kept in sync
     // by hand - EmulatorSession's own header comment even said so
     // explicitly. Both now construct a VenusCore and call RunFrame() on
@@ -23,16 +29,34 @@ namespace EmuSen.Cores.Nintendo.Venus
     //
     // Exposes Cart/Spc700/Bus/Cpu/Renderer as public properties beyond
     // what ICore requires. This is deliberate, not a leaky abstraction:
-    // Program.cs's debug toolchain (SnesDebugTarget, DebugCommandProcessor,
+    // Program.cs's debug toolchain (SnesDebugTarget, DianaOSInterpreter,
     // the F1-F9 hotkeys, the F4 prompt) all need real SNES-specific access
     // a core-agnostic interface has no business providing - see
     // ICore.cs's own comment for why input and debug-toolchain wiring
     // deliberately stay on the concrete type instead of the interface.
     public class VenusCore : ICore
     {
-        private const int CyclesPerScanline = 227;
+        // Real master clocks per scanline (341 dots x 4 master-clocks/dot),
+        // not an abstract "CPU cycle" count - Cpu.Step() now returns actual
+        // elapsed master clocks directly (see its own comment), computed
+        // from real per-access region speeds instead of a flat assumed
+        // rate. This used to be 227, a CPU-cycle-unit figure back-derived
+        // assuming every access ran at FastROM's 6-master-clock rate
+        // uniformly (227 = 1364/6) - wrong for the common SlowROM case
+        // (real hardware only fits ~1364/8 ≈ 170 CPU cycles per scanline
+        // there), and the source of this project's ~8% SPC700 audio-pacing
+        // undershoot (see Venus_APU.md).
+        private const int CyclesPerScanline = 1364;
         private const int TotalScanlines = 262;
+
+        // The SNES's two independent crystals - see Venus_CPU.md §8.5b.
+        private const int MasterClockHz = 21477272;
+        private const int ApuClockHz = 1024000;
         private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
+
+        // "SNES" little-endian, then the format version - see EmuSen_Save_States.md §3.
+        private const uint StateMagic = 0x53454E53;
+        private const int StateVersion = 1;
 
         private readonly bool _headless;
         private int _currentScanline;
@@ -85,8 +109,14 @@ namespace EmuSen.Cores.Nintendo.Venus
         public int ScreenWidth => Renderer?.FrameWidth ?? 256;
         public int ScreenHeight => 224;
 
+        // 21477272 / (262 * 1364) - not 60 - see Venus_CPU.md §8.5b.
+        public double FrameRateHz => 21477272.0 / (TotalScanlines * (double)CyclesPerScanline);
+
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
+
+        // Drops the per-scanline pixel pass only - see EmuSen_Rewind_And_FastForward.md §2.2.
+        public bool SkipRendering { get; set; }
 
         // True from the instant RunFrame() halts on a breakpoint (or an
         // armed single-step - see BreakpointRegistry) until the next
@@ -94,7 +124,7 @@ namespace EmuSen.Cores.Nintendo.Venus
         // rather than ICore, same call EmulatorSession's own comment
         // already makes for the LastFrame*Ms profiling properties: nothing
         // consumes this except the console frontend's own debug prompt
-        // (EmuSen.RaylibFrontend/Program.cs), which already holds a
+        // (EmuSen.Hotaru/Program.cs), which already holds a
         // concrete VenusCore, not just an ICore.
         public bool IsHaltedAtBreakpoint { get; private set; }
 
@@ -240,8 +270,9 @@ namespace EmuSen.Cores.Nintendo.Venus
                     }
 
                     _phaseStart = Stopwatch.GetTimestamp();
-                    _lineCycles = 0;
-                    Bus.LineCycles = 0;
+                    // Carry the boundary-crossing instruction's overshoot - see Venus_CPU.md §8.5a.
+                    _lineCycles = _lineCycles > CyclesPerScanline ? _lineCycles - CyclesPerScanline : 0;
+                    Bus.LineCycles = _lineCycles;
                     _scanlineStarted = true;
                 }
 
@@ -260,32 +291,38 @@ namespace EmuSen.Cores.Nintendo.Venus
                     _lineCycles += cpuCycles;
                     Bus.LineCycles = _lineCycles;
 
-                    // Cpu.Step()'s returned cycle count is in 65816 CPU
-                    // cycles (the standard oxyron.de-style counts the
-                    // opcode table is verified against), NOT master clocks
-                    // and NOT SPC700 cycles - those are three different
-                    // units. Real hardware: CPU cycle (SlowROM, the common
-                    // case; this project doesn't yet track FastROM/region
-                    // speed separately) = 8 master clocks; SPC700 cycle
-                    // (its own independent 1.024MHz crystal, universally
-                    // approximated as master/21 since it isn't derived from
-                    // the main clock at all) = ~21 master clocks. So 1 CPU
-                    // cycle is worth 8/21 of an SPC700 cycle - scaled here
-                    // with an explicit remainder carry (not float math) so
-                    // the fractional part isn't silently dropped every
-                    // single call, which previously left Spc700.CycleBudget
-                    // being compared against a flat "21" using raw,
-                    // unscaled CPU cycles - since Spc700.Step() already
-                    // drains its own real per-instruction cost (typically
-                    // well under 21) rather than a fixed 21, that let the
-                    // SPC700 run roughly 3x too fast (confirmed: a 10-
-                    // second capture produced ~30 seconds of audio),
-                    // which is what made played-back audio sound like
-                    // scrambled noise once the overflowing buffer started
-                    // dropping samples.
-                    int scaledSpc700Cycles = cpuCycles * 8 + _spc700CycleRemainder;
-                    _spc700CycleRemainder = scaledSpc700Cycles % 21;
-                    Spc700.CycleBudget += scaledSpc700Cycles / 21;
+                    // Cpu.Step()'s returned cycle count is real elapsed
+                    // master clocks now (see its own comment) - each
+                    // instruction's byte/cycle accounting is converted
+                    // through the actual region speed of whatever address
+                    // it touched (MemoryBus.GetAccessSpeedCycles), instead
+                    // of this loop assuming a single flat "1 CPU cycle-unit
+                    // = 6 master clocks" rate for the whole machine. SPC700
+                    // cycle (its own independent 1.024MHz crystal,
+                    // universally approximated as master/21 since it isn't
+                    // derived from the main clock at all) = ~21 master
+                    // clocks, so master clocks convert straight to SPC700
+                    // cycles by dividing by 21 - scaled here with an
+                    // explicit remainder carry (not float math) so the
+                    // fractional part isn't silently dropped every single
+                    // call.
+                    //
+                    // Before this dynamic per-access accounting existed,
+                    // the whole machine was scaled at a flat FastROM-style
+                    // 6-master-clocks-per-cycle rate regardless of the
+                    // ROM's actual (usually SlowROM, 8mc) speed, which fed
+                    // the SPC700 a fixed ~59474*6/21 SPC cycles/frame no
+                    // matter what the CPU actually executed - a systematic
+                    // ~7.5-8% audio-pacing undershoot relative to the real
+                    // NTSC frame rate, confirmed via EmuSen.Pharaoh's
+                    // `audiodump` verb (see Venus_APU.md). Master clocks are
+                    // now real per-instruction quantities, so SPC700 pacing
+                    // tracks actual elapsed hardware time directly, the
+                    // same approach MesenCE's Spc.cpp uses.
+                    // Exact 1.024MHz/21.477272MHz ratio, not /21 - see Venus_CPU.md §8.5b.
+                    long scaledSpc700Cycles = (long)cpuCycles * ApuClockHz + _spc700CycleRemainder;
+                    _spc700CycleRemainder = (int)(scaledSpc700Cycles % MasterClockHz);
+                    Spc700.CycleBudget += (int)(scaledSpc700Cycles / MasterClockHz);
                     while (Spc700.CycleBudget > 0)
                     {
                         Spc700.Step();
@@ -317,7 +354,9 @@ namespace EmuSen.Cores.Nintendo.Venus
                     long afterPpu = Stopwatch.GetTimestamp();
                     _hdmaTicksAccum += afterPpu - afterCpuSpc700;
 
-                    if (_currentScanline < 224)
+                    // HDMA above still runs; only the pixel pass drops - see
+                    // EmuSen_Rewind_And_FastForward.md §2.2.
+                    if (_currentScanline < 224 && !SkipRendering)
                     {
                         Renderer.RenderScanline(Bus, _currentScanline);
                     }
@@ -394,6 +433,31 @@ namespace EmuSen.Cores.Nintendo.Venus
             return Renderer.GetFrameBufferRgba();
         }
 
+        public int AudioSampleRate => EmuSen.Audio.AudioSettings.SampleRate;
+
+        // Moved from EmuSen.Hotaru/Program.cs's own PumpAudio,
+        // which used to reach directly into Spc700.Dsp.AudioBuffer (a real
+        // SNES/S-DSP-specific type) - the exact same "core-agnostic caller
+        // shouldn't touch Venus-specific internals" gap GetFrameBufferRgba
+        // above already closed for video. Same drain logic, unchanged:
+        // AudioBuffer is interleaved L/R shorts, so framesAvailable is
+        // half its Count; capped at <maxFrames> so a caller with its own
+        // per-call limit (avoiding a huge dump after a stall) doesn't need
+        // to slice the result down itself.
+        public short[] DequeueAudioSamples(int maxFrames)
+        {
+            if (Spc700 is null) return Array.Empty<short>();
+
+            var buffer = Spc700.Dsp.AudioBuffer;
+            int framesAvailable = buffer.Count / 2;
+            int framesToSend = Math.Min(framesAvailable, maxFrames);
+            if (framesToSend == 0) return Array.Empty<short>();
+
+            var data = new short[framesToSend * 2];
+            for (int i = 0; i < data.Length; i++) data[i] = buffer.Dequeue();
+            return data;
+        }
+
         // Full point-in-time snapshot of everything except the renderer
         // (which holds Raylib texture/window handles that have no
         // business in a save file, and is fully re-derivable from PPU
@@ -403,15 +467,29 @@ namespace EmuSen.Cores.Nintendo.Venus
         // loads correctly against the exact build that created it.
         public void SaveState(string path)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            using var stream = new FileStream(path, FileMode.Create);
+            SaveState(stream);
+        }
+
+        public void LoadState(string path)
+        {
+            using var stream = new FileStream(path, FileMode.Open);
+            LoadState(stream);
+        }
+
+        // leaveOpen: the caller owns the stream - see ICore's own comment.
+        public void SaveState(Stream stream)
+        {
             if (Cart is null || Cpu is null || Bus is null || Spc700 is null)
             {
                 throw new InvalidOperationException("SaveState() called before LoadRom().");
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            using var stream = new FileStream(path, FileMode.Create);
-            using var w = new BinaryWriter(stream);
+            using var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
 
+            w.Write(StateMagic);
+            w.Write(StateVersion);
             w.Write(TotalFrames);
             w.Write(_currentScanline);
             StateSerializer.Write(w, Cart);
@@ -420,22 +498,49 @@ namespace EmuSen.Cores.Nintendo.Venus
             StateSerializer.Write(w, Spc700);
         }
 
-        public void LoadState(string path)
+        public void LoadState(Stream stream)
         {
             if (Cart is null || Cpu is null || Bus is null || Spc700 is null)
             {
                 throw new InvalidOperationException("LoadState() called before LoadRom().");
             }
 
-            using var stream = new FileStream(path, FileMode.Open);
-            using var r = new BinaryReader(stream);
+            using var r = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+
+            // Pre-v1 files start straight in on TotalFrames with no header,
+            // and carry the DSP RAM aliases - see EmuSen_Save_States.md §2.
+            bool legacy = !TryReadHeader(r, stream);
 
             TotalFrames = r.ReadInt64();
             _currentScanline = r.ReadInt32();
-            StateSerializer.Read(r, Cart);
-            StateSerializer.Read(r, Cpu);
-            StateSerializer.Read(r, Bus);
-            StateSerializer.Read(r, Spc700);
+            StateSerializer.Read(r, Cart, legacy);
+            StateSerializer.Read(r, Cpu, legacy);
+            StateSerializer.Read(r, Bus, legacy);
+            StateSerializer.Read(r, Spc700, legacy);
+        }
+
+        // Consumes the header if present, rewinds and reports false if not.
+        private static bool TryReadHeader(BinaryReader r, Stream stream)
+        {
+            if (!stream.CanSeek)
+            {
+                throw new NotSupportedException("LoadState() needs a seekable stream to tell a versioned state from a pre-v1 one.");
+            }
+
+            long start = stream.Position;
+            if (stream.Length - start < sizeof(uint) + sizeof(int)) return false;
+
+            if (r.ReadUInt32() != StateMagic) { stream.Position = start; return false; }
+
+            int version = r.ReadInt32();
+            if (version > StateVersion)
+            {
+                throw new InvalidDataException($"Save state is version {version}; this build understands up to {StateVersion}.");
+            }
+            // Magic matched but the version is nonsense - a pre-v1 file whose
+            // TotalFrames happened to collide. Treat it as one.
+            if (version < 1) { stream.Position = start; return false; }
+            return true;
         }
 
         public void SaveSram()

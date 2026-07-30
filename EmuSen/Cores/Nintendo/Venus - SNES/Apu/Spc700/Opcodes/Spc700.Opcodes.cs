@@ -1,5 +1,10 @@
 using System;
-using EmuSen.Debug;
+using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
@@ -427,7 +432,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (isSet == branchIfSet)
             {
                 PC = (ushort)(PC + rel);
-                CycleBudget -= 2;
+                _branchExtraCycles += 2;
             }
         }
 
@@ -437,7 +442,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (condition)
             {
                 PC = (ushort)(PC + offset);
-                CycleBudget -= 2; // Branches take 2 extra cycles if taken
+                _branchExtraCycles += 2; // Branches take 2 extra cycles if taken
             }
         }
 
@@ -546,7 +551,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             {
                 sbyte rel = (sbyte)offset;
                 PC = (ushort)(PC + rel);
-                CycleBudget -= 2; // Branch taken penalty
+                _branchExtraCycles += 2; // Branch taken penalty
             }
         }
 
@@ -558,7 +563,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (Y != 0)
             {
                 PC = (ushort)(PC + offset);
-                CycleBudget -= 2;
+                _branchExtraCycles += 2;
             }
         }
 
@@ -573,7 +578,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (val != 0)
             {
                 PC = (ushort)(PC + (sbyte)offset);
-                CycleBudget -= 2;
+                _branchExtraCycles += 2;
             }
         }
 
@@ -616,7 +621,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (!GetFlag(SpcFlags.C))
             {
                 PC = (ushort)(PC + offset);
-                CycleBudget -= 2; 
+                _branchExtraCycles += 2; 
             }
         }
 
@@ -626,7 +631,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (GetFlag(SpcFlags.C))
             {
                 PC = (ushort)(PC + offset);
-                CycleBudget -= 2; 
+                _branchExtraCycles += 2; 
             }
         }
 

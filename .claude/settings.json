@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(mkdir -p var/log var/lib var/games)",
+      "Bash(mv Logs/* var/log/)",
+      "Bash(mv Saves/*.srm var/games/)",
+      "Bash(rmdir Logs Saves)",
+      "Bash(dotnet script *)",
+      "Bash(awk '{print $2}')",
+      "Bash(git -C \"/home/red/Projects/EmuSen Project\" log --all --diff-filter=A --name-only)",
+      "Bash(rm -f EmuSen.DianaOS/DianaOS/Usr/Home/Saves/.gitkeep EmuSen.DianaOS/DianaOS/Usr/Home/Logs/.gitkeep)",
+      "Bash(mv var/games/*.srm EmuSen.DianaOS/DianaOS/Usr/Home/Saves/)",
+      "Bash(mkdir -p EmuSen.DianaOS/DianaOS/Usr/Home/Logs/SNES)",
+      "Bash(mv var/log/SNES/console_* EmuSen.DianaOS/DianaOS/Usr/Home/Logs/SNES/)",
+      "Bash(mkdir -p SourceLogs)",
+      "Bash(cd \"/home/red/Projects/EmuSen Project\" && mv EmuSen.DianaOS/DianaOS/Usr/Home/Saves/SNES/*.srm EmuSen.DianaOS/DianaOS/Usr/Home/Saves/ && rmdir EmuSen.DianaOS/DianaOS/Usr/Home/Saves/SNES && ls EmuSen.DianaOS/DianaOS/Usr/Home/Saves/ && echo \"--- var leftovers ---\" && find var)",
+      "Bash(git restore *)",
+      "Bash(awk '{print $1}')",
+      "Bash(xargs -I{} basename {})",
+      "Bash(python3 -c \"import PIL; print\\('PIL ok'\\)\")",
+      "Bash(convert sheet1.bmp sheet1.png)",
+      "Bash(magick sheet2.bmp sheet2.png)",
+      "Bash(magick pre_start.bmp pre_start.png)",
+      "Bash(magick post_start1.bmp post_start1.png)",
+      "Bash(magick post_start2.bmp post_start2.png)",
+      "Bash(magick after_file.bmp after_file.png)",
+      "Bash(magick worldmap.bmp worldmap.png)",
+      "Bash(magick level_entry.bmp level_entry.png)",
+      "Bash(magick map_moved.bmp map_moved.png)",
+      "Bash(magick level_entry2.bmp level_entry2.png)",
+      "Bash(magick hold_right.bmp hold_right.png)",
+      "Bash(magick hold_down.bmp hold_down.png)",
+      "Bash(magick step_a.bmp step_a.png)",
+      "Bash(magick step_b.bmp step_b.png)"
+    ],
+    "additionalDirectories": [
+      "/home/red/Projects/EmuSen Project/EmuSen.DianaOS/DianaOS/Usr/Home/Saves/SNES"
+    ]
+  }
+}

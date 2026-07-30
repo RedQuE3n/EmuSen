@@ -1,11 +1,13 @@
 using System;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Memory;
+using EmuSen.Cores.Nintendo.Venus.Processor;
+using EmuSen.Cores.Nintendo.Venus.Video;
 
 namespace EmuSen.Common
 {
     // Thin, mostly core-agnostic wrapper around ICore for a non-Raylib
-    // frontend (the Avalonia EmuSen.TestingStudio project) to drive a core on
+    // frontend (the Avalonia EmuSen.Mistress project) to drive a core on
     // its own schedule, independent of any particular windowing/UI
     // toolkit - call LoadRom() once and RunFrame() whenever the UI's own
     // render loop wants a new frame.
@@ -42,6 +44,18 @@ namespace EmuSen.Common
         // header comment and ICore.cs's comment on why input isn't part
         // of the generic interface.
         public MemoryBus Bus => _core?.Bus ?? throw new InvalidOperationException("LoadRom() hasn't been called yet.");
+
+        // Same escape-hatch pattern as Bus above, added so a caller (the
+        // Avalonia frontend's shell console window) can construct a real
+        // SnesDebugTarget(Cpu, Bus, Renderer) - the exact constructor
+        // shape EmuSen.Hotaru/EmuSen.Pharaoh already use - without this
+        // class needing to grow its own IDebugTarget-building logic. Null
+        // before LoadRom() the same way Bus throws, rather than throwing
+        // itself, since "no target yet" is a normal condition a shell
+        // command dispatch already treats as such (see
+        // Shell/Commands/DebugCommandHelpers.RequireTarget).
+        public Cpu? Cpu => _core?.Cpu;
+        public Renderer? Renderer => _core?.Renderer;
 
         // Temporary profiling pass-through - see VenusCore's own comment on
         // these. Not promoted onto ICore for the same reason input/debug
@@ -94,10 +108,43 @@ namespace EmuSen.Common
             _core.LoadState(path);
         }
 
+        // The ICore this session is driving, for callers that need to hand
+        // a core to something core-agnostic (RewindBuffer) rather than go
+        // through this wrapper's own pass-throughs. Null before LoadRom(),
+        // same convention as Cpu/Renderer above.
+        public EmuSen.Cores.ICore? Core => _core;
+
+        // Fast-forward frame skipping - see ICore.SkipRendering.
+        public bool SkipRendering
+        {
+            get => _core?.SkipRendering ?? false;
+            set { if (_core is not null) _core.SkipRendering = value; }
+        }
+
         public byte[] GetFrameBufferRgba()
         {
             if (_core is null) throw new InvalidOperationException("GetFrameBufferRgba() called before LoadRom().");
             return _core.GetFrameBufferRgba();
         }
+
+        // AudioSampleRate falls back to the same AudioSettings default
+        // CoreName above falls back to "SNES" for - a caller opening its
+        // output device before any ROM is loaded yet (or between loads)
+        // still needs a sample rate to open it at.
+        public int AudioSampleRate => _core?.AudioSampleRate ?? EmuSen.Audio.AudioSettings.SampleRate;
+
+        // Straight pass-through to ICore.DequeueAudioSamples() - see that
+        // method's own comment. Returns an empty array rather than
+        // throwing when no ROM is loaded yet, unlike GetFrameBufferRgba()
+        // above - an audio pump callable every tick regardless of session
+        // state (the same "no ROM loaded is a normal condition, not an
+        // error" convention Shell/Commands/DebugCommandHelpers.
+        // RequireTarget's callers avoid on their own read paths) is
+        // simpler for a caller than needing its own IsRomLoaded guard
+        // around every single pump call.
+        public short[] DequeueAudioSamples(int maxFrames) => _core?.DequeueAudioSamples(maxFrames) ?? Array.Empty<short>();
+
+        // Falls back to NTSC until a ROM is loaded - see Venus_CPU.md §8.5b.
+        public double FrameRateHz => _core?.FrameRateHz ?? 60.0988;
     }
 }

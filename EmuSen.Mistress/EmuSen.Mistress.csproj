@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Avalonia GUI, purpose-built for bug testers: ROM loading, save
+       states, controller rebinding, and (Settings > Preferences...) a
+       configurable log directory + ROM directory + a scaffolding-only core
+       picker, plus a ROM browser (File > Browse ROMs...) - see
+       EmuSen_Project_Overview_v2.md and this project's Views/ for the
+       individual pieces. Deliberately its own project (renamed from
+       EmuSen.Frontend), NOT shared with whatever polished, EmulationStation-
+       style frontend eventually gets built - that's expected to be a
+       separate project when it exists, so building it never risks touching
+       (or awkwardly inheriting menu bars/preferences plumbing from) this
+       one. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <!-- Gamepad support: SDL's GameController API, initialized WITHOUT the
+         video subsystem so it never tries to open its own window - Avalonia
+         owns the window. Ships native SDL binaries via NuGet, same
+         convenience as Raylib-cs. See Input/GamepadManager.cs for a note on
+         confidence level - this is the one file in the project whose exact
+         API surface hasn't been independently verified against current docs
+         the way everything else has. -->
+    <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
+    <!-- The SDL2 binary itself - see EmuSen_Settings_Reference.md §4.9. -->
+    <PackageReference Include="Ultz.Native.SDL" Version="2.32.10" />
+    <!-- Native X11 backend, shipped in 12.1. Not picked up by
+         UsePlatformDetect() automatically on a Wayland session - opted into
+         explicitly in Program.cs (Linux only, see comments there). -->
+    <PackageReference Include="Avalonia.X11" Version="12.1.0" />
+    <!-- Only needed for the in-app dev inspector (Alt+Shift+F12 at runtime);
+         excluded outside Debug builds so it doesn't ship in Release. Note:
+         this replaces the old "Avalonia.Diagnostics" package, which was
+         retired at 11.3.x and never got a 12.x release - this is its
+         successor as of Avalonia 12. -->
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.2">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Pulls in the emulation core (Cores/Nintendo/Venus - SNES/*, Settings/*, etc).
+         EmuSen.csproj is a pure library (no Main, no window ownership) - the Raylib
+         console frontend's own Main/hotkey loop lives in the sibling
+         EmuSen.Hotaru project instead, so this reference no longer drags
+         in another frontend's Exe/window-ownership baggage, just the core. -->
+    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+    <!-- GameFrameControl (see Views/MainWindow.axaml/.axaml.cs) - the same
+         GPU-accelerated (Skia/Ganesh, when Avalonia negotiates a hardware
+         context) presentation surface EmuSen.Hotaru's GameWindow uses,
+         replacing the old CPU-side WriteableBitmap here. -->
+    <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
+  </ItemGroup>
+
+</Project>

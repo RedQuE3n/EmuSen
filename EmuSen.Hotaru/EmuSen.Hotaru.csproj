@@ -11,6 +11,8 @@
          previously justified by the now-deleted Raylib-based PumpAudio. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Both XAML types are constructed by hand - see EmuSen_Settings_Reference.md §4.8. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

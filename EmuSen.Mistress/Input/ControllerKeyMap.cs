@@ -69,15 +69,19 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
+        public void Unbind(SnesButton button)
+        {
+            ButtonToKey.Remove(button);
+            RebuildReverseLookup();
+        }
+
         public void ResetToDefaults()
         {
             ButtonToKey = DefaultBindings();
             RebuildReverseLookup();
         }
 
-        private static string ConfigPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "EmuSen", "keybindings.json");
+        private static string ConfigPath => Settings.SettingsPaths.For("keybindings.json");
 
         public void Save()
         {

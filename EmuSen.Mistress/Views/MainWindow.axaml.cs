@@ -118,6 +118,7 @@ namespace EmuSen.Mistress.Views
         private string? _currentDisplayName; // for restoring StatusText's "Running: ..." text exactly after a pause, without reformatting from _currentRomPath
         private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
         private readonly GamepadBindingMap _gamepadBindings = GamepadBindingMap.Load();
+        private readonly HotkeyBindingMap _hotkeyBindings = HotkeyBindingMap.Load();
         private readonly AppSettings _appSettings = AppSettings.Load();
         private readonly GamepadManager _gamepad;
 
@@ -160,8 +161,12 @@ namespace EmuSen.Mistress.Views
                 StopLogging();
             };
 
-            KeyDown += (_, e) => SetButtonFromKey(e.Key, pressed: true, e);
-            KeyUp += (_, e) => SetButtonFromKey(e.Key, pressed: false, e);
+            _gamepad.AnalogStickAsDpad = _appSettings.AnalogStickAsDpad;
+            _gamepad.StickDeadzone = _appSettings.StickDeadzone;
+
+            // Tunnel, not bubbling, or focus navigation eats the arrows - see EmuSen_Settings_Reference.md §4.2.
+            AddHandler(KeyDownEvent, (_, e) => SetButtonFromKey(e.Key, pressed: true, e), RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(KeyUpEvent, (_, e) => SetButtonFromKey(e.Key, pressed: false, e), RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
@@ -173,12 +178,28 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
-            switch (key)
+            if (!_hotkeyBindings.TryGetAction(key, out HotkeyAction action)) return;
+
+            // Held vs one-shot - see EmuSen_Rewind_And_FastForward.md §4, EmuSen_Settings_Reference.md §4.3.
+            if (HotkeyBindingMap.IsHeld(action))
             {
-                case Key.Tab: _turboHeld = pressed; e.Handled = true; break; // Handled or Avalonia steals Tab for focus traversal
-                case Key.Back: _rewindHeld = pressed; break;
+                if (action == HotkeyAction.FastForward) _turboHeld = pressed;
+                else if (action == HotkeyAction.Rewind) _rewindHeld = pressed;
+                e.Handled = true;
+                return;
             }
+
+            if (!pressed) return;
+            switch (action)
+            {
+                case HotkeyAction.SaveState: OnSaveStateClick(this, new RoutedEventArgs()); break;
+                case HotkeyAction.LoadState: OnLoadStateClick(this, new RoutedEventArgs()); break;
+                case HotkeyAction.TogglePause: TogglePause(); break;
+                case HotkeyAction.ToggleFullscreen:
+                    WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+                    break;
+            }
+            e.Handled = true;
         }
 
         private void ApplyButtonState(SnesButton button)
@@ -244,7 +265,7 @@ namespace EmuSen.Mistress.Views
 
         private void OnControllerBindingsClick(object? sender, RoutedEventArgs e)
         {
-            new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings).Show(this);
+            new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings).Show(this);
         }
 
         private void OnPreferencesClick(object? sender, RoutedEventArgs e)
@@ -440,6 +461,13 @@ namespace EmuSen.Mistress.Views
         // guard here. StatusText is only ever touched from the UI thread
         // in either case, so no Dispatcher.UIThread.Post is needed the way
         // EmulationLoop needs one for its own cross-thread updates.
+        // Hotkey counterpart to the console's `pause`/`resume` pair.
+        private void TogglePause()
+        {
+            if (_session is not { IsRomLoaded: true }) return;
+            if (IsPaused) ResumeEmulation(); else PauseEmulation();
+        }
+
         public void PauseEmulation()
         {
             _pauseSignal.Reset();

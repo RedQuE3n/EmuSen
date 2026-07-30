@@ -69,15 +69,19 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
+        public void Unbind(SnesButton button)
+        {
+            ButtonToPad.Remove(button);
+            RebuildReverseLookup();
+        }
+
         public void ResetToDefaults()
         {
             ButtonToPad = DefaultBindings();
             RebuildReverseLookup();
         }
 
-        private static string ConfigPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "EmuSen", "gamepadbindings.json");
+        private static string ConfigPath => Settings.SettingsPaths.For("gamepadbindings.json");
 
         public void Save()
         {

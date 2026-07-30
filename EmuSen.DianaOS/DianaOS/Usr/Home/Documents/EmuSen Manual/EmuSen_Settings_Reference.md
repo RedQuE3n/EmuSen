@@ -86,3 +86,90 @@ Window size, title, vsync, target frame rate, and texture filtering. **None of t
 - **`BilinearFiltering`** — Bilinear smooths the upscaled image; Point (the alternative) keeps hard pixel edges (the classic "sharp pixel" look). Point is generally more period-authentic for pixel art; Bilinear can look better at non-integer scale factors. Wired via `SKSamplingOptions(SKFilterMode.Linear/Nearest, ...)` in `GameFrameControl`'s draw path.
 
 **`ShowDebugPanels`/`PanelBackgroundColor`/`LetterboxColor` are gone** — they existed to configure the on-window Raylib debug overlay (VRAM tile sheet + CGRAM palette panels drawn directly onto the game window), which was removed entirely as part of the Raylib→Avalonia migration: `DianaOS`'s `regs`/`sprites`/`pal`/`tile`/`vramsheet`/`paletteswatch` commands and the `coretop` dashboard already cover the same data, and `EmuSen.Mistress` never had this overlay at all, which was the strongest evidence it wasn't load-bearing. See `EmuSen_Frontend_Driver.md`'s own top-of-file revision note and `EmuSen_Debugging_Tools_Reference_v5.md`'s own revision note on the same change.
+
+---
+
+## 4. `EmuSen.Mistress` — the frontend's own input settings
+
+Everything above is emulator configuration. This section covers the per-user settings the Mistress GUI owns: keyboard/gamepad bindings and the Settings > Controller Bindings... window that edits them. These are ordinary instance classes with JSON persistence, not static hubs, because they're per-user preference rather than global program behavior.
+
+### 4.1 Where the files live
+
+`Settings/SettingsPaths.cs` is the single answer to "where does this frontend keep config". `ControllerKeyMap`, `GamepadBindingMap`, `HotkeyBindingMap` and `AppSettings` all resolve their own file through it (`keybindings.json`, `gamepadbindings.json`, `hotkeybindings.json`, `appsettings.json`), rather than each rebuilding an `%AppData%/EmuSen` path of its own.
+
+It exists because those paths used to be hardcoded per class, which made them untestable: any test that rebound a key wrote the developer's real config, since rebinding saves immediately. `SettingsPaths.OverrideDirectory` redirects the whole set at once and is set only by tests.
+
+### 4.2 Fixed bug: rebinding a key appeared to do nothing
+
+The rebind flow is "click Rebind, then press a key" — the window listens for the next key and writes it into the map. It captured that key with a plain `KeyDown += ...`, which in Avalonia is the **bubbling** pass: the event reaches the focused control first and the window last.
+
+The focused control at that moment is always the *Rebind button the user just clicked*. A focused `Button` handles `Enter` and `Space` itself as activation keys and marks them handled, so neither ever reached the window and the binding silently didn't change — the row kept saying "Press a key..." forever. Worse, the activation re-fired the button's own `Click`, re-arming the same row, so the window could never leave listening state. `Start` defaults to `Enter`, so anyone rebinding Start hit this immediately.
+
+Fixed by capturing on the **tunnel** pass instead, which runs top-level-first:
+
+```csharp
+AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+```
+
+and setting `e.Handled = true` once the key is consumed, so it never reaches the button underneath. `handledEventsToo` matters for keys something upstream has already claimed.
+
+`MainWindow` captures gameplay input the same way and for the same reason — four of the twelve default game-button bindings are the arrow keys, which the focus manager claims for directional navigation whenever anything focusable (the menu bar) has focus.
+
+**Regression coverage**: `EmuSen.WiseMan/Mistress/InputSettingsWindowTests.cs` drives real Avalonia key events through `Avalonia.Headless` rather than calling the handler directly — a direct call passes against the broken build, because the bug is purely in routing. Reverting the single `AddHandler` line back to `KeyDown +=` fails 3 of its 12 tests (`Enter`, `Space`, and the re-arm check). Note the arrow-key half of the problem does **not** reproduce headlessly, since headless has no real focus-navigation pass; it is reasoned from Avalonia's routing, not measured.
+
+### 4.3 Hotkeys are bindings too (`Input/HotkeyBindingMap.cs`)
+
+Fast-forward and rewind used to be hardcoded to `Tab` and `Backspace` inside `MainWindow.SetButtonFromKey`, undiscoverable and unchangeable. They're now entries in a `HotkeyAction` map with the same shape, persistence and rebind rules as `ControllerKeyMap`, and they appear as their own section in the settings window. Defaults keep `Tab`/`Backspace` so existing muscle memory survives, and add `F5`/`F8` save/load state, `P` pause, `F11` fullscreen.
+
+`HotkeyBindingMap.IsHeld` splits the two shapes of action: fast-forward and rewind apply *while the key is down* (see `EmuSen_Rewind_And_FastForward.md` §4), everything else fires once on the press. Getting that wrong makes save-state fire once per frame while held.
+
+The two maps police **each other** on rebind, not just themselves: one key doing both a game button and a hotkey would fire both at once. Binding a key that's in use anywhere clears it from wherever it was.
+
+### 4.4 Gamepad options (`Input/GamepadManager.cs`, `Settings/AppSettings.cs`)
+
+- **`AnalogStickAsDpad`** (default on) — the left stick reports as the d-pad directions. No SNES game reads an analog axis, so an unmapped stick is simply dead input, which reads as a broken controller.
+- **`StickDeadzone`** (default 0.5, clamped 0.05-0.95) — fraction of full deflection before a direction registers. Exposed because worn sticks drift, and a drifting stick mapped onto the d-pad walks the player into walls.
+- **`ControllerName`/`IsConnected`** — surfaced in the window so "no controller detected" can be told apart from "connected but bound wrong". The window re-polls once a second, so hot-plugging is visible without reopening it.
+
+### 4.5 Conflict reporting
+
+`Rebind` guarantees one owner per key going forward, but a hand-edited or older config can still contain duplicates. The window recomputes conflicts after every change, colours the offending rows, and names them in a status line along the bottom rather than leaving the user to work out why one key does two things.
+
+**Clear the property, don't null it.** `MarkConflict` un-highlights a row with `label.ClearValue(TextBlock.ForegroundProperty)`, not `label.Foreground = null`. The second sets a *local* null brush, and a `TextBlock` with no brush paints nothing at all — that blanked the entire Keyboard column while every assertion-based test still passed, since `Text` was correct throughout. Caught only by rendering the window (§4.7).
+
+### 4.6 How the window is built
+
+**One scrolling page, not tabs.** Every row stays in the visual tree, so conflict detection sees all of them at once and no clashing binding can hide behind an unselected tab.
+
+**Rows are built in code, not XAML**, because they're one per `SnesButton`/`HotkeyAction` enum member. Column widths are shared by hand between `BuildButtonRows`/`BuildHotkeyRows` and the header `Grid`s in the `.axaml`; changing one means changing the other. Value labels use `TextTrimming.CharacterEllipsis` because `Key` and `GameControllerButton` names (`RightBracket`, `Leftshoulder`) routinely overflow their column.
+
+**Pad names are cleaned for display.** Silk.NET's `GameControllerButton` spells some members `ControllerButtonX` and others plainly (`Start`, `DpadUp`), so `PadName` strips a leading `ControllerButton` prefix to stop the column reading as a mix of both.
+
+**`_initialized` guards the option handlers.** `IsCheckedChanged`/`ValueChanged` are wired in the `.axaml`, which means Avalonia raises them from *inside* `InitializeComponent()` — before the constructor has assigned `_appSettings` or anything else. Setting `Minimum`/`Maximum` on the deadzone `Slider` coerces its value and fires `ValueChanged` on the spot, so every handler returns early until the constructor finishes. Without the guard the window throws `NullReferenceException` on construction.
+
+**`PollForPadButton` null-checks `_gamepad` itself** rather than relying on `StartListeningForPad` having done so. The invariant otherwise lives in the caller where the compiler can't see it (CS8602), and checking locally also means the 50 ms poll timer stops itself if the pad disappears mid-rebind.
+
+### 4.7 Test coverage
+
+`EmuSen.WiseMan/Mistress/` holds two files, both running on the shared `HeadlessUnitTestSession` from `Serenity/TestAppBuilder.cs`.
+
+`InputSettingsWindowTests.cs` drives **real Avalonia key events** through `Avalonia.Headless` rather than calling the capture handler directly — the §4.2 bug is purely in event routing, so a direct call passes against the broken build. `ClickAsUser` focuses a button before raising `Click`, because that focus is exactly what used to swallow the follow-up key. Reverting the single `AddHandler` line back to `KeyDown +=` fails 3 of its tests (`Enter`, `Space`, and the re-arm check).
+
+Two gotchas worth knowing before adding cases here:
+
+- **Match the row by its name cell (column 0) only.** A loose "any `TextBlock` in this row" match picks the wrong row: `Y`'s default keyboard binding is literally `A`, so searching for row "A" finds `Y`'s *value* column first.
+- **Redirect `SettingsPaths.OverrideDirectory`** in the fixture. Rebinding saves immediately, so without it the suite overwrites the developer's real bindings.
+
+The arrow-key half of §4.2 does **not** reproduce headlessly — headless has no real focus-navigation pass — so it is reasoned from Avalonia's routing rather than measured, and the theory cases for `Up`/`Left` pass either way.
+
+`InputSettingsWindowRenderTests.cs` renders the window through Avalonia's real Skia pass and asserts the result isn't one flat colour, which catches an unparseable `.axaml` or a collapsed layout. Set `EMUSEN_UI_DUMP=/path/to.bmp` to also write the capture out and look at it — that is how the blank-column bug in §4.5 was found.
+
+### 4.8 `EmuSen.Hotaru` suppresses AVLN3001
+
+Hotaru's `.csproj` carries `<NoWarn>$(NoWarn);AVLN3001</NoWarn>` — "XAML resource won't be reachable via runtime loader, as no public constructor was found", for `App.axaml` and `Views/GameWindow.axaml`.
+
+Both types are constructed by hand with their real dependencies: `Program.cs` resolves a ROM and builds the core *before* Avalonia starts, then hands them over via `AppBuilder.Configure<App>(() => new App(...))` and `new GameWindow(core, ...)`. URI-based instantiation (`AvaloniaXamlLoader.Load(uri)`) is a capability this frontend never uses; `App.Initialize()` calls the *instance* overload, which needs no parameterless constructor.
+
+Adding one is not an improvement. `GameWindow`'s constructor starts the emulation thread, the console-reader thread, a 60 Hz gamepad timer and an SDL handle, so a parameterless overload chaining into it would spawn all of that from the previewer — and one that skipped it would leave the class's `readonly` fields unassigned, trading this warning for a fistful of CS8618s and a half-built window.
+
+Scoped to that one project deliberately. `EmuSen.Mistress` satisfies the analyzer naturally (its `MainWindow` and `InputSettingsWindow` both have real parameterless constructors) and keeps the warning live.

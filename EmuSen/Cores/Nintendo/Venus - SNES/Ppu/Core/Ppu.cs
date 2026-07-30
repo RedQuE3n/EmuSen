@@ -100,9 +100,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
+        // Write observation for VRAM/CGRAM/OAM - see Venus_Memory.md §6.1.
+        [EmuSen.Common.SkipInState] public Memory.IWriteObserver? WriteObserver;
+
         private byte _vmain;                 // $2115 - VRAM increment mode
         private ushort _vramAddr;            // $2116/$2117 - word address
         public ushort CurrentVramAddr => _vramAddr;
+        private ushort _vramReadLatch;       // $2139/$213A prefetch - see Venus_PPU.md §2.3
 
         private byte _cgadd;                 // $2121
         public byte CurrentCgAddr => _cgadd;
@@ -214,6 +218,26 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 case 1: return 32;
                 default: return 128;
             }
+        }
+
+        // VMAIN ($2115) bits 2-3 address rotation - see Venus_PPU.md §2.2.
+        private int TranslatedVramWordAddress()
+        {
+            int addr = _vramAddr;
+            switch ((_vmain >> 2) & 0x03)
+            {
+                case 1: return (addr & 0xFF00) | ((addr & 0x1F) << 3) | ((addr >> 5) & 0x07);
+                case 2: return (addr & 0xFE00) | ((addr & 0x3F) << 3) | ((addr >> 6) & 0x07);
+                case 3: return (addr & 0xFC00) | ((addr & 0x7F) << 3) | ((addr >> 7) & 0x07);
+                default: return addr;
+            }
+        }
+
+        // Reads the current (pre-increment) address into the read latch - see Venus_PPU.md §2.3.
+        private ushort FetchVramReadLatch()
+        {
+            int byteAddr = (TranslatedVramWordAddress() * 2) & 0xFFFF;
+            return (ushort)(Vram[byteAddr] | (Vram[(byteAddr + 1) & 0xFFFF] << 8));
         }
 
     }

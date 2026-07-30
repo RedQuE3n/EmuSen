@@ -39,7 +39,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         private void WriteOAMDATA(ushort offset, byte data)
         {
-            if (_oamAddr < Oam.Length) Oam[_oamAddr] = data;
+            if (_oamAddr < Oam.Length) { Oam[_oamAddr] = data; WriteObserver?.OnWrite("OAM", _oamAddr, data); }
             _oamAddr = (ushort)((_oamAddr + 1) % 544);
         }
 
@@ -114,24 +114,30 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private void WriteVMADDL(ushort offset, byte data)
         {
             _vramAddr = (ushort)(((uint)_vramAddr & 0xFF00u) | (uint)data);
+            _vramReadLatch = FetchVramReadLatch();
         }
 
         private void WriteVMADDH(ushort offset, byte data)
         {
             _vramAddr = (ushort)(((uint)_vramAddr & 0x00FFu) | ((uint)data << 8));
+            _vramReadLatch = FetchVramReadLatch();
         }
 
         private void WriteVMDATAL(ushort offset, byte data)
         {
-            Vram[(_vramAddr * 2) & 0xFFFF] = data;
-            _vramTouched[(_vramAddr * 2) & 0xFFFF] = true;
+            int byteAddr = (TranslatedVramWordAddress() * 2) & 0xFFFF;
+            Vram[byteAddr] = data;
+            _vramTouched[byteAddr] = true;
+            WriteObserver?.OnWrite("VRAM", byteAddr, data);
             if ((_vmain & 0x80) == 0) { _vramAddr = (ushort)(_vramAddr + VramStep()); }
         }
 
         private void WriteVMDATAH(ushort offset, byte data)
         {
-            Vram[((_vramAddr * 2) + 1) & 0xFFFF] = data;
-            _vramTouched[((_vramAddr * 2) + 1) & 0xFFFF] = true;
+            int byteAddr = ((TranslatedVramWordAddress() * 2) + 1) & 0xFFFF;
+            Vram[byteAddr] = data;
+            _vramTouched[byteAddr] = true;
+            WriteObserver?.OnWrite("VRAM", byteAddr, data);
             if ((_vmain & 0x80) != 0) { _vramAddr = (ushort)(_vramAddr + VramStep()); }
         }
 
@@ -156,6 +162,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 Cgram[memIdx + 1] = data;
                 _cgramTouched[memIdx] = true;
                 _cgramTouched[memIdx + 1] = true;
+                WriteObserver?.OnWrite("CGRAM", memIdx, _cgLatch);
+                WriteObserver?.OnWrite("CGRAM", memIdx + 1, data);
 
                 if (DebugSettings.CgWriteLogging)
                 {
@@ -254,15 +262,23 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         private byte ReadVMDATAL(ushort offset)
         {
-            byte v = Vram[(_vramAddr * 2) & 0xFFFF];
-            if ((_vmain & 0x80) == 0) { _vramAddr = (ushort)(_vramAddr + VramStep()); }
+            byte v = (byte)(_vramReadLatch & 0xFF);
+            if ((_vmain & 0x80) == 0)
+            {
+                _vramReadLatch = FetchVramReadLatch();
+                _vramAddr = (ushort)(_vramAddr + VramStep());
+            }
             return v;
         }
 
         private byte ReadVMDATAH(ushort offset)
         {
-            byte v = Vram[((_vramAddr * 2) + 1) & 0xFFFF];
-            if ((_vmain & 0x80) != 0) { _vramAddr = (ushort)(_vramAddr + VramStep()); }
+            byte v = (byte)(_vramReadLatch >> 8);
+            if ((_vmain & 0x80) != 0)
+            {
+                _vramReadLatch = FetchVramReadLatch();
+                _vramAddr = (ushort)(_vramAddr + VramStep());
+            }
             return v;
         }
 

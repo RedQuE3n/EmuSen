@@ -14,7 +14,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         [EmuSen.Common.AliasOfSerializedField] private byte[] _ram = null!;
 
         private readonly DspVoice[] _voices = new DspVoice[8];
-        private byte _prevKon;
+
+        // KON latch - an event register, not a level. See Venus_APU.md §3.3.
+        private byte _pendingKon;
         private byte _prevKoff;
 
         // Global (non-per-voice) register offsets - see Venus_APU.md §3 /
@@ -109,7 +111,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
             _registerAddress = 0;
             _dspCycles = 0;
-            _prevKon = 0;
+            _pendingKon = 0;
             _prevKoff = 0;
             Array.Clear(_echoHistoryL, 0, 8);
             Array.Clear(_echoHistoryR, 0, 8);
@@ -181,6 +183,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             int index = _registerAddress & 0x7F;
             _registers[index] = data;
+
+            if (index == RegKeyOn) _pendingKon |= data; // see Venus_APU.md §3.3.1
 
             // Any write to ENDX clears all its bits - see Venus_APU.md §3.2.
             if (index == 0x7C)
@@ -375,28 +379,28 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             return (firL, firR);
         }
 
-        // KON/KOFF edge detection - see Venus_APU.md §3.3.
+        // Drains the KON latch, edge-detects KOFF - see Venus_APU.md §3.3.
         private void ProcessKeyEvents()
         {
-            byte kon = _registers[0x4C];
-            byte koff = _registers[0x5C];
-            byte dir = _registers[0x5D];
+            byte koff = _registers[RegKeyOff];
+            byte dir = _registers[RegSourceDir];
             int dirTableAddr = dir << 8;
 
-            byte konRising = (byte)(kon & ~_prevKon);
+            // Every latched KON write fires exactly once, then drains.
+            byte konPending = _pendingKon;
+            _pendingKon = 0;
             byte koffRising = (byte)(koff & ~_prevKoff);
 
             for (int v = 0; v < 8; v++)
             {
-                bool konBit = (konRising & (1 << v)) != 0;
+                bool konBit = (konPending & (1 << v)) != 0;
                 bool koffBit = (koffRising & (1 << v)) != 0;
 
                 if (konBit) _voices[v].KeyOn(dirTableAddr, _sampleCounter);
-                // KeyOff wins if both are newly set - see Venus_APU.md §3.3.
+                // KeyOff wins if both land in the same window - see Venus_APU.md §3.3.
                 if (koffBit) _voices[v].KeyOff();
             }
 
-            _prevKon = kon;
             _prevKoff = koff;
         }
 

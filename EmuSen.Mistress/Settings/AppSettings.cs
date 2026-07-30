@@ -34,9 +34,11 @@ namespace EmuSen.Mistress.Settings
         // and other emulators use, not a general input redesign.
         public bool MirrorPlayer1ToPlayer2 { get; set; } = false;
 
-        private static string ConfigPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "EmuSen", "appsettings.json");
+        // Stick-as-d-pad and its deadzone - see EmuSen_Settings_Reference.md §4.4.
+        public bool AnalogStickAsDpad { get; set; } = true;
+        public double StickDeadzone { get; set; } = 0.5;
+
+        private static string ConfigPath => SettingsPaths.For("appsettings.json");
 
         public void Save()
         {

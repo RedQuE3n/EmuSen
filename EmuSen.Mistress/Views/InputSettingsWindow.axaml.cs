@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -17,48 +18,78 @@ namespace EmuSen.Mistress.Views
     {
         private readonly ControllerKeyMap _keyBindings;
         private readonly GamepadBindingMap _gamepadBindings;
-        private readonly GamepadManager _gamepad;
+        private readonly HotkeyBindingMap _hotkeyBindings;
+        private readonly GamepadManager? _gamepad; // null from the previewer/tests
         private readonly AppSettings _appSettings;
 
-        // At most one row listens for a key, and independently at most one
-        // row listens for a pad button - a key rebind and a pad rebind could
-        // in principle be "in progress" at the same time since they're
-        // captured completely differently (an event vs a poll), though the
-        // UI doesn't really invite doing both at once.
+        // Key and pad listeners are separate - an event vs a poll.
         private SnesButton? _listeningForKey;
+        private HotkeyAction? _listeningForHotkey;
         private SnesButton? _listeningForPad;
         private DispatcherTimer? _padPollTimer;
+        private DispatcherTimer? _statusPollTimer;
+
+        // XAML handlers fire during InitializeComponent - see EmuSen_Settings_Reference.md §4.6.
+        private bool _initialized;
+
+        private const string RebindKeyText = "Rebind Key";
+        private const string RebindPadText = "Rebind Pad";
+        private const string ListeningText = "Press a key...";
+        private const string ListeningPadText = "Press a button...";
+        private const string Unbound = "(unbound)";
 
         private readonly Dictionary<SnesButton, TextBlock> _keyLabels = new();
         private readonly Dictionary<SnesButton, TextBlock> _padLabels = new();
         private readonly Dictionary<SnesButton, Button> _rebindKeyButtons = new();
         private readonly Dictionary<SnesButton, Button> _rebindPadButtons = new();
+        private readonly Dictionary<HotkeyAction, TextBlock> _hotkeyLabels = new();
+        private readonly Dictionary<HotkeyAction, Button> _rebindHotkeyButtons = new();
 
-        // Parameterless constructor exists only so Avalonia's XAML tooling
-        // (previewer, generated InitializeComponent) is happy - always use
-        // the full constructor in real code (see MainWindow's menu handler).
-        public InputSettingsWindow() : this(new ControllerKeyMap(), new GamepadBindingMap(), null!, new AppSettings()) { }
+        // For Avalonia's XAML tooling only - real code uses the full ctor.
+        public InputSettingsWindow() : this(new ControllerKeyMap(), new GamepadBindingMap(), null!, new AppSettings(), new HotkeyBindingMap()) { }
 
-        public InputSettingsWindow(ControllerKeyMap keyBindings, GamepadBindingMap gamepadBindings, GamepadManager gamepad, AppSettings appSettings)
+        public InputSettingsWindow(ControllerKeyMap keyBindings, GamepadBindingMap gamepadBindings, GamepadManager gamepad, AppSettings appSettings, HotkeyBindingMap hotkeyBindings)
         {
             InitializeComponent();
             _keyBindings = keyBindings;
             _gamepadBindings = gamepadBindings;
+            _hotkeyBindings = hotkeyBindings;
             _gamepad = gamepad;
             _appSettings = appSettings;
-            BuildRows();
+
+            BuildButtonRows();
+            BuildHotkeyRows();
+            RefreshConflicts();
+
             MirrorPlayer1ToPlayer2CheckBox.IsChecked = _appSettings.MirrorPlayer1ToPlayer2;
-            KeyDown += OnWindowKeyDown;
-            Closing += (_, _) => _padPollTimer?.Stop();
+            AnalogStickAsDpadCheckBox.IsChecked = _appSettings.AnalogStickAsDpad;
+            DeadzoneSlider.Value = _appSettings.StickDeadzone;
+            UpdateDeadzoneText();
+            UpdateControllerStatus();
+
+            // Tunnel, not bubbling, or the focused button eats the key - see EmuSen_Settings_Reference.md §4.2.
+            AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+            // Notices a pad plugged in or out while the window is open.
+            if (_gamepad is not null)
+            {
+                _statusPollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                _statusPollTimer.Tick += (_, _) => UpdateControllerStatus();
+                _statusPollTimer.Start();
+            }
+
+            Closing += (_, _) =>
+            {
+                _padPollTimer?.Stop();
+                _statusPollTimer?.Stop();
+            };
+
+            _initialized = true;
         }
 
-        private void OnMirrorPlayer1ToPlayer2Changed(object? sender, RoutedEventArgs e)
-        {
-            _appSettings.MirrorPlayer1ToPlayer2 = MirrorPlayer1ToPlayer2CheckBox.IsChecked == true;
-            _appSettings.Save();
-        }
+        // --- Row construction ---
 
-        private void BuildRows()
+        private void BuildButtonRows()
         {
             BindingsPanel.Children.Clear();
             _keyLabels.Clear();
@@ -68,85 +99,179 @@ namespace EmuSen.Mistress.Views
 
             foreach (SnesButton button in Enum.GetValues<SnesButton>())
             {
-                // Key labels are Avalonia Key.ToString() ("RightBracket",
-                // "LeftShift", ...) and pad labels are SDL
-                // GameControllerButton.ToString() ("Leftshoulder",
-                // "Rightshoulder", ...) - both routinely longer than the
-                // original 90px columns, which let them visually overflow
-                // underneath the next column's button (added later in
-                // Children, so it painted on top) instead of wrapping or
-                // clipping. Widened columns plus TextTrimming below are
-                // the fix; the window itself was widened to match.
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("80,110,Auto,150,Auto") };
+                // Columns must match ButtonHeaderRow in the XAML - see EmuSen_Settings_Reference.md §4.6.
+                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("90,130,Auto,Auto,140,Auto,Auto") };
 
-                var nameText = new TextBlock { Text = button.ToString(), VerticalAlignment = VerticalAlignment.Center };
-                Grid.SetColumn(nameText, 0);
+                row.Children.Add(Cell(new TextBlock { Text = button.ToString(), VerticalAlignment = VerticalAlignment.Center }, 0));
 
-                var keyText = new TextBlock
-                {
-                    Text = CurrentKeyLabel(button),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                };
-                Grid.SetColumn(keyText, 1);
+                var keyText = NewValueLabel(CurrentKeyLabel(button));
                 _keyLabels[button] = keyText;
+                row.Children.Add(Cell(keyText, 1));
 
-                var rebindKeyButton = new Button { Content = "Rebind Key" };
-                Grid.SetColumn(rebindKeyButton, 2);
-                rebindKeyButton.Click += (_, _) => StartListeningForKey(button);
-                _rebindKeyButtons[button] = rebindKeyButton;
+                var rebindKey = new Button { Content = RebindKeyText };
+                rebindKey.Click += (_, _) => StartListeningForKey(button);
+                _rebindKeyButtons[button] = rebindKey;
+                row.Children.Add(Cell(rebindKey, 2));
 
-                var padText = new TextBlock
+                var clearKey = new Button { Content = "Clear", Margin = new Avalonia.Thickness(4, 0, 12, 0) };
+                clearKey.Click += (_, _) =>
                 {
-                    Text = CurrentPadLabel(button),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    _keyBindings.Unbind(button);
+                    _keyBindings.Save();
+                    RefreshKeyLabels();
                 };
-                Grid.SetColumn(padText, 3);
+                row.Children.Add(Cell(clearKey, 3));
+
+                var padText = NewValueLabel(CurrentPadLabel(button));
                 _padLabels[button] = padText;
+                row.Children.Add(Cell(padText, 4));
 
-                var rebindPadButton = new Button { Content = "Rebind Pad" };
-                Grid.SetColumn(rebindPadButton, 4);
-                rebindPadButton.Click += (_, _) => StartListeningForPad(button);
-                _rebindPadButtons[button] = rebindPadButton;
+                var rebindPad = new Button { Content = RebindPadText };
+                rebindPad.Click += (_, _) => StartListeningForPad(button);
+                _rebindPadButtons[button] = rebindPad;
+                row.Children.Add(Cell(rebindPad, 5));
 
-                row.Children.Add(nameText);
-                row.Children.Add(keyText);
-                row.Children.Add(rebindKeyButton);
-                row.Children.Add(padText);
-                row.Children.Add(rebindPadButton);
+                var clearPad = new Button { Content = "Clear Pad", Margin = new Avalonia.Thickness(4, 0, 0, 0) };
+                clearPad.Click += (_, _) =>
+                {
+                    _gamepadBindings.Unbind(button);
+                    _gamepadBindings.Save();
+                    RefreshPadLabels();
+                };
+                row.Children.Add(Cell(clearPad, 6));
+
                 BindingsPanel.Children.Add(row);
             }
         }
 
+        private void BuildHotkeyRows()
+        {
+            HotkeysPanel.Children.Clear();
+            _hotkeyLabels.Clear();
+            _rebindHotkeyButtons.Clear();
+
+            foreach (HotkeyAction action in Enum.GetValues<HotkeyAction>())
+            {
+                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("130,130,Auto,Auto") };
+
+                row.Children.Add(Cell(new TextBlock { Text = HotkeyBindingMap.DisplayName(action), VerticalAlignment = VerticalAlignment.Center }, 0));
+
+                var keyText = NewValueLabel(CurrentHotkeyLabel(action));
+                _hotkeyLabels[action] = keyText;
+                row.Children.Add(Cell(keyText, 1));
+
+                var rebind = new Button { Content = RebindKeyText };
+                rebind.Click += (_, _) => StartListeningForHotkey(action);
+                _rebindHotkeyButtons[action] = rebind;
+                row.Children.Add(Cell(rebind, 2));
+
+                var clear = new Button { Content = "Clear", Margin = new Avalonia.Thickness(4, 0, 0, 0) };
+                clear.Click += (_, _) =>
+                {
+                    _hotkeyBindings.Unbind(action);
+                    _hotkeyBindings.Save();
+                    RefreshHotkeyLabels();
+                };
+                row.Children.Add(Cell(clear, 3));
+
+                HotkeysPanel.Children.Add(row);
+            }
+        }
+
+        private static TextBlock NewValueLabel(string text) => new()
+        {
+            Text = text,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+
+        private static T Cell<T>(T control, int column) where T : Control
+        {
+            Grid.SetColumn(control, column);
+            return control;
+        }
+
         private string CurrentKeyLabel(SnesButton button) =>
-            _keyBindings.ButtonToKey.TryGetValue(button, out Key k) ? k.ToString() : "(unbound)";
+            _keyBindings.ButtonToKey.TryGetValue(button, out Key k) ? k.ToString() : Unbound;
 
         private string CurrentPadLabel(SnesButton button) =>
-            _gamepadBindings.ButtonToPad.TryGetValue(button, out GameControllerButton p) ? p.ToString() : "(unbound)";
+            _gamepadBindings.ButtonToPad.TryGetValue(button, out GameControllerButton p) ? PadName(p) : Unbound;
 
-        // --- Keyboard rebind: capture via the window's KeyDown event ---
+        // Strips Silk.NET's inconsistent prefix - see EmuSen_Settings_Reference.md §4.6.
+        private static string PadName(GameControllerButton pad)
+        {
+            string name = pad.ToString();
+            return name.StartsWith("ControllerButton", StringComparison.Ordinal)
+                ? name["ControllerButton".Length..]
+                : name;
+        }
+
+        private string CurrentHotkeyLabel(HotkeyAction action) =>
+            _hotkeyBindings.ActionToKey.TryGetValue(action, out Key k) ? k.ToString() : Unbound;
+
+        // --- Keyboard capture (game buttons and hotkeys share one listener) ---
 
         private void StartListeningForKey(SnesButton button)
         {
-            if (_listeningForKey is SnesButton previous) _rebindKeyButtons[previous].Content = "Rebind Key";
-
+            ClearKeyListening();
             _listeningForKey = button;
-            _rebindKeyButtons[button].Content = "Press a key...";
+            _rebindKeyButtons[button].Content = ListeningText;
         }
 
-        private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+        private void StartListeningForHotkey(HotkeyAction action)
         {
-            if (_listeningForKey is not SnesButton button) return;
+            ClearKeyListening();
+            _listeningForHotkey = action;
+            _rebindHotkeyButtons[action].Content = ListeningText;
+        }
+
+        private void ClearKeyListening()
+        {
+            if (_listeningForKey is SnesButton b) _rebindKeyButtons[b].Content = RebindKeyText;
+            if (_listeningForHotkey is HotkeyAction a) _rebindHotkeyButtons[a].Content = RebindKeyText;
+            _listeningForKey = null;
+            _listeningForHotkey = null;
+        }
+
+        private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (_listeningForKey is null && _listeningForHotkey is null) return;
+
+            // A bare modifier would be an unpressable binding.
+            if (e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+                or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
 
             if (e.Key != Key.Escape)
             {
-                _keyBindings.Rebind(button, e.Key);
-                _keyBindings.Save();
+                if (_listeningForKey is SnesButton button)
+                {
+                    // One key must not drive a button and a hotkey at once.
+                    if (_hotkeyBindings.TryGetAction(e.Key, out HotkeyAction clash))
+                    {
+                        _hotkeyBindings.Unbind(clash);
+                        _hotkeyBindings.Save();
+                    }
+                    _keyBindings.Rebind(button, e.Key);
+                    _keyBindings.Save();
+                }
+                else if (_listeningForHotkey is HotkeyAction action)
+                {
+                    if (_keyBindings.TryGetButton(e.Key, out SnesButton clash))
+                    {
+                        _keyBindings.Unbind(clash);
+                        _keyBindings.Save();
+                    }
+                    _hotkeyBindings.Rebind(action, e.Key);
+                    _hotkeyBindings.Save();
+                }
             }
 
             _listeningForKey = null;
+            _listeningForHotkey = null;
             RefreshKeyLabels();
+            RefreshHotkeyLabels();
+
+            // Stops the key re-arming the still-focused rebind button.
             e.Handled = true;
         }
 
@@ -155,24 +280,71 @@ namespace EmuSen.Mistress.Views
             foreach (SnesButton button in Enum.GetValues<SnesButton>())
             {
                 _keyLabels[button].Text = CurrentKeyLabel(button);
-                _rebindKeyButtons[button].Content = "Rebind Key";
+                _rebindKeyButtons[button].Content = RebindKeyText;
             }
+            RefreshConflicts();
         }
 
-        // --- Gamepad rebind: no button-press event exists in Avalonia, so
-        // this polls GamepadManager on a short timer until something is held
-        // down, same GamepadManager instance MainWindow uses for actual
-        // gameplay input (passed in via the constructor) rather than opening
-        // a second SDL controller handle. ---
+        private void RefreshHotkeyLabels()
+        {
+            foreach (HotkeyAction action in Enum.GetValues<HotkeyAction>())
+            {
+                _hotkeyLabels[action].Text = CurrentHotkeyLabel(action);
+                _rebindHotkeyButtons[action].Content = RebindKeyText;
+            }
+            RefreshConflicts();
+        }
+
+        // Catches clashes a hand-edited config can still hold - see EmuSen_Settings_Reference.md §4.5.
+        private void RefreshConflicts()
+        {
+            var seen = new Dictionary<Key, List<string>>();
+
+            foreach (var kv in _keyBindings.ButtonToKey)
+            {
+                if (!seen.TryGetValue(kv.Value, out var owners)) seen[kv.Value] = owners = new List<string>();
+                owners.Add(kv.Key.ToString());
+            }
+            foreach (var kv in _hotkeyBindings.ActionToKey)
+            {
+                if (!seen.TryGetValue(kv.Value, out var owners)) seen[kv.Value] = owners = new List<string>();
+                owners.Add(HotkeyBindingMap.DisplayName(kv.Key));
+            }
+
+            var clashing = seen.Where(kv => kv.Value.Count > 1).ToList();
+            var clashingKeys = clashing.Select(kv => kv.Key).ToHashSet();
+
+            foreach (var kv in _keyLabels)
+            {
+                MarkConflict(kv.Value, _keyBindings.ButtonToKey.TryGetValue(kv.Key, out Key k) && clashingKeys.Contains(k));
+            }
+            foreach (var kv in _hotkeyLabels)
+            {
+                MarkConflict(kv.Value, _hotkeyBindings.ActionToKey.TryGetValue(kv.Key, out Key k) && clashingKeys.Contains(k));
+            }
+
+            ConflictText.Text = clashing.Count == 0
+                ? ""
+                : "Conflict: " + string.Join("; ", clashing.Select(kv => $"{kv.Key} is bound to {string.Join(" and ", kv.Value)}"));
+        }
+
+        // ClearValue, not Foreground = null - see EmuSen_Settings_Reference.md §4.5.
+        private static void MarkConflict(TextBlock label, bool conflicting)
+        {
+            if (conflicting) label.Foreground = Brushes.OrangeRed;
+            else label.ClearValue(TextBlock.ForegroundProperty);
+        }
+
+        // --- Gamepad rebind: polled, since Avalonia has no pad-press event ---
 
         private void StartListeningForPad(SnesButton button)
         {
             if (_gamepad is null) return; // parameterless-ctor / previewer case
 
-            if (_listeningForPad is SnesButton previous) _rebindPadButtons[previous].Content = "Rebind Pad";
+            if (_listeningForPad is SnesButton previous) _rebindPadButtons[previous].Content = RebindPadText;
 
             _listeningForPad = button;
-            _rebindPadButtons[button].Content = "Press a button...";
+            _rebindPadButtons[button].Content = ListeningPadText;
 
             _padPollTimer?.Stop();
             _padPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
@@ -182,7 +354,8 @@ namespace EmuSen.Mistress.Views
 
         private void PollForPadButton()
         {
-            if (_listeningForPad is not SnesButton button)
+            // Guarded locally so the timer stops itself - see EmuSen_Settings_Reference.md §4.6.
+            if (_gamepad is null || _listeningForPad is not SnesButton button)
             {
                 _padPollTimer?.Stop();
                 return;
@@ -204,8 +377,52 @@ namespace EmuSen.Mistress.Views
             foreach (SnesButton button in Enum.GetValues<SnesButton>())
             {
                 _padLabels[button].Text = CurrentPadLabel(button);
-                _rebindPadButtons[button].Content = "Rebind Pad";
+                _rebindPadButtons[button].Content = RebindPadText;
             }
+        }
+
+        private void UpdateControllerStatus()
+        {
+            if (_gamepad is null)
+            {
+                ControllerStatusText.Text = "Controller: not available";
+                return;
+            }
+
+            ControllerStatusText.Text = _gamepad.IsConnected
+                ? $"Connected: {_gamepad.ControllerName}"
+                : "No controller detected - plug one in and it will be picked up automatically.";
+        }
+
+        // --- Option handlers ---
+
+        private void OnMirrorPlayer1ToPlayer2Changed(object? sender, RoutedEventArgs e)
+        {
+            if (!_initialized) return;
+            _appSettings.MirrorPlayer1ToPlayer2 = MirrorPlayer1ToPlayer2CheckBox.IsChecked == true;
+            _appSettings.Save();
+        }
+
+        private void OnAnalogStickAsDpadChanged(object? sender, RoutedEventArgs e)
+        {
+            if (!_initialized) return;
+            _appSettings.AnalogStickAsDpad = AnalogStickAsDpadCheckBox.IsChecked == true;
+            _appSettings.Save();
+            if (_gamepad is not null) _gamepad.AnalogStickAsDpad = _appSettings.AnalogStickAsDpad;
+        }
+
+        private void OnDeadzoneChanged(object? sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            if (!_initialized) return;
+            _appSettings.StickDeadzone = DeadzoneSlider.Value;
+            _appSettings.Save();
+            if (_gamepad is not null) _gamepad.StickDeadzone = _appSettings.StickDeadzone;
+            UpdateDeadzoneText();
+        }
+
+        private void UpdateDeadzoneText()
+        {
+            if (DeadzoneText is not null) DeadzoneText.Text = $"{DeadzoneSlider.Value * 100:F0}%";
         }
 
         private void OnResetClick(object? sender, RoutedEventArgs e)
@@ -214,8 +431,11 @@ namespace EmuSen.Mistress.Views
             _keyBindings.Save();
             _gamepadBindings.ResetToDefaults();
             _gamepadBindings.Save();
+            _hotkeyBindings.ResetToDefaults();
+            _hotkeyBindings.Save();
             RefreshKeyLabels();
             RefreshPadLabels();
+            RefreshHotkeyLabels();
         }
 
         private void OnCloseClick(object? sender, RoutedEventArgs e)

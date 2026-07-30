@@ -108,12 +108,47 @@ namespace EmuSen.Mistress.Input
             _sdl.GameControllerUpdate();
         }
 
+        // Stick-as-d-pad and its threshold - see EmuSen_Settings_Reference.md §4.4.
+        public bool AnalogStickAsDpad { get; set; } = true;
+        public double StickDeadzone { get; set; } = 0.5;
+
+        public bool IsConnected => _available && _controller != null;
+
+        // Null when nothing is connected - see EmuSen_Settings_Reference.md §4.4.
+        public string? ControllerName
+        {
+            get
+            {
+                if (!IsConnected) return null;
+                byte* name = _sdl.GameControllerName(_controller);
+                return name == null ? "Unknown controller" : System.Runtime.InteropServices.Marshal.PtrToStringUTF8((IntPtr)name);
+            }
+        }
+
         public bool IsPressed(SnesButton button)
         {
             if (!_available || _controller == null) return false;
+
+            if (AnalogStickAsDpad && StickDirectionPressed(button)) return true;
+
             if (!_bindings.ButtonToPad.TryGetValue(button, out GameControllerButton sdlButton)) return false;
 
             return _sdl.GameControllerGetButton(_controller, sdlButton) != 0;
+        }
+
+        // Axis range is -32768..32767; the deadzone is a fraction of it.
+        private bool StickDirectionPressed(SnesButton button)
+        {
+            short threshold = (short)(Math.Clamp(StickDeadzone, 0.05, 0.95) * short.MaxValue);
+
+            return button switch
+            {
+                SnesButton.Left => _sdl.GameControllerGetAxis(_controller, GameControllerAxis.Leftx) < -threshold,
+                SnesButton.Right => _sdl.GameControllerGetAxis(_controller, GameControllerAxis.Leftx) > threshold,
+                SnesButton.Up => _sdl.GameControllerGetAxis(_controller, GameControllerAxis.Lefty) < -threshold,
+                SnesButton.Down => _sdl.GameControllerGetAxis(_controller, GameControllerAxis.Lefty) > threshold,
+                _ => false,
+            };
         }
 
         // Used by InputSettingsWindow's rebind-capture flow: polled on a

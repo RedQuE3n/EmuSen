@@ -1,9 +1,11 @@
+using System.IO;
+
 namespace EmuSen.Cores
 {
     // The core-agnostic execution contract - the missing counterpart to
     // Debug/IDebugTarget.cs. IDebugTarget already proved this pattern works:
     // a narrow interface any core implements, with everything built on top
-    // of it (DebugCommandProcessor, WatchRegistry, FrameRecorder) written
+    // of it (DianaOSInterpreter, WatchRegistry, FrameRecorder) written
     // once and reused unchanged for whatever core is plugged in. This is
     // the same idea applied to actually *running* a core, not just
     // inspecting it.
@@ -17,7 +19,7 @@ namespace EmuSen.Cores
     // interface now would be a much bigger, riskier piece of work than
     // this contract's actual purpose - eliminating the duplicated
     // frame-timing loop that used to exist separately in both the console
-    // frontend's Program.cs (now EmuSen.RaylibFrontend/Program.cs) and
+    // frontend's Program.cs (now EmuSen.Hotaru/Program.cs) and
     // Common/EmulatorSession.cs. A core's
     // concrete implementation (e.g. VenusCore) is free to expose its own
     // real input surface beyond this interface; callers that need it
@@ -40,6 +42,9 @@ namespace EmuSen.Cores
         int ScreenWidth { get; }
         int ScreenHeight { get; }
 
+        // Hardware refresh rate, for frontend frame pacing - see Venus_CPU.md §8.5b.
+        double FrameRateHz { get; }
+
         bool IsRomLoaded { get; }
         long TotalFrames { get; }
 
@@ -58,8 +63,43 @@ namespace EmuSen.Cores
         // to know anything about this core's native pixel format.
         byte[] GetFrameBufferRgba();
 
+        // Sample rate this core's audio is generated at, fixed for the
+        // whole session - a caller opening a real output device needs this
+        // once up front, before any samples exist to read a rate off of,
+        // so it's its own property rather than folded into
+        // DequeueAudioSamples' return the way IDebugTarget.GetAudioSamples
+        // bundles (Samples, SampleRate) together for a one-shot snapshot.
+        int AudioSampleRate { get; }
+
+        // The audio counterpart to GetFrameBufferRgba() above: drains up
+        // to <maxFrames> interleaved stereo frames (maxFrames*2 shorts,
+        // L then R, 16-bit signed PCM) of already-synthesized audio out of
+        // this core's internal buffer, so a caller can push real sound to
+        // its own output device (a Raylib AudioStream, an SDL audio
+        // device, whatever) without knowing anything about this core's
+        // synthesis hardware. Destructive - removes exactly what it
+        // returns - and never blocks: returns fewer frames than requested,
+        // or an empty array, if less is currently buffered. Deliberately
+        // NOT the same method as IDebugTarget.GetAudioSamples(), which is
+        // a non-destructive ToArray() snapshot built for one-shot WAV
+        // export (`audiodump`) - real-time playback needs to actually
+        // drain the queue as it consumes it, or the buffer would just grow
+        // until it hits its own cap and starts dropping the oldest
+        // samples. A core with no audio output modeled can return an
+        // empty array unconditionally.
+        short[] DequeueAudioSamples(int maxFrames);
+
         void SaveState(string path);
         void LoadState(string path);
+
+        // Same bytes as the path overloads above, without the filesystem - see
+        // EmuSen_Rewind_And_FastForward.md §1.1. Neither closes the stream.
+        void SaveState(Stream stream);
+        void LoadState(Stream stream);
+
+        // Fast-forward-only hint that this frame's pixels are discarded; a core
+        // honoring it may leave render-derived bits stale - see §2.2.
+        bool SkipRendering { get; set; }
 
         // Flushes battery-backed save data (SRAM or whatever this
         // hardware's equivalent is) to disk. A core with no such concept

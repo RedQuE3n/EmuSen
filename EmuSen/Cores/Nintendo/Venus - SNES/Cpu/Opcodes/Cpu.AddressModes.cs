@@ -1,6 +1,11 @@
 using System;
 using EmuSen.Cores.Nintendo.Venus.Memory;
-using EmuSen.Debug;
+using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
@@ -27,6 +32,33 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         // opcode matrix (oxyron.de, cross-checked against softpixel's table)
         // for the eight 0x_3 opcodes that use it: ORA/AND/EOR/ADC/STA/LDA/
         // CMP/SBC (sr,S),Y.
+        // Real 65816 hardware: any direct-page addressing mode costs one
+        // extra cycle when D's low byte is nonzero (the CPU has to add the
+        // 8-bit offset to a non-page-aligned D and can't just concatenate
+        // bytes for free). Reported via _addrModeExtraCycles - see its
+        // field comment in Cpu.cs - rather than a per-opcode table entry,
+        // since it's a property of the addressing mode itself, not the
+        // opcode using it.
+        private void ChargeDirectPagePenalty()
+        {
+            if ((D & 0xFF) != 0) _addrModeExtraCycles++;
+        }
+
+        // Real 65816 hardware: indexed addressing that carries out of the
+        // low byte of the 16-bit offset (i.e. crosses a page) costs one
+        // extra cycle - the CPU speculatively reads the wrong page first,
+        // then re-reads once it notices the carry. Approximated here as
+        // applying unconditionally on a crossing regardless of 8-bit vs
+        // 16-bit index width or read-vs-write instruction (the real
+        // hardware rule is somewhat narrower - e.g. 16-bit index and pure
+        // stores don't always take it), which is a known, accepted
+        // simplification rather than threading opcode-level read/write and
+        // index-width flags through every addressing mode for it.
+        private void ChargePageCrossingPenalty(uint baseAddr, int index)
+        {
+            if ((baseAddr & 0xFF00) != ((baseAddr + index) & 0xFF00)) _addrModeExtraCycles++;
+        }
+
         private uint AddrStackRelativeIndirectY()
         {
             byte offset = Fetch8();
@@ -51,40 +83,44 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private uint AddrDirectIndirectY()
         {
+            ChargeDirectPagePenalty();
             byte dpOffset = Fetch8();
             ushort dpAddr = (ushort)((D + dpOffset) & 0xFFFF);
-            
+
             // Read the 16-bit pointer from the Direct Page
             uint low = _bus.Read8(dpAddr);
             uint high = _bus.Read8((uint)((dpAddr + 1) & 0xFFFF));
-            
+
             // Combine with Data Bank (DB), then add Y
             uint baseAddr = ((uint)DB << 16) | (high << 8) | low;
+            ChargePageCrossingPenalty(baseAddr, Y);
             return (baseAddr + Y) & 0xFFFFFF;
         }
 
         private uint AddrDirectIndirectX()
         {
+            ChargeDirectPagePenalty();
             byte dpOffset = Fetch8();
             ushort dpAddr = (ushort)((D + dpOffset + X) & 0xFFFF);
-            
+
             uint low = _bus.Read8(dpAddr);
             uint high = _bus.Read8((uint)((dpAddr + 1) & 0xFFFF));
-            
+
             return ((uint)DB << 16) | (high << 8) | low;
         }
 
         private uint AddrDirectIndirect()
         {
+            ChargeDirectPagePenalty();
             byte dpOffset = Fetch8();
             ushort dpAddr = (ushort)((D + dpOffset) & 0xFFFF);
-            
+
             uint low = _bus.Read8(dpAddr);
             uint high = _bus.Read8((uint)((dpAddr + 1) & 0xFFFF));
-            
+
             return ((uint)DB << 16) | (high << 8) | low;
         }
-        
+
         private uint AddrAbsolute()
         {
             ushort offset = Fetch16();
@@ -95,6 +131,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             ushort offset = Fetch16();
             uint baseAddr = ((uint)DB << 16) | offset;
+            ChargePageCrossingPenalty(baseAddr, X);
             return (baseAddr + X) & 0xFFFFFF;
         }
 
@@ -102,6 +139,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             ushort offset = Fetch16();
             uint baseAddr = ((uint)DB << 16) | offset;
+            ChargePageCrossingPenalty(baseAddr, Y);
             return (baseAddr + Y) & 0xFFFFFF;
         }
 
@@ -196,46 +234,51 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private uint AddrDirectPageX()
         {
+            ChargeDirectPagePenalty();
             byte dpOffset = Fetch8();
             return (uint)((D + dpOffset + X) & 0xFFFF);
         }
 
         private uint AddrDirectPageY()
         {
+            ChargeDirectPagePenalty();
             byte dpOffset = Fetch8();
             return (uint)((D + dpOffset + Y) & 0xFFFF);
         }
 
         private uint AddrDirectPage()
         {
+            ChargeDirectPagePenalty();
             byte dpOffset = Fetch8();
             return (uint)((D + dpOffset) & 0xFFFF);
         }
 
         private uint AddrDirectIndirectLongY()
         {
+            ChargeDirectPagePenalty();
             byte dpOffset = Fetch8();
             ushort dpAddr = (ushort)((D + dpOffset) & 0xFFFF);
-            
+
             uint low = _bus.Read8(dpAddr);
             uint high = _bus.Read8((uint)((dpAddr + 1) & 0xFFFF));
             uint bank = _bus.Read8((uint)((dpAddr + 2) & 0xFFFF));
-            
+
             uint baseAddr = (bank << 16) | (high << 8) | low; // Safe, bank is already a uint
-            
+
             return (baseAddr + Y) & 0xFFFFFF;
         }
 
         private uint AddrDirectIndirectLong()
         {
             // [dp]: 24-bit pointer is read from the direct page, no Y indexing
+            ChargeDirectPagePenalty();
             byte dpOffset = Fetch8();
             ushort dpAddr = (ushort)((D + dpOffset) & 0xFFFF);
-            
+
             uint low = _bus.Read8(dpAddr);
             uint high = _bus.Read8((uint)((dpAddr + 1) & 0xFFFF));
             uint bank = _bus.Read8((uint)((dpAddr + 2) & 0xFFFF));
-            
+
             return (bank << 16) | (high << 8) | low; // Safe, bank is already a uint
         }
 

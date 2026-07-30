@@ -10,10 +10,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
     {
         private byte[] _registers = new byte[128];
         private byte _registerAddress;
-        private byte[] _ram = null!;
+        // Spc700.Ram, attached in AttachMemory - see EmuSen_Save_States.md §2.
+        [EmuSen.Common.AliasOfSerializedField] private byte[] _ram = null!;
 
         private readonly DspVoice[] _voices = new DspVoice[8];
-        private byte _prevKon;
+
+        // KON latch - an event register, not a level. See Venus_APU.md §3.3.
+        private byte _pendingKon;
         private byte _prevKoff;
 
         // Global (non-per-voice) register offsets - see Venus_APU.md §3 /
@@ -62,6 +65,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private int _dspCycles;
 
+        // Debug-only per-voice mute mask for the `mute`/`channels` commands
+        // (see GetVoiceDebugInfo/SetVoiceMuted below) - NOT real hardware
+        // state (there's no such SNES register), so excluded from save
+        // states the same way _sheetPixels/_audioBuffer are. A muted voice
+        // still runs GetNextSample() every tick (so its own envelope/
+        // playback position doesn't desync from "what really happened"),
+        // it's just excluded from the final mix and from feeding the echo
+        // buffer - letting a suspected-broken instrument be isolated
+        // (mute everything else, dump audio) or ruled out (mute just it,
+        // confirm the rest of the mix is unaffected) without needing a
+        // separate solo-rendering pipeline.
+        [EmuSen.Common.SkipInState]
+        private byte _debugMuteMask;
+
         public SDsp()
         {
             for (int i = 0; i < 8; i++) _voices[i] = new DspVoice();
@@ -94,7 +111,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
             _registerAddress = 0;
             _dspCycles = 0;
-            _prevKon = 0;
+            _pendingKon = 0;
             _prevKoff = 0;
             Array.Clear(_echoHistoryL, 0, 8);
             Array.Clear(_echoHistoryR, 0, 8);
@@ -142,10 +159,32 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             return _registers[index];
         }
 
+        // Non-mutating register peek for the debug toolchain
+        // (SnesDebugTarget.ApuRegisters) - unlike ReadRegister() above,
+        // this never touches _registerAddress, so a debugger inspecting
+        // DSP state can't disturb whatever multi-step address/data
+        // sequence the actual sound driver is mid-way through.
+        public byte PeekRegister(int index)
+        {
+            index &= 0x7F;
+            if (index == 0x7C)
+            {
+                byte endx = 0;
+                for (int v = 0; v < 8; v++)
+                {
+                    if (_voices[v].Ended) endx |= (byte)(1 << v);
+                }
+                return endx;
+            }
+            return _registers[index];
+        }
+
         public void WriteRegister(byte data)
         {
             int index = _registerAddress & 0x7F;
             _registers[index] = data;
+
+            if (index == RegKeyOn) _pendingKon |= data; // see Venus_APU.md §3.3.1
 
             // Any write to ENDX clears all its bits - see Venus_APU.md §3.2.
             if (index == 0x7C)
@@ -214,6 +253,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 {
                     var voice = _voices[i];
                     short s = voice.GetNextSample();
+                    // Debug-only solo/mute (see _debugMuteMask's own
+                    // comment) - GetNextSample() above still ran, so this
+                    // voice's own playback/envelope state stays in sync;
+                    // it's just excluded from the mix and from feeding echo.
+                    if ((_debugMuteMask & (1 << i)) != 0) continue;
                     int contribL = (s * (sbyte)voice.VolL) >> 7;
                     int contribR = (s * (sbyte)voice.VolR) >> 7;
                     dryL += contribL;
@@ -261,7 +305,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             AudioBuffer.Enqueue(leftSample);
             AudioBuffer.Enqueue(rightSample);
 
-            if (AudioBuffer.Count > AudioSettings.AudioBufferMaxSamples)
+            // Safety valve for when nothing is draining at all - the frontend's
+            // rate control is what keeps this near empty. Pairs, never single
+            // samples, or L/R swap. See EmuSen_Audio_Sync.md §4.
+            while (AudioBuffer.Count > AudioSettings.AudioBufferMaxSamples && AudioBuffer.Count >= 2)
             {
                 AudioBuffer.Dequeue();
                 AudioBuffer.Dequeue();
@@ -332,29 +379,91 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             return (firL, firR);
         }
 
-        // KON/KOFF edge detection - see Venus_APU.md §3.3.
+        // Drains the KON latch, edge-detects KOFF - see Venus_APU.md §3.3.
         private void ProcessKeyEvents()
         {
-            byte kon = _registers[0x4C];
-            byte koff = _registers[0x5C];
-            byte dir = _registers[0x5D];
+            byte koff = _registers[RegKeyOff];
+            byte dir = _registers[RegSourceDir];
             int dirTableAddr = dir << 8;
 
-            byte konRising = (byte)(kon & ~_prevKon);
+            // Every latched KON write fires exactly once, then drains.
+            byte konPending = _pendingKon;
+            _pendingKon = 0;
             byte koffRising = (byte)(koff & ~_prevKoff);
 
             for (int v = 0; v < 8; v++)
             {
-                bool konBit = (konRising & (1 << v)) != 0;
+                bool konBit = (konPending & (1 << v)) != 0;
                 bool koffBit = (koffRising & (1 << v)) != 0;
 
                 if (konBit) _voices[v].KeyOn(dirTableAddr, _sampleCounter);
-                // KeyOff wins if both are newly set - see Venus_APU.md §3.3.
+                // KeyOff wins if both land in the same window - see Venus_APU.md §3.3.
                 if (koffBit) _voices[v].KeyOff();
             }
 
-            _prevKon = kon;
             _prevKoff = koff;
         }
+
+        // Plain data snapshot of one voice's current debug-relevant state -
+        // backs SnesDebugTarget.AudioChannels (see IDebugTarget's own
+        // comment on why that's modeled as a generic "channel" concept
+        // rather than SNES-specific). Everything here already exists on
+        // DspVoice; this just gathers it into one struct instead of
+        // exposing 10 separate getters to the debug layer.
+        public readonly struct VoiceDebugInfo
+        {
+            public bool Active { get; }
+            public int Envelope { get; }
+            public string Stage { get; }
+            public byte VolL { get; }
+            public byte VolR { get; }
+            public byte Srcn { get; }
+            public ushort Pitch { get; }
+            public byte Adsr1 { get; }
+            public byte Adsr2 { get; }
+            public byte Gain { get; }
+            public bool Ended { get; }
+            public bool Muted { get; }
+            public int KeyOnCount { get; }
+            public long LastKeyOnSample { get; }
+
+            public VoiceDebugInfo(bool active, int envelope, string stage, byte volL, byte volR, byte srcn, ushort pitch, byte adsr1, byte adsr2, byte gain, bool ended, bool muted, int keyOnCount, long lastKeyOnSample)
+            {
+                Active = active;
+                Envelope = envelope;
+                Stage = stage;
+                VolL = volL;
+                VolR = volR;
+                Srcn = srcn;
+                Pitch = pitch;
+                Adsr1 = adsr1;
+                Adsr2 = adsr2;
+                Gain = gain;
+                Ended = ended;
+                Muted = muted;
+                KeyOnCount = keyOnCount;
+                LastKeyOnSample = lastKeyOnSample;
+            }
+        }
+
+        public VoiceDebugInfo GetVoiceDebugInfo(int index)
+        {
+            DspVoice v = _voices[index];
+            bool muted = (_debugMuteMask & (1 << index)) != 0;
+            return new VoiceDebugInfo(v.IsActive, v.EnvelopeLevel, v.StageName, v.VolL, v.VolR, v.Srcn, v.Pitch, v.Adsr1, v.Adsr2, v.Gain, v.Ended, muted, v.KeyOnCount, v.LastKeyOnSample);
+        }
+
+        public void SetVoiceMuted(int index, bool muted)
+        {
+            if (index < 0 || index >= 8) return;
+            if (muted) _debugMuteMask |= (byte)(1 << index);
+            else _debugMuteMask &= (byte)~(1 << index);
+        }
+
+        // Current sample-clock position, for VoiceDebugInfo.LastKeyOnSample
+        // to be interpreted against ("how many samples ago did this voice
+        // last trigger") without the debug layer needing its own copy of
+        // this counter.
+        public long SampleCounter => _sampleCounter;
     }
 }

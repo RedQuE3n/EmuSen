@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The core-agnostic debug/scripting shell - see this project's own
+       README/header comments (DianaOSInterpreter.cs, IDebugTarget.cs) for
+       the full design. OutputType=Exe so `dotnet run` here launches a
+       standalone shell with no core loaded at all (see Program.cs) -
+       every other project just references this like any other library;
+       its Main only runs when this project is the one actually launched. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- OutputType=Exe above means a RID-specific publish of a frontend that
+         references this project also builds it for the HOST rid, so restore
+         has to produce assets for every publish target plus the build
+         machine's own - see `man hier`. -->
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
+         comment on why these live in their own project, separate from
+         DianaOS, rather than being DianaOS-owned. -->
+    <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
+  </ItemGroup>
+
+  <!-- Ships the two read-only doc trees into a published build's own sandbox
+       root, so `man`/`cat`/`find` have the same reference material there that
+       they do running from source. Link= is what places them under
+       DianaOSRoot/ - see `man hier`'s "where the root actually is" for why a
+       published root is a subdirectory rather than the binary's folder.
+       CopyToPublishDirectory only (not CopyToOutputDirectory): running from
+       source already reads these straight out of the repo, so copying them
+       into every bin/ would be ~770KB of duplication nothing ever reads. -->
+  <ItemGroup>
+    <None Include="DianaOS\Etc\Man pages\**\*"
+          Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Etc\Man pages\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="Never"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="DianaOS\Usr\Home\Documents\**\*"
+          Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Usr\Home\Documents\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="Never"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

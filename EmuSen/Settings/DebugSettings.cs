@@ -1,7 +1,7 @@
 namespace EmuSen.Debug
 {
     // Central hub for every debug/diagnostic toggle across the emulator -
-    // see Man pages/EmuSen_Settings_Reference.md §1 for what each flag is
+    // see EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Settings_Reference.md §1 for what each flag is
     // for and the investigation history behind it.
     public static class DebugSettings
     {
@@ -24,7 +24,19 @@ namespace EmuSen.Debug
         // whatever value they're set to underneath, so re-enabling this
         // brings back exactly what was configured before, per this
         // comment's own original design.
-        public static bool MasterLoggingEnabled = false;
+        //
+        // Forwards to EmuSen.DianaOS.DianaOS.Etc.DianaOSLogging.MasterEnabled rather
+        // than holding its own field - DianaOS's own `log` command and
+        // WatchRegistry's live echo need to read/write this without
+        // depending on this (or any other core's) settings class, so the
+        // actual flag lives there; every caller here (VenusCore,
+        // Mistress's DebugSettingsWindow, Pharaoh) keeps working
+        // against this same property name unchanged.
+        public static bool MasterLoggingEnabled
+        {
+            get => EmuSen.DianaOS.DianaOS.Etc.DianaOSLogging.MasterEnabled;
+            set => EmuSen.DianaOS.DianaOS.Etc.DianaOSLogging.MasterEnabled = value;
+        }
 
         // --- Cpu.cs ---
         private static bool _cpuVerboseLogging = false;
@@ -79,6 +91,15 @@ namespace EmuSen.Debug
         {
             get => MasterLoggingEnabled && _spc700VerboseLogging;
             set => _spc700VerboseLogging = value;
+        }
+
+        // Both directions of the $2140-$2143 / $00F4-$00F7 mailbox, logged
+        // on change only - see Venus_APU.md §1.2.
+        private static bool _apuPortTrafficLogging = false;
+        public static bool ApuPortTrafficLogging
+        {
+            get => MasterLoggingEnabled && _apuPortTrafficLogging;
+            set => _apuPortTrafficLogging = value;
         }
 
         // --- DspVoice.cs ---
@@ -157,5 +178,11 @@ namespace EmuSen.Debug
 
         // --- Renderer.cs ---
         public static bool WindowingEnabled = true;
+
+        // ANDed into TM/TS to isolate one layer at a time - see EmuSen_Debugging_Tools_Reference_v5.md §3.19.
+        public static int LayerEnableMask = 0x1F;
+
+        // Dumps mid-frame PPU register state, which `regs` cannot see - see §3.19.
+        public static int ScanlineRegisterDumpLine = -1;
     }
 }

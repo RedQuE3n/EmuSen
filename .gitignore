@@ -1,16 +1,21 @@
 # .NET Build Outputs
 bin/
 obj/
+TestResults/
 
 # OS/IDE generated files (Standard additions)
 .DS_Store
 .vs/
 .vscode/
 
-# Emulator Specific Data
-Saves/
-SaveStates/
-Logs/
+# DianaOS's own Unix-shaped runtime tree (home/<user>, etc, tmp, and
+# SourceLogs at the repo root) - see `man hier` - real, uncommitted data,
+# not source. *.srm/*.state kept for anything still written outside
+# Usr/Home/Saves (EmuSen.Mistress's own AppData-based save path).
+home/
+etc/
+tmp/
+SourceLogs/
 *.srm
 *.state
 
@@ -18,3 +23,9 @@ Logs/
 # never belongs in version control (redistribution), regardless of who
 # added it or why.
 TestRoms/
+EmuSen.DianaOS/DianaOS/Usr/Home/Games/*
+EmuSen.DianaOS/DianaOS/Usr/Home/Roms/*
+!EmuSen.DianaOS/DianaOS/Usr/Home/Games/.gitkeep
+!EmuSen.DianaOS/DianaOS/Usr/Home/Roms/.gitkeep
+*.smc
+*.sfc

@@ -5,15 +5,21 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen", "EmuSen\EmuSen.csproj", "{A38C3BCD-5A38-48D5-9C1C-8858F9D65ECB}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Presentation", "EmuSen.Presentation\EmuSen.Presentation.csproj", "{0379B889-6F6C-4037-AF1E-1A6F807E0872}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Serenity", "EmuSen.Serenity\EmuSen.Serenity.csproj", "{0379B889-6F6C-4037-AF1E-1A6F807E0872}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.RaylibFrontend", "EmuSen.RaylibFrontend\EmuSen.RaylibFrontend.csproj", "{7EFE3253-C275-4845-8C09-C710153A2475}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Hotaru", "EmuSen.Hotaru\EmuSen.Hotaru.csproj", "{7EFE3253-C275-4845-8C09-C710153A2475}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.TestingStudio", "EmuSen.TestingStudio\EmuSen.TestingStudio.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmuSen.Mistress", "EmuSen.Mistress\EmuSen.Mistress.csproj", "{149D5BE3-4BB0-41D7-A1AA-BC15477B7827}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Validation", "EmuSen.Validation\EmuSen.Validation.csproj", "{B85BD116-4F6F-4BC7-AE89-90F60316685A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Tomoe", "EmuSen.Tomoe\EmuSen.Tomoe.csproj", "{B85BD116-4F6F-4BC7-AE89-90F60316685A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.HeadlessDebug", "EmuSen.HeadlessDebug\EmuSen.HeadlessDebug.csproj", "{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Pharaoh", "EmuSen.Pharaoh\EmuSen.Pharaoh.csproj", "{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.WiseMan", "EmuSen.WiseMan\EmuSen.WiseMan.csproj", "{8A373964-284F-40E7-A19D-2C922DD602F1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Cauldron", "EmuSen.Cauldron\EmuSen.Cauldron.csproj", "{AA49A702-4C1B-462E-A8FF-E90338E12AFA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.DianaOS", "EmuSen.DianaOS\EmuSen.DianaOS.csproj", "{A462A496-51EC-4E73-8E02-3C57A88AC352}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -97,6 +103,42 @@ Global
 		{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}.Release|x64.Build.0 = Release|Any CPU
 		{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}.Release|x86.ActiveCfg = Release|Any CPU
 		{308E0ACB-4B10-4653-932A-75D3AFBA6AE4}.Release|x86.Build.0 = Release|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Debug|x64.Build.0 = Debug|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Debug|x86.Build.0 = Debug|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Release|x64.ActiveCfg = Release|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Release|x64.Build.0 = Release|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Release|x86.ActiveCfg = Release|Any CPU
+		{8A373964-284F-40E7-A19D-2C922DD602F1}.Release|x86.Build.0 = Release|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Debug|x64.Build.0 = Debug|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Debug|x86.Build.0 = Debug|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Release|x64.ActiveCfg = Release|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Release|x64.Build.0 = Release|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Release|x86.ActiveCfg = Release|Any CPU
+		{AA49A702-4C1B-462E-A8FF-E90338E12AFA}.Release|x86.Build.0 = Release|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Debug|x64.Build.0 = Debug|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Debug|x86.Build.0 = Debug|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|x64.ActiveCfg = Release|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|x64.Build.0 = Release|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|x86.ActiveCfg = Release|Any CPU
+		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

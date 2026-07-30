@@ -1,5 +1,12 @@
 using System;
 using System.IO;
+using EmuSen.Cores.Nintendo.Venus.Memory.Mappers;
+using EmuSen.DianaOS;
+using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {
@@ -8,6 +15,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         [EmuSen.Common.SkipInState] private byte[] _rom;
         private byte[] _sram;
         public int SramSize => _sram.Length;
+
+        // All three are derived from the ROM file, which LoadRom re-reads
+        // before any state load, so none belong in a save state.
+        [EmuSen.Common.SkipInState] private readonly ICartridgeMapper _mapper;
+        [EmuSen.Common.SkipInState] private readonly bool _isHiRom;
+
+        private const int LoRomHeader = 0x7FC0;
+        private const int HiRomHeader = 0xFFC0;
+
+        public string MapperName => _mapper.Name;
 
         // Saves/<rom-name>.srm - see Venus_Memory.md §2.4.
         public string SavePath { get; }
@@ -28,11 +45,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             _rom = new byte[fileBytes.Length - headerSize];
             Array.Copy(fileBytes, headerSize, _rom, 0, _rom.Length);
 
-            // SRAM size from the ROM header ($00:FFD8) - see Venus_Memory.md §2.2.
+            // Which of the two header locations is real decides the whole
+            // memory map - see Venus_Memory.md §2.1a.
+            _isHiRom = ScoreHeader(_rom, HiRomHeader, hiRom: true) > ScoreHeader(_rom, LoRomHeader, hiRom: false);
+            _mapper = _isHiRom ? new HiRomMapper() : new LoRomMapper();
+            int headerBase = _isHiRom ? HiRomHeader : LoRomHeader;
+
+            // SRAM size from the ROM header (+$18) - see Venus_Memory.md §2.2.
             int sramSize = 0;
-            if (_rom.Length > 0x7FD8)
+            if (_rom.Length > headerBase + 0x18)
             {
-                int ramSizeExponent = _rom[0x7FD8];
+                int ramSizeExponent = _rom[headerBase + 0x18];
                 if (ramSizeExponent > 0)
                 {
                     // Clamp to SnesLab's documented real-hardware max (512KB).
@@ -42,12 +65,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
             _sram = new byte[sramSize];
 
-            string saveDir = Path.Combine(Directory.GetCurrentDirectory(), "Saves");
+            string saveDir = DianaOSSandbox.SavesDirectory;
             string romName = Path.GetFileNameWithoutExtension(romPath);
             SavePath = Path.Combine(saveDir, romName + ".srm");
             LoadSram();
 
             Console.WriteLine("=== Cartridge Loaded ===");
+            Console.WriteLine($"Mapper: {_mapper.Name}");
             Console.WriteLine($"ROM Size: {_rom.Length / 1024} KB");
             Console.WriteLine($"SRAM Size: {_sram.Length / 1024} KB");
             Console.WriteLine($"Save Path: {SavePath}");
@@ -94,43 +118,54 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
 
         public byte Read8(uint address)
         {
-            byte bank = (byte)(address >> 16);
-            ushort offset = (ushort)(address & 0xFFFF);
-
-            // --- LoROM ROM Mapping ---
-            // ROM is mapped to the upper 32KB ($8000-$FFFF) of banks $00-$3F and $80-$BF
-            if (offset >= 0x8000)
+            var mapped = _mapper.Resolve((byte)(address >> 16), (ushort)(address & 0xFFFF));
+            switch (mapped.Region)
             {
-                // Masking the bank to 0x7F handles the mirror between the lower and upper banks
-                uint romAddr = (uint)(((bank & 0x7F) * 0x8000) + (offset - 0x8000));
-                
-                if (romAddr < _rom.Length)
-                {
-                    return _rom[romAddr];
-                }
-            }
-            
-            // SRAM mirroring (modulo, not a hard range check) - see
-            // Venus_Memory.md §2.3 for why this matters beyond correctness.
-            if (offset < 0x8000 && ((bank >= 0x70 && bank <= 0x7D) || (bank >= 0xF0 && bank <= 0xFF)) && _sram.Length > 0)
-            {
-                return _sram[offset % _sram.Length];
-            }
+                case CartridgeRegion.Rom:
+                    return mapped.Offset < _rom.Length ? _rom[mapped.Offset] : (byte)0x00;
 
-            // Unmapped memory (Open Bus)
-            return 0x00; 
+                // SRAM mirroring (modulo, not a hard range check) - see
+                // Venus_Memory.md §2.3 for why this matters beyond correctness.
+                case CartridgeRegion.Sram:
+                    return _sram.Length > 0 ? _sram[mapped.Offset % _sram.Length] : (byte)0x00;
+
+                default:
+                    return 0x00; // open bus
+            }
         }
 
         public void Write8(uint address, byte data)
         {
-            byte bank = (byte)(address >> 16);
-            ushort offset = (ushort)(address & 0xFFFF);
-
-            // ROM is read-only; only SRAM is writable. Same mirroring as Read8.
-            if (offset < 0x8000 && ((bank >= 0x70 && bank <= 0x7D) || (bank >= 0xF0 && bank <= 0xFF)) && _sram.Length > 0)
+            // ROM is read-only; only SRAM is writable.
+            var mapped = _mapper.Resolve((byte)(address >> 16), (ushort)(address & 0xFFFF));
+            if (mapped.Region == CartridgeRegion.Sram && _sram.Length > 0)
             {
-                _sram[offset % _sram.Length] = data;
+                _sram[mapped.Offset % _sram.Length] = data;
             }
+        }
+
+        // Lets MemoryBus route a low-half address in a hardware bank here
+        // instead of returning open bus - see Venus_Memory.md §2.1a.
+        public bool MapsAddress(uint address)
+        {
+            return _mapper.Resolve((byte)(address >> 16), (ushort)(address & 0xFFFF)).Region != CartridgeRegion.Unmapped;
+        }
+
+        // Higher score wins - see Venus_Memory.md §2.1a.
+        private static int ScoreHeader(byte[] rom, int baseAddr, bool hiRom)
+        {
+            if (rom.Length < baseAddr + 0x20) return -1;
+
+            int score = 0;
+            int mapMode = rom[baseAddr + 0x15] & 0x0F;
+            bool modeMatches = hiRom ? (mapMode == 0x01 || mapMode == 0x05) : (mapMode == 0x00 || mapMode == 0x02 || mapMode == 0x03);
+            if (modeMatches) score += 2;
+
+            int complement = rom[baseAddr + 0x1C] | (rom[baseAddr + 0x1D] << 8);
+            int checksum = rom[baseAddr + 0x1E] | (rom[baseAddr + 0x1F] << 8);
+            if (checksum != 0 && (checksum ^ complement) == 0xFFFF) score += 2;
+
+            return score;
         }
     }
 }

@@ -214,6 +214,12 @@ namespace EmuSen.Pharaoh
                     emit($"> {cmdLine}");
                     emit(RunFrameSum(parts.Length >= 2 ? long.Parse(parts[1]) : 300));
                 }
+                else if (verb == "audiosum")
+                {
+                    // Output-identity digest over the mixed audio - see §3.22.
+                    emit($"> {cmdLine}");
+                    emit(RunAudioSum(parts.Length >= 2 ? long.Parse(parts[1]) : 300));
+                }
                 else if (verb == "layers")
                 {
                     // Isolates one layer at a time - see §3.19.
@@ -351,6 +357,40 @@ namespace EmuSen.Pharaoh
                 taken++;
             }
             return $"[FRAMESUM] {taken} frame(s) to frame {runner.CurrentFrame}: {digest:X16}";
+        }
+
+        // framesum's counterpart for audio - see §3.22.
+        private string RunAudioSum(long count)
+        {
+            const ulong FnvOffsetBasis = 14695981039346656037;
+            const ulong FnvPrime = 1099511628211;
+            var core = runner.Core;
+            ulong digest = FnvOffsetBasis;
+            long taken = 0, samples = 0, nonzero = 0;
+            double sumSquares = 0;
+            int peak = 0;
+
+            for (long i = 0; i < count; i++)
+            {
+                if (runner.CurrentFrame >= runner.FrameCap) break;
+                runner.RunFrames(1);
+                short[] chunk = core.DequeueAudioSamples(int.MaxValue);
+                foreach (short s in chunk)
+                {
+                    digest = (digest ^ (ulong)(ushort)s) * FnvPrime;
+                    if (s != 0) nonzero++;
+                    sumSquares += (double)s * s;
+                    int mag = Math.Abs((int)s);
+                    if (mag > peak) peak = mag;
+                }
+                samples += chunk.Length;
+                taken++;
+            }
+
+            if (taken == 0) return "[AUDIOSUM] No frames ran - already at the safety cap.";
+            double rms = samples == 0 ? 0 : Math.Sqrt(sumSquares / samples);
+            return $"[AUDIOSUM] {taken} frame(s) to frame {runner.CurrentFrame}: {digest:X16} "
+                 + $"samples={samples} nonzero={nonzero} ({(samples == 0 ? 0 : 100.0 * nonzero / samples):F1}%) peak={peak} rms={rms:F1}";
         }
 
         private static string DescribeLayerMask(int mask)

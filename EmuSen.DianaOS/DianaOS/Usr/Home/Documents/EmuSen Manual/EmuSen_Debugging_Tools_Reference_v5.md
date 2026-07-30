@@ -495,6 +495,7 @@ dotnet run --project EmuSen.Pharaoh -- <rom> <frames> [options...]
 - `fastforward on|off` (alias `ff`) — toggles `ICore.SkipRendering`. Headless already runs unpaced, so there is no speed multiplier to set here; the win is purely from not compositing frames nobody will look at. Measured at **~2.5x** on SMW (3300 frames: 12.4s -> 5.5s), which makes long boot sequences meaningfully cheaper to script past. Turn it back off before any `screenshot`/`contactsheet`/`spriteoverlay` line — a skipped frame leaves the framebuffer holding whatever was last drawn. See `EmuSen_Rewind_And_FastForward.md` §2.2 for the one accuracy caveat (`RangeOver`/`TimeOver` go stale).
 - `perf [frames=300] [worstCount=5]` — runs `frames` more frames and reports the wall-clock cost distribution (mean/p50/p95/max, plus a frames-over-budget count), the core's own cpu+spc700 / ppu / hdma attribution with an unattributed remainder, the ppu sub-split, and the worst individual frames by offset. Full write-up, including the Debug-vs-Release finding it was built for: §3.20.
 - `framesum [frames=300]` — runs `frames` more frames and folds every one of their frame-buffer hashes into a single 64-bit digest. One number that stands in for "every pixel of every frame in this window," so a renderer change can be shown to be output-identical rather than spot-checked against a screenshot. Full write-up: §3.21.
+- `audiosum [frames=300]` — the same idea for sound: folds every sample the DSP produced over the window into one digest, plus `samples`/`nonzero`/`peak`/`rms` so a change has a direction and not just a difference. Drains the audio queue as it goes (unlike `audiodump`, which peeks and therefore only ever sees the last ~2 seconds). Full write-up: §3.22.
 - `rewind on [interval=4] [budgetMB=96]` / `rewind off` / `rewind back <n>` / `rewind` — a bounded, in-memory history of core states, captured automatically by every frame-advancing verb once switched on. `rewind back <n>` steps back `n` snapshots (i.e. `n * interval` frames) and keeps the harness's own frame counter in sync; bare `rewind` reports depth, seconds held, bytes held, and raw state size. Core-agnostic — built on `ICore` alone, no SNES knowledge. See `EmuSen_Rewind_And_FastForward.md` §1.
 
   **This turns "when did it break?" from a re-run into a bisection.** Locating the exact frame a glitch appears otherwise means relaunching from boot with a different `--screenshot` frame each attempt. With rewind you overshoot once, then walk back inside a single process:
@@ -756,7 +757,23 @@ It exists because §3.20 turns performance into a number you can compare, but sa
 
 This is how §5.1 of `Venus_PPU.md` (skipping the unused sub-screen composite) was verified: 400-frame windows across 20 ROMs, plus 2500-frame windows across 8 color-math-heavy ones, all byte-identical either side of the change. Without it, "the frame rate went up 37%" and "the picture is still right" would have been two separate acts of faith.
 
-**Caveats.** The digest is order-sensitive and window-sensitive — both runs must start from the same state (same ROM, same `--loadstate`, same preceding verbs) and cover the same frame count, or the numbers differ for reasons that have nothing to do with the change under test. It tells you *that* something differs, never *what*: once a ROM's digest moves, fall back to `--autoshot` or `contactsheet` to find the frame. And it is a rendering check only — it says nothing about audio, timing, or save-state contents.
+**Caveats.** The digest is order-sensitive and window-sensitive — both runs must start from the same state (same ROM, same `--loadstate`, same preceding verbs) and cover the same frame count, or the numbers differ for reasons that have nothing to do with the change under test. It tells you *that* something differs, never *what*: once a ROM's digest moves, fall back to `--autoshot` or `contactsheet` to find the frame. And it is a rendering check only — it says nothing about audio, timing, or save-state contents. For audio, see §3.22.
+
+### 3.22 `audiosum` — output-identity digest for audio
+
+`audiosum [frames]` (`--commands` verb, default `300`) is §3.21's counterpart for sound. It runs `frames` more frames and FNV-1a-folds every sample the DSP actually produced into one 64-bit digest, alongside activity statistics:
+
+```
+[AUDIOSUM] 900 frame(s) to frame 900: ACB024E02AB2A512 samples=958426 nonzero=881546 (92.0%) peak=10383 rms=2298.5
+```
+
+**Why it drains rather than snapshots.** `audiodump` (§3.15) writes a `.wav` from a *non-destructive* peek at whatever is currently queued, so it can only ever see the tail — in a headless run nothing consumes the audio queue, and the core's own safety valve starts discarding the oldest samples once it passes `AudioSettings.AudioBufferMaxSamples` (~2 seconds). `audiosum` calls `DequeueAudioSamples` every frame instead, so the digest covers the entire window rather than its last two seconds.
+
+**Why the statistics are there and not just the hash.** A digest can only say "different." It cannot distinguish a fix from a regression that muted a voice — silence hashes to a perfectly stable, perfectly wrong number (every all-zero window in the sample produced the identical digest `B3BB38A76F1DFDCD`, which is how three ROMs with no music yet at frame 900 were spotted immediately). `nonzero`/`peak`/`rms` give the change a direction. Pair it with per-voice `KeyOns` from `channels` (§3.5) when the question is "are note events being lost," since that counts events rather than energy.
+
+**The workflow it's for** — proving an APU change does what you think, on more than the one ROM that motivated it. This is how `Venus_APU.md` §3.3.1 (the KON latch) was verified across 37 ROMs: 29 came out sample-identical, and the 8 that changed all moved the same way — more key-ons, more non-silent output, higher RMS. A cohort run that shows *only* the expected direction of change is much stronger evidence than one game sounding better.
+
+**Caveats.** Same order- and window-sensitivity as `framesum`, and the same "tells you *that*, never *what*" limit — when a digest moves, `audiodump` a narrowed window and listen, or use `mute` (§3.5) to isolate voices. Note that it consumes the queue: a script that runs `audiosum` and then `audiodump` will find little or nothing left to dump.
 
 ---
 

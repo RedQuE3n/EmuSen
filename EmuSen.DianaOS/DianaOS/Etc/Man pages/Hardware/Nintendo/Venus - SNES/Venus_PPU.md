@@ -24,6 +24,53 @@ BG scroll registers ($210D-$2114) are write-twice, 8-bit-at-a-time, combined int
 
 Scroll values are genuinely 10-bit (0-1023) on real hardware, not 8-bit — needed once a tilemap is wider/taller than one 32x32 screen.
 
+### 2.1 VRAM data ports — the address counter
+
+`$2116`/`$2117` (VMADD) hold a **word** address; `$2118`/`$2119` (VMDATA) are the low/high byte ports. `VMAIN` (`$2115`) bit 7 selects which port write advances the counter (clear → `$2118`, set → `$2119`), and bits 0-1 the step (1 / 32 / 128 words). A full 16-bit upload therefore writes `$2118` then `$2119` with bit 7 set, advancing one word per pair.
+
+### 2.2 VRAM address translation (`VMAIN` bits 2-3)
+
+Bits 2-3 **rotate the low bits of the word address the data ports dereference**, leaving the counter itself alone:
+
+| Mode | Rotation | Effect |
+|---|---|---|
+| 0 | none | address used as-is |
+| 1 | low 8 bits | `aaaaaaaa BBBccccc` → `aaaaaaaa cccccBBB` |
+| 2 | low 9 bits | `aaaaaaaB BBcccccc` → `aaaaaaac cccccBBB` |
+| 3 | low 10 bits | `aaaaaaBB Bccccccc` → `aaaaaacc cccccBBB` |
+
+The point is bitplane interleaving. A tile's bitplane pairs sit 8 words apart in VRAM, so uploading one tile normally means either 8 separate address writes or a stride the DMA unit can't express. With rotation on, **consecutive** counter values land 8 words apart, so a game can push tile data through a single linear DMA and let the PPU scatter it into place. `TranslatedVramWordAddress()` in `Ppu.cs` implements the rotation; both the write (`WriteVMDATAL`/`H`) and read (`ReadVMDATAL`/`H`) paths use it, while `VramStep()` still advances the untranslated counter.
+
+**Fixed bug: translation was ignored entirely, scrambling any upload that used it.** Bits 2-3 were never decoded — `WriteVMAIN` stored the byte, and the data ports indexed `_vramAddr * 2` directly. Every byte of a translated upload therefore landed at the wrong VRAM address.
+
+Reported as "FFMQ has severe graphical artifacts." That game sets `$2115 = 0x84` (mode 1) exactly once during startup, uploads its BG3 character data, then returns to `0x80`. The upload covers word addresses `$3000-$37FF` — byte range `$6000-$6FFF`, which is precisely BG3's character base (`BG34NBA = 0x03`). The result was BG3's 2bpp font/window tileset written as noise, which the overworld then displayed as full-screen garbage over a correctly-rendered BG1, because Mode 1's BG3-priority bit (`BGMODE = 0x09`) puts high-priority BG3 tiles above every other layer.
+
+The tell that separated this from a renderer fault: BG1 was pixel-perfect under `layers bg1` while `layers bg3` was pure noise, and BG3's tilemap decoded cleanly (a uniform fill of tile 254, palette 3, priority 1 — a deliberate "blank" fill) while the *tile data* that fill pointed at was garbage. When the map is sane and the tiles are not, the fault is upstream in the upload path, not in tilemap addressing or compositing.
+
+Of the 37-ROM sample, **FFMQ is the only game that uses translation at all** — which is why this survived so long. Verified with `framesum` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.21): all 37 ROMs byte-identical across 600-frame boot windows, with FFMQ's own gameplay window the single digest that moved. Pinned by `EmuSen.WiseMan/Ppu/VramAddressTranslationTests.cs`; 10 of those 21 tests fail against the old code.
+
+### 2.3 The VRAM read latch (`$2139`/`$213A`)
+
+Reading VRAM does **not** return the byte at the live address. The PPU holds a 16-bit read latch, and the ports serve that latch:
+
+| Event | Effect |
+|---|---|
+| Write `$2116`/`$2117` | address set, then latch ← VRAM[address] (no step) |
+| Read `$2139` | return latch low byte; if `VMAIN` bit 7 **clear**, latch ← VRAM[address] **then** address += step |
+| Read `$213A` | return latch high byte; if `VMAIN` bit 7 **set**, latch ← VRAM[address] **then** address += step |
+
+The ordering is the whole point: the reload samples the **current** address and only afterwards does the counter advance, so a read lags one word behind the counter. That is what makes the conventional "set address, dummy read, then read for real" idiom land on the addressed word, and equally why a game that reads *twice* and keeps the second value also gets the addressed word. `FetchVramReadLatch()` in `Ppu.cs` performs the reload and goes through the same §2.2 rotation the write path uses.
+
+**Fixed bug: there was no latch — reads were served straight from `Vram[_vramAddr * 2]`, so every read came back one word too late.**
+
+Reported as "confetti-looking artifacts on the ground and on the door" in Super Metroid's Crateria landing site, which cleared after leaving the room and returning. The room's BG1/BG2 character data (byte `$0066-$4FFF`) had 1385 wrong bytes, sparse — one to four bytes inside otherwise-correct tiles, concentrated where the correct value was `$00`, which is why the damage read as bright specks scattered over terrain that should have been flat.
+
+The tell was that the corruption was *sparse inside* tiles rather than at tile granularity: a partial or misaddressed upload damages whole tiles, so byte-level speckle inside good tiles means the upload was reading part of its own input wrong. A `watch add VRAM 3B8 4 write` (§3.3) named the writer directly — `PC=$80B404`/`$80B40A`, alternating `STA $2118`/`STA $2119` — and `disasm CpuBus 80B3D0` showed that routine is Super Metroid's decompressor servicing a **back-reference**: it sets `$2116`, reads `$2139` twice, and writes the result back out. Every back-reference therefore copied the word *after* the one it wanted, which is exactly the measured signature (`corrupt[i] == correct[i+2]` held across 49 of 141 non-trivial multi-byte runs, against 1 for the opposite direction). Literal copies came from ROM and stayed correct, which is why only back-references were damaged.
+
+Why a door transition "fixed" it: that path re-uploads the tileset over the top, and with the corrupt bytes overwritten the room renders clean. **A save state captured while the artifacts are visible still contains the corrupt VRAM**, so it keeps showing them after this fix — the state stores the damage, not the cause. Reproducing from a fresh boot (load `SAMUS DATA`, which returns Samus to the ship save station) is what separated a live emulation bug from a state-serialization one.
+
+Two games in the 37-ROM sample read VRAM back. Super Metroid's boot window never reaches a room load, so its 600-frame digest is unchanged; **Secret of Evermore's is the single digest that moved**, and its title screen went from a doubled, garbled logo over asymmetric architecture to clean — a second bug the same fix closed. The other 36 are byte-identical. Pinned by `EmuSen.WiseMan/Ppu/VramReadLatchTests.cs`. Note `VramAddressTranslationTests.Reads_use_the_same_translated_address_as_writes` had to change with this: it populated `Vram` *after* writing `VMADD`, which under a real latch means the prefetch samples empty VRAM.
+
 ---
 
 ## 3. Mode 7

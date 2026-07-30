@@ -135,15 +135,51 @@ Traced to seven opcode handlers in `Spc700.Opcodes.cs` (`TakeBranch` - the share
 
 ### 3.1 Register decode split
 
-`SDsp` owns register decode (raw bytes → the fields `DspVoice` actually uses), KON/KOFF edge detection, ENDX, and MVOL-scaled final mixing. BRR decoding and per-voice envelope logic live in `DspVoice` (§4) — the split mirrors real hardware's own division between the shared register file and per-voice logic.
+`SDsp` owns register decode (raw bytes → the fields `DspVoice` actually uses), the KON latch and KOFF edge detection (§3.3), ENDX, and MVOL-scaled final mixing. BRR decoding and per-voice envelope logic live in `DspVoice` (§4) — the split mirrors real hardware's own division between the shared register file and per-voice logic.
 
 ### 3.2 ENDX (`$7C`)
 
 Read returns the *live* per-voice end flags (one bit per voice, set when that voice's BRR playback reaches an end-marked block with no loop — see §4.3). **Any write to `$7C` clears all 8 bits, regardless of the value written** — documented hardware behavior, not a typo; games poll-and-acknowledge this register as a whole, not per-bit.
 
-### 3.3 KON/KOFF — edge-triggered, not level-triggered
+### 3.3 KON is an event register, KOFF is a level
 
-`ProcessKeyEvents` fires `KeyOn`/`KeyOff` on a bit **newly set since the last sample**, not on every sample where the bit happens to be set — so a game holding a KON bit set across multiple register writes doesn't re-key (restart) the voice every sample. Real hardware processes KON/KOFF roughly every 64 S-SMP clocks (fullsnes); gating on the same per-generated-sample cadence `GenerateSample` already runs at is close enough without modeling that separately. **If both KON and KOFF are newly set for the same voice in the same sample, KeyOff wins** — matches documented hardware behavior (key-on immediately followed by key-off silences the channel).
+The two key registers are **not** the same shape, and treating them the same way silently drops notes.
+
+**KON (`$4C`) is consumed per write.** Every write with a bit set keys that voice exactly once. Nothing obliges a sound driver to clear the register in between — hardware self-clears its own latch after acting on it, so a driver is free to write `$33`, then `$02`, then `$33` again and expect three separate key-on events. `SDsp` therefore accumulates written bits into `_pendingKon` inside `WriteRegister`, and `ProcessKeyEvents` drains that latch each generated sample. A bit left set does **not** retrigger on subsequent samples, because the latch is cleared once consumed.
+
+**KOFF (`$5C`) is a level**, checked on a rising edge here (`_prevKoff`). See §3.3.1 for the deviation that remains.
+
+**If a key-on and a key-off for the same voice land in the same sample window, KeyOff wins** — matches documented hardware behavior (a key-on immediately followed by a key-off silences the channel).
+
+Real hardware latches KON roughly every 2 samples (every 64 S-SMP clocks — fullsnes); draining on the same per-generated-sample cadence `GenerateSample` already runs at is finer than that and costs nothing extra.
+
+#### 3.3.1 Fixed bug: comparing KON against its previous value dropped over half of all notes
+
+`ProcessKeyEvents` used to derive key-on events by comparing the register against its own previous value, `konRising = kon & ~_prevKon`. That is a level comparison, and it lost note events **two** different ways:
+
+1. **A bit re-written while already set produced nothing.** `$33` followed later by `$02` yielded no rising bit for voice 1, so that note never sounded. Worse, a whole repeated chord (`$33` → `$33`) vanished entirely.
+2. **A KON pulse that opened and closed between two samples was never seen at all.** The register was only sampled once per output sample (every 32 SPC700 cycles); a driver that set and cleared KON within that window left no trace.
+
+Found from the reported symptom "not all the music plays on the BSSMSAS title screen, and it's intermittent during gameplay." That game's driver **never writes 0 to KON** — it writes the mask of voices to trigger and leaves it set — so failure mode 1 applied to nearly every note. Which note went missing depended entirely on which bits happened to already be set, which is exactly why it presented as intermittent rather than as one consistently silent instrument.
+
+Measured with `audiodump`/`audiosum` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.22) and per-voice `KeyOns` from `channels`:
+
+| BSSMSAS window | Note events requested by the driver | Delivered before | Delivered after |
+|---|---|---|---|
+| Intro, 900 frames | 43 | 19 (44%) | 43 (100%) |
+| Title/save screen, 600 frames | — | 251 | 319 |
+
+The intro figure is exact: summing the bit population of every KON write the driver issued gives 43, and 43 key-ons now occur. On the title screen the lead voices gained the most (voice 0: 38 → 59, voice 1: 44 → 75), which is what "the melody is missing notes" sounded like.
+
+Across the 37-ROM sample, 29 came out **sample-identical** and 8 changed — every one of them in the same direction (more key-ons, more non-silent output, higher RMS; none lost events or got quieter). The clearest collateral fix was Earthworm Jim 2, which went from 1 key-on and effectively silence to 23 key-ons (RMS 17 → 609).
+
+Pinned by `EmuSen.WiseMan/Audio/DspKeyOnLatchTests.cs`; 5 of those 7 tests fail against the old comparison.
+
+#### 3.3.2 Known remaining deviation: KOFF is edge-detected, not level-sensitive
+
+On real hardware KOFF is re-read every latch and holds a voice in release for as long as its bit is set. `SDsp` instead acts on a rising edge, which leaves the same two failure modes §3.3.1 describes for KON theoretically open for KOFF: a re-written bit, or a KOFF pulse narrower than one output sample, would be missed and the note would keep sustaining instead of releasing.
+
+Not changed alongside the KON fix, deliberately — no ROM in the sample exhibits it. Drivers observed here all use the sequence `KOFF=mask`, `KOFF=0`, `KON=mask`, with the writes hundreds of samples apart, so the rising edge is always visible. Left documented rather than "fixed" speculatively, since making it level-sensitive changes when every voice in every game enters release and would need its own cohort verification.
 
 ### 3.4 Muted/disabled audio still advances playback state
 
@@ -187,6 +223,8 @@ A BRR block's header carries independent end and loop flags (see `BrrDecoder.IsE
 The 32-entry period table (`PeriodTable`, verified against the SNESdev DSP_envelopes page) is denominated directly in **audio samples per envelope step** - the same table appears verbatim (2048, 1536, ..., 1) in essentially every reference S-DSP implementation (bsnes, snes9x, Mesen2), always used as a sample-count period with no further conversion; index 0 ("Infinite") means that stage never advances on its own.
 
 **Fixed bug: `RateDue` divided the table's value by 32 before using it**, on the mistaken assumption the table was denominated in raw S-SMP clock cycles needing conversion to samples via `SDsp.Tick`'s 32-cycles-per-sample constant - it wasn't; the table's values are already in samples. That extra division made every envelope step (attack ramp, decay, sustain decay) advance up to 32x too fast, and for most rate indices (table value already under 32) the `Math.Max(1, ...)` clamp made it fire on literally every generated sample regardless of the real intended rate. Reported as "you can hear part of the music, but there's missing sounds" (after the separate CPU->SPC700 pacing fix, §2.8, resolved a related "too fast" complaint) - confirmed via the new `channels` debug command (§3.5): a voice sitting in Sustain stage had already decayed to envelope level 0 within ~5900 samples (~0.18s) of KeyOn, when real hardware would still be clearly audible there. This is exactly a "some of the music is missing" symptom rather than total silence - sharp one-shot percussion (little or no meaningful sustain/decay phase) still played close to normally, while any note relying on its sustain to actually ring out collapsed to silence almost immediately. Fixed by using the table's value directly, no division.
+
+**A second, unrelated cause of the same complaint was found later** — see §3.3.1. "Part of the music is missing" turned out to be two independent bugs with near-identical symptoms: notes whose envelope collapsed the instant they started (this section), and notes that were never keyed on in the first place (§3.3.1). The distinguishing evidence is per-voice `KeyOns` from `channels`: an envelope fault shows the expected number of key-on events with the sound decaying too fast, whereas a dropped-event fault shows fewer key-ons than the driver actually asked for. Worth checking both before concluding either.
 
 ### 4.5 ADSR vs. GAIN mode
 

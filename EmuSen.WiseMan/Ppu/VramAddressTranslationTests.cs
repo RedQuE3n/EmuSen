@@ -142,8 +142,7 @@ namespace EmuSen.WiseMan.Ppu
             var ppu = NewPpu(1, 0x0001);
             WriteWord(ppu, 0x5A, 0xA5);
 
-            // VRAM has to be in place before VMADD is written - writing it is
-            // what loads the read latch. See Venus_PPU.md §2.3.
+            // VRAM must precede the VMADD write - see Venus_PPU.md §2.3.
             var reader = new VenusPpu();
             System.Array.Copy(ppu.Vram, reader.Vram, ppu.Vram.Length);
             reader.WriteRegister(Vmain, Vmain8(1));

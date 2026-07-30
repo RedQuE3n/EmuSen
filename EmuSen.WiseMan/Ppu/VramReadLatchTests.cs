@@ -2,11 +2,7 @@ using VenusPpu = EmuSen.Cores.Nintendo.Venus.Video.Ppu;
 
 namespace EmuSen.WiseMan.Ppu
 {
-    // The $2139/$213A read latch - see Venus_PPU.md §2.3. Reads return a
-    // prefetched word, not VRAM at the live address: the latch reloads from
-    // the CURRENT address and only then does the counter step, so a read lags
-    // one word behind. Serving VRAM directly is what displaced every
-    // Super Metroid VRAM back-reference by one word.
+    // The $2139/$213A read latch - see Venus_PPU.md §2.3.
     public class VramReadLatchTests
     {
         private const int Vmain = 0x2115;
@@ -49,9 +45,7 @@ namespace EmuSen.WiseMan.Ppu
             Assert.Equal(0xBEEF, ReadWord(ppu));
         }
 
-        // The idiom Super Metroid's decompressor uses: set the address, read
-        // twice, keep the second. Both reads must yield the addressed word -
-        // the reload happens at the current address, before the step.
+        // Super Metroid's read-twice-keep-the-second idiom.
         [Fact]
         public void The_second_read_after_setting_the_address_still_returns_that_word()
         {
@@ -100,8 +94,7 @@ namespace EmuSen.WiseMan.Ppu
             Assert.Equal(0x0101, ppu.CurrentVramAddr);
         }
 
-        // Reading the high port alone must not resurrect the low byte of a
-        // word the latch never fetched.
+        // Both bytes must come from the one latched word.
         [Fact]
         public void Both_bytes_come_from_the_same_latched_word()
         {
@@ -113,8 +106,7 @@ namespace EmuSen.WiseMan.Ppu
             Assert.Equal(0x12, ppu.ReadRegister(Rdvramh));
         }
 
-        // A write to VMADD mid-sequence re-latches rather than leaving the
-        // previous word visible.
+        // Re-addressing mid-sequence must re-latch.
         [Fact]
         public void Re_addressing_reloads_the_latch()
         {
@@ -128,8 +120,7 @@ namespace EmuSen.WiseMan.Ppu
             Assert.Equal(0x9999, ReadWord(ppu));
         }
 
-        // The latch reload goes through the same VMAIN bits 2-3 rotation the
-        // write path uses - see VramAddressTranslationTests.
+        // The reload rotates like the write path - see Venus_PPU.md §2.2.
         [Fact]
         public void The_latch_reload_honours_address_translation()
         {

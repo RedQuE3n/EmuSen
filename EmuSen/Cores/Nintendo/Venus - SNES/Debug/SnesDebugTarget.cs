@@ -144,6 +144,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _renderer = renderer;
             _frameTimings = frameTimings;
             bus.WriteObserver = this;
+            _ppu.WriteObserver = this; // VRAM/CGRAM/OAM - see Venus_Memory.md §6.1
             bus.ReadObserver = this;
             bus.FrameObserver = this;
             bus.RomPatcher = this;

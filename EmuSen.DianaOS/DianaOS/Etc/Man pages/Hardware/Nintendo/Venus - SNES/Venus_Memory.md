@@ -209,6 +209,18 @@ Tagged `"WRAM"` for actual RAM accesses and `"IO"` for hardware-register reads/w
 
 This class of field previously lived as concrete debug types directly on `MemoryBus` (a `WatchRegistry` field, a `Cpu` back-reference for PC context) — debug-toolchain plumbing that had no business on the bus itself, added there only because it was the convenient place at the time. The observer-interface pattern replaced that: `MemoryBus` knows nothing about `WatchRegistry`, `SnesDebugTarget`, or even that a debug console exists.
 
+### 6.1 The PPU's own memories are observed by `Ppu`, not `MemoryBus`
+
+`MemoryBus` can only ever tag a write `"WRAM"` or `"IO"`. It never sees a VRAM, CGRAM or OAM address at all — those don't exist until a data port (`$2118`/`$2119`, `$2122`, `$2104`) decodes the address register behind it, which happens inside `Ppu`. So `Ppu` carries its own `WriteObserver` field, set by `SnesDebugTarget` alongside the bus ones, and reports `"VRAM"`, `"CGRAM"` and `"OAM"` from the data-port write paths.
+
+Hooking it at the port rather than at the bus means **a DMA-driven write is observed identically to a CPU store** — both arrive through the same port, so a tile upload shows up whether the game used `STA $2118` in a loop or a general-purpose DMA. VRAM addresses are reported *after* `VMAIN` address translation (§2.2 of `Venus_PPU.md`), i.e. the address the byte actually landed at, which is the one worth watching.
+
+**Fixed bug: `watch add VRAM ...` was accepted and then silently never matched.** `WatchCommand` validated the space name against `GetMemorySpaces()` — which does list `VRAM`/`CGRAM`/`OAM`, since `mem`/`dump`/`snapshot` read those arrays directly — so the command reported success. But nothing in the emulator ever called an observer with those tags, so the watch sat there recording nothing, indistinguishable from "this address is never written."
+
+Worth knowing how that misleads in practice, because it cost real time here: a watch on a never-observed space returns no events, and if you then query the wrong watch ID you get somebody else's events and can conclude the space filtering itself is broken. It isn't — `WatchRegistry.Record` compares the tag correctly. **`watch list` before `watch summary` is the habit that catches this**, since a fresh DianaOS session already has watches registered and your new one will not be `#1`.
+
+Found chasing Super Metroid's scattered-coloured-pixel artifact, where the question "what actually writes these tile bytes" was unanswerable until VRAM became watchable. With the hook in place it answered immediately: the Common Room Elements tileset arrives by general-purpose DMA on channel 1, triggered by `STA $420B` at `$80:965E`, with source parameters staged in WRAM at `$05C0`.
+
 ---
 
 ## 7. Reset-vector guard, and other correctness regressions caught the hard way

@@ -1,4 +1,4 @@
-# EMUSEN(1)
+# EMUSEN
 
 ## NAME
 

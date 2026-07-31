@@ -1,25 +1,4 @@
-# EMUSEN
-
-## NAME
-
 **EmuSen** — a multi-system emulator built around a Unix-like shell
-
-## SYNOPSIS
-
-```sh
-EmuSen.Mistress                       # the GUI frontend
-EmuSen.Hotaru /path/to/game.smc       # the console-first frontend
-EmuSen.Pharaoh game.smc 3000 --commands script.txt   # headless, scripted
-```
-
-```sh
-$ EmuSen.Hotaru zelda.smc          # game opens in its own window
-DianaOS $ watch add VRAM 3B8 4 write
-DianaOS $ regs | grep -i vram
-DianaOS $ mem WRAM 0D80 20 | xxd
-```
-
----
 
 ## DESCRIPTION
 
@@ -54,8 +33,6 @@ is a claim about *architecture*, not about a shipping feature list — the debug
 core-agnostic and has been used in anger for months, but it has never been proven against a
 second implementation. That proof is the project's stated long-term goal, not a checked box.
 
----
-
 ## DIANAOS
 
 DianaOS is a bash-alike, not a command prompt with a fixed verb list. It has:
@@ -71,19 +48,6 @@ On top of that base sit the hardware verbs: `mem`, `regs`, `disasm`, `watch`, `b
 `sprites`, `pal`, `layers`, `vramsheet`, and `coretop` — an htop-style live dashboard of
 the running machine.
 
-```sh
-# what changed in VRAM while that tile was wrong?
-watch add VRAM 3B8 4 write
-watch summary 3
-
-# is the tilemap wrong, or is the tile data?
-mem VRAM 0 100 | head -4
-vramsheet /tmp/sheet.bmp
-
-# ordinary shell things work, because it is an ordinary shell
-for id in 1 2 3; do watch log $id 20; done > /tmp/watches.txt
-```
-
 The same interpreter is reachable three ways: on the terminal that launched **Hotaru**,
 through **Mistress**'s `Settings → DianaOS Console…` window, and — critically — as a
 *script* fed to **Pharaoh**, the headless harness.
@@ -94,8 +58,6 @@ happens: a bug is reproduced as a deterministic script, and a fix is proven with
 `framesum` / `audiosum` — output-identity digests that show a renderer or mixer change
 altered exactly the games it was meant to and nothing else, across the whole ROM library,
 rather than being eyeballed on one frame.
-
----
 
 ## ARCHITECTURE
 

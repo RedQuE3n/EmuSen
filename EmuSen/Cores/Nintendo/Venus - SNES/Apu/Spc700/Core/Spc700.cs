@@ -345,6 +345,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         // --- Execution Engine ---
         
+        // Base cost of the instruction at PC, without executing it or touching
+        // the read-sensitive $00F2-$00FF registers - see Venus_APU.md §1.6.
+        public int PeekStepCycles()
+        {
+            if (_halted) return 2;
+            byte opcode = (PC >= 0xFFC0 && IplRomEnabled) ? IplRom[PC - 0xFFC0] : Ram[PC];
+            return _instructions[opcode].Cycles;
+        }
+
         public void Step()
         {
             if (CycleBudget <= 0) return;

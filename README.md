@@ -61,8 +61,6 @@ rather than being eyeballed on one frame.
 
 ## ARCHITECTURE
 
-Strictly layered; each layer depends only on the ones below it.
-
 | Project | Role |
 |---|---|
 | `EmuSen` | The emulation core — CPU, PPU, APU, memory, save states, resampling. A pure library: no `Main`, no window, no frontend knowledge |

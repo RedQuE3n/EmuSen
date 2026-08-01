@@ -1,173 +1,260 @@
-**EmuSen** — a multi-system emulator built around a Unix-like shell
+# EmuSen
 
-## DESCRIPTION
+A SNES emulator written from scratch in C# / .NET 10, with a Unix-like debugging shell built into it.
 
-**EmuSen** is a from-scratch emulator written in C# / .NET 10, built against published
-hardware documentation rather than ported from an existing project. It differs from
-conventional emulators in one structural way: **the emulator is not a window with a debug
-menu attached — it is a machine you log into.**
+EmuSen is written against published hardware documentation rather than by porting an existing emulator. It is a working emulator, but it is a **hobby project in active development** — see [Status](#status) before expecting to play anything start to finish.
 
-That machine is **DianaOS**, a genuine Unix-like shell embedded in the emulator, and it is
-the primary interface to every piece of emulated hardware. Registers, memory spaces, the
-tilemap, the sprite table, the palette, the DSP's voice mixers — all of it is reachable as
-text, from a prompt, with pipes and redirection and control flow, the same way you would
-inspect a running process on any Unix system.
+**License:** GPL-3.0 · **Platforms:** Linux, Windows, macOS · **Cores:** SNES
 
-Most emulators treat introspection as a feature bolted onto playback: a hex viewer here, a
-sprite viewer there, each a separate GUI panel with a fixed set of things it can show you.
-EmuSen inverts that. Playback is one thing the machine does; the shell is how you talk to
-it. Because the shell composes — `mem` into `grep` into a file, `watch` inside a `for`
-loop — the set of questions you can ask the hardware is not enumerated in advance by
-whoever wrote the debugger.
+---
 
-The second consequence of that design is **multi-system by construction**. The shell does
-not know what a SNES is. It talks to an interface called `IDebugTarget`, which describes
-*memory spaces, registers, sprites, palettes and breakpoints* in the abstract. A new
-console core implements that interface and inherits the entire toolchain — the shell, the
-scripting harness, the watchpoint system, the screenshot and digest tooling — without a
-line of it being rewritten.
+## Table of contents
 
-**What is actually built today: one core, the SNES.** Every other console listed below is
-a reserved, empty folder with a documentation stub. The multi-system claim in this document
-is a claim about *architecture*, not about a shipping feature list — the debug toolchain is
-core-agnostic and has been used in anger for months, but it has never been proven against a
-second implementation. That proof is the project's stated long-term goal, not a checked box.
+- [What this is](#what-this-is)
+- [Status](#status)
+- [The two frontends](#the-two-frontends)
+- [DianaOS — the built-in debug shell](#dianaos--the-built-in-debug-shell)
+- [Pharaoh — the headless harness](#pharaoh--the-headless-harness)
+- [Architecture](#architecture)
+- [Why the names?](#why-the-names)
+- [Building and running](#building-and-running)
+- [Tests](#tests)
+- [Documentation](#documentation)
+- [Roadmap](#roadmap)
+- [ROMs](#roms)
 
-## DIANAOS
+---
 
-DianaOS is a bash-alike, not a command prompt with a fixed verb list. It has:
+## What this is
 
-- quoting, `$VAR` and `$(...)` expansion
-- pipes, and `>` / `>>` / `<` redirection to real files
-- `;`, `&&`, `||`, and `if` / `for` / `while`
-- history recall, `man` pages for every command
-- a coreutils subset — `ls`, `cd`, `grep`, `awk`, `sed`, `find`, `xxd`, `nano`, …
-- a sandboxed, Unix-shaped filesystem tree walled to the project directory
+A cycle-budgeted SNES emulator — 65816 CPU, SPC700 + S-DSP audio, and a full PPU — plus the tooling built around making it *debuggable*. That tooling is the part that makes this project unusual:
 
-On top of that base sit the hardware verbs: `mem`, `regs`, `disasm`, `watch`, `bp`,
-`sprites`, `pal`, `layers`, `vramsheet`, and `coretop` — an htop-style live dashboard of
-the running machine.
+- **DianaOS**, a genuine bash-alike shell embedded in the emulator, with pipes, variables, redirection, control flow, a coreutils subset, and hardware inspection commands (`mem`, `regs`, `watch`, `disasm`, `coretop`, …).
+- **Pharaoh**, a headless, scriptable harness that runs the real core with no window and no human, so bugs can be reproduced deterministically and fixes proven byte-identical across the ROM library.
 
-The same interpreter is reachable three ways: on the terminal that launched **Hotaru**,
-through **Mistress**'s `Settings → DianaOS Console…` window, and — critically — as a
-*script* fed to **Pharaoh**, the headless harness.
+The emulation core is a pure library with no window, no `Main`, and no frontend knowledge. Everything else — presentation, frontends, debug tooling — sits above it and depends on it one-directionally.
 
-Pharaoh runs the real core with no window, no audio device and no human, driven by the same
-commands the interactive shell accepts. It is how most debugging in this project actually
-happens: a bug is reproduced as a deterministic script, and a fix is proven with
-`framesum` / `audiosum` — output-identity digests that show a renderer or mixer change
-altered exactly the games it was meant to and nothing else, across the whole ROM library,
-rather than being eyeballed on one frame.
+The project is structured for more than one console. Only the SNES core exists today; every other core is a reserved, empty folder.
 
-## ARCHITECTURE
+---
+
+## Status
+
+**Honest summary: the SNES core runs real commercial games, and several boot correctly and play, but very few have been verified end to end.**
+
+| Area | State |
+|---|---|
+| 65816 CPU | Full 256/256 opcode table. **Gap:** decimal (BCD) mode — `SED`/`CLD` toggle the flag but `ADC`/`SBC` ignore it |
+| SPC700 + S-DSP | Full 256/256 opcodes, BRR decode, 4-tap Gaussian resampling, ADSR/GAIN, 8-voice mixing |
+| Audio output | Working — SDL out, with a resampler and dynamic rate control to stop drift |
+| PPU backgrounds | All 7 modes, 16×16 tiles, mosaic, Mode 7 + EXTBG, offset-per-tile, direct colour, pseudo and true hi-res |
+| PPU sprites | Full OAM decode, real per-scanline 32-sprite / 34-sliver limits |
+| Colour math / windowing | Implemented, including the fixed-colour and half-math hardware quirks |
+| Memory mapping | LoROM and HiROM, general DMA + HDMA, header-driven SRAM sizing |
+| Save states | Working, via a reflective serializer. **Gap:** no version header, so states can break across builds |
+| Rewind / fast-forward | Working, core-agnostic (XOR-delta chain) |
+| Input | Rebindable keyboard + gamepad, per-game hotkeys, gamepad hot-plug |
+| Timing accuracy | Scanline granularity, not per-dot. A deliberate, documented tradeoff |
+| Cores other than SNES | None. Reserved folders only |
+
+**Game compatibility** is tracked properly in [`EmuSen_Games_Tested.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md), which rates each title Perfect → Unplayable and links to the investigation behind the rating. As of now nothing sits in Unplayable, several titles boot and play with known cosmetic bugs, and no title has a claimed full playthrough. Treat that file as the source of truth, not this table.
+
+Verified builds: **Linux x64 is launch-tested.** Windows and macOS binaries are produced and structurally correct but have not been executed — there is no Windows or Mac on the build machine, and macOS builds are unsigned (Apple Silicon requires an ad-hoc signature before it will run them at all).
+
+---
+
+## The two frontends
+
+Both are Avalonia applications sharing one presentation layer, and neither owns any emulation logic.
+
+**Mistress** — the fuller GUI, scoped as bug-testing tooling rather than a polished launcher. ROM picker and ROM browser, save/load state, rebindable keyboard + gamepad, emulator hotkeys, preferences, per-session file logging, and a menu entry that opens the DianaOS console against the running game.
+
+**Hotaru** — a lighter, console-first frontend. Takes a ROM path on the command line and puts the DianaOS shell on the terminal it was launched from, with the game in its own window.
+
+A polished, EmulationStation-style launcher is explicitly *not* either of these; it is planned as a separate project.
+
+---
+
+## DianaOS — the built-in debug shell
+
+Reachable from Hotaru's terminal or Mistress's `Settings → DianaOS Console…`. It is a real shell, not a command prompt with a fixed verb list:
+
+```sh
+# what changed in VRAM while that tile was wrong?
+watch add VRAM 3B8 4 write
+watch summary 3
+
+# is the tilemap sane, or is the tile data?
+mem VRAM 0 100 | head -4
+vramsheet /tmp/sheet.bmp
+
+# ordinary shell things work
+for id in 1 2 3; do watch log $id 20; done > /tmp/watches.txt
+regs | grep -i vram
+```
+
+It has quoting, `$VAR` and `$(...)` expansion, pipes, `>`/`>>`/`<` redirection to real files, `;`/`&&`/`||`, `if`/`for`/`while`, history recall, `man` pages for every command, a coreutils subset (`ls`, `cd`, `grep`, `awk`, `sed`, `nano`, `find`, `xxd`, …), and a live `coretop` hardware dashboard. The filesystem it exposes is a sandboxed, Unix-shaped tree walled to the project directory.
+
+Crucially, `IDebugTarget` — the interface all of this talks to — is **core-agnostic**. It knows about memory spaces, registers, sprites, palettes and breakpoints, not about the SNES.
+
+---
+
+## Pharaoh — the headless harness
+
+Runs the real core with no window, no audio device, and no human, driven by a script of the same commands the interactive shell accepts. This is how most debugging in this project actually happens.
+
+```sh
+dotnet run --project EmuSen.Pharaoh -- game.smc 3000 \
+    --loadstate boss.state --commands script.txt --out run.log
+```
+
+A script interleaves frame-stepping, input, screenshots and debug commands freely:
+
+```
+frames 200
+tap Start 8
+hold Left
+frames 520
+release Left
+screenshot /tmp/at_the_door.bmp
+watch summary 3
+framesum 600
+```
+
+Notable verbs: `waitstable` / `waitchange` / `waitvalue` (advance until the screen or a memory address settles), `contactsheet` (a grid of thumbnails over time), `autoshot` (capture every visually distinct state), `layers` (isolate BG1/BG2/BG3/OBJ), `vramsheet`, `paletteswatch`, `spriteoverlay`, `rewind`, `perf`, and `framesum` / `audiosum` — output-identity digests that let a renderer or audio change be proven pixel- and sample-identical across the whole ROM library, rather than eyeballed on one frame.
+
+---
+
+## Architecture
+
+Layered bottom-to-top; each layer depends only on the ones below it.
 
 | Project | Role |
 |---|---|
-| `EmuSen` | The emulation core — CPU, PPU, APU, memory, save states, resampling. A pure library: no `Main`, no window, no frontend knowledge |
-| `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command. **Core-agnostic** |
+| `EmuSen` | The emulation core: CPU, PPU, APU, memory, save states, audio resampling. A pure library — no `Main`, no window |
+| `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command. Core-agnostic |
 | `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
-| `EmuSen.Serenity` | Shared presentation — the Avalonia/Skia frame control, shader pipeline, graphics settings |
+| `EmuSen.Serenity` | Shared presentation: the Avalonia/Skia `GameFrameControl`, shader pipeline, graphics settings |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
 | `EmuSen.Pharaoh` | The headless scripted harness |
 | `EmuSen.Tomoe` | CLI runner for ground-truth CPU/hardware test vectors |
 | `EmuSen.WiseMan` | The xUnit test suite |
 
-The layering is enforced in practice, not merely described. The PPU exposes a small
-`IWriteObserver` hook and has no idea a watchpoint exists; the debug layer implements that
-interface and supplies the meaning. The memory bus references no debug type at all. The
-core can be compiled, tested and run with the entire shell absent.
+The SNES core lives under `EmuSen/Cores/Nintendo/Venus - SNES/`, namespaced `EmuSen.Cores.Nintendo.Venus.*`, with reserved sibling folders for every other planned console.
 
-Cores live under `EmuSen/Cores/<Manufacturer>/<Codename> - <Console>/`, namespaced to
-match — the SNES is `EmuSen.Cores.Nintendo.Venus.*`. Hardware documentation mirrors that
-tree exactly under `Etc/Man pages/Hardware/`, so a core's reference notes sit at the same
-path as its code.
-
-Adding a console therefore means: implement the core in its reserved folder, implement
-`IDebugTarget` over it, and the shell, the harness, the watch system, rewind/fast-forward
-(already core-agnostic, an XOR-delta chain over opaque state) and the frontends all work
-against it unchanged.
+The layering is enforced in practice, not just described: the PPU exposes a small `IWriteObserver` hook and has no idea a watchpoint exists; the debug layer implements that interface and supplies the meaning.
 
 ---
 
-## CORES
+## Why the names?
 
-Cores are codenamed after *Bishoujo Senshi Sailor Moon* characters, grouped by
-manufacturer. Nintendo, as the project's origin point, gets the heroes; every other
-manufacturer gets a villain faction. Codenames govern folders and namespaces only — classes
-and log output still say `Snes65816Disassembler` and `"SNES"`, because that is what the
-hardware is called.
+**EmuSen** = **Emu**lator **Sen**shi, after *Bishoujo Senshi Sailor Moon*. Every core is named for a character, grouped by manufacturer — Nintendo, as the project's origin point, gets the heroes; everyone else gets a villain faction.
 
-**Nintendo — Sailor Guardians** (`Cores/Nintendo/`)
-
-| Console | Codename | State |
+| Manufacturer | Faction | Examples |
 |---|---|---|
-| SNES | **Venus** | **Implemented** — the only working core |
-| NES | **Moon** | Reserved — the planned second core |
-| Game Boy / Color | **Mercury** | Reserved |
-| Game Boy Advance | **Jupiter** | Reserved |
-| Nintendo 64 | **Mars** | Reserved |
-| Virtual Boy | **Saturn** | Reserved |
-| DS | **Luna** | Reserved |
-| 3DS / New 3DS | **Artemis** | Reserved |
-| GameCube | **Uranus** | Reserved |
-| Wii | **Neptune** | Reserved |
-| Wii U | **Pluto** | Reserved |
+| Nintendo | Sailor Guardians | SNES = **Venus**, NES = **Moon**, GBA = **Jupiter** |
+| Sega | Dark Kingdom | Genesis = **Beryl**, Dreamcast = **Kunzite** |
+| Sony | Black Moon Clan | PS1 = **Diamond**, PS2 = **Sapphire** |
+| Atari | Death Busters | 2600 = **Eudial**, Jaguar = **Cyprine & Ptilol** |
+| Microsoft / NEC | Dead Moon Circus | Xbox = **CereCere**, PC Engine = **Tiger's Eye** |
 
-Virtual Boy being **Saturn**, Guardian of Death and Destruction, is a joke rather than a
-coincidence.
+Virtual Boy is **Saturn** — Guardian of Death and Destruction — which is a joke, not a coincidence.
 
-**Sega — Dark Kingdom** (`Cores/Sega/`) — Master System **Endymion**, Game Gear
-**Jadeite**, Genesis **Beryl**, 32X **Nephrite**, Saturn **Zoisite**, Dreamcast
-**Kunzite**.
-
-**Sony — Black Moon Clan** (`Cores/Sony/`) — PlayStation **Diamond**, PlayStation 2
-**Sapphire**, PlayStation 3 **Rubeus**, PSP **Esmeraude**, PS Vita **Wiseman**.
-
-**Atari — Death Busters** (`Cores/Atari/`) — 2600 **Eudial**, 5200 **Mimete**, 7800
-**Tellu**, Lynx **Viluy**, Jaguar **Cyprine & Ptilol** (canonically inseparable, hence one
-slot rather than two).
-
-**NEC — Dead Moon Circus, Amazon Trio** (`Cores/NEC/`) — PC Engine / TurboGrafx-16
-**Tiger's Eye**, SuperGrafx **Fish Eye**, PC-FX **Hawk's Eye**.
-
-Shadow Galactica is the one major faction still unassigned, held for whichever
-manufacturer is added next.
-
-**Ordering.** NES (**Moon**) is next, and is the milestone the whole architecture was built
-toward: it is the first real test of whether `IDebugTarget` is genuinely generic or merely
-asserted to be. Nothing beyond it is scheduled — the reserved folders are a naming and
-layout commitment, not a promise of delivery dates.
+Codenames govern folders and namespaces only. Classes and log output still say `Snes65816Disassembler` and `"SNES"`, because that is what the hardware is actually called. Full mapping in [`EmuSen_Core_Naming_Scheme.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Core_Naming_Scheme.md).
 
 ---
 
-## STATUS
+## Building and running
 
-The SNES core runs real commercial games; several boot and play. Very few have been
-verified end to end, and per-title ratings live in `EmuSen_Games_Tested.md`, which is the
-source of truth over any summary. Known gaps include 65816 decimal mode, save states
-lacking a version header, and scanline- rather than per-dot timing granularity (a
-deliberate, documented tradeoff).
+Requires the **.NET 10 SDK**. Nothing else — SDL2 ships with the build.
 
-Linux x64 is launch-tested. Windows and macOS builds are produced and structurally correct
-but have not been executed; macOS builds are unsigned.
+```sh
+git clone https://github.com/RedQuE3n/EmuSen-Project.git
+cd EmuSen-Project
+dotnet build
 
-**No ROMs are included, and none will be.**
+# the fuller GUI
+dotnet run --project EmuSen.Mistress
+
+# the console-first frontend, ROM on the command line
+dotnet run --project EmuSen.Hotaru -- /path/to/game.smc
+```
+
+### Publishing a standalone build
+
+Per-RID, self-contained, no .NET install needed on the target machine:
+
+```sh
+dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r linux-x64 \
+    --self-contained true -p:DebugType=none \
+    -p:ErrorOnDuplicatePublishOutputFiles=false -o out/linux-x64
+```
+
+Swap `linux-x64` for `win-x64`, `osx-x64` or `osx-arm64`.
+
+Two things that will bite you, both documented in [`EmuSen_Settings_Reference.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md) §4.9:
+
+- **Do not add `-p:PublishSingleFile=true`.** It builds fine and then fails at runtime, because Silk.NET cannot resolve the SDL2 the single-file host extracts.
+- **Ship the whole output folder.** The executable needs `libSDL2` and `DianaOSRoot/` beside it.
+
+macOS builds cross-compiled from Linux are unsigned. Apple Silicon refuses to execute an unsigned arm64 binary outright, so the user must sign it themselves:
+
+```sh
+xattr -dr com.apple.quarantine Mistress.app
+codesign --force --deep --sign - Mistress.app
+```
 
 ---
 
-## SEE ALSO
+## Tests
 
-`README.md` — building, running, publishing, and the full status tables.
+```sh
+dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj
+```
 
-Inside the emulator, `man <command>` documents every DianaOS verb. The project's own
-documentation set lives under
-`EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/` (overview, debugging tools
-reference, save states, audio sync, settings, games tested, roadmap) and
-`EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/` (per-console hardware notes, including
-full root-cause writeups for real bugs found and fixed).
+631 tests across 56 files: CPU and PPU hardware behaviour, APU/DSP, audio sync and drain, save-state round-tripping, the DianaOS shell (lexer, parser, pipes, control flow, multi-line continuation, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
 
-## LICENSE
+Some of those are **property-based** (CsCheck), asserting laws rather than examples: that the rewind delta codec's `Apply` really is its own inverse, that resampled audio never leaves the range its input spanned, that a fuller audio queue never asks the resampler to speed up, and that `CanDecode` never promises a cheat-code decode that then throws. Each runs hundreds to thousands of generated cases and shrinks any failure to a minimal counterexample.
 
-GPL-3.0 — chosen so anything built on this stays open, matching how the project itself was
-built from openly-published documentation.
+Beyond unit tests, the project leans on **output-identity digests**: `framesum` and `audiosum` over a fixed window across all 37 ROMs in the local library, so a change to the renderer or the mixer can be shown to alter exactly the games it was meant to and nothing else.
+
+---
+
+## Documentation
+
+This project documents heavily, and deliberately keeps rationale *out* of code comments and *in* man pages. Code comments are one line and point at a section.
+
+- `EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/` — per-console hardware notes. The SNES set (`Venus - SNES/`) covers CPU, PPU, APU and memory, including full root-cause writeups for real bugs found and fixed.
+- `EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/` — project-level docs: overview, debugging tools reference, save states, audio sync, rewind/fast-forward, settings, games tested, roadmap.
+
+These are readable on GitHub, and also from inside the emulator via DianaOS's own `man` and `cat`.
+
+---
+
+## Roadmap
+
+Near-term, roughly in order:
+
+1. Finish verifying the games that currently boot but have not been played through.
+2. Decimal (BCD) mode on the 65816.
+3. A save-state version header.
+4. Real per-Player-2 input bindings (only a mirror-P1 toggle exists today).
+5. The Mesen-style multi-pane GUI debugger, built on `IDebugTarget`.
+6. A second core — NES (**Moon**) — which is the long-term goal the whole architecture has been built toward.
+
+Explicitly deferred: true doubled-resolution interlace, and per-dot H-position timing.
+
+---
+
+## ROMs
+
+**No ROMs are included, and none will be.** The local test library referenced in the docs is not in this repository and is excluded by `.gitignore`. Supply your own legally-obtained dumps.
+
+---
+
+## Credits and licensing
+
+Written against the [SNESdev wiki](https://snes.nesdev.org/) as the primary hardware reference. [MesenCE](https://github.com/nesdev-org/MesenCE) is consulted as an architecture reference where useful — both projects are GPL-3.0, so there is no compatibility issue, though implementations here are written rather than transcribed.
+
+Licensed **GPL-3.0**, chosen so anything built on this stays open, matching how the project itself was built from openly-published documentation.

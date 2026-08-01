@@ -1,4 +1,3 @@
-using System.Linq;
 using EmuSen.DianaOS.DianaOS.Bin;
 
 namespace EmuSen.WiseMan.DianaOS
@@ -139,7 +138,7 @@ namespace EmuSen.WiseMan.DianaOS
             var shell = NewShell();
             Feed(shell, "for i in 1; do", "echo x", "done");
 
-            Assert.Single(shell.History.Entries.Where(e => e.Contains("for i in 1")));
+            Assert.Single(shell.History.Entries, e => e.Contains("for i in 1"));
             Assert.DoesNotContain(shell.History.Entries, e => e == "echo x");
         }
 

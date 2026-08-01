@@ -323,7 +323,11 @@ namespace EmuSen.Cores.Nintendo.Venus
                     long scaledSpc700Cycles = (long)cpuCycles * ApuClockHz + _spc700CycleRemainder;
                     _spc700CycleRemainder = (int)(scaledSpc700Cycles % MasterClockHz);
                     Spc700.CycleBudget += (int)(scaledSpc700Cycles / MasterClockHz);
-                    while (Spc700.CycleBudget > 0)
+                    // Only run an instruction the budget actually covers - running
+                    // past it made SPC700 port writes visible to the CPU up to a
+                    // whole instruction early, corrupting audio uploads whose
+                    // handshake acks before reading - see Venus_APU.md §1.6.
+                    while (Spc700.CycleBudget >= Spc700.PeekStepCycles())
                     {
                         Spc700.Step();
                     }

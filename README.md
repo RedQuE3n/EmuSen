@@ -213,7 +213,9 @@ codesign --force --deep --sign - Mistress.app
 dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj
 ```
 
-506 tests across 49 files: CPU and PPU hardware behaviour, APU/DSP, audio sync and drain, save-state round-tripping, the DianaOS shell (parser, pipes, control flow, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
+631 tests across 56 files: CPU and PPU hardware behaviour, APU/DSP, audio sync and drain, save-state round-tripping, the DianaOS shell (lexer, parser, pipes, control flow, multi-line continuation, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
+
+Some of those are **property-based** (CsCheck), asserting laws rather than examples: that the rewind delta codec's `Apply` really is its own inverse, that resampled audio never leaves the range its input spanned, that a fuller audio queue never asks the resampler to speed up, and that `CanDecode` never promises a cheat-code decode that then throws. Each runs hundreds to thousands of generated cases and shrinks any failure to a minimal counterexample.
 
 Beyond unit tests, the project leans on **output-identity digests**: `framesum` and `audiosum` over a fixed window across all 37 ROMs in the local library, so a change to the renderer or the mixer can be shown to alter exactly the games it was meant to and nothing else.
 

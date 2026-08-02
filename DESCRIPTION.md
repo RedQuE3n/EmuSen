@@ -68,8 +68,8 @@ DianaOS is a bash-alike, not a command prompt with a fixed verb list. It has:
 - a sandboxed, Unix-shaped filesystem tree walled to the project directory
 
 On top of that base sit the hardware verbs: `mem`, `regs`, `disasm`, `watch`, `bp`,
-`sprites`, `pal`, `layers`, `vramsheet`, and `coretop` — an htop-style live dashboard of
-the running machine.
+`sprites`, `pal`, `layers`, `vramsheet`, `cheat`, and `coretop` — an htop-style live
+dashboard of the running machine.
 
 ```sh
 # what changed in VRAM while that tile was wrong?
@@ -83,6 +83,16 @@ vramsheet /tmp/sheet.bmp
 # ordinary shell things work, because it is an ordinary shell
 for id in 1 2 3; do watch log $id 20; done > /tmp/watches.txt
 ```
+
+Cheats are part of that surface rather than a separate feature with its own private state.
+Both mechanisms the era's devices actually used are modelled — Pro Action Replay-style RAM
+pokes re-applied every frame, and Game Genie-style ROM read substitution — behind one
+registry with one ID space, because a player thinks of both as just "my cheats". The
+RetroArch `.cht` format is read and written, so the libretro cheat database works as-is;
+`cheat db prune` drops the systems no core in this build can use, driven by what each core
+declares rather than by anything hardcoded. Everything reachable as `cheat add` / `enable`
+/ `master` from the prompt is reachable from Mistress's own cheat windows, against the same
+registry — the two interfaces are views, not copies.
 
 The same interpreter is reachable three ways: on the terminal that launched **Hotaru**,
 through **Mistress**'s `Settings → DianaOS Console…` window, and — critically — as a
@@ -99,14 +109,17 @@ rather than being eyeballed on one frame.
 
 ## ARCHITECTURE
 
-Strictly layered; each layer depends only on the ones below it.
+Strictly layered — the core knows nothing about the shell, and the shell nothing about any
+core. Frontends sit on top of both and are interchangeable.
 
 | Project | Role |
 |---|---|
 | `EmuSen` | The emulation core — CPU, PPU, APU, memory, save states, resampling. A pure library: no `Main`, no window, no frontend knowledge |
 | `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command. **Core-agnostic** |
 | `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
+| `EmuSen.Galaxia` | Config persistence — the single answer to "where does a config file go". Depends on nothing |
 | `EmuSen.Serenity` | Shared presentation — the Avalonia/Skia frame control, shader pipeline, graphics settings |
+| `EmuSen.Nehellania` | Shared device layer — SDL3 audio output and gamepad input, one copy for both frontends |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
 | `EmuSen.Pharaoh` | The headless scripted harness |
@@ -171,6 +184,12 @@ slot rather than two).
 **NEC — Dead Moon Circus, Amazon Trio** (`Cores/NEC/`) — PC Engine / TurboGrafx-16
 **Tiger's Eye**, SuperGrafx **Fish Eye**, PC-FX **Hawk's Eye**.
 
+**Microsoft — Dead Moon Circus, Amazoness Quartet** (`Cores/Microsoft/`) — Xbox
+**CereCere**, Xbox 360 **JunJun**, Xbox One **PallaPalla**, Xbox Series X|S **VesVes**.
+Dead Moon Circus is the one faction split across two manufacturers, because it is the one
+with two distinct subordinate groups — the Trio has three members and NEC has three
+systems, the Quartet has four and Microsoft has four.
+
 Shadow Galactica is the one major faction still unassigned, held for whichever
 manufacturer is added next.
 
@@ -183,11 +202,19 @@ layout commitment, not a promise of delivery dates.
 
 ## STATUS
 
-The SNES core runs real commercial games; several boot and play. Very few have been
-verified end to end, and per-title ratings live in `EmuSen_Games_Tested.md`, which is the
-source of truth over any summary. Known gaps include 65816 decimal mode, save states
-lacking a version header, and scanline- rather than per-dot timing granularity (a
-deliberate, documented tradeoff).
+The SNES core runs real commercial games; several boot and play. **All four cartridge
+coprocessors this core has met are implemented** — the SA-1, the SuperFX/GSU, the NEC DSP
+series, and the OBC1 — each with its own hardware writeup under
+`Etc/Man pages/Hardware/Nintendo/Venus - SNES/`, so the library reaches well past plain
+LoROM/HiROM carts. PAL timing is real rather than faked: region comes off the cartridge
+country byte and drives 312-scanline/50 Hz timing and the `STAT78` bit together.
+
+Very few titles have been verified end to end. Per-title ratings live in
+`EmuSen_Games_Tested.md`, which carries the investigation behind each rating and should be
+read over any summary here — with the caveat that it lags actual core state, since a fix
+that moves a title up is not always written back the same day. Known gaps include 65816
+decimal mode, save states lacking a version header, SA-1 character-conversion DMA, and
+scanline- rather than per-dot timing granularity (a deliberate, documented tradeoff).
 
 Linux x64 is launch-tested. Windows and macOS builds are produced and structurally correct
 but have not been executed; macOS builds are unsigned.

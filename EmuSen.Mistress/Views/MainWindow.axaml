@@ -49,6 +49,7 @@
                 <MenuItem Header="_Debug Logging..." Click="OnDebugLoggingClick" />
                 <MenuItem Header="_Preferences..." Click="OnPreferencesClick" />
                 <MenuItem Header="Chea_t Database..." Click="OnCheatDatabaseClick" />
+                <MenuItem Header="_Active Cheats..." Click="OnActiveCheatsClick" />
                 <Separator />
                 <MenuItem x:Name="HardwareDashboardMenuItem" Header="_Hardware Dashboard..." Click="OnHardwareDashboardClick" />
                 <!-- Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`. -->

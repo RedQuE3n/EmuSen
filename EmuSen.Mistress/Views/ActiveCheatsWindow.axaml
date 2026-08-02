@@ -1,0 +1,87 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:EmuSen.Mistress.Views"
+        x:Class="EmuSen.Mistress.Views.ActiveCheatsWindow"
+        Title="Active Cheats"
+        Width="720" Height="600"
+        MinWidth="560" MinHeight="440">
+
+    <DockPanel Margin="16">
+
+        <!-- One switch over the whole list, independent of each cheat's own
+             box - see EmuSen_Settings_Reference.md §4.14. -->
+        <Border DockPanel.Dock="Top"
+                Padding="10"
+                Margin="0,0,0,12"
+                CornerRadius="4"
+                Background="{DynamicResource SystemChromeLowColor}">
+            <StackPanel Spacing="4">
+                <CheckBox x:Name="MasterSwitch" Content="Enable cheats" />
+                <TextBlock x:Name="MasterHintText"
+                           TextWrapping="Wrap"
+                           FontSize="11"
+                           Foreground="Gray" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top" x:Name="ListHeaderText" FontWeight="Bold" Margin="0,0,0,4" />
+
+        <!-- Add a code by hand. Raw addresses go through `cheat poke` in the
+             DianaOS console - see `man cheat`. -->
+        <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <StackPanel Spacing="6">
+                <TextBlock Text="Add a cheat" FontWeight="Bold" />
+                <Grid ColumnDefinitions="*,*,Auto">
+                    <TextBox Grid.Column="0" x:Name="CodeBox" PlaceholderText="Code (e.g. DD82-64DD or 7E0DBF63)" />
+                    <TextBox Grid.Column="1" x:Name="DescriptionBox" PlaceholderText="Description" Margin="8,0,0,0" />
+                    <Button Grid.Column="2" x:Name="AddButton" Content="Add" Margin="8,0,0,0" Click="OnAddClick" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0"
+                           x:Name="StatusText"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="SaveButton" Content="Save Cheat List" Click="OnSaveClick" />
+                    <Button x:Name="ApplyButton" Content="Apply Cheats" Click="OnApplyClick" />
+                    <Button x:Name="RemoveButton" Content="Remove" IsEnabled="False" Click="OnRemoveClick" />
+                    <Button x:Name="ClearButton" Content="Remove All" Click="OnClearClick" />
+                    <Button Content="Close" Click="OnCloseClick" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ListBox x:Name="CheatsList" SelectionChanged="OnCheatSelected">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="views:CheatRow">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,2">
+                        <CheckBox Grid.Column="0" IsChecked="{Binding Enabled, Mode=TwoWay}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding Kind}"
+                                   Foreground="Gray"
+                                   FontSize="11"
+                                   Width="34"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding Description}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="3"
+                                   Text="{Binding Detail}"
+                                   Foreground="Gray"
+                                   FontFamily="monospace"
+                                   FontSize="11"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+    </DockPanel>
+
+</Window>

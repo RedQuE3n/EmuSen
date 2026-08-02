@@ -80,6 +80,9 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "                                     Game Genie code decodes to; unlike NES/Genesis,",
             "                                     SNES Game Genie codes never carry a compare)",
             "  cheat list                         list every cheat with its ID, kind, and state",
+            "  cheat master [on|off]              one switch over every cheat at once, without",
+            "                                     touching any cheat's own enabled state (no",
+            "                                     argument reports which way it is set)",
             "  cheat enable <id>                  turn a cheat back on",
             "  cheat disable <id>                 turn a cheat off without removing it",
             "  cheat remove <id>                  remove a cheat entirely",
@@ -124,7 +127,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         // Wizard's. Best-effort only, NOT a guarantee - `cheat gg`/`cheat
         // poke` are the reliable fallback for a code formatted
         // unconventionally (or copied without its original punctuation).
-        private static bool LooksLikeGameGenieFormat(string code)
+        public static bool LooksLikeGameGenieFormat(string code)
         {
             for (int i = 0; i < code.Length; i++)
             {
@@ -152,7 +155,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             return string.Join('\n', lines);
         }
 
-        private static string FormatWrite(CheatWrite w, CheatKind kind)
+        public static string FormatWrite(CheatWrite w, CheatKind kind)
         {
             string where = kind == CheatKind.RamPoke ? $"{w.Space} 0x{w.Address:X}" : $"0x{w.Address:X6}";
             string op = w.Type switch
@@ -175,7 +178,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = global::EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers.RequireTarget(target);
-            if (parts.Length < 2) return "Usage: cheat add|poke|gg|rompatch|list|enable|disable|remove|clear|save|load|files|import|export ...";
+            if (parts.Length < 2) return "Usage: cheat add|poke|gg|rompatch|list|master|enable|disable|remove|clear|save|load|files|import|export ...";
             string sub = parts[1].ToLowerInvariant();
             var cheats = target.Cheats;
 
@@ -241,7 +244,21 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 {
                     var list = cheats.GetCheats();
                     if (list.Count == 0) return "No cheats added.";
-                    return string.Join('\n', list.Select(FormatCheat));
+
+                    IEnumerable<string> lines = list.Select(FormatCheat);
+                    // Or an off master switch makes every [on] below it a lie.
+                    if (!cheats.MasterEnabled) lines = new[] { "Cheats are OFF at the master switch (`cheat master on`)." }.Concat(lines);
+                    return string.Join('\n', lines);
+                }
+                case "master":
+                {
+                    if (parts.Length < 3) return $"Cheats are {(cheats.MasterEnabled ? "ON" : "OFF")} at the master switch.";
+
+                    string want = parts[2].ToLowerInvariant();
+                    if (want is not ("on" or "off")) return "Usage: cheat master [on|off]";
+
+                    cheats.MasterEnabled = want == "on";
+                    return $"Cheats are now {(cheats.MasterEnabled ? "ON" : "OFF")} at the master switch.";
                 }
                 case "enable":
                 {
@@ -299,22 +316,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     if (!DianaOSSandbox.TryResolve(importArg, out string importPath)) return $"cheat import: '{importArg}' is outside the sandbox.";
                     if (!System.IO.File.Exists(importPath)) return $"cheat import: no file at {importPath}";
 
-                    ChtParseResult parsed;
-                    try { parsed = ChtFile.Parse(System.IO.File.ReadAllText(importPath), _autoDetectCodec, _autoDetectCodec?.SpaceName ?? "CpuBus"); }
+                    CheatImportResult imported;
+                    try { imported = CheatImport.FromChtFile(cheats, importPath, _autoDetectCodec); }
                     catch (Exception ex) { return $"cheat import: {ex.Message}"; }
 
-                    int added = 0;
-                    foreach (ChtCheat c in parsed.Cheats)
-                    {
-                        // Imported off, always. A database file can hold
-                        // dozens of cheats and turning them all on at once
-                        // is never what anyone meant - see `man cheat`.
-                        try { cheats.AddCheat(CheatKind.RamPoke, c.Writes, null, c.Description, enabled: false); added++; }
-                        catch (ArgumentException) { }
-                    }
-
-                    string skippedText = parsed.Skipped > 0 ? $", {parsed.Skipped} skipped" : "";
-                    return $"Imported {added} cheat(s) from {System.IO.Path.GetFileName(importPath)}{skippedText} - all disabled, `cheat enable <id>` to turn one on.";
+                    string skippedText = imported.Skipped > 0 ? $", {imported.Skipped} skipped" : "";
+                    return $"Imported {imported.Loaded} cheat(s) from {System.IO.Path.GetFileName(importPath)}{skippedText} - all disabled, `cheat enable <id>` to turn one on.";
                 }
                 case "export":
                 {
@@ -372,19 +379,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                                 return "No matching cheat file - try `cheat db find` first.";
                             }
 
-                            ChtParseResult found;
-                            try { found = ChtFile.Parse(System.IO.File.ReadAllText(match.Path), _autoDetectCodec, _autoDetectCodec?.SpaceName ?? "CpuBus"); }
+                            CheatImportResult found;
+                            try { found = CheatImport.FromChtFile(cheats, match.Path, _autoDetectCodec); }
                             catch (Exception ex) { return $"cheat db load: {ex.Message}"; }
 
-                            int loadedCount = 0;
-                            foreach (ChtCheat c in found.Cheats)
-                            {
-                                try { cheats.AddCheat(CheatKind.RamPoke, c.Writes, null, c.Description, enabled: false); loadedCount++; }
-                                catch (ArgumentException) { }
-                            }
-
                             string dbSkipped = found.Skipped > 0 ? $", {found.Skipped} skipped" : "";
-                            return $"Loaded {loadedCount} cheat(s) for {match.Game}{dbSkipped} - all disabled, `cheat enable <id>` to turn one on.";
+                            return $"Loaded {found.Loaded} cheat(s) for {match.Game}{dbSkipped} - all disabled, `cheat enable <id>` to turn one on.";
                         }
                         case "update":
                         {
@@ -417,7 +417,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 default:
                 {
                     // Named once so the suggestion and the "Try" list cannot drift.
-                    string[] subcommands = { "add", "poke", "gg", "rompatch", "list", "enable", "disable", "remove", "clear", "save", "load", "files", "import", "export", "db" };
+                    string[] subcommands = { "add", "poke", "gg", "rompatch", "list", "master", "enable", "disable", "remove", "clear", "save", "load", "files", "import", "export", "db" };
                     return $"Unknown 'cheat' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
                 }
             }

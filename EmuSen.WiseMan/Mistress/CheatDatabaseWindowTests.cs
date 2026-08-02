@@ -195,5 +195,225 @@ namespace EmuSen.WiseMan.Mistress
         {
             for (int i = 0; i < 200 && !condition(); i++) await Task.Delay(10);
         }
+
+        // --- Picking a system, then a game (see EmuSen_Settings_Reference.md §4.14) ---
+
+        private const string Snes = "Nintendo - Super Nintendo Entertainment System";
+
+        private static ListBox Systems(CheatDatabaseWindow w) => w.GetControl<ListBox>("SystemsList");
+        private static ListBox Games(CheatDatabaseWindow w) => w.GetControl<ListBox>("GamesList");
+
+        private static EmuSen.DianaOS.DianaOS.Lib.ICheatCodeCodec Codec() =>
+            new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec();
+
+        // Selecting a system used to do nothing at all - the games never
+        // appeared, so a downloaded database was unreachable from the GUI.
+        [Fact]
+        public Task Selecting_a_system_lists_that_systems_games() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+            WriteChtFile(Snes, "Super Metroid (Japan, USA)");
+            WriteChtFile("Sony - PlayStation", "Final Fantasy VII (USA) (Disc 1)");
+
+            var window = new CheatDatabaseWindow(Settings());
+            window.Show();
+
+            Assert.Empty(Games(window).ItemsSource!.Cast<string>());
+
+            // The SNES folder sorts first of the two.
+            Systems(window).SelectedIndex = 0;
+
+            var games = Games(window).ItemsSource!.Cast<string>().ToList();
+            Assert.Equal(new[] { "Super Mario World (USA)", "Super Metroid (Japan, USA)" }, games);
+            Assert.Contains(Snes, window.GetControl<TextBlock>("GamesHeaderText").Text!);
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task Switching_system_replaces_the_game_list() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+            WriteChtFile("Sony - PlayStation", "Final Fantasy VII (USA) (Disc 1)");
+
+            var window = new CheatDatabaseWindow(Settings());
+            window.Show();
+
+            Systems(window).SelectedIndex = 0;
+            Assert.Equal("Super Mario World (USA)", Games(window).ItemsSource!.Cast<string>().Single());
+
+            Systems(window).SelectedIndex = 1;
+            Assert.Equal("Final Fantasy VII (USA) (Disc 1)", Games(window).ItemsSource!.Cast<string>().Single());
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task The_filter_narrows_the_game_list() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+            WriteChtFile(Snes, "Chrono Trigger (USA)");
+
+            var window = new CheatDatabaseWindow(Settings());
+            window.Show();
+            Systems(window).SelectedIndex = 0;
+
+            window.GetControl<TextBox>("GameFilterBox").Text = "chrono";
+
+            Assert.Equal("Chrono Trigger (USA)", Games(window).ItemsSource!.Cast<string>().Single());
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task Picking_a_game_populates_the_active_cheat_list_disabled() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+            var registry = new CheatRegistry();
+
+            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec());
+            window.Show();
+
+            Systems(window).SelectedIndex = 0;
+            Games(window).SelectedIndex = 0;
+
+            window.GetControl<Button>("LoadGameButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Assert.Equal("Infinite Maximum Coins", registry.GetCheats().Single().Description);
+            Assert.False(registry.GetCheats().Single().Enabled);
+            Assert.Contains("Loaded 1 cheat(s)", Status(window).Text!);
+
+            window.Close();
+        }, default);
+
+        // Or picking the same game twice silently doubles every cheat.
+        [Fact]
+        public Task Picking_a_game_replaces_rather_than_appends() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+            var registry = new CheatRegistry();
+
+            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec());
+            window.Show();
+
+            Systems(window).SelectedIndex = 0;
+            Games(window).SelectedIndex = 0;
+
+            var load = window.GetControl<Button>("LoadGameButton");
+            load.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            load.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Assert.Single(registry.GetCheats());
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task A_load_tells_whoever_is_showing_the_list_to_refresh() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+            var registry = new CheatRegistry();
+            int refreshes = 0;
+
+            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec(), () => refreshes++);
+            window.Show();
+
+            Systems(window).SelectedIndex = 0;
+            Games(window).SelectedIndex = 0;
+            window.GetControl<Button>("LoadGameButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Assert.Equal(1, refreshes);
+
+            window.Close();
+        }, default);
+
+        // Without a list to load into there is nothing the button can do,
+        // so it must not look clickable.
+        [Fact]
+        public Task The_load_button_stays_off_with_no_cheat_list_to_load_into() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+
+            var window = new CheatDatabaseWindow(Settings());
+            window.Show();
+
+            Systems(window).SelectedIndex = 0;
+            Games(window).SelectedIndex = 0;
+
+            Assert.False(window.GetControl<Button>("LoadGameButton").IsEnabled);
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task The_load_button_stays_off_until_a_game_is_picked() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+            var registry = new CheatRegistry();
+
+            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec());
+            window.Show();
+
+            Assert.False(window.GetControl<Button>("LoadGameButton").IsEnabled);
+
+            Systems(window).SelectedIndex = 0;
+            Assert.False(window.GetControl<Button>("LoadGameButton").IsEnabled);
+
+            Games(window).SelectedIndex = 0;
+            Assert.True(window.GetControl<Button>("LoadGameButton").IsEnabled);
+
+            window.Close();
+        }, default);
+
+        // Turning a just-loaded list on is the next thing anyone does, so it
+        // is a button here rather than a trip back to the menu bar.
+        [Fact]
+        public Task The_active_cheats_button_asks_its_owner_to_open_that_window() => Session.Dispatch(() =>
+        {
+            WriteChtFile(Snes, "Super Mario World (USA)");
+            var registry = new CheatRegistry();
+
+            int opened = 0;
+            var window = new CheatDatabaseWindow(Settings(), () => registry, Codec(), null, () => opened++);
+            window.Show();
+
+            window.GetControl<Button>("ActiveCheatsButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Assert.Equal(1, opened);
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task The_active_cheats_button_is_off_when_no_owner_can_open_one() => Session.Dispatch(() =>
+        {
+            var window = new CheatDatabaseWindow(Settings(), () => new CheatRegistry(), Codec());
+            window.Show();
+
+            Assert.False(window.GetControl<Button>("ActiveCheatsButton").IsEnabled);
+
+            window.Close();
+        }, default);
+
+        // Both doors lead to the one window - see §4.14.
+        [Fact]
+        public Task Opening_it_from_the_database_window_reuses_the_menus_window() => Session.Dispatch(() =>
+        {
+            var main = new MainWindow();
+            main.Show();
+
+            Invoke(main, "ShowActiveCheats");
+            Window first = main.OwnedWindows.OfType<ActiveCheatsWindow>().Single();
+
+            Invoke(main, "ShowActiveCheats");
+
+            Assert.Same(first, main.OwnedWindows.OfType<ActiveCheatsWindow>().Single());
+
+            main.Close();
+        }, default);
+
+        private static void Invoke(MainWindow window, string method) =>
+            typeof(MainWindow).GetMethod(method, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(window, null);
     }
 }

@@ -2,8 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="EmuSen.Mistress.Views.CheatDatabaseWindow"
         Title="Cheat Database"
-        Width="620" Height="560"
-        MinWidth="480" MinHeight="420">
+        Width="820" Height="620"
+        MinWidth="640" MinHeight="480">
 
     <DockPanel Margin="16">
 
@@ -25,6 +25,7 @@
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ActiveCheatsButton" Content="Active Cheats..." Click="OnActiveCheatsClick" />
                     <Button x:Name="DownloadButton" Content="Download from libretro" Click="OnDownloadClick" />
                     <Button Content="Close" Click="OnCloseClick" />
                 </StackPanel>
@@ -45,8 +46,35 @@
                        Foreground="Gray" />
         </Border>
 
-        <TextBlock DockPanel.Dock="Top" Text="Installed" FontWeight="Bold" Margin="0,0,0,4" />
-        <ListBox x:Name="SystemsList" />
+        <!-- Systems on the left, that system's games on the right - see
+             EmuSen_Settings_Reference.md §4.14. -->
+        <Grid ColumnDefinitions="2*,12,3*">
+
+            <DockPanel Grid.Column="0">
+                <TextBlock DockPanel.Dock="Top" Text="Installed" FontWeight="Bold" Margin="0,0,0,4" />
+                <ListBox x:Name="SystemsList" SelectionChanged="OnSystemSelected" />
+            </DockPanel>
+
+            <DockPanel Grid.Column="2">
+                <TextBlock DockPanel.Dock="Top" x:Name="GamesHeaderText" Text="Games" FontWeight="Bold" Margin="0,0,0,4" />
+                <TextBox DockPanel.Dock="Top"
+                         x:Name="GameFilterBox"
+                         PlaceholderText="Filter games..."
+                         Margin="0,0,0,6" />
+                <Button DockPanel.Dock="Bottom"
+                        x:Name="LoadGameButton"
+                        Content="Load into Active Cheats"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        Margin="0,6,0,0"
+                        IsEnabled="False"
+                        Click="OnLoadGameClick" />
+                <ListBox x:Name="GamesList"
+                         SelectionChanged="OnGameSelected"
+                         DoubleTapped="OnGameActivated" />
+            </DockPanel>
+
+        </Grid>
 
     </DockPanel>
 

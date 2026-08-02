@@ -5,7 +5,7 @@
        reinvented as throwaway scratch code every session: shell/debug-
        toolchain dispatch, the core-agnostic IDebugTarget hooks
        (ClassifyStaticReference, DecodeTilePixels), the ICore audio drain
-       path, and AudioPlayer's actual SDL calls (against SDL's dummy
+       path, and AudioPlayer's actual SDL3 calls (against SDL's dummy
        driver - see Fixtures/SyntheticRom.cs and Audio/AudioPlayerTests.cs
        for why a real audio device isn't needed to test this for real). -->
   <PropertyGroup>
@@ -45,10 +45,13 @@
     <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
          comment on why these live separately from DianaOS. -->
     <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
-    <!-- AudioPlayer (SDL-backed real audio output) lives here - see
-         Audio/AudioPlayerTests.cs. Pulls in Avalonia/Silk.NET.SDL
-         transitively, which is fine for a test project; nothing here
-         opens an actual Avalonia window. -->
+    <!-- AudioPlayer/GamepadBindingMap - see Audio/AudioPlayerTests.cs and
+         Input/GamepadBindingMapTests.cs. Real SDL3 calls against the dummy
+         driver; nothing here opens a window. -->
+    <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
+    <!-- InputSettingsWindow and the rest of the Mistress GUI under test -
+         see Mistress/*Tests.cs. Pulls in Avalonia transitively, which is
+         fine for a test project; nothing here opens an actual window. -->
     <ProjectReference Include="..\EmuSen.Mistress\EmuSen.Mistress.csproj" />
     <!-- HeadlessDebugOptions.Parse and FrameRunner - see
          HeadlessDebug/HeadlessDebugOptionsTests.cs and

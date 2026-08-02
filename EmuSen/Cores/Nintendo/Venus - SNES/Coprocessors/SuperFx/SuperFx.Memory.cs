@@ -21,7 +21,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         private static int RamOffsetLinear(byte bank, ushort offset) => ((bank & 0x1F) << 16) | offset;
 
         // The S-CPU's 8KB window is packed one block per bank.
-        private static int RamOffsetWindow(byte bank, ushort offset) => ((bank & 0x3F) << 13) | (offset & 0x1FFF);
+        // The $6000-$7FFF window is the FIRST 8KB of Game Pak RAM mirrored into
+        // every low bank, not a bank-indexed slice - see Venus_SuperFX.md §5.1.
+        private static int RamOffsetWindow(byte bank, ushort offset) => offset & 0x1FFF;
 
         // S-CPU view. MemoryBus has already claimed WRAM, the PPU and the CPU
         // registers before the cartridge is consulted.

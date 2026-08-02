@@ -271,6 +271,36 @@ namespace EmuSen.WiseMan.Coprocessors
             Assert.Equal(11, gsu.R[8]);
         }
 
+        // LJMP takes its bank from the named register and its address from the
+        // source register. The official docs have the two swapped, so this
+        // pins the direction - see Venus_SuperFX.md §9.
+        [Fact]
+        public void Ljmp_takes_its_address_from_the_source_register()
+        {
+            // R8 = bank 0, R1 = target offset 32. FROM R1 then ALT1 then JMP R8.
+            byte[] program =
+            [
+                .. Iwt(5, 0), .. Iwt(6, 0), .. Iwt(8, 0), .. Iwt(1, 32),
+                0xB1,       // FROM R1 - selects the source holding the address
+                0x3D, 0x98, // ALT1, JMP R8 => LJMP R8
+                0xD5,       // delay slot: INC R5, always runs
+                Stop,
+            ];
+            byte[] rom = new byte[0x10000];
+            program.CopyTo(rom, 0);
+            rom[32] = 0xD6; // INC R6, only reached if the jump landed here
+            rom[33] = Stop;
+
+            var gsu = new Gsu(rom, new byte[0x8000]);
+            gsu.WriteRegister(Clsr, 0x01);
+            gsu.WriteRegister(R15Low, 0x00);
+            gsu.WriteRegister(R15High, 0x00);
+            gsu.Run(20000);
+
+            Assert.Equal(1, gsu.R[5]); // the delay slot ran
+            Assert.Equal(1, gsu.R[6]); // and control reached offset 32
+        }
+
         // LOOP decrements R12 and jumps to R13 until it hits zero.
         [Fact]
         public void Loop_repeats_until_the_counter_drains()

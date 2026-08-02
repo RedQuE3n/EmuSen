@@ -10,6 +10,8 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Mistress.Input;
+using EmuSen.Nehellania.Input;
+using EmuSen.Nehellania.Settings;
 using EmuSen.Mistress.Settings;
 using EmuSen.Mistress.Views;
 

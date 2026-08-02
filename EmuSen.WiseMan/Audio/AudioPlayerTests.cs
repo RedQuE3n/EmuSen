@@ -1,32 +1,17 @@
 using EmuSen.Common;
-using EmuSen.Mistress.Audio;
+using EmuSen.Nehellania.Audio;
 using EmuSen.WiseMan.Fixtures;
+using SDL3;
 
 namespace EmuSen.WiseMan.Audio
 {
-    // Exercises AudioPlayer's actual SDL P/Invoke calls (InitSubSystem,
-    // OpenAudioDevice, QueueAudio, GetQueuedAudioSize, CloseAudioDevice,
-    // QuitSubSystem) against SDL's "dummy" audio driver - a real,
-    // functioning SDL audio backend built for exactly this (headless CI/
-    // testing with no real sound hardware), not a fake or a mock. Forced
-    // via SDL_AUDIODRIVER before any SDL call in this process, since SDL
-    // reads that once at init time - see the static constructor below.
-    //
-    // This is what actually caught whether Silk.NET.SDL's exact method/
-    // struct shapes (OpenAudioDevice's parameter order, AudioSpec's field
-    // layout, the AudioS16Sys/InitAudio constant names) were right -
-    // confirming this compiles is not the same as confirming it runs
-    // without a marshaling crash, which is what these checks are for.
+    // Exercises AudioPlayer's real SDL3 P/Invoke calls against SDL's "dummy"
+    // audio driver - see EmuSen_Settings_Reference.md §4.10.
     public class AudioPlayerTests
     {
-        // NativeEnvironment.Set, not Environment.SetEnvironmentVariable -
-        // see that class's own comment for why (verified directly on this
-        // runtime: SDL kept trying ALSA, absent in this sandbox, instead
-        // of seeing the requested "dummy" driver at all) and for the
-        // per-platform reasoning behind how it's actually fixed.
         static AudioPlayerTests()
         {
-            NativeEnvironment.Set("SDL_AUDIODRIVER", "dummy");
+            SDL.SetHint(SDL.Hints.AudioDriver, "dummy");
         }
 
         [Fact]

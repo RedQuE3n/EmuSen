@@ -127,7 +127,8 @@ Two small helper classes back the memory spaces:
 | `spaces` | List memory spaces (name, size, writable) |
 | `mem <space> <addr> [<len>]` | xxd-style hexdump, default length 16 |
 | `write <space> <addr> <value>` | Write one byte, if the space is writable |
-| `regs` | CPU + video registers, plus an APU section when a target has one (§3.2) |
+| `regs` | CPU + video registers, plus APU and coprocessor sections when a target has them (§3.2, §3.23) |
+| `cophist [<reg>] [<count>]` | Coprocessor register history, and how long it has sat unchanged — see §3.23a |
 | `sprites` | Active sprite/OBJ table |
 | `pal [<index>]` | One palette, or all 16 if omitted |
 | `channels` | Audio channel/voice table (active, envelope level 0-100, muted, core-specific detail) - core-agnostic (`IDebugTarget.GetAudioChannels()`), SNES reports its 8 S-DSP voices - see `Venus_APU.md` §3.5 |
@@ -657,7 +658,7 @@ dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj   # or: dotnet test EmuSen.sln
 - `DianaOS/StaticReferenceClassificationTests.cs` - `IDebugTarget.ClassifyStaticReference` (JSR/STA/LDA absolute classify correctly; direct-page STA has no static target) plus `callers`/`writers`/`readers` end to end against a real target.
 - `DianaOS/TilePixelDecodeTests.cs` - `IDebugTarget.DecodeTilePixels` (bpp 2 decode correctness, unsupported bpp throws) plus `tile` end to end.
 - `Audio/AudioDrainTests.cs` - `ICore.DequeueAudioSamples`/`EmulatorSession`'s pass-through (FIFO order, capping, empty-buffer behavior, the null-session-before-`LoadRom()` fallback).
-- `Audio/AudioPlayerTests.cs` - `EmuSen.Mistress`'s `AudioPlayer` against SDL's real "dummy" audio driver (a genuine SDL backend built for headless testing, not a mock) - this is what actually proves Silk.NET.SDL's exact method/struct shapes (`OpenAudioDevice`'s parameter order, `AudioSpec`'s field layout, the `AudioS16Sys`/`InitAudio` constant names) are right, since compiling doesn't catch a P/Invoke marshaling mismatch.
+- `Audio/AudioPlayerTests.cs` - `EmuSen.Mistress`'s `AudioPlayer` against SDL's real "dummy" audio driver (a genuine SDL backend built for headless testing, not a mock) - this is what actually proves `SDL3-CS`'s exact method/struct shapes (`OpenAudioDeviceStream`'s parameter order, `AudioSpec`'s field layout, the `AudioS16LE`/`InitFlags.Audio` constant names) are right, since compiling doesn't catch a P/Invoke marshaling mismatch. It is also what caught, on the SDL3 migration's first run, that the dummy driver's pacing is looser than SDL2's - see `EmuSen_Settings_Reference.md` §4.10.
 - `Audio/WavFileTests.cs` - `EmuSen.Audio.WavFile`'s RIFF/WAVE/`fmt `/`data` header fields for a known sample-rate/channel-count input, plus the zero-samples edge case (header only, no data chunk).
 - `Imaging/BmpFileTests.cs` - `EmuSen.Common.Imaging.BmpFile` write/read round-trips preserve pixels and dimensions exactly.
 - `Imaging/FrameHashTests.cs` - `FrameHash.Compute` (FNV-1a) determinism and single-byte sensitivity - the property `--autoshot`'s whole "did this frame change" mechanism depends on.
@@ -680,6 +681,8 @@ dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj   # or: dotnet test EmuSen.sln
 - `Serenity/GameFrameControlRenderTests.cs` - real Avalonia render passes through `GameFrameControl`'s actual `Render()`/`DrawOp` path (`Avalonia.Headless` + `UseSkia`, driven via `HeadlessUnitTestSession.Dispatch` rather than `Avalonia.Headless.XUnit`'s `[AvaloniaFact]` - that package pins xunit v3, which collides with this project's xunit v2 tests; see `Serenity/TestAppBuilder.cs`'s own comment): a solid-color frame renders with the correct pixel color at its center, 120 consecutive frames render without throwing, the direct regression guard for the per-frame-`SKSurface` flicker bug fixed in `GameFrameControl.cs` itself (`EmuSen_Project_Overview_v2.md` §2a) - rendering one unchanged input frame 30 times in a row produces byte-identical output every time - the same three checks again with a shader (Scanlines/Crt) active, and `Scanlines_darkens_odd_output_rows_by_the_exact_documented_factor` - the exact-pixel-math regression guard for the local-matrix rewrite (§2a) that replaced the shader path's own offscreen upscale surface, not just "some" output changed. Added specifically because nothing before this exercised the real render path at all - only pure math/shader-source-string/enum-cycling tests existed, and it found a real bug on its first real run: the shader-active "many consecutive frames" test segfaulted the test host outright (`SKRuntimeShaderBuilder.Dispose()` corrupting a reused `SKRuntimeEffect` - see `EmuSen_Project_Overview_v2.md` §2a's own write-up; both that crash and the underlying per-frame-allocation design flaw are fixed now, not just papered over). **Known gap:** headless rendering has no live `GrContext` (no real GPU), so this can't reproduce a live-GPU/compositor-specific bug the way the original flicker only showed up under a real window - it catches rendering-logic and native-crash regressions, not driver/compositor interaction bugs.
 
 **A real bug caught building `AudioPlayerTests.cs`, not a hypothetical one:** `Environment.SetEnvironmentVariable("SDL_AUDIODRIVER", "dummy")` does **not** reach the real libc environment on this runtime - verified directly by calling `getenv(3)` via P/Invoke immediately afterward and getting back an empty string. Every SDL-touching test failed with `IsAvailable == false` (SDL falling through to ALSA, absent in a sandboxed test environment, instead of the dummy driver) until switched to a direct native call instead. Flagged here in case the same shape of bug (`Environment.SetEnvironmentVariable` not being visible to a native library's own `getenv()` call in the same process) shows up again anywhere else native interop and environment variables meet.
+
+**Both of the above are history as of the SDL3 migration (2026-08-01).** SDL3 exposes the driver choice as a hint, so the suites call `SDL.SetHint(SDL.Hints.AudioDriver, "dummy")` in a static constructor and never touch the process environment at all - `Audio/NativeEnvironment.cs` was deleted along with the problem it worked around (`EmuSen_Settings_Reference.md` §4.10). The paragraphs are kept because the underlying trap is not SDL-specific: `Environment.SetEnvironmentVariable` still does not reach the real libc environment a P/Invoked library reads, anywhere else that combination comes up. What follows describes the removed file.
 
 **`Audio/NativeEnvironment.cs` - the fix, made portable rather than Linux-only.** The first version of this fix P/Invoked libc's `setenv(3)` directly and unconditionally - it worked, but this project ships native SDL/Raylib runtimes for Windows and macOS too (`win-x64`/`x86`/`arm64`, `osx`), and there's no `libc.so` to resolve on Windows; that P/Invoke would have crashed the moment this suite ran anywhere but Linux/macOS, a real "worked here, breaks on port" landmine caught before it shipped rather than after. `NativeEnvironment.Set` branches on `RuntimeInformation.IsOSPlatform(OSPlatform.Windows)`: Unix keeps the verified `setenv(3)` P/Invoke (macOS shares the same POSIX libc API - not independently verified on real macOS hardware, since this project's dev/CI environment is Linux-only, but expected to work unchanged); Windows calls `Environment.SetEnvironmentVariable` directly rather than P/Invoking anything, on the documented reasoning that SDL2 on Windows reads environment variables via the Win32 `GetEnvironmentVariable` API (not a CRT-module-cached `getenv()` - the actual, well-documented reason this class of bug usually bites on Windows), and .NET's `SetEnvironmentVariable` already calls the matching Win32 `SetEnvironmentVariableW` under the hood there - so there's nothing to work around on that platform. Also not independently verified on real Windows hardware for the same reason as the macOS note. If either assumption ever turns out wrong, the fix is a `kernel32` `SetEnvironmentVariableW` P/Invoke in the same file, same shape as the Unix branch - not a deeper redesign.
 
@@ -836,7 +839,48 @@ This is how §5.1 of `Venus_PPU.md` (skipping the unused sub-screen composite) w
 
 ---
 
+### 3.23 Cartridge coprocessors (`regs`, `cophist`, `GSURAM`/`SA1IRAM`, `IDebugTarget.CoprocessorRegisters`)
+
+**The gap this closed.** Until this landed, the entire toolchain was blind to cartridge coprocessors. `SnesDebugTarget` had no reference to the SA-1, the SuperFX GSU or a NEC DSP at all, and the exposed memory spaces stopped at `CpuBus / IO / WRAM / VRAM / CGRAM / OAM / SRAM / APURAM`. So `regs`, `watch`, `framelog`, `waitvalue`, `snapshot`, `diff`, `search` and `coretop` — the whole surface — could not see a single GSU register. Every coprocessor investigation therefore degenerated into hand-patching `Console.WriteLine` into the interpreter and rebuilding, twice over in the SuperFX work (`Venus_SuperFX.md` §10). This is the same blind spot `APURAM` closed for the SPC700, and the same lesson §2 already states: a narrow, investigation-specific print is a sign something belongs in the toolchain.
+
+**What is exposed.** `IDebugTarget.CoprocessorRegisters` is a provider like `CpuRegisters`/`ApuRegisters`, publishing whichever chip the cartridge carries — the GSU's `SFR`/`PBR`/`CBR`/`SCBR`/`SCMR`/`ROMBR`/`RAMBR` plus the whole `R0`-`R15` file, the SA-1's control registers and its 65C816's state, or a NEC DSP's `PC`/`SR`/`DR`/`DP`/`RP`. A cartridge with no coprocessor — most of them — publishes an empty list, and `regs` prints no section at all. Two new memory spaces appear only when the chip is present: **`GSURAM`** (Game Pak RAM: the GSU's work RAM, framebuffer and save data all at once, so `snapshot`/`diff` over it answers "is the chip still plotting") and **`SA1IRAM`**.
+
+**Reads must not perturb the chip, and this is not a formality.** The real register windows have side effects — reading `$3031` *acknowledges the GSU's interrupt*, and the NEC DSP's `DR`/`SR` reads advance its transfer handshake. So the provider reads dedicated side-effect-free `Debug*` views rather than routing through each chip's own `ReadRegister`, exactly as `APURAM` wraps raw SPC700 RAM instead of `Spc700.Read8`. `CoprocessorDebugExposureTests.Reading_the_provider_does_not_acknowledge_the_gsu_interrupt` pins it, and genuinely fails if the implementation is rerouted through `ReadRegister`.
+
+**No `DSPRAM`.** The NEC DSP's RAM is `ushort[]`, and which byte order a byte-addressable view should present is a real decision rather than one to invent — its registers are on the provider instead.
+
+### 3.23a `cophist` — coprocessor register history
+
+`regs` shows the instant. Coprocessor bugs are *transitions* — the chip renders, then stops — so the question that actually gets asked is "what were `SFR`/`PBR`/`R15` doing in the seconds before it stopped", which no latest-value view can answer.
+
+`CoprocessorRegisters` is therefore backed by `EmuSen.Cauldron.HistoryProvider<T>` (§4) rather than `PollingProvider<T>`, retaining the last 600 refreshes (~10 seconds of frames). `cophist [<reg>] [<count>]` reads it back, oldest row first:
+
+```
+> cophist R15 10
+Coprocessor history: 10 of 301 retained (capacity 600),
+unchanged for 15 refresh(es).
+  refresh     R15
+      291    B2B1
+      ...
+      300    B2B1
+```
+
+The header's **"unchanged for N refresh(es)"** is the useful part: it is the direct answer to "when did the chip stop", available without storing or diffing anything by hand. The run above shows the GSU parked at `R15 = B2B1` for fifteen frames.
+
+---
+
 ## 4. Underlying helper libraries (pre-date the toolchain above)
+
+### `EmuSen.Cauldron/` — real-time snapshot providers
+
+The thread-safety seam between a live core and anything reading it. Deliberately knows nothing about DianaOS, cores, or any console.
+
+- `IRealtimeProvider<T>` — `Current` (never blocks, safe from any thread) plus `Refresh()` (only ever from the thread that owns the core). Every provider property on `IDebugTarget` is one of these.
+- `PollingProvider<T>` — the default: wraps a "go read the live core" delegate and publishes via a lock-free `Volatile` reference swap. Remembers only the latest snapshot.
+- `HistoryProvider<T>` — same contract, but also retains the last `capacity` snapshots in a fixed-size ring, plus a **staleness signal**: `RefreshesSinceChange` counts how long `Current` has compared equal to its predecessor. `PollingProvider` answers "what is the machine doing now", which is what a live dashboard wants; this answers "what was it doing before it stopped", which is what an investigation into a transition wants. `GetHistory()` copies out under a lock — the one member here that can block, which is why it is a method rather than a property that looks as cheap as `Current`.
+- `ListEqualityComparer<TItem>` — element-wise equality for the `IReadOnlyList<T>` snapshots providers publish. The staleness signal needs it: snapshots are rebuilt every `Refresh`, so reference equality would report "changed" every time and the signal would read 0 forever.
+
+**Kept a separate type on purpose.** History costs a retained reference per refresh, so a consumer that only reads `Current` should not pay for a ring it never looks at. Only `CoprocessorRegisters` uses it today (§3.23a). Note this is *not* the old `DebugTools.ChangeTracker<T>` removed below — that had no call sites at all; this one is load-bearing.
 
 ### `Cores/Nintendo/Venus - SNES/Debug/StateDump.cs`
 On-demand CPU+PPU snapshot formatter. Returns formatted strings (doesn't print directly) — `DumpCpuState`, `DumpPpuState`, `DumpAll`. Deliberately laid out to be directly comparable to MesenCE's own Status panel.

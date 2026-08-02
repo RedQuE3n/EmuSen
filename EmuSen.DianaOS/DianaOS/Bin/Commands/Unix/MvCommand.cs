@@ -23,10 +23,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
     {
         public string Name => "mv";
         public bool IsReadOnly => false;
-        public string Usage => "  mv <src> <dst>                move/rename a file or directory (dst may be an existing directory)";
+        public string Usage => "  mv <src> <dst>                SUSPENDED - move/rename a file or directory (dst may be an existing directory)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
+            if (DianaOSCommandSuspensions.IsSuspended(Name)) return DianaOSCommandSuspensions.Refuse(Name);
+
             if (args.Length < 3) return DianaOSResult.Fail("mv: usage: mv <src> <dst>");
 
             if (!DianaOSSandbox.TryResolve(args[1], out string src))

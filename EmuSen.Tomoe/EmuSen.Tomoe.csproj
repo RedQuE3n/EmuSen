@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -14,5 +14,10 @@
          the thin CLI wrapper that picks a target by name and runs it. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
   </ItemGroup>
+
+
+  <!-- A published build's output directory is DianaOS's own root: the .NET
+       app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
+  <Import Project="..\EmuSen.DianaOS\Publish\DianaOSPublishLayout.targets" />
 
 </Project>

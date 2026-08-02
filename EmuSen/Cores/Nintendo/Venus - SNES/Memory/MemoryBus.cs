@@ -22,6 +22,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // registers off of), added for SnesDebugTarget.ApuRegisters.
         public Spc700 Spc700 => _spc700;
 
+        // Same accessor pattern again, for SnesDebugTarget.CoprocessorRegisters.
+        public Cartridge Cart => _cartridge;
+
         public Dma Dma { get; private set; }
         public Input Input { get; private set; }
 

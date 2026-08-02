@@ -437,11 +437,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         }
 
         // The long form additionally reloads the program bank, which moves the
-        // cache window and invalidates everything in it.
+        // cache window and invalidates everything in it. Rn carries the bank
+        // and Sreg the address, not the other way round - see Venus_SuperFX.md §9.
         private int OpLjmp(int n)
         {
-            _pbr = (byte)(Src & 0x7F);
-            SetPc(R[n]);
+            _pbr = (byte)(R[n] & 0x7F);
+            SetPc(Src);
             _cbr = (ushort)(R[15] & 0xFFF0);
             InvalidateCache();
             return 1;

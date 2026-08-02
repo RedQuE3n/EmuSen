@@ -77,6 +77,12 @@ Whenever the sample stream jumps rather than continues:
 
 Without it the resampler interpolates across the seam between two unrelated waveforms.
 
+### 3.3 `TotalInputFrames` / `TotalOutputFrames`
+
+Two cumulative counters over everything `Process()` has taken in and handed on. Their difference *is* the control law's effect on the queue: frames withheld (resampled away, or dropped outright while shedding) are frames the output device will not get, which is the only lever this class has.
+
+They exist because that effect is otherwise impossible to observe without reading the output queue, and the queue's depth is a function of the *device's* clock as much as ours. `AudioLatencyDriftTests` asserts against these instead of against a queue reading for exactly that reason — see `EmuSen_Settings_Reference.md` §4.10. Cumulative, never reset (not even by `Reset()`), so a test can subtract two samples and get the interval it cares about.
+
 ---
 
 ## 4. The core-side buffer is a safety valve now

@@ -15,7 +15,8 @@ using EmuSen.Common;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.Mistress.Audio;
+using EmuSen.Nehellania.Audio;
+using EmuSen.Nehellania.Input;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Settings;
 using EmuSen.DianaOS;
@@ -42,13 +43,7 @@ namespace EmuSen.Mistress.Views
         private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true };
 
         // Gamepad polling stays on the UI thread, on its own timer, separate
-        // from emulation itself (see _emuThread below) - GamepadManager.cs's
-        // own comment flags Silk.NET.SDL's exact API surface as unverified,
-        // and SDL's threading rules are platform-specific enough (some
-        // platforms expect event/controller polling to stay on the thread
-        // that called SDL_Init, which is this constructor's thread, i.e. the
-        // UI thread) that keeping it here is the safe default rather than
-        // something worth risking on a perf pass.
+        // from emulation - see EmuSen_Settings_Reference.md §4.10.
         private DispatcherTimer? _timer;
 
         // Runs RunFrame() + frame-buffer readout off the UI thread entirely -

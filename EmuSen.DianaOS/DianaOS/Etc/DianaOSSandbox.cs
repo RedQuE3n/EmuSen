@@ -18,9 +18,11 @@ namespace EmuSen.DianaOS.DianaOS.Etc
     // was only ever meant to poke around this project's own files.
     public static class DianaOSSandbox
     {
-        // The two roots this shell can have, and why the published one is a
-        // subdirectory rather than the binary's own folder: see `man hier`.
+        // The three roots this shell can have, and how each is found: see `man hier`.
         public const string PublishedRootDirName = "DianaOSRoot";
+
+        // Written to a published tree's root by DianaOSPublishLayout.targets.
+        public const string RootMarkerFileName = ".dianaosroot";
 
         private static readonly Lazy<string> _root = new(() => ComputeRootFor(AppContext.BaseDirectory));
 
@@ -35,6 +37,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
             for (int i = 0; i < 10; i++)
             {
                 if (File.Exists(Path.Combine(dir, "EmuSen.sln"))) return dir;
+                if (File.Exists(Path.Combine(dir, RootMarkerFileName))) return dir;
                 string? parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(dir));
                 if (parent is null || parent == dir) break;
                 dir = parent;

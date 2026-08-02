@@ -7,9 +7,10 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
-using Silk.NET.SDL;
+using SDL3;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Mistress.Input;
+using EmuSen.Nehellania.Input;
 using EmuSen.Mistress.Settings;
 
 namespace EmuSen.Mistress.Views
@@ -195,16 +196,11 @@ namespace EmuSen.Mistress.Views
             _keyBindings.ButtonToKey.TryGetValue(button, out Key k) ? k.ToString() : Unbound;
 
         private string CurrentPadLabel(SnesButton button) =>
-            _gamepadBindings.ButtonToPad.TryGetValue(button, out GameControllerButton p) ? PadName(p) : Unbound;
+            _gamepadBindings.ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : Unbound;
 
-        // Strips Silk.NET's inconsistent prefix - see EmuSen_Settings_Reference.md §4.6.
-        private static string PadName(GameControllerButton pad)
-        {
-            string name = pad.ToString();
-            return name.StartsWith("ControllerButton", StringComparison.Ordinal)
-                ? name["ControllerButton".Length..]
-                : name;
-        }
+        // The connected pad's printed label where SDL3 knows it, else the
+        // button's position - see EmuSen_Settings_Reference.md §4.6.
+        private string PadName(SDL.GamepadButton pad) => _gamepad?.ButtonLabel(pad) ?? pad.ToString();
 
         private string CurrentHotkeyLabel(HotkeyAction action) =>
             _hotkeyBindings.ActionToKey.TryGetValue(action, out Key k) ? k.ToString() : Unbound;
@@ -361,8 +357,8 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            GameControllerButton? pressed = _gamepad.GetAnyPressedButton();
-            if (pressed is not GameControllerButton padButton) return;
+            SDL.GamepadButton? pressed = _gamepad.GetAnyPressedButton();
+            if (pressed is not SDL.GamepadButton padButton) return;
 
             _gamepadBindings.Rebind(button, padButton);
             _gamepadBindings.Save();

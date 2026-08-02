@@ -48,6 +48,10 @@ namespace EmuSen.Debug
         public static int CpuTraceCountdown = 0;
         public static bool HvIrqEnabled = true;
 
+        // --- Coprocessors/SuperFx ---
+        // Counts down one GSU instruction per line - see Venus_SuperFX.md §9.
+        public static int SuperFxTraceCountdown = 0;
+
         // --- Dma.cs ---
         private static bool _dmaVerboseLogging = true;
         public static bool DmaVerboseLogging

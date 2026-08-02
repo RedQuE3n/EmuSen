@@ -51,13 +51,27 @@ As of state version 1, a state begins with:
 | Offset | Size | Contents |
 |---|---|---|
 | 0 | 4 | magic `0x53454E53` (`"SNES"` little-endian) |
-| 4 | 4 | format version, currently `1` |
+| 4 | 4 | format version, currently `3` |
+
+### Version 2 — coprocessor state
+
+v2 appends **one extra blob after the original four** (`Cart`, `Cpu`, `Bus`, `Spc700`), and only when the cartridge actually carries a coprocessor — currently the SA-1 (`Venus_SA1.md` §9). An ordinary cartridge writes a v2 file that is byte-identical to what v1 would have written.
+
+The legacy read path this required is unusually cheap: `Cartridge.Sa1` is `[SkipInState]` so it never perturbs `Cart`'s own layout, and a v1 file **cannot** be an SA-1 game, because SA-1 games could not run when v1 was the current format. So "read the extra blob only when `version >= 2`" is the whole migration.
+
+Adding it did need one `StateSerializer` change: an **interface-typed field** — `Cpu._bus`, which is a `MemoryBus` for the S-CPU and an `Sa1Bus` for the SA-1 — is now walked like a class. `Type.IsClass` is false for an interface, so it would otherwise have thrown on the first save.
 
 `LoadState` peeks those eight bytes. If the magic matches and the version is in range, it reads the modern layout. If not, it rewinds the stream and reads the **pre-v1 layout** — no header, and aliases present inline. That is what lets save states written before this change keep working unchanged.
 
 A file whose version is *newer* than the running build throws rather than guessing. A magic match with a nonsense version (`< 1`) is treated as a pre-v1 collision and falls back to the legacy path, since a pre-v1 file's first eight bytes are `TotalFrames` and could in principle collide — it would take a `TotalFrames` of ~5.6 billion (about three years of continuous play) to do so.
 
 `LoadState` requires a seekable stream, because that peek-and-rewind is how the two formats are told apart. Every caller (a `FileStream`, or `RewindBuffer`'s `MemoryStream`) already is.
+
+### Version 3 — NEC DSP state
+
+v3 appends the NEC DSP's blob after the SA-1's and the GSU's, on exactly the same terms: only for a cartridge carrying one, and skipped otherwise. Its firmware is `[SkipInState]` — `LoadRom` re-reads that before any state load, the same way `Cartridge` handles ROM bytes — so what a v3 file actually carries is the chip's registers, its accumulator flags, and its data RAM. See `Venus_NecDSP.md` §7.
+
+The v2 migration argument repeats verbatim one chip later: a v2 file **cannot** be a NEC DSP cartridge, because none could run when v2 was the current format. "Read the extra blob only when `version >= 3`" is again the whole of it.
 
 ### Migration
 

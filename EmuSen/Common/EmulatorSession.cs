@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using EmuSen.Common.Firmware;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Processor;
@@ -68,6 +70,18 @@ namespace EmuSen.Common
         public double LastFrameMainCompositeMs => _core?.LastFrameMainCompositeMs ?? 0;
         public double LastFrameSubCompositeMs => _core?.LastFrameSubCompositeMs ?? 0;
         public double LastFrameHdmaMs => _core?.LastFrameHdmaMs ?? 0;
+
+        // Firmware <romPath> needs that isn't in the library yet. Answered
+        // without loading, so an interactive frontend can offer to go and
+        // find it BEFORE LoadRom - afterwards is too late, the core has
+        // already come up with the chip absent. A frontend that can't ask
+        // (Pharaoh, Tomoe) simply skips this and gets the missing-chip
+        // behaviour. See EmuSen_Firmware.md §3.
+        //
+        // Constructs a throwaway core for the same reason LoadRom below
+        // hardcodes one: there is exactly one core to construct today.
+        public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath) =>
+            FirmwareLibrary.MissingFrom(new VenusCore(headless: true).GetFirmwareRequirements(romPath));
 
         public void LoadRom(string path)
         {

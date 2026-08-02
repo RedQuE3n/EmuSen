@@ -20,12 +20,30 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // NMI rising-edge quirk - see Venus_Memory.md §4.2.
         public bool PendingImmediateNmi;
 
+        // $4200 bit 0 - gates the once-per-frame auto-joypad read, see Venus_Memory.md §4.4.
+        public bool AutoJoypadEnabled;
+
         // H/V-IRQ (the $4200 bits 4-5 / $4207-$420A timer, distinct from NMI).
         public bool HIrqEnabled;
         public bool VIrqEnabled;
         public ushort HTime = 0x1FF; // 9-bit; power-on default per hardware docs
         public ushort VTime = 0x1FF; // 9-bit; power-on default per hardware docs
         private bool _irqFlag;       // $4211 bit 7, set on trigger, cleared on read
+
+        // The auto-joypad-read busy window, in master clocks after the vblank scanline starts - see Venus_Memory.md §4.4.
+        public const int AutoJoypadScanline = 225;
+        private const int AutoJoypadBusyStart = 258;
+        public const int AutoJoypadBusyEnd = 4482;
+
+        // Latching at this scanline's end lands at master clock 4092, the last per-scanline tick inside the window - see Venus_Memory.md §4.4.
+        public const int AutoJoypadLatchScanline = 227;
+
+        // True while a game's "wait for $4212 bit 0 to clear" loop should still be spinning - see Venus_Memory.md §4.4.
+        public static bool InAutoJoypadWindow(int scanline, int lineCycles)
+        {
+            long clock = (long)(scanline - AutoJoypadScanline) * VenusCore.CyclesPerScanline + lineCycles;
+            return clock >= AutoJoypadBusyStart && clock < AutoJoypadBusyEnd;
+        }
 
         public void RaiseVBlank()
         {
@@ -55,10 +73,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             return val;
         }
 
-        // $4212 HVBJOY - see Venus_Memory.md §4.4 (bit 0 auto-read is not modeled).
-        public byte ReadHVBJOY(bool inHBlank, byte lastBusValue)
+        // $4212 HVBJOY - see Venus_Memory.md §4.4.
+        public byte ReadHVBJOY(bool inHBlank, bool inAutoJoypadWindow, byte lastBusValue)
         {
-            return (byte)((InVBlank ? 0x80 : 0x00) | (inHBlank ? 0x40 : 0x00) | (lastBusValue & 0x3E));
+            bool busy = AutoJoypadEnabled && inAutoJoypadWindow;
+            return (byte)((InVBlank ? 0x80 : 0x00) | (inHBlank ? 0x40 : 0x00) | (lastBusValue & 0x3E) | (busy ? 0x01 : 0x00));
         }
 
         // $4211 TIMEUP - see Venus_Memory.md §4.4.
@@ -74,6 +93,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             bool oldNmiEnabled = NmiEnabled;
             NmiEnabled = (data & 0x80) != 0;
+            AutoJoypadEnabled = (data & 0x01) != 0;
 
             // See PendingImmediateNmi / Venus_Memory.md §4.2.
             if (!oldNmiEnabled && NmiEnabled && _vblankFlag)

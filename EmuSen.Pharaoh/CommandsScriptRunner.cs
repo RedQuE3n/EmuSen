@@ -239,6 +239,20 @@ namespace EmuSen.Pharaoh
                     EmuSen.Debug.DebugSettings.LayerEnableMask = mask;
                     emit($"[LAYERS] Mask 0x{mask:X2} - {(mask == 0x1F ? "all layers" : DescribeLayerMask(mask))}.");
                 }
+                else if (verb == "scanregs")
+                {
+                    // Per-scanline PPU register trace - see §3.19.
+                    emit($"> {cmdLine}");
+                    string spec = parts.Length >= 2 ? parts[1].ToLowerInvariant() : "off";
+                    int line = spec switch
+                    {
+                        "off" => -1,
+                        "all" => -2,
+                        _ => int.Parse(spec)
+                    };
+                    EmuSen.Debug.DebugSettings.ScanlineRegisterDumpLine = line;
+                    emit($"[SCANREGS] {(line == -1 ? "off" : line == -2 ? "every scanline" : $"scanline {line} only")}.");
+                }
                 else if (verb == "vramsheet" && parts.Length >= 2)
                 {
                     // IDebugTarget.RenderTileSheet(), not Renderer directly - core-agnostic.

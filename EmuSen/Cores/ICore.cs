@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
+using EmuSen.Common.Firmware;
 
 namespace EmuSen.Cores
 {
@@ -49,6 +52,17 @@ namespace EmuSen.Cores
         long TotalFrames { get; }
 
         void LoadRom(string path);
+
+        // Firmware this ROM needs that the core cannot supply itself - a
+        // coprocessor's mask ROM, a console BIOS, whatever the hardware had
+        // that isn't in the cartridge. Answered WITHOUT loading, so a caller
+        // can resolve anything missing (see FirmwareLibrary) before LoadRom
+        // rather than discovering it afterwards. Defaults to none, which is
+        // right for any core whose hardware needs nothing external.
+        //
+        // A missing image is never fatal: LoadRom still succeeds and the core
+        // runs with that chip absent. See EmuSen_Firmware.md §1.
+        IReadOnlyList<FirmwareRequest> GetFirmwareRequirements(string romPath) => Array.Empty<FirmwareRequest>();
 
         // Runs exactly one frame's worth of internal timing (however many
         // scanlines/cycles/whatever unit makes sense for this hardware),

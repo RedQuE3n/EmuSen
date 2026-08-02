@@ -71,6 +71,16 @@ Why a door transition "fixed" it: that path re-uploads the tileset over the top,
 
 Two games in the 37-ROM sample read VRAM back. Super Metroid's boot window never reaches a room load, so its 600-frame digest is unchanged; **Secret of Evermore's is the single digest that moved**, and its title screen went from a doubled, garbled logo over asymmetric architecture to clean — a second bug the same fix closed. The other 36 are byte-identical. Pinned by `EmuSen.WiseMan/Ppu/VramReadLatchTests.cs`. Note `VramAddressTranslationTests.Reads_use_the_same_translated_address_as_writes` had to change with this: it populated `Vram` *after* writing `VMADD`, which under a real latch means the prefetch samples empty VRAM.
 
+### 2.4 The vertical scroll is offset by one scanline
+
+**The BG row shown on display row `N` is `N + 1 + VOFS`, not `N + VOFS`.** Real hardware's first *visible* scanline is line 1, not line 0 — line 0 is a non-rendered dummy line — so a renderer that indexes its output rows 0-223 has to add the 1 back when it converts an output row into a BG row. This applies to the vertical scroll only; **`OBJ` Y coordinates are not offset this way** (a sprite at `Y=0` really does start on display row 0, which is why `EvaluateSpritesForScanline` compares against a plain `py`), and the horizontal scroll has no equivalent adjustment. The asymmetry is genuine hardware behaviour, not a modelling convenience — it is why game code so often writes a `VOFS` one less than the row it actually wants at the top of the screen.
+
+**The bug this fixed.** `RenderBg1`-`4` computed `wy = (samplePy + vofs) % mapH`, one row short. For most scenes that is invisible: the whole BG is one pixel low, and adjacent tilemap rows usually look near-identical. It becomes glaring only where display row 0 lands on a **wrap boundary** — and Donkey Kong Country 2's Pirate Panic does exactly that, parking BG2 at `VOFS = $3FF`, one less than the map height, precisely so hardware's `+1` resolves it to BG row 0. Without the `+1` the top row wrapped backwards to the map's *last* row instead, painting one scanline of unrelated tilemap across the top of the screen. The same off-by-one produced a one-pixel seam partway down DKC2's Gangplank Galleon map (display row 159, where that screen's own scroll hit its wrap), and left the top row of Donkey Kong Country's mode-select screen black.
+
+Both artifacts are gone with the `+1`; every other screen simply moves up one pixel, which is the correction. Pinned by `EmuSen.WiseMan/Ppu/BackgroundVerticalOffsetTests.cs` (all three of its cases fail against the old formula).
+
+**Mode 7 was deliberately left alone.** `RenderMode7`/`RenderMode7Bg2Extbg` still use a plain `py` for their `sy`. The same hardware rule almost certainly applies to `M7VOFS` too, but Mode 7's affine transform produces no wrap seam to test against — a one-line shift in a smooth transform is not visually distinguishable from a correct one — so changing it would have been an unvalidated edit. Chrono Trigger's Mode 7 opening (its boot runs `BGMODE=07` for ~745 frames, the cheapest Mode 7 repro in the local ROM set) renders correctly as-is. Open question, not a resolved one.
+
 ---
 
 ## 3. Mode 7
@@ -176,6 +186,18 @@ Confirmed real via the SNESdev wiki's Sprites page ("OAMADD can adjust this with
 
 Tile slivers are consumed in on-screen left-to-right order, matching the documented culling order — not VRAM/flip order. This matters for which slivers get dropped once the 34-sliver budget is exhausted mid-sprite.
 
+### 6.4 The OAM address is reloaded every vblank
+
+`$2102`/`$2103` are a **latch**, not the write pointer itself. Hardware keeps a separate running internal address that `$2104` writes advance, and **reloads it from the latch at the start of vblank** — unless the PPU is in forced blank, in which case the running address is left alone. `Ppu` models this as `_oamAddrLatch` (what the registers hold) and `_oamAddr` (the running pointer); writing either address register sets both, and `ReloadOamAddressForVBlank()` is called from `VenusCore`'s vblank block.
+
+**This was previously missing** — `$2102`/`$2103` wrote straight into the single running address and nothing ever reloaded it. That is invisible to a game that re-sets the address before every upload, which is why it survived so long.
+
+**The bug it caused**: Donkey Kong Country builds its OAM in WRAM at `$00:0200` and DMAs all 544 bytes to `$2104` once per frame — and, after setup, **never writes `$2102`/`$2103` again**, trusting the vblank reload to put the pointer back at 0. Two stray bytes had reached `$2104` beforehand, so without the reload every frame's DMA landed two bytes late: OAM held the WRAM buffer shifted right by 2, every sprite read its neighbour's fields, and Donkey Kong rendered as fragments scattered across the screen. Diagnosed by dumping `OAM` and `WRAM $200` side by side — they were byte-identical apart from the 2-byte skew. Pinned by `EmuSen.WiseMan/Ppu/OamAddressReloadTests.cs`.
+
+**Timing is approximate**: the reload happens on the vblank scanline boundary rather than at H=10 within it (anomie's docs put it there; Mesen carries a `TODO` about the same detail). Nothing observed so far depends on the sub-scanline placement.
+
+**Known separate inaccuracy, deliberately left alone**: §6.2's `FirstSpriteIndex` computes `(_oamAddr & 0xFE) >> 1`, but `_oamAddr` is a *byte* address and OAM entries are 4 bytes, so the sprite index should be `(_oamAddr & 0x1FC) >> 2`. Not changed here — it only affects priority rotation, no game currently under test exercises it, and it is unrelated to this fix.
+
 ---
 
 ## 7. Windowing
@@ -188,7 +210,17 @@ Two windows (W1: `$2126`/`$2127`, W2: `$2128`/`$2129`) can each be enabled/inver
 
 **Phase A (implemented)**: real pseudo-hi-res column interleave (`SETINI` bit 3, outside Modes 5/6) — confirmed via the SNESdev wiki's Backgrounds page ("the main-screen appears on every even column, and the sub-screen appears on every odd column"). This does *not* change how BG1-4/OBJ render — they still compute a normal 256-wide `_mainLineBuf`/`_subLineBuf` exactly as in standard resolution (Mesen's own hi-res output confirms real hardware interleaves two already-independently-rendered screens here, it doesn't render new content at 512-wide density). Only the final compositing step in `RenderScanline` needs to know about the wider 512-pixel output.
 
-**Mode 5/6 (true forced hi-res) is deliberately *not* part of Phase A** — Mesen's own hi-res output is genuinely 512 pixels of *distinct* tile content there, from BG1/BG2 rendering at double horizontal density (16x8 tiles), not a reused 256-wide buffer. That needs real changes to `RenderBg1`/`RenderBg2`'s tile-fetch math (Phase B, not yet done); Modes 5/6 currently still use the same 50% blend approximation as before, unchanged, tracked separately from Phase A so it isn't confused with genuine hi-res support.
+**Phase B (implemented)**: Modes 5/6 now render genuinely distinct content at 512-dot horizontal density in `RenderBg1`/`RenderBg2`. Three pieces:
+
+- **A tilemap cell spans 16 dots, not 8**, supplied by a *pair* of 8x8 tiles (N and N+1). This is the same horizontal pairing 16x16 tiles already did, so `ResolveBgTileIndex` now takes a `hiRes` flag and handles both through one `subX = (wx >> 3) & 1`. The old `ResolveHiResPairedTile` — which handed the whole main screen tile N and the whole sub screen tile N+1 — is gone; that was never how the pairing works. Note the cell is 16 dots wide in hi-res *regardless* of the tile-size bit, which only adds vertical pairing, hence `cellShiftX` being separate from the `ty` shift.
+- **Each output dot samples its own BG column.** `HiResDot()` maps output pixel `px` to 512-dot column `2*px + (isMainScreen ? 0 : 1) + 2*hofs`, so the main screen takes the even dots and the sub the odd, matching the interleave below. `BGnHOFS` still counts 256-space pixels, so it is doubled into dot space. The pre-Phase-B code used `wx = px + hofs` and sampled 8 consecutive columns of one tile per 8 output pixels, dropping half of every glyph.
+- **The interleave itself was already correct** from Phase A and is unchanged.
+
+**The bug this fixed**: Secret of Mana draws its file-select menu — window frames, "GAME SELECT", the whole instruction paragraph — entirely in Mode 5. Under Phase A it rendered as sliced, half-missing glyphs ("GAME SELECT" came out as "GME SEET"). Pinned by `EmuSen.WiseMan/Ppu/HiResBackgroundTests.cs`.
+
+**Interleave parity is worth flagging**: this document's Phase A convention (main on even columns, sub on odd) comes from the SNESdev wiki's Backgrounds page, and `HiResDot` is written to agree with it. **Mesen does the opposite** (`ApplyHiResMode`: `buffer[x<<1] = sub; buffer[(x<<1)+1] = main`). The two differ by a one-dot horizontal shift and nothing else — both produce correct, self-consistent output, and no test ROM or game screen available here distinguishes them, so the wiki's convention was kept rather than churned on a coin flip. If a hardware comparison ever settles it the other way, flipping *both* `HiResDot`'s parity and `RenderScanline`'s interleave together is the whole change; flipping only one scrambles adjacent columns.
+
+**Still simplified in Modes 5/6**: the hi-res composite path skips windowing and colour math entirely (unchanged from Phase A), and Mode 6's offset-per-tile interacts with hi-res scroll in ways this doesn't model — `GetOffsetPerTileScroll` is applied in 256-space and then doubled.
 
 `Renderer.FrameWidth` reports the current output width (256 normally, 512 during pseudo-hi-res) — frontends should check this rather than assuming a fixed size, since it can change frame to frame if a game toggles `SETINI` bit 3. `_screenPixels` is always allocated at the max width (512) with a fixed row stride, so a hi-res toggle never needs reallocation.
 
@@ -199,7 +231,9 @@ Two windows (W1: `$2126`/`$2127`, W2: `$2128`/`$2129`) can each be enabled/inver
 - **`SLHV` (`$2137`)**: reading it latches the current H/V position into `OPHCT`/`OPVCT`. Real hardware also latches via WRIO (`$4201`) bit 7 transitions and the Super Scope's trigger — neither path is wired up here, only the direct `$2137` read is. The returned byte itself is genuine open bus on real hardware; `0` is as good a stand-in as any.
 - **`OPHCT`/`OPVCT` (`$213C`/`$213D`)**: each a 9-bit value read as two sequential 8-bit reads (low byte first, then high byte in bit 0 — bits 1-7 of the high read are PPU2 open bus, returned as 0). Each register tracks its own low/high toggle independently; only reading `STAT78` resets both back to "low". **H is not tracked** — this renderer has no real per-dot H position (see `Venus_Memory.md` §1.5's H-blank approximation for the same underlying gap) — so `ReadSLHV` always latches `_latchedH = 0` rather than fabricating a conversion from `LineCycles`.
 - **`STAT77` (`$213E`)**: `trm-vvvv` — Time Over (§6.1), Range Over (§6.1), master/slave select (always 0 — real consoles almost universally read this as 0 too), PPU1 version in the low nibble (`1`, matching most real units).
-- **`STAT78` (`$213F`)**: `flupvvvv` — interlace field (bit 7, tracked via `FieldParity`, toggled once per frame at scanline 0), NTSC/PAL region (`0` = NTSC, matching the 262-scanline timing used throughout this project), PPU2 version in the low nibble. Reading this also resets the `OPHCT`/`OPVCT` high/low toggle back to "low", per documented hardware behavior.
+- **`STAT78` (`$213F`)**: `flupvvvv` — interlace field (bit 7, tracked via `FieldParity`, toggled once per frame at scanline 0), NTSC/PAL region (bit 4), PPU2 version in the low nibble. Reading this also resets the `OPHCT`/`OPVCT` high/low toggle back to "low", per documented hardware behavior.
+
+  **The region bit is real, not hardcoded.** It reports `Ppu.IsPal`, which `VenusCore.LoadRom` sets from the cartridge header's country byte alongside the matching 262- or 312-scanline timing — see `Venus_CPU.md` §8.5c for the whole region mechanism and `Venus_Memory.md` §2.5 for the country-byte classification. It used to be a hardcoded `0`, which is what made a PAL cartridge stop on Nintendo's *"This game pack is not designed for your SUPER FAMICOM or SUPER NES"* lockout screen: the game reads this bit, sees NTSC, and refuses to run. `IsPal` is `[SkipInState]` — it's derived from the ROM, which is always reloaded before a state load, so storing it would only create a way for a state file to contradict the cartridge it was made from.
 
 ---
 

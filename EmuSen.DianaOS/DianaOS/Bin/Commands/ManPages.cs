@@ -348,7 +348,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "SYNOPSIS\n" +
                 "    bp add <addr>\n" +
                 "    bp list\n" +
-                "    bp remove <id>\n\n" +
+                "    bp remove <id>\n" +
+                "    bp sa1 add|list|remove ...\n\n" +
                 "DESCRIPTION\n" +
                 "    Registers/lists/removes a breakpoint at a 24-bit CPU address. This\n" +
                 "    command only edits the breakpoint list - it doesn't halt or resume\n" +
@@ -358,9 +359,46 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    the actual halt/resume side. Named 'bp', not 'break' - a command\n" +
                 "    literally named 'break' would be unreachable, shadowed by the shell's\n" +
                 "    own hardcoded break/continue loop-control keywords.\n\n" +
+                "    An optional 'sa1' (or 'cop') scope word in front of the subcommand\n" +
+                "    targets a cartridge coprocessor's own CPU instead. The two live in\n" +
+                "    separate lists because they are separate address spaces: an SA-1\n" +
+                "    game's $00:82D7 is not the S-CPU's $00:82D7. Errors with 'no\n" +
+                "    coprocessor CPU to break on' when the cartridge has none. Pair it\n" +
+                "    with 'disasm SA1BUS <addr>', which decodes using the SA-1's own\n" +
+                "    M/X/E flags rather than the S-CPU's.\n\n" +
                 "EXAMPLES\n" +
                 "    bp add 8000\n" +
-                "    bp list",
+                "    bp list\n" +
+                "    bp sa1 add 0082D7",
+
+            ["cov"] =
+                "NAME\n" +
+                "    cov - record which code actually ran\n\n" +
+                "SYNOPSIS\n" +
+                "    cov on|off\n" +
+                "    cov clear\n" +
+                "    cov <addr> [<len>]\n" +
+                "    cov cop on|off|clear|<addr> [<len>]\n\n" +
+                "DESCRIPTION\n" +
+                "    Records every 24-bit address executed between 'cov on' and 'cov off',\n" +
+                "    then answers 'did control flow ever reach here' for any range. A\n" +
+                "    breakpoint can only say whether execution is at an address right now,\n" +
+                "    so a breakpoint that never fires proves nothing on its own; this says\n" +
+                "    outright that a routine never ran, which is the answer that retires a\n" +
+                "    suspect. Pair it with 'callers': walk up from a routine that never ran\n" +
+                "    until you reach a caller that did, and the branch between the two is\n" +
+                "    the one that skipped it.\n\n" +
+                "    Reports executed addresses, not instruction boundaries you guessed at -\n" +
+                "    so it also settles where 'disasm' has mis-sized an immediate, since the\n" +
+                "    recorded addresses are the real opcode boundaries.\n\n" +
+                "    Recording is off by default and costs one bool test while disarmed;\n" +
+                "    armed, it allocates a 2MB bitmap. An optional 'cop' (or 'sa1'/'gsu')\n" +
+                "    scope word targets the coprocessor's own instruction stream, which is a\n" +
+                "    separate address space - see 'bp' for the same convention.\n\n" +
+                "EXAMPLES\n" +
+                "    cov on\n" +
+                "    cov 10F452 10\n" +
+                "    cov gsu 0A80E9 40",
 
             ["framelog"] =
                 "NAME\n" +

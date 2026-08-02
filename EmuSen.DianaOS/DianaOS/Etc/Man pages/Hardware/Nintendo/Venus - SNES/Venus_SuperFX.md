@@ -162,6 +162,30 @@ Appended after the four original blobs and after the SA-1's, and only for a Supe
 
 ## 8. Debugging facilities
 
+### 8.1 Reading the chip's code: `GSUBUS` and the disassembler
+
+**The GSU's own code is readable from the shell.** `GSUBUS` is a memory space over the chip's 24-bit program map — ROM through `RomOffset` for banks `$00-$5F`, Game Pak RAM for `$60+`, which is where the S-CPU stages code for it (§5.1) — and `disasm GSUBUS <pbr><r15>` decodes it with a real GSU disassembler rather than the 65816 one. Reads deliberately bypass the instruction cache, so looking at an address never fills a cache line (§4.3).
+
+This exists because §10.4 was found with a throwaway 120-line Python disassembler, and that section's own conclusion was that building one properly is cheap and should be the first tool reached for here. It is now built:
+
+```
+disasm GSUBUS 0A8146 6      # FROM R6 / TO R5 / ALT2 / BRA $8106 / AND #15
+```
+
+**A static per-opcode table cannot do this job, which is the whole design point.** The same byte is a different instruction under a different prefix — `$41` is `LDW (R1)` normally and `LDB (R1)` after `ALT1` — so the disassembler walks forward carrying `ALT1`/`ALT2`/`WITH`/`TO`/`FROM` exactly as `StepInstruction` does, including §4.2's rule that a branch is the one non-prefix instruction that does *not* clear the prefix. Verified against the two routines this file already hand-disassembled: it reproduces §10.4's `0A:8146` and §10.3's RLE plot loop at `0A:80E9` line for line.
+
+Undefined `ALT3` decodes on the `$Ax`/`$Fx` slots are shown as their `IBT`/`IWT` fallthrough, matching what the dispatcher actually does — see §9.
+
+### 8.2 Knowing whether the chip ran it: `cov gsu`
+
+`cov` records every address executed over a run and then answers "did control flow ever reach here" (`EmuSen_Debugging_Tools_Reference_v5.md` §3.24). `cov gsu` scopes it to the GSU's own instruction stream, which is a separate address space from the S-CPU's.
+
+**This replaces a method §10.1 had to hand-roll twice.** Both the `LJMP` and `ALT3` rounds were retired by patching a `Console.WriteLine` into an opcode handler and running headless to see whether it ever fired — the right instinct, and §10.1's own lesson is *"check that the game actually reaches a feature before spending time on its correctness"*. That is now one command against the running game, with no rebuild.
+
+Recording is off by default and costs one bool test in the dispatcher while disarmed.
+
+### 8.3 Tracing flags
+
 `DebugSettings.SuperFxTraceCountdown` logs one line per GSU instruction — PC, opcode, `SFR`, `CBR` and the interesting registers — and counts itself down. Through the headless harness:
 
 ```
@@ -364,8 +388,20 @@ Confirmed by injection: `dump GSURAM 4C00 800` then `load VRAM F800` puts plausi
 **Ruled out, with the measurement.**
 
 - *"The VRAM destination is computed wrong."* It is hard-coded game data: `7E:C8AC LDA #$7000 / STA $2116` with source `$4C00`, gated on `$0D15`. Nothing computes it.
-- *"Some code uploads there and we lose it."* A regex sweep of WRAM bank `$7E` and the whole ROM for `LDA #imm16 : STA $2116` finds **no site at all** targeting `$7C00` (VRAM `$F800`). The four `$2116` writes at `7E:E400` that appear to hit `$F800`/`$FCC0` are the DMA queue's blanket VMADD store (`7E:E3DF` walks a 12-byte-node linked list and writes node[0] to `$2116` for *every* job, including CGRAM/OAM ones), not real VRAM jobs — `DmaVerboseLogging` over 1700 frames shows nothing but the fill reaching `$F800-$FBFF`.
+- ~~*"Some code uploads there and we lose it."*~~ — **the measurement that retired this was wrong, and the claim is withdrawn.** It said a regex sweep of WRAM bank `$7E` and the whole ROM for `LDA #imm16 : STA $2116` finds no site at all targeting `$7C00` (VRAM `$F800`). A *runtime* sweep — `watch add IO 2116 2 write` then `watch summary`, which is addressing-mode-agnostic where a regex is not — finds **18 distinct sites writing VMADD, and two of them write `$7C00`**: `$00:E477` and `$00:E4DA`. So code targeting that window does exist and does run. Both appear to belong to the clear rather than to an upload (the only DMA reaching `$F800-$FBFF` is still the constant fill), but "nothing addresses `$F800`" is no longer a fact this section may lean on.
+
+  **Two traps worth more than the correction.** First, a regex for `LDA #imm16 : STA $2116` can only ever find destinations written as immediates, and in this game the destination normally arrives through a queue node — the sweep was structurally incapable of answering the question it was asked. Second, `watch summary` used to group only the **last 500** events, silently reporting a truncated site list as the complete one; the first run of this sweep returned exactly one site because of it. It now aggregates per-site totals outside the ring and says so when the ring is short (`EmuSen_Debugging_Tools_Reference_v5.md` §3.9). Note also that the headless harness pre-registers two WRAM watches, so a `watch add` of your own gets id **#3**, not #1.
 - *"It is drawn with sprites."* `sprites` reports **0 active sprites**, and `OBSEL = $02`.
 - *"A base register moves under us."* `BG3SC`, `BG34NBA` and `BGMODE` are each written exactly twice for the whole intro, both times from `$00:BA1A`, settling at `$74` / `$77` / `$09`. No HDMA touches them.
 
-**Where to pick it up.** The leading hypothesis is that the `$70:5800 -> $F000` upload **should be 4096 bytes, not 2048** — 4096 would cover tiles `$100-$1FF` and therefore all 92 referenced tiles exactly, with no leftover. Test it by watching `IO:4305:2` (the DMA size register) around that transfer and comparing against what `Dma` actually uses; if the game really does ask for 2048, then the motif comes from a separate upload that never runs, and the next question is which flag gates it — `$0D15` and `$0CF9` gate the sibling blocks at `7E:C8A7`/`7E:C8C5`, so the missing one probably has its own. Note also that four `$2116` sites in ROM bank `$10` (`$F452`, `$F492`, `$F58A`, `$F5CA`) never execute in this scene, which suggests a whole setup routine is being skipped — that is the more promising thread of the two.
+**Measured since, with `cov` and the runtime VMADD sweep (§8.2).** All of this is new evidence, not re-derived from the above:
+
+- **The four bank-`$10` `$2116` sites really never execute** — `cov 10F452 10` and its three siblings all report *Never reached* over 300 frames. But the inference drawn from that is weaker than it looked: **a different bank-`$10` routine does run**, at `$10:87CE-$10:88D3`, and performs **eleven** VRAM uploads. Their destinations are word `$6000`, `$7800` ×2, `$78A1`, `$78C1`, `$7903`, `$7923`, `$7960`, `$7980`, `$79C0`, `$79E0` — i.e. VRAM `$C000` and `$F000-$F3C0`. None reaches `$F800`. So bank `$10` is not simply skipped; part of it runs and covers only the low half of the tile range.
+- **The `$7000` destination at `7E:C8AC` is genuine, not a corrupted WRAM copy.** That block is copied from ROM `0x48AC`, and the ROM bytes are `A9 00 70 8D 16 21 A9 00 4C 85 F7` — byte-identical, and the only variant of that pattern in the whole 2MB image. The game really does hard-code `$7000` for the `$4C00` job, so "the copy got damaged on the way into WRAM" is retired.
+- **`7E:C8AF` executes exactly once** in 300 frames, and the `$0CF9`-gated sibling at `7E:C8CA` (destination word `$5000`, i.e. VRAM `$A000`) **never executes at all** — `cov 7EC890 A0` shows control jumping straight from the `BEQ` at `$C8C8` to `$C8E0`.
+
+**Where to pick it up.** The 2048-vs-4096 hypothesis is still open and still the cheapest test: `watch add IO 4305 2 write` now reports four sites (`7E:D4BE` and `7E:D526` dominating at 414 each, plus `$00:82AB` and `$00:B1AD`), so the size actually programmed for the `$70:5800 -> $F000` transfer can be read off directly rather than inferred.
+
+The more interesting thread is the one the corrected sweep opened: **2048 bytes at `$F800` would cover tiles `$180-$1FF`, which contains all 18 missing tiles exactly** — and §10.5's own injection test showed that putting `GSURAM $4C00`'s 2KB there renders the motif correctly. That is the same 2KB the game uploads to `$E000`. So the shape to test next is whether the `$4C00` page is meant to land in *both* windows (one upload we are missing, gated by a flag that never gets set), rather than whether one upload is the wrong size. `cov` on the `$0D15`/`$0CF9` writers will say which flag never gets set and who was supposed to set it.
+
+**A caveat on reading `disasm` output in this region.** `7E:C8AC` is `LDA #$7000` (3 bytes), but a `disasm` started at the wrong offset renders it as two 2-byte instructions, because the static disassembler has to guess M/X (see `SnesDebugTarget.Disassemble`'s own comment). `cov` recovers the true boundaries — the recorded addresses *are* the opcode boundaries — so disassemble, then check the boundaries against `cov` before trusting a decode in WRAM-resident code.

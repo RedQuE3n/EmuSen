@@ -111,6 +111,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // The GSU's IRQ line into the S-CPU, masked by CFGR bit 7 - see Venus_SuperFX.md §3.2.
         public bool ScpuIrqPending => GetFlag(FlagIrq) && (_cfgr & 0x80) == 0;
 
+        // Called with PBR:R15 before each instruction, when a debugger wants
+        // whole-run coverage of the chip - see Venus_SuperFX.md §8.2.
+        [EmuSen.Common.SkipInState] public System.Action<int>? CoverageRecorder;
+
         public void Reset()
         {
             System.Array.Clear(R);

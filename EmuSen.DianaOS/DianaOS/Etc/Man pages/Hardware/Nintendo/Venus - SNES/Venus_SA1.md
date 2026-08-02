@@ -45,6 +45,24 @@ The SA-1 shares the console's master clock rather than having its own crystal, a
 
 > Flat 2-cycle timing is a simplification: real BW-RAM access from the SA-1 side costs more than I-RAM. No game is known to depend on the difference, and nothing here measures it.
 
+### 2.3 Verifying the timebase — `ClocksRun` / `ClocksOffered`
+
+Because §2.2's whole claim is *"the SA-1 gets exactly the master clocks the S-CPU just spent"*, it is worth being able to check that rather than trust it. `Sa1` keeps two cumulative counters, both `[SkipInState]` so they never touch the save-state layout:
+
+- **`OfferedMasterClocks`** — every clock handed to `Run()`, whether the CPU executed or not.
+- **`ExecutedMasterClocks`** — only the clocks a `Cpu.Step()` actually consumed.
+
+They surface as `ClocksRun` / `ClocksOffered` in `regs`' coprocessor block, so the per-frame rate is a two-`regs` diff around a `frames N`:
+
+```sh
+# Pharaoh --commands: regs / frames 60 / regs
+ClocksRun = 0x0000000001472E36     # 21,442,102 over 60 frames = 357,368/frame
+```
+
+The figure to compare against is `_totalScanlines * VenusCore.CyclesPerScanline` — **357,368** master clocks per NTSC frame (262 x 1364), which is 178,684 SA-1 cycles at §2.2's 2:1 ratio, i.e. a full 10.7386MHz. A shortfall against that means the SA-1 is being starved somewhere; a surplus means it is being clocked twice.
+
+The gap between the two counters is the halted time: `Run()` zeroes the budget without executing when RESB or RDYB is set (§4.1), so `Offered - Run` is how long the game parked the chip. Both were verified equal-and-exact on Kirby's Dream Land 3, on the level-select map and in gameplay alike, while investigating a reported pacing complaint — the SA-1's timebase was ruled out as the cause.
+
 ---
 
 ## 3. The two memory maps
@@ -216,3 +234,84 @@ Boots and plays **Kirby's Dream Land 3** — HAL logo, intro cutscene, title scr
 Known gaps, all called out above: character-conversion DMA (§8.1), BW-RAM bitmap mode unverified (§3.3), linear timer mode approximate (§5), write protection stored but not enforced (§3.4), and flat 2-cycle SA-1 bus timing (§2.2).
 
 Other coprocessors (SuperFX, DSP-*, CX4, S-DD1) remain unimplemented. The `ICpuBus` seam (§2.1) and the `CartridgeRegion` extension (§3) are the parts of this work that generalise.
+
+---
+
+## 11. Debugging the chip
+
+Everything above describes emulating the SA-1. This section is about *inspecting* it, which for a long time the toolchain could barely do: `regs` grew a coprocessor block early, but `mem`, `disasm`, `watch`, `search`, `snapshot` and `bp` all saw only the S-CPU's world. The chip that runs the game's actual logic was the one part of the machine you could not point a debugger at.
+
+The rule this section follows is the one `IDebugTarget.CoprocessorRegisters` already set: **a debugger must never change what it observes.**
+
+### 11.1 Side-effect-free reads
+
+`ReadRegister` has exactly two side effects — `$2302` re-latches the timer counters (§5) and `$230D` advances the bitstream cursor (§7). `DebugPeekRegister` is the same switch with those two answered from the existing latch instead, and `DebugReadSa1` is `ReadSa1` routed through it. Everything a debug space reads goes through those, so pointing `mem` at a live chip cannot perturb it.
+
+### 11.2 `BWRAM` — the space that was missing entirely
+
+BW-RAM is the SA-1's main work and save RAM, and until it got its own space it was **completely invisible**. The `SRAM` space is a `BusDebugMemorySpace` anchored at `$70:0000`, and an SA-1 cart maps BW-RAM at `$40-$4F` (§3) — bank `$70` decodes to `Unmapped`, so `mem SRAM` faithfully reported 32KB of zeroes on Kirby's Dream Land 3 while the game was actively using it.
+
+`BWRAM` wraps the array directly, so it is inert and flat-indexed. Note that `Cartridge` hands the SA-1 the *same* array it uses for `_sram` — BW-RAM and cartridge save RAM are one buffer, which is why an SA-1 cart publishes it under the name that reflects what the chip calls it.
+
+### 11.3 `SA1BUS` — the chip's own address space
+
+The two CPUs see genuinely different maps off the same cartridge (§3), so an S-CPU-shaped view cannot answer "what is the SA-1 executing". `SA1BUS` is a 24-bit `DelegateDebugMemorySpace` over `DebugReadSa1`, Super MMC banking applied, which makes the whole existing toolchain work on SA-1 code for free:
+
+```sh
+regs                       # Coprocessor block: PB/PC of the second CPU
+disasm SA1BUS 82D7 12      # what it is actually running
+```
+
+**`disasm` picks its decoding CPU from the space.** Immediate-operand widths come from M/X/E, and using the S-CPU's flags to decode SA-1 code silently mis-lengths every immediate — `LDA #$0001` decoded as `LDA #$01` desynchronises the stream and the rest of the listing becomes garbage (`BRK #$8F` and similar). `DecodingCpuFor` maps `SA1BUS`/`SA1IRAM` to `Sa1.Cpu`; everything else keeps the S-CPU. The caveat in `Disassemble`'s own comment still applies — flags are those of *right now*, so anywhere other than the current PC is best-effort.
+
+### 11.4 Watch coverage on both sides
+
+Two separate paths write the SA-1's memories, and neither passed through anything the watch registry could see:
+
+| Writer | Path | Space reported |
+|---|---|---|
+| The SA-1 itself | `Sa1.WriteSa1` | `SA1IRAM` / `BWRAM` |
+| Its DMA | `Sa1.WriteBwRamByte` | `BWRAM` |
+| The S-CPU | `Cartridge.Write8` | `SA1IRAM` / `BWRAM` |
+
+`MemoryBus.Write8` routes cartridge writes straight to `Cartridge.Write8` without notifying its observer, so `Cartridge` now carries a `WriteObserver` of its own. That also fixes plain `SRAM` watches, which never fired on any game.
+
+Writes the chip makes itself go through `IWriteObserver.OnCoprocessorWrite` (a defaulted interface member, so other observers are unaffected) purely so the event is labelled with the **SA-1's** PC. The S-CPU's PC is meaningless for a write the second CPU made, and a log that mislabels them is worse than one that omits them:
+
+```
+      24x  W  SA1 PC=0xC22698     <- the coprocessor
+      16x  W  PC=0xC22709         <- the S-CPU
+```
+
+### 11.5 Breakpoints on the second CPU
+
+`Breakpoints` and `CoprocessorBreakpoints` are **separate registries**, because the two CPUs run different code at the same addresses — an SA-1 game's `$00:82D7` is not the S-CPU's `$00:82D7`. `IDebugTarget.CoprocessorBreakpoints` defaults to null, so a core with no separately-steppable coprocessor is unaffected.
+
+The shell reaches it with an optional scope word, leaving the existing forms untouched:
+
+```sh
+bp add 8000            # S-CPU, exactly as before
+bp sa1 add 0082D7      # the coprocessor
+bp sa1 list
+```
+
+`Sa1.Run` checks `BreakpointChecker` before each instruction and returns early **with `_clockBudget` intact**, so the unspent clocks are not lost and resuming re-enters exactly where it stopped. `VenusCore.RunFrame` polls `HaltedAtBreakpoint` after `Run()` and unwinds out of the frame, recording `_haltedOnCoprocessor` so that resuming arms the skip-one-check flag on *that* CPU — arming the S-CPU's for an SA-1 halt would let the SA-1 re-break on the same PC forever. `IsHaltedOnCoprocessor` lets a frontend say which chip stopped.
+
+`EmuSen.Pharaoh`'s `FrameRunner` now notices the halt, stops the batch and reports it, so this works headlessly. A halted frame is deliberately **not** counted, snapshotted for rewind, or reported as advanced — `RunFrame` returned mid-frame, so it did not happen:
+
+```
+> bp sa1 add 0082D7
+SA-1 breakpoint #1 added at $0082D7.
+> frames 30
+[BREAK] SA-1 halted at $0082D7 (frame 0).
+```
+
+### 11.6 Is the chip running at rate?
+
+`perf` reports the figure §2.3's counters exist for, against the `MasterClocksPerFrame` a full-rate frame allows:
+
+```
+  sa-1: 357368 clocks/frame run of 357368 offered (100.0% of the 357368 a full-rate frame allows)
+```
+
+A shortfall against 100% means the chip is being starved or is spending time halted (§4.1); a surplus means it is being clocked twice. This is the measurement that rules the SA-1's timebase in or out of a pacing complaint in one line, rather than by inference.

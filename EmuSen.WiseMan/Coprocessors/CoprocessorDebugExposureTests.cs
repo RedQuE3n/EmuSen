@@ -113,5 +113,52 @@ namespace EmuSen.WiseMan.Coprocessors
 
             Assert.True(target.CoprocessorHistory.RefreshesSinceChange > 0);
         }
+
+        // --- DSPRAM (§3.23b) ---
+        //
+        // The chip's RAM is ushort[], so a byte view has to commit to an
+        // order. Little-endian, matching how its 16-bit words reach the
+        // S-CPU over DR - see Venus_NecDSP.md §6.
+
+        private static byte[] DspFirmware() =>
+            NecDspFirmwareBuilder.Blob(NecDspFirmwareBuilder.Dsp1(
+                NecDspFirmwareBuilder.Ld(0x1234, NecDspFirmwareBuilder.DestDr)));
+
+        [Fact]
+        public void A_nec_dsp_cartridge_exposes_its_data_ram_little_endian()
+        {
+            var core = SyntheticRom.LoadCore(SyntheticRom.BuildNecDsp("PILOTWINGS", DspFirmware()));
+            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            core.Cart!.NecDsp!.Ram[0] = 0xBEEF;
+
+            var dspRam = target.GetMemorySpaces().Single(s => s.Name == "DSPRAM");
+
+            Assert.Equal(core.Cart.NecDsp.Ram.Length * 2, dspRam.Size);
+            Assert.False(dspRam.HasSideEffects);
+            Assert.Equal(0xEF, dspRam.Read(0));
+            Assert.Equal(0xBE, dspRam.Read(1));
+        }
+
+        [Fact]
+        public void Writing_one_byte_of_dsp_ram_leaves_the_other_half_alone()
+        {
+            var core = SyntheticRom.LoadCore(SyntheticRom.BuildNecDsp("PILOTWINGS", DspFirmware()));
+            var target = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!);
+            core.Cart!.NecDsp!.Ram[3] = 0xAA55;
+
+            var dspRam = target.GetMemorySpaces().Single(s => s.Name == "DSPRAM");
+            dspRam.Write(6, 0x01); // low byte of word 3
+            Assert.Equal(0xAA01, core.Cart.NecDsp.Ram[3]);
+
+            dspRam.Write(7, 0x02); // high byte of the same word
+            Assert.Equal(0x0201, core.Cart.NecDsp.Ram[3]);
+        }
+
+        [Fact]
+        public void A_plain_cartridge_exposes_no_dsp_ram()
+        {
+            var target = TargetFor(SyntheticRom.BuildBlank());
+            Assert.DoesNotContain("DSPRAM", target.GetMemorySpaces().Select(s => s.Name));
+        }
     }
 }

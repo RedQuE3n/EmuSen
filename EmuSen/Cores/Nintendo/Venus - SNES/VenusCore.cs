@@ -106,6 +106,10 @@ namespace EmuSen.Cores.Nintendo.Venus
         // NTSC 21477272/(262*1364) ~= 60.098, PAL 21281370/(312*1364) ~= 50.007 - see Venus_CPU.md §8.5b.
         public double FrameRateHz => _masterClockHz / (_totalScanlines * (double)CyclesPerScanline);
 
+        // The master clocks one frame is worth - what a coprocessor's own
+        // per-frame clock total has to match - see Venus_SA1.md §2.3.
+        public long MasterClocksPerFrame => (long)_totalScanlines * CyclesPerScanline;
+
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
 
@@ -142,6 +146,13 @@ namespace EmuSen.Cores.Nintendo.Venus
         // forever. Set for exactly one instruction each time RunFrame() is
         // (re)entered while IsHaltedAtBreakpoint is true.
         private bool _justResumedFromBreakpoint;
+
+        // True when the pending halt came from the SA-1's PC, not the S-CPU's.
+        private bool _haltedOnCoprocessor;
+
+        // True while RunFrame() is halted on the coprocessor - lets a frontend
+        // label the halt and read the right PC - see Venus_SA1.md §11.5.
+        public bool IsHaltedOnCoprocessor => IsHaltedAtBreakpoint && _haltedOnCoprocessor;
 
         // Per-frame phase-timing accumulators - promoted from RunFrame()
         // locals to fields for the same mid-frame-resume reason as
@@ -233,7 +244,19 @@ namespace EmuSen.Cores.Nintendo.Venus
             if (IsHaltedAtBreakpoint)
             {
                 IsHaltedAtBreakpoint = false;
-                _justResumedFromBreakpoint = true;
+
+                // Whichever CPU the halt was on is the one that has to skip a
+                // check - arming the S-CPU's flag for an SA-1 halt would let
+                // the SA-1 re-break instantly - see Venus_SA1.md §11.5.
+                if (_haltedOnCoprocessor)
+                {
+                    _haltedOnCoprocessor = false;
+                    Cart!.Sa1!.ResumeFromBreakpoint();
+                }
+                else
+                {
+                    _justResumedFromBreakpoint = true;
+                }
             }
 
             while (true)
@@ -350,6 +373,13 @@ namespace EmuSen.Cores.Nintendo.Venus
                     if (Cart!.Sa1 is { } sa1)
                     {
                         sa1.Run(cpuCycles);
+                        if (sa1.HaltedAtBreakpoint)
+                        {
+                            IsHaltedAtBreakpoint = true;
+                            _haltedOnCoprocessor = true;
+                            HaltedAddress = sa1.HaltedAddress;
+                            return; // sa1._clockBudget carries the unspent clocks - see Venus_SA1.md §11.5
+                        }
                         if (sa1.ScpuIrqPending) Cpu.Irq();
                     }
                     else if (Cart.SuperFx is { } gsu)

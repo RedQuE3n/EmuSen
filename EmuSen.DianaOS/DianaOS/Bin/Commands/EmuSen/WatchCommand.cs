@@ -79,21 +79,16 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 {
                     if (parts.Length < 3) return "Usage: watch summary <id>";
                     int id = ParseHex(parts[2]);
-                    // int.MaxValue rather than a fixed count - GetEvents'
-                    // Skip(Max(0, Count - maxCount)) naturally returns
-                    // everything still in the watch's own bounded buffer
-                    // when maxCount exceeds it, no separate "give me
-                    // everything" API needed on WatchRegistry itself.
-                    var events = watches.GetEvents(id, int.MaxValue);
-                    if (events.Count == 0) return $"No events recorded for watch #{id} (or it doesn't exist).";
+                    // Whole-run site totals, not the event ring - grouping the
+                    // ring reported a truncated site list as the complete one.
+                    var sites = watches.GetSiteHits(id);
+                    if (sites.Count == 0) return $"No events recorded for watch #{id} (or it doesn't exist).";
 
-                    var sites = events
-                        .GroupBy(e => (e.AccessKind, e.Context))
-                        .Select(g => (g.Key.AccessKind, g.Key.Context, Count: g.Count()))
-                        .OrderByDescending(s => s.Count);
-
-                    return string.Join('\n', sites.Select(s =>
-                        $"  {s.Count,6}x  {(s.AccessKind == WatchKind.Write ? "W" : "R")}  {s.Context}"));
+                    var (total, retained) = watches.GetEventCounts(id);
+                    var lines = sites.Select(s => $"  {s.Count,6}x  {s.Context}").ToList();
+                    lines.Add($"  {sites.Count} site(s), {total} access(es) total"
+                        + (total > retained ? $" ({retained} still in the event buffer - `watch log` shows only those)" : string.Empty));
+                    return string.Join('\n', lines);
                 }
                 case "clear":
                 {

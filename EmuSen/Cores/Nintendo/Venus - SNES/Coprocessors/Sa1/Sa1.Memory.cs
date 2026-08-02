@@ -121,7 +121,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             return true;
         }
 
-        public byte ReadSa1(uint address)
+        // ReadSa1 with the register window peeked instead of read - see Venus_SA1.md §11.1.
+        public byte DebugReadSa1(uint address) => ReadSa1Internal(address, forDebug: true);
+
+        public byte ReadSa1(uint address) => ReadSa1Internal(address, forDebug: false);
+
+        private byte ReadSa1Internal(uint address, bool forDebug)
         {
             byte bank = (byte)(address >> 16);
             ushort offset = (ushort)address;
@@ -146,7 +151,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
                     return IRam[mapped.Offset];
 
                 case CartridgeRegion.CoprocessorRegister:
-                    return ReadRegister((ushort)mapped.Offset);
+                    return forDebug
+                        ? DebugPeekRegister((ushort)mapped.Offset)
+                        : ReadRegister((ushort)mapped.Offset);
 
                 case CartridgeRegion.Sa1Vector:
                     return VectorByte(mapped.Offset);
@@ -171,13 +178,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
                         && Sa1BitmapWindow(offset, out int shift, out int mask))
                     {
                         _bwRam[index] = (byte)((_bwRam[index] & ~(mask << shift)) | ((data & mask) << shift));
+                        WriteObserver?.OnCoprocessorWrite("BWRAM", index, _bwRam[index]);
                         return;
                     }
                     _bwRam[index] = data;
+                    WriteObserver?.OnCoprocessorWrite("BWRAM", index, data);
                     return;
 
                 case CartridgeRegion.IRam:
                     IRam[mapped.Offset] = data;
+                    WriteObserver?.OnCoprocessorWrite("SA1IRAM", mapped.Offset, data);
                     return;
 
                 case CartridgeRegion.CoprocessorRegister:
@@ -193,7 +203,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
         internal void WriteBwRamByte(int offset, byte data)
         {
             if (_bwRam.Length == 0) return;
-            _bwRam[offset % _bwRam.Length] = data;
+            int index = offset % _bwRam.Length;
+            _bwRam[index] = data;
+            WriteObserver?.OnCoprocessorWrite("BWRAM", index, data);
         }
 
         // Offsets 0-3 are the S-CPU's overridden NMI/IRQ vectors, 4-9 the SA-1's own.

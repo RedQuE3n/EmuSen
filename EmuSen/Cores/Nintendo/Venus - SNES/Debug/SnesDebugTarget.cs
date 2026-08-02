@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EmuSen.Cores.Nintendo.Venus.Processor;
+using EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.DianaOS;
@@ -78,6 +79,35 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public void Write(int address, byte value) => _bus.Write8((uint)(_baseAddress + (uint)address), value);
     }
 
+    // A space backed by a read/write pair rather than an array or the S-CPU
+    // bus - what a coprocessor's own address space needs, since its decode
+    // lives on the chip and not on MemoryBus - see Venus_SA1.md §11.2.
+    internal sealed class DelegateDebugMemorySpace : IDebugMemorySpace
+    {
+        private readonly Func<int, byte> _read;
+        private readonly Action<int, byte>? _write;
+        public string Name { get; }
+        public int Size { get; }
+        public bool IsWritable => _write != null;
+        public bool HasSideEffects { get; }
+
+        public DelegateDebugMemorySpace(string name, int size, Func<int, byte> read, Action<int, byte>? write = null, bool hasSideEffects = false)
+        {
+            Name = name;
+            Size = size;
+            _read = read;
+            _write = write;
+            HasSideEffects = hasSideEffects;
+        }
+
+        public byte Read(int address) => _read(((address % Size) + Size) % Size);
+
+        public void Write(int address, byte value)
+        {
+            if (address >= 0 && address < Size) _write?.Invoke(address, value);
+        }
+    }
+
     // SNES implementation of IDebugTarget - see that interface for why the
     // shapes here are generic rather than SNES-specific. Everything below
     // wraps already-existing, already-verified state (Cpu's register
@@ -106,6 +136,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // list survives a reset - see EmuSen_Settings_Reference.md §4.14.
         private readonly CheatRegistry _cheats;
         private readonly BreakpointRegistry _breakpoints = new BreakpointRegistry();
+
+        // Only non-null on a cartridge whose coprocessor has its own CPU - see Venus_SA1.md §11.5.
+        private readonly BreakpointRegistry? _coprocessorBreakpoints;
+
+        private readonly CoverageRegistry _coverage = new CoverageRegistry();
+        private readonly CoverageRegistry? _coprocessorCoverage;
 
         // Optional - VenusCore.LastFrameCpuSpc700Ms/LastFramePpuMs/
         // LastFrameHdmaMs (or EmulatorSession's identical pass-through
@@ -157,6 +193,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _cheats = cheats ?? new CheatRegistry();
             bus.WriteObserver = this;
             _ppu.WriteObserver = this; // VRAM/CGRAM/OAM - see Venus_Memory.md §6.1
+            bus.Cart.WriteObserver = this; // SRAM + the S-CPU's view of the SA-1's RAM - see Venus_SA1.md §11.4
+            if (bus.Cart.Sa1 is { } observedSa1) observedSa1.WriteObserver = this; // the SA-1's own writes
             bus.ReadObserver = this;
             bus.FrameObserver = this;
             bus.RomPatcher = this;
@@ -169,7 +207,25 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // BreakpointRegistry itself off MemoryBus/Cpu entirely, same
             // reasoning as the WriteObserver/ReadObserver split documented
             // in this class's own header comment.
-            bus.BreakpointChecker = pc24 => _breakpoints.ShouldBreak(pc24);
+            // Coverage rides the same per-instruction seam, and costs one
+            // bool test while disarmed - see EmuSen_Debugging_Tools_Reference_v5.md §3.24.
+            bus.BreakpointChecker = pc24 => { _coverage.Record(pc24); return _breakpoints.ShouldBreak(pc24); };
+
+            // Same pull-hook, on the SA-1's PC - see Venus_SA1.md §11.5.
+            if (bus.Cart.Sa1 is { } breakableSa1)
+            {
+                _coprocessorBreakpoints = new BreakpointRegistry();
+                _coprocessorCoverage = new CoverageRegistry();
+                breakableSa1.BreakpointChecker = pc24 => { _coprocessorCoverage.Record(pc24); return _coprocessorBreakpoints.ShouldBreak(pc24); };
+            }
+
+            // The GSU has no breakpoint hook, but its PC is just as worth
+            // covering - see Venus_SuperFX.md §8.2.
+            if (bus.Cart.SuperFx is { } coveredGsu)
+            {
+                _coprocessorCoverage = new CoverageRegistry();
+                coveredGsu.CoverageRecorder = pc24 => _coprocessorCoverage.Record(pc24);
+            }
 
             // Each provider's initial snapshot is read right here, not left
             // default/empty - a caller reading Current before this target's
@@ -229,6 +285,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public CheatRegistry Cheats => _cheats;
 
         public BreakpointRegistry Breakpoints => _breakpoints;
+
+        public BreakpointRegistry? CoprocessorBreakpoints => _coprocessorBreakpoints;
+
+        public CoverageRegistry? Coverage => _coverage;
+
+        public CoverageRegistry? CoprocessorCoverage => _coprocessorCoverage;
 
         // Reads a (space, address, width) value the same way
         // DebugCommandHelpers.ReadValue does (little-endian accumulation)
@@ -298,6 +360,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
         }
 
+        // The S-CPU's PC says nothing about a write the SA-1 made on its own,
+        // so label these with the chip's own PC - see Venus_SA1.md §11.4.
+        public void OnCoprocessorWrite(string spaceName, int address, byte value)
+        {
+            var sa1 = _bus.Cart.Sa1;
+            if (sa1 == null) { OnWrite(spaceName, address, value); return; }
+            _watches.RecordWrite(spaceName, address, value,
+                () => $"SA1 PC=0x{sa1.Cpu.LastInstructionPB:X2}{sa1.Cpu.LastInstructionPC:X4}");
+        }
+
         // Mirror of OnWrite for reads - see IReadObserver's comment on why
         // this is a separate interface/method rather than folded into
         // OnWrite.
@@ -331,9 +403,25 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
         {
             IDebugMemorySpace space = GetMemorySpaces().First(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
-            bool mFlagSet = (_cpu.P & (byte)CpuFlags.M) != 0;
-            bool xFlagSet = (_cpu.P & (byte)CpuFlags.X) != 0;
-            return Snes65816Disassembler.Disassemble(a => space.Read(a), address, count, _cpu.E, mFlagSet, xFlagSet);
+
+            // The GSU is not a 65816 - see Venus_SuperFX.md §8.1.
+            if (string.Equals(space.Name, "GSUBUS", StringComparison.OrdinalIgnoreCase))
+                return GsuDisassembler.Disassemble(a => space.Read(a), address, count);
+
+            // Immediate-operand widths come from the CPU that actually runs
+            // this space's code, not always the S-CPU - see Venus_SA1.md §11.3.
+            Cpu decodingCpu = DecodingCpuFor(space.Name);
+            bool mFlagSet = (decodingCpu.P & (byte)CpuFlags.M) != 0;
+            bool xFlagSet = (decodingCpu.P & (byte)CpuFlags.X) != 0;
+            return Snes65816Disassembler.Disassemble(a => space.Read(a), address, count, decodingCpu.E, mFlagSet, xFlagSet);
+        }
+
+        // Which 65816's M/X/E state governs a space's immediate widths - see Venus_SA1.md §11.3.
+        private Cpu DecodingCpuFor(string spaceName)
+        {
+            bool sa1Space = string.Equals(spaceName, "SA1BUS", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(spaceName, "SA1IRAM", StringComparison.OrdinalIgnoreCase);
+            return sa1Space && _bus.Cart.Sa1 is { } sa1 ? sa1.Cpu : _cpu;
         }
 
         // Moved from CallersCommand/WritersCommand/ReadersCommand (which
@@ -420,11 +508,47 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // GSU's work RAM and framebuffer both, so snapshot/diff over it
             // answers "is the chip still plotting" - see Venus_SuperFX.md §5.1.
             var cart = _bus.Cart;
-            if (cart.SuperFx is { } gsu) spaces.Add(new ByteArrayDebugMemorySpace("GSURAM", gsu.DebugRam));
-            if (cart.Sa1 is { } sa1) spaces.Add(new ByteArrayDebugMemorySpace("SA1IRAM", sa1.IRam));
-            // No DSPRAM: the NEC DSP's RAM is ushort[], and which byte order a
-            // byte-addressable view should present is a real decision, not one
-            // to invent here. Its registers are on CoprocessorRegisters already.
+            if (cart.SuperFx is { } gsu)
+            {
+                spaces.Add(new ByteArrayDebugMemorySpace("GSURAM", gsu.DebugRam));
+
+                // The GSU's own program space, so `disasm GSUBUS <pbr><r15>`
+                // decodes what the chip is executing - see Venus_SuperFX.md §8.1.
+                spaces.Add(new DelegateDebugMemorySpace("GSUBUS", 0x1000000,
+                    a => gsu.DebugReadProgram(a), (a, v) => gsu.DebugWriteProgram(a, v)));
+            }
+            if (cart.Sa1 is { } sa1)
+            {
+                spaces.Add(new ByteArrayDebugMemorySpace("SA1IRAM", sa1.IRam));
+
+                // BW-RAM. The SRAM space above cannot reach it: that one is
+                // anchored at bank $70, and an SA-1 cart maps BW-RAM at
+                // $40-$4F, so `mem SRAM` reads an unmapped bank and reports
+                // 32KB of zeroes - see Venus_SA1.md §11.2.
+                if (sa1.BwRamSize > 0) spaces.Add(new ByteArrayDebugMemorySpace("BWRAM", sa1.DebugBwRam));
+
+                // The SA-1's own 24-bit address space, Super MMC banking
+                // applied, so `disasm SA1BUS <pc>` decodes what the chip is
+                // actually executing - see Venus_SA1.md §11.3.
+                spaces.Add(new DelegateDebugMemorySpace("SA1BUS", 0x1000000,
+                    a => sa1.DebugReadSa1((uint)a), (a, v) => sa1.WriteSa1((uint)a, v)));
+            }
+
+            // The NEC DSP's RAM is ushort[]; this presents it little-endian,
+            // matching how the chip's own 16-bit words reach the S-CPU over
+            // DR - see Venus_NecDSP.md §6.
+            if (cart.NecDsp is { } necDsp && necDsp.Ram.Length > 0)
+            {
+                spaces.Add(new DelegateDebugMemorySpace("DSPRAM", necDsp.Ram.Length * 2,
+                    a => (byte)((a & 1) == 0 ? necDsp.Ram[a >> 1] : necDsp.Ram[a >> 1] >> 8),
+                    (a, v) =>
+                    {
+                        ushort word = necDsp.Ram[a >> 1];
+                        necDsp.Ram[a >> 1] = (a & 1) == 0
+                            ? (ushort)((word & 0xFF00) | v)
+                            : (ushort)((word & 0x00FF) | (v << 8));
+                    }));
+            }
 
             return spaces;
         }
@@ -502,6 +626,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                     new DebugRegisterValue("Y", sa1.Cpu.Y, 16),
                     new DebugRegisterValue("S", sa1.Cpu.S, 16),
                     new DebugRegisterValue("P", sa1.Cpu.P, 8),
+                    new DebugRegisterValue("ClocksRun", (ulong)sa1.ExecutedMasterClocks, 64),
+                    new DebugRegisterValue("ClocksOffered", (ulong)sa1.OfferedMasterClocks, 64),
                 };
             }
 

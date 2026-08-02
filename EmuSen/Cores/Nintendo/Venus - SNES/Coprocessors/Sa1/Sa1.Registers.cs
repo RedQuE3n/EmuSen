@@ -5,6 +5,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
     // software convention, not a decode - see Venus_SA1.md §4.
     public sealed partial class Sa1
     {
+        // ReadRegister minus its two side effects - see Venus_SA1.md §11.1.
+        public byte DebugPeekRegister(ushort offset) => offset switch
+        {
+            0x2302 => (byte)_hcrLatch,
+            0x230D => (byte)(BitStream.Data >> 8),
+            _ => ReadRegister(offset),
+        };
+
         public byte ReadRegister(ushort offset)
         {
             switch (offset)

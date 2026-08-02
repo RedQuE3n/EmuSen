@@ -107,6 +107,31 @@ namespace EmuSen.Mistress.Views
         }
     }
 
+    // Replaces EmuSen.DianaOS.DianaOS.Bin.Commands.Unix.VstopCommand for the
+    // same reason CoretopWindowCommand above replaces its own terminal
+    // counterpart: this window's console is a TextBox with no terminal
+    // underneath it. Takes no IDebugTarget - `vstop` reports on the host
+    // VM, so it works with no ROM loaded. See `man vstop`.
+    public class VstopWindowCommand : IDianaOSCommand
+    {
+        private readonly Action _openWindow;
+
+        public VstopWindowCommand(Action openWindow)
+        {
+            _openWindow = openWindow;
+        }
+
+        public string Name => "vstop";
+        public bool IsReadOnly => true;
+        public string Usage => "  vstop                         open a live .NET runtime dashboard window (non-blocking - gameplay keeps running)";
+
+        public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        {
+            _openWindow();
+            return DianaOSResult.Ok("vstop: opened in a separate window.");
+        }
+    }
+
     // EmuSen.Hotaru's `feed`/`feed -w` (Program.cs) exists to solve a
     // problem this frontend never had in the first place: Raylib has
     // exactly one native window, so a Raylib build needs a second one

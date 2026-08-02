@@ -34,7 +34,8 @@
                 <TextBlock Text="Game Buttons" FontWeight="Bold" Margin="0,0,0,2" />
                 <TextBlock Text="What the emulated SNES controller reads."
                            Foreground="Gray" FontSize="11" Margin="0,0,0,6" />
-                <Grid x:Name="ButtonHeaderRow" ColumnDefinitions="90,130,Auto,Auto,140,Auto,Auto" Margin="0,0,0,2">
+                <!-- Columns come from BuildButtonRows, not from here - see EmuSen_Settings_Reference.md §4.6. -->
+                <Grid x:Name="ButtonHeaderRow" Margin="0,0,0,2">
                     <TextBlock Grid.Column="0" Text="Button" FontWeight="SemiBold" />
                     <TextBlock Grid.Column="1" Text="Keyboard" FontWeight="SemiBold" />
                     <TextBlock Grid.Column="4" Text="Gamepad" FontWeight="SemiBold" />
@@ -46,7 +47,7 @@
                 <TextBlock Text="Emulator Hotkeys" FontWeight="Bold" Margin="0,0,0,2" />
                 <TextBlock Text="Actions on the emulator itself. Fast Forward and Rewind apply while held; the rest fire once per press."
                            Foreground="Gray" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6" />
-                <Grid ColumnDefinitions="130,130,Auto,Auto" Margin="0,0,0,2">
+                <Grid x:Name="HotkeyHeaderRow" Margin="0,0,0,2">
                     <TextBlock Grid.Column="0" Text="Action" FontWeight="SemiBold" />
                     <TextBlock Grid.Column="1" Text="Keyboard" FontWeight="SemiBold" />
                 </Grid>

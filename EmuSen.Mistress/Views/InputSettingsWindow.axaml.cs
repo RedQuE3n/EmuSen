@@ -90,8 +90,31 @@ namespace EmuSen.Mistress.Views
 
         // --- Row construction ---
 
+        // The header and every data row take their columns from here. No Auto
+        // anywhere - see EmuSen_Settings_Reference.md §4.6.
+        private static ColumnDefinitions ButtonRowColumns() => new()
+        {
+            new ColumnDefinition(new GridLength(90)),  // button name
+            new ColumnDefinition(new GridLength(130)), // bound key
+            new ColumnDefinition(new GridLength(110)), // Rebind Key / "Press a key..."
+            new ColumnDefinition(new GridLength(68)),  // Clear, plus its margin
+            new ColumnDefinition(new GridLength(140)), // bound pad button
+            new ColumnDefinition(new GridLength(130)), // Rebind Pad / "Press a button..."
+            new ColumnDefinition(new GridLength(85)),  // Clear Pad, plus its margin
+        };
+
+        private static ColumnDefinitions HotkeyRowColumns() => new()
+        {
+            new ColumnDefinition(new GridLength(130)),
+            new ColumnDefinition(new GridLength(130)),
+            new ColumnDefinition(new GridLength(110)),
+            new ColumnDefinition(new GridLength(56)),
+        };
+
         private void BuildButtonRows()
         {
+            ButtonHeaderRow.ColumnDefinitions = ButtonRowColumns();
+
             BindingsPanel.Children.Clear();
             _keyLabels.Clear();
             _padLabels.Clear();
@@ -100,8 +123,7 @@ namespace EmuSen.Mistress.Views
 
             foreach (SnesButton button in Enum.GetValues<SnesButton>())
             {
-                // Columns must match ButtonHeaderRow in the XAML - see EmuSen_Settings_Reference.md §4.6.
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("90,130,Auto,Auto,140,Auto,Auto") };
+                var row = new Grid { ColumnDefinitions = ButtonRowColumns() };
 
                 row.Children.Add(Cell(new TextBlock { Text = button.ToString(), VerticalAlignment = VerticalAlignment.Center }, 0));
 
@@ -147,13 +169,14 @@ namespace EmuSen.Mistress.Views
 
         private void BuildHotkeyRows()
         {
+            HotkeyHeaderRow.ColumnDefinitions = HotkeyRowColumns();
             HotkeysPanel.Children.Clear();
             _hotkeyLabels.Clear();
             _rebindHotkeyButtons.Clear();
 
             foreach (HotkeyAction action in Enum.GetValues<HotkeyAction>())
             {
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("130,130,Auto,Auto") };
+                var row = new Grid { ColumnDefinitions = HotkeyRowColumns() };
 
                 row.Children.Add(Cell(new TextBlock { Text = HotkeyBindingMap.DisplayName(action), VerticalAlignment = VerticalAlignment.Center }, 0));
 

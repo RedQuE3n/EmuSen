@@ -238,6 +238,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                 new UserdelCommand(selfAccessor, sessions),
                 new PasswdCommand(selfAccessor),
                 new CoretopCommand(),
+                new VstopCommand(),
                 new ClearCommand(),
                 new TrueCommand(),
                 new FalseCommand(),
@@ -967,6 +968,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             lines.Add("  - Live hardware inspection: regs, mem, watch, bp, disasm, trace");
             lines.Add("  - Cheats (Action Replay / Game Genie), snapshot/diff, dump/load");
             lines.Add("  - coretop: live htop-style hardware dashboard (-w opens a window)");
+            lines.Add("  - vstop: the same, for the .NET runtime underneath (works with no core loaded)");
             lines.Add("  - feed / feed -w: watch gameplay without losing the shell");
             lines.Add("  - clear, nano, history, and the rest of a real shell's toolkit");
             lines.Add("");

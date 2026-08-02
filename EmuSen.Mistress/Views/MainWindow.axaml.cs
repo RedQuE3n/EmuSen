@@ -46,6 +46,13 @@ namespace EmuSen.Mistress.Views
         private readonly EmuSen.Common.SpeedController _speed = new();
         private readonly EmuSen.Common.RewindBuffer _rewind = new() { Enabled = true };
 
+        // What the Speed menu picked, read by EmulationLoop - see EmuSen_Settings_Reference.md §4.13.
+        private volatile int _baseSpeedPercent = EmuSen.Common.SpeedController.NormalPercent;
+
+        // Which save slot Save/Load State act on, 1-8 - see §4.13.
+        private int _stateSlot = 1;
+        private const int StateSlots = 8;
+
         // Gamepad polling stays on the UI thread, on its own timer, separate
         // from emulation - see EmuSen_Settings_Reference.md §4.10.
         private DispatcherTimer? _timer;
@@ -115,6 +122,10 @@ namespace EmuSen.Mistress.Views
         // `coretop`, via CoretopWindowCommand), not from a menu item.
         private CoretopWindow? _coretopWindow;
 
+        // Same at-most-one/reuse/clear-on-Closed pattern, but with no
+        // target to update - see `man vstop`.
+        private VstopWindow? _vstopWindow;
+
         private string? _currentRomPath;
         private string? _currentDisplayName; // for restoring StatusText's "Running: ..." text exactly after a pause, without reformatting from _currentRomPath
         private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
@@ -166,6 +177,7 @@ namespace EmuSen.Mistress.Views
             _gamepad.StickDeadzone = _appSettings.StickDeadzone;
 
             RefreshLibrary();
+            BuildSaveSlotItems();
 
             // Tunnel, not bubbling, or focus navigation eats the arrows - see EmuSen_Settings_Reference.md §4.2.
             AddHandler(KeyDownEvent, (_, e) => SetButtonFromKey(e.Key, pressed: true, e), RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -326,6 +338,12 @@ namespace EmuSen.Mistress.Views
             new DebugSettingsWindow().Show(this);
         }
 
+        // Never needs a ROM - it manages the cheat folder, not a session.
+        private void OnCheatDatabaseClick(object? sender, RoutedEventArgs e)
+        {
+            new CheatDatabaseWindow(_appSettings).Show(this);
+        }
+
         private void OnShellConsoleClick(object? sender, RoutedEventArgs e)
         {
             if (_consoleWindow is not null)
@@ -349,6 +367,7 @@ namespace EmuSen.Mistress.Views
             new PauseCommand(PauseEmulation, () => IsPaused),
             new ResumeCommand(ResumeEmulation, () => IsPaused),
             new CoretopWindowCommand(OpenCoretopWindow),
+            new VstopWindowCommand(OpenVstopWindow),
             new FeedCommand(() => Activate()),
             new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
         };
@@ -396,18 +415,36 @@ namespace EmuSen.Mistress.Views
             _coretopWindow.Show(this);
         }
 
+        // No target to hand over or refresh, unlike OpenCoretopWindow above.
+        private void OpenVstopWindow()
+        {
+            if (_vstopWindow is not null)
+            {
+                _vstopWindow.Activate();
+                return;
+            }
+
+            _vstopWindow = new VstopWindow();
+            _vstopWindow.Closed += (_, _) => _vstopWindow = null;
+            _vstopWindow.Show(this);
+        }
+
         // Defaults to the same Usr/Home/Saves/Save States/ tree the console
         // build and DianaOS shell's `state save`/`state load` write to -
         // overridable in Preferences (AppSettings.StateDirectory) for
         // anyone who wants states somewhere else.
-        private string? CurrentStatePath =>
+        private string? CurrentStatePath => StatePathForSlot(_stateSlot);
+
+        // Slot 1 is the plain <rom>.state every other frontend already
+        // writes - see EmuSen_Settings_Reference.md §4.13.
+        private string? StatePathForSlot(int slot) =>
             _currentRomPath is null
                 ? null
                 : System.IO.Path.Combine(
                     string.IsNullOrWhiteSpace(_appSettings.StateDirectory)
                         ? DianaOSSandbox.SaveStatesDirectory
                         : _appSettings.StateDirectory,
-                    System.IO.Path.GetFileNameWithoutExtension(_currentRomPath) + ".state");
+                    System.IO.Path.GetFileNameWithoutExtension(_currentRomPath) + (slot == 1 ? "" : $".slot{slot}") + ".state");
 
         private void OnSaveStateClick(object? sender, RoutedEventArgs e)
         {
@@ -421,7 +458,7 @@ namespace EmuSen.Mistress.Views
             {
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
                 _session.SaveState(path);
-                StatusText.Text = $"State saved: {System.IO.Path.GetFileName(path)}";
+                StatusText.Text = $"State saved to slot {_stateSlot}: {System.IO.Path.GetFileName(path)}";
             }
             catch (Exception ex)
             {
@@ -439,7 +476,7 @@ namespace EmuSen.Mistress.Views
 
             if (!System.IO.File.Exists(path))
             {
-                StatusText.Text = "Load State: no save state found for this ROM";
+                StatusText.Text = $"Load State: slot {_stateSlot} is empty";
                 return;
             }
 
@@ -448,12 +485,129 @@ namespace EmuSen.Mistress.Views
                 _session.LoadState(path);
                 _rewind.Clear(); // a discontinuous jump - see §1.4
                 _audioPlayer.RateControl.Reset();
-                StatusText.Text = $"State loaded: {System.IO.Path.GetFileName(path)}";
+                StatusText.Text = $"State loaded from slot {_stateSlot}: {System.IO.Path.GetFileName(path)}";
             }
             catch (Exception ex)
             {
                 StatusText.Text = $"Load State failed: {ex.Message}";
             }
+        }
+
+        // Every Emulation item needs a running game - see EmuSen_Settings_Reference.md §4.12.
+        private void OnEmulationMenuOpened(object? sender, RoutedEventArgs e)
+        {
+            bool running = _session is { IsRomLoaded: true };
+            PauseMenuItem.IsEnabled = running;
+            ResetMenuItem.IsEnabled = running;
+            CloseGameMenuItem.IsEnabled = running;
+            SpeedMenuItem.IsEnabled = running;
+            SaveStateMenuItem.IsEnabled = running;
+            LoadStateMenuItem.IsEnabled = running;
+            SaveSlotMenuItem.IsEnabled = running;
+            // Only synced here, never from Pause/ResumeEmulation - see §4.12.
+            PauseMenuItem.IsChecked = running && IsPaused;
+
+            SpeedNormalMenuItem.IsChecked = _baseSpeedPercent == EmuSen.Common.SpeedController.NormalPercent;
+            SpeedFastMenuItem.IsChecked = _baseSpeedPercent == _speed.TurboPercent;
+            SpeedSlowMenuItem.IsChecked = _baseSpeedPercent == _speed.SlowMotionPercent;
+            SpeedUnthrottledMenuItem.IsChecked = _baseSpeedPercent == EmuSen.Common.SpeedController.UnthrottledPercent;
+
+            SaveStateMenuItem.Header = $"Save _State (slot {_stateSlot})";
+            LoadStateMenuItem.Header = $"_Load State (slot {_stateSlot})";
+        }
+
+        private void OnSpeedNormalClick(object? sender, RoutedEventArgs e) => SetBaseSpeed(EmuSen.Common.SpeedController.NormalPercent);
+
+        private void OnSpeedFastClick(object? sender, RoutedEventArgs e) => SetBaseSpeed(_speed.TurboPercent);
+
+        private void OnSpeedSlowClick(object? sender, RoutedEventArgs e) => SetBaseSpeed(_speed.SlowMotionPercent);
+
+        private void OnSpeedUnthrottledClick(object? sender, RoutedEventArgs e) => SetBaseSpeed(EmuSen.Common.SpeedController.UnthrottledPercent);
+
+        private void SetBaseSpeed(int percent)
+        {
+            _baseSpeedPercent = percent;
+            _audioPlayer.RateControl.Reset(); // the device's pacing target just moved - see EmuSen_Audio_Sync.md §3.2
+            if (_session is { IsRomLoaded: true }) StatusText.Text = $"Speed: {DescribeSpeed(percent)}";
+        }
+
+        private static string DescribeSpeed(int percent) =>
+            percent == EmuSen.Common.SpeedController.UnthrottledPercent ? "unthrottled" : $"{percent}%";
+
+        // Rebuilt per open so a slot saved since last time shows its new stamp.
+        private void OnSaveSlotMenuOpened(object? sender, RoutedEventArgs e) => BuildSaveSlotItems();
+
+        // Also called at construction, or the item has no children yet and
+        // renders as a leaf with no submenu arrow.
+        private void BuildSaveSlotItems()
+        {
+            var items = new List<MenuItem>();
+            for (int slot = 1; slot <= StateSlots; slot++)
+            {
+                int captured = slot;
+                items.Add(new MenuItem
+                {
+                    Header = $"Slot {slot} - {DescribeSlot(slot)}",
+                    ToggleType = MenuItemToggleType.Radio,
+                    IsChecked = slot == _stateSlot,
+                    Command = new SelectSlotCommand(() => SelectStateSlot(captured)),
+                });
+            }
+            SaveSlotMenuItem.ItemsSource = items;
+        }
+
+        private string DescribeSlot(int slot)
+        {
+            if (StatePathForSlot(slot) is not string path || !System.IO.File.Exists(path)) return "empty";
+            return System.IO.File.GetLastWriteTime(path).ToString("yyyy-MM-dd HH:mm");
+        }
+
+        private void SelectStateSlot(int slot)
+        {
+            _stateSlot = slot;
+            if (_session is { IsRomLoaded: true }) StatusText.Text = $"Save slot {slot} selected ({DescribeSlot(slot)})";
+        }
+
+        // A MenuItem built in code has no Click event wired from XAML.
+        private sealed class SelectSlotCommand : System.Windows.Input.ICommand
+        {
+            private readonly Action _run;
+            public SelectSlotCommand(Action run) => _run = run;
+            public event EventHandler? CanExecuteChanged { add { } remove { } }
+            public bool CanExecute(object? parameter) => true;
+            public void Execute(object? parameter) => _run();
+        }
+
+        private void OnViewMenuOpened(object? sender, RoutedEventArgs e) =>
+            FullscreenMenuItem.IsChecked = WindowState == WindowState.FullScreen;
+
+        private void OnFullscreenClick(object? sender, RoutedEventArgs e) =>
+            WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+
+        private void OnSettingsMenuOpened(object? sender, RoutedEventArgs e) =>
+            HardwareDashboardMenuItem.IsEnabled = _debugTarget is not null;
+
+        // The same window `coretop` opens from the console - see EmuSen_Settings_Reference.md §4.13.
+        private void OnHardwareDashboardClick(object? sender, RoutedEventArgs e) => OpenCoretopWindow(_debugTarget);
+
+        // Never disabled by OnSettingsMenuOpened - see `man vstop`.
+        private void OnRuntimeDashboardClick(object? sender, RoutedEventArgs e) => OpenVstopWindow();
+
+        private void OnPauseClick(object? sender, RoutedEventArgs e) => TogglePause();
+
+        private void OnResetClick(object? sender, RoutedEventArgs e) => ResetEmulation();
+
+        private void OnCloseGameClick(object? sender, RoutedEventArgs e) => ShowLibrary();
+
+        // A power cycle, not a soft reset - see EmuSen_Settings_Reference.md §4.12.
+        private void ResetEmulation()
+        {
+            if (_session is not { IsRomLoaded: true }) return;
+            if (_currentRomPath is not string path || _currentDisplayName is not string displayName) return;
+
+            ResumeEmulation(); // a reset always comes back running, however it was paused
+            LoadRom(path, displayName);
+            if (_session is { IsRomLoaded: true }) StatusText.Text = $"Reset: {displayName}";
         }
 
         // Everything that has to happen to whatever is currently running
@@ -518,9 +672,16 @@ namespace EmuSen.Mistress.Views
         private void ShowLibrary()
         {
             ShutDownCurrentSession();
+            StopLogging(); // this ROM's log files have no next writer - see §4.12
             _session = null;
             _currentRomPath = null;
             _currentDisplayName = null;
+            _rewind.Clear();
+
+            // Or an open console/dashboard keeps inspecting the core we just dropped.
+            _debugTarget = null;
+            _consoleWindow?.UpdateTarget(null, null);
+            _coretopWindow?.UpdateTarget(null);
 
             GameFrame.IsVisible = false;
             LibraryView.IsVisible = true;
@@ -703,7 +864,8 @@ namespace EmuSen.Mistress.Views
                 EmulatorSession? session = _session;
                 if (session is null) break;
 
-                _speed.SetTurbo(_turboHeld);
+                // Held turbo wins over the menu's base speed - see EmuSen_Settings_Reference.md §4.13.
+                _speed.SpeedPercent = _turboHeld ? _speed.TurboPercent : _baseSpeedPercent;
                 nextTick += _speed.FrameInterval(session.FrameRateHz);
 
                 // Takes over the frame entirely - see EmuSen_Rewind_And_FastForward.md §4.

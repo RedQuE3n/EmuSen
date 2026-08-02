@@ -249,11 +249,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // Re-poke every enabled cheat, once per frame - see
             // CheatRegistry's own comment on why this needs to happen
             // every frame rather than once when a cheat is added.
-            _cheats.ApplyAll((spaceName, address, value) =>
-            {
-                var space = GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
-                space?.Write(address, value);
-            });
+            // Read as well as write: increase/decrease and bit-position
+            // cheats have to see what is already there - see `man cheat`.
+            _cheats.ApplyAll(
+                (spaceName, address) =>
+                {
+                    var space = GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+                    return space?.Read(address) ?? 0;
+                },
+                (spaceName, address, value) =>
+                {
+                    var space = GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+                    space?.Write(address, value);
+                });
         }
 
         // Game Genie-style ROM-read intercept - see IRomReadPatcher and

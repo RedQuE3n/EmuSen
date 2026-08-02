@@ -44,13 +44,13 @@ namespace EmuSen.WiseMan.Galaxia
             CheatInfo poke = reloaded.GetCheats().Single(c => c.Kind == CheatKind.RamPoke);
             Assert.Equal("WRAM", poke.SpaceName);
             Assert.Equal(0x0019, poke.Address);
-            Assert.Equal(0x09, poke.Value);
+            Assert.Equal(0x09u, poke.Value);
             Assert.Equal("99 lives", poke.Description);
             Assert.True(poke.Enabled);
 
             CheatInfo patch = reloaded.GetCheats().Single(c => c.Kind == CheatKind.RomPatch);
             Assert.Equal(0x00C05F, patch.Address);
-            Assert.Equal(0xEA, patch.Value);
+            Assert.Equal(0xEAu, patch.Value);
             Assert.Equal((byte?)0x1F, patch.Compare);
             Assert.False(patch.Enabled);
         }
@@ -89,10 +89,9 @@ namespace EmuSen.WiseMan.Galaxia
         [InlineData("  7e0019  ")]
         public void Hand_written_addresses_are_read_the_way_people_write_them(string address)
         {
-            var entry = new CheatFileEntry { Address = address };
-
-            Assert.True(entry.TryParseAddress(out int parsed));
-            Assert.Equal(0x7E0019, parsed);
+            // Moved onto the per-write carrier when a cheat became a list of writes.
+            Assert.True(CheatFileWrite.TryHex(address, out uint parsed));
+            Assert.Equal(0x7E0019u, parsed);
         }
 
         [Fact]

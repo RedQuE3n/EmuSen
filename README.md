@@ -25,7 +25,7 @@ EmuSen is written against published hardware documentation rather than by portin
 
 ---
 
-## What this is
+## What exists so far
 
 A cycle-budgeted SNES emulator — 65816 CPU, SPC700 + S-DSP audio, and a full PPU — plus the tooling built around making it *debuggable*. That tooling is the part that makes this project unusual:
 

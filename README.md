@@ -1,6 +1,6 @@
 # EmuSen
 
-A Multi-system emulator written from scratch in C# / .NET 10, with a Unix-like debugging shell built into it.
+A multi-system emulator written from scratch in C# / .NET 10, with a Unix-like debugging shell built into it.
 
 EmuSen is written against published hardware documentation rather than by porting an existing emulator. It is a working emulator, but it is a **hobby project in active development** — see [Status](#status) before expecting to play anything start to finish.
 

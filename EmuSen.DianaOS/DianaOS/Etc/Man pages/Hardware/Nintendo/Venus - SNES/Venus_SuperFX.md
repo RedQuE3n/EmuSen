@@ -168,7 +168,9 @@ That trace is what found the R15 invariant bug: the loop in §4.1 was visibly re
 
 - **OBJ page arrangement (§6.2)** — the column-major order within a page is confirmed by output; the 2x2 page arrangement and its stride are inferred, not verified.
 - **Cycle costs (§2.2)** — approximate.
-- **`LJMP` operand direction** — implemented as "the named register supplies the address, the source register supplies the bank", by analogy with `JMP Rn`. Unverified, and a plausible suspect for §10.
+- ~~**`LJMP` operand direction**~~ — **resolved, and it was wrong.** It had been implemented as "the named register supplies the address, the source register supplies the bank", by analogy with `JMP Rn`. It is the other way round: `Rn` carries the **bank**, `Sreg` the **address**. Corrected, and pinned by `Ljmp_takes_its_address_from_the_source_register`, which fails against the old direction.
+
+  Worth recording *why* this was inverted, because the trap is still there for anything else in this file: the official Nintendo SuperFX documentation has the two operands swapped, and SnesLab's `LJMP` page reproduces the official wording ("the low byte of the source register is loaded into the program bank register") while separately noting that fullsnes considers the official docs mixed up on exactly this point. bsnes settles it — `regs.pbr = regs.r[n] & 0x7f; regs.r[15] = regs.sr();`. **Do not treat the official docs as authoritative for this instruction.**
 - **`RAMBR` width** — masked to 5 bits, so a game writing a bank beyond the 128KB chip mirrors rather than faulting. Yoshi's Island does write `RAMBR = 2`.
 - **`MERGE` flag thresholds**, `FMULT` rounding, and the `ALT3` meanings of the `$Ax`/`$Fx` slots are implemented from the shape of the instruction set rather than from confirmed documentation.
 - **Bus arbitration (§2.1)** is not enforced.
@@ -177,15 +179,19 @@ That trace is what found the R15 invariant bug: the loop in §4.1 was visibly re
 
 ## 10. Status, and where to pick it up
 
-**What is verified.** 53 tests: 37 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, RAM round-trips, plotting and transparency) and 16 covering detection, the S-CPU address map and the register window. All pass.
+**What is verified.** 54 tests: 38 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, `LJMP`'s operand direction, RAM round-trips, plotting and transparency) and 16 covering detection, the S-CPU address map and the register window. All pass.
 
 **What Yoshi's Island does.** It boots, the GSU executes genuine game code, and it renders: the intro's bordered frame draws correctly, and the GSU-rendered interior draws recognisable scenery. It then stops drawing and the screen goes blank a few thousand frames in. Earlier in development it instead crashed the S-CPU into zeroed WRAM; the three fixes that moved it forward were the R15 invariant (§4.1), OBJ tile order (§6.2), and RAM sizing (§1).
 
-**Where to look next.** The failure is that the S-CPU stops producing display output while still running normally, which means it is acting on GSU results that are wrong rather than absent. In rough order of suspicion:
+**`LJMP` was the leading suspect, and it has been ruled out.** It really was implemented backwards (§9), and that is fixed — but it is *not* what breaks this game. **Yoshi's Island never executes `LJMP` at all**: instrumenting `OpLjmp` with a print and running `SMW2.smc` headless for 5000 frames — well past the point the display goes blank — produced zero hits, while `SuperFxTraceCountdown` over the same boot confirms the GSU is busily executing real game code the whole time (`08:BD16` onward, plotting loops around `08:BD24`). The fix is a genuine latent-correctness win for some other game; it changes nothing here.
 
-1. `LJMP`'s operand direction (§9) — a wrong long jump would send the GSU into plausible-looking but incorrect code, which matches "renders something, then diverges".
-2. The `$Ax`/`$Fx` `ALT3` decodes, currently falling through to the immediate forms.
-3. Cache invalidation on `PBR` change versus on `CACHE`/`LJMP` — a stale line would execute the wrong routine.
-4. `SCBR` granularity, if the framebuffer base drifts.
+That result is worth keeping in mind for the rest of this list: **check that the game actually reaches a feature before spending time on its correctness.** A one-line print plus a long headless run costs a couple of minutes and can retire a suspect outright.
+
+**Where to look next.** The failure is that the S-CPU stops producing display output while still running normally, which means it is acting on GSU results that are wrong rather than absent. In rough order of suspicion, with `LJMP` removed:
+
+1. The `$Ax`/`$Fx` `ALT3` decodes, currently falling through to the immediate forms.
+2. Cache invalidation on `PBR` change versus on `CACHE` — a stale line would execute the wrong routine. (The `LJMP` half of this is moot per above.)
+3. `SCBR` granularity, if the framebuffer base drifts.
+4. `MERGE` flag thresholds and `FMULT` rounding (§9), which feed the plotting maths directly.
 
 `SuperFxTraceCountdown` (§8) plus a diff against a known-good trace is the practical route; without a reference to diff against, the instruction-level tests in `EmuSen.WiseMan/Coprocessors/SuperFxInstructionTests.cs` are the place to encode each new fact as it is established.

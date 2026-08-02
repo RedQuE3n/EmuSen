@@ -188,7 +188,23 @@ Reads through all of these are side-effect-free by construction, which matters h
 
 **What is verified.** 54 tests: 38 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, `LJMP`'s operand direction, RAM round-trips, plotting and transparency) and 16 covering detection, the S-CPU address map and the register window. All pass.
 
-**What Yoshi's Island does.** It boots, the GSU executes genuine game code, and it renders: the intro's bordered frame draws correctly, and the GSU-rendered interior draws recognisable scenery. It then stops drawing and the screen goes blank a few thousand frames in. Earlier in development it instead crashed the S-CPU into zeroed WRAM; the three fixes that moved it forward were the R15 invariant (§4.1), OBJ tile order (§6.2), and RAM sizing (§1).
+**What Yoshi's Island does.** It boots, the GSU executes genuine game code, and it renders: the intro's bordered frame draws correctly, and the GSU-rendered interior draws recognisable scenery. It then stops drawing a few thousand frames in. The three fixes that got it this far were the R15 invariant (§4.1), OBJ tile order (§6.2), and RAM sizing (§1).
+
+### 10.1 The failure, measured
+
+Earlier revisions of this section assumed the S-CPU "stops producing display output while still running normally", and concluded it must be acting on GSU results that were wrong rather than absent. **That was wrong, and it sent two investigations (§9's `LJMP`, the `ALT3` decodes) after instruction-set details that had nothing to do with it.** The actual sequence, measured with `framesum`, `regs` and `mem` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.21, §3.23):
+
+| Frame | What the machine is doing |
+|---|---|
+| ≤1758 | Normal. S-CPU alternating between banks `$0F` and `$7E`, `INIDISP = $8F`, GSU `Running = 1`, Game Pak RAM actively changing. |
+| **1759** | **S-CPU derails into `$7E:0E6A`** — WRAM — and loops around `$7E:0E6A-0E6D`. |
+| 1762-1764 | Wanders: `$00:814F`, then `$04:0749`. |
+| **1765** | `XCE` puts it in **emulation mode** (`E=1`), parked at `$00:814F`. `INIDISP = $81` (forced blank), `TM = TS = BGMODE = 0`. |
+| ≥1765 | Byte-identical every frame forever. GSU `Running = 0`, `SFR = 0`. |
+
+**`$7E:0E60-0EA7` is all zeroes.** Opcode `$00` is `BRK`, so the S-CPU is executing zeroed WRAM. This is not a new failure mode — **it is the same "crashed the S-CPU into zeroed WRAM" bug this section used to describe as belonging to an earlier stage of development.** It was never fixed. The R15/OBJ/RAM-sizing fixes pushed it later, from boot to frame 1759, which looked like progress from the framebuffer but was not a different bug.
+
+**So the framing to work from is: what transfers control to zeroed WRAM at frame 1759.** The GSU was still working normally right up to that point — `snapshot`/`diff` over `GSURAM` shows 1083 bytes changing across the crash window, and `Running = 1` at frame 1750 — so the chip does not stop and then starve the S-CPU. The S-CPU dies first, and the GSU stops afterwards simply because nothing starts it again. Any theory that begins "the GSU computed the wrong value" has to explain a *control-flow* derailment, not a bad pixel.
 
 **`LJMP` was the leading suspect, and it has been ruled out.** It really was implemented backwards (§9), and that is fixed — but it is *not* what breaks this game. **Yoshi's Island never executes `LJMP` at all**: instrumenting `OpLjmp` with a print and running `SMW2.smc` headless for 5000 frames — well past the point the display goes blank — produced zero hits, while `SuperFxTraceCountdown` over the same boot confirms the GSU is busily executing real game code the whole time (`08:BD16` onward, plotting loops around `08:BD24`). The fix is a genuine latent-correctness win for some other game; it changes nothing here.
 
@@ -198,12 +214,14 @@ That result is worth keeping in mind for the rest of this list: **check that the
 
 **Two suspects retired by the same cheap method, which says something about the method.** Working down a ranked list of *plausible-looking* inaccuracies has now cost two rounds and produced one latent fix unrelated to this game. The list was built by reading the implementation for things that looked shaky, not by following evidence from the failure. Prefer evidence next: find the frame where output stops, and work backwards from what the machine is actually doing at that moment.
 
-**Where to look next.** The failure is that the S-CPU stops producing display output while still running normally, which means it is acting on GSU results that are wrong rather than absent. The remaining read-the-code suspects, in rough order:
+**Where to look next.** Work backwards from frame 1759 and find what puts `$7E:0E6A` into the program counter. `bp add` plus `--cpulog` over frames 1755-1760 should show the transfer directly — a `JMP`/`JSR` through a pointer, or an `RTS`/`RTI` to a corrupted return address. The distinction matters: a bad indirect jump means whatever computes the pointer is wrong, while a bad return means the stack was corrupted earlier and the derailment is a symptom with its own separate cause.
 
-1. Cache invalidation on `PBR` change versus on `CACHE` — a stale line would execute the wrong routine. (The `LJMP` half of this is moot per above.)
-2. `SCBR` granularity, if the framebuffer base drifts.
-3. `MERGE` flag thresholds and `FMULT` rounding (§9), which feed the plotting maths directly.
+Given the GSU is demonstrably alive right up to the crash, the likeliest shapes are:
 
-But the better first move is to **locate the transition** rather than audit any of them: bisect for the exact frame the display goes blank, then compare GSU state (`SFR`, `PBR:R15`, `SCBR`, `SCMR`) and the S-CPU's `INIDISP`/screen-enable either side of it. That distinguishes "the GSU stopped and the S-CPU is waiting on it" from "the GSU is still plotting and the S-CPU stopped uploading", which the current evidence does not yet separate — and each answer points at a different third of this chip.
+1. A jump table or handler pointer the game builds from data the GSU produced (or that the GSU's DMA/RAM mapping should have produced), landing on zero.
+2. Stack corruption — an unbalanced interrupt, or a `Sa1`/GSU IRQ delivered when it should not be. Note `VenusCore` polls `gsu.ScpuIrqPending` per instruction and calls `Cpu.Irq()`; that path is gated by the I flag and by `CFGR` bit 7, but it has never been examined against a real game's expectations. `SFR` reads `$0028` at frame 1750, so the IRQ flag is *not* set there — this is a lead to check, not a diagnosis.
+3. A mapping hole: the S-CPU reading zeroes from an address the SuperFX mapper should be serving, then using them as a pointer.
+
+The read-the-code suspects that remain (`CACHE`-side invalidation, `SCBR` granularity, `MERGE`/`FMULT` rounding) are all *pixel* correctness issues. Per §10.1 they cannot by themselves explain a control-flow derailment, so they are no longer the front of the queue.
 
 `SuperFxTraceCountdown` (§8) plus a diff against a known-good trace is the practical route; without a reference to diff against, the instruction-level tests in `EmuSen.WiseMan/Coprocessors/SuperFxInstructionTests.cs` are the place to encode each new fact as it is established.

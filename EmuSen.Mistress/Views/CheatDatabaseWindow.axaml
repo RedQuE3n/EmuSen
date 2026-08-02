@@ -26,6 +26,9 @@
                            VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                     <Button x:Name="ActiveCheatsButton" Content="Active Cheats..." Click="OnActiveCheatsClick" />
+                    <!-- Two-stage on purpose: the first click only reports
+                         what would go - see EmuSen_Settings_Reference.md §4.16. -->
+                    <Button x:Name="PruneButton" Content="Prune Unsupported" Click="OnPruneClick" />
                     <Button x:Name="DownloadButton" Content="Download from libretro" Click="OnDownloadClick" />
                     <Button Content="Close" Click="OnCloseClick" />
                 </StackPanel>

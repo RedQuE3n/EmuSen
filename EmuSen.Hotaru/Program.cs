@@ -31,11 +31,11 @@ namespace EmuSen.Hotaru
         // only one core is actually implemented (`VenusCore`, SNES) -
         // registered under both its internal codename and the console name
         // most people would actually type.
-        private static readonly Dictionary<string, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor> _coreRegistry = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["venus"] = new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
-            ["snes"] = new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor("SNES (Venus)", new[] { ".smc", ".sfc" }),
-        };
+        // EmuSen.Cores.CoreCatalog now holds the one copy - `cheat db prune`
+        // is a third reader of "which consoles exist" and three private
+        // copies is how they drift. See EmuSen_Settings_Reference.md 4.16.
+        private static IReadOnlyDictionary<string, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor> _coreRegistry
+            => EmuSen.Cores.CoreCatalog.Registry;
 
         static void Main(string[] args)
         {
@@ -230,7 +230,8 @@ namespace EmuSen.Hotaru
         // asked to shut down instead (or hit EOF).
         private static string? RunStandaloneShell(string? initialRomPath)
         {
-            DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null);
+            DianaOSInterpreter shell = DianaOSInterpreter.CreateDefault(null,
+                supportedCheatSystems: () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
             Console.WriteLine(shell.GetWelcomeBanner(_coreRegistry.Values.Select(d => d.DisplayName).Distinct()));
             Console.WriteLine("--- DianaOS (type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
 

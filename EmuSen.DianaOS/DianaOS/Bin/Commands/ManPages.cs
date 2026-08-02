@@ -538,6 +538,25 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    database every session. It never overwrites a list already in hand, so\n" +
                 "    a Reset or a close-and-reopen keeps whatever was edited since. See\n" +
                 "    section 4.15.\n\n" +
+                "PRUNING THE DATABASE\n" +
+                "    The libretro database ships around 44 systems and a build with one\n" +
+                "    core can use one of them, so most of a 250MB download is dead weight\n" +
+                "    that every database scan still walks. `cheat db prune` deletes the\n" +
+                "    system folders no core in this build claims.\n\n" +
+                "    It is core-agnostic: each core declares the cheat-database folder\n" +
+                "    names it covers (CoreDescriptor.CheatSystems), and the pruner keeps\n" +
+                "    those and drops the rest - so a second core is one registry entry\n" +
+                "    rather than an edit to the pruner. Venus claims both the main SNES\n" +
+                "    folder and Satellaview, which is the same cartridge hardware.\n\n" +
+                "    Deleting is irreversible and the only way back is another 250MB\n" +
+                "    download, so a bare `cheat db prune` only ever lists what would go;\n" +
+                "    `--apply` is what actually deletes. It refuses outright rather than\n" +
+                "    emptying the database in the two cases that would: when no core\n" +
+                "    claims any system at all, and when nothing on disk matches anything\n" +
+                "    claimed (a wrong folder, or a wrong mapping). In Mistress the same\n" +
+                "    thing is the Prune Unsupported button, whose first click reports and\n" +
+                "    whose second deletes; a finished download offers it, since that is\n" +
+                "    when the 250MB actually lands. See section 4.16.\n\n" +
                 "EXAMPLES\n" +
                 "    cheat poke WRAM 9c 63 infinite lives\n" +
                 "    cheat list\n" +
@@ -549,6 +568,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    cheat export my-cheats.cht\n" +
                 "    cheat db update\n" +
                 "    cheat db find mario\n" +
+                "    cheat db prune\n" +
+                "    cheat db prune --apply\n" +
                 "    cheat db load Super Mario World (USA)",
 
             ["search"] =

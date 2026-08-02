@@ -102,7 +102,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly Renderer _renderer;
         private readonly WatchRegistry _watches = new WatchRegistry();
         private readonly FrameLogRegistry _frameLog = new FrameLogRegistry();
-        private readonly CheatRegistry _cheats = new CheatRegistry();
+        // A frontend that outlives any one core passes its own, so a cheat
+        // list survives a reset - see EmuSen_Settings_Reference.md §4.14.
+        private readonly CheatRegistry _cheats;
         private readonly BreakpointRegistry _breakpoints = new BreakpointRegistry();
 
         // Optional - VenusCore.LastFrameCpuSpc700Ms/LastFramePpuMs/
@@ -145,13 +147,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannelsProvider;
         private readonly PollingProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoadProvider;
 
-        public SnesDebugTarget(Cpu cpu, MemoryBus bus, Renderer renderer, Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? frameTimings = null)
+        public SnesDebugTarget(Cpu cpu, MemoryBus bus, Renderer renderer, Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? frameTimings = null, CheatRegistry? cheats = null)
         {
             _cpu = cpu;
             _bus = bus;
             _ppu = bus.Ppu;
             _renderer = renderer;
             _frameTimings = frameTimings;
+            _cheats = cheats ?? new CheatRegistry();
             bus.WriteObserver = this;
             _ppu.WriteObserver = this; // VRAM/CGRAM/OAM - see Venus_Memory.md §6.1
             bus.ReadObserver = this;
@@ -246,11 +249,21 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 return value;
             });
 
-            // Re-poke every enabled cheat, once per frame - see
-            // CheatRegistry's own comment on why this needs to happen
-            // every frame rather than once when a cheat is added.
-            // Read as well as write: increase/decrease and bit-position
-            // cheats have to see what is already there - see `man cheat`.
+            ApplyCheats();
+        }
+
+        // Re-pokes every enabled cheat - see CheatRegistry's own comment on
+        // why this needs to happen every frame rather than once when a cheat
+        // is added. Read as well as write: increase/decrease and bit-position
+        // cheats have to see what is already there - see `man cheat`.
+        //
+        // Public so a frontend's "Apply Cheats" can force one immediately
+        // rather than waiting for the next frame, which is the difference
+        // between a paused game showing the effect and not - see
+        // EmuSen_Settings_Reference.md §4.15. Must be called on the thread
+        // that owns the core, same as OnFrame itself.
+        public void ApplyCheats()
+        {
             _cheats.ApplyAll(
                 (spaceName, address) =>
                 {

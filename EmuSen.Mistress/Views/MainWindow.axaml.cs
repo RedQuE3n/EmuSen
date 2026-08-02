@@ -126,6 +126,23 @@ namespace EmuSen.Mistress.Views
         // target to update - see `man vstop`.
         private VstopWindow? _vstopWindow;
 
+        // Same at-most-one/reuse/clear-on-Closed pattern, refreshed rather
+        // than re-targeted - see EmuSen_Settings_Reference.md §4.14.
+        private ActiveCheatsWindow? _activeCheatsWindow;
+
+        // Owned here, not by _debugTarget, so a cheat list outlives the core
+        // a Reset rebuilds - see §4.14.
+        private readonly CheatRegistry _cheats = new();
+
+        // Which ROM the loaded cheats were meant for; null while they belong
+        // to no game yet. Not _currentRomPath, which a close resets - see §4.14.
+        private string? _cheatsRomPath;
+
+        // Set by the Active Cheats window's Apply button, cleared by the
+        // emulation thread - cheats must be poked from the thread that owns
+        // the core, same rule DrainPendingFromEmulationThread follows. See §4.15.
+        private volatile bool _applyCheatsPending;
+
         private string? _currentRomPath;
         private string? _currentDisplayName; // for restoring StatusText's "Running: ..." text exactly after a pause, without reformatting from _currentRomPath
         private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
@@ -338,10 +355,78 @@ namespace EmuSen.Mistress.Views
             new DebugSettingsWindow().Show(this);
         }
 
-        // Never needs a ROM - it manages the cheat folder, not a session.
+        // Never needs a ROM - it manages the cheat folder and the cheat list,
+        // neither of which is a session. See §4.14.
         private void OnCheatDatabaseClick(object? sender, RoutedEventArgs e)
         {
-            new CheatDatabaseWindow(_appSettings).Show(this);
+            new CheatDatabaseWindow(_appSettings, () => _cheats, new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
+                () => _activeCheatsWindow?.Refresh(),
+                ShowActiveCheats).Show(this);
+        }
+
+        private void OnActiveCheatsClick(object? sender, RoutedEventArgs e) => ShowActiveCheats();
+
+        // Opens the one Active Cheats window, or brings it forward already
+        // refreshed - the menu item and the database window's own button are
+        // the same door. See §4.14.
+        private void ShowActiveCheats()
+        {
+            if (_activeCheatsWindow is not null)
+            {
+                _activeCheatsWindow.Refresh();
+                _activeCheatsWindow.Activate();
+                return;
+            }
+
+            _activeCheatsWindow = new ActiveCheatsWindow(_cheats,
+                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
+                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
+                RequestCheatApply,
+                () => CheatListName(_cheatsRomPath));
+            _activeCheatsWindow.Closed += (_, _) => _activeCheatsWindow = null;
+            _activeCheatsWindow.Show(this);
+        }
+
+        // Hands the poke to the emulation thread rather than doing it here -
+        // see _applyCheatsPending. False means there was no core to hand it to.
+        private bool RequestCheatApply()
+        {
+            if (_debugTarget is null) return false;
+
+            // Paused parks the emulation thread in _pauseSignal.Wait() rather
+            // than in the core, so nothing is racing and this can happen now -
+            // which is the whole point of the button while paused. See §4.15.
+            if (IsPaused) _debugTarget.ApplyCheats();
+            else _applyCheatsPending = true;
+
+            return true;
+        }
+
+        // The file name a ROM's cheat list is saved under and looked for at
+        // load. Sanitized rather than validated, unlike the name `cheat save`
+        // takes, because this one is derived rather than typed - see §4.15.
+        private static string? CheatListName(string? romPath)
+        {
+            if (string.IsNullOrEmpty(romPath)) return null;
+
+            var name = new string(System.IO.Path.GetFileNameWithoutExtension(romPath)
+                .Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
+            return CheatFile.IsValidName(name) ? name : null;
+        }
+
+        // Whatever was saved for this ROM, brought back so a player doesn't
+        // reload it from the database every session - see §4.15. Returns how
+        // many arrived, for the caller to mention in its own status line.
+        private int LoadSavedCheatsFor(string path)
+        {
+            if (CheatListName(path) is not string name) return 0;
+
+            CheatFile? saved = CheatFile.For(name).Load();
+            if (saved is null) return 0;
+
+            (int loaded, _) = _cheats.LoadFrom(saved);
+            _activeCheatsWindow?.Refresh();
+            return loaded;
         }
 
         private void OnShellConsoleClick(object? sender, RoutedEventArgs e)
@@ -599,6 +684,24 @@ namespace EmuSen.Mistress.Views
 
         private void OnCloseGameClick(object? sender, RoutedEventArgs e) => ShowLibrary();
 
+        // Another game's addresses are meaningless here, so they go rather
+        // than quietly poking this one's RAM. A Reset keeps them - same ROM.
+        private int DropCheatsFromAnotherGame(string path)
+        {
+            bool sameGame = string.Equals(_cheatsRomPath, path, StringComparison.Ordinal);
+            if (_cheatsRomPath is not null && !sameGame)
+            {
+                _cheats.Clear();
+                _activeCheatsWindow?.Refresh();
+            }
+
+            _cheatsRomPath = path;
+
+            // Only when this game's list isn't already in hand: a Reset or a
+            // close-and-reopen must not overwrite edits made since - see §4.15.
+            return !sameGame && _cheats.GetCheats().Count == 0 ? LoadSavedCheatsFor(path) : 0;
+        }
+
         // A power cycle, not a soft reset - see EmuSen_Settings_Reference.md §4.12.
         private void ResetEmulation()
         {
@@ -626,6 +729,7 @@ namespace EmuSen.Mistress.Views
         private void LoadRom(string path, string displayName)
         {
             ShutDownCurrentSession();
+            int restoredCheats = DropCheatsFromAnotherGame(path);
 
             try
             {
@@ -638,14 +742,17 @@ namespace EmuSen.Mistress.Views
                 // See SnesDebugTarget's own constructor comment - feeds
                 // `coretop`'s hardware-load bars.
                 _debugTarget = new SnesDebugTarget(_session.Cpu!, _session.Bus, _session.Renderer!,
-                    () => (_session.LastFrameCpuSpc700Ms, _session.LastFramePpuMs, _session.LastFrameHdmaMs));
+                    () => (_session.LastFrameCpuSpc700Ms, _session.LastFramePpuMs, _session.LastFrameHdmaMs),
+                    _cheats);
                 _consoleWindow?.UpdateTarget(_debugTarget, displayName);
                 _coretopWindow?.UpdateTarget(_debugTarget);
 
                 GameFrame.IsVisible = true;
                 LibraryView.IsVisible = false;
 
-                StatusText.Text = $"Running: {displayName}";
+                StatusText.Text = restoredCheats > 0
+                    ? $"Running: {displayName}  ({restoredCheats} saved cheat(s) restored)"
+                    : $"Running: {displayName}";
                 _currentRomPath = path;
                 _currentDisplayName = displayName;
 
@@ -908,6 +1015,14 @@ namespace EmuSen.Mistress.Views
                     // on this (the emulation) thread, same reasoning as
                     // RefreshProviders() just above.
                     _consoleWindow?.DrainPendingFromEmulationThread();
+
+                    // Same rule, same thread: the Apply Cheats button only
+                    // sets the flag - see _applyCheatsPending.
+                    if (_applyCheatsPending)
+                    {
+                        _applyCheatsPending = false;
+                        _debugTarget?.ApplyCheats();
+                    }
 
                     // Same call-site placement as PumpAudio() in
                     // EmuSen.Hotaru/Program.cs - right after

@@ -390,6 +390,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    cheat gg <code> [description]\n" +
                 "    cheat rompatch <addr> <value> [<compare>|-] [description]\n" +
                 "    cheat list\n" +
+                "    cheat master [on|off]\n" +
                 "    cheat enable <id>\n" +
                 "    cheat disable <id>\n" +
                 "    cheat remove <id>\n" +
@@ -405,6 +406,20 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    directly if the guess is wrong). 'poke'/'rompatch' add a cheat directly\n" +
                 "    without code decoding, e.g. for an address already found with 'search'.\n" +
                 "    'enable'/'disable' toggle a cheat without removing it.\n\n" +
+                "THE MASTER SWITCH\n" +
+                "    'cheat master off' silences every cheat at once; 'cheat master on'\n" +
+                "    brings them back. It is a SECOND AXIS, not a bulk edit: it does not\n" +
+                "    touch any individual cheat's own enabled flag, so switching off to\n" +
+                "    check whether a cheat is causing a bug and switching back on returns\n" +
+                "    exactly the arrangement you had, however many were on. A cheat added\n" +
+                "    while it is off is inert until it is switched back on. 'cheat list'\n" +
+                "    says so at the top while it is off, because otherwise every [on] in\n" +
+                "    that listing would be a lie.\n\n" +
+                "    It is runtime state and is NOT saved. 'cheat save' does not write it\n" +
+                "    and 'cheat load' does not set it: a set saved months ago with the\n" +
+                "    switch off would otherwise silently kill every cheat in a session that\n" +
+                "    had it on. It starts on, which costs nothing - everything imports\n" +
+                "    disabled anyway, so nothing is applying until you say so.\n\n" +
                 "    'save'/'load' persist a named set to /etc/EmuSen/cheats/<name>.json - see\n" +
                 "    'man hier'. That file is ordinary JSON with addresses and bytes written\n" +
                 "    as hex text, so it can be written or corrected by hand from this shell;\n" +
@@ -493,11 +508,41 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    wins for its own name.\n\n" +
                 "    In EmuSen.Mistress the same thing is on the menu bar at Settings > Cheat\n" +
                 "    Database..., which shows the folder, what is installed per system, the\n" +
-                "    attribution notice, and a download button.\n\n" +
+                "    attribution notice, and a download button. Selecting a system there\n" +
+                "    lists that system's games (with a filter box - a real SNES folder holds\n" +
+                "    several thousand), and picking one loads its cheats into the active\n" +
+                "    list, disabled, the same way 'cheat db load' does. It REPLACES that\n" +
+                "    list rather than adding to it, unlike the command: picking the same\n" +
+                "    game twice from a list is an ordinary thing to do and must not double\n" +
+                "    every cheat, whereas typing the command twice is not. An Active\n" +
+                "    Cheats... button sits next to Close, since turning a list on is what\n" +
+                "    anyone does next.\n\n" +
+                "    Settings > Active Cheats... is the GUI half of 'list', 'enable',\n" +
+                "    'disable', 'remove', 'clear' and 'master' - one checkbox per cheat, the\n" +
+                "    master switch, and a box to type a code into using the same format\n" +
+                "    guess 'add' makes. That list is owned by the frontend rather than by\n" +
+                "    the running core, so it survives a Reset and can be built before any\n" +
+                "    ROM is loaded; loading a DIFFERENT ROM clears it, since one game's\n" +
+                "    addresses mean nothing in another. See EmuSen_Settings_Reference.md\n" +
+                "    section 4.14.\n\n" +
+                "    Its Apply Cheats button is not an arm/commit step - ticking a box\n" +
+                "    already takes effect on the next frame, the same as 'cheat enable'.\n" +
+                "    Apply forces one poke immediately (useful while paused, where no next\n" +
+                "    frame is coming) and reports how many landed; it also turns the master\n" +
+                "    switch back on, since applying cheats that the switch would swallow is\n" +
+                "    not what the button says.\n\n" +
+                "    Save Cheat List writes the list under the running game's file name,\n" +
+                "    the same store 'cheat save' uses - so 'cheat load <game>' finds it\n" +
+                "    from the shell. Mistress reloads it by itself the next time that game\n" +
+                "    starts, which is the point: a saved list is not re-imported from the\n" +
+                "    database every session. It never overwrites a list already in hand, so\n" +
+                "    a Reset or a close-and-reopen keeps whatever was edited since. See\n" +
+                "    section 4.15.\n\n" +
                 "EXAMPLES\n" +
                 "    cheat poke WRAM 9c 63 infinite lives\n" +
                 "    cheat list\n" +
                 "    cheat disable 1\n" +
+                "    cheat master off\n" +
                 "    cheat save zelda\n" +
                 "    cheat clear && cheat load zelda\n" +
                 "    cheat import \"Super Mario World (USA).cht\"\n" +

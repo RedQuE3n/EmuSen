@@ -12,7 +12,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
     {
         public string Name => "regs";
         public bool IsReadOnly => true;
-        public string Usage => "  regs                          CPU + video registers";
+        public string Usage => "  regs                          CPU + video (+ APU/coprocessor) registers";
 
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
@@ -34,6 +34,17 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             {
                 sb.AppendLine("APU registers:");
                 foreach (var r in apuRegs)
+                {
+                    int digits = Math.Max(1, r.BitWidth / 4);
+                    sb.AppendLine($"  {r.Name,-9} = 0x{r.Value.ToString("X" + digits)}");
+                }
+            }
+            // Only present on a cartridge carrying one, so most games print nothing here.
+            var coprocessorRegs = target.CoprocessorRegisters.Current;
+            if (coprocessorRegs.Count > 0)
+            {
+                sb.AppendLine("Coprocessor registers:");
+                foreach (var r in coprocessorRegs)
                 {
                     int digits = Math.Max(1, r.BitWidth / 4);
                     sb.AppendLine($"  {r.Name,-9} = 0x{r.Value.ToString("X" + digits)}");

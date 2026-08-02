@@ -1,0 +1,80 @@
+<Project>
+
+  <!-- Makes a published frontend's output directory BE DianaOS's own root,
+       instead of a flat .NET app dir with a DianaOSRoot/ subfolder inside
+       it. The whole .NET app directory - apphost, every .dll, deps.json,
+       runtimeconfig.json, runtimes/ - moves intact into /lib/EmuSen, and
+       /bin gets a launcher shim. Nothing about how the app loads changes:
+       the app dir is relocated, not taken apart, so no assembly resolver
+       or deps.json surgery is involved. See `man hier` for the resulting
+       layout and for why the root moved out from under the binaries.
+
+       Imported explicitly by each publishable frontend rather than dropped
+       in a Directory.Build.targets, matching this repo's "be explicit about
+       what's actually used" convention (see EmuSen.csproj). Set
+       DianaOSPublishLayout=false to publish a plain flat .NET app dir. -->
+
+  <PropertyGroup>
+    <DianaOSPublishLayout Condition="'$(DianaOSPublishLayout)' == ''">true</DianaOSPublishLayout>
+    <!-- Private libraries of a single application, the /usr/lib/<app> shape. -->
+    <DianaOSAppDirName Condition="'$(DianaOSAppDirName)' == ''">lib/EmuSen</DianaOSAppDirName>
+    <!-- Where EmuSen.DianaOS.csproj's doc-tree Link= metadata stages the read-only
+         trees. Must match DianaOSSandbox.PublishedRootDirName, which is still the
+         fallback root for a publish that does NOT import this file. -->
+    <DianaOSStagedRootDirName Condition="'$(DianaOSStagedRootDirName)' == ''">DianaOSRoot</DianaOSStagedRootDirName>
+    <_DianaOSStagedPrefixLength>$([MSBuild]::Add($(DianaOSStagedRootDirName.Length), 1))</_DianaOSStagedPrefixLength>
+    <!-- Must match DianaOSSandbox.RootMarkerFileName. -->
+    <DianaOSRootMarkerFileName Condition="'$(DianaOSRootMarkerFileName)' == ''">.dianaosroot</DianaOSRootMarkerFileName>
+    <_DianaOSLauncherDir>$(MSBuildThisFileDirectory)</_DianaOSLauncherDir>
+  </PropertyGroup>
+
+  <!-- Rewrites each publish item's destination before anything is copied, so
+       files land in their final home directly - no post-publish move, and no
+       empty runtimes/*/native husks left behind by one. The staged doc trees
+       lose their DianaOSRoot/ prefix (they are already at their root-relative
+       path); everything else gains the app dir prefix. Matched on the bare
+       directory name so it works whichever slash MSBuild normalized Link= to.
+
+       Hooked on ComputeFilesToPublish, not ComputeResolvedFilesToPublishList:
+       the latter does not contribute the app's own deps.json, which
+       GeneratePublishDependencyFile adds afterwards and which would otherwise
+       be the one file left stranded at the root, away from the assemblies it
+       describes. ComputeFilesToPublish is the join point for both, and still
+       runs before anything is copied. -->
+  <Target Name="DianaOSRelocatePublishFiles"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(DianaOSPublishLayout)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish>
+        <_DianaOSPath Condition="$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaOSStagedRootDirName)'))">$([System.String]::Copy('%(RelativePath)').Substring($(_DianaOSStagedPrefixLength)))</_DianaOSPath>
+        <_DianaOSPath Condition="!$([System.String]::Copy('%(RelativePath)').StartsWith('$(DianaOSStagedRootDirName)'))">$(DianaOSAppDirName)/%(RelativePath)</_DianaOSPath>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish>
+        <RelativePath>%(_DianaOSPath)</RelativePath>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <!-- The two things the root needs that aren't build output: the marker
+       DianaOSSandbox.ComputeRootFor walks up to find, and the launcher. Both
+       shims dispatch on their own filename, so the same file serves every
+       frontend - see launcher.sh. -->
+  <Target Name="DianaOSWritePublishRoot"
+          AfterTargets="Publish"
+          Condition="'$(DianaOSPublishLayout)' == 'true'">
+    <PropertyGroup>
+      <_DianaOSRoot>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))</_DianaOSRoot>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_DianaOSRoot)$(DianaOSRootMarkerFileName)"
+                      Lines="DianaOS sandbox root. Created at publish time - see 'man hier'."
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Copy SourceFiles="$(_DianaOSLauncherDir)launcher.sh"
+          DestinationFiles="$(_DianaOSRoot)bin/$(AssemblyName)" />
+    <Copy SourceFiles="$(_DianaOSLauncherDir)launcher.cmd"
+          DestinationFiles="$(_DianaOSRoot)bin/$(AssemblyName).cmd" />
+    <!-- Copy does not carry the source's mode bits across. -->
+    <Exec Command="chmod +x &quot;$(_DianaOSRoot)bin/$(AssemblyName)&quot;"
+          Condition="'$(OS)' != 'Windows_NT'" />
+  </Target>
+
+</Project>

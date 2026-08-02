@@ -67,6 +67,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
         // RESB (bit 5) holds the SA-1 CPU in reset; RDYB (bit 6) parks it.
         private bool Halted => (_ccnt & 0x60) != 0;
 
+        // Side-effect-free views for the debug target - see Venus_SA1.md §3.
+        public byte DebugCcnt => _ccnt;
+        public byte DebugScnt => _scnt;
+        public byte DebugSie => _sie;
+        public byte DebugCie => _cie;
+        public byte DebugBmap => _bmap;
+        public bool DebugHalted => Halted;
+
         // Unspent master clocks carried between Run() calls.
         private int _clockBudget;
 

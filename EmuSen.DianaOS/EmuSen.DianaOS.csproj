@@ -27,9 +27,10 @@
 
   <!-- Ships the two read-only doc trees into a published build's own sandbox
        root, so `man`/`cat`/`find` have the same reference material there that
-       they do running from source. Link= is what places them under
-       DianaOSRoot/ - see `man hier`'s "where the root actually is" for why a
-       published root is a subdirectory rather than the binary's folder.
+       they do running from source. Link= stages them under DianaOSRoot/, which
+       DianaOSPublishLayout.targets then hoists to the publish root - and which
+       is also where a publish that does NOT import those targets leaves them,
+       matching DianaOSSandbox's fallback root. See `man hier`.
        CopyToPublishDirectory only (not CopyToOutputDirectory): running from
        source already reads these straight out of the repo, so copying them
        into every bin/ would be ~770KB of duplication nothing ever reads. -->
@@ -43,5 +44,10 @@
           CopyToOutputDirectory="Never"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
+
+  <!-- A published build's output directory is DianaOS's own root: the .NET
+       app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
+  <Import Project="Publish\DianaOSPublishLayout.targets" />
 
 </Project>

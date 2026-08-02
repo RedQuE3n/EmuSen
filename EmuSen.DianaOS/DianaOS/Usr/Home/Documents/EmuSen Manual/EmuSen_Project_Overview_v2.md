@@ -11,6 +11,7 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as four sibling pr
 - **`EmuSen/`** — the emulation core only (CPU/PPU/APU/memory, `Common/`, `DianaOS/`, `Settings/`). A pure library — no `Main`, no window ownership of its own. This is the primary development/debugging environment — cores get built and verified here first, standalone, before either frontend is the main way of running them. It still has a `Raylib-cs` package dependency, because `Renderer.cs` uses `Raylib_cs.Color`/`Image`/`Texture2D` directly as its internal pixel representation and for debug-panel drawing - a real dependency of the core's own rendering logic, not something inherited from a frontend.
 - **`EmuSen.Hotaru/`** — the console-first frontend's actual driver (`Program.cs`'s `Main`, `App.axaml.cs`, `Views/GameWindow.axaml.cs`). Used to live inside `EmuSen.csproj` as its own `Exe`, which meant `EmuSen.Mistress/` (Avalonia) inherited this project's `Main`/window-ownership just by referencing `EmuSen.csproj` to reach the emulation core - backwards, since the two frontends have nothing to do with each other. Split out specifically to fix that: both frontends are now true siblings, each independently referencing `EmuSen.csproj` for the core and `EmuSen.Serenity` for presentation. Moved off Raylib entirely onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note. (Named `Hotaru`, not `Console` - naming it `EmuSen.Console` would make every bare `Console.WriteLine` in the file ambiguous with the namespace itself, a real C# gotcha, not just a style choice.)
 - **`EmuSen.Serenity/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `GameFrameControl` (an Avalonia `Control` presenting any core via `ICore.GetFrameBufferRgba()` straight through Skia, with real shader support), `FramePresenter` (a plain `Window` + `GameFrameControl` bundle for a consumer that needs nothing else from its window), `Shaders/BuiltInShaders.cs` (Skia SkSL for the shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). Both `EmuSen.Hotaru/` and `EmuSen.Mistress/` are real consumers now - Hotaru uses `GameFrameControl` directly rather than `FramePresenter` (see that project's own `GameWindow.axaml.cs` header comment for why); Mistress adopted the same `GameFrameControl` directly too, replacing its old CPU-side `WriteableBitmap` presentation (`MainWindow.axaml`/`.cs`) - the long-standing "no GPU/shader hook of its own" TODO this project existed to answer is closed on both frontends now. See §2a for which actual GPU API `GrContext` resolves to underneath that shared control, per platform.
+- **`EmuSen.Nehellania/`** — the shared SDL3 device layer, and the audio/input counterpart to `EmuSen.Serenity`: `AudioPlayer` (SDL3 audio streams), `GamepadManager`, `GamepadBindingMap` and `SettingsPaths`. Both frontends carried near-identical copies of all four until the SDL3 migration merged them here — see `EmuSen_Settings_Reference.md` §4.10 for what the merge had to reconcile. Depends on `EmuSen` and SDL3 only; deliberately no Avalonia, since nothing in it owns a window.
 - **`EmuSen.Mistress/`** — an Avalonia GUI, renamed from `EmuSen.Frontend` and deliberately scoped as bug-testing tooling: ROM picker (plus a ROM browser and a configurable default ROM directory), rebindable keyboard+gamepad input, Save/Load State menu items, and (Settings > Preferences...) a configurable log directory that reuses `EmuSen.Common.CategorizedLogWriter` for real per-session file logging, plus a scaffolding-only core picker. Referencing `EmuSen` and `EmuSen.Serenity` via project reference (as a sibling of `EmuSen.Hotaru`, not through it). Deliberately **not** where the eventual EmulationStation-style launcher gets built — see `EmuSen_Launcher_Multicore_Gameplan.md` for that separate, not-yet-created project's plan.
 
 **License:** GNU GPL-3.0 (see `LICENSE` at the repo root) — chosen deliberately over a permissive license (MIT) specifically so anything built on EmuSen's code stays open forever, matching how this project itself was built entirely from openly-provided documentation. Not chosen for commercial reasons; the point is guaranteeing downstream openness, not restricting use.
@@ -48,6 +49,7 @@ Package manager is `dnf` (Fedora), not `apt`/`apt-get` — relevant for any inst
 - **`Settings/`** — global configuration, most notably `DebugSettings` (the logging-toggle registry) and input/graphics/audio settings. Intentionally simple global static state for the debug toggles specifically — a conscious tradeoff (see §5) rather than an oversight. See `EmuSen_Settings_Reference.md` for what every flag/setting does and, for the debug toggles, the investigation each one was originally added for.
 - **The debug toolchain** (`DianaOS/`, plus `Cores/Nintendo/Venus - SNES/Debug/`) — a deliberately separate, core-agnostic layer sitting *beside* the hardware simulation, not inside it. `DianaOS/IDebugTarget.cs` defines a contract any core can implement; `Cores/Nintendo/Venus - SNES/Debug/SnesDebugTarget.cs` is the SNES implementation; `DianaOS/DianaOSInterpreter.cs` is a genuine bash-alike shell, user-facing name **DianaOS** (quoting, variables, `$(...)`, pipes, redirection, if/for/while, plus a coreutils subset - `ls`/`cd`/`grep`/`awk`/`nano`/`coretop`/...) built on top of that, with the SNES-facing commands themselves (`mem`/`regs`/`watch`/...) living in `DianaOS/Commands/` alongside the shell's own builtins - split into `Commands/Unix/` (`EmuSen.DianaOS.Commands.Unix`, core-agnostic) and `Commands/EmuSen/` (`EmuSen.DianaOS.Commands.EmuSen`, needs a real `IDebugTarget`) so a future standalone "Diana" build has a clean, compiler-enforced line to register only the former. See the companion `EmuSen_Debugging_Tools_Reference` doc for the full breakdown.
 - **Presentation** (`EmuSen.Serenity/`) — window/GPU-surface ownership and the shader pipeline (Avalonia + Skia, not Raylib), shared between frontends via `ICore.GetFrameBufferRgba()` rather than duplicated per frontend. Split out from the console frontend once it stopped being small - see `EmuSen_Frontend_Driver.md` §1.
+- **Device I/O** (`EmuSen.Nehellania/`) — real audio output and gamepad polling through SDL3, shared between frontends for the same reason presentation is: one implementation, not a hand-copied duplicate per GUI. See `EmuSen_Settings_Reference.md` §4.10.
 - **Frontends** (`EmuSen.Hotaru/`, `EmuSen.Mistress/`) — presentation *driving*, not the presentation code itself anymore. Both are now Avalonia frontends into the same core (Hotaru moved off Raylib entirely - see `EmuSen_Frontend_Driver.md`'s own revision note); neither owns emulation logic itself, and neither depends on the other.
 
 **A concrete example of the layering working as intended:** `MemoryBus` (hardware simulation) exposes a tiny, debug-agnostic `IWriteObserver` hook that it calls on every WRAM write, with no idea what's listening. `SnesDebugTarget` (debug toolchain) implements that interface and is the thing that actually knows what a "watchpoint" is. `MemoryBus` could be reused by a completely different debug story (or none at all) without any changes — the coupling only exists in one direction, and it's the debug layer depending on the core, not the reverse. This wasn't always true — a `WatchRegistry` field and a `Cpu` back-reference used to live directly on `MemoryBus` itself, mixing the two layers together, until a later architecture-focused pass (see §4 and §7) untangled it.
@@ -362,10 +364,6 @@ EmuSen Project/
 │   │                                     #   via its constructor (not the usual parameterless one),
 │   │                                     #   constructs one GameWindow in
 │   │                                     #   OnFrameworkInitializationCompleted.
-│   ├── Audio/
-│   │   └── AudioPlayer.cs               # Duplicated from EmuSen.Mistress's own SDL-backed copy,
-│   │                                     #   adapted for ICore directly (Hotaru has no
-│   │                                     #   EmulatorSession wrapper).
 │   ├── Imaging/
 │   │   └── FrameImageWriter.cs          # Screenshot/frame-recording PNG encoding via SkiaSharp's
 │   │                                     #   SKImage.Encode directly, not Avalonia's
@@ -373,13 +371,10 @@ EmuSen Project/
 │   │                                     #   platform bootstrap, which is what keeps it unit-
 │   │                                     #   testable with no display (see EmuSen.WiseMan/Imaging/).
 │   ├── Input/
-│   │   ├── HotaruKeyMap.cs              # Avalonia-Key port of the deleted InputBindings.cs's
-│   │   │                                 #   keyboard scheme - no rebind/persistence, unlike
-│   │   │                                 #   EmuSen.Mistress's own ControllerKeyMap.
-│   │   ├── GamepadManager.cs            # Duplicated from EmuSen.Mistress's own copy.
-│   │   └── GamepadBindingMap.cs         # Duplicated from EmuSen.Mistress's own copy - same
-│   │                                     #   %AppData%/EmuSen/gamepadbindings.json path, shared
-│   │                                     #   between both frontends on purpose.
+│   │   └── HotaruKeyMap.cs              # Avalonia-Key port of the deleted InputBindings.cs's
+│   │                                     #   keyboard scheme - no rebind/persistence, unlike
+│   │                                     #   EmuSen.Mistress's own ControllerKeyMap. Gamepad
+│   │                                     #   input lives in EmuSen.Nehellania/ now, shared.
 │   └── Views/
 │       ├── GameWindow.axaml / .axaml.cs # Owns a GameFrameControl (EmuSen.Serenity) directly, not
 │       │                                 #   via FramePresenter - see this file's own header comment
@@ -424,6 +419,27 @@ EmuSen Project/
 │                                         #   the same Scanlines/Crt darken-factor and vignette math
 │                                         #   (F8 hotkey, EmuSen_Frontend_Driver.md §2).
 │
+├── EmuSen.Nehellania/                # Shared SDL3 device layer (both frontends reference) - the
+│   │                                     #   audio/input counterpart to EmuSen.Serenity's
+│   │                                     #   presentation. No Avalonia dependency: nothing here
+│   │                                     #   touches a window. See EmuSen_Settings_Reference.md §4.10.
+│   ├── EmuSen.Nehellania.csproj
+│   ├── Audio/
+│   │   └── AudioPlayer.cs               # Real audio output via SDL3's audio-stream API
+│   │                                     #   (SDL_OpenAudioDeviceStream/SDL_PutAudioStreamData).
+│   │                                     #   Core-agnostic - Pump(ICore), with an EmulatorSession
+│   │                                     #   overload for EmuSen.Mistress's wrapper.
+│   ├── Input/
+│   │   ├── GamepadManager.cs            # Dispose() uses QuitSubSystem, not Quit() - SDL_Quit()
+│   │   │                                 #   tears down the whole library regardless of which
+│   │   │                                 #   subsystem asked, which would break Audio/
+│   │   │                                 #   AudioPlayer.cs's still-open device otherwise
+│   │   └── GamepadBindingMap.cs         # One %AppData%/EmuSen/gamepadbindings.json for both
+│   │                                     #   frontends - SDL2-era files still load (§4.10).
+│   └── Settings/
+│       └── SettingsPaths.cs             # The redirectable config root every settings file in
+│                                         #   both frontends resolves through.
+│
 └── EmuSen.Mistress/                 # Avalonia GUI - renamed from EmuSen.Frontend, deliberately
     │                                     #   scoped as bug-testing tooling only, NOT the future
     │                                     #   EmulationStation-style launcher (that's a separate,
@@ -431,22 +447,9 @@ EmuSen Project/
     │                                     #   EmuSen_Launcher_Multicore_Gameplan.md)
     ├── EmuSen.Mistress.csproj
     ├── App.axaml / App.axaml.cs
-    ├── Audio/
-    │   └── AudioPlayer.cs                 # Real audio output via SDL's queue-based audio API
-    │                                     #   (SDL_OpenAudioDevice/SDL_QueueAudio) - reuses the
-    │                                     #   Silk.NET.SDL dependency Input/GamepadManager.cs
-    │                                     #   already brought in, rather than a second audio
-    │                                     #   backend. Core-agnostic (only calls
-    │                                     #   ICore.AudioSampleRate/DequeueAudioSamples via
-    │                                     #   EmulatorSession) - see EmuSen_Frontend_Driver.md's
-    │                                     #   audio section for the full pipeline.
     ├── Input/
-    │   ├── ControllerKeyMap.cs
-    │   ├── GamepadBindingMap.cs
-    │   └── GamepadManager.cs             # Dispose() uses QuitSubSystem, not Quit() - SDL_Quit()
-    │                                     #   tears down the whole library regardless of which
-    │                                     #   subsystem asked, which would break Audio/
-    │                                     #   AudioPlayer.cs's still-open device otherwise
+    │   ├── ControllerKeyMap.cs           # Keyboard only - audio output and everything gamepad
+    │   │                                 #   moved to EmuSen.Nehellania/ (shared with Hotaru).
     ├── Settings/
     │   └── AppSettings.cs                # Log/ROM directory + selected-core preferences -
     │                                     #   same JSON-under-%AppData% pattern as Input/*.cs

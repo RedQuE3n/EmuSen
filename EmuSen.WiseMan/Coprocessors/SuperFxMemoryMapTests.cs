@@ -81,12 +81,22 @@ namespace EmuSen.WiseMan.Coprocessors
             Assert.Equal((CartridgeRegion.Sram, 0x10000), Map(Chip(), 0x61, 0x0000));
         }
 
-        // The 8KB window is packed one block per bank, not mirrored.
+        // The $6000-$7FFF window is the FIRST 8KB of Game Pak RAM mirrored into
+        // every low bank - it does NOT advance per bank. This test previously
+        // asserted the opposite, which is what let the bug through: Yoshi's
+        // Island reads a jump-table index through $0F:6F0C, and a bank-indexed
+        // window handed it a byte from 120KB further into RAM. See §5.1 and
+        // §10.1 - it crashed the S-CPU at frame 1759.
         [Fact]
-        public void The_scpu_ram_window_advances_one_block_per_bank()
+        public void The_scpu_ram_window_mirrors_the_first_8kb_into_every_bank()
         {
             Assert.Equal((CartridgeRegion.Sram, 0), Map(Chip(), 0x00, 0x6000));
-            Assert.Equal((CartridgeRegion.Sram, 0x2000), Map(Chip(), 0x01, 0x6000));
+            Assert.Equal((CartridgeRegion.Sram, 0), Map(Chip(), 0x01, 0x6000));
+            Assert.Equal((CartridgeRegion.Sram, 0), Map(Chip(), 0x3F, 0x6000));
+
+            // The offset within the window still tracks the address.
+            Assert.Equal((CartridgeRegion.Sram, 0x0F0C), Map(Chip(), 0x0F, 0x6F0C));
+            Assert.Equal((CartridgeRegion.Sram, 0x1FFF), Map(Chip(), 0x20, 0x7FFF));
         }
 
         [Fact]

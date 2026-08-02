@@ -210,5 +210,38 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.Contains("outside the project sandbox", shell.Submit($"touch \"{outside}foo.txt\"").Output);
             Assert.Contains("outside the project sandbox", shell.Submit($"find \"{outside}\"").Output);
         }
+
+        // Suspended because a published root holds its own install - see `man hier`.
+        [Theory]
+        [InlineData("rm")]
+        [InlineData("mv")]
+        public void Rm_and_mv_refuse_to_run_while_suspended(string command)
+        {
+            using var dir = TempDir();
+            string file = Path.Combine(dir.Path, "keepme.txt");
+            File.WriteAllText(file, "still here");
+            var shell = DianaOSInterpreter.CreateDefault(null);
+
+            var result = shell.Submit($"{command} \"{file}\" \"{file}.moved\"");
+
+            Assert.Contains("suspended", result.Output);
+            Assert.Equal("1", shell.Submit("echo $?").Output.Trim());
+            Assert.True(File.Exists(file));
+        }
+
+        // The refusal has to beat the argument check, or `rm <path>` still deletes.
+        [Fact]
+        public void Rm_refuses_before_it_ever_looks_at_its_arguments()
+        {
+            using var dir = TempDir();
+            string file = Path.Combine(dir.Path, "keepme.txt");
+            File.WriteAllText(file, "still here");
+            var shell = DianaOSInterpreter.CreateDefault(null);
+
+            Assert.Contains("suspended", shell.Submit($"rm \"{file}\"").Output);
+            Assert.Contains("suspended", shell.Submit($"rm -r \"{dir.Path}\"").Output);
+            Assert.Contains("suspended", shell.Submit("rm").Output);
+            Assert.True(File.Exists(file));
+        }
     }
 }

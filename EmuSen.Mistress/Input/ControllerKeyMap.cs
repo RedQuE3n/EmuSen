@@ -81,7 +81,7 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        private static string ConfigPath => Settings.SettingsPaths.For("keybindings.json");
+        private static string ConfigPath => Nehellania.Settings.SettingsPaths.For("keybindings.json");
 
         public void Save()
         {

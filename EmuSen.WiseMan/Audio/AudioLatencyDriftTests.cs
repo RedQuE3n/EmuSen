@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using EmuSen.Audio;
 using EmuSen.Common;
 using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.Mistress.Audio;
+using EmuSen.Nehellania.Audio;
+using SDL3;
 
 namespace EmuSen.WiseMan.Audio
 {
@@ -10,7 +12,7 @@ namespace EmuSen.WiseMan.Audio
     {
         static AudioLatencyDriftTests()
         {
-            NativeEnvironment.Set("SDL_AUDIODRIVER", "dummy");
+            SDL.SetHint(SDL.Hints.AudioDriver, "dummy");
         }
 
         private const int FramesPerSecond = 60;
@@ -53,14 +55,25 @@ namespace EmuSen.WiseMan.Audio
             }
             double postStallBacklog = BacklogMs(session);
             int postStallQueue = player.QueuedFrames;
+            long inputAtStall = player.RateControl.TotalInputFrames;
+            long outputAtStall = player.RateControl.TotalOutputFrames;
 
-            RunPaced(session, player, seconds: 3.0, clock);
+            const double RecoverySeconds = 3.0;
+            RunPaced(session, player, seconds: RecoverySeconds, clock);
             double recoveredBacklog = BacklogMs(session);
+
+            // What rate control itself did during recovery, measured against
+            // its own frame counts rather than the output device's clock -
+            // see EmuSen_Settings_Reference.md §4.10.
+            long produced = player.RateControl.TotalInputFrames - inputAtStall;
+            long emitted = player.RateControl.TotalOutputFrames - outputAtStall;
+            double shedFraction = produced == 0 ? 0.0 : 1.0 - (double)emitted / produced;
 
             string report =
                 $"baseline={baselineBacklog:F1}ms, post-stall={postStallBacklog:F1}ms, " +
-                $"after 3s of normal play={recoveredBacklog:F1}ms, " +
-                $"output queue={player.QueuedFrames} frames, " +
+                $"after {RecoverySeconds:F0}s of normal play={recoveredBacklog:F1}ms, " +
+                $"output queue={player.QueuedFrames} frames (post-stall {postStallQueue}), " +
+                $"produced={produced}, emitted={emitted} ({shedFraction:P3} withheld), " +
                 $"ratio={player.RateControl.LastRatio:F5}, shed={player.RateControl.SheddingEvents}";
             Console.WriteLine($"[AudioLatencyDriftTests] {report}");
 
@@ -73,12 +86,22 @@ namespace EmuSen.WiseMan.Audio
             Assert.True(recoveredBacklog < 50.0, $"core-side backlog should stay near zero; got {report}");
 
             // A one-second burst is exactly the gross-backlog case shedding
-            // exists for, so it may engage here - what matters is that it
-            // lets go again and the queue is actually coming back down,
-            // rather than parking at an end stop. See EmuSen_Audio_Sync.md §3.1.
-            Assert.False(player.RateControl.IsShedding, $"still shedding after 3s of normal play; got {report}");
-            Assert.True(player.QueuedFrames < postStallQueue,
-                $"output queue should be draining back toward target; got {report}");
+            // exists for, so it may engage here - what matters is that it lets
+            // go again. See EmuSen_Audio_Sync.md §3.1.
+            Assert.False(player.RateControl.IsShedding, $"still shedding after {RecoverySeconds:F0}s of normal play; got {report}");
+
+            // With the queue this far above target the control law must be
+            // holding audio back on every pump, at close to its full
+            // authority. This is the assertion the output queue's own reading
+            // used to stand in for - see EmuSen_Settings_Reference.md §4.10.
+            Assert.True(produced > 0, $"the core produced no audio during recovery; got {report}");
+            Assert.True(shedFraction >= AudioSettings.RateControlMaxDeviation * 0.5,
+                $"rate control should be withholding audio to drain the queue; got {report}");
+
+            // And the queue must not be running away while it does - anything
+            // near the shedding entry point means the drain never took.
+            Assert.True(player.QueuedFrames < AudioSettings.OutputTargetFrames * player.RateControl.SheddingEntryFactor,
+                $"output queue climbed toward the shedding end stop; got {report}");
         }
 
         private static double BacklogMs(EmulatorSession session)

@@ -38,7 +38,7 @@ namespace EmuSen.Mistress.Settings
         public bool AnalogStickAsDpad { get; set; } = true;
         public double StickDeadzone { get; set; } = 0.5;
 
-        private static string ConfigPath => SettingsPaths.For("appsettings.json");
+        private static string ConfigPath => Nehellania.Settings.SettingsPaths.For("appsettings.json");
 
         public void Save()
         {

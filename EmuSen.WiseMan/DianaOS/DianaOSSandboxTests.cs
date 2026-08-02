@@ -119,8 +119,27 @@ namespace EmuSen.WiseMan.DianaOS
             finally { Directory.Delete(temp, true); }
         }
 
+        // DianaOSPublishLayout.targets puts the binaries in <root>/lib/EmuSen, so the
+        // walk has to climb out of the app dir to find the marker beside it.
         [Fact]
-        public void A_published_build_roots_at_a_subdirectory_beside_the_binary()
+        public void A_published_build_roots_at_the_marker_above_its_app_directory()
+        {
+            string temp = NewTempDir();
+            try
+            {
+                File.WriteAllText(Path.Combine(temp, DianaOSSandbox.RootMarkerFileName), "");
+                string appDir = Path.Combine(temp, "lib", "EmuSen");
+                Directory.CreateDirectory(appDir);
+
+                Assert.Equal(temp, DianaOSSandbox.ComputeRootFor(appDir));
+            }
+            finally { Directory.Delete(temp, true); }
+        }
+
+        // An app dir copied out on its own has no marker to find, so it still gets a
+        // root - the subdirectory the doc trees stage into. See `man hier`.
+        [Fact]
+        public void A_publish_without_the_layout_falls_back_to_a_subdirectory_beside_the_binary()
         {
             string temp = NewTempDir();
             try
@@ -132,37 +151,45 @@ namespace EmuSen.WiseMan.DianaOS
             finally { Directory.Delete(temp, true); }
         }
 
-        // The bug this subdirectory exists for: a published build ships an apphost
-        // named EmuSen.DianaOS, and the skeleton's own first segment is that same
-        // name - rooting at the binary's folder made the skeleton unbuildable.
+        // The bug the app dir being one level down avoids: a published build ships an
+        // apphost named EmuSen.DianaOS, and the skeleton's own first segment is that
+        // same name - the two sharing a directory made the skeleton unbuildable.
         [Fact]
-        public void The_skeleton_is_creatable_next_to_an_apphost_named_after_the_tree()
+        public void The_skeleton_is_creatable_beside_an_app_dir_holding_that_apphost()
         {
             string temp = NewTempDir();
             try
             {
-                File.WriteAllText(Path.Combine(temp, "EmuSen.DianaOS"), "apphost");
+                File.WriteAllText(Path.Combine(temp, DianaOSSandbox.RootMarkerFileName), "");
+                string appDir = Path.Combine(temp, "lib", "EmuSen");
+                Directory.CreateDirectory(appDir);
+                File.WriteAllText(Path.Combine(appDir, "EmuSen.DianaOS"), "apphost");
 
-                string root = DianaOSSandbox.ComputeRootFor(temp);
-                Directory.CreateDirectory(Path.Combine(root, "EmuSen.DianaOS", "DianaOS", "Usr", "Home", "Logs"));
+                string root = DianaOSSandbox.ComputeRootFor(appDir);
+                string logs = Path.Combine(root, "EmuSen.DianaOS", "DianaOS", "Usr", "Home", "Logs");
+                Directory.CreateDirectory(logs);
 
-                Assert.True(Directory.Exists(Path.Combine(root, "EmuSen.DianaOS", "DianaOS", "Usr", "Home", "Logs")));
-                Assert.True(File.Exists(Path.Combine(temp, "EmuSen.DianaOS")));
+                Assert.True(Directory.Exists(logs));
+                Assert.True(File.Exists(Path.Combine(appDir, "EmuSen.DianaOS")));
             }
             finally { Directory.Delete(temp, true); }
         }
 
-        // The published root must still wall the shell off from the install itself.
+        // The reverse of what the old subdirectory root guaranteed, and deliberately
+        // so - a published tree IS the root, binaries included. See `man hier`.
         [Fact]
-        public void A_published_root_excludes_the_binaries_beside_it()
+        public void A_published_root_contains_the_binaries_it_ships()
         {
             string temp = NewTempDir();
             try
             {
-                string root = DianaOSSandbox.ComputeRootFor(temp);
+                File.WriteAllText(Path.Combine(temp, DianaOSSandbox.RootMarkerFileName), "");
+                string appDir = Path.Combine(temp, "lib", "EmuSen");
+                Directory.CreateDirectory(appDir);
 
-                Assert.StartsWith(root, Path.Combine(root, "home", "root"));
-                Assert.False(Path.Combine(temp, "Avalonia.dll").StartsWith(root + Path.DirectorySeparatorChar));
+                string root = DianaOSSandbox.ComputeRootFor(appDir);
+
+                Assert.StartsWith(root + Path.DirectorySeparatorChar, Path.Combine(appDir, "Avalonia.dll"));
             }
             finally { Directory.Delete(temp, true); }
         }

@@ -2,63 +2,56 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using Silk.NET.SDL;
+using SDL3;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 
-namespace EmuSen.Mistress.Input
+namespace EmuSen.Nehellania.Input
 {
-    // Gamepad-button -> SnesButton mapping, same shape and persistence
-    // approach as ControllerKeyMap (Input/ControllerKeyMap.cs) but for
-    // GameControllerButton instead of Avalonia's Key. Kept as a separate
-    // class/file rather than merged into ControllerKeyMap since keyboard and
-    // gamepad are different device types with different rebind-capture flows
-    // (KeyDown event vs polling - see InputSettingsWindow).
-    //
-    // Defaults match GamepadManager's previous hardcoded mapping: physical
-    // button POSITION rather than label (bottom/right/left/top face buttons
-    // -> B/A/Y/X), same reasoning as EmuSen.Hotaru's own HotaruKeyMap.cs.
+    // Gamepad-button -> SnesButton mapping, persisted like ControllerKeyMap.
+    // Defaults bind by physical button POSITION, not label - see
+    // EmuSen_Settings_Reference.md §4.6.
     public class GamepadBindingMap
     {
-        public Dictionary<SnesButton, GameControllerButton> ButtonToPad { get; private set; } = DefaultBindings();
+        public Dictionary<SnesButton, SDL.GamepadButton> ButtonToPad { get; private set; } = DefaultBindings();
 
-        private Dictionary<GameControllerButton, SnesButton> _padToButton = new();
+        private Dictionary<SDL.GamepadButton, SnesButton> _padToButton = new();
 
         public GamepadBindingMap()
         {
             RebuildReverseLookup();
         }
 
-        private static Dictionary<SnesButton, GameControllerButton> DefaultBindings() => new()
+        private static Dictionary<SnesButton, SDL.GamepadButton> DefaultBindings() => new()
         {
-            [SnesButton.Up] = GameControllerButton.DpadUp,
-            [SnesButton.Down] = GameControllerButton.DpadDown,
-            [SnesButton.Left] = GameControllerButton.DpadLeft,
-            [SnesButton.Right] = GameControllerButton.DpadRight,
-            [SnesButton.B] = GameControllerButton.A,
-            [SnesButton.A] = GameControllerButton.B,
-            [SnesButton.Y] = GameControllerButton.X,
-            [SnesButton.X] = GameControllerButton.Y,
-            [SnesButton.L] = GameControllerButton.Leftshoulder,
-            [SnesButton.R] = GameControllerButton.Rightshoulder,
-            [SnesButton.Start] = GameControllerButton.Start,
-            [SnesButton.Select] = GameControllerButton.Back,
+            [SnesButton.Up] = SDL.GamepadButton.DPadUp,
+            [SnesButton.Down] = SDL.GamepadButton.DPadDown,
+            [SnesButton.Left] = SDL.GamepadButton.DPadLeft,
+            [SnesButton.Right] = SDL.GamepadButton.DPadRight,
+            [SnesButton.B] = SDL.GamepadButton.South,
+            [SnesButton.A] = SDL.GamepadButton.East,
+            [SnesButton.Y] = SDL.GamepadButton.West,
+            [SnesButton.X] = SDL.GamepadButton.North,
+            [SnesButton.L] = SDL.GamepadButton.LeftShoulder,
+            [SnesButton.R] = SDL.GamepadButton.RightShoulder,
+            [SnesButton.Start] = SDL.GamepadButton.Start,
+            [SnesButton.Select] = SDL.GamepadButton.Back,
         };
 
         private void RebuildReverseLookup()
         {
-            _padToButton = new Dictionary<GameControllerButton, SnesButton>();
+            _padToButton = new Dictionary<SDL.GamepadButton, SnesButton>();
             foreach (var kv in ButtonToPad)
             {
                 _padToButton[kv.Value] = kv.Key;
             }
         }
 
-        public bool TryGetButton(GameControllerButton pad, out SnesButton button) => _padToButton.TryGetValue(pad, out button);
+        public bool TryGetButton(SDL.GamepadButton pad, out SnesButton button) => _padToButton.TryGetValue(pad, out button);
 
         // Rebinds `button` to `newPad`. If newPad was already assigned to a
         // different button, that button is left unbound rather than allowing
         // two SNES buttons to share one pad button.
-        public void Rebind(SnesButton button, GameControllerButton newPad)
+        public void Rebind(SnesButton button, SDL.GamepadButton newPad)
         {
             if (_padToButton.TryGetValue(newPad, out SnesButton existingOwner) && existingOwner != button)
             {
@@ -106,7 +99,7 @@ namespace EmuSen.Mistress.Input
                 if (File.Exists(ConfigPath))
                 {
                     string json = File.ReadAllText(ConfigPath);
-                    var loaded = JsonSerializer.Deserialize<Dictionary<SnesButton, GameControllerButton>>(json);
+                    var loaded = JsonSerializer.Deserialize<Dictionary<SnesButton, SDL.GamepadButton>>(json);
                     if (loaded is { Count: > 0 })
                     {
                         bindings.ButtonToPad = loaded;

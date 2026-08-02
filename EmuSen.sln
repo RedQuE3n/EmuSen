@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Cauldron", "EmuSen.C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.DianaOS", "EmuSen.DianaOS\EmuSen.DianaOS.csproj", "{A462A496-51EC-4E73-8E02-3C57A88AC352}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Nehellania", "EmuSen.Nehellania\EmuSen.Nehellania.csproj", "{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -139,6 +141,18 @@ Global
 		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|x64.Build.0 = Release|Any CPU
 		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|x86.ActiveCfg = Release|Any CPU
 		{A462A496-51EC-4E73-8E02-3C57A88AC352}.Release|x86.Build.0 = Release|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Debug|x64.Build.0 = Debug|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Debug|x86.Build.0 = Debug|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|x64.ActiveCfg = Release|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|x64.Build.0 = Release|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|x86.ActiveCfg = Release|Any CPU
+		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

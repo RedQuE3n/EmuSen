@@ -135,6 +135,7 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 | `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command. Core-agnostic |
 | `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
 | `EmuSen.Serenity` | Shared presentation: the Avalonia/Skia `GameFrameControl`, shader pipeline, graphics settings |
+| `EmuSen.Nehellania` | Shared device I/O: SDL3 audio output, gamepad polling, pad bindings, the config root |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
 | `EmuSen.Pharaoh` | The headless scripted harness |
@@ -167,7 +168,7 @@ Codenames govern folders and namespaces only. Classes and log output still say `
 
 ## Building and running
 
-Requires the **.NET 10 SDK**. Nothing else — SDL2 ships with the build.
+Requires the **.NET 10 SDK**. Nothing else — SDL3 ships with the build.
 
 ```sh
 git clone https://github.com/RedQuE3n/EmuSen-Project.git
@@ -193,10 +194,10 @@ dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r linux-x64 \
 
 Swap `linux-x64` for `win-x64`, `osx-x64` or `osx-arm64`.
 
-Two things that will bite you, both documented in [`EmuSen_Settings_Reference.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md) §4.9:
+Two things worth knowing, both documented in [`EmuSen_Settings_Reference.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md) §4.9:
 
-- **Do not add `-p:PublishSingleFile=true`.** It builds fine and then fails at runtime, because Silk.NET cannot resolve the SDL2 the single-file host extracts.
-- **Ship the whole output folder.** The executable needs `libSDL2` and `DianaOSRoot/` beside it.
+- **Ship the whole output folder.** The executable needs `libSDL3` and `DianaOSRoot/` beside it.
+- **`-p:PublishSingleFile=true` is untested here.** It used to be an outright trap — Silk.NET could not resolve the SDL2 the single-file host extracted — and the SDL3 bindings no longer have that fault, but nothing has verified the rest of the stack (Avalonia, SkiaSharp) under single-file publishing. The folder recipe above is the supported one.
 
 macOS builds cross-compiled from Linux are unsigned. Apple Silicon refuses to execute an unsigned arm64 binary outright, so the user must sign it themselves:
 

@@ -27,6 +27,12 @@ namespace EmuSen.Audio
 
         public bool IsShedding => _shedding;
 
+        // Frames in vs frames handed on, cumulative. Their difference is what
+        // this class actually did to the queue, measurable without consulting
+        // the output device's clock - see EmuSen_Audio_Sync.md §3.3.
+        public long TotalInputFrames { get; private set; }
+        public long TotalOutputFrames { get; private set; }
+
         public DynamicRateControl(int targetQueuedFrames)
         {
             TargetQueuedFrames = targetQueuedFrames;
@@ -44,6 +50,7 @@ namespace EmuSen.Audio
         public short[] Process(short[] input, int queuedFrames)
         {
             LastRatio = ComputeRatio(queuedFrames);
+            TotalInputFrames += input.Length / 2;
 
             if (_shedding)
             {
@@ -60,7 +67,10 @@ namespace EmuSen.Audio
             }
 
             if (input.Length < 2) return Array.Empty<short>();
-            return _resampler.Resample(input, LastRatio);
+
+            short[] output = _resampler.Resample(input, LastRatio);
+            TotalOutputFrames += output.Length / 2;
+            return output;
         }
 
         // Call on any discontinuity - a ROM load, a state load, resuming from

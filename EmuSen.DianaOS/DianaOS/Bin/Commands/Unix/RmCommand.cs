@@ -14,10 +14,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
     {
         public string Name => "rm";
         public bool IsReadOnly => false;
-        public string Usage => "  rm [-r] <path>                delete a file (-r: delete a directory and everything in it)";
+        public string Usage => "  rm [-r] <path>                SUSPENDED - delete a file (-r: delete a directory and everything in it)";
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
+            if (DianaOSCommandSuspensions.IsSuspended(Name)) return DianaOSCommandSuspensions.Refuse(Name);
+
             if (args.Length < 2) return DianaOSResult.Fail("rm: usage: rm [-r] <path>");
 
             bool recursive = args[1].Equals("-r", StringComparison.OrdinalIgnoreCase)

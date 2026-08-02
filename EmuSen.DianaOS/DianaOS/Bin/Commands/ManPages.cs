@@ -778,6 +778,14 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    /home/<user>      created by 'useradd <user>'; 'cd' with no argument goes\n" +
                 "                      to the current account's own home - see 'whoami'/'su'\n" +
                 "    /etc              reserved for future shell-level config - empty for now\n" +
+                "    /bin              published builds only: one launcher per frontend, each\n" +
+                "                      a two-line shim onto the real binary in /lib/EmuSen\n" +
+                "    /lib/EmuSen       published builds only: the whole .NET application\n" +
+                "                      directory - every shipped .dll, the apphosts,\n" +
+                "                      deps.json/runtimeconfig.json, runtimes/. The Unix\n" +
+                "                      '/usr/lib/<app>' shape: private libraries of one app,\n" +
+                "                      not a shared library dir. Absent from source\n" +
+
                 "    /SourceLogs       was 'var/log' - WiseMan test-run scratch space only;\n" +
                 "                      dev/test artifacts, not emulator output\n" +
                 "    /tmp              scratch space, nothing here is ever auto-deleted\n\n" +
@@ -805,33 +813,53 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    layout above - this shell was always meant to let you poke around the\n" +
                 "    project's own files, not hide them.\n\n" +
                 "WHERE THE ROOT ACTUALLY IS\n" +
-                "    Two cases, decided once at startup by walking up from the running\n" +
-                "    assembly's own folder (not the current directory, which a launcher or\n" +
-                "    shortcut gets to choose and so can't be trusted):\n\n" +
-                "    Running from source   the first parent holding 'EmuSen.sln' - the\n" +
-                "                          project root, as described above. A build output\n" +
-                "                          dir ('bin/Release/net10.0') is three levels down,\n" +
-                "                          so Debug and Release both land on the same root\n" +
-                "                          and share one set of saves and logs.\n\n" +
-                "    Published build       'DianaOSRoot/', created NEXT TO the binary. No\n" +
-                "                          'EmuSen.sln' ships with a published app, so the\n" +
-                "                          walk finds nothing and falls back to this.\n\n" +
-                "    The published case is deliberately a subdirectory rather than the\n" +
-                "    binary's own folder, for two reasons. The first is that it flat out\n" +
-                "    did not work: this tree's own first path segment is\n" +
-                "    'EmuSen.DianaOS', and a published build already has a FILE of exactly\n" +
-                "    that name sitting beside the binary - the DianaOS project's apphost\n" +
-                "    executable. Creating the skeleton then died on 'Not a directory'.\n\n" +
-                "    The second is that it makes the walled garden mean more, not less. If\n" +
-                "    the root were the binary's own folder, every shipped .dll and the\n" +
-                "    running executable itself would sit inside the sandbox, in reach of\n" +
-                "    'rm' and 'mv'. Keeping the root one level in means a published app\n" +
-                "    can only ever damage its own data, never its own install.\n\n" +
+                "    Decided once at startup by walking up from the running assembly's own\n" +
+                "    folder (not the current directory, which a launcher or shortcut gets\n" +
+                "    to choose and so can't be trusted), stopping at the first parent that\n" +
+                "    holds either marker:\n\n" +
+                "    'EmuSen.sln'          running from source: the project root, as\n" +
+                "                          described above. A build output dir\n" +
+                "                          ('bin/Release/net10.0') is three levels down, so\n" +
+                "                          Debug and Release both land on the same root and\n" +
+                "                          share one set of saves and logs.\n\n" +
+                "    '.dianaosroot'        a published build: the publish directory itself,\n" +
+                "                          written there at publish time. No 'EmuSen.sln'\n" +
+                "                          ships with a published app, so this is what the\n" +
+                "                          walk finds instead - two levels up from\n" +
+                "                          '/lib/EmuSen', where the binaries live.\n\n" +
+                "    If neither turns up, the fallback is 'DianaOSRoot/' beside the binary.\n" +
+                "    That is what a publish looks like WITHOUT the layout below - the doc\n" +
+                "    trees stage into 'DianaOSRoot/' either way, so an app dir copied out by\n" +
+                "    hand still finds its own manual instead of coming up rootless.\n\n" +
+                "    A published tree puts the binaries in '/lib/EmuSen' and the root at the\n" +
+                "    top, rather than the other way round. Two things follow. The first is\n" +
+                "    that the skeleton is buildable at all: this tree's own first path\n" +
+                "    segment is 'EmuSen.DianaOS', and a published build has a FILE of\n" +
+                "    exactly that name - the DianaOS project's apphost. Rooting at the\n" +
+                "    binary's own folder put the two in the same directory and creating the\n" +
+                "    skeleton died on 'Not a directory'; from '/lib/EmuSen' they never meet.\n\n" +
+                "    The second is a deliberate narrowing of the walled garden. Every\n" +
+                "    shipped .dll and the running executable now sit INSIDE the sandbox,\n" +
+                "    where before the root was one level in and could only ever reach its\n" +
+                "    own data. That is the cost of the layout being an honest Unix\n" +
+                "    hierarchy: real '/' contains real '/lib'.\n\n" +
+                "    'rm' and 'mv' are suspended for exactly this reason - they are the two\n" +
+                "    commands that could have destroyed the install, and nothing in this\n" +
+                "    shell distinguishes '/lib/EmuSen' from your own files. Both still\n" +
+                "    exist, still document themselves, and refuse to run. Note this is a\n" +
+                "    guardrail against accidents, not a security boundary: 'cp', 'touch',\n" +
+                "    'nano' and '>' redirection can all still write into '/lib'.\n\n" +
                 "    A published root is NOT empty. The two read-only doc trees - Documents\n" +
                 "    (the EmuSen Manual) and Etc/Man pages - are copied in at publish time,\n" +
                 "    so 'man', 'cat', 'find' and 'grep' have the same reference material\n" +
                 "    there as they do running from source. Everything else - Roms, Games,\n" +
                 "    Music, Pictures, Logs, Saves - is created empty on first run.\n\n" +
+                "    The layout is MSBuild's doing, not this shell's: see\n" +
+                "    EmuSen.DianaOS/Publish/DianaOSPublishLayout.targets, imported by each\n" +
+                "    publishable frontend. It only rewrites where files are copied - the\n" +
+                "    .NET application directory is relocated whole, never taken apart, so\n" +
+                "    nothing about how the app resolves its assemblies changes. Publish\n" +
+                "    with -p:DianaOSPublishLayout=false for a plain flat app dir.\n\n" +
                 "EXAMPLES\n" +
                 "    man hier\n" +
                 "    ls /\n" +
@@ -1035,6 +1063,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    mv - move or rename a file or directory\n\n" +
                 "SYNOPSIS\n" +
                 "    mv <src> <dst>\n\n" +
+                "SUSPENDED\n" +
+                "    This command currently refuses to do anything. A published build puts\n" +
+                "    its own binaries in '/lib/EmuSen', inside this root - see 'man hier' -\n" +
+                "    and nothing in this shell tells the install apart from your data, so\n" +
+                "    'mv' could quietly relocate the running application out from under\n" +
+                "    itself. Parked until the tree distinguishes the two. Everything below\n" +
+                "    describes what it does when re-enabled.\n\n" +
                 "DESCRIPTION\n" +
                 "    Moves/renames a real file or directory. If <dst> is an existing\n" +
                 "    directory, <src> lands inside it ('mv foo.txt logs/' -> 'logs/foo.txt'),\n" +
@@ -1067,6 +1102,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "SYNOPSIS\n" +
                 "    rm <path>\n" +
                 "    rm -r <path>\n\n" +
+                "SUSPENDED\n" +
+                "    This command currently refuses to do anything. A published build puts\n" +
+                "    its own binaries in '/lib/EmuSen', inside this root - see 'man hier' -\n" +
+                "    and nothing in this shell tells the install apart from your data, so\n" +
+                "    'rm -r /lib' would delete the running application. Parked until the\n" +
+                "    tree distinguishes the two. Everything below describes what it does\n" +
+                "    when re-enabled.\n\n" +
                 "DESCRIPTION\n" +
                 "    Deletes a real file. A directory requires -r (matching real rm's own\n" +
                 "    refusal to remove a directory without it); with -r, the directory and\n" +

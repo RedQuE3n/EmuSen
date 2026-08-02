@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The Avalonia GUI, purpose-built for bug testers: ROM loading, save
        states, controller rebinding, and (Settings > Preferences...) a
@@ -17,7 +17,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,16 +24,12 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
-    <!-- Gamepad support: SDL's GameController API, initialized WITHOUT the
-         video subsystem so it never tries to open its own window - Avalonia
-         owns the window. Ships native SDL binaries via NuGet, same
-         convenience as Raylib-cs. See Input/GamepadManager.cs for a note on
-         confidence level - this is the one file in the project whose exact
-         API surface hasn't been independently verified against current docs
-         the way everything else has. -->
-    <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
-    <!-- The SDL2 binary itself - see EmuSen_Settings_Reference.md §4.9. -->
-    <PackageReference Include="Ultz.Native.SDL" Version="2.32.10" />
+    <!-- Views/InputSettingsWindow.axaml.cs names SDL.GamepadButton directly,
+         so the bindings are referenced explicitly rather than leant on
+         transitively via EmuSen.Nehellania - the same convention
+         EmuSen.Serenity's csproj follows. The native comes with that
+         project reference; see EmuSen_Settings_Reference.md §4.9. -->
+    <PackageReference Include="SDL3-CS" Version="3.4.2" />
     <!-- Native X11 backend, shipped in 12.1. Not picked up by
          UsePlatformDetect() automatically on a Wayland session - opted into
          explicitly in Program.cs (Linux only, see comments there). -->
@@ -62,6 +57,15 @@
          context) presentation surface EmuSen.Hotaru's GameWindow uses,
          replacing the old CPU-side WriteableBitmap here. -->
     <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
+    <!-- AudioPlayer/GamepadManager/GamepadBindingMap and the shared
+         config root - one copy for both frontends, see
+         EmuSen_Settings_Reference.md §4.10. -->
+    <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
   </ItemGroup>
+
+
+  <!-- A published build's output directory is DianaOS's own root: the .NET
+       app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
+  <Import Project="..\EmuSen.DianaOS\Publish\DianaOSPublishLayout.targets" />
 
 </Project>

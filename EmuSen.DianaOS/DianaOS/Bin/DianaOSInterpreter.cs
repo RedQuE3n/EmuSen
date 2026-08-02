@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Galaxia.Text;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -763,7 +764,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin
 
             if (!_commands.TryGetValue(cmd, out IDianaOSCommand? command))
             {
-                return DianaOSResult.Fail($"Unknown command '{cmd}'. Type 'help' for a list.");
+                return DianaOSResult.Fail(
+                    $"Unknown command '{cmd}'.{Suggestion.Hint(cmd, _commands.Keys)} Type 'help' for a list.");
             }
 
             try

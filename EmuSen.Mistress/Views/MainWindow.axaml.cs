@@ -18,7 +18,8 @@ using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Nehellania.Audio;
 using EmuSen.Nehellania.Input;
 using EmuSen.Mistress.Input;
-using EmuSen.Mistress.Settings;
+using EmuSen.Mistress.Library;
+using EmuSen.Galaxia.Models;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
@@ -34,6 +35,9 @@ namespace EmuSen.Mistress.Views
         private TimeSpan FrameInterval => TimeSpan.FromSeconds(1.0 / (_session?.FrameRateHz ?? 60.0988));
 
         private EmulatorSession? _session;
+
+        // Parallel to LibraryList's item strings, which are titles only - see EmuSen_Settings_Reference.md §4.11.
+        private IReadOnlyList<RomEntry> _libraryEntries = Array.Empty<RomEntry>();
 
         // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
         private volatile bool _turboHeld;
@@ -160,6 +164,8 @@ namespace EmuSen.Mistress.Views
 
             _gamepad.AnalogStickAsDpad = _appSettings.AnalogStickAsDpad;
             _gamepad.StickDeadzone = _appSettings.StickDeadzone;
+
+            RefreshLibrary();
 
             // Tunnel, not bubbling, or focus navigation eats the arrows - see EmuSen_Settings_Reference.md §4.2.
             AddHandler(KeyDownEvent, (_, e) => SetButtonFromKey(e.Key, pressed: true, e), RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -307,7 +313,12 @@ namespace EmuSen.Mistress.Views
 
         private void OnPreferencesClick(object? sender, RoutedEventArgs e)
         {
-            new PreferencesWindow(_appSettings).Show(this);
+            // Non-modal, so the ROM directory can change while the library is
+            // on screen behind it - re-scan on close rather than leaving a
+            // stale list the user has to know to refresh.
+            var window = new PreferencesWindow(_appSettings);
+            window.Closed += (_, _) => { if (LibraryView.IsVisible) RefreshLibrary(); };
+            window.Show(this);
         }
 
         private void OnDebugLoggingClick(object? sender, RoutedEventArgs e)
@@ -445,15 +456,22 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        private void LoadRom(string path, string displayName)
+        // Everything that has to happen to whatever is currently running
+        // before _session can be replaced or dropped.
+        private void ShutDownCurrentSession()
         {
             _timer?.Stop();
-            StopEmulationThread(); // must fully stop before _session is replaced below - see that method's own comment
+            StopEmulationThread(); // must fully stop before _session changes - see that method's own comment
             _session?.SaveSram(); // flush whatever was previously running before switching
-            // Must happen on the OLD session, before it's replaced below -
-            // StartLogging()'s call to StopLogging() runs against whatever
-            // _session currently is, which would already be the new one.
+            // Must happen on the OLD session: StartLogging()'s call to
+            // StopLogging() runs against whatever _session currently is,
+            // which would already be the new one.
             _session?.FlushVerboseLogs();
+        }
+
+        private void LoadRom(string path, string displayName)
+        {
+            ShutDownCurrentSession();
 
             try
             {
@@ -471,7 +489,7 @@ namespace EmuSen.Mistress.Views
                 _coretopWindow?.UpdateTarget(_debugTarget);
 
                 GameFrame.IsVisible = true;
-                NoRomText.IsVisible = false;
+                LibraryView.IsVisible = false;
 
                 StatusText.Text = $"Running: {displayName}";
                 _currentRomPath = path;
@@ -488,8 +506,65 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex)
             {
                 _session = null;
+                // Back to the list rather than a black viewport with only a
+                // status line to explain it.
+                ShowLibrary();
                 StatusText.Text = $"Failed to load {displayName}: {ex.Message}";
             }
+        }
+
+        // The library is the no-game-running screen, so this is also the
+        // unload path - see EmuSen_Settings_Reference.md §4.11.
+        private void ShowLibrary()
+        {
+            ShutDownCurrentSession();
+            _session = null;
+            _currentRomPath = null;
+            _currentDisplayName = null;
+
+            GameFrame.IsVisible = false;
+            LibraryView.IsVisible = true;
+            RefreshLibrary();
+
+            StatusText.Text = "No ROM loaded";
+            FpsText.Text = "";
+        }
+
+        private void RefreshLibrary()
+        {
+            RomLibraryResult result = RomLibrary.Scan(_appSettings.RomDirectory);
+            _libraryEntries = result.Entries;
+
+            LibraryList.ItemsSource = _libraryEntries.Select(e => e.Title).ToList();
+            LibraryList.IsVisible = _libraryEntries.Count > 0;
+            LibraryHintText.IsVisible = _libraryEntries.Count > 0;
+
+            LibraryHeaderText.Text = _libraryEntries.Count > 0
+                ? $"{_libraryEntries.Count} game{(_libraryEntries.Count == 1 ? "" : "s")} in {result.Directory}"
+                : RomLibrary.DescribeEmpty(result);
+
+            if (_libraryEntries.Count > 0) LibraryList.SelectedIndex = 0;
+        }
+
+        private void OnShowLibraryClick(object? sender, RoutedEventArgs e) => ShowLibrary();
+
+        private void OnLibraryItemActivated(object? sender, TappedEventArgs e) => LaunchSelectedLibraryEntry();
+
+        private void OnLibraryKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+            e.Handled = true; // otherwise it also reaches the window's own game-input handler
+            LaunchSelectedLibraryEntry();
+        }
+
+        private async void LaunchSelectedLibraryEntry()
+        {
+            int index = LibraryList.SelectedIndex;
+            if (index < 0 || index >= _libraryEntries.Count) return;
+
+            RomEntry entry = _libraryEntries[index];
+            await PromptForMissingFirmwareAsync(entry.FullPath);
+            LoadRom(entry.FullPath, entry.FileName);
         }
 
         // Called from _consoleWindow's PauseCommand/ResumeCommand (both run

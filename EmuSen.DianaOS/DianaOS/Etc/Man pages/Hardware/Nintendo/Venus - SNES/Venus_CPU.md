@@ -8,11 +8,11 @@ The disassembler's own quirks and caveats are documented in depth in `Man pages/
 
 ## 1. Structure
 
-`Cpu` is a `partial class` split by concern, not by convenience: `Cpu.cs` holds core state and the fetch/execute loop, `Cpu.AddressModes.cs` holds every `AddrXxx` addressing-mode delegate, `Cpu.OpcodeTable.cs` builds the 256-entry dispatch table, and every `OpXxx` operation lives in one of eight `Cpu.Opcodes.*.cs` files, split by instruction category the way most 65816 references group them:
+`Cpu` is a `partial class` split by concern, not by convenience: `Cpu.cs` holds core state and the fetch/execute loop, `Cpu.AddressModes.cs` holds every `AddrXxx` addressing-mode delegate, `Cpu.OpcodeTable.cs` holds the 256-case dispatch switch plus the per-opcode name and cycle tables, and every `OpXxx` operation lives in one of eight `Cpu.Opcodes.*.cs` files, split by instruction category the way most 65816 references group them:
 
 | File | Covers |
 |---|---|
-| `Cpu.Opcodes.System.cs` | NOP/unknown-opcode fallback, BRK/COP/RTI, WAI/STP, MVN/MVP |
+| `Cpu.Opcodes.System.cs` | NOP, BRK/COP/RTI, WAI/STP, MVN/MVP |
 | `Cpu.Opcodes.Stack.cs` | PHP/PLP, PHA/PLA, PHX/PLX, PHY/PLY, PHB/PLB, PHK, PHD/PLD, PEA/PEI/PER |
 | `Cpu.Opcodes.LoadStoreTransfer.cs` | LDA/LDX/LDY, STA/STX/STY/STZ, every T__ register transfer, XBA |
 | `Cpu.Opcodes.Arithmetic.cs` | INC/DEC (A, memory, X, Y), CMP/CPX/CPY, ADC/SBC |
@@ -23,9 +23,9 @@ The disassembler's own quirks and caveats are documented in depth in `Man pages/
 
 This used to be one 1229-line `Cpu.Opcodes.cs` — split for the same reason `DebugCommandProcessor` and the PPU renderer were: a monolith the size of "every CPU operation in one file" stopped being something you could hold in your head at once, and none of the split boundaries needed to touch any actual instruction logic to fix that. `Cpu.OpcodeTable.cs` and `Cpu.AddressModes.cs` were deliberately **not** split the same way — see the note at the end of this section.
 
-Each `Instruction` entry (built once, in `Cpu.OpcodeTable.cs`) pairs an addressing-mode delegate (computes an effective address, may consume operand bytes) with an operate delegate (does the actual work at that address) — mirroring how real 6502/65816 opcode references describe instructions as (addressing mode × operation).
+Each `case` in `Cpu.OpcodeTable.cs`'s `Dispatch()` pairs an addressing-mode call (computes an effective address, may consume operand bytes) with an operate call (does the actual work at that address) — mirroring how real 6502/65816 opcode references describe instructions as (addressing mode × operation). This was a table of `Instruction` structs holding two delegates until §9 replaced it with direct calls.
 
-**Why `Cpu.OpcodeTable.cs` stays one file.** Unlike the `Op*` method bodies, its 256 entries are already terse one-liners — the file is long because there are 256 opcodes, not because any individual entry is hard to read. It's also organically grown in registration order (see its own inline comments — "fills gaps... after the ROM halted on 0x9E," "0xE6 is what the ROM halted on," etc.), not opcode-category order, and this exact table got a dedicated verification pass against oxyron.de (§7) before being trusted. Re-deriving a per-category split for all 256 entries would risk introducing a transcription error into a table that's already been verified once — real risk for a benefit this table doesn't actually need, since it's already scannable as a flat list. `Cpu.AddressModes.cs` (243 lines) was left alone for a simpler reason: it's already a single, cohesive category (every `AddrXxx` delegate) and isn't especially large to begin with.
+**Why `Cpu.OpcodeTable.cs` stays one file.** Unlike the `Op*` method bodies, its 256 entries are already terse one-liners — the file is long because there are 256 opcodes, not because any individual entry is hard to read. This exact table got a dedicated verification pass against oxyron.de (§7) before being trusted, so any re-derivation of all 256 entries risks introducing a transcription error into a table that's already been verified once — which is why §9's conversion was done by a generator over the old file rather than by hand, and proven equivalent before being kept. `Cpu.AddressModes.cs` (243 lines) was left alone for a simpler reason: it's already a single, cohesive category (every `AddrXxx` delegate) and isn't especially large to begin with.
 
 ---
 
@@ -186,3 +186,99 @@ Both machines run 341 dots x 4 master clocks per scanline; PAL simply spends mor
 ### 8.6 Validation
 
 Re-run against the SingleStepTests/65816 ground-truth suite (§7) after this change — no regressions (state-only checks, since that suite's vectors don't assert cycle counts, only resulting registers/memory). This change's actual timing effect was cross-checked separately by re-measuring SPC700 audio pacing (`Venus_APU.md` §2.9): the per-frame master-clock budget turned out to already be correctly calibrated either way (see that section for why), so this is a genuine general CPU/PPU timing accuracy improvement, but it did **not** turn out to be the fix for the audio symptom that motivated it.
+
+---
+
+## 9. Opcode dispatch — direct-call `switch`, not a delegate table
+
+`Cpu.OpcodeTable.cs` used to build a 256-entry `Instruction[]`, each entry a struct holding a `Func<uint> AddrMode`, an `Action<uint> Operate`, a `Name` and a `Cycles`. `Step()` loaded the struct and made two indirect delegate calls per instruction. It now calls `Dispatch(opcode)`, a flat `switch` over `0x00`–`0xFF` whose cases call the addressing-mode and operate methods directly; `Name` and `Cycles` moved to two `static readonly` arrays (`OpcodeNames`, `OpcodeCycles`), the first used only by the verbose trace.
+
+Three things fell out of the shape change, independent of speed:
+
+- **The per-instruction string comparison is gone.** The old `Step()` tested `inst.Name == "NOP/UNK"` on *every* executed instruction to detect an unimplemented opcode. That test had been dead since the table reached 256/256 (§7) — every entry is explicitly assigned, so the placeholder name never survives initialisation. The `switch`'s `default:` arm now carries that job and costs nothing on the taken paths. `OpUnknown` was the placeholder's operate delegate and is deleted; the SPC700 keeps its own separate `OpUnknown`, which is still live.
+- **512 delegate objects per `Cpu` are no longer allocated.** Construction cost only, but the SA-1 builds a second `Cpu` (`Venus_SA1.md` §4.1), so it was paid twice.
+- **The table is now in opcode order rather than registration order**, which makes it checkable against a printed 65816 matrix top to bottom. The old organic ordering (its inline comments read "0xE6 is what the ROM halted on") is preserved as history here rather than in the file.
+
+### 9.1 Notes that used to live in the table's inline comments
+
+- **`0x87` is `STA [dp]`**, the 24-bit long-indirect store — a 3-byte pointer read from the direct page, no `DBR` involved — *not* `0x92`'s `STA (dp)` (16-bit pointer + current `DBR`). It was wired to `AddrDirectIndirect` instead of `AddrDirectIndirectLong` at one point. Real-world effect: any code doing `STA [dp]` with `DBR` != the pointer's own bank byte silently wrote to the wrong bank. Common in practice — ALTTP's `AddReceivedItem` sets `DBR` to its own bank via `PHK`/`PLB`, then writes an item's equipment-table byte through a pointer whose bank byte is `$7E`. Found via the LttP "lamp appears then never enters inventory" investigation.
+- **`0x42` is `WDM`**, officially reserved for future expansion. Every real 65816 treats it as a 2-byte NOP: fetch the opcode, fetch and discard one operand byte, do nothing. Games don't use it intentionally, but some copy-protection/anti-emulation checks have historically probed for correct handling.
+- **The `(sr,S),Y` family (`0x_3`) cycle counts** were resolved against two sources: oxyron.de lists `EOR`'s as 6 where every other opcode in the family — and softpixel's independent table — lists 7. Treated as a typo in that one source rather than a real asymmetry, since nothing about `EOR`'s addressing differs from the others.
+
+### 9.2 Validation
+
+The conversion was generated mechanically from the old table rather than retyped (§1), then the two builds were compared directly: all **43 ROMs** in `Usr/Home/Roms` run 1200 frames headless, with a SHA-256 taken every 200 frames over the full save-state image (every serialized CPU/PPU/APU/DMA register, WRAM and VRAM — so a divergence is caught long before it could reach the screen) concatenated with the framebuffer. All 43 digests are identical between the delegate-table and `switch` builds.
+
+Two harness traps worth recording, since both initially looked like real regressions:
+
+- **Battery saves leak between runs.** `Cartridge` writes `.srm` files next to the executable, so the second run of a game that touches SRAM during those 1200 frames boots from different state than the first. Nine ROMs "diverged" purely from this. Any A/B of this kind must delete the `Saves` directory before *every* run, not once at the start.
+- **A stable hash across two runs does not prove determinism** if both runs already read the same leftover `.srm`. The re-check that appeared to confirm determinism was doing exactly that.
+- **Save-state images embed absolute filesystem paths.** `Cartridge.SavePath` is an ordinary serialized string field, so publishing the same build to a different output directory changed all 43 digests at once while the emulation was byte-for-byte unchanged. Both sides of a state-hash comparison must run from the same directory. This is also a latent bug in its own right, independent of any benchmarking: `LoadState` writes that string back, so a state file shared between two machines (or two install locations) restores the *other* machine's save path. Noted here, not fixed.
+
+### 9.3 Measured effect, and where the real headroom is
+
+Throughput (mean ms per `RunFrame()`, headless, 2400 frames after 600 warmup, interleaved A/B, .NET 10 Release):
+
+| ROM | delegate table | `switch` |
+|---|---|---|
+| LttP | 2.626 / 2.670 | 2.561 / 2.642 |
+| DKC | 2.430 / 2.438 | 2.377 / 2.389 |
+| SMW | 3.219 / 3.116 | 3.108 / 3.092 |
+| FFVI | 3.095 / 3.078 | 3.040 / 3.005 |
+| CT | 2.286 / 2.237 | 2.242 / 2.264 |
+
+About **2%** — real but small, and worth having mainly for the string comparison and the allocations rather than the dispatch itself.
+
+**The dispatch table was not what dynamic PGO was buying.** Running with `DOTNET_TieredPGO=0` costs ~16% *with either dispatch style* (LttP 17.1% delegate / 15.5% switch; DKC 15.5% / 17.8%), so profile-guided devirtualisation is earning that ~16% somewhere other than the opcode table. The obvious suspect was `ICpuBus` — §10 tests that and rules it out.
+
+This also settles the NativeAOT question that prompted the change: AOT stays ~10–12% *slower* than the tiered JIT with the `switch` in place (LttP +10.4%, DKC +10.8%, SMW +12.2%), for the same reason — it has no dynamic profile, and the `switch` did nothing to reduce the dependence on one. See `EmuSen_Project_Overview_v2.md` for the AOT trimming hazards (`StateSerializer` silently produces a 20-byte save state under AOT) that make it a correctness question as well as a speed one.
+
+## 10. The `ICpuBus` interface call is not the bottleneck — measured, not assumed
+
+§9.3 left an open hypothesis: `_bus.Read8`/`Write8`/`GetAccessSpeedCycles` are `ICpuBus` interface calls made several times per instruction with exactly two runtime implementations, which looks like exactly the thing dynamic PGO's guarded devirtualisation would be worth ~16% on. It was tested and it is wrong.
+
+The experiment gave the CPU a concrete, statically-typed fast path — a `MemoryBus?` field set in the constructor (`bus as MemoryBus`, non-null for every CPU except the SA-1's own), with all 151 bus call sites routed through three `AggressiveInlining` helpers that branch to the concrete reference when it is present. `MemoryBus` was sealed and its `Read8`/`Write8` made non-virtual at the same time (§10.1) so the concrete call is a direct, statically-bound one.
+
+Result, headless mean ms per `RunFrame()`, 2400 frames after 300 warmup:
+
+| ROM | PGO on: `switch` / + fast path | PGO off: `switch` / + fast path |
+|---|---|---|
+| LttP | 2.421, 2.459 / 2.452, 2.373 | 2.781 / 2.783 |
+| DKC | 2.376, 2.363 / 2.351, 2.336 | 2.716 / 2.751 |
+| CT | 2.205, 2.114 / 2.139, 2.132 | 2.702 / 2.670 |
+| SMW | 3.086, 3.106 / 3.115, 3.080 | — |
+| FFVI | 3.049, 2.991 / 2.984, 3.061 | — |
+
+Signs flip between repetitions in the PGO-on column, so that is noise around zero. The PGO-off column is the decisive one: hand-devirtualising the bus, with no profile available to do it dynamically, is worth **nothing** (2.783 vs 2.781, 2.751 vs 2.716, 2.670 vs 2.702). If the interface call were where PGO's 16% lived, removing it statically would have recovered most of that gap with PGO off. It recovers none of it.
+
+The reason is inlining, not dispatch. `MemoryBus.Read8` → `ReadInternal` is a long bank/offset decode chain far past any inlining budget, so both the manual fast path and PGO's guarded devirtualisation end at the same place: a direct call to a method that is called, not inlined. Removing the interface indirection saves one load and one indirect branch against a callee that costs far more than that. Whatever PGO is actually earning is elsewhere — most plausibly profile-driven basic-block layout inside `Dispatch`'s 256 arms and inside that same decode chain, which no source-level change replicates.
+
+The fast path was therefore reverted; it added a null test to every bus access for no measurable gain. **Do not re-propose bus devirtualisation** — generic-over-bus-type, struct bus shims, or another concrete fast path — without first showing a profile that contradicts the PGO-off column above.
+
+### 10.1 What was kept: `MemoryBus` is sealed, and the flat test bus stands alone
+
+`MemoryBus.Read8`/`Write8` were `virtual` for exactly one reason: `FlatTestMemoryBus`, the 16 MB flat-RAM double used by the `SingleStepTests/65816` harness (§8.6, `EmuSen.Tomoe`), subclassed `MemoryBus` and overrode them to bypass all SNES bank/register decoding. A test double was making two of the hottest methods in the emulator overridable.
+
+`FlatTestMemoryBus` now implements `ICpuBus` directly instead. It never used anything from `MemoryBus` other than the two methods it overrode, so the inheritance was buying nothing — and it forced the double to construct a `Cartridge`, which reads a real file, which is why the harness used to generate a throwaway 32 KB dummy ROM into the temp directory just to satisfy a constructor. That is gone too. `GetAccessSpeedCycles` returns a flat 6 and `TakePendingDmaCycles` returns 0, both unused: the suite discards `Step()`'s return value and checks only registers and memory.
+
+With the last subclass gone, `MemoryBus` is `sealed` and both methods are ordinary non-virtual instance methods. Measured as neutral (the numbers above are with the sealing in place), so this is a structural cleanup, not a performance change.
+
+The vectors themselves are third-party data this repo does not ship, so nothing in `EmuSen.WiseMan` was covering this adapter. `Validation/Cpu65816SingleStepTargetTests.cs` now does, pinning the property that matters: every address including `$2100`/`$4210` register space behaves as plain RAM, in both directions, through real executed instructions.
+
+---
+
+## 11. Interpreter dispatch: threaded dispatch / "help the branch predictor" is not the next win
+
+Raised as a follow-up to §9 and §10: would giving the interpreter some concept of branch prediction help? Recorded here so it isn't re-derived.
+
+**What the technique is.** For an interpreter it means threaded (replicated) dispatch: instead of one `switch` at the top of the loop, every handler ends with its own copy of the dispatch jump, giving the CPU's indirect predictor ~256 separate branch sites that can learn opcode-pair correlations, rather than one site that jumps everywhere. It needs computed `goto`. C# has no equivalent — a `switch` compiles to a single jump-table indirect branch, and the only way to replicate it is to tail-duplicate all 256 cases into every handler.
+
+**The lever is already pulled.** Profile-driven basic-block layout is the compiler-side form of helping branch prediction, and .NET's dynamic PGO does it automatically. §9.3 measured it: `DOTNET_TieredPGO=0` costs ~15–16%, and NativeAOT — which has no profile at all — is ~11% slower (§9.3, and it silently corrupts save states besides). That is the largest single effect measured across this whole investigation, and it is on by default. A manual scheme would be competing for a slice of something already mostly captured.
+
+**The hardware has moved.** The classic "threading is ~2× faster" results (Ertl & Gregg) are Pentium 4 / PowerPC era. The development machine here is a Zen 4 (Ryzen 7 7700X) whose TAGE-class indirect predictor recovers most of the single-dispatch-site penalty on its own.
+
+**The ceiling is small anyway.** Per `Venus_PPU.md` §13.1, `cpu+spc700` is 0.45–0.98 ms of a 1.4–3.2 ms frame for every ROM except KSS (3.22 ms, which is the SA-1's second CPU — `Venus_SA1.md` §4.1). Per-scanline PPU compositing is the larger half and is straight-line pixel code, not dispatch. Eliminating interpreter dispatch *entirely* would cap out near 30% of frame time, on a core already running 3.5–12× real time.
+
+**What is worth doing in this family.** The SPC700 still has the shape the 65816 had before §9: `Spc700.Step()` loads `SpcInstruction inst = _instructions[opcode]` and makes two delegate calls per instruction. Converting it to a direct-call `switch` is mechanical and worth roughly what the 65816 conversion was (~2%, plus the dead per-instruction string compare and the per-instance delegate allocations). That is a cleanup with a known small payoff — not a branch-prediction strategy.
+
+**If this gets re-opened**, the decisive measurement is an actual mispredict rate (`perf stat -e branches,branch-misses,instructions,cycles`). `perf` is not installed on the dev machine; `perf_event_paranoid` is 2, so it needs installing but not root to run. Do that before writing any code.

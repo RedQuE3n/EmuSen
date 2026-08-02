@@ -95,9 +95,9 @@ Everything above is emulator configuration. This section covers the per-user set
 
 ### 4.1 Where the files live
 
-`Settings/SettingsPaths.cs` is the single answer to "where does this frontend keep config". `ControllerKeyMap`, `GamepadBindingMap`, `HotkeyBindingMap` and `AppSettings` all resolve their own file through it (`keybindings.json`, `gamepadbindings.json`, `hotkeybindings.json`, `appsettings.json`), rather than each rebuilding an `%AppData%/EmuSen` path of its own.
+**Moved to `EmuSen.Galaxia` — see `EmuSen_Config_Reference.md` for the current answer.** All four files (`keybindings.json`, `gamepadbindings.json`, `hotkeybindings.json`, `appsettings.json`) now live in the sandbox at `/etc/EmuSen`, are read and written through `ConfigFile<T>`, and are migrated out of the old per-user location automatically on first read.
 
-It exists because those paths used to be hardcoded per class, which made them untestable: any test that rebound a key wrote the developer's real config, since rebinding saves immediately. `SettingsPaths.OverrideDirectory` redirects the whole set at once and is set only by tests.
+The history is worth keeping, because the reason has outlived the class: these paths were once hardcoded per class, which made them untestable — any test that rebound a key wrote the developer's real config, since rebinding saves immediately. `SettingsPaths` existed to redirect the whole set at once. That role is now `ConfigStore.OverrideDirectory`, and `AppSettings` itself moved to Galaxia (it holds no frontend types, so nothing about it was ever Mistress-specific).
 
 ### 4.2 Fixed bug: rebinding a key appeared to do nothing
 
@@ -125,7 +125,7 @@ Fast-forward and rewind used to be hardcoded to `Tab` and `Backspace` inside `Ma
 
 The two maps police **each other** on rebind, not just themselves: one key doing both a game button and a hotkey would fire both at once. Binding a key that's in use anywhere clears it from wherever it was.
 
-### 4.4 Gamepad options (`Input/GamepadManager.cs`, `Settings/AppSettings.cs`)
+### 4.4 Gamepad options (`Input/GamepadManager.cs`, `EmuSen.Galaxia/Models/AppSettings.cs`)
 
 - **`AnalogStickAsDpad`** (default on) — the left stick reports as the d-pad directions. No SNES game reads an analog axis, so an unmapped stick is simply dead input, which reads as a broken controller.
 - **`StickDeadzone`** (default 0.5, clamped 0.05-0.95) — fraction of full deflection before a direction registers. Exposed because worn sticks drift, and a drifting stick mapped onto the d-pad walks the player into walls.
@@ -158,7 +158,7 @@ The two maps police **each other** on rebind, not just themselves: one key doing
 Two gotchas worth knowing before adding cases here:
 
 - **Match the row by its name cell (column 0) only.** A loose "any `TextBlock` in this row" match picks the wrong row: `Y`'s default keyboard binding is literally `A`, so searching for row "A" finds `Y`'s *value* column first.
-- **Redirect `SettingsPaths.OverrideDirectory`** in the fixture. Rebinding saves immediately, so without it the suite overwrites the developer's real bindings.
+- **Redirect `ConfigStore.OverrideDirectory`** in the fixture. Rebinding saves immediately, so without it the suite overwrites the developer's real bindings.
 
 The arrow-key half of §4.2 does **not** reproduce headlessly — headless has no real focus-navigation pass — so it is reasoned from Avalonia's routing rather than measured, and the theory cases for `Up`/`Left` pass either way.
 
@@ -201,13 +201,13 @@ dotnet publish <app>/<app>.csproj -c Release -r <rid> --self-contained true \
 
 Both frontends moved from `Silk.NET.SDL` (SDL2) to `SDL3-CS` on 2026-08-01. Silk.NET has no SDL3 binding and none is planned in the 2.x line, so this was a binding swap, not a version bump.
 
-**One copy, in its own project.** `AudioPlayer`, `GamepadManager`, `GamepadBindingMap` and `SettingsPaths` used to be duplicated per frontend — `EmuSen.Mistress` and `EmuSen.Hotaru` each carried a near-identical file, and the SDL3 port had to be written twice and kept in sync by hand. They now live once in **`EmuSen.Nehellania`**, which both GUIs reference. It depends on `EmuSen` (for `ICore`/`EmulatorSession`, `DynamicRateControl`, `SnesButton`) and on SDL3; deliberately not on Avalonia, since nothing in it touches a window — that stays split between `EmuSen.Serenity` (presentation) and the frontends themselves.
+**One copy, in its own project.** `AudioPlayer`, `GamepadManager`, `GamepadBindingMap` and the config-root helper used to be duplicated per frontend — `EmuSen.Mistress` and `EmuSen.Hotaru` each carried a near-identical file, and the SDL3 port had to be written twice and kept in sync by hand. They now live once in **`EmuSen.Nehellania`**, which both GUIs reference. It depends on `EmuSen` (for `ICore`/`EmulatorSession`, `DynamicRateControl`, `SnesButton`) and on SDL3; deliberately not on Avalonia, since nothing in it touches a window — that stays split between `EmuSen.Serenity` (presentation) and the frontends themselves.
 
 The merge resolved three real differences between the two old copies rather than picking one at random:
 
 - **`Pump`** took `EmulatorSession` in Mistress and `ICore` in Hotaru. The shared class takes `ICore?` and keeps a one-line `Pump(EmulatorSession)` overload forwarding to it, so both call sites are unchanged. `EmulatorSession` lives in the core library, so this costs the shared project no extra dependency.
 - **`GamepadManager`** carried the rebind-capture members (`GetAnyPressedButton`, `ControllerName`, `ButtonLabel`, the stick-as-d-pad options) in Mistress only. The shared class is Mistress's superset; Hotaru simply doesn't call them.
-- **`GamepadBindingMap`** resolved its config path through Mistress's redirectable `SettingsPaths` in one copy and a hardcoded `%AppData%/EmuSen` in the other. `SettingsPaths` moved into the shared project too, so both frontends now go through the redirectable one — which is what lets `EmuSen.WiseMan`'s fixtures point rebind tests at a scratch directory instead of overwriting the developer's real bindings. Mistress's other settings files (`AppSettings`, `ControllerKeyMap`, `HotkeyBindingMap`) follow it there.
+- **`GamepadBindingMap`** resolved its config path through Mistress's redirectable `SettingsPaths` in one copy and a hardcoded `%AppData%/EmuSen` in the other. `SettingsPaths` moved into the shared project too, so both frontends went through the redirectable one — which is what lets `EmuSen.WiseMan`'s fixtures point rebind tests at a scratch directory instead of overwriting the developer's real bindings. That role has since moved again, out of `EmuSen.Nehellania` entirely and into `EmuSen.Galaxia` (`ConfigStore`), where every config file in the project shares it — see `EmuSen_Config_Reference.md` §1.
 
 `AllowUnsafeBlocks` moved with the code: `EmuSen.Nehellania` sets it (for `AudioPlayer`'s pinned sample array), and both frontends dropped it, having no unsafe code of their own left.
 
@@ -219,7 +219,9 @@ The merge resolved three real differences between the two old copies rather than
 
 **Gamepads are enumerated, not indexed.** SDL2's joystick indices are gone. `GetGamepads(out count)` returns instance IDs for the gamepads specifically, so `TryOpenFirstController` no longer walks every joystick asking `IsGameController` about it — the one-second hot-plug rescan interval (§4.4) is unchanged, but the scan behind it is cheaper. `GameController*` handles became plain `IntPtr`, `GameControllerGetButton`'s `0`/`1` became a `bool`, and `GameControllerUpdate` is `UpdateGamepads`.
 
-**Saved bindings survived the rename.** `GamepadButton` renamed the face buttons to their positions (`A`/`B`/`X`/`Y` → `South`/`East`/`West`/`North`) but kept every numeric value SDL2 used, and `gamepadbindings.json` persists the numbers, not the names. An SDL2-era config therefore loads into the SDL3 build as the same physical buttons; `EmuSen.WiseMan/Input/GamepadBindingMapTests.cs` pins that with a verbatim copy of a file the old build wrote.
+**Saved bindings survived the rename.** `GamepadButton` renamed the face buttons to their positions (`A`/`B`/`X`/`Y` → `South`/`East`/`West`/`North`) but kept every numeric value SDL2 used, and `gamepadbindings.json` persisted the numbers, not the names. An SDL2-era config therefore loads into the SDL3 build as the same physical buttons; `EmuSen.WiseMan/Input/GamepadBindingMapTests.cs` pins that with a verbatim copy of a file the old build wrote.
+
+> **Since superseded, deliberately.** The file now stores names (`"B": "South"`), because `11` told a person reading it nothing. Numbers still *read*, so nothing written by an older build is orphaned and the SDL2-era file above still loads — but this does invert which kind of change is survivable, from renumbering to renaming. See `EmuSen_Config_Reference.md` §2.1 for the full trade-off.
 
 **Testing against the dummy driver.** The audio suites force SDL's `dummy` playback driver, which is a real backend built for headless CI, not a mock. SDL3 exposes the driver choice as the `SDL_AUDIO_DRIVER` hint, so `SDL.SetHint` in a static constructor replaces the whole `SDL_AUDIODRIVER` environment-variable dance the SDL2 suites needed (a P/Invoked `setenv(3)`, because .NET's managed environment view was not what SDL read — see `EmuSen_Debugging_Tools_Reference_v5.md`). `EmuSen.WiseMan/Audio/NativeEnvironment.cs` existed only for that and was deleted.
 
@@ -228,3 +230,21 @@ One measurement did have to change, and the fix is worth understanding because t
 The queue's depth is not ours alone. It is `produced − consumed`, and *consumed* belongs to the output device's clock. SDL2's dummy driver happened to consume on a tight schedule; SDL3's paces against the wall clock more loosely, and a percent of drift there is ~320 frames/s, against a control law whose entire authority is 0.5 % (~160 frames/s). The queue reading was mostly reporting the driver, and only incidentally the emulator. Lengthening the window to ten seconds made it pass again, which is the tempting fix and the wrong one — it buys signal by waiting, without ever measuring the thing under test.
 
 What the test wants to know is whether rate control is *acting* to drain the queue, and that is observable directly: `DynamicRateControl.TotalInputFrames`/`TotalOutputFrames` (`EmuSen_Audio_Sync.md` §3.3) count frames in against frames handed on, so their difference over the recovery window is exactly the audio the control law withheld — no device clock involved. The test samples both counters at the stall and again at the end, and asserts the withheld fraction is at least half the configured maximum deviation. With the queue sitting well above target the law should be pinned near full authority, and it is: `produced=96375, emitted=95893, 0.500 % withheld`, identical on every run. The queue reading is still checked, but only as the loose bound it can actually support — that it has not climbed to the shedding entry point. The window went back to three seconds.
+
+### 4.11 The game library (`Library/RomLibrary.cs`, `Views/MainWindow.axaml`)
+
+`MainWindow`'s viewport is two screens sharing one `Grid`: `LibraryView` (a list of every ROM in `AppSettings.RomDirectory`) and `GameFrame` (the live emulator output). Exactly one is visible; the library is what you get whenever no game is running. Visibility is toggled in code-behind rather than bound, matching how the rest of this window is written.
+
+Activating a title — double-click, or Enter with it selected — prompts for any missing firmware (§`EmuSen_Firmware.md` §3, same path the OS picker uses) and then calls `LoadRom`, which hides the library and shows the frame. `File > Game Library` goes back, and is also the only unload path: it stops the emulation thread, flushes SRAM and verbose logs, and drops the session. A failed load returns there too, rather than leaving a black viewport with only a status line to explain it.
+
+**Enter reaches the list even though it is also bound to Start.** `MainWindow`'s key handlers are registered `Tunnel` with `handledEventsToo: true` (§4.2), so they see Enter first — but `SetButtonFromKey` does not mark a bound *button* handled, so the event still bubbles to `LibraryList`. The library's own handler sets `Handled` to stop it going further. The cost is that launching with Enter also latches Start for as long as the key is held, which is harmless and arguably wanted.
+
+**Why the scan is its own class.** `RomLibrary.Scan` has no Avalonia dependency, so the interesting behaviour is testable without a window: extension filtering (`.smc`/`.sfc`, case-insensitive), case-insensitive title sort, and the four outcomes a directory can produce — `NoDirectoryConfigured`, `DirectoryNotFound`, `Empty`, `Ok`. `RomLibrary.DescribeEmpty` is the single place the "why is my list empty" wording lives, so the inline library and the older modal `RomBrowserWindow` cannot drift; `RomBrowserWindow` was rewritten onto the same scan and no longer carries its own copy of the extension list.
+
+The list is refreshed on construction, whenever the library is shown, and when `PreferencesWindow` closes — that window is non-modal, so the ROM directory can change while the library sits on screen behind it.
+
+Two deliberate limits: the scan is **not recursive** (it matches what `RomBrowserWindow` always did — ROMs in subfolders are not listed), and titles are filenames with the extension stripped, with no header-name lookup or box art. Both are worth revisiting; neither is a bug.
+
+**Test coverage.** `EmuSen.WiseMan/Mistress/RomLibraryTests.cs` covers the scan directly. `MainWindowLibraryTests.cs` drives a real `MainWindow` through `HeadlessUnitTestSession` (§4.7's harness): that a configured directory lists and sorts its games, that an unset one points at Preferences, that activating a title really switches to the game screen — it boots a `SyntheticRom` for that — that `Game Library` returns, and that a ROM added afterwards shows up on refresh.
+
+**The headless harness needed a theme first.** `TestAppBuilder` (§4.7) built a bare `Application` with no styles. Templated controls — `ListBox`, `ListBoxItem`, `Button`, `TextBox` — then have no control template and render as *nothing*, while untemplated `TextBlock`s still draw. A render assertion counting distinct colours therefore passed on the header and hint text alone, with the entire list invisible; the library screen looked correct to the test and blank in a captured frame. `TestAppBuilder` now adds `FluentTheme` and `ThemeVariant.Dark` to match `App.axaml`, and the library's render test asserts specifically that the *selected row's accent colour* is present, which only a real templated `ListBoxItem` can produce. Set `EMUSEN_UI_DUMP=/path/frame.png` to write the captured frame out and look at it.

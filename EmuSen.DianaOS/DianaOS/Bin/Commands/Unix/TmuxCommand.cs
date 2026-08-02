@@ -5,6 +5,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia.Text;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
@@ -88,7 +89,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
                     return $"[tmux] Killed '{name}'.";
                 }
                 default:
-                    return $"Unknown 'tmux' subcommand '{sub}'. Try new/list/switch/kill.";
+                {
+                    // Named once so the suggestion and the "Try" list cannot drift.
+                    string[] subcommands = { "new", "list", "switch", "kill" };
+                    return $"Unknown 'tmux' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
+                }
             }
         }
     }

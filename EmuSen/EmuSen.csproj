@@ -35,6 +35,9 @@
          "be explicit about what's actually used" convention. -->
     <ProjectReference Include="..\EmuSen.DianaOS\EmuSen.DianaOS.csproj" />
     <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
+    <!-- AudioConfig, which AudioSettings maps to and from - see
+         EmuSen_Config_Reference.md §3.2. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
 </Project>

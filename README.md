@@ -131,11 +131,12 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 
 | Project | Role |
 |---|---|
+| `EmuSen.Galaxia` | Every config file on disk — paths, atomic JSON persistence, the agnostic models. A leaf: no dependencies at all |
 | `EmuSen` | The emulation core: CPU, PPU, APU, memory, save states, audio resampling. A pure library — no `Main`, no window |
 | `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command. Core-agnostic |
 | `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
 | `EmuSen.Serenity` | Shared presentation: the Avalonia/Skia `GameFrameControl`, shader pipeline, graphics settings |
-| `EmuSen.Nehellania` | Shared device I/O: SDL3 audio output, gamepad polling, pad bindings, the config root |
+| `EmuSen.Nehellania` | Shared device I/O: SDL3 audio output, gamepad polling, pad bindings |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
 | `EmuSen.Pharaoh` | The headless scripted harness |

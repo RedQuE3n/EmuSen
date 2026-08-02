@@ -11,7 +11,8 @@ EmuSen is a SNES emulator written in C# / .NET 10, structured as four sibling pr
 - **`EmuSen/`** — the emulation core only (CPU/PPU/APU/memory, `Common/`, `DianaOS/`, `Settings/`). A pure library — no `Main`, no window ownership of its own. This is the primary development/debugging environment — cores get built and verified here first, standalone, before either frontend is the main way of running them. It still has a `Raylib-cs` package dependency, because `Renderer.cs` uses `Raylib_cs.Color`/`Image`/`Texture2D` directly as its internal pixel representation and for debug-panel drawing - a real dependency of the core's own rendering logic, not something inherited from a frontend.
 - **`EmuSen.Hotaru/`** — the console-first frontend's actual driver (`Program.cs`'s `Main`, `App.axaml.cs`, `Views/GameWindow.axaml.cs`). Used to live inside `EmuSen.csproj` as its own `Exe`, which meant `EmuSen.Mistress/` (Avalonia) inherited this project's `Main`/window-ownership just by referencing `EmuSen.csproj` to reach the emulation core - backwards, since the two frontends have nothing to do with each other. Split out specifically to fix that: both frontends are now true siblings, each independently referencing `EmuSen.csproj` for the core and `EmuSen.Serenity` for presentation. Moved off Raylib entirely onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note. (Named `Hotaru`, not `Console` - naming it `EmuSen.Console` would make every bare `Console.WriteLine` in the file ambiguous with the namespace itself, a real C# gotcha, not just a style choice.)
 - **`EmuSen.Serenity/`** — shared presentation-layer code, split out so both frontends depend on the same implementation instead of a hand-copied duplicate: `GameFrameControl` (an Avalonia `Control` presenting any core via `ICore.GetFrameBufferRgba()` straight through Skia, with real shader support), `FramePresenter` (a plain `Window` + `GameFrameControl` bundle for a consumer that needs nothing else from its window), `Shaders/BuiltInShaders.cs` (Skia SkSL for the shader pass - see `EmuSen_Frontend_Driver.md` §2's F8 entry), and `GraphicsSettings.cs` (moved out of `EmuSen/Settings/` for the same reason). Both `EmuSen.Hotaru/` and `EmuSen.Mistress/` are real consumers now - Hotaru uses `GameFrameControl` directly rather than `FramePresenter` (see that project's own `GameWindow.axaml.cs` header comment for why); Mistress adopted the same `GameFrameControl` directly too, replacing its old CPU-side `WriteableBitmap` presentation (`MainWindow.axaml`/`.cs`) - the long-standing "no GPU/shader hook of its own" TODO this project existed to answer is closed on both frontends now. See §2a for which actual GPU API `GrContext` resolves to underneath that shared control, per platform.
-- **`EmuSen.Nehellania/`** — the shared SDL3 device layer, and the audio/input counterpart to `EmuSen.Serenity`: `AudioPlayer` (SDL3 audio streams), `GamepadManager`, `GamepadBindingMap` and `SettingsPaths`. Both frontends carried near-identical copies of all four until the SDL3 migration merged them here — see `EmuSen_Settings_Reference.md` §4.10 for what the merge had to reconcile. Depends on `EmuSen` and SDL3 only; deliberately no Avalonia, since nothing in it owns a window.
+- **`EmuSen.Nehellania/`** — the shared SDL3 device layer, and the audio/input counterpart to `EmuSen.Serenity`: `AudioPlayer` (SDL3 audio streams), `GamepadManager` and `GamepadBindingMap`. Both frontends carried near-identical copies until the SDL3 migration merged them here — see `EmuSen_Settings_Reference.md` §4.10 for what the merge had to reconcile. Depends on `EmuSen` and SDL3 only; deliberately no Avalonia, since nothing in it owns a window.
+- **`EmuSen.Galaxia/`** — every config file the program keeps on disk, and the one answer to where they live: `ConfigRoot` (root discovery, which `DianaOSSandbox` delegates to), `ConfigStore` (paths), `ConfigFile<T>` (atomic, best-effort JSON persistence) and the agnostic models — `AppSettings`, `AudioConfig`, `GraphicsConfig`, `CheatFile`. Config lives inside the sandbox at `/etc/EmuSen`, so `cat`/`nano` reach it. A **leaf** by necessity: `EmuSen.DianaOS` references it and `EmuSen` references `EmuSen.DianaOS`, so it can have no project references of its own — which is exactly what keeps it agnostic. See `EmuSen_Config_Reference.md`.
 - **`EmuSen.Mistress/`** — an Avalonia GUI, renamed from `EmuSen.Frontend` and deliberately scoped as bug-testing tooling: ROM picker (plus a ROM browser and a configurable default ROM directory), rebindable keyboard+gamepad input, Save/Load State menu items, and (Settings > Preferences...) a configurable log directory that reuses `EmuSen.Common.CategorizedLogWriter` for real per-session file logging, plus a scaffolding-only core picker. Referencing `EmuSen` and `EmuSen.Serenity` via project reference (as a sibling of `EmuSen.Hotaru`, not through it). Deliberately **not** where the eventual EmulationStation-style launcher gets built — see `EmuSen_Launcher_Multicore_Gameplan.md` for that separate, not-yet-created project's plan.
 
 **License:** GNU GPL-3.0 (see `LICENSE` at the repo root) — chosen deliberately over a permissive license (MIT) specifically so anything built on EmuSen's code stays open forever, matching how this project itself was built entirely from openly-provided documentation. Not chosen for commercial reasons; the point is guaranteeing downstream openness, not restricting use.
@@ -434,11 +435,27 @@ EmuSen Project/
 │   │   │                                 #   tears down the whole library regardless of which
 │   │   │                                 #   subsystem asked, which would break Audio/
 │   │   │                                 #   AudioPlayer.cs's still-open device otherwise
-│   │   └── GamepadBindingMap.cs         # One %AppData%/EmuSen/gamepadbindings.json for both
+│   │   └── GamepadBindingMap.cs         # One /etc/EmuSen/gamepadbindings.json for both
 │   │                                     #   frontends - SDL2-era files still load (§4.10).
-│   └── Settings/
-│       └── SettingsPaths.cs             # The redirectable config root every settings file in
-│                                         #   both frontends resolves through.
+│
+├── EmuSen.Galaxia/                  # The agnostic config handler - EmuSen_Config_Reference.md.
+│   │                                     #   A leaf: no ProjectReference, no PackageReference,
+│   │                                     #   because EmuSen.DianaOS references THIS and
+│   │                                     #   EmuSen references EmuSen.DianaOS.
+│   ├── ConfigRoot.cs                    # Root discovery - DianaOSSandbox forwards to it now.
+│   ├── ConfigStore.cs                   # /etc/EmuSen, plus the test-only overrides.
+│   ├── ConfigFile.cs                    # Load/Save for every config file: atomic write,
+│   │                                     #   best-effort read, one-time migration out of the
+│   │                                     #   old per-user location.
+│   ├── ConfigJson.cs                    # Comments and trailing commas allowed - these files
+│   │                                     #   are meant to be hand-edited from the shell.
+│   └── Models/
+│       ├── AppSettings.cs               # Was EmuSen.Mistress/Settings/ - holds no frontend
+│       │                                 #   types, so it was never frontend-specific.
+│       ├── AudioConfig.cs               # On-disk mirror of the static AudioSettings hub.
+│       ├── GraphicsConfig.cs            # Same, for GraphicsSettings.
+│       └── CheatFile.cs                 # `cheat save`/`load` - hex-text addresses, so the
+│                                         #   file is readable with `cat`.
 │
 └── EmuSen.Mistress/                 # Avalonia GUI - renamed from EmuSen.Frontend, deliberately
     │                                     #   scoped as bug-testing tooling only, NOT the future

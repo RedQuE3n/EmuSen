@@ -9,14 +9,11 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // NOP/unknown-opcode fallback, software interrupts (BRK/COP/RTI), WAI/STP
-    // halt states, and the two block-move opcodes (MVN/MVP) - the "not really
-    // any other category" operations, grouped together the way most 65816
-    // references group them.
+    // NOP, software interrupts (BRK/COP/RTI), WAI/STP halt states, and the two
+    // block-move opcodes (MVN/MVP) - the "not really any other category"
+    // operations, grouped together the way most 65816 references group them.
     public partial class Cpu
     {
-        private void OpUnknown(uint address) { }
-
         private void OpNOP(uint address) { }
 
         private void OpBRK(uint address)

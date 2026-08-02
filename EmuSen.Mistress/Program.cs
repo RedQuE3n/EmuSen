@@ -12,8 +12,17 @@ namespace EmuSen.Mistress
         // shape, not something specific to this project.
         [STAThread]
         public static void Main(string[] args)
-            => BuildAvaloniaApp()
-                .StartWithClassicDesktopLifetime(args);
+        {
+            // A config file that won't parse falls back to defaults either way;
+            // this is what stops it doing so silently - see §6.2.
+            EmuSen.Galaxia.ConfigDiagnostics.Sink = m => Console.WriteLine("[config] " + m);
+
+            // Before any window exists, since GraphicsSettings decides its size.
+            EmuSen.Audio.AudioSettings.LoadFromDisk();
+            EmuSen.Graphics.GraphicsSettings.LoadFromDisk();
+
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
 
         public static AppBuilder BuildAvaloniaApp()
         {

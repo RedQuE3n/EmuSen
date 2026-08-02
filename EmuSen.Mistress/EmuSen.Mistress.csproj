@@ -61,6 +61,9 @@
          config root - one copy for both frontends, see
          EmuSen_Settings_Reference.md §4.10. -->
     <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
+    <!-- AppSettings, and the ConfigFile that ControllerKeyMap/
+         HotkeyBindingMap persist through - see EmuSen_Config_Reference.md. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
 

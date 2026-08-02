@@ -185,6 +185,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                 new MemCommand(),
                 new WriteCommand(),
                 new RegsCommand(),
+                new CopHistCommand(),
                 new SpritesCommand(),
                 new PalCommand(),
                 new ChannelsCommand(),

@@ -3,7 +3,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using EmuSen.Mistress.Settings;
+using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Mistress.Views
 {

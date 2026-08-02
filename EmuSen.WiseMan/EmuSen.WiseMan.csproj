@@ -68,6 +68,10 @@
          Imaging/FrameImageWriterTests.cs. Nothing here constructs a
          GameWindow or opens an actual Avalonia window. -->
     <ProjectReference Include="..\EmuSen.Hotaru\EmuSen.Hotaru.csproj" />
+    <!-- ConfigStore/ConfigFile and the config models - see
+         Galaxia/*Tests.cs. ConfigStore.OverrideDirectory is what keeps
+         those tests off the real config tree. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
 </Project>

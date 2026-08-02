@@ -5,6 +5,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
+using EmuSen.Galaxia.Text;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
@@ -107,7 +108,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     return removed ? $"Watch #{parts[2]} removed." : $"No watch #{parts[2]} found.";
                 }
                 default:
-                    return $"Unknown 'watch' subcommand '{sub}'. Try add/list/log/summary/clear/remove.";
+                {
+                    // Named once so the suggestion and the "Try" list cannot drift.
+                    string[] subcommands = { "add", "list", "log", "summary", "clear", "remove" };
+                    return $"Unknown 'watch' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
+                }
             }
         }
     }

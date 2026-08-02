@@ -6,6 +6,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia.Models;
 
 namespace EmuSen.DianaOS.DianaOS.Var
 {
@@ -130,6 +131,40 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public IReadOnlyList<CheatInfo> GetCheats()
         {
             return _cheats.Select(c => new CheatInfo(c.Id, c.Kind, c.SpaceName, c.Address, c.Value, c.Compare, c.Description, c.Enabled)).ToList();
+        }
+
+        // Snapshot for etc/EmuSen/cheats/<name>.json - see EmuSen_Config_Reference.md §3.4.
+        public CheatFile ToCheatFile()
+        {
+            var file = new CheatFile();
+            foreach (Cheat c in _cheats)
+            {
+                file.Cheats.Add(c.Kind == CheatKind.RomPatch
+                    ? CheatFileEntry.RomPatch(c.Address, c.Value, c.Compare, c.Description, c.Enabled)
+                    : CheatFileEntry.RamPoke(c.SpaceName, c.Address, c.Value, c.Description, c.Enabled));
+            }
+            return file;
+        }
+
+        // Adds every well-formed entry and returns how many, plus how many were
+        // skipped as unparseable - a hand-edited file with one bad line still
+        // loads the rest, see EmuSen_Config_Reference.md §3.4.
+        public (int loaded, int skipped) LoadFrom(CheatFile file)
+        {
+            int loaded = 0, skipped = 0;
+            foreach (CheatFileEntry e in file.Cheats)
+            {
+                if (!e.TryParseAddress(out int address) || !e.TryParseValue(out byte value) || !e.TryParseCompare(out byte? compare))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                if (e.IsRomPatch) AddRomPatch(address, value, compare, e.Description, e.Enabled);
+                else AddRamPoke(e.Space, address, value, e.Description, e.Enabled);
+                loaded++;
+            }
+            return (loaded, skipped);
         }
 
         // Called once per frame - re-pokes every enabled RamPoke cheat's

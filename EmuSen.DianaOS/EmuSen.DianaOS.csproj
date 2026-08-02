@@ -23,6 +23,11 @@
          comment on why these live in their own project, separate from
          DianaOS, rather than being DianaOS-owned. -->
     <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
+    <!-- ConfigRoot (this shell's own root discovery lives there now) and
+         CheatFile, behind `cheat save`/`load` - see
+         EmuSen_Config_Reference.md §1.1 for why the dependency runs this
+         way round rather than Galaxia calling DianaOSSandbox. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
   <!-- Ships the two read-only doc trees into a published build's own sandbox
@@ -35,14 +40,8 @@
        source already reads these straight out of the repo, so copying them
        into every bin/ would be ~770KB of duplication nothing ever reads. -->
   <ItemGroup>
-    <None Include="DianaOS\Etc\Man pages\**\*"
-          Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Etc\Man pages\%(RecursiveDir)%(Filename)%(Extension)"
-          CopyToOutputDirectory="Never"
-          CopyToPublishDirectory="PreserveNewest" />
-    <None Include="DianaOS\Usr\Home\Documents\**\*"
-          Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Usr\Home\Documents\%(RecursiveDir)%(Filename)%(Extension)"
-          CopyToOutputDirectory="Never"
-          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="DianaOS\Etc\Man pages\**\*" Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Etc\Man pages\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="DianaOS\Usr\Home\Documents\**\*" Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Usr\Home\Documents\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 

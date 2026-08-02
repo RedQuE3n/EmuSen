@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Every config file this program keeps on disk, and the one answer to
+       where they live - see EmuSen_Config_Reference.md.
+
+       Deliberately a leaf: no ProjectReference, no PackageReference. It has
+       to be, because EmuSen.DianaOS references it (CheatRegistry's save/load)
+       and EmuSen references EmuSen.DianaOS - anything Galaxia depended on
+       upward would close a cycle. That constraint is what makes it agnostic
+       rather than just shared: nothing here can name Avalonia's Key, SDL's
+       GamepadButton or SnesButton, so the config models are plain data and
+       the typed maps that use foreign enums keep their own homes. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

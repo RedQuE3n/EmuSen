@@ -1,9 +1,7 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
 using SDL3;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Galaxia;
 
 namespace EmuSen.Nehellania.Input
 {
@@ -74,42 +72,17 @@ namespace EmuSen.Nehellania.Input
             RebuildReverseLookup();
         }
 
-        private static string ConfigPath => Settings.SettingsPaths.For("gamepadbindings.json");
+        private static readonly ConfigFile<Dictionary<SnesButton, SDL.GamepadButton>> File = new("gamepadbindings.json");
 
-        public void Save()
-        {
-            try
-            {
-                string dir = Path.GetDirectoryName(ConfigPath)!;
-                Directory.CreateDirectory(dir);
-                string json = JsonSerializer.Serialize(ButtonToPad, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(ConfigPath, json);
-            }
-            catch
-            {
-                // Best-effort - a failed save shouldn't crash a rebind attempt.
-            }
-        }
+        public void Save() => File.Save(ButtonToPad);
 
         public static GamepadBindingMap Load()
         {
             var bindings = new GamepadBindingMap();
-            try
+            if (File.Load() is { Count: > 0 } loaded)
             {
-                if (File.Exists(ConfigPath))
-                {
-                    string json = File.ReadAllText(ConfigPath);
-                    var loaded = JsonSerializer.Deserialize<Dictionary<SnesButton, SDL.GamepadButton>>(json);
-                    if (loaded is { Count: > 0 })
-                    {
-                        bindings.ButtonToPad = loaded;
-                        bindings.RebuildReverseLookup();
-                    }
-                }
-            }
-            catch
-            {
-                // Corrupt/unreadable config - fall back to defaults rather than crash.
+                bindings.ButtonToPad = loaded;
+                bindings.RebuildReverseLookup();
             }
             return bindings;
         }

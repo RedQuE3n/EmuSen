@@ -26,4 +26,11 @@
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- GraphicsConfig, which GraphicsSettings maps to and from - see
+         EmuSen_Config_Reference.md §3.3. The only reference this
+         presentation-layer project has. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+  </ItemGroup>
+
 </Project>

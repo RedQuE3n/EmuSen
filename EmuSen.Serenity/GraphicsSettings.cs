@@ -1,3 +1,5 @@
+using System;
+
 namespace EmuSen.Graphics
 {
     // Central hub for display/presentation options - see
@@ -29,5 +31,33 @@ namespace EmuSen.Graphics
         public static bool VSyncEnabled = true;
         public static bool WindowResizable = true;
         public static bool BilinearFiltering = true;
+
+        // Applies etc/EmuSen/graphics.json, seeding it on first run so there
+        // is something to hand-edit - see EmuSen_Config_Reference.md §3.3.
+        // Clamped for the same reason AudioSettings.LoadFromDisk is.
+        public static void LoadFromDisk()
+        {
+            bool seed = !Galaxia.Models.GraphicsConfig.Exists;
+            var config = Galaxia.Models.GraphicsConfig.Load();
+
+            WindowWidth = Math.Clamp(config.WindowWidth, 256, 16384);
+            WindowHeight = Math.Clamp(config.WindowHeight, 224, 16384);
+            TargetFps = Math.Clamp(config.TargetFps, 1, 1000);
+            VSyncEnabled = config.VSyncEnabled;
+            WindowResizable = config.WindowResizable;
+            BilinearFiltering = config.BilinearFiltering;
+
+            if (seed) SaveToDisk();
+        }
+
+        public static bool SaveToDisk() => new Galaxia.Models.GraphicsConfig
+        {
+            WindowWidth = WindowWidth,
+            WindowHeight = WindowHeight,
+            TargetFps = TargetFps,
+            VSyncEnabled = VSyncEnabled,
+            WindowResizable = WindowResizable,
+            BilinearFiltering = BilinearFiltering,
+        }.Save();
     }
 }

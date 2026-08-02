@@ -16,15 +16,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 {
     public partial class Renderer
     {
-        // Sub-phase breakdown within RenderScanline, for the same
-        // gameplay-slowdown investigation as VenusCore's LastFramePpuMs -
-        // that number stopped dropping as much as expected once BG1-4's
-        // redundant double-decode was fixed (RenderBg1-4's BgLineCache),
-        // meaning something else in here - sprite evaluation, or the
-        // final color-math/window blend loop, neither of which that fix
-        // touched - is the actual dominant cost. Accumulated across every
-        // scanline of one frame, reset when a new frame starts (py==0,
-        // same convention RangeOver/TimeOver already use above).
+        // Sub-phase breakdown within RenderScanline, accumulated per frame
+        // and reset at py==0 - see Venus_PPU.md §13.
         private long _objEvalTicksAccum;
         private long _blendTicksAccum;
         private long _mainCompositeTicksAccum;

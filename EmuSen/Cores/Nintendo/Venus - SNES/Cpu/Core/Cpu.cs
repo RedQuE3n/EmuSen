@@ -24,18 +24,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         N = (1 << 7)  
     }
 
-    public struct Instruction
-    {
-        public string Name;
-        public Func<uint> AddrMode;    
-        public Action<uint> Operate;   
-        public byte Cycles;            
-    }
-
     public partial class Cpu
     {
         private ICpuBus _bus;
-        [EmuSen.Common.SkipInState] private Instruction[] _instructions = null!; 
 
         // Set to true for detailed per-instruction tracing. Leave false for normal runs -
         // printing a console line for every single instruction (including ones inside
@@ -66,7 +57,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         // Side channel for the handful of addressing-mode-level cycle
         // penalties real hardware charges that don't fit the static
-        // per-opcode Instruction.Cycles model: a direct-page access with a
+        // per-opcode OpcodeCycles model: a direct-page access with a
         // nonzero D low byte, and an indexed access whose effective
         // address crosses a page boundary. The addressing-mode methods in
         // Cpu.AddressModes.cs increment this directly (they're instance
@@ -105,8 +96,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         }
 
         // Holds delegates (a Console.WriteLine reference plus two closures)
-        // internally - not serializable, same reasoning as _instructions
-        // above (case 1 in StateSerializer's own doc comment), just not
+        // internally - not serializable, same reasoning as Spc700's own
+        // dispatch table (case 1 in StateSerializer's doc comment), just not
         // caught at the time this field was added. Surfaced by the
         // headless debug harness's own --savestate/--loadstate smoke test:
         // reflecting into a delegate hits its private method-pointer field
@@ -125,10 +116,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             _name = name;
             _logReset = logReset;
             _bus = bus;
-            BuildOpcodeTable();
             _verboseTrace = new DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
-                key => $"[CPU] 0x{key.Pb:X2}{key.Pc:X4}: {_instructions[key.Opcode].Name} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X6}",
+                key => $"[CPU] 0x{key.Pb:X2}{key.Pc:X4}: {OpcodeNames[key.Opcode]} (Opcode 0x{key.Opcode:X2}) -> Target Addr: 0x{key.TargetAddr:X6}",
                 (cycleLength, repeats) => cycleLength == 1
                     ? $"[CPU]     ^ repeated {repeats}x total"
                     : $"[CPU]     ^ {cycleLength}-instruction loop above repeated {repeats}x total");
@@ -213,15 +203,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             uint opcodeAddr = ((uint)executedAtPB << 16) | executedAtPC;
             _addrModeExtraCycles = 0;
             byte opcode = Fetch8();
-            Instruction inst = _instructions[opcode];
-
-            if (inst.Name == "NOP/UNK")
-            {
-                throw new NotImplementedException($"Unimplemented Opcode: 0x{opcode:X2} at PC: 0x{PB:X2}{(PC - 1):X4}");
-            }
-
-            uint targetAddr = inst.AddrMode();
-            inst.Operate(targetAddr);
+            uint targetAddr = Dispatch(opcode);
 
             if (DebugSettings.CpuVerboseLogging)
             {
@@ -245,8 +227,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             }
 
             // Convert this instruction's cycle count into real elapsed
-            // master clocks instead of returning inst.Cycles as an opaque
-            // "CPU cycle" unit. inst.Cycles (plus _addrModeExtraCycles from
+            // master clocks instead of returning its base count as an opaque
+            // "CPU cycle" unit. OpcodeCycles (plus _addrModeExtraCycles from
             // the D-register/page-crossing penalties addressing-mode
             // methods report directly) is still the total access count,
             // but each access is now charged at the real region-dependent
@@ -267,7 +249,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             // the opcode bank rather than bank 0 - accepted as a known,
             // narrow residual rather than threading a same-bank flag
             // through every implied-addressing opcode for it.
-            int totalCycleUnits = inst.Cycles + _addrModeExtraCycles;
+            int totalCycleUnits = OpcodeCycles[opcode] + _addrModeExtraCycles;
             int bytesFetched = (ushort)(PC - executedAtPC);
             if (bytesFetched > totalCycleUnits) bytesFetched = totalCycleUnits;
             int remainderUnits = totalCycleUnits - bytesFetched;

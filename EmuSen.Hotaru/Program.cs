@@ -39,6 +39,14 @@ namespace EmuSen.Hotaru
 
         static void Main(string[] args)
         {
+            // A config file that won't parse falls back to defaults either way;
+            // this is what stops it doing so silently - see §6.2.
+            EmuSen.Galaxia.ConfigDiagnostics.Sink = m => Console.WriteLine("[config] " + m);
+
+            // Before any window exists, since GraphicsSettings decides its size.
+            EmuSen.Audio.AudioSettings.LoadFromDisk();
+            EmuSen.Graphics.GraphicsSettings.LoadFromDisk();
+
             TextWriter originalOut = Console.Out;
 
             // Disposed by FlushAndDispose() below on every exit path

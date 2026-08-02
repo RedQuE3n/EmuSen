@@ -262,6 +262,28 @@ namespace EmuSen.WiseMan.Coprocessors
             Assert.Equal(1, gsu.R[5]);
         }
 
+        // A branch is the one non-prefix instruction that leaves the prefix
+        // state alone, so TO/FROM/ALT ahead of it apply to the delay slot.
+        // This is Yoshi's Island's own idiom at 0A:8146 - see Venus_SuperFX.md §4.2.
+        [Fact]
+        public void A_branch_carries_its_prefix_into_the_delay_slot()
+        {
+            // FROM R6 : TO R5 : ALT2 : BRA +2, with AND #15 in the delay slot,
+            // so R5 = R6 & $0F. The INC R5 at the branch target must be skipped.
+            var gsu = Run([.. Iwt(6, 0x1234), .. Iwt(5, 0), 0xB6, 0x15, 0x3E, 0x05, 0x02, 0x7F, 0xD5, Stop]);
+            Assert.Equal(4, gsu.R[5]);
+        }
+
+        [Fact]
+        public void An_untaken_branch_also_carries_its_prefix()
+        {
+            // CMP R1 against an equal R0 sets Z, so BNE falls through; the
+            // prefix set after the compare must still reach AND #15.
+            var gsu = Run([.. Iwt(6, 0x1234), .. Iwt(5, 0), .. Iwt(0, 1), .. Iwt(1, 1),
+                0x3F, 0x61, 0xB6, 0x15, 0x3E, 0x08, 0x02, 0x7F, Stop]);
+            Assert.Equal(4, gsu.R[5]);
+        }
+
         [Fact]
         public void Jmp_transfers_control_to_a_register()
         {
@@ -410,6 +432,36 @@ namespace EmuSen.WiseMan.Coprocessors
 
             Assert.Equal(0xE0, gsu.ReadRam(0)); // three leftmost pixels
             Assert.Equal(3, gsu.R[1]);
+        }
+
+        // R1 keeps counting past 255 as PLOT advances it, but the plot
+        // hardware only ever sees the low byte, so the run wraps back to the
+        // start of the row instead of running off into another tile.
+        [Fact]
+        public void Plot_uses_only_the_low_byte_of_its_coordinate_registers()
+        {
+            byte[] rom = new byte[0x10000];
+            byte[] program =
+            [
+                .. Iwt(1, 0x0100), // x = 256, which is column 0
+                .. Iwt(2, 0x0200), // y = 512, which is row 0
+                .. Iwt(0, 0x0001),
+                0x4E,              // COLOR 1
+                0x4C,              // PLOT
+                Stop,
+            ];
+            program.CopyTo(rom, 0);
+
+            var gsu = new Gsu(rom, new byte[0x8000]);
+            gsu.WriteRegister(Clsr, 0x01);
+            gsu.WriteRegister(Scmr, 0x01);
+            gsu.WriteRegister(Scbr, 0x00);
+            gsu.WriteRegister(R15Low, 0x00);
+            gsu.WriteRegister(R15High, 0x00);
+            gsu.Run(20000);
+
+            Assert.Equal(0x80, gsu.ReadRam(0));
+            Assert.Equal(0x0101, gsu.R[1]); // the register itself is untouched
         }
 
         // Colour 0 is skipped unless POR says to plot it.

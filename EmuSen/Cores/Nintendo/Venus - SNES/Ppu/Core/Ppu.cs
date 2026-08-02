@@ -91,6 +91,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         public bool FieldParity;
 
+        // ROM-derived, so it survives a state load without being stored - see Venus_PPU.md §9.
+        [EmuSen.Common.SkipInState] public bool IsPal;
+
         public void OnScanlineStart(int scanline)
         {
             if (scanline == 0)
@@ -113,7 +116,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private bool _cgLowByte = true;
         private byte _cgLatch;
 
-        private ushort _oamAddr;             // $2102/$2103 (byte address into Oam)
+        private ushort _oamAddr;             // running internal address (byte address into Oam)
+        private ushort _oamAddrLatch;        // $2102/$2103 as last written, reloaded each vblank - see Venus_PPU.md §6.4
 
         public bool PriorityRotationEnabled;
         public int FirstSpriteIndex => PriorityRotationEnabled ? (_oamAddr & 0xFE) >> 1 : 0;

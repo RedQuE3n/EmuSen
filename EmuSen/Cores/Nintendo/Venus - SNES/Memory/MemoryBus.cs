@@ -12,7 +12,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {
-    public class MemoryBus
+    public class MemoryBus : EmuSen.Cores.Nintendo.Venus.Processor.ICpuBus
     {
         [EmuSen.Common.SkipInState] private Cartridge _cartridge;
         public int SramSize => _cartridge.SramSize;
@@ -157,6 +157,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             return 8;
         }
 
+        // See Dma.PendingCpuCycles for the unit convention (1 unit = 8 master clocks).
+        public int TakePendingDmaCycles()
+        {
+            int cycles = Dma.PendingCpuCycles;
+            Dma.PendingCpuCycles = 0;
+            return cycles;
+        }
+
         // Open-bus tracking - see Venus_Memory.md §1.4.
         private byte _lastBusValue;
 
@@ -225,7 +233,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     // through-the-scanline HBlank point (183/227 * 1364),
                     // matching real hardware's HBlank start around dot 274.
                     bool inHBlank = LineCycles >= 1099;
-                    return ObserveRead(Interrupts.ReadHVBJOY(inHBlank, _lastBusValue));
+                    bool inAutoJoypad = InterruptController.InAutoJoypadWindow(CurrentScanline, LineCycles);
+                    return ObserveRead(Interrupts.ReadHVBJOY(inHBlank, inAutoJoypad, _lastBusValue));
                 }
 
                 if (offset == 0x4211) return ObserveRead(Interrupts.ReadTIMEUP(_lastBusValue));

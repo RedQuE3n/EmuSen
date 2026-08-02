@@ -100,7 +100,10 @@ namespace EmuSen.Common
                 return;
             }
 
-            if (t.IsClass)
+            // An interface-typed field (Cpu._bus, which is a MemoryBus for the
+            // S-CPU and an Sa1Bus for the SA-1) is walked exactly like a class:
+            // Write() below keys off the runtime type either way.
+            if (t.IsClass || t.IsInterface)
             {
                 bool hasValue = value != null;
                 w.Write(hasValue);
@@ -146,7 +149,7 @@ namespace EmuSen.Common
                 return;
             }
 
-            if (t.IsClass)
+            if (t.IsClass || t.IsInterface)
             {
                 bool hasValue = r.ReadBoolean();
                 if (hasValue) Read(r, field.GetValue(owner)!, includeAliases);

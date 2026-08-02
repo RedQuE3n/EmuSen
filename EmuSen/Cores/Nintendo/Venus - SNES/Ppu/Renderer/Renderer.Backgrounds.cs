@@ -58,20 +58,21 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private readonly BgLineCache _bg4MainCache = new();
         private readonly BgLineCache _bg4SubCache = new();
 
-        private static int ResolveBgTileIndex(int baseTile, bool tile16, int wx, int wy, bool flipX, bool flipY)
+        // Modes 5/6 pair two 8-dot tiles into one 16-dot cell horizontally, the same way 16x16 tiles do - see Venus_PPU.md §8.
+        private static int ResolveBgTileIndex(int baseTile, bool tile16, bool hiRes, int wx, int wy, bool flipX, bool flipY)
         {
-            if (!tile16) return baseTile;
+            if (!tile16 && !hiRes) return baseTile;
             int subX = (wx >> 3) & 1;
-            int subY = (wy >> 3) & 1;
+            int subY = tile16 ? ((wy >> 3) & 1) : 0;
             if (flipX) subX = 1 - subX;
-            if (flipY) subY = 1 - subY;
+            if (flipY && tile16) subY = 1 - subY;
             return baseTile + subX + subY * 16;
         }
-        private static int ResolveHiResPairedTile(int tileIndex, int mode, bool tile16, bool flipX, bool isMainScreen)
+
+        // The 512-dot column this output pixel samples, matching §8's main-on-even interleave - see Venus_PPU.md §8.
+        private static int HiResDot(int samplePx, int hofs, bool isMainScreen)
         {
-            if ((mode != 5 && mode != 6) || tile16) return tileIndex;
-            int offset = (isMainScreen != flipX) ? 0 : 1;
-            return tileIndex + offset;
+            return (samplePx << 1) + (isMainScreen ? 0 : 1) + (hofs << 1);
         }
 
         private static int GetBgBpp(int mode, int bgIndex)
@@ -186,8 +187,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int mosaicSize = ((ppu.Mosaic >> 4) & 0x0F) + 1;
                 int samplePy = mosaicOn ? py - ((py - ppu.MosaicStartScanline) % mosaicSize) : py;
 
+                // Hi-res cells are always 16 dots wide, whatever the tile-size bit says - see Venus_PPU.md §8.
+                bool hiRes = mode == 5 || mode == 6;
+                int cellShiftX = (hiRes || tile16) ? 4 : 3;
                 int mapH = ((sizeBits & 0x02) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
-                int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
+                int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * ((hiRes || tile16) ? 2 : 1);
 
                 // Reactive VRAM-read caching: consecutive screen pixels very
                 // often land in the same 8x8 tile (a tile spans 8 WORLD
@@ -221,9 +225,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         (hofsBase, vofsBase) = GetOffsetPerTileScroll(ppu, mode, 0, px, hofsBase, vofsBase);
                     }
 
-                    int wx = (samplePx + hofsBase) % mapW;
-                    int tx = wx >> (tile16 ? 4 : 3);
-                    int wy = (samplePy + vofsBase) % mapH;
+                    int wx = (hiRes ? HiResDot(samplePx, hofsBase, isMainScreen) : samplePx + hofsBase) % mapW;
+                    int tx = wx >> cellShiftX;
+                    // +1: the first visible scanline is 1, not 0 - see Venus_PPU.md §2.4.
+                    int wy = (samplePy + 1 + vofsBase) % mapH;
                     int ty = wy >> (tile16 ? 4 : 3);
 
                     int entryAddr = BgTilemapEntryAddress(mapBase, sizeBits, tx, ty);
@@ -247,8 +252,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int r = flipY ? 7 - (wy & 7) : (wy & 7);
                     int cbit = flipX ? (wx & 7) : 7 - (wx & 7);
 
-                    int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, wx, wy, flipX, flipY);
-                    tileIndex = ResolveHiResPairedTile(tileIndex, mode, tile16, flipX, isMainScreen);
+                    int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, hiRes, wx, wy, flipX, flipY);
                     int tileAddr = (chrBase + tileIndex * tileStride) & 0xFFFF;
 
                     byte p0, p1, p2 = 0, p3 = 0, p4 = 0, p5 = 0, p6 = 0, p7 = 0;
@@ -353,8 +357,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int mosaicSize = ((ppu.Mosaic >> 4) & 0x0F) + 1;
                 int samplePy = mosaicOn ? py - ((py - ppu.MosaicStartScanline) % mosaicSize) : py;
 
+                // Hi-res cells are always 16 dots wide - see RenderBg1's own comment and Venus_PPU.md §8.
+                bool hiRes = mode == 5 || mode == 6;
+                int cellShiftX = (hiRes || tile16) ? 4 : 3;
                 int mapH = ((sizeBits & 0x02) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
-                int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
+                int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * ((hiRes || tile16) ? 2 : 1);
 
                 // Reactive VRAM-read caching - see RenderBg1's own comment.
                 // BG2 never exceeds 4bpp (GetBgBpp), so only p0-p3 are
@@ -376,9 +383,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         (hofsBase, vofsBase) = GetOffsetPerTileScroll(ppu, mode, 1, px, hofsBase, vofsBase);
                     }
 
-                    int wx = (samplePx + hofsBase) % mapW;
-                    int tx = wx >> (tile16 ? 4 : 3);
-                    int wy = (samplePy + vofsBase) % mapH;
+                    int wx = (hiRes ? HiResDot(samplePx, hofsBase, isMainScreen) : samplePx + hofsBase) % mapW;
+                    int tx = wx >> cellShiftX;
+                    // +1: the first visible scanline is 1, not 0 - see Venus_PPU.md §2.4.
+                    int wy = (samplePy + 1 + vofsBase) % mapH;
                     int ty = wy >> (tile16 ? 4 : 3);
 
                     int entryAddr = BgTilemapEntryAddress(mapBase, sizeBits, tx, ty);
@@ -402,8 +410,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int r = flipY ? 7 - (wy & 7) : (wy & 7);
                     int cbit = flipX ? (wx & 7) : 7 - (wx & 7);
 
-                    int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, wx, wy, flipX, flipY);
-                    tileIndex = ResolveHiResPairedTile(tileIndex, mode, tile16, flipX, isMainScreen);
+                    int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, hiRes, wx, wy, flipX, flipY);
                     int tileAddr = (chrBase + tileIndex * tileStride) & 0xFFFF;
 
                     byte p0, p1, p2 = 0, p3 = 0;
@@ -474,7 +481,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int samplePy = mosaicOn ? py - ((py - ppu.MosaicStartScanline) % mosaicSize) : py;
 
                 int mapH = ((sizeBits & 0x02) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
-                int wy = (samplePy + ppu.BgScrollY[2]) % mapH;
+                // +1: the first visible scanline is 1, not 0 - see Venus_PPU.md §2.4.
+                int wy = (samplePy + 1 + ppu.BgScrollY[2]) % mapH;
                 int ty = wy >> (tile16 ? 4 : 3);
 
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
@@ -515,7 +523,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int r = flipY ? 7 - (wy & 7) : (wy & 7);
                     int cbit = flipX ? (wx & 7) : 7 - (wx & 7);
 
-                    int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, wx, wy, flipX, flipY);
+                    int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, false, wx, wy, flipX, flipY);
                     int tileAddr = (chrBase + tileIndex * tileStride) & 0xFFFF;
 
                     byte p0, p1, p2 = 0, p3 = 0;
@@ -586,7 +594,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int samplePy = mosaicOn ? py - ((py - ppu.MosaicStartScanline) % mosaicSize) : py;
 
                 int mapH = ((sizeBits & 0x02) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
-                int wy = (samplePy + ppu.BgScrollY[3]) % mapH;
+                // +1: the first visible scanline is 1, not 0 - see Venus_PPU.md §2.4.
+                int wy = (samplePy + 1 + ppu.BgScrollY[3]) % mapH;
                 int ty = wy >> (tile16 ? 4 : 3);
 
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
@@ -627,7 +636,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     int r = flipY ? 7 - (wy & 7) : (wy & 7);
                     int cbit = flipX ? (wx & 7) : 7 - (wx & 7);
 
-                    int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, wx, wy, flipX, flipY);
+                    int tileIndex = ResolveBgTileIndex(entry & 0x3FF, tile16, false, wx, wy, flipX, flipY);
                     int tileAddr = (chrBase + tileIndex * tileStride) & 0xFFFF;
 
                     byte p0, p1, p2 = 0, p3 = 0;

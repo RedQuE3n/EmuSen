@@ -52,6 +52,23 @@ namespace EmuSen.Debug
         // Counts down one GSU instruction per line - see Venus_SuperFX.md §9.
         public static int SuperFxTraceCountdown = 0;
 
+        // Scales the GSU's cycle cost, to test whether a failure is a
+        // GSU/S-CPU synchronisation problem - see Venus_SuperFX.md §8.
+        public static int SuperFxSpeedDivisor = 1;
+
+        // Logs the plot stream itself, skipping the first N plots so a later
+        // drawing pass can be reached - see Venus_SuperFX.md §8.
+        public static int SuperFxPlotTraceSkip = 0;
+        public static int SuperFxPlotTraceCountdown = 0;
+        public static int SuperFxPlotTraceInstr = 0;
+
+        // Logs GSU-side Game Pak RAM writes to one address, with the GSU PC that
+        // made them - answers "did the chip write this, and from where"
+        // for output the chip builds with stores rather than PLOT.
+        // -1 is off - see Venus_SuperFX.md §8.
+        public static int SuperFxRamWriteTraceAddr = -1;
+        public static int SuperFxRamWriteTraceCountdown = 0;
+
         // --- Dma.cs ---
         private static bool _dmaVerboseLogging = true;
         public static bool DmaVerboseLogging

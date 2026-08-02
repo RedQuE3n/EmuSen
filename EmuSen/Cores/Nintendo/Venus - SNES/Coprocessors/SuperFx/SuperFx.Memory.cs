@@ -27,19 +27,23 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         // S-CPU view. MemoryBus has already claimed WRAM, the PPU and the CPU
         // registers before the cartridge is consulted.
+        // Bus arbitration is not enforced, so this counts the violations the
+        // hardware would have stalled - see Venus_SuperFX.md §2.1.
+        public long DebugScpuRamWhileRunning { get; private set; }
+
         public CartridgeAddress ResolveScpu(byte bank, ushort offset)
         {
             if (IsLowBank(bank))
             {
                 if (offset >= 0x3000 && offset <= 0x32FF) return CartridgeAddress.CoprocessorRegister(offset);
-                if (offset >= 0x6000 && offset <= 0x7FFF) return CartridgeAddress.Sram(RamOffsetWindow(bank, offset));
+                if (offset >= 0x6000 && offset <= 0x7FFF) { if (Running) DebugScpuRamWhileRunning++; return CartridgeAddress.Sram(RamOffsetWindow(bank, offset)); }
                 if (offset >= 0x8000) return CartridgeAddress.Rom(RomOffset(bank, offset));
                 return CartridgeAddress.Unmapped;
             }
 
             // $7E/$7F never arrive here - MemoryBus decodes WRAM first.
             if ((bank >= 0x40 && bank <= 0x5F) || (bank >= 0xC0 && bank <= 0xDF)) return CartridgeAddress.Rom(RomOffset(bank, offset));
-            if (bank >= 0x60) return CartridgeAddress.Sram(RamOffsetLinear(bank, offset));
+            if (bank >= 0x60) { if (Running) DebugScpuRamWhileRunning++; return CartridgeAddress.Sram(RamOffsetLinear(bank, offset)); }
             return CartridgeAddress.Unmapped;
         }
 
@@ -56,7 +60,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         public void WriteRam(int offset, byte data)
         {
             if (_ram.Length == 0) return;
-            _ram[(offset & 0x7FFFFF) % _ram.Length] = data;
+            int index = (offset & 0x7FFFFF) % _ram.Length;
+
+            // See Venus_SuperFX.md §8.
+            if (EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceCountdown > 0
+                && index == EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceAddr)
+            {
+                EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceCountdown--;
+                System.Console.WriteLine($"[GSUW] {index:X6} = {data:X2} pc={_pbr:X2}:{R[15]:X4}");
+            }
+
+            _ram[index] = data;
         }
 
         // Program fetch. The GSU can run out of ROM ($00-$5F) or, for code the

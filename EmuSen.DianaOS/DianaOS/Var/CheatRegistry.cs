@@ -80,14 +80,48 @@ namespace EmuSen.DianaOS.DianaOS.Var
     // handed read/write delegates. A future core wires this up the same
     // way Venus's SnesDebugTarget does. See `man cheat` for the write
     // model (widths, byte order, repeat runs, bit positions).
+    //
+    // Thread-safe by copy-on-write, because the reader is the emulation
+    // thread and the writer usually is not - see
+    // EmuSen_Settings_Reference.md §4.15.
     public class CheatRegistry
     {
-        private readonly List<Cheat> _cheats = new();
+        // Copy-on-write: mutated only under _gate, read without any lock -
+        // see this class's threading note above.
+        private Cheat[] _cheats = Array.Empty<Cheat>();
+        private readonly object _gate = new();
         private int _nextId = 1;
 
         // TryPatchRom runs on every cartridge-routed read, so the common
         // "no ROM patches active" case must not walk the list at all.
-        private int _enabledRomPatches;
+        private volatile int _enabledRomPatches;
+
+        private volatile bool _masterEnabled = true;
+
+        // One switch over every cheat, runtime-only and never saved - see `man cheat`.
+        public bool MasterEnabled
+        {
+            get => _masterEnabled;
+            set
+            {
+                lock (_gate)
+                {
+                    _masterEnabled = value;
+                    RecountRomPatches();
+                }
+            }
+        }
+
+        // The snapshot a reader walks. One volatile read, then the array is
+        // its own for the rest of the call - see the threading note above.
+        private Cheat[] Snapshot() => System.Threading.Volatile.Read(ref _cheats);
+
+        // Publishes a new snapshot. Callers hold _gate.
+        private void Publish(Cheat[] next)
+        {
+            System.Threading.Volatile.Write(ref _cheats, next);
+            RecountRomPatches();
+        }
 
         public int AddRamPoke(string spaceName, int address, byte value, string description, bool enabled = true) =>
             AddCheat(CheatKind.RamPoke, new[] { CheatWrite.Poke(spaceName, address, value) }, null, description, enabled);
@@ -125,53 +159,68 @@ namespace EmuSen.DianaOS.DianaOS.Var
                 }
             }
 
-            var cheat = new Cheat
+            lock (_gate)
             {
-                Id = _nextId++,
-                Kind = kind,
-                Writes = list,
-                Compare = compare,
-                Description = description,
-                Enabled = enabled,
-            };
-            _cheats.Add(cheat);
-            RecountRomPatches();
-            return cheat.Id;
+                var cheat = new Cheat
+                {
+                    Id = _nextId++,
+                    Kind = kind,
+                    Writes = list,
+                    Compare = compare,
+                    Description = description,
+                    Enabled = enabled,
+                };
+
+                var next = new Cheat[_cheats.Length + 1];
+                Array.Copy(_cheats, next, _cheats.Length);
+                next[^1] = cheat;
+                Publish(next);
+                return cheat.Id;
+            }
         }
 
         public bool RemoveCheat(int id)
         {
-            bool removed = _cheats.RemoveAll(c => c.Id == id) > 0;
-            if (removed) RecountRomPatches();
-            return removed;
+            lock (_gate)
+            {
+                Cheat[] next = _cheats.Where(c => c.Id != id).ToArray();
+                if (next.Length == _cheats.Length) return false;
+                Publish(next);
+                return true;
+            }
         }
 
         public bool SetEnabled(int id, bool enabled)
         {
-            Cheat? c = _cheats.FirstOrDefault(x => x.Id == id);
-            if (c is null) return false;
-            c.Enabled = enabled;
-            RecountRomPatches();
-            return true;
+            lock (_gate)
+            {
+                Cheat? c = _cheats.FirstOrDefault(x => x.Id == id);
+                if (c is null) return false;
+                // In place, not a new snapshot: a reader mid-walk seeing the
+                // old or the new flag is equally correct, and both are torn-free.
+                c.Enabled = enabled;
+                RecountRomPatches();
+                return true;
+            }
         }
 
         public void Clear()
         {
-            _cheats.Clear();
-            RecountRomPatches();
+            lock (_gate) Publish(Array.Empty<Cheat>());
         }
 
+        // Master off counts as zero, so TryPatchRom's hot path stays one int compare.
         private void RecountRomPatches() =>
-            _enabledRomPatches = _cheats.Count(c => c.Kind == CheatKind.RomPatch && c.Enabled);
+            _enabledRomPatches = _masterEnabled ? _cheats.Count(c => c.Kind == CheatKind.RomPatch && c.Enabled) : 0;
 
         public IReadOnlyList<CheatInfo> GetCheats() =>
-            _cheats.Select(c => new CheatInfo(c.Id, c.Kind, c.Writes, c.Compare, c.Description, c.Enabled)).ToList();
+            Snapshot().Select(c => new CheatInfo(c.Id, c.Kind, c.Writes, c.Compare, c.Description, c.Enabled)).ToList();
 
         // Snapshot for etc/EmuSen/cheats/<name>.json - see EmuSen_Config_Reference.md §3.4.
         public CheatFile ToCheatFile()
         {
             var file = new CheatFile();
-            foreach (Cheat c in _cheats)
+            foreach (Cheat c in Snapshot())
             {
                 bool isRomPatch = c.Kind == CheatKind.RomPatch;
                 file.Cheats.Add(new CheatFileEntry
@@ -269,7 +318,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
         // already there - the registry still never touches memory itself.
         public void ApplyAll(Func<string, int, byte> read, Action<string, int, byte> write)
         {
-            foreach (Cheat c in _cheats)
+            if (!_masterEnabled) return;
+
+            foreach (Cheat c in Snapshot())
             {
                 if (c.Kind != CheatKind.RamPoke || !c.Enabled) continue;
                 foreach (CheatWrite w in c.Writes) ApplyWrite(w, read, write);
@@ -336,7 +387,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
             int target = (int)address;
 
-            foreach (Cheat c in _cheats)
+            foreach (Cheat c in Snapshot())
             {
                 if (c.Kind != CheatKind.RomPatch || !c.Enabled) continue;
                 if (c.Compare.HasValue && c.Compare.Value != originalValue) continue;

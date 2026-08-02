@@ -1,9 +1,7 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
 using Avalonia.Input;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Galaxia;
 
 namespace EmuSen.Mistress.Input
 {
@@ -81,43 +79,17 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        private static string ConfigPath => Nehellania.Settings.SettingsPaths.For("keybindings.json");
+        private static readonly ConfigFile<Dictionary<SnesButton, Key>> File = new("keybindings.json");
 
-        public void Save()
-        {
-            try
-            {
-                string dir = Path.GetDirectoryName(ConfigPath)!;
-                Directory.CreateDirectory(dir);
-                string json = JsonSerializer.Serialize(ButtonToKey, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(ConfigPath, json);
-            }
-            catch
-            {
-                // Best-effort - a failed save shouldn't crash a rebind attempt,
-                // it just means the change won't survive a restart.
-            }
-        }
+        public void Save() => File.Save(ButtonToKey);
 
         public static ControllerKeyMap Load()
         {
             var bindings = new ControllerKeyMap();
-            try
+            if (File.Load() is { Count: > 0 } loaded)
             {
-                if (File.Exists(ConfigPath))
-                {
-                    string json = File.ReadAllText(ConfigPath);
-                    var loaded = JsonSerializer.Deserialize<Dictionary<SnesButton, Key>>(json);
-                    if (loaded is { Count: > 0 })
-                    {
-                        bindings.ButtonToKey = loaded;
-                        bindings.RebuildReverseLookup();
-                    }
-                }
-            }
-            catch
-            {
-                // Corrupt/unreadable config - fall back to defaults rather than crash.
+                bindings.ButtonToKey = loaded;
+                bindings.RebuildReverseLookup();
             }
             return bindings;
         }

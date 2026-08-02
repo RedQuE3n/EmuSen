@@ -24,6 +24,10 @@
          and AudioSettings, SnesButton. No Avalonia here on purpose: nothing
          in this project touches a window. -->
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+    <!-- ConfigFile, which GamepadBindingMap persists through - reached
+         transitively via EmuSen too, named explicitly because this project
+         uses the type directly. See EmuSen_Config_Reference.md §2. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
 </Project>

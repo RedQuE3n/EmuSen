@@ -8,8 +8,8 @@ using Avalonia.Platform;
 using EmuSen.Common.Imaging;
 using EmuSen.Mistress.Input;
 using EmuSen.Nehellania.Input;
-using EmuSen.Nehellania.Settings;
-using EmuSen.Mistress.Settings;
+using EmuSen.Galaxia;
+using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
 
 namespace EmuSen.WiseMan.Mistress

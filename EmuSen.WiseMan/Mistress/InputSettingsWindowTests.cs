@@ -11,8 +11,8 @@ using Avalonia.VisualTree;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Mistress.Input;
 using EmuSen.Nehellania.Input;
-using EmuSen.Nehellania.Settings;
-using EmuSen.Mistress.Settings;
+using EmuSen.Galaxia;
+using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
 
 namespace EmuSen.WiseMan.Mistress
@@ -29,12 +29,12 @@ namespace EmuSen.WiseMan.Mistress
         {
             // Rebinding saves, so redirect it - see EmuSen_Settings_Reference.md §4.7.
             _configDir = Path.Combine(Path.GetTempPath(), "EmuSenInputSettingsTests", Guid.NewGuid().ToString("N"));
-            SettingsPaths.OverrideDirectory = _configDir;
+            ConfigStore.OverrideDirectory = _configDir;
         }
 
         public void Dispose()
         {
-            SettingsPaths.OverrideDirectory = null;
+            ConfigStore.OverrideDirectory = null;
             try { if (Directory.Exists(_configDir)) Directory.Delete(_configDir, recursive: true); } catch { }
         }
 

@@ -5,6 +5,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia;
 
 namespace EmuSen.DianaOS.DianaOS.Etc
 {
@@ -19,31 +20,16 @@ namespace EmuSen.DianaOS.DianaOS.Etc
     public static class DianaOSSandbox
     {
         // The three roots this shell can have, and how each is found: see `man hier`.
-        public const string PublishedRootDirName = "DianaOSRoot";
+        // Root discovery itself lives in EmuSen.Galaxia, which sits below this
+        // project - see EmuSen_Config_Reference.md §1.1 for why that direction.
+        public const string PublishedRootDirName = ConfigRoot.PublishedRootDirName;
 
         // Written to a published tree's root by DianaOSPublishLayout.targets.
-        public const string RootMarkerFileName = ".dianaosroot";
+        public const string RootMarkerFileName = ConfigRoot.RootMarkerFileName;
 
-        private static readonly Lazy<string> _root = new(() => ComputeRootFor(AppContext.BaseDirectory));
+        public static string RootDirectory => ConfigRoot.Directory;
 
-        public static string RootDirectory => _root.Value;
-
-        // baseDirectory is AppContext.BaseDirectory in production - NOT
-        // Environment.CurrentDirectory, which a launcher/shortcut gets to decide.
-        // Parameterized purely so both branches are testable - see DianaOSSandboxTests.
-        public static string ComputeRootFor(string baseDirectory)
-        {
-            string dir = Path.GetFullPath(baseDirectory);
-            for (int i = 0; i < 10; i++)
-            {
-                if (File.Exists(Path.Combine(dir, "EmuSen.sln"))) return dir;
-                if (File.Exists(Path.Combine(dir, RootMarkerFileName))) return dir;
-                string? parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(dir));
-                if (parent is null || parent == dir) break;
-                dir = parent;
-            }
-            return Path.GetFullPath(Path.Combine(baseDirectory, PublishedRootDirName));
-        }
+        public static string ComputeRootFor(string baseDirectory) => ConfigRoot.ComputeFor(baseDirectory);
 
         // The DianaOS project's own "user data" home - emulator-facing
         // output (dump/load/screenshot/recording logs, SRAM + state
@@ -76,6 +62,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
             foreach (string stub in UsrHomeStubs) Directory.CreateDirectory(Path.Combine(UsrHomeDirectory, stub));
             Directory.CreateDirectory(Path.Combine(root, "home", "root"));
             Directory.CreateDirectory(Path.Combine(root, "etc"));
+            Directory.CreateDirectory(ConfigStore.Directory);
             Directory.CreateDirectory(Path.Combine(root, "tmp"));
         }
 

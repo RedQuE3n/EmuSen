@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
 
 [assembly: AvaloniaTestApplication(typeof(EmuSen.WiseMan.Serenity.TestAppBuilder))]
 
@@ -14,9 +16,17 @@ namespace EmuSen.WiseMan.Serenity
     // instead of a live GPU one.
     public class TestAppBuilder
     {
+        // FluentTheme/Dark to match the real frontends (App.axaml) - without a
+        // theme, templated controls have no template and render as nothing at
+        // all, which silently makes any render assertion over them vacuous.
         public static AppBuilder BuildAvaloniaApp() =>
             AppBuilder.Configure<Application>()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .UseSkia();
+                .UseSkia()
+                .AfterSetup(builder =>
+                {
+                    builder.Instance!.Styles.Add(new FluentTheme());
+                    builder.Instance.RequestedThemeVariant = ThemeVariant.Dark;
+                });
     }
 }

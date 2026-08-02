@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.DianaOS", "EmuSen.Di
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Nehellania", "EmuSen.Nehellania\EmuSen.Nehellania.csproj", "{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Galaxia", "EmuSen.Galaxia\EmuSen.Galaxia.csproj", "{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -153,6 +155,18 @@ Global
 		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|x64.Build.0 = Release|Any CPU
 		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|x86.ActiveCfg = Release|Any CPU
 		{45CDBA60-1F6F-45B3-8C07-BB4F730728FE}.Release|x86.Build.0 = Release|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Debug|x64.Build.0 = Debug|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Debug|x86.Build.0 = Debug|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Release|x64.ActiveCfg = Release|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Release|x64.Build.0 = Release|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Release|x86.ActiveCfg = Release|Any CPU
+		{4D7D64FC-E28C-483F-B1DB-061E3D9A05D2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

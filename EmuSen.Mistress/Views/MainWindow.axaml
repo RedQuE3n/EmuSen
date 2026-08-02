@@ -18,23 +18,41 @@
                 <MenuItem Header="E_xit" Click="OnExitClick" />
             </MenuItem>
 
-            <!-- Pause/Reset still aren't implemented - individually disabled.
-                 Save/Load State are real now (EmulatorSession.SaveState/
-                 LoadState), so the menu itself no longer needs a blanket
-                 disable. -->
-            <MenuItem Header="_Emulation">
-                <MenuItem Header="_Pause" IsEnabled="False" />
-                <MenuItem Header="_Reset" IsEnabled="False" />
+            <!-- Every item needs a running game; enabled state is synced on
+                 open - see EmuSen_Settings_Reference.md §4.12. -->
+            <MenuItem x:Name="EmulationMenu" Header="_Emulation" SubmenuOpened="OnEmulationMenuOpened">
+                <MenuItem x:Name="PauseMenuItem" Header="_Pause" ToggleType="CheckBox" Click="OnPauseClick" />
+                <MenuItem x:Name="ResetMenuItem" Header="_Reset" Click="OnResetClick" />
+                <MenuItem x:Name="CloseGameMenuItem" Header="_Close Game" Click="OnCloseGameClick" />
                 <Separator />
-                <MenuItem Header="Save _State" Click="OnSaveStateClick" />
-                <MenuItem Header="_Load State" Click="OnLoadStateClick" />
+                <!-- The held Fast Forward hotkey layers over whichever of these
+                     is picked - see EmuSen_Settings_Reference.md §4.13. -->
+                <MenuItem x:Name="SpeedMenuItem" Header="Spee_d">
+                    <MenuItem x:Name="SpeedNormalMenuItem" Header="_Normal" ToggleType="Radio" Click="OnSpeedNormalClick" />
+                    <MenuItem x:Name="SpeedFastMenuItem" Header="_Fast Forward" ToggleType="Radio" Click="OnSpeedFastClick" />
+                    <MenuItem x:Name="SpeedSlowMenuItem" Header="_Slow Motion" ToggleType="Radio" Click="OnSpeedSlowClick" />
+                    <MenuItem x:Name="SpeedUnthrottledMenuItem" Header="_Unthrottled" ToggleType="Radio" Click="OnSpeedUnthrottledClick" />
+                </MenuItem>
+                <Separator />
+                <MenuItem x:Name="SaveStateMenuItem" Header="Save _State" Click="OnSaveStateClick" />
+                <MenuItem x:Name="LoadStateMenuItem" Header="_Load State" Click="OnLoadStateClick" />
+                <!-- Slots are rebuilt on open so their timestamps are current - see §4.13. -->
+                <MenuItem x:Name="SaveSlotMenuItem" Header="State Sl_ot" SubmenuOpened="OnSaveSlotMenuOpened" />
             </MenuItem>
 
-            <MenuItem Header="_Settings">
+            <MenuItem x:Name="ViewMenu" Header="_View" SubmenuOpened="OnViewMenuOpened">
+                <MenuItem x:Name="FullscreenMenuItem" Header="_Fullscreen" ToggleType="CheckBox" Click="OnFullscreenClick" />
+            </MenuItem>
+
+            <MenuItem x:Name="SettingsMenu" Header="_Settings" SubmenuOpened="OnSettingsMenuOpened">
                 <MenuItem Header="_Controller Bindings..." Click="OnControllerBindingsClick" />
                 <MenuItem Header="_Debug Logging..." Click="OnDebugLoggingClick" />
                 <MenuItem Header="_Preferences..." Click="OnPreferencesClick" />
+                <MenuItem Header="Chea_t Database..." Click="OnCheatDatabaseClick" />
                 <Separator />
+                <MenuItem x:Name="HardwareDashboardMenuItem" Header="_Hardware Dashboard..." Click="OnHardwareDashboardClick" />
+                <!-- Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`. -->
+                <MenuItem x:Name="RuntimeDashboardMenuItem" Header="_Runtime Dashboard..." Click="OnRuntimeDashboardClick" />
                 <MenuItem Header="_DianaOS Console..." Click="OnShellConsoleClick" />
             </MenuItem>
         </Menu>

@@ -90,7 +90,26 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "                                     is already loaded (`cheat clear` first to",
             "                                     replace rather than merge)",
             "  cheat files                        list the saved cheat files",
+            "  cheat import <path.cht>            import RetroArch/libretro .cht cheats, added",
+            "                                     disabled so nothing turns on by surprise",
+            "  cheat export <path.cht>            write RAM-poke cheats out as a .cht file",
+            "  cheat db [status]                  where the cheat database is, and what is in it",
+            "  cheat db find <game>               search the database for a game",
+            "  cheat db load <game>               import that game's cheats, disabled",
+            "  cheat db update                    download the libretro cheat database (CC BY-SA 4.0)",
         });
+
+        // AppSettings when set, the sandbox's own Cheats folder otherwise -
+        // pointing this at an existing RetroArch cheats folder is the whole
+        // of "use the database you already have". See `man cheat`.
+        private static string CheatDatabaseDirectory
+        {
+            get
+            {
+                string? configured = AppSettings.Load().CheatDatabaseDirectory;
+                return string.IsNullOrWhiteSpace(configured) ? DianaOSSandbox.CheatDatabaseDirectory : configured;
+            }
+        }
 
         // `cheat add`'s format guess. Both codecs decode from the exact
         // same 8 hex-digit character set - SNES Game Genie's own alphabet
@@ -114,10 +133,49 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             return false; // no separator at all - assume Pro Action Replay/Game Wizard
         }
 
+        // One header line per cheat, then one indented line per write when
+        // there is more than one - a cheat is one toggle however many
+        // addresses it drives, and the list has to show that.
+        private static string FormatCheat(CheatInfo c)
+        {
+            string state = c.Enabled ? "on " : "off";
+            string kind = c.Kind == CheatKind.RamPoke ? "RAM" : "ROM";
+            string compareText = c.Compare.HasValue ? $" if==0x{c.Compare.Value:X2}" : "";
+
+            if (c.Writes.Count == 1)
+            {
+                return $"  #{c.Id}: [{state}] {kind}  {FormatWrite(c.Writes[0], c.Kind)}{compareText}  {c.Description}";
+            }
+
+            var lines = new List<string> { $"  #{c.Id}: [{state}] {kind}  {c.Writes.Count} writes{compareText}  {c.Description}" };
+            lines.AddRange(c.Writes.Select(w => $"        {FormatWrite(w, c.Kind)}"));
+            return string.Join('\n', lines);
+        }
+
+        private static string FormatWrite(CheatWrite w, CheatKind kind)
+        {
+            string where = kind == CheatKind.RamPoke ? $"{w.Space} 0x{w.Address:X}" : $"0x{w.Address:X6}";
+            string op = w.Type switch
+            {
+                CheatWriteType.Increase => "+=",
+                CheatWriteType.Decrease => "-=",
+                _ => "=",
+            };
+
+            if (w.BitPosition is int bit) return $"{where} bit{bit} {op} {w.Value & 1}";
+
+            string value = $"0x{w.Value.ToString("X" + w.EffectiveWidth * 2)}";
+            string width = w.EffectiveWidth > 1 ? $" ({w.EffectiveWidth}-byte{(w.BigEndian ? ", big-endian" : "")})" : "";
+            string repeat = w.EffectiveRepeatCount > 1
+                ? $" x{w.EffectiveRepeatCount} step 0x{w.RepeatAddAddress:X}" + (w.RepeatAddValue != 0 ? $"/+0x{w.RepeatAddValue:X}" : "")
+                : "";
+            return $"{where} {op} {value}{width}{repeat}";
+        }
+
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = global::EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers.RequireTarget(target);
-            if (parts.Length < 2) return "Usage: cheat add|poke|gg|rompatch|list|enable|disable|remove|clear ...";
+            if (parts.Length < 2) return "Usage: cheat add|poke|gg|rompatch|list|enable|disable|remove|clear|save|load|files|import|export ...";
             string sub = parts[1].ToLowerInvariant();
             var cheats = target.Cheats;
 
@@ -183,16 +241,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 {
                     var list = cheats.GetCheats();
                     if (list.Count == 0) return "No cheats added.";
-                    return string.Join('\n', list.Select(c =>
-                    {
-                        string state = c.Enabled ? "on " : "off";
-                        if (c.Kind == CheatKind.RamPoke)
-                        {
-                            return $"  #{c.Id}: [{state}] RAM  {c.SpaceName} 0x{c.Address:X} = 0x{c.Value:X2}  {c.Description}";
-                        }
-                        string compareText = c.Compare.HasValue ? $" if==0x{c.Compare.Value:X2}" : "";
-                        return $"  #{c.Id}: [{state}] ROM  0x{c.Address:X6} = 0x{c.Value:X2}{compareText}  {c.Description}";
-                    }));
+                    return string.Join('\n', list.Select(FormatCheat));
                 }
                 case "enable":
                 {
@@ -241,6 +290,124 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     string skippedText = skipped > 0 ? $" ({skipped} unparseable entr{(skipped == 1 ? "y" : "ies")} skipped)" : "";
                     return $"Loaded {added} cheat(s) from {file.Path}{skippedText}";
                 }
+                case "import":
+                {
+                    if (parts.Length < 3) return "Usage: cheat import <path.cht>";
+                    // Joined, not parts[2]: a path is the last argument and
+                    // may well contain spaces.
+                    string importArg = string.Join(' ', parts.Skip(2));
+                    if (!DianaOSSandbox.TryResolve(importArg, out string importPath)) return $"cheat import: '{importArg}' is outside the sandbox.";
+                    if (!System.IO.File.Exists(importPath)) return $"cheat import: no file at {importPath}";
+
+                    ChtParseResult parsed;
+                    try { parsed = ChtFile.Parse(System.IO.File.ReadAllText(importPath), _autoDetectCodec, _autoDetectCodec?.SpaceName ?? "CpuBus"); }
+                    catch (Exception ex) { return $"cheat import: {ex.Message}"; }
+
+                    int added = 0;
+                    foreach (ChtCheat c in parsed.Cheats)
+                    {
+                        // Imported off, always. A database file can hold
+                        // dozens of cheats and turning them all on at once
+                        // is never what anyone meant - see `man cheat`.
+                        try { cheats.AddCheat(CheatKind.RamPoke, c.Writes, null, c.Description, enabled: false); added++; }
+                        catch (ArgumentException) { }
+                    }
+
+                    string skippedText = parsed.Skipped > 0 ? $", {parsed.Skipped} skipped" : "";
+                    return $"Imported {added} cheat(s) from {System.IO.Path.GetFileName(importPath)}{skippedText} - all disabled, `cheat enable <id>` to turn one on.";
+                }
+                case "export":
+                {
+                    if (parts.Length < 3) return "Usage: cheat export <path.cht>";
+                    string exportArg = string.Join(' ', parts.Skip(2));
+                    if (!DianaOSSandbox.TryResolve(exportArg, out string exportPath)) return $"cheat export: '{exportArg}' is outside the sandbox.";
+
+                    var exportable = cheats.GetCheats().Where(c => c.Kind == CheatKind.RamPoke).ToList();
+                    int romPatches = cheats.GetCheats().Count - exportable.Count;
+
+                    var chtCheats = exportable
+                        .Select(c => new ChtCheat { Description = c.Description, Enabled = c.Enabled, Writes = c.Writes })
+                        .ToList();
+
+                    try
+                    {
+                        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(exportPath)!);
+                        System.IO.File.WriteAllText(exportPath, ChtFile.Write(chtCheats));
+                    }
+                    catch (Exception ex) { return $"cheat export: {ex.Message}"; }
+
+                    // RetroArch's model has no ROM-read substitution, so
+                    // there is nothing honest to write for those.
+                    string skippedText = romPatches > 0 ? $" ({romPatches} ROM patch(es) skipped - .cht has no equivalent)" : "";
+                    return $"Exported {chtCheats.Count} cheat(s) to {exportPath}{skippedText}";
+                }
+                case "db":
+                {
+                    string dbSub = parts.Length > 2 ? parts[2].ToLowerInvariant() : "status";
+                    var db = new CheatDatabase(CheatDatabaseDirectory);
+
+                    switch (dbSub)
+                    {
+                        case "status":
+                        {
+                            if (!db.Exists) return $"No cheat database at {db.Directory}\nRun `cheat db update` to download one, or point AppSettings.CheatDatabaseDirectory at an existing RetroArch cheats folder.";
+                            var systems = db.Systems();
+                            int total = systems.Sum(s => s.Count);
+                            if (total == 0) return $"Cheat database at {db.Directory} is empty.";
+                            return string.Join('\n', new[] { $"{total} cheat file(s) in {db.Directory}" }
+                                .Concat(systems.Select(s => $"  {s.System}  ({s.Count})")));
+                        }
+                        case "find":
+                        {
+                            if (parts.Length < 4) return "Usage: cheat db find <game>";
+                            var matches = db.Find(string.Join(' ', parts.Skip(3)));
+                            if (matches.Count == 0) return "No matching cheat file.";
+                            return string.Join('\n', matches.Select(m => $"  {m.Game}   [{m.System}]"));
+                        }
+                        case "load":
+                        {
+                            if (parts.Length < 4) return "Usage: cheat db load <game>";
+                            if (db.BestMatch(string.Join(' ', parts.Skip(3))) is not CheatDatabaseEntry match)
+                            {
+                                return "No matching cheat file - try `cheat db find` first.";
+                            }
+
+                            ChtParseResult found;
+                            try { found = ChtFile.Parse(System.IO.File.ReadAllText(match.Path), _autoDetectCodec, _autoDetectCodec?.SpaceName ?? "CpuBus"); }
+                            catch (Exception ex) { return $"cheat db load: {ex.Message}"; }
+
+                            int loadedCount = 0;
+                            foreach (ChtCheat c in found.Cheats)
+                            {
+                                try { cheats.AddCheat(CheatKind.RamPoke, c.Writes, null, c.Description, enabled: false); loadedCount++; }
+                                catch (ArgumentException) { }
+                            }
+
+                            string dbSkipped = found.Skipped > 0 ? $", {found.Skipped} skipped" : "";
+                            return $"Loaded {loadedCount} cheat(s) for {match.Game}{dbSkipped} - all disabled, `cheat enable <id>` to turn one on.";
+                        }
+                        case "update":
+                        {
+                            CheatDatabaseInstallResult result;
+                            try
+                            {
+                                using Stream zip = CheatDatabaseInstaller.Fetch(CheatDatabaseInstaller.LibretroCheatsUrl);
+                                result = CheatDatabaseInstaller.Install(zip, db.Directory);
+                            }
+                            catch (Exception ex)
+                            {
+                                return $"cheat db update: {ex.Message}";
+                            }
+
+                            return $"Installed {result.Installed} cheat file(s) into {db.Directory}\n\n{CheatDatabaseInstaller.Attribution}";
+                        }
+                        default:
+                        {
+                            string[] dbSubcommands = { "status", "find", "load", "update" };
+                            return $"Unknown 'cheat db' subcommand '{dbSub}'.{Suggestion.Hint(dbSub, dbSubcommands)} Try {string.Join('/', dbSubcommands)}.";
+                        }
+                    }
+                }
                 case "files":
                 {
                     IReadOnlyList<string> names = CheatFile.ListNames();
@@ -250,7 +417,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 default:
                 {
                     // Named once so the suggestion and the "Try" list cannot drift.
-                    string[] subcommands = { "add", "poke", "gg", "rompatch", "list", "enable", "disable", "remove", "clear", "save", "load", "files" };
+                    string[] subcommands = { "add", "poke", "gg", "rompatch", "list", "enable", "disable", "remove", "clear", "save", "load", "files", "import", "export", "db" };
                     return $"Unknown 'cheat' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
                 }
             }

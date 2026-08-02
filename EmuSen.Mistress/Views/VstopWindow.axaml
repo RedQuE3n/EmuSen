@@ -1,0 +1,60 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmuSen.Mistress.Views.VstopWindow"
+        Title="DianaOS vstop"
+        Width="480" Height="620"
+        MinWidth="360" MinHeight="360"
+        Background="#1E1E1E">
+
+    <DockPanel>
+
+        <Border DockPanel.Dock="Bottom" Padding="12,8">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0"
+                           x:Name="HintText"
+                           Foreground="Gray"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1" x:Name="CollectButton" Content="Collect now" Click="OnCollectClick" />
+            </Grid>
+        </Border>
+
+        <ScrollViewer>
+            <StackPanel Margin="12" Spacing="8">
+                <TextBlock x:Name="HeaderText"
+                           Foreground="#D4D4D4"
+                           FontFamily="Consolas,Menlo,monospace"
+                           FontWeight="Bold"
+                           FontSize="14" />
+                <TextBlock x:Name="HostText"
+                           Foreground="Gray"
+                           FontFamily="Consolas,Menlo,monospace"
+                           FontSize="11"
+                           TextWrapping="Wrap" />
+
+                <StackPanel x:Name="MetersPanel" Spacing="3" />
+
+                <TextBlock Text="Memory" Foreground="#9CDCFE" FontWeight="Bold" />
+                <TextBlock x:Name="MemoryText"
+                           Foreground="#D4D4D4"
+                           FontFamily="Consolas,Menlo,monospace"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="Garbage collector" Foreground="#9CDCFE" FontWeight="Bold" />
+                <TextBlock x:Name="GcText"
+                           Foreground="#D4D4D4"
+                           FontFamily="Consolas,Menlo,monospace"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="Threads" Foreground="#9CDCFE" FontWeight="Bold" />
+                <TextBlock x:Name="ThreadsText"
+                           Foreground="#D4D4D4"
+                           FontFamily="Consolas,Menlo,monospace"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </ScrollViewer>
+
+    </DockPanel>
+
+</Window>

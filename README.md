@@ -27,7 +27,7 @@ EmuSen is written against published hardware documentation rather than by portin
 
 ## What exists so far
 
-A cycle-budgeted SNES emulator — 65816 CPU, SPC700 + S-DSP audio, and a full PPU — plus the tooling built around making it *debuggable*. That tooling is the part that makes this project unusual:
+A cycle-budgeted SNES emulator — 65816 CPU, SPC700 + S-DSP audio, a full PPU, and the cartridge coprocessors — plus the tooling built around making it *debuggable*. That tooling is the part that makes this project unusual:
 
 - **DianaOS**, a genuine bash-alike shell embedded in the emulator, with pipes, variables, redirection, control flow, a coreutils subset, and hardware inspection commands (`mem`, `regs`, `watch`, `disasm`, `coretop`, …).
 - **Pharaoh**, a headless, scriptable harness that runs the real core with no window and no human, so bugs can be reproduced deterministically and fixes proven byte-identical across the ROM library.
@@ -44,18 +44,21 @@ The project is structured for more than one console. Only the SNES core exists t
 
 | Area | State |
 |---|---|
-| 65816 CPU | Full 256/256 opcode table. **Gap:** decimal (BCD) mode — `SED`/`CLD` toggle the flag but `ADC`/`SBC` ignore it |
+| 65816 CPU | Full 256/256 opcode table, including decimal (BCD) mode and its documented `ADC`/`SBC` flag divergence |
 | SPC700 + S-DSP | Full 256/256 opcodes, BRR decode, 4-tap Gaussian resampling, ADSR/GAIN, 8-voice mixing |
 | Audio output | Working — SDL out, with a resampler and dynamic rate control to stop drift |
 | PPU backgrounds | All 7 modes, 16×16 tiles, mosaic, Mode 7 + EXTBG, offset-per-tile, direct colour, pseudo and true hi-res |
 | PPU sprites | Full OAM decode, real per-scanline 32-sprite / 34-sliver limits |
 | Colour math / windowing | Implemented, including the fixed-colour and half-math hardware quirks |
 | Memory mapping | LoROM and HiROM, general DMA + HDMA, header-driven SRAM sizing |
-| Save states | Working, via a reflective serializer. **Gap:** no version header, so states can break across builds |
+| Cartridge coprocessors | **SA-1** (second 65C816, Super MMC banking, arithmetic + bit-stream units), **SuperFX / GSU**, **NEC DSP** family (DSP-1/1B/2/3/4, ST010/ST011), **OBC1**. Verification differs per chip — see the note under this table |
+| Save states | Working, via a reflective serializer, with a version header — a state from a newer build is rejected rather than misread |
 | Rewind / fast-forward | Working, core-agnostic (XOR-delta chain) |
 | Input | Rebindable keyboard + gamepad, per-game hotkeys, gamepad hot-plug |
 | Timing accuracy | Scanline granularity, not per-dot. A deliberate, documented tradeoff |
 | Cores other than SNES | None. Reserved folders only |
+
+**Coprocessors, chip by chip.** The **SA-1** is the most solid — Kirby's Dream Land 3 and Kirby Super Star both play, and its one known gap is character-conversion DMA, which neither game requests. The **SuperFX** runs Yoshi's Island: it boots and plays through the intro, with one open cosmetic defect (a strip of 18 tiles the game never uploads). The **NEC DSP** interpreter covers all seven uPD7725/uPD96050 variants from one implementation, but **it cannot run without a firmware dump, and none is shipped** — a DSP game sitting on a loading screen is a missing dump, not an emulation bug. The **OBC1** is implemented and tested.
 
 **Game compatibility** is tracked properly in [`EmuSen_Games_Tested.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md), which rates each title Perfect → Unplayable and links to the investigation behind the rating. As of now nothing sits in Unplayable, several titles boot and play with known cosmetic bugs, and no title has a claimed full playthrough. Treat that file as the source of truth, not this table.
 
@@ -95,7 +98,9 @@ regs | grep -i vram
 
 It has quoting, `$VAR` and `$(...)` expansion, pipes, `>`/`>>`/`<` redirection to real files, `;`/`&&`/`||`, `if`/`for`/`while`, history recall, `man` pages for every command, a coreutils subset (`ls`, `cd`, `grep`, `awk`, `sed`, `nano`, `find`, `xxd`, …), and a live `coretop` hardware dashboard. The filesystem it exposes is a sandboxed, Unix-shaped tree walled to the project directory.
 
-Crucially, `IDebugTarget` — the interface all of this talks to — is **core-agnostic**. It knows about memory spaces, registers, sprites, palettes and breakpoints, not about the SNES.
+Cartridge coprocessors are first-class here too, not a blind spot: `regs` reports the chip's own register file, its RAM and address space are ordinary memory spaces (`GSURAM`, `GSUBUS`, `SA1IRAM`, `BWRAM`, `SA1BUS`), `disasm` decodes each chip's own instruction set rather than assuming the 65816, `bp sa1` breaks on the second CPU, and `cov` records which code actually executed over a whole run — the answer to "does the game even reach this feature", which a breakpoint that never fires cannot give.
+
+Crucially, `IDebugTarget` — the interface all of this talks to — is **core-agnostic**. It knows about memory spaces, registers, sprites, palettes, breakpoints and coverage, not about the SNES.
 
 ---
 
@@ -215,11 +220,11 @@ codesign --force --deep --sign - Mistress.app
 dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj
 ```
 
-631 tests across 56 files: CPU and PPU hardware behaviour, APU/DSP, audio sync and drain, save-state round-tripping, the DianaOS shell (lexer, parser, pipes, control flow, multi-line continuation, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
+1302 tests across 110 files: CPU and PPU hardware behaviour, APU/DSP, the cartridge coprocessors and their debug exposure, audio sync and drain, save-state round-tripping, the DianaOS shell (lexer, parser, pipes, control flow, multi-line continuation, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
 
 Some of those are **property-based** (CsCheck), asserting laws rather than examples: that the rewind delta codec's `Apply` really is its own inverse, that resampled audio never leaves the range its input spanned, that a fuller audio queue never asks the resampler to speed up, and that `CanDecode` never promises a cheat-code decode that then throws. Each runs hundreds to thousands of generated cases and shrinks any failure to a minimal counterexample.
 
-Beyond unit tests, the project leans on **output-identity digests**: `framesum` and `audiosum` over a fixed window across all 37 ROMs in the local library, so a change to the renderer or the mixer can be shown to alter exactly the games it was meant to and nothing else.
+Beyond unit tests, the project leans on **output-identity digests**: `framesum` and `audiosum` over a fixed window across all 43 ROMs in the local library, so a change to the renderer or the mixer can be shown to alter exactly the games it was meant to and nothing else.
 
 ---
 
@@ -227,7 +232,7 @@ Beyond unit tests, the project leans on **output-identity digests**: `framesum` 
 
 This project documents heavily, and deliberately keeps rationale *out* of code comments and *in* man pages. Code comments are one line and point at a section.
 
-- `EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/` — per-console hardware notes. The SNES set (`Venus - SNES/`) covers CPU, PPU, APU and memory, including full root-cause writeups for real bugs found and fixed.
+- `EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/` — per-console hardware notes. The SNES set (`Venus - SNES/`) covers CPU, PPU, APU, memory and each cartridge coprocessor, including full root-cause writeups for real bugs found and fixed — and, where a lead turned out to be wrong, the measurement that retired it, so the same ground does not get walked twice.
 - `EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/` — project-level docs: overview, debugging tools reference, save states, audio sync, rewind/fast-forward, settings, games tested, roadmap.
 
 These are readable on GitHub, and also from inside the emulator via DianaOS's own `man` and `cat`.
@@ -239,8 +244,8 @@ These are readable on GitHub, and also from inside the emulator via DianaOS's ow
 Near-term, roughly in order:
 
 1. Finish verifying the games that currently boot but have not been played through.
-2. Decimal (BCD) mode on the 65816.
-3. A save-state version header.
+2. Close out the SuperFX cosmetic defect in Yoshi's Island (18 tiles that never reach VRAM).
+3. Character-conversion DMA on the SA-1 — unused by both Kirby titles, but a game that asks for it gets wrong tile data.
 4. Real per-Player-2 input bindings (only a mirror-P1 toggle exists today).
 5. The Mesen-style multi-pane GUI debugger, built on `IDebugTarget`.
 6. A second core — NES (**Moon**) — which is the long-term goal the whole architecture has been built toward.

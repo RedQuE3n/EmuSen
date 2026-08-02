@@ -14,6 +14,55 @@
        what's actually used" convention (see EmuSen.csproj). Set
        DianaOSPublishLayout=false to publish a plain flat .NET app dir. -->
 
+  <!-- SkiaSharp and HarfBuzzSharp ship a native .pdb beside the .dll in
+       their win32 runtime packs; the Linux and macOS packs ship none. That
+       is 100MB per Windows app (80MB libSkiaSharp.pdb, 20MB
+       libHarfBuzzSharp.pdb) of symbols for third-party native libraries -
+       never loaded at runtime, and useless without matching Skia sources.
+       It is what made a Windows publish roughly twice the size of the same
+       app for any other RID.
+
+       DebugType=none does not cover these: that governs this repo's own
+       MANAGED pdbs, while these arrive as native package content. Matched
+       on AssetType rather than by file name so a future native dependency
+       is covered without an edit here. Set DianaOSPublishNativePdbs=true
+       to keep them for a session that genuinely needs to debug into Skia. -->
+  <PropertyGroup>
+    <DianaOSPublishNativePdbs Condition="'$(DianaOSPublishNativePdbs)' == ''">false</DianaOSPublishNativePdbs>
+  </PropertyGroup>
+
+  <Target Name="DianaOSDropNativePdbs"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(DianaOSPublishNativePdbs)' != 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish
+        Remove="@(ResolvedFileToPublish)"
+        Condition="'%(Extension)' == '.pdb' AND '%(ResolvedFileToPublish.AssetType)' == 'native'" />
+    </ItemGroup>
+  </Target>
+
+  <!-- EmuSen ships NO cheat data, ever. The libretro database is CC BY-SA
+       content the user downloads themselves and then prunes to whatever
+       cores they have (see `man cheat`), and a developer's own downloaded
+       copy lives in the same sandbox tree the publish reads its docs out
+       of - one over-broad glob away from being redistributed by accident.
+
+       So this is a build failure rather than a code review item: nothing
+       matching *.cht, and nothing under Usr/Home/Cheats, may enter a
+       publish. Today no include even selects them (EmuSen.DianaOS.csproj
+       takes Documents and Man pages only); this exists so that stays
+       true. -->
+  <Target Name="DianaOSRefuseToPublishCheats"
+          AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_DianaOSLeakedCheat
+        Include="@(ResolvedFileToPublish)"
+        Condition="'%(Extension)' == '.cht' OR $([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').Contains('Usr/Home/Cheats'))" />
+    </ItemGroup>
+    <Error Condition="'@(_DianaOSLeakedCheat)' != ''"
+           Text="Refusing to publish cheat data - EmuSen ships none. @(_DianaOSLeakedCheat->'%(RelativePath)', ', ')" />
+  </Target>
+
   <PropertyGroup>
     <DianaOSPublishLayout Condition="'$(DianaOSPublishLayout)' == ''">true</DianaOSPublishLayout>
     <!-- Private libraries of a single application, the /usr/lib/<app> shape. -->

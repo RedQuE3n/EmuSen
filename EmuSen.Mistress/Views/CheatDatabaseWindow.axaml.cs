@@ -34,6 +34,15 @@ namespace EmuSen.Mistress.Views
         // not by this one - both are its children and only one may exist.
         private readonly Action? _openActiveCheats;
 
+        // Which cheat-database folders this build's cores can use. Injected
+        // rather than known here - see §4.16.
+        private readonly Func<IReadOnlyCollection<string>>? _supportedSystems;
+
+        // The plan the Prune button is currently offering to carry out, set
+        // by its first click and consumed by its second. Null means the
+        // button is back to being an offer rather than a confirmation.
+        private CheatPrunePlan? _armedPrune;
+
         // One scan per folder, reused by both lists - see CheatDatabase.
         private CheatDatabase _db;
 
@@ -43,7 +52,8 @@ namespace EmuSen.Mistress.Views
         public CheatDatabaseWindow() : this(AppSettings.Load()) { }
 
         public CheatDatabaseWindow(AppSettings settings, Func<CheatRegistry?>? activeCheats = null, ICheatCodeCodec? codec = null,
-            Action? changed = null, Action? openActiveCheats = null)
+            Action? changed = null, Action? openActiveCheats = null,
+            Func<IReadOnlyCollection<string>>? supportedSystems = null)
         {
             InitializeComponent();
             _settings = settings;
@@ -51,10 +61,12 @@ namespace EmuSen.Mistress.Views
             _codec = codec;
             _changed = changed;
             _openActiveCheats = openActiveCheats;
+            _supportedSystems = supportedSystems;
             _db = new CheatDatabase(Directory);
             AttributionText.Text = CheatDatabaseInstaller.Attribution;
             DirectoryBox.Text = _settings.CheatDatabaseDirectory;
             ActiveCheatsButton.IsEnabled = _openActiveCheats is not null;
+            PruneButton.IsEnabled = _supportedSystems is not null;
             Refresh();
 
             // The property, not the TextChanged event - only this reacts to a
@@ -157,6 +169,55 @@ namespace EmuSen.Mistress.Views
         // here rather than a trip back to the menu bar - see §4.14.
         private void OnActiveCheatsClick(object? sender, RoutedEventArgs e) => _openActiveCheats?.Invoke();
 
+        // Deleting is irreversible and the only way back is a 250MB
+        // download, so the first click only ever reports - see §4.16.
+        private void OnPruneClick(object? sender, RoutedEventArgs e)
+        {
+            if (_armedPrune is CheatPrunePlan armed)
+            {
+                (int removed, IReadOnlyList<string> failed) = CheatDatabasePruner.Apply(_db, armed);
+                DisarmPrune();
+                Refresh();
+
+                string trouble = failed.Count > 0 ? $"  Couldn't remove: {string.Join("; ", failed)}" : "";
+                StatusText.Text = $"Deleted {removed} system(s), {armed.Files:N0} file(s), {CheatPrunePlan.Human(armed.Bytes)}.{trouble}";
+                return;
+            }
+
+            CheatPrunePlan plan = CheatDatabasePruner.Plan(_db, _supportedSystems?.Invoke() ?? Array.Empty<string>());
+            if (!plan.CanApply)
+            {
+                StatusText.Text = $"Nothing to prune - {plan.Reason}";
+                return;
+            }
+
+            _armedPrune = plan;
+            PruneButton.Content = $"Delete {plan.Removing.Count} system(s)?";
+            StatusText.Text = $"{plan.Removing.Count} system(s) have no core in this build - {plan.Files:N0} file(s), " +
+                              $"{CheatPrunePlan.Human(plan.Bytes)}. Keeping {string.Join(", ", plan.Keeping)}. " +
+                              "Click again to delete them for good, or Close to leave them alone.";
+        }
+
+        private void DisarmPrune()
+        {
+            _armedPrune = null;
+            PruneButton.Content = "Prune Unsupported";
+        }
+
+        // Offered where the download lands, since that is the moment the
+        // 250MB actually arrives - see §4.16.
+        private void OfferPrune()
+        {
+            CheatPrunePlan plan = CheatDatabasePruner.Plan(_db, _supportedSystems?.Invoke() ?? Array.Empty<string>());
+            if (!plan.CanApply) return;
+
+            _armedPrune = plan;
+            PruneButton.Content = $"Delete {plan.Removing.Count} system(s)?";
+            StatusText.Text = $"{StatusText.Text}  -  {plan.Removing.Count} of {plan.Removing.Count + plan.Keeping.Count} " +
+                              $"system(s) have no core in this build ({plan.Files:N0} file(s), {CheatPrunePlan.Human(plan.Bytes)}). " +
+                              "Prune Unsupported deletes them.";
+        }
+
         private async void OnBrowseClick(object? sender, RoutedEventArgs e)
         {
             IReadOnlyList<IStorageFolder> folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
@@ -170,6 +231,8 @@ namespace EmuSen.Mistress.Views
             _settings.CheatDatabaseDirectory = picked;
             _settings.Save();
             DirectoryBox.Text = picked;
+            // The armed plan was measured against the old folder.
+            DisarmPrune();
             Refresh();
         }
 
@@ -193,6 +256,7 @@ namespace EmuSen.Mistress.Views
 
                 Refresh();
                 StatusText.Text = $"Installed {result.Installed:N0} cheat file(s) into {target}";
+                OfferPrune();
             }
             catch (Exception ex)
             {

@@ -361,7 +361,8 @@ namespace EmuSen.Mistress.Views
         {
             new CheatDatabaseWindow(_appSettings, () => _cheats, new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
                 () => _activeCheatsWindow?.Refresh(),
-                ShowActiveCheats).Show(this);
+                ShowActiveCheats,
+                () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems).Show(this);
         }
 
         private void OnActiveCheatsClick(object? sender, RoutedEventArgs e) => ShowActiveCheats();

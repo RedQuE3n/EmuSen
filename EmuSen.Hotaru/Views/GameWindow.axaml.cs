@@ -407,7 +407,8 @@ namespace EmuSen.Hotaru.Views
                 new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
                 new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
                 new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch(),
-                _sessions);
+                _sessions,
+                () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
 
         // Syncs _schedulers to whatever sessions currently exist - see `man tmux`.
         private void SyncSchedulersToSessions()

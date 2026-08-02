@@ -159,7 +159,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             ICheatCodeCodec? cheatAutoDetectCodec = null,
             ICheatCodeCodec? cheatExplicitCodec = null,
             ICpuTraceSwitch? cpuTraceSwitch = null,
-            DianaOSSessionManager? sessions = null)
+            DianaOSSessionManager? sessions = null,
+            Func<IReadOnlyCollection<string>>? supportedCheatSystems = null)
         {
             DianaOSSandbox.EnsureInitialWorkingDirectory();
 
@@ -194,7 +195,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                 new WatchCommand(),
                 new BreakCommand(),
                 new FrameLogCommand(),
-                new CheatCommand(cheatAutoDetectCodec, cheatExplicitCodec),
+                new CheatCommand(cheatAutoDetectCodec, cheatExplicitCodec, supportedCheatSystems),
                 new SearchCommand(),
                 new SnapshotCommand(snapshotStore),
                 new DiffCommand(snapshotStore),
@@ -228,7 +229,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                 new FindCommand(),
                 new XxdCommand(),
                 new NanoCommand(),
-                new TmuxCommand(sessions, sessions is null ? null : () => CreateDefault(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions)),
+                new TmuxCommand(sessions, sessions is null ? null : () => CreateDefault(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems)),
                 new PsCommand(sessions),
                 new KillCommand(sessions),
                 new WhoamiCommand(selfAccessor),

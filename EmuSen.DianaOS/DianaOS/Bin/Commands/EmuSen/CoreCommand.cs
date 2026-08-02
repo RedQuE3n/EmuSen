@@ -17,10 +17,31 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
     // `venus` is a clear user error worth catching here rather than
     // handing bytes that aren't really an SNES ROM to `Cartridge`, which
     // has no format validation of its own at all.
-    public sealed record CoreDescriptor(string DisplayName, string[] Extensions)
+    // CheatSystems names the libretro cheat-database folders this core can
+    // actually use ("Nintendo - Super Nintendo Entertainment System"), which
+    // is what lets `cheat db prune` stay agnostic: it asks the registry what
+    // is supported and drops the rest, so a second core is one entry here
+    // rather than an edit to the pruner. Empty means "claims nothing", and a
+    // registry where every core claims nothing prunes nothing rather than
+    // everything - see EmuSen_Settings_Reference.md §4.16.
+    public sealed record CoreDescriptor(string DisplayName, string[] Extensions, string[]? CheatSystems = null)
     {
         public bool SupportsExtension(string extension) =>
             Array.Exists(Extensions, e => e.Equals(extension, StringComparison.OrdinalIgnoreCase));
+
+        public IReadOnlyList<string> CheatSystemNames => CheatSystems ?? Array.Empty<string>();
+
+        // Every folder name any core in <registry> claims, deduplicated - one
+        // core registered under several aliases must not count twice.
+        public static IReadOnlyCollection<string> SupportedCheatSystems(IEnumerable<CoreDescriptor> registry)
+        {
+            var systems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (CoreDescriptor descriptor in registry)
+            {
+                foreach (string system in descriptor.CheatSystemNames) systems.Add(system);
+            }
+            return systems;
+        }
     }
 
     // `core <corename> <path>` - swaps (or, on a frontend that has no

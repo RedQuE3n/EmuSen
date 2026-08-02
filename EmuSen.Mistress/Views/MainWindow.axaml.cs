@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -11,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EmuSen.Common;
+using EmuSen.Common.Firmware;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Mistress.Audio;
@@ -248,7 +250,46 @@ namespace EmuSen.Mistress.Views
             var file = files.FirstOrDefault();
             if (file is null) return;
 
+            await PromptForMissingFirmwareAsync(file.Path.LocalPath);
             LoadRom(file.Path.LocalPath, file.Name);
+        }
+
+        // Offers the OS picker for anything this ROM needs that the firmware
+        // library doesn't have yet, and installs whatever comes back.
+        // Declining is a perfectly good answer - the core then loads with
+        // that chip absent, exactly as it does headless. Runs BEFORE LoadRom
+        // because afterwards is too late. See EmuSen_Firmware.md §3.
+        private async Task PromptForMissingFirmwareAsync(string romPath)
+        {
+            foreach (FirmwareRequest request in EmulatorSession.MissingFirmwareFor(romPath))
+            {
+                var picked = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+                {
+                    Title = $"{request.ChipName} firmware needed - pick {request.FileName} ({request.Size:N0} bytes), or cancel to play without it",
+                    AllowMultiple = false,
+                    FileTypeFilter = new[]
+                    {
+                        new FilePickerFileType($"{request.ChipName} firmware") { Patterns = new[] { request.FileName, "*.rom", "*.bin" } },
+                        new FilePickerFileType("All files") { Patterns = new[] { "*" } },
+                    }
+                });
+
+                var chosen = picked.FirstOrDefault();
+                if (chosen is null)
+                {
+                    StatusText.Text = $"No {request.ChipName} firmware selected - that chip will not be emulated.";
+                    continue;
+                }
+
+                if (FirmwareLibrary.Install(request, chosen.Path.LocalPath))
+                {
+                    StatusText.Text = $"Installed {request.ChipName} firmware.";
+                }
+                else
+                {
+                    StatusText.Text = $"{chosen.Name} is not a {request.ChipName} dump ({request.Size:N0} bytes expected) - that chip will not be emulated.";
+                }
+            }
         }
 
         // Alternative to the OS file picker above - lists .smc/.sfc files
@@ -260,6 +301,7 @@ namespace EmuSen.Mistress.Views
             string? selected = await new RomBrowserWindow(_appSettings.RomDirectory).ShowDialog<string?>(this);
             if (selected is null) return;
 
+            await PromptForMissingFirmwareAsync(selected);
             LoadRom(selected, Path.GetFileName(selected));
         }
 

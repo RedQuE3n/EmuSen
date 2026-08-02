@@ -96,7 +96,13 @@ The CPU reset into zeroed WRAM and executed `BRK` forever, so not one instructio
 
 **One bus change was needed.** `MemoryBus.ReadInternal` returned open bus for any `offset < 0x8000` in a hardware bank before the cartridge was ever consulted — correct for LoROM, but it swallows HiROM's `$20-$3F:$6000-$7FFF` SRAM window. That early return is now `if (offset < 0x8000 && !_cartridge.MapsAddress(address))`, so the mapper decides. The write path already fell through to the cartridge and needed no change.
 
-**Not yet implemented:** ExHiROM (mode `$25`, the >4MB Star Ocean/Far East of Eden layout) and every coprocessor cart (SA-1, SuperFX, DSP-*, CX4). Those are new `ICartridgeMapper` implementations plus, for the coprocessors, a chip to talk to — the seam now exists, which it did not before.
+**`Sa1Mapper`** (mode `$23`) — the first coprocessor cart, and the first mapper that is *not* pure address arithmetic: the SA-1's bank registers move ROM and BW-RAM around at runtime, so the arithmetic lives on the chip and the mapper forwards to it. It also needed three new `CartridgeRegion` members (`IRam`, `Sa1Register`, `Sa1Vector`), since a cartridge can now decode to more than ROM and SRAM. See `Venus_SA1.md`. The `MapsAddress` escape hatch added for HiROM below turned out to be exactly what let this land with no `MemoryBus` change at all.
+
+**`SuperFxMapper`** (cartridge type `$1x`) — static arithmetic, unlike `Sa1Mapper`, but it lives on the chip so both sides share one decode. See `Venus_SuperFX.md`; that chip is **implemented but not yet correct end to end**.
+
+**`CoprocessorOverlayMapper`** (cartridge types `$0x`, `$2x`, `$Fx`) — the other shape a coprocessor mapper can take. The NEC DSPs and the OBC1 claim only a small window and leave the rest of the cartridge on its ordinary LoROM/HiROM decode, so rather than each writing out a whole map, they supply just the overlay and this wrapper falls through to `LoRomMapper`/`HiRomMapper` on a miss. See `Venus_NecDSP.md` §3 and `Venus_OBC1.md` §1. The DSP family needs a firmware dump this project does not ship; without one the cartridge stays on the plain map and the chip is simply absent.
+
+**Not yet implemented:** ExHiROM (mode `$25`, the >4MB Star Ocean/Far East of Eden layout) and the remaining coprocessor carts (CX4, S-DD1, SPC7110, ST018, SGB, BS-X). Those are new `ICartridgeMapper` implementations plus, for the coprocessors, a chip to talk to — and for one with its own 65816, the `ICpuBus` seam `Venus_SA1.md` §2.1 describes.
 
 ### 2.2 SRAM sizing from the ROM header
 
@@ -117,6 +123,25 @@ SRAM is mapped to the lower 32KB (`$0000-$7FFF`) of banks `$70-$7D` and `$F0-$FF
 `LoadSram()` tolerates a save file that doesn't exactly match the allocated SRAM size (copies whichever is smaller) rather than failing outright — a mismatch most likely means this ROM's header-reported SRAM size differs from whatever created the file, not a corrupted save. A save that fails to load doesn't prevent the game from booting.
 
 `SaveSram()` is called periodically (see `VenusCore.RunFrame`'s autosave) and on shutdown, not on every SRAM write — cheap enough (a few KB, plain overwrite) that this is a convenience choice, not a performance necessity.
+
+### 2.5 Region detection from the country byte
+
+The header's country byte (`+$19`, so `$FFD9` on HiROM / `$7FD9` on LoROM) says which territory the cartridge was sold in, and therefore which console it expects. `Cartridge` classifies it once at load into a `ConsoleRegion` (`ConsoleRegion.cs`), which `VenusCore.LoadRom` turns into both the frame timing and the `STAT78` region bit — see `Venus_CPU.md` §8.5c.
+
+| Country byte | Territory | Region |
+|---|---|---|
+| `$00` | Japan | NTSC |
+| `$01` | USA | NTSC |
+| `$02`-`$0C` | Europe, Scandinavia, France, Netherlands, Spain, Germany, Italy, China, Indonesia | **PAL** |
+| `$0D` | South Korea | NTSC |
+| `$0F` | Canada | NTSC |
+| `$10` | Brazil | NTSC |
+| `$11` | Australia | **PAL** |
+| anything else | — | NTSC |
+
+Two entries are worth stating explicitly because they look wrong at a glance. **Brazil (`$10`) is NTSC here** despite being a PAL territory: Brazilian SNES units run PAL-M, which is 60 Hz with 262 lines — PAL only in its colour encoding, which an emulator producing RGB never reproduces anyway. Only the *timing* matters at this layer, and PAL-M's timing is NTSC's. **Australia (`$11`) is PAL**, which some emulators get wrong; snes9x's own check is `region >= 2 && region <= 12`, which stops one short of it.
+
+**The fallback is NTSC, deliberately.** An unrecognized byte (a homebrew ROM that never filled the field in, a bad dump, or the `$EA` filler that `SyntheticRom` leaves there) gets NTSC rather than a guess, because NTSC is what this emulator did unconditionally before regions existed — an unknown ROM behaves exactly as it always has, and only a positively-identified PAL cartridge changes behavior.
 
 ---
 
@@ -162,7 +187,7 @@ All console output here is behind `DebugSettings` flags (`DmaVerboseLogging`, `D
 
 An earlier architecture review proposed splitting H/V-IRQ into its own "IrqController," leaving NMI/vblank state on `MemoryBus`. On inspection that split would have been artificial: the vblank flag feeds *both* the `$4210` (RDNMI) read *and* the `$4200`-write NMI-rising-edge check (§4.2), and a single `$4200` write sets NMI enable and H/V-IRQ enable together on real hardware. Splitting them would add cross-object coupling instead of removing any — this class is everything that's genuinely one hardware subsystem, extracted together.
 
-Deliberately does **not** own `LineCycles`/`CurrentScanline` (those stay on `MemoryBus`, mirrored into `Ppu`) even though HVBJOY's H-blank bit needs a value derived from `LineCycles` — that's PPU-timing state, not an interrupt-controller concern. `MemoryBus` computes the H-blank bool itself and passes it into `ReadHVBJOY`.
+Deliberately does **not** own `LineCycles`/`CurrentScanline` (those stay on `MemoryBus`, mirrored into `Ppu`) even though HVBJOY's H-blank bit needs a value derived from `LineCycles` — that's PPU-timing state, not an interrupt-controller concern. `MemoryBus` computes the H-blank bool itself and passes it into `ReadHVBJOY`, and does the same for the auto-joypad window (§4.4a) — `InAutoJoypadWindow` is a `static` function of the position it is handed, so owning the constants doesn't mean owning the state.
 
 ### 4.2 NMI rising-edge quirk
 
@@ -177,9 +202,43 @@ Real hardware clears RDNMI's vblank flag at the *end* of vblank regardless of wh
 ### 4.4 Register bit layouts
 
 - **`$4210` RDNMI**: `Nxxx VVVV` — bit 7 vblank flag, bits 4-6 open bus, bits 0-3 CPU version (`2`, unchanged since the original S-CPU).
-- **`$4212` HVBJOY**: `VHxx xxxJ` — bit 7 vblank, bit 6 hblank, bits 1-5 open bus, bit 0 joypad auto-read in-progress (**not modeled** — auto-joypad read isn't its own timed process in this project; defaults to 0/"not in progress," correct outside the ~3-scanline window right after vblank starts where real hardware briefly reports 1 — an accepted, narrow gap).
+- **`$4212` HVBJOY**: `VHxx xxxJ` — bit 7 vblank, bit 6 hblank, bits 1-5 open bus, bit 0 joypad auto-read in-progress (modeled — see §4.4a).
 - **`$4211` TIMEUP**: `Txxx xxxx` — bit 7 timer/IRQ flag, bits 0-6 open bus.
 - **Disabling an IRQ also acknowledges a pending one** (`Write4200`) — documented hardware behavior (fullsnes), something NMI does *not* do.
+
+### 4.4a The auto-joypad read (`$4200` bit 0, `$4212` bit 0)
+
+Real hardware performs one automatic controller read per frame, starting shortly after vblank begins and shifting all 16 bits out over roughly three scanlines. `$4212` bit 0 reads 1 for the duration. The standard idiom in a game's NMI handler is to spin until that bit clears and only then read `$4218`-`$421B`, so that it gets *this* frame's input rather than a half-shifted value. Illusion of Gaia's handler does exactly this at `$80:8355`:
+
+```
+LDA $4212
+ROR A
+BCS -3      ; spin while bit 0 is set
+LDA $4218
+```
+
+**This used to be unmodeled** — bit 0 was masked off (`lastBusValue & 0x3E`) and always read back 0, so every such wait loop exited on its first iteration instead of spinning for ~4200 master clocks. The value read was still correct (the latch happened at the top of vblank), so nothing visibly broke; what it distorted was *timing* — an NMI handler finished measurably earlier than on hardware, changing how much of vblank was left for everything after it.
+
+Now modeled as three pieces:
+
+- **`InterruptController.AutoJoypadEnabled`** — `$4200` bit 0. When clear, the read never runs: bit 0 never sets, and `$4218`-`$421B` never update. This is real behavior, not a shortcut, and it means a ROM that never writes `$4200` sees no controller input at all (`SyntheticRom`'s boot stub writes `$4200 = $01` for exactly this reason).
+- **`InterruptController.InAutoJoypadWindow(scanline, lineCycles)`** — a pure function of PPU position, so `MemoryBus` can ask for it per read with no state machine. The window runs from master clock 258 to 4482 measured from the start of scanline 225, i.e. it closes 390 clocks into scanline 228. `MemoryBus` computes it and passes it into `ReadHVBJOY`, the same split already used for the H-blank bit (§4's `LineCycles` note).
+- **The latch moved off the top of vblank.** `VenusCore` now calls `LatchAutoJoypad()` at the end of scanline 227 — master clock 4092, the last per-scanline tick still inside the window — rather than at scanline 225. A game that waits for bit 0 correctly (reading at ≥4482) therefore still sees fresh data, while one that reads early sees the previous frame's, as on hardware.
+
+- **The read leaves the `$4016`/`$4017` shift registers spent.** Hardware's auto-read isn't a separate data path — it drives the strobe and 16 clock pulses on the *same* controller port lines the manual `$4016`/`$4017` serial protocol uses. By the time it finishes, the pads have shifted all 16 button bits out, so a manual read taken afterwards without a fresh strobe pulse gets the past-the-end state: bit 0 reads back **1**, the same "no more buttons" convention `ReadJoy1Serial` already shifts in. `LatchAutoJoypad()` therefore sets `_shiftJoy1`/`_shiftJoy2` to `$FFFF` alongside latching `$4218`-`$421B`. It is gated on `AutoJoypadEnabled` for the same reason the latch itself is: a game doing its own manual polling turns `$4200` bit 0 off precisely so hardware stops trampling its read, and this models that trampling rather than papering over it.
+
+Frontends set button state once per frame before `RunFrame()`, so moving the latch within the frame cannot change the *value* any well-behaved game observes — only the timing of when it becomes visible.
+
+**Why the spent-shift-register piece matters — Super Mario All-Stars' player/port assignment.** Before it was modeled, `_shiftJoy1`/`_shiftJoy2` sat at `$0000` from power-on until something wrote the strobe, so a bare `LDA $4016` returned **0** where hardware returns 1. All-Stars runs a one-shot port-assignment routine at `$00:86F9` the moment a sub-game launches:
+
+```
+LDA $4016 : AND #$01 : EOR #$01 : ASL A : STA $701FF4   ; player 1's $4218 index
+LDA $4017 : AND #$01 :            ASL A : STA $701FF6   ; player 2's $4218 index
+```
+
+Both reads are of the idle, already-clocked-out port, so on hardware both return 1 and the routine stores 0 for player 1 (reads `$4218`/`$4219`) and 2 for player 2 (reads `$421A`/`$421B`). Returning 0 inverted both: player 1 was assigned port **2** — an empty port — and player 2 got the real controller. The shell's own menus poll both players' button words and so still responded to Start, which made the failure look like it began at gameplay: Super Mario Bros. 1 would boot to World 1-1 with Mario permanently inert, since his input came from a controller that was never plugged in. The two indices live in SRAM (`$70:1FF4`/`$70:1FF6`) and persist into the `.srm`, but the routine rewrites them on every sub-game launch, so a save written while the bug was live corrects itself on the next launch.
+
+**Still simplified:** the individual 16 shift steps aren't modeled (only the window's open/close edges and the spent shift registers it leaves behind), and the window is anchored to fixed scanline/clock constants rather than being rescheduled per frame from a live master clock.
 
 ---
 

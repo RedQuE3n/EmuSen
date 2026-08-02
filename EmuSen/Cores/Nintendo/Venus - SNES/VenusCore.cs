@@ -46,20 +46,33 @@ namespace EmuSen.Cores.Nintendo.Venus
         // (real hardware only fits ~1364/8 ≈ 170 CPU cycles per scanline
         // there), and the source of this project's ~8% SPC700 audio-pacing
         // undershoot (see Venus_APU.md).
-        private const int CyclesPerScanline = 1364;
-        private const int TotalScanlines = 262;
+        public const int CyclesPerScanline = 1364;
+
+        // Both differ per region; the dot clock and 224-line active display do not - see Venus_CPU.md §8.5c.
+        private const int NtscScanlines = 262;
+        private const int PalScanlines = 312;
+        private const int NtscMasterClockHz = 21477272;
+        private const int PalMasterClockHz = 21281370;
 
         // The SNES's two independent crystals - see Venus_CPU.md §8.5b.
-        private const int MasterClockHz = 21477272;
         private const int ApuClockHz = 1024000;
         private const int SaveEveryNFrames = 300; // ~5 seconds at 60fps
 
         // "SNES" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x53454E53;
-        private const int StateVersion = 1;
+        // v2 appends the SA-1's state after the four original blobs, v3 the
+        // NEC DSP's, each only for a cartridge carrying that chip - see
+        // EmuSen_Save_States.md §3.
+        private const int StateVersion = 3;
 
         private readonly bool _headless;
         private int _currentScanline;
+
+        // Set from the cartridge header at LoadRom; NTSC until one is loaded.
+        private int _totalScanlines = NtscScanlines;
+        private int _masterClockHz = NtscMasterClockHz;
+
+        public ConsoleRegion Region { get; private set; } = ConsoleRegion.Ntsc;
 
         public Cartridge? Cart { get; private set; }
         public Spc700? Spc700 { get; private set; }
@@ -109,8 +122,8 @@ namespace EmuSen.Cores.Nintendo.Venus
         public int ScreenWidth => Renderer?.FrameWidth ?? 256;
         public int ScreenHeight => 224;
 
-        // 21477272 / (262 * 1364) - not 60 - see Venus_CPU.md §8.5b.
-        public double FrameRateHz => 21477272.0 / (TotalScanlines * (double)CyclesPerScanline);
+        // NTSC 21477272/(262*1364) ~= 60.098, PAL 21281370/(312*1364) ~= 50.007 - see Venus_CPU.md §8.5b.
+        public double FrameRateHz => _masterClockHz / (_totalScanlines * (double)CyclesPerScanline);
 
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
@@ -182,6 +195,11 @@ namespace EmuSen.Cores.Nintendo.Venus
             _headless = headless;
         }
 
+        // Delegated to Cartridge, which can answer from the header alone - see
+        // EmuSen_Firmware.md §1.
+        public System.Collections.Generic.IReadOnlyList<Common.Firmware.FirmwareRequest> GetFirmwareRequirements(string romPath) =>
+            Cartridge.FirmwareRequirements(romPath);
+
         public void LoadRom(string path)
         {
             Cart = new Cartridge(path);
@@ -189,6 +207,17 @@ namespace EmuSen.Cores.Nintendo.Venus
             Bus = new MemoryBus(Cart, Spc700);
             Cpu = new Cpu(Bus);
             Renderer = new Renderer(headless: _headless);
+
+            Region = Cart.Region;
+            bool pal = Region == ConsoleRegion.Pal;
+            _totalScanlines = pal ? PalScanlines : NtscScanlines;
+            _masterClockHz = pal ? PalMasterClockHz : NtscMasterClockHz;
+            Bus.Ppu.IsPal = pal;
+            if (Cart.Sa1 != null) Cart.Sa1.TotalScanlines = _totalScanlines;
+
+            // The NEC DSPs have their own crystal, so they need the master
+            // rate to convert against - see Venus_NecDSP.md §4.1.
+            if (Cart.NecDsp != null) Cart.NecDsp.MasterClockHz = _masterClockHz;
 
             _currentScanline = 0;
             TotalFrames = 0;
@@ -321,8 +350,8 @@ namespace EmuSen.Cores.Nintendo.Venus
                     // same approach MesenCE's Spc.cpp uses.
                     // Exact 1.024MHz/21.477272MHz ratio, not /21 - see Venus_CPU.md §8.5b.
                     long scaledSpc700Cycles = (long)cpuCycles * ApuClockHz + _spc700CycleRemainder;
-                    _spc700CycleRemainder = (int)(scaledSpc700Cycles % MasterClockHz);
-                    Spc700.CycleBudget += (int)(scaledSpc700Cycles / MasterClockHz);
+                    _spc700CycleRemainder = (int)(scaledSpc700Cycles % _masterClockHz);
+                    Spc700.CycleBudget += (int)(scaledSpc700Cycles / _masterClockHz);
                     // Only run an instruction the budget actually covers - running
                     // past it made SPC700 port writes visible to the CPU up to a
                     // whole instruction early, corrupting audio uploads whose
@@ -330,6 +359,27 @@ namespace EmuSen.Cores.Nintendo.Venus
                     while (Spc700.CycleBudget >= Spc700.PeekStepCycles())
                     {
                         Spc700.Step();
+                    }
+
+                    // The SA-1 shares the master clock rather than having its
+                    // own crystal, so it takes the same figure directly - see
+                    // Venus_SA1.md §2.2. Its IRQ line into the S-CPU is polled
+                    // here, at the same per-instruction granularity the two
+                    // chips actually interleave at on hardware.
+                    if (Cart!.Sa1 is { } sa1)
+                    {
+                        sa1.Run(cpuCycles);
+                        if (sa1.ScpuIrqPending) Cpu.Irq();
+                    }
+                    else if (Cart.SuperFx is { } gsu)
+                    {
+                        gsu.Run(cpuCycles);
+                        if (gsu.ScpuIrqPending) Cpu.Irq();
+                    }
+                    else if (Cart.NecDsp is { } dsp)
+                    {
+                        // No IRQ line: the S-CPU polls SR instead - see Venus_NecDSP.md §3.2.
+                        dsp.Run(cpuCycles);
                     }
                 }
 
@@ -367,21 +417,23 @@ namespace EmuSen.Cores.Nintendo.Venus
                     _ppuTicksAccum += Stopwatch.GetTimestamp() - afterPpu;
                 }
 
-                if (_currentScanline == 225)
+                if (_currentScanline == InterruptController.AutoJoypadScanline)
                 {
                     Bus.Interrupts.InVBlank = true;
                     Bus.Interrupts.RaiseVBlank();
+                    Bus.Ppu.ReloadOamAddressForVBlank();
                     if (Bus.Interrupts.NmiEnabled) Cpu.Nmi();
+                }
 
-                    // Real hardware automatically reads the controller
-                    // once per frame right at the start of vblank; mirror
-                    // that timing here.
+                // The auto-joypad read completes partway into vblank, not at its start - see Venus_Memory.md §4.4.
+                if (_currentScanline == InterruptController.AutoJoypadLatchScanline && Bus.Interrupts.AutoJoypadEnabled)
+                {
                     Bus.Input.LatchAutoJoypad();
                 }
 
                 _scanlineStarted = false;
                 _currentScanline++;
-                if (_currentScanline >= TotalScanlines)
+                if (_currentScanline >= _totalScanlines)
                 {
                     _currentScanline = 0;
                     TotalFrames++;
@@ -500,6 +552,9 @@ namespace EmuSen.Cores.Nintendo.Venus
             StateSerializer.Write(w, Cpu);
             StateSerializer.Write(w, Bus);
             StateSerializer.Write(w, Spc700);
+            if (Cart.Sa1 != null) StateSerializer.Write(w, Cart.Sa1);
+            if (Cart.SuperFx != null) StateSerializer.Write(w, Cart.SuperFx);
+            if (Cart.NecDsp != null) StateSerializer.Write(w, Cart.NecDsp);
         }
 
         public void LoadState(Stream stream)
@@ -513,7 +568,8 @@ namespace EmuSen.Cores.Nintendo.Venus
 
             // Pre-v1 files start straight in on TotalFrames with no header,
             // and carry the DSP RAM aliases - see EmuSen_Save_States.md §2.
-            bool legacy = !TryReadHeader(r, stream);
+            int version = ReadHeaderVersion(r, stream);
+            bool legacy = version == 0;
 
             TotalFrames = r.ReadInt64();
             _currentScanline = r.ReadInt32();
@@ -521,10 +577,19 @@ namespace EmuSen.Cores.Nintendo.Venus
             StateSerializer.Read(r, Cpu, legacy);
             StateSerializer.Read(r, Bus, legacy);
             StateSerializer.Read(r, Spc700, legacy);
+
+            // Only v2 onward carries it, and only for an SA-1 cartridge - a v1
+            // file can't be one, since SA-1 games couldn't run when v1 was written.
+            if (version >= 2 && Cart.Sa1 != null) StateSerializer.Read(r, Cart.Sa1);
+            if (version >= 2 && Cart.SuperFx != null) StateSerializer.Read(r, Cart.SuperFx);
+
+            // Same reasoning as v2's, one chip later: a v2 file can't be a NEC
+            // DSP cartridge, since none could run when v2 was written.
+            if (version >= 3 && Cart.NecDsp != null) StateSerializer.Read(r, Cart.NecDsp);
         }
 
-        // Consumes the header if present, rewinds and reports false if not.
-        private static bool TryReadHeader(BinaryReader r, Stream stream)
+        // Returns the format version, or 0 for a pre-v1 file (stream rewound).
+        private static int ReadHeaderVersion(BinaryReader r, Stream stream)
         {
             if (!stream.CanSeek)
             {
@@ -532,9 +597,9 @@ namespace EmuSen.Cores.Nintendo.Venus
             }
 
             long start = stream.Position;
-            if (stream.Length - start < sizeof(uint) + sizeof(int)) return false;
+            if (stream.Length - start < sizeof(uint) + sizeof(int)) return 0;
 
-            if (r.ReadUInt32() != StateMagic) { stream.Position = start; return false; }
+            if (r.ReadUInt32() != StateMagic) { stream.Position = start; return 0; }
 
             int version = r.ReadInt32();
             if (version > StateVersion)
@@ -543,8 +608,8 @@ namespace EmuSen.Cores.Nintendo.Venus
             }
             // Magic matched but the version is nonsense - a pre-v1 file whose
             // TotalFrames happened to collide. Treat it as one.
-            if (version < 1) { stream.Position = start; return false; }
-            return true;
+            if (version < 1) { stream.Position = start; return 0; }
+            return version;
         }
 
         public void SaveSram()

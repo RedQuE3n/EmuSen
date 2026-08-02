@@ -50,6 +50,9 @@ namespace EmuSen.DianaOS.DianaOS.Etc
         public static string SavesDirectory => Path.Combine(UsrHomeDirectory, "Saves");
         public static string SaveStatesDirectory => Path.Combine(SavesDirectory, "Save States");
 
+        // Coprocessor firmware dumps the user supplies (dsp1.rom, st010.rom, ...) - see Venus_NecDSP.md §2.
+        public static string FirmwareDirectory => Path.Combine(UsrHomeDirectory, "Firmware");
+
         // WiseMan test-run scratch space only - dev/test artifacts, not
         // emulator output, kept out of Usr/Home so it isn't mistaken for it.
         public static string SourceLogsDirectory => Path.Combine(RootDirectory, "SourceLogs");
@@ -65,6 +68,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
             Directory.CreateDirectory(LogsDirectory);
             Directory.CreateDirectory(SavesDirectory);
             Directory.CreateDirectory(SaveStatesDirectory);
+            Directory.CreateDirectory(FirmwareDirectory);
             Directory.CreateDirectory(SourceLogsDirectory);
             foreach (string stub in UsrHomeStubs) Directory.CreateDirectory(Path.Combine(UsrHomeDirectory, stub));
             Directory.CreateDirectory(Path.Combine(root, "home", "root"));

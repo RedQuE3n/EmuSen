@@ -34,7 +34,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
     public partial class Cpu
     {
-        private MemoryBus _bus;
+        private ICpuBus _bus;
         [EmuSen.Common.SkipInState] private Instruction[] _instructions = null!; 
 
         // Set to true for detailed per-instruction tracing. Leave false for normal runs -
@@ -114,8 +114,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         [EmuSen.Common.SkipInState] private readonly DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
-        public Cpu(MemoryBus bus)
+        // <name> tags trace output so the S-CPU and the SA-1's CPU are
+        // distinguishable; <logReset> is off for the SA-1, whose reset line the
+        // game drives directly and can toggle repeatedly - see Venus_SA1.md §4.1.
+        [EmuSen.Common.SkipInState] private readonly string _name;
+        [EmuSen.Common.SkipInState] private readonly bool _logReset;
+
+        public Cpu(ICpuBus bus, string name = "CPU", bool logReset = true)
         {
+            _name = name;
+            _logReset = logReset;
             _bus = bus;
             BuildOpcodeTable();
             _verboseTrace = new DebugTools.RepeatCollapsingTrace<StepKey>(
@@ -159,8 +167,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             
             PC = (ushort)((resetHigh << 8) | resetLow);
 
-            Console.WriteLine($"[CPU] Power-on Reset Complete.");
-            Console.WriteLine($"[CPU] PC set to: 0x{PB:X2}{PC:X4}");
+            if (_logReset)
+            {
+                Console.WriteLine($"[{_name}] Power-on Reset Complete.");
+                Console.WriteLine($"[{_name}] PC set to: 0x{PB:X2}{PC:X4}");
+            }
         }
 
         private byte Fetch8()
@@ -277,10 +288,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         // abstract "CPU cycle" units.
         private int DrainPendingDmaCycles()
         {
-            int cycles = _bus.Dma.PendingCpuCycles;
-            if (cycles == 0) return 0;
-            _bus.Dma.PendingCpuCycles = 0;
-            return cycles * 8;
+            return _bus.TakePendingDmaCycles() * 8;
         }
 
         // NMI entry sequence - see Venus_CPU.md §3. Triggered externally

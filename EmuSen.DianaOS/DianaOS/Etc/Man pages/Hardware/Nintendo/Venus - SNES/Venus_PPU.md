@@ -186,6 +186,18 @@ Confirmed real via the SNESdev wiki's Sprites page ("OAMADD can adjust this with
 
 Tile slivers are consumed in on-screen left-to-right order, matching the documented culling order — not VRAM/flip order. This matters for which slivers get dropped once the 34-sliver budget is exhausted mid-sprite.
 
+### 6.4 The OAM address is reloaded every vblank
+
+`$2102`/`$2103` are a **latch**, not the write pointer itself. Hardware keeps a separate running internal address that `$2104` writes advance, and **reloads it from the latch at the start of vblank** — unless the PPU is in forced blank, in which case the running address is left alone. `Ppu` models this as `_oamAddrLatch` (what the registers hold) and `_oamAddr` (the running pointer); writing either address register sets both, and `ReloadOamAddressForVBlank()` is called from `VenusCore`'s vblank block.
+
+**This was previously missing** — `$2102`/`$2103` wrote straight into the single running address and nothing ever reloaded it. That is invisible to a game that re-sets the address before every upload, which is why it survived so long.
+
+**The bug it caused**: Donkey Kong Country builds its OAM in WRAM at `$00:0200` and DMAs all 544 bytes to `$2104` once per frame — and, after setup, **never writes `$2102`/`$2103` again**, trusting the vblank reload to put the pointer back at 0. Two stray bytes had reached `$2104` beforehand, so without the reload every frame's DMA landed two bytes late: OAM held the WRAM buffer shifted right by 2, every sprite read its neighbour's fields, and Donkey Kong rendered as fragments scattered across the screen. Diagnosed by dumping `OAM` and `WRAM $200` side by side — they were byte-identical apart from the 2-byte skew. Pinned by `EmuSen.WiseMan/Ppu/OamAddressReloadTests.cs`.
+
+**Timing is approximate**: the reload happens on the vblank scanline boundary rather than at H=10 within it (anomie's docs put it there; Mesen carries a `TODO` about the same detail). Nothing observed so far depends on the sub-scanline placement.
+
+**Known separate inaccuracy, deliberately left alone**: §6.2's `FirstSpriteIndex` computes `(_oamAddr & 0xFE) >> 1`, but `_oamAddr` is a *byte* address and OAM entries are 4 bytes, so the sprite index should be `(_oamAddr & 0x1FC) >> 2`. Not changed here — it only affects priority rotation, no game currently under test exercises it, and it is unrelated to this fix.
+
 ---
 
 ## 7. Windowing
@@ -219,7 +231,9 @@ Two windows (W1: `$2126`/`$2127`, W2: `$2128`/`$2129`) can each be enabled/inver
 - **`SLHV` (`$2137`)**: reading it latches the current H/V position into `OPHCT`/`OPVCT`. Real hardware also latches via WRIO (`$4201`) bit 7 transitions and the Super Scope's trigger — neither path is wired up here, only the direct `$2137` read is. The returned byte itself is genuine open bus on real hardware; `0` is as good a stand-in as any.
 - **`OPHCT`/`OPVCT` (`$213C`/`$213D`)**: each a 9-bit value read as two sequential 8-bit reads (low byte first, then high byte in bit 0 — bits 1-7 of the high read are PPU2 open bus, returned as 0). Each register tracks its own low/high toggle independently; only reading `STAT78` resets both back to "low". **H is not tracked** — this renderer has no real per-dot H position (see `Venus_Memory.md` §1.5's H-blank approximation for the same underlying gap) — so `ReadSLHV` always latches `_latchedH = 0` rather than fabricating a conversion from `LineCycles`.
 - **`STAT77` (`$213E`)**: `trm-vvvv` — Time Over (§6.1), Range Over (§6.1), master/slave select (always 0 — real consoles almost universally read this as 0 too), PPU1 version in the low nibble (`1`, matching most real units).
-- **`STAT78` (`$213F`)**: `flupvvvv` — interlace field (bit 7, tracked via `FieldParity`, toggled once per frame at scanline 0), NTSC/PAL region (`0` = NTSC, matching the 262-scanline timing used throughout this project), PPU2 version in the low nibble. Reading this also resets the `OPHCT`/`OPVCT` high/low toggle back to "low", per documented hardware behavior.
+- **`STAT78` (`$213F`)**: `flupvvvv` — interlace field (bit 7, tracked via `FieldParity`, toggled once per frame at scanline 0), NTSC/PAL region (bit 4), PPU2 version in the low nibble. Reading this also resets the `OPHCT`/`OPVCT` high/low toggle back to "low", per documented hardware behavior.
+
+  **The region bit is real, not hardcoded.** It reports `Ppu.IsPal`, which `VenusCore.LoadRom` sets from the cartridge header's country byte alongside the matching 262- or 312-scanline timing — see `Venus_CPU.md` §8.5c for the whole region mechanism and `Venus_Memory.md` §2.5 for the country-byte classification. It used to be a hardcoded `0`, which is what made a PAL cartridge stop on Nintendo's *"This game pack is not designed for your SUPER FAMICOM or SUPER NES"* lockout screen: the game reads this bit, sees NTSC, and refuses to run. `IsPal` is `[SkipInState]` — it's derived from the ROM, which is always reloaded before a state load, so storing it would only create a way for a state file to contradict the cartridge it was made from.
 
 ---
 

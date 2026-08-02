@@ -190,6 +190,24 @@ Reads through all of these are side-effect-free by construction, which matters h
 
 **What Yoshi's Island does.** It boots, the GSU executes genuine game code, and it renders: the intro's bordered frame draws correctly, and the GSU-rendered interior draws recognisable scenery. It then stops drawing a few thousand frames in. The three fixes that got it this far were the R15 invariant (§4.1), OBJ tile order (§6.2), and RAM sizing (§1).
 
+### 10.0 Resolved: the `$6000-$7FFF` window was bank-indexed
+
+**Root cause of the frame-1759 crash below, found and fixed.** `RamOffsetWindow` computed `((bank & 0x3F) << 13) | (offset & 0x1FFF)`, giving each low bank its own 8KB slice of Game Pak RAM. Real hardware mirrors **the first 8KB** into `$6000-$7FFF` of *every* bank `$00-$3F` and `$80-$BF` — bsnes's own manifest says so outright: `map address=00-3f,80-bf:6000-7fff size=0x2000`. The fix is `offset & 0x1FFF`.
+
+The chain from that one expression to a dead console, which is worth reading as an example of how far a mapping error propagates:
+
+1. Yoshi's Island's NMI path reads a jump-table index with `LDY $6F00,X`, landing on `$0F:6F0C`. Correct offset `$0F0C`; we served `$1EF0C`, 120KB further in.
+2. That returned `Y = $FD` — **odd**, and this is a table of 16-bit pointers.
+3. `LDA $C356,Y` therefore read *across* an entry boundary, at `$0F:C453` instead of `$C452`.
+4. The game dispatches with the `PHA`/`RTS` idiom (`$0F:C36E`), so the misread pointer put the PC at `$0F:9969` — **one byte before** the real instruction boundary at `$0F:996A`, where the actual code is four clean `JSR $A9D7` calls (`20 D7 A9` ×4).
+5. Misaligned, that byte stream decodes as `TSB` + three junk `LDA #imm16` + **a `PLY` that is not in the real code at all**. Both paths then resynchronise at `$0F:9979` — so the machine kept running, two bytes light on the stack.
+6. The routine's closing `RTS` at `$0F:99CB` pulled that corrupted return address and jumped to `$0F:00C4`.
+7. From there the S-CPU crawled through zeroed WRAM executing `BRK` (`$00`), each vectoring to a bare `RTI` at `$00:814F` and advancing two bytes, until an `XCE` dropped it into emulation mode with the screen force-blanked.
+
+**The test suite had the bug written into it.** `SuperFxMemoryMapTests` carried `The_scpu_ram_window_advances_one_block_per_bank`, asserting the wrong behaviour in as many words, with a comment stating "not mirrored". It was written from the same assumption as the implementation, so it locked the bug in rather than catching it. Replaced with `The_scpu_ram_window_mirrors_the_first_8kb_into_every_bank`. **A test only pins a fact if the fact was checked against something other than the code it tests.**
+
+**Result:** the game now runs past frame 1759 with output continuing to change through frame 4500 and beyond, `E=0`, `INIDISP=$8F`, layers enabled. §10.1 below is retained as the record of how the failure was measured.
+
 ### 10.1 The failure, measured
 
 Earlier revisions of this section assumed the S-CPU "stops producing display output while still running normally", and concluded it must be acting on GSU results that were wrong rather than absent. **That was wrong, and it sent two investigations (§9's `LJMP`, the `ALT3` decodes) after instruction-set details that had nothing to do with it.** The actual sequence, measured with `framesum`, `regs` and `mem` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.21, §3.23):

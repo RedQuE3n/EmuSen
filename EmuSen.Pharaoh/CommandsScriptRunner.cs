@@ -315,6 +315,8 @@ namespace EmuSen.Pharaoh
             var subComp = new double[count];
 
             double toMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            long sa1RunAtStart = core.Cart?.Sa1?.ExecutedMasterClocks ?? 0;
+            long sa1OfferedAtStart = core.Cart?.Sa1?.OfferedMasterClocks ?? 0;
             long taken = 0;
             for (long i = 0; i < count; i++)
             {
@@ -333,6 +335,19 @@ namespace EmuSen.Pharaoh
             }
             if (taken == 0) return "[PERF] No frames ran - already at the safety cap.";
 
+            // Clocks per frame is the figure that says whether a coprocessor is
+            // being starved or double-clocked, and the offered/run gap is how
+            // long the game parked it - see Venus_SA1.md §2.3.
+            string coprocessorLine = string.Empty;
+            if (core.Cart?.Sa1 is { } perfSa1)
+            {
+                double runPerFrame = (perfSa1.ExecutedMasterClocks - sa1RunAtStart) / (double)taken;
+                double offeredPerFrame = (perfSa1.OfferedMasterClocks - sa1OfferedAtStart) / (double)taken;
+                double expected = core.MasterClocksPerFrame;
+                coprocessorLine = $"  sa-1: {runPerFrame:F0} clocks/frame run of {offeredPerFrame:F0} offered "
+                                + $"({runPerFrame / expected * 100:F1}% of the {expected:F0} a full-rate frame allows)";
+            }
+
             var sortedWall = wall.Take((int)taken).OrderBy(v => v).ToArray();
             double Pct(double p) => sortedWall[Math.Min(sortedWall.Length - 1, (int)(p * sortedWall.Length))];
             double Mean(double[] a) => a.Take((int)taken).Average();
@@ -344,6 +359,7 @@ namespace EmuSen.Pharaoh
             sb.AppendLine($"  over budget: {sortedWall.Count(v => v > budget)}/{taken} frame(s)");
             sb.AppendLine($"  cpu+spc700 {Mean(cpu):F2}ms   ppu {Mean(ppu):F2}ms   hdma {Mean(hdma):F2}ms   unattributed {Mean(wall) - Mean(cpu) - Mean(ppu) - Mean(hdma):F2}ms");
             sb.AppendLine($"  ppu split: mainComposite {Mean(mainComp):F2}ms  subComposite {Mean(subComp):F2}ms  objEval {Mean(objEval):F2}ms  blend {Mean(blend):F2}ms");
+            if (coprocessorLine.Length > 0) sb.AppendLine(coprocessorLine);
 
             var worst = Enumerable.Range(0, (int)taken).OrderByDescending(i => wall[i]).Take(worstCount);
             foreach (int i in worst)

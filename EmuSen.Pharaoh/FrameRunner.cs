@@ -91,12 +91,29 @@ namespace EmuSen.Pharaoh
                     EmuSen.Debug.DebugSettings.CpuVerboseLogging = inWindow;
                 }
                 Core.RunFrame();
+
+                // A breakpoint returns from RunFrame() mid-frame, so this
+                // frame is NOT complete - counting it, snapshotting it for
+                // rewind or reporting it as advanced would all be wrong.
+                // Stops the batch here and leaves the core halted, so the
+                // next verb in the script inspects the moment it stopped at
+                // - see EmuSen_Debugging_Tools_Reference_v5.md §3.23.
+                if (Core.IsHaltedAtBreakpoint)
+                {
+                    HaltedAtBreakpoint = true;
+                    emit($"[BREAK] {(Core.IsHaltedOnCoprocessor ? "SA-1" : "S-CPU")} halted at ${Core.HaltedAddress:X6} (frame {CurrentFrame}).");
+                    return;
+                }
+
                 CurrentFrame++;
                 Rewind.OnFrameCompleted(Core);
                 onFrameAdvanced?.Invoke(CurrentFrame);
                 if (CurrentFrame % ProgressEvery == 0) emit($"[frame {CurrentFrame}/{FrameCap}]");
             }
         }
+
+        // True once RunFrames stopped early on a breakpoint - see §3.23.
+        public bool HaltedAtBreakpoint { get; private set; }
 
         // Returns steps actually taken - see EmuSen_Rewind_And_FastForward.md §3.
         public int StepBack(int steps)

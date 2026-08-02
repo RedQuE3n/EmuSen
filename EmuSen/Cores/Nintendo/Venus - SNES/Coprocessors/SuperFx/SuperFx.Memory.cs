@@ -108,5 +108,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         // GSU data access to ROM, through ROMBR:R14 - see Venus_SuperFX.md §5.2.
         private byte ReadRomBuffer() => ReadRom(_rombr, R[14]);
+
+        // The GSU's own 24-bit program space, for the debugger. Deliberately
+        // skips the cache so a read never fills a line - see Venus_SuperFX.md §8.1.
+        public byte DebugReadProgram(int address) =>
+            ReadProgramMemory((byte)(address >> 16), (ushort)address);
+
+        // Only Game Pak RAM is writable; a poke at a ROM bank is dropped.
+        public void DebugWriteProgram(int address, byte data)
+        {
+            byte bank = (byte)(address >> 16);
+            if (bank >= 0x60) WriteRam(RamOffsetLinear(bank, (ushort)address), data);
+        }
     }
 }

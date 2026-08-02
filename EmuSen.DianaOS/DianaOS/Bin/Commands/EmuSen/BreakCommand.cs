@@ -36,6 +36,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "  bp add <addr>                 halt execution just before <addr> runs (24-bit CPU address)",
             "  bp list                       list active breakpoints with their IDs and hit counts",
             "  bp remove <id>                remove a breakpoint entirely",
+            "  bp sa1 add|list|remove ...    same, on the cartridge coprocessor's own CPU - its",
+            "                                addresses are a different address space to the S-CPU's",
             "  (see also: the F4 prompt's own 'step'/'s' and 'continue'/'c' - not",
             "  DianaOSInterpreter commands, since they need to resume the core's",
             "  own frame loop, not just edit the breakpoint list)",
@@ -44,31 +46,44 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = global::EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers.RequireTarget(target);
-            if (parts.Length < 2) return "Usage: bp add|list|remove ...";
-            string sub = parts[1].ToLowerInvariant();
-            var breakpoints = target.Breakpoints;
+            if (parts.Length < 2) return "Usage: bp [sa1] add|list|remove ...";
+
+            // An optional scope word in front of the subcommand, so the
+            // existing three-word forms are untouched - see Venus_SA1.md §11.5.
+            int at = 1;
+            bool coprocessor = parts[at].Equals("sa1", System.StringComparison.OrdinalIgnoreCase)
+                            || parts[at].Equals("cop", System.StringComparison.OrdinalIgnoreCase);
+            if (coprocessor) at++;
+            if (parts.Length <= at) return "Usage: bp sa1 add|list|remove ...";
+
+            var breakpoints = coprocessor ? target.CoprocessorBreakpoints : target.Breakpoints;
+            if (breakpoints == null) return "This cartridge has no coprocessor CPU to break on.";
+
+            string sub = parts[at].ToLowerInvariant();
+            string addrArg = parts.Length > at + 1 ? parts[at + 1] : string.Empty;
+            string scope = coprocessor ? "SA-1 breakpoint" : "Breakpoint";
 
             switch (sub)
             {
                 case "add":
                 {
-                    if (parts.Length < 3) return "Usage: bp add <addr>";
-                    int addr = ParseHex(parts[2]);
+                    if (addrArg.Length == 0) return "Usage: bp add <addr>";
+                    int addr = ParseHex(addrArg);
                     int id = breakpoints.AddBreakpoint(addr);
-                    return $"Breakpoint #{id} added at ${addr:X6}.";
+                    return $"{scope} #{id} added at ${addr:X6}.";
                 }
                 case "list":
                 {
                     var list = breakpoints.GetBreakpoints();
-                    if (list.Count == 0) return "No active breakpoints.";
+                    if (list.Count == 0) return coprocessor ? "No active SA-1 breakpoints." : "No active breakpoints.";
                     return string.Join('\n', list.Select(b =>
                         $"  #{b.Id}: ${b.Address:X6} ({(b.Enabled ? "enabled" : "disabled")}, hit {b.HitCount}x)"));
                 }
                 case "remove":
                 {
-                    if (parts.Length < 3) return "Usage: bp remove <id>";
-                    bool removed = breakpoints.RemoveBreakpoint(ParseHex(parts[2]));
-                    return removed ? $"Breakpoint #{parts[2]} removed." : $"No breakpoint #{parts[2]} found.";
+                    if (addrArg.Length == 0) return "Usage: bp remove <id>";
+                    bool removed = breakpoints.RemoveBreakpoint(ParseHex(addrArg));
+                    return removed ? $"{scope} #{addrArg} removed." : $"No {(coprocessor ? "SA-1 " : string.Empty)}breakpoint #{addrArg} found.";
                 }
                 default:
                 {

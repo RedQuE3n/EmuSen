@@ -38,6 +38,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // of Cartridge's own state blob so a state version 1 file, which
         // predates the SA-1 entirely, still has the layout it was written
         // with; VenusCore appends this separately - see EmuSen_Save_States.md §3.
+        // MemoryBus routes cartridge writes straight here, so without this
+        // `watch` never saw SRAM or either SA-1 memory - see Venus_SA1.md §11.4.
+        [EmuSen.Common.SkipInState] public IWriteObserver? WriteObserver;
+
         [EmuSen.Common.SkipInState] public Coprocessors.Sa1.Sa1? Sa1;
 
         // Non-null only for a SuperFX cartridge - see Venus_SuperFX.md §1. Same
@@ -277,11 +281,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             switch (mapped.Region)
             {
                 case CartridgeRegion.Sram:
-                    if (_sram.Length > 0) _sram[mapped.Offset % _sram.Length] = data;
+                    if (_sram.Length == 0) return;
+                    int sramIndex = mapped.Offset % _sram.Length;
+                    _sram[sramIndex] = data;
+                    // On an SA-1 cart this same array is BW-RAM, and that is
+                    // the space name it is published under - see Venus_SA1.md §11.2.
+                    WriteObserver?.OnWrite(Sa1 != null ? "BWRAM" : "SRAM", sramIndex, data);
                     return;
 
                 case CartridgeRegion.IRam:
                     Sa1!.IRam[mapped.Offset] = data;
+                    WriteObserver?.OnWrite("SA1IRAM", mapped.Offset, data);
                     return;
 
                 case CartridgeRegion.CoprocessorRegister:

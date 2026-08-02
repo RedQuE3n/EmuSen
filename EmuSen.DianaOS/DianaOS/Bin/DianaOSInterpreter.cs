@@ -194,6 +194,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                 new MuteCommand(),
                 new WatchCommand(),
                 new BreakCommand(),
+                new CovCommand(),
                 new FrameLogCommand(),
                 new CheatCommand(cheatAutoDetectCodec, cheatExplicitCodec, supportedCheatSystems),
                 new SearchCommand(),

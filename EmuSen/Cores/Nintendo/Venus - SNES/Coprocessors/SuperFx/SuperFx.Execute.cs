@@ -111,6 +111,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             }
 
 
+            CoverageRecorder?.Invoke((_pbr << 16) | R[15]);
+
             byte opcode = Pipe();
             _prefixInstruction = false;
             int cycles = Execute(opcode);

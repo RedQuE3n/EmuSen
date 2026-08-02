@@ -78,6 +78,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
         // Unspent master clocks carried between Run() calls.
         private int _clockBudget;
 
+        // Cumulative master clocks the SA-1 CPU actually executed - see Venus_SA1.md §2.3.
+        [SkipInState] public long ExecutedMasterClocks;
+
+        // Cumulative master clocks handed to Run() whether executed or not - see Venus_SA1.md §2.3.
+        [SkipInState] public long OfferedMasterClocks;
+
         public Sa1(byte[] rom, byte[] bwRam)
         {
             _rom = rom;
@@ -90,6 +96,32 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 
         public int BwRamSize => _bwRam.Length;
 
+        // The BW-RAM array itself, for the BWRAM debug space - see Venus_SA1.md §11.2.
+        public byte[] DebugBwRam => _bwRam;
+
+        // Writes the SA-1 makes to its own RAM, so `watch` sees them - see Venus_SA1.md §11.4.
+        [SkipInState] public IWriteObserver? WriteObserver;
+
+        // Same pull-hook shape as MemoryBus.BreakpointChecker, on the SA-1's
+        // own PC rather than the S-CPU's - see Venus_SA1.md §11.5.
+        [SkipInState] public Func<int, bool>? BreakpointChecker;
+
+        // Set when BreakpointChecker halts Run() mid-budget; VenusCore polls
+        // it to unwind out of the frame - see Venus_SA1.md §11.5.
+        [SkipInState] public bool HaltedAtBreakpoint;
+
+        [SkipInState] public int HaltedAddress;
+
+        // Skips one check after resuming, so `continue` leaves the breakpoint.
+        [SkipInState] private bool _justResumedFromBreakpoint;
+
+        // Called by VenusCore when re-entering a frame that halted on this chip.
+        public void ResumeFromBreakpoint()
+        {
+            HaltedAtBreakpoint = false;
+            _justResumedFromBreakpoint = true;
+        }
+
         // True while the SA-1 is asserting an IRQ the S-CPU has enabled - polled by VenusCore.RunFrame.
         public bool ScpuIrqPending =>
             ((_sa1IrqToScpu && (_sie & 0x80) != 0) || (_dmaIrqToScpu && (_sie & 0x20) != 0));
@@ -98,6 +130,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
         // consumed, so both cores share one timebase - see Venus_SA1.md §2.2.
         public void Run(int masterClocks)
         {
+            OfferedMasterClocks += masterClocks;
             _clockBudget += masterClocks;
             if (_clockBudget <= 0) return;
 
@@ -113,9 +146,22 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             while (_clockBudget > 0)
             {
                 ServiceInterrupts();
+
+                // Returns with _clockBudget intact, so resuming re-enters here
+                // rather than losing the unspent clocks - see Venus_SA1.md §11.5.
+                int pc24 = (Cpu.PB << 16) | Cpu.PC;
+                if (!_justResumedFromBreakpoint && BreakpointChecker != null && BreakpointChecker(pc24))
+                {
+                    HaltedAtBreakpoint = true;
+                    HaltedAddress = pc24;
+                    return;
+                }
+                _justResumedFromBreakpoint = false;
+
                 int spent = Cpu.Step();
                 StepTimer(spent);
                 _clockBudget -= spent;
+                ExecutedMasterClocks += spent;
             }
         }
 

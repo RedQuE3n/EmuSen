@@ -57,6 +57,12 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public WatchKind Kind = WatchKind.Write;
         public readonly List<DebugWatchEvent> Events = new();
         public const int MaxStoredEvents = 500; // ring-buffer cap - a long session shouldn't grow this unbounded
+
+        // Per-site totals for the whole run, kept outside the ring so
+        // `watch summary` cannot report a truncated site list as the
+        // complete one - see EmuSen_Debugging_Tools_Reference_v5.md §3.9.
+        public readonly Dictionary<string, long> SiteHits = new();
+        public long TotalEvents;
     }
 
     // The reusable mechanism behind every "log writes to this address range"
@@ -107,9 +113,30 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return w.Events.Skip(Math.Max(0, w.Events.Count - maxCount)).ToList();
         }
 
+        // Every access site since the watch was added, with whole-run counts -
+        // unlike GetEvents, this never loses a site to the ring's eviction.
+        public IReadOnlyList<(string Context, long Count)> GetSiteHits(int id)
+        {
+            var w = _watches.FirstOrDefault(x => x.Id == id);
+            if (w == null) return Array.Empty<(string, long)>();
+            return w.SiteHits.Select(kv => (kv.Key, kv.Value)).OrderByDescending(s => s.Value).ToList();
+        }
+
+        // How many accesses the watch has seen in total, against how many the
+        // event ring still holds - the gap is what `watch log` cannot show.
+        public (long Total, int Retained) GetEventCounts(int id)
+        {
+            var w = _watches.FirstOrDefault(x => x.Id == id);
+            return w == null ? (0, 0) : (w.TotalEvents, w.Events.Count);
+        }
+
         public void ClearEvents(int id)
         {
-            _watches.FirstOrDefault(x => x.Id == id)?.Events.Clear();
+            var w = _watches.FirstOrDefault(x => x.Id == id);
+            if (w == null) return;
+            w.Events.Clear();
+            w.SiteHits.Clear();
+            w.TotalEvents = 0;
         }
 
         // Called from an emulation-side write path (e.g. MemoryBus.Write8)
@@ -152,6 +179,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
                 var ev = new DebugWatchEvent(_nextSequence++, accessKind, address, value, context);
                 w.Events.Add(ev);
                 if (w.Events.Count > Watch.MaxStoredEvents) w.Events.RemoveAt(0);
+
+                w.SiteHits[context] = w.SiteHits.TryGetValue(context, out long hits) ? hits + 1 : 1;
+                w.TotalEvents++;
 
                 // Storing the event above always happens regardless of
                 // DianaOSLogging.MasterEnabled - watch/log commands querying

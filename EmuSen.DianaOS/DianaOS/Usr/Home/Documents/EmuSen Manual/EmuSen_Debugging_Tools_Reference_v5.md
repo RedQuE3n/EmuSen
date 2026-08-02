@@ -139,10 +139,11 @@ Two small helper classes back the memory spaces:
 | `watch add <space> <addr> <len> [write\|read\|both]` | Register a watchpoint (default write-only) |
 | `watch list` | List active watchpoints with their IDs |
 | `watch log <id> [<count>]` | Show a watchpoint's recorded events (default 20) |
-| `watch summary <id>` | Group a watchpoint's recorded events by access site (`Context`) with hit counts, instead of one line per event — the dynamic, addressing-mode-agnostic equivalent of `readers`/`writers` (§3.12) |
+| `watch summary <id>` | Group a watchpoint's accesses by site (`Context`) with **whole-run** hit counts — the dynamic, addressing-mode-agnostic equivalent of `readers`/`writers` (§3.12). Site totals are kept outside the event ring, so unlike `watch log` this never omits a site the ring has evicted |
 | `watch clear <id>` | Clear a watchpoint's stored events (keeps the watch registered) |
 | `watch remove <id>` | Remove a watchpoint entirely |
 | `bp add <addr>` / `bp list` / `bp remove <id>` | Manage execution breakpoints (24-bit CPU address) — see §3.1's breakpoints note. Named `bp`, not `break` - the shell's own `break`/`continue` loop-control keywords (§3.17) are hardcoded, zero-argument parser statements, so a command literally named `break` is unreachable (`break add 8000` parses as bare loop-control followed by a syntax error on the leftover `add 8000`) |
+| `cov on|off` / `cov clear` / `cov <addr> [<len>]` / `cov cop ...` | Record which addresses actually executed, then ask whether a routine was ever reached — see §3.24 |
 | `framelog add <space> <addr> [<width>]` / `list` / `show <id> [<count>]` / `clear <id>` / `remove <id>` | Per-frame value sampling, independent of reads/writes — see §3.13 |
 | `callers <addr> [<scanstart> <scanlen>]` | Find instructions statically calling/jumping to `<addr>` — see §3.12 |
 | `writers <addr> [<scanstart> <scanlen>]` | Find instructions statically writing to `<addr>` (absolute/absolute-long only on the SNES core — see §3.12 for why direct-page/indexed/indirect forms are excluded, and where that ISA-specific knowledge now lives) |
@@ -343,6 +344,10 @@ callers <addr> [<scanstart> <scanlen>]   find instructions statically calling/ju
 **Same "best-effort, may misalign through data mixed with code" caveat as `disasm`.** A linear disassembler walking forward byte-by-byte has no way to know which bytes in a scanned range are really instructions versus embedded data (graphics, tables, text) — if the scan range includes non-code bytes, everything after the first misaligned read can decode to garbage opcodes, including spurious `callers` matches or missed real ones. Best used on a range that's actually known to be code.
 
 **`writers`/`readers`** (`DianaOS/Commands/WritersCommand.cs`/`ReadersCommand.cs`) are the store/load-side counterparts to `callers` - "what code is capable of writing/reading this address," independent of whether that path was ever actually exercised in a traced run (the gap `writers` was built to close: watching an address live can show exactly one write from one PC and nothing else, which only proves what a specific run did, not what the ROM's code is capable of doing).
+
+**A regex or a static scan can only find destinations written as immediates, and that limitation has produced at least one wrong conclusion.** `Venus_SuperFX.md` §10.5 retired "some code uploads to VRAM `$F800` and we lose it" on the strength of a ROM-wide regex for `LDA #imm16 : STA $2116` finding nothing. A runtime `watch add IO 2116 2 write` over the same scene finds **eighteen** sites, two of them writing exactly that destination — the game normally supplies it through a queue node, which no operand-parsing scan can see. Reach for the watch first when the question is "does anything ever address X".
+
+**`watch summary` reports whole-run site totals; `watch log` does not.** The event ring holds 500 events, and `summary` used to group *that* rather than the run — so a long trace reported the last 500 events' site list as if it were complete, which is how the sweep above first returned "exactly one site". Per-site counts now live outside the ring, and the summary's footer says how many events the ring still holds when it is short of the total. Anything reading `watch log` on a busy watch is still seeing a tail, not the run.
 
 **`watch summary <id>` (§3.5) is the dynamic complement to `writers`/`readers`, not a replacement.** It only reports what actually executed during a traced run, but unlike a static scan it doesn't care what addressing mode got it there - an indexed `LDA addr,X` or an indirect `STA (dp),Y` shows up in a summary exactly like an absolute one would, since it operates on the resolved runtime address rather than parsing the instruction's operand form. Neither subsumes the other: `writers`/`readers` finds code paths that exist but may never have been reached yet; `watch summary` finds exactly what a specific run actually did, including forms `writers`/`readers` structurally can't see.
 
@@ -843,11 +848,55 @@ This is how §5.1 of `Venus_PPU.md` (skipping the unused sub-screen composite) w
 
 **The gap this closed.** Until this landed, the entire toolchain was blind to cartridge coprocessors. `SnesDebugTarget` had no reference to the SA-1, the SuperFX GSU or a NEC DSP at all, and the exposed memory spaces stopped at `CpuBus / IO / WRAM / VRAM / CGRAM / OAM / SRAM / APURAM`. So `regs`, `watch`, `framelog`, `waitvalue`, `snapshot`, `diff`, `search` and `coretop` — the whole surface — could not see a single GSU register. Every coprocessor investigation therefore degenerated into hand-patching `Console.WriteLine` into the interpreter and rebuilding, twice over in the SuperFX work (`Venus_SuperFX.md` §10). This is the same blind spot `APURAM` closed for the SPC700, and the same lesson §2 already states: a narrow, investigation-specific print is a sign something belongs in the toolchain.
 
-**What is exposed.** `IDebugTarget.CoprocessorRegisters` is a provider like `CpuRegisters`/`ApuRegisters`, publishing whichever chip the cartridge carries — the GSU's `SFR`/`PBR`/`CBR`/`SCBR`/`SCMR`/`ROMBR`/`RAMBR` plus the whole `R0`-`R15` file, the SA-1's control registers and its 65C816's state, or a NEC DSP's `PC`/`SR`/`DR`/`DP`/`RP`. A cartridge with no coprocessor — most of them — publishes an empty list, and `regs` prints no section at all. Two new memory spaces appear only when the chip is present: **`GSURAM`** (Game Pak RAM: the GSU's work RAM, framebuffer and save data all at once, so `snapshot`/`diff` over it answers "is the chip still plotting") and **`SA1IRAM`**.
+**What is exposed.** `IDebugTarget.CoprocessorRegisters` is a provider like `CpuRegisters`/`ApuRegisters`, publishing whichever chip the cartridge carries — the GSU's `SFR`/`PBR`/`CBR`/`SCBR`/`SCMR`/`ROMBR`/`RAMBR` plus the whole `R0`-`R15` file, the SA-1's control registers and its 65C816's state, or a NEC DSP's `PC`/`SR`/`DR`/`DP`/`RP`. A cartridge with no coprocessor — most of them — publishes an empty list, and `regs` prints no section at all. Memory spaces appear only when the chip is present: **`GSURAM`** (Game Pak RAM: the GSU's work RAM, framebuffer and save data all at once, so `snapshot`/`diff` over it answers "is the chip still plotting"), **`SA1IRAM`**, **`BWRAM`**, **`SA1BUS`** and **`DSPRAM`** — the last three added later, see §3.23b.
 
 **Reads must not perturb the chip, and this is not a formality.** The real register windows have side effects — reading `$3031` *acknowledges the GSU's interrupt*, and the NEC DSP's `DR`/`SR` reads advance its transfer handshake. So the provider reads dedicated side-effect-free `Debug*` views rather than routing through each chip's own `ReadRegister`, exactly as `APURAM` wraps raw SPC700 RAM instead of `Spc700.Read8`. `CoprocessorDebugExposureTests.Reading_the_provider_does_not_acknowledge_the_gsu_interrupt` pins it, and genuinely fails if the implementation is rerouted through `ReadRegister`.
 
-**No `DSPRAM`.** The NEC DSP's RAM is `ushort[]`, and which byte order a byte-addressable view should present is a real decision rather than one to invent — its registers are on the provider instead.
+**`DSPRAM`.** The NEC DSP's RAM is `ushort[]`, so a byte-addressable view has to pick an order; it presents **little-endian**, matching how the chip's own 16-bit words reach the S-CPU over `DR`. Writes recombine into the existing word rather than clobbering the other half.
+
+### 3.23b Coprocessors as first-class debug targets
+
+§3.23 made the chips *visible*. This made them *debuggable* — the difference being that a second CPU needs the same verbs the first one has, pointed at its own address space. Full design detail: `Venus_SA1.md` §11.
+
+**`BWRAM` — a space that was silently lying.** BW-RAM is the SA-1's main work and save RAM. The `SRAM` space is anchored at `$70:0000`, and an SA-1 cart maps BW-RAM at `$40-$4F`, so `mem SRAM` decoded an unmapped bank and reported **32KB of zeroes** on Kirby's Dream Land 3 while the game was actively using it. Worse than a missing space: a present one that answers confidently and wrongly. `BWRAM` wraps the array directly.
+
+**`SA1BUS` — the chip's own 24-bit address space**, Super MMC banking applied, side-effect-free (`DebugPeekRegister` answers `$2302`/`$230D` from their latches instead of re-latching and advancing them). This is what makes the rest of the toolchain work on coprocessor code for free:
+
+```sh
+regs                       # Coprocessor block: PB/PC of the second CPU
+disasm SA1BUS 82D7 12      # what it is actually running
+```
+
+**`disasm` picks its decoding CPU from the space name.** Immediate widths come from M/X/E, and decoding SA-1 code with the *S-CPU's* flags mis-lengths every immediate — `LDA #$0001` read as `LDA #$01` desynchronises the stream and the remainder of the listing turns into garbage. `SA1BUS`/`SA1IRAM` decode with `Sa1.Cpu`.
+
+**`watch` now sees both sides.** `MemoryBus.Write8` routes cartridge writes straight to `Cartridge.Write8` without notifying its observer, so writes to `SRAM`, `SA1IRAM` and `BWRAM` fired no watch at all — on any game, not just SA-1 ones. `Cartridge` carries its own `WriteObserver` now, and the SA-1 reports its own writes through `IWriteObserver.OnCoprocessorWrite` (a defaulted member) so events are labelled with the chip's PC rather than the S-CPU's, which is meaningless for them:
+
+```
+      24x  W  SA1 PC=0xC22698     <- the coprocessor
+      16x  W  PC=0xC22709         <- the S-CPU
+```
+
+**`bp sa1` — breakpoints on the second CPU.** `Breakpoints` and `CoprocessorBreakpoints` are separate registries, because the two CPUs run different code at the same addresses. The scope word is optional, so existing forms are untouched:
+
+```sh
+bp add 8000            # S-CPU, exactly as before
+bp sa1 add 0082D7      # the coprocessor
+```
+
+`EmuSen.Pharaoh`'s `FrameRunner` stops the batch when either CPU halts and says which one, so this works headlessly. A halted frame is deliberately **not** counted, snapshotted for rewind, or reported as advanced — `RunFrame()` returned mid-frame, so that frame did not happen:
+
+```
+> frames 30
+[BREAK] SA-1 halted at $0082D7 (frame 0).
+```
+
+**`perf` reports whether the chip is running at rate** (see §3.20 and `Venus_SA1.md` §2.3):
+
+```
+  sa-1: 357368 clocks/frame run of 357368 offered (100.0% of the 357368 a full-rate frame allows)
+```
+
+A shortfall means starvation or halted time; a surplus means double-clocking. It settles a coprocessor's contribution to a pacing complaint in one line rather than by inference.
 
 ### 3.23a `cophist` — coprocessor register history
 
@@ -866,6 +915,30 @@ unchanged for 15 refresh(es).
 ```
 
 The header's **"unchanged for N refresh(es)"** is the useful part: it is the direct answer to "when did the chip stop", available without storing or diffing anything by hand. The run above shows the GSU parked at `R15 = B2B1` for fifteen frames.
+
+### 3.24 `cov` — execution coverage
+
+`bp` answers "is execution at this address *right now*". It cannot answer "did this code ever run", and a breakpoint that never fires proves nothing on its own — it looks identical to a breakpoint on an address that is never reached and to one that was set wrong.
+
+`cov` records every 24-bit address executed between `cov on` and `cov off` into a bitmap, and reports coverage over any range:
+
+```
+> cov on
+> frames 300
+> cov off
+Coverage recording off, 4233705 instructions recorded.
+> cov 10F452 10
+Coverage $10F452-$10F461: 0/16 bytes executed
+  Never reached.
+```
+
+Recording is off by default and costs one bool test per instruction while disarmed; armed, it allocates a 2MB bitmap. An optional `cop`/`sa1`/`gsu` scope word targets the coprocessor's own instruction stream, which is a separate address space — same convention as `bp sa1` (§3.23b).
+
+**Three things it does that nothing else here did.**
+
+- **Retires "the game never reaches this feature" in one command.** `Venus_SuperFX.md` §10.1 retired two suspects by patching a `Console.WriteLine` into an opcode handler and running headless to see whether it fired. That is the right instinct and the wrong mechanism — it needs a rebuild per question, and the probe has to be removed afterward.
+- **Pairs with `callers` into a mechanical search.** Walk up from a routine that never ran until you reach a caller that did; the branch between the two is the one that skipped it. Neither half works alone: `callers` finds paths that exist without saying which ran, and coverage says what ran without saying what could have.
+- **Recovers instruction boundaries `disasm` guessed wrong.** The static disassembler has to assume the CPU's *current* M/X flags apply at the address being decoded (see `SnesDebugTarget.Disassemble`'s own comment), so a 16-bit `LDA #$7000` in a routine disassembled while M is set renders as two shorter instructions. The recorded addresses *are* the real opcode boundaries, so `cov <routine> <len>` checks a decode without tracing it.
 
 ---
 

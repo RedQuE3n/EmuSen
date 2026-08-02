@@ -289,6 +289,22 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // (a CMP/branch pair) that never touch memory.
         BreakpointRegistry Breakpoints { get; }
 
+        // Breakpoints on a cartridge coprocessor's own CPU, kept separate from
+        // Breakpoints above because the two run different code at the same
+        // addresses - an SA-1 game's $00:82D7 is not the S-CPU's $00:82D7.
+        // Null when this core has no separately-steppable coprocessor, which
+        // is the common case - see Venus_SA1.md §11.5.
+        BreakpointRegistry? CoprocessorBreakpoints => null;
+
+        // Whole-run execution coverage (see CoverageRegistry.cs), fed from the
+        // same per-instruction seam as Breakpoints. Null when a core has no
+        // coverage hook - see EmuSen_Debugging_Tools_Reference_v5.md §3.24.
+        CoverageRegistry? Coverage => null;
+
+        // Coverage of a coprocessor's own instruction stream, separate from
+        // Coverage for the same reason CoprocessorBreakpoints is separate.
+        CoverageRegistry? CoprocessorCoverage => null;
+
         // The RAM-poke cheat engine (see CheatRegistry.cs) - same exposure
         // pattern as Watches/FrameLog, but the data flow runs the other
         // direction: instead of the core feeding data into the registry,

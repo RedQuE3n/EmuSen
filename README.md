@@ -10,7 +10,7 @@ EmuSen is written against published hardware documentation rather than by portin
 
 ## Table of contents
 
-- [What this is](#what-this-is)
+- [What exists so far](#what-exists-so-far)
 - [Status](#status)
 - [The two frontends](#the-two-frontends)
 - [DianaOS — the built-in debug shell](#dianaos--the-built-in-debug-shell)

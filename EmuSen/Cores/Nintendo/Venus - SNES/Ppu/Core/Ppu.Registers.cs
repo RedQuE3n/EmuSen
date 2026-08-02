@@ -21,12 +21,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         
         private void WriteOAMADDL(ushort offset, byte data)
         {
-            _oamAddr = (ushort)(((uint)_oamAddr & 0x0200u) | ((uint)data << 1));
+            _oamAddrLatch = (ushort)(((uint)_oamAddrLatch & 0x0200u) | ((uint)data << 1));
+            _oamAddr = _oamAddrLatch;
         }
 
         private void WriteOAMADDH(ushort offset, byte data)
         {
-            _oamAddr = (ushort)((((uint)data & 0x01u) << 9) | ((uint)_oamAddr & 0x01FFu));
+            _oamAddrLatch = (ushort)((((uint)data & 0x01u) << 9) | ((uint)_oamAddrLatch & 0x01FFu));
+            _oamAddr = _oamAddrLatch;
 
             // Bit 7: OAM priority rotation - confirmed real via the SNESdev
             // wiki's Sprites page ("OAMADD can adjust this with 'priority
@@ -35,6 +37,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             // the first/topmost one, wrapping through all 128 from there.
             // Previously not parsed at all - this bit was silently dropped.
             PriorityRotationEnabled = (data & 0x80) != 0;
+        }
+
+        // Hardware reloads the running OAM address from $2102/$2103 when vblank starts, unless forced blank - see Venus_PPU.md §6.4.
+        public void ReloadOamAddressForVBlank()
+        {
+            if ((Inidisp & 0x80) == 0) _oamAddr = _oamAddrLatch;
         }
 
         private void WriteOAMDATA(ushort offset, byte data)
@@ -330,6 +338,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             _ophctHigh = false;
             _opvctHigh = false;
             byte result = 0x01; // PPU2 version = 1
+            if (IsPal) result |= 0x10;
             if (FieldParity) result |= 0x80;
             return result;
         }

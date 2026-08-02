@@ -163,6 +163,26 @@ A ~60x reduction. The sign flip in the middle row matters: fixing only the scanl
 
 **What this does not fix.** Because the two crystals are genuinely independent, real hardware drifts too — a residual mismatch is physically correct, not a bug to be eliminated. Any emulator therefore still needs a mechanism to absorb it continuously. `AudioBuffer`'s current discard-based resync is the wrong such mechanism; see `EmuSen_Settings_Reference.md` §2.
 
+### 8.5c PAL support — both crystals move, the dot clock doesn't
+
+§8.5b's two constants are NTSC's. A PAL console differs in exactly two of them, and the reason the change stayed small is that the *third* number everything else is built on doesn't move at all:
+
+| | NTSC | PAL |
+|---|---|---|
+| Master clock | 21477272 Hz | **21281370 Hz** |
+| Scanlines/frame | 262 | **312** |
+| Master clocks/scanline | 1364 | 1364 (unchanged) |
+| Active display lines | 224 | 224 (unchanged) |
+| Frame rate | 60.0985 Hz | **50.0070 Hz** |
+
+Both machines run 341 dots x 4 master clocks per scanline; PAL simply spends more scanlines per frame in vblank at a slightly slower clock. So `CyclesPerScanline` stays a `const`, the whole per-scanline CPU/HDMA/render loop is untouched, and vblank still starts at line 225 (`InterruptController.AutoJoypadScanline`) because the active display is 224 lines either way. Only `TotalScanlines` and `MasterClockHz` became per-instance fields, set by `LoadRom` from `Cart.Region` (`Venus_Memory.md` §2.5).
+
+**`FrameRateHz` and the SPC700 conversion both fell out for free**, which is the payoff for §8.5b having derived them from the constants instead of restating magic numbers. `FrameRateHz` is still `masterClock / (totalScanlines * CyclesPerScanline)` and now yields 50.0070 for PAL with no other change; frontend pacing follows automatically, as §8.5b designed it to for a hypothetical future core. The SPC700 remainder-carry math is unchanged apart from reading the instance field — and it is *correct* that it changes, because the APU crystal genuinely does not: the SPC700 still runs at 1.024 MHz on a PAL console, so the same real time buys the same number of APU cycles while the CPU's master-clock count per frame goes up.
+
+**What this does not model.** PAL games' extra 50 vblank lines are real time the CPU gets to work in, and that is modelled; what isn't is that the *display* on a real PAL set is 239 lines tall, with games choosing either 224-line output (letterboxed, what nearly everything including DKC2 does) or true 239-line mode via `SETINI` bit 2 (§10 of `Venus_PPU.md`, stored but not implemented). A 239-line PAL game would render its bottom 15 lines missing. Frame *pacing* at 50 Hz is honest, but this is emulating a PAL machine's timing, not a PAL machine's overscan.
+
+**Validated by** `EmuSen.WiseMan/Memory/ConsoleRegionTests.cs` (country-byte classification, both frame rates to 3 decimal places, the `STAT78` bit in both directions, and that the region bit doesn't disturb the PPU2 version nibble sharing that byte), and end-to-end by Donkey Kong Country 2 — the European dump that motivated the work — now booting past the region lockout into playable gameplay (`EmuSen_Games_Tested.md`).
+
 ### 8.6 Validation
 
 Re-run against the SingleStepTests/65816 ground-truth suite (§7) after this change — no regressions (state-only checks, since that suite's vectors don't assert cycle counts, only resulting registers/memory). This change's actual timing effect was cross-checked separately by re-measuring SPC700 audio pacing (`Venus_APU.md` §2.9): the per-frame master-clock budget turned out to already be correctly calibrated either way (see that section for why), so this is a genuine general CPU/PPU timing accuracy improvement, but it did **not** turn out to be the fix for the audio symptom that motivated it.

@@ -67,6 +67,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Controllers
         {
             _latchedJoy1 = _liveJoy1;
             _latchedJoy2 = _liveJoy2;
+            // The auto-read clocks the same port lines, leaving the manual shift registers spent - see Venus_Memory.md §4.4a.
+            _shiftJoy1 = 0xFFFF;
+            _shiftJoy2 = 0xFFFF;
         }
 
         // $4016 write: bit 0 is the strobe line. While held high, the shift

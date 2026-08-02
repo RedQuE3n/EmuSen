@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The SDL3 device layer both GUI frontends sit on: real audio output,
+       gamepad polling, the rebindable pad map and the shared config root.
+       One copy, not one per frontend - see EmuSen_Settings_Reference.md §4.10. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Audio/AudioPlayer.cs pins its sample array for SDL_PutAudioStreamData
+         - see EmuSen_Settings_Reference.md §4.10. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SDL3 bindings (gamepad input, audio output) and the SDL3 binary
+         itself - see EmuSen_Settings_Reference.md §4.9. -->
+    <PackageReference Include="SDL3-CS" Version="3.4.2" />
+    <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ICore/EmulatorSession (what AudioPlayer pumps), DynamicRateControl
+         and AudioSettings, SnesButton. No Avalonia here on purpose: nothing
+         in this project touches a window. -->
+    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
+  </ItemGroup>
+
+</Project>

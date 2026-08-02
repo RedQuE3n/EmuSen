@@ -1,15 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- Needed for Audio/AudioPlayer.cs's fixed-pointer hand-off to SDL's
-         QueueAudio (a raw void* parameter) - see that file's own comment.
-         No longer needed for Raylib (this frontend has none left); was
-         previously justified by the now-deleted Raylib-based PumpAudio. -->
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Both XAML types are constructed by hand - see EmuSen_Settings_Reference.md §4.8. -->
     <NoWarn>$(NoWarn);AVLN3001</NoWarn>
@@ -28,12 +23,6 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
-    <!-- Gamepad input (Input/GamepadManager.cs) and real audio output
-         (Audio/AudioPlayer.cs) - both duplicated from EmuSen.Mistress's
-         own copies, which already carry this exact dependency. -->
-    <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
-    <!-- The SDL2 binary itself - see EmuSen_Settings_Reference.md §4.9. -->
-    <PackageReference Include="Ultz.Native.SDL" Version="2.32.10" />
     <!-- Native X11 backend - opted into explicitly in Program.cs
          (Linux only), matching EmuSen.Mistress's own Program.cs. -->
     <PackageReference Include="Avalonia.X11" Version="12.1.0" />
@@ -56,6 +45,15 @@
          presenter this frontend is built around. See
          EmuSen.Serenity.csproj. -->
     <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
+    <!-- AudioPlayer/GamepadManager/GamepadBindingMap and the shared
+         config root - one copy for both frontends, see
+         EmuSen_Settings_Reference.md §4.10. -->
+    <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
   </ItemGroup>
+
+
+  <!-- A published build's output directory is DianaOS's own root: the .NET
+       app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
+  <Import Project="..\EmuSen.DianaOS\Publish\DianaOSPublishLayout.targets" />
 
 </Project>

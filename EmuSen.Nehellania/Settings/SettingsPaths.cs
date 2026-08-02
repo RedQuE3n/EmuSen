@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace EmuSen.Mistress.Settings
+namespace EmuSen.Nehellania.Settings
 {
     // Redirectable config root for this frontend - see EmuSen_Settings_Reference.md §4.1.
     public static class SettingsPaths

@@ -46,10 +46,29 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         private readonly ICheatCodeCodec? _autoDetectCodec;
         private readonly ICheatCodeCodec? _explicitCodec;
 
-        public CheatCommand(ICheatCodeCodec? autoDetectCodec = null, ICheatCodeCodec? explicitCodec = null)
+        // Which cheat-database folders this build's cores can use, for
+        // `cheat db prune`. Injected rather than known here, same as the
+        // codecs above - DianaOS has no idea which cores exist. Null means
+        // nobody told us, which prunes nothing. See §4.16.
+        private readonly Func<IReadOnlyCollection<string>>? _supportedCheatSystems;
+
+        public CheatCommand(ICheatCodeCodec? autoDetectCodec = null, ICheatCodeCodec? explicitCodec = null,
+            Func<IReadOnlyCollection<string>>? supportedCheatSystems = null)
         {
             _autoDetectCodec = autoDetectCodec;
             _explicitCodec = explicitCodec;
+            _supportedCheatSystems = supportedCheatSystems;
+        }
+
+        // Appended to a finished download: the moment the 250MB actually
+        // lands is the moment to mention that most of it is unusable here.
+        private string PruneOffer(CheatDatabase db)
+        {
+            CheatPrunePlan plan = CheatDatabasePruner.Plan(db, _supportedCheatSystems?.Invoke() ?? Array.Empty<string>());
+            if (!plan.CanApply) return "";
+
+            return $"\n\n{plan.Removing.Count} of {plan.Removing.Count + plan.Keeping.Count} system(s) have no core in this build " +
+                   $"({plan.Files} file(s), {CheatPrunePlan.Human(plan.Bytes)}). `cheat db prune` lists them.";
         }
 
         public string Name => "cheat";
@@ -100,6 +119,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "  cheat db find <game>               search the database for a game",
             "  cheat db load <game>               import that game's cheats, disabled",
             "  cheat db update                    download the libretro cheat database (CC BY-SA 4.0)",
+            "  cheat db prune [--apply]           delete the systems no core in this build can use",
         });
 
         // AppSettings when set, the sandbox's own Cheats folder otherwise -
@@ -399,11 +419,36 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                                 return $"cheat db update: {ex.Message}";
                             }
 
-                            return $"Installed {result.Installed} cheat file(s) into {db.Directory}\n\n{CheatDatabaseInstaller.Attribution}";
+                            string offer = PruneOffer(new CheatDatabase(db.Directory));
+                            return $"Installed {result.Installed} cheat file(s) into {db.Directory}{offer}\n\n{CheatDatabaseInstaller.Attribution}";
+                        }
+                        case "prune":
+                        {
+                            CheatPrunePlan plan = CheatDatabasePruner.Plan(db, _supportedCheatSystems?.Invoke() ?? Array.Empty<string>());
+                            if (!plan.CanApply) return $"Nothing to prune - {plan.Reason}";
+
+                            var listing = plan.Removing
+                                .OrderByDescending(s => s.Files)
+                                .Select(s => $"  {s.System}  ({s.Files} file(s), {CheatPrunePlan.Human(s.Bytes)})");
+
+                            string header = $"Would delete {plan.Removing.Count} system(s), {plan.Files} file(s), {CheatPrunePlan.Human(plan.Bytes)}:";
+                            string kept = $"Keeping: {string.Join(", ", plan.Keeping)}";
+
+                            // Deleting is irreversible and the only way back is
+                            // a 250MB download, so the flag is not optional.
+                            if (!parts.Skip(3).Any(p => p.Equals("--apply", StringComparison.OrdinalIgnoreCase)))
+                            {
+                                return string.Join('\n', new[] { header }.Concat(listing).Append(kept)
+                                    .Append("\nRe-run as `cheat db prune --apply` to delete them."));
+                            }
+
+                            (int pruned, IReadOnlyList<string> failed) = CheatDatabasePruner.Apply(db, plan);
+                            string trouble = failed.Count > 0 ? $"\nCouldn't remove: {string.Join("; ", failed)}" : "";
+                            return $"Deleted {pruned} system(s), {plan.Files} file(s), {CheatPrunePlan.Human(plan.Bytes)}.\n{kept}{trouble}";
                         }
                         default:
                         {
-                            string[] dbSubcommands = { "status", "find", "load", "update" };
+                            string[] dbSubcommands = { "status", "find", "load", "update", "prune" };
                             return $"Unknown 'cheat db' subcommand '{dbSub}'.{Suggestion.Hint(dbSub, dbSubcommands)} Try {string.Join('/', dbSubcommands)}.";
                         }
                     }

@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
 using Avalonia.Input;
+using EmuSen.Galaxia;
 
 namespace EmuSen.Mistress.Input
 {
@@ -90,39 +88,17 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        private static string ConfigPath => Nehellania.Settings.SettingsPaths.For("hotkeybindings.json");
+        private static readonly ConfigFile<Dictionary<HotkeyAction, Key>> File = new("hotkeybindings.json");
 
-        public void Save()
-        {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
-                File.WriteAllText(ConfigPath, JsonSerializer.Serialize(ActionToKey, new JsonSerializerOptions { WriteIndented = true }));
-            }
-            catch
-            {
-                // Best-effort - a failed save shouldn't crash a rebind.
-            }
-        }
+        public void Save() => File.Save(ActionToKey);
 
         public static HotkeyBindingMap Load()
         {
             var bindings = new HotkeyBindingMap();
-            try
+            if (File.Load() is { Count: > 0 } loaded)
             {
-                if (File.Exists(ConfigPath))
-                {
-                    var loaded = JsonSerializer.Deserialize<Dictionary<HotkeyAction, Key>>(File.ReadAllText(ConfigPath));
-                    if (loaded is { Count: > 0 })
-                    {
-                        bindings.ActionToKey = loaded;
-                        bindings.RebuildReverseLookup();
-                    }
-                }
-            }
-            catch
-            {
-                // Corrupt/unreadable config - fall back to defaults rather than crash.
+                bindings.ActionToKey = loaded;
+                bindings.RebuildReverseLookup();
             }
             return bindings;
         }

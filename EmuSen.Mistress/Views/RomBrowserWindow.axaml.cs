@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Views
 {
@@ -21,9 +21,7 @@ namespace EmuSen.Mistress.Views
     // state beyond "what did the user pick, if anything."
     public partial class RomBrowserWindow : Window
     {
-        private static readonly string[] RomExtensions = { ".smc", ".sfc" };
-
-        private readonly List<string> _fullPaths = new();
+        private IReadOnlyList<RomEntry> _entries = Array.Empty<RomEntry>();
 
         // Parameterless constructor exists only so Avalonia's XAML tooling
         // (previewer, generated InitializeComponent) is happy - always use
@@ -38,30 +36,11 @@ namespace EmuSen.Mistress.Views
 
         private void PopulateList(string? romDirectory)
         {
-            if (string.IsNullOrWhiteSpace(romDirectory))
-            {
-                DirectoryText.Text = "No ROM directory configured - set one in Settings > Preferences...";
-                return;
-            }
+            RomLibraryResult result = RomLibrary.Scan(romDirectory);
+            _entries = result.Entries;
 
-            if (!Directory.Exists(romDirectory))
-            {
-                DirectoryText.Text = $"Directory not found: {romDirectory}";
-                return;
-            }
-
-            DirectoryText.Text = romDirectory;
-
-            _fullPaths.AddRange(
-                Directory.EnumerateFiles(romDirectory)
-                    .Where(f => RomExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
-                    .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase));
-
-            RomList.ItemsSource = _fullPaths.Select(Path.GetFileName).ToList();
-            if (_fullPaths.Count == 0)
-            {
-                DirectoryText.Text += " (no .smc/.sfc files found)";
-            }
+            DirectoryText.Text = _entries.Count > 0 ? result.Directory : RomLibrary.DescribeEmpty(result);
+            RomList.ItemsSource = _entries.Select(e => e.FileName).ToList();
         }
 
         private void OnOpenClick(object? sender, RoutedEventArgs e) => TryReturnSelection();
@@ -73,8 +52,8 @@ namespace EmuSen.Mistress.Views
         private void TryReturnSelection()
         {
             int index = RomList.SelectedIndex;
-            if (index < 0 || index >= _fullPaths.Count) return;
-            Close(_fullPaths[index]);
+            if (index < 0 || index >= _entries.Count) return;
+            Close(_entries[index].FullPath);
         }
     }
 }

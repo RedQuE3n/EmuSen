@@ -82,36 +82,17 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         public string CoreName => "SNES";
 
-        // Per-phase breakdown of the last completed RunFrame() call -
-        // a temporary profiling aid for the "why is gameplay slower than
-        // 60fps" investigation (both frontends print an [FPS] readout
-        // showing RunFrame() itself taking ~17-18ms during real gameplay).
-        // Timed at per-scanline granularity, not per-instruction - timing
-        // every single Cpu.Step() call would add Stopwatch overhead
-        // comparable to the work being measured (a fast interpreter's
-        // per-instruction cost and Stopwatch.GetTimestamp()'s own cost are
-        // the same order of magnitude), which would distort the very
-        // numbers this exists to produce. CpuSpc700 bundles CPU+SPC700
-        // stepping as one phase for the same reason - splitting further
-        // would mean timing individual Cpu.Step() calls again.
+        // Per-phase breakdown of the last completed RunFrame() call, timed
+        // at per-scanline granularity - see Venus_PPU.md §13.
         public double LastFrameCpuSpc700Ms { get; private set; }
         public double LastFramePpuMs { get; private set; }
         public double LastFrameHdmaMs { get; private set; }
 
-        // Sub-breakdown of LastFramePpuMs, sourced straight from Renderer -
-        // see that class's own comment (Renderer.Scanline.cs) for why this
-        // exists: LastFramePpuMs stopped dropping as much as expected once
-        // the BG1-4 double-decode fix landed, meaning sprite evaluation or
-        // the final color-math/blend loop (neither touched by that fix) is
-        // the actual dominant cost within it.
+        // Sub-breakdown of LastFramePpuMs, straight from Renderer - see Venus_PPU.md §13.
         public double LastFrameObjEvalMs => Renderer?.LastFrameObjEvalMs ?? 0;
         public double LastFrameBlendMs => Renderer?.LastFrameBlendMs ?? 0;
 
-        // objEval+blend turned out tiny (~0.6ms) against ~13ms of total ppu
-        // time - these two split the rest (per-scanline BG/OBJ compositing)
-        // into main-screen vs sub-screen, to check whether sub-screen
-        // rendering (often skippable/cheap if a scene doesn't really use
-        // it) is doubling the real per-pixel BG decode cost unnecessarily.
+        // Splits the per-scanline BG/OBJ composite into main vs sub screen - see Venus_PPU.md §13.
         public double LastFrameMainCompositeMs => Renderer?.LastFrameMainCompositeMs ?? 0;
         public double LastFrameSubCompositeMs => Renderer?.LastFrameSubCompositeMs ?? 0;
 

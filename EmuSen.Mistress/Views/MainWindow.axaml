@@ -13,6 +13,8 @@
                 <MenuItem Header="_Open ROM..." Click="OnOpenRomClick" />
                 <MenuItem Header="_Browse ROMs..." Click="OnBrowseRomsClick" />
                 <Separator />
+                <MenuItem Header="Game _Library" Click="OnShowLibraryClick" />
+                <Separator />
                 <MenuItem Header="E_xit" Click="OnExitClick" />
             </MenuItem>
 
@@ -52,19 +54,28 @@
             </Grid>
         </Border>
 
-        <!-- Game viewport. GameFrame shows the live frame once a ROM is
-             running; NoRomText sits behind it and is only visible until then
-             (toggled in code-behind, not a binding, to keep this first pass
-             simple). GameFrameControl is EmuSen.Serenity's shared GPU
-             (Skia/Ganesh) presentation surface - same control Hotaru's
-             GameWindow uses - replacing the old WriteableBitmap-backed
-             Image below. -->
+        <!-- Two screens in one viewport: the library list until a game is
+             running, the live frame after. Visibility is toggled in
+             code-behind rather than bound - see EmuSen_Settings_Reference.md
+             §4.11. GameFrameControl is EmuSen.Serenity's shared GPU
+             (Skia/Ganesh) presentation surface, the same control Hotaru's
+             GameWindow uses. -->
         <Grid Background="Black">
-            <TextBlock x:Name="NoRomText"
-                       Text="No ROM loaded"
-                       Foreground="Gray"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center" />
+            <DockPanel x:Name="LibraryView" Margin="12">
+                <TextBlock DockPanel.Dock="Top"
+                           x:Name="LibraryHeaderText"
+                           Foreground="Gray"
+                           Margin="2,0,2,8" />
+                <TextBlock DockPanel.Dock="Bottom"
+                           x:Name="LibraryHintText"
+                           Text="Double-click a title, or press Enter, to start it."
+                           Foreground="Gray"
+                           Margin="2,8,2,0" />
+                <ListBox x:Name="LibraryList"
+                         Background="Transparent"
+                         DoubleTapped="OnLibraryItemActivated"
+                         KeyDown="OnLibraryKeyDown" />
+            </DockPanel>
             <serenity:GameFrameControl x:Name="GameFrame" IsVisible="False" />
         </Grid>
 

@@ -7,11 +7,12 @@ namespace EmuSen.Common
 {
     // Marks a field as NOT part of save-state data. Used for three kinds of
     // fields that reflection would otherwise mishandle:
-    //   1. Dispatch tables holding delegates (Cpu._instructions,
-    //      Spc700._instructions, Ppu's register table) - delegates aren't
-    //      meaningfully serializable, and these get rebuilt identically by
-    //      BuildOpcodeTable()/BuildRegisterTable() every time a fresh
-    //      Cpu/Spc700/Ppu is constructed, so they're wiring, not data.
+    //   1. Dispatch tables holding delegates (Spc700._instructions, Ppu's
+    //      register table) - delegates aren't meaningfully serializable, and
+    //      these get rebuilt identically by BuildOpcodeTable()/
+    //      BuildRegisterTable() every time a fresh Spc700/Ppu is
+    //      constructed, so they're wiring, not data. (The 65816's own table
+    //      is no longer one of these - see Venus_CPU.md §9.)
     //   2. Back-references to an already-owned object (Dma._bus pointing
     //      back to its owning MemoryBus, MemoryBus's own references to the
     //      Cartridge/Spc700 that EmulatorSession already owns and saves

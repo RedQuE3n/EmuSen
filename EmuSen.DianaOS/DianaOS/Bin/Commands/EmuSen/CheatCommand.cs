@@ -1,11 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using EmuSen.Galaxia;
+using EmuSen.Galaxia.Models;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
+using EmuSen.Galaxia.Text;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
@@ -80,6 +84,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "  cheat disable <id>                 turn a cheat off without removing it",
             "  cheat remove <id>                  remove a cheat entirely",
             "  cheat clear                        remove every cheat",
+            "  cheat save <name>                  write every cheat to",
+            "                                     /etc/EmuSen/cheats/<name>.json",
+            "  cheat load <name>                  add every cheat from that file to whatever",
+            "                                     is already loaded (`cheat clear` first to",
+            "                                     replace rather than merge)",
+            "  cheat files                        list the saved cheat files",
         });
 
         // `cheat add`'s format guess. Both codecs decode from the exact
@@ -207,8 +217,42 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     cheats.Clear();
                     return "All cheats removed.";
                 }
+                case "save":
+                {
+                    if (parts.Length < 3) return "Usage: cheat save <name>";
+                    if (!CheatFile.IsValidName(parts[2])) return $"cheat save: '{parts[2]}' is not a usable file name.";
+
+                    ConfigFile<CheatFile> file = CheatFile.For(parts[2]);
+                    if (!file.Save(cheats.ToCheatFile())) return $"cheat save: couldn't write {file.Path}";
+                    return $"Saved {cheats.GetCheats().Count} cheat(s) to {file.Path}";
+                }
+                case "load":
+                {
+                    if (parts.Length < 3) return "Usage: cheat load <name>";
+                    if (!CheatFile.IsValidName(parts[2])) return $"cheat load: '{parts[2]}' is not a usable file name.";
+
+                    ConfigFile<CheatFile> file = CheatFile.For(parts[2]);
+                    CheatFile? loaded = file.Load();
+                    if (loaded is null) return $"cheat load: no readable cheat file at {file.Path}";
+
+                    // Added to whatever is already loaded, not replacing it -
+                    // `cheat clear` first if that's what you meant.
+                    (int added, int skipped) = cheats.LoadFrom(loaded);
+                    string skippedText = skipped > 0 ? $" ({skipped} unparseable entr{(skipped == 1 ? "y" : "ies")} skipped)" : "";
+                    return $"Loaded {added} cheat(s) from {file.Path}{skippedText}";
+                }
+                case "files":
+                {
+                    IReadOnlyList<string> names = CheatFile.ListNames();
+                    if (names.Count == 0) return $"No cheat files in {CheatFile.DirectoryPath}";
+                    return string.Join('\n', new[] { CheatFile.DirectoryPath }.Concat(names.Select(n => "  " + n)));
+                }
                 default:
-                    return $"Unknown 'cheat' subcommand '{sub}'. Try add/poke/gg/rompatch/list/enable/disable/remove/clear.";
+                {
+                    // Named once so the suggestion and the "Try" list cannot drift.
+                    string[] subcommands = { "add", "poke", "gg", "rompatch", "list", "enable", "disable", "remove", "clear", "save", "load", "files" };
+                    return $"Unknown 'cheat' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
+                }
             }
         }
     }

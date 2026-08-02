@@ -393,7 +393,10 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    cheat enable <id>\n" +
                 "    cheat disable <id>\n" +
                 "    cheat remove <id>\n" +
-                "    cheat clear\n\n" +
+                "    cheat clear\n" +
+                "    cheat save <name>\n" +
+                "    cheat load <name>\n" +
+                "    cheat files\n\n" +
                 "DESCRIPTION\n" +
                 "    Unifies two SNES-specific cheat mechanisms under one command: RAM pokes\n" +
                 "    (Pro Action Replay/Game Wizard style) and ROM-read patches (Game Genie\n" +
@@ -402,10 +405,20 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    directly if the guess is wrong). 'poke'/'rompatch' add a cheat directly\n" +
                 "    without code decoding, e.g. for an address already found with 'search'.\n" +
                 "    'enable'/'disable' toggle a cheat without removing it.\n\n" +
+                "    'save'/'load' persist a named set to /etc/EmuSen/cheats/<name>.json - see\n" +
+                "    'man hier'. That file is ordinary JSON with addresses and bytes written\n" +
+                "    as hex text, so it can be written or corrected by hand from this shell;\n" +
+                "    an entry whose hex doesn't parse is skipped and reported, and the rest of\n" +
+                "    the file still loads. 'load' ADDS to whatever is already loaded rather\n" +
+                "    than replacing it - run 'cheat clear' first to replace. 'files' lists the\n" +
+                "    saved sets. Nothing is loaded automatically: a cheat set applies only\n" +
+                "    when you ask for it, so a saved file can't silently alter a later run.\n\n" +
                 "EXAMPLES\n" +
                 "    cheat poke WRAM 9c 63 infinite lives\n" +
                 "    cheat list\n" +
-                "    cheat disable 1",
+                "    cheat disable 1\n" +
+                "    cheat save zelda\n" +
+                "    cheat clear && cheat load zelda",
 
             ["search"] =
                 "NAME\n" +
@@ -777,7 +790,15 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    /home/root        root's own home directory\n" +
                 "    /home/<user>      created by 'useradd <user>'; 'cd' with no argument goes\n" +
                 "                      to the current account's own home - see 'whoami'/'su'\n" +
-                "    /etc              reserved for future shell-level config - empty for now\n" +
+                "    /etc/EmuSen       every config file the emulator keeps: appsettings.json,\n" +
+                "                      keybindings.json, gamepadbindings.json,\n" +
+                "                      hotkeybindings.json, audio.json, graphics.json, and\n" +
+                "                      cheats/<name>.json. Plain JSON, meant to be read and\n" +
+                "                      edited from this shell - comments and trailing commas\n" +
+                "                      are tolerated. Written by EmuSen.Galaxia; these used to\n" +
+                "                      live outside the sandbox under the OS's own per-user\n" +
+                "                      config directory, and are copied in the first time each\n" +
+                "                      file is read (the originals are left where they were)\n" +
                 "    /bin              published builds only: one launcher per frontend, each\n" +
                 "                      a two-line shim onto the real binary in /lib/EmuSen\n" +
                 "    /lib/EmuSen       published builds only: the whole .NET application\n" +

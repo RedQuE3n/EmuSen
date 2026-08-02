@@ -288,3 +288,49 @@ Found while verifying §12's attempt-2 fix, on a fresh save sent by the user ("s
 Confirmed **not** caused by §12's fixes (reproduces identically on the commit before either existed). Root-caused as far as: ALTTP draws rain as individual raindrop tiles scattered through BG3's tilemap (VRAM `$C000`, sourced from a `$7F2000` WRAM buffer per the disassembly's own RAM map). Diffing the full 8KB BG3 tilemap between a raining save and a non-raining save shows the raining save has real raindrop tile indices (e.g. `0xBC`, `0xBD`) at scattered positions that the non-raining save instead fills with a plain, high-priority filler tile (`0x7F`). Every other PPU register checked (BGMODE, TM/TS, CGADSUB, CGWSEL, window registers, BG3 scroll, CGRAM) is byte-identical between the two saves — so this isn't a compositing bug, the raindrop tile data itself was simply never DMA'd into VRAM for whatever moment the non-raining save was captured at, and/or gets cleared during camera scrolling without being refreshed. Not yet investigated further: what WRAM flag gates that DMA transfer, or why it didn't fire/persist for some saves' contexts. Possibly related to the per-scanline indirect-HDMA VRAM streaming this same bridge/rain scene was already implicated in for an earlier, separate (fixed) HDMA-ordering bug (`Venus_Memory.md` §3.2) — not confirmed.
 
 `SnesDebugTarget.GetVideoRegisters()` now exposes BG3/BG4 scroll, `BG3SC`/`Bg34Nba`, and the window mask/position registers (`W12Sel`/`W34Sel`/`WObjSel`/`Wh0-3`) from this investigation, for whoever picks it up next.
+
+---
+
+## 13. Frame cost — what `RunFrame()` actually costs, and why the old numbers were wrong
+
+`VenusCore` exposes a per-phase breakdown of the last completed `RunFrame()` — `LastFrameCpuSpc700Ms`, `LastFramePpuMs`, `LastFrameHdmaMs`, plus a sub-breakdown of the PPU phase sourced from `Renderer` (`LastFrameObjEvalMs`, `LastFrameBlendMs`, `LastFrameMainCompositeMs`, `LastFrameSubCompositeMs`). Both frontends print all of it in their FPS readout.
+
+It is timed at **per-scanline** granularity, deliberately. Timing every `Cpu.Step()` would add `Stopwatch.GetTimestamp()` overhead of the same order as the work being measured — a fast interpreter's per-instruction cost — and distort the numbers this exists to produce. `CpuSpc700` bundles CPU and SPC700 stepping into one phase for the same reason; splitting them means timing individual `Step()` calls again.
+
+### 13.1 Current measured cost
+
+Headless, 3000 frames from cold boot (so title, menus, and each game's own attract-mode gameplay demo), .NET 10 Release:
+
+| ROM | mean | p99 | max | cpu+spc700 | ppu | main | sub | objEval | blend |
+|---|---|---|---|---|---|---|---|---|---|
+| SMW | 3.05 | 6.14 | 8.00 | 0.66 | 2.37 | 1.14 | 0.75 | 0.05 | 0.36 |
+| LttP | 2.49 | 4.35 | 6.46 | 0.68 | 1.81 | 1.10 | 0.18 | 0.08 | 0.37 |
+| SM | 1.76 | 4.19 | 10.19 | 0.70 | 1.05 | 0.45 | 0.05 | 0.06 | 0.45 |
+| DKC | 2.30 | 3.12 | 4.46 | 0.45 | 1.84 | 1.14 | 0.34 | 0.06 | 0.21 |
+| FFVI | 2.84 | 3.13 | 15.24 | 0.49 | 2.33 | 1.76 | 0.33 | 0.04 | 0.27 |
+| CT | 2.15 | 6.24 | 8.39 | 0.55 | 1.59 | 1.03 | 0.22 | 0.06 | 0.22 |
+| SMW2 | 3.19 | 8.25 | 15.72 | 0.98 | 2.20 | 1.20 | 0.60 | 0.04 | 0.25 |
+| KSS | 4.70 | 6.27 | 8.86 | 3.22 | 1.47 | 1.12 | 0.00 | 0.07 | 0.31 |
+| SoM | 1.40 | 3.97 | 6.68 | 0.49 | 0.90 | 0.51 | 0.02 | 0.04 | 0.21 |
+| EB | 1.96 | 6.23 | 8.68 | 0.66 | 1.28 | 0.68 | 0.18 | 0.05 | 0.30 |
+
+The NTSC frame budget is 16.64 ms (§`Venus_CPU.md` §8.5b). Mean cost is **1.4–4.7 ms**, i.e. 3.5–12× real time, and no ROM sustains anything close to the budget. The isolated `max` outliers (FFVI 15.2, SMW2 15.7) are single frames, almost certainly GC pauses — the p99 column is 3.1–8.3 ms.
+
+Within the PPU phase, per-scanline main-screen compositing is the single largest item everywhere. `objEval` is negligible (≤0.08 ms). Sub-screen compositing is near-zero for games that don't really use it and only becomes significant in SMW (0.75) and SMW2 (0.60) — §5.1's skip is doing its job.
+
+### 13.2 The "~17–18 ms during gameplay / ~13 ms of PPU" figures are historical
+
+Comments in `VenusCore.cs` and `Renderer.Scanline.cs` used to state that `RunFrame()` itself took ~17–18 ms during real gameplay, with ~13 ms of that in the PPU, and framed the phase counters as a live investigation into that. Those numbers predate the fixes that investigation produced — chiefly BG1-4's redundant double-decode (`RenderBg1-4`'s `BgLineCache`) — and are roughly **6–10× off** the current cost. They were left in place long enough to send a later performance investigation down a dead end. The comments now point here instead; treat the table above as the number, and re-measure rather than trusting prose.
+
+### 13.3 Two costs the frontends pay that headless benchmarking does not
+
+Worth knowing before blaming the core for a frontend-side frame time:
+
+- **Rewind capture.** `MainWindow` constructs its `RewindBuffer` with `Enabled = true` unconditionally, so every 4th frame is a full reflection-based `SaveState` (~600 KB) plus an XOR delta. Measured at **~0.20–0.25 ms per frame amortized** across SMW/LttP/SM/DKC/FFVI/KSS — real, but not a suspect.
+- **Frame hand-off.** `SubmitFrame` is an `Interlocked.Exchange` of a reference plus a coalesced `Dispatcher.UIThread.Post`; the actual upload happens once on the UI thread and stale frames are dropped by design. Not a per-frame cost on the emulation thread.
+
+The frontend readout separates `run Xms` (the `RunFrame()` call alone) from `total Yms` (wall clock per frame, *including* the pacing sleep). A `total` at ~16.6 ms with `run` at ~3 ms is the 60 Hz pacer working correctly, not a slow emulator. Only a `run` figure near the budget indicates a core problem.
+
+### 13.4 Save states older than the current field layout resume into a dead machine
+
+Noted here because it silently invalidates any attempt to benchmark real gameplay by resuming a state. `StateSerializer` has no field-name tagging (`EmuSen_Save_States.md` §1/§3), so a `.state` written before a field was added or reordered still loads without error and produces a machine that runs but renders nothing — `LastFramePpuMs` collapses to ~0.06 ms while the renderer's own `LastFrame*` properties keep reporting their last real values, which is what the inconsistency looks like from the outside. The three states in `Usr/Home/Saves/Save States` are all in this condition. Verify a resumed state by dumping the framebuffer before trusting any measurement taken from it.

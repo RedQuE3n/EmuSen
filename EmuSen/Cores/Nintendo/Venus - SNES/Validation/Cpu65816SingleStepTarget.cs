@@ -1,27 +1,26 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using EmuSen.Cores.Nintendo.Venus.Memory;
-using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Validation;
 
 namespace EmuSen.Cores.Nintendo.Venus.Validation
 {
     // Flat 16MB RAM model matching SingleStepTests/65816's own stated
-    // methodology ("a full 16mb of RAM... single address space") -
-    // bypasses every bit of real SNES bank/register decoding via the
-    // virtual Read8/Write8 override on MemoryBus (made virtual purely for
-    // this reason - see that class's own comment). Internal: only
-    // Cpu65816SingleStepTarget needs to construct one.
-    internal sealed class FlatTestMemoryBus : MemoryBus
+    // methodology ("a full 16mb of RAM... single address space") - an
+    // ICpuBus in its own right rather than a MemoryBus subclass, so no
+    // SNES bank/register decoding exists to bypass - see Venus_CPU.md §10.1.
+    // Internal: only Cpu65816SingleStepTarget needs to construct one.
+    internal sealed class FlatTestMemoryBus : ICpuBus
     {
         public readonly byte[] Flat = new byte[0x1000000];
 
-        public FlatTestMemoryBus(Cartridge cart, Spc700 spc700) : base(cart, spc700) { }
+        public byte Read8(uint address) => Flat[address & 0xFFFFFF];
+        public void Write8(uint address, byte data) => Flat[address & 0xFFFFFF] = data;
 
-        public override byte Read8(uint address) => Flat[address & 0xFFFFFF];
-        public override void Write8(uint address, byte data) => Flat[address & 0xFFFFFF] = data;
+        // The suite discards Step()'s cycle return - see Venus_CPU.md §10.1.
+        public int GetAccessSpeedCycles(uint address) => 6;
+        public int TakePendingDmaCycles() => 0;
     }
 
     // ISingleStepTarget adapter for the 65816 CPU - see that interface's
@@ -36,21 +35,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Validation
 
         public Cpu65816SingleStepTarget()
         {
-            // Cartridge's constructor reads a real file - a full ROM
-            // isn't needed for anything here (FlatTestMemoryBus's
-            // Read8/Write8 override never consults it), so a minimal,
-            // throwaway dummy is generated once into a temp file rather
-            // than requiring the caller to supply a real ROM just to
-            // satisfy the constructor.
-            string dummyRomPath = Path.Combine(Path.GetTempPath(), "emusen_validation_dummy.smc");
-            if (!File.Exists(dummyRomPath))
-            {
-                File.WriteAllBytes(dummyRomPath, new byte[32768]);
-            }
-
-            var cart = new Cartridge(dummyRomPath);
-            var spc700 = new Spc700();
-            _bus = new FlatTestMemoryBus(cart, spc700);
+            _bus = new FlatTestMemoryBus();
             _cpu = new Cpu(_bus);
         }
 

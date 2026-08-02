@@ -11,7 +11,7 @@ using SDL3;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Mistress.Input;
 using EmuSen.Nehellania.Input;
-using EmuSen.Mistress.Settings;
+using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Mistress.Views
 {

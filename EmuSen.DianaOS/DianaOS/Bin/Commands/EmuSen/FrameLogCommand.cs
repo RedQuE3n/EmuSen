@@ -5,6 +5,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
+using EmuSen.Galaxia.Text;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
@@ -77,7 +78,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     return removed ? $"Frame log #{parts[2]} removed." : $"No frame log #{parts[2]} found.";
                 }
                 default:
-                    return $"Unknown 'framelog' subcommand '{sub}'. Try add/list/show/clear/remove.";
+                {
+                    // Named once so the suggestion and the "Try" list cannot drift.
+                    string[] subcommands = { "add", "list", "show", "clear", "remove" };
+                    return $"Unknown 'framelog' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
+                }
             }
         }
     }

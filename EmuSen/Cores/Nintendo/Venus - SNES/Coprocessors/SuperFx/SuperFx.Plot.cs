@@ -11,6 +11,21 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         private int _pixelCacheAddress = -1;
         private byte _pixelCachePending;
 
+        // Answers "is this game plotting at all, and in which layout" without
+        // instrumentation - POR/SCMR sampled per frame cannot, since CMODE is
+        // set and cleared inside one - see Venus_SuperFX.md §8.
+        public long DebugPlotCount { get; private set; }
+        public long DebugPlotObjCount { get; private set; }
+        public byte DebugPlotScmr { get; private set; }
+        public byte DebugPlotPor { get; private set; }
+        public byte DebugPlotScbr { get; private set; }
+        public int DebugPlotMaxX { get; private set; }
+        public int DebugPlotMaxY { get; private set; }
+        public long DebugPlotXHigh { get; private set; }
+        public long DebugPlotYOdd { get; private set; }
+        public int DebugPlotMinAddr { get; private set; } = int.MaxValue;
+        public int DebugPlotMaxAddr { get; private set; }
+
         private void ResetPixelCache()
         {
             _pixelCacheAddress = -1;
@@ -29,6 +44,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // HT1 is bit 2 and HT0 is bit 5 - the two halves of the field are not adjacent.
         private int ScreenHeightMode => (((_scmr >> 2) & 1) << 1) | ((_scmr >> 5) & 1);
 
+        // CMODE bit 4 selects OBJ mode independently of SCMR's height field - see Venus_SuperFX.md §6.2.
+        private bool ObjMode => ScreenHeightMode == 3 || (_por & 0x10) != 0;
+
         private int ColumnHeightTiles => ScreenHeightMode switch
         {
             0 => 16,  // 128 pixels
@@ -46,10 +64,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             int bytesPerTile = 8 * ColorDepth;
 
             int tile;
-            if (ScreenHeightMode == 3)
+            if (ObjMode)
             {
                 int page = ((y >> 7) << 1) | ((x >> 7) & 1);
-                tile = (page << 8) | (((x >> 3) & 0x0F) << 4) | ((y >> 3) & 0x0F);
+                tile = (page << 8) | (((y >> 3) & 0x0F) << 4) | ((x >> 3) & 0x0F);
             }
             else
             {
@@ -81,9 +99,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         private void LoadColorFromRomBuffer() => _colr = ColorValue(_romBuffer);
 
+        // R1/R2 are full 16-bit registers, but the plot hardware only sees
+        // their low bytes - R1 runs past 255 mid-row - see Venus_SuperFX.md §6.
         private int OpPlot()
         {
-            Plot(R[1], R[2]);
+            Plot((byte)R[1], (byte)R[2]);
             WriteReg(1, (ushort)(R[1] + 1));
             return 1;
         }
@@ -91,14 +111,59 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         private int OpRpix()
         {
             FlushPixelCache();
-            ushort value = ReadPixel(R[1], R[2]);
+            ushort value = ReadPixel((byte)R[1], (byte)R[2]);
             Dst(value);
             SetZS(value);
             return 5;
         }
 
+        // POR bit 3 freezes the high nibble, so only the low one decides.
+        private bool IsTransparent()
+        {
+            byte color = (_por & 0x08) != 0 ? (byte)(_colr & 0x0F) : _colr;
+            return ColorDepth switch
+            {
+                2 => (color & 0x03) == 0,
+                8 => color == 0,
+                _ => (color & 0x0F) == 0,
+            };
+        }
+
+        // What the chip was actually asked to draw, which per-frame register
+        // sampling cannot see - see Venus_SuperFX.md §8.
+        private void RecordPlotForDebug(int x, int y)
+        {
+            DebugPlotCount++;
+            if (ObjMode) DebugPlotObjCount++;
+            DebugPlotScmr = _scmr;
+            DebugPlotPor = _por;
+            DebugPlotScbr = _scbr;
+            if (x > DebugPlotMaxX) DebugPlotMaxX = x;
+            if (y > DebugPlotMaxY) DebugPlotMaxY = y;
+            if ((x & 0x80) != 0) DebugPlotXHigh++;
+            if ((y & 0x08) != 0) DebugPlotYOdd++;
+
+            if (EmuSen.Debug.DebugSettings.SuperFxPlotTraceSkip > 0)
+            {
+                EmuSen.Debug.DebugSettings.SuperFxPlotTraceSkip--;
+            }
+            else if (EmuSen.Debug.DebugSettings.SuperFxPlotTraceCountdown > 0)
+            {
+                EmuSen.Debug.DebugSettings.SuperFxPlotTraceCountdown--;
+                System.Console.WriteLine(
+                    $"[PLOT] x={x:D3} y={y:D3} r1={R[1]:X4} r2={R[2]:X4} colr={_colr:X2} "
+                    + $"por={_por:X2} scmr={_scmr:X2} scbr={_scbr:X2} addr={TileRowAddress(x, y):X4} pc={_pbr:X2}:{R[15]:X4}");
+            }
+        }
+
         private void Plot(int x, int y)
         {
+            RecordPlotForDebug(x, y);
+
+            // Colour 0 is transparent unless POR bit 0 says otherwise, and the
+            // test reads COLR before dithering - see Venus_SuperFX.md §6.
+            if ((_por & 0x01) == 0 && IsTransparent()) return;
+
             byte color = _colr;
 
             // Dithering alternates which nibble of COLR is used per pixel.
@@ -108,20 +173,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
                 color &= 0x0F;
             }
 
-            // Colour 0 is transparent unless POR bit 0 says otherwise.
-            if ((_por & 0x01) == 0 && (_por & 0x10) == 0)
-            {
-                if (ColorDepth == 8)
-                {
-                    if ((_por & 0x04) != 0 ? (color & 0xF0) == 0 : color == 0) return;
-                }
-                else if ((color & 0x0F) == 0)
-                {
-                    return;
-                }
-            }
-
             int address = TileRowAddress(x, y);
+            if (address < DebugPlotMinAddr) DebugPlotMinAddr = address;
+            if (address > DebugPlotMaxAddr) DebugPlotMaxAddr = address;
+
             if (address != _pixelCacheAddress)
             {
                 FlushPixelCache();

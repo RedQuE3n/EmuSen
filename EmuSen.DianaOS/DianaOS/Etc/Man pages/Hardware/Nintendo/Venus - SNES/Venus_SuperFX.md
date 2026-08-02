@@ -172,7 +172,10 @@ That trace is what found the R15 invariant bug: the loop in §4.1 was visibly re
 
   Worth recording *why* this was inverted, because the trap is still there for anything else in this file: the official Nintendo SuperFX documentation has the two operands swapped, and SnesLab's `LJMP` page reproduces the official wording ("the low byte of the source register is loaded into the program bank register") while separately noting that fullsnes considers the official docs mixed up on exactly this point. bsnes settles it — `regs.pbr = regs.r[n] & 0x7f; regs.r[15] = regs.sr();`. **Do not treat the official docs as authoritative for this instruction.**
 - **`RAMBR` width** — masked to 5 bits, so a game writing a bank beyond the 128KB chip mirrors rather than faulting. Yoshi's Island does write `RAMBR = 2`.
-- **`MERGE` flag thresholds**, `FMULT` rounding, and the `ALT3` meanings of the `$Ax`/`$Fx` slots are implemented from the shape of the instruction set rather than from confirmed documentation.
+- **`MERGE` flag thresholds** and `FMULT` rounding are implemented from the shape of the instruction set rather than from confirmed documentation.
+- ~~**`ALT3` on the `$Ax`/`$Fx` slots**~~ — **resolved: there is nothing to implement.** `ALT3` is genuinely *undefined* on both slots. bsnes decodes `$A0-$AF` as `IBT`/`LMS`/`SMS` and `$F0-$FF` as `IWT`/`LM`/`SM` for `ALT0`/`ALT1`/`ALT2` and carries **no `ALT3` case at all** for either. No assembler emits it and no correct program contains it, so any behaviour here is arbitrary.
+
+  What matters is only that the operand consumption stays right, and it does: every `$Ax` form consumes exactly one operand byte and every `$Fx` form exactly two, on all four `ALT` states, because `OpIwtLmSm` reads its two bytes before it ever inspects the prefix. Falling through to the immediate form therefore cannot desynchronise the instruction stream — which is the only way an undefined opcode could do real damage. Left as-is deliberately.
 - **Bus arbitration (§2.1)** is not enforced.
 
 ---
@@ -187,11 +190,16 @@ That trace is what found the R15 invariant bug: the loop in §4.1 was visibly re
 
 That result is worth keeping in mind for the rest of this list: **check that the game actually reaches a feature before spending time on its correctness.** A one-line print plus a long headless run costs a couple of minutes and can retire a suspect outright.
 
-**Where to look next.** The failure is that the S-CPU stops producing display output while still running normally, which means it is acting on GSU results that are wrong rather than absent. In rough order of suspicion, with `LJMP` removed:
+**The `ALT3` decodes were the next suspect, and they are ruled out twice over.** First, they are unreachable: probes in both `OpImmediateByteOrShort` and `OpIwtLmSm` over the same 5000-frame run recorded **zero** `ALT3` executions, against a control probe on the same `$Fx` slot that fires constantly (`08:BD1A`, `08:BD1D`, `08:BD22`, `0A:8011`, …), so the instrumentation was demonstrably live. Second, per §9 there is no defined `ALT3` behaviour on these slots to get wrong. Retired, no code change.
 
-1. The `$Ax`/`$Fx` `ALT3` decodes, currently falling through to the immediate forms.
-2. Cache invalidation on `PBR` change versus on `CACHE` — a stale line would execute the wrong routine. (The `LJMP` half of this is moot per above.)
-3. `SCBR` granularity, if the framebuffer base drifts.
-4. `MERGE` flag thresholds and `FMULT` rounding (§9), which feed the plotting maths directly.
+**Two suspects retired by the same cheap method, which says something about the method.** Working down a ranked list of *plausible-looking* inaccuracies has now cost two rounds and produced one latent fix unrelated to this game. The list was built by reading the implementation for things that looked shaky, not by following evidence from the failure. Prefer evidence next: find the frame where output stops, and work backwards from what the machine is actually doing at that moment.
+
+**Where to look next.** The failure is that the S-CPU stops producing display output while still running normally, which means it is acting on GSU results that are wrong rather than absent. The remaining read-the-code suspects, in rough order:
+
+1. Cache invalidation on `PBR` change versus on `CACHE` — a stale line would execute the wrong routine. (The `LJMP` half of this is moot per above.)
+2. `SCBR` granularity, if the framebuffer base drifts.
+3. `MERGE` flag thresholds and `FMULT` rounding (§9), which feed the plotting maths directly.
+
+But the better first move is to **locate the transition** rather than audit any of them: bisect for the exact frame the display goes blank, then compare GSU state (`SFR`, `PBR:R15`, `SCBR`, `SCMR`) and the S-CPU's `INIDISP`/screen-enable either side of it. That distinguishes "the GSU stopped and the S-CPU is waiting on it" from "the GSU is still plotting and the S-CPU stopped uploading", which the current evidence does not yet separate — and each answer points at a different third of this chip.
 
 `SuperFxTraceCountdown` (§8) plus a diff against a known-good trace is the practical route; without a reference to diff against, the instruction-level tests in `EmuSen.WiseMan/Coprocessors/SuperFxInstructionTests.cs` are the place to encode each new fact as it is established.

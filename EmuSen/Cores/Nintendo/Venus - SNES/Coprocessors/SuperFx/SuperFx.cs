@@ -90,6 +90,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         public bool Running => GetFlag(FlagGo);
 
+        // Side-effect-free views for the debug target - ReadRegister($3031)
+        // acknowledges the interrupt, so a debugger must not go through it.
+        // Work RAM, framebuffer and save data all at once - see §1.
+        public byte[] DebugRam => _ram;
+
+        public ushort DebugSfr => _sfr;
+        public byte DebugPbr => _pbr;
+        public ushort DebugCbr => _cbr;
+        public byte DebugScbr => _scbr;
+        public byte DebugScmr => _scmr;
+        public byte DebugRombr => _rombr;
+        public byte DebugRambr => _rambr;
+
         // The GSU's IRQ line into the S-CPU, masked by CFGR bit 7 - see Venus_SuperFX.md §3.2.
         public bool ScpuIrqPending => GetFlag(FlagIrq) && (_cfgr & 0x80) == 0;
 

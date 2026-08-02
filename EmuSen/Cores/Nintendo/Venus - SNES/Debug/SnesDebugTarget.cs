@@ -94,7 +94,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
     // this class supplies the actual watch-recording logic AND the PC
     // context (from its own _cpu reference, already held for other
     // reasons) in one place.
-    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver, IRomReadPatcher
+    public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver, IRomReadPatcher, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.IHistoricalCoprocessorTarget
     {
         private readonly Cpu _cpu;
         private readonly MemoryBus _bus;
@@ -131,6 +131,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegistersProvider;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _videoRegistersProvider;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _apuRegistersProvider;
+        // The one provider that keeps history rather than just the latest
+        // snapshot. Coprocessor bugs are transitions - the chip renders,
+        // then stops - so "what were SFR/PBR/R15 doing in the seconds
+        // before it stopped" is the question that actually gets asked, and
+        // Current alone can never answer it. 600 refreshes is ~10 seconds
+        // of frames, comfortably spanning a transition without the ring
+        // becoming a memory cost worth thinking about.
+        private const int CoprocessorHistoryFrames = 600;
+        private readonly HistoryProvider<IReadOnlyList<DebugRegisterValue>> _coprocessorRegistersProvider;
         private readonly PollingProvider<IReadOnlyList<DebugSpriteInfo>> _spritesProvider;
         private readonly PollingProvider<IReadOnlyList<DebugPaletteInfo>> _palettesProvider;
         private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannelsProvider;
@@ -167,6 +176,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _cpuRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadCpuRegistersLive, ReadCpuRegistersLive());
             _videoRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadVideoRegistersLive, ReadVideoRegistersLive());
             _apuRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadApuRegistersLive, ReadApuRegistersLive());
+            _coprocessorRegistersProvider = new HistoryProvider<IReadOnlyList<DebugRegisterValue>>(
+                ReadCoprocessorRegistersLive,
+                ReadCoprocessorRegistersLive(),
+                CoprocessorHistoryFrames,
+                ListEqualityComparer<DebugRegisterValue>.Instance);
             _spritesProvider = new PollingProvider<IReadOnlyList<DebugSpriteInfo>>(ReadSpritesLive, ReadSpritesLive());
             _palettesProvider = new PollingProvider<IReadOnlyList<DebugPaletteInfo>>(ReadPalettesLive, ReadPalettesLive());
             _audioChannelsProvider = new PollingProvider<IReadOnlyList<DebugAudioChannelInfo>>(ReadAudioChannelsLive, ReadAudioChannelsLive());
@@ -178,6 +192,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CpuRegisters => _cpuRegistersProvider;
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters => _videoRegistersProvider;
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters => _apuRegistersProvider;
+        public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters => _coprocessorRegistersProvider;
+
+        // The history behind CoprocessorRegisters, for anything that wants
+        // the transition rather than the instant - see the field's comment.
+        public HistoryProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorHistory => _coprocessorRegistersProvider;
         public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites => _spritesProvider;
         public IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes => _palettesProvider;
         public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels => _audioChannelsProvider;
@@ -193,6 +212,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _cpuRegistersProvider.Refresh();
             _videoRegistersProvider.Refresh();
             _apuRegistersProvider.Refresh();
+            _coprocessorRegistersProvider.Refresh();
             _spritesProvider.Refresh();
             _palettesProvider.Refresh();
             _audioChannelsProvider.Refresh();
@@ -346,7 +366,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces()
         {
-            return new IDebugMemorySpace[]
+            var spaces = new List<IDebugMemorySpace>
             {
                 new BusDebugMemorySpace("CpuBus", _bus, 0x000000, 0x1000000),
                 // Registers mirror identically across every hardware bank,
@@ -372,6 +392,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 // overlay instead of the RAM beneath it (Venus_APU.md §1.1).
                 new ByteArrayDebugMemorySpace("APURAM", _bus.Spc700.Ram),
             };
+
+            // Coprocessor RAM, only when the cartridge actually carries the
+            // chip - listing a space that can't be read would break `spaces`
+            // and FindSpace's "does this name exist" contract. GSURAM is the
+            // GSU's work RAM and framebuffer both, so snapshot/diff over it
+            // answers "is the chip still plotting" - see Venus_SuperFX.md §5.1.
+            var cart = _bus.Cart;
+            if (cart.SuperFx is { } gsu) spaces.Add(new ByteArrayDebugMemorySpace("GSURAM", gsu.DebugRam));
+            if (cart.Sa1 is { } sa1) spaces.Add(new ByteArrayDebugMemorySpace("SA1IRAM", sa1.IRam));
+            // No DSPRAM: the NEC DSP's RAM is ushort[], and which byte order a
+            // byte-addressable view should present is a real decision, not one
+            // to invent here. Its registers are on CoprocessorRegisters already.
+
+            return spaces;
         }
 
         private IReadOnlyList<DebugRegisterValue> ReadCpuRegistersLive()
@@ -389,6 +423,66 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new DebugRegisterValue("P", _cpu.P, 8),
                 new DebugRegisterValue("E", (ulong)(_cpu.E ? 1 : 0), 1),
             };
+        }
+
+        // Every value here comes from a Debug* view, never the chip's own
+        // ReadRegister - see IDebugTarget.CoprocessorRegisters.
+        private IReadOnlyList<DebugRegisterValue> ReadCoprocessorRegistersLive()
+        {
+            var cart = _bus.Cart;
+
+            if (cart.SuperFx is { } gsu)
+            {
+                var values = new List<DebugRegisterValue>
+                {
+                    new DebugRegisterValue("SFR", gsu.DebugSfr, 16),
+                    new DebugRegisterValue("PBR", gsu.DebugPbr, 8),
+                    new DebugRegisterValue("CBR", gsu.DebugCbr, 16),
+                    new DebugRegisterValue("SCBR", gsu.DebugScbr, 8),
+                    new DebugRegisterValue("SCMR", gsu.DebugScmr, 8),
+                    new DebugRegisterValue("ROMBR", gsu.DebugRombr, 8),
+                    new DebugRegisterValue("RAMBR", gsu.DebugRambr, 8),
+                    new DebugRegisterValue("Running", (ulong)(gsu.Running ? 1 : 0), 1),
+                };
+                // R15 is the program counter, so the register file is the
+                // GSU's trace in structured form - see Venus_SuperFX.md §3.1.
+                for (int i = 0; i < 16; i++) values.Add(new DebugRegisterValue($"R{i}", gsu.R[i], 16));
+                return values;
+            }
+
+            if (cart.Sa1 is { } sa1)
+            {
+                return new[]
+                {
+                    new DebugRegisterValue("CCNT", sa1.DebugCcnt, 8),
+                    new DebugRegisterValue("SCNT", sa1.DebugScnt, 8),
+                    new DebugRegisterValue("SIE", sa1.DebugSie, 8),
+                    new DebugRegisterValue("CIE", sa1.DebugCie, 8),
+                    new DebugRegisterValue("BMAP", sa1.DebugBmap, 8),
+                    new DebugRegisterValue("Halted", (ulong)(sa1.DebugHalted ? 1 : 0), 1),
+                    new DebugRegisterValue("PB", sa1.Cpu.PB, 8),
+                    new DebugRegisterValue("PC", sa1.Cpu.PC, 16),
+                    new DebugRegisterValue("A", sa1.Cpu.A, 16),
+                    new DebugRegisterValue("X", sa1.Cpu.X, 16),
+                    new DebugRegisterValue("Y", sa1.Cpu.Y, 16),
+                    new DebugRegisterValue("S", sa1.Cpu.S, 16),
+                    new DebugRegisterValue("P", sa1.Cpu.P, 8),
+                };
+            }
+
+            if (cart.NecDsp is { } dsp)
+            {
+                return new[]
+                {
+                    new DebugRegisterValue("PC", dsp.DebugPc, 16),
+                    new DebugRegisterValue("SR", dsp.DebugSr, 16),
+                    new DebugRegisterValue("DR", dsp.DebugDr, 16),
+                    new DebugRegisterValue("DP", dsp.DebugDp, 16),
+                    new DebugRegisterValue("RP", dsp.DebugRp, 16),
+                };
+            }
+
+            return System.Array.Empty<DebugRegisterValue>();
         }
 
         private IReadOnlyList<DebugRegisterValue> ReadVideoRegistersLive()

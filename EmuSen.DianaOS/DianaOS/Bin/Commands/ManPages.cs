@@ -249,6 +249,27 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    the core reports any) APU registers, each in their own section. Field\n" +
                 "    widths adapt to each register's real bit width.",
 
+            ["cophist"] =
+                "NAME\n" +
+                "    cophist - coprocessor register history\n\n" +
+                "SYNOPSIS\n" +
+                "    cophist [<reg>] [<count>]\n\n" +
+                "DESCRIPTION\n" +
+                "    Prints the retained history of the cartridge coprocessor's registers -\n" +
+                "    the SuperFX GSU, the SA-1, or a NEC DSP - one row per refresh, oldest\n" +
+                "    first. Where `regs` shows the instant, this shows the run-up to it.\n\n" +
+                "    Give <reg> to follow a single register (SFR, PBR, R15, ...) instead of\n" +
+                "    the whole file, and <count> to change how many rows are shown from the\n" +
+                "    default 16. The header also reports how many refreshes the registers\n" +
+                "    have gone unchanged, which is the direct answer to \"when did the chip\n" +
+                "    stop\".\n\n" +
+                "    Prints nothing useful on a cartridge with no coprocessor, which is most\n" +
+                "    of them.\n\n" +
+                "EXAMPLES\n" +
+                "    cophist\n" +
+                "    cophist SFR 64\n" +
+                "    cophist R15",
+
             ["sprites"] =
                 "NAME\n" +
                 "    sprites - dump the active sprite/OBJ table\n\n" +

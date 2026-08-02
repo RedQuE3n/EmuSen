@@ -127,7 +127,8 @@ Two small helper classes back the memory spaces:
 | `spaces` | List memory spaces (name, size, writable) |
 | `mem <space> <addr> [<len>]` | xxd-style hexdump, default length 16 |
 | `write <space> <addr> <value>` | Write one byte, if the space is writable |
-| `regs` | CPU + video registers, plus an APU section when a target has one (§3.2) |
+| `regs` | CPU + video registers, plus APU and coprocessor sections when a target has them (§3.2, §3.23) |
+| `cophist [<reg>] [<count>]` | Coprocessor register history, and how long it has sat unchanged — see §3.23a |
 | `sprites` | Active sprite/OBJ table |
 | `pal [<index>]` | One palette, or all 16 if omitted |
 | `channels` | Audio channel/voice table (active, envelope level 0-100, muted, core-specific detail) - core-agnostic (`IDebugTarget.GetAudioChannels()`), SNES reports its 8 S-DSP voices - see `Venus_APU.md` §3.5 |
@@ -836,7 +837,48 @@ This is how §5.1 of `Venus_PPU.md` (skipping the unused sub-screen composite) w
 
 ---
 
+### 3.23 Cartridge coprocessors (`regs`, `cophist`, `GSURAM`/`SA1IRAM`, `IDebugTarget.CoprocessorRegisters`)
+
+**The gap this closed.** Until this landed, the entire toolchain was blind to cartridge coprocessors. `SnesDebugTarget` had no reference to the SA-1, the SuperFX GSU or a NEC DSP at all, and the exposed memory spaces stopped at `CpuBus / IO / WRAM / VRAM / CGRAM / OAM / SRAM / APURAM`. So `regs`, `watch`, `framelog`, `waitvalue`, `snapshot`, `diff`, `search` and `coretop` — the whole surface — could not see a single GSU register. Every coprocessor investigation therefore degenerated into hand-patching `Console.WriteLine` into the interpreter and rebuilding, twice over in the SuperFX work (`Venus_SuperFX.md` §10). This is the same blind spot `APURAM` closed for the SPC700, and the same lesson §2 already states: a narrow, investigation-specific print is a sign something belongs in the toolchain.
+
+**What is exposed.** `IDebugTarget.CoprocessorRegisters` is a provider like `CpuRegisters`/`ApuRegisters`, publishing whichever chip the cartridge carries — the GSU's `SFR`/`PBR`/`CBR`/`SCBR`/`SCMR`/`ROMBR`/`RAMBR` plus the whole `R0`-`R15` file, the SA-1's control registers and its 65C816's state, or a NEC DSP's `PC`/`SR`/`DR`/`DP`/`RP`. A cartridge with no coprocessor — most of them — publishes an empty list, and `regs` prints no section at all. Two new memory spaces appear only when the chip is present: **`GSURAM`** (Game Pak RAM: the GSU's work RAM, framebuffer and save data all at once, so `snapshot`/`diff` over it answers "is the chip still plotting") and **`SA1IRAM`**.
+
+**Reads must not perturb the chip, and this is not a formality.** The real register windows have side effects — reading `$3031` *acknowledges the GSU's interrupt*, and the NEC DSP's `DR`/`SR` reads advance its transfer handshake. So the provider reads dedicated side-effect-free `Debug*` views rather than routing through each chip's own `ReadRegister`, exactly as `APURAM` wraps raw SPC700 RAM instead of `Spc700.Read8`. `CoprocessorDebugExposureTests.Reading_the_provider_does_not_acknowledge_the_gsu_interrupt` pins it, and genuinely fails if the implementation is rerouted through `ReadRegister`.
+
+**No `DSPRAM`.** The NEC DSP's RAM is `ushort[]`, and which byte order a byte-addressable view should present is a real decision rather than one to invent — its registers are on the provider instead.
+
+### 3.23a `cophist` — coprocessor register history
+
+`regs` shows the instant. Coprocessor bugs are *transitions* — the chip renders, then stops — so the question that actually gets asked is "what were `SFR`/`PBR`/`R15` doing in the seconds before it stopped", which no latest-value view can answer.
+
+`CoprocessorRegisters` is therefore backed by `EmuSen.Cauldron.HistoryProvider<T>` (§4) rather than `PollingProvider<T>`, retaining the last 600 refreshes (~10 seconds of frames). `cophist [<reg>] [<count>]` reads it back, oldest row first:
+
+```
+> cophist R15 10
+Coprocessor history: 10 of 301 retained (capacity 600),
+unchanged for 15 refresh(es).
+  refresh     R15
+      291    B2B1
+      ...
+      300    B2B1
+```
+
+The header's **"unchanged for N refresh(es)"** is the useful part: it is the direct answer to "when did the chip stop", available without storing or diffing anything by hand. The run above shows the GSU parked at `R15 = B2B1` for fifteen frames.
+
+---
+
 ## 4. Underlying helper libraries (pre-date the toolchain above)
+
+### `EmuSen.Cauldron/` — real-time snapshot providers
+
+The thread-safety seam between a live core and anything reading it. Deliberately knows nothing about DianaOS, cores, or any console.
+
+- `IRealtimeProvider<T>` — `Current` (never blocks, safe from any thread) plus `Refresh()` (only ever from the thread that owns the core). Every provider property on `IDebugTarget` is one of these.
+- `PollingProvider<T>` — the default: wraps a "go read the live core" delegate and publishes via a lock-free `Volatile` reference swap. Remembers only the latest snapshot.
+- `HistoryProvider<T>` — same contract, but also retains the last `capacity` snapshots in a fixed-size ring, plus a **staleness signal**: `RefreshesSinceChange` counts how long `Current` has compared equal to its predecessor. `PollingProvider` answers "what is the machine doing now", which is what a live dashboard wants; this answers "what was it doing before it stopped", which is what an investigation into a transition wants. `GetHistory()` copies out under a lock — the one member here that can block, which is why it is a method rather than a property that looks as cheap as `Current`.
+- `ListEqualityComparer<TItem>` — element-wise equality for the `IReadOnlyList<T>` snapshots providers publish. The staleness signal needs it: snapshots are rebuilt every `Refresh`, so reference equality would report "changed" every time and the signal would read 0 forever.
+
+**Kept a separate type on purpose.** History costs a retained reference per refresh, so a consumer that only reads `Current` should not pay for a ring it never looks at. Only `CoprocessorRegisters` uses it today (§3.23a). Note this is *not* the old `DebugTools.ChangeTracker<T>` removed below — that had no call sites at all; this one is load-bearing.
 
 ### `Cores/Nintendo/Venus - SNES/Debug/StateDump.cs`
 On-demand CPU+PPU snapshot formatter. Returns formatted strings (doesn't print directly) — `DumpCpuState`, `DumpPpuState`, `DumpAll`. Deliberately laid out to be directly comparable to MesenCE's own Status panel.

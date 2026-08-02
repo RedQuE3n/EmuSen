@@ -90,6 +90,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
         // Only the uPD96050's 2KB of data RAM is battery-backed - see Venus_NecDSP.md §6.
         public bool HasBatteryRam => NecDspProfile.IsSt01x(_variant);
 
+        // Side-effect-free views for the debug target - the host's own DR/SR
+        // reads advance the transfer handshake, see Venus_NecDSP.md §3.2.
+        public ushort DebugPc => _pc;
+        public ushort DebugSr => _sr;
+        public ushort DebugDr => _dr;
+        public ushort DebugDp => _dp;
+        public ushort DebugRp => _rp;
+
         public void Reset()
         {
             System.Array.Clear(_acc);

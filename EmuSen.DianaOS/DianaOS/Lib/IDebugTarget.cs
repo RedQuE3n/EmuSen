@@ -44,7 +44,10 @@ namespace EmuSen.DianaOS.DianaOS.Lib
     // wildly different register sets (the 65816 has PB/DB/D/an E flag the
     // 6502 doesn't; a 6502 target would just report a different list
     // through this same shape).
-    public readonly struct DebugRegisterValue
+    // IEquatable so EqualityComparer<T>.Default takes the fast path rather
+    // than reflection-based ValueType.Equals, which boxes - this is compared
+    // per-frame per-register by HistoryProvider's staleness signal.
+    public readonly struct DebugRegisterValue : IEquatable<DebugRegisterValue>
     {
         public string Name { get; }
         public ulong Value { get; }
@@ -56,6 +59,13 @@ namespace EmuSen.DianaOS.DianaOS.Lib
             Value = value;
             BitWidth = bitWidth;
         }
+
+        public bool Equals(DebugRegisterValue other) =>
+            Value == other.Value && BitWidth == other.BitWidth && Name == other.Name;
+
+        public override bool Equals(object? obj) => obj is DebugRegisterValue other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(Name, Value, BitWidth);
     }
 
     // One sprite/OBJ entry, shaped generically enough to cover consoles
@@ -235,6 +245,24 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // `regs` for it. A core without a distinct sound co-processor
         // (or one not yet modeled this way) can publish an empty list.
         IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters { get; }
+
+        // Whatever cartridge coprocessor is present, if any (65816-side
+        // cores: the SA-1, the SuperFX GSU, a NEC DSP). Added because the
+        // whole DianaOS toolchain was blind to these chips - `regs`,
+        // `watch`, `framelog`, `waitvalue`, `coretop` and the rest saw the
+        // CPU, PPU and APU but not a single GSU register, so every
+        // coprocessor investigation degenerated into hand-patching
+        // Console.WriteLine into the interpreter and rebuilding. Same
+        // reasoning that added ApuRegisters for the SPC700.
+        //
+        // Reads must be side-effect-free: the real register windows
+        // acknowledge interrupts ($3031 on the GSU) and advance transfer
+        // handshakes (the NEC DSP's DR/SR), so implementations read
+        // dedicated Debug* views rather than routing through the chip's own
+        // ReadRegister. Same trap APURAM avoids by wrapping raw RAM instead
+        // of Spc700.Read8. A cartridge with no coprocessor - the common
+        // case - publishes an empty list.
+        IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters { get; }
 
         IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites { get; }
         IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes { get; }

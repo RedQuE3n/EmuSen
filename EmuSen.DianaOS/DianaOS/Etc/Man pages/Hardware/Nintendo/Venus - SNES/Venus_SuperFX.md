@@ -162,6 +162,10 @@ dotnet run --project EmuSen.Pharaoh -- <rom> <frames> --flag SuperFxTraceCountdo
 
 That trace is what found the R15 invariant bug: the loop in §4.1 was visibly re-entering one instruction late.
 
+**The GSU is now visible to the rest of the toolchain, so reach for that first.** `regs` prints a Coprocessor section with `SFR`, `PBR`, `CBR`, `SCBR`, `SCMR`, `ROMBR`, `RAMBR` and the whole `R0`-`R15` file; `GSURAM` is a memory space, so `snapshot`/`diff`/`search`/`watch` reach Game Pak RAM — work RAM and framebuffer both — the same way they reach WRAM; and `cophist [<reg>] [<count>]` replays the last 600 frames of that register file with a "unchanged for N refresh(es)" counter that answers *when did the chip stop* without any instrumentation at all. See `EmuSen_Debugging_Tools_Reference_v5.md` §3.23/§3.23a.
+
+Reads through all of these are side-effect-free by construction, which matters here specifically: `$3031` acknowledges the GSU's interrupt, so a debugger routed through the real register window would clear a flag simply by looking. Prefer these to hand-patching a `Console.WriteLine` into `SuperFx.Execute.cs` — the `LJMP` and `ALT3` rounds in §10 both did that, and both would have been one command against the running game.
+
 ---
 
 ## 9. Known-wrong and unverified

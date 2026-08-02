@@ -101,6 +101,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
                     + $"R0={R[0]:X4} R1={R[1]:X4} R2={R[2]:X4} R11={R[11]:X4} R13={R[13]:X4} R14={R[14]:X4}");
             }
 
+            if (EmuSen.Debug.DebugSettings.SuperFxPlotTraceSkip == 0
+                && EmuSen.Debug.DebugSettings.SuperFxPlotTraceInstr > 0)
+            {
+                EmuSen.Debug.DebugSettings.SuperFxPlotTraceInstr--;
+                System.Console.WriteLine(
+                    $"[I] {_pbr:X2}:{R[15]:X4} {_pipeline:X2} R0={R[0]:X4} R1={R[1]:X4} R2={R[2]:X4} "
+                    + $"R3={R[3]:X4} R4={R[4]:X4} R5={R[5]:X4} R10={R[10]:X4} R11={R[11]:X4} R12={R[12]:X4} R14={R[14]:X4} rb={_romBuffer:X2} rombr={_rombr:X2} sfr={_sfr:X4}");
+            }
+
+
             byte opcode = Pipe();
             _prefixInstruction = false;
             int cycles = Execute(opcode);
@@ -192,10 +202,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         // Branches take their displacement from the instruction stream and are
         // relative to the delay-slot instruction that follows - see Venus_SuperFX.md §4.1.
+        // A branch is the one non-prefix instruction that does NOT clear the prefix
+        // state, so TO/FROM/WITH/ALT ahead of it apply to the delay slot - see §4.2.
         private int Branch(bool take)
         {
             sbyte displacement = (sbyte)Pipe();
             if (take) SetPc((ushort)(R[15] + displacement));
+            _prefixInstruction = true;
             return 1;
         }
 

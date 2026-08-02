@@ -103,6 +103,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         public byte DebugRombr => _rombr;
         public byte DebugRambr => _rambr;
 
+        // POR carries the OBJ-mode bit that picks the framebuffer layout, so it
+        // is as load-bearing as SCMR - see Venus_SuperFX.md §6.2.
+        public byte DebugPor => _por;
+        public byte DebugColr => _colr;
+
         // The GSU's IRQ line into the S-CPU, masked by CFGR bit 7 - see Venus_SuperFX.md §3.2.
         public bool ScpuIrqPending => GetFlag(FlagIrq) && (_cfgr & 0x80) == 0;
 
@@ -138,6 +143,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             }
 
             int perCycle = MasterClocksPerCycle;
+            if (EmuSen.Debug.DebugSettings.SuperFxSpeedDivisor > 1) perCycle *= EmuSen.Debug.DebugSettings.SuperFxSpeedDivisor;
             while (_clockBudget > 0 && Running)
             {
                 int cycles = StepInstruction();

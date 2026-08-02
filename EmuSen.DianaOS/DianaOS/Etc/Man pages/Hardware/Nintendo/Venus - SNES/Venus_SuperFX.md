@@ -2,7 +2,7 @@
 
 Covers everything under `Cores/Nintendo/Venus - SNES/Coprocessors/SuperFx/`, plus `SuperFxMapper`. This is the second coprocessor this core implements, after the SA-1 (`Venus_SA1.md`).
 
-> **Status: incomplete.** The chip is fully built — memory map, the whole instruction set, the plot hardware — and it executes real GSU code from Yoshi's Island and renders real graphics. It does **not** yet render the game correctly end to end. §10 says exactly what works, what doesn't, and where to pick the debugging back up. Everything in §1-§8 is implemented; treat §9's warnings as live.
+> **Status: working, with one open issue that is not the chip's.** The chip is fully built — memory map, the whole instruction set, the plot hardware — and since §10.4 (2026-08-02) Yoshi's Island's intro renders correctly: the frame, the sky, and every picture the GSU draws inside the frame. The one remaining defect is the story-text strip, and §10.5 shows the GSU decodes that text correctly into Game Pak RAM, so the fault is downstream on the S-CPU/PPU side. Everything in §1-§8 is implemented; treat §9's warnings as live.
 
 ---
 
@@ -43,14 +43,14 @@ Both sides see the same ROM and RAM through the same decode — unlike the SA-1 
 | Address | Contents |
 |---|---|
 | `$00-$3F/$80-$BF:3000-32FF` | GSU registers and cache |
-| `$00-$3F/$80-$BF:6000-7FFF` | Game Pak RAM, 8KB window, one block per bank |
+| `$00-$3F/$80-$BF:6000-7FFF` | Game Pak RAM, the **first 8KB mirrored** into every bank |
 | `$00-$3F/$80-$BF:8000-FFFF` | ROM, LoROM-style |
 | `$40-$5F`, `$C0-$DF` | ROM, linear 64KB banks |
 | `$60-$7D`, `$E0-$FF` | Game Pak RAM, flat |
 
 Bit 15 of the address is **ignored** in the LoROM view, so `$00:0000` and `$00:8000` are the same ROM byte — that is what lets the GSU point `ROMBR:R14` anywhere in a bank.
 
-The `$6000-$7FFF` window is *packed*, not mirrored: bank `$00` shows RAM `$0000-$1FFF`, bank `$01` shows `$2000-$3FFF`, and so on.
+The `$6000-$7FFF` window **mirrors the first 8KB of Game Pak RAM into every bank** `$00-$3F`/`$80-$BF`. This paragraph previously claimed the opposite — that the window is packed, one block per bank — which is the bug §10.0 fixed; it is corrected here so the two sections stop contradicting each other.
 
 As with the SA-1, **no `MemoryBus` change was needed** — the `MapsAddress` escape hatch and the existing fall-through to `Cartridge.Write8` already cover all of it.
 
@@ -86,13 +86,17 @@ That is not a free choice — it is forced by real code. Yoshi's Island opens a 
 
 Because R15 is a normal register, **every write to it is a jump** — including `TO R15`, `MOVE R15`, `LOOP`, `JMP` and the branches. And because the prefetched byte has already been fetched, **every jump runs one delay-slot instruction before it takes effect**. `_jumpPending` carries that across: after a jump R15 already names the destination, so the next `Pipe()` consumes the delay-slot byte *without* advancing, and only then refills from the target.
 
-Multi-byte instructions in a delay slot fetch their operands from the retargeted R15, which is why real GSU code never puts one there.
+Multi-byte instructions in a delay slot fetch their operands **from the retargeted R15**, so the branch target's first byte is eaten as the operand and execution resumes one byte in. Mesen agrees (its trailing `R[15]++` is skipped only when `_r15Changed`, and `ReadOperand` advances from the already-retargeted R15).
+
+This file used to add "which is why real GSU code never puts one there". **That is wrong — Yoshi's Island puts one there on purpose.** `0A:81B4` is `BNE $81C5` with `IBT R10,#$08` in the delay slot; the branch target `$81C5` *is* the `$08` operand byte of the `IBT R10,#$08` sitting at `$81C4`, so both paths load 8 and both resume at `$81C6`. The overlap is deliberate code compression, and it only works if the operand comes from the target. It is a good check on the pipeline model: get this wrong and `R10` loads `$2B` (the `WITH R11` opcode) as its bit count.
 
 ### 4.2 Prefixes
 
 `TO Rn` ($10-$1F) sets the destination. `FROM Rn` ($B0-$BF) sets the source. `WITH Rn` ($20-$2F) sets both *and* raises the `B` flag — and while `B` is set, `TO`/`FROM` stop being prefixes and become the real instructions `MOVE`/`MOVES`. `ALT1`/`ALT2`/`ALT3` ($3D/$3E/$3F) set the flags that pick which of a slot's four meanings runs.
 
 All of it is cleared after the next non-prefix instruction, which is why `FROM R1 : ADD R2 : ADD R2` adds R1+R2 into R0 and then R0+R2 into R0.
+
+**The eleven branch opcodes (`$05-$0F`) are the exception: a branch does not clear the prefix, so it passes it to the delay-slot instruction.** Every other real instruction clears it; `JMP` and `LOOP` clear it too, even though they also jump. Mesen encodes this by calling `ResetFlags()` from every instruction *except* `Branch`, and Yoshi's Island depends on it — `0A:8146` reads `FROM R6 : TO R5 : ALT2 : BRA $8106` with `AND #15` in the delay slot, which is `R5 = R6 & $0F`, the run colour for the next RLE span. Clear the prefix there and that byte decodes instead as `AND R15` into `R0`, which both loses the colour and corrupts the bit-stream buffer. That was the whole of §10.4. Pinned by `A_branch_carries_its_prefix_into_the_delay_slot` and `An_untaken_branch_also_carries_its_prefix`, both of which fail against the clearing form.
 
 The four meanings follow a consistent shape: base, ALT1 = a variant operation, ALT2 = the same with a 4-bit immediate, ALT3 = both. So `$5n` is `ADD Rn / ADC Rn / ADD #n / ADC #n`, and `$7n` is `AND / BIC / AND #n / BIC #n`. The subtract slot breaks the pattern: ALT3 there is `CMP Rn`, which sets flags without writing.
 
@@ -120,7 +124,9 @@ Writing **R14** starts a ROM fetch at `ROMBR:R14`; `GETB`/`GETBH`/`GETBL`/`GETBS
 
 `COLOR` loads `COLR` from the source register (`GETC` loads it from the ROM buffer instead); `CMODE` loads the plot options `POR`. `PLOT` writes `COLR` at (R1, R2) **and increments R1**, so a run of `PLOT`s fills a row. `RPIX` reads a pixel back.
 
-Colour 0 is transparent unless `POR` bit 0 says otherwise. `POR` also carries dithering (bit 1), high-nibble colour (2), a frozen high nibble (3), and OBJ mode (4).
+**The coordinates are the low bytes of R1 and R2, not the whole registers.** R1 is a full 16-bit register and `PLOT`'s increment carries into its high byte, so a long run walks R1 past 255 as a matter of course; the plot hardware only ever sees `R1 & 0xFF` and `R2 & 0xFF`. Passing the full register instead sends every pixel after the wrap into a tile hundreds of tiles away — see §10.2, where this was measured at `PLOTMAXX = 0xFFFF` in Yoshi's Island. Pinned by `Plot_uses_only_the_low_byte_of_its_coordinate_registers`, which fails against the unmasked form.
+
+Colour 0 is transparent unless `POR` bit 0 says otherwise. `POR` also carries dithering (bit 1), high-nibble colour (2), a frozen high nibble (3), and OBJ mode (4). The transparency test reads `COLR` **before** dithering is applied, and compares against the depth's own mask (`0x03` at 2bpp, `0x0F` at 4bpp, the whole byte at 8bpp), with `POR` bit 3 narrowing it to the low nibble. OBJ mode does **not** exempt a pixel from the test — this file previously said it did, which silently disabled transparency for every plot Yoshi's Island makes, since its intro sets `POR` bit 4 throughout.
 
 Because the framebuffer is stored as **SNES planar tiles** — so the S-CPU can DMA it straight to VRAM — writing one pixel means touching one bit in each of 2, 4 or 8 bitplane bytes. An 8-pixel cache absorbs that: pixels accumulate for one tile row and flush as whole bitplanes when the row changes, when `RPIX` needs the memory to be current, or at `STOP`. Partially-filled rows read-modify-write so untouched pixels survive.
 
@@ -135,14 +141,16 @@ addr = (SCBR << 10) + tile * (8 * bpp) + (y & 7) * 2
 
 ### 6.2 OBJ mode
 
-`SCMR`'s height field is split — **HT1 is bit 2 and HT0 is bit 5**, not adjacent — and the value 3 selects OBJ mode, where the buffer is laid out the way the PPU wants *sprite* tiles instead: 128x128 pages of 16x16 tiles, pages arranged 2x2.
+`SCMR`'s height field is split — the two halves are not adjacent — and the value 3 selects OBJ mode, where the buffer is laid out the way the PPU wants *sprite* tiles instead: 128x128 pages of 16x16 tiles, pages arranged 2x2.
+
+**`CMODE` bit 4 selects OBJ mode too**, independently of the height field, so the selector is `height == 3 || (POR & 0x10)`. This file used to key the layout off the height field alone. That happens to be a no-op for Yoshi's Island — measured, its intro sets *both*, `SCMR = $3C`/`$3D` with `POR = $11` — but it is not a no-op in general, and Mesen keys off `CMODE` bit 4 alone.
 
 ```
 page = ((y >> 7) << 1) | ((x >> 7) & 1)
-tile = (page << 8) | (((x >> 3) & 15) << 4) | ((y >> 3) & 15)
+tile = (page << 8) | (((y >> 3) & 15) << 4) | ((x >> 3) & 15)
 ```
 
-Within a page the order is **column-major**, matching the normal modes; the row-major reading of the same layout produces recognisable but badly streaked output, which is how the two were told apart. Yoshi's Island uses OBJ mode for its intro, in both 4bpp and 2bpp.
+Within a page the order is **row-major** — `y` supplies the high nibble of the tile index. This file previously said column-major, and claimed the two had been told apart by which one produced streak-free output. **That claim does not hold up**: with the coordinate-truncation bug above still present, both orders produce equally unreadable output, so whatever was compared could not have distinguished them. Row-major is what bsnes and Mesen both compute (`((y & 0x78) << 1) + ((x & 0x78) >> 3)`), and that is the only reason this file now states it. Yoshi's Island uses OBJ mode for its intro, in both 4bpp and 2bpp.
 
 ---
 
@@ -164,13 +172,26 @@ That trace is what found the R15 invariant bug: the loop in §4.1 was visibly re
 
 **The GSU is now visible to the rest of the toolchain, so reach for that first.** `regs` prints a Coprocessor section with `SFR`, `PBR`, `CBR`, `SCBR`, `SCMR`, `ROMBR`, `RAMBR` and the whole `R0`-`R15` file; `GSURAM` is a memory space, so `snapshot`/`diff`/`search`/`watch` reach Game Pak RAM — work RAM and framebuffer both — the same way they reach WRAM; and `cophist [<reg>] [<count>]` replays the last 600 frames of that register file with a "unchanged for N refresh(es)" counter that answers *when did the chip stop* without any instrumentation at all. See `EmuSen_Debugging_Tools_Reference_v5.md` §3.23/§3.23a.
 
+**Sampling a register once per frame is not enough, and mis-sampling sent §10.2 down two dead ends.** `SCMR`, `SCBR` and `POR` are all set and cleared *inside* one frame — `cophist SCMR` reads `00` all through Yoshi's Island's intro while every plot in that same frame runs with `SCMR = $3C`. So the plot-time state is published separately, latched by `Plot` itself rather than by the per-frame refresh: `PLOTS` and `PLOTSOBJ` (how many pixels, and how many took the OBJ layout — equal means the layout question is settled), `PLOTSCMR`/`PLOTSCBR`/`PLOTPOR` (the register values actually in force at the last plot), and `PLOTMAXX`/`PLOTMAXY`/`PLOTADRLO`/`PLOTADRHI` (the coordinate and Game Pak RAM ranges the chip was asked to cover). `PLOTMAXX` is what exposed the coordinate-truncation bug in §6, in one command.
+
+`SCPURAMHOT` counts S-CPU accesses to Game Pak RAM while `GO = 1` — the bus-arbitration violations §2.1 does not enforce. It reads **0** for Yoshi's Island, which is how "the S-CPU is DMAing the framebuffer out from under the GSU" was retired.
+
+`DebugSettings.SuperFxPlotTraceSkip` / `SuperFxPlotTraceCountdown` log the plot stream itself — `x`, `y`, the raw `R1`/`R2`, `COLR`, `POR`, `SCMR`, `SCBR`, the target address and the PC — after skipping the first N plots, so a later drawing pass can be reached without drowning in the first. `SuperFxPlotTraceInstr` logs one line per GSU instruction over the same window. Rendering an image straight from the plot stream is what separated "the wrong colours are being decoded" from "the framebuffer encoding is wrong" in §10.3.
+
+`DebugSettings.SuperFxRamWriteTraceAddr` (a flat Game Pak RAM offset, `-1` off) plus `SuperFxRamWriteTraceCountdown` log GSU-side writes to one address with the GSU PC that made them. Reach for it when the chip builds output with **stores rather than `PLOT`** — the plot-trace flags above see nothing then. That is what proved the BG3 tilemap is GSU output written by a literal-run copy loop at `08:A9FA` (§10.5); a per-frame `GSURAM` dump could not, because the buffer is overwritten within the same frame it is DMAed. `--flag` takes decimal, so pass `23880`, not `0x5D48`.
+
+`DebugSettings.SuperFxSpeedDivisor` scales the chip's cycle cost. If a failure is a GSU/S-CPU synchronisation problem, the output changes character with the divisor; if the handshake is sound, only the frame the work lands on moves. Cheaper than reasoning about the handshake from the code.
+
 Reads through all of these are side-effect-free by construction, which matters here specifically: `$3031` acknowledges the GSU's interrupt, so a debugger routed through the real register window would clear a flag simply by looking. Prefer these to hand-patching a `Console.WriteLine` into `SuperFx.Execute.cs` — the `LJMP` and `ALT3` rounds in §10 both did that, and both would have been one command against the running game.
 
 ---
 
 ## 9. Known-wrong and unverified
 
-- **OBJ page arrangement (§6.2)** — the column-major order within a page is confirmed by output; the 2x2 page arrangement and its stride are inferred, not verified.
+- **OBJ page arrangement (§6.2)** — the 2x2 page arrangement and its stride are inferred, not verified. The within-page order is now row-major on Mesen's and bsnes's authority, not on output evidence; the previous "confirmed by output" claim was withdrawn (§6.2).
+- **`SCMR` height-field bit order** — this file and the implementation read **HT1 from bit 2 and HT0 from bit 5**; **Mesen reads them the other way round** (`ScreenHeight = ((v & 0x04) >> 2) | ((v & 0x20) >> 4)`). The two disagree only for height values 1 and 2, i.e. 160 vs 192 pixels, and they agree that 3 means OBJ mode. Yoshi's Island plots with both bits set, so this cannot be settled from that game and is currently untested either way. Do not "fix" it to match Mesen without a game that distinguishes them.
+- **`COLOR`/`GETC` nibble handling** — bsnes and Mesen genuinely fork here, and `ColorValue` follows **bsnes**: `POR` bit 2 rewrites the source as `(source & $F0) | (source >> 4)` and then bit 3 may also apply, whereas Mesen early-returns `(COLR & $F0) | (value >> 4)` on bit 2 so the two bits are mutually exclusive. The two agree on the low nibble, so they are indistinguishable at 2bpp and 4bpp; they differ only in the high nibble, i.e. at 8bpp or when a later `COLR`-freeze reads it back. Untested either way — Yoshi's Island runs with both bits clear.
+- **`ALT1`/`ALT2`/`ALT3` and the `B` flag** — Mesen's `ALT1()`/`ALT2()`/`ALT3()` each set `Prefix = false`, i.e. an `ALT` prefix *clears* the `WITH` flag while leaving `SrcReg`/`DestReg` alone. This implementation leaves `B` set. The two differ only for `WITH Rn : ALT? : TO Rm` / `FROM Rm`, where Mesen decodes the third instruction as a prefix and we decode it as `MOVE`/`MOVES`. **Untested either way — Yoshi's Island never writes that sequence**, so it cannot be settled from the one SuperFX game here. Found while fixing §10.4; left alone deliberately, on the same reasoning as the `SCMR` height field above.
 - **Cycle costs (§2.2)** — approximate.
 - ~~**`LJMP` operand direction**~~ — **resolved, and it was wrong.** It had been implemented as "the named register supplies the address, the source register supplies the bank", by analogy with `JMP Rn`. It is the other way round: `Rn` carries the **bank**, `Sreg` the **address**. Corrected, and pinned by `Ljmp_takes_its_address_from_the_source_register`, which fails against the old direction.
 
@@ -186,9 +207,9 @@ Reads through all of these are side-effect-free by construction, which matters h
 
 ## 10. Status, and where to pick it up
 
-**What is verified.** 54 tests: 38 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, `LJMP`'s operand direction, RAM round-trips, plotting and transparency) and 16 covering detection, the S-CPU address map and the register window. All pass.
+**What is verified.** 57 tests: 41 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, `LJMP`'s operand direction, RAM round-trips, plotting, transparency, and the plot coordinate mask) and 16 covering detection, the S-CPU address map and the register window. All pass.
 
-**What Yoshi's Island does.** It boots, the GSU executes genuine game code, and it renders: the intro's bordered frame draws correctly, and the GSU-rendered interior draws recognisable scenery. It then stops drawing a few thousand frames in. The three fixes that got it this far were the R15 invariant (§4.1), OBJ tile order (§6.2), and RAM sizing (§1).
+**What Yoshi's Island does.** It boots and plays its whole intro: the bordered frame, the night sky, and — since §10.4 — **the pictures inside the frame, which now render correctly** through the Nintendo-logo quilt, the sunrise and the cloud page. §10.1/§10.2/§10.3 are retained as the record of how that was measured, but the failure they describe is fixed; do not work from them as if it were open. **What remains is the story text strip below the frame**, and §10.5 shows that one is *not* a GSU bug — the chip decodes the text correctly into Game Pak RAM.
 
 ### 10.0 Resolved: the `$6000-$7FFF` window was bank-indexed
 
@@ -243,3 +264,108 @@ Given the GSU is demonstrably alive right up to the crash, the likeliest shapes 
 The read-the-code suspects that remain (`CACHE`-side invalidation, `SCBR` granularity, `MERGE`/`FMULT` rounding) are all *pixel* correctness issues. Per §10.1 they cannot by themselves explain a control-flow derailment, so they are no longer the front of the queue.
 
 `SuperFxTraceCountdown` (§8) plus a diff against a known-good trace is the practical route; without a reference to diff against, the instruction-level tests in `EmuSen.WiseMan/Coprocessors/SuperFxInstructionTests.cs` are the place to encode each new fact as it is established.
+
+### 10.2 The intro picture, measured
+
+The frame-1759 crash is gone, so the game now reaches its intro and stays there. The failure that remains is a rendering one, and this is the shape of it, measured end to end rather than guessed.
+
+**Which layer is wrong.** `--flag LayerEnableMask=N` isolates one layer at a time. **BG2** (the night sky) and **BG3** (the ornate frame) both draw correctly. **BG1 is the broken layer** — it carries the picture inside the frame. **OBJ draws nothing at all**, which is worth knowing before spending any more time on OBJ-mode *display* correctness: the OBJ-shaped framebuffer §6.2 describes never reaches a sprite. `BGMODE = $09`, so this is Mode 1, not a hi-res mode.
+
+**How the picture gets to BG1.** The GSU plots into Game Pak RAM and the S-CPU DMAs the result to VRAM. `DmaVerboseLogging` shows the whole path: six transfers, all on channel 0, all `src = $70:5800`, all 8192 bytes, landing at VRAM `$0000/$2000/$4000/$6000/$8000` (BG1's character data) and `$A000`. The copy is verbatim — matching 1KB blocks line up exactly, and the freshest chunk is 75% identical to live Game Pak RAM — so **nothing is corrupted in transit**. Whatever is wrong is wrong in Game Pak RAM before the DMA reads it.
+
+**What the chip is asked to draw.** Two plot phases, and only two:
+
+| Phase | Frames | Plots | `SCBR` | `SCMR` | `POR` |
+|---|---|---|---|---|---|
+| 1 | before 250 | 24,064 | `$13` (`$4C00`) | `$3C` (2bpp) | `$00` |
+| 2 | 274-283 | 81,920 | `$16` (`$5800`) | `$3D` (4bpp) | `$11` (OBJ) |
+
+Phase 2 is exactly 5 x 16,384 pixels, matching the five 8KB DMAs. Coordinates cover x 0-255, y 0-127, and the addresses touched run `$5800`-`$97EE` — two OBJ pages, 16KB.
+
+**Retired, with the measurement that retired each.** Do not re-run these.
+
+- *"The S-CPU DMAs the framebuffer while the GSU is still drawing."* `SCPURAMHOT` (§8) counts S-CPU Game Pak RAM accesses while `GO = 1`. It is **0**. The handshake is sound. Scaling the chip's speed with `SuperFxSpeedDivisor` moves which frame the work lands on but does not change the character of the corruption, which is the same conclusion from the other direction.
+- *"The OBJ within-page tile order is the wrong way round."* Tried both orders with the coordinate bug fixed. **Both are unreadable**, so this is not what is left. Row-major is retained because bsnes and Mesen agree on it (§6.2), not because it fixed anything.
+- *"VMAIN address translation is unimplemented."* It is implemented, and all three rotate modes match the standard formulas.
+
+**Fixed along the way**, each a real divergence from bsnes/Mesen, none of them sufficient: the plot coordinate mask (§6, the significant one — x was reaching `$FFFF`), OBJ-mode selection ignoring `CMODE` bit 4 (§6.2), and the transparency test being skipped outright in OBJ mode and evaluated after dithering (§6).
+
+### 10.3 The blitter, traced
+
+The intro picture is drawn by an RLE row decoder at `0A:80E9-0A:8113`, reached through a bit-stream reader at `0A:809C-0A:80B5` that refills from ROM via a subroutine at `0A:81B3`. Disassembled and confirmed against a live trace:
+
+```
+8108: B5        FROM R5           ; run colour
+8109: 3D 31     ALT1: STB (R1)    ; scratch[R1] = colour
+810B: 3C        LOOP              ; R12 = run length
+810C: E1        DEC R1            ; delay slot - the row fills DOWNWARD
+810D: 0A 87     BPL 8096          ; another run while R1 >= 0
+810F: AC 00     IBT R12,#$00
+8111: 05 D7     BRA 80EA          ; row done
+80EB: D1        INC R1            ; -1 -> 0
+80EC: FC 80 00  IWT R12,#$0080    ; 128 pixels
+80F1: 3D 41     ALT1: LDB (R1)    ; colour = scratch[R1]
+80F3: 4E        COLOR
+80F4: 3C        LOOP
+80F5: 4C        PLOT              ; delay slot; PLOT increments R1
+```
+
+**This gives a free oracle: every row's fill must end with `R1 = -1`,** because `INC R1` then has to leave `R1 = 0` for the 128-pixel plot loop. **77 of 128 rows in a pass end somewhere else** — mostly `-2` or `-3`, occasionally `-96`. Those rows are drawn shifted, and their spill lands at `x >= 128` in OBJ page 1, which is never DMAed.
+
+`R1` doubles as the scratch pointer and the plot X, so `x >= 128` plots are the *symptom*, not the fault: `scratch[0]` still reaches `x = 0`, and the spill is invisible. **Do not chase `PLOTXHIGH` again** — it undercounts badly (a row off by two contributes only two hits), which is why 60% broken rows first read as 9%.
+
+Rendering straight from the plot stream — bypassing the framebuffer encoding entirely — reproduces the same streaked garbage as `GSURAM` does, so the fault is upstream of `PLOT`: **the wrong colours are being decoded, not mis-stored.**
+
+**Retired here, with the measurement.** Do not redo these.
+
+- *"The pixel cache or the bitplane encoding is wrong."* Rendering from the plot stream is identically broken, so the encoding is not involved. Our `FlushPixelCache` also matches Mesen's `WritePixelCache` byte for byte, including the `ValidBits` read-merge and the `(x & 7) ^ 7` bit order.
+- *"The OBJ tile index is wrong."* Mesen's `GetTileIndex` case 3 is `((y & 0x80) << 2) + ((x & 0x80) << 1) + ((y & 0x78) << 1) + ((x & 0x78) >> 3)`, which is algebraically our page/row/column expression. All four `ScreenHeight` cases agree too.
+- *"The colour transform is wrong."* `POR = $11` for the whole pass: neither `ColorHighNibble` (bit 2) nor `ColorFreezeHigh` (bit 3) is set, so `ColorValue` is a pass-through and cannot be the fault **for this game**. bsnes and Mesen disagree about it in general — see §9.
+- *"The GSU ROM map is wrong."* Mesen registers `00-3f:8000-ffff` and `40-5f:0000-ffff`, matching `RomOffset`. `ROMBR = $5E`, `R14 = $8305` resolves to `$1E8305` in both.
+- *"The ALU or shift flags are wrong."* `LSR`, `ROL`, `ROR`, `ASR`/`DIV2`, `ADD`/`ADC`, `SUB`/`SBC`/`CMP`, `AND`/`BIC`, `OR`/`XOR`, `NOT`, `SWAP`, `LOB`, `HIB`, `MERGE`, `MULT`/`UMULT` and `IBT`'s sign extension were all diffed against `Gsu.Instructions.cpp`. The overflow expressions differ in form but are algebraically identical.
+
+**Two facts that constrain whatever is left.** First, the failures are wrong *values*, not lost sync: one run decoded as 46 where 44 was needed differs in a single bit, and the bit **count** stays right — `R10` and `R14` carry across rows without re-anchoring, so a mis-consumed bit would desync the rest of the picture permanently, and it does not. Second, do **not** read "40% of rows land exactly on `-1`" as evidence the decoder works. At these run lengths random data lands there about a third of the time, which is the mistake that made the decode look sound for most of this round.
+
+**Where to pick it up.** The bit reader is `R0` = bit buffer, `R10` = bits left, `R4` = bit weight, `R12` = accumulator; a value bit is the carry out of `LSR` tested by `BCC` at `80A5`, and a continuation bit is the carry tested by `BCS` at `80B4`. `R0` is parked in `R4` across the plot loop (`WITH R0 : TO R4` at `80EA`) and restored on the way back in. Take one row that ends wrong, dump `80A5`/`80B4` with `R0`/`R10`/`R4`/`R12` for its final run, and hand-decode the same bits out of the ROM bytes `R14` walked. That says in one pass whether the emulator built the wrong number from the right bits, or the game is being pointed at the wrong bits to begin with — the two remaining possibilities. The refill path is worth reading closely first: `80A0 LINK #4` / `80A1 IWT R15,#$81B3` calls out with `GETB` in the delay slot, the return at `81C7` jumps back through `R11` with an `LSR` in *its* delay slot, and both `IBT` operands in that path are fetched from the branch target rather than from after the opcode.
+
+Trace with `--flag SuperFxPlotTraceSkip=N --flag SuperFxPlotTraceInstr=M` (§8).
+
+### 10.4 Resolved: a branch was clearing the prefix before its delay slot
+
+**Root cause of the unreadable picture, found and fixed (2026-08-02).** `Branch` fell through to the dispatcher's `if (!_prefixInstruction) ClearPrefix()`, so `TO`/`FROM`/`WITH`/`ALT` set ahead of a branch were gone by the time the delay-slot instruction ran. Branches are the one non-prefix instruction that must *not* clear it — see §4.2 for the rule and the Mesen cross-check.
+
+**The game's own code proves it, without needing a reference emulator.** `0A:8146` is `FROM R6 : TO R5 : ALT2 : BRA $8106`, with the byte at `814B` as the delay slot. With the prefix intact that byte is `AND #15`, giving `R5 = R6 & $0F` — the run colour the RLE span loop at `8108` immediately stores. With the prefix cleared it is `AND R15`, which ANDs `R0` with the program counter. So the bug both dropped the colour *and* corrupted `R0`, which is the bit-stream buffer §10.3 traced. That is why the failure looked like "wrong values, right bit count": `R0` was being clobbered between reads, not desynchronised.
+
+**Measured before and after**, on the §10.3 oracle rather than by eye:
+
+| | before | after |
+|---|---|---|
+| `PLOTXHIGH` (plots at x ≥ 128) | 10,347 | **0** |
+| `PLOTMAXX` | `$FF` | **`$7F`** |
+| `PLOTADRHI` | `$97EE` (spilling into OBJ page 1) | **`$77EE`** (one 8KB page) |
+
+`PLOTMAXX = $7F` with `PLOTXHIGH = 0` *is* §10.3's invariant restated: every row now fills exactly `R1 = 127 … -1`, so `INC R1` leaves 0 and the 128-pixel plot loop starts at x = 0. Phase 2 lands as exactly five 16,384-pixel passes inside `$5800-$77FF`, matching the five 8KB DMAs §10.2 recorded. 1074 tests pass.
+
+**Two lessons worth more than the fix.** First, §10.3's ranked suspect list did not contain this, because every entry on it was an *instruction semantic* and this is a *dispatcher* semantic — the prefix rule lives in `StepInstruction`, not in any opcode. When a list of plausible causes has been worked through twice without result, suspect the layer the list is not written at. Second, the answer was legible in the game's own instruction stream: an `ALT2` immediately before a branch is meaningless unless the prefix survives, so **disassembling the failing routine and asking "what would make this code sensible" beat auditing the emulator against a reference.** The disassembler used is 120 lines of Python over the GSU opcode table; building one is cheap and it is now the first tool to reach for here.
+
+### 10.5 Open: the strip below the frame is 18 tiles that are never uploaded
+
+**This section replaces an earlier version whose two leads were both wrong.** It said the BG3 tilemap was suspect because its entries "repeat on a 9-tile cycle", and it called the strip "the story text". Both are disproved below. Read this version.
+
+**The GSU is not at fault, and both halves of that are now measured.**
+
+- *The pixels it draws are right.* Dumping `GSURAM $4C00` (the 2bpp pass, `SCBR = $13`) and rendering it as an OBJ-layout page shows the story text fully legible — "A stork hurries … in his bill … across the … sky".
+- *The tilemap it decompresses is right.* The BG3 tilemap is **GSU output**, decompressed into Game Pak RAM `$5800` and DMAed to VRAM `$E800` (2048 bytes, from `$00:B1A5`); `SuperFxRamWriteTraceAddr` (§8) caught the chip writing it from `08:A9FA`, a literal-run copy loop. The 9-tile cycle is **genuine ROM data**: the literal run `A1 3D A2 3D … A9 3D` sits at ROM `0x1B19DF`, and rows 17-22 decompress from strictly increasing offsets (1775925, 1775980, 1776035, 1776095, 1776120) in one stream. The repeat is an **overlapping LZ back-reference** — a standard idiom for a repeating pattern — so the strip is a decorative 9-tile motif tiled three times, by design. Not text, and not a decode error.
+
+**What is actually wrong: 18 referenced tiles have no graphics.** BG3's tilemap uses 92 distinct tiles. 74 of them fall in VRAM `$F000-$F7FF` (tiles `$100-$17F`), which is cleared and then filled with the frame graphics from `$70:5800`. The other **18 — `$1A1-$1A9` and `$1B1-$1B9`, at VRAM `$FA10-$FBA0` — are never written by anything except a constant fill** (`$0F:C09E`, value `$0130`, `step=0`, covering `$F800-$FBFF`). That constant, read as 2bpp character data, is exactly the vertical-stripe pattern on screen.
+
+Confirmed by injection: `dump GSURAM 4C00 800` then `load VRAM F800` puts plausible data under those tile indices, and the strip immediately renders as three identical repeats of one motif — the shape the tilemap describes. So the tilemap semantics are right and only the graphics are missing.
+
+**Ruled out, with the measurement.**
+
+- *"The VRAM destination is computed wrong."* It is hard-coded game data: `7E:C8AC LDA #$7000 / STA $2116` with source `$4C00`, gated on `$0D15`. Nothing computes it.
+- *"Some code uploads there and we lose it."* A regex sweep of WRAM bank `$7E` and the whole ROM for `LDA #imm16 : STA $2116` finds **no site at all** targeting `$7C00` (VRAM `$F800`). The four `$2116` writes at `7E:E400` that appear to hit `$F800`/`$FCC0` are the DMA queue's blanket VMADD store (`7E:E3DF` walks a 12-byte-node linked list and writes node[0] to `$2116` for *every* job, including CGRAM/OAM ones), not real VRAM jobs — `DmaVerboseLogging` over 1700 frames shows nothing but the fill reaching `$F800-$FBFF`.
+- *"It is drawn with sprites."* `sprites` reports **0 active sprites**, and `OBSEL = $02`.
+- *"A base register moves under us."* `BG3SC`, `BG34NBA` and `BGMODE` are each written exactly twice for the whole intro, both times from `$00:BA1A`, settling at `$74` / `$77` / `$09`. No HDMA touches them.
+
+**Where to pick it up.** The leading hypothesis is that the `$70:5800 -> $F000` upload **should be 4096 bytes, not 2048** — 4096 would cover tiles `$100-$1FF` and therefore all 92 referenced tiles exactly, with no leftover. Test it by watching `IO:4305:2` (the DMA size register) around that transfer and comparing against what `Dma` actually uses; if the game really does ask for 2048, then the motif comes from a separate upload that never runs, and the next question is which flag gates it — `$0D15` and `$0CF9` gate the sibling blocks at `7E:C8A7`/`7E:C8C5`, so the missing one probably has its own. Note also that four `$2116` sites in ROM bank `$10` (`$F452`, `$F492`, `$F58A`, `$F5CA`) never execute in this scene, which suggests a whole setup routine is being skipped — that is the more promising thread of the two.

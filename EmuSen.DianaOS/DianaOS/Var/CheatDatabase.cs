@@ -23,6 +23,10 @@ namespace EmuSen.DianaOS.DianaOS.Var
     {
         public string Directory { get; }
 
+        // A real libretro tree is tens of thousands of files and every query
+        // here walks all of it, so one instance scans once - see `man cheat`.
+        private IReadOnlyList<CheatDatabaseEntry>? _all;
+
         public CheatDatabase(string directory)
         {
             Directory = directory;
@@ -30,7 +34,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
         public bool Exists => System.IO.Directory.Exists(Directory);
 
-        public IReadOnlyList<CheatDatabaseEntry> All()
+        public IReadOnlyList<CheatDatabaseEntry> All() => _all ??= Scan();
+
+        private IReadOnlyList<CheatDatabaseEntry> Scan()
         {
             if (!Exists) return Array.Empty<CheatDatabaseEntry>();
 
@@ -59,6 +65,22 @@ namespace EmuSen.DianaOS.DianaOS.Var
                  .Select(g => (g.Key, g.Count()))
                  .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                  .ToList();
+
+        // Every game under one system folder, optionally narrowed by a
+        // substring - a system holds thousands, so the filter is not optional
+        // in practice. Already name-ordered by All().
+        public IReadOnlyList<CheatDatabaseEntry> Games(string system, string? filter = null)
+        {
+            IEnumerable<CheatDatabaseEntry> games = All().Where(e => string.Equals(e.System, system, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(filter))
+            {
+                string needle = filter.Trim();
+                games = games.Where(e => e.Game.Contains(needle, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return games.ToList();
+        }
 
         // Best matches first. A ROM is usually loaded as "Game (USA).sfc"
         // while its cheat file is "Game (USA).cht", so the extension is

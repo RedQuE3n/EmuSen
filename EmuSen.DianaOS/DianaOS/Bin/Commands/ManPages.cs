@@ -413,12 +413,98 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    than replacing it - run 'cheat clear' first to replace. 'files' lists the\n" +
                 "    saved sets. Nothing is loaded automatically: a cheat set applies only\n" +
                 "    when you ask for it, so a saved file can't silently alter a later run.\n\n" +
+                "THE WRITE MODEL\n" +
+                "    A cheat is one description, one enable flag, and a LIST of writes. That\n" +
+                "    matters because real cheats are rarely one address: 'max every item' is\n" +
+                "    a run of twenty, and they have to arm and disarm together. One cheat,\n" +
+                "    one ID, one toggle, however many addresses it drives - 'cheat list'\n" +
+                "    prints a header line and then one indented line per write.\n\n" +
+                "    Each write carries:\n\n" +
+                "        width         1, 2 or 4 bytes. A wide write covers consecutive\n" +
+                "                      addresses.\n" +
+                "        byte order    little-endian unless the write says otherwise. Only\n" +
+                "                      meaningful above one byte.\n" +
+                "        type          set, increase or decrease. Increase/decrease read what\n" +
+                "                      is there and adjust it, so they accumulate every frame\n" +
+                "                      - 'increase by 1' climbs, it does not hold at 1.\n" +
+                "        bit position  makes the write touch a single bit instead of whole\n" +
+                "                      bytes, leaving the other seven alone. For flag bytes\n" +
+                "                      where poking the whole byte would clobber unrelated\n" +
+                "                      state.\n" +
+                "        repeat        count, address stride and value stride. One write can\n" +
+                "                      cover a whole run: 8 repetitions stepping the address\n" +
+                "                      by 2 pokes every other byte of an inventory table.\n\n" +
+                "    Two combinations are refused rather than half-implemented. A ROM patch\n" +
+                "    cannot increase or decrease - the substitution happens at read time and\n" +
+                "    the real byte is never written, so there is nothing to accumulate into.\n" +
+                "    And a compare byte only works on a single-byte ROM patch, because the\n" +
+                "    read hook is handed one byte at a time and cannot check a compare that\n" +
+                "    spans several addresses; allowing it would give a torn patch where the\n" +
+                "    first byte declines and the rest apply.\n\n" +
+                "IMPORTING RETROARCH CHEATS\n" +
+                "    'cheat import <path.cht>' reads RetroArch/libretro .cht files - the\n" +
+                "    format the libretro cheat database ships in, one file per game. Both\n" +
+                "    shapes a .cht can take are handled:\n\n" +
+                "        cheatN_code       the core-native code string, hex, with several\n" +
+                "                          codes joined by '+' becoming one multi-write cheat.\n" +
+                "                          Decoded through the same code decoder 'cheat add'\n" +
+                "                          uses, so the per-system layout is never hardcoded.\n" +
+                "        cheatN_address    RetroArch's own handler fields - cheat_type,\n" +
+                "                          memory_search_size, address_bit_position,\n" +
+                "                          big_endian, repeat_count and the two strides. These\n" +
+                "                          are DECIMAL in a .cht file, unlike the code string.\n\n" +
+                "    memory_search_size 3/4/5 are 1/2/4-byte writes; 0-2 are sub-byte and\n" +
+                "    become bit writes at address_bit_position. cheat_type 0 means the entry\n" +
+                "    exists but does nothing, and is skipped rather than imported as a no-op.\n" +
+                "    An entry that cannot be decoded is skipped and counted; the rest of the\n" +
+                "    file still imports.\n\n" +
+                "    Everything imports DISABLED. A database file routinely holds dozens of\n" +
+                "    cheats and switching them all on at once is never what anyone meant -\n" +
+                "    'cheat list' then 'cheat enable <id>' picks the ones you want.\n\n" +
+                "    'cheat export <path.cht>' writes RAM pokes back out in RetroArch's\n" +
+                "    handler form, which round-trips every field above. ROM patches are\n" +
+                "    skipped and counted: RetroArch's model has no ROM-read substitution, so\n" +
+                "    there is nothing honest to write for them.\n\n" +
+                "THE CHEAT DATABASE\n" +
+                "    'cheat db' works over a DIRECTORY TREE of .cht files - one file per\n" +
+                "    game, in per-system folders, which is exactly how RetroArch stores its\n" +
+                "    cheats. EmuSen ships no cheat data of its own and redistributes none.\n" +
+                "    There are two ways to have a database, and neither involves us hosting\n" +
+                "    anything:\n\n" +
+                "        Use one you already have. Set AppSettings.CheatDatabaseDirectory to\n" +
+                "        an existing RetroArch cheats folder and it is indexed as-is - no\n" +
+                "        copying, no conversion. Unset, it defaults to Usr/Home/Cheats (see\n" +
+                "        'man hier').\n\n" +
+                "        'cheat db update' downloads one. It fetches the same archive\n" +
+                "        RetroArch's own Online Updater does, straight from libretro to your\n" +
+                "        machine, on your explicit request. The data is licensed CC BY-SA 4.0;\n" +
+                "        the codes themselves were aggregated from community sources,\n" +
+                "        substantially GameHacking.org, and credit belongs to their original\n" +
+                "        authors. That notice is printed with the result rather than buried\n" +
+                "        here, because attribution is a condition of the licence.\n\n" +
+                "    Only .cht entries are extracted, and an archive entry that tries to\n" +
+                "    write outside the target directory is skipped rather than followed.\n\n" +
+                "    'cheat db' with no argument reports where the database is and how many\n" +
+                "    files per system. 'find' searches it; 'load' imports the best match,\n" +
+                "    disabled, the same way 'import' does. Matching tolerates a loaded ROM's\n" +
+                "    file name - 'cheat db load Super Mario World (USA).sfc' finds\n" +
+                "    'Super Mario World (USA).cht' - and prefers an exact name over a prefix\n" +
+                "    over a substring, so a game whose title is a prefix of another still\n" +
+                "    wins for its own name.\n\n" +
+                "    In EmuSen.Mistress the same thing is on the menu bar at Settings > Cheat\n" +
+                "    Database..., which shows the folder, what is installed per system, the\n" +
+                "    attribution notice, and a download button.\n\n" +
                 "EXAMPLES\n" +
                 "    cheat poke WRAM 9c 63 infinite lives\n" +
                 "    cheat list\n" +
                 "    cheat disable 1\n" +
                 "    cheat save zelda\n" +
-                "    cheat clear && cheat load zelda",
+                "    cheat clear && cheat load zelda\n" +
+                "    cheat import \"Super Mario World (USA).cht\"\n" +
+                "    cheat export my-cheats.cht\n" +
+                "    cheat db update\n" +
+                "    cheat db find mario\n" +
+                "    cheat db load Super Mario World (USA)",
 
             ["search"] =
                 "NAME\n" +
@@ -1078,6 +1164,103 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "EXAMPLES\n" +
                 "    coretop\n" +
                 "    coretop -w",
+
+            ["vstop"] =
+                "NAME\n" +
+                "    vstop - live htop-style dashboard of the .NET runtime this process runs on\n\n" +
+                "SYNOPSIS\n" +
+                "    vstop [-w]\n\n" +
+                "DESCRIPTION\n" +
+                "    The counterpart to 'coretop'. Where that one watches the emulated\n" +
+                "    machine, this one watches the real one underneath it: the .NET virtual\n" +
+                "    machine that DianaOS, the loaded core, and the frontend are all running\n" +
+                "    on. Managed heap, garbage collector, thread pool, process memory and\n" +
+                "    CPU, refreshing twice a second until you quit.\n\n" +
+                "    It is the one dashboard that still has something to show with NO ROM\n" +
+                "    loaded, because it reports on the host VM rather than a guest - it\n" +
+                "    takes no IDebugTarget at all and is completely core-agnostic.\n\n" +
+                "    Four bars across the top, colored green/yellow/red under 60% / 60-85% /\n" +
+                "    over 85% the same way coretop's are:\n\n" +
+                "        CPU        this process's processor time, divided by core count, so\n" +
+                "                   100% means every core busy - htop's aggregate scale, not\n" +
+                "                   the per-core one where an 8-core box can read 800%.\n" +
+                "        Machine    system-wide memory in use. This is the figure the GC\n" +
+                "                   compares against its own high-load threshold when it\n" +
+                "                   decides to collect more aggressively, so it explains GC\n" +
+                "                   behaviour that the heap numbers alone do not.\n" +
+                "        Heap frag  fragmented bytes over committed bytes - dead space inside\n" +
+                "                   the managed heap that the GC has not handed back. A high\n" +
+                "                   reading next to a small live heap is the signature of a\n" +
+                "                   pinning or large-object problem.\n" +
+                "        Pool load  thread-pool threads against the pool maximum. Climbing\n" +
+                "                   toward the ceiling with a non-zero queued-work count is\n" +
+                "                   thread-pool starvation.\n\n" +
+                "    Below them: process working set and private bytes; managed heap, GC-\n" +
+                "    committed bytes, cumulative allocations and the live allocation rate;\n" +
+                "    per-generation sizes (gen0/gen1/gen2, then LOH and POH where the\n" +
+                "    runtime reports them); GC mode, latency mode, pause-time percentage,\n" +
+                "    per-generation collection counts with a collections-per-minute rate and\n" +
+                "    total time paused; OS thread and handle counts, pool thread counts and\n" +
+                "    limits, queued and completed work items with a throughput rate; and the\n" +
+                "    number of loaded assemblies.\n\n" +
+                "    Allocation rate, CPU percent, collections per minute and work-item\n" +
+                "    throughput are all rates, so they need two readings to exist. The first\n" +
+                "    reading is taken before the first frame is drawn - you never see a\n" +
+                "    screen of zeroes - but they stay zero for a single refresh if the\n" +
+                "    dashboard is somehow drawn without that priming sample.\n\n" +
+                "    A subtler point, and the reason several fields can read '-' instead of\n" +
+                "    a number: GC.GetGCMemoryInfo() does not describe the heap right now, it\n" +
+                "    describes the heap AS OF THE LAST COLLECTION. In a process that has not\n" +
+                "    collected yet - which a freshly launched shell has not - every figure\n" +
+                "    derived from it is legitimately zero: committed bytes, fragmented bytes,\n" +
+                "    machine memory load, per-generation sizes, pause-time percentage. Those\n" +
+                "    are exactly the readings someone opening this dashboard is most likely\n" +
+                "    to act on, and a bar sitting confidently at 0.0% is worse than no bar,\n" +
+                "    because it looks like an answer. So the Machine and Heap frag bars draw\n" +
+                "    empty with '(no GC yet - press G)' until a collection has actually\n" +
+                "    happened, and the committed/per-generation/pause-time fields show '-'.\n" +
+                "    Press G once and the whole screen fills in. Working set, private bytes,\n" +
+                "    managed heap, cumulative allocations, thread counts and CPU are all\n" +
+                "    live readings and never do this.\n\n" +
+                "    Nothing this command reads is allowed to throw. Every counter is read\n" +
+                "    behind a guard that falls back to zero, because a runtime or platform\n" +
+                "    that does not expose one of them (handle counts are not meaningful\n" +
+                "    everywhere) must degrade to a missing number, not take the shell down.\n\n" +
+                "    KEYS\n" +
+                "        Ctrl+C, Q   exit. As in coretop, Ctrl+C is read as a key here (via\n" +
+                "                    Console.TreatControlCAsInput) rather than raising a\n" +
+                "                    process-level interrupt, and is restored the moment\n" +
+                "                    vstop exits.\n" +
+                "        G           force a full blocking GC.Collect(). Deliberately\n" +
+                "                    included: the most common question this dashboard gets\n" +
+                "                    opened to answer is 'is that a leak or just uncollected\n" +
+                "                    garbage', and collecting on demand answers it in one\n" +
+                "                    keystroke. It is a diagnostic, not something to lean on.\n\n" +
+                "    Needs a REAL interactive terminal, same as 'nano' and 'coretop' and for\n" +
+                "    the same reason - refuses cleanly rather than drawing anywhere when\n" +
+                "    stdin/stdout is redirected or there is no terminal at all (a piped\n" +
+                "    script, a 'source'd file, a headless test).\n\n" +
+                "    In EmuSen.Mistress's own console window (a TextBox, not a real\n" +
+                "    terminal - the above wouldn't work there at all), 'vstop' is replaced\n" +
+                "    with a windowed equivalent, exactly as 'coretop' is: a real, non-\n" +
+                "    blocking Avalonia window showing the same figures as widgets, with the\n" +
+                "    four meters as real progress bars on the same green/yellow/red\n" +
+                "    thresholds, refreshing on its own timer while gameplay keeps running.\n" +
+                "    Ctrl+C, Q and G don't apply there - close the window to dismiss it, and\n" +
+                "    use its 'Collect now' button for what G does here. The same window is\n" +
+                "    on the menu bar at Settings > Runtime Dashboard..., which unlike\n" +
+                "    Hardware Dashboard beside it is never greyed out, because this one has\n" +
+                "    something to show with no ROM loaded.\n\n" +
+                "    -w  Open the same dashboard in a separate window instead of taking over\n" +
+                "        the terminal. Wired per frontend; where nothing is wired up it fails\n" +
+                "        cleanly with \"not supported by this frontend\" rather than falling\n" +
+                "        back to the terminal dashboard. Unlike coretop's -w, this one passes\n" +
+                "        no debug target, because there is nothing here that depends on a\n" +
+                "        loaded core. In EmuSen.Mistress vstop is already windowed, so -w is\n" +
+                "        accepted and simply has no additional effect.\n\n" +
+                "EXAMPLES\n" +
+                "    vstop\n" +
+                "    vstop -w",
 
             ["mv"] =
                 "NAME\n" +

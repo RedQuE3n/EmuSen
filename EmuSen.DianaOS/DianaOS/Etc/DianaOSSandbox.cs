@@ -42,6 +42,9 @@ namespace EmuSen.DianaOS.DianaOS.Etc
         // Coprocessor firmware dumps the user supplies (dsp1.rom, st010.rom, ...) - see Venus_NecDSP.md §2.
         public static string FirmwareDirectory => Path.Combine(UsrHomeDirectory, "Firmware");
 
+        // The user's own .cht tree - never shipped with EmuSen, see `man cheat`.
+        public static string CheatDatabaseDirectory => Path.Combine(UsrHomeDirectory, "Cheats");
+
         // WiseMan test-run scratch space only - dev/test artifacts, not
         // emulator output, kept out of Usr/Home so it isn't mistaken for it.
         public static string SourceLogsDirectory => Path.Combine(RootDirectory, "SourceLogs");

@@ -143,22 +143,35 @@ New capability, not a migration: `CheatRegistry` previously had no persistence a
 
 `CheatRegistry.ToCheatFile()` and `LoadFrom(CheatFile)` map between the registry and the file; `cheat save`, `cheat load` and `cheat files` are the shell surface (see `man cheat`).
 
-Addresses and byte values are stored as **hex text**, not JSON numbers:
+A cheat is one description, one enable flag, and a **list of writes** — real cheats are rarely one address, and the ones that aren't have to arm and disarm together (see `man cheat` for the write model). Addresses and values are stored as **hex text**, not JSON numbers:
 
 ```json
 {
   "cheats": [
     {
       "kind": "RamPoke",
-      "space": "WRAM",
-      "address": "7E0019",
-      "value": "09",
       "description": "99 lives",
-      "enabled": true
+      "enabled": true,
+      "writes": [
+        {
+          "space": "WRAM",
+          "address": "7E0019",
+          "value": "09",
+          "width": 1,
+          "type": "Set",
+          "bitPosition": null,
+          "bigEndian": false,
+          "repeatCount": 1,
+          "repeatAddAddress": "0",
+          "repeatAddValue": "0"
+        }
+      ]
     }
   ]
 }
 ```
+
+**Files written before writes were a list still load.** A pre-multi-write entry carries `space`/`address`/`value` flat on the cheat itself instead of a `writes` array; `CheatFileEntry.EffectiveWrites` synthesizes the single 1-byte `Set` write those describe, so nothing saved earlier is stranded. Saving always writes the new shape and leaves the old fields null, so re-saving quietly migrates a file. The mapping between this carrier and `CheatWrite` lives in `CheatRegistry`, not on the carrier, because `EmuSen.Galaxia` cannot reference `EmuSen.DianaOS` — the dependency runs the other way.
 
 `"address": 8257561` would be technically equivalent and useless to a person reading it with `cat`. Since the entire reason for putting config in `/etc` was to make it reachable from the shell, the on-disk shape follows the way SNES addresses are actually written. Reading tolerates `0x` and `$` prefixes and surrounding whitespace, because those are what people paste in.
 
@@ -169,6 +182,14 @@ Three behaviours worth stating:
 - **Nothing loads automatically.** There is no per-ROM auto-apply. A cheat set changes the run only when asked for, so a file saved months ago can't quietly alter a later session — which matters when the emulator is being used to investigate whether a game behaves correctly.
 
 `CheatFile.IsValidName` rejects a name rather than sanitizing it. The name arrives from a shell argument, so it must not be able to walk out of the cheats directory; and silently rewriting what the user typed would save to a file they didn't name.
+
+### 3.4a `CheatDatabaseDirectory` — using a cheat tree you already have
+
+`AppSettings.CheatDatabaseDirectory` points at a directory tree of `.cht` files, one per game in per-system folders — the exact shape RetroArch stores its cheats in. Point it at an existing RetroArch cheats folder and it is indexed in place: no copying, no conversion, no import step. Unset, it falls back to `DianaOSSandbox.CheatDatabaseDirectory` (`Usr/Home/Cheats`).
+
+This is deliberately a *directory setting* rather than a bundled asset. **EmuSen ships no cheat data and redistributes none.** The libretro cheat database is licensed CC BY-SA 4.0, but its own README states the codes were "collected from any available source on the web" — so the grant is only as good as libretro's rights in an aggregated corpus, and the EU sui generis database right applies independently of copyright either way. Indexing a folder the user already has, or downloading one to their machine at their explicit request (`cheat db update`, `Settings > Cheat Database...`), keeps that question off this project entirely. Attribution is shown at the point of download, since it is a licence condition rather than a footnote.
+
+`CheatDatabase` and `CheatDatabaseInstaller` both live in `EmuSen.DianaOS` and are core-agnostic; the installer extracts only `.cht` entries and refuses any archive entry that resolves outside the target directory.
 
 ### 3.5 What is deliberately not persisted
 

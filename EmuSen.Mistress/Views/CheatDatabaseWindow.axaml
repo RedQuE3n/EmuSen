@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmuSen.Mistress.Views.CheatDatabaseWindow"
+        Title="Cheat Database"
+        Width="620" Height="560"
+        MinWidth="480" MinHeight="420">
+
+    <DockPanel Margin="16">
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="EmuSen ships no cheat data. Point this at a cheat folder you already have - a RetroArch cheats folder works as-is - or download one."
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12" />
+
+        <TextBlock DockPanel.Dock="Top" Text="Cheat Folder" FontWeight="Bold" />
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,12">
+            <TextBox x:Name="DirectoryBox" Grid.Column="0" IsReadOnly="True" PlaceholderText="(default)" />
+            <Button x:Name="BrowseButton" Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Click="OnBrowseClick" />
+        </Grid>
+
+        <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0"
+                           x:Name="StatusText"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="DownloadButton" Content="Download from libretro" Click="OnDownloadClick" />
+                    <Button Content="Close" Click="OnCloseClick" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- CC BY-SA 4.0 requires attribution, and the codes were
+             aggregated from elsewhere - both belong in front of the user
+             before they download, not buried in a doc. -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="10"
+                Margin="0,12,0,0"
+                CornerRadius="4"
+                Background="{DynamicResource SystemChromeLowColor}">
+            <TextBlock x:Name="AttributionText"
+                       TextWrapping="Wrap"
+                       FontSize="11"
+                       Foreground="Gray" />
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top" Text="Installed" FontWeight="Bold" Margin="0,0,0,4" />
+        <ListBox x:Name="SystemsList" />
+
+    </DockPanel>
+
+</Window>

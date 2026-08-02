@@ -13,6 +13,10 @@ namespace EmuSen.Galaxia.Models
         public string? LogDirectory { get; set; }
         public string? RomDirectory { get; set; }
         public string? StateDirectory { get; set; }
+
+        // The user's own .cht tree - point this at an existing RetroArch
+        // cheats folder to use it as-is. See `man cheat`.
+        public string? CheatDatabaseDirectory { get; set; }
         public string SelectedCore { get; set; } = "SNES (Venus)";
 
         // Off by default - forcing this on unconditionally would break any

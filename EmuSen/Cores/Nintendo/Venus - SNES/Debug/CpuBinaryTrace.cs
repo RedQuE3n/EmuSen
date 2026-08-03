@@ -6,11 +6,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
     // Fixed-width S-CPU trace this core and MesenProbe both emit - see EmuSen_Debugging_Tools_Reference_v5.md §3.40.
     public static class CpuBinaryTrace
     {
-        public const int RecordBytes = 20;
+        public const int RecordBytes = 24;
         public const int HeaderBytes = 8;
 
         // "ESCT" + version, so a dump in an older layout is rejected not misread.
-        public static readonly byte[] Magic = { (byte)'E', (byte)'S', (byte)'C', (byte)'T', 1, 0, 0, 0 };
+        public static readonly byte[] Magic = { (byte)'E', (byte)'S', (byte)'C', (byte)'T', 2, 0, 0, 0 };
 
         // Record kinds; an interrupt entry carries the interrupted address.
         public const byte KindInstruction = 0;
@@ -62,6 +62,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             b[o + 12] = (byte)s; b[o + 13] = (byte)(s >> 8);
             b[o + 14] = (byte)d; b[o + 15] = (byte)(d >> 8);
             b[o + 16] = db; b[o + 17] = p; b[o + 18] = (byte)(e ? 1 : 0); b[o + 19] = 0;
+            b[o + 20] = 0; b[o + 21] = 0; b[o + 22] = 0; b[o + 23] = 0;
             _length = o + RecordBytes;
         }
 
@@ -71,6 +72,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             if (_buffer.Length >= MaxBytes) { Overflowed = true; Enabled = false; return false; }
             Array.Resize(ref _buffer, Math.Min(MaxBytes, _buffer.Length * 2));
             return true;
+        }
+
+        // Backfilled once Step() knows the cost; a cost the reference disagrees with is a timing bug.
+        public static void SetLastCost(int masterClocks)
+        {
+            if (_length < RecordBytes) return;
+            int o = _length - RecordBytes;
+            _buffer[o + 20] = (byte)masterClocks; _buffer[o + 21] = (byte)(masterClocks >> 8);
+            _buffer[o + 22] = (byte)(masterClocks >> 16); _buffer[o + 23] = (byte)(masterClocks >> 24);
         }
 
         public static void WriteTo(string path)

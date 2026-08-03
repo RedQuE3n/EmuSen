@@ -57,6 +57,10 @@ HVBJOY's H-blank bit (`$4212` bit 6) is approximated from `LineCycles >= 1099` a
 
 ### 1.6 MEMSEL (`$420D`) — FastROM enable
 
+**FastROM only speeds up banks `$80-$FF`.** Banks `$00-$3F:$8000-$FFFF` are always 8 master clocks no matter what `$420D` says — the bit selects the speed of the *upper* half of the address space, not of every ROM window. `GetAccessSpeedCycles` applied it to both halves until 2026-08-03, which would have run bank-`$00` code 25% fast in any FastROM game. Verified cell by cell against Mesen's `_masterClockTable` (`SnesMemoryManager.cpp`), which builds banks `$00-$3F` page `>= $80` as a flat 8 and only makes `$80-$BF`/`$C0-$FF` register-dependent.
+
+Worth recording that this was a **latent** bug on the game that exposed it: Yoshi's Island never enables FastROM during the window under investigation, so fixing it changed that measurement by exactly zero instructions. It is still wrong, and would matter the moment a FastROM game runs code from a low bank.
+
 Bit 0 selects FastROM (6 master clocks/access) vs. SlowROM (8) for the `$8000-FFFF` window of banks `$00-$3F`/`$80-$BF` and all of `$C0-FF` — everywhere else on the bus is a fixed speed regardless of this bit (banks `$40-$7D`/`$7E-$7F` always slow; the `$2000-3FFF`/`$4200-5FFF` register windows always fast; `$4000-41FF` always a slow 12). Previously entirely unhandled — a write here fell through to the generic open-bus fallback, so this project always behaved as SlowROM no matter what a game actually wrote. Read via `MemoryBus.GetAccessSpeedCycles(address)`, which `Cpu.Step()` now uses for real per-instruction master-clock accounting — see `Venus_CPU.md` §8 for the full story of why this exists and what changed alongside it.
 
 ---

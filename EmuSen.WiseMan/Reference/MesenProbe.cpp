@@ -174,6 +174,9 @@ int main(int argc, char** argv)
 	// The stock config has no keyboard binding at all, so port 1 would read as
 	// idle no matter what the schedule says.
 	SnesConfig scfg = emu->GetSettings()->GetSnesConfig();
+	// Mesen defaults to a random power-on RAM fill, which makes it non-reproducible
+	// run to run - measured, not assumed. Zero matches our own fill - see §3.40.
+	scfg.RamPowerOnState = RamState::AllZeros;
 	scfg.Port1.Type = ControllerType::SnesController;
 	KeyMapping& kmap = scfg.Port1.Keys.Mapping1;
 	kmap.A = KeyA; kmap.B = KeyB; kmap.X = KeyX; kmap.Y = KeyY;
@@ -263,9 +266,10 @@ int main(int argc, char** argv)
 			char path[1024];
 			snprintf(path, sizeof(path), "%s/mesen_cputrace_f%05u.bin", dumpDir.c_str(), frame);
 			std::ofstream fc(path, std::ios::binary);
-			fc.write("ESCT\1\0\0\0", 8);
+			// Version 2 = the 24-byte record carrying per-instruction cost.
+			fc.write("ESCT\2\0\0\0", 8);
 			fc.write((char*)g_cpuTrace.data(), g_cpuTrace.size());
-			printf("  [cputrace %zu steps -> %s]\n", g_cpuTrace.size() / 20, path);
+			printf("  [cputrace %zu steps -> %s]\n", g_cpuTrace.size() / 24, path);
 			g_cpuTrace.clear();
 		}
 

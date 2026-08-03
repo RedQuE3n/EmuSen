@@ -1330,6 +1330,20 @@ Every Mesen pass above (§3.33, §3.36, §3.37, §3.38) read Mesen's **source** 
 
 ---
 
+### 3.15d `tapuntil` — navigating a scene by state, not by frame count
+
+A `--commands` script that reaches a scene by counting frames (`frames 1250`, `tap Start 8`, `frames 60`, ...) breaks the moment core timing changes, and it broke immediately when §8.7's DRAM refresh landed: the same script that used to reach Yoshi's Island level 1-1 now stops on the intro stork, because every scripted tap lands somewhere else. §3.39 already warns not to anchor on frame indices; `tapuntil` is the verb that makes following that advice practical.
+
+```
+tapuntil <button> <space> <addr> <hexvalue> [cap] [every]
+```
+
+Taps the button (4 frames held, then released — a held button reads as one press to most menus) every `every` frames until the bytes at `<space>:<addr>` equal `<hexvalue>`, or `cap` frames pass. It reports how many taps and frames it took, and says plainly when it did **not** reach the value rather than continuing as if it had.
+
+`tapuntil A GSURAM 94 0001 3000 40` walks the file-select and every cutscene message box and stops on the camera value's documented pre-pan state, with no frame arithmetic anywhere in the script.
+
+---
+
 ### 3.40 Differential *control flow* — the S-CPU trace differ (`--cputrace`, `--tracediff`)
 
 **Why this exists.** §3.39 compares memory contents at a frame boundary. That is only valid when both machines are at the same point in the program, and on Yoshi's Island they are not — EmuSen ran roughly a frame off the game's own `$0030` counter, and Mesen randomises power-on RAM. Every measurement in the §10.7 investigation paid for that: "317 diverged bytes" that were almost entirely random fill, a 4-run mask to erase it, a frame-offset hunt that *minimised* but never eliminated the difference, and `gsudiff.py` desyncing on a boot block only Mesen runs. Those were not four problems. They were one problem four times — **diffing snapshots of two clocks that are out of phase, where the noise scales with the skew.**
@@ -1346,8 +1360,9 @@ Control flow has no such coupling. If EmuSen simply runs a frame later but execu
 | 5 | 1 | kind — 0 instruction, 1 NMI, 2 IRQ |
 | 6..15 | 2 ea | `A X Y S D` |
 | 16..19 | 1 ea | `DB P E` + pad |
+| 20 | 4 | master clocks this instruction cost (backfilled after it runs) |
 
-Files start with the 8-byte magic `ESCT` + version, so a blob written by an older layout is rejected rather than silently misread.
+Files start with the 8-byte magic `ESCT` + version, so a blob written by an older layout is rejected rather than silently misread. Version 2 added the cost field and widened the record from 20 bytes to 24.
 
 Registers are captured **before** the instruction executes, on both sides — Mesen in `SnesCpu::Exec()` before `RunOp()`, EmuSen in `Cpu.Step()` after the opcode fetch but before `Dispatch`. Getting that wrong by one instruction makes every register comparison useless.
 
@@ -1387,6 +1402,10 @@ Volume is a non-issue: 80 frames of Yoshi's Island is ~1.0-1.1M steps, ~21 MB a 
 Both emulators upload **exactly 45,186 bytes** — the payload is right. But EmuSen spins **6.24 times per byte against Mesen's 5.45**, 14.5% more, and those extra spins account for ~71k of the 91,480-instruction excess EmuSen accumulates over the same 80 frames. Since 80 frames is the same emulated duration on both sides and both APUs complete the same upload within it, the APU is not slow — **the S-CPU is fast.** That inverts the natural first guess, and it is consistent with the `CMP Y, dp` fix (§`Venus_APU.md` 1.7) having moved the first main-loop frame from 79 to 77 against hardware's 78: we overshot.
 
 The next step is the master-clock cost of that specific two-instruction spin against Mesen's, not another memory diff. The clock ratio itself is exact (`ApuClockHz`/`_masterClockHz`, not `/21`) and `GetAccessSpeedCycles` matches the fullsnes table, so neither is the suspect.
+
+**The cost field is what actually found the timing bugs.** Recording *what each instruction cost* rather than an absolute clock makes the two sides directly comparable even after they drift, and lets the differ aggregate: it reports one row per `(opcode, leftCost, rightCost)` with a count and the total drift, sorted by how much damage each combination does. That table is what turned "we run 9% fast somewhere in 80 frames" into four named bugs in one afternoon — see `Venus_CPU.md` §8.7 and §8.8. Read it as a table, not as individual findings; a systemic bug shows up as one row with a huge count, and a `left = right + 40` row is DRAM-refresh *attribution* rather than a cost error.
+
+**Mesen is not deterministic out of the box, and this was measured, not assumed.** Its default power-on RAM fill is `RamState::Random`, and two identical no-trace runs of Yoshi's Island differ in VRAM, GSU RAM, WRAM *and* APU RAM at the same frame — which means every single-run comparison ever made against it carried noise, and the four-run masking in §3.39 was treating the symptom. The probe now sets `scfg.RamPowerOnState = RamState::AllZeros` before `LoadRom`, matching our own fill. After that every dump and the whole instruction trace are byte-identical across runs. **If a reference disagrees with itself, nothing measured against it means anything** — check that first, before believing any diff. Note `BaseCartridge::InitRamPowerOnState` overrides the setting for four named carts; none of them are relevant here, but check before trusting it on a new game.
 
 **Cautions.**
 - Both sides must start **from power-on**. The probe arms before `LoadRom` (which is what starts execution) and `FrameRunner` arms on the first `RunFrames`; `Reset()` executes no instruction on either, so the first traced step is the reset vector on both.

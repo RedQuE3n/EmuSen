@@ -189,6 +189,44 @@ Re-run against the SingleStepTests/65816 ground-truth suite (§7) after this cha
 
 ---
 
+### 8.7 DRAM refresh — the CPU does not get the whole scanline
+
+**Found 2026-08-03, by the trace differ (`EmuSen_Debugging_Tools_Reference_v5.md` §3.40), not by reading the code.** Real hardware stops the CPU once per scanline to refresh DRAM: 40 master clocks, at h-position ~538. We were handing the CPU all 1364 clocks per line instead of 1324, so **the whole machine ran ~2.9% fast** — every game, always.
+
+How it surfaced: the cost table showed EmuSen charging a 65536-byte DMA exactly `65536 x 8 = 524,288` clocks while Mesen charged 540,202. The 15,914-clock gap over 396 scanlines is 40 clocks a line, and the ratio held to four digits across three separate DMAs of different sizes (0.9706, 0.9706, 0.9705). That is not a rounding difference; it is a missing mechanism.
+
+`VenusCore.RunFrame` now charges the stall to whichever instruction spans `DramRefreshPosition`, which is how a stall actually behaves — the instruction in progress simply takes longer. Mesen positions it at `538 - (masterClock & 7)`; we use the flat 538 and accept the sub-8-clock jitter.
+
+**Known residual.** A DMA that runs for hundreds of scanlines still only pays one refresh, because the stall is injected per `Cpu.Step()` and a DMA drains inside one step. That is worth ~15,900 clocks on a 64KB transfer and is still visible in the differ's cost table as the `$0082CC`/`$0082CF` rows. Not yet fixed.
+
+### 8.8 Cycle costs the 8-bit opcode table never carried
+
+`OpcodeCycles` counts an **8-bit** operand, and nothing was adding what the real 65816 charges on top. Three separate omissions, all found in one pass by the differ's per-opcode cost table and each now pinned by `Snes65816CycleCostTests`:
+
+| what was missing | rule | measured on Yoshi's Island's boot |
+| --- | --- | --- |
+| 16-bit operand | +1 bus cycle when the operand is 16 bits (M=0 for the accumulator, X=0 for index registers); **+2** for read-modify-write, which touches the operand twice | `LDA #imm` charged 16 where hardware charges 24; `STA abs` 30 against 36 |
+| taken branch | a taken conditional branch costs one extra internal cycle; the base count is the not-taken cost | 9,545 taken branches in 80 frames, each one cycle short — the single largest row in the table |
+| internal cycles | a cycle that touches no bus is **always 6 master clocks**, whatever region the operand lives in | `XBA` 24 against 20, `INY`/`DEX`/`INC A` 16 against 14, `REP`/`SEP` 24 against 22 |
+
+The last one had been half-known: `Cpu.Step`'s own comment described overcharging "a handful of pure-register FastROM opcodes" as "a known, narrow residual". It was neither narrow nor confined to FastROM — it was every internal cycle in the machine, and in SlowROM it overcharged rather than undercharged.
+
+**A trap in the old code worth recording.** `bytesFetched` is derived from how far PC moved, then clamped to the opcode's cycle count. For a 16-bit immediate PC really does move 3, but the clamp pulled it back to the 8-bit table's 2 — so the clamp was *hiding* the missing cycle rather than the count being wrong somewhere obvious. And for a taken branch, PC has already jumped, so the subtraction is meaningless and the clamp was the only thing keeping it plausible; branches now carry their real length in `OpcodeFixedBytes` instead.
+
+**Effect, measured.** Instructions executed over the same 80 frames of Yoshi's Island, against Mesen with a deterministic power-on fill:
+
+| | S-CPU instructions in 80 frames | vs reference |
+| --- | --- | --- |
+| Mesen (reference) | 1,018,938 | — |
+| before | 1,110,397 | +8.97% |
+| after DRAM refresh (§8.7) | 1,077,326 | +5.73% |
+| after the 16-bit operand cycle | 1,061,461 | +4.17% |
+| after taken-branch + internal cycles | **1,023,354** | **+0.43%** |
+
+All 1736 tests still pass. Note this did **not** fix the Yoshi's Island camera bug (`Venus_SuperFX.md` §10.7) — that was the hypothesis this work came from, and it is now disproved.
+
+---
+
 ## 9. Opcode dispatch — direct-call `switch`, not a delegate table
 
 `Cpu.OpcodeTable.cs` used to build a 256-entry `Instruction[]`, each entry a struct holding a `Func<uint> AddrMode`, an `Action<uint> Operate`, a `Name` and a `Cycles`. `Step()` loaded the struct and made two indirect delegate calls per instruction. It now calls `Dispatch(opcode)`, a flat `switch` over `0x00`–`0xFF` whose cases call the addressing-mode and operate methods directly; `Name` and `Cycles` moved to two `static readonly` arrays (`OpcodeNames`, `OpcodeCycles`), the first used only by the verbose trace.

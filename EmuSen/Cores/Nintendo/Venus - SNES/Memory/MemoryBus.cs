@@ -169,7 +169,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 if (offset < 0x4200) return 12;
                 if (offset < 0x6000) return 6;
                 if (offset < 0x8000) return 8;
-                return FastRomEnabled ? 6 : 8;
+                // $420D speeds up $80-$FF only; $00-$3F:$8000-$FFFF is always slow - see Venus_Memory.md §1.6.
+                return bank >= 0x80 && FastRomEnabled ? 6 : 8;
             }
 
             // Banks 40-7D and 7E-7F: always slow. Banks C0-FF: same

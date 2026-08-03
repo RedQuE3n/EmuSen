@@ -116,6 +116,54 @@ namespace EmuSen.Pharaoh
                     ContactSheet.WriteContactSheet(path, thumbs, thumbW, thumbH, cols);
                     emit($"[CONTACTSHEET] {count} frame(s), every {every}, {thumbW}x{thumbH} each -> {path}");
                 }
+                else if (verb == "tapuntil" && parts.Length >= 5)
+                {
+                    // Scene navigation anchored on state, not frame counts - see §3.15d.
+                    emit($"> {cmdLine}");
+                    var button = Enum.Parse<EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton>(parts[1], ignoreCase: true);
+                    string spaceName = parts[2];
+                    var space = debugTarget.GetMemorySpaces()
+                        .FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+                    if (space == null)
+                    {
+                        emit($"[WARN] No memory space named '{spaceName}' - ignoring.");
+                        continue;
+                    }
+
+                    int addr = Convert.ToInt32(parts[3], 16);
+                    byte[] target = ParseHexBytes(parts[4]);
+                    int cap = parts.Length >= 6 ? int.Parse(parts[5]) : 3600;
+                    int every = parts.Length >= 7 ? int.Parse(parts[6]) : 20;
+
+                    byte[] Sample()
+                    {
+                        var b = new byte[target.Length];
+                        for (int i = 0; i < b.Length; i++) b[i] = space.Read(addr + i);
+                        return b;
+                    }
+
+                    byte[] now = Sample();
+                    int stepped = 0, taps = 0;
+                    while (!now.SequenceEqual(target) && stepped < cap && runner.CurrentFrame < runner.FrameCap)
+                    {
+                        // Released between presses; a held button reads as one press to most menus.
+                        runner.Tap(button, 1, 4);
+                        taps++;
+                        stepped += 4;
+                        now = Sample();
+                        for (int i = 0; i < every - 4 && !now.SequenceEqual(target) && stepped < cap; i++)
+                        {
+                            runner.RunFrames(1);
+                            stepped++;
+                            now = Sample();
+                        }
+                    }
+
+                    string to = string.Join(' ', now.Select(v => v.ToString("X2")));
+                    emit(now.SequenceEqual(target)
+                        ? $"[TAPUNTIL] {space.Name} 0x{addr:X} reached {to} after {taps} {button} tap(s), {stepped} frame(s) (frame {runner.CurrentFrame})."
+                        : $"[TAPUNTIL] {space.Name} 0x{addr:X} NOT reached - still {to} after {taps} {button} tap(s), {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
+                }
                 else if ((verb == "waitchange" || verb == "waitvalue") && parts.Length >= 4)
                 {
                     // waitstable's memory-side counterpart - see §3.15.

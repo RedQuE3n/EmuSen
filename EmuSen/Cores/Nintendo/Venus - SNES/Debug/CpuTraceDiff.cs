@@ -9,7 +9,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
     public static class CpuTraceDiff
     {
         public readonly record struct Step(uint Addr, byte Opcode, byte Kind,
-            ushort A, ushort X, ushort Y, ushort S, ushort D, byte Db, byte P, bool E)
+            ushort A, ushort X, ushort Y, ushort S, ushort D, byte Db, byte P, bool E, uint Cost)
         {
             public bool SameRegisters(Step o) =>
                 A == o.A && X == o.X && Y == o.Y && S == o.S && D == o.D && Db == o.Db && P == o.P && E == o.E;
@@ -23,7 +23,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             public int Steps => Length * Repeats;
         }
 
-        public enum FindingKind { Registers, LoopCount, Structure, TruncatedSide }
+        public enum FindingKind { Cost, Registers, LoopCount, Structure, TruncatedSide }
 
         public readonly record struct Finding(FindingKind Kind, int LeftStep, int RightStep, string Detail)
         {
@@ -31,8 +31,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             public int Earliest => Math.Min(LeftStep, RightStep);
         }
 
+        // One (opcode, leftCost, rightCost) disagreement and how often it happened;
+        public readonly record struct CostRow(byte Opcode, uint LeftCost, uint RightCost, int Count, uint FirstAddr);
+
         public sealed record Result(
-            int LeftSteps, int RightSteps, int LeftNodes, int RightNodes, List<Finding> Findings)
+            int LeftSteps, int RightSteps, int LeftNodes, int RightNodes,
+            List<Finding> Findings, List<CostRow> CostRows, long LeftClocks, long RightClocks)
         {
             public Finding? First => Findings.Count == 0 ? null : Findings[0];
         }
@@ -71,12 +75,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                     (ushort)(blob[o + 10] | (blob[o + 11] << 8)),
                     (ushort)(blob[o + 12] | (blob[o + 13] << 8)),
                     (ushort)(blob[o + 14] | (blob[o + 15] << 8)),
-                    blob[o + 16], blob[o + 17], blob[o + 18] != 0);
+                    blob[o + 16], blob[o + 17], blob[o + 18] != 0,
+                    (uint)(blob[o + 20] | (blob[o + 21] << 8) | (blob[o + 22] << 16) | (blob[o + 23] << 24)));
             }
             return steps;
         }
 
         public static Step[] Load(string path) => Parse(File.ReadAllBytes(path));
+
+        private const byte KindOfInstruction = CpuBinaryTrace.KindInstruction;
 
         // Alignment identity; registers are compared separately as an earlier, stronger finding.
         private static ulong Key(Step s) => ((ulong)s.Kind << 32) | s.Addr;
@@ -194,27 +201,39 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             var rn = Collapse(right);
             var findings = new List<Finding>();
 
+            var costs = new Dictionary<(byte, uint, uint), (int Count, uint FirstAddr)>();
+            long leftClocks = 0, rightClocks = 0;
+            bool costReported = false;
+
+            // Alignment keeps running past the finding cap, so the cost table below
+            // covers the whole shared prefix rather than just its first few entries.
             int li = 0, ri = 0;
-            while (li < ln.Count && ri < rn.Count && findings.Count < maxFindings)
+            while (li < ln.Count && ri < rn.Count)
             {
                 if (!SameShape(left, ln, li, right, rn, ri))
                 {
                     var resync = FindResync(left, ln, li, right, rn, ri);
                     if (resync == null)
                     {
-                        findings.Add(new Finding(FindingKind.Structure, ln[li].Index, rn[ri].Index,
-                            $"Streams diverge and do not resync within {ResyncWindow} nodes.\n"
-                          + $"    left  ran {Where(left, ln, li, 6)}\n"
-                          + $"    right ran {Where(right, rn, ri, 6)}"));
+                        if (findings.Count < maxFindings)
+                        {
+                            findings.Add(new Finding(FindingKind.Structure, ln[li].Index, rn[ri].Index,
+                                $"Streams diverge and do not resync within {ResyncWindow} nodes.\n"
+                              + $"    left  ran {Where(left, ln, li, 6)}\n"
+                              + $"    right ran {Where(right, rn, ri, 6)}"));
+                        }
                         break;
                     }
 
                     var (dl, dr) = resync.Value;
-                    findings.Add(new Finding(FindingKind.Structure, ln[li].Index, rn[ri].Index,
-                        $"left executed {ln.Skip(li).Take(dl).Sum(x => x.Steps)} extra steps, "
-                      + $"right {rn.Skip(ri).Take(dr).Sum(x => x.Steps)}, then the paths rejoin.\n"
-                      + $"    left  ran {Where(left, ln, li, Math.Max(dl, 1))}\n"
-                      + $"    right ran {Where(right, rn, ri, Math.Max(dr, 1))}"));
+                    if (findings.Count < maxFindings)
+                    {
+                        findings.Add(new Finding(FindingKind.Structure, ln[li].Index, rn[ri].Index,
+                            $"left executed {ln.Skip(li).Take(dl).Sum(x => x.Steps)} extra steps, "
+                          + $"right {rn.Skip(ri).Take(dr).Sum(x => x.Steps)}, then the paths rejoin.\n"
+                          + $"    left  ran {Where(left, ln, li, Math.Max(dl, 1))}\n"
+                          + $"    right ran {Where(right, rn, ri, Math.Max(dr, 1))}"));
+                    }
                     li += dl;
                     ri += dr;
                     continue;
@@ -222,27 +241,56 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
                 if (ln[li].Repeats != rn[ri].Repeats)
                 {
-                    findings.Add(new Finding(FindingKind.LoopCount, ln[li].Index, rn[ri].Index,
-                        $"loop {Where(left, ln, li, 1)} ran {ln[li].Repeats}x on the left, {rn[ri].Repeats}x on the right."));
+                    if (findings.Count < maxFindings)
+                    {
+                        findings.Add(new Finding(FindingKind.LoopCount, ln[li].Index, rn[ri].Index,
+                            $"loop {Where(left, ln, li, 1)} ran {ln[li].Repeats}x on the left, {rn[ri].Repeats}x on the right."));
+                    }
                 }
                 else
                 {
+                    bool regsReported = false;
                     for (int k = 0; k < ln[li].Length; k++)
                     {
                         Step a = left[ln[li].Index + k], b = right[rn[ri].Index + k];
-                        if (a.SameRegisters(b)) continue;
+
+                        // Charged once per repeat, so a loop's cost carries its real weight.
+                        leftClocks += (long)a.Cost * ln[li].Repeats;
+                        rightClocks += (long)b.Cost * rn[ri].Repeats;
+
+                        if (a.Cost != b.Cost && a.Kind == KindOfInstruction)
+                        {
+                            var key = (a.Opcode, a.Cost, b.Cost);
+                            var prev = costs.TryGetValue(key, out var v) ? v : (0, a.Addr);
+                            costs[key] = (prev.Item1 + ln[li].Repeats, prev.Item2);
+
+                            if (!costReported && findings.Count < maxFindings)
+                            {
+                                costReported = true;
+                                findings.Add(new Finding(FindingKind.Cost, ln[li].Index + k, rn[ri].Index + k,
+                                    $"at ${a.Addr:X6} opcode {a.Opcode:X2} costs {a.Cost} master clocks on the left, {b.Cost} on the right."));
+                            }
+                        }
+
+                        if (regsReported || a.SameRegisters(b)) continue;
+                        regsReported = true;
+                        if (findings.Count >= maxFindings) continue;
 
                         findings.Add(new Finding(FindingKind.Registers, ln[li].Index + k, rn[ri].Index + k,
                             $"at ${a.Addr:X6} (op {a.Opcode:X2}) the same instruction sees different inputs.\n"
                           + $"    left  {a.Registers}\n"
                           + $"    right {b.Registers}"));
-                        break;
                     }
                 }
 
                 li++;
                 ri++;
             }
+
+            var costRows = costs
+                .Select(kv => new CostRow(kv.Key.Item1, kv.Key.Item2, kv.Key.Item3, kv.Value.Count, kv.Value.FirstAddr))
+                .OrderByDescending(x => (long)x.Count * Math.Abs((long)x.LeftCost - x.RightCost))
+                .ToList();
 
             if (findings.Count == 0 && left.Length != right.Length)
             {
@@ -255,7 +303,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             }
 
             findings.Sort((x, y) => x.Earliest.CompareTo(y.Earliest));
-            return new Result(left.Length, right.Length, ln.Count, rn.Count, findings);
+            return new Result(left.Length, right.Length, ln.Count, rn.Count, findings, costRows, leftClocks, rightClocks);
         }
 
         public static string Report(Result r, string leftLabel, string rightLabel)
@@ -265,15 +313,30 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             sb.AppendLine($"right = {rightLabel}: {r.RightSteps} steps, {r.RightNodes} nodes after loop collapsing");
             sb.AppendLine();
 
-            if (r.Findings.Count == 0)
+            if (r.Findings.Count == 0 && r.CostRows.Count == 0)
             {
-                sb.AppendLine("No divergence: both streams executed the same instructions with the same register inputs.");
+                sb.AppendLine("No divergence: both streams executed the same instructions, with the same register inputs and the same cycle cost.");
                 return sb.ToString();
             }
 
             foreach (var f in r.Findings)
             {
                 sb.AppendLine($"[{f.Kind}] left step {f.LeftStep}, right step {f.RightStep}: {f.Detail}");
+            }
+
+            if (r.CostRows.Count > 0)
+            {
+                long delta = r.RightClocks - r.LeftClocks;
+                sb.AppendLine();
+                sb.AppendLine($"=== cycle cost, over every aligned instruction ({r.CostRows.Count} opcode/cost combinations disagree) ===");
+                sb.AppendLine($"    left {r.LeftClocks} master clocks, right {r.RightClocks} ({(delta >= 0 ? "+" : "")}{delta}, "
+                            + $"{(r.LeftClocks == 0 ? 0 : 100.0 * delta / r.LeftClocks):F2}%)");
+                sb.AppendLine("    opcode   left  right   count   total drift   first seen");
+                foreach (var c in r.CostRows.Take(20))
+                {
+                    long drift = (long)c.Count * ((long)c.RightCost - c.LeftCost);
+                    sb.AppendLine($"      {c.Opcode:X2}    {c.LeftCost,5} {c.RightCost,6} {c.Count,7} {drift,13}   ${c.FirstAddr:X6}");
+                }
             }
             return sb.ToString();
         }

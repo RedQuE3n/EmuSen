@@ -72,6 +72,10 @@
          Galaxia/*Tests.cs. ConfigStore.OverrideDirectory is what keeps
          those tests off the real config tree. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+    <!-- The scheduler is tested directly rather than only through a core, so
+         its timeline semantics are pinned before any core depends on them -
+         see EmuSen_Crystal_Scheduler.md. -->
+    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
   </ItemGroup>
 
 </Project>

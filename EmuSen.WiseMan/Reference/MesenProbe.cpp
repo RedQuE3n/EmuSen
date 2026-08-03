@@ -5,6 +5,7 @@
 #include <thread>
 #include <chrono>
 #include <fstream>
+#include <atomic>
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 #include "Shared/KeyManager.h"
@@ -53,6 +54,10 @@ public:
 	std::vector<std::vector<uint16_t>> Held{MaxFrames};
 	Emulator* Emu = nullptr;
 
+	// --pressuntil decides its presses while the emulator runs, so this one is
+	// written from the control thread and read from the emulation thread.
+	std::atomic<uint16_t> LiveKey{0};
+
 	void Press(uint32_t startFrame, uint32_t duration, uint16_t key)
 	{
 		for(uint32_t f = startFrame; f < startFrame + duration && f < MaxFrames; f++) {
@@ -66,6 +71,7 @@ public:
 
 	bool IsKeyPressed(uint16_t keyCode)
 	{
+		if(LiveKey.load(std::memory_order_relaxed) == keyCode) { return true; }
 		uint32_t f = Emu ? Emu->GetFrameCount() : 0;
 		if(f >= MaxFrames) return false;
 		for(uint16_t k : Held[f]) { if(k == keyCode) return true; }
@@ -125,7 +131,10 @@ int main(int argc, char** argv)
 		printf("  from frame F for DUR frames (default 4) - repeatable, needed to reach any\n");
 		printf("  scene behind a menu.\n");
 		printf("  --cputrace F records every S-CPU instruction from boot to frame F as\n");
-		printf("  mesen_cputrace_f<frame>.bin, in the shared 20-byte record `tracediff` reads.\n");
+		printf("  mesen_cputrace_f<frame>.bin, in the shared 24-byte record `tracediff` reads.\n");
+		printf("  --pressuntil BTN:ADDR:VALUE[:CAP[:EVERY]] taps BTN until GSU RAM word ADDR\n");
+		printf("  equals VALUE (all hex), the counterpart of the harness's own `tapuntil` -\n");
+		printf("  the only way to reach the same scene in both emulators without frame maths.\n");
 		return 1;
 	}
 
@@ -147,9 +156,30 @@ int main(int argc, char** argv)
 	unique_ptr<Emulator> emu(new Emulator());
 	unique_ptr<ScriptedKeyManager> km(new ScriptedKeyManager());
 	uint32_t cpuTraceFrame = 0xFFFFFFFF;
+	uint16_t untilKey = 0;
+	uint32_t untilAddr = 0, untilValue = 0, untilCap = 6000, untilEvery = 40;
 	for(int i = 5; i < argc; i++) {
 		if(string(argv[i]) == "--cputrace" && i + 1 < argc) {
 			cpuTraceFrame = (uint32_t)atoi(argv[++i]);
+			continue;
+		}
+		if(string(argv[i]) == "--pressuntil" && i + 1 < argc) {
+			string spec = argv[++i];
+			vector<string> f;
+			size_t at = 0;
+			while(at <= spec.size()) {
+				size_t c = spec.find(':', at);
+				if(c == string::npos) { f.push_back(spec.substr(at)); break; }
+				f.push_back(spec.substr(at, c - at));
+				at = c + 1;
+			}
+			if(f.size() < 3) { printf("[ERROR] --pressuntil wants BTN:ADDR:VALUE[:CAP[:EVERY]]\n"); return 1; }
+			untilKey = KeyFromName(f[0]);
+			if(untilKey == 0) { printf("[ERROR] unknown button '%s'\n", f[0].c_str()); return 1; }
+			untilAddr = (uint32_t)strtoul(f[1].c_str(), nullptr, 16);
+			untilValue = (uint32_t)strtoul(f[2].c_str(), nullptr, 16);
+			if(f.size() >= 4) { untilCap = (uint32_t)atoi(f[3].c_str()); }
+			if(f.size() >= 5) { untilEvery = (uint32_t)atoi(f[4].c_str()); }
 			continue;
 		}
 		if(string(argv[i]) != "--press" || i + 1 >= argc) continue;
@@ -208,6 +238,44 @@ int main(int argc, char** argv)
 
 	SnesConsole* console = dynamic_cast<SnesConsole*>(emu->GetConsole().get());
 	Gsu* gsu = console ? console->GetCartridge()->GetGsu() : nullptr;
+
+	// Anchors the run on game state instead of a frame count, so the same scene
+	// is reached here and in the harness even though the two emulators do not
+	// agree on how many frames it takes - see §3.15d and §3.40.
+	if(untilKey != 0) {
+		uint32_t lastPress = 0;
+		bool reached = false;
+		uint32_t taps = 0, frame = 0;
+		while(frame < untilCap) {
+			emu->Pause();
+			while(!emu->IsPaused()) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+			frame = emu->GetFrameCount();
+			uint32_t got = ((uint8_t*)gsuRam.Memory)[(untilAddr + 1) & (gsuRam.Size - 1)] << 8
+			             | ((uint8_t*)gsuRam.Memory)[untilAddr & (gsuRam.Size - 1)];
+			if(got == untilValue) { reached = true; emu->Resume(); break; }
+
+			// Held for four frames then released; a held button reads as one
+			// press to most menus, exactly as `tapuntil` does on our side.
+			uint32_t phase = frame - lastPress;
+			if(phase >= untilEvery) { km->LiveKey.store(untilKey); lastPress = frame; taps++; }
+			else if(phase >= 4) { km->LiveKey.store(0); }
+
+			emu->Resume();
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		km->LiveKey.store(0);
+		printf(reached
+			? "[PRESSUNTIL] GSURAM $%04X reached $%04X after %u tap(s) at frame %u\n"
+			: "[PRESSUNTIL] GSURAM $%04X NOT reached ($%04X) after %u tap(s), frame %u\n",
+			untilAddr, untilValue, taps, frame);
+		fflush(stdout);
+		if(!reached) { emu->Stop(false); emu->Release(); return 2; }
+		// Report from where the anchor landed; traceUntilFrame is re-read as
+		// "how many frames of GSU trace after it" rather than an absolute frame.
+		startFrame = emu->GetFrameCount();
+		endFrame = startFrame + (traceFrame == 0xFFFFFFFF ? 0 : traceFrame);
+		if(traceFrame != 0xFFFFFFFF) { traceFrame = endFrame; }
+	}
 
 	if(traceFrame != 0xFFFFFFFF) { g_gsuTraceOn = true; }
 

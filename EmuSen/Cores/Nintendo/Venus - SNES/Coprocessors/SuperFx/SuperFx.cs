@@ -43,6 +43,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // One-byte instruction prefetch - see Venus_SuperFX.md §4.1.
         private byte _pipeline;
 
+        // Where _pipeline was fetched from; R15 already names the jump target while a delay slot executes - see §4.1a.
+        [SkipInState] private ushort _pipelineAddress;
+
         // A jump has retargeted R15 but its delay-slot byte is still in the
         // pipeline and has to be consumed first.
         private bool _jumpPending;
@@ -150,6 +153,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _colr = _por = 0;
             _sreg = _dreg = 0;
             _pipeline = 0x01; // NOP, so a stray step before a real fetch does nothing
+            _pipelineAddress = R[15];
             _romBuffer = 0;
             _clockBudget = 0;
             InvalidateCache();
@@ -185,7 +189,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
                     return;
                 }
                 _justResumedFromBreakpoint = false;
-                _debugInstructionAddress = pc24;
+                _debugInstructionAddress = (_pbr << 16) | _pipelineAddress;
 
                 int cycles = StepInstruction();
                 _clockBudget -= cycles * perCycle;

@@ -202,7 +202,19 @@ Tile slivers are consumed in on-screen left-to-right order, matching the documen
 
 ## 7. Windowing
 
-Two windows (W1: `$2126`/`$2127`, W2: `$2128`/`$2129`) can each be enabled/inverted per layer via the per-layer select registers (`W12SEL`/`W34SEL`/`WOBJSEL`), with configurable combine logic (OR/AND/XOR/XNOR, from `WBGLOG`/`WOBJLOG`) when both windows are active for a layer. The color-math window is a *separate* mask, using `WOBJSEL` bits 4-7 and `WOBJLOG` bits 2-3 rather than a specific layer's own bits — `CGWSEL` bits 6-7 additionally invert the final window output for the main/sub screen independently. `IsWindowMasked`/`IsColorMathWindowMasked` implement these as two distinct functions since they read from different bit groups and serve different purposes (visibility mask vs. color-math eligibility mask), even though the window-position/invert/combine logic itself is structurally identical between them.
+Two windows (W1: `$2126`/`$2127`, W2: `$2128`/`$2129`) can each be enabled/inverted per layer via the per-layer select registers (`W12SEL`/`W34SEL`/`WOBJSEL`), with configurable combine logic (OR/AND/XOR/XNOR, from `WBGLOG`/`WOBJLOG`) when both windows are active for a layer. The color-math window is a *separate* mask, using `WOBJSEL` bits 4-7 and `WOBJLOG` bits 2-3 rather than a specific layer's own bits — `CGWSEL` bits 6-7 additionally invert the final window output for the main/sub screen independently. `WindowMask` (§7.1) and `IsColorMathWindowMasked` implement these separately since they read from different bit groups and serve different purposes (visibility mask vs. color-math eligibility mask), even though the window-position/invert/combine logic itself is structurally identical between them.
+
+### 7.1 The window test is decoded once per scanline, not once per pixel
+
+`IsWindowMasked` used to take `(ppu, layerId, isMainScreen, px)` and be called from inside every per-pixel loop in the renderer — seven call sites across `Renderer.Backgrounds.cs`, `Renderer.Mode7.cs` and `Renderer.Sprites.cs`. Everything it did except the final window-range comparisons was **constant for the whole call**: the `layerId` switch selecting `W12SEL`/`W34SEL`/`WOBJSEL`, the `TMW`/`TSW` enable-bit test, the nibble decode into the four enable/invert flags, and the "neither window enabled" early-out. All of it re-ran up to 256 times per layer per screen per scanline to produce the same answer.
+
+It is now the `WindowMask` struct: `WindowMask.For(ppu, layerId, isMainScreen)` decodes once and captures `WH0`–`WH3`, and `Masked(px)` does only the per-pixel part. `Active` is false whenever the layer is unwindowed, which lets a caller skip the per-pixel test for the entire scanline. Capturing the window positions at the top of the loop is safe for the same reason `BgLineCache` is: no CPU executes during a `RenderScanline` call, so PPU register state cannot change mid-scanline.
+
+**Measured, three runs each way, 600 frames, Release:** SMW 3.48 → 3.33 ms (−4.4%), DKC 2.69 → 2.58 (−4.2%), both with non-overlapping ranges. LttP was unchanged (1.567 → 1.563) and CT was inconclusive against its own noise. That shape is expected: where a layer has no window enabled, the old code already early-outed cheaply, so there was nothing to win. The gain is real only on titles that actually use windows. All 12 ROMs' `framesum` and `audiosum` digests are byte-identical.
+
+It does **not** move the throttled picture — KBL3 at 33% went 17.70 → 17.78 ms, inside noise. §13.4's target is `mainComposite` itself, and this was not that.
+
+**Do not "simplify" this by testing every pixel.** Computing the mask unconditionally, including for transparent pixels (common for parallax, sky and background gaps), was tried when `BgLineCache` was first written and made PPU rendering *slower than before the cache existed at all*. The `if (pixel != 0)` guard around the background call sites is load-bearing.
 
 ---
 

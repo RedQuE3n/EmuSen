@@ -249,52 +249,81 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        private static bool IsWindowMasked(Ppu ppu, int layerId, bool isMainScreen, int px)
+        // A window test with everything scanline-constant already decoded - see Venus_PPU.md §7.1.
+        private readonly struct WindowMask
         {
-            if (!DebugSettings.WindowingEnabled) return false;
-            byte selByte;
-            int nibbleShift;
-            int logBits;
+            public readonly bool Active;
+            private readonly bool _w1Enable, _w2Enable, _w1Invert, _w2Invert;
+            private readonly int _logBits, _wh0, _wh1, _wh2, _wh3;
 
-            switch (layerId)
+            private WindowMask(Ppu ppu, bool w1Enable, bool w2Enable, bool w1Invert, bool w2Invert, int logBits)
             {
-                case LayerBg1: selByte = ppu.W12Sel; nibbleShift = 0; logBits = ppu.WBgLog & 0x03; break;
-                case LayerBg2: selByte = ppu.W12Sel; nibbleShift = 4; logBits = (ppu.WBgLog >> 2) & 0x03; break;
-                case LayerBg3: selByte = ppu.W34Sel; nibbleShift = 0; logBits = (ppu.WBgLog >> 4) & 0x03; break;
-                case LayerBg4: selByte = ppu.W34Sel; nibbleShift = 4; logBits = (ppu.WBgLog >> 6) & 0x03; break;
-                case LayerObj: selByte = ppu.WObjSel; nibbleShift = 0; logBits = ppu.WObjLog & 0x03; break;
-                default: return false;
+                Active = true;
+                _w1Enable = w1Enable;
+                _w2Enable = w2Enable;
+                _w1Invert = w1Invert;
+                _w2Invert = w2Invert;
+                _logBits = logBits;
+                _wh0 = ppu.Wh0;
+                _wh1 = ppu.Wh1;
+                _wh2 = ppu.Wh2;
+                _wh3 = ppu.Wh3;
             }
 
-            byte enableReg = isMainScreen ? ppu.Tmw : ppu.Tsw;
-            int enableBit = layerId switch { LayerBg1 => 0x01, LayerBg2 => 0x02, LayerBg3 => 0x04, LayerBg4 => 0x08, LayerObj => 0x10, _ => 0 };
-            if ((enableReg & enableBit) == 0) return false;
-
-            int nibble = (selByte >> nibbleShift) & 0x0F;
-            bool w1Invert = (nibble & 0x01) != 0;
-            bool w1Enable = (nibble & 0x02) != 0;
-            bool w2Invert = (nibble & 0x04) != 0;
-            bool w2Enable = (nibble & 0x08) != 0;
-
-            if (!w1Enable && !w2Enable) return false;
-
-            bool w1 = px >= ppu.Wh0 && px <= ppu.Wh1;
-            bool w2 = px >= ppu.Wh2 && px <= ppu.Wh3;
-            if (w1Invert) w1 = !w1;
-            if (w2Invert) w2 = !w2;
-
-            if (w1Enable && w2Enable)
+            // An inactive mask masks nothing, so callers can skip the per-pixel test entirely.
+            public static WindowMask For(Ppu ppu, int layerId, bool isMainScreen)
             {
-                switch (logBits)
+                if (!DebugSettings.WindowingEnabled) return default;
+                byte selByte;
+                int nibbleShift;
+                int logBits;
+
+                switch (layerId)
                 {
-                    case 0: return w1 || w2;   
-                    case 1: return w1 && w2;   
-                    case 2: return w1 ^ w2;    
-                    default: return !(w1 ^ w2); 
+                    case LayerBg1: selByte = ppu.W12Sel; nibbleShift = 0; logBits = ppu.WBgLog & 0x03; break;
+                    case LayerBg2: selByte = ppu.W12Sel; nibbleShift = 4; logBits = (ppu.WBgLog >> 2) & 0x03; break;
+                    case LayerBg3: selByte = ppu.W34Sel; nibbleShift = 0; logBits = (ppu.WBgLog >> 4) & 0x03; break;
+                    case LayerBg4: selByte = ppu.W34Sel; nibbleShift = 4; logBits = (ppu.WBgLog >> 6) & 0x03; break;
+                    case LayerObj: selByte = ppu.WObjSel; nibbleShift = 0; logBits = ppu.WObjLog & 0x03; break;
+                    default: return default;
                 }
+
+                byte enableReg = isMainScreen ? ppu.Tmw : ppu.Tsw;
+                int enableBit = layerId switch { LayerBg1 => 0x01, LayerBg2 => 0x02, LayerBg3 => 0x04, LayerBg4 => 0x08, LayerObj => 0x10, _ => 0 };
+                if ((enableReg & enableBit) == 0) return default;
+
+                int nibble = (selByte >> nibbleShift) & 0x0F;
+                bool w1Invert = (nibble & 0x01) != 0;
+                bool w1Enable = (nibble & 0x02) != 0;
+                bool w2Invert = (nibble & 0x04) != 0;
+                bool w2Enable = (nibble & 0x08) != 0;
+
+                if (!w1Enable && !w2Enable) return default;
+
+                return new WindowMask(ppu, w1Enable, w2Enable, w1Invert, w2Invert, logBits);
             }
-            return w1Enable ? w1 : w2;
+
+            public bool Masked(int px)
+            {
+                bool w1 = px >= _wh0 && px <= _wh1;
+                bool w2 = px >= _wh2 && px <= _wh3;
+                if (_w1Invert) w1 = !w1;
+                if (_w2Invert) w2 = !w2;
+
+                if (_w1Enable && _w2Enable)
+                {
+                    switch (_logBits)
+                    {
+                        case 0: return w1 || w2;
+                        case 1: return w1 && w2;
+                        case 2: return w1 ^ w2;
+                        default: return !(w1 ^ w2);
+                    }
+                }
+                return _w1Enable ? w1 : w2;
+            }
         }
+
 
         private static bool IsColorMathWindowMasked(Ppu ppu, int px, bool isMainScreen)
         {

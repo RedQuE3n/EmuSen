@@ -27,13 +27,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             int sy = vFlip ? 255 - py : py;
             int relY = sy + ppu.M7VOfs - ppu.M7Y;
 
+            WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
             for (int px = 0; px < ScreenW; px++)
             {
                 int raw = SampleMode7Pixel(ppu, px, relY, hFlip, screenOverEnabled, fillWithChar0);
                 if (raw < 0) continue;
 
                 byte colorIndex = (byte)raw;
-                if (colorIndex != 0 && !IsWindowMasked(ppu, layerId, isMainScreen, px))
+                if (colorIndex != 0 && !(window.Active && window.Masked(px)))
                 {
                     // 8bpp indexes the full 256-color CGRAM directly - no
                     // palette-group offset needed, unlike 2bpp/4bpp modes.
@@ -55,6 +56,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             int sy = vFlip ? 255 - py : py;
             int relY = sy + ppu.M7VOfs - ppu.M7Y;
 
+            WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
             for (int px = 0; px < ScreenW; px++)
             {
                 int raw = SampleMode7Pixel(ppu, px, relY, hFlip, screenOverEnabled, fillWithChar0);
@@ -64,7 +66,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 if (highPriority != highPriorityOnly) continue;
 
                 int colorIndex = raw & 0x7F;
-                if (colorIndex != 0 && !IsWindowMasked(ppu, layerId, isMainScreen, px))
+                if (colorIndex != 0 && !(window.Active && window.Masked(px)))
                 {
                     int cgIdx = colorIndex * 2;
                     target[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);

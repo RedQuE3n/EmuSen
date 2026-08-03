@@ -43,6 +43,10 @@
     <!-- AudioConfig, which AudioSettings maps to and from - see
          EmuSen_Config_Reference.md §3.2. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+    <!-- The core-agnostic timing scheduler every core schedules against -
+         see EmuSen_Crystal_Scheduler.md. The dependency only ever runs
+         this way: Crystal is a leaf and names nothing from this project. -->
+    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
   </ItemGroup>
 
 </Project>

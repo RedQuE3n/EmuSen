@@ -27,6 +27,15 @@ namespace EmuSen.Cores
         private static readonly CoreDescriptor Venus =
             new("SNES (Venus)", new[] { ".smc", ".sfc" }, SnesCheatSystems);
 
+        // The libretro folder name for the NES; Famicom Disk System is different hardware and is not claimed.
+        private static readonly string[] NesCheatSystems =
+        {
+            "Nintendo - Nintendo Entertainment System",
+        };
+
+        private static readonly CoreDescriptor Moon =
+            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems);
+
         // Keyed by what a user would type - the internal codename and the
         // console name both reach the same core.
         public static IReadOnlyDictionary<string, CoreDescriptor> Registry { get; } =
@@ -34,6 +43,8 @@ namespace EmuSen.Cores
             {
                 ["venus"] = Venus,
                 ["snes"] = Venus,
+                ["moon"] = Moon,
+                ["nes"] = Moon,
             };
 
         // What `cheat db prune` keeps. Deduplicated, since one core is

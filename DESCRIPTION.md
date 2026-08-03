@@ -48,11 +48,14 @@ console core implements that interface and inherits the entire toolchain — the
 scripting harness, the watchpoint system, the screenshot and digest tooling — without a
 line of it being rewritten.
 
-**What is actually built today: one core, the SNES.** Every other console listed below is
-a reserved, empty folder with a documentation stub. The multi-system claim in this document
+**What is actually built today: one playable core, the SNES.** The NES (**Moon**) has been
+started, but only its CPU exists — no PPU, no APU, no mappers, and nothing implementing
+`ICore` or `IDebugTarget` yet, so it runs no games. Every other console listed below is a
+reserved, empty folder with a documentation stub. The multi-system claim in this document
 is a claim about *architecture*, not about a shipping feature list — the debug toolchain is
-core-agnostic and has been used in anger for months, but it has never been proven against a
-second implementation. That proof is the project's stated long-term goal, not a checked box.
+core-agnostic and has been used in anger for months, and it has still never been proven
+against a second `IDebugTarget`. The narrower `ISingleStepTarget` rig now *has* been: it
+took the 6502 with one adapter, one loader and one line of registry, unchanged otherwise.
 
 ---
 
@@ -156,7 +159,7 @@ hardware is called.
 | Console | Codename | State |
 |---|---|---|
 | SNES | **Venus** | **Implemented** — the only working core |
-| NES | **Moon** | Reserved — the planned second core |
+| NES | **Moon** | **In progress** — CPU, PPU, memory, five mappers, `ICore` and `IDebugTarget`; silent, NTSC only |
 | Game Boy / Color | **Mercury** | Reserved |
 | Game Boy Advance | **Jupiter** | Reserved |
 | Nintendo 64 | **Mars** | Reserved |
@@ -193,8 +196,9 @@ systems, the Quartet has four and Microsoft has four.
 Shadow Galactica is the one major faction still unassigned, held for whichever
 manufacturer is added next.
 
-**Ordering.** NES (**Moon**) is next, and is the milestone the whole architecture was built
-toward: it is the first real test of whether `IDebugTarget` is genuinely generic or merely
+**Ordering.** NES (**Moon**) is underway, starting from its CPU, and is the milestone the
+whole architecture was built toward: it is the first real test of whether `IDebugTarget`
+is genuinely generic or merely
 asserted to be. Nothing beyond it is scheduled — the reserved folders are a naming and
 layout commitment, not a promise of delivery dates.
 

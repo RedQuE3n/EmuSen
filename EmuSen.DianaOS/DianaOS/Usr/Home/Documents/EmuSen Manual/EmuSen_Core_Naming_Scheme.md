@@ -20,7 +20,7 @@ Folder: `Cores/Nintendo/`
 
 | Console | Codename | Folder | Status |
 |---|---|---|---|
-| NES | **Moon** | `Cores/Nintendo/Moon - NES/` | Not started — reserved |
+| NES | **Moon** | `Cores/Nintendo/Moon - NES/` | Active development — `EmuSen.Cores.Nintendo.Moon.*`. CPU validated against SingleStepTests `nes6502/v1` (2,560,000 cases, traces included); PPU, memory, five mappers, `ICore` and `IDebugTarget` all implemented. No audio synthesis, no PAL, scanline-granularity PPU. See `Man pages/Hardware/Nintendo/Moon - NES/` |
 | SNES | **Venus** | `Cores/Nintendo/Venus - SNES/` | Active development — `EmuSen.Cores.Nintendo.Venus.*` (see §8) |
 | Game Boy / Game Boy Color | **Mercury** | `Cores/Nintendo/Mercury - GB-GBC/` | Not started — reserved. Open question whether GB and GBC are different enough hardware to warrant two separate cores rather than one (undecided; revisit once Venus work is further along and there's a real basis for comparison) |
 | Game Boy Advance | **Jupiter** | `Cores/Nintendo/Jupiter - GBA/` | Not started — reserved |

@@ -1,10 +1,12 @@
 using System;
+using System.Linq;
 using System.Text;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
@@ -16,6 +18,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         {
             "  regs                          CPU + video (+ APU/coprocessor) registers",
             "  regs <cpu>                    just one processor's registers - `cpus` lists them",
+            "  (to WRITE a register, see `setreg` - kept separate so `regs` stays read-only)",
         });
 
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
@@ -75,5 +78,6 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             }
             return sb.ToString().TrimEnd();
         }
+
     }
 }

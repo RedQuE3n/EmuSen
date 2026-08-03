@@ -21,6 +21,11 @@ SourceLogs/
 *.srm
 *.state
 
+# Coverage maps written by `cov save` (see `man cov`) - a recording of one
+# person's playthrough of one ROM, accumulated locally and merged on load.
+# Real, uncommitted data like the saves above, not source.
+*.covmap
+
 # Copyrighted commercial ROMs dropped here for local debugging/testing -
 # never belongs in version control (redistribution), regardless of who
 # added it or why.

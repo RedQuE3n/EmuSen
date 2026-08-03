@@ -318,6 +318,21 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             return _mapper.Resolve((byte)(address >> 16), (ushort)(address & 0xFFFF)).Region != CartridgeRegion.Unmapped;
         }
 
+        // The same decode Read8 uses, reported rather than followed - see `man addr`.
+        public EmuSen.DianaOS.DianaOS.Lib.PhysicalAddress? TryResolvePhysical(uint address)
+        {
+            var mapped = _mapper.Resolve((byte)(address >> 16), (ushort)(address & 0xFFFF));
+            return mapped.Region switch
+            {
+                CartridgeRegion.Rom => new("ROM", mapped.Offset % System.Math.Max(1, _rom.Length)),
+                CartridgeRegion.Sram => new(Sa1 != null ? "BWRAM" : "SRAM", mapped.Offset),
+                CartridgeRegion.IRam => new("SA1IRAM", mapped.Offset),
+                CartridgeRegion.CoprocessorRegister => new($"coprocessor register ${mapped.Offset:X4}", mapped.Offset, false),
+                CartridgeRegion.Sa1Vector => new("SA-1 vector override", mapped.Offset, false),
+                _ => null,
+            };
+        }
+
         // What this ROM will need before it can be fully emulated, decided
         // from the header alone - no Cartridge is built and nothing is
         // loaded. A ROM carrying its firmware appended needs nothing, so it

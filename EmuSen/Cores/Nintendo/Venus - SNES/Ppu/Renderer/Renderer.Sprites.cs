@@ -124,7 +124,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         if (pixel == 0) continue;
 
                         int cgIdx = (pal * 16 + pixel) * 2;
-                        _objColor[screenX] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+                        _objColor[screenX] = PaletteColor(cgIdx);
                         _objPriority[screenX] = spritePriority;
                         _objPalette[screenX] = pal - 8; // OBJ-relative 0-7, for color math's palette-4-7 rule
                         _objSet[screenX] = true;
@@ -137,10 +137,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         private void RenderObj(Ppu ppu, int py, float brightness, Color[] target, int[] targetLayer, int layerId, int priorityFilter, bool isMainScreen)
         {
+            WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
+
             for (int x = 0; x < ScreenW; x++)
             {
                 if (!_objSet[x] || _objPriority[x] != priorityFilter) continue;
-                if (IsWindowMasked(ppu, layerId, isMainScreen, x)) continue;
+                if (window.Active && window.Masked(x)) continue;
 
                 target[x] = _objColor[x];
                 targetLayer[x] = layerId;

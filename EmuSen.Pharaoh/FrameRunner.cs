@@ -1,6 +1,7 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores.Nintendo.Venus.Debug;
 
 namespace EmuSen.Pharaoh
 {
@@ -22,6 +23,11 @@ namespace EmuSen.Pharaoh
         public long CpuLogStart { get; set; } = -1;
         public long CpuLogEnd { get; set; } = -1;
         public bool Verbose { get; set; }
+
+        // --cputrace: binary S-CPU trace from boot, written once this frame completes - see §3.40.
+        public long CpuTraceEnd { get; set; } = -1;
+        public string? CpuTracePath { get; set; }
+        private bool _cpuTraceWritten;
 
         private readonly Action<string> emit;
         private readonly Action<long>? onFrameAdvanced;
@@ -67,8 +73,32 @@ namespace EmuSen.Pharaoh
             Release(button, controller);
         }
 
+        // Armed before any instruction executes, where Mesen's starts too - see §3.40.
+        private void EnsureCpuTraceArmed()
+        {
+            if (CpuTracePath == null || _cpuTraceArmed) return;
+            _cpuTraceArmed = true;
+            CpuBinaryTrace.Start();
+        }
+
+        private bool _cpuTraceArmed;
+
+        private void WriteCpuTraceIfDue()
+        {
+            if (CpuTracePath == null || _cpuTraceWritten || CurrentFrame < CpuTraceEnd) return;
+            _cpuTraceWritten = true;
+            CpuBinaryTrace.Stop();
+            CpuBinaryTrace.WriteTo(CpuTracePath);
+            emit($"[CPUTRACE] {CpuBinaryTrace.Count} steps through frame {CurrentFrame} -> {CpuTracePath}");
+            if (CpuBinaryTrace.Overflowed)
+            {
+                emit("[WARN] The trace buffer filled and recording stopped early - lower --cputrace's frame.");
+            }
+        }
+
         public void RunFrames(long count)
         {
+            EnsureCpuTraceArmed();
             for (long i = 0; i < count; i++)
             {
                 if (CurrentFrame >= FrameCap)
@@ -111,8 +141,10 @@ namespace EmuSen.Pharaoh
                 }
 
                 CurrentFrame++;
+                WriteCpuTraceIfDue();
                 Rewind.OnFrameCompleted(Core);
                 onFrameAdvanced?.Invoke(CurrentFrame);
+                AfterFrame?.Invoke();
                 if (CurrentFrame % ProgressEvery == 0) emit($"[frame {CurrentFrame}/{FrameCap}]");
             }
         }
@@ -122,6 +154,9 @@ namespace EmuSen.Pharaoh
 
         // Run when a breakpoint halts mid-frame - see the call site above.
         public Action? OnHalted { get; set; }
+
+        // Ticked after every completed frame, alongside the constructor's own hook - see §3.15b.
+        public Action? AfterFrame { get; set; }
 
         // Returns steps actually taken - see EmuSen_Rewind_And_FastForward.md §3.
         public int StepBack(int steps)

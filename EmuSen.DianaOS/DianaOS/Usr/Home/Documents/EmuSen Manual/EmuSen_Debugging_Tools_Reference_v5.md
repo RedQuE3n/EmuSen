@@ -2,9 +2,11 @@
 
 This document covers every debugging tool currently in the project: what it does, where it lives, how to trigger it, and how the pieces fit together. It's organized from "things you press a key for" down to "the underlying reusable toolchain," since that's roughly the order you'd reach for them in.
 
-*(Living document — updated as the toolchain grows. This revision: every `IDianaOSCommand` now states `bool IsReadOnly { get; }` - true only if it never mutates core/session/interpreter state for any invocation (`mem`/`regs`/`echo`/`diff`/the shell text utilities and similar), false otherwise, conservatively including every command with a mixed read/write sub-verb surface (`watch`/`bp`/`framelog`/`cheat`/`snapshot`/`search`/`history`/`log`/`trace` - the property can't vary per invocation, so a command that's read-only for one sub-verb and mutating for another reports `false`) and `coretop`'s raw-terminal mode (blocks indefinitely on its own key-read loop until Ctrl+C, same category as `nano`, despite never touching core state). This is what powers `EmuSen.Hotaru`'s new **always-live** DianaOS terminal (see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the full design) - from the moment a ROM loads, a `DianaOS $` prompt accepts commands continuously, with no F4 mode-switch needed: a read-only line answers instantly, off the emulation thread entirely, via `DianaOSInterpreter.TryGetReadOnlyFastPath` (a pure, parse-only classifier - single bare simple command, no pipes/`&&`/control-flow, resolves to a registered `IsReadOnly` command); anything else is queued and runs inline on the emulation thread's own next frame. F4/breakpoint halts are completely unchanged - still the fully-blocking classic prompt, still the only way to run a multi-line construct interactively.
+*(Living document — updated as the toolchain grows. **This revision: the trace differ is now generic, and the GSU has one (§3.41)** — `TraceDiff` works over any `ITraceStep<T>`, so `CpuTraceDiff` and `GsuTraceDiff` are just record layouts and `--tracediff` picks the parser by magic. Pointed at Yoshi's Island's intro it found four real GSU bugs in an afternoon, two of them *flag* bugs on instructions whose results were already correct — the class of bug no state diff in this document can see. It also found that the harness's own battery save had been invalidating three days of state-anchored measurements, because on a SuperFX cart the `.srm` is GSU work RAM and a `tapuntil` anchor was firing at frame 0; `--nobattery` closes that. Previous revision: a fifth Mesen pass (§3.38), run over the two areas the previous four had least to say about: what the *hardware* does wrong, and the coprocessors as debuggable chips rather than as register dumps. Three things came out of it. **`bp when <condition>`** halts on a hardware event rather than an address — Mesen's `BreakSource` "exception" list is a good inventory of these and §3.33 dismissed the 65816-specific ones as NES/GB-only, which was simply wrong; `stp`, `wdm`, `ppuaccess` (VRAM/CGRAM/OAM written while the display is rendering) and `autojoy` ($4218-$421F read mid-refresh) are all cases where the machine and the game silently disagree and nothing in the output says so. Any of them can be armed `log` instead of halting, which is the right mode for anything a game does every frame. **The NEC DSP is now a real debug target** — `bp dsp`, `step dsp`, `bt dsp`, `cov dsp funcs` — closing the last "cannot be halted" entry in §3.34's table. Mesen has had this all along via `NecDspDebugger`, and the reason recorded here for not building it (mask ROM, stepped as a block) was not the real obstacle: the chip was already stepped one instruction at a time. Its hardware CALL/RET pair drives a genuine call stack, so firmware nobody has source for can be mapped by running it. And **`dma`** — the channel table plus a transfer log with per-destination bandwidth totals, which **neither emulator has as text**: Mesen shows DMA in the Event Viewer's 2D plot, the one thing §3.33 deferred for wanting a GUI, and the scanline column carries most of that plot's value without it. Previous revision: a fourth Mesen pass (§3.37), this time over the parts of Mesen outside `Core/Debugger/` — `DebuggerFeatures.h` and the `LuaApi` surface, which is a good inventory of what a debugger should be able to do because every entry is something someone wanted to script. It found that **the debugger could not write anything**: every one of the eight modelled processors' registers was read-only. `setreg` fixes that, and its point is counterfactuals — flip the register a branch compares, resume, and see what the game does down the path it did not take. Also new: `vectors` (dereference the interrupt vector table, grouped by CPU mode because a 65816 has two full sets and the E flag picks one, and marked `(ran)` when coverage says the target actually executed) and `addr` (decode a CPU address to a ROM file offset through the cartridge's own mapper). And **logpoints** — `bp add <addr> log "a, x"` records and carries on instead of halting, which is the only way to study a routine that runs four hundred times a frame, since halting even once changes the timing of everything after it. Mesen needs a Lua script for that; §3.33 declined to add a second scripting language because the shell already exists, and this is part of making that true. Previous revision: a third Mesen gap-analysis pass (§3.36), run specifically to audit what the first two waved through — and two rows of §3.33's comparison table turned out to be wrong rather than merely incomplete. `Breakpoint` was recorded as covered by `bp` (it was not: Mesen has address *ranges*, read breakpoints and forbid ranges; we had one address and writes only) and `CodeDataLogger` as covered by `cov` (it was not: Mesen persists a ROM map, enumerates discovered functions, and reports statistics). Closed this pass: `bp add`/`bp read`/`bp write` all take `<start>-<end>` ranges, `bp read`, `bp forbid`, `bp uninit` (§3.30 had the tally, not the halt), `cov funcs` and `cov save`/`cov load` (which merges rather than replaces, so maps accumulate across sessions). Three capabilities **neither emulator has**: `bp write ... changed` (halt only when the value actually changes, instead of on every one of sixty identical rewrites a second), `bp depth <n>` (catch runaway recursion while the chain is still readable with `bt`), and `cov mark`/`cov new` — differential coverage, the sharpest of the three, which turns "find the routine that handles X" into mark, press the button, read the list. Previous revision: a second Mesen gap-analysis pass, this time aimed at **coprocessors**. The old model of "which processor am I debugging" was a bool — main CPU or the one coprocessor — which cannot describe an SNES, since every SNES is at least two processors and the SPC700 present in every game had no breakpoints at all. `DebugCpu` (§3.34) replaces it with a named list, and one shared helper gives `bp`/`cov`/`bt`/`step`/`profile`/`eval`/`regs`/`disasm` an identical optional scope word, so `bp gsu add ...` and `bt sa1` work while every pre-existing unscoped form is untouched. New this pass: GSU and SPC700 breakpoints, SPC700 coverage, the SA-1's call stack (it is a 65816, so the existing seam applied unchanged), per-chip expression contexts derived from each chip's own `regs` output, `cpus`, and two disassemblers that were missing outright — `disasm APURAM` previously decoded SPC700 bytes with the 65816 table and produced confident nonsense. §3.35 adds `copflow`, which **Mesen has no equivalent of**: a log of the coprocessor register window plus poll-run detection, so "the game hung" becomes "it read $3030 ninety thousand times and the value never changed". Previous revision (retained below in §3.27–§3.33): the first Mesen pass, which closed seven capabilities — `eval` and conditional breakpoints, `bt`, `step over`/`step out`, `runto`, `label`, `counters`, `freeze` and `profile`. §3.33 records both comparisons, including what was deliberately **not** built (the Event Viewer, step-back, an assembler, disassembly search) and why.
 
-Previous revision: `EmuSen.Hotaru` moved off Raylib entirely, onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the full picture. Relevant here: the on-window Raylib debug overlay (VRAM sheet/CGRAM swatch/register text drawn directly onto the game window, the old `O`/`GraphicsSettings.ShowDebugPanels` panels) is gone entirely - this doc's tools (`regs`/`sprites`/`pal`/`tile`/`vramsheet`/`paletteswatch`, `coretop`) already covered the same data and are unaffected. `coretop -w`/`feed -w` now open their windows via `Views/DebugWindows.cs` (a plain `Dispatcher.UIThread.Post`, since Avalonia is Hotaru's primary application now) instead of the old `AvaloniaHost.cs` (deleted - see git history), which had to bootstrap a second, independent Avalonia dispatcher thread specifically because Raylib owned the actual main thread and supported only one native window - see §3.17's updated `coretop`/`feed` writeups. F3's screenshot and F6's frame recording now encode real PNGs via SkiaSharp's `SKImage.Encode` directly (`EmuSen.Hotaru/Imaging/FrameImageWriter.cs`), not Raylib's `TakeScreenshot`, and capture the same raw pre-shader `ICore.GetFrameBufferRgba()` bytes every other consumer already uses.
+Previous revision: every `IDianaOSCommand` now states `bool IsReadOnly { get; }` - true only if it never mutates core/session/interpreter state for any invocation (`mem`/`regs`/`echo`/`diff`/the shell text utilities and similar), false otherwise, conservatively including every command with a mixed read/write sub-verb surface (`watch`/`bp`/`framelog`/`cheat`/`snapshot`/`search`/`history`/`log`/`trace` - the property can't vary per invocation, so a command that's read-only for one sub-verb and mutating for another reports `false`) and `coretop`'s raw-terminal mode (blocks indefinitely on its own key-read loop until Ctrl+C, same category as `nano`, despite never touching core state). This is what powers `EmuSen.Hotaru`'s new **always-live** DianaOS terminal (see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the full design) - from the moment a ROM loads, a `DianaOS $` prompt accepts commands continuously, with no F4 mode-switch needed: a read-only line answers instantly, off the emulation thread entirely, via `DianaOSInterpreter.TryGetReadOnlyFastPath` (a pure, parse-only classifier - single bare simple command, no pipes/`&&`/control-flow, resolves to a registered `IsReadOnly` command); anything else is queued and runs inline on the emulation thread's own next frame. F4/breakpoint halts are completely unchanged - still the fully-blocking classic prompt, still the only way to run a multi-line construct interactively.
+
+Earlier: `EmuSen.Hotaru` moved off Raylib entirely, onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the full picture. Relevant here: the on-window Raylib debug overlay (VRAM sheet/CGRAM swatch/register text drawn directly onto the game window, the old `O`/`GraphicsSettings.ShowDebugPanels` panels) is gone entirely - this doc's tools (`regs`/`sprites`/`pal`/`tile`/`vramsheet`/`paletteswatch`, `coretop`) already covered the same data and are unaffected. `coretop -w`/`feed -w` now open their windows via `Views/DebugWindows.cs` (a plain `Dispatcher.UIThread.Post`, since Avalonia is Hotaru's primary application now) instead of the old `AvaloniaHost.cs` (deleted - see git history), which had to bootstrap a second, independent Avalonia dispatcher thread specifically because Raylib owned the actual main thread and supported only one native window - see §3.17's updated `coretop`/`feed` writeups. F3's screenshot and F6's frame recording now encode real PNGs via SkiaSharp's `SKImage.Encode` directly (`EmuSen.Hotaru/Imaging/FrameImageWriter.cs`), not Raylib's `TakeScreenshot`, and capture the same raw pre-shader `ICore.GetFrameBufferRgba()` bytes every other consumer already uses.
 
 *Earlier history, condensed (see `git log` for the full reasoning behind any of these):* a boxed MOTD-style welcome banner at shell launch (`GetWelcomeBanner`) · a standard `clear` command · `EmuSen.Hotaru` became a full DianaOS shell frontend (shell-first launch always; the always-on `[STATUS]`/`[FPS]` diagnostic prints were removed entirely - they're gone, not just currently unused; `feed`/`feed -w` added) · `coretop -w` (windowed dashboard, so it stops taking over the terminal) · `EmuSen.Mistress` gained a real windowed `coretop` (non-blocking, `WriteableBitmap`-based) · `coretop` itself added (htop-style hardware dashboard) · `nano <path>` and standalone-shell `core <name> <path>` added · `help`/`man` split apart again (`help` = standalone listing, `man [command]` = full manual pages) · the shell fully renamed to **DianaOS** (`EmuSen.Shell*` → `EmuSen.DianaOS*` everywhere, `ShellInterpreter`→`DianaOSInterpreter`, `IShellCommand`→`IDianaOSCommand`, `ShellResult`→`DianaOSResult`, `ShellSandbox`→`DianaOSSandbox`, `ShellConsoleWindow`→`DianaOSConsoleWindow`, `ShellDispatchTests`→`DianaOSDispatchTests` - see §3.3) · five plain project renames, no behavior change: `EmuSen.Validation`→`EmuSen.Tomoe` (the `EmuSen.Validation` *namespace* itself stayed - it's still live, generic single-step-test infrastructure, see `EmuSen/Validation/` and each core's own `Validation/` adapter folder), `EmuSen.HeadlessDebug`→`EmuSen.Pharaoh`, `EmuSen.TestingStudio`→`EmuSen.Mistress`, `EmuSen.RaylibFrontend`→`EmuSen.Hotaru`, `EmuSen.Presentation`→`EmuSen.Serenity` · `EmuSen.Pharaoh/Program.cs` broken up into `FrameRunner`/`HeadlessDebugOptions`/`CommandsScriptRunner`/`DiffShotRunner` plus shared imaging/audio helpers in `EmuSen/Common/` · `EmuSen.WiseMan` (§3.18) added as a committed xUnit project; real audio output added to `EmuSen.Mistress` · a core-agnosticism pass over `DianaOS/` (dead-code removal, `callers`/`writers`/`readers` dedup, `IDebugTarget.ClassifyStaticReference`/`DecodeTilePixels` added so those commands + `tile` stopped hardcoding 65816/SNES-specific knowledge) · `Debug.Commands`/`Debug/Commands/` merged into `DianaOS`/`DianaOS/`; `break` renamed to `bp` (shadowed by the shell's own loop-control keyword) · breakpoints/single-stepping docs corrected, `GetApuRegisters()` documented, command table filled in, `EmuSen.Pharaoh`/`EmuSen.Tomoe` given full write-ups · watchpoints, the generalized `tile` command, shared `FrameCount`/screenshot timestamping, and a full 65816 disassembler added (retiring `CoinTileDumpLogging`); `WatchRegistry` ownership moved from `MemoryBus` to `SnesDebugTarget` via the `IWriteObserver` hook.)*
 
@@ -127,24 +129,46 @@ Two small helper classes back the memory spaces:
 | `spaces` | List memory spaces (name, size, writable) |
 | `mem <space> <addr> [<len>]` | xxd-style hexdump, default length 16 |
 | `write <space> <addr> <value>` | Write one byte, if the space is writable |
-| `regs` | CPU + video registers, plus APU and coprocessor sections when a target has them (§3.2, §3.23) |
+| `regs [<cpu>]` | CPU + video registers, plus APU and coprocessor sections when a target has them; with a chip name, just that chip (§3.2, §3.23, §3.34) |
 | `cophist [<reg>] [<count>]` | Coprocessor register history, and how long it has sat unchanged — see §3.23a |
+| `cpus` | Every processor a debug command can be scoped to, and what each supports — see §3.34 |
+| `copflow on\|off\|clear\|tail\|stats\|poll` | Coprocessor register-window traffic, and stuck-handshake detection — see §3.35 |
 | `sprites` | Active sprite/OBJ table |
 | `pal [<index>]` | One palette, or all 16 if omitted |
 | `channels` | Audio channel/voice table (active, envelope level 0-100, muted, core-specific detail) - core-agnostic (`IDebugTarget.GetAudioChannels()`), SNES reports its 8 S-DSP voices - see `Venus_APU.md` §3.5 |
 | `mute <index> <on|off>` | Mute/unmute one audio channel for isolation testing - its own playback state still advances, just excluded from the final mix - see `Venus_APU.md` §3.5 |
 | `tile <space> <addr> <bpp>` | ASCII-decode one 8x8 tile from any space (bpp 2, 4, or 8) |
 | `tilemap <space> <addr> <cols> <rows>` | Decode a grid of raw tilemap entries as text (tile index/palette/priority/flip on SNES) — core-agnostic at the command level, see §3.2's `TilemapEntryStride`/`DecodeTilemapEntry` note |
-| `disasm <space> <addr> [<count>]` | Disassemble `<count>` instructions (default 10) — see §3.7 |
+| `disasm <space>\|<cpu> [<addr>] [<count>]` | Disassemble `<count>` instructions (default 10); a chip name picks its own code space and ISA, and with no address starts where it is executing — see §3.7, §3.34 |
 | `watch add <space> <addr> <len> [write\|read\|both]` | Register a watchpoint (default write-only) |
 | `watch list` | List active watchpoints with their IDs |
 | `watch log <id> [<count>]` | Show a watchpoint's recorded events (default 20) |
 | `watch summary <id>` | Group a watchpoint's accesses by site (`Context`) with **whole-run** hit counts — the dynamic, addressing-mode-agnostic equivalent of `readers`/`writers` (§3.12). Site totals are kept outside the event ring, so unlike `watch log` this never omits a site the ring has evicted |
 | `watch clear <id>` | Clear a watchpoint's stored events (keeps the watch registered) |
 | `watch remove <id>` | Remove a watchpoint entirely |
-| `bp add <addr>` / `bp list` / `bp remove <id>` | Manage execution breakpoints (24-bit CPU address) — see §3.1's breakpoints note. Named `bp`, not `break` - the shell's own `break`/`continue` loop-control keywords (§3.17) are hardcoded, zero-argument parser statements, so a command literally named `break` is unreachable (`break add 8000` parses as bare loop-control followed by a syntax error on the leftover `add 8000`) |
-| `bp write <space> <addr> [<value>]` | Halt the moment anything writes `<addr>` — the state-at-the-write counterpart to `watch`, see §3.26 |
-| `cov on|off` / `cov clear` / `cov <addr> [<len>]` / `cov cop ...` | Record which addresses actually executed, then ask whether a routine was ever reached — see §3.24 |
+| `bp [<cpu>] add <addr>[-<end>] [if <expr>]` / `bp list` / `bp on\|off <id>` / `bp remove <id>` | Manage execution breakpoints (a 24-bit CPU address, or a range — §3.36) — see §3.1's breakpoints note. `if <expr>` makes one conditional (§3.27). Named `bp`, not `break` - the shell's own `break`/`continue` loop-control keywords (§3.17) are hardcoded, zero-argument parser statements, so a command literally named `break` is unreachable (`break add 8000` parses as bare loop-control followed by a syntax error on the leftover `add 8000`) |
+| `bp write <space> <addr>[-<end>] [<value>] [changed] [if <expr>]` | Halt the moment anything writes `<addr>` — the state-at-the-write counterpart to `watch`, see §3.26. `changed` suppresses the halt unless the byte actually changes (§3.36) |
+| `bp read <space> <addr>[-<end>] [<value>] [if <expr>]` | Halt on a read instead — catches consumers reached through a computed pointer that `readers` cannot resolve statically, see §3.36 |
+| `bp uninit <space>` | Halt the first time never-written memory is read back — see §3.36 |
+| `bp depth <n>` | Halt if the call stack ever gets deeper than `<n>`, while the chain is still readable with `bt` — see §3.36 |
+| `bp forbid <addr>-<end>` | Suppress every halt while the PC is inside a range — see §3.36 |
+| `bp add <addr> log <expr>` / `bp log [<count>]` / `bp log clear` | Logpoint: record `<expr>` and carry on instead of halting, for routines that run too often to step — see §3.37 |
+| `eval [<cpu>] <expr>` / `eval symbols [<filter>]` | Evaluate an expression against live state, decimal/hex/binary at once; a chip name evaluates against its registers — see §3.27, §3.34 |
+| `step [<cpu>] [<count>\|over\|out]` | Single-step, run a call to completion, or run until the current routine returns — see §3.28, §3.34 |
+| `runto nmi\|irq\|brk\|cop` / `runto scanline <n>` / `runto frame [<n>]` / `runto <addr>` | Resume until a named event rather than an address — see §3.28 |
+| `bt [<cpu>] [<count>\|reset]` | Backtrace the live call chain — the dynamic counterpart to `callers` (§3.12), see §3.28, §3.34 |
+| `label add\|list\|at\|remove\|clear\|load\|save ...` | Name addresses; shown by `disasm`/`bt`/`bp list` and usable as expression symbols — see §3.29 |
+| `counters on <space>` / `off` / `clear` / `<addr> [<len>]` / `top [r\|w\|x\|u] [<n>]` / `cold <addr> <len>` | Per-address read/write/execute tallies, including uninitialized-read detection — see §3.30 |
+| `freeze add <space> <addr> [<value>]` / `list` / `remove <id>` / `clear` | Pin an address by undoing every write to it — see §3.31 |
+| `profile [<cpu>] on\|off\|clear\|top [<n>]` | Which of the *game's* routines the instruction budget goes to — see §3.32, §3.34 |
+| `cov [<cpu>] on\|off\|clear\|<addr> [<len>]` | Record which addresses actually executed, then ask whether a routine was ever reached — see §3.24, §3.34 |
+| `cov mark` / `cov new <addr> [<len>]` | Differential coverage: freeze what has run, do the thing, then see only what the thing ran — see §3.36 |
+| `cov funcs [<count>]` / `cov save\|load <file>` | Routines discovered by watching calls land, and a coverage map that persists and merges across sessions — see §3.36 |
+| `setreg [<cpu>] <reg> <value>` | Write a CPU register — force a branch, skip a hang, test the counterfactual. See §3.37 |
+| `vectors` | Dereference the interrupt vector table, resolved through labels and marked with what actually ran — see §3.37 |
+| `addr <addr>` | Decode a CPU-bus address to a ROM file offset, RAM offset or hardware register — see §3.37 |
+| `bp when [<condition>] [log\|off]` | Halt (or record) when the hardware does something it should not: `stp`, `wdm`, `brk`, `cop`, `ppuaccess`, `autojoy` — see §3.38 |
+| `dma` / `dma log on\|off\|clear\|[<n>]` / `dma stats` | DMA/HDMA channel state, a transfer log with frame and scanline, and per-destination bandwidth — see §3.38 |
 | `framelog add <space> <addr> [<width>]` / `list` / `show <id> [<count>]` / `clear <id>` / `remove <id>` | Per-frame value sampling, independent of reads/writes — see §3.13 |
 | `callers <addr> [<scanstart> <scanlen>]` | Find instructions statically calling/jumping to `<addr>` — see §3.12 |
 | `writers <addr> [<scanstart> <scanlen>]` | Find instructions statically writing to `<addr>` (absolute/absolute-long only on the SNES core — see §3.12 for why direct-page/indexed/indirect forms are excluded, and where that ISA-specific knowledge now lives) |
@@ -343,6 +367,10 @@ callers <addr> [<scanstart> <scanlen>]   find instructions statically calling/ju
 
 **Matches on the raw opcode byte, not the mnemonic** (inside `SnesDebugTarget.ClassifyStaticReference` now, same reasoning as before the move): `JMP $nnnn` (absolute, direct — opcode `$4C`), `JMP ($nnnn)` (indirect — `$6C`), and `JMP ($nnnn,X)` (indexed indirect — `$7C`) all disassemble to the mnemonic `"JMP"` with the same 3-byte length, but only the direct form has a target `callers` can know without actually running the code. Indirect forms are deliberately excluded rather than guessed at, same principle `writers`/`readers` apply to direct-page/indexed/indirect stores and loads (only `STA`/`STX`/`STY`/`STZ`/`LDA`/`LDX`/`LDY` in **absolute or absolute-long** addressing resolve to a `Write`/`Read` classification - everything else returns `null`, since the real target depends on runtime register/D-register state a static scan can't know). Same bank-assumed-equals-PB convention throughout.
 
+**The opcode alone is not enough — the instruction's own length has to agree.** `disasm` annotates every line it prints by running it through `ClassifyStaticReference` (§3.29), including lines from spaces that are not 65816 code at all. A GSU `WITH R0` is opcode `$20` in one byte; the table reads `$20` as `JSR $nnnn` and goes looking for two operand bytes that do not exist, so `disasm GSUBUS` died outright with `Index was out of range` on any routine containing one — and GSU code is full of them (`$20`, `$4C` `PLOT`, `$8C`/`$8D` `MULT`, `$AC`/`$AD`/`$AE` `IBT`). Every arm of the table now carries a `when absolute` / `when absoluteLong` guard on `instr.Bytes.Count` (3 and 4 respectively).
+
+This is a correctness fix, not just a crash guard: a one-byte instruction that happens to share a byte with a three-byte 65816 absolute instruction *is* evidence that this line is not that instruction, and returning `null` is the right answer for the same reason the indirect `JMP` forms are excluded above. It fixes `callers`/`writers`/`readers` over `GSUBUS`/`APURAM`/`DSPPRG` too, which had the same latent mis-annotation without the crash. Found while disassembling Yoshi's Island's GSU sprite builder, where the disassembler was the only way to read the routine at all.
+
 **Same "best-effort, may misalign through data mixed with code" caveat as `disasm`.** A linear disassembler walking forward byte-by-byte has no way to know which bytes in a scanned range are really instructions versus embedded data (graphics, tables, text) — if the scan range includes non-code bytes, everything after the first misaligned read can decode to garbage opcodes, including spurious `callers` matches or missed real ones. Best used on a range that's actually known to be code.
 
 **`writers`/`readers`** (`DianaOS/Commands/WritersCommand.cs`/`ReadersCommand.cs`) are the store/load-side counterparts to `callers` - "what code is capable of writing/reading this address," independent of whether that path was ever actually exercised in a traced run (the gap `writers` was built to close: watching an address live can show exactly one write from one PC and nothing else, which only proves what a specific run did, not what the ROM's code is capable of doing).
@@ -452,7 +480,7 @@ A third consumer of `DianaOSInterpreter` alongside the console's F4 prompt (§3.
 - `Program.cs` - thin: dispatches to `DiffShotRunner` for `--diffshot`, otherwise parses args via `HeadlessDebugOptions.Parse`, builds a `FrameRunner`, and either drives the classic frame loop itself or hands off to `CommandsScriptRunner`.
 - `Cli/HeadlessDebugOptions.cs` - `Parse(string[] args)` turns argv into a plain options object plus a `Warnings` list, with no I/O of its own (ROM-existence checking stays in `Program.cs`, since that's a filesystem side effect, not parsing) - genuinely unit-testable for the first time (§3.18).
 - `FrameRunner.cs` - the one shared frame-stepping primitive both the classic loop and `--commands` mode drive: apply held input, apply `--cpulog` windowing, `RunFrame()`, bump a post-increment `CurrentFrame` ("frames completed so far" - `--commands` mode's own pre-existing convention), fire an autoshot callback, emit the progress heartbeat, enforce the frame-count safety cap. Replaces what used to be two separately-maintained copies of this same sequence. Owns `Hold`/`Release`/`Tap` and `WaitStable` too; does **not** own `FlushVerboseTrace()` - both callers still call that exactly once after their own loop/script finishes, matching before.
-- `CommandsScriptRunner.cs` - the `--commands` verb interpreter (`frames`/`tap[2]`/`hold`/`release`/`screenshot`/`waitstable`/`waitchange`/`waitvalue`/`contactsheet`/`vramsheet`/`paletteswatch`/`spriteoverlay`/`audiodump`/`fastforward`/`rewind`/`layers`/`scanregs`/`perf`), now driving a shared `FrameRunner` instead of its own closures; unrecognized verbs still fall through to `DianaOSInterpreter.Execute`.
+- `CommandsScriptRunner.cs` - the `--commands` verb interpreter (`frames`/`tap[2]`/`tapuntil`/`hold`/`release`/`screenshot`/`waitstable`/`waitchange`/`waitvalue`/`contactsheet`/`vramsheet`/`paletteswatch`/`spriteoverlay`/`audiodump`/`gsutrace`/`fastforward`/`rewind`/`layers`/`scanregs`/`perf`), now driving a shared `FrameRunner` instead of its own closures; unrecognized verbs still fall through to `DianaOSInterpreter.Execute`.
 - `DiffShotRunner.cs` - the standalone `--diffshot` mode, logic unchanged, now reading/writing BMPs via `EmuSen.Common.Imaging.BmpFile`.
 
 The classic loop's `--tap`/`--screenshot` frame-indexed timing and `--autoshot`'s filenames are bit-for-bit unchanged by this - `Program.cs` captures `FrameRunner.CurrentFrame` *before* each `RunFrames(1)` call for tap/screenshot checks (matching the old for-loop's pre-increment `frame` variable exactly), and passes an autoshot callback that subtracts 1 from `FrameRunner`'s post-increment counter to reproduce the classic loop's original 0-indexed `frame_<n>.bmp` names - only the `--commands` mode's own already-post-increment autoshot numbering (and the progress-log text, called out above) reflect the unified convention directly.
@@ -470,8 +498,9 @@ dotnet run --project EmuSen.Pharaoh -- <rom> <frames> [options...]
 | `--script <path>` | A text file of newline-separated `DianaOSInterpreter` commands (§3.3's table), run once after all frames finish. **Only the last `--script` wins** — passing it more than once silently drops the earlier ones rather than merging, since each flag just overwrites the same variable. Comment lines (`# ...`) and blank lines are skipped. If omitted, defaults to `watch list` + a `watch log` for every still-registered watch. |
 | `--watch <space>:<addr>:<len>[:write\|read\|both]` (repeatable) | Register a watch **before** the run starts (unlike `watch add` inside `--script`, which only takes effect for whatever's left of the run *after* the script executes — since the script runs last). Two default watches are always active: `WRAM:0x8000:0x1800` and `WRAM:0xD80:0x80`, matching what `EmuSen.Hotaru` registers from power-on. |
 | `--cpulog <start>:<end>` | Enables `CpuVerboseLogging` (+ `MasterLoggingEnabled`) only for frames in `[start, end)` — avoids capturing a trace of the entire run when only a narrow window matters. |
-| `--flag <Name>[=<value>]` (repeatable) | Set any `DebugSettings` property or field by name via reflection (bool if no `=value`, otherwise `Convert.ChangeType`'d to the member's real type) — also forces `MasterLoggingEnabled = true`, since most `DebugSettings` flags are gated behind it (`Settings/DebugSettings.cs`, §2) and setting the individual flag alone is otherwise a silent no-op. |
+| `--flag <Name>[=<value>]` (repeatable) | Set any `DebugSettings` property or field by name via reflection — also forces `MasterLoggingEnabled = true`, since most `DebugSettings` flags are gated behind it (`Settings/DebugSettings.cs`, §2) and setting the individual flag alone is otherwise a silent no-op. `int` members take decimal or hex (`0x94` or `$94`, matching every address-taking shell command); `bool` members take `true`/`false`/`1`/`0`, or bare `--flag <Name>` for true. A value that will not convert, or a bare name on a non-`bool` member, is a parse **error** now rather than a `FormatException` thrown out of `Main` — `Convert.ChangeType` reads neither hex nor a boxed `true` into an `int`, so `--flag SuperFxRamWriteTraceAddr=0x94` used to crash the run, and piped through a `grep` for the trace's own output that was indistinguishable from "the chip never wrote there". |
 | `--verbose` | Shortcut for `MasterLoggingEnabled = true` for the whole run. |
+| `--nobattery` | The run neither reads nor writes the cartridge `.srm`. **Use it for every comparison against the Mesen probe.** A battery save is emulator state that survives between runs, so two invocations of one script are not the same run; on a SuperFX cart the save *is* GSU work RAM, which invalidated three days of `Venus_SuperFX.md` §10.7 by making a `tapuntil` anchor fire at frame 0. See `Venus_Memory.md` §2.4a and §3.41. |
 | `--out <path>` | Write this harness's own `Emit()`-based log lines (`[ROM]`, `[RUN]`, `[SCREENSHOT]`, the `--script` output, etc.) to a file. |
 | `--commands <path>` | Takes over the whole run - see below. Ignores `--tap`/`--tap2`/`--screenshot`/`--script` when present; `<frames>` becomes a hard safety cap instead of an exact count. |
 | `--autoshot <dir>` | Works alongside every other mode (classic frame loop and `--commands` both). Hashes `GetFrameBufferRgba()` (64-bit FNV-1a) every frame and writes `<dir>/frame_<n>.bmp` only when it differs from the last saved hash - finds every distinct visual state a run passes through without having to guess frame numbers up front, e.g. confirming exactly when a menu transition settles instead of sampling `--screenshot 550`, `600`, `650`... and hoping one landed on it. |
@@ -500,6 +529,7 @@ dotnet run --project EmuSen.Pharaoh -- <rom> <frames> [options...]
 - `paletteswatch <path>` — export the current color palette memory as a 16x16 swatch-grid BMP, via `IDebugTarget.RenderPaletteSwatch()`. On the SNES this reuses the same `SnesColor()` BGR555 conversion `DrawDebugPanels`'s on-screen CGRAM panel already used, just written into a plain RGBA buffer instead of `Raylib.DrawRectangle` calls (which need an active render target this harness doesn't have).
 - `spriteoverlay <path>` — capture the current frame buffer and draw a green bounding-box outline for every entry the already-generic `IDebugTarget.GetSprites()` reports (no interface change needed for this one - `GetSprites()` was core-agnostic from when it was first added). For "is this OAM entry actually where I think it is on screen" questions without needing to cross-reference `sprites`' text output against a plain screenshot by hand.
 - `audiodump <path> [maxsamples]` — write whatever's currently buffered in the new `IDebugTarget.GetAudioSamples()` out as a standard 16-bit PCM `.wav` file (`maxsamples` truncates rather than errors if fewer are actually buffered). On the SNES this is `Spc700.Dsp.AudioBuffer.ToArray()` - `ToArray()` specifically, not dequeuing, so this never steals samples out from under a live audio-playback consumer of the same queue. A core with no audio output modeled yet can return an empty array.
+- `gsutrace <frames> <path>` — arms the GSU instruction sink, runs `<frames>` frames, and writes the trace, all in one verb. It exists as one verb rather than an arm/disarm pair specifically so it can sit **after** a `tapuntil` line: a GSU trace armed from power-on is mostly a boot sequence Mesen and this core do not even share, and the interesting part would be buried in it. Pairs with the Mesen probe's `--pressuntil` + `traceUntilFrame`, and is read by `--tracediff`. Full write-up: §3.41.
 - `fastforward on|off` (alias `ff`) — toggles `ICore.SkipRendering`. Headless already runs unpaced, so there is no speed multiplier to set here; the win is purely from not compositing frames nobody will look at. Measured at **~2.5x** on SMW (3300 frames: 12.4s -> 5.5s), which makes long boot sequences meaningfully cheaper to script past. Turn it back off before any `screenshot`/`contactsheet`/`spriteoverlay` line — a skipped frame leaves the framebuffer holding whatever was last drawn. See `EmuSen_Rewind_And_FastForward.md` §2.2 for the one accuracy caveat (`RangeOver`/`TimeOver` go stale).
 - `perf [frames=300] [worstCount=5]` — runs `frames` more frames and reports the wall-clock cost distribution (mean/p50/p95/max, plus a frames-over-budget count), the core's own cpu+spc700 / ppu / hdma attribution with an unattributed remainder, the ppu sub-split, and the worst individual frames by offset. Full write-up, including the Debug-vs-Release finding it was built for: §3.20.
 - `framesum [frames=300]` — runs `frames` more frames and folds every one of their frame-buffer hashes into a single 64-bit digest. One number that stands in for "every pixel of every frame in this window," so a renderer change can be shown to be output-identical rather than spot-checked against a screenshot. Full write-up: §3.21.
@@ -549,7 +579,38 @@ Reads back two of this harness's own BMPs (`--screenshot`/`--autoshot`/`contacts
 
 **Two separate output streams, easy to conflate.** `--out` only captures this harness's own `Emit()` calls. Everything the *emulator itself* prints via raw `Console.WriteLine` — `CpuVerboseLogging`/`Spc700VerboseLogging` traces, `[DMA]`/`[PORT]`/etc. `DebugSettings` output, the `[FRAME] N` marker (`Venus_Memory.md`/`VenusCore.RunFrame`) — bypasses `Emit()` entirely and goes straight to real stdout. Redirecting shell output to `/dev/null` while relying on `--out` for everything discards all of that silently; capture real stdout to a file (`> file.log 2>&1`) instead whenever any `DebugSettings` trace flag is in play.
 
-**`bp add` inside a script only counts hits — it never halts.** Headless has no frontend loop to resume from a halt (§3.1's breakpoints note), so a breakpoint here answers "did execution ever reach this address, and how many times" (via `bp list`'s hit count) rather than pausing anything.
+**`bp add` inside a script does halt** — this line used to say it only counted hits, which stopped being true once `FrameRunner` learned to stop a batch on `IsHaltedAtBreakpoint` (§3.23). A `frames N` that hits a breakpoint returns early with the core halted mid-frame, the next verb inspects that moment, and `resume` followed by another `frames` call continues to the next hit. That resume/inspect cycle is how the Yoshi's Island GSU object loop was walked one iteration at a time (§3.15c's worked example). One rough edge left: the `[BREAK]` line names any halted coprocessor "SA-1" regardless of which chip it was, so a GSU halt reads as `[BREAK] SA-1 halted at $098A05` — cosmetic, and the address is right.
+
+### 3.15b `record` — a real video of a headless run
+
+`contactsheet` answers "roughly what happened over this window" at thumbnail scale. It cannot answer "when exactly did this stop moving", and reading thirty separate images to find out is the wrong shape of work. `record` writes the actual frame sequence instead:
+
+```
+record on [<stride>] [<dir>]   start capturing; stride 1 = every frame
+record off                     stop, and encode
+record                         report whether a capture is running
+```
+
+The pieces already existed and were simply never wired together: `DianaOS/Var/FrameRecorder.cs` (session folder, `frames.log` ledger mapping every captured frame back to its emulator frame number, ffmpeg encode with automatic `libx264rgb` → `ffv1` codec fallback, PNG-sequence zip afterwards) was reachable only from `EmuSen.Hotaru`'s F6 hotkey, i.e. only by launching a real window — exactly what the headless harness exists to avoid. `record` gives the same recorder a `--commands` driver: `FrameRunner.AfterFrame` (a second per-frame hook alongside the constructor's own) ticks `CaptureFrame` while a capture is armed, and a script that never says `record off` still gets its video, because `CommandsScriptRunner.Run` stops any live recorder on the way out.
+
+**Encoding is lossless, so the video is evidence, not an impression.** That matters more than it sounds: `ffmpeg -i recording.mkv -f framemd5 -` gives a per-frame checksum, and the longest run of identical checksums is the exact frame the picture froze on — 4150, in the investigation this was built for, found in one command after a contact sheet had only narrowed it to "somewhere between 3300 and 5400". Cross-reference the checksum index against `frames.log` to turn a video frame index back into an emulator frame number.
+
+`record on` clears `SkipRendering`, since `fastforward` would otherwise leave nothing to capture. Frames are written through `EmuSen.Common.Imaging.PngFile`, which is now the project's single RGBA→PNG encoder: `EmuSen.Hotaru/Imaging/FrameImageWriter.SavePng` delegates to it rather than keeping a second copy of the same six SkiaSharp lines.
+
+### 3.15c `savestate` / `loadstate` — stop paying for the boot sequence
+
+```
+savestate <path>
+loadstate <path>
+```
+
+`--loadstate`/`--savestate` already existed as *command-line flags*, which meant a state could only be taken at the very end of a run and loaded at the very beginning. Mid-script there was nothing, and `savestate` as a script line was simply an unrecognized verb that fell through to the DianaOS interpreter and reported `Unknown command 'savestate'`.
+
+This is the single biggest change to how expensive an investigation is. Driving Yoshi's Island from power-on to its opening cutscene costs ~6700 frames of scripted menu input, a minute or two per question asked. With a state pinned at the interesting moment, every subsequent probe — `sprites`, a GSU disassembly, a breakpoint walk, a memory diff — starts from `--loadstate` and answers in seconds. Pin the moment **once**, in the same run that records the video, then never boot again.
+
+`loadstate` clears the rewind chain and calls `RefreshProviders()`, because a state load is a discontinuous jump: without the refresh, `regs`/`sprites`/`pal` would report the pre-load frame's values, which is exactly the moment being inspected. The script's own frame counter deliberately keeps counting rather than jumping to the state's frame number — it bounds the safety cap, and rewriting it would make the cap mean something different depending on which state was loaded.
+
+**States do round-trip.** An older note held that saved `.state` files "resume into a dead machine"; that was verified false here — `frozen.state` reloaded in a fresh process renders the identical frame and continues executing correctly, coprocessor included.
 
 ### 3.16 `EmuSen.Tomoe` — ground-truth single-step validation
 
@@ -781,7 +842,7 @@ It reports three things the FPS text can't:
 
 **Read the first `perf` in a process with suspicion.** Tiered JIT makes the opening ~20 frames materially more expensive, and they land in the "worst frames" list looking like a real spike. The Rocky Rodent run showed exactly this: p95 17.57 ms in the first window, all five worst frames inside the first 17, and 5.9 ms flat forever after. Put a `frames 300` ahead of the first `perf`, or discard that window.
 
-#### What it found: Debug builds are ~3.6x slower, and Rocky Rodent is the first game that cliff pushes under 60
+#### What it found: Debug builds are ~3.6x slower, and it is the CPU-bound titles that fall under 60
 
 Measured on this machine, gameplay, same scene, same `--commands` script:
 
@@ -793,7 +854,21 @@ Measured on this machine, gameplay, same scene, same `--commands` script:
 
 The third row is the point: the entire penalty is the **JIT optimizer being off**, not `DEBUG`-conditional code. Nothing in the core is compiled differently between the two configurations — it is purely `Optimize=false`.
 
+**`-p:Optimize=true` silently does nothing on an incremental build.** Changing that property does not invalidate MSBuild's up-to-date check, so `dotnet run -c Debug -p:Optimize=true` reuses the unoptimized assemblies and reports the plain Debug number — measured 2026-08-03: `EmuSen.dll` came back byte-identical, same timestamp, and the run was 19.0 ms against Release's 5.0. It needs `-t:Rebuild` (then `--no-build` on the run), after which it matches Release to a tenth of a millisecond. **The failure mode is the dangerous direction**: the flag looks applied, the number looks like a real finding, and the conclusion is "the optimizer is not the problem." It also fails the other way — a forced optimized Debug build stays optimized until something else forces a rebuild, so a later plain `dotnet build -c Debug` can hand back a fast Debug binary and hide the cliff entirely.
+
 Rocky Rodent matters because it is the heaviest title in the sample and therefore the first to cross the line. In Debug: RR 16.9 ms (over the 16.64 ms budget), FFVI 12.4, SMW 12.2, LttP 11.5, DKC 10.5, SM 8.0. In Release every one of those, plus CT/MMX/SoM/EB, sits between 1.9 and 4.9 ms — 3-9x headroom. So a Debug-built frontend is not "a bit slower", it is running with roughly a 1.02x margin on the heaviest game and a 1.4x margin on the next one down: any further renderer cost makes more titles fall under 60, one at a time, which is what "it's an issue in another game too" looks like from the outside.
+
+**Re-confirmed 2026-08-03 on Kirby's Dream Land 3, which is now the worst case.** Reported from outside as "in game levels we are only getting 51 fps", and the harness reproduced it to a tenth on the same in-level scene:
+
+| Config | KBL3 ms/frame | fps | over budget |
+|---|---|---|---|
+| Release | 4.93-5.03 | ~201 | 0/900 |
+| Debug | 19.34-19.69 | **50.8-51.7** | 900/900 |
+| Debug + `Optimize=true`, forced rebuild | 4.88-5.00 | ~202 | 0/900 |
+
+KBL3 displaces Rocky Rodent as the title the cliff hits hardest — RR dropped to 15.21 ms once its wasted sub-screen composite was fixed (below), and KBL3 is heavier still. The reason is a different one, and it generalises: **`cpu+spc700` is 13.2 ms of KBL3's 19.4**, because it is an **SA-1** game and that means two 65816 cores stepping every frame, with `perf`'s own coprocessor line reading `357368 clocks/frame run of 357368 offered (100.0%)` — the game keeps the SA-1 saturated. RR was a renderer problem; KBL3 is a CPU-bound one, and no renderer work will move it. The Debug cliff scales with whichever phase dominates, so the first games under 60 are now the SA-1 titles.
+
+**A frame-rate report from a frontend is a build-configuration question before it is a core question.** The core measured 5.0 ms on the same scene — a 3.3x margin — while the frontend was reporting 51 fps; the most recently built frontend assembly was in `bin/Debug`. Check which configuration is running *before* profiling anything.
 
 Two ways to not hit it, with the tradeoff stated rather than picked:
 
@@ -987,6 +1062,463 @@ Two details worth knowing:
 
 The data breakpoint also exposed a real gap in the halt path, now fixed: `regs`/`sprites`/`pal` read `IRealtimeProvider` snapshots refreshed once per *completed* frame, so at a mid-frame halt they reported the previous frame's end state — a breakpoint reporting stale registers is worse than no breakpoint. `FrameRunner.OnHalted` now refreshes the providers before the `[BREAK]` line is printed.
 
+### 3.27 `eval` and conditional breakpoints (`DianaOS/Lib/ExpressionEvaluator.cs`, `DebugTargetExpressionContext.cs`, `Cores/.../Debug/SnesExpressionContext.cs`)
+
+Added after a gap-analysis pass against Mesen's debugger (`Core/Debugger/`, cloned to `/home/red/Projects/mesen-reference` as a read-only reference) — see §3.33 for the full comparison and what was deliberately left out.
+
+An expression language over live machine state, and the thing that turns a breakpoint on a hot routine from useless into precise. `bp add 80A31C` on a routine that runs 400 times a frame stops on the first one; `bp add 80A31C if x == 7` stops on the one that matters. Everything else in this section exists to serve that.
+
+**Split along the core-agnostic line the rest of §3 already uses.** The language — tokens, precedence, short-circuiting, `[addr]`/`{addr}` memory forms — lives in `EmuSen.DianaOS` and knows nothing about any CPU. What a name *means* is an `IExpressionContext`, which each core implements:
+
+- `SnesExpressionContext` publishes the 65816's registers, its individual P flags as `flag.c`/`flag.z`/…, `frame`/`scanline`/`cycle`, `opaddr`, `stackdepth`, and every label.
+- `DebugTargetExpressionContext` is the **zero-per-core fallback**: it derives symbols from whatever registers a target already reports through `CpuRegisters`/`VideoRegisters`/`ApuRegisters`/`CoprocessorRegisters` (i.e. whatever `regs` prints) and reads memory through `GetMemorySpaces()`. A second core gets a working `eval` and working conditional breakpoints without writing a line of expression code; publishing its own context is an upgrade, not a prerequisite.
+
+`DebugCommandHelpers.ExpressionsFor(target)` picks the target's own context when it has one and the fallback otherwise, so no command has to care which it got.
+
+Three decisions worth recording because the obvious alternatives are wrong:
+
+- **Short-circuiting genuinely skips, it does not just discard.** `ParseBinary` threads a `live` flag: a skipped branch is still *parsed* (tokens have to be consumed) but nothing in it is evaluated. That matters beyond `100 / [$7E0000]` not dividing by zero — an unevaluated `[...]` must not *read the bus*, because reading a hardware register has side effects (`RDNMI` clears the pending-NMI flag). A first cut of this evaluated both sides and threw the result away, which the short-circuit tests caught.
+- **WRAM reads bypass the bus.** In `SnesExpressionContext.TryReadMemory`, a CPU address landing in WRAM (banks `$7E`/`$7F`, or the `$00-$3F`/`$80-$BF` low-RAM mirror) is served straight from `bus.Ram` rather than through `Read8`. It's faster on a path that runs per-instruction, and it makes the overwhelmingly common condition form (`[$7E0020] == 3`) side-effect-free by construction. Anything not resolving to WRAM still goes through the live bus, with whatever consequence that carries — `man eval` says so explicitly rather than pretending otherwise.
+- **A condition that won't evaluate is dropped, not retried.** A typo'd symbol would otherwise fail on every single instruction the address is reached at, forever. `ConditionHolds` halts once, records the error in `LastConditionError`, and clears that breakpoint's condition — the breakpoint survives, its condition doesn't. A core with no `ConditionEvaluator` wired treats conditions as always-true, so the address still works.
+
+`%` is both the binary-literal prefix (`%1010`) and modulo. It's read as a literal only when the next character is `0` or `1`; everywhere else it's the operator. Found by a test, not by inspection.
+
+Note the shell interaction: `&&`, `||`, `<`, `>`, `|` are DianaOS's own operators (§3.17) and are consumed before the command ever sees them, so a condition using them must be quoted. Everything after the `if` word is rejoined with single spaces, so simple unquoted forms still work.
+
+### 3.28 Execution control: `bt`, `step over`/`step out`, `runto`
+
+Before this, the halt/resume surface was a single-instruction `step` and a breakpoint list. That covers "stop here" but not the two questions that actually dominate a session: *how did I get here*, and *get me to the interesting moment*.
+
+**`bt` — the live call chain.** `CallStackRegistry` records a frame on every JSR/JSL and pops on every RTS/RTL, plus a labelled frame on NMI/IRQ/BRK/COP entry (and a pop on RTI). This is the dynamic counterpart to `callers` (§3.12) and the two answer different questions: `callers` scans code and lists every instruction that *could* reach an address, `bt` reports the one path that actually did. When a routine has six static callers, `callers` gives six suspects and `bt` gives the answer.
+
+The seam is two nullable fields on `Cpu` (`CallStack`, `Breakpoints`), attached by `SnesDebugTarget` and null in a normal run — the same "core notifies a registry it knows nothing about" shape `BreakpointChecker` and `CoverageRecorder` already use, and both are `[SkipInState]` for the same reason `_verboseTrace` is.
+
+**A tracked call stack is an inference, and the doc says so.** Code that manipulates its own stack — pushing a return address and jumping, pulling one it never returns through, unwinding several frames with a stack-pointer write — desynchronizes it. Rather than pretend otherwise, unmatched returns are *counted* and surfaced by `bt` whenever nonzero, depth is capped so a runaway chain stops recording instead of growing without bound, and `bt reset` resyncs from the current instruction. That honesty is what makes `step out` and `profile` trustworthy: when the reading is wrong, there is a visible reason.
+
+**`step over`/`step out` work by depth, not by address.** `ArmStepToDepth(n)` halts at the first instruction executed once the call stack is no deeper than `n` — `step over` passes the current depth, `step out` passes depth − 1. Two things fall out for free: recursion is handled correctly (an inner call at the same address doesn't stop it early), and `step over` on a *non-call* instruction degrades to a plain `step`, because the depth never rises. An address-based implementation gets both of those wrong.
+
+The one subtlety is why arming works at all: `VenusCore.RunFrame`'s `_justResumedFromBreakpoint` flag already skips exactly one breakpoint check after a resume, so the instruction being stepped over runs before any check happens. The existing single-step depends on the same property.
+
+**`runto` — resume until an event.** `runto nmi|irq|brk|cop` (fed by `BreakpointRegistry.NoteInterrupt` from the CPU's interrupt entry points), `runto scanline <n>` (a new `MemoryBus.ScanlineObserver`, invoked once per scanline from `RunFrame`), and `runto frame [<n>]` (the existing per-frame `OnFrame` hook). All three set a pending flag consumed at the next instruction boundary — the same one-instruction lag `bp write` has, for the same reason: an event fires somewhere the core cannot safely stop.
+
+`runto nmi` + `bt` + `label add opaddr NmiHandler` is the intended three-command sequence for finding and keeping a handler address you didn't previously know.
+
+`runto <addr>` on a plain address is a convenience that adds an ordinary breakpoint and resumes. It is **not** removed when it fires — the registry has no one-shot concept — so the command reports the id and tells you to remove it. Silently leaving a permanent breakpoint behind would be worse than saying so.
+
+### 3.29 `label` — named addresses (`DianaOS/Var/LabelRegistry.cs`)
+
+The piece that makes a long investigation compound instead of restarting. Every prior section produces addresses; nothing kept them. `label add 7E13C6 CoinCount` names one, and from then on `disasm`, `bt`, `bp list`, `counters top` and `profile top` all print `$7E13C6 <CoinCount>`, and `CoinCount` works as a symbol in any expression (`bp add NmiHandler`, `eval [CoinCount]`).
+
+`disasm` prints a label on its own line above the instruction it names, and annotates any operand whose statically-resolvable target (via the existing `ClassifyStaticReference`, §3.12) is itself labelled — so a `JSR` to a named routine says which one without a second lookup.
+
+The map is one-to-one in both directions: renaming an address drops its old name, repointing a name moves it. Two entries pointing at the same thing is always a mistake, so it's made unrepresentable rather than documented around.
+
+`label load`/`label save` use a deliberately trivial format (`<hex address> <name> [comment...]`, `#` comments, blank lines ignored) rather than any one assembler's symbol file — nothing here knows which assembler a given ROM was built with, and a real `.sym`/`.mlb` converts with one `awk` line, which this shell already has (§3.17). Bad lines are reported with line numbers and the good ones still load.
+
+### 3.30 `counters` — per-address access tallies (`DianaOS/Var/AccessCounterRegistry.cs`)
+
+`watch` records individual events with context; `cov` records whether an address ever executed. Neither answers *how many times*, which is the question behind "is this table live or dead", "which byte of this struct does the game actually touch", and "which half of this buffer is being updated". `counters` tallies reads, writes and executes per address for one space.
+
+Armed against one space at a time on purpose: the tallies cost four arrays the size of that space, which is worth paying where a question is being asked and not worth paying everywhere. Same "cheap when disarmed" contract `CoverageRegistry.Record` already has — one bool test on every memory access.
+
+**Uninitialized-read detection** is the part worth having beyond raw counts. An address read before anything wrote it (since arming) is counted separately. On hardware that read returns power-on RAM contents, so a game doing it is either relying on that state or has a real bug — and an emulator whose RAM fill differs from hardware diverges exactly there. `counters top u` finds those addresses directly. The "since arming" qualifier does real work: arm before the moment being studied, or an address initialized earlier looks uninitialized.
+
+`counters cold` is the inverse and answers what `cov` answers for code but nothing answered for data: addresses in a range nothing ever touched.
+
+### 3.31 `freeze` — pin an address (`DianaOS/Var/FreezeRegistry.cs`)
+
+Holds an address at a value by writing that value straight back the instant anything writes something else. Deliberately **not** the same thing as `cheat poke` (§3.14): a cheat re-applies once per frame, so the game's own value is live for most of that frame and every read in between observes it. A freeze undoes the write immediately, so nothing ever sees what the game tried to store. When the question is "what breaks if this counter never changes" or "is this the variable driving that animation", a per-frame poke answers neither cleanly.
+
+Fed from the same `IWriteObserver` seam `watch` uses; the restore writes through `IDebugMemorySpace`, so the registry needs no knowledge of how a space is stored. The restoring write is itself a write, so `FreezeRegistry.Restore` wraps it in a reentrancy guard — without that it reports straight back into itself.
+
+Writes matching the frozen value are left alone and not counted, which makes the per-entry "writes undone" count meaningful: **a freeze with a blocked count of zero means nothing is writing the address you suspected**. That doubles as a cheap negative result, in the same spirit as §3.24's "a breakpoint that never fires proves nothing, but coverage that never records does".
+
+### 3.32 `profile` — where the *game's* instructions go (`CallStackRegistry`)
+
+Charges every executed instruction to whichever routine is innermost on the call stack, then ranks routines. Note the scope: this profiles the **game**, not the emulator — `perf` (§3.20) and `coretop` cover EmuSen's own frame cost, and the two are unrelated tools that happen to share a word.
+
+Two deliberate limits:
+
+- **Exclusive, not inclusive.** A routine that spends all its time inside a call it made scores low; the callee scores high. Inclusive attribution would compound any call-stack drift (§3.28) across every enclosing frame, where exclusive attribution localizes it to one.
+- **Instructions, not cycles.** Instructions are what the per-instruction seam can count exactly. A cycle figure would have to be attributed across a boundary the seam doesn't see, and for "which routine is hot" the two rank almost identically.
+
+Instructions executed with nothing on the stack are charged to `(outside any recorded call)` — normal, and it means the code was already running when profiling was armed, not that anything is broken.
+
+### 3.33 What these passes took from Mesen, and what they left
+
+The Mesen source (`SourMesen/Mesen2`, `Core/Debugger/`) was cloned as a read-only reference and its debugger feature set compared against this toolchain command by command. Everything above came out of that comparison. What was already covered, and what was consciously *not* built:
+
+| Mesen | Here |
+|---|---|
+| `ExpressionEvaluator.*` | §3.27 `eval`, `bp ... if` |
+| `CallstackManager` | §3.28 `bt` |
+| `StepRequest` StepOver/StepOut/RunToNmi/RunToIrq/PpuFrame/SpecificScanline | §3.28 `step over`/`step out`, `runto` |
+| `LabelManager` | §3.29 `label` |
+| `MemoryAccessCounter` (incl. `BreakOnUninitMemoryRead`) | §3.30 `counters` (as a tally, not a halt) |
+| `FrozenAddressManager` | §3.31 `freeze` |
+| `Profiler` | §3.32 `profile` |
+| `MemoryDumper`, `Disassembler`, `PpuTools`, `BaseTraceLogger` | already `mem`/`dump`, `disasm`, `tile`/`tilemap`/`sprites`/`pal`, `trace` |
+| `Breakpoint` (`_startAddr`/`_endAddr` ranges, `BreakpointType::Read`, `BreakpointType::Forbid`) | §3.36 `bp add <a>-<b>`, `bp read`, `bp forbid` — the last pass claimed `bp` covered this and it did not |
+| `MemoryAccessCounter::BreakOnUninitMemoryRead` | §3.36 `bp uninit` — §3.30 had the tally, not the halt |
+| `CodeDataLogger` / `CdlManager` (`.cdl` files, `GetFunctions`, statistics) | §3.36 `cov funcs`/`cov save`/`cov load` — the last pass claimed `cov` covered this and it did not |
+| *(nothing — Mesen has no equivalent)* | §3.36 `cov mark`/`cov new`, differential coverage |
+| *(nothing — Mesen has no equivalent)* | §3.36 `bp write ... changed`, and `bp depth` |
+| `DebuggerFeatures::ChangeProgramCounter`, `LuaApi::SetState` | §3.37 `setreg` — the debugger could read every register and write none of them |
+| `DebuggerFeatures::CpuVectors` | §3.37 `vectors` |
+| `LuaApi::ConvertAddress` | §3.37 `addr` |
+| *(nothing — Mesen needs a Lua script for this)* | §3.37 `bp ... log <expr>`, logpoints |
+| `LuaApi`/`ScriptManager` | the shell itself (§3.17) plus `EmuSen.Pharaoh` (§3.15) — a second scripting language isn't wanted |
+| `CpuType` / per-CPU `IDebugger` (Snes/Spc/Gsu/NecDsp/Cx4/St018) | §3.34 `cpus` and the scope word every command takes |
+| `ExpressionEvaluator.Gsu/.NecDsp/.Spc` (per-CPU token sets) | §3.34 `eval <cpu>`, derived from each chip's reported registers |
+| `SpcDisUtils`, `NecDspDisUtils` | §3.34 `Spc700Disassembler`, `NecDspDisassembler` |
+| *(nothing — Mesen has no equivalent)* | §3.35 `copflow`, the coprocessor register-window log and poll detection |
+| `BreakSource::BreakOnStp`/`BreakOnWdm`/`SnesInvalidPpuAccess`/`SnesReadDuringAutoJoy` | §3.38 `bp when` — the row above dismissed these as NES/GB-specific, and all four are 65816 or SNES ones |
+| `NecDspDebugger` (breakpoints, step, callstack on the DSP) | §3.38 `bp dsp`/`step dsp`/`bt dsp`/`cov dsp funcs` — §3.34 recorded this as impossible for a reason that was not the real obstacle |
+| `SnesEventManager` (the DMA half of the Event Viewer) | §3.38 `dma`, `dma log`, `dma stats` — the data as text, including the scanline column |
+| *(nothing — Mesen needs a Lua script for this)* | §3.38 `bp when ... log`, a hardware condition recorded rather than halted on |
+
+**Not built, and why:**
+
+- **`BaseEventManager` (the Event Viewer)** — a per-frame log of register writes, DMA, NMI/IRQ and sprite-0 hits plotted at scanline/dot coordinates. The single largest remaining gap, and a genuinely good fit for a PPU-focused emulator. Left out because its value is mostly in the *2D plot*, and everything in §3 is text; it wants the GUI debug window (§7) that still doesn't exist. `runto scanline` (§3.28) plus `layers` (§3.19) covers the narrow "what changed at this scanline" case in the meantime.
+- **`StepBackManager` (step back one instruction)** — needs a rewind ring at instruction granularity, not frame granularity. Real work in the core, not the toolchain, and it should be built on whatever `EmuSen_Rewind_And_FastForward.md` already establishes rather than beside it.
+- **`Base6502Assembler`** — assemble text to bytes and patch it in. `cheat rompatch` plus `write` already covers patching; the missing half is only the mnemonic-to-bytes direction, and the disassembler's own verification pass (§7) should land first so the two agree by construction.
+- **`DisassemblySearch`** — `disasm ... | grep` is the composable-Unix answer this shell was built for, and it already works.
+- **`BreakOnBrk`/`BreakOnCop`/`BreakOnStp`/unofficial-opcode breaks** — `runto brk`/`runto cop` cover the two that matter on a 65816; the rest are NES/GB-specific in Mesen. ~~**Wrong**, and corrected in §3.38: `BreakOnStp` and `BreakOnWdm` are both 65816 opcodes, not NES/GB ones, and Mesen additionally carries two SNES-specific break sources this list missed entirely (`SnesInvalidPpuAccess`, `SnesReadDuringAutoJoy`). All four are now `bp when`.~~
+
+**Cost.** The call-stack and profiler hooks sit on the per-instruction seam, which §13.1 of `Venus_PPU.md` warns about. Measured on a deliberately JSR/RTS-dense synthetic ROM (a 3-instruction subroutine called in a tight loop — far denser than real game code): **1.038 ms/frame with no debug target attached, 1.060 ms/frame with one attached**, i.e. ~2% while debugging and nothing measurable during normal play, since `Cpu.CallStack` is null unless a `SnesDebugTarget` exists. Profiling and access counting are additionally opt-in behind an `IsArmed` bool, matching `CoverageRegistry`.
+
+---
+
+### 3.34 Named debug CPUs — the coprocessor pass (`DianaOS/Var/DebugCpu.cs`)
+
+The toolchain's model of "which processor am I debugging" used to be a boolean: `Breakpoints` and `CoprocessorBreakpoints`, `Coverage` and `CoprocessorCoverage`, with commands taking a hardcoded `sa1`/`cop`/`gsu` scope word. That does not describe the hardware. An SNES is **always at least two** processors — the 65816 and the SPC700 — and a cartridge can add a third. One bool cannot name three chips, and the SPC700, which is present in every single game, had no breakpoints at all.
+
+`DebugCpu` replaces the pair with a list. Each entry names a chip and carries whatever that chip actually supports: a `BreakpointRegistry` (never null, so commands need no second null check), and optionally a `CoverageRegistry`, a `CallStackRegistry`, an `IExpressionContext`, a code space, a register provider, and a program-counter delegate. `IDebugTarget.DebugCpus` defaults to empty, so a core that publishes nothing is unaffected and the legacy `Breakpoints`/`CoprocessorBreakpoints` properties still work.
+
+Every scoped command resolves its optional first word through one shared helper (`DebugCommandHelpers.ResolveCpu`), so the convention is identical across `bp`, `cov`, `bt`, `step`, `profile`, `eval`, `regs` and `disasm`. With no scope word, the first CPU in the list — always the main one — is used, so **every pre-existing command form is untouched**. `cop` survives as an alias for whichever cartridge coprocessor is present.
+
+**What the SNES now publishes:**
+
+| Chip | `bp` | `cov` | `bt` | `regs` | `disasm` | Notes |
+|---|---|---|---|---|---|---|
+| `cpu` | yes | yes | yes | yes | yes | 65816, unchanged |
+| `spc` | **new** | **new** | — | yes | **new** | present in every game; had no breakpoints before |
+| `sa1` | yes | yes | **new** | yes | yes | a 65816, so the call/return seam applies unchanged |
+| `gsu` | **new** | yes | — | yes | yes | coverage-only before |
+| `dsp` | yes | yes | yes | yes | yes | breakpoints/coverage/call stack added in §3.38; addresses are word indices |
+
+Support is deliberately **not** uniform, and `cpus` prints per chip what is actually wired rather than letting a command fail obscurely later. The remaining absence is an honest one: the GSU and SPC700 have no stack-based call convention to infer frames from, so `bt gsu` says so instead of inventing them. *(The DSP row above said `bp`/`cov`/`bt` were impossible until §3.38 found the stated reason was wrong — see there.)*
+
+**Halting.** Only one chip halts at a time. `VenusCore` tracks *which* (`HaltedCpu`, replacing the old `_haltedOnCoprocessor` bool), because the resume path has to arm the skip-one-check flag on the chip that actually halted — arming the S-CPU's flag for a GSU halt would let the GSU re-break instantly on the same PC, forever. Each chip's unspent clock budget survives the halt, so resuming continues the frame rather than restarting it.
+
+**Two disassemblers were missing outright.** `disasm APURAM` previously decoded SPC700 bytes with the 65816 table and produced confident nonsense. `Spc700Disassembler` and `NecDspDisassembler` fill that in; the SNES now needs four decoders to cover itself (65816, SPC700, GSU, NEC DSP), and naming a chip picks the right one. `disasm DSPPRG` indexes program *words* rather than bytes, because the DSP's PC is a word index and that is the only number a user ever has to paste in.
+
+**Per-chip expressions.** `eval gsu r14` and `bp gsu add X if r14 > $100` evaluate against the *GSU's* registers. This needed no new expression language: `DebugCpuExpressionContext` derives symbols from whatever registers a chip already reports through `regs`, so a chip gets a working conditional-breakpoint context for free, and a core-specific context is an enrichment layered on top rather than a requirement.
+
+### 3.35 `copflow` — the coprocessor handshake log (`DianaOS/Var/RegisterFlowRegistry.cs`)
+
+Neither this toolchain nor Mesen had anything for the seam where coprocessor bugs actually live.
+
+Every cartridge coprocessor talks to the main CPU through one narrow register window, and the failure is almost never the chip's arithmetic. It is the conversation: the CPU writes a parameter block, kicks the chip, the chip works and sets a status bit, the CPU polls that bit and moves on. Any of those four steps can fail silently, and none are visible in a register dump — by the time you look, the moment has passed. `cophist` (§3.26) shows the run-up in *register* terms; this shows the *traffic*.
+
+`copflow` logs the window: every read and write with its value, frame, and which side did it. `copflow tail` replays the recent conversation in order; `copflow stats` gives whole-run per-register tallies.
+
+**Poll-run detection** is the part worth the code. `copflow poll` tracks the longest run of consecutive reads of one register whose value never changed, plus the run in progress right now. A long run is unambiguous: if a game read `$3030` ninety thousand times and always got the same byte, the game is not slow and the plot is not wrong — it is spinning on a status bit this core never updates. That points at the register model rather than the chip's logic, and it is a different bug from anything `regs` or `cophist` would surface. A write by either side always breaks the run, because a write means someone learned something and acted.
+
+Core-agnostic: `RegisterFlowRegistry` knows nothing about the SNES, and the SNES feeds it from the single `CartridgeRegion.CoprocessorRegister` choke point in `Cartridge.cs`. Disarmed it costs one bool test per coprocessor register access, and nothing at all on a cartridge without a coprocessor, which never reaches the seam.
+
+
+### 3.36 The third Mesen pass — ranges, reads, and the ROM map (`DianaOS/Var/{BreakpointRegistry,CoverageRegistry}.cs`)
+
+A third comparison, run specifically to find what the first two had waved through. It found that **two rows of §3.33's table were wrong**, not merely incomplete: `Breakpoint` was recorded as already covered by `bp`, and `CodeDataLogger` as already covered by `cov`. Neither claim survived reading the Mesen headers next to ours.
+
+**What `bp` was actually missing.** Mesen's `Breakpoint` carries a `_startAddr`/`_endAddr` pair and a `BreakpointTypeFlags` of Read/Write/Execute/Forbid. Ours carried one address and could only break on writes. Three real capabilities were behind that:
+
+- **Ranges.** Any address argument now takes `<start>-<end>`. This is a bigger difference than it looks, because it changes what can be *asked*: a single-address write breakpoint requires already knowing which byte moves first, and `bp write WRAM 0100-01FF` does not. The halt message names both the address that matched and the range it belongs to, so the range answers where it landed rather than only that it landed.
+- **Read breakpoints.** `bp read` was simply absent. `readers` (§3.12) scans for instructions that *could* read an address, and misses every access through a computed pointer — which on a SNES game is most of them. The runtime halt catches what the static scan cannot.
+- **Forbid ranges.** `bp forbid <start>-<end>` suppresses every halt while the PC is inside it. The use is noise: the interesting breakpoint is usually drowned by one loud caller, and forbidding the NMI handler's range leaves only the game logic. Steps are deliberately exempt — `step` still works inside a forbidden range, or stepping into one would run away with nothing able to stop it. A pending data break is *dropped* rather than deferred when it lands in a forbidden range, since deferring it would just fire it one instruction later and defeat the point.
+
+**And `bp uninit`.** Mesen has `BreakOnUninitMemoryRead` as a break source; §3.30 had built the same detection as a whole-run tally in `counters` and stopped there. The tally answers "did this happen", the halt answers "what was on the stack when it did", and only the second one finds the cause. Each address reports once and is then treated as initialized, or a boot loop over uninitialized memory halts on the same byte forever.
+
+**What `cov` was actually missing.** Mesen's `CodeDataLogger` persists to `.cdl` files keyed on ROM CRC, classifies bytes, exposes `GetFunctions()`, and reports statistics. Ours was an in-memory bitmap that answered one question. Two of those gaps were worth closing:
+
+- **`cov funcs`** lists every address a call actually landed on, with an entry count and whether it was reached by a call or an interrupt vector. These are observed entry points, not inferred ones, which is the whole value — a static scan finds routines reached by a literal JSR and misses every jump table. Fed by a new `CallStackRegistry.EntryPointObserver` delegate, so the discovery rides the call seam that already existed rather than adding a second one. The output is shaped to paste into `label`.
+- **`cov save`/`cov load`** persist the bitmap and the routine table, and **load merges rather than replaces**, so maps from several sessions accumulate. No single sitting reaches every routine, and a map of a whole playthrough is worth much more than a map of one.
+
+The third CDL feature, per-byte code-vs-data classification, was **not** built. It needs the CPU to tag each memory access with an operation type (Mesen's `MemoryOperationType`, set at every read site), which is a change to every access site in the 65816 rather than a debug-layer addition. Our bitmap also stores instruction *starts* rather than a per-byte code flag, which is strictly more information — it is where `cov` gets its ability to settle a mis-sized immediate (§3.24) — so the two are not the same structure with one filled in.
+
+**Two things neither emulator has.** Both came out of asking what the Mesen features were *for* rather than copying their shape:
+
+- **`bp write ... changed`** halts only when the byte written differs from the last one seen there. A plain write breakpoint on a per-frame state byte trips sixty times a second and tells you nothing; games rewrite the same value constantly. The comparison is against what the breakpoint last *saw*, not against memory, so it costs no read and cannot disturb a side-effecting address. The first write to an address always counts as a change, or a value written exactly once would never be reported at all.
+- **`cov mark` / `cov new`** are differential coverage — the coverage analogue of `snapshot`/`diff` (§3.10). Mark, press the button, and every address `cov new` reports is code that ran *because of what you just did*. Whole-run coverage cannot separate that from the boot sequence and the per-frame loop, which together dwarf it. This is the sharpest tool in this section, because it turns "find the routine that handles X" — the most common reverse-engineering question there is — into a mechanical two-command procedure.
+
+**And `bp depth <n>`**, which Mesen also lacks: halt as soon as the call stack gets deeper than `<n>`. Runaway recursion presents as a game that slows down and then misbehaves long after the actual defect, by which time the evidence is gone; this stops the machine while the chain is still on the stack and readable with `bt`. Fires once and disarms, so it does not retrigger on every instruction that stays deep.
+
+**Cost.** Everything here rides seams that already existed. `bp read` is one added call in `SnesDebugTarget.OnRead`, alongside the watch and counter notes already there. Forbid ranges cost a `Count > 0` test per instruction. The uninitialized-read map is one bool per byte of one space, allocated only when armed. `cov`'s mark is a second 2MB bitmap, allocated only by `cov mark`. Entry-point discovery is a dictionary write per call, and only while coverage is armed. Nothing new touches the per-instruction path when disarmed.
+
+**Still not built, deliberately**, and unchanged from §3.33: the Event Viewer (wants the GUI window), step-back (wants instruction-granularity rewind in the core), and an assembler (wants the disassembler verification pass first). Mesen's `CpuCycleStep`/`PpuStep` step types are also still absent — `runto scanline`/`runto frame` cover the cases that have come up, and a dot-granular step wants the same 2D view the Event Viewer does.
+### 3.37 The fourth Mesen pass — writing state, and the log that does not stop (`setreg`, `vectors`, `addr`, logpoints)
+
+The third pass audited the *breakpoint and coverage* rows of §3.33. This one looked at the parts of Mesen that are not in `Core/Debugger/` at all — `DebuggerFeatures.h`, and the `LuaApi` surface, which is a good inventory of what Mesen thinks a debugger should be able to do because every entry is something someone wanted to script.
+
+**The debugger could not write anything.** `LuaApi::SetState` and `DebuggerFeatures::ChangeProgramCounter` are both about modifying CPU state, and nothing here could. `mem`/`write` could poke memory, `freeze` could pin it, `cheat` could patch ROM — but every register was read-only, in a toolchain that otherwise models eight processors' registers in detail.
+
+`setreg` closes that, and the point of it is **counterfactuals**. Halt on the compare that gates a routine, flip the register it compares, resume, and watch the game go down the branch it did not take. Coverage and breakpoints can establish that a branch was never taken; only this can show what would have happened if it were. It also skips a hang — forcing PC past a spin loop lets a boot sequence run far enough to show what the *next* problem is, which is frequently worth more than the one you are stopped on.
+
+Deliberately **not** folded into `regs` as a `regs set` subverb, despite that reading better. `regs` is `IsReadOnly => true`, which is what lets the always-live shell answer it instantly off the emulation thread (§3.3); a write subverb would force the whole command false, dragging every register dump onto the emulation thread's next frame — and writing a register from the shell thread would be a race besides. A separate non-read-only command keeps both halves honest. Values are refused rather than truncated when they do not fit the register's width, since a silently masked value is a wrong answer reported as a success. Writability is per chip and reported by `cpus`: the 65816, the SA-1 and the SPC700 take writes, the GSU and NEC DSP report registers through debug accessors with no write path behind them and say so.
+
+**`vectors`.** Mesen carries a `CpuVectorDefinition` table per CPU; we had `runto nmi` but no way to ask where NMI actually goes. `vectors` dereferences the table live through the CpuBus and resolves each target through the label registry. Two details make it more than a convenience: it groups by CPU mode, because a 65816 has two complete vector sets and which one the hardware uses depends on the E flag at the instant the interrupt is taken — a game that initializes only the native table and then takes an interrupt in emulation mode jumps somewhere it never intended, and seeing both tables together is what makes that visible. And when coverage is recording, a vector whose target has actually executed is marked `(ran)`; a vector pointing at plausible code that never ran says the interrupt is not firing at all, which is a different bug from it firing and misbehaving.
+
+**`addr`.** `LuaApi::ConvertAddress` exists because the CPU's view and the ROM file's layout are different coordinate systems, and every task that crosses between them needs the translation. `addr` reports it using the cartridge's own decode — the same path a real read takes — so it is correct for whatever mapper the ROM uses rather than assuming LoROM, and ROM offsets come back modulo the real ROM size, matching how an undersized ROM mirrors on hardware. Addressable results print a ready-made `mem` command underneath. A hardware register reports as a register rather than being given a fabricated offset, and an address nothing claims reports as unmapped — itself an answer, since a pointer that decodes to nothing was computed wrong.
+
+**Logpoints, which Mesen can only do with a Lua script.** A breakpoint with a `log <expr>` clause evaluates the expression, records it, and *carries on*.
+
+This is the one capability here that is not catching up to anything. It exists because halting is the wrong tool for a whole class of question. A routine that runs four hundred times a frame cannot be stepped through four hundred times, and halting even once changes the timing of everything downstream — so the act of measuring destroys what is being measured. `bp add 80A31C log "a, x, [$7E0DB3]"` records all four hundred at full speed, and the *pattern across calls* becomes visible instead of one arbitrary call being inspected in isolation. Mesen's answer to this is `RegisterMemoryCallback` from a Lua script; §3.33 declined to add a second scripting language on the grounds that the shell already exists, and this is part of making that argument true rather than merely convenient.
+
+Implementation is almost entirely reuse. The expression side is the existing evaluator, rendered per-chip through the same `DebugCpuExpressionContext` (§3.34) that conditions already use, so `bp gsu add X log r14` reads the GSU's R14. Comma-separated parts render as `expr=value` so a line names what it is showing. Logpoints compose with `if`, in either order, since both clauses are parsed by one scanner. A logpoint whose expression fails records the error text in place of the value rather than being dropped the way a bad *condition* is — a condition that throws must be dropped because it would otherwise fire on every instruction forever, and a logpoint has no such failure mode. The log is a 4096-entry ring shared per processor, so entries from several logpoints interleave in the order they really happened. Data logpoints record at the moment of the access rather than one instruction later, so a logged write shows the value that was written.
+
+**Cost.** `setreg`, `vectors` and `addr` are all on-demand and cost nothing while not being run. A logpoint costs what a conditional breakpoint costs — an expression evaluation per match — and nothing when no logpoint is set, since the log expression is null and the check is a null test on a path that had already matched an address.
+
+**Checked and deliberately still not built.** Mesen's `TraceLoggerOptions` carries a `Condition` and a `Format` string; our `trace` remains count-only. A conditional trace is real, but it wants the condition evaluated inside the core's own verbose-log path — core surgery — and logpoints now cover the same need better for the case that actually comes up, since they record *chosen* values rather than every field of every instruction. `LuaApi::SetInput` (programmatic controller input) is genuinely missing and genuinely useful — several open questions in `Games_Tested.md` are input-related — but it belongs with the frontend's input plumbing rather than in a debug registry, and it is the one item from this pass parked rather than dismissed.
+
+### 3.38 The fifth Mesen pass — what the hardware does wrong, and the chips as chips (`bp when`, the NEC DSP, `dma`)
+
+Four passes had compared *commands*. This one compared two things a command list does not surface: Mesen's `BreakSource` enum, which is the complete inventory of reasons its debugger will stop the machine, and its per-coprocessor `IDebugger` implementations, which are where a chip stops being a register dump and becomes something you can step.
+
+**`bp when` — halting on a hardware fault rather than an address.** Every breakpoint here answered "where". Mesen's `BreakSource` list is mostly answers to "what": `BreakOnStp`, `BreakOnWdm`, `BreakOnBrk`, `BreakOnCop`, `SnesInvalidPpuAccess`, `SnesReadDuringAutoJoy`. §3.33 waved this row away as "the rest are NES/GB-specific in Mesen", **which was wrong on both halves** — STP and WDM are 65816 opcodes, and two of the entries are SNES-specific ones that list never mentioned.
+
+These are worth having because none of them are visible in the output:
+
+- **`stp`** is the sharpest. A 65816 that executes STP is stopped until reset, and a game only reaches one by jumping somewhere it never meant to. The symptom is that the picture simply stops, with nothing to say where — and by then the PC is parked and the call stack is the only remaining evidence. `bp when stp` halts on the instruction itself, while `bt` still reads.
+- **`ppuaccess`** and **`autojoy`** are the two where the emulator and the game disagree quietly. Real hardware drops a VRAM/CGRAM/OAM write made during active display, and returns a half-updated byte from a joypad register read taken mid-refresh. A core more permissive than the hardware runs such a game correctly and hides a real bug; a core less permissive breaks one that worked. Either way the first thing worth knowing is that it happened at all, and neither is reported by anything else here. `autojoy` in particular has open questions waiting for it — `Games_Tested.md`'s input entries are exactly this shape.
+- Only the PPU **data** ports count for `ppuaccess` ($2104, $2118/$2119, $2122). The address ports latch fine mid-frame, so flagging them would be noise, and noise is what makes a condition get turned off.
+
+**Log mode is the half that makes it usable.** A condition can be armed `log` instead, recording every occurrence and carrying on. This is not a convenience: a title screen may read the joypad early on every single frame, and halting on the first one tells you far less than seeing the pattern across a hundred. Logged conditions land in the *same* ring as logpoints (§3.37) and read back through `bp log`, so a condition and a logpoint interleave in the order they really happened rather than being two logs that have to be correlated by hand.
+
+Core-agnostic, as usual: `BreakpointRegistry` holds named conditions and knows nothing about what they mean, `IDebugTarget.BreakConditions` lets a core publish its own list with descriptions, and `bp when` with no argument prints that list rather than a hardcoded one. A second core publishes its own vocabulary and the command needs no change.
+
+**The NEC DSP is a real debug target now.** §3.34's table recorded the DSP as breakpoint-less, coverage-less and stack-less, with the reason given as "firmware runs from mask ROM this core steps as a block". Reading `NecDspDebugger.cpp` next to `NecDsp.cs` showed that reason was not the obstacle. The mask ROM makes the firmware unreadable *from the cartridge*, which a debugger does not care about; and the chip was never stepped as a block — `Run()` already calls `Step()` in a loop, one instruction at a time, which is all a breakpoint needs. The seam was the same `BreakpointChecker` pull-hook the SA-1 and GSU already had, and it took the same shape: consulted before the instruction, returns with the clock budget intact, `ResumeFromBreakpoint()` skips one check so `continue` leaves the breakpoint.
+
+Two details are specific to this chip:
+
+- **Addresses are word indices, not bytes.** The DSP's PC counts 24-bit instruction words, so `bp dsp add 100` is the 257th instruction and `disasm DSPPRG` indexes identically. Deliberately not multiplied by three to look byte-addressed: the chip's own PC is the only number a user has to reason about, and a second coordinate system would mean every value needed labelling with which one it was in.
+- **The call stack is observed, not inferred.** The uPD7725 has a hardware stack with a real CALL/RET pair — jump types `$140`/`$141` push, the `$400000` opcode class executes-and-returns. The observers fire from exactly those two sites, so `bt dsp` reports frames the chip actually pushed. That feeds `cov dsp funcs` (§3.36), which is the point: **firmware nobody has source for can be mapped by running it.** Every routine a game actually calls shows up with an entry count, and that is not a static analysis anyone could have done instead.
+
+One honest blind spot: `Run()` returns immediately while the chip is in its RQM idle spin (`Venus_NecDSP.md` §4.3), so a breakpoint placed inside those two instructions never fires. Correct — nothing worth stopping on is executing — but worth knowing before concluding a breakpoint is broken.
+
+**`dma` — the Event Viewer's data without the Event Viewer.** On a SNES nearly everything the player sees arrives by DMA, and per-scanline effects are HDMA. So a large class of "rendering bug" is not one: the data never arrived, or arrived somewhere else, and the renderer faithfully drew what it was given. There was no way to ask about any of that. Mesen's answer is the Event Viewer's 2D plot, which §3.33 deferred for wanting the GUI debug window — but most of that plot's value is one column, and a text command can have it:
+
+- **`dma`** prints the channel table: direction, B-bus write pattern, the destination register *by name* (`VMDATAL $2118`, not a bare number), source, length, and for HDMA the table pointer and line counter reached. An idle channel still shows its last configuration, which is usually the thing being asked about.
+- **`dma log`** records every transfer with its frame **and scanline**. That column is the one carrying the plot's value: a VRAM transfer during vblank is normal and the identical transfer at scanline 100 is a bug, and only the log distinguishes them. It also solves what the channel table structurally cannot — a general DMA reconfigures and fires many times a frame, and the table only ever shows the last one. Pairs directly with `bp when ppuaccess`, which halts on one.
+- **`dma stats`** totals the armed run per channel (split general/HDMA, because they cost very differently) and **per destination register**, which answers "where is the bandwidth going". A game slow in one scene and not another is usually uploading something enormous, and the destination table names it.
+
+`DmaLogRegistry` is core-agnostic — a ring plus counters, knowing nothing about the SNES — and the destination naming goes through a new `IDebugTarget.NameDmaDestination`, since only a core knows what base its register byte offsets. The SNES reuses the PPU's own `$21xx` name table rather than carrying a second copy.
+
+**Cost.** `bp when` is one bool (`AnyConditionArmed`) tested at each detection site before anything is computed, so an unarmed condition costs a branch on paths that were already branching. The DSP hook is one null test per DSP instruction, matching what the SA-1 and GSU already pay, and the CALL/RET observers are null unless a debug target is attached. `dma log` is a null field test at the end of each transfer — per transfer, not per byte — so a disarmed run pays nothing measurable and an armed one pays a ring write per block rather than per byte moved.
+
+### 3.39 Mesen as a *running* reference, not a source reference (`EmuSen.WiseMan/Reference/`)
+
+Every Mesen pass above (§3.33, §3.36, §3.37, §3.38) read Mesen's **source** and imported capabilities from it. This is a different thing: driving Mesen as a second emulator on the same ROM and diffing the two machines' state at the same frame. It exists because the Yoshi's Island missing-sprites bug could not be found any other way — see `Venus_SuperFX.md` §9 for that investigation end to end.
+
+**What's in the directory.** `MesenProbe.cpp` is a headless `main()` linked against a Mesen2 checkout's `MesenCore.so`; it runs a ROM to a frame, pauses on the frame boundary, prints the GSU and PPU register state, and writes `mesen_{vram,cgram,oam,gsuram,screen}_f<frame>.bin`. `build-mesen-probe.sh` builds it, including the two things that make Mesen build unattended on a machine without SDL2/X11 development packages: the headers are fetched as RPMs and unpacked into a work directory (`CPATH`/`LIBRARY_PATH` plus a shim `sdl2-config`), and `STATICLINK=false` is forced because the stock link line wants `libstdc++.a`. `mesen-gsu-trace.patch` adds the one hook Mesen has no equivalent of — a per-GSU-instruction record of address, opcode and all sixteen registers. `gsudiff.py` aligns that against our own `SuperFxTraceCountdown` trace and reports the first divergence. `MesenReferenceTests.cs` consumes the dumps from inside `EmuSen.WiseMan`.
+
+**Driving it past a menu (`--press`).** The probe originally registered a key manager that reported "nothing pressed" forever, which confined every comparison to whatever the ROM reaches on its own — for Yoshi's Island that is the attract-mode intro and nothing else. `--press <frame>:<button>[:<duration>]` (repeatable; `A B X Y L R Up Down Left Right Start Select`, default 4 frames) holds a button on port 1 on a frame-indexed schedule, which is enough to skip an intro, pick a file and reach real gameplay. Two details it needs to work: the stock config has *no* keyboard binding at all, so the probe assigns its own synthetic scan codes to `Port1.Keys.Mapping1` and sets `Port1.Type = SnesController` before `LoadRom`; and the schedule is resolved against `Emulator::GetFrameCount()` *inside* `IsKeyPressed` rather than from a counter updated by the report loop, because the probe runs with `MaximumSpeed` set and the report loop only wakes on report frames — a cached counter skips whole presses. Positional arguments stop at the first `-`, so `--press` may follow `endFrame` directly without being read as a stride.
+
+**A caution that comes with it.** Frame numbers are *not* comparable across the two emulators once input is involved: the two runs need their own press schedules, and a press that lands one message-box early diverges the whole run. Anchor the comparison on a state variable that is stable at the moment of interest (the Yoshi's Island camera work below anchored on GSU RAM `$0094 == 0x0100`, the last frame before the intro camera starts moving) rather than on a frame index.
+
+**What it dumps.** `mesen_{vram,cgram,oam,gsuram,wram,screen}_f<frame>.bin` per report. WRAM was added 2026-08-03 for §10.7 of `Venus_SuperFX.md`, where the whole question turned out to be "does the divergence start on the CPU side or the chip side" - and it started on the CPU side, which nothing in the previous dump set could have shown.
+
+**The alignment problem, because it will come back.** The two cores label a step differently: Mesen primes its pipeline with a NOP at every GSU start and logs `R15` *before* the fetch, so its `(address, opcode)` pairing is offset from ours — and the offset grows by one at each start, so no fixed shift aligns the streams. Register state is unambiguous, though, and an injected NOP changes none of it, so `gsudiff.py` collapses runs of identical register tuples on both sides and the artifact cancels exactly. Anything surviving that is real. Getting this wrong produces a confident "divergence at step 0" that is pure bookkeeping, which happened twice before the collapse trick.
+
+**Two cautions worth carrying.** Mesen fills Game Pak RAM with **random** bytes at power-on, so any region the game has not written yet legitimately differs — compare only what the ROM touches. And trace buffers must be sized before concluding anything: a capped Mesen trace ends early and looks exactly like "EmuSen executed 1.8x more instructions", which is what it looked like right up until the cap was raised and the counts came out within 818 of each other over 300 frames.
+
+**What the tests assert, and what they deliberately do not.** VRAM and CGRAM are compared **byte-exact** — they match, and that is the load-bearing fact, because it means a frame that looks wrong with matching video memory is a renderer bug and one that differs is an upload bug. OAM and GSU work RAM are *not* byte-exact yet (`Venus_SuperFX.md` §9's residual), so those two tests assert the property that actually failed — how many sprites reach the screen, and whether the GSU built its table at all — rather than pretending to an equality that does not hold. Neither the ROMs nor the dumps are committed (a VRAM snapshot of a commercial game is that game's data), so every test returns early when they are absent, the same shape as `NecDspRealFirmwareTests`.
+
+**Also learned, and unfixed.** Three gaps this pass exposed in tools that already existed, all of which report something plausible rather than erroring, which is what makes them expensive:
+
+- **`cov gsu` only records addresses fetched *outside* the GSU instruction cache.** In one measured frame it reported 140 of the 516 addresses actually executed — and the ones it did report were the first two bytes of each 16-byte cache line, which reads exactly like a genuine control-flow divergence against a reference that reports all of them. Not usable for "did this branch run" until fixed.
+- **~~`copflow` logs nothing for the SuperFX.~~ Wrong - corrected 2026-08-03.** It works, and it is the right tool for the GSU register window: `copflow on 250000` over 301 frames of Yoshi's Island records **185,758 accesses across 23 registers**, including `$301F` written exactly 22 times for exactly 22 GSU jobs. The original reading was taken over 100 frames, and this game does not touch `$3000-$303F` at all between frame 0 and frame ~280 - a genuinely empty window, not a broken one. **Size the buffer and the frame range to the question before concluding a log is empty.** Note `watch`/`bp write` still cannot see this window (only `RegisterFlow?.Note` is raised for `CartridgeRegion.CoprocessorRegister`, not `WriteObserver`), so `copflow` is not merely the best tool here, it is the only one.
+- **`dma` decodes some general transfers as `MPYL $2134`**, which is not a plausible DMA destination — `$2134` is a read-only multiply result. Seen on Yoshi's Island as seven transfers in one frame with otherwise sensible sources and sizes (`$7F0000` 65536 bytes, `$700000` 31744, `$702604` 20988). Every other destination in the same log decodes correctly (`$2118`, `$2104`, `$2122`), so this is either a destination-naming gap for those channels or the game really does write `BBAD = $34`. **Not chased** — it was noise relative to the sprite bug — but it is either a real decode gap or a real game behaviour worth knowing, and it should not stay unexplained.
+
+**Superseded for CPU-side questions.** Everything above diffs *state* — memory contents at a frame boundary. §3.40 diffs *control flow* instead, which is the right tool whenever the two emulators are not in phase. Keep the state dumps for "is VRAM right"; reach for §3.40 for "why is the timing off".
+
+**Checked and still not built.** Mesen's `StepBackManager` (rewind to instruction granularity), `Base6502Assembler`, `DisassemblySearch` and the Event Viewer's actual *plot* remain deferred for the reasons in §3.33 and §3.36, all unchanged. Mesen's `Cx4Debugger` and `St018Debugger` have no counterpart here for a simpler reason: this core does not implement the CX4 or the ST018, so there is nothing to debug — worth recording so a future pass does not read their absence as a debugger gap. `LuaApi::SetInput` is still parked for *our* side (§3.37); the probe's `--press` above covers the Mesen side of the same need, and `bp when autojoy` still makes the pair attractive, since a condition that fires on joypad reads goes naturally with being able to inject one.
+
+---
+
+### 3.15d `tapuntil` — navigating a scene by state, not by frame count
+
+A `--commands` script that reaches a scene by counting frames (`frames 1250`, `tap Start 8`, `frames 60`, ...) breaks the moment core timing changes, and it broke immediately when §8.7's DRAM refresh landed: the same script that used to reach Yoshi's Island level 1-1 now stops on the intro stork, because every scripted tap lands somewhere else. §3.39 already warns not to anchor on frame indices; `tapuntil` is the verb that makes following that advice practical.
+
+```
+tapuntil <button> <space> <addr> <hexvalue> [cap] [every]
+```
+
+Taps the button (4 frames held, then released — a held button reads as one press to most menus) every `every` frames until the bytes at `<space>:<addr>` equal `<hexvalue>`, or `cap` frames pass. It reports how many taps and frames it took, and says plainly when it did **not** reach the value rather than continuing as if it had.
+
+`tapuntil A GSURAM 1E1A F0,01 12000 40` walks the file-select and every cutscene message box and stops on the frame Yoshi's Island's intro camera target is set, in 20 taps.
+
+**Two ways to pick an anchor address wrong, both paid for in §10.7.**
+
+- **Never anchor on the value under investigation.** The first attempt used `$0094`, the camera position itself — the thing believed to be broken. An anchor has to be a value both emulators already agree about, or it either never fires or fires in the wrong place.
+- **Never anchor on an address the battery save restores.** On a SuperFX cart the `.srm` *is* GSU work RAM, so once any run has played the scene, `$1E1A` holds its answer at power-on and this verb reports success at frame 0 having pressed nothing — which is exactly what it did, silently, for three days. Pass `--nobattery`. See `Venus_Memory.md` §2.4a.
+
+---
+
+### 3.40 Differential *control flow* — the S-CPU trace differ (`--cputrace`, `--tracediff`)
+
+**Why this exists.** §3.39 compares memory contents at a frame boundary. That is only valid when both machines are at the same point in the program, and on Yoshi's Island they are not — EmuSen ran roughly a frame off the game's own `$0030` counter, and Mesen randomises power-on RAM. Every measurement in the §10.7 investigation paid for that: "317 diverged bytes" that were almost entirely random fill, a 4-run mask to erase it, a frame-offset hunt that *minimised* but never eliminated the difference, and `gsudiff.py` desyncing on a boot block only Mesen runs. Those were not four problems. They were one problem four times — **diffing snapshots of two clocks that are out of phase, where the noise scales with the skew.**
+
+Control flow has no such coupling. If EmuSen simply runs a frame later but executes the same instructions, the two instruction streams align perfectly and the diff is empty until something real happens. Uninitialised RAM is never read at all, so the random fill cannot lie to you.
+
+**The record.** Both emulators emit the same fixed 24-byte little-endian record, defined once in `CpuBinaryTrace.cs` and parsed by `CpuTraceDiff.cs`. The comparison itself lives in `TraceDiff.cs`, generic over `ITraceStep<T>`, so the GSU gets the same collapse/resync/cost machinery from its own record layout (§3.41):
+
+| offset | size | field |
+| --- | --- | --- |
+| 0 | 3 | `(PB<<16)\|PC` — for an interrupt record, the *interrupted* address |
+| 3 | 1 | reserved (0) |
+| 4 | 1 | opcode (0 on interrupt records) |
+| 5 | 1 | kind — 0 instruction, 1 NMI, 2 IRQ |
+| 6..15 | 2 ea | `A X Y S D` |
+| 16..19 | 1 ea | `DB P E` + pad |
+| 20 | 4 | master clocks this instruction cost (backfilled after it runs) |
+
+Files start with the 8-byte magic `ESCT` + version, so a blob written by an older layout is rejected rather than silently misread. Version 2 added the cost field and widened the record from 20 bytes to 24.
+
+Registers are captured **before** the instruction executes, on both sides — Mesen in `SnesCpu::Exec()` before `RunOp()`, EmuSen in `Cpu.Step()` after the opcode fetch but before `Dispatch`. Getting that wrong by one instruction makes every register comparison useless.
+
+**Interrupt records matter more than they look.** Mesen vectors NMI/IRQ inside `CheckForInterrupts()`, *outside* its per-instruction trace point. If one side recorded interrupt entry as a step and the other did not, the streams would desync at the very first NMI and everything after would be garbage. Both sides therefore emit an explicit kind-1/kind-2 record, and the differ treats kind as part of a step's identity, so an interrupt entry can never align with a plain instruction.
+
+**Producing the pair.**
+
+```
+# Mesen, from the Mesen checkout (its DT_NEEDED is the relative bin/pgohelperlib.so)
+cd /path/to/mesen2 && /tmp/emusen-mesen-probe/mesenprobe rom.smc outdir 80 80 --cputrace 80
+
+# EmuSen
+dotnet run --project EmuSen.Pharaoh -c Release -- rom.smc 81 --cputrace 80:outdir/emusen_cputrace_f00080.bin
+
+# Diff (standalone, no ROM loaded)
+dotnet run --project EmuSen.Pharaoh -c Release -- --tracediff outdir/mesen_cputrace_f00080.bin outdir/emusen_cputrace_f00080.bin
+```
+
+Volume is a non-issue: 80 frames of Yoshi's Island is ~1.0-1.1M steps, ~21 MB a side, and the whole diff runs in under half a second. There is no reason to trace a window rather than the entire boot.
+
+**Loop collapsing, which is what makes the output readable.** A vblank spin loop iterating a different number of times is an *insertion*, not a substitution — an index-aligned diff would report every later step as different. `CpuTraceDiff.Collapse` detects a repeating address block (smallest period first, up to 32 instructions) and emits one node carrying its repeat count. A spin loop then becomes a single node, and a differing iteration count becomes a **number to report** rather than a desync: `loop [$008497,$00849A] ran 13x on the left, 15x on the right`. That line is the signal, not the noise.
+
+**Resync.** When node shapes genuinely differ, `FindResync` looks for the smallest skip `(dl, dr)` that makes the next 8 nodes line up again — a full square search for small totals, then along each axis out to 4096 nodes, because a long skip is realistically one side running a block the other never runs, not both skipping different long blocks at once. The finding then reads `left executed N extra steps, right M, then the paths rejoin`, and the comparison continues instead of collapsing. This is precisely what `gsudiff.py` could not do, and why it was the wrong tool for §10.7.
+
+**Two kinds of finding, and why the register one is worth more.** `Structure` and `LoopCount` say the *paths* differ. `Registers` says the same instruction, at the same point in the same path, saw different inputs — data went wrong *before* control flow did. Findings come back sorted by execution position, so whichever happened first is first, regardless of kind.
+
+**What it found on the first run (2026-08-03).** Pointed at Yoshi's Island for 80 frames, the first divergence is at **step 238** — not frame 70, where three days of state diffing had placed it. It lands in the S-CPU's SPC700 IPL upload loop at `$00843B-$00844E`:
+
+```
+008440: CD 40 21  CMP $2140      ; wait for the APU to echo the byte back
+008443: D0 FB     BNE $8440      ; spin
+008445: 1A        INC A
+008448: 8D 40 21  STA $2140      ; send the next one
+00844E: D0 EB     BNE $843B
+```
+
+Both emulators upload **exactly 45,186 bytes** — the payload is right. But EmuSen spins **6.24 times per byte against Mesen's 5.45**, 14.5% more, and those extra spins account for ~71k of the 91,480-instruction excess EmuSen accumulates over the same 80 frames. Since 80 frames is the same emulated duration on both sides and both APUs complete the same upload within it, the APU is not slow — **the S-CPU is fast.** That inverts the natural first guess, and it is consistent with the `CMP Y, dp` fix (§`Venus_APU.md` 1.7) having moved the first main-loop frame from 79 to 77 against hardware's 78: we overshot.
+
+The next step is the master-clock cost of that specific two-instruction spin against Mesen's, not another memory diff. The clock ratio itself is exact (`ApuClockHz`/`_masterClockHz`, not `/21`) and `GetAccessSpeedCycles` matches the fullsnes table, so neither is the suspect.
+
+**The cost field is what actually found the timing bugs.** Recording *what each instruction cost* rather than an absolute clock makes the two sides directly comparable even after they drift, and lets the differ aggregate: it reports one row per `(opcode, leftCost, rightCost)` with a count and the total drift, sorted by how much damage each combination does. That table is what turned "we run 9% fast somewhere in 80 frames" into four named bugs in one afternoon — see `Venus_CPU.md` §8.7 and §8.8. Read it as a table, not as individual findings; a systemic bug shows up as one row with a huge count, and a `left = right + 40` row is DRAM-refresh *attribution* rather than a cost error.
+
+**Mesen is not deterministic out of the box, and this was measured, not assumed.** Its default power-on RAM fill is `RamState::Random`, and two identical no-trace runs of Yoshi's Island differ in VRAM, GSU RAM, WRAM *and* APU RAM at the same frame — which means every single-run comparison ever made against it carried noise, and the four-run masking in §3.39 was treating the symptom. The probe now sets `scfg.RamPowerOnState = RamState::AllZeros` before `LoadRom`, matching our own fill. After that every dump and the whole instruction trace are byte-identical across runs. **If a reference disagrees with itself, nothing measured against it means anything** — check that first, before believing any diff. Note `BaseCartridge::InitRamPowerOnState` overrides the setting for four named carts; none of them are relevant here, but check before trusting it on a new game.
+
+**`--pressuntil`, the probe's half of state anchoring.** `tapuntil` (§3.15d) solves this on our side; the probe needs the same thing or the two runs still cannot be brought to the same place. `--pressuntil BTN:ADDR:VALUE[:CAP[:EVERY]]` taps a button until the GSU RAM word at `ADDR` equals `VALUE`, polling on the control thread while the emulator runs (the key manager grew an atomic `LiveKey` for it, since the frame-indexed schedule is fixed before boot and cannot answer a question decided at runtime).
+
+Used in anger: `--pressuntil A:1E1A:01F0:12000:40` walks Yoshi's Island's file select and its whole opening cutscene and stops on the frame the camera target is set, in 17 taps. **Anchor on a value both emulators agree about** - anchoring on the buggy value itself cannot work, and the first attempt here did exactly that (`$0094`, which is the symptom) and never triggered.
+
+**Cautions.**
+- Both sides must start **from power-on**. The probe arms before `LoadRom` (which is what starts execution) and `FrameRunner` arms on the first `RunFrames`; `Reset()` executes no instruction on either, so the first traced step is the reset vector on both.
+- Only the S-CPU is traced by `--cputrace`; the GSU has its own sink and verb (§3.41). `Cpu.cs` is shared with the SA-1's core, which has no Mesen counterpart to diff against, so recording is gated on the instance name.
+- A `TruncatedSide` finding means the streams agreed for their whole shared length and one just ended first — raise its cap, do not read it as agreement.
+- The trace buffer stops recording rather than throwing when it fills, and says so; a silently short trace would look exactly like an early divergence.
+
+---
+
+### 3.41 The same differ, pointed at the GSU (`gsutrace`, `--after`, `--nobattery`)
+
+**What it is.** §3.40's machinery, generalised. `TraceDiff` is now generic over "a stream of steps with an address, an opcode, a cost and some registers" (`ITraceStep<T>`); `CpuTraceDiff` and `GsuTraceDiff` are just the two record layouts plus their parsers. `--tracediff` picks which one by the file's magic, so the same command reads either pair and refuses a mismatched one.
+
+**The record.** 48 bytes, little-endian, magic `ESGT` + version, defined once in `GsuBinaryTrace.cs`:
+
+| offset | size | field |
+| --- | --- | --- |
+| 0 | 3 | `(PBR<<16) \| ` the address the **opcode byte** was fetched from |
+| 3 | 1 | kind (0; the GSU has no interrupt entries) |
+| 4 | 1 | opcode |
+| 5 | 1 | `SrcReg<<4 \| DestReg` |
+| 6 | 2 | `SFR` |
+| 8 | 32 | `R0`-`R15` |
+| 40 | 4 | master clocks this instruction cost |
+
+**Three conventions that have to match, and did not at first.**
+
+- **The address is not `R15`.** Mesen's `R15` at the top of `Gsu::Exec` is already one byte past the opcode, and after a jump it names the *target* while the delay slot is still executing — so tracing it labels every delay slot with the wrong address. That is the same trap §4.1a fixed on this side, and it is the reason an earlier pass in §10.7 spent an afternoon disassembling code that never ran. Both sides now record the address the byte in the prefetch buffer came from: `_lastOpAddr` on Mesen's side, `_pipelineAddress` on ours. Pinned by `A_recorded_delay_slot_carries_its_own_address`.
+- **`R15` is not compared.** It *is* the address, under two different conventions, so comparing it would report a divergence on every straight-line instruction. `GsuTraceDiff.ComparedRegisters` is 15 for that reason.
+- **Three `SFR` bits are not compared.** `Go` (`$20`), ROM-pending (`$40`) and IRQ (`$8000`) are chip-state rather than program-visible arithmetic; ROM-pending in particular never sets here at all, because the ROM fetch is modelled as instantaneous (`Venus_SuperFX.md` §5.2). `ComparedSfrBits = $1F1E` is `Z`/`Cy`/`S`/`Ov` plus the four prefix bits, and those four prefix bits are worth their place — one of §10.7's four bugs showed up *only* in them.
+
+**Producing the pair.** Both sides trace from a **shared state anchor**, not from power-on — the GSU runs a boot self-test on Mesen that this core never receives (§10.7), so power-on traces do not align at all and a crude longest-common-run match over them scored 158 of 80,000.
+
+```
+# Mesen: walk to the anchor, then trace 4 frames past it
+cd /path/to/mesen2 && /tmp/emusen-mesen-probe/mesenprobe rom.smc outdir 0 0 4 1E1A 4 \
+    --pressuntil A:1E1A:01F0:12000:40
+
+# EmuSen: the same anchor, then the `gsutrace <frames> <path>` verb
+#   tapuntil A GSURAM 1E1A F0,01 12000 40
+#   gsutrace 4 outdir/emusen_gsutrace.bin
+dotnet run --project EmuSen.Pharaoh -c Release -- rom.smc 13000 --nobattery --commands script.cmds
+
+dotnet run --project EmuSen.Pharaoh -c Release -- --tracediff \
+    outdir/mesen_gsutrace_f00710.bin outdir/emusen_gsutrace.bin
+```
+
+Four frames of Yoshi's Island is ~100k GSU steps and ~5 MB a side. `gsutrace` arms the sink, runs the frames and writes, all in one verb, precisely so it can sit *after* `tapuntil` in the same script — arming from power-on would drown the interesting part in the boot sequence.
+
+**`--nobattery`, and why it is not optional here.** On a SuperFX cart the `.srm` is GSU work RAM, so a save written by an earlier run pre-loads the very address the anchor tests, and `tapuntil` reports success at frame 0 having pressed nothing. This invalidated three days of §10.7 measurements. `--nobattery` makes the run neither read nor write the save; the Mesen probe has always been isolated this way (`SetHomeFolder` into the dump directory). Full account: `Venus_Memory.md` §2.4a.
+
+**`--after N`** runs the probe for N frames past a `--pressuntil` anchor *without* enabling the GSU trace, which is how a value is watched over hundreds of frames — 600 frames of trace would be ~800 MB, and the question "does `$0094` climb to `$0100`" needs a `DumpHex` line every 60 frames, not an instruction stream.
+
+**What it found on its first run (2026-08-03).** Four real GSU bugs in one afternoon, each by walking to the first divergence and reading the instruction *before* it: `GETB` and `LDW` setting flags they must not, an `ALT` prefix that must clear `WITH`, and a 16-bit RAM access that pairs `addr ^ 1` rather than `addr + 1`. Distinct divergences went 119 → 67 → 10 → 0 across the four. See `Venus_SuperFX.md` §4.2, §4.4, §5.1a and §10.7.
+
+**The lesson that generalises past the GSU.** Two of the four are *flag* bugs on instructions whose result was already correct, and a flag bug is invisible to every state-diffing tool in this document: the load is right, the register is right, and what goes wrong is a branch several instructions later. Carrying `SFR` in the record — and comparing the prefix bits, which looked like bookkeeping — is what made them findable at all. When adding a processor to this differ, record the flags.
+
+---
+
+### 3.42 Measuring a slow machine on a fast one (`--throttle`)
+
+Every performance number this project has ever recorded came from one machine, a Ryzen 7700X. That was fine while the only question was "does Venus hold 60 fps?" — it does, with 3.3–12× headroom (`Venus_PPU.md` §13.1). It is useless for the question that opened on 2026-08-03: *how much machine does Venus need?* `--throttle` answers that without owning a second machine.
+
+```sh
+dotnet run --project EmuSen.Pharaoh -c Release -- <rom> <frames> --nobattery --commands script.cmds --throttle 33
+```
+
+**What it does.** `CpuThrottle.ReExec` relaunches the same argv inside a transient systemd scope with a CPU quota:
+
+```
+systemd-run --user --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms -- <self> <argv…>
+```
+
+`EMUSEN_THROTTLE_ACTIVE=1` in the child's environment is what stops it recursing. The re-exec happens in `Main` before every other mode, including `--diffshot` and `--tracediff`, because it replays argv verbatim.
+
+**Why the 5 ms period matters.** The cgroup default is 100 ms, which is six frames. At that granularity a throttled run does not behave like a slow machine — it behaves like a fast machine that freezes for 60 ms at a time, and the per-frame distribution (`p95`, `max`, `over budget`) becomes meaningless while only the mean survives. `CPUQuotaPeriodSec=5ms` puts the enforcement granularity well inside a 16.64 ms frame, so latency figures stay readable. Against a fixed synthetic workload, 100/50/33/25% then measured 0.656/1.246/2.140/2.875 s against an ideal 0.68/1.36/2.06/2.72 — within about 5–9% of linear.
+
+**It fails loudly and does not fall back.** No systemd, not Linux, `systemd-run` missing: the run exits 1 rather than quietly proceeding at full speed. This is deliberate, and the reason is §3.20's `-p:Optimize=true` footgun — a measurement flag that silently does not apply produces a *confidently wrong* number, which is worse than no number. Both the parent and the throttled child print a `[THROTTLE]` line, the child's into `--out` alongside the timings it qualifies.
+
+**`--throttle 100` is not "off".** The quota is one core's worth summed across *every* thread in the scope, so 100% models a single-core machine, not an unconstrained one. Omit the flag entirely for unconstrained.
+
+**Two honest limits.**
+
+- **The scaling overstates slowdown, unevenly.** GC and tiered-JIT background threads draw from the same quota as the emulation thread, so the observed factor at 33% ran 3.6× (KBL3), 3.8× (SMW) and 5.5× (DKC) rather than 3.0×. DKC's `max 123.83ms` is a GC pause amplified by the quota. Use it for A/B comparison and for "does this miss the budget", not as a calibrated model of a specific CPU.
+- **It is not a profiler.** It tells you the frame got slower, not which function. See below.
+
+**On profiling, and why there isn't one here.** `dotnet-trace collect --profile dotnet-sampled-thread-time --format speedscope` runs without root and its *inclusive* percentages are trustworthy — it independently put 38.78% of a KBL3 level run under `RenderScanline` against the phase counters' 39.8%, which is a genuine cross-check of §13's instrumentation. Its *leaf* attribution is not usable: Release inlining collapses the 65816 interpreter into `RunFrame`, and the sampler's stacks bottom out on a GC-poll helper that absorbed 97.6% of self time. Real function-level attribution needs `perf` with perf-maps, which means installing it and lowering `perf_event_paranoid` from 2 — both root. Until someone wants that badly enough, the per-phase counters in `Venus_PPU.md` §13 are the finer-grained instrument, and they are the ones designed not to distort what they measure.
+
 ---
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)
@@ -1043,10 +1575,19 @@ This is roughly how the toolchain got used across the coin/Yoshi rendering inves
 
 ## 7. Roadmap (things this doc deliberately doesn't cover because they don't exist yet)
 
-- **Breakpoints / single-step / pause-resume** — done (§3.1's breakpoints note, §3.3's `bp` row). Still open: `EmuSen.Pharaoh` doesn't drive the halt/resume loop at all (its `bp add` is hit-counting only, §3.15) — a scripted, non-interactive equivalent of `step`/`continue` would need the harness to check `IsHaltedAtBreakpoint` and decide what to do next, which nothing does today.
-- **A verification pass on the disassembler** (§3.7) — it exists now, but hasn't had the equivalent scrutiny the execution opcode table got against oxyron.de. Worth a dedicated pass rather than trusting it blind.
-- **Watchpoints beyond WRAM** — VRAM/CGRAM/OAM and the general CPU-bus/SRAM write paths don't report to `MemoryBus`'s `IWriteObserver` hook yet (§3.4).
-- **The Avalonia GUI debug window** — partially started: `Settings > DianaOS Console...` (`EmuSen.Mistress/Views/DianaOSConsoleWindow.axaml`) is a real terminal window onto the full `DianaOSInterpreter` (§3.17), text-only. The actual Mesen-style multi-pane debugger (register panels, hex viewer, disassembly view, sprite/palette viewers, event log, watch panel) built against `IDebugTarget` directly still doesn't exist - everything in §3 was built with that as the eventual consumer, and the console window covers the same functionality today just as one text pane rather than dedicated graphical panels.
-- **An NES (or other console) `IDebugTarget` implementation** — the interface was designed generically for this from the start, but no second implementation exists yet to prove it out.
+- **Breakpoints / single-step / pause-resume** — done (§3.1's breakpoints note, §3.3's `bp` row), and since extended with conditions, `step over`/`step out` and `runto` (§3.27, §3.28). Still open: `EmuSen.Pharaoh` doesn't drive the halt/resume loop at all (its `bp add` is hit-counting only, §3.15) — a scripted, non-interactive equivalent of `step`/`continue` would need the harness to check `IsHaltedAtBreakpoint` and decide what to do next, which nothing does today.
+- **A verification pass on the disassemblers** (§3.7, §3.34) — there are now four (65816, SPC700, GSU, NEC DSP). The 65816 one still hasn't had the scrutiny the execution opcode table got against oxyron.de; the SPC700 and NEC DSP decoders shipped with table-driven tests covering every opcode's mnemonic, operand form and length, but those check the decoder against its own documented table, not against hardware. Worth a dedicated pass rather than trusting any of them blind.
+- **Watchpoints beyond WRAM** — VRAM/CGRAM/OAM and the general CPU-bus/SRAM write paths don't report to `MemoryBus`'s `IWriteObserver` hook yet (§3.4). This now also caps `bp read`/`bp uninit` (§3.36), which see exactly the accesses the read observer reports — today IO and WRAM.
+- **Per-byte code-vs-data classification** — the one part of Mesen's `CodeDataLogger` §3.36 did not build. It needs the CPU to tag each memory access with an operation type at every read site in the 65816, which is core work rather than a debug-layer addition. `cov`'s instruction-start bitmap is a different and in some ways better structure; the two would need reconciling rather than one being bolted onto the other.
+- **A cartridge-ROM read observer** — there is an `IRomReadPatcher` hook on every cartridge-routed read, but it exists to *change* bytes for the cheat engine, not to report them. A proper observer would let `counters`, `bp read` and any future data-classification pass see ROM reads, which today none of them do.
+- **A Mesen-style Event Viewer** — the largest remaining gap from the Mesen comparisons (§3.33): a per-frame plot of register writes, DMA and interrupts against scanline/dot coordinates. Deliberately deferred rather than skipped — its value is in the 2D plot, so it wants the GUI debug window below, not another text command. `copflow` (§3.35) covers the coprocessor-register slice of the same data as text, and `dma` (§3.38) covers the DMA/HDMA slice, including the scanline column that carries most of the plot's value.
+- **Step back one instruction** and **an assembler** — also from §3.33, both deferred for reasons recorded there (instruction-granularity rewind belongs in the core; the assembler should follow the disassembler's verification pass).
+- **The Avalonia GUI debug window** — partially started: `Settings > DianaOS Console...` (`EmuSen.Mistress/Views/DianaOSConsoleWindow.axaml`) is a real terminal window onto the full `DianaOSInterpreter` (§3.17), text-only. The actual Mesen-style multi-pane debugger (register panels, hex viewer, disassembly view, sprite/palette viewers, event log, watch panel, call-stack panel) built against `IDebugTarget` directly still doesn't exist - everything in §3 was built with that as the eventual consumer, and the console window covers the same functionality today just as one text pane rather than dedicated graphical panels.
+- **An NES (or other console) `IDebugTarget` implementation** — the interface was designed generically for this from the start, but no second implementation exists yet to prove it out. The §3.27 and §3.34 fallback contexts are a down-payment: a second core gets `eval`, conditional breakpoints and per-chip scoping working off its `regs` output alone, with no expression code of its own. An NES core would publish `cpu` plus whatever its cartridge mapper carries through the same `DebugCpus` list.
+- **A GSU/SPC700 call stack** — neither reports one (§3.34), so `bt`, `step over`/`step out` and `profile` are unavailable for them. The GSU's subroutine convention is register-based rather than a stack the way the 65816's JSR/RTS is, so this needs a chip-specific inference (tracking LINK/R11) rather than the existing seam, and is only worth building if a real GSU investigation wants it.
+- **Coprocessor-side `copflow` attribution** — every entry is currently tagged `cpu`, because the S-CPU's own register-window accesses are the only ones that route through `Cartridge`'s decode (§3.35). A chip reading its own registers internally never reaches that seam, so a genuinely two-sided log would need per-chip hooks.
+- **The CX4 and the ST018** — not implemented as *chips*, which is why nothing here debugs them. Mesen carries a `Cx4Debugger` and an `St018Debugger`; their absence here is a core gap, not a toolchain gap, and `DebugCpus` (§3.34) would carry either of them the day the chip exists.
 - **A visual, burned-in-pixel screenshot timestamp** — deliberately deferred in favor of the companion-file approach (§3.6); revisit if the on-image version is still wanted.
+- **Programmatic controller input** — Mesen's `LuaApi::SetInput`. The one item from §3.37 parked rather than dismissed: several open questions in `Games_Tested.md` are input-related (the SMAS controller-port assignment, the IoG title screen), and a `pad` command that injects a button press would test them directly. It belongs with the frontend's input plumbing rather than in a debug registry, which is why it was not built alongside the rest of that pass.
+- **A conditional trace** — Mesen's `TraceLoggerOptions.Condition`/`Format`. `trace` is still count-only. Deferred in §3.37 because the condition would have to be evaluated inside the core's own verbose-log path, and logpoints cover the case that actually comes up more precisely.
 - **A ROM database/mapper for known per-title quirks** — not built yet. The idea: a small lookup (by ROM checksum, not filename) that lets a frontend auto-apply a known cartridge-specific behavior - the concrete case that prompted this is Super Mario All-Stars' Controller 2 quirk (`Games_Tested.md`'s SMAS entry), where the mirroring workaround exists but currently has to be turned on by hand (F7 in `EmuSen.Hotaru`, a checkbox in `EmuSen.Mistress`) rather than being applied automatically for that specific cartridge. Needs to stay **core-agnostic** if built - EmuSen is adding cores beyond the SNES before it ever reaches disk-based generations, and a "quirks database" keyed on some SNES-specific identifier (or living inside `EmuSen.Cores.Nintendo.Venus` at all) wouldn't carry over to an NES/other core needing the exact same kind of per-title override; the lookup mechanism belongs at a level every core can plug into, the same way `IDebugTarget` itself doesn't assume any one console's shape.

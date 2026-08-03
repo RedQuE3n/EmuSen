@@ -243,11 +243,23 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "NAME\n" +
                 "    regs - dump CPU/video/APU registers\n\n" +
                 "SYNOPSIS\n" +
-                "    regs\n\n" +
+                "    regs\n" +
+                "    regs <cpu>\n\n" +
                 "DESCRIPTION\n" +
                 "    Prints the current core's CPU registers, video (PPU) registers, and (if\n" +
                 "    the core reports any) APU registers, each in their own section. Field\n" +
-                "    widths adapt to each register's real bit width.",
+                "    widths adapt to each register's real bit width.\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    'regs <cpu>' prints just one chip's registers - see 'man cpus'. Bare\n" +
+                "    'regs' keeps printing every section at once, which stays the right\n" +
+                "    default when the question is 'what is the machine doing' rather than\n" +
+                "    'what is this one chip doing'.\n\n" +
+                "    Every value here is read through a side-effect-free view, never the\n" +
+                "    chip's own register window - reading a real coprocessor status register\n" +
+                "    can acknowledge an interrupt or advance a transfer handshake, and a\n" +
+                "    debugger that did that would change the run it is meant to observe.\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, eval, cophist, copflow, watch",
 
             ["cophist"] =
                 "NAME\n" +
@@ -346,11 +358,39 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "NAME\n" +
                 "    bp - manage execution breakpoints\n\n" +
                 "SYNOPSIS\n" +
-                "    bp add <addr>\n" +
-                "    bp write <space> <addr> [<value>]\n" +
+                "    bp add <addr>[-<end>] [if <expr>] [log <expr>]\n" +
+                "    bp write <space> <addr>[-<end>] [<value>] [changed] [if <expr>]\n" +
+                "    bp read <space> <addr>[-<end>] [<value>] [if <expr>]\n" +
+                "    bp uninit <space>\n" +
+                "    bp when [<condition>] [log|off]\n" +
+                "    bp depth <n>|off\n" +
+                "    bp forbid <addr>-<end>\n" +
+                "    bp log [<count>] | bp log clear\n" +
                 "    bp list\n" +
+                "    bp on|off <id>\n" +
                 "    bp remove <id>\n" +
-                "    bp sa1 add|list|remove ...\n\n" +
+                "    bp <cpu> add|list|remove ...\n\n" +
+                "CONDITIONS\n" +
+                "    An 'if <expr>' suffix turns a breakpoint into a conditional one: the\n" +
+                "    address (or the write) still has to match, and then <expr> has to\n" +
+                "    evaluate nonzero before execution actually halts. This is what makes a\n" +
+                "    breakpoint usable on a routine that runs thousands of times a frame -\n" +
+                "    'bp add 80A31C if x == 7' stops on the one iteration that matters\n" +
+                "    instead of the first. See 'man eval' for the expression language; every\n" +
+                "    symbol and memory form it documents works here unchanged.\n\n" +
+                "    Conditions are evaluated on the emulation thread, once per matching\n" +
+                "    hit, so an expensive one costs real frame time. Reading an I/O register\n" +
+                "    in a condition reads it for real, with whatever side effect that has on\n" +
+                "    hardware - 'man eval' covers which reads are and aren't safe.\n\n" +
+                "    A condition that fails to evaluate (a typo, an unknown symbol, an\n" +
+                "    unreadable address) is DROPPED rather than left to fire on every\n" +
+                "    instruction forever: the breakpoint halts once, keeps its address, and\n" +
+                "    loses its condition. The error text is reported once at that halt.\n" +
+                "    Re-add the breakpoint once the expression is fixed.\n\n" +
+                "    Quote a condition containing '&&', '||', '<', '>' or '|' - those are\n" +
+                "    the shell's own operators and get consumed before this command ever\n" +
+                "    sees them. Everything after the 'if' word is rejoined with single\n" +
+                "    spaces, so an unquoted 'if a == 5' works fine.\n\n" +
                 "DESCRIPTION\n" +
                 "    Registers/lists/removes a breakpoint at a 24-bit CPU address. This\n" +
                 "    command only edits the breakpoint list - it doesn't halt or resume\n" +
@@ -375,11 +415,268 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    coprocessor CPU to break on' when the cartridge has none. Pair it\n" +
                 "    with 'disasm SA1BUS <addr>', which decodes using the SA-1's own\n" +
                 "    M/X/E flags rather than the S-CPU's.\n\n" +
+                "    'bp read' is the mirror image, halting just after anything reads the\n" +
+                "    address. Where 'readers' scans the ROM for instructions that COULD read\n" +
+                "    something, this catches the read that actually happened, including ones\n" +
+                "    through a computed pointer that no static scan can resolve - the way to\n" +
+                "    find out who consumes a flag rather than who sets it.\n\n" +
+                "    'bp on'/'bp off' toggle one breakpoint without losing its address,\n" +
+                "    condition or hit count - the difference between silencing a breakpoint\n" +
+                "    for one experiment and having to retype it afterwards.\n\n" +
+                "    'bp list' resolves each address through the label registry, so a\n" +
+                "    breakpoint on a named address reads '$00A3B2 <NmiHandler>'. See\n" +
+                "    'man label'. A range prints as a range, since a label names one address.\n\n" +
+                "RANGES\n" +
+                "    Any address argument accepts '<start>-<end>' instead of one address, and\n" +
+                "    the breakpoint then matches anywhere inside it. This is the difference\n" +
+                "    between needing to already know the answer and being able to ask the\n" +
+                "    question: 'bp write WRAM 0100-01FF' catches whoever is clobbering a\n" +
+                "    struct when you do not yet know which byte of it moves first, and\n" +
+                "    'bp add 818000-818FFF' catches whatever in a bank runs at all.\n\n" +
+                "    The halt message names the exact address that matched as well as the\n" +
+                "    range, so a range breakpoint tells you where it landed, not just that\n" +
+                "    it landed.\n\n" +
+                "CHANGED-ONLY WRITES\n" +
+                "    'changed' on a write breakpoint suppresses the halt unless the byte\n" +
+                "    written differs from the last one seen at that address. Games rewrite\n" +
+                "    the same value constantly - a per-frame state byte re-stored every frame\n" +
+                "    will trip a plain write breakpoint sixty times a second while telling\n" +
+                "    you nothing. 'bp write WRAM 0DB3 changed' fires on the transition\n" +
+                "    instead, which is almost always the moment being looked for.\n\n" +
+                "    The first write to an address always counts as a change: there is no\n" +
+                "    previous value to compare against, and a value written exactly once\n" +
+                "    would otherwise never be reported at all. The comparison is against\n" +
+                "    what this breakpoint last SAW, not against memory, so it costs no read\n" +
+                "    and cannot disturb a side-effecting address.\n\n" +
+                "UNINITIALIZED READS\n" +
+                "    'bp uninit <space>' halts the first time the machine reads back a byte\n" +
+                "    of <space> that nothing has written since the breakpoint was armed. That\n" +
+                "    is a real defect nearly every time it happens: the game is consuming\n" +
+                "    whatever the previous contents were, so its behavior depends on power-on\n" +
+                "    garbage. It is also the single most useful check for the emulator\n" +
+                "    itself, because it catches this core failing to initialize something\n" +
+                "    that real hardware would have.\n\n" +
+                "    Each address reports once and is then treated as initialized, or a boot\n" +
+                "    loop over uninitialized memory would halt on the same byte forever.\n" +
+                "    Arming allocates one bool per byte of the space and replaces any\n" +
+                "    previous arming - one space is watched at a time. Note that a space\n" +
+                "    written before arming counts as initialized; arm it early to catch\n" +
+                "    reset-time reads. 'counters' reports the same thing as a whole-run\n" +
+                "    tally when a halt is too blunt.\n\n" +
+                "HARDWARE CONDITIONS\n" +
+                "    'bp when <condition>' halts when the machine does something it should\n" +
+                "    not, rather than when it reaches an address. 'bp when' with no argument\n" +
+                "    lists what this core can detect, with each one's current state. On the\n" +
+                "    SNES that is:\n\n" +
+                "        stp         the 65816 executed STP and is stopped until reset\n" +
+                "        wdm         the 65816 executed WDM, a reserved opcode\n" +
+                "        brk         a BRK was taken\n" +
+                "        cop         a COP was taken\n" +
+                "        ppuaccess   VRAM/CGRAM/OAM written while the display is rendering\n" +
+                "        autojoy     $4218-$421F read while the auto-joypad read is running\n\n" +
+                "    These matter because none of them are visible in the output. STP is the\n" +
+                "    clearest case: a game that executes it has usually jumped somewhere it\n" +
+                "    never meant to, and the symptom is simply that the picture stops - with\n" +
+                "    no indication of where. 'bp when stp' halts on the instruction itself,\n" +
+                "    while the call stack that got there is still readable with 'bt'.\n\n" +
+                "    'ppuaccess' and 'autojoy' are the two where the emulator and the game\n" +
+                "    disagree most quietly. Real hardware drops a VRAM write made during\n" +
+                "    active display, and returns a half-updated byte from a joypad register\n" +
+                "    read mid-refresh; a core that is more permissive than the hardware runs\n" +
+                "    such a game correctly and hides a real bug, and a core that is less\n" +
+                "    permissive breaks one that worked. Either way the first thing you want\n" +
+                "    is to know it happened at all.\n\n" +
+                "    A condition can be armed 'log' instead, which records every occurrence\n" +
+                "    and carries on. That is the right mode for anything the game does often\n" +
+                "    - a title screen may read the joypad early on every single frame, and\n" +
+                "    halting on it tells you far less than seeing the pattern across frames.\n" +
+                "    Logged conditions land in the same ring as logpoints and are read back\n" +
+                "    with 'bp log', where they interleave with everything else in the order\n" +
+                "    it really happened. 'bp when <condition> off' disarms one.\n\n" +
+                "    Conditions cost nothing until one is armed: each detection site tests a\n" +
+                "    single bool before computing anything.\n\n" +
+                "DEPTH GUARD\n" +
+                "    'bp depth <n>' halts as soon as the call stack gets deeper than <n>.\n" +
+                "    Runaway recursion and a stack that never unwinds both present as a game\n" +
+                "    that slows down and then behaves bizarrely, long after the actual defect\n" +
+                "    - by the time anything visible goes wrong the evidence is gone. This\n" +
+                "    stops the machine while the chain that caused it is still on the stack\n" +
+                "    and readable with 'bt'. Fires once and disarms, so it will not retrigger\n" +
+                "    on every instruction that stays deep. 'bp depth off' cancels it.\n\n" +
+                "FORBID RANGES\n" +
+                "    'bp forbid <start>-<end>' is a suppression rule, not a breakpoint:\n" +
+                "    while the PC is anywhere inside the range, nothing halts - no address\n" +
+                "    breakpoint, no data breakpoint, no uninitialized read. It exists for\n" +
+                "    the case where the interesting breakpoint is drowned by one noisy\n" +
+                "    caller: forbid the NMI handler's range and a watch on a shadow register\n" +
+                "    reports only the game logic that writes it, not the per-frame flush.\n\n" +
+                "    Steps are deliberately exempt. 'step' and 'step over' still work inside\n" +
+                "    a forbidden range, or stepping into one would run away with no way to\n" +
+                "    stop. Forbid ranges are listed by 'bp list' and removed by 'bp remove'\n" +
+                "    like anything else, and 'bp off <id>' suspends one without losing it.\n\n" +
+                "LOGPOINTS\n" +
+                "    A 'log <expr>' clause turns a breakpoint into a logpoint: when it matches,\n" +
+                "    <expr> is evaluated and recorded, and execution CARRIES ON. Read the\n" +
+                "    recording back with 'bp log'.\n\n" +
+                "    This is for the case a halting breakpoint cannot answer. A routine that\n" +
+                "    runs four hundred times a frame cannot be stepped through four hundred\n" +
+                "    times, and halting even once changes the timing of everything after it.\n" +
+                "    'bp add 80A31C log \"a, x, [$7E0DB3]\"' records all four hundred and leaves\n" +
+                "    the machine running at full speed, so the pattern across calls is visible\n" +
+                "    rather than one arbitrary call being inspected in isolation.\n\n" +
+                "    <expr> is a comma-separated list, and each part is rendered as 'expr=value'\n" +
+                "    so a line names what it is showing. 'uote it - commas are fine unquoted\n" +
+                "    but the shell eats the brackets and operators that make it worth logging.\n" +
+                "    Every symbol 'man eval' documents works, evaluated against the chip the\n" +
+                "    breakpoint belongs to.\n\n" +
+                "    A logpoint still honors 'if ', so the two compose: match the address,\n" +
+                "    check the condition, then record instead of halting. A logpoint that\n" +
+                "    fails to evaluate records the error text in place of the value rather\n" +
+                "    than being dropped the way a bad condition is - a logpoint cannot fire\n" +
+                "    forever on every instruction, so there is nothing to protect against.\n\n" +
+                "    The log keeps the most recent 4096 entries and is shared by every\n" +
+                "    logpoint on that processor, so entries interleave in the order they\n" +
+                "    actually happened. 'bp log' shows the last 32 by default, 'bp log 100'\n" +
+                "    more, and 'bp log clear' empties it. Data logpoints record at the moment\n" +
+                "    of the access rather than one instruction later, so a logged write shows\n" +
+                "    the value that was written.\n\n" +
                 "EXAMPLES\n" +
                 "    bp add 8000\n" +
+                "    bp add 80A31C if x == 7\n" +
+                "    bp add 80A31C log \"a, x\"\n" +
+                "    bp write WRAM 0DB3 log \"a, [$7E0100]\" if a > 4\n" +
+                "    bp log 100\n" +
+                "    bp add 818000-818FFF\n" +
+                "    bp add 808000 if \"[$7E0020] != 0 && a > 16\"\n" +
                 "    bp write VRAM 2760\n" +
+                "    bp write WRAM 0100-01FF\n" +
+                "    bp write WRAM 0DB3 changed\n" +
+                "    bp read WRAM 13c6\n" +
+                "    bp uninit WRAM\n" +
+                "    bp depth 40\n" +
+                "    bp forbid 0080C4-0080FF\n" +
+                "    bp off 1\n" +
                 "    bp list\n" +
-                "    bp sa1 add 0082D7",
+                "    bp sa1 add 0082D7\n" +
+                "    bp gsu add 0A80E9 if r14 > $100\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    A scope word puts the breakpoint on another chip - see 'cpus' for the\n" +
+                "    names. Each chip keeps its own breakpoint list, because each runs\n" +
+                "    different code at the same addresses, and a condition attached to one\n" +
+                "    is evaluated against THAT chip's registers: 'bp gsu add X if r14 > 0'\n" +
+                "    reads the GSU's R14, not anything on the main CPU.\n\n" +
+                "    A chip the core cannot halt takes no breakpoints and says so rather\n" +
+                "    than accepting one that would never fire.\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, eval, step, runto, bt, watch, cov, counters, readers, writers",
+
+            ["setreg"] =
+                "NAME\n" +
+                "    setreg - write a CPU register\n\n" +
+                "SYNOPSIS\n" +
+                "    setreg <register> <value>\n" +
+                "    setreg <cpu> <register> <value>\n\n" +
+                "DESCRIPTION\n" +
+                "    Sets one of a processor's registers to a value. Until this existed the\n" +
+                "    debugger could read every register and change none of them, which meant\n" +
+                "    a hypothesis could only ever be tested by editing memory and waiting to\n" +
+                "    see whether the machine happened to reload the register from it.\n\n" +
+                "    What it is actually for is counterfactuals. Halt on the compare that\n" +
+                "    gates a routine, flip the register it compares, resume, and watch what\n" +
+                "    the game does down the branch it did not take. That answers 'is this\n" +
+                "    check the reason my sprite never appears' in one step, where coverage\n" +
+                "    and breakpoints can only establish that the branch was not taken.\n\n" +
+                "    It also skips a hang: forcing PC past a spin loop lets a boot sequence\n" +
+                "    continue far enough to show what the NEXT problem is, which is often\n" +
+                "    worth more than the one you are stopped on.\n\n" +
+                "    Values are hex, and are REFUSED rather than truncated if they do not fit\n" +
+                "    the register's width - a silently masked value would be a wrong answer\n" +
+                "    reported as a success. An unknown register name lists the ones that chip\n" +
+                "    actually has.\n\n" +
+                "    Kept separate from 'regs' on purpose. 'regs' is read-only, which is what\n" +
+                "    lets an always-live shell answer it instantly off the emulation thread;\n" +
+                "    folding a write into it would drag every register dump onto the\n" +
+                "    emulation thread's next frame, and writing a register from another\n" +
+                "    thread would be a race besides.\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    A scope word writes another chip's registers - 'cpus' lists which ones\n" +
+                "    support it at all. Not every chip does: the GSU and the NEC DSP report\n" +
+                "    their registers through debug accessors with no write path behind them,\n" +
+                "    so they refuse rather than pretending. 'cpus' prints 'setreg' in a\n" +
+                "    chip's supported list only when it really is writable.\n\n" +
+                "    Take care with a halted coprocessor: only one chip halts at a time, so\n" +
+                "    writing a register on a chip that is still running races its own\n" +
+                "    execution.\n\n" +
+                "EXAMPLES\n" +
+                "    setreg a 0007\n" +
+                "    setreg pc 8123\n" +
+                "    setreg p 34\n" +
+                "    setreg spc a 00\n" +
+                "    setreg sa1 x 0010\n\n" +
+                "SEE ALSO\n" +
+                "    regs, cpus, bp, step, eval",
+
+            ["vectors"] =
+                "NAME\n" +
+                "    vectors - where each interrupt vector points\n\n" +
+                "SYNOPSIS\n" +
+                "    vectors\n\n" +
+                "DESCRIPTION\n" +
+                "    Reads the interrupt vector table out of the running machine and shows\n" +
+                "    what each entry points at, resolved through the label registry. 'Which\n" +
+                "    routine handles NMI' is a question that comes up in almost every\n" +
+                "    investigation, and the alternative is remembering that the SNES keeps\n" +
+                "    its native NMI vector at $00FFEA and hand-reading two bytes.\n\n" +
+                "    Vectors are grouped by CPU mode, because a 65816 has two full sets and\n" +
+                "    which one the hardware uses depends on the E flag at the moment the\n" +
+                "    interrupt is taken. 'regs' shows E. A game that sets up only the native\n" +
+                "    table and then takes an interrupt in emulation mode jumps somewhere it\n" +
+                "    never intended, and seeing both tables side by side is what makes that\n" +
+                "    visible.\n\n" +
+                "    When coverage recording is on ('man cov'), a vector whose target has\n" +
+                "    actually executed is marked '(ran)'. A vector that points at plausible\n" +
+                "    code which never ran is a much stronger signal than one that merely\n" +
+                "    looks wrong - it says the interrupt is not firing at all, rather than\n" +
+                "    firing and doing the wrong thing.\n\n" +
+                "    The pointers are read live through the CpuBus, so a game that rewrites\n" +
+                "    its own vector table (or maps different ROM in) reports what is mapped\n" +
+                "    right now, not what was there at reset.\n\n" +
+                "EXAMPLES\n" +
+                "    vectors\n" +
+                "    cov on; vectors\n\n" +
+                "SEE ALSO\n" +
+                "    runto, bt, cov, label, addr",
+
+            ["addr"] =
+                "NAME\n" +
+                "    addr - decode a CPU-bus address\n\n" +
+                "SYNOPSIS\n" +
+                "    addr <addr>\n\n" +
+                "DESCRIPTION\n" +
+                "    Says what a 24-bit CPU-bus address actually reaches: a ROM file offset,\n" +
+                "    a RAM offset, or a hardware register. The CPU's view and the ROM file's\n" +
+                "    layout are different coordinate systems, and every task that crosses\n" +
+                "    between them - comparing against a ROM in a hex editor, writing a patch,\n" +
+                "    reading a disassembly someone else produced - needs the translation.\n" +
+                "    Doing it by hand means knowing the mapper, which is exactly the detail\n" +
+                "    worth not having to remember.\n\n" +
+                "    The decode is the cartridge's own, the same one a real read goes\n" +
+                "    through, so it is right for whatever mapper this ROM uses rather than\n" +
+                "    assuming LoROM. ROM offsets are reported modulo the ROM's real size,\n" +
+                "    matching how an undersized ROM mirrors on hardware.\n\n" +
+                "    Addressable results print a ready-made 'mem' command underneath, since\n" +
+                "    looking at the bytes is almost always the next thing wanted. A hardware\n" +
+                "    register reports as a register rather than being given a fake offset -\n" +
+                "    there is nothing there to point 'mem' at.\n\n" +
+                "    An address the cartridge does not map and the bus does not claim\n" +
+                "    reports as unmapped, which is itself an answer: a pointer that decodes\n" +
+                "    to nothing is a pointer that was computed wrong.\n\n" +
+                "EXAMPLES\n" +
+                "    addr 808000\n" +
+                "    addr 7E0DB3\n" +
+                "    addr 002100\n\n" +
+                "SEE ALSO\n" +
+                "    mem, dump, spaces, vectors, cheat",
 
             ["cov"] =
                 "NAME\n" +
@@ -388,7 +685,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    cov on|off\n" +
                 "    cov clear\n" +
                 "    cov <addr> [<len>]\n" +
-                "    cov cop on|off|clear|<addr> [<len>]\n\n" +
+                "    cov mark\n" +
+                "    cov new <addr> [<len>]\n" +
+                "    cov funcs [<count>]\n" +
+                "    cov save|load <file>\n" +
+                "    cov <cpu> on|off|clear|<addr> [<len>]\n\n" +
                 "DESCRIPTION\n" +
                 "    Records every 24-bit address executed between 'cov on' and 'cov off',\n" +
                 "    then answers 'did control flow ever reach here' for any range. A\n" +
@@ -402,13 +703,58 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    so it also settles where 'disasm' has mis-sized an immediate, since the\n" +
                 "    recorded addresses are the real opcode boundaries.\n\n" +
                 "    Recording is off by default and costs one bool test while disarmed;\n" +
-                "    armed, it allocates a 2MB bitmap. An optional 'cop' (or 'sa1'/'gsu')\n" +
-                "    scope word targets the coprocessor's own instruction stream, which is a\n" +
-                "    separate address space - see 'bp' for the same convention.\n\n" +
+                "    armed, it allocates a 2MB bitmap per processor recorded.\n\n" +
+                "DIFFERENTIAL COVERAGE\n" +
+                "    'cov mark' freezes what has run so far; 'cov new <addr>' then reports\n" +
+                "    only what has run SINCE. This is the sharpest tool here, because it\n" +
+                "    converts a question about code into a question about the machine: mark,\n" +
+                "    press the button (open the door, take the damage, trigger the glitch),\n" +
+                "    and every address 'cov new' reports is code that ran because of what\n" +
+                "    you just did. Whole-run coverage cannot separate that from the boot\n" +
+                "    sequence and the per-frame loop, which together dwarf it.\n\n" +
+                "    Marking does not stop or clear recording, so several marks in a session\n" +
+                "    just move the baseline forward. 'cov clear' drops the mark along with\n" +
+                "    everything else. A mark costs a second 2MB bitmap.\n\n" +
+                "DISCOVERED ROUTINES\n" +
+                "    'cov funcs' lists every address a call actually landed on while\n" +
+                "    recording, with how many times each was entered and whether it was\n" +
+                "    reached by a call or by an interrupt vector. These are real entry\n" +
+                "    points, observed rather than inferred - a static scan finds routines\n" +
+                "    reached by a literal JSR, and misses every one reached through a jump\n" +
+                "    table or a computed pointer, which on a SNES game is most of them.\n\n" +
+                "    Output is designed to be pasted into 'label': the addresses are exactly\n" +
+                "    the ones worth naming, and naming them makes every later 'bt', 'bp\n" +
+                "    list' and 'profile' readable. Where 'profile' ranks routines by the\n" +
+                "    time they cost, this enumerates them, including the cheap ones.\n\n" +
+                "PERSISTENCE\n" +
+                "    'cov save <file>' writes the bitmap and the discovered routines to\n" +
+                "    Logs/<CoreName>/<file>; 'cov load' MERGES a saved map back in rather\n" +
+                "    than replacing what is recorded, so maps from several sessions\n" +
+                "    accumulate into one. A map of a whole playthrough is worth far more\n" +
+                "    than a map of one sitting, and no single sitting reaches every\n" +
+                "    routine.\n\n" +
+                "    Name it with a .covmap extension - the repo gitignores that, and a map\n" +
+                "    is a recording of one person's playthrough rather than source.\n\n" +
+                "    The file is a fixed header, the routine table, then the raw bitmap.\n" +
+                "    It is keyed to nothing - loading a map taken from a different ROM will\n" +
+                "    quietly merge nonsense, so keep the filename tied to the game.\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    A scope word records another chip's instruction stream instead - see\n" +
+                "    'man cpus' for the names. Each chip gets its own bitmap, because each\n" +
+                "    runs its own code: an address covered on the SA-1 says nothing about\n" +
+                "    whether the main CPU ever executed the same number. 'cop' still works\n" +
+                "    as an alias for whichever cartridge coprocessor is present.\n\n" +
                 "EXAMPLES\n" +
                 "    cov on\n" +
                 "    cov 10F452 10\n" +
-                "    cov gsu 0A80E9 40",
+                "    cov mark\n" +
+                "    cov new 108000 8000\n" +
+                "    cov funcs 20\n" +
+                "    cov save alttp.covmap\n" +
+                "    cov gsu 0A80E9 40\n" +
+                "    cov spc on\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, bp, callers, disasm, label, profile",
 
             ["framelog"] =
                 "NAME\n" +
@@ -757,7 +1103,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "NAME\n" +
                 "    disasm - disassemble instructions\n\n" +
                 "SYNOPSIS\n" +
-                "    disasm <space> <addr> [<n>]\n\n" +
+                "    disasm <space> <addr> [<n>]\n" +
+                "    disasm <cpu> [<addr>] [<n>]\n\n" +
                 "DESCRIPTION\n" +
                 "    Disassembles <n> instructions (default 10) starting at <addr>, printing\n" +
                 "    address, raw bytes, mnemonic, and operand for each. A linear\n" +
@@ -765,8 +1112,48 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    mixed into the same range, so a run through embedded data can produce\n" +
                 "    garbage until it happens to resync - a known, accepted limitation, not a\n" +
                 "    bug.\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    A chip name in place of a space disassembles that chip's own code, in\n" +
+                "    its own instruction set - see 'man cpus'. The SNES needs four different\n" +
+                "    disassemblers to cover itself: the 65816 for the main CPU and the SA-1,\n" +
+                "    the SPC700 for sound, the GSU's RISC encoding, and the NEC DSP's fixed\n" +
+                "    24-bit words. Naming the chip picks the right one; naming a raw space\n" +
+                "    picks by space, which is why 'disasm APURAM' decodes SPC700 and not\n" +
+                "    65816 - it used to decode 65816, and quietly produced nonsense.\n\n" +
+                "    With no address, disassembly starts wherever that chip is executing\n" +
+                "    right now, which is usually what you want at a breakpoint.\n\n" +
+                "    One asymmetry worth knowing: 'disasm DSPPRG' indexes program WORDS, not\n" +
+                "    bytes, because the NEC DSP's program counter is a word index and that\n" +
+                "    is the only number you ever have to paste in. Reading DSPPRG through\n" +
+                "    'mem' is still byte-addressed, three bytes per word.\n\n" +
+                "OPERAND WIDTHS (65816 ONLY)\n" +
+                "    On the 65816 an immediate operand is one byte or two depending on the\n" +
+                "    M (accumulator) and X (index) flags, which are not in the instruction\n" +
+                "    bytes. By default those come from the CPU's flags RIGHT NOW, and\n" +
+                "    REP/SEP inside the range are then tracked forward - which is correct\n" +
+                "    when disassembling from the current PC, and only a guess anywhere\n" +
+                "    else. Guessing wrong shifts every following instruction by a byte, so\n" +
+                "    the listing stays syntactically plausible while being entirely wrong:\n" +
+                "    a routine that really runs 8-bit-index reads as 'LDY #$C500' where the\n" +
+                "    bytes are 'LDY #$00' followed by the start of the next instruction.\n\n" +
+                "    'm8'/'m16' and 'x8'/'x16' force the starting widths. They may appear\n" +
+                "    in any order after the command name and don't count as <addr>/<n>.\n" +
+                "    The chosen widths are echoed above the listing. Asking for a 16-bit\n" +
+                "    width also selects native mode, because emulation mode forces both\n" +
+                "    widths to 8 regardless of M/X - without that, 'x16' would silently do\n" +
+                "    nothing whenever the CPU happens to be paused in emulation mode.\n\n" +
+                "    If a disassembly looks like it decodes into nonsense a few\n" +
+                "    instructions in - implausible operands, a store to a read-only\n" +
+                "    register, addresses that don't line up with a known write site - try\n" +
+                "    the other widths before concluding the bytes are data.\n\n" +
                 "EXAMPLES\n" +
-                "    disasm CpuBus 8000 20",
+                "    disasm CpuBus 8000 20\n" +
+                "    disasm gsu\n" +
+                "    disasm spc 05A5 10\n" +
+                "    disasm dsp 0 20\n" +
+                "    disasm cpu 04FDD8 12 m16 x8\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, cov, bt, label",
 
             ["trace"] =
                 "NAME\n" +
@@ -1783,18 +2170,572 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
 
             ["step"] =
                 "NAME\n" +
-                "    step - single-step one CPU instruction\n\n" +
+                "    step - single-step, step over a call, or step out of a routine\n\n" +
                 "SYNOPSIS\n" +
-                "    step\n" +
-                "    s\n\n" +
+                "    step [<count>]\n" +
+                "    s [<count>]\n" +
+                "    step over\n" +
+                "    step out\n" +
+                "    step <cpu> [<count>|over|out]\n\n" +
                 "DESCRIPTION\n" +
-                "    Arms a one-shot halt-before-next-instruction and lets emulation run just\n" +
-                "    long enough for exactly one CPU instruction to execute, then halts again\n" +
-                "    at the same interactive prompt - 's' is recognized as a plain alias, not\n" +
-                "    a separate command. Needs a ROM loaded (an active debug target).\n\n" +
+                "    Arms a halt and lets emulation run just far enough to reach it, then\n" +
+                "    halts again at the same interactive prompt - 's' is recognized as a\n" +
+                "    plain alias, not a separate command. Needs a ROM loaded.\n\n" +
+                "    Bare 'step' executes exactly one instruction. 'step <count>' executes\n" +
+                "    <count> of them (hex, like every other address/count in this shell), for\n" +
+                "    walking past a delay loop without holding down 's'. A real breakpoint\n" +
+                "    that fires part-way through still wins and halts early - a multi-step is\n" +
+                "    a convenience, not a way to suppress breakpoints.\n\n" +
+                "    'step over' runs the call at the current instruction to completion and\n" +
+                "    halts on the instruction after it. It works by depth, not by address:\n" +
+                "    it records the call stack's current depth and halts at the first\n" +
+                "    instruction executed once the stack is back down to it. That makes it\n" +
+                "    correct for recursion (an inner call at the same address doesn't stop\n" +
+                "    it early) and it degrades gracefully on a non-call instruction, where\n" +
+                "    the depth never rises and it behaves exactly like a plain 'step'.\n\n" +
+                "    'step out' is the same mechanism with a target of depth - 1: run until\n" +
+                "    the routine currently executing returns to its caller. It errors rather\n" +
+                "    than running away when the call stack is already empty.\n\n" +
+                "    Both depend on the call stack, so both need a core that reports one -\n" +
+                "    see 'man bt', which also covers what makes a depth reading go wrong\n" +
+                "    (a game that manipulates its own stack) and how to resync it.\n\n" +
                 "EXAMPLES\n" +
                 "    step\n" +
-                "    s",
+                "    s 20\n" +
+                "    step over\n" +
+                "    step out\n" +
+                "    step sa1 out\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    A scope word steps another chip - see 'man cpus'. 'over' and 'out'\n" +
+                "    additionally need that chip to report a call stack, so on an SNES they\n" +
+                "    work for the main CPU and the SA-1 but not the GSU or SPC700, which\n" +
+                "    still accept a plain instruction step.\n\n" +
+                "    Stepping one chip lets the others keep running - they share a timebase,\n" +
+                "    and freezing everything but one processor would change the behaviour\n" +
+                "    being investigated, which on a coprocessor handshake is usually the\n" +
+                "    entire bug.\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, bt, runto, bp, resume",
+
+            ["eval"] =
+                "NAME\n" +
+                "    eval - evaluate an expression against live core state\n\n" +
+                "SYNOPSIS\n" +
+                "    eval <expr>\n" +
+                "    eval symbols [<filter>]\n" +
+                "    eval <cpu> <expr>\n\n" +
+                "DESCRIPTION\n" +
+                "    Evaluates one integer expression against the machine as it is right\n" +
+                "    now and prints the result three ways at once - decimal, hex, binary -\n" +
+                "    so a flag word or a packed register never needs converting by hand.\n\n" +
+                "    The same language backs conditional breakpoints ('bp add <addr> if\n" +
+                "    <expr>'), which is the point of having it: 'eval' is where an expression\n" +
+                "    gets checked before being trusted to gate a halt.\n\n" +
+                "SYMBOLS\n" +
+                "    'eval symbols' lists everything nameable, which is the authoritative\n" +
+                "    answer for whatever core is loaded - the list below is the SNES core's.\n\n" +
+                "    Registers   a x y s (sp) d (dp) pc pb (pbr) db (dbr) p e\n" +
+                "    Flags       flag.c flag.z flag.i flag.d flag.x flag.m flag.v flag.n\n" +
+                "                (each 0 or 1)\n" +
+                "    Position    frame, scanline, cycle\n" +
+                "    Context     opaddr (the 24-bit address of the instruction a halt is\n" +
+                "                sitting in front of), stackdepth\n" +
+                "    Labels      every name defined via 'label add' - see 'man label'\n\n" +
+                "    A core that publishes none of its own still gets symbols for free: the\n" +
+                "    generic fallback names every register the core already reports through\n" +
+                "    'regs', plus 'frame' and any labels. Nothing has to be written per-core\n" +
+                "    for 'eval' to work on a new console.\n\n" +
+                "NUMBERS AND MEMORY\n" +
+                "    Numbers     123 decimal, $1F or 0x1F hex, %1010 binary\n" +
+                "    [addr]      one byte at <addr>\n" +
+                "    {addr}      one little-endian word at <addr>\n" +
+                "    [SPACE:addr]  read from a named space instead, e.g. [VRAM:$2760]\n\n" +
+                "    Without a space name, a read goes to the CPU bus. On the SNES core an\n" +
+                "    address that lands in WRAM is served straight from the RAM array\n" +
+                "    instead, which is both faster and free of side effects - so the common\n" +
+                "    case ('[$7E0020]') is always safe to put in a breakpoint condition.\n" +
+                "    An address that does NOT resolve to WRAM goes through the live bus, and\n" +
+                "    reading a hardware register there has whatever side effect the real\n" +
+                "    register has (RDNMI clears the pending-NMI flag, OPHCT/OPVCT toggle a\n" +
+                "    byte-order latch). Name a plain space explicitly when that matters.\n\n" +
+                "OPERATORS\n" +
+                "    Lowest to highest precedence:\n" +
+                "        ||  &&  |  ^  &  == !=  < > <= >=  << >>  + -  * / %\n" +
+                "    Unary: - ! ~ . Parentheses group. '&&' and '||' short-circuit, so\n" +
+                "    '[$7E0000] != 0 && 100 / [$7E0000] > 2' is safe. Any nonzero value is\n" +
+                "    true; comparisons produce 1 or 0.\n\n" +
+                "QUOTING\n" +
+                "    '&&', '||', '<', '>' and '|' are the shell's own operators and are\n" +
+                "    consumed before this command sees them - quote any expression using\n" +
+                "    them. Everything after 'eval' is rejoined with single spaces, so simple\n" +
+                "    unquoted forms ('eval a + 1') work.\n\n" +
+                "EXAMPLES\n" +
+                "    eval a\n" +
+                "    eval [$7E0020]\n" +
+                "    eval {$7E13C6} + 4\n" +
+                "    eval \"flag.m == 0 && a > $100\"\n" +
+                "    eval [VRAM:$2760]\n" +
+                "    eval symbols flag\n" +
+                "    eval gsu r14\n" +
+                "    eval spc \"a == $F0\"\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    'eval <cpu> <expr>' evaluates against another chip's registers - see\n" +
+                "    'man cpus'. Its symbols are that chip's own, so 'eval gsu r14' reads\n" +
+                "    the GSU's R14 while 'eval a' still reads the main CPU's accumulator,\n" +
+                "    and an unnamed memory read like '[$8000]' resolves in that chip's own\n" +
+                "    code space rather than the main CPU bus.\n\n" +
+                "    A chip name alone is an EXPRESSION, not a scope: 'eval a' evaluates the\n" +
+                "    symbol 'a'. The scope reading only applies when something follows it.\n\n" +
+                "    Symbols for a chip come from whatever registers it already reports, so\n" +
+                "    'eval <cpu> symbols' is the reliable way to see what is nameable rather\n" +
+                "    than guessing at a register's spelling.\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, bp, regs, mem, label",
+
+            ["bt"] =
+                "NAME\n" +
+                "    bt - backtrace the live call chain\n\n" +
+                "SYNOPSIS\n" +
+                "    bt [<count>]\n" +
+                "    bt reset\n" +
+                "    bt <cpu> [<count>|reset]\n\n" +
+                "DESCRIPTION\n" +
+                "    Prints the calls currently on the stack, innermost frame first: what was\n" +
+                "    called, where it was called from, and which frame number the call\n" +
+                "    happened on. This is the dynamic counterpart to 'callers' (see 'man\n" +
+                "    callers'), and the two answer genuinely different questions. 'callers'\n" +
+                "    scans code and reports every instruction that COULD reach an address;\n" +
+                "    'bt' reports the one path that actually did, this time. When a routine\n" +
+                "    has six static callers, 'callers' gives you six suspects and 'bt' gives\n" +
+                "    you the answer.\n\n" +
+                "    Frames are recorded from the CPU's own call and return opcodes plus its\n" +
+                "    interrupt entry points, so an NMI or IRQ frame is labelled as such\n" +
+                "    rather than looking like an ordinary call. Addresses are resolved\n" +
+                "    through the label registry - see 'man label'.\n\n" +
+                "ACCURACY\n" +
+                "    A call stack tracked this way is an inference, not machine state, and\n" +
+                "    it can drift on code that manipulates its own stack directly: a routine\n" +
+                "    that pushes a return address and jumps, that pulls a return address it\n" +
+                "    never intends to return through, or that unwinds several frames with a\n" +
+                "    stack-pointer write rather than matched returns. Two symptoms give this\n" +
+                "    away - a depth that only ever grows, and a rising 'unmatched returns'\n" +
+                "    count, which 'bt' reports whenever it is nonzero.\n\n" +
+                "    'bt reset' forgets the current chain and starts counting again from the\n" +
+                "    current instruction. Do that after stepping through a routine known to\n" +
+                "    play with its own stack, and before trusting 'step out' or a 'profile'\n" +
+                "    run that has to survive it. Depth is also capped, so a runaway chain\n" +
+                "    stops recording rather than growing without bound.\n\n" +
+                "    Frames opened before the debug target attached are not on the stack -\n" +
+                "    code already running at that moment shows up in 'profile' under\n" +
+                "    '(outside any recorded call)' rather than under its real caller.\n\n" +
+                "EXAMPLES\n" +
+                "    bt\n" +
+                "    bt 8\n" +
+                "    bt reset\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    'bt <cpu>' backtraces another chip - see 'man cpus'. Only a chip with a\n" +
+                "    real call/return seam has a stack to report: on an SNES that is the\n" +
+                "    main CPU and the SA-1, both 65816s. The GSU and the SPC700 report none,\n" +
+                "    and say so rather than inventing frames.\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, callers, step, profile, bp, label",
+
+            ["cpus"] =
+                "NAME\n" +
+                "    cpus - list the processors a debug command can be aimed at\n\n" +
+                "SYNOPSIS\n" +
+                "    cpus\n\n" +
+                "DESCRIPTION\n" +
+                "    A console is rarely one processor. An SNES is always at least two - the\n" +
+                "    65816 main CPU and the SPC700 driving sound - and a cartridge can add a\n" +
+                "    third: an SA-1, a SuperFX GSU, a NEC DSP. Each runs its own code, in its\n" +
+                "    own address space, from its own program counter. An SA-1 game's $00:82D7\n" +
+                "    is simply not the same instruction as the main CPU's $00:82D7.\n\n" +
+                "    'cpus' lists the ones this core publishes, with what each supports, and\n" +
+                "    every scoped command takes one of those names as an optional first word:\n\n" +
+                "        bp sa1 add 82D7            breakpoint on the coprocessor's PC\n" +
+                "        cov gsu on                 coverage of the GSU's instruction stream\n" +
+                "        bt sa1                     the coprocessor's own call chain\n" +
+                "        step spc over              step the sound CPU over a call\n" +
+                "        eval gsu r14 > 100         evaluate against the GSU's registers\n" +
+                "        regs spc                   just that chip's registers\n" +
+                "        disasm gsu                 disassemble from where the GSU is now\n\n" +
+                "    With no scope word every command means the main CPU, so nothing that\n" +
+                "    worked before needs rewriting. 'cop' is still accepted as an alias for\n" +
+                "    whichever cartridge coprocessor is present, from before chips had names.\n\n" +
+                "WHAT EACH CHIP SUPPORTS\n" +
+                "    Support is not uniform, because the hardware is not uniform, and 'cpus'\n" +
+                "    prints per chip what is actually wired rather than letting a command\n" +
+                "    fail obscurely later:\n\n" +
+                "        bp      the core can halt this chip mid-instruction\n" +
+                "        cov     its executed addresses can be recorded\n" +
+                "        bt      it has a call/return seam to infer a stack from\n" +
+                "        regs    it reports named registers\n" +
+                "        disasm  it has a code space and a disassembler for its ISA\n\n" +
+                "    One absence is worth knowing about. The GSU and the SPC700 have no\n" +
+                "    call stack: the GSU's LINK/subroutine convention is register-based\n" +
+                "    rather than a stack the way the 65816's JSR/RTS is, so there is no\n" +
+                "    honest seam to infer frames from, and 'bt gsu' says so instead of\n" +
+                "    inventing them.\n\n" +
+                "    The SA-1 gets everything, because it IS a 65816: the same call/return\n" +
+                "    and interrupt seams the main CPU uses apply to it unchanged, so\n" +
+                "    'bt sa1', 'step sa1 out' and 'profile sa1' all work.\n\n" +
+                "    The NEC DSP gets everything too, by a different route. Its firmware\n" +
+                "    runs from a mask ROM the cartridge never exposes, so there is no code\n" +
+                "    to read - but the chip is still stepped one instruction at a time by\n" +
+                "    this core, and that is all a breakpoint needs. Its addresses are word\n" +
+                "    indices, not bytes, because that is what the DSP's own PC is: 'bp dsp\n" +
+                "    add 100' means the 257th instruction, and 'disasm DSPPRG' indexes the\n" +
+                "    same way. Its CALL/RET pair drives a real call stack, so 'bt dsp' and\n" +
+                "    'cov dsp funcs' map firmware nobody has source for.\n\n" +
+                "HALTING, AND WHICH CHIP RESUMES\n" +
+                "    Only one chip halts at a time. Whichever one hit its breakpoint is the\n" +
+                "    one that skips a check on resume, so 'continue' leaves the breakpoint it\n" +
+                "    is sitting on instead of instantly re-halting - and, just as important,\n" +
+                "    the OTHER chips do not skip theirs. Arming the main CPU's resume flag\n" +
+                "    for a coprocessor halt would let the coprocessor re-break immediately\n" +
+                "    on the same PC, forever.\n\n" +
+                "    A halt mid-frame keeps the unspent clock budget of whichever chip was\n" +
+                "    running, so resuming continues the frame rather than restarting it.\n\n" +
+                "EXAMPLES\n" +
+                "    cpus\n" +
+                "    bp gsu add 008010\n" +
+                "    cov sa1 on\n" +
+                "    regs dsp\n\n" +
+                "SEE ALSO\n" +
+                "    bp, cov, bt, step, profile, eval, regs, disasm, copflow",
+
+            ["copflow"] =
+                "NAME\n" +
+                "    copflow - watch the CPU and a coprocessor talk\n\n" +
+                "SYNOPSIS\n" +
+                "    copflow on [<size>]\n" +
+                "    copflow off\n" +
+                "    copflow clear\n" +
+                "    copflow tail [<n>]\n" +
+                "    copflow stats\n" +
+                "    copflow poll\n\n" +
+                "DESCRIPTION\n" +
+                "    Every cartridge coprocessor talks to the main CPU through one narrow\n" +
+                "    register window, and that window is where coprocessor bugs actually\n" +
+                "    live. The chip itself is usually fine. What breaks is the conversation:\n" +
+                "    the CPU writes a parameter block and kicks the chip, the chip works and\n" +
+                "    sets a status bit, the CPU polls that bit and moves on. Any one of those\n" +
+                "    four steps can fail silently, and none of them are visible in a register\n" +
+                "    dump - by the time you look, the moment has passed.\n\n" +
+                "    'copflow' logs that window: every read and write, with the value, the\n" +
+                "    frame it happened on, and which side did it. 'copflow tail' replays the\n" +
+                "    recent conversation in order, which is usually enough to see which of\n" +
+                "    the four steps never happened.\n\n" +
+                "POLL RUNS\n" +
+                "    'copflow poll' exists for the most common coprocessor failure by a wide\n" +
+                "    margin: the CPU asks a question the chip never answers. It tracks the\n" +
+                "    longest run of consecutive reads of one register where the value never\n" +
+                "    changed, and reports the run in progress right now.\n\n" +
+                "    A long run is unambiguous. If the game read $3030 ninety thousand times\n" +
+                "    in a row and always got the same byte back, the game is not slow and the\n" +
+                "    plot is not wrong - it is spinning on a status bit that this core never\n" +
+                "    updates. That points at the register model, not the chip's arithmetic,\n" +
+                "    and it is a very different bug from one 'regs' or 'cophist' would find.\n\n" +
+                "    A write by either side always breaks the run, because a write is\n" +
+                "    progress: it means someone learned something and acted. Only unbroken\n" +
+                "    reads of an unchanging value count.\n\n" +
+                "COST\n" +
+                "    Disarmed, this costs one bool test per coprocessor register access -\n" +
+                "    nothing measurable, and nothing at all on a cartridge with no\n" +
+                "    coprocessor, which never reaches the seam. Armed, it keeps whole-run\n" +
+                "    tallies per register plus a ring of the most recent accesses, so a long\n" +
+                "    session cannot grow memory without bound; 'copflow tail' can only show\n" +
+                "    what is still in the ring, while 'copflow stats' and 'copflow poll'\n" +
+                "    cover the entire armed run.\n\n" +
+                "EXAMPLES\n" +
+                "    copflow on\n" +
+                "    copflow tail 40\n" +
+                "    copflow poll\n" +
+                "    copflow stats\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, cophist, regs, watch, bp",
+
+            ["dma"] =
+                "NAME\n" +
+                "    dma - what the block-transfer engine is set up to do, and what it did\n\n" +
+                "SYNOPSIS\n" +
+                "    dma\n" +
+                "    dma log on [<n>]\n" +
+                "    dma log off\n" +
+                "    dma log [<n>]\n" +
+                "    dma log clear\n" +
+                "    dma stats\n\n" +
+                "DESCRIPTION\n" +
+                "    On a SNES nearly everything the player sees arrives by DMA. Tiles,\n" +
+                "    palettes, sprite tables and the sound driver's samples are all block\n" +
+                "    transfers, and per-scanline effects - a status-bar split, a colour\n" +
+                "    gradient, a growing window wipe - are HDMA. So a large class of visual\n" +
+                "    bug is not a rendering bug at all: the data never arrived, or arrived\n" +
+                "    somewhere else, and the renderer faithfully drew what it was given.\n\n" +
+                "    'dma' alone prints the channel table: for each of the eight channels,\n" +
+                "    its direction, its B-bus write pattern, which register it targets (by\n" +
+                "    name, not just an address), where it reads from, how long the transfer\n" +
+                "    is, and for HDMA the table pointer and line counter it has reached. An\n" +
+                "    idle channel still shows its last configuration, which is usually the\n" +
+                "    thing you wanted to see.\n\n" +
+                "TRANSFER LOG\n" +
+                "    'dma log on' records every transfer as it happens - channel, kind,\n" +
+                "    destination, source, length, and the frame and scanline it ran on.\n" +
+                "    This is the part the channel table cannot give you, because a general\n" +
+                "    DMA reconfigures and fires many times a frame and the table only ever\n" +
+                "    shows the last one.\n\n" +
+                "    The scanline column is what makes it worth reading. A VRAM transfer\n" +
+                "    during vblank is normal; the same transfer at scanline 100 is a bug\n" +
+                "    that will show as corrupt graphics, and 'dma log' names the frame it\n" +
+                "    first happened on. Pair it with 'bp when ppuaccess' to halt on one.\n\n" +
+                "BANDWIDTH\n" +
+                "    'dma stats' totals the whole armed run two ways: per channel, split\n" +
+                "    into general and HDMA because those cost very differently, and per\n" +
+                "    destination register, which answers 'where is the bandwidth going'.\n" +
+                "    A game that is slow during one scene and not another is usually\n" +
+                "    uploading something enormous, and the destination table names it.\n\n" +
+                "COST\n" +
+                "    Disarmed the log is a null field test at the end of each transfer, so\n" +
+                "    a normal run pays nothing. Armed, it is a fixed-size ring plus a set\n" +
+                "    of counters, so a long session cannot grow memory without bound -\n" +
+                "    'dma log' shows only what is still in the ring, while 'dma stats'\n" +
+                "    covers the whole armed run. The channel table is read on demand and\n" +
+                "    costs nothing at all when not being run.\n\n" +
+                "EXAMPLES\n" +
+                "    dma\n" +
+                "    dma log on\n" +
+                "    dma log 40\n" +
+                "    dma stats\n\n" +
+                "SEE ALSO\n" +
+                "    bp, copflow, mem, watch, tilemap",
+
+            ["label"] =
+                "NAME\n" +
+                "    label - name addresses, so an investigation's findings survive it\n\n" +
+                "SYNOPSIS\n" +
+                "    label add <addr> <name> [<comment...>]\n" +
+                "    label list [<filter>]\n" +
+                "    label at <addr>\n" +
+                "    label remove <name|addr>\n" +
+                "    label clear\n" +
+                "    label load <path>\n" +
+                "    label save <path>\n\n" +
+                "DESCRIPTION\n" +
+                "    Attaches a name (and optionally a comment) to an address. Once named,\n" +
+                "    that address reads as '$00A3B2 <NmiHandler>' everywhere it appears -\n" +
+                "    'disasm', 'bt', 'bp list', 'counters top', 'profile top' - and the name\n" +
+                "    becomes usable as a symbol in any expression, so 'bp add NmiHandler'\n" +
+                "    and 'eval [PlayerX]' work.\n\n" +
+                "    This is the piece that makes a long investigation compound instead of\n" +
+                "    restarting. Without it, every session re-derives what $7E13C6 was, from\n" +
+                "    notes kept somewhere outside the tool. 'label save' writes the set out\n" +
+                "    and 'label load' merges one back in, so the naming survives a restart\n" +
+                "    and can be committed alongside whatever else an investigation produced.\n\n" +
+                "    'disasm' prints a label on its own line above the instruction it names,\n" +
+                "    the way a disassembly listing does, and annotates any operand whose\n" +
+                "    statically-resolvable target is itself labelled.\n\n" +
+                "    'label at <addr>' answers the reverse question - given an address in the\n" +
+                "    middle of a routine, which routine is it in? An exact hit prints the\n" +
+                "    name; otherwise it reports the nearest label at or below the address\n" +
+                "    with the offset ('MainLoop+12').\n\n" +
+                "    The map is one-to-one in both directions: renaming an address drops its\n" +
+                "    old name, and pointing an existing name at a new address moves it\n" +
+                "    rather than leaving two entries.\n\n" +
+                "FILE FORMAT\n" +
+                "    One entry per line, '<hex address> <name> [comment...]'. Blank lines and\n" +
+                "    lines starting with '#' are ignored. '$' and '0x' prefixes on the\n" +
+                "    address are accepted. Deliberately its own trivial format rather than\n" +
+                "    any one assembler's symbol file, since nothing here knows which\n" +
+                "    assembler a given ROM was built with; a real .sym/.mlb file converts\n" +
+                "    with one 'awk' line. Paths resolve inside this shell's sandbox - see\n" +
+                "    'man hier'.\n\n" +
+                "EXAMPLES\n" +
+                "    label add 00A3B2 NmiHandler main vblank entry\n" +
+                "    label add 7E13C6 CoinCount\n" +
+                "    label at 00A3C0\n" +
+                "    label list Nmi\n" +
+                "    label save /Usr/Home/Documents/smw.labels\n\n" +
+                "SEE ALSO\n" +
+                "    disasm, bt, bp, eval, callers",
+
+            ["runto"] =
+                "NAME\n" +
+                "    runto - resume until a named event instead of an address\n\n" +
+                "SYNOPSIS\n" +
+                "    runto nmi | irq | brk | cop\n" +
+                "    runto scanline <n>\n" +
+                "    runto frame [<n>]\n" +
+                "    runto <addr>\n\n" +
+                "DESCRIPTION\n" +
+                "    Resumes emulation and halts at the next occurrence of an event, rather\n" +
+                "    than requiring an address to put a breakpoint on. Half of debugging a\n" +
+                "    console is 'get me to the interesting moment', and for a whole class of\n" +
+                "    moments there is no single address to break on - the vblank handler's\n" +
+                "    entry address is not knowable before you've found it, and 'the state at\n" +
+                "    scanline 100' is not an address at all.\n\n" +
+                "    'runto nmi|irq|brk|cop' halts as soon as the CPU takes an interrupt of\n" +
+                "    that kind, with the halt landing inside the handler. Pair it with 'bt',\n" +
+                "    which then shows what the interrupt interrupted, and 'label add opaddr\n" +
+                "    NmiHandler' to keep the address you just found.\n\n" +
+                "    'runto scanline <n>' halts at the start of scanline <n> of whichever\n" +
+                "    frame is in progress, which is how you catch a mid-frame register write\n" +
+                "    (a status-bar split, a mid-screen mode change) in the act. Scanline\n" +
+                "    numbers here are decimal.\n\n" +
+                "    'runto frame [<n>]' halts once frame <n> has completed; with no argument\n" +
+                "    it means the next frame, which is the fastest way to advance exactly one\n" +
+                "    frame from a halt.\n\n" +
+                "    Events are noticed where they happen but the halt lands at the next\n" +
+                "    instruction boundary, because that is the only place a core can safely\n" +
+                "    stop - the same one-instruction lag 'bp write' has, for the same reason.\n\n" +
+                "    'runto <addr>' is a convenience for a plain address: it adds an ordinary\n" +
+                "    breakpoint and resumes. That breakpoint is NOT removed when it fires -\n" +
+                "    the command reports its id so 'bp remove <id>' can clear it. A one-shot\n" +
+                "    breakpoint would need a concept the registry doesn't have, and silently\n" +
+                "    leaving a permanent breakpoint behind would be worse than saying so.\n\n" +
+                "    An armed run-to survives a plain 'continue': it fires whenever the event\n" +
+                "    next happens. Only one run-to of each kind can be armed at a time -\n" +
+                "    arming a second replaces the first.\n\n" +
+                "EXAMPLES\n" +
+                "    runto nmi\n" +
+                "    runto scanline 100\n" +
+                "    runto frame\n" +
+                "    runto 808000\n\n" +
+                "SEE ALSO\n" +
+                "    step, bp, bt, resume",
+
+            ["counters"] =
+                "NAME\n" +
+                "    counters - per-address read/write/execute tallies\n\n" +
+                "SYNOPSIS\n" +
+                "    counters on <space>\n" +
+                "    counters off\n" +
+                "    counters clear\n" +
+                "    counters <addr> [<len>]\n" +
+                "    counters top [r|w|x|u] [<n>]\n" +
+                "    counters cold <addr> <len>\n\n" +
+                "DESCRIPTION\n" +
+                "    Counts every read, write and execute per address in one memory space.\n" +
+                "    Where 'watch' records individual events with context and 'cov' records\n" +
+                "    only whether an address ever executed, this records how MANY times -\n" +
+                "    which is the question behind 'is this table live or dead', 'which byte\n" +
+                "    of this struct does the game actually touch', and 'which half of this\n" +
+                "    buffer is the one being updated'.\n\n" +
+                "    Armed against one space at a time, because the tallies cost four arrays\n" +
+                "    the size of that space - worth paying where a question is being asked,\n" +
+                "    not worth paying everywhere by default. 'counters off' stops counting\n" +
+                "    but leaves what was collected readable; 'counters clear' zeroes the\n" +
+                "    counts and stays armed.\n\n" +
+                "    A bare address (with an optional length) reports totals over that range,\n" +
+                "    including how many of its bytes were touched at all. 'counters top'\n" +
+                "    ranks the busiest addresses - 'r' reads (default), 'w' writes, 'x'\n" +
+                "    executes, 'u' uninitialized reads. 'counters cold' is the inverse:\n" +
+                "    addresses in a range that nothing ever touched, which is what proves a\n" +
+                "    table is unused rather than merely quiet.\n\n" +
+                "UNINITIALIZED READS\n" +
+                "    An address read before anything wrote it (since counting started) is\n" +
+                "    counted separately. On real hardware that read returns whatever the RAM\n" +
+                "    powered up holding, so a game doing it is either relying on\n" +
+                "    power-on state or has a genuine bug - and an emulator whose RAM fill\n" +
+                "    differs from hardware will diverge exactly there. 'counters top u' is\n" +
+                "    the fastest way to find those addresses.\n\n" +
+                "    'Since counting started' is doing real work in that sentence: arm before\n" +
+                "    the moment being studied, not after, or an address the game initialized\n" +
+                "    earlier will look uninitialized.\n\n" +
+                "    Execution is counted against whatever space the core reports its program\n" +
+                "    counter in (the CPU bus), so counting a RAM space leaves the execute\n" +
+                "    column at zero unless that RAM is genuinely executed from.\n\n" +
+                "EXAMPLES\n" +
+                "    counters on WRAM\n" +
+                "    counters 13c6 8\n" +
+                "    counters top w 10\n" +
+                "    counters top u\n" +
+                "    counters cold 1000 200\n\n" +
+                "SEE ALSO\n" +
+                "    watch, cov, search, memfind, profile",
+
+            ["freeze"] =
+                "NAME\n" +
+                "    freeze - pin an address by undoing every write to it\n\n" +
+                "SYNOPSIS\n" +
+                "    freeze add <space> <addr> [<value>]\n" +
+                "    freeze list\n" +
+                "    freeze remove <id>\n" +
+                "    freeze clear\n\n" +
+                "DESCRIPTION\n" +
+                "    Holds an address at a value by writing that value straight back the\n" +
+                "    instant anything writes something else. Without a <value> it pins\n" +
+                "    whatever the address holds right now, which is the common case: find an\n" +
+                "    address with 'search', freeze it, watch what stops moving.\n\n" +
+                "    This is a debugging instrument, not a cheat. 'cheat poke' re-applies\n" +
+                "    once per frame, so the game's own value is live for most of that frame\n" +
+                "    and every read in between sees it; a freeze undoes the write\n" +
+                "    immediately, so nothing ever observes the value the game tried to store.\n" +
+                "    That difference is the whole point when the question is 'what breaks if\n" +
+                "    this counter never changes' or 'is this the variable driving that\n" +
+                "    animation' - a per-frame poke answers neither cleanly.\n\n" +
+                "    The restore is itself a write, and is suppressed from re-entering the\n" +
+                "    freeze check, so it cannot recurse. Writes matching the frozen value are\n" +
+                "    left alone and not counted. 'freeze list' reports how many writes each\n" +
+                "    entry has undone, which doubles as a cheap 'is anything even writing\n" +
+                "    here' signal - a freeze with a blocked count of zero means the address\n" +
+                "    you suspected is not the one being written.\n\n" +
+                "    Only spaces the core reports writes for can be frozen; freezing an\n" +
+                "    address in a read-only space is refused rather than silently ignored.\n" +
+                "    Freezing an address whose writes the core does not observe will also\n" +
+                "    show a blocked count of zero - see 'man watch' for which paths report.\n\n" +
+                "EXAMPLES\n" +
+                "    freeze add WRAM 13c6\n" +
+                "    freeze add WRAM 0dbf 63\n" +
+                "    freeze list\n" +
+                "    freeze clear\n\n" +
+                "SEE ALSO\n" +
+                "    cheat, watch, search, counters",
+
+            ["profile"] =
+                "NAME\n" +
+                "    profile - which routines the instruction budget actually goes to\n\n" +
+                "SYNOPSIS\n" +
+                "    profile on\n" +
+                "    profile off\n" +
+                "    profile clear\n" +
+                "    profile top [<n>]\n" +
+                "    profile <cpu> on|off|clear|top [<n>]\n\n" +
+                "DESCRIPTION\n" +
+                "    Charges every executed instruction to whichever routine is innermost on\n" +
+                "    the call stack at the time, then ranks routines by the count. That makes\n" +
+                "    the figure EXCLUSIVE: a routine that spends all its time inside a call\n" +
+                "    it made scores low, and the callee scores high. Inclusive ('this\n" +
+                "    routine and everything under it') is deliberately not reported, because\n" +
+                "    on a stack that can drift (see 'man bt') an inclusive number compounds\n" +
+                "    the drift while an exclusive one localizes it.\n\n" +
+                "    The unit is instructions, not cycles. Instructions are what the\n" +
+                "    per-instruction seam this rides on can count exactly; a cycle figure\n" +
+                "    would have to be attributed across a boundary the seam doesn't see. For\n" +
+                "    'which routine is hot', the two rank almost identically.\n\n" +
+                "    Counting only happens while armed, so 'profile on' ... 'profile off'\n" +
+                "    brackets the window being studied. Both the call count and the\n" +
+                "    instruction count are reported per routine, so a routine that is hot\n" +
+                "    because it is slow is distinguishable from one that is hot because it is\n" +
+                "    called constantly.\n\n" +
+                "    Instructions executed while nothing is on the call stack are charged to\n" +
+                "    '(outside any recorded call)'. A large share there is normal and means\n" +
+                "    the code was already running when profiling started - it is not a bug,\n" +
+                "    but it is a reason to arm profiling from a known point and to run 'bt\n" +
+                "    reset' first if the stack looks wrong.\n\n" +
+                "    This profiles the GAME, not the emulator. For where EmuSen's own frame\n" +
+                "    time goes, see 'perf' and 'coretop'.\n\n" +
+                "EXAMPLES\n" +
+                "    profile on\n" +
+                "    profile top 10\n" +
+                "    profile off\n" +
+                "    profile sa1 top 10\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    A scope word profiles another chip - see 'man cpus'. Since this is\n" +
+                "    built on the call stack, it only works for a chip that reports one: on\n" +
+                "    an SNES, the main CPU and the SA-1.\n\n" +
+                "SEE ALSO\n" +
+                "    cpus, bt, counters, cov, coretop",
         };
     }
 }

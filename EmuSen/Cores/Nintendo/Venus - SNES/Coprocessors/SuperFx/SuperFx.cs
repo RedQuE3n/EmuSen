@@ -43,6 +43,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // One-byte instruction prefetch - see Venus_SuperFX.md §4.1.
         private byte _pipeline;
 
+        // Where _pipeline was fetched from; R15 already names the jump target while a delay slot executes - see §4.1a.
+        [SkipInState] private ushort _pipelineAddress;
+
         // A jump has retargeted R15 but its delay-slot byte is still in the
         // pipeline and has to be consumed first.
         private bool _jumpPending;
@@ -111,9 +114,35 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // The GSU's IRQ line into the S-CPU, masked by CFGR bit 7 - see Venus_SuperFX.md §3.2.
         public bool ScpuIrqPending => GetFlag(FlagIrq) && (_cfgr & 0x80) == 0;
 
+        // Game Pak RAM the chip touches itself, which the S-CPU's bus never
+        // sees and `watch`/`counters` were therefore blind to - see Venus_SuperFX.md §8.4.
+        [SkipInState] public Memory.IWriteObserver? WriteObserver;
+        [SkipInState] public Memory.IReadObserver? ReadObserver;
+
+        // PBR:R15 as of the instruction currently executing, so an observed
+        // access can name the instruction that made it - see Venus_SuperFX.md §8.4.
+        [SkipInState] private int _debugInstructionAddress;
+        public int DebugInstructionAddress => _debugInstructionAddress;
+
         // Called with PBR:R15 before each instruction, when a debugger wants
         // whole-run coverage of the chip - see Venus_SuperFX.md §8.2.
         [EmuSen.Common.SkipInState] public System.Action<int>? CoverageRecorder;
+
+        // Same pull-hook shape as MemoryBus.BreakpointChecker, on PBR:R15 - see `man cpus`.
+        [EmuSen.Common.SkipInState] public System.Func<int, bool>? BreakpointChecker;
+
+        [EmuSen.Common.SkipInState] public bool HaltedAtBreakpoint;
+
+        [EmuSen.Common.SkipInState] public int HaltedAddress;
+
+        // Skips one check after resuming, so `continue` leaves the breakpoint.
+        [EmuSen.Common.SkipInState] private bool _justResumedFromBreakpoint;
+
+        public void ResumeFromBreakpoint()
+        {
+            HaltedAtBreakpoint = false;
+            _justResumedFromBreakpoint = true;
+        }
 
         public void Reset()
         {
@@ -124,6 +153,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _colr = _por = 0;
             _sreg = _dreg = 0;
             _pipeline = 0x01; // NOP, so a stray step before a real fetch does nothing
+            _pipelineAddress = R[15];
             _romBuffer = 0;
             _clockBudget = 0;
             InvalidateCache();
@@ -150,6 +180,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             if (EmuSen.Debug.DebugSettings.SuperFxSpeedDivisor > 1) perCycle *= EmuSen.Debug.DebugSettings.SuperFxSpeedDivisor;
             while (_clockBudget > 0 && Running)
             {
+                // Returns with _clockBudget intact, so resuming re-enters here - see `man cpus`.
+                int pc24 = (_pbr << 16) | R[15];
+                if (!_justResumedFromBreakpoint && BreakpointChecker != null && BreakpointChecker(pc24))
+                {
+                    HaltedAtBreakpoint = true;
+                    HaltedAddress = pc24;
+                    return;
+                }
+                _justResumedFromBreakpoint = false;
+                _debugInstructionAddress = (_pbr << 16) | _pipelineAddress;
+
                 int cycles = StepInstruction();
                 _clockBudget -= cycles * perCycle;
             }

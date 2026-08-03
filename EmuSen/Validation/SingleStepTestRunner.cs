@@ -80,6 +80,12 @@ namespace EmuSen.Validation
                             }
                         }
                     }
+
+                    // Checked last, so a state mismatch outranks the cycle bug it usually causes.
+                    if (mismatch is null && t.ExpectedTrace is not null && target is IBusTraceTarget traceTarget)
+                    {
+                        mismatch = CompareTrace(t.ExpectedTrace, traceTarget.LastStepTrace);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -102,5 +108,27 @@ namespace EmuSen.Validation
 
             return result;
         }
+
+        // Count first, then the first differing access - the count names a wrong dummy read fastest.
+        private static string? CompareTrace(List<BusAccess> want, IReadOnlyList<BusAccess> got)
+        {
+            if (got.Count != want.Count)
+            {
+                return $"CYCLES: got {got.Count} want {want.Count}";
+            }
+
+            for (int i = 0; i < want.Count; i++)
+            {
+                if (got[i] != want[i])
+                {
+                    return $"CYCLE[{i}]: got {Describe(got[i])} want {Describe(want[i])}";
+                }
+            }
+
+            return null;
+        }
+
+        private static string Describe(BusAccess access) =>
+            $"{(access.IsWrite ? "write" : "read")} {access.Value:X2} @ {access.Address:X4}";
     }
 }

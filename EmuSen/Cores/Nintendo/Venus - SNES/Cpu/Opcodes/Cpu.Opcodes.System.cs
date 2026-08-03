@@ -33,6 +33,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             PB = 0x00;
             PC = (ushort)((high << 8) | low);
+            NoteInterruptFrame(CallFrameKind.Brk);
         }
 
         private void OpCOP(uint address)
@@ -52,10 +53,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             PB = 0x00;
             PC = (ushort)((high << 8) | low);
+            NoteInterruptFrame(CallFrameKind.Cop);
         }
 
         private void OpRTI(uint address)
         {
+            CallStack?.NotePop();
             P = Pop8();
             PC = Pop16();
 
@@ -78,7 +81,22 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         // WAI/STP - see Venus_CPU.md §4.
         private void OpWAI(uint address) { _waitingForInterrupt = true; }
-        private void OpSTP(uint address) { _stopped = true; }
+
+        private void OpSTP(uint address)
+        {
+            _stopped = true;
+            NoteCpuCondition("stp", "STP executed - the CPU is stopped until reset");
+        }
+
+        // WDM's operand byte is reserved, so a real one means the PC left the code - see `man bp`.
+        private void OpWDM(uint address) => NoteCpuCondition("wdm", "WDM executed - a reserved opcode");
+
+        private void NoteCpuCondition(string name, string what)
+        {
+            if (Breakpoints is not { AnyConditionArmed: true } breakpoints) return;
+            int at = (LastInstructionPB << 16) | LastInstructionPC;
+            breakpoints.NoteCondition(name, at, $"{what}, at ${at:X6}");
+        }
 
         private void OpMVN(uint address)
         {

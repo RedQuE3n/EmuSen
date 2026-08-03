@@ -90,6 +90,14 @@ Multi-byte instructions in a delay slot fetch their operands **from the retarget
 
 This file used to add "which is why real GSU code never puts one there". **That is wrong — Yoshi's Island puts one there on purpose.** `0A:81B4` is `BNE $81C5` with `IBT R10,#$08` in the delay slot; the branch target `$81C5` *is* the `$08` operand byte of the `IBT R10,#$08` sitting at `$81C4`, so both paths load 8 and both resume at `$81C6`. The overlap is deliberate code compression, and it only works if the operand comes from the target. It is a good check on the pipeline model: get this wrong and `R10` loads `$2B` (the `WITH R11` opcode) as its bit count.
 
+#### 4.1a The trace address of a delay slot
+
+`R15` names the byte sitting in the pipeline, which is exactly right for the `WITH R15 : TO R13` idiom - but **not** while a delay slot executes. After a jump, `R15` already names the target while `_pipeline` still holds the delay-slot byte, so anything that reported `R15` as "the instruction executing now" named the target instead.
+
+That is what the `[GSU]` trace, the `[I]` plot trace and `cov gsu` all did until 2026-08-03. The symptom is subtle and expensive: a taken branch produced two consecutive trace records with the *same* address and different opcodes, and reading the trace naturally led to disassembling the target - code that had not run - instead of the delay slot that had. It cost real time during the §10.7 camera work.
+
+`_pipelineAddress` now records where `_pipeline` was fetched from and every debug consumer reports that. It carries `[SkipInState]`: it is derived from the pipeline, not machine state, and serializing it would have invalidated every existing save state for a debug label. Pinned by `SuperFxTraceAddressTests`.
+
 ### 4.2 Prefixes
 
 `TO Rn` ($10-$1F) sets the destination. `FROM Rn` ($B0-$BF) sets the source. `WITH Rn` ($20-$2F) sets both *and* raises the `B` flag — and while `B` is set, `TO`/`FROM` stop being prefixes and become the real instructions `MOVE`/`MOVES`. `ALT1`/`ALT2`/`ALT3` ($3D/$3E/$3F) set the flags that pick which of a slot's four meanings runs.
@@ -100,11 +108,26 @@ All of it is cleared after the next non-prefix instruction, which is why `FROM R
 
 The four meanings follow a consistent shape: base, ALT1 = a variant operation, ALT2 = the same with a 4-bit immediate, ALT3 = both. So `$5n` is `ADD Rn / ADC Rn / ADD #n / ADC #n`, and `$7n` is `AND / BIC / AND #n / BIC #n`. The subtract slot breaks the pattern: ALT3 there is `CMP Rn`, which sets flags without writing.
 
+**An `ALT` prefix clears `B`.** `ALT1`/`ALT2`/`ALT3` each drop the `WITH` flag while leaving `SrcReg`/`DestReg` alone, so `WITH R1 : ALT1 : TO R2` decodes the `TO` as a prefix and not as `MOVE`. §9 carried this as "untested either way" for a long time on the grounds that Yoshi's Island never writes the sequence; the GSU trace differ (§10.7) settled the *first* half of that and refined the second. The game writes `WITH Rn : ALT?` at ten distinct addresses per intro frame, and at none of them is the following instruction a `TO` or a `FROM` — so the two forms are still indistinguishable *by output* here, but the disagreement is visible in every `SFR` sample and made ten sites of permanent noise in the differ. Reconciled to Mesen's form and pinned by `An_alt_prefix_clears_a_pending_with`. **This is reference-derived, not hardware-derived**: if a game ever turns up that writes `WITH : ALT : TO`, it decides this, not Mesen.
+
 ### 4.3 The cache
 
 512 bytes, 32 lines of 16. An instruction fetch whose address falls within `[CBR, CBR+512)` comes from the cache, filling the line from ROM or RAM on first touch. `CACHE` points `CBR` at the current address (16-byte aligned) and flushes if it moved; `LJMP` and a `PBR` change flush unconditionally.
 
 The S-CPU can also stage code into the cache directly through `$3100-$32FF`, marking a line valid once its last byte arrives. **The index there is `offset - $3100`, not `offset & $1FF`** — `$3100 & $1FF` is `$100`, so the mask form silently writes every byte 256 positions off. That was the second real bug, and it is exactly the kind a unit test catches and a framebuffer does not.
+
+### 4.4 Which instructions touch the flags
+
+Only ALU-shaped instructions do. **The loads do not**, and that is the entry to read before changing anything here:
+
+| sets `Z`/`S` | leaves the flags alone |
+| --- | --- |
+| `ADD`/`ADC`/`SUB`/`SBC`/`CMP` (also `Cy`/`Ov`), `AND`/`BIC`, `OR`/`XOR`, `NOT`, `INC`, `DEC`, `SEX`, `MULT`/`UMULT`, `LOB`, `HIB`, `SWAP`, `LOOP`, `RPIX` | `LDW`/`LDB`, `GETB`/`GETBH`/`GETBL`/`GETBS`, `STW`/`STB`, `SBK`, `IBT`/`IWT`, `LM`/`SM`/`LMS`/`SMS`, `GETC`/`RAMB`/`ROMB`, `TO`/`WITH`/`FROM`-as-prefix, `CACHE`, `LINK`, the jumps, the branches, `PLOT`, `COLOR`/`CMODE` |
+| `LSR`/`ASR`/`ROL`/`ROR`/`DIV2` also set `Cy`; `FMULT`/`LMULT` set `Z`/`S`/`Cy`; `MERGE` sets all four | `MOVE` (`TO` under `WITH`) — but `MOVES` (`FROM` under `WITH`) sets `Z`/`S`/`Ov` |
+
+**`LDW`/`LDB` and `GETB` used to set `Z`/`S` here, and both were wrong.** They are the two that a game notices, because both are the natural instruction immediately before a conditional branch: load a byte, then branch on a flag that some *earlier* comparison set. Setting the flags from the loaded value overwrites that comparison. In Yoshi's Island's intro these two accounted for 109 of the 119 `SFR` disagreements the GSU trace differ reported against Mesen (§10.7); fixing them dropped it to 10, and the `ALT`/`B` reconciliation in §4.2 took it to zero.
+
+The list above was not read off a document — it was produced by diffing this file's flag writes against Mesen's `Gsu.Instructions.cpp` function by function, after the trace differ pointed at the first two. Both `LDW` and `GETB` are documented as flagless in the official instruction set as well, so the reference and the documentation agree here; where they do not (§9's `COLOR`/`GETC` and `LJMP` entries), the documentation has lost before.
 
 ---
 
@@ -113,6 +136,12 @@ The S-CPU can also stage code into the cache directly through `$3100-$32FF`, mar
 ### 5.1 Game Pak RAM
 
 `RAMBR` supplies the bank for every RAM access: `LDW`/`LDB`/`STW`/`STB` through a register, `LM`/`SM` with a full 16-bit address, and `LMS`/`SMS` with a byte operand that indexes **words**, so the address is `operand << 1`. `SBK` re-stores to whatever address the last load or store used.
+
+### 5.1a A 16-bit RAM access pairs `addr` with `addr ^ 1`, not `addr + 1`
+
+The RAM buffer is a word wide and a 16-bit access toggles A0 rather than incrementing the address. So `LDW (Rn)` with `Rn = $0FA1` takes its **low** byte from `$0FA1` and its **high** byte from `$0FA0` — the byte *below* it. Same for `STW`, `SBK`, `LM` and `SM`. `LMS`/`SMS` are unaffected in practice because `operand << 1` is always even, and for an even address `^1`, `|1` and `+1` are the same thing.
+
+**Which is exactly why this survived so long.** Every even-addressed access — almost all of them, since the game's own structures are word-aligned — behaves identically under both forms, so no test, no framebuffer and no dump distinguished them. It took the instruction-level differ to catch it, on a single `LDW (R1)` with `R1 = $0FA1` at `$09:818D`, 16,482 GSU steps into a frame: Mesen loaded `$20F6`, this core loaded `$4FF6`, and the low byte agreed. Pinned by `A_word_load_from_an_odd_address_pairs_with_the_byte_below_it` and its store and even-address counterparts.
 
 ### 5.2 ROM
 
@@ -138,6 +167,24 @@ Tiles are stored in **vertical strips**, which is why the mode register specifie
 tile = (x >> 3) * columnHeightInTiles + (y >> 3)
 addr = (SCBR << 10) + tile * (8 * bpp) + (y & 7) * 2
 ```
+
+### 6.1a The height field's bit order — settled, and it was backwards
+
+`SCMR`'s height field is split across two non-adjacent bits, and this implementation had them the wrong way round:
+
+```
+HT0 = SCMR bit 2   (the low half)
+HT1 = SCMR bit 5   (the high half)
+height = HT1 << 1 | HT0     0 = 128px/16 tiles, 1 = 160/20, 2 = 192/24, 3 = OBJ
+```
+
+§9 used to carry this as an open question, on the grounds that Yoshi's Island's *intro* plots with both halves set — where the order cannot matter — and with an explicit "do not fix it to match Mesen without a game that distinguishes them". **Its title screen is that game.** The title plots with `PLOTSCMR = $1D`: bit 2 set, bit 5 clear. Read correctly that is height 1, a 160-line framebuffer with 20-tile columns; read backwards it is height 2, 192 lines with 24-tile columns, so every column after the first landed four tiles further down Game Pak RAM than the one before it. The GSU-rendered island came out as vertical smears of recognisable scenery — see §10.6.
+
+160 lines is also what the screen itself says: the game shows this buffer through a grid of `32x32` sprites spanning x = 32..224 and y = 40..200, which is exactly 192x160.
+
+Pinned by `SuperFxScreenHeightTests`, which plots one pixel in column 1 under each of the four height values and asserts the Game Pak RAM offset it lands on. Three of its six cases fail against the old order.
+
+The order matters *only* for heights 1 and 2 — 0 and 3 are symmetric — which is why every other game here, and Yoshi's Island's own intro, were byte-identical across the fix.
 
 ### 6.2 OBJ mode
 
@@ -210,13 +257,47 @@ Reads through all of these are side-effect-free by construction, which matters h
 
 ---
 
+### 8.4 Watching the chip's own RAM traffic
+
+For most of this core's life `watch`, `counters`, `bp write` and `freeze` could not see a single Game Pak RAM access the GSU made. They are fed by `IWriteObserver`/`IReadObserver`, which `MemoryBus` and `Cartridge` raise on the S-CPU's bus — and the GSU never uses that bus. `SuperFx.ReadRam`/`WriteRam` index `_ram` directly, so `counters on GSURAM` followed by `counters <addr>` reported `reads 0, writes 0, bytes touched 0/16` for an address the chip was hammering every frame. The tooling did not say "I can't see this"; it said "nothing happened", which is a considerably worse failure.
+
+`SuperFx` now carries its own `WriteObserver`/`ReadObserver`, wired by `SnesDebugTarget`'s constructor the same way the SA-1's already was (§11.4 of `Venus_SA1.md`), and raises `OnCoprocessorWrite`/`OnCoprocessorRead` from `WriteRam`/`ReadRam`.
+
+**The space name is the load-bearing part.** Game Pak RAM is one array reachable from two sides, and the two sides report under different names:
+
+| Watch this | To see |
+| --- | --- |
+| `SRAM` | the **S-CPU** writing Game Pak RAM, through the `$6000-$7FFF` window or banks `$70`/`$71` (raised by `Cartridge`) |
+| `GSURAM` | the **GSU** writing the same bytes itself |
+
+That is a feature, not an accident of naming: "did the CPU stage this, or did the chip compute it" is exactly the question worth asking about a shared array, and a single merged name would throw the answer away. Both use the same offset into the array, so the same address means the same byte on either side. `mem`/`snapshot`/`diff` over `GSURAM` were always truthful — they read the array directly rather than going through the observer path — which is why a snapshot diff was the only thing that worked here before this existed.
+
+**Accesses are labelled with the GSU's own PC.** `SuperFx.DebugInstructionAddress` records `PBR:R15` at the top of each instruction, before `StepInstruction` runs, so `watch summary` reports `GSU PC=0x0AD012` rather than whatever the S-CPU happened to be executing — which for a chip running asynchronously is noise. The SA-1 path already did this with `LastInstructionPB`/`PC`; the GSU has no equivalent, hence the explicit field.
+
+**Use that field, not `R[15]`, anywhere an access is being attributed.** The `SuperFxRamWriteTraceAddr` console trace printed `_pbr:R[15]` and so named the instruction *after* the one that wrote: `R15` has already advanced over the current instruction's operand bytes by the time `WriteRam` runs, which for the two-byte `SMS` at `$09:984F` reported `$09:9851`. Fixed 2026-08-03; `watch` was always right because it went through `DebugInstructionAddress`. The disagreement between the two is what exposed it (§10.7), and a lone trace with no second opinion would simply have sent someone to the wrong instruction.
+
+**Two behaviours changed for the SA-1 as well**, deliberately: `OnCoprocessorWrite` used to record the watch and nothing else, so `bp write` and `counters` silently ignored every write a coprocessor made. It now runs the same three (`_watches`, `_breakpoints`, `_accessCounters`) the S-CPU path does. `RestoreIfFrozen` is still deliberately *not* on the coprocessor path — `freeze` undoing a chip's own write mid-computation is a different feature with its own hazards, and nothing has needed it yet.
+
+**Cost when nothing is attached** is a null check per RAM byte. `ReadRam` is on the plot hot path (`FlushPixelCache` reads every bitplane it merges into), so this is not free in principle; measured against the full suite it is not visible, and `EmuSen_Games_Tested.md`'s digests are unchanged. Pinned by `EmuSen.WiseMan/Coprocessors/SuperFxRamObservationTests.cs`, including that a chip with no observer attached still runs.
+
 ## 9. Known-wrong and unverified
 
+- ~~**`BGE`/`BLT` opcode assignment**~~ — **resolved, and it was wrong.** `$06` is `BGE` (branch when `S == V`) and `$07` is `BLT` (branch when `S != V`). Both the executor (`SuperFx.Execute.cs`) and `GsuDisassembler`'s name table had the two swapped, consistently, so the disassembly agreed with the bug and could not expose it. Every signed comparison in every SuperFX game therefore branched the wrong way.
+
+  **What it broke.** Yoshi's Island's intro cutscene rendered its backgrounds, its storybook frame and its text, but *every character sprite was missing* — the stork, Kamek, both babies, and the Yoshis. The chain, measured end to end: the game's per-frame OAM table is built by the **GSU**, not the CPU, into Game Pak RAM at `$0A00` (reached by the S-CPU as `$00:6A00`), and DMA'd to `$2104` once per frame. With the branches swapped, the object loop at `$08:B216` — `LDW (R6)` / `ALT3 SUB R7` (= `CMP R7`) / `BGE $B275` — took the branch instead of falling through, skipping the code that fills in each entry, so the table kept its "hide everything" fill of `$80,$F0` and 58 sprites became 0.
+
+  **How it was found, because the method generalises.** Everything downstream was byte-identical to Mesen at the same frame — VRAM, CGRAM, and every PPU register — which ruled out the renderer, the DMA path and the OAM address logic in one step and pointed at the GSU. Dumping both emulators' GSU instruction streams from boot (address, opcode, registers) and diffing them found the *first* divergence at instruction ~3,146,878: identical registers going in, opposite branch decisions coming out. Note it took 3.1 million instructions to surface — the two cores agree perfectly up to that point — so nothing short of a full-stream diff would have caught it. Pinned by four `Bge_*`/`Blt_*` tests plus `Blt_and_bge_use_signed_ordering_not_the_carry` in `SuperFxInstructionTests`.
+
+  One caveat worth carrying forward: `cov gsu` only records addresses fetched **outside** the instruction cache, so GSU coverage under-reports badly (140 of 516 executed addresses in one measured frame). It is not usable for "did this branch run" questions until that is fixed.
+- **Residual GSU divergence after the `BGE`/`BLT` fix** — with the branches corrected, VRAM and CGRAM are byte-identical to Mesen at the same frame and the sprite *count* matches exactly (58 at Yoshi's Island frame 1500, against 0 before). Game Pak RAM is not yet byte-identical: 257 bytes still differ from `$0092` up, down from 913, and sprite coordinates land a few pixels from Mesen's — OAM `$0040` reads `$78` where Mesen has `$74`. It is not a frame-alignment artifact; frames 1496-1504 were checked and none matches exactly, though 1499 is closest at 31 differing bytes. Something else in the chip is still slightly off. `MesenReferenceTests` asserts the count and the "table was built at all" property rather than byte equality, precisely so this stays visible instead of being papered over — the tooling to find it is §3.39 of the debugging reference and it is the same method that found the branch swap.
+- **Game Pak RAM is sized 128KB, not 32KB** — the cartridge header's expansion-RAM byte (`$BD`) is `$05` on Yoshi's Island, i.e. `1024 << 5` = 32KB, which is what Mesen allocates (`BaseCartridge.cpp`, `_coprocessorRamSize`). This implementation allocates 131072. Addresses are masked by the allocated length, so the high banks a 32KB chip would alias down are separate storage here. **Not the cause of anything observed** — the mirrors were dumped during the missing-sprites investigation and Yoshi's Island never writes above `$7FFF`, so every mirror is untouched zeroes — but a game that does rely on the wrap would diverge silently, and the `RAMBR` note below is the entry that would matter if one did.
 - **OBJ page arrangement (§6.2)** — the 2x2 page arrangement and its stride are inferred, not verified. The within-page order is now row-major on Mesen's and bsnes's authority, not on output evidence; the previous "confirmed by output" claim was withdrawn (§6.2).
-- **`SCMR` height-field bit order** — this file and the implementation read **HT1 from bit 2 and HT0 from bit 5**; **Mesen reads them the other way round** (`ScreenHeight = ((v & 0x04) >> 2) | ((v & 0x20) >> 4)`). The two disagree only for height values 1 and 2, i.e. 160 vs 192 pixels, and they agree that 3 means OBJ mode. Yoshi's Island plots with both bits set, so this cannot be settled from that game and is currently untested either way. Do not "fix" it to match Mesen without a game that distinguishes them.
-- **`COLOR`/`GETC` nibble handling** — bsnes and Mesen genuinely fork here, and `ColorValue` follows **bsnes**: `POR` bit 2 rewrites the source as `(source & $F0) | (source >> 4)` and then bit 3 may also apply, whereas Mesen early-returns `(COLR & $F0) | (value >> 4)` on bit 2 so the two bits are mutually exclusive. The two agree on the low nibble, so they are indistinguishable at 2bpp and 4bpp; they differ only in the high nibble, i.e. at 8bpp or when a later `COLR`-freeze reads it back. Untested either way — Yoshi's Island runs with both bits clear.
-- **`ALT1`/`ALT2`/`ALT3` and the `B` flag** — Mesen's `ALT1()`/`ALT2()`/`ALT3()` each set `Prefix = false`, i.e. an `ALT` prefix *clears* the `WITH` flag while leaving `SrcReg`/`DestReg` alone. This implementation leaves `B` set. The two differ only for `WITH Rn : ALT? : TO Rm` / `FROM Rm`, where Mesen decodes the third instruction as a prefix and we decode it as `MOVE`/`MOVES`. **Untested either way — Yoshi's Island never writes that sequence**, so it cannot be settled from the one SuperFX game here. Found while fixing §10.4; left alone deliberately, on the same reasoning as the `SCMR` height field above.
-- **Cycle costs (§2.2)** — approximate.
+- ~~**`SCMR` height-field bit order**~~ — **resolved, and it was wrong.** HT0 is bit 2 and HT1 is bit 5, as Mesen has it. The title screen distinguishes them where the intro could not; corrected and pinned — see §6.1a and §10.6. The instruction this entry gave — do not flip it without a game that tells the two apart — was the right instruction, and it is what made the title screen conclusive rather than a coin toss.
+- **`COLOR`/`GETC` nibble handling** — bsnes and Mesen genuinely fork here, and `ColorValue` follows **bsnes**: `POR` bit 2 rewrites the source as `(source & $F0) | (source >> 4)` and then bit 3 may also apply, whereas Mesen early-returns `(COLR & $F0) | (value >> 4)` on bit 2 so the two bits are mutually exclusive. The two agree on the low nibble, so they are indistinguishable at 2bpp and 4bpp; they differ only in the high nibble, i.e. at 8bpp or when a later `COLR`-freeze reads it back.
+
+  **Still unsettled, but no longer untouched by any game.** This entry used to say Yoshi's Island runs with both bits clear. It does not: its title screen plots with `PLOTPOR = $04`, i.e. bit 2 set, high-nibble mode. That plotting is 4bpp, so the two forms still agree on every pixel it produces — switching `ColorValue` to Mesen's form was tried and left all eighteen game digests byte-identical. Since the local reference set is Mesen only and this file records the current form as a deliberate reading of bsnes, the fork stays as it is until something can actually tell them apart: an 8bpp plot with `POR` bit 2, or a `COLR` high nibble read back through a later freeze.
+- **`ALT1`/`ALT2`/`ALT3` and the `B` flag** — **reconciled to Mesen 2026-08-03, and the "untested either way" claim was half wrong.** An `ALT` prefix clears the `WITH` flag; §4.2 has the reasoning and the measurement. The old entry said Yoshi's Island never writes the sequence — it writes `WITH Rn : ALT?` ten times per intro frame, but never follows it with a `TO`/`FROM`, so the two forms remain indistinguishable by output and this is still reference-derived rather than settled. What changed is that leaving it alone was no longer free: it made ten permanent `SFR` disagreements in every GSU trace diff, which is noise that a future real finding has to be picked out of.
+- **Cycle costs (§2.2)** — approximate, and now measured rather than assumed. Over the 93,321 GSU instructions the two emulators execute identically after the §10.7 anchor, Mesen charges **332,472** GSU clocks and this core **139,910** — we model the chip as running about 2.4x cheaper per instruction. It is concentrated, not spread: Mesen charges 81-86 clocks for instructions this core charges 1-4 for, which is cache-line fill (`InitProgramCache` costs `6*16`) plus ROM and RAM wait states, none of which are modelled here. §10.7's "where to pick it up" is this.
 - ~~**`LJMP` operand direction**~~ — **resolved, and it was wrong.** It had been implemented as "the named register supplies the address, the source register supplies the bank", by analogy with `JMP Rn`. It is the other way round: `Rn` carries the **bank**, `Sreg` the **address**. Corrected, and pinned by `Ljmp_takes_its_address_from_the_source_register`, which fails against the old direction.
 
   Worth recording *why* this was inverted, because the trap is still there for anything else in this file: the official Nintendo SuperFX documentation has the two operands swapped, and SnesLab's `LJMP` page reproduces the official wording ("the low byte of the source register is loaded into the program bank register") while separately noting that fullsnes considers the official docs mixed up on exactly this point. bsnes settles it — `regs.pbr = regs.r[n] & 0x7f; regs.r[15] = regs.sr();`. **Do not treat the official docs as authoritative for this instruction.**
@@ -231,9 +312,13 @@ Reads through all of these are side-effect-free by construction, which matters h
 
 ## 10. Status, and where to pick it up
 
-**What is verified.** 57 tests: 41 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, `LJMP`'s operand direction, RAM round-trips, plotting, transparency, and the plot coordinate mask) and 16 covering detection, the S-CPU address map and the register window. All pass.
+**What is verified.** 63 tests: 47 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, `LJMP`'s operand direction, RAM round-trips, plotting, transparency, the plot coordinate mask, and the framebuffer's column stride at each of the four screen heights) and 16 covering detection, the S-CPU address map and the register window. All pass.
 
-**What Yoshi's Island does.** It boots and plays its whole intro: the bordered frame, the night sky, and — since §10.4 — **the pictures inside the frame, which now render correctly** through the Nintendo-logo quilt, the sunrise and the cloud page. §10.1/§10.2/§10.3 are retained as the record of how that was measured, but the failure they describe is fixed; do not work from them as if it were open. **What remains is the story text strip below the frame**, and §10.5 shows that one is *not* a GSU bug — the chip decodes the text correctly into Game Pak RAM.
+**What Yoshi's Island does.** It boots and plays its whole intro: the bordered frame, the night sky, and — since §10.4 — **the pictures inside the frame, which now render correctly** through the Nintendo-logo quilt, the sunrise and the cloud page. §10.1/§10.2/§10.3 are retained as the record of how that was measured, but the failure they describe is fixed; do not work from them as if it were open. The story text strip below the frame is also **fixed** (§10.5, 2026-08-03) — it was never a GSU bug at all, but an HDMA layer switch this core was not running plus an unimplemented Mode 0 palette base.
+
+**The title screen and file menu render correctly too** (§10.6, 2026-08-03). That one *was* a GSU bug — the height field's bit order — and it is the first thing here that exercises the chip's normal (non-OBJ) framebuffer layout at all.
+
+**And the level 1-1 opening cutscene plays to its end** (§10.7, 2026-08-03) — the camera pans right, the Yoshis walk off, the level card appears, and the GSU runs 93,321 instructions after a shared anchor with zero divergences from Mesen in address, registers or flags. The four GSU bugs found on the way there are §4.2, §4.4 and §5.1a. The one measured difference left is cycle cost, not behaviour.
 
 ### 10.0 Resolved: the `$6000-$7FFF` window was bank-indexed
 
@@ -372,7 +457,203 @@ Trace with `--flag SuperFxPlotTraceSkip=N --flag SuperFxPlotTraceInstr=M` (§8).
 
 **Two lessons worth more than the fix.** First, §10.3's ranked suspect list did not contain this, because every entry on it was an *instruction semantic* and this is a *dispatcher* semantic — the prefix rule lives in `StepInstruction`, not in any opcode. When a list of plausible causes has been worked through twice without result, suspect the layer the list is not written at. Second, the answer was legible in the game's own instruction stream: an `ALT2` immediately before a branch is meaningless unless the prefix survives, so **disassembling the failing routine and asking "what would make this code sensible" beat auditing the emulator against a reference.** The disassembler used is 120 lines of Python over the GSU opcode table; building one is cheap and it is now the first tool to reach for here.
 
-### 10.5 Open: the strip below the frame is 18 tiles that are never uploaded
+### 10.5 Resolved: the strip is BG4, and the GSU was never involved
+
+**Root cause found and fixed (2026-08-03). Two bugs, neither in the SuperFX, stacked on one symptom.** The sections below are retained as the record of how the strip was measured, but **every open thread in them is closed and none should be resumed** — in particular, stop looking for something that uploads to VRAM `$F800`. Nothing does, and nothing should.
+
+**What the strip actually is.** For scanlines 152-197 the game leaves Mode 1 entirely. HDMA channel 7 writes `BGMODE = $00` and channel 6 writes `TM = $08` / `TS = $00`, so the bottom of the screen is **Mode 0 with BG4 as the only layer**. BG4's tilemap is at VRAM `$F800` (`BG4SC = $7C`) and its character base is `$E000` (`BG34NBA = $77`, high nibble), which is exactly the `$70:4C00` story-text page that `7E:C8AF` uploads. The text renders from there. Verified by reading channel 6's table out of WRAM `$7E:5B98` — `46 15 02 / 46 15 02 / 01 08 00 / 00`, i.e. 140 lines of `TM=$15` then `TM=$08` for the rest of the frame — and by `scanregs all`, which now shows the mode/TM change landing at scanline 152.
+
+**So the 18 tiles were never missing.** BG3 tiles `$1A1-$1A9` / `$1B1-$1B9` resolve to VRAM `$FA10-$FBA0`, which *is* BG4's tilemap. BG3 is switched off over those scanlines, so what those entries point at is never read on hardware. The `$0130` constant fill at `$00:E477` is a **tilemap** clear, not a failed graphics upload: `$0130` is a tilemap entry naming blank tile `$130`, and it is one of four entries in a descriptor table at `$0F:BC9C` that blank BG1's second screen (`$C800`), BG2's second screen (`$D800`) and BG4's map (`$F800-$FFFF`) in one pass, right after the matching maps are uploaded. The symmetry is the tell.
+
+**Why nothing ran the HDMA.** `Venus_Memory.md` §3.2a has the detail. In short: the game enables `$420C` at scanline 12 and clears it at scanline 198, so it is never set at scanline 0, and this core armed HDMA only at scanline 0. `dma stats` reported **zero HDMA transfers over 700 frames** against 415 enable writes. Fixing that put the layer switch in place and the text appeared — in the wrong colours, because of the second bug: Mode 0's per-layer CGRAM blocks were unimplemented (`Venus_PPU.md` §14), so BG4 palettes 6/7 read CGRAM 24-31 instead of 120-127.
+
+**What this cost, and the lesson.** Four rounds of investigation went into "which upload targets `$F800`", built on a measurement that was sound in itself — the destination-side watch really does show nothing but the fill — but answered a question whose premise was wrong. The premise was that a tilemap entry BG3 references must be BG3 character data. **A layer that is switched off for the scanlines in question references nothing.** The check that would have caught it in one command is `scanregs all`: dump the per-scanline registers over the failing rows and confirm which layer is actually enabled there *before* tracing where its data comes from. `layers bg3` was used early and did correctly attribute the strip to BG3 — but it isolates a layer for the whole frame, so it cannot see a mid-frame `TM` change, and its answer was read as more than it said.
+
+### 10.6 Resolved: the title screen, and one bit of SCMR
+
+**Root cause found and fixed (2026-08-03). One expression, and it was an open question this file had already written down.** The title screen's island — the GSU-rendered 3D scene under the logo — came out as tall vertical smears of recognisable scenery: clouds, trees and hillside, sheared into ~16px columns running most of the height of the screen. `ScreenHeightMode` read `SCMR`'s split height field with its two halves swapped, so the title screen's `SCMR = $1D` selected 192-line/24-tile columns instead of 160-line/20-tile ones and every column landed four tiles lower in Game Pak RAM than the one before it. §6.1a has the correction.
+
+**The route to it, which was short because the tooling answered each step directly.**
+
+1. `layers bg1` / `bg2` / `obj` at the title. **BG1 (the sea and the flat island) and BG2 (the logo and the copyright line) are both pixel-perfect; the whole defect is on OBJ.** That single command is what turned "the title screen is broken" into "the sprite layer is broken", and it is worth doing before anything else on any composite screen.
+2. `sprites`. Forty sprites in a regular grid — `32x32` at x = 32..224, y = 40..200, tile indices stepping by 4 across and by `$40` down. That is not a scene made of objects; **it is a bitmap being shown through sprites**, 192x160 of it.
+3. `regs`. `PLOTS = 3,260,220` against `PLOTSOBJ = 135,040`, so ~96% of the chip's plots take the *normal* layout, not the OBJ one — and the normal layout is the only one the height field feeds. `PLOTSCMR = $1D` gave the value to check, and `$1D` has bit 2 set and bit 5 clear, so it is exactly the case the two readings disagree on.
+4. §9's own open-question list already named this, with the bit patterns spelled out and an instruction not to change it without a distinguishing game. Step 3 produced that game.
+
+**Two things worth carrying forward.**
+
+**The per-frame register dump lies about the GSU, and `PLOT*` is why it exists.** `regs` shows `SCMR = $00` at the title screen, because the game sets and clears it inside the frame (§8.3). The `PLOTSCMR` latch — recorded by `Plot` itself — is what reads `$1D`. Reaching for `regs`' plain `SCMR` here would have said the chip was in 128-line mode and sent the whole investigation somewhere else.
+
+**"Untested either way" is a claim with a scope, and the scope was the intro.** §9 said Yoshi's Island plots with both height bits set. That was measured, and it was true — of the intro, the only scene anyone had run at the time. The title screen is the same game in a different mode, and it settles it in one command. When an open question is parked as unsettleable, it is worth recording *which scene* it was measured in, because the next scene may not be.
+
+The same run also falsified the neighbouring bullet's "Yoshi's Island runs with both bits clear" for `POR` — the title screen plots with `PLOTPOR = $04`. That one is still undecidable, for a different reason, and §9 now says so.
+
+### 10.7 Resolved: the 1-1 intro camera pans right, and the last measurement that said otherwise was anchored on a stale save
+
+**Fixed 2026-08-03.** The Yoshis walk right, the camera follows them, and the level card appears. GSU RAM `$0094` runs `$0040 → $0100` at +1/frame and stops there — **value for value and interval for interval identical to Mesen**, checked at nine points over 600 frames past a shared anchor. The GSU trace differ (`EmuSen_Debugging_Tools_Reference_v5.md` §3.41) reports **zero** divergences across the 93,321 instructions the two chips execute after that anchor: same addresses, same `R0-R14`, same prefix registers, same arithmetic flags.
+
+Everything below the "how it was actually found" heading is the historical record. Its *conclusions* about what the bug was not still hold and are worth keeping; its measurements of what the bug **was** are all wrong, and they were wrong for one reason described immediately below.
+
+#### The measurement was broken, not the camera: the anchor fired at frame 0
+
+`tapuntil A GSURAM 1E1A F0,01` walks the file select and the whole opening cutscene. It reported reaching `$01F0` **at frame 0, after zero taps.**
+
+On a SuperFX cart the `.srm` *is* GSU work RAM — one chip holds the chip's variables, the framebuffer and the save (§1) — so `LoadSram` pre-loads `$1E1A` with whatever the previous run left there. Once any run had played the intro once, every later run of the same script satisfied the anchor before the console had finished booting, and every command after it measured a machine sitting in its boot sequence. That is where `$0094` "counting down `0043 0041 003E ... 0000`" came from: not a camera, a cold machine. Mesen never had the problem, because the probe points its home folder at a fresh directory beside its dumps — so for the whole investigation **the two emulators were anchored on different scenes**, which is precisely the failure mode §3.40 was built to end and which had simply moved from frames to saves.
+
+`--nobattery` (§3.15) exists now so a comparison run cannot read or write the `.srm` at all. Use it for every measurement against the probe. Full write-up: `Venus_Memory.md` §2.4a.
+
+**What this means for the rest of this section.** The camera was already correct before any of the fixes below: re-running the `$0094` sample against a build with them stashed gives the identical rising sequence. The fixes are real GSU bugs and were found by the tooling built for this section, but **none of them is what made the camera work** — a clean boot is. Two of the four S-CPU timing fixes in "Disproved 2026-08-03" are the likeliest actual cause and that has not been bisected.
+
+#### Four real GSU bugs, found by giving the chip the same trace treatment the S-CPU got
+
+This section's "where to pick it up" said to build a resyncing GSU differ. It was built (§3.41), and pointed at the 4 frames after the shared anchor it found these in one afternoon, each one by walking to the first divergence and reading the instruction before it:
+
+| divergences reported | what it was |
+| --- | --- |
+| 119 distinct `SFR` sites | `GETB`/`GETBH`/`GETBL`/`GETBS` set `Z`/`S`; they set nothing (§4.4) |
+| 67 | `LDW`/`LDB` set `Z`/`S`; likewise (§4.4) |
+| 10 | an `ALT` prefix must clear the `WITH` flag (§4.2) |
+| 2 register sites | a 16-bit RAM access pairs `addr` with `addr ^ 1`, not `addr + 1` (§5.1a) |
+| **0** | |
+
+The first two matter most and share a shape: **a load immediately before a conditional branch.** Setting flags from a loaded value destroys the comparison the branch was meant to test, and there is no way to see it in a memory dump — the load itself is correct, the register is correct, and only the branch three instructions later goes the wrong way. The last one is the opposite kind: pure data, one odd address in 93,321 steps, invisible to everything except an instruction-level diff.
+
+#### Still open: the GSU cost model
+
+Over the same 93,321 identical instructions Mesen charges 332,472 GSU clocks and this core 139,910 — **2.4x cheap**, concentrated in instructions where Mesen charges 81-86 clocks and we charge 1-4. That is cache-line fill (`InitProgramCache`, `6*16` clocks) and ROM/RAM wait states, none of which this core models. The visible consequence is throughput: in the same four frames Mesen's GSU gets through 114,053 instructions and ours 93,321. Nothing in the intro depends on it, but it is the one measured, quantified GSU difference left, and §3.41's cost table is how to work it.
+
+---
+
+**Historical record from here down.** Retained for the ruled-out list and the method, not as a description of an open bug.
+
+**The frame-70 finding this section was originally built on is superseded** - see "Measured 2026-08-03 with the trace differ" below, which locates the first divergence at **S-CPU step 238**, in the SPC700 upload handshake, long before any GSU instruction runs on either machine. The frame-70 material is kept because its *conclusions* still hold (the GSU is not the cause, the job sequences match, the ruled-out list stands); only its "where it starts" is wrong, and it was wrong because of how it measured.
+
+**The symptom.** Start a new file and let the level 1-1 opening cutscene play. Every message renders correctly and the Yoshi line-up is intact. After the last one ("Now begins a new adventure for the Yoshies and baby Mario.") the Yoshis should walk **right** and hand off to the level. Instead the camera pans **left** at 1px/frame forever; the Yoshis are static in world space and slide off the right edge (OAM count falls 51 -> 40), and the "Welcome To Yoshi's Island" card never appears.
+
+**The chain from pixels to the chip.** `$210D` <- WRAM-resident code at `$7E:C53E` copying `$011D/$011E` <- `$7E:C4A2` from direct-page `$39` <- `$04:FDE2` from `$6094` with `DBR = $04`. Bank `$04` offset `$6094` is the S-CPU's `$6000-$7FFF` window, so that is **GSU RAM `$0094`** (§5.1's `offset & 0x1FFF`), written by **GSU PC `$09:984F`**. Mesen counts it **up** `256 -> 496` (+1/frame, stopping at its target `$1F0`); we count **down** from the same 256 at -1/frame.
+
+#### The method, because two passes got the wrong answer before this one
+
+Both emulators are driven from power-on by the **same** input schedule (`--tap` and `--press` take the same `frame:button:duration`), and every comparison is masked by **four independent Mesen runs** - a byte only counts as game-determined when all four agree. Mesen fills RAM randomly at power-on, and with two runs ~1.5 of 400 random bytes agree by chance, which reads exactly like a real finding. An unmasked single-moment diff reported "317 bytes differ", which was almost entirely that noise.
+
+**Frame numbers are not directly comparable, and that matters more than it looks.** We run about **one frame behind** Mesen from frame 70 on: the game's own frame counter at WRAM `$0030` is consistently exactly 1 lower in every sample from frame 80 to 260, with the countdown at `$011A` correspondingly 1 higher. Sweeping the offset over frames 297-305, `+1` minimises the difference (WRAM 18.7 bytes/frame against 32.0 at `+0`) - **but does not remove it**, and ~17 GSU RAM bytes survive at the best offset. So there is a real divergence *plus* a one-frame lag, and any measurement that ignores the lag overstates the divergence.
+
+#### Where it actually starts
+
+WRAM diffed frame by frame with the four-run mask:
+
+| frame | game-determined WRAM bytes differing |
+| --- | --- |
+| 60-69 | **0** |
+| 70 | 737 |
+| 71-72 | ~14,900 |
+| 73 | 4 |
+
+A large WRAM initialisation happens a frame apart on the two machines, and the one-frame lag dates from exactly there. **Neither emulator has executed any GSU instruction by frame 70** - a Mesen trace with `traceUntilFrame=70` contains zero steps - so nothing about the SuperFX can be the cause. This is S-CPU/PPU/APU/DMA boot timing.
+
+#### What the GSU side looks like once the lag is accounted for
+
+Comparing the **sequence of GSU jobs** (split each trace at `STOP`; a job is its entry address and length) over power-on to frame 301: we run **22** jobs, Mesen runs **42**, and the sequences are identical except that Mesen runs an initial block of **18 jobs we skip entirely**, and ends two jobs further along. The skipped block is the game's boot self-test - `$08:DE83` is a 52-word checksum (`LDW (R10)` / `ADD R1` / `INC R10` under `IWT R12,#$0034`) compared against `$7777`, in a six-job pattern repeated three times with `$08:DE59` and `$08:DE73`. **It writes nothing to RAM**, which is exactly why GSU RAM could still match byte-for-byte while we never ran it.
+
+The two jobs we have not reached by frame 301 are `$08:B1D8` and `$09:884C`. `$08:B1D8` is the object-table hide-fill:
+
+```
+08B1D9: IWT R0,#$0200     ; table start
+08B1DD: SMS ($0092),R0    ; end-pointer := $0200
+08B1DF: IWT R1,#$8000     ; hide sentinel
+08B1E4: IWT R12,#$0100    ; 256 iterations
+08B1E9: FROM R1 / STW (R0) / LOOP / ADD R2     ; 4 steps x 256 = 1024
+08B1ED: STOP
+```
+
+1024 + ~13 setup = **1,037 steps**, which is precisely the deficit measured between the two traces for that address range (2,945 against 3,982). So hardware ends frame 301 with an emptied table (`$0092 = $0200`, every slot `$8000`) and we end it with twelve live entries (`$0092 = $0260`) - the state the camera is later computed from.
+
+#### Ruled out, with evidence
+
+- **Game Pak RAM size.** We allocate the GSU's full addressable 128KB (`SuperFxRamSize`); the cart and Mesen have 32KB, so accesses above 32KB do not mirror as hardware would. Rebuilding with `sramSize = batteryRamSize` produced a **byte-identical** failure. The discrepancy is real and §1 should say which behaviour is intended, but it is not this bug.
+- **GSU/S-CPU speed.** `SuperFxSpeedDivisor` 1 and 2 leave `$0092 = $0260`; 3 and above give `$0000`. No divisor reproduces hardware's `$0200`.
+- **Dropped start requests.** Instrumenting the `if (Running) return;` guard in `WriteRegister` recorded **zero** dropped writes over 40 frames, and `copflow` shows `$301F` written exactly 22 times for exactly 22 jobs. The S-CPU never asks for the jobs we are missing.
+- **The GSU IRQ line.** It is wired - `VenusCore.cs` polls `gsu.ScpuIrqPending` and calls `Cpu.Irq()` at the same per-instruction granularity as the SA-1.
+- **The register-access rule.** Hardware allows only SFR and SCMR while the chip runs; we also allow `$3031/$3033/$3034/$3037/$3038/$3039`. Tightening it to match changed nothing at the anchor. Worth fixing on its own merits, not for this.
+- **The subtraction at `$09:9512`.** Both its inputs are already wrong by the time it runs. Do not "fix" it.
+
+#### Traced further: the lag is the APU boot upload, and one cycle of it is now fixed
+
+Tracing the S-CPU across frames 70-79 puts it in the **SPC700 upload loop** at `$00:843B-$00:844E`: `LDA [$0A],Y` / `CMP $2140` / `BNE` - it spins 5-7 times per byte waiting for the SPC's IPL loader to echo the index, so the **SPC side sets the transfer rate**. Both emulators' IPL ROMs are byte-identical, and with a four-run mask APU RAM agrees on the uploaded payload, so the loader code and data are right; only its timing differed.
+
+`CMP Y, dp` (`$7E`) was charged **4 cycles instead of 3** - see `Venus_APU.md` §1.7, now fixed and pinned by a test. It sits in the IPL's 25-cycle per-byte loop, and the extra cycle stretched the ~19-frame upload enough to land the game's first main-loop frame a whole frame late. Measured on the game's own frame counter at WRAM `$0030`, which first increments at **frame 78** on hardware:
+
+| | first `$0030` increment |
+| --- | --- |
+| hardware | 78 |
+| before the fix | 79 |
+| after the fix | **77** |
+
+So the lag is real and this was part of it, but the boot now lands one frame *early* rather than one late - something else on this path is still slightly fast. **The camera bug itself is unchanged by the fix**, which is expected: a one-frame boot offset is not obviously sufficient to produce it, and the fix does not close the residual ~17 GSU bytes that survive the best frame offset.
+
+**A measurement trap worth carrying.** "Upload bytes per frame", computed by diffing consecutive APU RAM dumps, is **not** comparable across the two emulators: Mesen randomises APU RAM at power-on so writing real data changes ~255/256 of the bytes it touches, while we zero-fill and a written zero changes nothing. That yielded a confident "we upload 6% slower" that was entirely artifact. The `$0030` counter is the sound measurement because it is the game's own state.
+
+#### Measured 2026-08-03 with the trace differ: the divergence is at step 238, and the S-CPU is fast
+
+**The frame-70 framing above is superseded.** It was an artifact of the method, not a property of the bug. Everything before this point compared *memory contents* at a frame boundary between two emulators that are not in phase - which is why it cost a four-run random-fill mask, a frame-offset sweep that minimised but never eliminated the difference, and a residual "~17 GSU bytes" that meant nothing in particular. `EmuSen_Debugging_Tools_Reference_v5.md` §3.40 replaces that with a *control-flow* diff, which is phase-independent by construction.
+
+Pointed at this ROM for 80 frames from power-on (~1.0M steps a side, diff runs in 0.43s), the first divergence is at **step 238** - inside the same SPC700 upload loop the section above already reached, but now located to the instruction rather than to a ten-frame window:
+
+| | |
+| --- | --- |
+| bytes uploaded (`$008445` executions) | **45,186 on both sides** - the payload is right |
+| S-CPU spins per byte (`$008440`) | Mesen **5.45**, EmuSen **6.24** (+14.5%) |
+| extra spin steps over 80 frames | **+35,489** (~71k including the paired `BNE`) |
+| total S-CPU steps, same 80 frames | Mesen 1,018,917, EmuSen 1,110,397 (**+91,480**) |
+
+The first two findings the differ reports are loop counts, not desyncs: `[$008497,$00849A]` runs 13x on hardware and 15x here, `[$008440,$008443]` 4x against 7x.
+
+**Which side is wrong follows from the numbers.** 80 frames is the same emulated duration on both machines, and both APUs complete the same 45,186-byte upload inside it - so the APU is *not* slow. The S-CPU simply executes 91,480 more instructions in that same duration, nearly all of them spins waiting on an APU that is keeping up fine. **The S-CPU is fast, not the APU slow**, which inverts the natural first guess and is consistent with the `CMP Y, dp` fix having overshot 79 -> 77 against hardware's 78.
+
+**Already excluded as the cause of the excess:** the APU clock ratio is exact (`ApuClockHz`/`_masterClockHz`, deliberately not `/21`), `GetAccessSpeedCycles` matches the fullsnes access-speed table region for region, and the IPL per-byte loop is pinned at 25 cycles by test (`Venus_APU.md` §1.7).
+
+#### Disproved 2026-08-03: boot pacing is not the cause
+
+The section above proposed that S-CPU boot pacing was upstream of the camera. **It was worth chasing and it was wrong.** Chasing it found four genuine timing bugs (`Venus_CPU.md` §8.7/§8.8, `Venus_Memory.md` §1.6) and closed the boot divergence from **+8.97% to +0.43%** against Mesen over the same 80 frames. The camera bug is completely unchanged by all four.
+
+Re-measured after the fixes, with a state-anchored script (`tapuntil`, §3.15d - the old frame-counted one no longer reaches the scene at all now that pacing moved), GSU RAM `$0094` still counts **down**: `0043 0041 003E 003C 0039 ... 0007 0005 0002 0000`. Hardware counts up.
+
+So the two are independent. That is worth as much as a fix: every future reading of this section should stop treating the frame skew as a lead.
+
+**Also retired: the four-run masking.** Mesen's default power-on RAM fill is random, and two identical runs of it disagree with each other - measured, see §3.40. The probe now forces a zero fill and every dump is byte-identical across runs. The masking in §3.39 was compensating for a reference that disagreed with itself; it is no longer needed, and any measurement that depended on it should be redone rather than trusted.
+
+#### Measured 2026-08-03: the target is right, the velocity is zero
+
+With both emulators anchored on the **same game state** rather than the same frame - `tapuntil` on our side (§3.15d), `--pressuntil` on the probe's (§3.40), both waiting for GSU RAM `$1E1A == $01F0` - the camera routine at `$09:95AF-$09:95D6` can be compared instruction for instruction. It is an easing loop: load the current camera from `$0094`, step it toward a target, store it back.
+
+| | value | verdict |
+| --- | --- | --- |
+| camera **target**, `LM R1,($1E1A)` at `$09:95C7` | `$01F0` (496) both sides | **we are correct** |
+| camera **velocity**, `R1` at `$09:95AF` | Mesen `$0100`, ours `$0000` | **wrong** |
+| what `HIB`/`SEX` make of it | Mesen `$0001` (+1/frame), ours `$0000` | camera never advances |
+| stored to `$0094` at `$09:984F` | Mesen `$0041`, ours `$00A7` and falling | the symptom |
+
+So the game knows where the camera should go and we agree with hardware about that. What we get wrong is the per-frame step: `R1`'s **high byte is the integer velocity**, and ours is zero, which is why `$0095` is observed as `$00` on every single write while hardware's passes `$01`.
+
+Walked back one more level: at `$09:95A5` (`BPL`) Mesen branches and we do not, because the `XOR` at `$09:95A4` sees `R0=$0900, R1=$0100` there and ours sees `R0=$0040, R1=$FFC0`. **Both branch correctly given their inputs** - do not "fix" the branch. The corruption is upstream of `$09:959F` and was not chased further by hand.
+
+#### Where to pick it up — done, see §3.41 and the top of this section
+
+**Give the GSU the same treatment the S-CPU just got.** The three CPU timing bugs were not found by reading code - they were found by emitting a per-instruction binary trace on both sides and diffing control flow with a resyncing differ (§3.40). Everything needed to repeat that for the GSU already exists: `mesen-gsu-trace.patch` already records address, opcode and all sixteen registers per step, and `CpuTraceDiff`'s collapse/resync/cost machinery is generic over "a stream of steps with an address and some registers". What is missing is a binary GSU sink on our side in the same record layout, and the small amount of refactoring to point the differ at it.
+
+Hand-walking the dependency chain is now the bottleneck: it took four manual passes to get from `$09:984F` back to `$09:959F`, and the trail keeps going. A resyncing GSU differ would report the first divergence in the whole stream in one run, which is precisely how the four S-CPU timing bugs were found.
+
+Two things to get right when building it. Mesen's GSU records label the address **one instruction ahead** of the opcode they carry (its own pipeline priming, §3.39) - ours are now correct after §4.1a, so the two conventions differ by one and must be reconciled before comparing addresses. And a naive alignment does not work: a crude longest-common-run match over the two traces captured here scored 158 matches out of 80,000, because the two runs reach the scene by different routes and run different job mixes. The resync must key on collapsed **register** state, the way `gsudiff.py` already does, rather than on addresses.
+
+**A trap this section already fell into once.** The `HIB`/`SWAP`/`TO R1`/`OR R7` sequence at `$09:982F-$09:9832` looks like it computes the stored value and is tempting to read as the culprit. It never executes - the routine arrives at `$09:984E` directly. It looked live only because the delay-slot trace bug (§4.1a) was labelling instructions with their jump target. Check a candidate address actually appears in the trace before reasoning about it.
+
+#### Superseded: measure the spin loop's master-clock cost
+
+Measure the master-clock cost of the two-instruction spin `CMP $2140` / `BNE $8440` at `$00:8440` against Mesen's cost for the same pair, and work outward from there. That is a bounded question about one addressing mode's timing, not another memory diff - and it is upstream of the camera, because until the two machines agree on S-CPU pacing every later comparison inherits the skew.
+
+`gsudiff.py` is the wrong tool for any of this: its collapse trick cancels Mesen's primed-NOP offset but not the two cores' different job *ordering*, so it reports a confident divergence at step 9 that is pure bookkeeping. §3.40's differ resyncs instead, which is exactly the capability it lacked.
+
+#### 10.5-hist Historical: the strip measured as 18 tiles that are never uploaded
 
 **This section replaces an earlier version whose two leads were both wrong.** It said the BG3 tilemap was suspect because its entries "repeat on a 9-tile cycle", and it called the strip "the story text". Both are disproved below. Read this version.
 

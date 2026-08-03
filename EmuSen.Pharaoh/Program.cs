@@ -32,6 +32,17 @@ class Program
 {
     static int Main(string[] args)
     {
+        // Before every other mode, because it relaunches this same argv - see §3.42.
+        if (!CpuThrottle.TryParsePercent(args, out int throttlePercent, out string? throttleError))
+        {
+            Console.WriteLine(throttleError);
+            return 1;
+        }
+        if (throttlePercent > 0 && !CpuThrottle.AlreadyThrottled)
+        {
+            return CpuThrottle.ReExec(throttlePercent, args);
+        }
+
         // Standalone utility mode - no ROM/core involved, so it's checked
         // before HeadlessDebugOptions.Parse ever looks at args[0].
         if (args.Length >= 1 && args[0] == "--diffshot")
@@ -42,6 +53,17 @@ class Program
                 return 1;
             }
             return DiffShotRunner.Run(args[1], args[2], args[3]);
+        }
+
+        // Also standalone: two --cputrace blobs, no ROM needed - see §3.40.
+        if (args.Length >= 1 && args[0] == "--tracediff")
+        {
+            if (args.Length < 3)
+            {
+                Console.WriteLine("Usage: dotnet run -- --tracediff <left.bin> <right.bin>");
+                return 1;
+            }
+            return TraceDiffRunner.Run(args[1], args[2]);
         }
 
         var (options, warnings, error) = HeadlessDebugOptions.Parse(args);
@@ -90,12 +112,20 @@ class Program
 
             if (memberType == null) continue; // already warned above
 
-            object value = rawValue == null ? true : Convert.ChangeType(rawValue, memberType);
+            // Parse already proved this converts, by this same function.
+            HeadlessDebugOptions.TryConvertFlagValue(rawValue, memberType, out object? value, out _);
             if (prop != null) prop.SetValue(null, value);
             else field!.SetValue(null, value);
 
             EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
         }
+
+        // Before LoadRom, which is what reads the .srm - see §3.15's --nobattery entry.
+        EmuSen.Cores.Nintendo.Venus.Memory.Cartridge.BatteryRamDisabled = options.NoBattery;
+        if (options.NoBattery) Emit("[ROM] --nobattery: the cartridge save is neither read nor written.");
+
+        // So a throttled measurement says so in its own log, not just on the parent's console - see §3.42.
+        if (CpuThrottle.AlreadyThrottled) Emit("[THROTTLE] This run is inside a CPU quota; every timing below is a slow-machine timing.");
 
         Emit($"[ROM] Loading: {options.RomPath}");
         var core = new VenusCore(headless: true);
@@ -177,6 +207,8 @@ class Program
             {
                 CpuLogStart = options.CpuLogStart,
                 CpuLogEnd = options.CpuLogEnd,
+                CpuTraceEnd = options.CpuTraceEnd,
+                CpuTracePath = options.CpuTracePath,
                 Verbose = options.Verbose,
                 OnHalted = debugTarget.RefreshProviders,
             };
@@ -203,6 +235,8 @@ class Program
         {
             CpuLogStart = options.CpuLogStart,
             CpuLogEnd = options.CpuLogEnd,
+            CpuTraceEnd = options.CpuTraceEnd,
+            CpuTracePath = options.CpuTracePath,
             Verbose = options.Verbose,
             OnHalted = debugTarget.RefreshProviders,
         };

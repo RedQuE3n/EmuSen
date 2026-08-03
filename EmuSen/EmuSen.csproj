@@ -18,6 +18,11 @@
          not just a frontend concern, so it stays here even though this
          project no longer owns any window. -->
     <PackageReference Include="Raylib-cs" Version="8.0.0" />
+    <!-- Common/Imaging/PngFile.cs encodes with SKImage directly, so this is
+         a real dependency of this project and not just something inherited
+         through EmuSen.Serenity - listed explicitly to match this file's
+         own "be explicit about what's actually used" convention. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 
   <ItemGroup>
@@ -38,6 +43,10 @@
     <!-- AudioConfig, which AudioSettings maps to and from - see
          EmuSen_Config_Reference.md §3.2. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+    <!-- The core-agnostic timing scheduler every core schedules against -
+         see EmuSen_Crystal_Scheduler.md. The dependency only ever runs
+         this way: Crystal is a leaf and names nothing from this project. -->
+    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
   </ItemGroup>
 
 </Project>

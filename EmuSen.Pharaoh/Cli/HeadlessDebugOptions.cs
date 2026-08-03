@@ -20,11 +20,57 @@ namespace EmuSen.Pharaoh.Cli
         public string? LoadStatePath { get; init; }
         public string? SaveStatePath { get; init; }
         public bool Verbose { get; init; }
+        public bool NoBattery { get; init; }
         public long CpuLogStart { get; init; } = -1;
         public long CpuLogEnd { get; init; } = -1;
+        public long CpuTraceEnd { get; init; } = -1;
+        public string? CpuTracePath { get; init; }
         public List<string> FlagsToEnable { get; init; } = new();
         public List<(long Start, long End, SnesButton Button, int Controller)> Taps { get; init; } = new();
         public List<(long Frame, string Path)> Screenshots { get; init; } = new();
+
+        // Hex, bools and bare names - see §3.15's --flag entry.
+        public static bool TryConvertFlagValue(string? rawValue, Type memberType, out object? value, out string? error)
+        {
+            value = null;
+            error = null;
+
+            if (rawValue == null)
+            {
+                // "Switch this on" only means anything for a bool - see §3.15.
+                if (memberType == typeof(bool)) { value = true; return true; }
+                error = $"{memberType.Name} needs an explicit value, e.g. Name=100.";
+                return false;
+            }
+
+            if (memberType == typeof(bool))
+            {
+                if (bool.TryParse(rawValue, out bool b)) { value = b; return true; }
+                if (rawValue == "1") { value = true; return true; }
+                if (rawValue == "0") { value = false; return true; }
+                error = $"'{rawValue}' is not a bool (use true/false or 1/0).";
+                return false;
+            }
+
+            if (memberType == typeof(int))
+            {
+                bool negative = rawValue.StartsWith('-');
+                string body = negative ? rawValue[1..] : rawValue;
+                bool hex = body.StartsWith("0x", StringComparison.OrdinalIgnoreCase) || body.StartsWith('$');
+                string digits = hex ? (body.StartsWith('$') ? body[1..] : body[2..]) : body;
+
+                bool ok = hex
+                    ? int.TryParse(digits, System.Globalization.NumberStyles.HexNumber, null, out int n)
+                    : int.TryParse(digits, out n);
+                if (ok) { value = negative ? -n : n; return true; }
+
+                error = $"'{rawValue}' is not an integer (decimal, or hex as 0x94 or $94).";
+                return false;
+            }
+
+            error = $"unsupported DebugSettings member type {memberType.Name}.";
+            return false;
+        }
 
         // Result of a parse attempt: either Options is set (success) or
         // Error is set (caller should print it and exit 1) - never both.
@@ -53,7 +99,9 @@ namespace EmuSen.Pharaoh.Cli
             string? loadStatePath = null;
             string? saveStatePath = null;
             bool verbose = false;
-            long cpuLogStart = -1, cpuLogEnd = -1;
+            bool noBattery = false;
+            long cpuLogStart = -1, cpuLogEnd = -1, cpuTraceEnd = -1;
+            string? cpuTracePath = null;
             var flagsToEnable = new List<string>();
             var taps = new List<(long Start, long End, SnesButton Button, int Controller)>();
             var screenshots = new List<(long Frame, string Path)>();
@@ -76,12 +124,23 @@ namespace EmuSen.Pharaoh.Cli
                     cpuLogStart = long.Parse(p[0]);
                     cpuLogEnd = long.Parse(p[1]);
                 }
+                else if (args[i] == "--cputrace" && i + 1 < args.Length)
+                {
+                    // <frame>:<path>, same shape as --screenshot - see §3.40.
+                    string[] p = args[++i].Split(new[] { ':' }, 2);
+                    if (p.Length < 2 || !long.TryParse(p[0], out cpuTraceEnd) || p[1].Length == 0)
+                    {
+                        return (null, warnings, $"[ERROR] --cputrace wants <frame>:<path>, got '{args[i]}'.");
+                    }
+                    cpuTracePath = p[1];
+                }
                 else if (args[i] == "--watch" && i + 1 < args.Length) extraWatches.Add(args[++i]);
                 else if (args[i] == "--script" && i + 1 < args.Length) scriptPath = args[++i];
                 else if (args[i] == "--commands" && i + 1 < args.Length) commandsPath = args[++i];
                 else if (args[i] == "--autoshot" && i + 1 < args.Length) autoshotDir = args[++i];
                 else if (args[i] == "--out" && i + 1 < args.Length) outPath = args[++i];
                 else if (args[i] == "--verbose") verbose = true;
+                else if (args[i] == "--nobattery") noBattery = true;
                 else if (args[i] == "--loadstate" && i + 1 < args.Length) loadStatePath = args[++i];
                 else if (args[i] == "--savestate" && i + 1 < args.Length) saveStatePath = args[++i];
                 else if (args[i] == "--screenshot" && i + 1 < args.Length)
@@ -118,13 +177,23 @@ namespace EmuSen.Pharaoh.Cli
             // additional read-only lookup to source the warning text.
             foreach (string flagSpec in flagsToEnable)
             {
-                string flagName = flagSpec.Split(new[] { '=' }, 2)[0];
+                string[] flagParts = flagSpec.Split(new[] { '=' }, 2);
+                string flagName = flagParts[0];
                 var settingsType = typeof(EmuSen.Debug.DebugSettings);
                 var prop = settingsType.GetProperty(flagName);
                 var field = prop == null ? settingsType.GetField(flagName) : null;
                 if (prop == null && field == null)
                 {
                     warnings.Add($"[WARN] No DebugSettings.{flagName} property or field found - ignoring --flag {flagSpec}.");
+                    continue;
+                }
+
+                // Same converter as apply time, so a bad value reports not throws.
+                Type memberType = prop?.PropertyType ?? field!.FieldType;
+                string? rawValue = flagParts.Length >= 2 ? flagParts[1] : null;
+                if (!TryConvertFlagValue(rawValue, memberType, out _, out string? convertError))
+                {
+                    return (null, warnings, $"[ERROR] --flag {flagSpec}: {convertError}");
                 }
             }
 
@@ -140,8 +209,11 @@ namespace EmuSen.Pharaoh.Cli
                 LoadStatePath = loadStatePath,
                 SaveStatePath = saveStatePath,
                 Verbose = verbose,
+                NoBattery = noBattery,
                 CpuLogStart = cpuLogStart,
                 CpuLogEnd = cpuLogEnd,
+                CpuTraceEnd = cpuTraceEnd,
+                CpuTracePath = cpuTracePath,
                 FlagsToEnable = flagsToEnable,
                 Taps = taps,
                 Screenshots = screenshots,

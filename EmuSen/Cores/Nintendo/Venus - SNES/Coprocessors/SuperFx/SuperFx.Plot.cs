@@ -41,8 +41,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _ => 4,
         };
 
-        // HT1 is bit 2 and HT0 is bit 5 - the two halves of the field are not adjacent.
-        private int ScreenHeightMode => (((_scmr >> 2) & 1) << 1) | ((_scmr >> 5) & 1);
+        // HT0 is bit 2 and HT1 is bit 5 - the two halves of the field are not adjacent.
+        private int ScreenHeightMode => (((_scmr >> 5) & 1) << 1) | ((_scmr >> 2) & 1);
 
         // CMODE bit 4 selects OBJ mode independently of SCMR's height field - see Venus_SuperFX.md §6.2.
         private bool ObjMode => ScreenHeightMode == 3 || (_por & 0x10) != 0;

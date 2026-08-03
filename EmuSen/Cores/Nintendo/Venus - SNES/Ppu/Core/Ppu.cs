@@ -20,6 +20,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // --- Core Memory ---
         public byte[] Vram = new byte[64 * 1024];   // 32K words
         public byte[] Cgram = new byte[512];        // 256 palette entries (15-bit color)
+
+        // Cleared by the renderer's palette cache, set by every CGRAM write - see Venus_PPU.md §7.2.
+        public bool CgramChanged = true;
         public byte[] Oam = new byte[544];          // 512-byte main table + 32-byte high table
 
         // --- Decoded 32-bit ARGB Palette ---
@@ -27,6 +30,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         // --- Register Handlers ---
         [EmuSen.Common.SkipInState] private PpuRegister[] _registers = null!;
+
+        // The $21xx mnemonic, for anything reporting a register by number - see `man dma`.
+        public string? DebugRegisterName(int index)
+            => (uint)index < (uint)_registers.Length && !_registers[index].Name.StartsWith("UNK_") ? _registers[index].Name : null;
 
         // --- Register State ---
         public byte Inidisp;                 // $2100 - brightness + force blank
@@ -137,8 +144,26 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             BuildRegisterTable();
         }
 
+        // Counts $21xx traffic while the screen is being drawn, which decides how a deferred renderer must work - see Venus_PPU.md §7.3.
+        public int ActiveDisplayWrites;
+        public int ActiveDisplayLines;
+        private int _lastActiveWriteLine = -1;
+
+        public void ResetActiveDisplayCounters()
+        {
+            ActiveDisplayWrites = 0;
+            ActiveDisplayLines = 0;
+            _lastActiveWriteLine = -1;
+        }
+
         public void WriteRegister(uint offset, byte data)
         {
+            // Flag first: this is the $21xx hot path, and DMA drives thousands of writes a frame through it.
+            if (EmuSen.Debug.DebugSettings.PpuActiveDisplayWriteLogging && CurrentScanline < 224)
+            {
+                ActiveDisplayWrites++;
+                if (CurrentScanline != _lastActiveWriteLine) { _lastActiveWriteLine = CurrentScanline; ActiveDisplayLines++; }
+            }
             uint index = offset - 0x2100;
             if (index < _registers.Length)
             {

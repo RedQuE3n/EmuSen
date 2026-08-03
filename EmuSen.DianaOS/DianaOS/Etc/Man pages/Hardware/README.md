@@ -20,7 +20,14 @@ One page per piece of hardware being abstracted, rather than the long inline `//
   - [`Venus_CPU.md`](Nintendo/Venus%20-%20SNES/Venus_CPU.md) — 65816 core: fetch/execute loop, interrupt entry sequences, WAI/STP, addressing modes, opcode table verification status.
   - [`Venus_PPU.md`](Nintendo/Venus%20-%20SNES/Venus_PPU.md) — register dispatch, scroll-latch fix, Mode 7, compositing order, color math, sprite budget, windowing, hi-res, status registers.
   - [`Venus_APU.md`](Nintendo/Venus%20-%20SNES/Venus_APU.md) — SPC700 boot/ports/timers, instruction-set quirks, S-DSP register handling, ADSR/GAIN envelopes, BRR decoding.
-- `Moon - NES/`, `Mercury - GB-GBC/`, `Jupiter - GBA/`, `Mars - N64/`, `Saturn - Virtual Boy/`, `Uranus - GameCube/`, `Neptune - Wii/`, `Pluto - Wii U/`, `Luna - DS/`, `Artemis - 3DS-New3DS/` — stubs, not started yet.
+- [`Moon - NES/`](Nintendo/Moon%20-%20NES/) — **runs, silent** (CPU/PPU/memory/`ICore`/`IDebugTarget`; no audio synthesis, no PAL)
+  - [`Moon_CPU.md`](Nintendo/Moon%20-%20NES/Moon_CPU.md) — 2A03/6502 core: the one-access-per-cycle bus model, addressing modes and their dummy reads, the phantom `B`/`U` flag bits, reset and interrupts, the undocumented opcodes, and validation status.
+  - [`Moon_Core.md`](Nintendo/Moon%20-%20NES/Moon_Core.md) — `ICore`: the master clock and the CPU-budget accumulator, the Crystal schedule, scanline granularity, named address spaces, save states.
+  - [`Moon_Memory.md`](Nintendo/Moon%20-%20NES/Moon_Memory.md) — CPU address decode, the iNES image, nametable mirroring, the five implemented boards, MMC1's serial register, OAM DMA, controllers, the write-observer seam.
+  - [`Moon_PPU.md`](Nintendo/Moon%20-%20NES/Moon_PPU.md) — 2C02: the loopy `v`/`t`/`x`/`w` registers, the `$2007` read buffer, palette holes, background and sprite composition, sprite 0 hit.
+  - [`Moon_APU.md`](Nintendo/Moon%20-%20NES/Moon_APU.md) — the register surface, length counters and frame IRQ that are modelled, and the synthesis that is not.
+  - [`Moon_Debug.md`](Nintendo/Moon%20-%20NES/Moon_Debug.md) — `IDebugTarget`'s second implementation: memory spaces, registers, tile/tilemap decoders, the disassembler, and what that second implementation proved.
+- `Mercury - GB-GBC/`, `Jupiter - GBA/`, `Mars - N64/`, `Saturn - Virtual Boy/`, `Uranus - GameCube/`, `Neptune - Wii/`, `Pluto - Wii U/`, `Luna - DS/`, `Artemis - 3DS-New3DS/` — stubs, not started yet.
 
 ## Sega
 

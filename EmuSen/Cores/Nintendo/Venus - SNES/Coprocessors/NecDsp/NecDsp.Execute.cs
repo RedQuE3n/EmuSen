@@ -28,6 +28,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             ExecOp();
             _sp = (byte)((_sp - 1) & _stackMask);
             _pc = _stack[_sp];
+            ReturnObserver?.Invoke();
         }
 
         private void Jump()
@@ -88,12 +89,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
                 case 0x140:
                     _stack[_sp] = _pc;
                     _sp = (byte)((_sp + 1) & _stackMask);
+                    CallObserver?.Invoke((_pc - 1) & _programMask, target & ~0x2000);
                     _pc = (ushort)(target & ~0x2000);
                     break;
 
                 case 0x141:
                     _stack[_sp] = _pc;
                     _sp = (byte)((_sp + 1) & _stackMask);
+                    CallObserver?.Invoke((_pc - 1) & _programMask, target | 0x2000);
                     _pc = (ushort)(target | 0x2000);
                     break;
             }

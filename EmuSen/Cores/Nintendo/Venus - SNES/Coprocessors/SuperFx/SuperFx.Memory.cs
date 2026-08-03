@@ -55,7 +55,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             return index < _rom.Length ? _rom[index] : (byte)0x00;
         }
 
-        public byte ReadRam(int offset) => _ram.Length == 0 ? (byte)0x00 : _ram[(offset & 0x7FFFFF) % _ram.Length];
+        // Reported as GSURAM, not SRAM: the space name is what tells the two
+        // sides of the same chip apart - see Venus_SuperFX.md §8.4.
+        public byte ReadRam(int offset)
+        {
+            if (_ram.Length == 0) return 0x00;
+            int index = (offset & 0x7FFFFF) % _ram.Length;
+            byte value = _ram[index];
+            ReadObserver?.OnCoprocessorRead("GSURAM", index, value);
+            return value;
+        }
 
         public void WriteRam(int offset, byte data)
         {
@@ -66,11 +75,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             if (EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceCountdown > 0
                 && index == EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceAddr)
             {
+                // Not R[15] - it already moved past - see Venus_SuperFX.md §8.4.
                 EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceCountdown--;
-                System.Console.WriteLine($"[GSUW] {index:X6} = {data:X2} pc={_pbr:X2}:{R[15]:X4}");
+                System.Console.WriteLine(
+                    $"[GSUW] {index:X6} = {data:X2} pc={_debugInstructionAddress >> 16:X2}:{_debugInstructionAddress & 0xFFFF:X4}");
             }
 
             _ram[index] = data;
+            WriteObserver?.OnCoprocessorWrite("GSURAM", index, data);
         }
 
         // Program fetch. The GSU can run out of ROM ($00-$5F) or, for code the

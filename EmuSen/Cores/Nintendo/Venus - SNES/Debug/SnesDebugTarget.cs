@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx;
+using EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp;
+using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.DianaOS;
@@ -143,6 +145,26 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly CoverageRegistry _coverage = new CoverageRegistry();
         private readonly CoverageRegistry? _coprocessorCoverage;
 
+        // See `man bt`, `man label`, `man counters`, `man freeze`, `man eval`.
+        private readonly CallStackRegistry _callStack = new CallStackRegistry();
+        private readonly LabelRegistry _labels = new LabelRegistry();
+        private readonly AccessCounterRegistry _accessCounters = new AccessCounterRegistry();
+        private readonly FreezeRegistry _freezes = new FreezeRegistry();
+        private readonly SnesExpressionContext _expressions;
+
+        // The named chip list every scoped command resolves against - see `man cpus`.
+        private readonly List<DebugCpu> _debugCpus = new();
+
+        // Only the SA-1 has both a 65816 and a call/return seam to hang this on.
+        private readonly CallStackRegistry? _coprocessorCallStack;
+
+        private readonly BreakpointRegistry _spcBreakpoints = new BreakpointRegistry();
+        private readonly CoverageRegistry _spcCoverage = new CoverageRegistry();
+
+        // Traffic across the cartridge coprocessor's register window - see `man copflow`.
+        private readonly RegisterFlowRegistry _registerFlow = new RegisterFlowRegistry();
+        private readonly DmaLogRegistry _dmaLog = new DmaLogRegistry();
+
         // Optional - VenusCore.LastFrameCpuSpc700Ms/LastFramePpuMs/
         // LastFrameHdmaMs (or EmulatorSession's identical pass-through
         // properties) live on the concrete core/session, not on anything
@@ -195,6 +217,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _ppu.WriteObserver = this; // VRAM/CGRAM/OAM - see Venus_Memory.md §6.1
             bus.Cart.WriteObserver = this; // SRAM + the S-CPU's view of the SA-1's RAM - see Venus_SA1.md §11.4
             if (bus.Cart.Sa1 is { } observedSa1) observedSa1.WriteObserver = this; // the SA-1's own writes
+            // The GSU's own Game Pak RAM traffic, which never reaches the S-CPU bus - see Venus_SuperFX.md §8.4.
+            if (bus.Cart.SuperFx is { } observedGsu) { observedGsu.WriteObserver = this; observedGsu.ReadObserver = this; }
             bus.ReadObserver = this;
             bus.FrameObserver = this;
             bus.RomPatcher = this;
@@ -209,23 +233,93 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // in this class's own header comment.
             // Coverage rides the same per-instruction seam, and costs one
             // bool test while disarmed - see EmuSen_Debugging_Tools_Reference_v5.md §3.24.
-            bus.BreakpointChecker = pc24 => { _coverage.Record(pc24); return _breakpoints.ShouldBreak(pc24); };
+            bus.BreakpointChecker = pc24 =>
+            {
+                _coverage.Record(pc24);
+                _callStack.NoteInstruction();
+                _accessCounters.NoteExecute("CpuBus", pc24);
+                return _breakpoints.ShouldBreak(pc24);
+            };
+
+            // The seams `bt`, `step over`/`step out` and `runto` read - see `man bt`.
+            cpu.CallStack = _callStack;
+            cpu.Breakpoints = _breakpoints;
+            bus.Breakpoints = _breakpoints; // the bus-level `bp when` conditions
+            _callStack.FrameNumberProvider = () => bus.FrameCount;
+            _breakpoints.CallStack = _callStack;
+            bus.ScanlineObserver = _breakpoints.NoteScanline;
+
+            // Every call target becomes a discovered routine - see `man cov`.
+            _callStack.EntryPointObserver = _coverage.RecordEntryPoint;
+
+            _expressions = new SnesExpressionContext(cpu, bus, _labels, () => _bus.FrameCount, GetMemorySpaces);
+            _breakpoints.ConditionEvaluator = EvaluateCondition;
 
             // Same pull-hook, on the SA-1's PC - see Venus_SA1.md §11.5.
             if (bus.Cart.Sa1 is { } breakableSa1)
             {
                 _coprocessorBreakpoints = new BreakpointRegistry();
                 _coprocessorCoverage = new CoverageRegistry();
-                breakableSa1.BreakpointChecker = pc24 => { _coprocessorCoverage.Record(pc24); return _coprocessorBreakpoints.ShouldBreak(pc24); };
+                _coprocessorCallStack = new CallStackRegistry
+                {
+                    FrameNumberProvider = () => bus.FrameCount,
+                    EntryPointObserver = _coprocessorCoverage.RecordEntryPoint,
+                };
+                breakableSa1.BreakpointChecker = pc24 =>
+                {
+                    _coprocessorCoverage.Record(pc24);
+                    _coprocessorCallStack.NoteInstruction();
+                    return _coprocessorBreakpoints.ShouldBreak(pc24);
+                };
+
+                // The SA-1 runs a 65816, so the same JSR/RTS seam applies - see `man bt`.
+                breakableSa1.Cpu.CallStack = _coprocessorCallStack;
+                breakableSa1.Cpu.Breakpoints = _coprocessorBreakpoints;
+                _coprocessorBreakpoints.CallStack = _coprocessorCallStack;
             }
 
-            // The GSU has no breakpoint hook, but its PC is just as worth
-            // covering - see Venus_SuperFX.md §8.2.
+            // The GSU has its own breakpoint hook now too - see Venus_SuperFX.md §8.2.
             if (bus.Cart.SuperFx is { } coveredGsu)
             {
+                _coprocessorBreakpoints = new BreakpointRegistry();
                 _coprocessorCoverage = new CoverageRegistry();
                 coveredGsu.CoverageRecorder = pc24 => _coprocessorCoverage.Record(pc24);
+                coveredGsu.BreakpointChecker = pc24 => _coprocessorBreakpoints.ShouldBreak(pc24);
             }
+
+            // Word-indexed rather than byte-addressed, since that is the DSP's PC - see Venus_NecDSP.md §9.
+            if (bus.Cart.NecDsp is { } breakableDsp)
+            {
+                _coprocessorBreakpoints = new BreakpointRegistry();
+                _coprocessorCoverage = new CoverageRegistry();
+                _coprocessorCallStack = new CallStackRegistry
+                {
+                    FrameNumberProvider = () => bus.FrameCount,
+                    EntryPointObserver = _coprocessorCoverage.RecordEntryPoint,
+                };
+                _coprocessorBreakpoints.CallStack = _coprocessorCallStack;
+                breakableDsp.CallObserver = (source, target) => _coprocessorCallStack.NotePush(source, target, CallFrameKind.Call);
+                breakableDsp.ReturnObserver = _coprocessorCallStack.NotePop;
+                breakableDsp.BreakpointChecker = pc =>
+                {
+                    _coprocessorCoverage.Record(pc);
+                    _coprocessorCallStack.NoteInstruction();
+                    return _coprocessorBreakpoints.ShouldBreak(pc);
+                };
+            }
+
+            bus.Spc700.BreakpointChecker = pc =>
+            {
+                _spcCoverage.Record(pc);
+                return _spcBreakpoints.ShouldBreak(pc);
+            };
+
+            _registerFlow.FrameNumberProvider = () => bus.FrameCount;
+            bus.Cart.RegisterFlow = _registerFlow;
+
+            _dmaLog.FrameNumberProvider = () => bus.FrameCount;
+            _dmaLog.ScanlineProvider = () => bus.CurrentScanline;
+            bus.Dma.DmaLog = _dmaLog;
 
             // Each provider's initial snapshot is read right here, not left
             // default/empty - a caller reading Current before this target's
@@ -244,6 +338,184 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _palettesProvider = new PollingProvider<IReadOnlyList<DebugPaletteInfo>>(ReadPalettesLive, ReadPalettesLive());
             _audioChannelsProvider = new PollingProvider<IReadOnlyList<DebugAudioChannelInfo>>(ReadAudioChannelsLive, ReadAudioChannelsLive());
             _hardwareLoadProvider = new PollingProvider<IReadOnlyList<DebugLoadInfo>>(ReadHardwareLoadLive, ReadHardwareLoadLive());
+
+            // Last: the CPU list hands out the providers built just above.
+            BuildDebugCpus();
+        }
+
+        // What this core can catch the hardware doing wrong - see `man bp`.
+        private static readonly BreakCondition[] Conditions =
+        {
+            new("stp", "the 65816 executed STP and is stopped until reset"),
+            new("wdm", "the 65816 executed WDM, a reserved opcode"),
+            new("brk", "a BRK was taken"),
+            new("cop", "a COP was taken"),
+            new("ppuaccess", "VRAM/CGRAM/OAM written while the display is rendering"),
+            new("autojoy", "$4218-$421F read while the auto-joypad read is running"),
+        };
+
+        public IReadOnlyList<BreakCondition> BreakConditions => Conditions;
+
+        public IReadOnlyList<DebugDmaChannel> DmaChannels => _bus.Dma.DebugChannels();
+
+        public DmaLogRegistry? DmaLog => _dmaLog;
+
+        // $2140-$217F is the APU/WRAM half of the B bus, which the PPU table does not cover.
+        public string? NameDmaDestination(byte register)
+        {
+            string? name = register switch
+            {
+                >= 0x40 and <= 0x43 => $"APUIO{register - 0x40}",
+                0x80 => "WMDATA",
+                _ => _bus.Ppu.DebugRegisterName(register),
+            };
+            return name == null ? $"${0x2100 + register:X4}" : $"{name} ${0x2100 + register:X4}";
+        }
+
+        // One entry per chip this cartridge actually carries - see `man cpus`.
+        // Both banks' worth, because which set is live depends on the E flag - see `man vectors`.
+        private static readonly InterruptVector[] Vectors =
+        {
+            new("COP", 0x00FFE4, 2, "Native (E=0)"),
+            new("BRK", 0x00FFE6, 2, "Native (E=0)"),
+            new("ABORT", 0x00FFE8, 2, "Native (E=0)"),
+            new("NMI", 0x00FFEA, 2, "Native (E=0)"),
+            new("IRQ", 0x00FFEE, 2, "Native (E=0)"),
+            new("COP", 0x00FFF4, 2, "Emulation (E=1)"),
+            new("ABORT", 0x00FFF8, 2, "Emulation (E=1)"),
+            new("NMI", 0x00FFFA, 2, "Emulation (E=1)"),
+            new("RESET", 0x00FFFC, 2, "Emulation (E=1)"),
+            new("IRQ/BRK", 0x00FFFE, 2, "Emulation (E=1)"),
+        };
+
+        public IReadOnlyList<InterruptVector> InterruptVectors => Vectors;
+
+        // The cartridge's own decode where it maps, else the bus regions - see `man addr`.
+        public PhysicalAddress? ResolvePhysical(int cpuAddress)
+        {
+            uint address = (uint)(cpuAddress & 0xFFFFFF);
+            byte bank = (byte)(address >> 16);
+            ushort offset = (ushort)(address & 0xFFFF);
+
+            if (_bus.Cart.TryResolvePhysical(address) is { } cartridge) return cartridge;
+
+            // WRAM is mirrored into the low 8KB of every non-cartridge bank.
+            if (bank is >= 0x7E and <= 0x7F) return new PhysicalAddress("WRAM", (int)(address - 0x7E0000));
+            if (offset < 0x2000) return new PhysicalAddress("WRAM", offset);
+            if (offset < 0x8000) return new PhysicalAddress($"hardware register ${offset:X4}", offset, isAddressable: false);
+            return null;
+        }
+
+        private bool WriteCpuRegister(string name, ulong value) => Write65816Register(_cpu, name, value);
+
+        // The GSU and NEC DSP expose their registers read-only, so they publish no writer at all.
+        private static bool Write65816Register(Cpu cpu, string name, ulong value)
+        {
+            switch (name.ToUpperInvariant())
+            {
+                case "A": cpu.A = (ushort)value; return true;
+                case "X": cpu.X = (ushort)value; return true;
+                case "Y": cpu.Y = (ushort)value; return true;
+                case "S": cpu.S = (ushort)value; return true;
+                case "D": cpu.D = (ushort)value; return true;
+                case "PB": cpu.PB = (byte)value; return true;
+                case "PC": cpu.PC = (ushort)value; return true;
+                case "DB": cpu.DB = (byte)value; return true;
+                case "P": cpu.P = (byte)value; return true;
+                case "E": cpu.E = value != 0; return true;
+                default: return false;
+            }
+        }
+
+        private bool WriteSpcRegister(string name, ulong value)
+        {
+            var spc = _bus.Spc700;
+            switch (name.ToUpperInvariant())
+            {
+                case "A": spc.A = (byte)value; return true;
+                case "X": spc.X = (byte)value; return true;
+                case "Y": spc.Y = (byte)value; return true;
+                case "SP": spc.SP = (byte)value; return true;
+                case "PC": spc.PC = (ushort)value; return true;
+                case "PSW": spc.PSW = (byte)value; return true;
+                // InPort0-3 are the S-CPU's side of the mailbox, written through $2140 - see Venus_APU.md.
+                default: return false;
+            }
+        }
+
+        private void BuildDebugCpus()
+        {
+            _debugCpus.Add(new DebugCpu("cpu", "Ricoh 5A22 (65816) main CPU", _breakpoints)
+            {
+                Coverage = _coverage,
+                CallStack = _callStack,
+                Expressions = _expressions,
+                CodeSpace = "CpuBus",
+                Registers = _cpuRegistersProvider,
+                ProgramCounter = () => (_cpu.PB << 16) | _cpu.PC,
+                RegisterWriter = WriteCpuRegister,
+            });
+
+            _debugCpus.Add(new DebugCpu("spc", "Sony SPC700 sound CPU", _spcBreakpoints)
+            {
+                Coverage = _spcCoverage,
+                CodeSpace = "APURAM",
+                Registers = _apuRegistersProvider,
+                ProgramCounter = () => _bus.Spc700.PC,
+                RegisterWriter = WriteSpcRegister,
+            });
+
+            var cart = _bus.Cart;
+
+            if (cart.Sa1 is { } sa1 && _coprocessorBreakpoints != null)
+            {
+                _debugCpus.Add(new DebugCpu("sa1", "SA-1 (65816) cartridge coprocessor", _coprocessorBreakpoints)
+                {
+                    Coverage = _coprocessorCoverage,
+                    CallStack = _coprocessorCallStack,
+                    CodeSpace = "SA1BUS",
+                    Registers = _coprocessorRegistersProvider,
+                    ProgramCounter = () => (sa1.Cpu.PB << 16) | sa1.Cpu.PC,
+                    RegisterWriter = (name, value) => Write65816Register(sa1.Cpu, name, value),
+                });
+            }
+            else if (cart.SuperFx is { } gsu && _coprocessorBreakpoints != null)
+            {
+                _debugCpus.Add(new DebugCpu("gsu", "SuperFX GSU cartridge coprocessor", _coprocessorBreakpoints)
+                {
+                    Coverage = _coprocessorCoverage,
+                    CodeSpace = "GSUBUS",
+                    Registers = _coprocessorRegistersProvider,
+                    ProgramCounter = () => (gsu.DebugPbr << 16) | gsu.R[15],
+                });
+            }
+            else if (cart.NecDsp is { } dsp && _coprocessorBreakpoints != null)
+            {
+                _debugCpus.Add(new DebugCpu("dsp", $"NEC {dsp.Name} cartridge coprocessor", _coprocessorBreakpoints)
+                {
+                    Coverage = _coprocessorCoverage,
+                    CallStack = _coprocessorCallStack,
+                    CodeSpace = "DSPPRG",
+                    Registers = _coprocessorRegistersProvider,
+                    ProgramCounter = () => dsp.DebugPc,
+                });
+            }
+
+            // A chip's conditions and logpoints read that chip's registers - see `man eval`.
+            foreach (var cpu in _debugCpus)
+            {
+                var context = cpu.Expressions ?? DebugCpuExpressionContext.For(this, cpu);
+                cpu.Breakpoints.LogEvaluator ??= expression => RenderLog(context, expression);
+
+                if (cpu.Breakpoints.ConditionEvaluator != null) continue;
+                cpu.Breakpoints.ConditionEvaluator = condition =>
+                {
+                    var evaluator = new ExpressionEvaluator(context);
+                    return evaluator.TryEvaluateBool(condition, out bool result, out string error)
+                        ? (result, null)
+                        : (false, error);
+                };
+            }
         }
 
         public string CoreName => "SNES";
@@ -292,6 +564,43 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         public CoverageRegistry? CoprocessorCoverage => _coprocessorCoverage;
 
+        public CallStackRegistry? CallStack => _callStack;
+
+        public LabelRegistry? Labels => _labels;
+
+        public AccessCounterRegistry? AccessCounters => _accessCounters;
+
+        public FreezeRegistry? Freezes => _freezes;
+
+        public IExpressionContext? Expressions => _expressions;
+
+        public IReadOnlyList<DebugCpu> DebugCpus => _debugCpus;
+
+        public RegisterFlowRegistry? RegisterFlow => _registerFlow;
+
+        // Fresh per call: the evaluator holds parse state - see `man eval`.
+        private (bool Result, string? Error) EvaluateCondition(string condition)
+        {
+            var evaluator = new ExpressionEvaluator(_expressions);
+            return evaluator.TryEvaluateBool(condition, out bool result, out string error)
+                ? (result, null)
+                : (false, error);
+        }
+
+        // Renders a logpoint's comma-separated expressions as "expr=value" pairs - see `man bp`.
+        private static (string Text, string? Error) RenderLog(IExpressionContext context, string expression)
+        {
+            var evaluator = new ExpressionEvaluator(context);
+            var rendered = new List<string>();
+
+            foreach (string part in expression.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                try { rendered.Add($"{part}=0x{evaluator.Evaluate(part):X}"); }
+                catch (Exception ex) { return (string.Empty, $"{part}: {ex.Message}"); }
+            }
+            return (string.Join("  ", rendered), null);
+        }
+
         // Reads a (space, address, width) value the same way
         // DebugCommandHelpers.ReadValue does (little-endian accumulation)
         // - duplicated rather than shared since that helper lives in
@@ -311,6 +620,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 return value;
             });
 
+            _breakpoints.NoteFrame(frameCount); // see `man runto`
             ApplyCheats();
         }
 
@@ -359,16 +669,43 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _watches.RecordWrite(spaceName, address, value,
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
             _breakpoints.NoteWrite(spaceName, address, value);
+            _accessCounters.NoteWrite(spaceName, address);
+            RestoreIfFrozen(spaceName, address, value);
         }
 
-        // The S-CPU's PC says nothing about a write the SA-1 made on its own,
-        // so label these with the chip's own PC - see Venus_SA1.md §11.4.
+        // Undoes a write immediately, not next frame - see `man freeze`.
+        private void RestoreIfFrozen(string spaceName, int address, byte value)
+        {
+            if (_freezes.NoteWrite(spaceName, address, value) is not { } frozen) return;
+            var space = GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+            if (space is not { IsWritable: true }) return;
+            _freezes.Restore(() => space.Write(address, frozen));
+        }
+
+        // The S-CPU's PC says nothing about an access a cartridge chip made on
+        // its own, so label these with that chip's own PC - see Venus_SA1.md §11.4.
         public void OnCoprocessorWrite(string spaceName, int address, byte value)
         {
-            var sa1 = _bus.Cart.Sa1;
-            if (sa1 == null) { OnWrite(spaceName, address, value); return; }
-            _watches.RecordWrite(spaceName, address, value,
-                () => $"SA1 PC=0x{sa1.Cpu.LastInstructionPB:X2}{sa1.Cpu.LastInstructionPC:X4}");
+            if (CoprocessorContext() is not { } context) { OnWrite(spaceName, address, value); return; }
+            _watches.RecordWrite(spaceName, address, value, context);
+            _breakpoints.NoteWrite(spaceName, address, value);
+            _accessCounters.NoteWrite(spaceName, address);
+        }
+
+        public void OnCoprocessorRead(string spaceName, int address, byte value)
+        {
+            if (CoprocessorContext() is not { } context) { OnRead(spaceName, address, value); return; }
+            _watches.RecordRead(spaceName, address, value, context);
+            _breakpoints.NoteRead(spaceName, address, value);
+            _accessCounters.NoteRead(spaceName, address);
+        }
+
+        // A cartridge carries one of these at most, so which chip is present decides the label.
+        private Func<string>? CoprocessorContext()
+        {
+            if (_bus.Cart.Sa1 is { } sa1) return () => $"SA1 PC=0x{sa1.Cpu.LastInstructionPB:X2}{sa1.Cpu.LastInstructionPC:X4}";
+            if (_bus.Cart.SuperFx is { } gsu) return () => $"GSU PC=0x{gsu.DebugInstructionAddress:X6}";
+            return null;
         }
 
         // Mirror of OnWrite for reads - see IReadObserver's comment on why
@@ -378,6 +715,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         {
             _watches.RecordRead(spaceName, address, value,
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
+            _breakpoints.NoteRead(spaceName, address, value);
+            _accessCounters.NoteRead(spaceName, address);
         }
 
         public long FrameCount => _bus.FrameCount;
@@ -402,6 +741,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // as best-effort for immediate-mode operand widths specifically;
         // opcode/addressing-mode decoding itself is unaffected.
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
+            => Disassemble(spaceName, address, count, System.Array.Empty<string>());
+
+        // 'm8'/'m16'/'x8'/'x16' override the guessed widths - see `man disasm`.
+        public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count, IReadOnlyList<string> hints)
         {
             IDebugMemorySpace space = GetMemorySpaces().First(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
 
@@ -409,12 +752,29 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             if (string.Equals(space.Name, "GSUBUS", StringComparison.OrdinalIgnoreCase))
                 return GsuDisassembler.Disassemble(a => space.Read(a), address, count);
 
+            // Nor is the SPC700 - see Venus_APU.md §8.
+            if (string.Equals(space.Name, "APURAM", StringComparison.OrdinalIgnoreCase))
+                return Spc700Disassembler.Disassemble(a => space.Read(a), address, count);
+
+            // <address> is a program-word index here, matching the DSP's own PC - see Venus_NecDSP.md §8.
+            if (string.Equals(space.Name, "DSPPRG", StringComparison.OrdinalIgnoreCase) && _bus.Cart.NecDsp is { } prgDsp)
+                return NecDspDisassembler.Disassemble(prgDsp.DebugProgramWord, address, count);
+
             // Immediate-operand widths come from the CPU that actually runs
             // this space's code, not always the S-CPU - see Venus_SA1.md §11.3.
             Cpu decodingCpu = DecodingCpuFor(space.Name);
             bool mFlagSet = (decodingCpu.P & (byte)CpuFlags.M) != 0;
             bool xFlagSet = (decodingCpu.P & (byte)CpuFlags.X) != 0;
-            return Snes65816Disassembler.Disassemble(a => space.Read(a), address, count, decodingCpu.E, mFlagSet, xFlagSet);
+            bool eFlag = decodingCpu.E;
+            foreach (string hint in hints)
+            {
+                // A 16-bit width implies native mode - see `man disasm`.
+                if (string.Equals(hint, "m8", StringComparison.OrdinalIgnoreCase)) mFlagSet = true;
+                else if (string.Equals(hint, "m16", StringComparison.OrdinalIgnoreCase)) { mFlagSet = false; eFlag = false; }
+                else if (string.Equals(hint, "x8", StringComparison.OrdinalIgnoreCase)) xFlagSet = true;
+                else if (string.Equals(hint, "x16", StringComparison.OrdinalIgnoreCase)) { xFlagSet = false; eFlag = false; }
+            }
+            return Snes65816Disassembler.Disassemble(a => space.Read(a), address, count, eFlag, mFlagSet, xFlagSet);
         }
 
         // Which 65816's M/X/E state governs a space's immediate widths - see Venus_SA1.md §11.3.
@@ -455,21 +815,24 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             int Abs() => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8));
             int Long() => instr.Bytes[1] | (instr.Bytes[2] << 8) | (instr.Bytes[3] << 16);
 
+            // A GSU/SPC700 line whose length disagrees is not the 65816 instruction this table names - see EmuSen_Debugging_Tools_Reference_v5.md §3.12.
+            bool absolute = instr.Bytes.Count == 3, absoluteLong = instr.Bytes.Count == 4;
+
             return opcode switch
             {
-                0x20 => (StaticReferenceKind.Call, Abs()),  // JSR absolute
-                0x22 => (StaticReferenceKind.Call, Long()), // JSL absolute long
-                0x4C => (StaticReferenceKind.Call, Abs()),  // JMP absolute
-                0x5C => (StaticReferenceKind.Call, Long()), // JMP absolute long
-                0x8D => (StaticReferenceKind.Write, Abs()),  // STA absolute
-                0x8F => (StaticReferenceKind.Write, Long()), // STA absolute long
-                0x8E => (StaticReferenceKind.Write, Abs()),  // STX absolute
-                0x8C => (StaticReferenceKind.Write, Abs()),  // STY absolute
-                0x9C => (StaticReferenceKind.Write, Abs()),  // STZ absolute
-                0xAD => (StaticReferenceKind.Read, Abs()),   // LDA absolute
-                0xAF => (StaticReferenceKind.Read, Long()),  // LDA absolute long
-                0xAE => (StaticReferenceKind.Read, Abs()),   // LDX absolute
-                0xAC => (StaticReferenceKind.Read, Abs()),   // LDY absolute
+                0x20 when absolute => (StaticReferenceKind.Call, Abs()),  // JSR absolute
+                0x22 when absoluteLong => (StaticReferenceKind.Call, Long()), // JSL absolute long
+                0x4C when absolute => (StaticReferenceKind.Call, Abs()),  // JMP absolute
+                0x5C when absoluteLong => (StaticReferenceKind.Call, Long()), // JMP absolute long
+                0x8D when absolute => (StaticReferenceKind.Write, Abs()),  // STA absolute
+                0x8F when absoluteLong => (StaticReferenceKind.Write, Long()), // STA absolute long
+                0x8E when absolute => (StaticReferenceKind.Write, Abs()),  // STX absolute
+                0x8C when absolute => (StaticReferenceKind.Write, Abs()),  // STY absolute
+                0x9C when absolute => (StaticReferenceKind.Write, Abs()),  // STZ absolute
+                0xAD when absolute => (StaticReferenceKind.Read, Abs()),   // LDA absolute
+                0xAF when absoluteLong => (StaticReferenceKind.Read, Long()),  // LDA absolute long
+                0xAE when absolute => (StaticReferenceKind.Read, Abs()),   // LDX absolute
+                0xAC when absolute => (StaticReferenceKind.Read, Abs()),   // LDY absolute
                 _ => null,
             };
         }
@@ -549,6 +912,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                             ? (ushort)((word & 0xFF00) | v)
                             : (ushort)((word & 0x00FF) | (v << 8));
                     }));
+            }
+
+            // Firmware, three bytes per 24-bit word. `disasm DSPPRG` indexes
+            // words, not bytes - see Venus_NecDSP.md §8.
+            if (cart.NecDsp is { } prgDsp && prgDsp.DebugProgramWords > 0)
+            {
+                spaces.Add(new DelegateDebugMemorySpace("DSPPRG", prgDsp.DebugProgramWords * 3,
+                    a => (byte)(prgDsp.DebugProgramWord(a / 3) >> (8 * (a % 3))),
+                    (a, v) => { }));
             }
 
             return spaces;

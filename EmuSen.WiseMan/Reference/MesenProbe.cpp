@@ -24,6 +24,10 @@
 extern bool g_gsuTraceOn;
 extern std::vector<uint32_t> g_gsuTrace;
 
+// Supplied by mesen-cpu-trace.patch - see EmuSen_Debugging_Tools_Reference_v5.md §3.40.
+extern bool g_cpuTraceOn;
+extern std::vector<uint8_t> g_cpuTrace;
+
 // Synthetic scan codes this probe assigns to the SNES pad, so a --press
 // script can hold a button without a real keyboard - see the man page.
 enum ProbeKey : uint16_t
@@ -120,6 +124,8 @@ int main(int argc, char** argv)
 		printf("  --press holds BTN (A/B/X/Y/L/R/Up/Down/Left/Right/Start/Select) on port 1\n");
 		printf("  from frame F for DUR frames (default 4) - repeatable, needed to reach any\n");
 		printf("  scene behind a menu.\n");
+		printf("  --cputrace F records every S-CPU instruction from boot to frame F as\n");
+		printf("  mesen_cputrace_f<frame>.bin, in the shared 20-byte record `tracediff` reads.\n");
 		return 1;
 	}
 
@@ -140,7 +146,12 @@ int main(int argc, char** argv)
 
 	unique_ptr<Emulator> emu(new Emulator());
 	unique_ptr<ScriptedKeyManager> km(new ScriptedKeyManager());
+	uint32_t cpuTraceFrame = 0xFFFFFFFF;
 	for(int i = 5; i < argc; i++) {
+		if(string(argv[i]) == "--cputrace" && i + 1 < argc) {
+			cpuTraceFrame = (uint32_t)atoi(argv[++i]);
+			continue;
+		}
 		if(string(argv[i]) != "--press" || i + 1 >= argc) continue;
 		string spec = argv[++i];
 		size_t c1 = spec.find(':');
@@ -170,6 +181,10 @@ int main(int argc, char** argv)
 	kmap.Up = KeyUp; kmap.Down = KeyDown; kmap.Left = KeyLeft; kmap.Right = KeyRight;
 	kmap.Start = KeyStart; kmap.Select = KeySelect;
 	emu->GetSettings()->SetSnesConfig(scfg);
+
+	// Armed before LoadRom, which is what starts execution - the reset vector
+	// and the whole boot sequence are the point of this trace.
+	if(cpuTraceFrame != 0xFFFFFFFF) { g_cpuTrace.reserve(64u * 1024 * 1024); g_cpuTraceOn = true; }
 
 	if(!emu->LoadRom((VirtualFile)romPath, VirtualFile())) {
 		printf("[ERROR] failed to load %s\n", romPath.c_str());
@@ -241,6 +256,17 @@ int main(int argc, char** argv)
 		if(console) {
 			// Raw BGR555, row stride is the reported width - not 512.
 			WriteBlob(dumpDir, "screen", frame, console->GetPpu()->GetScreenBuffer(), 512 * 478 * 2);
+		}
+
+		if(g_cpuTraceOn && frame >= cpuTraceFrame) {
+			g_cpuTraceOn = false;
+			char path[1024];
+			snprintf(path, sizeof(path), "%s/mesen_cputrace_f%05u.bin", dumpDir.c_str(), frame);
+			std::ofstream fc(path, std::ios::binary);
+			fc.write("ESCT\1\0\0\0", 8);
+			fc.write((char*)g_cpuTrace.data(), g_cpuTrace.size());
+			printf("  [cputrace %zu steps -> %s]\n", g_cpuTrace.size() / 20, path);
+			g_cpuTrace.clear();
 		}
 
 		if(frame >= traceFrame) {

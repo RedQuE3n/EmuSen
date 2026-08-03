@@ -44,6 +44,17 @@ class Program
             return DiffShotRunner.Run(args[1], args[2], args[3]);
         }
 
+        // Also standalone: two --cputrace blobs, no ROM needed - see §3.40.
+        if (args.Length >= 1 && args[0] == "--tracediff")
+        {
+            if (args.Length < 3)
+            {
+                Console.WriteLine("Usage: dotnet run -- --tracediff <left.bin> <right.bin>");
+                return 1;
+            }
+            return TraceDiffRunner.Run(args[1], args[2]);
+        }
+
         var (options, warnings, error) = HeadlessDebugOptions.Parse(args);
         if (error != null)
         {
@@ -178,6 +189,8 @@ class Program
             {
                 CpuLogStart = options.CpuLogStart,
                 CpuLogEnd = options.CpuLogEnd,
+                CpuTraceEnd = options.CpuTraceEnd,
+                CpuTracePath = options.CpuTracePath,
                 Verbose = options.Verbose,
                 OnHalted = debugTarget.RefreshProviders,
             };
@@ -204,6 +217,8 @@ class Program
         {
             CpuLogStart = options.CpuLogStart,
             CpuLogEnd = options.CpuLogEnd,
+            CpuTraceEnd = options.CpuTraceEnd,
+            CpuTracePath = options.CpuTracePath,
             Verbose = options.Verbose,
             OnHalted = debugTarget.RefreshProviders,
         };

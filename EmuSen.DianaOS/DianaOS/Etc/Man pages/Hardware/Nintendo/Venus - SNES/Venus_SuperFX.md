@@ -457,9 +457,9 @@ Trace with `--flag SuperFxPlotTraceSkip=N --flag SuperFxPlotTraceInstr=M` (§8).
 
 The same run also falsified the neighbouring bullet's "Yoshi's Island runs with both bits clear" for `POR` — the title screen plots with `PLOTPOR = $04`. That one is still undecidable, for a different reason, and §9 now says so.
 
-### 10.7 Open: the 1-1 intro camera pans left - and the origin is a frame-70 S-CPU divergence, not the GSU
+### 10.7 Open: the 1-1 intro camera pans left - and the origin is S-CPU boot pacing, not the GSU
 
-**Not fixed. The GSU is downstream of this, not the cause: WRAM is byte-identical through frame 69 and diverges at frame 70, at which point neither emulator has run a single GSU instruction.**
+**Not fixed. The GSU is downstream of this, not the cause.** The frame-70 finding this section was originally built on is superseded - see "Measured 2026-08-03 with the trace differ" below, which locates the first divergence at **S-CPU step 238**, in the SPC700 upload handshake, long before any GSU instruction runs on either machine. The frame-70 material is kept because its *conclusions* still hold (the GSU is not the cause, the job sequences match, the ruled-out list stands); only its "where it starts" is wrong, and it was wrong because of how it measured.
 
 **The symptom.** Start a new file and let the level 1-1 opening cutscene play. Every message renders correctly and the Yoshi line-up is intact. After the last one ("Now begins a new adventure for the Yoshies and baby Mario.") the Yoshis should walk **right** and hand off to the level. Instead the camera pans **left** at 1px/frame forever; the Yoshis are static in world space and slide off the right edge (OAM count falls 51 -> 40), and the "Welcome To Yoshi's Island" card never appears.
 
@@ -526,9 +526,30 @@ So the lag is real and this was part of it, but the boot now lands one frame *ea
 
 **A measurement trap worth carrying.** "Upload bytes per frame", computed by diffing consecutive APU RAM dumps, is **not** comparable across the two emulators: Mesen randomises APU RAM at power-on so writing real data changes ~255/256 of the bytes it touches, while we zero-fill and a written zero changes nothing. That yielded a confident "we upload 6% slower" that was entirely artifact. The `$0030` counter is the sound measurement because it is the game's own state.
 
+#### Measured 2026-08-03 with the trace differ: the divergence is at step 238, and the S-CPU is fast
+
+**The frame-70 framing above is superseded.** It was an artifact of the method, not a property of the bug. Everything before this point compared *memory contents* at a frame boundary between two emulators that are not in phase - which is why it cost a four-run random-fill mask, a frame-offset sweep that minimised but never eliminated the difference, and a residual "~17 GSU bytes" that meant nothing in particular. `EmuSen_Debugging_Tools_Reference_v5.md` §3.40 replaces that with a *control-flow* diff, which is phase-independent by construction.
+
+Pointed at this ROM for 80 frames from power-on (~1.0M steps a side, diff runs in 0.43s), the first divergence is at **step 238** - inside the same SPC700 upload loop the section above already reached, but now located to the instruction rather than to a ten-frame window:
+
+| | |
+| --- | --- |
+| bytes uploaded (`$008445` executions) | **45,186 on both sides** - the payload is right |
+| S-CPU spins per byte (`$008440`) | Mesen **5.45**, EmuSen **6.24** (+14.5%) |
+| extra spin steps over 80 frames | **+35,489** (~71k including the paired `BNE`) |
+| total S-CPU steps, same 80 frames | Mesen 1,018,917, EmuSen 1,110,397 (**+91,480**) |
+
+The first two findings the differ reports are loop counts, not desyncs: `[$008497,$00849A]` runs 13x on hardware and 15x here, `[$008440,$008443]` 4x against 7x.
+
+**Which side is wrong follows from the numbers.** 80 frames is the same emulated duration on both machines, and both APUs complete the same 45,186-byte upload inside it - so the APU is *not* slow. The S-CPU simply executes 91,480 more instructions in that same duration, nearly all of them spins waiting on an APU that is keeping up fine. **The S-CPU is fast, not the APU slow**, which inverts the natural first guess and is consistent with the `CMP Y, dp` fix having overshot 79 -> 77 against hardware's 78.
+
+**Already excluded as the cause of the excess:** the APU clock ratio is exact (`ApuClockHz`/`_masterClockHz`, deliberately not `/21`), `GetAccessSpeedCycles` matches the fullsnes access-speed table region for region, and the IPL per-byte loop is pinned at 25 cycles by test (`Venus_APU.md` §1.7).
+
 #### Where to pick it up
 
-Bisect frame 69 -> 70 at sub-frame granularity on the **S-CPU** side - what large WRAM initialisation runs there, and what the CPU is waiting on for the extra frame. `gsudiff.py` is the wrong tool for any of this: its collapse trick cancels Mesen's primed-NOP offset but not the two cores' different job *ordering*, so it reports a confident divergence at step 9 that is pure bookkeeping. Counting trace steps per address range, and splitting traces into jobs at `STOP`, are what actually localised things here.
+Measure the master-clock cost of the two-instruction spin `CMP $2140` / `BNE $8440` at `$00:8440` against Mesen's cost for the same pair, and work outward from there. That is a bounded question about one addressing mode's timing, not another memory diff - and it is upstream of the camera, because until the two machines agree on S-CPU pacing every later comparison inherits the skew.
+
+`gsudiff.py` is the wrong tool for any of this: its collapse trick cancels Mesen's primed-NOP offset but not the two cores' different job *ordering*, so it reports a confident divergence at step 9 that is pure bookkeeping. §3.40's differ resyncs instead, which is exactly the capability it lacked.
 
 #### 10.5-hist Historical: the strip measured as 18 tiles that are never uploaded
 

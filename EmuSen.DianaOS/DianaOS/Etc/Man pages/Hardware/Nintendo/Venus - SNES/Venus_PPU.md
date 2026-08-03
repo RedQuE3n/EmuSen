@@ -333,7 +333,23 @@ Worth knowing before blaming the core for a frontend-side frame time:
 
 The frontend readout separates `run Xms` (the `RunFrame()` call alone) from `total Yms` (wall clock per frame, *including* the pacing sleep). A `total` at ~16.6 ms with `run` at ~3 ms is the 60 Hz pacer working correctly, not a slow emulator. Only a `run` figure near the budget indicates a core problem.
 
-### 13.4 Save states older than the current field layout resume into a dead machine
+### 13.4 What it costs on the machine we are actually targeting
+
+§13.1 answers "does it hold 60 on a 7700X" — yes, everywhere. From 2026-08-03 the goal changed to **running on a low-end x86-64 laptop**, roughly a third of that machine's single-thread performance, and that is a different answer. Measured with `--throttle` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.42), same scripts, `--nobattery`:
+
+| ROM | scene | 100% | 33% | over budget at 33% | 33% cpu | 33% ppu | 33% mainComposite |
+|---|---|---|---|---|---|---|---|
+| KBL3 | Grass Land, holding Right | 4.93 | 17.82 | **168/300** | 10.33 | 7.43 | 5.96 |
+| SMW | boot + attract | 3.42 | 13.02 | 30/600 | 3.79 | 9.09 | 4.43 |
+| DKC | boot + attract | 2.68 | 14.72 | **169/600** | 3.53 | 11.07 | 7.32 |
+
+All three miss the budget on a real fraction of frames, and the SA-1 title misses on more than half. The throttle overstates slowdown somewhat (§3.42's second limit), so treat the *shape* as the finding rather than the exact milliseconds.
+
+The shape is unambiguous: **`mainComposite` alone costs 4.4–7.3 ms of a 16.64 ms budget** — a third to nearly half the entire frame, in one function family, on every ROM regardless of which phase dominates overall. It is the largest single item at full speed too (§13.1) and it grows fastest under constraint. Anything spent on `objEval` (≤0.26 ms even throttled) or HDMA (≤0.12) is spent in the wrong place.
+
+Two structural facts frame what to do about it. `CompositeScreen` is a painter's algorithm: every enabled layer writes every pixel and later layers overwrite, so a four-layer mode pays up to 4× the necessary writes. And the whole console runs on one thread (`MainWindow.axaml.cs`'s `EmuSen-Emulation`), so Venus today needs one fast core and cannot use a second — the wrong shape for cheap hardware, which has several mediocre cores instead. Reducing the work comes before parallelising it; there is no point spending two cores on writes that should not happen.
+
+### 13.5 Save states older than the current field layout resume into a dead machine
 
 Noted here because it silently invalidates any attempt to benchmark real gameplay by resuming a state. `StateSerializer` has no field-name tagging (`EmuSen_Save_States.md` §1/§3), so a `.state` written before a field was added or reordered still loads without error and produces a machine that runs but renders nothing — `LastFramePpuMs` collapses to ~0.06 ms while the renderer's own `LastFrame*` properties keep reporting their last real values, which is what the inconsistency looks like from the outside. The three states in `Usr/Home/Saves/Save States` are all in this condition. Verify a resumed state by dumping the framebuffer before trusting any measurement taken from it.
 

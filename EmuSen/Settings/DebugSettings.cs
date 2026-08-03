@@ -164,6 +164,13 @@ namespace EmuSen.Debug
             get => MasterLoggingEnabled && _renderReadLogging;
             set => _renderReadLogging = value;
         }
+        // Per-frame $21xx traffic during active display - see Venus_PPU.md §7.3.
+        private static bool _ppuActiveDisplayWriteLogging = true;
+        public static bool PpuActiveDisplayWriteLogging
+        {
+            get => MasterLoggingEnabled && _ppuActiveDisplayWriteLogging;
+            set => _ppuActiveDisplayWriteLogging = value;
+        }
         private static bool _allScrollWriteLogging = true;
         public static bool AllScrollWriteLogging
         {

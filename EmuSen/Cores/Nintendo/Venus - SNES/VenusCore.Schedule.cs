@@ -107,6 +107,13 @@ namespace EmuSen.Cores.Nintendo.Venus
             // Periodic autosave - see Cartridge.SaveSram's own comment for why this is safe this often.
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
 
+            // How much a deferred renderer would have to snapshot for this game - see Venus_PPU.md §7.3.
+            if (DebugSettings.PpuActiveDisplayWriteLogging)
+            {
+                Console.WriteLine($"[ACTIVEWRITES] frame {TotalFrames}: {Bus.Ppu.ActiveDisplayWrites} write(s) on {Bus.Ppu.ActiveDisplayLines} of 224 line(s)");
+            }
+            Bus.Ppu.ResetActiveDisplayCounters();
+
             double ticksToMs = 1000.0 / Stopwatch.Frequency;
             LastFrameCpuSpc700Ms = _cpuSpc700TicksAccum * ticksToMs;
             LastFramePpuMs = _ppuTicksAccum * ticksToMs;

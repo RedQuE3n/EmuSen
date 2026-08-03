@@ -46,6 +46,97 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             /* 0xF_ */ 2, 5, 5, 7, 5, 4, 6, 6, 2, 4, 4, 2, 8, 4, 7, 5,
         };
 
+        // OpcodeCycles above counts an 8-bit operand. A 16-bit one costs the real
+        // chip an extra bus cycle per extra byte - see Venus_CPU.md §8.8.
+        public const byte WidthNone = 0, WidthM = 1, WidthX = 2, WidthMRmw = 3;
+
+        private static readonly byte[] OpcodeWidth = BuildWidthTable();
+
+        private static byte[] BuildWidthTable()
+        {
+            var w = new byte[256];
+
+            // Follow the M flag: one extra cycle when the accumulator is 16-bit.
+            foreach (byte op in new byte[]
+            {
+                0x01,0x03,0x05,0x07,0x09,0x0D,0x0F,0x11,0x12,0x13,0x15,0x17,0x19,0x1D,0x1F, // ORA
+                0x21,0x23,0x25,0x27,0x29,0x2D,0x2F,0x31,0x32,0x33,0x35,0x37,0x39,0x3D,0x3F, // AND
+                0x41,0x43,0x45,0x47,0x49,0x4D,0x4F,0x51,0x52,0x53,0x55,0x57,0x59,0x5D,0x5F, // EOR
+                0x61,0x63,0x65,0x67,0x69,0x6D,0x6F,0x71,0x72,0x73,0x75,0x77,0x79,0x7D,0x7F, // ADC
+                0x81,0x83,0x85,0x87,0x8D,0x8F,0x91,0x92,0x93,0x95,0x97,0x99,0x9D,0x9F,      // STA
+                0xA1,0xA3,0xA5,0xA7,0xA9,0xAD,0xAF,0xB1,0xB2,0xB3,0xB5,0xB7,0xB9,0xBD,0xBF, // LDA
+                0xC1,0xC3,0xC5,0xC7,0xC9,0xCD,0xCF,0xD1,0xD2,0xD3,0xD5,0xD7,0xD9,0xDD,0xDF, // CMP
+                0xE1,0xE3,0xE5,0xE7,0xE9,0xED,0xEF,0xF1,0xF2,0xF3,0xF5,0xF7,0xF9,0xFD,0xFF, // SBC
+                0x24,0x2C,0x34,0x3C,0x89,                                                   // BIT
+                0x64,0x74,0x9C,0x9E,                                                        // STZ
+                0x48,0x68,                                                                  // PHA/PLA
+            }) w[op] = WidthM;
+
+            // Read-modify-write reads and writes the operand, so 16-bit costs two.
+            foreach (byte op in new byte[]
+            {
+                0x06,0x0E,0x16,0x1E, // ASL
+                0x46,0x4E,0x56,0x5E, // LSR
+                0x26,0x2E,0x36,0x3E, // ROL
+                0x66,0x6E,0x76,0x7E, // ROR
+                0xC6,0xCE,0xD6,0xDE, // DEC
+                0xE6,0xEE,0xF6,0xFE, // INC
+                0x04,0x0C,0x14,0x1C, // TSB/TRB
+            }) w[op] = WidthMRmw;
+
+            // Follow the X flag instead; the accumulator's width is irrelevant here.
+            foreach (byte op in new byte[]
+            {
+                0xA2,0xA6,0xAE,0xB6,0xBE, // LDX
+                0xA0,0xA4,0xAC,0xB4,0xBC, // LDY
+                0x86,0x8E,0x96,           // STX
+                0x84,0x8C,0x94,           // STY
+                0xE0,0xE4,0xEC,           // CPX
+                0xC0,0xC4,0xCC,           // CPY
+                0xDA,0xFA,0x5A,0x7A,      // PHX/PLX/PHY/PLY
+            }) w[op] = WidthX;
+
+            return w;
+        }
+
+        // An internal cycle touches no bus, so it is always 6 master clocks whatever
+        // region the operand lives in - see Venus_CPU.md §8.8.
+        public const int InternalCycleClocks = 6;
+
+        // Opcodes whose every non-fetch cycle is internal: register-only work and
+        // branches. Anything else spends its remainder on the operand's own bus.
+        private static readonly bool[] OpcodeInternalRemainder = BuildInternalRemainder();
+
+        // A taken branch moves PC, so the usual "how far did PC advance" byte count
+        // is meaningless; these carry the real instruction length instead.
+        private static readonly byte[] OpcodeFixedBytes = BuildFixedBytes();
+
+        private static bool[] BuildInternalRemainder()
+        {
+            var t = new bool[256];
+            foreach (byte op in new byte[]
+            {
+                0x18,0x38,0x58,0x78,0xB8,0xD8,0xF8,      // CLC SEC CLI SEI CLV CLD SED
+                0xC2,0xE2,                               // REP SEP
+                0xAA,0xA8,0xBA,0x8A,0x9A,0x98,0x9B,0xBB, // TAX TAY TSX TXA TXS TYA TXY TYX
+                0x1B,0x3B,0x5B,0x7B,                     // TCS TSC TCD TDC
+                0xE8,0xC8,0xCA,0x88,0x1A,0x3A,           // INX INY DEX DEY INC A DEC A
+                0x0A,0x4A,0x2A,0x6A,                     // ASL A LSR A ROL A ROR A
+                0xEB,0xFB,0xEA,0x42,                     // XBA XCE NOP WDM
+                0x10,0x30,0x50,0x70,0x90,0xB0,0xD0,0xF0, // conditional branches
+                0x80,0x82,                               // BRA BRL
+            }) t[op] = true;
+            return t;
+        }
+
+        private static byte[] BuildFixedBytes()
+        {
+            var t = new byte[256];
+            foreach (byte op in new byte[] { 0x10,0x30,0x50,0x70,0x90,0xB0,0xD0,0xF0,0x80 }) t[op] = 2;
+            t[0x82] = 3; // BRL's offset is 16-bit
+            return t;
+        }
+
         // Direct-call dispatch in opcode order - see Venus_CPU.md §9.
         private uint Dispatch(byte opcode)
         {
@@ -119,7 +210,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
                 case 0x40: { uint a = AddrImplied(); OpRTI(a); return a; } // RTI
                 case 0x41: { uint a = AddrDirectIndirectX(); OpEOR(a); return a; } // EOR
                 // WDM is a 2-byte NOP on real silicon - see Venus_CPU.md §9.1.
-                case 0x42: { uint a = AddrImmediate8(); OpNOP(a); return a; } // WDM
+                case 0x42: { uint a = AddrImmediate8(); OpWDM(a); return a; } // WDM
                 case 0x43: { uint a = AddrStackRelative(); OpEOR(a); return a; } // EOR
                 case 0x44: { uint a = AddrBlockMove(); OpMVP(a); return a; } // MVP
                 case 0x45: { uint a = AddrDirectPage(); OpEOR(a); return a; } // EOR

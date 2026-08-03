@@ -23,6 +23,9 @@ namespace EmuSen.Pharaoh
         private readonly DianaOSInterpreter debugCmd;
         private readonly Action<string> emit;
 
+        // Null until the `record` verb starts one - see §3.15b.
+        private FrameRecorder? recorder;
+
         public CommandsScriptRunner(FrameRunner runner, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, Action<string> emit)
         {
             this.runner = runner;
@@ -113,6 +116,69 @@ namespace EmuSen.Pharaoh
                     ContactSheet.WriteContactSheet(path, thumbs, thumbW, thumbH, cols);
                     emit($"[CONTACTSHEET] {count} frame(s), every {every}, {thumbW}x{thumbH} each -> {path}");
                 }
+                else if (verb == "tapuntil" && parts.Length >= 5)
+                {
+                    // Scene navigation anchored on state, not frame counts - see §3.15d.
+                    emit($"> {cmdLine}");
+                    var button = Enum.Parse<EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton>(parts[1], ignoreCase: true);
+                    string spaceName = parts[2];
+                    var space = debugTarget.GetMemorySpaces()
+                        .FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+                    if (space == null)
+                    {
+                        emit($"[WARN] No memory space named '{spaceName}' - ignoring.");
+                        continue;
+                    }
+
+                    int addr = Convert.ToInt32(parts[3], 16);
+                    byte[] target = ParseHexBytes(parts[4]);
+                    int cap = parts.Length >= 6 ? int.Parse(parts[5]) : 3600;
+                    int every = parts.Length >= 7 ? int.Parse(parts[6]) : 20;
+
+                    byte[] Sample()
+                    {
+                        var b = new byte[target.Length];
+                        for (int i = 0; i < b.Length; i++) b[i] = space.Read(addr + i);
+                        return b;
+                    }
+
+                    byte[] now = Sample();
+                    int stepped = 0, taps = 0;
+                    while (!now.SequenceEqual(target) && stepped < cap && runner.CurrentFrame < runner.FrameCap)
+                    {
+                        // One frame at a time throughout, including while the button is
+                        // held: a four-frame Tap() would step straight over the value.
+                        int phase = stepped % Math.Max(every, 5);
+                        if (phase == 0) { runner.Hold(button, 1); taps++; }
+                        else if (phase == 4) runner.Release(button, 1);
+
+                        runner.RunFrames(1);
+                        stepped++;
+                        now = Sample();
+                    }
+                    runner.Release(button, 1);
+
+                    string to = string.Join(' ', now.Select(v => v.ToString("X2")));
+                    emit(now.SequenceEqual(target)
+                        ? $"[TAPUNTIL] {space.Name} 0x{addr:X} reached {to} after {taps} {button} tap(s), {stepped} frame(s) (frame {runner.CurrentFrame})."
+                        : $"[TAPUNTIL] {space.Name} 0x{addr:X} NOT reached - still {to} after {taps} {button} tap(s), {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
+                }
+                else if (verb == "gsutrace" && parts.Length >= 3)
+                {
+                    // Armed here, not from power-on, so it starts where tapuntil left off - see §3.41.
+                    emit($"> {cmdLine}");
+                    long frames = long.Parse(parts[1]);
+                    GsuBinaryTrace.Start();
+                    runner.RunFrames(frames);
+                    GsuBinaryTrace.Stop();
+                    GsuBinaryTrace.WriteTo(parts[2]);
+                    emit($"[GSUTRACE] {GsuBinaryTrace.Count} steps over {frames} frame(s) to frame {runner.CurrentFrame} -> {parts[2]}");
+                    if (GsuBinaryTrace.Overflowed)
+                    {
+                        emit("[WARN] The trace buffer filled and recording stopped early - lower the frame count.");
+                    }
+                    GsuBinaryTrace.Reset();
+                }
                 else if ((verb == "waitchange" || verb == "waitvalue") && parts.Length >= 4)
                 {
                     // waitstable's memory-side counterpart - see §3.15.
@@ -155,6 +221,63 @@ namespace EmuSen.Pharaoh
                     emit(Done()
                         ? $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} satisfied after {stepped} frame(s): {from} -> {to} (frame {runner.CurrentFrame})."
                         : $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} NOT satisfied - still {to} after {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
+                }
+                else if ((verb == "savestate" || verb == "loadstate") && parts.Length >= 2)
+                {
+                    // Pin an interesting moment once, then re-probe it in seconds - see §3.15c.
+                    emit($"> {cmdLine}");
+                    if (verb == "savestate")
+                    {
+                        core.SaveState(parts[1]);
+                        emit($"[STATE] Frame {runner.CurrentFrame} saved -> {parts[1]}");
+                    }
+                    else if (!File.Exists(parts[1]))
+                    {
+                        emit($"[STATE] Not found: {parts[1]}");
+                    }
+                    else
+                    {
+                        core.LoadState(parts[1]);
+                        // A discontinuous jump, so the rewind chain and the
+                        // per-frame providers regs/sprites/pal read are both stale.
+                        runner.Rewind.Clear();
+                        debugTarget.RefreshProviders();
+                        emit($"[STATE] Loaded {parts[1]} (script frame counter stays at {runner.CurrentFrame})");
+                    }
+                }
+                else if (verb == "record")
+                {
+                    // A real video of a run, not a grid of thumbnails - see §3.15b.
+                    emit($"> {cmdLine}");
+                    string mode = parts.Length >= 2 ? parts[1].ToLowerInvariant() : "info";
+
+                    if (mode == "on")
+                    {
+                        if (recorder != null) { emit("[RECORD] Already recording - `record off` first."); continue; }
+                        int stride = parts.Length >= 3 ? int.Parse(parts[2]) : 1;
+                        string baseDir = parts.Length >= 4
+                            ? parts[3]
+                            : Path.Combine(DianaOSSandbox.LogsDirectory, debugTarget.CoreName, "Recordings");
+
+                        recorder = new FrameRecorder(debugTarget);
+                        string dir = recorder.Start(baseDir, stride);
+                        // Rendering has to actually happen for there to be anything to capture.
+                        core.SkipRendering = false;
+                        runner.AfterFrame = () => recorder!.CaptureFrame(
+                            path => PngFile.Write(path, core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight));
+                        emit($"[RECORD] Started at frame {runner.CurrentFrame}, every {stride} frame(s) -> {dir}");
+                    }
+                    else if (mode == "off")
+                    {
+                        if (recorder == null) { emit("[RECORD] Not recording."); continue; }
+                        emit(StopRecording());
+                    }
+                    else
+                    {
+                        emit(recorder is { IsRecording: true }
+                            ? $"[RECORD] Recording -> {recorder.SessionDir}"
+                            : "[RECORD] Not recording. `record on [<stride>] [<dir>]` starts one.");
+                    }
                 }
                 else if (verb == "fastforward" || verb == "ff")
                 {
@@ -297,7 +420,20 @@ namespace EmuSen.Pharaoh
                 }
             }
 
+            // A script that never says `record off` still gets its video.
+            if (recorder != null) emit(StopRecording());
+
             return true;
+        }
+
+        // Detaches the per-frame hook first - Stop() blocks while ffmpeg encodes.
+        private string StopRecording()
+        {
+            runner.AfterFrame = null;
+            string? dir = recorder!.SessionDir;
+            recorder.Stop();
+            recorder = null;
+            return $"[RECORD] Stopped at frame {runner.CurrentFrame} -> {dir}";
         }
 
         // Wall clock per frame plus the core's own phase breakdown, so a

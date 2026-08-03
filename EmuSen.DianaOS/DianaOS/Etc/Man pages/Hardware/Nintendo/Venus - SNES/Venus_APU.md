@@ -67,6 +67,42 @@ That is fatal for the audio-upload handshake IoG uses. The game uploads its soun
 
 ---
 
+### 1.7 Fixed bug: `CMP Y, dp` cost 4 cycles instead of 3, and it slowed the boot upload by a whole frame
+
+**Found 2026-08-03 while bisecting Yoshi's Island's 1-1 camera bug (`Venus_SuperFX.md` §10.7).** Opcode `$7E` (`CMP Y, dp`) carried `Cycles = 4`. Every direct-page compare on this chip is **3**, and this file's own table already had `CMP A, dp` (`$64`) and `CMP X, dp` (`$3E`) at 3 - the entry was internally inconsistent with its two siblings. Mesen's `CPX` and `CPY` are structurally identical functions behind the same `Addr_Dir()`, so they cannot differ.
+
+**Why one cycle mattered.** `$7E` sits in the IPL ROM's per-byte transfer loop, which the S-CPU's boot upload spins on:
+
+```
+FFDA: CMP Y, $F4        3      ; has the SPC taken the last byte?
+FFDC: BNE +11           2      ; (not taken on the transfer path)
+FFDE: MOV A, $F5        3
+FFE0: MOV $F4, Y        4      ; echo the index back
+FFE2: MOV [$00]+Y, A    7
+FFE4: INC Y             2
+FFE5: BNE -13           4      ; taken
+                       ---
+                        25 cycles per byte
+```
+
+The S-CPU meanwhile spins in `CMP $2140 / BNE` waiting for that echo, so **the SPC side sets the transfer rate**. An extra cycle on `$7E` - charged once per byte on the transfer path and again on every wait iteration - stretched a ~19-frame upload far enough that the game's first main-loop frame landed **one frame late**, which is measurable in the game's own state: the frame counter at WRAM `$0030` first increments at frame 78 on hardware and did so at 79 here. With the fix it increments at 77.
+
+**Still one frame out, in the other direction.** 77 against hardware's 78, so something else in this path is now slightly too fast; the fix is right on its own merits (it is not defensible to keep a compare at 4 cycles when its two siblings are 3) but it did not land the boot exactly. Pinned by `EmuSen.WiseMan/Apu/Spc700CompareCycleTests.cs`, which asserts all three dp compares at 3 and the loop above at 25 - both fail against the old value.
+
+**The measurement trap this cost an hour on.** "Bytes uploaded per frame" is *not* comparable across the two emulators by diffing consecutive APU RAM dumps. Mesen fills APU RAM randomly at power-on, so writing real data changes ~255/256 of the bytes it touches; we zero-fill, so writing a zero changes nothing and the count silently undercounts by however much of the payload is zero. That produced a confident "we upload 6% slower" that was pure artifact. **Anchor on the game's own state** (`$0030` here), never on a byte-change count against a randomly-initialised reference.
+
+### 1.8 The dispatch loop compared a string per instruction, and removing it was worth nothing
+
+`Step` decided whether an opcode was implemented with `if (inst.Name == "NOP/UNK")` — a `string` comparison on **every SPC700 instruction executed**, plus a 40-byte `SpcInstruction` struct copy out of the table to do it. Both are now gone: `SpcInstruction.Unimplemented` is a `bool` set only by `BuildOpcodeTable`'s default fill, and the table entry is read `ref` rather than copied.
+
+**It made no measurable difference.** Three runs each way, 600 frames, Release: SMW 3.49/3.45/3.53 ms against a 3.52/3.44/3.49 baseline; DKC 2.69/2.69/2.70 against 2.69/2.70/2.69. Not a small win — no win, inside run-to-run noise on both.
+
+**Why it is kept anyway.** It is strictly less work for identical output (all 12 ROMs' `framesum`/`audiosum` digests unchanged), and a string compare in an interpreter's hot path is the kind of thing that reads as a bug to the next person even when it costs nothing.
+
+**What this says about the planned `switch` conversion.** `Venus_PPU.md` §13's standing note that converting the SPC700's delegate dispatch table to a `switch` — the shape the 65816 already has — is worth ~2% should be treated as **unverified**, not confirmed. This change did not touch the delegate indirection, so it does not refute that figure; but it does establish that the SPC700's share of a frame is small enough that the surrounding overhead is invisible, which makes ~2% from dispatch alone look optimistic. Measure before spending a day on 256 cases.
+
+---
+
 ## 2. SPC700 instruction set notes
 
 ### 2.1 `dd,ds` ALU family — operand order is not what the mnemonic suggests

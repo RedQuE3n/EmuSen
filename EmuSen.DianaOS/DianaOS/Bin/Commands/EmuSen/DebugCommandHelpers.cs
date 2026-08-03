@@ -26,6 +26,18 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             return Convert.ToInt32(s, 16);
         }
 
+        // "<start>-<end>", or a lone address that becomes a one-byte range - see `man bp`.
+        public static (int Start, int End) ParseRange(string s)
+        {
+            s = s.Trim();
+            int split = s.IndexOf('-', 1);
+            if (split < 0) { int only = ParseHex(s); return (only, only); }
+
+            int start = ParseHex(s.Substring(0, split));
+            int end = ParseHex(s.Substring(split + 1));
+            return end < start ? (end, start) : (start, end);
+        }
+
         // Every debug command (mem, regs, watch, ...) fundamentally needs
         // a real emulator session to do anything - unlike the shell-level
         // commands (echo, sed, true/false...) that work with target ==
@@ -37,6 +49,36 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             if (target == null) throw new InvalidOperationException("No ROM loaded - this command needs an active debug target.");
             return target;
         }
+
+        // A target's own context when it publishes one, otherwise the generic
+        // register/space-derived fallback - see `man eval`.
+        public static IExpressionContext ExpressionsFor(IDebugTarget target)
+            => target.Expressions ?? new DebugTargetExpressionContext(target);
+
+        // A chip's own context, else one derived from its reported registers - see `man eval`.
+        public static IExpressionContext ExpressionsFor(IDebugTarget target, DebugCpu? cpu)
+            => cpu == null ? ExpressionsFor(target)
+             : cpu.Expressions ?? DebugCpuExpressionContext.For(target, cpu);
+
+        // Which chip a scoped command is aimed at, and where its real args start - see `man cpus`.
+        public static (DebugCpu? Cpu, int Next) ResolveCpu(IDebugTarget target, string[] parts, int at)
+        {
+            var cpus = target.DebugCpus;
+            if (cpus.Count == 0 || at >= parts.Length) return (null, at);
+
+            if (DebugCpus.Find(cpus, parts[at]) is { } named) return (named, at + 1);
+
+            // `cop` predates chips having names - see `man cpus`.
+            if (string.Equals(parts[at], "cop", StringComparison.OrdinalIgnoreCase))
+            {
+                return (DebugCpus.Coprocessor(cpus), at + 1);
+            }
+
+            return (cpus[0], at);
+        }
+
+        public static string NoSuchCpu(IDebugTarget target, string word)
+            => $"No debug CPU named '{word}' on this {target.CoreName}. Available: {DebugCpus.NameList(target.DebugCpus)}.";
 
         public static IDebugMemorySpace FindSpace(IDebugTarget? target, string name)
         {

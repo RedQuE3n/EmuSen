@@ -1,10 +1,12 @@
 using System;
+using System.Linq;
 using System.Text;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
@@ -12,11 +14,35 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
     {
         public string Name => "regs";
         public bool IsReadOnly => true;
-        public string Usage => "  regs                          CPU + video (+ APU/coprocessor) registers";
+        public string Usage => string.Join('\n', new[]
+        {
+            "  regs                          CPU + video (+ APU/coprocessor) registers",
+            "  regs <cpu>                    just one processor's registers - `cpus` lists them",
+            "  (to WRITE a register, see `setreg` - kept separate so `regs` stays read-only)",
+        });
 
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = global::EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers.RequireTarget(target);
+
+            if (parts.Length > 1)
+            {
+                if (DebugCpus.Find(target.DebugCpus, parts[1]) is not { } only)
+                {
+                    return DebugCommandHelpers.NoSuchCpu(target, parts[1]);
+                }
+                if (only.Registers == null) return $"{only.Name} reports no registers on this core.";
+
+                var one = new StringBuilder();
+                one.AppendLine($"{only.Description} registers:");
+                foreach (var r in only.Registers.Current)
+                {
+                    int digits = Math.Max(1, r.BitWidth / 4);
+                    one.AppendLine($"  {r.Name,-9} = 0x{r.Value.ToString("X" + digits)}");
+                }
+                return one.ToString().TrimEnd();
+            }
+
             var sb = new StringBuilder();
             sb.AppendLine($"{target.CoreName} CPU registers:");
             foreach (var r in target.CpuRegisters.Current)
@@ -52,5 +78,6 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             }
             return sb.ToString().TrimEnd();
         }
+
     }
 }

@@ -112,6 +112,54 @@ namespace EmuSen.WiseMan.HeadlessDebug
             Assert.Empty(warnings);
         }
 
+        // Convert.ChangeType threw on every hex address - see §3.15's --flag entry.
+        [Theory]
+        [InlineData("0x94", 0x94)]
+        [InlineData("$94", 0x94)]
+        [InlineData("0X94", 0x94)]
+        [InlineData("148", 148)]
+        [InlineData("-1", -1)]
+        public void Int_flag_accepts_decimal_and_either_hex_form(string spec, int expected)
+        {
+            var (options, _, error) = HeadlessDebugOptions.Parse(
+                new[] { "rom.sfc", "600", "--flag", $"SuperFxRamWriteTraceAddr={spec}" });
+
+            Assert.Null(error);
+            Assert.True(HeadlessDebugOptions.TryConvertFlagValue(
+                spec, typeof(int), out object? value, out _));
+            Assert.Equal(expected, value);
+            Assert.Contains(options!.FlagsToEnable, f => f.EndsWith(spec));
+        }
+
+        [Fact]
+        public void Unparseable_flag_value_is_an_error_rather_than_an_exception_out_of_Main()
+        {
+            var (options, _, error) = HeadlessDebugOptions.Parse(
+                new[] { "rom.sfc", "600", "--flag", "SuperFxRamWriteTraceAddr=zzz" });
+
+            Assert.Null(options);
+            Assert.NotNull(error);
+            Assert.Contains("SuperFxRamWriteTraceAddr=zzz", error);
+        }
+
+        // Used to reach SetValue with a boxed true and throw - see §3.15.
+        [Fact]
+        public void Bare_flag_on_a_non_bool_member_is_an_error_not_a_boxed_true()
+        {
+            var (options, _, error) = HeadlessDebugOptions.Parse(
+                new[] { "rom.sfc", "600", "--flag", "SuperFxTraceCountdown" });
+
+            Assert.Null(options);
+            Assert.Contains("explicit value", error!);
+        }
+
+        [Fact]
+        public void Bare_flag_on_a_bool_member_still_means_true()
+        {
+            Assert.True(HeadlessDebugOptions.TryConvertFlagValue(null, typeof(bool), out object? value, out _));
+            Assert.Equal(true, value);
+        }
+
         [Fact]
         public void Screenshot_spec_splits_frame_and_path_on_the_first_colon_only()
         {

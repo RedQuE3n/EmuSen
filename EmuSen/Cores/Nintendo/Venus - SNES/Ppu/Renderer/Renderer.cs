@@ -142,6 +142,25 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return (buffer, width, height);
         }
 
+        private readonly Color[] _paletteColor = new Color[256];
+        private float _paletteBrightness = float.NaN;
+
+        // Rebuilt on a CGRAM write, a brightness change, or the top of a frame - see Venus_PPU.md §7.2.
+        private void EnsurePaletteColors(Ppu ppu, int py, float brightness)
+        {
+            if (py != 0 && !ppu.CgramChanged && _paletteBrightness == brightness) return;
+
+            for (int i = 0; i < 256; i++)
+            {
+                _paletteColor[i] = SnesColor(ppu.Cgram[i * 2], ppu.Cgram[i * 2 + 1], brightness);
+            }
+            _paletteBrightness = brightness;
+            ppu.CgramChanged = false;
+        }
+
+        // cgIdx is always an even byte offset, so this is the entry it names.
+        private Color PaletteColor(int cgIdx) => _paletteColor[(cgIdx >> 1) & 0xFF];
+
         private static Color SnesColor(byte lo, byte hi, float brightness)
         {
             int c = lo | (hi << 8);

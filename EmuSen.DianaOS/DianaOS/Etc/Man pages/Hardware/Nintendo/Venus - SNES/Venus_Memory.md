@@ -57,6 +57,10 @@ HVBJOY's H-blank bit (`$4212` bit 6) is approximated from `LineCycles >= 1099` a
 
 ### 1.6 MEMSEL (`$420D`) — FastROM enable
 
+**FastROM only speeds up banks `$80-$FF`.** Banks `$00-$3F:$8000-$FFFF` are always 8 master clocks no matter what `$420D` says — the bit selects the speed of the *upper* half of the address space, not of every ROM window. `GetAccessSpeedCycles` applied it to both halves until 2026-08-03, which would have run bank-`$00` code 25% fast in any FastROM game. Verified cell by cell against Mesen's `_masterClockTable` (`SnesMemoryManager.cpp`), which builds banks `$00-$3F` page `>= $80` as a flat 8 and only makes `$80-$BF`/`$C0-$FF` register-dependent.
+
+Worth recording that this was a **latent** bug on the game that exposed it: Yoshi's Island never enables FastROM during the window under investigation, so fixing it changed that measurement by exactly zero instructions. It is still wrong, and would matter the moment a FastROM game runs code from a low bank.
+
 Bit 0 selects FastROM (6 master clocks/access) vs. SlowROM (8) for the `$8000-FFFF` window of banks `$00-$3F`/`$80-$BF` and all of `$C0-FF` — everywhere else on the bus is a fixed speed regardless of this bit (banks `$40-$7D`/`$7E-$7F` always slow; the `$2000-3FFF`/`$4200-5FFF` register windows always fast; `$4000-41FF` always a slow 12). Previously entirely unhandled — a write here fell through to the generic open-bus fallback, so this project always behaved as SlowROM no matter what a game actually wrote. Read via `MemoryBus.GetAccessSpeedCycles(address)`, which `Cpu.Step()` now uses for real per-instruction master-clock accounting — see `Venus_CPU.md` §8 for the full story of why this exists and what changed alongside it.
 
 ---
@@ -124,6 +128,17 @@ SRAM is mapped to the lower 32KB (`$0000-$7FFF`) of banks `$70-$7D` and `$F0-$FF
 
 `SaveSram()` is called periodically (see `VenusCore.RunFrame`'s autosave) and on shutdown, not on every SRAM write — cheap enough (a few KB, plain overwrite) that this is a convenience choice, not a performance necessity.
 
+### 2.4a The battery save is emulator state, and it silently broke a three-day measurement
+
+**On a SuperFX cart the `.srm` *is* GSU work RAM.** Game Pak RAM is one chip holding the GSU's variables, its framebuffer and the battery-backed save (`Venus_SuperFX.md` §1), and `LoadSram()` copies `_batteryRamSize` bytes straight into the low end of it. So restoring a save does not only restore the player's progress — it pre-loads whatever the GSU last left in those addresses.
+
+That interacts badly with state anchoring (`EmuSen_Debugging_Tools_Reference_v5.md` §3.15d). `tapuntil A GSURAM 1E1A F0,01` is supposed to walk Yoshi's Island's file select and its whole opening cutscene. With a `.srm` written by an earlier run of the same script, `$1E1A` **already holds `$01F0` at power-on**, so the verb reports success at frame 0, having pressed nothing, and every command after it measures a machine that is still in its boot sequence. That is exactly what happened to §10.7's "the camera velocity is zero" measurement, and it is why the finding could not be reproduced from a clean boot.
+
+Two consequences worth carrying:
+
+- **A run that persists state is not a reproducible run.** Two invocations of one `--commands` script reached the anchor at frame 789 and at frame 0 purely because the first one wrote a save. Mesen's probe never had the problem — it points `FolderUtilities::SetHomeFolder` at a fresh directory beside its dumps — which means the two emulators were anchored on different scenes for the whole comparison.
+- **`--nobattery` exists for this.** It sets `Cartridge.BatteryRamDisabled`, so the run neither reads nor writes the `.srm`. Every comparison against the Mesen probe should use it; see §3.15's own entry.
+
 ### 2.5 Region detection from the country byte
 
 The header's country byte (`+$19`, so `$FFD9` on HiROM / `$7FD9` on LoROM) says which territory the cartridge was sold in, and therefore which console it expects. `Cartridge` classifies it once at load into a `ConsoleRegion` (`ConsoleRegion.cs`), which `VenusCore.LoadRom` turns into both the frame timing and the `STAT78` region bit — see `Venus_CPU.md` §8.5c.
@@ -172,6 +187,26 @@ Re-armed once per frame (`InitHdma`) and stepped once per scanline (`ExecuteHdma
 **7-bit line counter**: bit 7 of the line-counter byte is a "repeat" flag, not part of the count — only the lower 7 bits actually count down. Getting this wrong (treating the whole byte as the counter) breaks any HDMA table using the repeat flag, which is most of them.
 
 **Indirect addressing** (`Control` bit 6): instead of reading transfer data directly from the table, each block's 2-byte indirect address is fetched from the table and *that* address is where the actual transfer data lives — lets one table entry cover an arbitrary-sized block instead of being limited by inline table bytes.
+
+### 3.2a Enabling HDMA mid-frame ($420C 0->1)
+
+`InitHdma` runs at scanline 0 and arms whichever channels `$420C` names *at that moment*. A game that only ever writes `$420C` in vblank is therefore fine, and that is nearly every game. **Yoshi's Island is not one of them**, and the shape of what it does is worth recording because it defeated a long investigation that never suspected the DMA engine at all.
+
+Its intro is driven by three H/V-IRQs per frame, programmed through `$4209`/`$420A` and dispatched from a `$7E:0125` phase counter at `$7E:C821`:
+
+| Scanline | Phase | What it does |
+|---|---|---|
+| 12 | 0 | `LDA $094A` / `STA $420C` — **HDMA on** (`$F0`, channels 4-7) — then `INIDISP = $00`, next V-target `$0E` |
+| 14 | 1 | `INIDISP = $0F` (screen to full brightness), next V-target `$C6` |
+| 198 | 2 | `INIDISP = $8F` (force blank), `STZ $420C` — **HDMA off** — next V-target `$0C` |
+
+So `$420C` is `$F0` only between scanlines 12 and 198, and is `$00` across every scanline 0. Arming solely at scanline 0 meant **`dma stats` reported zero HDMA transfers over 700 frames** while the game requested it 415 times — the channels were configured, the tables were in WRAM, and nothing ever ran.
+
+The fix is `WriteHdmaEnable`: a bit going 0->1 arms that channel there and then, exactly as `InitHdma` would have, and leaves already-armed channels alone. Frame-start init is unchanged.
+
+**This is modeled behavior, not a silicon measurement, and the honest version of the claim matters.** bsnes and Mesen both arm only at scanline 0 (`SnesDmaController::InitHdmaChannels` early-returns when `HdmaChannels` is zero, having first cleared every channel's `DoTransfer`), so a mid-frame enable there resumes from whatever table pointer the channel was left holding. For this game that state is the previous frame's terminator, which cannot produce a correct picture — yet the game demonstrably works on hardware and in Mesen. Re-arming from the top of the table is the only reading consistent with the game's own design, and it is what this core does. If a future test ever pins the real 0->1 semantics, this is the paragraph to correct.
+
+**What it is worth, measured.** Yoshi's Island's intro renders its story text (`Venus_SuperFX.md` §10.5). Sixteen other games — SMW, LttP, Super Metroid, Chrono Trigger, DKC2, FFVI, Super Mario Kart, MMX, EarthBound, Secret of Mana, Super Castlevania IV, Illusion of Gaia, All-Stars+World, Mario's Time Machine, Rock 'n Roll Racing, TMNT IV — produce **byte-identical `framesum` digests** over 200 frames before and after, and all 1680 `EmuSen.WiseMan` tests pass. Games that enable HDMA in vblank see the newly-enabled channel armed once at the write and again at scanline 0, which lands on the same state.
 
 ### 3.3 Debug logging gates
 

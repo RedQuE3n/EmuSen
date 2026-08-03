@@ -202,7 +202,58 @@ Tile slivers are consumed in on-screen left-to-right order, matching the documen
 
 ## 7. Windowing
 
-Two windows (W1: `$2126`/`$2127`, W2: `$2128`/`$2129`) can each be enabled/inverted per layer via the per-layer select registers (`W12SEL`/`W34SEL`/`WOBJSEL`), with configurable combine logic (OR/AND/XOR/XNOR, from `WBGLOG`/`WOBJLOG`) when both windows are active for a layer. The color-math window is a *separate* mask, using `WOBJSEL` bits 4-7 and `WOBJLOG` bits 2-3 rather than a specific layer's own bits — `CGWSEL` bits 6-7 additionally invert the final window output for the main/sub screen independently. `IsWindowMasked`/`IsColorMathWindowMasked` implement these as two distinct functions since they read from different bit groups and serve different purposes (visibility mask vs. color-math eligibility mask), even though the window-position/invert/combine logic itself is structurally identical between them.
+Two windows (W1: `$2126`/`$2127`, W2: `$2128`/`$2129`) can each be enabled/inverted per layer via the per-layer select registers (`W12SEL`/`W34SEL`/`WOBJSEL`), with configurable combine logic (OR/AND/XOR/XNOR, from `WBGLOG`/`WOBJLOG`) when both windows are active for a layer. The color-math window is a *separate* mask, using `WOBJSEL` bits 4-7 and `WOBJLOG` bits 2-3 rather than a specific layer's own bits — `CGWSEL` bits 6-7 additionally invert the final window output for the main/sub screen independently. `WindowMask` (§7.1) and `IsColorMathWindowMasked` implement these separately since they read from different bit groups and serve different purposes (visibility mask vs. color-math eligibility mask), even though the window-position/invert/combine logic itself is structurally identical between them.
+
+### 7.1 The window test is decoded once per scanline, not once per pixel
+
+`IsWindowMasked` used to take `(ppu, layerId, isMainScreen, px)` and be called from inside every per-pixel loop in the renderer — seven call sites across `Renderer.Backgrounds.cs`, `Renderer.Mode7.cs` and `Renderer.Sprites.cs`. Everything it did except the final window-range comparisons was **constant for the whole call**: the `layerId` switch selecting `W12SEL`/`W34SEL`/`WOBJSEL`, the `TMW`/`TSW` enable-bit test, the nibble decode into the four enable/invert flags, and the "neither window enabled" early-out. All of it re-ran up to 256 times per layer per screen per scanline to produce the same answer.
+
+It is now the `WindowMask` struct: `WindowMask.For(ppu, layerId, isMainScreen)` decodes once and captures `WH0`–`WH3`, and `Masked(px)` does only the per-pixel part. `Active` is false whenever the layer is unwindowed, which lets a caller skip the per-pixel test for the entire scanline. Capturing the window positions at the top of the loop is safe for the same reason `BgLineCache` is: no CPU executes during a `RenderScanline` call, so PPU register state cannot change mid-scanline.
+
+**Measured, three runs each way, 600 frames, Release:** SMW 3.48 → 3.33 ms (−4.4%), DKC 2.69 → 2.58 (−4.2%), both with non-overlapping ranges. LttP was unchanged (1.567 → 1.563) and CT was inconclusive against its own noise. That shape is expected: where a layer has no window enabled, the old code already early-outed cheaply, so there was nothing to win. The gain is real only on titles that actually use windows. All 12 ROMs' `framesum` and `audiosum` digests are byte-identical.
+
+It does **not** move the throttled picture — KBL3 at 33% went 17.70 → 17.78 ms, inside noise. §13.4's target is `mainComposite` itself, and this was not that.
+
+**Do not "simplify" this by testing every pixel.** Computing the mask unconditionally, including for transparent pixels (common for parallax, sky and background gaps), was tried when `BgLineCache` was first written and made PPU rendering *slower than before the cache existed at all*. The `if (pixel != 0)` guard around the background call sites is load-bearing.
+
+### 7.2 CGRAM is converted to output colours once per palette change, not once per pixel
+
+`SnesColor(lo, hi, brightness)` unpacks a 15-bit BGR entry and scales each channel by brightness. It was called **per opaque pixel per layer per screen** — up to ~229,000 times a frame — to produce one of only **256 distinct results**, because its inputs are always a CGRAM entry and a brightness that is constant for the whole scanline.
+
+`_paletteColor[256]` now holds the converted colours and `PaletteColor(cgIdx)` indexes it. `EnsurePaletteColors` rebuilds when any of three things is true:
+
+- **`Ppu.CgramChanged`** — set by `WriteCGDATA`, the single register path all CGRAM writes (including DMA and HDMA to `$2122`) go through.
+- **the brightness changed** — `INIDISP`'s low nibble, which HDMA drives per scanline for fades.
+- **`py == 0`** — unconditionally, once a frame.
+
+**That third condition is load-bearing, not belt-and-braces.** Save-state restore, the debug tools and most of this project's own PPU tests assign `ppu.Cgram[...]` directly and never touch `WriteCGDATA`, so the dirty flag alone would leave them rendering stale colours. Rebuilding at the top of every frame bounds any missed invalidation to a single frame, and it is what makes the existing test suite — which pokes CGRAM directly and then calls `RunFrame()` — keep passing. A direct poke *mid-frame* is still not seen until the next one; nothing in the emulator does that, and `PaletteColorCacheTests` pins the behaviour either way.
+
+**Measured, three runs each, 600 frames, Release:** SMW 3.33 → 3.12 ms (−6.3%), DKC 2.58 → 2.40 (−7.0%), CT 2.39 → 2.27 (−4.8%), LttP unchanged. Throttled to 33%, SMW went from **30/600 frames over budget to 4/600**. All 12 ROMs byte-identical on `framesum` and `audiosum`.
+
+**Why this was the right target, and the painter's algorithm was not.** `mainComposite` covers two things: each layer's per-pixel *decode*, and the per-layer *composite pass* that writes it into the line buffer. Skipping every composite pass entirely (measured by gating them off) left SMW at 0.88 ms of 1.15, DKC 0.88 of 1.20, KBL3 1.12 of 1.45 — so **the decode is ~75% and the overdraw only ~25%**. Removing the painter's algorithm perfectly would win about 4%, roughly what §7.1 got. The colour conversion was inside the 75%.
+
+### 7.3 How much PPU state actually moves during active display
+
+Deferring rendering — the prerequisite for taking the PPU off the emulation thread (§13.4's 27–35%) — turns on one question: **while lines 0–223 are being drawn, how much of the state the renderer reads is still changing?** Anything that changes has to be captured per scanline; anything that does not can be read once.
+
+`DebugSettings.PpuActiveDisplayWriteLogging` counts `$21xx` writes made while `CurrentScanline < 224` and reports them per frame as `[ACTIVEWRITES]`. Everything routes through `Ppu.WriteRegister`, so this covers CPU stores, DMA and HDMA alike, and VRAM/CGRAM/OAM ports as well as the plain registers. It is gated inside the hot path rather than outside it, because DMA drives thousands of writes a frame through that method.
+
+Measured in-game, one representative frame each:
+
+| ROM | writes | lines touched |
+|---|---|---|
+| CT, FFVI, Super Metroid | **0** | **0 / 224** |
+| DKC | 6 | 2 / 224 |
+| LttP | 12 | 2 / 224 |
+| KBL3 | 136 | 12 / 224 |
+| SMW2 | 1611 | 125 / 224 |
+| SMW | 448 | **224 / 224** |
+
+**The spread is the finding.** Three of eight titles change nothing at all between lines 0 and 223 — their entire frame is renderable from one snapshot taken at frame end, with no per-scanline capture and no VRAM/CGRAM/OAM hazard whatsoever. Three more touch two to twelve lines. Only SMW, whose HDMA status-bar split rewrites registers on every line, needs genuine per-scanline capture.
+
+That rules out one design and supports another. Snapshotting all ~45 scalar registers unconditionally every scanline would be wasted work on most of the library. Capturing **only when a write has actually occurred since the last capture** costs one snapshot per frame for CT/FFVI/SM and 224 for SMW — which is still affordable, since even the worst case is ~10k field copies against a ~2 ms rendering cost.
+
+The 48 fields the renderer reads split cleanly: `Vram`, `Cgram` and `Oam` are bulk arrays that must not be copied per scanline (they need sync-on-write instead), and the other 45 are scalars or four-element arrays that a snapshot struct can hold. Note also that the renderer *writes* `RangeOver`/`TimeOver`, which the CPU reads back through `$213E` — so sprite evaluation has to stay on the emulation thread regardless of where compositing runs. It is cheap enough for that to be fine: `objEval` is ≤0.26 ms even throttled (§13.4).
 
 ---
 
@@ -316,6 +367,8 @@ Headless, 3000 frames from cold boot (so title, menus, and each game's own attra
 
 The NTSC frame budget is 16.64 ms (§`Venus_CPU.md` §8.5b). Mean cost is **1.4–4.7 ms**, i.e. 3.5–12× real time, and no ROM sustains anything close to the budget. The isolated `max` outliers (FFVI 15.2, SMW2 15.7) are single frames, almost certainly GC pauses — the p99 column is 3.1–8.3 ms.
 
+**SA-1 titles are the heaviest class, and the table above understates them** because it measures boot and attract mode. Measured directly in a level (KBL3, Kirby's Dream Land 3, holding Right, 900 frames): **5.0 ms mean, 0/900 over budget** — `cpu+spc700` 2.9, `ppu` 2.0, `mainComposite` 1.6. That is still a 3.3x margin, but the phase split is inverted relative to every other ROM here: the CPU phase dominates, because an SA-1 game steps two 65816 cores and `perf`'s coprocessor line reads 100% of a full-rate frame every frame. KSS's 3.22 ms `cpu+spc700` in the table is the same effect. Anything that makes the 65816 interpreter slower costs these games double, and they are the first to fall under 60 when it happens — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.20.
+
 Within the PPU phase, per-scanline main-screen compositing is the single largest item everywhere. `objEval` is negligible (≤0.08 ms). Sub-screen compositing is near-zero for games that don't really use it and only becomes significant in SMW (0.75) and SMW2 (0.60) — §5.1's skip is doing its job.
 
 ### 13.2 The "~17–18 ms during gameplay / ~13 ms of PPU" figures are historical
@@ -331,6 +384,41 @@ Worth knowing before blaming the core for a frontend-side frame time:
 
 The frontend readout separates `run Xms` (the `RunFrame()` call alone) from `total Yms` (wall clock per frame, *including* the pacing sleep). A `total` at ~16.6 ms with `run` at ~3 ms is the 60 Hz pacer working correctly, not a slow emulator. Only a `run` figure near the budget indicates a core problem.
 
-### 13.4 Save states older than the current field layout resume into a dead machine
+### 13.4 What it costs on the machine we are actually targeting
+
+§13.1 answers "does it hold 60 on a 7700X" — yes, everywhere. From 2026-08-03 the goal changed to **running on a low-end x86-64 laptop**, roughly a third of that machine's single-thread performance, and that is a different answer. Measured with `--throttle` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.42), same scripts, `--nobattery`:
+
+| ROM | scene | 100% | 33% | over budget at 33% | 33% cpu | 33% ppu | 33% mainComposite |
+|---|---|---|---|---|---|---|---|
+| KBL3 | Grass Land, holding Right | 4.93 | 17.82 | **168/300** | 10.33 | 7.43 | 5.96 |
+| SMW | boot + attract | 3.42 | 13.02 | 30/600 | 3.79 | 9.09 | 4.43 |
+| DKC | boot + attract | 2.68 | 14.72 | **169/600** | 3.53 | 11.07 | 7.32 |
+
+All three miss the budget on a real fraction of frames, and the SA-1 title misses on more than half. The throttle overstates slowdown somewhat (§3.42's second limit), so treat the *shape* as the finding rather than the exact milliseconds.
+
+The shape is unambiguous: **`mainComposite` alone costs 4.4–7.3 ms of a 16.64 ms budget** — a third to nearly half the entire frame, in one function family, on every ROM regardless of which phase dominates overall. It is the largest single item at full speed too (§13.1) and it grows fastest under constraint. Anything spent on `objEval` (≤0.26 ms even throttled) or HDMA (≤0.12) is spent in the wrong place.
+
+Two structural facts frame what to do about it. `CompositeScreen` is a painter's algorithm: every enabled layer writes every pixel and later layers overwrite, so a four-layer mode pays up to 4× the necessary writes. And the whole console runs on one thread (`MainWindow.axaml.cs`'s `EmuSen-Emulation`), so Venus today needs one fast core and cannot use a second — the wrong shape for cheap hardware, which has several mediocre cores instead. Reducing the work comes before parallelising it; there is no point spending two cores on writes that should not happen.
+
+### 13.5 Save states older than the current field layout resume into a dead machine
 
 Noted here because it silently invalidates any attempt to benchmark real gameplay by resuming a state. `StateSerializer` has no field-name tagging (`EmuSen_Save_States.md` §1/§3), so a `.state` written before a field was added or reordered still loads without error and produces a machine that runs but renders nothing — `LastFramePpuMs` collapses to ~0.06 ms while the renderer's own `LastFrame*` properties keep reporting their last real values, which is what the inconsistency looks like from the outside. The three states in `Usr/Home/Saves/Save States` are all in this condition. Verify a resumed state by dumping the framebuffer before trusting any measurement taken from it.
+
+---
+
+## 14. Mode 0 — each layer has its own 32-colour CGRAM block
+
+Mode 0 is the only mode where all four backgrounds are 2bpp, and it is the only mode where a tilemap entry's 3-bit palette field is **not** an index into the bottom of CGRAM. Each layer gets its own quarter of the palette:
+
+| Layer | Palettes | CGRAM entries | Base added by `Mode0PaletteBase` |
+|---|---|---|---|
+| BG1 | 0-7 | 0-31 | 0 |
+| BG2 | 8-15 | 32-63 | 32 |
+| BG3 | 16-23 | 64-95 | 64 |
+| BG4 | 24-31 | 96-127 | 96 |
+
+`BgCgramIndex` took `entryPalette * 4 + pixel` for every 2bpp layer in every mode, so in Mode 0 all four layers read BG1's 32 colours. Every other mode is unaffected — `Mode0PaletteBase` returns 0 outside Mode 0, and the 4bpp/8bpp paths never had a per-layer base to begin with. Matches Mesen's `RenderMode0`, which passes exactly these four constants as its `basePaletteOffset` template argument (`SnesPpu.cpp`).
+
+**How it surfaced.** Yoshi's Island's intro switches to Mode 0 with `TM = $08` (BG4 only) for scanlines 152-197 to draw the story text over the bottom of the screen — see `Venus_SuperFX.md` §10.5. The tilemap there uses palettes 6 and 7, which resolve to CGRAM 120-123 and 124-127, both white-on-transparent. Read without the base, they landed on CGRAM 24-31 and the text came out dark red. **The glyph shapes were already correct at that point**, which is the useful diagnostic: a palette-indexing bug leaves geometry intact and only moves colour, so "right shape, wrong colour" points at the CGRAM index and not at the tile decode.
+
+This was invisible until the HDMA fix in `Venus_Memory.md` §3.2a, because nothing had ever driven this core into Mode 0 with a non-zero palette field before. Two independent bugs stacked on the same symptom — worth remembering when a fix improves an artifact without clearing it.

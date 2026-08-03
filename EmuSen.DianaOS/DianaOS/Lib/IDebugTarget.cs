@@ -68,6 +68,93 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         public override int GetHashCode() => HashCode.Combine(Name, Value, BitWidth);
     }
 
+    // Where a vector's POINTER lives, not where it points - see `man vectors`.
+    public readonly struct InterruptVector
+    {
+        public string Name { get; }
+        public int Address { get; }
+        public int Width { get; }
+
+        // Which CPU mode this vector belongs to, blank when a core has only one.
+        public string Mode { get; }
+
+        public InterruptVector(string name, int address, int width = 2, string mode = "")
+        {
+            Name = name;
+            Address = address;
+            Width = width;
+            Mode = mode;
+        }
+    }
+
+    // What a CPU-bus address actually decodes to - see `man addr`.
+    public readonly struct PhysicalAddress
+    {
+        // A memory-space name where one exists, else a description of the device.
+        public string Space { get; }
+        public int Offset { get; }
+
+        // True when Offset indexes a real space `mem`/`dump` can be pointed at.
+        public bool IsAddressable { get; }
+
+        public PhysicalAddress(string space, int offset, bool isAddressable = true)
+        {
+            Space = space;
+            Offset = offset;
+            IsAddressable = isAddressable;
+        }
+    }
+
+    // A hardware condition a core can detect and halt on - see `man bp`.
+    public readonly struct BreakCondition
+    {
+        public string Name { get; }
+        public string Description { get; }
+
+        public BreakCondition(string name, string description)
+        {
+            Name = name;
+            Description = description;
+        }
+    }
+
+    // One block-transfer channel, in the terms a channel table prints - see `man dma`.
+    public readonly struct DebugDmaChannel
+    {
+        public int Index { get; }
+        public bool GeneralEnabled { get; }
+        public bool HdmaEnabled { get; }
+
+        // The mode/direction byte, left raw so a core's own decoder names it.
+        public byte Control { get; }
+        public byte DestinationRegister { get; }
+        public int SourceAddress { get; }
+        public int TransferSize { get; }
+
+        // HDMA only: the table it walks, and where it has got to.
+        public bool HdmaActive { get; }
+        public int TableAddress { get; }
+        public byte LineCounter { get; }
+        public int IndirectAddress { get; }
+
+        public DebugDmaChannel(int index, bool generalEnabled, bool hdmaEnabled, byte control,
+            byte destinationRegister, int sourceAddress, int transferSize,
+            bool hdmaActive, int tableAddress, byte lineCounter, int indirectAddress)
+        {
+            Index = index;
+            GeneralEnabled = generalEnabled;
+            HdmaEnabled = hdmaEnabled;
+            Control = control;
+            DestinationRegister = destinationRegister;
+            SourceAddress = sourceAddress;
+            TransferSize = transferSize;
+            HdmaActive = hdmaActive;
+            TableAddress = tableAddress;
+            LineCounter = lineCounter;
+            IndirectAddress = indirectAddress;
+        }
+    }
+
     // One sprite/OBJ entry, shaped generically enough to cover consoles
     // with very different sprite hardware (the SNES's OAM low+high table
     // split, the NES's flatter 4-byte-per-sprite OAM) - a generic sprite
@@ -305,6 +392,58 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // Coverage for the same reason CoprocessorBreakpoints is separate.
         CoverageRegistry? CoprocessorCoverage => null;
 
+        // The live call/return chain (see CallStackRegistry.cs), fed from the
+        // core's own call and return opcodes. Null when a core has no such
+        // seam wired - see EmuSen_Debugging_Tools_Reference_v5.md §3.28.
+        CallStackRegistry? CallStack => null;
+
+        // Named addresses (see LabelRegistry.cs). Owned by the target so a
+        // label set survives for as long as the loaded ROM does, the same
+        // lifetime every other registry here has. Null means `label` is
+        // unavailable for this core - see §3.29.
+        LabelRegistry? Labels => null;
+
+        // Per-address read/write/execute tallies (see
+        // AccessCounterRegistry.cs), fed from the same observer seams
+        // WatchRegistry uses. Null when a core has no such seam - see §3.30.
+        AccessCounterRegistry? AccessCounters => null;
+
+        // Addresses pinned to a value by undoing writes to them (see
+        // FreezeRegistry.cs). Null when a core has no write-observer seam to
+        // hang this on - see §3.31.
+        FreezeRegistry? Freezes => null;
+
+        // Live-state expression evaluation, backing `eval` and conditional
+        // breakpoints (see ExpressionEvaluator.cs). Deliberately the context,
+        // not an evaluator: the language is core-agnostic, only the symbols
+        // and memory behind it are per-core. Null when a core hasn't
+        // published one - see §3.27.
+        IExpressionContext? Expressions => null;
+
+        // Every separately-steppable processor, main CPU first - see `man cpus`.
+        IReadOnlyList<DebugCpu> DebugCpus => System.Array.Empty<DebugCpu>();
+
+        // Traffic across a coprocessor's register window - see `man copflow`.
+        RegisterFlowRegistry? RegisterFlow => null;
+
+        // Where each interrupt vector lives, for `vectors` to dereference - see `man vectors`.
+        IReadOnlyList<InterruptVector> InterruptVectors => System.Array.Empty<InterruptVector>();
+
+        // Which physical location a CPU-bus address decodes to - see `man addr`.
+        PhysicalAddress? ResolvePhysical(int cpuAddress) => null;
+
+        // Which named hardware conditions `bp when` can arm on this core - see `man bp`.
+        IReadOnlyList<BreakCondition> BreakConditions => System.Array.Empty<BreakCondition>();
+
+        // Live block-transfer channel state - see `man dma`.
+        IReadOnlyList<DebugDmaChannel> DmaChannels => System.Array.Empty<DebugDmaChannel>();
+
+        // The recorded transfer history behind `dma log` - see `man dma`.
+        DmaLogRegistry? DmaLog => null;
+
+        // What a DMA destination register is called on this console - see `man dma`.
+        string? NameDmaDestination(byte register) => null;
+
         // The RAM-poke cheat engine (see CheatRegistry.cs) - same exposure
         // pattern as Watches/FrameLog, but the data flow runs the other
         // direction: instead of the core feeding data into the registry,
@@ -335,6 +474,10 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // DisassembledInstruction records. A target with no disassembler
         // at all can legitimately return an empty list.
         IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count);
+
+        // Opaque core-defined decoder state a caller already knows - see `man disasm`.
+        IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count, IReadOnlyList<string> hints)
+            => Disassemble(spaceName, address, count);
 
         // Classifies whether a disassembled instruction statically
         // references an address - the code-only counterpart to

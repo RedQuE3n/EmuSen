@@ -26,9 +26,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
     public struct SpcInstruction
     {
         public string Name;
-        public Func<ushort> AddrMode;    
-        public Action<ushort> Operate;   
-        public byte Cycles;            
+        public Func<ushort> AddrMode;
+        public Action<ushort> Operate;
+        public byte Cycles;
+        // Set only by the table's default fill, so Step needs no string compare - see Venus_APU.md §1.8.
+        public bool Unimplemented;
     }
 
     public partial class Spc700
@@ -40,6 +42,22 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         public int CycleBudget { get; set; }
         public int TotalBytesStored { get; private set; }
+
+        // Same pull-hook shape as MemoryBus.BreakpointChecker, on the SPC700's PC - see `man cpus`.
+        [EmuSen.Common.SkipInState] public Func<int, bool>? BreakpointChecker;
+
+        [EmuSen.Common.SkipInState] public bool HaltedAtBreakpoint;
+
+        [EmuSen.Common.SkipInState] public int HaltedAddress;
+
+        // Skips one check after resuming, so `continue` leaves the breakpoint.
+        [EmuSen.Common.SkipInState] private bool _justResumedFromBreakpoint;
+
+        public void ResumeFromBreakpoint()
+        {
+            HaltedAtBreakpoint = false;
+            _justResumedFromBreakpoint = true;
+        }
 
         // Side channel for the "+2 cycles if a conditional branch is taken"
         // penalty (BCC/BCS/BEQ/BNE/BMI/BPL/BVC/BVS, CBNE, DBNZ, BBS/BBC-style
@@ -373,6 +391,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 return;
             }
 
+            // Returns with CycleBudget intact, so resuming re-enters here - see `man cpus`.
+            if (!_justResumedFromBreakpoint && BreakpointChecker != null && BreakpointChecker(PC))
+            {
+                HaltedAtBreakpoint = true;
+                HaltedAddress = PC;
+                return;
+            }
+            _justResumedFromBreakpoint = false;
+
             ushort executedAtPC = PC;
             byte opcode = Read8(PC);
             // One-shot dispatch-chain tracer - see Venus_APU.md §1.5.
@@ -388,9 +415,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
             PC++;
 
-            SpcInstruction inst = _instructions[opcode];
+            // By ref, so dispatch reads the entry in place instead of copying 40 bytes per instruction.
+            ref SpcInstruction inst = ref _instructions[opcode];
 
-            if (inst.Name == "NOP/UNK")
+            if (inst.Unimplemented)
             {
                 throw new NotImplementedException($"Unimplemented SPC700 Opcode: 0x{opcode:X2} at PC: 0x{(PC - 1):X4}");
             }

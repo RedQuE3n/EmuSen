@@ -21,6 +21,11 @@ SourceLogs/
 *.srm
 *.state
 
+# Coverage maps written by `cov save` (see `man cov`) - a recording of one
+# person's playthrough of one ROM, accumulated locally and merged on load.
+# Real, uncommitted data like the saves above, not source.
+*.covmap
+
 # Copyrighted commercial ROMs dropped here for local debugging/testing -
 # never belongs in version control (redistribution), regardless of who
 # added it or why.
@@ -31,6 +36,12 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Roms/*
 !EmuSen.DianaOS/DianaOS/Usr/Home/Roms/.gitkeep
 *.smc
 *.sfc
+*.nes
+
+# Reference-emulator dumps written by MesenProbe (see EmuSen.WiseMan/Reference).
+# These are VRAM/OAM/GSU-RAM snapshots of a commercial game - the same
+# redistribution rule as the ROMs above applies to state extracted from one.
+EmuSen.WiseMan/Reference/dumps/
 
 # The libretro cheat database, downloaded at runtime - ~28k files and
 # 250MB of CC BY-SA data that `cheat db update` fetches on demand. See
@@ -43,3 +54,7 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Cheats/
 # tooling, not the dumps it redistributes. See Venus_NecDSP.md §2.
 EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/*
 !EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/.gitkeep
+
+# AI-assistant config. This repo does not carry one and must not depend on one -
+# it has been added and deleted more than once. Ignored so it cannot come back.
+CLAUDE.md

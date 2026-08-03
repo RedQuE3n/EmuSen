@@ -98,6 +98,31 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
         public ushort DebugDp => _dp;
         public ushort DebugRp => _rp;
 
+        // Firmware words for the disassembler, which decodes 24 bits at a time - see Venus_NecDSP.md §8.
+        public int DebugProgramWords => _program.Length;
+        public int DebugProgramWord(int index) => (int)_program[index & _programMask];
+
+        // Same pull-hook shape as Sa1.BreakpointChecker, on the DSP's word PC - see Venus_NecDSP.md §9.
+        [SkipInState] public System.Func<int, bool>? BreakpointChecker;
+
+        // The chip's own CALL/RET pair, for a backtrace - see Venus_NecDSP.md §9.
+        [SkipInState] public System.Action<int, int>? CallObserver;
+        [SkipInState] public System.Action? ReturnObserver;
+
+        [SkipInState] public bool HaltedAtBreakpoint;
+
+        [SkipInState] public int HaltedAddress;
+
+        // Skips one check after resuming, so `continue` leaves the breakpoint.
+        [SkipInState] private bool _justResumedFromBreakpoint;
+
+        // Called by VenusCore when re-entering a frame that halted on this chip.
+        public void ResumeFromBreakpoint()
+        {
+            HaltedAtBreakpoint = false;
+            _justResumedFromBreakpoint = true;
+        }
+
         public void Reset()
         {
             System.Array.Clear(_acc);
@@ -131,6 +156,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             _clockBudget += (long)masterClocks * _clockHz;
             while (_clockBudget >= MasterClockHz)
             {
+                // Returns with _clockBudget intact, so resuming re-enters here - see Venus_NecDSP.md §9.
+                if (!_justResumedFromBreakpoint && BreakpointChecker != null && BreakpointChecker(_pc & _programMask))
+                {
+                    HaltedAtBreakpoint = true;
+                    HaltedAddress = _pc & _programMask;
+                    return;
+                }
+                _justResumedFromBreakpoint = false;
+
                 _clockBudget -= MasterClockHz;
                 Step();
                 if (_inRqmLoop)

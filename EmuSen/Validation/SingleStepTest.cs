@@ -20,5 +20,8 @@ namespace EmuSen.Validation
 
         public Dictionary<string, int> FinalRegisters = new();
         public List<(int Address, byte Value)> FinalMemory = new();
+
+        // Null when the suite ships no trace, which leaves the runner checking final state only - see IBusTraceTarget.
+        public List<BusAccess>? ExpectedTrace;
     }
 }

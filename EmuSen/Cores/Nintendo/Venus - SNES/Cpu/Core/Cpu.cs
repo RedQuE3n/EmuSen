@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
@@ -47,6 +48,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         // see Venus_CPU.md §2.
         public ushort LastInstructionPC;
         public byte LastInstructionPB;
+
+        // Debug observers of call/return and interrupt flow - see `man bt`.
+        [EmuSen.Common.SkipInState] public CallStackRegistry? CallStack;
+        [EmuSen.Common.SkipInState] public BreakpointRegistry? Breakpoints;
         
         public byte P;    
         public bool E;    
@@ -111,10 +116,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         [EmuSen.Common.SkipInState] private readonly string _name;
         [EmuSen.Common.SkipInState] private readonly bool _logReset;
 
+        // Only the S-CPU; the SA-1's own core shares this class and has no Mesen counterpart to diff against.
+        [EmuSen.Common.SkipInState] private readonly bool _traceBinary;
+
         public Cpu(ICpuBus bus, string name = "CPU", bool logReset = true)
         {
             _name = name;
             _logReset = logReset;
+            _traceBinary = name == "CPU";
             _bus = bus;
             _verboseTrace = new DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
@@ -133,6 +142,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         // notice. Program.cs's shutdown path calls this before disposing
         // the log writer.
         public void FlushVerboseTrace() => _verboseTrace.Flush();
+
+        // The extra bus cycles a 16-bit operand costs - see Venus_CPU.md §8.8.
+        private static int WidthPenalty(byte opcode, bool wide16A, bool wide16X) => OpcodeWidth[opcode] switch
+        {
+            WidthM => wide16A ? 1 : 0,
+            WidthMRmw => wide16A ? 2 : 0,
+            WidthX => wide16X ? 1 : 0,
+            _ => 0,
+        };
 
         public void Reset()
         {
@@ -202,7 +220,18 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             LastInstructionPB = executedAtPB;
             uint opcodeAddr = ((uint)executedAtPB << 16) | executedAtPC;
             _addrModeExtraCycles = 0;
+            // Sampled before the instruction runs, since REP/SEP/PLP change them mid-flight.
+            bool wide16A = !GetFlag(CpuFlags.M);
+            bool wide16X = !GetFlag(CpuFlags.X);
             byte opcode = Fetch8();
+
+            // Before Dispatch, so registers are this instruction's inputs - the point Mesen records at.
+            if (CpuBinaryTrace.Enabled && _traceBinary)
+            {
+                CpuBinaryTrace.Record(opcodeAddr, opcode, CpuBinaryTrace.KindInstruction,
+                    A, X, Y, S, D, DB, P, E);
+            }
+
             uint targetAddr = Dispatch(opcode);
 
             if (DebugSettings.CpuVerboseLogging)
@@ -249,18 +278,26 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             // the opcode bank rather than bank 0 - accepted as a known,
             // narrow residual rather than threading a same-bank flag
             // through every implied-addressing opcode for it.
-            int totalCycleUnits = OpcodeCycles[opcode] + _addrModeExtraCycles;
-            int bytesFetched = (ushort)(PC - executedAtPC);
-            if (bytesFetched > totalCycleUnits) bytesFetched = totalCycleUnits;
+            int totalCycleUnits = OpcodeCycles[opcode] + _addrModeExtraCycles + WidthPenalty(opcode, wide16A, wide16X);
+            int bytesFetched = OpcodeFixedBytes[opcode];
+            if (bytesFetched == 0)
+            {
+                bytesFetched = (ushort)(PC - executedAtPC);
+                if (bytesFetched > totalCycleUnits) bytesFetched = totalCycleUnits;
+            }
             int remainderUnits = totalCycleUnits - bytesFetched;
 
             int masterClocks = bytesFetched * _bus.GetAccessSpeedCycles(opcodeAddr);
             if (remainderUnits > 0)
             {
-                masterClocks += remainderUnits * _bus.GetAccessSpeedCycles(targetAddr);
+                masterClocks += remainderUnits * (OpcodeInternalRemainder[opcode]
+                    ? InternalCycleClocks
+                    : _bus.GetAccessSpeedCycles(targetAddr));
             }
 
-            return masterClocks + DrainPendingDmaCycles();
+            int totalClocks = masterClocks + DrainPendingDmaCycles();
+            if (CpuBinaryTrace.Enabled && _traceBinary) CpuBinaryTrace.SetLastCost(totalClocks);
+            return totalClocks;
         }
 
         // See Dma.PendingCpuCycles's own comment for why this exists and
@@ -279,6 +316,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             _waitingForInterrupt = false;
 
+            // Carries the interrupted address, so the trace shows where vblank landed.
+            if (CpuBinaryTrace.Enabled && _traceBinary)
+            {
+                CpuBinaryTrace.Record(((uint)PB << 16) | PC, 0, CpuBinaryTrace.KindNmi, A, X, Y, S, D, DB, P, E);
+            }
+
             if (!E)
             {
                 Push8(PB);
@@ -296,6 +339,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             PB = 0x00;
             PC = (ushort)((high << 8) | low);
+            NoteInterruptFrame(CallFrameKind.Nmi);
 
             if (DebugSettings.CpuVerboseLogging)
             {
@@ -307,6 +351,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             }
         }
 
+        // Where `bt` and `runto nmi|irq|brk|cop` learn an interrupt was taken.
+        private void NoteInterruptFrame(CallFrameKind kind)
+        {
+            CallStack?.NotePush((LastInstructionPB << 16) | LastInstructionPC, (PB << 16) | PC, kind);
+            Breakpoints?.NoteInterrupt(kind);
+        }
+
         // IRQ entry sequence - see Venus_CPU.md §3.
         public bool Irq()
         {
@@ -316,6 +367,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             ushort interruptedPC = PC;
             byte interruptedPB = PB;
+
+            // After the I-flag check above, so only interrupts actually taken appear.
+            if (CpuBinaryTrace.Enabled && _traceBinary)
+            {
+                CpuBinaryTrace.Record(((uint)PB << 16) | PC, 0, CpuBinaryTrace.KindIrq, A, X, Y, S, D, DB, P, E);
+            }
 
             if (!E)
             {
@@ -334,6 +391,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             PB = 0x00;
             PC = (ushort)((high << 8) | low);
+            NoteInterruptFrame(CallFrameKind.Irq);
 
             if (DebugSettings.CpuVerboseLogging)
             {

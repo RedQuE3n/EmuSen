@@ -139,6 +139,24 @@ tile = (x >> 3) * columnHeightInTiles + (y >> 3)
 addr = (SCBR << 10) + tile * (8 * bpp) + (y & 7) * 2
 ```
 
+### 6.1a The height field's bit order — settled, and it was backwards
+
+`SCMR`'s height field is split across two non-adjacent bits, and this implementation had them the wrong way round:
+
+```
+HT0 = SCMR bit 2   (the low half)
+HT1 = SCMR bit 5   (the high half)
+height = HT1 << 1 | HT0     0 = 128px/16 tiles, 1 = 160/20, 2 = 192/24, 3 = OBJ
+```
+
+§9 used to carry this as an open question, on the grounds that Yoshi's Island's *intro* plots with both halves set — where the order cannot matter — and with an explicit "do not fix it to match Mesen without a game that distinguishes them". **Its title screen is that game.** The title plots with `PLOTSCMR = $1D`: bit 2 set, bit 5 clear. Read correctly that is height 1, a 160-line framebuffer with 20-tile columns; read backwards it is height 2, 192 lines with 24-tile columns, so every column after the first landed four tiles further down Game Pak RAM than the one before it. The GSU-rendered island came out as vertical smears of recognisable scenery — see §10.6.
+
+160 lines is also what the screen itself says: the game shows this buffer through a grid of `32x32` sprites spanning x = 32..224 and y = 40..200, which is exactly 192x160.
+
+Pinned by `SuperFxScreenHeightTests`, which plots one pixel in column 1 under each of the four height values and asserts the Game Pak RAM offset it lands on. Three of its six cases fail against the old order.
+
+The order matters *only* for heights 1 and 2 — 0 and 3 are symmetric — which is why every other game here, and Yoshi's Island's own intro, were byte-identical across the fix.
+
 ### 6.2 OBJ mode
 
 `SCMR`'s height field is split — the two halves are not adjacent — and the value 3 selects OBJ mode, where the buffer is laid out the way the PPU wants *sprite* tiles instead: 128x128 pages of 16x16 tiles, pages arranged 2x2.
@@ -213,8 +231,10 @@ Reads through all of these are side-effect-free by construction, which matters h
 ## 9. Known-wrong and unverified
 
 - **OBJ page arrangement (§6.2)** — the 2x2 page arrangement and its stride are inferred, not verified. The within-page order is now row-major on Mesen's and bsnes's authority, not on output evidence; the previous "confirmed by output" claim was withdrawn (§6.2).
-- **`SCMR` height-field bit order** — this file and the implementation read **HT1 from bit 2 and HT0 from bit 5**; **Mesen reads them the other way round** (`ScreenHeight = ((v & 0x04) >> 2) | ((v & 0x20) >> 4)`). The two disagree only for height values 1 and 2, i.e. 160 vs 192 pixels, and they agree that 3 means OBJ mode. Yoshi's Island plots with both bits set, so this cannot be settled from that game and is currently untested either way. Do not "fix" it to match Mesen without a game that distinguishes them.
-- **`COLOR`/`GETC` nibble handling** — bsnes and Mesen genuinely fork here, and `ColorValue` follows **bsnes**: `POR` bit 2 rewrites the source as `(source & $F0) | (source >> 4)` and then bit 3 may also apply, whereas Mesen early-returns `(COLR & $F0) | (value >> 4)` on bit 2 so the two bits are mutually exclusive. The two agree on the low nibble, so they are indistinguishable at 2bpp and 4bpp; they differ only in the high nibble, i.e. at 8bpp or when a later `COLR`-freeze reads it back. Untested either way — Yoshi's Island runs with both bits clear.
+- ~~**`SCMR` height-field bit order**~~ — **resolved, and it was wrong.** HT0 is bit 2 and HT1 is bit 5, as Mesen has it. The title screen distinguishes them where the intro could not; corrected and pinned — see §6.1a and §10.6. The instruction this entry gave — do not flip it without a game that tells the two apart — was the right instruction, and it is what made the title screen conclusive rather than a coin toss.
+- **`COLOR`/`GETC` nibble handling** — bsnes and Mesen genuinely fork here, and `ColorValue` follows **bsnes**: `POR` bit 2 rewrites the source as `(source & $F0) | (source >> 4)` and then bit 3 may also apply, whereas Mesen early-returns `(COLR & $F0) | (value >> 4)` on bit 2 so the two bits are mutually exclusive. The two agree on the low nibble, so they are indistinguishable at 2bpp and 4bpp; they differ only in the high nibble, i.e. at 8bpp or when a later `COLR`-freeze reads it back.
+
+  **Still unsettled, but no longer untouched by any game.** This entry used to say Yoshi's Island runs with both bits clear. It does not: its title screen plots with `PLOTPOR = $04`, i.e. bit 2 set, high-nibble mode. That plotting is 4bpp, so the two forms still agree on every pixel it produces — switching `ColorValue` to Mesen's form was tried and left all eighteen game digests byte-identical. Since the local reference set is Mesen only and this file records the current form as a deliberate reading of bsnes, the fork stays as it is until something can actually tell them apart: an 8bpp plot with `POR` bit 2, or a `COLR` high nibble read back through a later freeze.
 - **`ALT1`/`ALT2`/`ALT3` and the `B` flag** — Mesen's `ALT1()`/`ALT2()`/`ALT3()` each set `Prefix = false`, i.e. an `ALT` prefix *clears* the `WITH` flag while leaving `SrcReg`/`DestReg` alone. This implementation leaves `B` set. The two differ only for `WITH Rn : ALT? : TO Rm` / `FROM Rm`, where Mesen decodes the third instruction as a prefix and we decode it as `MOVE`/`MOVES`. **Untested either way — Yoshi's Island never writes that sequence**, so it cannot be settled from the one SuperFX game here. Found while fixing §10.4; left alone deliberately, on the same reasoning as the `SCMR` height field above.
 - **Cycle costs (§2.2)** — approximate.
 - ~~**`LJMP` operand direction**~~ — **resolved, and it was wrong.** It had been implemented as "the named register supplies the address, the source register supplies the bank", by analogy with `JMP Rn`. It is the other way round: `Rn` carries the **bank**, `Sreg` the **address**. Corrected, and pinned by `Ljmp_takes_its_address_from_the_source_register`, which fails against the old direction.
@@ -231,9 +251,11 @@ Reads through all of these are side-effect-free by construction, which matters h
 
 ## 10. Status, and where to pick it up
 
-**What is verified.** 57 tests: 41 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, `LJMP`'s operand direction, RAM round-trips, plotting, transparency, and the plot coordinate mask) and 16 covering detection, the S-CPU address map and the register window. All pass.
+**What is verified.** 63 tests: 47 driving hand-assembled GSU programs through the real chip (arithmetic and its flags, every shift, the prefix and delay-slot semantics, `LOOP`, `LJMP`'s operand direction, RAM round-trips, plotting, transparency, the plot coordinate mask, and the framebuffer's column stride at each of the four screen heights) and 16 covering detection, the S-CPU address map and the register window. All pass.
 
 **What Yoshi's Island does.** It boots and plays its whole intro: the bordered frame, the night sky, and — since §10.4 — **the pictures inside the frame, which now render correctly** through the Nintendo-logo quilt, the sunrise and the cloud page. §10.1/§10.2/§10.3 are retained as the record of how that was measured, but the failure they describe is fixed; do not work from them as if it were open. The story text strip below the frame is also **fixed** (§10.5, 2026-08-03) — it was never a GSU bug at all, but an HDMA layer switch this core was not running plus an unimplemented Mode 0 palette base.
+
+**The title screen and file menu render correctly too** (§10.6, 2026-08-03). That one *was* a GSU bug — the height field's bit order — and it is the first thing here that exercises the chip's normal (non-OBJ) framebuffer layout at all.
 
 ### 10.0 Resolved: the `$6000-$7FFF` window was bank-indexed
 
@@ -383,6 +405,25 @@ Trace with `--flag SuperFxPlotTraceSkip=N --flag SuperFxPlotTraceInstr=M` (§8).
 **Why nothing ran the HDMA.** `Venus_Memory.md` §3.2a has the detail. In short: the game enables `$420C` at scanline 12 and clears it at scanline 198, so it is never set at scanline 0, and this core armed HDMA only at scanline 0. `dma stats` reported **zero HDMA transfers over 700 frames** against 415 enable writes. Fixing that put the layer switch in place and the text appeared — in the wrong colours, because of the second bug: Mode 0's per-layer CGRAM blocks were unimplemented (`Venus_PPU.md` §14), so BG4 palettes 6/7 read CGRAM 24-31 instead of 120-127.
 
 **What this cost, and the lesson.** Four rounds of investigation went into "which upload targets `$F800`", built on a measurement that was sound in itself — the destination-side watch really does show nothing but the fill — but answered a question whose premise was wrong. The premise was that a tilemap entry BG3 references must be BG3 character data. **A layer that is switched off for the scanlines in question references nothing.** The check that would have caught it in one command is `scanregs all`: dump the per-scanline registers over the failing rows and confirm which layer is actually enabled there *before* tracing where its data comes from. `layers bg3` was used early and did correctly attribute the strip to BG3 — but it isolates a layer for the whole frame, so it cannot see a mid-frame `TM` change, and its answer was read as more than it said.
+
+### 10.6 Resolved: the title screen, and one bit of SCMR
+
+**Root cause found and fixed (2026-08-03). One expression, and it was an open question this file had already written down.** The title screen's island — the GSU-rendered 3D scene under the logo — came out as tall vertical smears of recognisable scenery: clouds, trees and hillside, sheared into ~16px columns running most of the height of the screen. `ScreenHeightMode` read `SCMR`'s split height field with its two halves swapped, so the title screen's `SCMR = $1D` selected 192-line/24-tile columns instead of 160-line/20-tile ones and every column landed four tiles lower in Game Pak RAM than the one before it. §6.1a has the correction.
+
+**The route to it, which was short because the tooling answered each step directly.**
+
+1. `layers bg1` / `bg2` / `obj` at the title. **BG1 (the sea and the flat island) and BG2 (the logo and the copyright line) are both pixel-perfect; the whole defect is on OBJ.** That single command is what turned "the title screen is broken" into "the sprite layer is broken", and it is worth doing before anything else on any composite screen.
+2. `sprites`. Forty sprites in a regular grid — `32x32` at x = 32..224, y = 40..200, tile indices stepping by 4 across and by `$40` down. That is not a scene made of objects; **it is a bitmap being shown through sprites**, 192x160 of it.
+3. `regs`. `PLOTS = 3,260,220` against `PLOTSOBJ = 135,040`, so ~96% of the chip's plots take the *normal* layout, not the OBJ one — and the normal layout is the only one the height field feeds. `PLOTSCMR = $1D` gave the value to check, and `$1D` has bit 2 set and bit 5 clear, so it is exactly the case the two readings disagree on.
+4. §9's own open-question list already named this, with the bit patterns spelled out and an instruction not to change it without a distinguishing game. Step 3 produced that game.
+
+**Two things worth carrying forward.**
+
+**The per-frame register dump lies about the GSU, and `PLOT*` is why it exists.** `regs` shows `SCMR = $00` at the title screen, because the game sets and clears it inside the frame (§8.3). The `PLOTSCMR` latch — recorded by `Plot` itself — is what reads `$1D`. Reaching for `regs`' plain `SCMR` here would have said the chip was in 128-line mode and sent the whole investigation somewhere else.
+
+**"Untested either way" is a claim with a scope, and the scope was the intro.** §9 said Yoshi's Island plots with both height bits set. That was measured, and it was true — of the intro, the only scene anyone had run at the time. The title screen is the same game in a different mode, and it settles it in one command. When an open question is parked as unsettleable, it is worth recording *which scene* it was measured in, because the next scene may not be.
+
+The same run also falsified the neighbouring bullet's "Yoshi's Island runs with both bits clear" for `POR` — the title screen plots with `PLOTPOR = $04`. That one is still undecidable, for a different reason, and §9 now says so.
 
 #### 10.5-hist Historical: the strip measured as 18 tiles that are never uploaded
 

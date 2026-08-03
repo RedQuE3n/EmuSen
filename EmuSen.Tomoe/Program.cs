@@ -1,3 +1,4 @@
+using EmuSen.Cores.Nintendo.Moon.Validation;
 using EmuSen.Cores.Nintendo.Venus.Validation;
 using EmuSen.Validation;
 
@@ -37,6 +38,7 @@ class Program
     {
         ["65816"] = (() => new Cpu65816SingleStepTarget(), Cpu65816TestLoader.Load),
         ["spc700"] = (() => new Spc700SingleStepTarget(), Spc700TestLoader.Load),
+        ["nes6502"] = (() => new Cpu6502SingleStepTarget(), Cpu6502TestLoader.Load),
     };
 
     static int Main(string[] args)

@@ -36,6 +36,7 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Roms/*
 !EmuSen.DianaOS/DianaOS/Usr/Home/Roms/.gitkeep
 *.smc
 *.sfc
+*.nes
 
 # Reference-emulator dumps written by MesenProbe (see EmuSen.WiseMan/Reference).
 # These are VRAM/OAM/GSU-RAM snapshots of a commercial game - the same

@@ -141,8 +141,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
                 case 0x04: return OpRol();
 
                 case 0x05: return Branch(true);
-                case 0x06: return Branch(GetFlag(FlagS) != GetFlag(FlagOv));
-                case 0x07: return Branch(GetFlag(FlagS) == GetFlag(FlagOv));
+                // $06 is BGE and $07 is BLT, not the reverse - see Venus_SuperFX.md §9.
+                case 0x06: return Branch(GetFlag(FlagS) == GetFlag(FlagOv));
+                case 0x07: return Branch(GetFlag(FlagS) != GetFlag(FlagOv));
                 case 0x08: return Branch(!GetFlag(FlagZ));
                 case 0x09: return Branch(GetFlag(FlagZ));
                 case 0x0A: return Branch(!GetFlag(FlagS));

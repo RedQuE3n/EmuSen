@@ -89,7 +89,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
                 case >= 0x05 and <= 0x0F:
                 {
-                    string[] names = { "BRA", "BLT", "BGE", "BNE", "BEQ", "BPL", "BMI", "BCC", "BCS", "BVC", "BVS" };
+                    string[] names = { "BRA", "BGE", "BLT", "BNE", "BEQ", "BPL", "BMI", "BCC", "BCS", "BVC", "BVS" };
                     // The displacement is relative to the delay slot, i.e. to pc+2.
                     int target = (pc + 2 + (sbyte)bytes[1]) & 0xFFFF;
                     return (names[opcode - 0x05], $"${target:X4}");

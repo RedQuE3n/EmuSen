@@ -33,6 +33,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             PB = 0x00;
             PC = (ushort)((high << 8) | low);
+            NoteInterruptFrame(CallFrameKind.Brk);
         }
 
         private void OpCOP(uint address)
@@ -52,10 +53,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             PB = 0x00;
             PC = (ushort)((high << 8) | low);
+            NoteInterruptFrame(CallFrameKind.Cop);
         }
 
         private void OpRTI(uint address)
         {
+            CallStack?.NotePop();
             P = Pop8();
             PC = Pop16();
 

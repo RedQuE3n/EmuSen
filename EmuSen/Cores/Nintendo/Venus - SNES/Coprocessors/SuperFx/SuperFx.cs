@@ -115,6 +115,22 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // whole-run coverage of the chip - see Venus_SuperFX.md §8.2.
         [EmuSen.Common.SkipInState] public System.Action<int>? CoverageRecorder;
 
+        // Same pull-hook shape as MemoryBus.BreakpointChecker, on PBR:R15 - see `man cpus`.
+        [EmuSen.Common.SkipInState] public System.Func<int, bool>? BreakpointChecker;
+
+        [EmuSen.Common.SkipInState] public bool HaltedAtBreakpoint;
+
+        [EmuSen.Common.SkipInState] public int HaltedAddress;
+
+        // Skips one check after resuming, so `continue` leaves the breakpoint.
+        [EmuSen.Common.SkipInState] private bool _justResumedFromBreakpoint;
+
+        public void ResumeFromBreakpoint()
+        {
+            HaltedAtBreakpoint = false;
+            _justResumedFromBreakpoint = true;
+        }
+
         public void Reset()
         {
             System.Array.Clear(R);
@@ -150,6 +166,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             if (EmuSen.Debug.DebugSettings.SuperFxSpeedDivisor > 1) perCycle *= EmuSen.Debug.DebugSettings.SuperFxSpeedDivisor;
             while (_clockBudget > 0 && Running)
             {
+                // Returns with _clockBudget intact, so resuming re-enters here - see `man cpus`.
+                int pc24 = (_pbr << 16) | R[15];
+                if (!_justResumedFromBreakpoint && BreakpointChecker != null && BreakpointChecker(pc24))
+                {
+                    HaltedAtBreakpoint = true;
+                    HaltedAddress = pc24;
+                    return;
+                }
+                _justResumedFromBreakpoint = false;
+
                 int cycles = StepInstruction();
                 _clockBudget -= cycles * perCycle;
             }

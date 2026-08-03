@@ -35,6 +35,8 @@ namespace EmuSen.DianaOS.DianaOS.Var
             public int Address;
             public bool Enabled = true;
             public long HitCount;
+
+            public string? Condition; // null = unconditional, see `man bp`
         }
 
         // A breakpoint on data rather than on control flow: halt when a
@@ -48,6 +50,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             public int Value = -1;
             public bool Enabled = true;
             public long HitCount;
+            public string? Condition;
         }
 
         private readonly List<Breakpoint> _breakpoints = new();
@@ -71,16 +74,41 @@ namespace EmuSen.DianaOS.DianaOS.Var
         // it fires, so it only ever halts once per arm.
         private bool _singleStepArmed;
 
-        public int AddBreakpoint(int address)
+        // What `step <n>` still owes - see `man step`.
+        private int _stepsRemaining;
+
+        // `step over`/`step out` arm a depth, not a count; MinValue = unarmed.
+        private int _stepDepthTarget = int.MinValue;
+
+        // Consumed at the next instruction boundary, same as _dataBreakPending.
+        private bool _eventBreakPending;
+        private string _lastEventBreak = "";
+        private CallFrameKind? _runToInterrupt;
+        private int _runToScanline = -1;
+        private long _runToFrame = -1;
+
+        // Wired by whoever owns the core; null means conditions are always-true.
+        public Func<string, (bool Result, string? Error)>? ConditionEvaluator { get; set; }
+
+        // The depth `step over`/`step out` measure against - see `man step`.
+        public CallStackRegistry? CallStack { get; set; }
+
+        // Why the last halt happened, for a frontend to print.
+        public string LastBreakReason { get; private set; } = "";
+
+        // The last condition that failed to evaluate - see `man bp`.
+        public string LastConditionError { get; private set; } = "";
+
+        public int AddBreakpoint(int address, string? condition = null)
         {
-            var bp = new Breakpoint { Id = _nextId++, Address = address };
+            var bp = new Breakpoint { Id = _nextId++, Address = address, Condition = condition };
             _breakpoints.Add(bp);
             return bp.Id;
         }
 
-        public int AddDataBreakpoint(string space, int address, int value = -1)
+        public int AddDataBreakpoint(string space, int address, int value = -1, string? condition = null)
         {
-            var bp = new DataBreakpoint { Id = _nextId++, Space = space, Address = address, Value = value };
+            var bp = new DataBreakpoint { Id = _nextId++, Space = space, Address = address, Value = value, Condition = condition };
             _dataBreakpoints.Add(bp);
             return bp.Id;
         }
@@ -88,8 +116,8 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public bool RemoveBreakpoint(int id)
             => _breakpoints.RemoveAll(b => b.Id == id) + _dataBreakpoints.RemoveAll(b => b.Id == id) > 0;
 
-        public IReadOnlyList<(int Id, string Space, int Address, int Value, bool Enabled, long HitCount)> GetDataBreakpoints()
-            => _dataBreakpoints.Select(b => (b.Id, b.Space, b.Address, b.Value, b.Enabled, b.HitCount)).ToList();
+        public IReadOnlyList<(int Id, string Space, int Address, int Value, bool Enabled, long HitCount, string? Condition)> GetDataBreakpoints()
+            => _dataBreakpoints.Select(b => (b.Id, b.Space, b.Address, b.Value, b.Enabled, b.HitCount, b.Condition)).ToList();
 
         // What the last data breakpoint that fired was, so the halt can say
         // which write stopped it rather than just showing a PC one past it.
@@ -105,6 +133,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
                 if (!bp.Enabled || bp.Address != address) continue;
                 if (!string.Equals(bp.Space, space, StringComparison.OrdinalIgnoreCase)) continue;
                 if (bp.Value >= 0 && bp.Value != value) continue;
+                if (!ConditionHolds(bp.Condition, bp.Id, () => bp.Condition = null)) continue;
                 bp.HitCount++;
                 _dataBreakPending = true;
                 _lastDataBreak = $"#{bp.Id} {space} 0x{address:X} = 0x{value:X2}";
@@ -112,8 +141,35 @@ namespace EmuSen.DianaOS.DianaOS.Var
             }
         }
 
-        public IReadOnlyList<(int Id, int Address, bool Enabled, long HitCount)> GetBreakpoints()
-            => _breakpoints.Select(b => (b.Id, b.Address, b.Enabled, b.HitCount)).ToList();
+        // From a core's interrupt entry points - see `man runto`.
+        public void NoteInterrupt(CallFrameKind kind)
+        {
+            if (_runToInterrupt != kind) return;
+            _runToInterrupt = null;
+            _eventBreakPending = true;
+            _lastEventBreak = $"{kind.ToString().ToUpperInvariant()} taken";
+        }
+
+        // Called once per scanline from a core's own scanline loop.
+        public void NoteScanline(int scanline)
+        {
+            if (_runToScanline < 0 || scanline != _runToScanline) return;
+            _runToScanline = -1;
+            _eventBreakPending = true;
+            _lastEventBreak = $"scanline {scanline} reached";
+        }
+
+        // Called once per completed frame, with that frame's number.
+        public void NoteFrame(long frameNumber)
+        {
+            if (_runToFrame < 0 || frameNumber < _runToFrame) return;
+            _runToFrame = -1;
+            _eventBreakPending = true;
+            _lastEventBreak = $"frame {frameNumber} reached";
+        }
+
+        public IReadOnlyList<(int Id, int Address, bool Enabled, long HitCount, string? Condition)> GetBreakpoints()
+            => _breakpoints.Select(b => (b.Id, b.Address, b.Enabled, b.HitCount, b.Condition)).ToList();
 
         public bool SetEnabled(int id, bool enabled)
         {
@@ -123,7 +179,64 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return true;
         }
 
-        public void ArmSingleStep() => _singleStepArmed = true;
+        public void ArmSingleStep() => ArmStep(1);
+
+        public void ArmStep(int instructions)
+        {
+            _stepsRemaining = instructions < 1 ? 1 : instructions;
+            _stepDepthTarget = int.MinValue;
+            _singleStepArmed = true;
+        }
+
+        // Halt once the stack is back to <depth> - see `man step`.
+        public bool ArmStepToDepth(int depth)
+        {
+            if (CallStack == null) return false;
+            _stepDepthTarget = depth;
+            _stepsRemaining = 0;
+            _singleStepArmed = false;
+            return true;
+        }
+
+        public bool ArmRunToInterrupt(CallFrameKind kind)
+        {
+            _runToInterrupt = kind;
+            return true;
+        }
+
+        public void ArmRunToScanline(int scanline) => _runToScanline = scanline;
+
+        public void ArmRunToFrame(long frameNumber) => _runToFrame = frameNumber;
+
+        // Cancels every armed step/run-to, leaving real breakpoints alone.
+        public void DisarmSteps()
+        {
+            _singleStepArmed = false;
+            _stepsRemaining = 0;
+            _stepDepthTarget = int.MinValue;
+            _runToInterrupt = null;
+            _runToScanline = -1;
+            _runToFrame = -1;
+            _eventBreakPending = false;
+        }
+
+        public string LastEventBreak => _lastEventBreak;
+
+        // A condition that throws clears itself via <onError> - see `man bp`.
+        private bool ConditionHolds(string? condition, int id, Action onError)
+        {
+            if (string.IsNullOrEmpty(condition)) return true;
+            if (ConditionEvaluator == null) return true;
+
+            var (result, error) = ConditionEvaluator(condition!);
+            if (error != null)
+            {
+                LastConditionError = $"breakpoint #{id}: {error} (condition dropped)";
+                onError();
+                return true;
+            }
+            return result;
+        }
 
         // Called once per instruction, BEFORE it executes, from whichever
         // core's own step loop - deliberately cheap when nothing matches (a
@@ -136,23 +249,46 @@ namespace EmuSen.DianaOS.DianaOS.Var
         {
             if (_singleStepArmed)
             {
-                _singleStepArmed = false;
+                _stepsRemaining--;
+                if (_stepsRemaining <= 0)
+                {
+                    _singleStepArmed = false;
+                    LastBreakReason = "single-step";
+                    return true;
+                }
+            }
+
+            // Before the address scan: an armed step always wins.
+            if (_stepDepthTarget != int.MinValue && CallStack != null && CallStack.Depth <= _stepDepthTarget)
+            {
+                _stepDepthTarget = int.MinValue;
+                LastBreakReason = "step over/out complete";
                 return true;
             }
 
             if (_dataBreakPending)
             {
                 _dataBreakPending = false;
+                LastBreakReason = $"data breakpoint {_lastDataBreak}";
+                return true;
+            }
+
+            if (_eventBreakPending)
+            {
+                _eventBreakPending = false;
+                LastBreakReason = _lastEventBreak;
                 return true;
             }
 
             foreach (var bp in _breakpoints)
             {
-                if (bp.Enabled && bp.Address == address)
-                {
-                    bp.HitCount++;
-                    return true;
-                }
+                if (!bp.Enabled || bp.Address != address) continue;
+                if (!ConditionHolds(bp.Condition, bp.Id, () => bp.Condition = null)) continue;
+                bp.HitCount++;
+                LastBreakReason = bp.Condition == null
+                    ? $"breakpoint #{bp.Id} at ${address:X6}"
+                    : $"breakpoint #{bp.Id} at ${address:X6} (if {bp.Condition})";
+                return true;
             }
             return false;
         }

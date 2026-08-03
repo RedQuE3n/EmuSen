@@ -37,6 +37,11 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Roms/*
 *.smc
 *.sfc
 
+# Reference-emulator dumps written by MesenProbe (see EmuSen.WiseMan/Reference).
+# These are VRAM/OAM/GSU-RAM snapshots of a commercial game - the same
+# redistribution rule as the ROMs above applies to state extracted from one.
+EmuSen.WiseMan/Reference/dumps/
+
 # The libretro cheat database, downloaded at runtime - ~28k files and
 # 250MB of CC BY-SA data that `cheat db update` fetches on demand. See
 # `man cheat`.

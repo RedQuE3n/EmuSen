@@ -262,6 +262,51 @@ namespace EmuSen.WiseMan.Coprocessors
             Assert.Equal(1, gsu.R[5]);
         }
 
+        // $06 is BGE and $07 is BLT - they were swapped once, see Venus_SuperFX.md §9.
+        [Fact]
+        public void Bge_is_taken_when_the_compare_was_not_less_than()
+        {
+            // CMP R0(2) against R1(1): 2 >= 1, so S == V and BGE ($06) is taken.
+            var gsu = Run([.. Iwt(5, 0), .. Iwt(0, 2), .. Iwt(1, 1), 0x3F, 0x61, 0x06, 0x02, 0xD5, 0xD5, Stop]);
+            Assert.Equal(1, gsu.R[5]);
+        }
+
+        [Fact]
+        public void Bge_is_not_taken_when_the_compare_was_less_than()
+        {
+            var gsu = Run([.. Iwt(5, 0), .. Iwt(0, 1), .. Iwt(1, 2), 0x3F, 0x61, 0x06, 0x02, 0xD5, 0xD5, Stop]);
+            Assert.Equal(2, gsu.R[5]);
+        }
+
+        [Fact]
+        public void Blt_is_taken_when_the_compare_was_less_than()
+        {
+            // CMP R0(1) against R1(2): 1 < 2, so S != V and BLT ($07) is taken.
+            var gsu = Run([.. Iwt(5, 0), .. Iwt(0, 1), .. Iwt(1, 2), 0x3F, 0x61, 0x07, 0x02, 0xD5, 0xD5, Stop]);
+            Assert.Equal(1, gsu.R[5]);
+        }
+
+        [Fact]
+        public void Blt_is_not_taken_when_the_compare_was_not_less_than()
+        {
+            var gsu = Run([.. Iwt(5, 0), .. Iwt(0, 2), .. Iwt(1, 1), 0x3F, 0x61, 0x07, 0x02, 0xD5, 0xD5, Stop]);
+            Assert.Equal(2, gsu.R[5]);
+        }
+
+        // The signed cases are what Yoshi's Island's object loop actually hits:
+        // a negative minus a positive overflows, so S and V disagree.
+        [Fact]
+        public void Blt_and_bge_use_signed_ordering_not_the_carry()
+        {
+            // CMP R0(-2) against R1(1): signed less-than, so BLT is taken...
+            var taken = Run([.. Iwt(5, 0), .. Iwt(0, 0xFFFE), .. Iwt(1, 1), 0x3F, 0x61, 0x07, 0x02, 0xD5, 0xD5, Stop]);
+            Assert.Equal(1, taken.R[5]);
+
+            // ...and BGE, on the same compare, is not.
+            var notTaken = Run([.. Iwt(5, 0), .. Iwt(0, 0xFFFE), .. Iwt(1, 1), 0x3F, 0x61, 0x06, 0x02, 0xD5, 0xD5, Stop]);
+            Assert.Equal(2, notTaken.R[5]);
+        }
+
         // A branch is the one non-prefix instruction that leaves the prefix
         // state alone, so TO/FROM/ALT ahead of it apply to the delay slot.
         // This is Yoshi's Island's own idiom at 0A:8146 - see Venus_SuperFX.md §4.2.

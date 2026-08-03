@@ -1,0 +1,23 @@
+diff --git a/Core/SNES/Coprocessors/GSU/Gsu.cpp b/Core/SNES/Coprocessors/GSU/Gsu.cpp
+index 4f721c7d..48336985 100644
+--- a/Core/SNES/Coprocessors/GSU/Gsu.cpp
++++ b/Core/SNES/Coprocessors/GSU/Gsu.cpp
+@@ -99,9 +99,18 @@ void Gsu::Run()
+ 	}
+ }
+ 
++bool g_gsuTraceOn = false;
++std::vector<uint32_t> g_gsuTrace;
++
+ void Gsu::Exec()
+ {
++	uint32_t traceAddr = (_state.ProgramBank << 16) | _state.R[15];
+ 	uint8_t opCode = ReadOpCode();
++	if(g_gsuTraceOn && g_gsuTrace.size() < 90000000) {
++		g_gsuTrace.push_back(traceAddr);
++		g_gsuTrace.push_back(opCode);
++		for(int i = 0; i < 16; i++) { g_gsuTrace.push_back(_state.R[i]); }
++	}
+ 
+ 	switch(opCode) {
+ 		case 0x00: STOP(); break;

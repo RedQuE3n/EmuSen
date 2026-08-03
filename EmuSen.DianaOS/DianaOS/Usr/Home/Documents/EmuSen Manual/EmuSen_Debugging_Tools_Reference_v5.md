@@ -1324,7 +1324,76 @@ Every Mesen pass above (§3.33, §3.36, §3.37, §3.38) read Mesen's **source** 
 - **~~`copflow` logs nothing for the SuperFX.~~ Wrong - corrected 2026-08-03.** It works, and it is the right tool for the GSU register window: `copflow on 250000` over 301 frames of Yoshi's Island records **185,758 accesses across 23 registers**, including `$301F` written exactly 22 times for exactly 22 GSU jobs. The original reading was taken over 100 frames, and this game does not touch `$3000-$303F` at all between frame 0 and frame ~280 - a genuinely empty window, not a broken one. **Size the buffer and the frame range to the question before concluding a log is empty.** Note `watch`/`bp write` still cannot see this window (only `RegisterFlow?.Note` is raised for `CartridgeRegion.CoprocessorRegister`, not `WriteObserver`), so `copflow` is not merely the best tool here, it is the only one.
 - **`dma` decodes some general transfers as `MPYL $2134`**, which is not a plausible DMA destination — `$2134` is a read-only multiply result. Seen on Yoshi's Island as seven transfers in one frame with otherwise sensible sources and sizes (`$7F0000` 65536 bytes, `$700000` 31744, `$702604` 20988). Every other destination in the same log decodes correctly (`$2118`, `$2104`, `$2122`), so this is either a destination-naming gap for those channels or the game really does write `BBAD = $34`. **Not chased** — it was noise relative to the sprite bug — but it is either a real decode gap or a real game behaviour worth knowing, and it should not stay unexplained.
 
+**Superseded for CPU-side questions.** Everything above diffs *state* — memory contents at a frame boundary. §3.40 diffs *control flow* instead, which is the right tool whenever the two emulators are not in phase. Keep the state dumps for "is VRAM right"; reach for §3.40 for "why is the timing off".
+
 **Checked and still not built.** Mesen's `StepBackManager` (rewind to instruction granularity), `Base6502Assembler`, `DisassemblySearch` and the Event Viewer's actual *plot* remain deferred for the reasons in §3.33 and §3.36, all unchanged. Mesen's `Cx4Debugger` and `St018Debugger` have no counterpart here for a simpler reason: this core does not implement the CX4 or the ST018, so there is nothing to debug — worth recording so a future pass does not read their absence as a debugger gap. `LuaApi::SetInput` is still parked for *our* side (§3.37); the probe's `--press` above covers the Mesen side of the same need, and `bp when autojoy` still makes the pair attractive, since a condition that fires on joypad reads goes naturally with being able to inject one.
+
+---
+
+### 3.40 Differential *control flow* — the S-CPU trace differ (`--cputrace`, `--tracediff`)
+
+**Why this exists.** §3.39 compares memory contents at a frame boundary. That is only valid when both machines are at the same point in the program, and on Yoshi's Island they are not — EmuSen ran roughly a frame off the game's own `$0030` counter, and Mesen randomises power-on RAM. Every measurement in the §10.7 investigation paid for that: "317 diverged bytes" that were almost entirely random fill, a 4-run mask to erase it, a frame-offset hunt that *minimised* but never eliminated the difference, and `gsudiff.py` desyncing on a boot block only Mesen runs. Those were not four problems. They were one problem four times — **diffing snapshots of two clocks that are out of phase, where the noise scales with the skew.**
+
+Control flow has no such coupling. If EmuSen simply runs a frame later but executes the same instructions, the two instruction streams align perfectly and the diff is empty until something real happens. Uninitialised RAM is never read at all, so the random fill cannot lie to you.
+
+**The record.** Both emulators emit the same fixed 20-byte little-endian record, defined once in `CpuBinaryTrace.cs` and parsed by `CpuTraceDiff.cs`:
+
+| offset | size | field |
+| --- | --- | --- |
+| 0 | 3 | `(PB<<16)\|PC` — for an interrupt record, the *interrupted* address |
+| 3 | 1 | reserved (0) |
+| 4 | 1 | opcode (0 on interrupt records) |
+| 5 | 1 | kind — 0 instruction, 1 NMI, 2 IRQ |
+| 6..15 | 2 ea | `A X Y S D` |
+| 16..19 | 1 ea | `DB P E` + pad |
+
+Files start with the 8-byte magic `ESCT` + version, so a blob written by an older layout is rejected rather than silently misread.
+
+Registers are captured **before** the instruction executes, on both sides — Mesen in `SnesCpu::Exec()` before `RunOp()`, EmuSen in `Cpu.Step()` after the opcode fetch but before `Dispatch`. Getting that wrong by one instruction makes every register comparison useless.
+
+**Interrupt records matter more than they look.** Mesen vectors NMI/IRQ inside `CheckForInterrupts()`, *outside* its per-instruction trace point. If one side recorded interrupt entry as a step and the other did not, the streams would desync at the very first NMI and everything after would be garbage. Both sides therefore emit an explicit kind-1/kind-2 record, and the differ treats kind as part of a step's identity, so an interrupt entry can never align with a plain instruction.
+
+**Producing the pair.**
+
+```
+# Mesen, from the Mesen checkout (its DT_NEEDED is the relative bin/pgohelperlib.so)
+cd /path/to/mesen2 && /tmp/emusen-mesen-probe/mesenprobe rom.smc outdir 80 80 --cputrace 80
+
+# EmuSen
+dotnet run --project EmuSen.Pharaoh -c Release -- rom.smc 81 --cputrace 80:outdir/emusen_cputrace_f00080.bin
+
+# Diff (standalone, no ROM loaded)
+dotnet run --project EmuSen.Pharaoh -c Release -- --tracediff outdir/mesen_cputrace_f00080.bin outdir/emusen_cputrace_f00080.bin
+```
+
+Volume is a non-issue: 80 frames of Yoshi's Island is ~1.0-1.1M steps, ~21 MB a side, and the whole diff runs in under half a second. There is no reason to trace a window rather than the entire boot.
+
+**Loop collapsing, which is what makes the output readable.** A vblank spin loop iterating a different number of times is an *insertion*, not a substitution — an index-aligned diff would report every later step as different. `CpuTraceDiff.Collapse` detects a repeating address block (smallest period first, up to 32 instructions) and emits one node carrying its repeat count. A spin loop then becomes a single node, and a differing iteration count becomes a **number to report** rather than a desync: `loop [$008497,$00849A] ran 13x on the left, 15x on the right`. That line is the signal, not the noise.
+
+**Resync.** When node shapes genuinely differ, `FindResync` looks for the smallest skip `(dl, dr)` that makes the next 8 nodes line up again — a full square search for small totals, then along each axis out to 4096 nodes, because a long skip is realistically one side running a block the other never runs, not both skipping different long blocks at once. The finding then reads `left executed N extra steps, right M, then the paths rejoin`, and the comparison continues instead of collapsing. This is precisely what `gsudiff.py` could not do, and why it was the wrong tool for §10.7.
+
+**Two kinds of finding, and why the register one is worth more.** `Structure` and `LoopCount` say the *paths* differ. `Registers` says the same instruction, at the same point in the same path, saw different inputs — data went wrong *before* control flow did. Findings come back sorted by execution position, so whichever happened first is first, regardless of kind.
+
+**What it found on the first run (2026-08-03).** Pointed at Yoshi's Island for 80 frames, the first divergence is at **step 238** — not frame 70, where three days of state diffing had placed it. It lands in the S-CPU's SPC700 IPL upload loop at `$00843B-$00844E`:
+
+```
+008440: CD 40 21  CMP $2140      ; wait for the APU to echo the byte back
+008443: D0 FB     BNE $8440      ; spin
+008445: 1A        INC A
+008448: 8D 40 21  STA $2140      ; send the next one
+00844E: D0 EB     BNE $843B
+```
+
+Both emulators upload **exactly 45,186 bytes** — the payload is right. But EmuSen spins **6.24 times per byte against Mesen's 5.45**, 14.5% more, and those extra spins account for ~71k of the 91,480-instruction excess EmuSen accumulates over the same 80 frames. Since 80 frames is the same emulated duration on both sides and both APUs complete the same upload within it, the APU is not slow — **the S-CPU is fast.** That inverts the natural first guess, and it is consistent with the `CMP Y, dp` fix (§`Venus_APU.md` 1.7) having moved the first main-loop frame from 79 to 77 against hardware's 78: we overshot.
+
+The next step is the master-clock cost of that specific two-instruction spin against Mesen's, not another memory diff. The clock ratio itself is exact (`ApuClockHz`/`_masterClockHz`, not `/21`) and `GetAccessSpeedCycles` matches the fullsnes table, so neither is the suspect.
+
+**Cautions.**
+- Both sides must start **from power-on**. The probe arms before `LoadRom` (which is what starts execution) and `FrameRunner` arms on the first `RunFrames`; `Reset()` executes no instruction on either, so the first traced step is the reset vector on both.
+- Only the S-CPU is traced. `Cpu.cs` is shared with the SA-1's core, which has no Mesen counterpart to diff against, so recording is gated on the instance name.
+- A `TruncatedSide` finding means the streams agreed for their whole shared length and one just ended first — raise its cap, do not read it as agreement.
+- The trace buffer stops recording rather than throwing when it fills, and says so; a silently short trace would look exactly like an early divergence.
+
 ---
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)

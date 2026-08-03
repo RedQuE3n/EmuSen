@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
@@ -115,10 +116,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         [EmuSen.Common.SkipInState] private readonly string _name;
         [EmuSen.Common.SkipInState] private readonly bool _logReset;
 
+        // Only the S-CPU; the SA-1's own core shares this class and has no Mesen counterpart to diff against.
+        [EmuSen.Common.SkipInState] private readonly bool _traceBinary;
+
         public Cpu(ICpuBus bus, string name = "CPU", bool logReset = true)
         {
             _name = name;
             _logReset = logReset;
+            _traceBinary = name == "CPU";
             _bus = bus;
             _verboseTrace = new DebugTools.RepeatCollapsingTrace<StepKey>(
                 Console.WriteLine,
@@ -207,6 +212,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             uint opcodeAddr = ((uint)executedAtPB << 16) | executedAtPC;
             _addrModeExtraCycles = 0;
             byte opcode = Fetch8();
+
+            // Before Dispatch, so registers are this instruction's inputs - the point Mesen records at.
+            if (CpuBinaryTrace.Enabled && _traceBinary)
+            {
+                CpuBinaryTrace.Record(opcodeAddr, opcode, CpuBinaryTrace.KindInstruction,
+                    A, X, Y, S, D, DB, P, E);
+            }
+
             uint targetAddr = Dispatch(opcode);
 
             if (DebugSettings.CpuVerboseLogging)
@@ -283,6 +296,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             _waitingForInterrupt = false;
 
+            // Carries the interrupted address, so the trace shows where vblank landed.
+            if (CpuBinaryTrace.Enabled && _traceBinary)
+            {
+                CpuBinaryTrace.Record(((uint)PB << 16) | PC, 0, CpuBinaryTrace.KindNmi, A, X, Y, S, D, DB, P, E);
+            }
+
             if (!E)
             {
                 Push8(PB);
@@ -328,6 +347,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             ushort interruptedPC = PC;
             byte interruptedPB = PB;
+
+            // After the I-flag check above, so only interrupts actually taken appear.
+            if (CpuBinaryTrace.Enabled && _traceBinary)
+            {
+                CpuBinaryTrace.Record(((uint)PB << 16) | PC, 0, CpuBinaryTrace.KindIrq, A, X, Y, S, D, DB, P, E);
+            }
 
             if (!E)
             {

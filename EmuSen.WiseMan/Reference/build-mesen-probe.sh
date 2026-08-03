@@ -42,10 +42,13 @@ export PATH="$WORK/deps/bin:$PATH"
 export CPATH="$WORK/deps/usr/include"
 export LIBRARY_PATH="$WORK/deps/usr/lib64"
 
-echo "== applying GSU trace instrumentation (idempotent)"
+echo "== applying trace instrumentation (idempotent)"
 cd "$MESEN"
 if ! grep -q g_gsuTraceOn Core/SNES/Coprocessors/GSU/Gsu.cpp; then
     git apply "$HERE/mesen-gsu-trace.patch"
+fi
+if ! grep -q g_cpuTraceOn Core/SNES/SnesCpu.cpp; then
+    git apply "$HERE/mesen-cpu-trace.patch"
 fi
 
 # STATICLINK=false: the stock recipe wants libstdc++.a, which Fedora splits out.

@@ -1490,6 +1490,37 @@ Four frames of Yoshi's Island is ~100k GSU steps and ~5 MB a side. `gsutrace` ar
 
 ---
 
+### 3.42 Measuring a slow machine on a fast one (`--throttle`)
+
+Every performance number this project has ever recorded came from one machine, a Ryzen 7700X. That was fine while the only question was "does Venus hold 60 fps?" — it does, with 3.3–12× headroom (`Venus_PPU.md` §13.1). It is useless for the question that opened on 2026-08-03: *how much machine does Venus need?* `--throttle` answers that without owning a second machine.
+
+```sh
+dotnet run --project EmuSen.Pharaoh -c Release -- <rom> <frames> --nobattery --commands script.cmds --throttle 33
+```
+
+**What it does.** `CpuThrottle.ReExec` relaunches the same argv inside a transient systemd scope with a CPU quota:
+
+```
+systemd-run --user --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms -- <self> <argv…>
+```
+
+`EMUSEN_THROTTLE_ACTIVE=1` in the child's environment is what stops it recursing. The re-exec happens in `Main` before every other mode, including `--diffshot` and `--tracediff`, because it replays argv verbatim.
+
+**Why the 5 ms period matters.** The cgroup default is 100 ms, which is six frames. At that granularity a throttled run does not behave like a slow machine — it behaves like a fast machine that freezes for 60 ms at a time, and the per-frame distribution (`p95`, `max`, `over budget`) becomes meaningless while only the mean survives. `CPUQuotaPeriodSec=5ms` puts the enforcement granularity well inside a 16.64 ms frame, so latency figures stay readable. Against a fixed synthetic workload, 100/50/33/25% then measured 0.656/1.246/2.140/2.875 s against an ideal 0.68/1.36/2.06/2.72 — within about 5–9% of linear.
+
+**It fails loudly and does not fall back.** No systemd, not Linux, `systemd-run` missing: the run exits 1 rather than quietly proceeding at full speed. This is deliberate, and the reason is §3.20's `-p:Optimize=true` footgun — a measurement flag that silently does not apply produces a *confidently wrong* number, which is worse than no number. Both the parent and the throttled child print a `[THROTTLE]` line, the child's into `--out` alongside the timings it qualifies.
+
+**`--throttle 100` is not "off".** The quota is one core's worth summed across *every* thread in the scope, so 100% models a single-core machine, not an unconstrained one. Omit the flag entirely for unconstrained.
+
+**Two honest limits.**
+
+- **The scaling overstates slowdown, unevenly.** GC and tiered-JIT background threads draw from the same quota as the emulation thread, so the observed factor at 33% ran 3.6× (KBL3), 3.8× (SMW) and 5.5× (DKC) rather than 3.0×. DKC's `max 123.83ms` is a GC pause amplified by the quota. Use it for A/B comparison and for "does this miss the budget", not as a calibrated model of a specific CPU.
+- **It is not a profiler.** It tells you the frame got slower, not which function. See below.
+
+**On profiling, and why there isn't one here.** `dotnet-trace collect --profile dotnet-sampled-thread-time --format speedscope` runs without root and its *inclusive* percentages are trustworthy — it independently put 38.78% of a KBL3 level run under `RenderScanline` against the phase counters' 39.8%, which is a genuine cross-check of §13's instrumentation. Its *leaf* attribution is not usable: Release inlining collapses the 65816 interpreter into `RunFrame`, and the sampler's stacks bottom out on a GC-poll helper that absorbed 97.6% of self time. Real function-level attribution needs `perf` with perf-maps, which means installing it and lowering `perf_event_paranoid` from 2 — both root. Until someone wants that badly enough, the per-phase counters in `Venus_PPU.md` §13 are the finer-grained instrument, and they are the ones designed not to distort what they measure.
+
+---
+
 ## 4. Underlying helper libraries (pre-date the toolchain above)
 
 ### `EmuSen.Cauldron/` — real-time snapshot providers

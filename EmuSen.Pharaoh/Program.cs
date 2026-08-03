@@ -32,6 +32,17 @@ class Program
 {
     static int Main(string[] args)
     {
+        // Before every other mode, because it relaunches this same argv - see §3.42.
+        if (!CpuThrottle.TryParsePercent(args, out int throttlePercent, out string? throttleError))
+        {
+            Console.WriteLine(throttleError);
+            return 1;
+        }
+        if (throttlePercent > 0 && !CpuThrottle.AlreadyThrottled)
+        {
+            return CpuThrottle.ReExec(throttlePercent, args);
+        }
+
         // Standalone utility mode - no ROM/core involved, so it's checked
         // before HeadlessDebugOptions.Parse ever looks at args[0].
         if (args.Length >= 1 && args[0] == "--diffshot")
@@ -112,6 +123,9 @@ class Program
         // Before LoadRom, which is what reads the .srm - see §3.15's --nobattery entry.
         EmuSen.Cores.Nintendo.Venus.Memory.Cartridge.BatteryRamDisabled = options.NoBattery;
         if (options.NoBattery) Emit("[ROM] --nobattery: the cartridge save is neither read nor written.");
+
+        // So a throttled measurement says so in its own log, not just on the parent's console - see §3.42.
+        if (CpuThrottle.AlreadyThrottled) Emit("[THROTTLE] This run is inside a CPU quota; every timing below is a slow-machine timing.");
 
         Emit($"[ROM] Loading: {options.RomPath}");
         var core = new VenusCore(headless: true);

@@ -842,7 +842,7 @@ It reports three things the FPS text can't:
 
 **Read the first `perf` in a process with suspicion.** Tiered JIT makes the opening ~20 frames materially more expensive, and they land in the "worst frames" list looking like a real spike. The Rocky Rodent run showed exactly this: p95 17.57 ms in the first window, all five worst frames inside the first 17, and 5.9 ms flat forever after. Put a `frames 300` ahead of the first `perf`, or discard that window.
 
-#### What it found: Debug builds are ~3.6x slower, and Rocky Rodent is the first game that cliff pushes under 60
+#### What it found: Debug builds are ~3.6x slower, and it is the CPU-bound titles that fall under 60
 
 Measured on this machine, gameplay, same scene, same `--commands` script:
 
@@ -854,7 +854,21 @@ Measured on this machine, gameplay, same scene, same `--commands` script:
 
 The third row is the point: the entire penalty is the **JIT optimizer being off**, not `DEBUG`-conditional code. Nothing in the core is compiled differently between the two configurations — it is purely `Optimize=false`.
 
+**`-p:Optimize=true` silently does nothing on an incremental build.** Changing that property does not invalidate MSBuild's up-to-date check, so `dotnet run -c Debug -p:Optimize=true` reuses the unoptimized assemblies and reports the plain Debug number — measured 2026-08-03: `EmuSen.dll` came back byte-identical, same timestamp, and the run was 19.0 ms against Release's 5.0. It needs `-t:Rebuild` (then `--no-build` on the run), after which it matches Release to a tenth of a millisecond. **The failure mode is the dangerous direction**: the flag looks applied, the number looks like a real finding, and the conclusion is "the optimizer is not the problem." It also fails the other way — a forced optimized Debug build stays optimized until something else forces a rebuild, so a later plain `dotnet build -c Debug` can hand back a fast Debug binary and hide the cliff entirely.
+
 Rocky Rodent matters because it is the heaviest title in the sample and therefore the first to cross the line. In Debug: RR 16.9 ms (over the 16.64 ms budget), FFVI 12.4, SMW 12.2, LttP 11.5, DKC 10.5, SM 8.0. In Release every one of those, plus CT/MMX/SoM/EB, sits between 1.9 and 4.9 ms — 3-9x headroom. So a Debug-built frontend is not "a bit slower", it is running with roughly a 1.02x margin on the heaviest game and a 1.4x margin on the next one down: any further renderer cost makes more titles fall under 60, one at a time, which is what "it's an issue in another game too" looks like from the outside.
+
+**Re-confirmed 2026-08-03 on Kirby's Dream Land 3, which is now the worst case.** Reported from outside as "in game levels we are only getting 51 fps", and the harness reproduced it to a tenth on the same in-level scene:
+
+| Config | KBL3 ms/frame | fps | over budget |
+|---|---|---|---|
+| Release | 4.93-5.03 | ~201 | 0/900 |
+| Debug | 19.34-19.69 | **50.8-51.7** | 900/900 |
+| Debug + `Optimize=true`, forced rebuild | 4.88-5.00 | ~202 | 0/900 |
+
+KBL3 displaces Rocky Rodent as the title the cliff hits hardest — RR dropped to 15.21 ms once its wasted sub-screen composite was fixed (below), and KBL3 is heavier still. The reason is a different one, and it generalises: **`cpu+spc700` is 13.2 ms of KBL3's 19.4**, because it is an **SA-1** game and that means two 65816 cores stepping every frame, with `perf`'s own coprocessor line reading `357368 clocks/frame run of 357368 offered (100.0%)` — the game keeps the SA-1 saturated. RR was a renderer problem; KBL3 is a CPU-bound one, and no renderer work will move it. The Debug cliff scales with whichever phase dominates, so the first games under 60 are now the SA-1 titles.
+
+**A frame-rate report from a frontend is a build-configuration question before it is a core question.** The core measured 5.0 ms on the same scene — a 3.3x margin — while the frontend was reporting 51 fps; the most recently built frontend assembly was in `bin/Debug`. Check which configuration is running *before* profiling anything.
 
 Two ways to not hit it, with the tradeoff stated rather than picked:
 

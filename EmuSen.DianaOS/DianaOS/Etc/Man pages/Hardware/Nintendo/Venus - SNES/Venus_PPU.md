@@ -316,6 +316,8 @@ Headless, 3000 frames from cold boot (so title, menus, and each game's own attra
 
 The NTSC frame budget is 16.64 ms (§`Venus_CPU.md` §8.5b). Mean cost is **1.4–4.7 ms**, i.e. 3.5–12× real time, and no ROM sustains anything close to the budget. The isolated `max` outliers (FFVI 15.2, SMW2 15.7) are single frames, almost certainly GC pauses — the p99 column is 3.1–8.3 ms.
 
+**SA-1 titles are the heaviest class, and the table above understates them** because it measures boot and attract mode. Measured directly in a level (KBL3, Kirby's Dream Land 3, holding Right, 900 frames): **5.0 ms mean, 0/900 over budget** — `cpu+spc700` 2.9, `ppu` 2.0, `mainComposite` 1.6. That is still a 3.3x margin, but the phase split is inverted relative to every other ROM here: the CPU phase dominates, because an SA-1 game steps two 65816 cores and `perf`'s coprocessor line reads 100% of a full-rate frame every frame. KSS's 3.22 ms `cpu+spc700` in the table is the same effect. Anything that makes the 65816 interpreter slower costs these games double, and they are the first to fall under 60 when it happens — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.20.
+
 Within the PPU phase, per-scanline main-screen compositing is the single largest item everywhere. `objEval` is negligible (≤0.08 ms). Sub-screen compositing is near-zero for games that don't really use it and only becomes significant in SMW (0.75) and SMW2 (0.60) — §5.1's skip is doing its job.
 
 ### 13.2 The "~17–18 ms during gameplay / ~13 ms of PPU" figures are historical

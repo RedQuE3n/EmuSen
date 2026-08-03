@@ -34,7 +34,7 @@ namespace EmuSen.Cores.Nintendo.Venus
     // a core-agnostic interface has no business providing - see
     // ICore.cs's own comment for why input and debug-toolchain wiring
     // deliberately stay on the concrete type instead of the interface.
-    public class VenusCore : ICore
+    public partial class VenusCore : ICore
     {
         // Real master clocks per scanline (341 dots x 4 master-clocks/dot),
         // not an abstract "CPU cycle" count - Cpu.Step() now returns actual
@@ -145,6 +145,9 @@ namespace EmuSen.Cores.Nintendo.Venus
         private bool _refreshedThisLine;
         private long _phaseStart;
 
+        // Taken where the old inline block took afterCpuSpc700, so the phase split is unchanged.
+        private long _phaseEndCpu;
+
         // Skips exactly one breakpoint check right after resuming from a
         // halt, so `continue`ing past a breakpoint executes the instruction
         // it's sitting on instead of instantly re-halting on the same PC
@@ -218,6 +221,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
             _currentScanline = 0;
             TotalFrames = 0;
+            ResetSchedule();
         }
 
         // Runs up to one frame's worth of scanlines: CPU/APU stepping,
@@ -240,6 +244,12 @@ namespace EmuSen.Cores.Nintendo.Venus
             if (Bus is null || Cpu is null || Spc700 is null || Renderer is null)
             {
                 throw new InvalidOperationException("RunFrame() called before LoadRom().");
+            }
+
+            // Without the boundary event the frame would never end; a hang is worse than a message.
+            if (!_schedule.IsScheduled((int)VenusEvent.ScanlineBoundary))
+            {
+                throw new InvalidOperationException("RunFrame() called with no scanline boundary scheduled - see ResetSchedule().");
             }
 
             // Resuming from a prior halt: let exactly the instruction we
@@ -308,15 +318,17 @@ namespace EmuSen.Cores.Nintendo.Venus
                     }
 
                     _phaseStart = Stopwatch.GetTimestamp();
-                    // Carry the boundary-crossing instruction's overshoot - see Venus_CPU.md §8.5a.
-                    _lineCycles = _lineCycles > CyclesPerScanline ? _lineCycles - CyclesPerScanline : 0;
+                    // The overshoot carries itself now: it is Now minus the line's own start - see Venus_CPU.md §8.5a.
+                    _lineCycles = (int)(_schedule.Now - _lineStartClock);
                     _refreshedThisLine = false;
                     Bus.LineCycles = _lineCycles;
                     Bus.ScanlineObserver?.Invoke(_currentScanline); // see `man runto`
                     _scanlineStarted = true;
                 }
 
-                while (_lineCycles < CyclesPerScanline)
+                long lineDeadline = _lineStartClock + CyclesPerScanline;
+
+                while (_schedule.Now < lineDeadline)
                 {
                     int pc24 = (Cpu.PB << 16) | Cpu.PC;
                     if (!_justResumedFromBreakpoint && Bus.BreakpointChecker != null && Bus.BreakpointChecker(pc24))
@@ -338,7 +350,8 @@ namespace EmuSen.Cores.Nintendo.Venus
                         cpuCycles += DramRefreshClocks;
                     }
 
-                    _lineCycles += cpuCycles;
+                    _schedule.Advance(cpuCycles);
+                    _lineCycles = (int)(_schedule.Now - _lineStartClock);
                     Bus.LineCycles = _lineCycles;
 
                     // Cpu.Step()'s returned cycle count is real elapsed
@@ -432,95 +445,15 @@ namespace EmuSen.Cores.Nintendo.Venus
                     }
                 }
 
-                long afterCpuSpc700 = Stopwatch.GetTimestamp();
-                _cpuSpc700TicksAccum += afterCpuSpc700 - _phaseStart;
+                _phaseEndCpu = Stopwatch.GetTimestamp();
+                _cpuSpc700TicksAccum += _phaseEndCpu - _phaseStart;
 
-                Bus.CurrentScanline = _currentScanline;
+                // Everything that used to follow this loop now lives in OnScheduledEvent.
+                _schedule.RunUntil(lineDeadline);
 
-                if (_currentScanline < 225)
+                if (_frameComplete)
                 {
-                    // Real hardware runs each scanline's HDMA transfer
-                    // during H-blank, BEFORE that same scanline's active
-                    // display period - so whatever a scanline's own HDMA
-                    // table entry changes (a window edge, a VRAM byte, a
-                    // CGRAM color) is already in effect by the time that
-                    // scanline's pixels are actually drawn. This used to
-                    // render first and run HDMA after, which fed every
-                    // scanline the PREVIOUS scanline's HDMA update instead
-                    // of its own - invisible for anything that changes
-                    // slowly or not at all frame-to-frame, but a visible,
-                    // wrong band of color for any effect that changes
-                    // rapidly per scanline (found via a Zelda: A Link to
-                    // the Past bridge/rain scene using indirect HDMA to
-                    // drive per-scanline window/VRAM updates).
-                    Bus.Dma.ExecuteHdma();
-                    long afterPpu = Stopwatch.GetTimestamp();
-                    _hdmaTicksAccum += afterPpu - afterCpuSpc700;
-
-                    // HDMA above still runs; only the pixel pass drops - see
-                    // EmuSen_Rewind_And_FastForward.md §2.2.
-                    if (_currentScanline < 224 && !SkipRendering)
-                    {
-                        Renderer.RenderScanline(Bus, _currentScanline);
-                    }
-                    _ppuTicksAccum += Stopwatch.GetTimestamp() - afterPpu;
-                }
-
-                if (_currentScanline == InterruptController.AutoJoypadScanline)
-                {
-                    Bus.Interrupts.InVBlank = true;
-                    Bus.Interrupts.RaiseVBlank();
-                    Bus.Ppu.ReloadOamAddressForVBlank();
-                    if (Bus.Interrupts.NmiEnabled) Cpu.Nmi();
-                }
-
-                // The auto-joypad read completes partway into vblank, not at its start - see Venus_Memory.md §4.4.
-                if (_currentScanline == InterruptController.AutoJoypadLatchScanline && Bus.Interrupts.AutoJoypadEnabled)
-                {
-                    Bus.Input.LatchAutoJoypad();
-                }
-
-                _scanlineStarted = false;
-                _currentScanline++;
-                if (_currentScanline >= _totalScanlines)
-                {
-                    _currentScanline = 0;
-                    TotalFrames++;
-                    Bus.FrameCount = TotalFrames;
-                    Bus.FrameObserver?.OnFrame(TotalFrames);
-
-                    // A frame-boundary marker in the raw trace stream -
-                    // added for a Super Metroid boot-hang investigation
-                    // where the question was "what was the CPU doing
-                    // relative to what the SPC700 was doing, in real
-                    // time" and CpuVerboseLogging/Spc700VerboseLogging
-                    // write to the same Console stream but with no shared
-                    // reference point, making that correlation only
-                    // possible by separately re-running with each flag on
-                    // and cross-referencing by eye. Gated on the same
-                    // flags that would otherwise be producing trace
-                    // output at all - this is a no-op (and prints
-                    // nothing) unless at least one of them is on, so it
-                    // can't add noise to a run that isn't already tracing
-                    // CPU/SPC700 execution.
-                    if (DebugSettings.MasterLoggingEnabled &&
-                        (DebugSettings.CpuVerboseLogging || DebugSettings.Spc700VerboseLogging))
-                    {
-                        Console.WriteLine($"[FRAME] {TotalFrames}");
-                    }
-
-                    // Periodic autosave - see Cartridge.SaveSram's own
-                    // comment for why this is safe to call this often.
-                    if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
-
-                    double ticksToMs = 1000.0 / Stopwatch.Frequency;
-                    LastFrameCpuSpc700Ms = _cpuSpc700TicksAccum * ticksToMs;
-                    LastFramePpuMs = _ppuTicksAccum * ticksToMs;
-                    LastFrameHdmaMs = _hdmaTicksAccum * ticksToMs;
-                    _cpuSpc700TicksAccum = 0;
-                    _ppuTicksAccum = 0;
-                    _hdmaTicksAccum = 0;
-
+                    _frameComplete = false;
                     return; // one full frame done - hand control back to the caller
                 }
             }

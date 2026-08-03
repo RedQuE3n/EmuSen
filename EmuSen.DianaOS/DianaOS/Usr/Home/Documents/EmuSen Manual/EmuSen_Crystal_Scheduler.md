@@ -1,6 +1,8 @@
 # EmuSen.Crystal — the core-agnostic timing scheduler
 
-*This revision: initial. The mechanism exists and is tested; no core schedules against it yet. `VenusCore.RunFrame()` still runs its own hand-rolled per-scanline loop — see §7 for what remains.*
+*This revision: Venus now schedules against Crystal (`VenusCore.Schedule.cs`), digest-clean. The event decomposition and the PPU-as-lagging-device work are still ahead — see §7.*
+
+*Previous revision: initial, mechanism only.*
 
 ---
 
@@ -90,7 +92,13 @@ A core supplies exactly three things, all of them code:
 2. **Events** — an enum of ids, and one `switch` that gives them meaning and reschedules them.
 3. **Sync points** — an explicit `Sync(device)` at each place the core reads state a lagging device owns. For Venus that is roughly six sites in `MemoryBus`: `$213E` (STAT77), and VRAM/CGRAM/OAM writes. These cannot be inferred, and having them written down is a feature — each one is a place where a device stops being allowed to lag, which is the list you want when debugging a threading bug.
 
-**Nothing implements this yet.** `VenusSchedule` is the next step, and the bar for it is a pure refactor: byte-identical `framesum` **and** `audiosum` across all 12 ROMs. Then the PPU becomes a lagging device (the 27–35%), and then `HTime` is fixed as its own separate commit — that one will legitimately *change* digests for any game using mid-scanline IRQs, and that diff must not be tangled up with a refactor that is supposed to change nothing.
+**Venus does this in `VenusCore.Schedule.cs`** (a partial of `VenusCore`, so the boundary work keeps direct access to the state it already used). `Scheduler.Now` is now the authoritative master clock: `_lineCycles` is `Now - _lineStartClock` rather than a running total, which means §8.5a's scanline-overshoot carry falls out of the subtraction instead of needing its own statement. The conversion is digest-clean — byte-identical `framesum` and `audiosum` on all 12 ROMs.
+
+**It has exactly one event, and that is a finding rather than a shortcut.** Every event in the old `RunFrame` fired at a scanline boundary, and end-of-line-N is separated from start-of-line-(N+1) only by the scanline increment. So a conversion that changes no behaviour necessarily collapses to one `ScanlineBoundary` event; splitting HDMA, render, vblank and the IRQ check apart means moving them to their true hardware times, which *changes* digests by definition. **This commit buys the timeline, not the decomposition.**
+
+What that unlocks is the point: with a master clock in place, the PPU can become a device that lags. That is the 27–35% (`Venus_PPU.md` §13.4), and it is the next step. `HTime` comes after, as its own commit, because it will legitimately change digests for any game using mid-scanline IRQs and that diff must not be tangled with a refactor that is supposed to change nothing.
+
+**Known gap: the timeline is not in the save state.** `VenusCore.SaveState` serialises `Cart`/`Cpu`/`Bus`/`Spc700`, not `VenusCore` itself, so `Scheduler.Now` and `_lineStartClock` are not written — exactly as `_lineCycles` and `_scanlineStarted` never were. A loaded state therefore resumes on the running instance's timeline rather than the saved one. That is pre-existing behaviour and not a regression (the digests confirm it), but `Scheduler.CaptureState`/`RestoreState` (§6) exist for when it is fixed properly.
 
 ---
 

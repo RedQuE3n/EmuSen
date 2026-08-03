@@ -244,6 +244,40 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         [Fact]
+        public void Advance_moves_the_clock_without_dispatching()
+        {
+            var (s, r) = Build();
+            s.At(50, 0);
+
+            s.Advance(100);
+
+            Assert.Equal(100, s.Now);
+            Assert.Empty(r.Fired);
+        }
+
+        // The overshoot case: the CPU runs past a deadline, then the event fires where it actually landed.
+        [Fact]
+        public void An_event_overrun_by_Advance_fires_at_the_overshot_clock()
+        {
+            var (s, r) = Build();
+            s.At(1000, 0);
+
+            s.Advance(1007);
+            s.RunUntil(1000);
+
+            Assert.Equal(new[] { (0, 1007L) }, r.Fired);
+            Assert.Equal(1007, s.Now);
+        }
+
+        [Fact]
+        public void Advancing_backwards_is_rejected()
+        {
+            var (s, _) = Build();
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => s.Advance(-1));
+        }
+
+        [Fact]
         public void State_round_trips_through_a_span()
         {
             var (s, _) = Build();

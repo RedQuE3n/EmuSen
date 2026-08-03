@@ -116,6 +116,13 @@ namespace EmuSen.Crystal
             if (deadline > Now) Now = deadline;
         }
 
+        // How a core spends time: the driving device consumes clocks, then RunUntil dispatches what came due.
+        public void Advance(long masterTicks)
+        {
+            if (masterTicks < 0) throw new ArgumentOutOfRangeException(nameof(masterTicks), "A clock cannot run backwards.");
+            Now += masterTicks;
+        }
+
         public void Sync(IClockedDevice device) => device.SyncTo(Now);
 
         public void SyncAll()

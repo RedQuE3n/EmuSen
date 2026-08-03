@@ -37,8 +37,29 @@ namespace EmuSen.DianaOS.DianaOS.Var
             public long HitCount;
         }
 
+        // A breakpoint on data rather than on control flow: halt when a
+        // given address is written, optionally only with a given value.
+        // Value is int so "any value" can be -1 - see the man page for `bp`.
+        private sealed class DataBreakpoint
+        {
+            public int Id;
+            public string Space = "";
+            public int Address;
+            public int Value = -1;
+            public bool Enabled = true;
+            public long HitCount;
+        }
+
         private readonly List<Breakpoint> _breakpoints = new();
+        private readonly List<DataBreakpoint> _dataBreakpoints = new();
         private int _nextId = 1;
+
+        // Set by NoteWrite, consumed by ShouldBreak at the next instruction
+        // boundary - a write happens mid-instruction, so the only safe place
+        // to stop is once that instruction has finished, exactly as a real
+        // debugger reports a data breakpoint one instruction "late".
+        private bool _dataBreakPending;
+        private string _lastDataBreak = "";
 
         // One-shot "halt before the very next instruction, whatever address
         // it's at" flag - what the F4 prompt's `step`/`s` command arms.
@@ -57,7 +78,39 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return bp.Id;
         }
 
-        public bool RemoveBreakpoint(int id) => _breakpoints.RemoveAll(b => b.Id == id) > 0;
+        public int AddDataBreakpoint(string space, int address, int value = -1)
+        {
+            var bp = new DataBreakpoint { Id = _nextId++, Space = space, Address = address, Value = value };
+            _dataBreakpoints.Add(bp);
+            return bp.Id;
+        }
+
+        public bool RemoveBreakpoint(int id)
+            => _breakpoints.RemoveAll(b => b.Id == id) + _dataBreakpoints.RemoveAll(b => b.Id == id) > 0;
+
+        public IReadOnlyList<(int Id, string Space, int Address, int Value, bool Enabled, long HitCount)> GetDataBreakpoints()
+            => _dataBreakpoints.Select(b => (b.Id, b.Space, b.Address, b.Value, b.Enabled, b.HitCount)).ToList();
+
+        // What the last data breakpoint that fired was, so the halt can say
+        // which write stopped it rather than just showing a PC one past it.
+        public string LastDataBreak => _lastDataBreak;
+
+        // Called from the core's write observer for every observed write -
+        // returns nothing, because halting here would stop mid-instruction.
+        public void NoteWrite(string space, int address, byte value)
+        {
+            if (_dataBreakpoints.Count == 0) return;
+            foreach (var bp in _dataBreakpoints)
+            {
+                if (!bp.Enabled || bp.Address != address) continue;
+                if (!string.Equals(bp.Space, space, StringComparison.OrdinalIgnoreCase)) continue;
+                if (bp.Value >= 0 && bp.Value != value) continue;
+                bp.HitCount++;
+                _dataBreakPending = true;
+                _lastDataBreak = $"#{bp.Id} {space} 0x{address:X} = 0x{value:X2}";
+                return;
+            }
+        }
 
         public IReadOnlyList<(int Id, int Address, bool Enabled, long HitCount)> GetBreakpoints()
             => _breakpoints.Select(b => (b.Id, b.Address, b.Enabled, b.HitCount)).ToList();
@@ -84,6 +137,12 @@ namespace EmuSen.DianaOS.DianaOS.Var
             if (_singleStepArmed)
             {
                 _singleStepArmed = false;
+                return true;
+            }
+
+            if (_dataBreakPending)
+            {
+                _dataBreakPending = false;
                 return true;
             }
 

@@ -217,6 +217,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 // BG2-4 which never exceed 4bpp.
                 byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0, cachedP4 = 0, cachedP5 = 0, cachedP6 = 0, cachedP7 = 0;
 
+                WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
                 for (int px = 0; px < ScreenW; px++)
                 {
                     int samplePx = mosaicOn ? px - (px % mosaicSize) : px;
@@ -292,18 +293,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                     cache.Opaque[px] = pixel != 0;
 
-                    // IsWindowMasked deliberately only runs for opaque
-                    // pixels, matching the original short-circuited
-                    // "pixel != 0 && !IsWindowMasked(...)" check - calling
-                    // it unconditionally for every pixel (including fully
-                    // transparent ones, common for parallax/sky/background
-                    // gaps) was tried here first and made PPU rendering
-                    // slower than before this cache existed at all, not
-                    // faster - a real regression caught by the same [FPS]
-                    // readout this whole change was built to satisfy.
+                    // Opaque pixels only; testing every pixel was measured slower - see Venus_PPU.md §7.1.
                     if (pixel != 0)
                     {
-                        cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
+                        cache.WindowMasked[px] = window.Active && window.Masked(px);
 
                         if (directColor)
                         {
@@ -375,6 +368,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int lastRow = -1;
                 byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0;
 
+                WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
                 for (int px = 0; px < ScreenW; px++)
                 {
                     int samplePx = mosaicOn ? px - (px % mosaicSize) : px;
@@ -444,7 +438,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     // opaque pixels.
                     if (pixel != 0)
                     {
-                        cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
+                        cache.WindowMasked[px] = window.Active && window.Masked(px);
 
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 1));
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
@@ -499,6 +493,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int lastRow = -1;
                 byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0;
 
+                WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
                 for (int px = 0; px < ScreenW; px++)
                 {
                     int samplePx = mosaicOn ? px - (px % mosaicSize) : px;
@@ -557,7 +552,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     // opaque pixels.
                     if (pixel != 0)
                     {
-                        cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
+                        cache.WindowMasked[px] = window.Active && window.Masked(px);
 
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 2));
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
@@ -612,6 +607,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int lastRow = -1;
                 byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0;
 
+                WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
                 for (int px = 0; px < ScreenW; px++)
                 {
                     int samplePx = mosaicOn ? px - (px % mosaicSize) : px;
@@ -670,7 +666,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     // opaque pixels.
                     if (pixel != 0)
                     {
-                        cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
+                        cache.WindowMasked[px] = window.Active && window.Masked(px);
 
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 3));
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);

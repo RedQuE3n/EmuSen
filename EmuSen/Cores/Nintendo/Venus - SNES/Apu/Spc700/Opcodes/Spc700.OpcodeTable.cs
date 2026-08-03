@@ -18,12 +18,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
             for (int i = 0; i < 256; i++)
             {
-                _instructions[i] = new SpcInstruction 
-                { 
-                    Name = "NOP/UNK", 
-                    AddrMode = AddrImplied, 
-                    Operate = OpUnknown, 
-                    Cycles = 2 
+                _instructions[i] = new SpcInstruction
+                {
+                    Name = "NOP/UNK",
+                    AddrMode = AddrImplied,
+                    Operate = OpUnknown,
+                    Cycles = 2,
+                    Unimplemented = true
                 };
             }
 

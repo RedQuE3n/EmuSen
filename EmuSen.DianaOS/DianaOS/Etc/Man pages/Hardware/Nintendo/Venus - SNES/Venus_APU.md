@@ -91,6 +91,18 @@ The S-CPU meanwhile spins in `CMP $2140 / BNE` waiting for that echo, so **the S
 
 **The measurement trap this cost an hour on.** "Bytes uploaded per frame" is *not* comparable across the two emulators by diffing consecutive APU RAM dumps. Mesen fills APU RAM randomly at power-on, so writing real data changes ~255/256 of the bytes it touches; we zero-fill, so writing a zero changes nothing and the count silently undercounts by however much of the payload is zero. That produced a confident "we upload 6% slower" that was pure artifact. **Anchor on the game's own state** (`$0030` here), never on a byte-change count against a randomly-initialised reference.
 
+### 1.8 The dispatch loop compared a string per instruction, and removing it was worth nothing
+
+`Step` decided whether an opcode was implemented with `if (inst.Name == "NOP/UNK")` — a `string` comparison on **every SPC700 instruction executed**, plus a 40-byte `SpcInstruction` struct copy out of the table to do it. Both are now gone: `SpcInstruction.Unimplemented` is a `bool` set only by `BuildOpcodeTable`'s default fill, and the table entry is read `ref` rather than copied.
+
+**It made no measurable difference.** Three runs each way, 600 frames, Release: SMW 3.49/3.45/3.53 ms against a 3.52/3.44/3.49 baseline; DKC 2.69/2.69/2.70 against 2.69/2.70/2.69. Not a small win — no win, inside run-to-run noise on both.
+
+**Why it is kept anyway.** It is strictly less work for identical output (all 12 ROMs' `framesum`/`audiosum` digests unchanged), and a string compare in an interpreter's hot path is the kind of thing that reads as a bug to the next person even when it costs nothing.
+
+**What this says about the planned `switch` conversion.** `Venus_PPU.md` §13's standing note that converting the SPC700's delegate dispatch table to a `switch` — the shape the 65816 already has — is worth ~2% should be treated as **unverified**, not confirmed. This change did not touch the delegate indirection, so it does not refute that figure; but it does establish that the SPC700's share of a frame is small enough that the surrounding overhead is invisible, which makes ~2% from dispatch alone look optimistic. Measure before spending a day on 256 cases.
+
+---
+
 ## 2. SPC700 instruction set notes
 
 ### 2.1 `dd,ds` ALU family — operand order is not what the mnemonic suggests

@@ -137,10 +137,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         private void RenderObj(Ppu ppu, int py, float brightness, Color[] target, int[] targetLayer, int layerId, int priorityFilter, bool isMainScreen)
         {
+            WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
+
             for (int x = 0; x < ScreenW; x++)
             {
                 if (!_objSet[x] || _objPriority[x] != priorityFilter) continue;
-                if (IsWindowMasked(ppu, layerId, isMainScreen, x)) continue;
+                if (window.Active && window.Masked(x)) continue;
 
                 target[x] = _objColor[x];
                 targetLayer[x] = layerId;

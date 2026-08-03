@@ -26,9 +26,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
     public struct SpcInstruction
     {
         public string Name;
-        public Func<ushort> AddrMode;    
-        public Action<ushort> Operate;   
-        public byte Cycles;            
+        public Func<ushort> AddrMode;
+        public Action<ushort> Operate;
+        public byte Cycles;
+        // Set only by the table's default fill, so Step needs no string compare - see Venus_APU.md §1.8.
+        public bool Unimplemented;
     }
 
     public partial class Spc700
@@ -413,9 +415,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
             PC++;
 
-            SpcInstruction inst = _instructions[opcode];
+            // By ref, so dispatch reads the entry in place instead of copying 40 bytes per instruction.
+            ref SpcInstruction inst = ref _instructions[opcode];
 
-            if (inst.Name == "NOP/UNK")
+            if (inst.Unimplemented)
             {
                 throw new NotImplementedException($"Unimplemented SPC700 Opcode: 0x{opcode:X2} at PC: 0x{(PC - 1):X4}");
             }

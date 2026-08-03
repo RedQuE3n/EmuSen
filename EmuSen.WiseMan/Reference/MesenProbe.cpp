@@ -24,22 +24,74 @@
 extern bool g_gsuTraceOn;
 extern std::vector<uint32_t> g_gsuTrace;
 
-// Mesen drives input through a registered key manager, so headless needs one
-// that is always "nothing pressed" rather than none at all.
-class NullKeyManager : public IKeyManager
+// Synthetic scan codes this probe assigns to the SNES pad, so a --press
+// script can hold a button without a real keyboard - see the man page.
+enum ProbeKey : uint16_t
+{
+	KeyA = 1, KeyB = 2, KeyX = 3, KeyY = 4, KeyL = 5, KeyR = 6,
+	KeyUp = 7, KeyDown = 8, KeyLeft = 9, KeyRight = 10,
+	KeyStart = 11, KeySelect = 12,
+};
+
+// Mesen drives input through a registered key manager, so headless needs one.
+// Rather than always "nothing pressed", this one answers from a frame-indexed
+// schedule, which is what lets the probe walk a file-select menu and reach a
+// scene that only exists after a new game is started.
+class ScriptedKeyManager : public IKeyManager
 {
 public:
+	static const uint32_t MaxFrames = 65536;
+
+	// Filled before the emulator starts, then read-only. Indexed by frame, so
+	// the schedule is resolved against Emulator::GetFrameCount() at the moment
+	// the pad is polled - the probe runs at maximum speed, and a cached
+	// per-poll counter would skip past whole presses.
+	std::vector<std::vector<uint16_t>> Held{MaxFrames};
+	Emulator* Emu = nullptr;
+
+	void Press(uint32_t startFrame, uint32_t duration, uint16_t key)
+	{
+		for(uint32_t f = startFrame; f < startFrame + duration && f < MaxFrames; f++) {
+			Held[f].push_back(key);
+		}
+	}
+
 	void RefreshState() {}
 	void UpdateDevices() {}
 	bool IsMouseButtonPressed(MouseButton button) { return false; }
-	bool IsKeyPressed(uint16_t keyCode) { return false; }
-	vector<uint16_t> GetPressedKeys() { return {}; }
-	string GetKeyName(uint16_t keyCode) { return ""; }
-	uint16_t GetKeyCode(string keyName) { return 0; }
+
+	bool IsKeyPressed(uint16_t keyCode)
+	{
+		uint32_t f = Emu ? Emu->GetFrameCount() : 0;
+		if(f >= MaxFrames) return false;
+		for(uint16_t k : Held[f]) { if(k == keyCode) return true; }
+		return false;
+	}
+
+	vector<uint16_t> GetPressedKeys()
+	{
+		uint32_t f = Emu ? Emu->GetFrameCount() : 0;
+		return f < MaxFrames ? Held[f] : vector<uint16_t>();
+	}
+
+	string GetKeyName(uint16_t keyCode) { return std::to_string(keyCode); }
+	uint16_t GetKeyCode(string keyName) { return (uint16_t)atoi(keyName.c_str()); }
 	bool SetKeyState(uint16_t scanCode, bool state) { return false; }
 	void ResetKeyState() {}
 	void SetDisabled(bool disabled) {}
 };
+
+// Maps a button name from the --press script onto its synthetic scan code.
+static uint16_t KeyFromName(const string& n)
+{
+	if(n == "A") return KeyA;          if(n == "B") return KeyB;
+	if(n == "X") return KeyX;          if(n == "Y") return KeyY;
+	if(n == "L") return KeyL;          if(n == "R") return KeyR;
+	if(n == "Up") return KeyUp;        if(n == "Down") return KeyDown;
+	if(n == "Left") return KeyLeft;    if(n == "Right") return KeyRight;
+	if(n == "Start") return KeyStart;  if(n == "Select") return KeySelect;
+	return 0;
+}
 
 static void WriteBlob(const string& dir, const char* name, uint32_t frame, const void* data, size_t bytes)
 {
@@ -61,10 +113,13 @@ static void DumpHex(const char* label, uint8_t* mem, uint32_t size, uint32_t add
 int main(int argc, char** argv)
 {
 	if(argc < 5) {
-		printf("usage: mesenprobe <rom> <outDir> <startFrame> <endFrame> [stride] [gsuRamAddr] [traceUntilFrame]\n");
-		printf("  Writes mesen_{vram,cgram,oam,gsuram,screen}_f<frame>.bin per report.\n");
+		printf("usage: mesenprobe <rom> <outDir> <startFrame> <endFrame> [stride] [gsuRamAddr] [traceUntilFrame] [--press F:BTN[:DUR]]...\n");
+		printf("  Writes mesen_{vram,cgram,oam,gsuram,wram,apuram,screen}_f<frame>.bin per report.\n");
 		printf("  traceUntilFrame additionally records every GSU instruction from boot\n");
 		printf("  as mesen_gsutrace_f<frame>.bin - 18 uint32 per step: addr, opcode, R0-R15.\n");
+		printf("  --press holds BTN (A/B/X/Y/L/R/Up/Down/Left/Right/Start/Select) on port 1\n");
+		printf("  from frame F for DUR frames (default 4) - repeatable, needed to reach any\n");
+		printf("  scene behind a menu.\n");
 		return 1;
 	}
 
@@ -72,32 +127,66 @@ int main(int argc, char** argv)
 	string dumpDir = argv[2];
 	uint32_t startFrame = (uint32_t)atoi(argv[3]);
 	uint32_t endFrame = (uint32_t)atoi(argv[4]);
-	uint32_t stride = argc > 5 ? (uint32_t)atoi(argv[5]) : 1;
-	uint32_t dumpAddr = argc > 6 ? (uint32_t)strtoul(argv[6], nullptr, 16) : 0x0A00;
-	uint32_t traceFrame = argc > 7 ? (uint32_t)atoi(argv[7]) : 0xFFFFFFFF;
+	// A "--" flag ends the optional positionals, so --press can follow endFrame
+	// directly without being read as a stride.
+	auto positional = [&](int i) { return argc > i && argv[i][0] != '-'; };
+	uint32_t stride = positional(5) ? (uint32_t)atoi(argv[5]) : 1;
+	uint32_t dumpAddr = positional(6) ? (uint32_t)strtoul(argv[6], nullptr, 16) : 0x0A00;
+	uint32_t traceFrame = positional(7) ? (uint32_t)atoi(argv[7]) : 0xFFFFFFFF;
 
 	// Kept beside the dumps so a probe run never touches a real Mesen profile
 	// (and so its .srm does not silently change what the ROM boots into).
 	FolderUtilities::SetHomeFolder(dumpDir + "/mesenhome");
 
 	unique_ptr<Emulator> emu(new Emulator());
-	NullKeyManager km;
-	KeyManager::RegisterKeyManager(&km);
+	unique_ptr<ScriptedKeyManager> km(new ScriptedKeyManager());
+	for(int i = 5; i < argc; i++) {
+		if(string(argv[i]) != "--press" || i + 1 >= argc) continue;
+		string spec = argv[++i];
+		size_t c1 = spec.find(':');
+		size_t c2 = spec.find(':', c1 + 1);
+		uint32_t start = (uint32_t)atoi(spec.substr(0, c1).c_str());
+		string btn = spec.substr(c1 + 1, c2 == string::npos ? string::npos : c2 - c1 - 1);
+		uint32_t dur = c2 == string::npos ? 4 : (uint32_t)atoi(spec.substr(c2 + 1).c_str());
+		uint16_t key = KeyFromName(btn);
+		if(key == 0) { printf("[ERROR] unknown button '%s'\n", btn.c_str()); return 1; }
+		km->Press(start, dur, key);
+		printf("[INFO] press %s frames %u..%u\n", btn.c_str(), start, start + dur - 1);
+	}
+	km->Emu = emu.get();
+	KeyManager::RegisterKeyManager(km.get());
 	KeyManager::SetSettings(emu->GetSettings());
 
 	emu->Initialize();
 	emu->GetSettings()->SetFlag(EmulationFlags::MaximumSpeed);
+
+	// The stock config has no keyboard binding at all, so port 1 would read as
+	// idle no matter what the schedule says.
+	SnesConfig scfg = emu->GetSettings()->GetSnesConfig();
+	scfg.Port1.Type = ControllerType::SnesController;
+	KeyMapping& kmap = scfg.Port1.Keys.Mapping1;
+	kmap.A = KeyA; kmap.B = KeyB; kmap.X = KeyX; kmap.Y = KeyY;
+	kmap.L = KeyL; kmap.R = KeyR;
+	kmap.Up = KeyUp; kmap.Down = KeyDown; kmap.Left = KeyLeft; kmap.Right = KeyRight;
+	kmap.Start = KeyStart; kmap.Select = KeySelect;
+	emu->GetSettings()->SetSnesConfig(scfg);
 
 	if(!emu->LoadRom((VirtualFile)romPath, VirtualFile())) {
 		printf("[ERROR] failed to load %s\n", romPath.c_str());
 		return 1;
 	}
 
+	// The S-CPU's own RAM, so a divergence that starts on the CPU side can be
+	// bisected the same way GSU RAM already could - see §3.39.
+	ConsoleMemoryInfo wram = emu->GetMemory(MemoryType::SnesWorkRam);
+	// The SPC700's RAM, so a boot-timing lag in the APU upload handshake is
+	// visible as data rather than inferred - see §10.7.
+	ConsoleMemoryInfo apuRam = emu->GetMemory(MemoryType::SpcRam);
 	ConsoleMemoryInfo gsuRam = emu->GetMemory(MemoryType::GsuWorkRam);
 	ConsoleMemoryInfo vram = emu->GetMemory(MemoryType::SnesVideoRam);
 	ConsoleMemoryInfo cgram = emu->GetMemory(MemoryType::SnesCgRam);
 	ConsoleMemoryInfo oam = emu->GetMemory(MemoryType::SnesSpriteRam);
-	printf("[INFO] GsuWorkRam %u bytes, VRAM %u, CGRAM %u, OAM %u\n", gsuRam.Size, vram.Size, cgram.Size, oam.Size);
+	printf("[INFO] GsuWorkRam %u bytes, WRAM %u, APURAM %u, VRAM %u, CGRAM %u, OAM %u\n", gsuRam.Size, wram.Size, apuRam.Size, vram.Size, cgram.Size, oam.Size);
 
 	SnesConsole* console = dynamic_cast<SnesConsole*>(emu->GetConsole().get());
 	Gsu* gsu = console ? console->GetCartridge()->GetGsu() : nullptr;
@@ -147,6 +236,8 @@ int main(int argc, char** argv)
 		WriteBlob(dumpDir, "cgram", frame, cgram.Memory, cgram.Size);
 		WriteBlob(dumpDir, "oam", frame, oam.Memory, oam.Size);
 		WriteBlob(dumpDir, "gsuram", frame, gsuRam.Memory, gsuRam.Size);
+		WriteBlob(dumpDir, "wram", frame, wram.Memory, wram.Size);
+		WriteBlob(dumpDir, "apuram", frame, apuRam.Memory, apuRam.Size);
 		if(console) {
 			// Raw BGR555, row stride is the reported width - not 512.
 			WriteBlob(dumpDir, "screen", frame, console->GetPpu()->GetScreenBuffer(), 512 * 478 * 2);

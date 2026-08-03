@@ -18,12 +18,20 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "  disasm <space> <addr> [<n>]   disassemble <n> instructions (default 10)",
             "  disasm <cpu> [<addr>] [<n>]   same, in that processor's own code space and ISA -",
             "                                with no <addr>, starts at where it is executing now",
+            "  ... [m8|m16] [x8|x16]         65816 only: force the starting operand widths",
         });
+
+        private static bool IsWidthHint(string s) =>
+            s is "m8" or "m16" or "x8" or "x16" or "M8" or "M16" or "X8" or "X16";
 
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = global::EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers.RequireTarget(target);
             if (parts.Length < 2) return "Usage: disasm <space>|<cpu> <addr> [<count>]";
+
+            // Pulled out first so they never read as <addr>/<count>.
+            var hints = parts.Where(IsWidthHint).ToArray();
+            if (hints.Length > 0) parts = parts.Where(p => !IsWidthHint(p)).ToArray();
 
             // A chip name stands in for its own code space - see `man cpus`.
             var named = DebugCpus.Find(target.DebugCpus, parts[1]);
@@ -43,11 +51,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 
             int count = parts.Length >= at + 2 ? ParseHex(parts[at + 1]) : 10;
 
-            var instructions = target.Disassemble(space, addr, count);
+            var instructions = target.Disassemble(space, addr, count, hints);
             if (instructions.Count == 0) return $"{target.CoreName} target has no disassembler, or nothing was returned.";
 
             var labels = target.Labels;
             var sb = new StringBuilder();
+            // Echoed so a scripted run records which widths produced the listing.
+            if (hints.Length > 0) sb.AppendLine($"  ; decoding with {string.Join(' ', hints).ToLowerInvariant()}");
             foreach (var instr in instructions)
             {
                 // A label gets its own line - see `man label`.

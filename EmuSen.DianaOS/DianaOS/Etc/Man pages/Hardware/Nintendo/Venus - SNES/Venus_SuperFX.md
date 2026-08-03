@@ -245,6 +245,8 @@ That is a feature, not an accident of naming: "did the CPU stage this, or did th
 
 **Accesses are labelled with the GSU's own PC.** `SuperFx.DebugInstructionAddress` records `PBR:R15` at the top of each instruction, before `StepInstruction` runs, so `watch summary` reports `GSU PC=0x0AD012` rather than whatever the S-CPU happened to be executing — which for a chip running asynchronously is noise. The SA-1 path already did this with `LastInstructionPB`/`PC`; the GSU has no equivalent, hence the explicit field.
 
+**Use that field, not `R[15]`, anywhere an access is being attributed.** The `SuperFxRamWriteTraceAddr` console trace printed `_pbr:R[15]` and so named the instruction *after* the one that wrote: `R15` has already advanced over the current instruction's operand bytes by the time `WriteRam` runs, which for the two-byte `SMS` at `$09:984F` reported `$09:9851`. Fixed 2026-08-03; `watch` was always right because it went through `DebugInstructionAddress`. The disagreement between the two is what exposed it (§10.7), and a lone trace with no second opinion would simply have sent someone to the wrong instruction.
+
 **Two behaviours changed for the SA-1 as well**, deliberately: `OnCoprocessorWrite` used to record the watch and nothing else, so `bp write` and `counters` silently ignored every write a coprocessor made. It now runs the same three (`_watches`, `_breakpoints`, `_accessCounters`) the S-CPU path does. `RestoreIfFrozen` is still deliberately *not* on the coprocessor path — `freeze` undoing a chip's own write mid-computation is a different feature with its own hazards, and nothing has needed it yet.
 
 **Cost when nothing is attached** is a null check per RAM byte. `ReadRam` is on the plot hot path (`FlushPixelCache` reads every bitplane it merges into), so this is not free in principle; measured against the full suite it is not visible, and `EmuSen_Games_Tested.md`'s digests are unchanged. Pinned by `EmuSen.WiseMan/Coprocessors/SuperFxRamObservationTests.cs`, including that a chip with no observer attached still runs.
@@ -454,6 +456,79 @@ Trace with `--flag SuperFxPlotTraceSkip=N --flag SuperFxPlotTraceInstr=M` (§8).
 **"Untested either way" is a claim with a scope, and the scope was the intro.** §9 said Yoshi's Island plots with both height bits set. That was measured, and it was true — of the intro, the only scene anyone had run at the time. The title screen is the same game in a different mode, and it settles it in one command. When an open question is parked as unsettleable, it is worth recording *which scene* it was measured in, because the next scene may not be.
 
 The same run also falsified the neighbouring bullet's "Yoshi's Island runs with both bits clear" for `POR` — the title screen plots with `PLOTPOR = $04`. That one is still undecidable, for a different reason, and §9 now says so.
+
+### 10.7 Open: the 1-1 intro camera pans left - and the origin is a frame-70 S-CPU divergence, not the GSU
+
+**Not fixed. The GSU is downstream of this, not the cause: WRAM is byte-identical through frame 69 and diverges at frame 70, at which point neither emulator has run a single GSU instruction.**
+
+**The symptom.** Start a new file and let the level 1-1 opening cutscene play. Every message renders correctly and the Yoshi line-up is intact. After the last one ("Now begins a new adventure for the Yoshies and baby Mario.") the Yoshis should walk **right** and hand off to the level. Instead the camera pans **left** at 1px/frame forever; the Yoshis are static in world space and slide off the right edge (OAM count falls 51 -> 40), and the "Welcome To Yoshi's Island" card never appears.
+
+**The chain from pixels to the chip.** `$210D` <- WRAM-resident code at `$7E:C53E` copying `$011D/$011E` <- `$7E:C4A2` from direct-page `$39` <- `$04:FDE2` from `$6094` with `DBR = $04`. Bank `$04` offset `$6094` is the S-CPU's `$6000-$7FFF` window, so that is **GSU RAM `$0094`** (§5.1's `offset & 0x1FFF`), written by **GSU PC `$09:984F`**. Mesen counts it **up** `256 -> 496` (+1/frame, stopping at its target `$1F0`); we count **down** from the same 256 at -1/frame.
+
+#### The method, because two passes got the wrong answer before this one
+
+Both emulators are driven from power-on by the **same** input schedule (`--tap` and `--press` take the same `frame:button:duration`), and every comparison is masked by **four independent Mesen runs** - a byte only counts as game-determined when all four agree. Mesen fills RAM randomly at power-on, and with two runs ~1.5 of 400 random bytes agree by chance, which reads exactly like a real finding. An unmasked single-moment diff reported "317 bytes differ", which was almost entirely that noise.
+
+**Frame numbers are not directly comparable, and that matters more than it looks.** We run about **one frame behind** Mesen from frame 70 on: the game's own frame counter at WRAM `$0030` is consistently exactly 1 lower in every sample from frame 80 to 260, with the countdown at `$011A` correspondingly 1 higher. Sweeping the offset over frames 297-305, `+1` minimises the difference (WRAM 18.7 bytes/frame against 32.0 at `+0`) - **but does not remove it**, and ~17 GSU RAM bytes survive at the best offset. So there is a real divergence *plus* a one-frame lag, and any measurement that ignores the lag overstates the divergence.
+
+#### Where it actually starts
+
+WRAM diffed frame by frame with the four-run mask:
+
+| frame | game-determined WRAM bytes differing |
+| --- | --- |
+| 60-69 | **0** |
+| 70 | 737 |
+| 71-72 | ~14,900 |
+| 73 | 4 |
+
+A large WRAM initialisation happens a frame apart on the two machines, and the one-frame lag dates from exactly there. **Neither emulator has executed any GSU instruction by frame 70** - a Mesen trace with `traceUntilFrame=70` contains zero steps - so nothing about the SuperFX can be the cause. This is S-CPU/PPU/APU/DMA boot timing.
+
+#### What the GSU side looks like once the lag is accounted for
+
+Comparing the **sequence of GSU jobs** (split each trace at `STOP`; a job is its entry address and length) over power-on to frame 301: we run **22** jobs, Mesen runs **42**, and the sequences are identical except that Mesen runs an initial block of **18 jobs we skip entirely**, and ends two jobs further along. The skipped block is the game's boot self-test - `$08:DE83` is a 52-word checksum (`LDW (R10)` / `ADD R1` / `INC R10` under `IWT R12,#$0034`) compared against `$7777`, in a six-job pattern repeated three times with `$08:DE59` and `$08:DE73`. **It writes nothing to RAM**, which is exactly why GSU RAM could still match byte-for-byte while we never ran it.
+
+The two jobs we have not reached by frame 301 are `$08:B1D8` and `$09:884C`. `$08:B1D8` is the object-table hide-fill:
+
+```
+08B1D9: IWT R0,#$0200     ; table start
+08B1DD: SMS ($0092),R0    ; end-pointer := $0200
+08B1DF: IWT R1,#$8000     ; hide sentinel
+08B1E4: IWT R12,#$0100    ; 256 iterations
+08B1E9: FROM R1 / STW (R0) / LOOP / ADD R2     ; 4 steps x 256 = 1024
+08B1ED: STOP
+```
+
+1024 + ~13 setup = **1,037 steps**, which is precisely the deficit measured between the two traces for that address range (2,945 against 3,982). So hardware ends frame 301 with an emptied table (`$0092 = $0200`, every slot `$8000`) and we end it with twelve live entries (`$0092 = $0260`) - the state the camera is later computed from.
+
+#### Ruled out, with evidence
+
+- **Game Pak RAM size.** We allocate the GSU's full addressable 128KB (`SuperFxRamSize`); the cart and Mesen have 32KB, so accesses above 32KB do not mirror as hardware would. Rebuilding with `sramSize = batteryRamSize` produced a **byte-identical** failure. The discrepancy is real and §1 should say which behaviour is intended, but it is not this bug.
+- **GSU/S-CPU speed.** `SuperFxSpeedDivisor` 1 and 2 leave `$0092 = $0260`; 3 and above give `$0000`. No divisor reproduces hardware's `$0200`.
+- **Dropped start requests.** Instrumenting the `if (Running) return;` guard in `WriteRegister` recorded **zero** dropped writes over 40 frames, and `copflow` shows `$301F` written exactly 22 times for exactly 22 jobs. The S-CPU never asks for the jobs we are missing.
+- **The GSU IRQ line.** It is wired - `VenusCore.cs` polls `gsu.ScpuIrqPending` and calls `Cpu.Irq()` at the same per-instruction granularity as the SA-1.
+- **The register-access rule.** Hardware allows only SFR and SCMR while the chip runs; we also allow `$3031/$3033/$3034/$3037/$3038/$3039`. Tightening it to match changed nothing at the anchor. Worth fixing on its own merits, not for this.
+- **The subtraction at `$09:9512`.** Both its inputs are already wrong by the time it runs. Do not "fix" it.
+
+#### Traced further: the lag is the APU boot upload, and one cycle of it is now fixed
+
+Tracing the S-CPU across frames 70-79 puts it in the **SPC700 upload loop** at `$00:843B-$00:844E`: `LDA [$0A],Y` / `CMP $2140` / `BNE` - it spins 5-7 times per byte waiting for the SPC's IPL loader to echo the index, so the **SPC side sets the transfer rate**. Both emulators' IPL ROMs are byte-identical, and with a four-run mask APU RAM agrees on the uploaded payload, so the loader code and data are right; only its timing differed.
+
+`CMP Y, dp` (`$7E`) was charged **4 cycles instead of 3** - see `Venus_APU.md` §1.7, now fixed and pinned by a test. It sits in the IPL's 25-cycle per-byte loop, and the extra cycle stretched the ~19-frame upload enough to land the game's first main-loop frame a whole frame late. Measured on the game's own frame counter at WRAM `$0030`, which first increments at **frame 78** on hardware:
+
+| | first `$0030` increment |
+| --- | --- |
+| hardware | 78 |
+| before the fix | 79 |
+| after the fix | **77** |
+
+So the lag is real and this was part of it, but the boot now lands one frame *early* rather than one late - something else on this path is still slightly fast. **The camera bug itself is unchanged by the fix**, which is expected: a one-frame boot offset is not obviously sufficient to produce it, and the fix does not close the residual ~17 GSU bytes that survive the best frame offset.
+
+**A measurement trap worth carrying.** "Upload bytes per frame", computed by diffing consecutive APU RAM dumps, is **not** comparable across the two emulators: Mesen randomises APU RAM at power-on so writing real data changes ~255/256 of the bytes it touches, while we zero-fill and a written zero changes nothing. That yielded a confident "we upload 6% slower" that was entirely artifact. The `$0030` counter is the sound measurement because it is the game's own state.
+
+#### Where to pick it up
+
+Bisect frame 69 -> 70 at sub-frame granularity on the **S-CPU** side - what large WRAM initialisation runs there, and what the CPU is waiting on for the extra frame. `gsudiff.py` is the wrong tool for any of this: its collapse trick cancels Mesen's primed-NOP offset but not the two cores' different job *ordering*, so it reports a confident divergence at step 9 that is pure bookkeeping. Counting trace steps per address range, and splitting traces into jobs at `STOP`, are what actually localised things here.
 
 #### 10.5-hist Historical: the strip measured as 18 tiles that are never uploaded
 

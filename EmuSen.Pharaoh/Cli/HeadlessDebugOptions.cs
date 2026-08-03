@@ -26,6 +26,49 @@ namespace EmuSen.Pharaoh.Cli
         public List<(long Start, long End, SnesButton Button, int Controller)> Taps { get; init; } = new();
         public List<(long Frame, string Path)> Screenshots { get; init; } = new();
 
+        // Hex, bools and bare names - see §3.15's --flag entry.
+        public static bool TryConvertFlagValue(string? rawValue, Type memberType, out object? value, out string? error)
+        {
+            value = null;
+            error = null;
+
+            if (rawValue == null)
+            {
+                // "Switch this on" only means anything for a bool - see §3.15.
+                if (memberType == typeof(bool)) { value = true; return true; }
+                error = $"{memberType.Name} needs an explicit value, e.g. Name=100.";
+                return false;
+            }
+
+            if (memberType == typeof(bool))
+            {
+                if (bool.TryParse(rawValue, out bool b)) { value = b; return true; }
+                if (rawValue == "1") { value = true; return true; }
+                if (rawValue == "0") { value = false; return true; }
+                error = $"'{rawValue}' is not a bool (use true/false or 1/0).";
+                return false;
+            }
+
+            if (memberType == typeof(int))
+            {
+                bool negative = rawValue.StartsWith('-');
+                string body = negative ? rawValue[1..] : rawValue;
+                bool hex = body.StartsWith("0x", StringComparison.OrdinalIgnoreCase) || body.StartsWith('$');
+                string digits = hex ? (body.StartsWith('$') ? body[1..] : body[2..]) : body;
+
+                bool ok = hex
+                    ? int.TryParse(digits, System.Globalization.NumberStyles.HexNumber, null, out int n)
+                    : int.TryParse(digits, out n);
+                if (ok) { value = negative ? -n : n; return true; }
+
+                error = $"'{rawValue}' is not an integer (decimal, or hex as 0x94 or $94).";
+                return false;
+            }
+
+            error = $"unsupported DebugSettings member type {memberType.Name}.";
+            return false;
+        }
+
         // Result of a parse attempt: either Options is set (success) or
         // Error is set (caller should print it and exit 1) - never both.
         // Warnings can be non-empty either way (e.g. an unrecognized
@@ -118,13 +161,23 @@ namespace EmuSen.Pharaoh.Cli
             // additional read-only lookup to source the warning text.
             foreach (string flagSpec in flagsToEnable)
             {
-                string flagName = flagSpec.Split(new[] { '=' }, 2)[0];
+                string[] flagParts = flagSpec.Split(new[] { '=' }, 2);
+                string flagName = flagParts[0];
                 var settingsType = typeof(EmuSen.Debug.DebugSettings);
                 var prop = settingsType.GetProperty(flagName);
                 var field = prop == null ? settingsType.GetField(flagName) : null;
                 if (prop == null && field == null)
                 {
                     warnings.Add($"[WARN] No DebugSettings.{flagName} property or field found - ignoring --flag {flagSpec}.");
+                    continue;
+                }
+
+                // Same converter as apply time, so a bad value reports not throws.
+                Type memberType = prop?.PropertyType ?? field!.FieldType;
+                string? rawValue = flagParts.Length >= 2 ? flagParts[1] : null;
+                if (!TryConvertFlagValue(rawValue, memberType, out _, out string? convertError))
+                {
+                    return (null, warnings, $"[ERROR] --flag {flagSpec}: {convertError}");
                 }
             }
 

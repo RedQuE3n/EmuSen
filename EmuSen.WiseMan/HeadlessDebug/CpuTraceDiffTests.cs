@@ -54,7 +54,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var result = CpuTraceDiff.Compare(left, right);
 
             var f = Assert.Single(result.Findings);
-            Assert.Equal(CpuTraceDiff.FindingKind.LoopCount, f.Kind);
+            Assert.Equal(TraceDiff.FindingKind.LoopCount, f.Kind);
             Assert.Contains("431x on the left", f.Detail);
             Assert.Contains("388x on the right", f.Detail);
         }
@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var result = CpuTraceDiff.Compare(left, right);
 
             var f = Assert.Single(result.Findings);
-            Assert.Equal(CpuTraceDiff.FindingKind.Registers, f.Kind);
+            Assert.Equal(TraceDiff.FindingKind.Registers, f.Kind);
             Assert.Equal(7, f.LeftStep);
             Assert.Equal(7, f.RightStep);
         }
@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var result = CpuTraceDiff.Compare(left, shared);
 
             var f = Assert.Single(result.Findings);
-            Assert.Equal(CpuTraceDiff.FindingKind.Structure, f.Kind);
+            Assert.Equal(TraceDiff.FindingKind.Structure, f.Kind);
             Assert.Contains("left executed 12 extra steps", f.Detail);
             Assert.Contains("then the paths rejoin", f.Detail);
         }
@@ -102,9 +102,9 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var result = CpuTraceDiff.Compare(left, right);
 
             Assert.Equal(2, result.Findings.Count);
-            Assert.Equal(CpuTraceDiff.FindingKind.Structure, result.Findings[0].Kind);
+            Assert.Equal(TraceDiff.FindingKind.Structure, result.Findings[0].Kind);
             var regs = result.Findings[1];
-            Assert.Equal(CpuTraceDiff.FindingKind.Registers, regs.Kind);
+            Assert.Equal(TraceDiff.FindingKind.Registers, regs.Kind);
             Assert.Equal(30, regs.RightStep);
             Assert.Equal(42, regs.LeftStep);
         }
@@ -119,7 +119,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var result = CpuTraceDiff.Compare(left, right);
 
             Assert.NotEmpty(result.Findings);
-            Assert.Equal(CpuTraceDiff.FindingKind.Structure, result.Findings[0].Kind);
+            Assert.Equal(TraceDiff.FindingKind.Structure, result.Findings[0].Kind);
         }
 
         [Fact]
@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var result = CpuTraceDiff.Compare(left, left.Take(30).ToArray());
 
             var f = Assert.Single(result.Findings);
-            Assert.Equal(CpuTraceDiff.FindingKind.TruncatedSide, f.Kind);
+            Assert.Equal(TraceDiff.FindingKind.TruncatedSide, f.Kind);
             Assert.Contains("right", f.Detail);
         }
 

@@ -109,6 +109,10 @@ class Program
             EmuSen.Debug.DebugSettings.MasterLoggingEnabled = true;
         }
 
+        // Before LoadRom, which is what reads the .srm - see §3.15's --nobattery entry.
+        EmuSen.Cores.Nintendo.Venus.Memory.Cartridge.BatteryRamDisabled = options.NoBattery;
+        if (options.NoBattery) Emit("[ROM] --nobattery: the cartridge save is neither read nor written.");
+
         Emit($"[ROM] Loading: {options.RomPath}");
         var core = new VenusCore(headless: true);
         core.LoadRom(options.RomPath);

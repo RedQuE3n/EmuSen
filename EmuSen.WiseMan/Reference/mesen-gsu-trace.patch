@@ -1,23 +1,55 @@
 diff --git a/Core/SNES/Coprocessors/GSU/Gsu.cpp b/Core/SNES/Coprocessors/GSU/Gsu.cpp
-index 4f721c7d..48336985 100644
+index 4f721c7d..ab60b02c 100644
 --- a/Core/SNES/Coprocessors/GSU/Gsu.cpp
 +++ b/Core/SNES/Coprocessors/GSU/Gsu.cpp
-@@ -99,9 +99,18 @@ void Gsu::Run()
+@@ -99,8 +99,24 @@ void Gsu::Run()
  	}
  }
  
++// GSU trace in EmuSen's shared 48-byte ESGT record - see EmuSen_Debugging_Tools_Reference_v5.md §3.41.
 +bool g_gsuTraceOn = false;
-+std::vector<uint32_t> g_gsuTrace;
++std::vector<uint8_t> g_gsuTrace;
 +
  void Gsu::Exec()
  {
-+	uint32_t traceAddr = (_state.ProgramBank << 16) | _state.R[15];
- 	uint8_t opCode = ReadOpCode();
-+	if(g_gsuTraceOn && g_gsuTrace.size() < 90000000) {
-+		g_gsuTrace.push_back(traceAddr);
-+		g_gsuTrace.push_back(opCode);
-+		for(int i = 0; i < 16; i++) { g_gsuTrace.push_back(_state.R[i]); }
++	// _lastOpAddr is where the byte now in ProgramReadBuffer was fetched from.
++	// R15 is already one past it, and after a jump names the target instead, so
++	// tracing R15 labels every delay slot with the wrong address.
++	uint32_t traceAddr = _lastOpAddr;
++	uint8_t tracePrefixRegs = (uint8_t)(((_state.SrcReg & 0x0F) << 4) | (_state.DestReg & 0x0F));
++	uint16_t traceSfr = (uint16_t)((_state.SFR.GetFlagsHigh() << 8) | _state.SFR.GetFlagsLow());
++	uint16_t traceR[16];
++	uint64_t traceClock = _state.CycleCount;
++	if(g_gsuTraceOn) {
++		for(int i = 0; i < 16; i++) { traceR[i] = _state.R[i]; }
 +	}
++
+ 	uint8_t opCode = ReadOpCode();
  
  	switch(opCode) {
- 		case 0x00: STOP(); break;
+@@ -238,6 +254,25 @@ void Gsu::Exec()
+ 	} else {
+ 		_r15Changed = false;
+ 	}
++
++	// Emitted here rather than at the top so the record can carry what the
++	// instruction cost; the cap is a runaway guard only.
++	if(g_gsuTraceOn && g_gsuTrace.size() < 2000000000u) {
++		uint8_t r[48] = {};
++		r[0] = (uint8_t)traceAddr; r[1] = (uint8_t)(traceAddr >> 8); r[2] = (uint8_t)(traceAddr >> 16);
++		r[3] = 0;
++		r[4] = opCode;
++		r[5] = tracePrefixRegs;
++		r[6] = (uint8_t)traceSfr; r[7] = (uint8_t)(traceSfr >> 8);
++		for(int i = 0; i < 16; i++) {
++			r[8 + i * 2] = (uint8_t)traceR[i];
++			r[9 + i * 2] = (uint8_t)(traceR[i] >> 8);
++		}
++		uint32_t cost = (uint32_t)(_state.CycleCount - traceClock);
++		r[40] = (uint8_t)cost; r[41] = (uint8_t)(cost >> 8);
++		r[42] = (uint8_t)(cost >> 16); r[43] = (uint8_t)(cost >> 24);
++		g_gsuTrace.insert(g_gsuTrace.end(), r, r + 48);
++	}
+ }
+ 
+ uint8_t Gsu::ReadGsu(uint32_t addr, MemoryOperationType opType)

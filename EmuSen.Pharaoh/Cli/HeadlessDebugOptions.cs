@@ -20,6 +20,7 @@ namespace EmuSen.Pharaoh.Cli
         public string? LoadStatePath { get; init; }
         public string? SaveStatePath { get; init; }
         public bool Verbose { get; init; }
+        public bool NoBattery { get; init; }
         public long CpuLogStart { get; init; } = -1;
         public long CpuLogEnd { get; init; } = -1;
         public long CpuTraceEnd { get; init; } = -1;
@@ -98,6 +99,7 @@ namespace EmuSen.Pharaoh.Cli
             string? loadStatePath = null;
             string? saveStatePath = null;
             bool verbose = false;
+            bool noBattery = false;
             long cpuLogStart = -1, cpuLogEnd = -1, cpuTraceEnd = -1;
             string? cpuTracePath = null;
             var flagsToEnable = new List<string>();
@@ -138,6 +140,7 @@ namespace EmuSen.Pharaoh.Cli
                 else if (args[i] == "--autoshot" && i + 1 < args.Length) autoshotDir = args[++i];
                 else if (args[i] == "--out" && i + 1 < args.Length) outPath = args[++i];
                 else if (args[i] == "--verbose") verbose = true;
+                else if (args[i] == "--nobattery") noBattery = true;
                 else if (args[i] == "--loadstate" && i + 1 < args.Length) loadStatePath = args[++i];
                 else if (args[i] == "--savestate" && i + 1 < args.Length) saveStatePath = args[++i];
                 else if (args[i] == "--screenshot" && i + 1 < args.Length)
@@ -206,6 +209,7 @@ namespace EmuSen.Pharaoh.Cli
                 LoadStatePath = loadStatePath,
                 SaveStatePath = saveStatePath,
                 Verbose = verbose,
+                NoBattery = noBattery,
                 CpuLogStart = cpuLogStart,
                 CpuLogEnd = cpuLogEnd,
                 CpuTraceEnd = cpuTraceEnd,

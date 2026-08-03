@@ -144,8 +144,26 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             BuildRegisterTable();
         }
 
+        // Counts $21xx traffic while the screen is being drawn, which decides how a deferred renderer must work - see Venus_PPU.md §7.3.
+        public int ActiveDisplayWrites;
+        public int ActiveDisplayLines;
+        private int _lastActiveWriteLine = -1;
+
+        public void ResetActiveDisplayCounters()
+        {
+            ActiveDisplayWrites = 0;
+            ActiveDisplayLines = 0;
+            _lastActiveWriteLine = -1;
+        }
+
         public void WriteRegister(uint offset, byte data)
         {
+            // Flag first: this is the $21xx hot path, and DMA drives thousands of writes a frame through it.
+            if (EmuSen.Debug.DebugSettings.PpuActiveDisplayWriteLogging && CurrentScanline < 224)
+            {
+                ActiveDisplayWrites++;
+                if (CurrentScanline != _lastActiveWriteLine) { _lastActiveWriteLine = CurrentScanline; ActiveDisplayLines++; }
+            }
             uint index = offset - 0x2100;
             if (index < _registers.Length)
             {

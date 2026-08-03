@@ -232,6 +232,29 @@ It does **not** move the throttled picture — KBL3 at 33% went 17.70 → 17.78 
 
 **Why this was the right target, and the painter's algorithm was not.** `mainComposite` covers two things: each layer's per-pixel *decode*, and the per-layer *composite pass* that writes it into the line buffer. Skipping every composite pass entirely (measured by gating them off) left SMW at 0.88 ms of 1.15, DKC 0.88 of 1.20, KBL3 1.12 of 1.45 — so **the decode is ~75% and the overdraw only ~25%**. Removing the painter's algorithm perfectly would win about 4%, roughly what §7.1 got. The colour conversion was inside the 75%.
 
+### 7.3 How much PPU state actually moves during active display
+
+Deferring rendering — the prerequisite for taking the PPU off the emulation thread (§13.4's 27–35%) — turns on one question: **while lines 0–223 are being drawn, how much of the state the renderer reads is still changing?** Anything that changes has to be captured per scanline; anything that does not can be read once.
+
+`DebugSettings.PpuActiveDisplayWriteLogging` counts `$21xx` writes made while `CurrentScanline < 224` and reports them per frame as `[ACTIVEWRITES]`. Everything routes through `Ppu.WriteRegister`, so this covers CPU stores, DMA and HDMA alike, and VRAM/CGRAM/OAM ports as well as the plain registers. It is gated inside the hot path rather than outside it, because DMA drives thousands of writes a frame through that method.
+
+Measured in-game, one representative frame each:
+
+| ROM | writes | lines touched |
+|---|---|---|
+| CT, FFVI, Super Metroid | **0** | **0 / 224** |
+| DKC | 6 | 2 / 224 |
+| LttP | 12 | 2 / 224 |
+| KBL3 | 136 | 12 / 224 |
+| SMW2 | 1611 | 125 / 224 |
+| SMW | 448 | **224 / 224** |
+
+**The spread is the finding.** Three of eight titles change nothing at all between lines 0 and 223 — their entire frame is renderable from one snapshot taken at frame end, with no per-scanline capture and no VRAM/CGRAM/OAM hazard whatsoever. Three more touch two to twelve lines. Only SMW, whose HDMA status-bar split rewrites registers on every line, needs genuine per-scanline capture.
+
+That rules out one design and supports another. Snapshotting all ~45 scalar registers unconditionally every scanline would be wasted work on most of the library. Capturing **only when a write has actually occurred since the last capture** costs one snapshot per frame for CT/FFVI/SM and 224 for SMW — which is still affordable, since even the worst case is ~10k field copies against a ~2 ms rendering cost.
+
+The 48 fields the renderer reads split cleanly: `Vram`, `Cgram` and `Oam` are bulk arrays that must not be copied per scanline (they need sync-on-write instead), and the other 45 are scalars or four-element arrays that a snapshot struct can hold. Note also that the renderer *writes* `RangeOver`/`TimeOver`, which the CPU reads back through `$213E` — so sprite evaluation has to stay on the emulation thread regardless of where compositing runs. It is cheap enough for that to be fine: `objEval` is ≤0.26 ms even throttled (§13.4).
+
 ---
 
 ## 8. Pseudo-hi-res vs. true hi-res (Modes 5/6)

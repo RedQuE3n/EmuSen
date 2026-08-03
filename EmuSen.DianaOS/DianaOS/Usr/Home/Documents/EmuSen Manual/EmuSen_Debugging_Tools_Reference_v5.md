@@ -367,6 +367,10 @@ callers <addr> [<scanstart> <scanlen>]   find instructions statically calling/ju
 
 **Matches on the raw opcode byte, not the mnemonic** (inside `SnesDebugTarget.ClassifyStaticReference` now, same reasoning as before the move): `JMP $nnnn` (absolute, direct — opcode `$4C`), `JMP ($nnnn)` (indirect — `$6C`), and `JMP ($nnnn,X)` (indexed indirect — `$7C`) all disassemble to the mnemonic `"JMP"` with the same 3-byte length, but only the direct form has a target `callers` can know without actually running the code. Indirect forms are deliberately excluded rather than guessed at, same principle `writers`/`readers` apply to direct-page/indexed/indirect stores and loads (only `STA`/`STX`/`STY`/`STZ`/`LDA`/`LDX`/`LDY` in **absolute or absolute-long** addressing resolve to a `Write`/`Read` classification - everything else returns `null`, since the real target depends on runtime register/D-register state a static scan can't know). Same bank-assumed-equals-PB convention throughout.
 
+**The opcode alone is not enough — the instruction's own length has to agree.** `disasm` annotates every line it prints by running it through `ClassifyStaticReference` (§3.29), including lines from spaces that are not 65816 code at all. A GSU `WITH R0` is opcode `$20` in one byte; the table reads `$20` as `JSR $nnnn` and goes looking for two operand bytes that do not exist, so `disasm GSUBUS` died outright with `Index was out of range` on any routine containing one — and GSU code is full of them (`$20`, `$4C` `PLOT`, `$8C`/`$8D` `MULT`, `$AC`/`$AD`/`$AE` `IBT`). Every arm of the table now carries a `when absolute` / `when absoluteLong` guard on `instr.Bytes.Count` (3 and 4 respectively).
+
+This is a correctness fix, not just a crash guard: a one-byte instruction that happens to share a byte with a three-byte 65816 absolute instruction *is* evidence that this line is not that instruction, and returning `null` is the right answer for the same reason the indirect `JMP` forms are excluded above. It fixes `callers`/`writers`/`readers` over `GSUBUS`/`APURAM`/`DSPPRG` too, which had the same latent mis-annotation without the crash. Found while disassembling Yoshi's Island's GSU sprite builder, where the disassembler was the only way to read the routine at all.
+
 **Same "best-effort, may misalign through data mixed with code" caveat as `disasm`.** A linear disassembler walking forward byte-by-byte has no way to know which bytes in a scanned range are really instructions versus embedded data (graphics, tables, text) — if the scan range includes non-code bytes, everything after the first misaligned read can decode to garbage opcodes, including spurious `callers` matches or missed real ones. Best used on a range that's actually known to be code.
 
 **`writers`/`readers`** (`DianaOS/Commands/WritersCommand.cs`/`ReadersCommand.cs`) are the store/load-side counterparts to `callers` - "what code is capable of writing/reading this address," independent of whether that path was ever actually exercised in a traced run (the gap `writers` was built to close: watching an address live can show exactly one write from one PC and nothing else, which only proves what a specific run did, not what the ROM's code is capable of doing).
@@ -573,7 +577,38 @@ Reads back two of this harness's own BMPs (`--screenshot`/`--autoshot`/`contacts
 
 **Two separate output streams, easy to conflate.** `--out` only captures this harness's own `Emit()` calls. Everything the *emulator itself* prints via raw `Console.WriteLine` — `CpuVerboseLogging`/`Spc700VerboseLogging` traces, `[DMA]`/`[PORT]`/etc. `DebugSettings` output, the `[FRAME] N` marker (`Venus_Memory.md`/`VenusCore.RunFrame`) — bypasses `Emit()` entirely and goes straight to real stdout. Redirecting shell output to `/dev/null` while relying on `--out` for everything discards all of that silently; capture real stdout to a file (`> file.log 2>&1`) instead whenever any `DebugSettings` trace flag is in play.
 
-**`bp add` inside a script only counts hits — it never halts.** Headless has no frontend loop to resume from a halt (§3.1's breakpoints note), so a breakpoint here answers "did execution ever reach this address, and how many times" (via `bp list`'s hit count) rather than pausing anything.
+**`bp add` inside a script does halt** — this line used to say it only counted hits, which stopped being true once `FrameRunner` learned to stop a batch on `IsHaltedAtBreakpoint` (§3.23). A `frames N` that hits a breakpoint returns early with the core halted mid-frame, the next verb inspects that moment, and `resume` followed by another `frames` call continues to the next hit. That resume/inspect cycle is how the Yoshi's Island GSU object loop was walked one iteration at a time (§3.15c's worked example). One rough edge left: the `[BREAK]` line names any halted coprocessor "SA-1" regardless of which chip it was, so a GSU halt reads as `[BREAK] SA-1 halted at $098A05` — cosmetic, and the address is right.
+
+### 3.15b `record` — a real video of a headless run
+
+`contactsheet` answers "roughly what happened over this window" at thumbnail scale. It cannot answer "when exactly did this stop moving", and reading thirty separate images to find out is the wrong shape of work. `record` writes the actual frame sequence instead:
+
+```
+record on [<stride>] [<dir>]   start capturing; stride 1 = every frame
+record off                     stop, and encode
+record                         report whether a capture is running
+```
+
+The pieces already existed and were simply never wired together: `DianaOS/Var/FrameRecorder.cs` (session folder, `frames.log` ledger mapping every captured frame back to its emulator frame number, ffmpeg encode with automatic `libx264rgb` → `ffv1` codec fallback, PNG-sequence zip afterwards) was reachable only from `EmuSen.Hotaru`'s F6 hotkey, i.e. only by launching a real window — exactly what the headless harness exists to avoid. `record` gives the same recorder a `--commands` driver: `FrameRunner.AfterFrame` (a second per-frame hook alongside the constructor's own) ticks `CaptureFrame` while a capture is armed, and a script that never says `record off` still gets its video, because `CommandsScriptRunner.Run` stops any live recorder on the way out.
+
+**Encoding is lossless, so the video is evidence, not an impression.** That matters more than it sounds: `ffmpeg -i recording.mkv -f framemd5 -` gives a per-frame checksum, and the longest run of identical checksums is the exact frame the picture froze on — 4150, in the investigation this was built for, found in one command after a contact sheet had only narrowed it to "somewhere between 3300 and 5400". Cross-reference the checksum index against `frames.log` to turn a video frame index back into an emulator frame number.
+
+`record on` clears `SkipRendering`, since `fastforward` would otherwise leave nothing to capture. Frames are written through `EmuSen.Common.Imaging.PngFile`, which is now the project's single RGBA→PNG encoder: `EmuSen.Hotaru/Imaging/FrameImageWriter.SavePng` delegates to it rather than keeping a second copy of the same six SkiaSharp lines.
+
+### 3.15c `savestate` / `loadstate` — stop paying for the boot sequence
+
+```
+savestate <path>
+loadstate <path>
+```
+
+`--loadstate`/`--savestate` already existed as *command-line flags*, which meant a state could only be taken at the very end of a run and loaded at the very beginning. Mid-script there was nothing, and `savestate` as a script line was simply an unrecognized verb that fell through to the DianaOS interpreter and reported `Unknown command 'savestate'`.
+
+This is the single biggest change to how expensive an investigation is. Driving Yoshi's Island from power-on to its opening cutscene costs ~6700 frames of scripted menu input, a minute or two per question asked. With a state pinned at the interesting moment, every subsequent probe — `sprites`, a GSU disassembly, a breakpoint walk, a memory diff — starts from `--loadstate` and answers in seconds. Pin the moment **once**, in the same run that records the video, then never boot again.
+
+`loadstate` clears the rewind chain and calls `RefreshProviders()`, because a state load is a discontinuous jump: without the refresh, `regs`/`sprites`/`pal` would report the pre-load frame's values, which is exactly the moment being inspected. The script's own frame counter deliberately keeps counting rather than jumping to the state's frame number — it bounds the safety cap, and rewriting it would make the cap mean something different depending on which state was loaded.
+
+**States do round-trip.** An older note held that saved `.state` files "resume into a dead machine"; that was verified false here — `frozen.state` reloaded in a fresh process renders the identical frame and continues executing correctly, coprocessor included.
 
 ### 3.16 `EmuSen.Tomoe` — ground-truth single-step validation
 

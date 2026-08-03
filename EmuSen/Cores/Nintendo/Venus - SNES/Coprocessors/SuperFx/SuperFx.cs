@@ -111,6 +111,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // The GSU's IRQ line into the S-CPU, masked by CFGR bit 7 - see Venus_SuperFX.md §3.2.
         public bool ScpuIrqPending => GetFlag(FlagIrq) && (_cfgr & 0x80) == 0;
 
+        // Game Pak RAM the chip touches itself, which the S-CPU's bus never
+        // sees and `watch`/`counters` were therefore blind to - see Venus_SuperFX.md §8.4.
+        [SkipInState] public Memory.IWriteObserver? WriteObserver;
+        [SkipInState] public Memory.IReadObserver? ReadObserver;
+
+        // PBR:R15 as of the instruction currently executing, so an observed
+        // access can name the instruction that made it - see Venus_SuperFX.md §8.4.
+        [SkipInState] private int _debugInstructionAddress;
+        public int DebugInstructionAddress => _debugInstructionAddress;
+
         // Called with PBR:R15 before each instruction, when a debugger wants
         // whole-run coverage of the chip - see Venus_SuperFX.md §8.2.
         [EmuSen.Common.SkipInState] public System.Action<int>? CoverageRecorder;
@@ -175,6 +185,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
                     return;
                 }
                 _justResumedFromBreakpoint = false;
+                _debugInstructionAddress = pc24;
 
                 int cycles = StepInstruction();
                 _clockBudget -= cycles * perCycle;

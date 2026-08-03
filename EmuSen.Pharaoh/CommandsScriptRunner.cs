@@ -23,6 +23,9 @@ namespace EmuSen.Pharaoh
         private readonly DianaOSInterpreter debugCmd;
         private readonly Action<string> emit;
 
+        // Null until the `record` verb starts one - see §3.15b.
+        private FrameRecorder? recorder;
+
         public CommandsScriptRunner(FrameRunner runner, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, Action<string> emit)
         {
             this.runner = runner;
@@ -155,6 +158,63 @@ namespace EmuSen.Pharaoh
                     emit(Done()
                         ? $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} satisfied after {stepped} frame(s): {from} -> {to} (frame {runner.CurrentFrame})."
                         : $"[{verb.ToUpperInvariant()}] {space.Name} 0x{addr:X} NOT satisfied - still {to} after {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
+                }
+                else if ((verb == "savestate" || verb == "loadstate") && parts.Length >= 2)
+                {
+                    // Pin an interesting moment once, then re-probe it in seconds - see §3.15c.
+                    emit($"> {cmdLine}");
+                    if (verb == "savestate")
+                    {
+                        core.SaveState(parts[1]);
+                        emit($"[STATE] Frame {runner.CurrentFrame} saved -> {parts[1]}");
+                    }
+                    else if (!File.Exists(parts[1]))
+                    {
+                        emit($"[STATE] Not found: {parts[1]}");
+                    }
+                    else
+                    {
+                        core.LoadState(parts[1]);
+                        // A discontinuous jump, so the rewind chain and the
+                        // per-frame providers regs/sprites/pal read are both stale.
+                        runner.Rewind.Clear();
+                        debugTarget.RefreshProviders();
+                        emit($"[STATE] Loaded {parts[1]} (script frame counter stays at {runner.CurrentFrame})");
+                    }
+                }
+                else if (verb == "record")
+                {
+                    // A real video of a run, not a grid of thumbnails - see §3.15b.
+                    emit($"> {cmdLine}");
+                    string mode = parts.Length >= 2 ? parts[1].ToLowerInvariant() : "info";
+
+                    if (mode == "on")
+                    {
+                        if (recorder != null) { emit("[RECORD] Already recording - `record off` first."); continue; }
+                        int stride = parts.Length >= 3 ? int.Parse(parts[2]) : 1;
+                        string baseDir = parts.Length >= 4
+                            ? parts[3]
+                            : Path.Combine(DianaOSSandbox.LogsDirectory, debugTarget.CoreName, "Recordings");
+
+                        recorder = new FrameRecorder(debugTarget);
+                        string dir = recorder.Start(baseDir, stride);
+                        // Rendering has to actually happen for there to be anything to capture.
+                        core.SkipRendering = false;
+                        runner.AfterFrame = () => recorder!.CaptureFrame(
+                            path => PngFile.Write(path, core.GetFrameBufferRgba(), core.ScreenWidth, core.ScreenHeight));
+                        emit($"[RECORD] Started at frame {runner.CurrentFrame}, every {stride} frame(s) -> {dir}");
+                    }
+                    else if (mode == "off")
+                    {
+                        if (recorder == null) { emit("[RECORD] Not recording."); continue; }
+                        emit(StopRecording());
+                    }
+                    else
+                    {
+                        emit(recorder is { IsRecording: true }
+                            ? $"[RECORD] Recording -> {recorder.SessionDir}"
+                            : "[RECORD] Not recording. `record on [<stride>] [<dir>]` starts one.");
+                    }
                 }
                 else if (verb == "fastforward" || verb == "ff")
                 {
@@ -297,7 +357,20 @@ namespace EmuSen.Pharaoh
                 }
             }
 
+            // A script that never says `record off` still gets its video.
+            if (recorder != null) emit(StopRecording());
+
             return true;
+        }
+
+        // Detaches the per-frame hook first - Stop() blocks while ffmpeg encodes.
+        private string StopRecording()
+        {
+            runner.AfterFrame = null;
+            string? dir = recorder!.SessionDir;
+            recorder.Stop();
+            recorder = null;
+            return $"[RECORD] Stopped at frame {runner.CurrentFrame} -> {dir}";
         }
 
         // Wall clock per frame plus the core's own phase breakdown, so a

@@ -347,6 +347,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    bp - manage execution breakpoints\n\n" +
                 "SYNOPSIS\n" +
                 "    bp add <addr>\n" +
+                "    bp write <space> <addr> [<value>]\n" +
                 "    bp list\n" +
                 "    bp remove <id>\n" +
                 "    bp sa1 add|list|remove ...\n\n" +
@@ -359,6 +360,14 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    the actual halt/resume side. Named 'bp', not 'break' - a command\n" +
                 "    literally named 'break' would be unreachable, shadowed by the shell's\n" +
                 "    own hardcoded break/continue loop-control keywords.\n\n" +
+                "    'bp write' breaks on data instead of on control flow: it halts when\n" +
+                "    anything writes <addr> in <space>, optionally only when the value\n" +
+                "    written equals <value>. Where 'watch' records a write and carries on,\n" +
+                "    this stops the machine there, so 'regs'/'mem' can read the state that\n" +
+                "    produced it - the way to answer 'what was the source pointer' rather\n" +
+                "    than just 'which PC stored it'. A write happens part-way through an\n" +
+                "    instruction, so the halt lands on the instruction AFTER the store,\n" +
+                "    exactly as a real debugger reports a data breakpoint.\n\n" +
                 "    An optional 'sa1' (or 'cop') scope word in front of the subcommand\n" +
                 "    targets a cartridge coprocessor's own CPU instead. The two live in\n" +
                 "    separate lists because they are separate address spaces: an SA-1\n" +
@@ -368,6 +377,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    M/X/E flags rather than the S-CPU's.\n\n" +
                 "EXAMPLES\n" +
                 "    bp add 8000\n" +
+                "    bp write VRAM 2760\n" +
                 "    bp list\n" +
                 "    bp sa1 add 0082D7",
 
@@ -634,6 +644,30 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    search WRAM 64\n" +
                 "    search refine 65\n" +
                 "    search list",
+
+            ["memfind"] =
+                "NAME\n" +
+                "    memfind - locate a byte sequence in a memory space\n\n" +
+                "SYNOPSIS\n" +
+                "    memfind <space> <bytes> [<max>]\n\n" +
+                "DESCRIPTION\n" +
+                "    Scans <space> for every offset where <bytes> occurs. Where 'search'\n" +
+                "    matches one 1/2/4-byte scalar and then narrows it down over time, this\n" +
+                "    matches a whole block in a single pass - the tool for asking where a\n" +
+                "    tile's 32 bytes, a decompressed buffer, or a string came from.\n\n" +
+                "    <bytes> is hex byte pairs; ',', ':', '-' and '_' between them are\n" +
+                "    ignored, and so is whitespace, so '00FF11', '00 FF 11' and '00:FF:11'\n" +
+                "    are the same pattern. '??' in place of a pair matches any byte, which\n" +
+                "    is how you skip over the parts of a block that legitimately differ.\n\n" +
+                "    Stops after <max> hits (default 20) and says so, so a pattern that is\n" +
+                "    too short to be distinctive reports quickly instead of listing\n" +
+                "    thousands of offsets. Same live-hardware-space refusal as 'search' and\n" +
+                "    'dump': a byte-by-byte scan of CpuBus could change real emulation\n" +
+                "    state, so it is refused outright.\n\n" +
+                "EXAMPLES\n" +
+                "    memfind WRAM 00FFFFFFFF00FF00\n" +
+                "    memfind VRAM 00??FF??11 5\n" +
+                "    memfind ROM 4E696E74656E646F",
 
             ["snapshot"] =
                 "NAME\n" +

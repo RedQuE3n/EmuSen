@@ -101,6 +101,11 @@ namespace EmuSen.Pharaoh
                 if (Core.IsHaltedAtBreakpoint)
                 {
                     HaltedAtBreakpoint = true;
+                    // The providers `regs`/`sprites`/`pal` read are refreshed
+                    // per completed frame, so without this they would report
+                    // the PREVIOUS frame's end state at a mid-frame halt -
+                    // exactly the moment a breakpoint exists to inspect.
+                    OnHalted?.Invoke();
                     emit($"[BREAK] {(Core.IsHaltedOnCoprocessor ? "SA-1" : "S-CPU")} halted at ${Core.HaltedAddress:X6} (frame {CurrentFrame}).");
                     return;
                 }
@@ -114,6 +119,9 @@ namespace EmuSen.Pharaoh
 
         // True once RunFrames stopped early on a breakpoint - see §3.23.
         public bool HaltedAtBreakpoint { get; private set; }
+
+        // Run when a breakpoint halts mid-frame - see the call site above.
+        public Action? OnHalted { get; set; }
 
         // Returns steps actually taken - see EmuSen_Rewind_And_FastForward.md §3.
         public int StepBack(int steps)

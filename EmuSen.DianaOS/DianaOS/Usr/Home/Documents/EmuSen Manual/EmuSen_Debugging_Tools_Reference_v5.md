@@ -143,6 +143,7 @@ Two small helper classes back the memory spaces:
 | `watch clear <id>` | Clear a watchpoint's stored events (keeps the watch registered) |
 | `watch remove <id>` | Remove a watchpoint entirely |
 | `bp add <addr>` / `bp list` / `bp remove <id>` | Manage execution breakpoints (24-bit CPU address) — see §3.1's breakpoints note. Named `bp`, not `break` - the shell's own `break`/`continue` loop-control keywords (§3.17) are hardcoded, zero-argument parser statements, so a command literally named `break` is unreachable (`break add 8000` parses as bare loop-control followed by a syntax error on the leftover `add 8000`) |
+| `bp write <space> <addr> [<value>]` | Halt the moment anything writes `<addr>` — the state-at-the-write counterpart to `watch`, see §3.26 |
 | `cov on|off` / `cov clear` / `cov <addr> [<len>]` / `cov cop ...` | Record which addresses actually executed, then ask whether a routine was ever reached — see §3.24 |
 | `framelog add <space> <addr> [<width>]` / `list` / `show <id> [<count>]` / `clear <id>` / `remove <id>` | Per-frame value sampling, independent of reads/writes — see §3.13 |
 | `callers <addr> [<scanstart> <scanlen>]` | Find instructions statically calling/jumping to `<addr>` — see §3.12 |
@@ -150,6 +151,7 @@ Two small helper classes back the memory spaces:
 | `readers <addr> [<scanstart> <scanlen>]` | Find instructions statically reading `<addr>` (same scope as `writers`) |
 | `dump <space> <addr> <len> <path>` / `load <space> <addr> <path>` | Save/restore a memory range to/from a file — see §3.11 |
 | `search <space> <val> [<width>]` | Start a memory search — see §3.9 |
+| `memfind <space> <bytes> [<max>]` | Find every offset where a byte *sequence* occurs (`??` wildcards) — see §3.25 |
 | `search refine\|changed\|unchanged\|increased\|decreased\|list\|reset` | Narrow/inspect/clear the active search — see §3.9 |
 | `snapshot <space> <name>` / `snapshot list\|remove <name>` | Capture/manage a named memory baseline — see §3.10 |
 | `diff <name> [<count>]` | Compare a snapshot against current contents — see §3.10 |
@@ -939,6 +941,51 @@ Recording is off by default and costs one bool test per instruction while disarm
 - **Retires "the game never reaches this feature" in one command.** `Venus_SuperFX.md` §10.1 retired two suspects by patching a `Console.WriteLine` into an opcode handler and running headless to see whether it fired. That is the right instinct and the wrong mechanism — it needs a rebuild per question, and the probe has to be removed afterward.
 - **Pairs with `callers` into a mechanical search.** Walk up from a routine that never ran until you reach a caller that did; the branch between the two is the one that skipped it. Neither half works alone: `callers` finds paths that exist without saying which ran, and coverage says what ran without saying what could have.
 - **Recovers instruction boundaries `disasm` guessed wrong.** The static disassembler has to assume the CPU's *current* M/X flags apply at the address being decoded (see `SnesDebugTarget.Disassemble`'s own comment), so a 16-bit `LDA #$7000` in a routine disassembled while M is set renders as two shorter instructions. The recorded addresses *are* the real opcode boundaries, so `cov <routine> <len>` checks a decode without tracing it.
+
+---
+
+### 3.25 `memfind` — locate a byte sequence
+
+`search` (§3.x) matches one 1/2/4-byte scalar and then narrows the candidate set over successive scans. That is the right shape for "where does the game keep the life counter" and the wrong shape for "where did this block of bytes come from", which is a single-pass question about a sequence.
+
+```
+> memfind WRAM 00FFFFFFFF00FF00FF11FF11FF11FF11
+No match for 16-byte pattern in WRAM.
+> memfind VRAM 00FFFFFFFF00FF00FF11FF11FF11FF11
+1 match(es) for the 16-byte pattern in VRAM:
+  0x2760
+```
+
+Separators (`,`, `:`, `-`, `_`, whitespace) between byte pairs are ignored, so a pattern pasted straight out of a `mem` dump works unedited. `??` in place of a pair matches any byte — the way to skip the parts of a block that legitimately differ between two copies. It stops after `<max>` hits (default 20) and says it truncated, so a pattern too short to be distinctive answers immediately instead of printing thousands of offsets. Same live-hardware-space refusal as `search`/`dump`.
+
+The negative result is as useful as the positive one. In the Super Mario World title-screen investigation (§3.26) the 16 bytes of a tile were present in VRAM and *absent* from all 128KB of WRAM, which said immediately that the staging buffer had already been reused — so chasing it in a post-hoc dump was never going to work, and the question had to be asked at the moment of the write instead.
+
+### 3.26 `bp write` — halt on data, not on control flow
+
+`watch` records a write and lets the machine run on; `bp add` halts on an address being *executed*. Neither answers "what state produced this write" — the write's own PC is in the watch log, but by the time anything can read registers or memory the machine has moved on by thousands of instructions.
+
+`bp write <space> <addr> [<value>]` halts the core the moment the write happens, so `regs`, `mem` and `disasm` all read the state that caused it:
+
+```
+> bp write VRAM 2769 11
+Breakpoint #1 added on writes to VRAM 0x2769 = 0x11.
+> frames 500
+[BREAK] S-CPU halted at $00AAD4 (frame 277).
+> regs
+  A    = 0x11FF
+  PC   = 0xAAD4
+> mem WRAM 0 10
+  000000: 90 B2 7E ...
+```
+
+That three-byte direct-page pointer (`$7E:B290`) is the whole answer: it is the source address the uploader was reading from, and nothing short of stopping at the write could have produced it. Repeating the same trick one level down — `bp write WRAM B291 11` — lands in the decompressor that filled that buffer, which is how a VRAM byte gets traced back to a compressed stream in ROM.
+
+Two details worth knowing:
+
+- **The halt lands one instruction late, on purpose.** A write happens part-way through an instruction; stopping there would leave the CPU mid-instruction with no consistent state to read. `BreakpointRegistry.NoteWrite` arms a pending flag that the existing per-instruction `ShouldBreak` consumes at the next boundary, so the reported PC is the instruction *after* the store — exactly the convention a hardware watchpoint uses.
+- **Optional value matching is what makes it usable on a busy address.** A VRAM byte inside a tile is written on every upload of that tile; `bp write VRAM 2769 11` fires only on the upload that wrote the byte being investigated.
+
+The data breakpoint also exposed a real gap in the halt path, now fixed: `regs`/`sprites`/`pal` read `IRealtimeProvider` snapshots refreshed once per *completed* frame, so at a mid-frame halt they reported the previous frame's end state — a breakpoint reporting stale registers is worse than no breakpoint. `FrameRunner.OnHalted` now refreshes the providers before the `[BREAK]` line is printed.
 
 ---
 

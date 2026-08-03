@@ -34,6 +34,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         public string Usage => string.Join('\n', new[]
         {
             "  bp add <addr>                 halt execution just before <addr> runs (24-bit CPU address)",
+            "  bp write <space> <addr> [<v>] halt just after anything writes <addr> in <space>",
             "  bp list                       list active breakpoints with their IDs and hit counts",
             "  bp remove <id>                remove a breakpoint entirely",
             "  bp sa1 add|list|remove ...    same, on the cartridge coprocessor's own CPU - its",
@@ -72,12 +73,27 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     int id = breakpoints.AddBreakpoint(addr);
                     return $"{scope} #{id} added at ${addr:X6}.";
                 }
+                case "write":
+                {
+                    // Halts at the instruction AFTER the store - see BreakpointRegistry.NoteWrite.
+                    if (parts.Length < at + 3) return "Usage: bp write <space> <addr> [<value>]";
+                    var space = FindSpace(target, parts[at + 1]);
+                    int addr = ParseHex(parts[at + 2]);
+                    int value = parts.Length > at + 3 ? ParseHex(parts[at + 3]) : -1;
+                    int id = breakpoints.AddDataBreakpoint(space.Name, addr, value);
+                    string valueText = value < 0 ? string.Empty : $" = 0x{value:X2}";
+                    return $"{scope} #{id} added on writes to {space.Name} 0x{addr:X}{valueText}.";
+                }
                 case "list":
                 {
                     var list = breakpoints.GetBreakpoints();
-                    if (list.Count == 0) return coprocessor ? "No active SA-1 breakpoints." : "No active breakpoints.";
-                    return string.Join('\n', list.Select(b =>
-                        $"  #{b.Id}: ${b.Address:X6} ({(b.Enabled ? "enabled" : "disabled")}, hit {b.HitCount}x)"));
+                    var dataList = breakpoints.GetDataBreakpoints();
+                    if (list.Count == 0 && dataList.Count == 0) return coprocessor ? "No active SA-1 breakpoints." : "No active breakpoints.";
+                    var lines = list.Select(b =>
+                        $"  #{b.Id}: ${b.Address:X6} ({(b.Enabled ? "enabled" : "disabled")}, hit {b.HitCount}x)")
+                        .Concat(dataList.Select(b =>
+                        $"  #{b.Id}: write {b.Space} 0x{b.Address:X}{(b.Value < 0 ? string.Empty : $" = 0x{b.Value:X2}")} ({(b.Enabled ? "enabled" : "disabled")}, hit {b.HitCount}x)"));
+                    return string.Join('\n', lines);
                 }
                 case "remove":
                 {
@@ -88,7 +104,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 default:
                 {
                     // Named once so the suggestion and the "Try" list cannot drift.
-                    string[] subcommands = { "add", "list", "remove" };
+                    string[] subcommands = { "add", "write", "list", "remove" };
                     return $"Unknown 'bp' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
                 }
             }

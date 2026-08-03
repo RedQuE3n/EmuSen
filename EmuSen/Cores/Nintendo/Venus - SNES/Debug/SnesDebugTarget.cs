@@ -358,6 +358,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // needing to hold a Cpu reference to get it.
             _watches.RecordWrite(spaceName, address, value,
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
+            _breakpoints.NoteWrite(spaceName, address, value);
         }
 
         // The S-CPU's PC says nothing about a write the SA-1 made on its own,

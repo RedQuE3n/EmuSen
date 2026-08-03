@@ -34,7 +34,7 @@ A cycle-budgeted SNES emulator — 65816 CPU, SPC700 + S-DSP audio, a full PPU, 
 
 The emulation core is a pure library with no window, no `Main`, and no frontend knowledge. Everything else — presentation, frontends, debug tooling — sits above it and depends on it one-directionally.
 
-The project is structured for more than one console. Only the SNES core exists today; every other core is a reserved, empty folder.
+The project is structured for more than one console. Only the SNES core is playable today. The NES core (**Moon**) has been started and currently consists of its 2A03 CPU and nothing else — see `EmuSen/Cores/Nintendo/Moon - NES/README.md`. Every other core is a reserved, empty folder.
 
 ---
 

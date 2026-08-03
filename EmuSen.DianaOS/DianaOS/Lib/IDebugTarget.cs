@@ -105,6 +105,56 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         }
     }
 
+    // A hardware condition a core can detect and halt on - see `man bp`.
+    public readonly struct BreakCondition
+    {
+        public string Name { get; }
+        public string Description { get; }
+
+        public BreakCondition(string name, string description)
+        {
+            Name = name;
+            Description = description;
+        }
+    }
+
+    // One block-transfer channel, in the terms a channel table prints - see `man dma`.
+    public readonly struct DebugDmaChannel
+    {
+        public int Index { get; }
+        public bool GeneralEnabled { get; }
+        public bool HdmaEnabled { get; }
+
+        // The mode/direction byte, left raw so a core's own decoder names it.
+        public byte Control { get; }
+        public byte DestinationRegister { get; }
+        public int SourceAddress { get; }
+        public int TransferSize { get; }
+
+        // HDMA only: the table it walks, and where it has got to.
+        public bool HdmaActive { get; }
+        public int TableAddress { get; }
+        public byte LineCounter { get; }
+        public int IndirectAddress { get; }
+
+        public DebugDmaChannel(int index, bool generalEnabled, bool hdmaEnabled, byte control,
+            byte destinationRegister, int sourceAddress, int transferSize,
+            bool hdmaActive, int tableAddress, byte lineCounter, int indirectAddress)
+        {
+            Index = index;
+            GeneralEnabled = generalEnabled;
+            HdmaEnabled = hdmaEnabled;
+            Control = control;
+            DestinationRegister = destinationRegister;
+            SourceAddress = sourceAddress;
+            TransferSize = transferSize;
+            HdmaActive = hdmaActive;
+            TableAddress = tableAddress;
+            LineCounter = lineCounter;
+            IndirectAddress = indirectAddress;
+        }
+    }
+
     // One sprite/OBJ entry, shaped generically enough to cover consoles
     // with very different sprite hardware (the SNES's OAM low+high table
     // split, the NES's flatter 4-byte-per-sprite OAM) - a generic sprite
@@ -381,6 +431,18 @@ namespace EmuSen.DianaOS.DianaOS.Lib
 
         // Which physical location a CPU-bus address decodes to - see `man addr`.
         PhysicalAddress? ResolvePhysical(int cpuAddress) => null;
+
+        // Which named hardware conditions `bp when` can arm on this core - see `man bp`.
+        IReadOnlyList<BreakCondition> BreakConditions => System.Array.Empty<BreakCondition>();
+
+        // Live block-transfer channel state - see `man dma`.
+        IReadOnlyList<DebugDmaChannel> DmaChannels => System.Array.Empty<DebugDmaChannel>();
+
+        // The recorded transfer history behind `dma log` - see `man dma`.
+        DmaLogRegistry? DmaLog => null;
+
+        // What a DMA destination register is called on this console - see `man dma`.
+        string? NameDmaDestination(byte register) => null;
 
         // The RAM-poke cheat engine (see CheatRegistry.cs) - same exposure
         // pattern as Watches/FrameLog, but the data flow runs the other

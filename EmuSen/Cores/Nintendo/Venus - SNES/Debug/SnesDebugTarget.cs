@@ -163,6 +163,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         // Traffic across the cartridge coprocessor's register window - see `man copflow`.
         private readonly RegisterFlowRegistry _registerFlow = new RegisterFlowRegistry();
+        private readonly DmaLogRegistry _dmaLog = new DmaLogRegistry();
 
         // Optional - VenusCore.LastFrameCpuSpc700Ms/LastFramePpuMs/
         // LastFrameHdmaMs (or EmulatorSession's identical pass-through
@@ -241,6 +242,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // The seams `bt`, `step over`/`step out` and `runto` read - see `man bt`.
             cpu.CallStack = _callStack;
             cpu.Breakpoints = _breakpoints;
+            bus.Breakpoints = _breakpoints; // the bus-level `bp when` conditions
             _callStack.FrameNumberProvider = () => bus.FrameCount;
             _breakpoints.CallStack = _callStack;
             bus.ScanlineObserver = _breakpoints.NoteScanline;
@@ -283,6 +285,27 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 coveredGsu.BreakpointChecker = pc24 => _coprocessorBreakpoints.ShouldBreak(pc24);
             }
 
+            // Word-indexed rather than byte-addressed, since that is the DSP's PC - see Venus_NecDSP.md §9.
+            if (bus.Cart.NecDsp is { } breakableDsp)
+            {
+                _coprocessorBreakpoints = new BreakpointRegistry();
+                _coprocessorCoverage = new CoverageRegistry();
+                _coprocessorCallStack = new CallStackRegistry
+                {
+                    FrameNumberProvider = () => bus.FrameCount,
+                    EntryPointObserver = _coprocessorCoverage.RecordEntryPoint,
+                };
+                _coprocessorBreakpoints.CallStack = _coprocessorCallStack;
+                breakableDsp.CallObserver = (source, target) => _coprocessorCallStack.NotePush(source, target, CallFrameKind.Call);
+                breakableDsp.ReturnObserver = _coprocessorCallStack.NotePop;
+                breakableDsp.BreakpointChecker = pc =>
+                {
+                    _coprocessorCoverage.Record(pc);
+                    _coprocessorCallStack.NoteInstruction();
+                    return _coprocessorBreakpoints.ShouldBreak(pc);
+                };
+            }
+
             bus.Spc700.BreakpointChecker = pc =>
             {
                 _spcCoverage.Record(pc);
@@ -291,6 +314,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
             _registerFlow.FrameNumberProvider = () => bus.FrameCount;
             bus.Cart.RegisterFlow = _registerFlow;
+
+            _dmaLog.FrameNumberProvider = () => bus.FrameCount;
+            _dmaLog.ScanlineProvider = () => bus.CurrentScanline;
+            bus.Dma.DmaLog = _dmaLog;
 
             // Each provider's initial snapshot is read right here, not left
             // default/empty - a caller reading Current before this target's
@@ -312,6 +339,35 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
             // Last: the CPU list hands out the providers built just above.
             BuildDebugCpus();
+        }
+
+        // What this core can catch the hardware doing wrong - see `man bp`.
+        private static readonly BreakCondition[] Conditions =
+        {
+            new("stp", "the 65816 executed STP and is stopped until reset"),
+            new("wdm", "the 65816 executed WDM, a reserved opcode"),
+            new("brk", "a BRK was taken"),
+            new("cop", "a COP was taken"),
+            new("ppuaccess", "VRAM/CGRAM/OAM written while the display is rendering"),
+            new("autojoy", "$4218-$421F read while the auto-joypad read is running"),
+        };
+
+        public IReadOnlyList<BreakCondition> BreakConditions => Conditions;
+
+        public IReadOnlyList<DebugDmaChannel> DmaChannels => _bus.Dma.DebugChannels();
+
+        public DmaLogRegistry? DmaLog => _dmaLog;
+
+        // $2140-$217F is the APU/WRAM half of the B bus, which the PPU table does not cover.
+        public string? NameDmaDestination(byte register)
+        {
+            string? name = register switch
+            {
+                >= 0x40 and <= 0x43 => $"APUIO{register - 0x40}",
+                0x80 => "WMDATA",
+                _ => _bus.Ppu.DebugRegisterName(register),
+            };
+            return name == null ? $"${0x2100 + register:X4}" : $"{name} ${0x2100 + register:X4}";
         }
 
         // One entry per chip this cartridge actually carries - see `man cpus`.
@@ -431,15 +487,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                     ProgramCounter = () => (gsu.DebugPbr << 16) | gsu.R[15],
                 });
             }
-            else if (cart.NecDsp is { } dsp)
+            else if (cart.NecDsp is { } dsp && _coprocessorBreakpoints != null)
             {
-                // No halt seam: the firmware runs from ROM this core cannot interrupt.
-                _debugCpus.Add(new DebugCpu("dsp", $"NEC {dsp.Name} cartridge coprocessor", new BreakpointRegistry())
+                _debugCpus.Add(new DebugCpu("dsp", $"NEC {dsp.Name} cartridge coprocessor", _coprocessorBreakpoints)
                 {
+                    Coverage = _coprocessorCoverage,
+                    CallStack = _coprocessorCallStack,
                     CodeSpace = "DSPPRG",
                     Registers = _coprocessorRegistersProvider,
                     ProgramCounter = () => dsp.DebugPc,
-                    CanHalt = false,
                 });
             }
 

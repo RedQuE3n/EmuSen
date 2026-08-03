@@ -24,6 +24,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "  bp read <space> <addr>[-<end>] [<v>] [if <expr>]",
             "                                halt just after anything reads it",
             "  bp uninit <space>             halt the first time never-written memory is read back",
+            "  bp when <condition> [log|off] halt (or just record) when the hardware does something",
+            "                                it should not - `bp when` alone lists what this core detects",
             "  bp depth <n>                  halt if the call stack ever gets deeper than <n>",
             "  bp forbid <addr>-<end>        never halt while the PC is in this range",
             "  bp log [<count>] | bp log clear",
@@ -101,6 +103,49 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                         return DianaOSResult.Fail($"{space.Name} reports no size, so its writes cannot be tracked.");
                     return $"Halting on the first read of any never-written byte of {space.Name}.";
                 }
+                case "when":
+                {
+                    var available = target.BreakConditions;
+                    if (available.Count == 0)
+                        return DianaOSResult.Fail("This core reports no hardware conditions to break on.");
+
+                    var armed = breakpoints.GetConditions();
+                    if (addrArg.Length == 0)
+                    {
+                        var rows = available.Select(c =>
+                        {
+                            var match = armed.FirstOrDefault(a => a.Name.Equals(c.Name, System.StringComparison.OrdinalIgnoreCase));
+                            string state = match.Name == null
+                                ? "off"
+                                : $"{(match.LogOnly ? "logging" : "halting")}, {match.HitCount}x";
+                            return $"  {c.Name,-12} {c.Description}  [{state}]";
+                        });
+                        return "Conditions this core detects:\n" + string.Join('\n', rows);
+                    }
+
+                    var chosen = available.FirstOrDefault(c => c.Name.Equals(addrArg, System.StringComparison.OrdinalIgnoreCase));
+                    if (chosen.Name == null)
+                    {
+                        string[] names = available.Select(c => c.Name).ToArray();
+                        return DianaOSResult.Fail($"'{addrArg}' is not a condition this core detects.{Suggestion.Hint(addrArg, names)} Try {string.Join('/', names)}.");
+                    }
+
+                    string mode = parts.Length > at + 2 ? parts[at + 2].ToLowerInvariant() : string.Empty;
+                    if (mode == "off")
+                    {
+                        return breakpoints.DisarmCondition(chosen.Name)
+                            ? $"No longer watching for {chosen.Name}."
+                            : $"{chosen.Name} was not armed.";
+                    }
+                    if (mode.Length > 0 && mode != "log")
+                        return $"Usage: bp when {chosen.Name} [log|off]";
+
+                    bool logOnly = mode == "log";
+                    breakpoints.ArmCondition(chosen.Name, logOnly);
+                    return logOnly
+                        ? $"Recording every {chosen.Name} ({chosen.Description}) without halting - read it back with `bp log`."
+                        : $"Halting on {chosen.Name} ({chosen.Description}).";
+                }
                 case "depth":
                 {
                     if (addrArg.Length == 0) return "Usage: bp depth <n>";
@@ -134,11 +179,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     {
                         return breakpoints.GetBreakpoints().Any(b => b.LogExpression != null)
                             || breakpoints.GetDataBreakpoints().Any(b => b.LogExpression != null)
+                            || breakpoints.GetConditions().Any(c => c.LogOnly)
                             ? "Nothing logged yet - the logpoints have not been hit."
                             : "No logpoints set - add one with `bp add <addr> log <expr>`.";
                     }
                     var labels = target.Labels;
-                    var logged = entries.Select(e => $"  #{e.Id} {labels?.Describe(e.Address) ?? $"${e.Address:X6}"}  {e.Text}");
+                    // Id 0 is a `bp when` condition, which belongs to no numbered breakpoint.
+                    var logged = entries.Select(e => $"  {(e.Id == 0 ? "when" : $"#{e.Id}")} {labels?.Describe(e.Address) ?? $"${e.Address:X6}"}  {e.Text}");
                     string more = breakpoints.LogEntriesRecorded > entries.Count
                         ? $"\n  ({breakpoints.LogEntriesRecorded} recorded in total)"
                         : string.Empty;
@@ -149,7 +196,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     var list = breakpoints.GetBreakpoints();
                     var dataList = breakpoints.GetDataBreakpoints();
                     var forbidList = breakpoints.GetForbidRanges();
-                    if (list.Count == 0 && dataList.Count == 0 && forbidList.Count == 0)
+                    var conditionList = breakpoints.GetConditions();
+                    if (list.Count == 0 && dataList.Count == 0 && forbidList.Count == 0 && conditionList.Count == 0)
                     {
                         string none = coprocessor ? $"No active {cpu!.Name} breakpoints." : "No active breakpoints.";
                         return breakpoints.IsUninitializedReadBreakArmed
@@ -164,6 +212,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                         .Concat(forbidList.Select(r =>
                         $"  #{r.Id}: forbid {Range(r.Address, r.EndAddress)} ({(r.Enabled ? "enabled" : "disabled")})"))
                         .ToList();
+                    foreach (var c in conditionList)
+                        lines.Add($"  when {c.Name}: {(c.LogOnly ? "logging" : "halting")} ({(c.Enabled ? "enabled" : "disabled")}, {c.HitCount}x)");
                     if (breakpoints.DepthGuard >= 0) lines.Add($"  depth guard: halt above depth {breakpoints.DepthGuard}");
                     if (breakpoints.IsUninitializedReadBreakArmed) lines.Add($"  uninitialized reads: {breakpoints.UninitializedReadSpace}");
                     return string.Join('\n', lines);
@@ -187,7 +237,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 default:
                 {
                     // Named once so the suggestion and the "Try" list cannot drift.
-                    string[] subcommands = { "add", "read", "write", "uninit", "depth", "forbid", "log", "list", "on", "off", "remove" };
+                    string[] subcommands = { "add", "read", "write", "uninit", "when", "depth", "forbid", "log", "list", "on", "off", "remove" };
                     return $"Unknown 'bp' subcommand '{sub}'.{Suggestion.Hint(sub, subcommands)} Try {string.Join('/', subcommands)}.";
                 }
             }

@@ -119,7 +119,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
                 case 0x40: { uint a = AddrImplied(); OpRTI(a); return a; } // RTI
                 case 0x41: { uint a = AddrDirectIndirectX(); OpEOR(a); return a; } // EOR
                 // WDM is a 2-byte NOP on real silicon - see Venus_CPU.md §9.1.
-                case 0x42: { uint a = AddrImmediate8(); OpNOP(a); return a; } // WDM
+                case 0x42: { uint a = AddrImmediate8(); OpWDM(a); return a; } // WDM
                 case 0x43: { uint a = AddrStackRelative(); OpEOR(a); return a; } // EOR
                 case 0x44: { uint a = AddrBlockMove(); OpMVP(a); return a; } // MVP
                 case 0x45: { uint a = AddrDirectPage(); OpEOR(a); return a; } // EOR

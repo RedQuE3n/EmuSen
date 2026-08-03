@@ -207,6 +207,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                 new SetRegCommand(),
                 new VectorsCommand(),
                 new AddrCommand(),
+                new DmaCommand(),
                 new FrameLogCommand(),
                 new CheatCommand(cheatAutoDetectCodec, cheatExplicitCodec, supportedCheatSystems),
                 new SearchCommand(),

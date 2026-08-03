@@ -362,6 +362,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    bp write <space> <addr>[-<end>] [<value>] [changed] [if <expr>]\n" +
                 "    bp read <space> <addr>[-<end>] [<value>] [if <expr>]\n" +
                 "    bp uninit <space>\n" +
+                "    bp when [<condition>] [log|off]\n" +
                 "    bp depth <n>|off\n" +
                 "    bp forbid <addr>-<end>\n" +
                 "    bp log [<count>] | bp log clear\n" +
@@ -462,6 +463,38 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    written before arming counts as initialized; arm it early to catch\n" +
                 "    reset-time reads. 'counters' reports the same thing as a whole-run\n" +
                 "    tally when a halt is too blunt.\n\n" +
+                "HARDWARE CONDITIONS\n" +
+                "    'bp when <condition>' halts when the machine does something it should\n" +
+                "    not, rather than when it reaches an address. 'bp when' with no argument\n" +
+                "    lists what this core can detect, with each one's current state. On the\n" +
+                "    SNES that is:\n\n" +
+                "        stp         the 65816 executed STP and is stopped until reset\n" +
+                "        wdm         the 65816 executed WDM, a reserved opcode\n" +
+                "        brk         a BRK was taken\n" +
+                "        cop         a COP was taken\n" +
+                "        ppuaccess   VRAM/CGRAM/OAM written while the display is rendering\n" +
+                "        autojoy     $4218-$421F read while the auto-joypad read is running\n\n" +
+                "    These matter because none of them are visible in the output. STP is the\n" +
+                "    clearest case: a game that executes it has usually jumped somewhere it\n" +
+                "    never meant to, and the symptom is simply that the picture stops - with\n" +
+                "    no indication of where. 'bp when stp' halts on the instruction itself,\n" +
+                "    while the call stack that got there is still readable with 'bt'.\n\n" +
+                "    'ppuaccess' and 'autojoy' are the two where the emulator and the game\n" +
+                "    disagree most quietly. Real hardware drops a VRAM write made during\n" +
+                "    active display, and returns a half-updated byte from a joypad register\n" +
+                "    read mid-refresh; a core that is more permissive than the hardware runs\n" +
+                "    such a game correctly and hides a real bug, and a core that is less\n" +
+                "    permissive breaks one that worked. Either way the first thing you want\n" +
+                "    is to know it happened at all.\n\n" +
+                "    A condition can be armed 'log' instead, which records every occurrence\n" +
+                "    and carries on. That is the right mode for anything the game does often\n" +
+                "    - a title screen may read the joypad early on every single frame, and\n" +
+                "    halting on it tells you far less than seeing the pattern across frames.\n" +
+                "    Logged conditions land in the same ring as logpoints and are read back\n" +
+                "    with 'bp log', where they interleave with everything else in the order\n" +
+                "    it really happened. 'bp when <condition> off' disarms one.\n\n" +
+                "    Conditions cost nothing until one is armed: each detection site tests a\n" +
+                "    single bool before computing anything.\n\n" +
                 "DEPTH GUARD\n" +
                 "    'bp depth <n>' halts as soon as the call stack gets deeper than <n>.\n" +
                 "    Runaway recursion and a stack that never unwinds both present as a game\n" +
@@ -2318,16 +2351,22 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "        bt      it has a call/return seam to infer a stack from\n" +
                 "        regs    it reports named registers\n" +
                 "        disasm  it has a code space and a disassembler for its ISA\n\n" +
-                "    Two absences are worth knowing about. The GSU and the SPC700 have no\n" +
+                "    One absence is worth knowing about. The GSU and the SPC700 have no\n" +
                 "    call stack: the GSU's LINK/subroutine convention is register-based\n" +
                 "    rather than a stack the way the 65816's JSR/RTS is, so there is no\n" +
                 "    honest seam to infer frames from, and 'bt gsu' says so instead of\n" +
-                "    inventing them. The NEC DSP cannot be halted at all - its firmware runs\n" +
-                "    from mask ROM this core steps as a block, so it reports 'regs' and\n" +
-                "    'disasm' but takes no breakpoints.\n\n" +
-                "    The SA-1 is the exception that gets everything, because it IS a 65816:\n" +
-                "    the same call/return and interrupt seams the main CPU uses apply to it\n" +
-                "    unchanged, so 'bt sa1', 'step sa1 out' and 'profile sa1' all work.\n\n" +
+                "    inventing them.\n\n" +
+                "    The SA-1 gets everything, because it IS a 65816: the same call/return\n" +
+                "    and interrupt seams the main CPU uses apply to it unchanged, so\n" +
+                "    'bt sa1', 'step sa1 out' and 'profile sa1' all work.\n\n" +
+                "    The NEC DSP gets everything too, by a different route. Its firmware\n" +
+                "    runs from a mask ROM the cartridge never exposes, so there is no code\n" +
+                "    to read - but the chip is still stepped one instruction at a time by\n" +
+                "    this core, and that is all a breakpoint needs. Its addresses are word\n" +
+                "    indices, not bytes, because that is what the DSP's own PC is: 'bp dsp\n" +
+                "    add 100' means the 257th instruction, and 'disasm DSPPRG' indexes the\n" +
+                "    same way. Its CALL/RET pair drives a real call stack, so 'bt dsp' and\n" +
+                "    'cov dsp funcs' map firmware nobody has source for.\n\n" +
                 "HALTING, AND WHICH CHIP RESUMES\n" +
                 "    Only one chip halts at a time. Whichever one hit its breakpoint is the\n" +
                 "    one that skips a check on resume, so 'continue' leaves the breakpoint it\n" +
@@ -2395,6 +2434,60 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    copflow stats\n\n" +
                 "SEE ALSO\n" +
                 "    cpus, cophist, regs, watch, bp",
+
+            ["dma"] =
+                "NAME\n" +
+                "    dma - what the block-transfer engine is set up to do, and what it did\n\n" +
+                "SYNOPSIS\n" +
+                "    dma\n" +
+                "    dma log on [<n>]\n" +
+                "    dma log off\n" +
+                "    dma log [<n>]\n" +
+                "    dma log clear\n" +
+                "    dma stats\n\n" +
+                "DESCRIPTION\n" +
+                "    On a SNES nearly everything the player sees arrives by DMA. Tiles,\n" +
+                "    palettes, sprite tables and the sound driver's samples are all block\n" +
+                "    transfers, and per-scanline effects - a status-bar split, a colour\n" +
+                "    gradient, a growing window wipe - are HDMA. So a large class of visual\n" +
+                "    bug is not a rendering bug at all: the data never arrived, or arrived\n" +
+                "    somewhere else, and the renderer faithfully drew what it was given.\n\n" +
+                "    'dma' alone prints the channel table: for each of the eight channels,\n" +
+                "    its direction, its B-bus write pattern, which register it targets (by\n" +
+                "    name, not just an address), where it reads from, how long the transfer\n" +
+                "    is, and for HDMA the table pointer and line counter it has reached. An\n" +
+                "    idle channel still shows its last configuration, which is usually the\n" +
+                "    thing you wanted to see.\n\n" +
+                "TRANSFER LOG\n" +
+                "    'dma log on' records every transfer as it happens - channel, kind,\n" +
+                "    destination, source, length, and the frame and scanline it ran on.\n" +
+                "    This is the part the channel table cannot give you, because a general\n" +
+                "    DMA reconfigures and fires many times a frame and the table only ever\n" +
+                "    shows the last one.\n\n" +
+                "    The scanline column is what makes it worth reading. A VRAM transfer\n" +
+                "    during vblank is normal; the same transfer at scanline 100 is a bug\n" +
+                "    that will show as corrupt graphics, and 'dma log' names the frame it\n" +
+                "    first happened on. Pair it with 'bp when ppuaccess' to halt on one.\n\n" +
+                "BANDWIDTH\n" +
+                "    'dma stats' totals the whole armed run two ways: per channel, split\n" +
+                "    into general and HDMA because those cost very differently, and per\n" +
+                "    destination register, which answers 'where is the bandwidth going'.\n" +
+                "    A game that is slow during one scene and not another is usually\n" +
+                "    uploading something enormous, and the destination table names it.\n\n" +
+                "COST\n" +
+                "    Disarmed the log is a null field test at the end of each transfer, so\n" +
+                "    a normal run pays nothing. Armed, it is a fixed-size ring plus a set\n" +
+                "    of counters, so a long session cannot grow memory without bound -\n" +
+                "    'dma log' shows only what is still in the ring, while 'dma stats'\n" +
+                "    covers the whole armed run. The channel table is read on demand and\n" +
+                "    costs nothing at all when not being run.\n\n" +
+                "EXAMPLES\n" +
+                "    dma\n" +
+                "    dma log on\n" +
+                "    dma log 40\n" +
+                "    dma stats\n\n" +
+                "SEE ALSO\n" +
+                "    bp, copflow, mem, watch, tilemap",
 
             ["label"] =
                 "NAME\n" +

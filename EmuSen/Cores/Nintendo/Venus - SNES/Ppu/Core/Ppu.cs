@@ -28,6 +28,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // --- Register Handlers ---
         [EmuSen.Common.SkipInState] private PpuRegister[] _registers = null!;
 
+        // The $21xx mnemonic, for anything reporting a register by number - see `man dma`.
+        public string? DebugRegisterName(int index)
+            => (uint)index < (uint)_registers.Length && !_registers[index].Name.StartsWith("UNK_") ? _registers[index].Name : null;
+
         // --- Register State ---
         public byte Inidisp;                 // $2100 - brightness + force blank
         public byte Obsel;                   // $2101 - sprite size / tile base

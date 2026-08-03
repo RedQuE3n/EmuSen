@@ -143,6 +143,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         // the log writer.
         public void FlushVerboseTrace() => _verboseTrace.Flush();
 
+        // The extra bus cycles a 16-bit operand costs - see Venus_CPU.md §8.8.
+        private static int WidthPenalty(byte opcode, bool wide16A, bool wide16X) => OpcodeWidth[opcode] switch
+        {
+            WidthM => wide16A ? 1 : 0,
+            WidthMRmw => wide16A ? 2 : 0,
+            WidthX => wide16X ? 1 : 0,
+            _ => 0,
+        };
+
         public void Reset()
         {
             E = true;
@@ -211,6 +220,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             LastInstructionPB = executedAtPB;
             uint opcodeAddr = ((uint)executedAtPB << 16) | executedAtPC;
             _addrModeExtraCycles = 0;
+            // Sampled before the instruction runs, since REP/SEP/PLP change them mid-flight.
+            bool wide16A = !GetFlag(CpuFlags.M);
+            bool wide16X = !GetFlag(CpuFlags.X);
             byte opcode = Fetch8();
 
             // Before Dispatch, so registers are this instruction's inputs - the point Mesen records at.
@@ -266,18 +278,26 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             // the opcode bank rather than bank 0 - accepted as a known,
             // narrow residual rather than threading a same-bank flag
             // through every implied-addressing opcode for it.
-            int totalCycleUnits = OpcodeCycles[opcode] + _addrModeExtraCycles;
-            int bytesFetched = (ushort)(PC - executedAtPC);
-            if (bytesFetched > totalCycleUnits) bytesFetched = totalCycleUnits;
+            int totalCycleUnits = OpcodeCycles[opcode] + _addrModeExtraCycles + WidthPenalty(opcode, wide16A, wide16X);
+            int bytesFetched = OpcodeFixedBytes[opcode];
+            if (bytesFetched == 0)
+            {
+                bytesFetched = (ushort)(PC - executedAtPC);
+                if (bytesFetched > totalCycleUnits) bytesFetched = totalCycleUnits;
+            }
             int remainderUnits = totalCycleUnits - bytesFetched;
 
             int masterClocks = bytesFetched * _bus.GetAccessSpeedCycles(opcodeAddr);
             if (remainderUnits > 0)
             {
-                masterClocks += remainderUnits * _bus.GetAccessSpeedCycles(targetAddr);
+                masterClocks += remainderUnits * (OpcodeInternalRemainder[opcode]
+                    ? InternalCycleClocks
+                    : _bus.GetAccessSpeedCycles(targetAddr));
             }
 
-            return masterClocks + DrainPendingDmaCycles();
+            int totalClocks = masterClocks + DrainPendingDmaCycles();
+            if (CpuBinaryTrace.Enabled && _traceBinary) CpuBinaryTrace.SetLastCost(totalClocks);
+            return totalClocks;
         }
 
         // See Dma.PendingCpuCycles's own comment for why this exists and

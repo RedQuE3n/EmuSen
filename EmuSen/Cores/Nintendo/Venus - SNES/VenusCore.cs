@@ -48,6 +48,10 @@ namespace EmuSen.Cores.Nintendo.Venus
         // undershoot (see Venus_APU.md).
         public const int CyclesPerScanline = 1364;
 
+        // The once-per-scanline DRAM refresh stall - see Venus_CPU.md §8.7.
+        public const int DramRefreshPosition = 538;
+        public const int DramRefreshClocks = 40;
+
         // Both differ per region; the dot clock and 224-line active display do not - see Venus_CPU.md §8.5c.
         private const int NtscScanlines = 262;
         private const int PalScanlines = 312;
@@ -138,6 +142,7 @@ namespace EmuSen.Cores.Nintendo.Venus
         // left off rather than redoing that scanline's start-of-line work).
         private bool _scanlineStarted;
         private int _lineCycles;
+        private bool _refreshedThisLine;
         private long _phaseStart;
 
         // Skips exactly one breakpoint check right after resuming from a
@@ -305,6 +310,7 @@ namespace EmuSen.Cores.Nintendo.Venus
                     _phaseStart = Stopwatch.GetTimestamp();
                     // Carry the boundary-crossing instruction's overshoot - see Venus_CPU.md §8.5a.
                     _lineCycles = _lineCycles > CyclesPerScanline ? _lineCycles - CyclesPerScanline : 0;
+                    _refreshedThisLine = false;
                     Bus.LineCycles = _lineCycles;
                     Bus.ScanlineObserver?.Invoke(_currentScanline); // see `man runto`
                     _scanlineStarted = true;
@@ -323,6 +329,15 @@ namespace EmuSen.Cores.Nintendo.Venus
                     _justResumedFromBreakpoint = false;
 
                     int cpuCycles = Cpu.Step();
+
+                    // Hardware stops the CPU once per scanline to refresh DRAM; the
+                    // instruction spanning that point is charged for it - see Venus_CPU.md §8.7.
+                    if (!_refreshedThisLine && _lineCycles + cpuCycles >= DramRefreshPosition)
+                    {
+                        _refreshedThisLine = true;
+                        cpuCycles += DramRefreshClocks;
+                    }
+
                     _lineCycles += cpuCycles;
                     Bus.LineCycles = _lineCycles;
 

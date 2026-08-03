@@ -56,6 +56,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             PB = newPB;
         }
 
+        // A taken conditional branch costs one internal cycle - see Venus_CPU.md §8.8.
+        private void TakeBranch(uint address)
+        {
+            _addrModeExtraCycles++;
+            PC = (ushort)(address & 0xFFFF);
+        }
+
         private void OpBRA(uint address)
         {
             PC = (ushort)(address & 0xFFFF);
@@ -72,7 +79,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             if (!GetFlag(CpuFlags.N))
             {
-                PC = (ushort)(address & 0xFFFF);
+                TakeBranch(address);
             }
         }
 
@@ -80,7 +87,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             if (!GetFlag(CpuFlags.Z))
             {
-                PC = (ushort)(address & 0xFFFF);
+                TakeBranch(address);
             }
         }
 
@@ -88,7 +95,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             if (GetFlag(CpuFlags.Z))
             {
-                PC = (ushort)(address & 0xFFFF);
+                TakeBranch(address);
             }
         }
 
@@ -96,7 +103,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             if (GetFlag(CpuFlags.V))
             {
-                PC = (ushort)(address & 0xFFFF);
+                TakeBranch(address);
             }
         }
 
@@ -104,7 +111,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             if (!GetFlag(CpuFlags.V))
             {
-                PC = (ushort)(address & 0xFFFF);
+                TakeBranch(address);
             }
         }
 
@@ -112,7 +119,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             if (!GetFlag(CpuFlags.C))
             {
-                PC = (ushort)(address & 0xFFFF);
+                TakeBranch(address);
             }
         }
 
@@ -120,7 +127,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             if (GetFlag(CpuFlags.C))
             {
-                PC = (ushort)(address & 0xFFFF);
+                TakeBranch(address);
             }
         }
 
@@ -128,7 +135,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             if (GetFlag(CpuFlags.N))
             {
-                PC = (ushort)(address & 0xFFFF);
+                TakeBranch(address);
             }
         }
     }

@@ -6,8 +6,8 @@ namespace EmuSen.WiseMan.HeadlessDebug
     // The resyncing S-CPU trace differ - see EmuSen_Debugging_Tools_Reference_v5.md §3.40.
     public class CpuTraceDiffTests
     {
-        private static Step At(uint addr, ushort a = 0) =>
-            new Step(addr, 0xEA, CpuBinaryTrace.KindInstruction, a, 0, 0, 0x01FF, 0, 0, 0x30, false);
+        private static Step At(uint addr, ushort a = 0, uint cost = 8) =>
+            new Step(addr, 0xEA, CpuBinaryTrace.KindInstruction, a, 0, 0, 0x01FF, 0, 0, 0x30, false, cost);
 
         // A straight run of distinct addresses, so nothing collapses by accident.
         private static Step[] Line(int count, uint from = 0x008000) =>
@@ -114,7 +114,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
         {
             var left = Line(10);
             var right = Line(10);
-            right[5] = new Step(right[5].Addr, 0, CpuBinaryTrace.KindNmi, 0, 0, 0, 0x01FF, 0, 0, 0x30, false);
+            right[5] = new Step(right[5].Addr, 0, CpuBinaryTrace.KindNmi, 0, 0, 0, 0x01FF, 0, 0, 0x30, false, 8);
 
             var result = CpuTraceDiff.Compare(left, right);
 
@@ -167,6 +167,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
                 CpuBinaryTrace.Start();
                 CpuBinaryTrace.Record(0x7E1234, 0xA9, CpuBinaryTrace.KindInstruction,
                     0x1122, 0x3344, 0x5566, 0x01F0, 0x0100, 0x7E, 0x24, true);
+                CpuBinaryTrace.SetLastCost(30);
                 CpuBinaryTrace.Record(0x008123, 0x00, CpuBinaryTrace.KindNmi,
                     0, 0, 0, 0x01FF, 0, 0, 0x30, false);
                 CpuBinaryTrace.Stop();
@@ -187,6 +188,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
                 Assert.Equal(0x7E, steps[0].Db);
                 Assert.Equal(0x24, steps[0].P);
                 Assert.True(steps[0].E);
+                Assert.Equal(30u, steps[0].Cost);
                 Assert.Equal(CpuBinaryTrace.KindNmi, steps[1].Kind);
             }
             finally

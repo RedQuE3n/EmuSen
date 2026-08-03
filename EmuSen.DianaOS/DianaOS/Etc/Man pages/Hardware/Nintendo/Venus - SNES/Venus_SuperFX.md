@@ -545,7 +545,35 @@ The first two findings the differ reports are loop counts, not desyncs: `[$00849
 
 **Already excluded as the cause of the excess:** the APU clock ratio is exact (`ApuClockHz`/`_masterClockHz`, deliberately not `/21`), `GetAccessSpeedCycles` matches the fullsnes access-speed table region for region, and the IPL per-byte loop is pinned at 25 cycles by test (`Venus_APU.md` §1.7).
 
+#### Disproved 2026-08-03: boot pacing is not the cause
+
+The section above proposed that S-CPU boot pacing was upstream of the camera. **It was worth chasing and it was wrong.** Chasing it found four genuine timing bugs (`Venus_CPU.md` §8.7/§8.8, `Venus_Memory.md` §1.6) and closed the boot divergence from **+8.97% to +0.43%** against Mesen over the same 80 frames. The camera bug is completely unchanged by all four.
+
+Re-measured after the fixes, with a state-anchored script (`tapuntil`, §3.15d - the old frame-counted one no longer reaches the scene at all now that pacing moved), GSU RAM `$0094` still counts **down**: `0043 0041 003E 003C 0039 ... 0007 0005 0002 0000`. Hardware counts up.
+
+So the two are independent. That is worth as much as a fix: every future reading of this section should stop treating the frame skew as a lead.
+
+**Also retired: the four-run masking.** Mesen's default power-on RAM fill is random, and two identical runs of it disagree with each other - measured, see §3.40. The probe now forces a zero fill and every dump is byte-identical across runs. The masking in §3.39 was compensating for a reference that disagreed with itself; it is no longer needed, and any measurement that depended on it should be redone rather than trusted.
+
 #### Where to pick it up
+
+**Give the GSU the same treatment the S-CPU just got.** The three CPU timing bugs were not found by reading code - they were found by emitting a per-instruction binary trace on both sides and diffing control flow with a resyncing differ (§3.40). Everything needed to repeat that for the GSU already exists: `mesen-gsu-trace.patch` already records address, opcode and all sixteen registers per step, and `CpuTraceDiff`'s collapse/resync/cost machinery is generic over "a stream of steps with an address and some registers". What is missing is a binary GSU sink on our side in the same record layout, and the small amount of refactoring to point the differ at it.
+
+That matters here specifically because the write is already localised: `$0094` comes from **R1 at GSU PC `$09:984F`** (`SMS ($0094),R1`), and at the camera moment we compute `R1 = $00A7`. What is not known is what Mesen has in R1 at the same point - and a GSU trace diff answers exactly that, the same way the CPU one answered "which opcode do we charge wrong".
+
+The routine around it is worth reading with the `BGE`/`BLT` history in mind (§10.4 - a branch condition in this core was inverted once already):
+
+```
+099839: E5        DEC R5
+09983A: 0B 02     BMI $983E    ; delay slot below runs either way
+09983C: 54        ADD R4
+09983D: 4F        NOT          ; skipped when the branch is taken
+09983E: 18        TO R8
+```
+
+The branch's only effect is whether `NOT` runs - a sign selection, on the value that becomes the camera delta. Do not "fix" it by inspection; that is the mistake §10.7 already records making at `$09:9512`. Measure R1 against the reference first.
+
+#### Superseded: measure the spin loop's master-clock cost
 
 Measure the master-clock cost of the two-instruction spin `CMP $2140` / `BNE $8440` at `$00:8440` against Mesen's cost for the same pair, and work outward from there. That is a bounded question about one addressing mode's timing, not another memory diff - and it is upstream of the camera, because until the two machines agree on S-CPU pacing every later comparison inherits the skew.
 

@@ -75,8 +75,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             if (EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceCountdown > 0
                 && index == EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceAddr)
             {
+                // Not R[15] - it already moved past - see Venus_SuperFX.md §8.4.
                 EmuSen.Debug.DebugSettings.SuperFxRamWriteTraceCountdown--;
-                System.Console.WriteLine($"[GSUW] {index:X6} = {data:X2} pc={_pbr:X2}:{R[15]:X4}");
+                System.Console.WriteLine(
+                    $"[GSUW] {index:X6} = {data:X2} pc={_debugInstructionAddress >> 16:X2}:{_debugInstructionAddress & 0xFFFF:X4}");
             }
 
             _ram[index] = data;

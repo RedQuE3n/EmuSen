@@ -59,7 +59,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             _instructions[0x5D] = new SpcInstruction { Name = "MOV X, A", AddrMode = AddrImplied, Operate = OpMOV_X_A, Cycles = 2 };
             _instructions[0xEB] = new SpcInstruction { Name = "MOV Y, dp", AddrMode = AddrDirectPage, Operate = OpMOV_Y_mem, Cycles = 3 };
             _instructions[0xFB] = new SpcInstruction { Name = "MOV Y, dp+X", AddrMode = AddrDirectPageX, Operate = OpMOV_Y_mem, Cycles = 4 };
-            _instructions[0x7E] = new SpcInstruction { Name = "CMP Y, dp", AddrMode = AddrDirectPage, Operate = OpCMP_Y_dp, Cycles = 4 };
+            // 3, like every other dp compare - see Venus_APU.md §1.7.
+            _instructions[0x7E] = new SpcInstruction { Name = "CMP Y, dp", AddrMode = AddrDirectPage, Operate = OpCMP_Y_dp, Cycles = 3 };
             _instructions[0xE4] = new SpcInstruction { Name = "MOV A, dp", AddrMode = AddrDirectPage, Operate = OpMOV_A_dp, Cycles = 3 };
             _instructions[0xCB] = new SpcInstruction { Name = "MOV dp, Y", AddrMode = AddrDirectPage, Operate = OpMOV_dp_Y, Cycles = 4 };
             _instructions[0xC5] = new SpcInstruction { Name = "MOV abs, A", AddrMode = AddrAbsolute, Operate = OpMOV_abs_A, Cycles = 5 };

@@ -475,6 +475,10 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // at all can legitimately return an empty list.
         IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count);
 
+        // Opaque core-defined decoder state a caller already knows - see `man disasm`.
+        IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count, IReadOnlyList<string> hints)
+            => Disassemble(spaceName, address, count);
+
         // Classifies whether a disassembled instruction statically
         // references an address - the code-only counterpart to
         // Disassemble() above, backing the `callers`/`writers`/`readers`

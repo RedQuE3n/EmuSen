@@ -1126,11 +1126,32 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    bytes, because the NEC DSP's program counter is a word index and that\n" +
                 "    is the only number you ever have to paste in. Reading DSPPRG through\n" +
                 "    'mem' is still byte-addressed, three bytes per word.\n\n" +
+                "OPERAND WIDTHS (65816 ONLY)\n" +
+                "    On the 65816 an immediate operand is one byte or two depending on the\n" +
+                "    M (accumulator) and X (index) flags, which are not in the instruction\n" +
+                "    bytes. By default those come from the CPU's flags RIGHT NOW, and\n" +
+                "    REP/SEP inside the range are then tracked forward - which is correct\n" +
+                "    when disassembling from the current PC, and only a guess anywhere\n" +
+                "    else. Guessing wrong shifts every following instruction by a byte, so\n" +
+                "    the listing stays syntactically plausible while being entirely wrong:\n" +
+                "    a routine that really runs 8-bit-index reads as 'LDY #$C500' where the\n" +
+                "    bytes are 'LDY #$00' followed by the start of the next instruction.\n\n" +
+                "    'm8'/'m16' and 'x8'/'x16' force the starting widths. They may appear\n" +
+                "    in any order after the command name and don't count as <addr>/<n>.\n" +
+                "    The chosen widths are echoed above the listing. Asking for a 16-bit\n" +
+                "    width also selects native mode, because emulation mode forces both\n" +
+                "    widths to 8 regardless of M/X - without that, 'x16' would silently do\n" +
+                "    nothing whenever the CPU happens to be paused in emulation mode.\n\n" +
+                "    If a disassembly looks like it decodes into nonsense a few\n" +
+                "    instructions in - implausible operands, a store to a read-only\n" +
+                "    register, addresses that don't line up with a known write site - try\n" +
+                "    the other widths before concluding the bytes are data.\n\n" +
                 "EXAMPLES\n" +
                 "    disasm CpuBus 8000 20\n" +
                 "    disasm gsu\n" +
                 "    disasm spc 05A5 10\n" +
-                "    disasm dsp 0 20\n\n" +
+                "    disasm dsp 0 20\n" +
+                "    disasm cpu 04FDD8 12 m16 x8\n\n" +
                 "SEE ALSO\n" +
                 "    cpus, cov, bt, label",
 

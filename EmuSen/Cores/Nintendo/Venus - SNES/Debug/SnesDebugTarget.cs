@@ -741,6 +741,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         // as best-effort for immediate-mode operand widths specifically;
         // opcode/addressing-mode decoding itself is unaffected.
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
+            => Disassemble(spaceName, address, count, System.Array.Empty<string>());
+
+        // 'm8'/'m16'/'x8'/'x16' override the guessed widths - see `man disasm`.
+        public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count, IReadOnlyList<string> hints)
         {
             IDebugMemorySpace space = GetMemorySpaces().First(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
 
@@ -761,7 +765,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             Cpu decodingCpu = DecodingCpuFor(space.Name);
             bool mFlagSet = (decodingCpu.P & (byte)CpuFlags.M) != 0;
             bool xFlagSet = (decodingCpu.P & (byte)CpuFlags.X) != 0;
-            return Snes65816Disassembler.Disassemble(a => space.Read(a), address, count, decodingCpu.E, mFlagSet, xFlagSet);
+            bool eFlag = decodingCpu.E;
+            foreach (string hint in hints)
+            {
+                // A 16-bit width implies native mode - see `man disasm`.
+                if (string.Equals(hint, "m8", StringComparison.OrdinalIgnoreCase)) mFlagSet = true;
+                else if (string.Equals(hint, "m16", StringComparison.OrdinalIgnoreCase)) { mFlagSet = false; eFlag = false; }
+                else if (string.Equals(hint, "x8", StringComparison.OrdinalIgnoreCase)) xFlagSet = true;
+                else if (string.Equals(hint, "x16", StringComparison.OrdinalIgnoreCase)) { xFlagSet = false; eFlag = false; }
+            }
+            return Snes65816Disassembler.Disassemble(a => space.Read(a), address, count, eFlag, mFlagSet, xFlagSet);
         }
 
         // Which 65816's M/X/E state governs a space's immediate widths - see Venus_SA1.md §11.3.

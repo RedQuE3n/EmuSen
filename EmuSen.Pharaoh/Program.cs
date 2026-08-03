@@ -90,7 +90,8 @@ class Program
 
             if (memberType == null) continue; // already warned above
 
-            object value = rawValue == null ? true : Convert.ChangeType(rawValue, memberType);
+            // Parse already proved this converts, by this same function.
+            HeadlessDebugOptions.TryConvertFlagValue(rawValue, memberType, out object? value, out _);
             if (prop != null) prop.SetValue(null, value);
             else field!.SetValue(null, value);
 

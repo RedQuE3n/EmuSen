@@ -228,6 +228,27 @@ Reads through all of these are side-effect-free by construction, which matters h
 
 ---
 
+### 8.4 Watching the chip's own RAM traffic
+
+For most of this core's life `watch`, `counters`, `bp write` and `freeze` could not see a single Game Pak RAM access the GSU made. They are fed by `IWriteObserver`/`IReadObserver`, which `MemoryBus` and `Cartridge` raise on the S-CPU's bus — and the GSU never uses that bus. `SuperFx.ReadRam`/`WriteRam` index `_ram` directly, so `counters on GSURAM` followed by `counters <addr>` reported `reads 0, writes 0, bytes touched 0/16` for an address the chip was hammering every frame. The tooling did not say "I can't see this"; it said "nothing happened", which is a considerably worse failure.
+
+`SuperFx` now carries its own `WriteObserver`/`ReadObserver`, wired by `SnesDebugTarget`'s constructor the same way the SA-1's already was (§11.4 of `Venus_SA1.md`), and raises `OnCoprocessorWrite`/`OnCoprocessorRead` from `WriteRam`/`ReadRam`.
+
+**The space name is the load-bearing part.** Game Pak RAM is one array reachable from two sides, and the two sides report under different names:
+
+| Watch this | To see |
+| --- | --- |
+| `SRAM` | the **S-CPU** writing Game Pak RAM, through the `$6000-$7FFF` window or banks `$70`/`$71` (raised by `Cartridge`) |
+| `GSURAM` | the **GSU** writing the same bytes itself |
+
+That is a feature, not an accident of naming: "did the CPU stage this, or did the chip compute it" is exactly the question worth asking about a shared array, and a single merged name would throw the answer away. Both use the same offset into the array, so the same address means the same byte on either side. `mem`/`snapshot`/`diff` over `GSURAM` were always truthful — they read the array directly rather than going through the observer path — which is why a snapshot diff was the only thing that worked here before this existed.
+
+**Accesses are labelled with the GSU's own PC.** `SuperFx.DebugInstructionAddress` records `PBR:R15` at the top of each instruction, before `StepInstruction` runs, so `watch summary` reports `GSU PC=0x0AD012` rather than whatever the S-CPU happened to be executing — which for a chip running asynchronously is noise. The SA-1 path already did this with `LastInstructionPB`/`PC`; the GSU has no equivalent, hence the explicit field.
+
+**Two behaviours changed for the SA-1 as well**, deliberately: `OnCoprocessorWrite` used to record the watch and nothing else, so `bp write` and `counters` silently ignored every write a coprocessor made. It now runs the same three (`_watches`, `_breakpoints`, `_accessCounters`) the S-CPU path does. `RestoreIfFrozen` is still deliberately *not* on the coprocessor path — `freeze` undoing a chip's own write mid-computation is a different feature with its own hazards, and nothing has needed it yet.
+
+**Cost when nothing is attached** is a null check per RAM byte. `ReadRam` is on the plot hot path (`FlushPixelCache` reads every bitplane it merges into), so this is not free in principle; measured against the full suite it is not visible, and `EmuSen_Games_Tested.md`'s digests are unchanged. Pinned by `EmuSen.WiseMan/Coprocessors/SuperFxRamObservationTests.cs`, including that a chip with no observer attached still runs.
+
 ## 9. Known-wrong and unverified
 
 - **OBJ page arrangement (§6.2)** — the 2x2 page arrangement and its stride are inferred, not verified. The within-page order is now row-major on Mesen's and bsnes's authority, not on output evidence; the previous "confirmed by output" claim was withdrawn (§6.2).

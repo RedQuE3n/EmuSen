@@ -217,6 +217,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _ppu.WriteObserver = this; // VRAM/CGRAM/OAM - see Venus_Memory.md §6.1
             bus.Cart.WriteObserver = this; // SRAM + the S-CPU's view of the SA-1's RAM - see Venus_SA1.md §11.4
             if (bus.Cart.Sa1 is { } observedSa1) observedSa1.WriteObserver = this; // the SA-1's own writes
+            // The GSU's own Game Pak RAM traffic, which never reaches the S-CPU bus - see Venus_SuperFX.md §8.4.
+            if (bus.Cart.SuperFx is { } observedGsu) { observedGsu.WriteObserver = this; observedGsu.ReadObserver = this; }
             bus.ReadObserver = this;
             bus.FrameObserver = this;
             bus.RomPatcher = this;
@@ -680,14 +682,30 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _freezes.Restore(() => space.Write(address, frozen));
         }
 
-        // The S-CPU's PC says nothing about a write the SA-1 made on its own,
-        // so label these with the chip's own PC - see Venus_SA1.md §11.4.
+        // The S-CPU's PC says nothing about an access a cartridge chip made on
+        // its own, so label these with that chip's own PC - see Venus_SA1.md §11.4.
         public void OnCoprocessorWrite(string spaceName, int address, byte value)
         {
-            var sa1 = _bus.Cart.Sa1;
-            if (sa1 == null) { OnWrite(spaceName, address, value); return; }
-            _watches.RecordWrite(spaceName, address, value,
-                () => $"SA1 PC=0x{sa1.Cpu.LastInstructionPB:X2}{sa1.Cpu.LastInstructionPC:X4}");
+            if (CoprocessorContext() is not { } context) { OnWrite(spaceName, address, value); return; }
+            _watches.RecordWrite(spaceName, address, value, context);
+            _breakpoints.NoteWrite(spaceName, address, value);
+            _accessCounters.NoteWrite(spaceName, address);
+        }
+
+        public void OnCoprocessorRead(string spaceName, int address, byte value)
+        {
+            if (CoprocessorContext() is not { } context) { OnRead(spaceName, address, value); return; }
+            _watches.RecordRead(spaceName, address, value, context);
+            _breakpoints.NoteRead(spaceName, address, value);
+            _accessCounters.NoteRead(spaceName, address);
+        }
+
+        // A cartridge carries one of these at most, so which chip is present decides the label.
+        private Func<string>? CoprocessorContext()
+        {
+            if (_bus.Cart.Sa1 is { } sa1) return () => $"SA1 PC=0x{sa1.Cpu.LastInstructionPB:X2}{sa1.Cpu.LastInstructionPC:X4}";
+            if (_bus.Cart.SuperFx is { } gsu) return () => $"GSU PC=0x{gsu.DebugInstructionAddress:X6}";
+            return null;
         }
 
         // Mirror of OnWrite for reads - see IReadObserver's comment on why
@@ -784,21 +802,24 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             int Abs() => (instr.Address & 0xFF0000) | (instr.Bytes[1] | (instr.Bytes[2] << 8));
             int Long() => instr.Bytes[1] | (instr.Bytes[2] << 8) | (instr.Bytes[3] << 16);
 
+            // A GSU/SPC700 line whose length disagrees is not the 65816 instruction this table names - see EmuSen_Debugging_Tools_Reference_v5.md §3.12.
+            bool absolute = instr.Bytes.Count == 3, absoluteLong = instr.Bytes.Count == 4;
+
             return opcode switch
             {
-                0x20 => (StaticReferenceKind.Call, Abs()),  // JSR absolute
-                0x22 => (StaticReferenceKind.Call, Long()), // JSL absolute long
-                0x4C => (StaticReferenceKind.Call, Abs()),  // JMP absolute
-                0x5C => (StaticReferenceKind.Call, Long()), // JMP absolute long
-                0x8D => (StaticReferenceKind.Write, Abs()),  // STA absolute
-                0x8F => (StaticReferenceKind.Write, Long()), // STA absolute long
-                0x8E => (StaticReferenceKind.Write, Abs()),  // STX absolute
-                0x8C => (StaticReferenceKind.Write, Abs()),  // STY absolute
-                0x9C => (StaticReferenceKind.Write, Abs()),  // STZ absolute
-                0xAD => (StaticReferenceKind.Read, Abs()),   // LDA absolute
-                0xAF => (StaticReferenceKind.Read, Long()),  // LDA absolute long
-                0xAE => (StaticReferenceKind.Read, Abs()),   // LDX absolute
-                0xAC => (StaticReferenceKind.Read, Abs()),   // LDY absolute
+                0x20 when absolute => (StaticReferenceKind.Call, Abs()),  // JSR absolute
+                0x22 when absoluteLong => (StaticReferenceKind.Call, Long()), // JSL absolute long
+                0x4C when absolute => (StaticReferenceKind.Call, Abs()),  // JMP absolute
+                0x5C when absoluteLong => (StaticReferenceKind.Call, Long()), // JMP absolute long
+                0x8D when absolute => (StaticReferenceKind.Write, Abs()),  // STA absolute
+                0x8F when absoluteLong => (StaticReferenceKind.Write, Long()), // STA absolute long
+                0x8E when absolute => (StaticReferenceKind.Write, Abs()),  // STX absolute
+                0x8C when absolute => (StaticReferenceKind.Write, Abs()),  // STY absolute
+                0x9C when absolute => (StaticReferenceKind.Write, Abs()),  // STZ absolute
+                0xAD when absolute => (StaticReferenceKind.Read, Abs()),   // LDA absolute
+                0xAF when absoluteLong => (StaticReferenceKind.Read, Long()),  // LDA absolute long
+                0xAE when absolute => (StaticReferenceKind.Read, Abs()),   // LDX absolute
+                0xAC when absolute => (StaticReferenceKind.Read, Abs()),   // LDY absolute
                 _ => null,
             };
         }

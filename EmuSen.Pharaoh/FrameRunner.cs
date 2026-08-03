@@ -113,6 +113,7 @@ namespace EmuSen.Pharaoh
                 CurrentFrame++;
                 Rewind.OnFrameCompleted(Core);
                 onFrameAdvanced?.Invoke(CurrentFrame);
+                AfterFrame?.Invoke();
                 if (CurrentFrame % ProgressEvery == 0) emit($"[frame {CurrentFrame}/{FrameCap}]");
             }
         }
@@ -122,6 +123,9 @@ namespace EmuSen.Pharaoh
 
         // Run when a breakpoint halts mid-frame - see the call site above.
         public Action? OnHalted { get; set; }
+
+        // Ticked after every completed frame, alongside the constructor's own hook - see §3.15b.
+        public Action? AfterFrame { get; set; }
 
         // Returns steps actually taken - see EmuSen_Rewind_And_FastForward.md §3.
         public int StepBack(int steps)

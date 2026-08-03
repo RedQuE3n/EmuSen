@@ -112,11 +112,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return pixel;
         }
 
-        private static int BgCgramIndex(int entryPalette, int pixel, int bpp)
+        // Mode 0 gives each layer its own 32-colour CGRAM block - see Venus_PPU.md §14.
+        private static int Mode0PaletteBase(int mode, int bgIndex) => mode == 0 ? bgIndex * 32 : 0;
+
+        private static int BgCgramIndex(int entryPalette, int pixel, int bpp, int paletteBase = 0)
         {
             if (bpp == 8) return pixel * 2;
             int colorsPerPalette = bpp == 2 ? 4 : 16;
-            return (entryPalette * colorsPerPalette + pixel) * 2;
+            return (paletteBase + entryPalette * colorsPerPalette + pixel) * 2;
         }
 
         private static Color DirectColor(int pixel, int entryPalette, float brightness)
@@ -308,7 +311,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         }
                         else
                         {
-                            int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp);
+                            int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 0));
                             cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
 
                             if (DebugSettings.ColorMathBlendLogging && !isMainScreen && layerId == LayerBg1 && py == DebugSettings.ColorMathBlendScanline)
@@ -443,7 +446,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     {
                         cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
 
-                        int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp);
+                        int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 1));
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
                     }
                 }
@@ -556,7 +559,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     {
                         cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
 
-                        int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp);
+                        int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 2));
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
                     }
                 }
@@ -669,7 +672,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     {
                         cache.WindowMasked[px] = IsWindowMasked(ppu, layerId, isMainScreen, px);
 
-                        int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp);
+                        int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 3));
                         cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
                     }
                 }

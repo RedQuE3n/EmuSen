@@ -173,6 +173,26 @@ Re-armed once per frame (`InitHdma`) and stepped once per scanline (`ExecuteHdma
 
 **Indirect addressing** (`Control` bit 6): instead of reading transfer data directly from the table, each block's 2-byte indirect address is fetched from the table and *that* address is where the actual transfer data lives — lets one table entry cover an arbitrary-sized block instead of being limited by inline table bytes.
 
+### 3.2a Enabling HDMA mid-frame ($420C 0->1)
+
+`InitHdma` runs at scanline 0 and arms whichever channels `$420C` names *at that moment*. A game that only ever writes `$420C` in vblank is therefore fine, and that is nearly every game. **Yoshi's Island is not one of them**, and the shape of what it does is worth recording because it defeated a long investigation that never suspected the DMA engine at all.
+
+Its intro is driven by three H/V-IRQs per frame, programmed through `$4209`/`$420A` and dispatched from a `$7E:0125` phase counter at `$7E:C821`:
+
+| Scanline | Phase | What it does |
+|---|---|---|
+| 12 | 0 | `LDA $094A` / `STA $420C` — **HDMA on** (`$F0`, channels 4-7) — then `INIDISP = $00`, next V-target `$0E` |
+| 14 | 1 | `INIDISP = $0F` (screen to full brightness), next V-target `$C6` |
+| 198 | 2 | `INIDISP = $8F` (force blank), `STZ $420C` — **HDMA off** — next V-target `$0C` |
+
+So `$420C` is `$F0` only between scanlines 12 and 198, and is `$00` across every scanline 0. Arming solely at scanline 0 meant **`dma stats` reported zero HDMA transfers over 700 frames** while the game requested it 415 times — the channels were configured, the tables were in WRAM, and nothing ever ran.
+
+The fix is `WriteHdmaEnable`: a bit going 0->1 arms that channel there and then, exactly as `InitHdma` would have, and leaves already-armed channels alone. Frame-start init is unchanged.
+
+**This is modeled behavior, not a silicon measurement, and the honest version of the claim matters.** bsnes and Mesen both arm only at scanline 0 (`SnesDmaController::InitHdmaChannels` early-returns when `HdmaChannels` is zero, having first cleared every channel's `DoTransfer`), so a mid-frame enable there resumes from whatever table pointer the channel was left holding. For this game that state is the previous frame's terminator, which cannot produce a correct picture — yet the game demonstrably works on hardware and in Mesen. Re-arming from the top of the table is the only reading consistent with the game's own design, and it is what this core does. If a future test ever pins the real 0->1 semantics, this is the paragraph to correct.
+
+**What it is worth, measured.** Yoshi's Island's intro renders its story text (`Venus_SuperFX.md` §10.5). Sixteen other games — SMW, LttP, Super Metroid, Chrono Trigger, DKC2, FFVI, Super Mario Kart, MMX, EarthBound, Secret of Mana, Super Castlevania IV, Illusion of Gaia, All-Stars+World, Mario's Time Machine, Rock 'n Roll Racing, TMNT IV — produce **byte-identical `framesum` digests** over 200 frames before and after, and all 1680 `EmuSen.WiseMan` tests pass. Games that enable HDMA in vblank see the newly-enabled channel armed once at the write and again at scanline 0, which lands on the same state.
+
 ### 3.3 Debug logging gates
 
 All console output here is behind `DebugSettings` flags (`DmaVerboseLogging`, `DmaSourceAddrLogging`, `WindowHdmaLogging`) — see `Man pages/Hardware/README.md`'s note on `DebugSettings` vs. the newer `DianaOS/` toolchain (WatchRegistry, FrameLogRegistry) for why these older ad hoc flags still exist alongside the newer core-agnostic tools.

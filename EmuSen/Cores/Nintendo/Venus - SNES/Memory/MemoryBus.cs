@@ -352,7 +352,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 if (offset == 0x420C)
                 {
                     ObserveWrite();
-                    Dma.HdmaEnable = data;
+                    Dma.WriteHdmaEnable(data);
                     return;
                 }
 

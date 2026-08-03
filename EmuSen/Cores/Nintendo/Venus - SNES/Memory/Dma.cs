@@ -329,12 +329,33 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
         }
 
+        // A $420C bit going 0->1 arms that channel there and then, so a game that
+        // only ever enables HDMA mid-frame still runs it - see Venus_Memory.md §3.2a.
+        public void WriteHdmaEnable(byte data)
+        {
+            int newlyEnabled = data & ~HdmaEnable;
+            HdmaEnable = data;
+            if (newlyEnabled == 0) return;
+            for (int i = 0; i < 8; i++)
+            {
+                if ((newlyEnabled & (1 << i)) != 0) _channels[i].HdmaActive = true;
+            }
+            ArmHdmaChannels(newlyEnabled);
+        }
+
+        // Frame start: $420C alone decides which channels are live this frame.
         public void InitHdma()
+        {
+            for (int i = 0; i < 8; i++) _channels[i].HdmaActive = (HdmaEnable & (1 << i)) != 0;
+            ArmHdmaChannels(HdmaEnable);
+        }
+
+        private void ArmHdmaChannels(int mask)
         {
             for (int i = 0; i < 8; i++)
             {
+                if ((mask & (1 << i)) == 0) continue;
                 DmaChannel ch = _channels[i];
-                ch.HdmaActive = (HdmaEnable & (1 << i)) != 0;
                 if (!ch.HdmaActive) continue;
 
                 ch.TableAddress = ch.SourceAddress;

@@ -334,3 +334,22 @@ The frontend readout separates `run Xms` (the `RunFrame()` call alone) from `tot
 ### 13.4 Save states older than the current field layout resume into a dead machine
 
 Noted here because it silently invalidates any attempt to benchmark real gameplay by resuming a state. `StateSerializer` has no field-name tagging (`EmuSen_Save_States.md` §1/§3), so a `.state` written before a field was added or reordered still loads without error and produces a machine that runs but renders nothing — `LastFramePpuMs` collapses to ~0.06 ms while the renderer's own `LastFrame*` properties keep reporting their last real values, which is what the inconsistency looks like from the outside. The three states in `Usr/Home/Saves/Save States` are all in this condition. Verify a resumed state by dumping the framebuffer before trusting any measurement taken from it.
+
+---
+
+## 14. Mode 0 — each layer has its own 32-colour CGRAM block
+
+Mode 0 is the only mode where all four backgrounds are 2bpp, and it is the only mode where a tilemap entry's 3-bit palette field is **not** an index into the bottom of CGRAM. Each layer gets its own quarter of the palette:
+
+| Layer | Palettes | CGRAM entries | Base added by `Mode0PaletteBase` |
+|---|---|---|---|
+| BG1 | 0-7 | 0-31 | 0 |
+| BG2 | 8-15 | 32-63 | 32 |
+| BG3 | 16-23 | 64-95 | 64 |
+| BG4 | 24-31 | 96-127 | 96 |
+
+`BgCgramIndex` took `entryPalette * 4 + pixel` for every 2bpp layer in every mode, so in Mode 0 all four layers read BG1's 32 colours. Every other mode is unaffected — `Mode0PaletteBase` returns 0 outside Mode 0, and the 4bpp/8bpp paths never had a per-layer base to begin with. Matches Mesen's `RenderMode0`, which passes exactly these four constants as its `basePaletteOffset` template argument (`SnesPpu.cpp`).
+
+**How it surfaced.** Yoshi's Island's intro switches to Mode 0 with `TM = $08` (BG4 only) for scanlines 152-197 to draw the story text over the bottom of the screen — see `Venus_SuperFX.md` §10.5. The tilemap there uses palettes 6 and 7, which resolve to CGRAM 120-123 and 124-127, both white-on-transparent. Read without the base, they landed on CGRAM 24-31 and the text came out dark red. **The glyph shapes were already correct at that point**, which is the useful diagnostic: a palette-indexing bug leaves geometry intact and only moves colour, so "right shape, wrong colour" points at the CGRAM index and not at the tile decode.
+
+This was invisible until the HDMA fix in `Venus_Memory.md` §3.2a, because nothing had ever driven this core into Mode 0 with a non-zero palette field before. Two independent bugs stacked on the same symptom — worth remembering when a fix improves an artifact without clearing it.

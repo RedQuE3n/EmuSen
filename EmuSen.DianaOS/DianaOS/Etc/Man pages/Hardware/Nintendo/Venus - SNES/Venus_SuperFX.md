@@ -90,6 +90,14 @@ Multi-byte instructions in a delay slot fetch their operands **from the retarget
 
 This file used to add "which is why real GSU code never puts one there". **That is wrong — Yoshi's Island puts one there on purpose.** `0A:81B4` is `BNE $81C5` with `IBT R10,#$08` in the delay slot; the branch target `$81C5` *is* the `$08` operand byte of the `IBT R10,#$08` sitting at `$81C4`, so both paths load 8 and both resume at `$81C6`. The overlap is deliberate code compression, and it only works if the operand comes from the target. It is a good check on the pipeline model: get this wrong and `R10` loads `$2B` (the `WITH R11` opcode) as its bit count.
 
+#### 4.1a The trace address of a delay slot
+
+`R15` names the byte sitting in the pipeline, which is exactly right for the `WITH R15 : TO R13` idiom - but **not** while a delay slot executes. After a jump, `R15` already names the target while `_pipeline` still holds the delay-slot byte, so anything that reported `R15` as "the instruction executing now" named the target instead.
+
+That is what the `[GSU]` trace, the `[I]` plot trace and `cov gsu` all did until 2026-08-03. The symptom is subtle and expensive: a taken branch produced two consecutive trace records with the *same* address and different opcodes, and reading the trace naturally led to disassembling the target - code that had not run - instead of the delay slot that had. It cost real time during the §10.7 camera work.
+
+`_pipelineAddress` now records where `_pipeline` was fetched from and every debug consumer reports that. It carries `[SkipInState]`: it is derived from the pipeline, not machine state, and serializing it would have invalidated every existing save state for a debug label. Pinned by `SuperFxTraceAddressTests`.
+
 ### 4.2 Prefixes
 
 `TO Rn` ($10-$1F) sets the destination. `FROM Rn` ($B0-$BF) sets the source. `WITH Rn` ($20-$2F) sets both *and* raises the `B` flag — and while `B` is set, `TO`/`FROM` stop being prefixes and become the real instructions `MOVE`/`MOVES`. `ALT1`/`ALT2`/`ALT3` ($3D/$3E/$3F) set the flags that pick which of a slot's four meanings runs.
@@ -555,23 +563,30 @@ So the two are independent. That is worth as much as a fix: every future reading
 
 **Also retired: the four-run masking.** Mesen's default power-on RAM fill is random, and two identical runs of it disagree with each other - measured, see §3.40. The probe now forces a zero fill and every dump is byte-identical across runs. The masking in §3.39 was compensating for a reference that disagreed with itself; it is no longer needed, and any measurement that depended on it should be redone rather than trusted.
 
+#### Measured 2026-08-03: the target is right, the velocity is zero
+
+With both emulators anchored on the **same game state** rather than the same frame - `tapuntil` on our side (§3.15d), `--pressuntil` on the probe's (§3.40), both waiting for GSU RAM `$1E1A == $01F0` - the camera routine at `$09:95AF-$09:95D6` can be compared instruction for instruction. It is an easing loop: load the current camera from `$0094`, step it toward a target, store it back.
+
+| | value | verdict |
+| --- | --- | --- |
+| camera **target**, `LM R1,($1E1A)` at `$09:95C7` | `$01F0` (496) both sides | **we are correct** |
+| camera **velocity**, `R1` at `$09:95AF` | Mesen `$0100`, ours `$0000` | **wrong** |
+| what `HIB`/`SEX` make of it | Mesen `$0001` (+1/frame), ours `$0000` | camera never advances |
+| stored to `$0094` at `$09:984F` | Mesen `$0041`, ours `$00A7` and falling | the symptom |
+
+So the game knows where the camera should go and we agree with hardware about that. What we get wrong is the per-frame step: `R1`'s **high byte is the integer velocity**, and ours is zero, which is why `$0095` is observed as `$00` on every single write while hardware's passes `$01`.
+
+Walked back one more level: at `$09:95A5` (`BPL`) Mesen branches and we do not, because the `XOR` at `$09:95A4` sees `R0=$0900, R1=$0100` there and ours sees `R0=$0040, R1=$FFC0`. **Both branch correctly given their inputs** - do not "fix" the branch. The corruption is upstream of `$09:959F` and was not chased further by hand.
+
 #### Where to pick it up
 
 **Give the GSU the same treatment the S-CPU just got.** The three CPU timing bugs were not found by reading code - they were found by emitting a per-instruction binary trace on both sides and diffing control flow with a resyncing differ (§3.40). Everything needed to repeat that for the GSU already exists: `mesen-gsu-trace.patch` already records address, opcode and all sixteen registers per step, and `CpuTraceDiff`'s collapse/resync/cost machinery is generic over "a stream of steps with an address and some registers". What is missing is a binary GSU sink on our side in the same record layout, and the small amount of refactoring to point the differ at it.
 
-That matters here specifically because the write is already localised: `$0094` comes from **R1 at GSU PC `$09:984F`** (`SMS ($0094),R1`), and at the camera moment we compute `R1 = $00A7`. What is not known is what Mesen has in R1 at the same point - and a GSU trace diff answers exactly that, the same way the CPU one answered "which opcode do we charge wrong".
+Hand-walking the dependency chain is now the bottleneck: it took four manual passes to get from `$09:984F` back to `$09:959F`, and the trail keeps going. A resyncing GSU differ would report the first divergence in the whole stream in one run, which is precisely how the four S-CPU timing bugs were found.
 
-The routine around it is worth reading with the `BGE`/`BLT` history in mind (§10.4 - a branch condition in this core was inverted once already):
+Two things to get right when building it. Mesen's GSU records label the address **one instruction ahead** of the opcode they carry (its own pipeline priming, §3.39) - ours are now correct after §4.1a, so the two conventions differ by one and must be reconciled before comparing addresses. And a naive alignment does not work: a crude longest-common-run match over the two traces captured here scored 158 matches out of 80,000, because the two runs reach the scene by different routes and run different job mixes. The resync must key on collapsed **register** state, the way `gsudiff.py` already does, rather than on addresses.
 
-```
-099839: E5        DEC R5
-09983A: 0B 02     BMI $983E    ; delay slot below runs either way
-09983C: 54        ADD R4
-09983D: 4F        NOT          ; skipped when the branch is taken
-09983E: 18        TO R8
-```
-
-The branch's only effect is whether `NOT` runs - a sign selection, on the value that becomes the camera delta. Do not "fix" it by inspection; that is the mistake §10.7 already records making at `$09:9512`. Measure R1 against the reference first.
+**A trap this section already fell into once.** The `HIB`/`SWAP`/`TO R1`/`OR R7` sequence at `$09:982F-$09:9832` looks like it computes the stored value and is tempting to read as the culprit. It never executes - the routine arrives at `$09:984E` directly. It looked live only because the delay-slot trace bug (§4.1a) was labelling instructions with their jump target. Check a candidate address actually appears in the trace before reasoning about it.
 
 #### Superseded: measure the spin loop's master-clock cost
 

@@ -52,12 +52,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             if (_jumpPending) _jumpPending = false;
             else R[15]++;
 
+            _pipelineAddress = R[15];
             _pipeline = FetchProgramByte(R[15]);
             return result;
         }
 
         private void ReloadPipeline()
         {
+            _pipelineAddress = R[15];
             _pipeline = FetchProgramByte(R[15]);
             _jumpPending = false;
         }
@@ -97,7 +99,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             {
                 EmuSen.Debug.DebugSettings.SuperFxTraceCountdown--;
                 System.Console.WriteLine(
-                    $"[GSU] {_pbr:X2}:{R[15]:X4} op={_pipeline:X2} sfr={_sfr:X4} cbr={_cbr:X4} "
+                    $"[GSU] {_pbr:X2}:{_pipelineAddress:X4} op={_pipeline:X2} sfr={_sfr:X4} cbr={_cbr:X4} "
                     + $"R0={R[0]:X4} R1={R[1]:X4} R2={R[2]:X4} R11={R[11]:X4} R13={R[13]:X4} R14={R[14]:X4}");
             }
 
@@ -106,12 +108,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             {
                 EmuSen.Debug.DebugSettings.SuperFxPlotTraceInstr--;
                 System.Console.WriteLine(
-                    $"[I] {_pbr:X2}:{R[15]:X4} {_pipeline:X2} R0={R[0]:X4} R1={R[1]:X4} R2={R[2]:X4} "
+                    $"[I] {_pbr:X2}:{_pipelineAddress:X4} {_pipeline:X2} R0={R[0]:X4} R1={R[1]:X4} R2={R[2]:X4} "
                     + $"R3={R[3]:X4} R4={R[4]:X4} R5={R[5]:X4} R10={R[10]:X4} R11={R[11]:X4} R12={R[12]:X4} R14={R[14]:X4} rb={_romBuffer:X2} rombr={_rombr:X2} sfr={_sfr:X4}");
             }
 
 
-            CoverageRecorder?.Invoke((_pbr << 16) | R[15]);
+            CoverageRecorder?.Invoke((_pbr << 16) | _pipelineAddress);
 
             byte opcode = Pipe();
             _prefixInstruction = false;

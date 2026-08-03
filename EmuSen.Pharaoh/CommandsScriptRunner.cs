@@ -146,18 +146,17 @@ namespace EmuSen.Pharaoh
                     int stepped = 0, taps = 0;
                     while (!now.SequenceEqual(target) && stepped < cap && runner.CurrentFrame < runner.FrameCap)
                     {
-                        // Released between presses; a held button reads as one press to most menus.
-                        runner.Tap(button, 1, 4);
-                        taps++;
-                        stepped += 4;
+                        // One frame at a time throughout, including while the button is
+                        // held: a four-frame Tap() would step straight over the value.
+                        int phase = stepped % Math.Max(every, 5);
+                        if (phase == 0) { runner.Hold(button, 1); taps++; }
+                        else if (phase == 4) runner.Release(button, 1);
+
+                        runner.RunFrames(1);
+                        stepped++;
                         now = Sample();
-                        for (int i = 0; i < every - 4 && !now.SequenceEqual(target) && stepped < cap; i++)
-                        {
-                            runner.RunFrames(1);
-                            stepped++;
-                            now = Sample();
-                        }
                     }
+                    runner.Release(button, 1);
 
                     string to = string.Join(' ', now.Select(v => v.ToString("X2")));
                     emit(now.SequenceEqual(target)

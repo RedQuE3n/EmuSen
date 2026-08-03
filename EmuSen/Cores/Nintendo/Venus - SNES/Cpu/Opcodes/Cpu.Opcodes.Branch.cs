@@ -17,11 +17,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         private void OpJSR(uint address)
         {
             Push16((ushort)(PC - 1));
+            CallStack?.NotePush((LastInstructionPB << 16) | LastInstructionPC, (PB << 16) | (int)(address & 0xFFFF), CallFrameKind.Call);
             PC = (ushort)(address & 0xFFFF);
         }
 
         private void OpRTS(uint address)
         {
+            CallStack?.NotePop();
             PC = (ushort)(Pop16() + 1);
         }
 
@@ -40,12 +42,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         {
             Push8(PB);
             Push16((ushort)(PC - 1));
+            CallStack?.NotePush((LastInstructionPB << 16) | LastInstructionPC, (int)(address & 0xFFFFFF), CallFrameKind.Call);
             PB = (byte)(address >> 16);
             PC = (ushort)(address & 0xFFFF);
         }
 
         private void OpRTL(uint address)
         {
+            CallStack?.NotePop();
             ushort newPC = Pop16();
             byte newPB = Pop8();
             PC = (ushort)(newPC + 1);

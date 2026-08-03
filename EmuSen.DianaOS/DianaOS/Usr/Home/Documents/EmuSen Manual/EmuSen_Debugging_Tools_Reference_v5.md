@@ -2,9 +2,11 @@
 
 This document covers every debugging tool currently in the project: what it does, where it lives, how to trigger it, and how the pieces fit together. It's organized from "things you press a key for" down to "the underlying reusable toolchain," since that's roughly the order you'd reach for them in.
 
-*(Living document — updated as the toolchain grows. This revision: every `IDianaOSCommand` now states `bool IsReadOnly { get; }` - true only if it never mutates core/session/interpreter state for any invocation (`mem`/`regs`/`echo`/`diff`/the shell text utilities and similar), false otherwise, conservatively including every command with a mixed read/write sub-verb surface (`watch`/`bp`/`framelog`/`cheat`/`snapshot`/`search`/`history`/`log`/`trace` - the property can't vary per invocation, so a command that's read-only for one sub-verb and mutating for another reports `false`) and `coretop`'s raw-terminal mode (blocks indefinitely on its own key-read loop until Ctrl+C, same category as `nano`, despite never touching core state). This is what powers `EmuSen.Hotaru`'s new **always-live** DianaOS terminal (see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the full design) - from the moment a ROM loads, a `DianaOS $` prompt accepts commands continuously, with no F4 mode-switch needed: a read-only line answers instantly, off the emulation thread entirely, via `DianaOSInterpreter.TryGetReadOnlyFastPath` (a pure, parse-only classifier - single bare simple command, no pipes/`&&`/control-flow, resolves to a registered `IsReadOnly` command); anything else is queued and runs inline on the emulation thread's own next frame. F4/breakpoint halts are completely unchanged - still the fully-blocking classic prompt, still the only way to run a multi-line construct interactively.
+*(Living document — updated as the toolchain grows. This revision: a second Mesen gap-analysis pass, this time aimed at **coprocessors**. The old model of "which processor am I debugging" was a bool — main CPU or the one coprocessor — which cannot describe an SNES, since every SNES is at least two processors and the SPC700 present in every game had no breakpoints at all. `DebugCpu` (§3.34) replaces it with a named list, and one shared helper gives `bp`/`cov`/`bt`/`step`/`profile`/`eval`/`regs`/`disasm` an identical optional scope word, so `bp gsu add ...` and `bt sa1` work while every pre-existing unscoped form is untouched. New this pass: GSU and SPC700 breakpoints, SPC700 coverage, the SA-1's call stack (it is a 65816, so the existing seam applied unchanged), per-chip expression contexts derived from each chip's own `regs` output, `cpus`, and two disassemblers that were missing outright — `disasm APURAM` previously decoded SPC700 bytes with the 65816 table and produced confident nonsense. §3.35 adds `copflow`, which **Mesen has no equivalent of**: a log of the coprocessor register window plus poll-run detection, so "the game hung" becomes "it read $3030 ninety thousand times and the value never changed". Previous revision (retained below in §3.27–§3.33): the first Mesen pass, which closed seven capabilities — `eval` and conditional breakpoints, `bt`, `step over`/`step out`, `runto`, `label`, `counters`, `freeze` and `profile`. §3.33 records both comparisons, including what was deliberately **not** built (the Event Viewer, step-back, an assembler, disassembly search) and why.
 
-Previous revision: `EmuSen.Hotaru` moved off Raylib entirely, onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the full picture. Relevant here: the on-window Raylib debug overlay (VRAM sheet/CGRAM swatch/register text drawn directly onto the game window, the old `O`/`GraphicsSettings.ShowDebugPanels` panels) is gone entirely - this doc's tools (`regs`/`sprites`/`pal`/`tile`/`vramsheet`/`paletteswatch`, `coretop`) already covered the same data and are unaffected. `coretop -w`/`feed -w` now open their windows via `Views/DebugWindows.cs` (a plain `Dispatcher.UIThread.Post`, since Avalonia is Hotaru's primary application now) instead of the old `AvaloniaHost.cs` (deleted - see git history), which had to bootstrap a second, independent Avalonia dispatcher thread specifically because Raylib owned the actual main thread and supported only one native window - see §3.17's updated `coretop`/`feed` writeups. F3's screenshot and F6's frame recording now encode real PNGs via SkiaSharp's `SKImage.Encode` directly (`EmuSen.Hotaru/Imaging/FrameImageWriter.cs`), not Raylib's `TakeScreenshot`, and capture the same raw pre-shader `ICore.GetFrameBufferRgba()` bytes every other consumer already uses.
+Previous revision: every `IDianaOSCommand` now states `bool IsReadOnly { get; }` - true only if it never mutates core/session/interpreter state for any invocation (`mem`/`regs`/`echo`/`diff`/the shell text utilities and similar), false otherwise, conservatively including every command with a mixed read/write sub-verb surface (`watch`/`bp`/`framelog`/`cheat`/`snapshot`/`search`/`history`/`log`/`trace` - the property can't vary per invocation, so a command that's read-only for one sub-verb and mutating for another reports `false`) and `coretop`'s raw-terminal mode (blocks indefinitely on its own key-read loop until Ctrl+C, same category as `nano`, despite never touching core state). This is what powers `EmuSen.Hotaru`'s new **always-live** DianaOS terminal (see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the full design) - from the moment a ROM loads, a `DianaOS $` prompt accepts commands continuously, with no F4 mode-switch needed: a read-only line answers instantly, off the emulation thread entirely, via `DianaOSInterpreter.TryGetReadOnlyFastPath` (a pure, parse-only classifier - single bare simple command, no pipes/`&&`/control-flow, resolves to a registered `IsReadOnly` command); anything else is queued and runs inline on the emulation thread's own next frame. F4/breakpoint halts are completely unchanged - still the fully-blocking classic prompt, still the only way to run a multi-line construct interactively.
+
+Earlier: `EmuSen.Hotaru` moved off Raylib entirely, onto Avalonia (window, rendering, shaders, audio, input) - see `EmuSen_Frontend_Driver.md`'s own top-of-file revision note for the full picture. Relevant here: the on-window Raylib debug overlay (VRAM sheet/CGRAM swatch/register text drawn directly onto the game window, the old `O`/`GraphicsSettings.ShowDebugPanels` panels) is gone entirely - this doc's tools (`regs`/`sprites`/`pal`/`tile`/`vramsheet`/`paletteswatch`, `coretop`) already covered the same data and are unaffected. `coretop -w`/`feed -w` now open their windows via `Views/DebugWindows.cs` (a plain `Dispatcher.UIThread.Post`, since Avalonia is Hotaru's primary application now) instead of the old `AvaloniaHost.cs` (deleted - see git history), which had to bootstrap a second, independent Avalonia dispatcher thread specifically because Raylib owned the actual main thread and supported only one native window - see §3.17's updated `coretop`/`feed` writeups. F3's screenshot and F6's frame recording now encode real PNGs via SkiaSharp's `SKImage.Encode` directly (`EmuSen.Hotaru/Imaging/FrameImageWriter.cs`), not Raylib's `TakeScreenshot`, and capture the same raw pre-shader `ICore.GetFrameBufferRgba()` bytes every other consumer already uses.
 
 *Earlier history, condensed (see `git log` for the full reasoning behind any of these):* a boxed MOTD-style welcome banner at shell launch (`GetWelcomeBanner`) · a standard `clear` command · `EmuSen.Hotaru` became a full DianaOS shell frontend (shell-first launch always; the always-on `[STATUS]`/`[FPS]` diagnostic prints were removed entirely - they're gone, not just currently unused; `feed`/`feed -w` added) · `coretop -w` (windowed dashboard, so it stops taking over the terminal) · `EmuSen.Mistress` gained a real windowed `coretop` (non-blocking, `WriteableBitmap`-based) · `coretop` itself added (htop-style hardware dashboard) · `nano <path>` and standalone-shell `core <name> <path>` added · `help`/`man` split apart again (`help` = standalone listing, `man [command]` = full manual pages) · the shell fully renamed to **DianaOS** (`EmuSen.Shell*` → `EmuSen.DianaOS*` everywhere, `ShellInterpreter`→`DianaOSInterpreter`, `IShellCommand`→`IDianaOSCommand`, `ShellResult`→`DianaOSResult`, `ShellSandbox`→`DianaOSSandbox`, `ShellConsoleWindow`→`DianaOSConsoleWindow`, `ShellDispatchTests`→`DianaOSDispatchTests` - see §3.3) · five plain project renames, no behavior change: `EmuSen.Validation`→`EmuSen.Tomoe` (the `EmuSen.Validation` *namespace* itself stayed - it's still live, generic single-step-test infrastructure, see `EmuSen/Validation/` and each core's own `Validation/` adapter folder), `EmuSen.HeadlessDebug`→`EmuSen.Pharaoh`, `EmuSen.TestingStudio`→`EmuSen.Mistress`, `EmuSen.RaylibFrontend`→`EmuSen.Hotaru`, `EmuSen.Presentation`→`EmuSen.Serenity` · `EmuSen.Pharaoh/Program.cs` broken up into `FrameRunner`/`HeadlessDebugOptions`/`CommandsScriptRunner`/`DiffShotRunner` plus shared imaging/audio helpers in `EmuSen/Common/` · `EmuSen.WiseMan` (§3.18) added as a committed xUnit project; real audio output added to `EmuSen.Mistress` · a core-agnosticism pass over `DianaOS/` (dead-code removal, `callers`/`writers`/`readers` dedup, `IDebugTarget.ClassifyStaticReference`/`DecodeTilePixels` added so those commands + `tile` stopped hardcoding 65816/SNES-specific knowledge) · `Debug.Commands`/`Debug/Commands/` merged into `DianaOS`/`DianaOS/`; `break` renamed to `bp` (shadowed by the shell's own loop-control keyword) · breakpoints/single-stepping docs corrected, `GetApuRegisters()` documented, command table filled in, `EmuSen.Pharaoh`/`EmuSen.Tomoe` given full write-ups · watchpoints, the generalized `tile` command, shared `FrameCount`/screenshot timestamping, and a full 65816 disassembler added (retiring `CoinTileDumpLogging`); `WatchRegistry` ownership moved from `MemoryBus` to `SnesDebugTarget` via the `IWriteObserver` hook.)*
 
@@ -127,24 +129,34 @@ Two small helper classes back the memory spaces:
 | `spaces` | List memory spaces (name, size, writable) |
 | `mem <space> <addr> [<len>]` | xxd-style hexdump, default length 16 |
 | `write <space> <addr> <value>` | Write one byte, if the space is writable |
-| `regs` | CPU + video registers, plus APU and coprocessor sections when a target has them (§3.2, §3.23) |
+| `regs [<cpu>]` | CPU + video registers, plus APU and coprocessor sections when a target has them; with a chip name, just that chip (§3.2, §3.23, §3.34) |
 | `cophist [<reg>] [<count>]` | Coprocessor register history, and how long it has sat unchanged — see §3.23a |
+| `cpus` | Every processor a debug command can be scoped to, and what each supports — see §3.34 |
+| `copflow on\|off\|clear\|tail\|stats\|poll` | Coprocessor register-window traffic, and stuck-handshake detection — see §3.35 |
 | `sprites` | Active sprite/OBJ table |
 | `pal [<index>]` | One palette, or all 16 if omitted |
 | `channels` | Audio channel/voice table (active, envelope level 0-100, muted, core-specific detail) - core-agnostic (`IDebugTarget.GetAudioChannels()`), SNES reports its 8 S-DSP voices - see `Venus_APU.md` §3.5 |
 | `mute <index> <on|off>` | Mute/unmute one audio channel for isolation testing - its own playback state still advances, just excluded from the final mix - see `Venus_APU.md` §3.5 |
 | `tile <space> <addr> <bpp>` | ASCII-decode one 8x8 tile from any space (bpp 2, 4, or 8) |
 | `tilemap <space> <addr> <cols> <rows>` | Decode a grid of raw tilemap entries as text (tile index/palette/priority/flip on SNES) — core-agnostic at the command level, see §3.2's `TilemapEntryStride`/`DecodeTilemapEntry` note |
-| `disasm <space> <addr> [<count>]` | Disassemble `<count>` instructions (default 10) — see §3.7 |
+| `disasm <space>\|<cpu> [<addr>] [<count>]` | Disassemble `<count>` instructions (default 10); a chip name picks its own code space and ISA, and with no address starts where it is executing — see §3.7, §3.34 |
 | `watch add <space> <addr> <len> [write\|read\|both]` | Register a watchpoint (default write-only) |
 | `watch list` | List active watchpoints with their IDs |
 | `watch log <id> [<count>]` | Show a watchpoint's recorded events (default 20) |
 | `watch summary <id>` | Group a watchpoint's accesses by site (`Context`) with **whole-run** hit counts — the dynamic, addressing-mode-agnostic equivalent of `readers`/`writers` (§3.12). Site totals are kept outside the event ring, so unlike `watch log` this never omits a site the ring has evicted |
 | `watch clear <id>` | Clear a watchpoint's stored events (keeps the watch registered) |
 | `watch remove <id>` | Remove a watchpoint entirely |
-| `bp add <addr>` / `bp list` / `bp remove <id>` | Manage execution breakpoints (24-bit CPU address) — see §3.1's breakpoints note. Named `bp`, not `break` - the shell's own `break`/`continue` loop-control keywords (§3.17) are hardcoded, zero-argument parser statements, so a command literally named `break` is unreachable (`break add 8000` parses as bare loop-control followed by a syntax error on the leftover `add 8000`) |
-| `bp write <space> <addr> [<value>]` | Halt the moment anything writes `<addr>` — the state-at-the-write counterpart to `watch`, see §3.26 |
-| `cov on|off` / `cov clear` / `cov <addr> [<len>]` / `cov cop ...` | Record which addresses actually executed, then ask whether a routine was ever reached — see §3.24 |
+| `bp [<cpu>] add <addr> [if <expr>]` / `bp list` / `bp on\|off <id>` / `bp remove <id>` | Manage execution breakpoints (24-bit CPU address) — see §3.1's breakpoints note. `if <expr>` makes one conditional (§3.27). Named `bp`, not `break` - the shell's own `break`/`continue` loop-control keywords (§3.17) are hardcoded, zero-argument parser statements, so a command literally named `break` is unreachable (`break add 8000` parses as bare loop-control followed by a syntax error on the leftover `add 8000`) |
+| `bp write <space> <addr> [<value>] [if <expr>]` | Halt the moment anything writes `<addr>` — the state-at-the-write counterpart to `watch`, see §3.26 |
+| `eval [<cpu>] <expr>` / `eval symbols [<filter>]` | Evaluate an expression against live state, decimal/hex/binary at once; a chip name evaluates against its registers — see §3.27, §3.34 |
+| `step [<cpu>] [<count>\|over\|out]` | Single-step, run a call to completion, or run until the current routine returns — see §3.28, §3.34 |
+| `runto nmi\|irq\|brk\|cop` / `runto scanline <n>` / `runto frame [<n>]` / `runto <addr>` | Resume until a named event rather than an address — see §3.28 |
+| `bt [<cpu>] [<count>\|reset]` | Backtrace the live call chain — the dynamic counterpart to `callers` (§3.12), see §3.28, §3.34 |
+| `label add\|list\|at\|remove\|clear\|load\|save ...` | Name addresses; shown by `disasm`/`bt`/`bp list` and usable as expression symbols — see §3.29 |
+| `counters on <space>` / `off` / `clear` / `<addr> [<len>]` / `top [r\|w\|x\|u] [<n>]` / `cold <addr> <len>` | Per-address read/write/execute tallies, including uninitialized-read detection — see §3.30 |
+| `freeze add <space> <addr> [<value>]` / `list` / `remove <id>` / `clear` | Pin an address by undoing every write to it — see §3.31 |
+| `profile [<cpu>] on\|off\|clear\|top [<n>]` | Which of the *game's* routines the instruction budget goes to — see §3.32, §3.34 |
+| `cov [<cpu>] on\|off\|clear\|<addr> [<len>]` | Record which addresses actually executed, then ask whether a routine was ever reached — see §3.24, §3.34 |
 | `framelog add <space> <addr> [<width>]` / `list` / `show <id> [<count>]` / `clear <id>` / `remove <id>` | Per-frame value sampling, independent of reads/writes — see §3.13 |
 | `callers <addr> [<scanstart> <scanlen>]` | Find instructions statically calling/jumping to `<addr>` — see §3.12 |
 | `writers <addr> [<scanstart> <scanlen>]` | Find instructions statically writing to `<addr>` (absolute/absolute-long only on the SNES core — see §3.12 for why direct-page/indexed/indirect forms are excluded, and where that ISA-specific knowledge now lives) |
@@ -987,6 +999,159 @@ Two details worth knowing:
 
 The data breakpoint also exposed a real gap in the halt path, now fixed: `regs`/`sprites`/`pal` read `IRealtimeProvider` snapshots refreshed once per *completed* frame, so at a mid-frame halt they reported the previous frame's end state — a breakpoint reporting stale registers is worse than no breakpoint. `FrameRunner.OnHalted` now refreshes the providers before the `[BREAK]` line is printed.
 
+### 3.27 `eval` and conditional breakpoints (`DianaOS/Lib/ExpressionEvaluator.cs`, `DebugTargetExpressionContext.cs`, `Cores/.../Debug/SnesExpressionContext.cs`)
+
+Added after a gap-analysis pass against Mesen's debugger (`Core/Debugger/`, cloned to `/home/red/Projects/mesen-reference` as a read-only reference) — see §3.33 for the full comparison and what was deliberately left out.
+
+An expression language over live machine state, and the thing that turns a breakpoint on a hot routine from useless into precise. `bp add 80A31C` on a routine that runs 400 times a frame stops on the first one; `bp add 80A31C if x == 7` stops on the one that matters. Everything else in this section exists to serve that.
+
+**Split along the core-agnostic line the rest of §3 already uses.** The language — tokens, precedence, short-circuiting, `[addr]`/`{addr}` memory forms — lives in `EmuSen.DianaOS` and knows nothing about any CPU. What a name *means* is an `IExpressionContext`, which each core implements:
+
+- `SnesExpressionContext` publishes the 65816's registers, its individual P flags as `flag.c`/`flag.z`/…, `frame`/`scanline`/`cycle`, `opaddr`, `stackdepth`, and every label.
+- `DebugTargetExpressionContext` is the **zero-per-core fallback**: it derives symbols from whatever registers a target already reports through `CpuRegisters`/`VideoRegisters`/`ApuRegisters`/`CoprocessorRegisters` (i.e. whatever `regs` prints) and reads memory through `GetMemorySpaces()`. A second core gets a working `eval` and working conditional breakpoints without writing a line of expression code; publishing its own context is an upgrade, not a prerequisite.
+
+`DebugCommandHelpers.ExpressionsFor(target)` picks the target's own context when it has one and the fallback otherwise, so no command has to care which it got.
+
+Three decisions worth recording because the obvious alternatives are wrong:
+
+- **Short-circuiting genuinely skips, it does not just discard.** `ParseBinary` threads a `live` flag: a skipped branch is still *parsed* (tokens have to be consumed) but nothing in it is evaluated. That matters beyond `100 / [$7E0000]` not dividing by zero — an unevaluated `[...]` must not *read the bus*, because reading a hardware register has side effects (`RDNMI` clears the pending-NMI flag). A first cut of this evaluated both sides and threw the result away, which the short-circuit tests caught.
+- **WRAM reads bypass the bus.** In `SnesExpressionContext.TryReadMemory`, a CPU address landing in WRAM (banks `$7E`/`$7F`, or the `$00-$3F`/`$80-$BF` low-RAM mirror) is served straight from `bus.Ram` rather than through `Read8`. It's faster on a path that runs per-instruction, and it makes the overwhelmingly common condition form (`[$7E0020] == 3`) side-effect-free by construction. Anything not resolving to WRAM still goes through the live bus, with whatever consequence that carries — `man eval` says so explicitly rather than pretending otherwise.
+- **A condition that won't evaluate is dropped, not retried.** A typo'd symbol would otherwise fail on every single instruction the address is reached at, forever. `ConditionHolds` halts once, records the error in `LastConditionError`, and clears that breakpoint's condition — the breakpoint survives, its condition doesn't. A core with no `ConditionEvaluator` wired treats conditions as always-true, so the address still works.
+
+`%` is both the binary-literal prefix (`%1010`) and modulo. It's read as a literal only when the next character is `0` or `1`; everywhere else it's the operator. Found by a test, not by inspection.
+
+Note the shell interaction: `&&`, `||`, `<`, `>`, `|` are DianaOS's own operators (§3.17) and are consumed before the command ever sees them, so a condition using them must be quoted. Everything after the `if` word is rejoined with single spaces, so simple unquoted forms still work.
+
+### 3.28 Execution control: `bt`, `step over`/`step out`, `runto`
+
+Before this, the halt/resume surface was a single-instruction `step` and a breakpoint list. That covers "stop here" but not the two questions that actually dominate a session: *how did I get here*, and *get me to the interesting moment*.
+
+**`bt` — the live call chain.** `CallStackRegistry` records a frame on every JSR/JSL and pops on every RTS/RTL, plus a labelled frame on NMI/IRQ/BRK/COP entry (and a pop on RTI). This is the dynamic counterpart to `callers` (§3.12) and the two answer different questions: `callers` scans code and lists every instruction that *could* reach an address, `bt` reports the one path that actually did. When a routine has six static callers, `callers` gives six suspects and `bt` gives the answer.
+
+The seam is two nullable fields on `Cpu` (`CallStack`, `Breakpoints`), attached by `SnesDebugTarget` and null in a normal run — the same "core notifies a registry it knows nothing about" shape `BreakpointChecker` and `CoverageRecorder` already use, and both are `[SkipInState]` for the same reason `_verboseTrace` is.
+
+**A tracked call stack is an inference, and the doc says so.** Code that manipulates its own stack — pushing a return address and jumping, pulling one it never returns through, unwinding several frames with a stack-pointer write — desynchronizes it. Rather than pretend otherwise, unmatched returns are *counted* and surfaced by `bt` whenever nonzero, depth is capped so a runaway chain stops recording instead of growing without bound, and `bt reset` resyncs from the current instruction. That honesty is what makes `step out` and `profile` trustworthy: when the reading is wrong, there is a visible reason.
+
+**`step over`/`step out` work by depth, not by address.** `ArmStepToDepth(n)` halts at the first instruction executed once the call stack is no deeper than `n` — `step over` passes the current depth, `step out` passes depth − 1. Two things fall out for free: recursion is handled correctly (an inner call at the same address doesn't stop it early), and `step over` on a *non-call* instruction degrades to a plain `step`, because the depth never rises. An address-based implementation gets both of those wrong.
+
+The one subtlety is why arming works at all: `VenusCore.RunFrame`'s `_justResumedFromBreakpoint` flag already skips exactly one breakpoint check after a resume, so the instruction being stepped over runs before any check happens. The existing single-step depends on the same property.
+
+**`runto` — resume until an event.** `runto nmi|irq|brk|cop` (fed by `BreakpointRegistry.NoteInterrupt` from the CPU's interrupt entry points), `runto scanline <n>` (a new `MemoryBus.ScanlineObserver`, invoked once per scanline from `RunFrame`), and `runto frame [<n>]` (the existing per-frame `OnFrame` hook). All three set a pending flag consumed at the next instruction boundary — the same one-instruction lag `bp write` has, for the same reason: an event fires somewhere the core cannot safely stop.
+
+`runto nmi` + `bt` + `label add opaddr NmiHandler` is the intended three-command sequence for finding and keeping a handler address you didn't previously know.
+
+`runto <addr>` on a plain address is a convenience that adds an ordinary breakpoint and resumes. It is **not** removed when it fires — the registry has no one-shot concept — so the command reports the id and tells you to remove it. Silently leaving a permanent breakpoint behind would be worse than saying so.
+
+### 3.29 `label` — named addresses (`DianaOS/Var/LabelRegistry.cs`)
+
+The piece that makes a long investigation compound instead of restarting. Every prior section produces addresses; nothing kept them. `label add 7E13C6 CoinCount` names one, and from then on `disasm`, `bt`, `bp list`, `counters top` and `profile top` all print `$7E13C6 <CoinCount>`, and `CoinCount` works as a symbol in any expression (`bp add NmiHandler`, `eval [CoinCount]`).
+
+`disasm` prints a label on its own line above the instruction it names, and annotates any operand whose statically-resolvable target (via the existing `ClassifyStaticReference`, §3.12) is itself labelled — so a `JSR` to a named routine says which one without a second lookup.
+
+The map is one-to-one in both directions: renaming an address drops its old name, repointing a name moves it. Two entries pointing at the same thing is always a mistake, so it's made unrepresentable rather than documented around.
+
+`label load`/`label save` use a deliberately trivial format (`<hex address> <name> [comment...]`, `#` comments, blank lines ignored) rather than any one assembler's symbol file — nothing here knows which assembler a given ROM was built with, and a real `.sym`/`.mlb` converts with one `awk` line, which this shell already has (§3.17). Bad lines are reported with line numbers and the good ones still load.
+
+### 3.30 `counters` — per-address access tallies (`DianaOS/Var/AccessCounterRegistry.cs`)
+
+`watch` records individual events with context; `cov` records whether an address ever executed. Neither answers *how many times*, which is the question behind "is this table live or dead", "which byte of this struct does the game actually touch", and "which half of this buffer is being updated". `counters` tallies reads, writes and executes per address for one space.
+
+Armed against one space at a time on purpose: the tallies cost four arrays the size of that space, which is worth paying where a question is being asked and not worth paying everywhere. Same "cheap when disarmed" contract `CoverageRegistry.Record` already has — one bool test on every memory access.
+
+**Uninitialized-read detection** is the part worth having beyond raw counts. An address read before anything wrote it (since arming) is counted separately. On hardware that read returns power-on RAM contents, so a game doing it is either relying on that state or has a real bug — and an emulator whose RAM fill differs from hardware diverges exactly there. `counters top u` finds those addresses directly. The "since arming" qualifier does real work: arm before the moment being studied, or an address initialized earlier looks uninitialized.
+
+`counters cold` is the inverse and answers what `cov` answers for code but nothing answered for data: addresses in a range nothing ever touched.
+
+### 3.31 `freeze` — pin an address (`DianaOS/Var/FreezeRegistry.cs`)
+
+Holds an address at a value by writing that value straight back the instant anything writes something else. Deliberately **not** the same thing as `cheat poke` (§3.14): a cheat re-applies once per frame, so the game's own value is live for most of that frame and every read in between observes it. A freeze undoes the write immediately, so nothing ever sees what the game tried to store. When the question is "what breaks if this counter never changes" or "is this the variable driving that animation", a per-frame poke answers neither cleanly.
+
+Fed from the same `IWriteObserver` seam `watch` uses; the restore writes through `IDebugMemorySpace`, so the registry needs no knowledge of how a space is stored. The restoring write is itself a write, so `FreezeRegistry.Restore` wraps it in a reentrancy guard — without that it reports straight back into itself.
+
+Writes matching the frozen value are left alone and not counted, which makes the per-entry "writes undone" count meaningful: **a freeze with a blocked count of zero means nothing is writing the address you suspected**. That doubles as a cheap negative result, in the same spirit as §3.24's "a breakpoint that never fires proves nothing, but coverage that never records does".
+
+### 3.32 `profile` — where the *game's* instructions go (`CallStackRegistry`)
+
+Charges every executed instruction to whichever routine is innermost on the call stack, then ranks routines. Note the scope: this profiles the **game**, not the emulator — `perf` (§3.20) and `coretop` cover EmuSen's own frame cost, and the two are unrelated tools that happen to share a word.
+
+Two deliberate limits:
+
+- **Exclusive, not inclusive.** A routine that spends all its time inside a call it made scores low; the callee scores high. Inclusive attribution would compound any call-stack drift (§3.28) across every enclosing frame, where exclusive attribution localizes it to one.
+- **Instructions, not cycles.** Instructions are what the per-instruction seam can count exactly. A cycle figure would have to be attributed across a boundary the seam doesn't see, and for "which routine is hot" the two rank almost identically.
+
+Instructions executed with nothing on the stack are charged to `(outside any recorded call)` — normal, and it means the code was already running when profiling was armed, not that anything is broken.
+
+### 3.33 What these passes took from Mesen, and what they left
+
+The Mesen source (`SourMesen/Mesen2`, `Core/Debugger/`) was cloned as a read-only reference and its debugger feature set compared against this toolchain command by command. Everything above came out of that comparison. What was already covered, and what was consciously *not* built:
+
+| Mesen | Here |
+|---|---|
+| `ExpressionEvaluator.*` | §3.27 `eval`, `bp ... if` |
+| `CallstackManager` | §3.28 `bt` |
+| `StepRequest` StepOver/StepOut/RunToNmi/RunToIrq/PpuFrame/SpecificScanline | §3.28 `step over`/`step out`, `runto` |
+| `LabelManager` | §3.29 `label` |
+| `MemoryAccessCounter` (incl. `BreakOnUninitMemoryRead`) | §3.30 `counters` (as a tally, not a halt) |
+| `FrozenAddressManager` | §3.31 `freeze` |
+| `Profiler` | §3.32 `profile` |
+| `MemoryDumper`, `Disassembler`, `PpuTools`, `BaseTraceLogger`, `CodeDataLogger`, `Breakpoint` | already `mem`/`dump`, `disasm`, `tile`/`tilemap`/`sprites`/`pal`, `trace`, `cov`, `bp` |
+| `LuaApi`/`ScriptManager` | the shell itself (§3.17) plus `EmuSen.Pharaoh` (§3.15) — a second scripting language isn't wanted |
+| `CpuType` / per-CPU `IDebugger` (Snes/Spc/Gsu/NecDsp/Cx4/St018) | §3.34 `cpus` and the scope word every command takes |
+| `ExpressionEvaluator.Gsu/.NecDsp/.Spc` (per-CPU token sets) | §3.34 `eval <cpu>`, derived from each chip's reported registers |
+| `SpcDisUtils`, `NecDspDisUtils` | §3.34 `Spc700Disassembler`, `NecDspDisassembler` |
+| *(nothing — Mesen has no equivalent)* | §3.35 `copflow`, the coprocessor register-window log and poll detection |
+
+**Not built, and why:**
+
+- **`BaseEventManager` (the Event Viewer)** — a per-frame log of register writes, DMA, NMI/IRQ and sprite-0 hits plotted at scanline/dot coordinates. The single largest remaining gap, and a genuinely good fit for a PPU-focused emulator. Left out because its value is mostly in the *2D plot*, and everything in §3 is text; it wants the GUI debug window (§7) that still doesn't exist. `runto scanline` (§3.28) plus `layers` (§3.19) covers the narrow "what changed at this scanline" case in the meantime.
+- **`StepBackManager` (step back one instruction)** — needs a rewind ring at instruction granularity, not frame granularity. Real work in the core, not the toolchain, and it should be built on whatever `EmuSen_Rewind_And_FastForward.md` already establishes rather than beside it.
+- **`Base6502Assembler`** — assemble text to bytes and patch it in. `cheat rompatch` plus `write` already covers patching; the missing half is only the mnemonic-to-bytes direction, and the disassembler's own verification pass (§7) should land first so the two agree by construction.
+- **`DisassemblySearch`** — `disasm ... | grep` is the composable-Unix answer this shell was built for, and it already works.
+- **`BreakOnBrk`/`BreakOnCop`/`BreakOnStp`/unofficial-opcode breaks** — `runto brk`/`runto cop` cover the two that matter on a 65816; the rest are NES/GB-specific in Mesen.
+
+**Cost.** The call-stack and profiler hooks sit on the per-instruction seam, which §13.1 of `Venus_PPU.md` warns about. Measured on a deliberately JSR/RTS-dense synthetic ROM (a 3-instruction subroutine called in a tight loop — far denser than real game code): **1.038 ms/frame with no debug target attached, 1.060 ms/frame with one attached**, i.e. ~2% while debugging and nothing measurable during normal play, since `Cpu.CallStack` is null unless a `SnesDebugTarget` exists. Profiling and access counting are additionally opt-in behind an `IsArmed` bool, matching `CoverageRegistry`.
+
+---
+
+### 3.34 Named debug CPUs — the coprocessor pass (`DianaOS/Var/DebugCpu.cs`)
+
+The toolchain's model of "which processor am I debugging" used to be a boolean: `Breakpoints` and `CoprocessorBreakpoints`, `Coverage` and `CoprocessorCoverage`, with commands taking a hardcoded `sa1`/`cop`/`gsu` scope word. That does not describe the hardware. An SNES is **always at least two** processors — the 65816 and the SPC700 — and a cartridge can add a third. One bool cannot name three chips, and the SPC700, which is present in every single game, had no breakpoints at all.
+
+`DebugCpu` replaces the pair with a list. Each entry names a chip and carries whatever that chip actually supports: a `BreakpointRegistry` (never null, so commands need no second null check), and optionally a `CoverageRegistry`, a `CallStackRegistry`, an `IExpressionContext`, a code space, a register provider, and a program-counter delegate. `IDebugTarget.DebugCpus` defaults to empty, so a core that publishes nothing is unaffected and the legacy `Breakpoints`/`CoprocessorBreakpoints` properties still work.
+
+Every scoped command resolves its optional first word through one shared helper (`DebugCommandHelpers.ResolveCpu`), so the convention is identical across `bp`, `cov`, `bt`, `step`, `profile`, `eval`, `regs` and `disasm`. With no scope word, the first CPU in the list — always the main one — is used, so **every pre-existing command form is untouched**. `cop` survives as an alias for whichever cartridge coprocessor is present.
+
+**What the SNES now publishes:**
+
+| Chip | `bp` | `cov` | `bt` | `regs` | `disasm` | Notes |
+|---|---|---|---|---|---|---|
+| `cpu` | yes | yes | yes | yes | yes | 65816, unchanged |
+| `spc` | **new** | **new** | — | yes | **new** | present in every game; had no breakpoints before |
+| `sa1` | yes | yes | **new** | yes | yes | a 65816, so the call/return seam applies unchanged |
+| `gsu` | **new** | yes | — | yes | yes | coverage-only before |
+| `dsp` | — | — | — | yes | **new** | firmware runs from mask ROM this core cannot halt |
+
+Support is deliberately **not** uniform, and `cpus` prints per chip what is actually wired rather than letting a command fail obscurely later. The two absences are honest ones: the GSU and SPC700 have no stack-based call convention to infer frames from, so `bt gsu` says so instead of inventing them, and the NEC DSP cannot be halted, so it refuses breakpoints rather than accepting ones that would never fire.
+
+**Halting.** Only one chip halts at a time. `VenusCore` tracks *which* (`HaltedCpu`, replacing the old `_haltedOnCoprocessor` bool), because the resume path has to arm the skip-one-check flag on the chip that actually halted — arming the S-CPU's flag for a GSU halt would let the GSU re-break instantly on the same PC, forever. Each chip's unspent clock budget survives the halt, so resuming continues the frame rather than restarting it.
+
+**Two disassemblers were missing outright.** `disasm APURAM` previously decoded SPC700 bytes with the 65816 table and produced confident nonsense. `Spc700Disassembler` and `NecDspDisassembler` fill that in; the SNES now needs four decoders to cover itself (65816, SPC700, GSU, NEC DSP), and naming a chip picks the right one. `disasm DSPPRG` indexes program *words* rather than bytes, because the DSP's PC is a word index and that is the only number a user ever has to paste in.
+
+**Per-chip expressions.** `eval gsu r14` and `bp gsu add X if r14 > $100` evaluate against the *GSU's* registers. This needed no new expression language: `DebugCpuExpressionContext` derives symbols from whatever registers a chip already reports through `regs`, so a chip gets a working conditional-breakpoint context for free, and a core-specific context is an enrichment layered on top rather than a requirement.
+
+### 3.35 `copflow` — the coprocessor handshake log (`DianaOS/Var/RegisterFlowRegistry.cs`)
+
+Neither this toolchain nor Mesen had anything for the seam where coprocessor bugs actually live.
+
+Every cartridge coprocessor talks to the main CPU through one narrow register window, and the failure is almost never the chip's arithmetic. It is the conversation: the CPU writes a parameter block, kicks the chip, the chip works and sets a status bit, the CPU polls that bit and moves on. Any of those four steps can fail silently, and none are visible in a register dump — by the time you look, the moment has passed. `cophist` (§3.26) shows the run-up in *register* terms; this shows the *traffic*.
+
+`copflow` logs the window: every read and write with its value, frame, and which side did it. `copflow tail` replays the recent conversation in order; `copflow stats` gives whole-run per-register tallies.
+
+**Poll-run detection** is the part worth the code. `copflow poll` tracks the longest run of consecutive reads of one register whose value never changed, plus the run in progress right now. A long run is unambiguous: if a game read `$3030` ninety thousand times and always got the same byte, the game is not slow and the plot is not wrong — it is spinning on a status bit this core never updates. That points at the register model rather than the chip's logic, and it is a different bug from anything `regs` or `cophist` would surface. A write by either side always breaks the run, because a write means someone learned something and acted.
+
+Core-agnostic: `RegisterFlowRegistry` knows nothing about the SNES, and the SNES feeds it from the single `CartridgeRegion.CoprocessorRegister` choke point in `Cartridge.cs`. Disarmed it costs one bool test per coprocessor register access, and nothing at all on a cartridge without a coprocessor, which never reaches the seam.
+
+
 ---
 
 ## 4. Underlying helper libraries (pre-date the toolchain above)
@@ -1043,10 +1208,15 @@ This is roughly how the toolchain got used across the coin/Yoshi rendering inves
 
 ## 7. Roadmap (things this doc deliberately doesn't cover because they don't exist yet)
 
-- **Breakpoints / single-step / pause-resume** — done (§3.1's breakpoints note, §3.3's `bp` row). Still open: `EmuSen.Pharaoh` doesn't drive the halt/resume loop at all (its `bp add` is hit-counting only, §3.15) — a scripted, non-interactive equivalent of `step`/`continue` would need the harness to check `IsHaltedAtBreakpoint` and decide what to do next, which nothing does today.
-- **A verification pass on the disassembler** (§3.7) — it exists now, but hasn't had the equivalent scrutiny the execution opcode table got against oxyron.de. Worth a dedicated pass rather than trusting it blind.
+- **Breakpoints / single-step / pause-resume** — done (§3.1's breakpoints note, §3.3's `bp` row), and since extended with conditions, `step over`/`step out` and `runto` (§3.27, §3.28). Still open: `EmuSen.Pharaoh` doesn't drive the halt/resume loop at all (its `bp add` is hit-counting only, §3.15) — a scripted, non-interactive equivalent of `step`/`continue` would need the harness to check `IsHaltedAtBreakpoint` and decide what to do next, which nothing does today.
+- **A verification pass on the disassemblers** (§3.7, §3.34) — there are now four (65816, SPC700, GSU, NEC DSP). The 65816 one still hasn't had the scrutiny the execution opcode table got against oxyron.de; the SPC700 and NEC DSP decoders shipped with table-driven tests covering every opcode's mnemonic, operand form and length, but those check the decoder against its own documented table, not against hardware. Worth a dedicated pass rather than trusting any of them blind.
 - **Watchpoints beyond WRAM** — VRAM/CGRAM/OAM and the general CPU-bus/SRAM write paths don't report to `MemoryBus`'s `IWriteObserver` hook yet (§3.4).
-- **The Avalonia GUI debug window** — partially started: `Settings > DianaOS Console...` (`EmuSen.Mistress/Views/DianaOSConsoleWindow.axaml`) is a real terminal window onto the full `DianaOSInterpreter` (§3.17), text-only. The actual Mesen-style multi-pane debugger (register panels, hex viewer, disassembly view, sprite/palette viewers, event log, watch panel) built against `IDebugTarget` directly still doesn't exist - everything in §3 was built with that as the eventual consumer, and the console window covers the same functionality today just as one text pane rather than dedicated graphical panels.
-- **An NES (or other console) `IDebugTarget` implementation** — the interface was designed generically for this from the start, but no second implementation exists yet to prove it out.
+- **A Mesen-style Event Viewer** — the largest remaining gap from the Mesen comparisons (§3.33): a per-frame plot of register writes, DMA and interrupts against scanline/dot coordinates. Deliberately deferred rather than skipped — its value is in the 2D plot, so it wants the GUI debug window below, not another text command. `copflow` (§3.35) now covers the coprocessor-register slice of the same data as text.
+- **Step back one instruction** and **an assembler** — also from §3.33, both deferred for reasons recorded there (instruction-granularity rewind belongs in the core; the assembler should follow the disassembler's verification pass).
+- **The Avalonia GUI debug window** — partially started: `Settings > DianaOS Console...` (`EmuSen.Mistress/Views/DianaOSConsoleWindow.axaml`) is a real terminal window onto the full `DianaOSInterpreter` (§3.17), text-only. The actual Mesen-style multi-pane debugger (register panels, hex viewer, disassembly view, sprite/palette viewers, event log, watch panel, call-stack panel) built against `IDebugTarget` directly still doesn't exist - everything in §3 was built with that as the eventual consumer, and the console window covers the same functionality today just as one text pane rather than dedicated graphical panels.
+- **An NES (or other console) `IDebugTarget` implementation** — the interface was designed generically for this from the start, but no second implementation exists yet to prove it out. The §3.27 and §3.34 fallback contexts are a down-payment: a second core gets `eval`, conditional breakpoints and per-chip scoping working off its `regs` output alone, with no expression code of its own. An NES core would publish `cpu` plus whatever its cartridge mapper carries through the same `DebugCpus` list.
+- **A GSU/SPC700 call stack** — neither reports one (§3.34), so `bt`, `step over`/`step out` and `profile` are unavailable for them. The GSU's subroutine convention is register-based rather than a stack the way the 65816's JSR/RTS is, so this needs a chip-specific inference (tracking LINK/R11) rather than the existing seam, and is only worth building if a real GSU investigation wants it.
+- **Halting the NEC DSP** — its firmware runs from mask ROM the core steps as a block, so it reports registers and disassembly but takes no breakpoints (§3.34). A per-instruction seam like the SA-1's would fix it; nothing has needed it yet.
+- **Coprocessor-side `copflow` attribution** — every entry is currently tagged `cpu`, because the S-CPU's own register-window accesses are the only ones that route through `Cartridge`'s decode (§3.35). A chip reading its own registers internally never reaches that seam, so a genuinely two-sided log would need per-chip hooks.
 - **A visual, burned-in-pixel screenshot timestamp** — deliberately deferred in favor of the companion-file approach (§3.6); revisit if the on-image version is still wanted.
 - **A ROM database/mapper for known per-title quirks** — not built yet. The idea: a small lookup (by ROM checksum, not filename) that lets a frontend auto-apply a known cartridge-specific behavior - the concrete case that prompted this is Super Mario All-Stars' Controller 2 quirk (`Games_Tested.md`'s SMAS entry), where the mirroring workaround exists but currently has to be turned on by hand (F7 in `EmuSen.Hotaru`, a checkbox in `EmuSen.Mistress`) rather than being applied automatically for that specific cartridge. Needs to stay **core-agnostic** if built - EmuSen is adding cores beyond the SNES before it ever reaches disk-based generations, and a "quirks database" keyed on some SNES-specific identifier (or living inside `EmuSen.Cores.Nintendo.Venus` at all) wouldn't carry over to an NES/other core needing the exact same kind of per-title override; the lookup mechanism belongs at a level every core can plug into, the same way `IDebugTarget` itself doesn't assume any one console's shape.

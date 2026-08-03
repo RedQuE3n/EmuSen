@@ -23,32 +23,33 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "  cov clear                     forget everything recorded so far",
             "  cov <addr> [<len>]            report which of <len> bytes from <addr> ever executed",
             "                                (default 16); 0 executed means the code never ran",
-            "  cov cop on|off|clear|<addr>   same, on the coprocessor's own instruction stream -",
-            "                                its addresses are a different address space",
+            "  cov <cpu> on|off|clear|<addr> same, on another processor's own instruction stream -",
+            "                                `cpus` lists them, and each has its own address space",
         });
 
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)
         {
             target = global::EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers.RequireTarget(target);
-            if (parts.Length < 2) return "Usage: cov [cop] on|off|clear|<addr> [<len>]";
+            if (parts.Length < 2) return "Usage: cov [<cpu>] on|off|clear|<addr> [<len>]";
 
-            // Optional scope word ahead of the subcommand, same shape as `bp sa1`.
-            int at = 1;
-            bool coprocessor = parts[at].Equals("cop", System.StringComparison.OrdinalIgnoreCase)
-                            || parts[at].Equals("sa1", System.StringComparison.OrdinalIgnoreCase)
-                            || parts[at].Equals("gsu", System.StringComparison.OrdinalIgnoreCase);
-            if (coprocessor) at++;
-            if (parts.Length <= at) return "Usage: cov cop on|off|clear|<addr> [<len>]";
+            // Optional scope word ahead of the subcommand - see `man cpus`.
+            var (cpu, at) = ResolveCpu(target, parts, 1);
+            if (cpu == null && DebugCpus.IsScopeWord(target.DebugCpus, parts[1]))
+            {
+                return "This cartridge has no coprocessor to record coverage for.";
+            }
+            if (parts.Length <= at) return "Usage: cov <cpu> on|off|clear|<addr> [<len>]";
 
-            var coverage = coprocessor ? target.CoprocessorCoverage : target.Coverage;
+            bool coprocessor = cpu != null && cpu.Name != DebugCpus.MainName;
+            var coverage = cpu != null ? cpu.Coverage : target.Coverage;
             if (coverage == null)
             {
                 return coprocessor
-                    ? "This cartridge has no coprocessor to record coverage for."
+                    ? $"{cpu!.Name} records no execution coverage on this core."
                     : $"{target.CoreName} target records no execution coverage.";
             }
 
-            string scope = coprocessor ? "Coprocessor coverage" : "Coverage";
+            string scope = coprocessor ? $"{cpu!.Name.ToUpperInvariant()} coverage" : "Coverage";
             string sub = parts[at].ToLowerInvariant();
 
             switch (sub)

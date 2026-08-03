@@ -41,6 +41,22 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         public int CycleBudget { get; set; }
         public int TotalBytesStored { get; private set; }
 
+        // Same pull-hook shape as MemoryBus.BreakpointChecker, on the SPC700's PC - see `man cpus`.
+        [EmuSen.Common.SkipInState] public Func<int, bool>? BreakpointChecker;
+
+        [EmuSen.Common.SkipInState] public bool HaltedAtBreakpoint;
+
+        [EmuSen.Common.SkipInState] public int HaltedAddress;
+
+        // Skips one check after resuming, so `continue` leaves the breakpoint.
+        [EmuSen.Common.SkipInState] private bool _justResumedFromBreakpoint;
+
+        public void ResumeFromBreakpoint()
+        {
+            HaltedAtBreakpoint = false;
+            _justResumedFromBreakpoint = true;
+        }
+
         // Side channel for the "+2 cycles if a conditional branch is taken"
         // penalty (BCC/BCS/BEQ/BNE/BMI/BPL/BVC/BVS, CBNE, DBNZ, BBS/BBC-style
         // bit-branches) - real SPC700 timing, but not a fixed per-opcode
@@ -372,6 +388,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 CycleBudget -= 2;
                 return;
             }
+
+            // Returns with CycleBudget intact, so resuming re-enters here - see `man cpus`.
+            if (!_justResumedFromBreakpoint && BreakpointChecker != null && BreakpointChecker(PC))
+            {
+                HaltedAtBreakpoint = true;
+                HaltedAddress = PC;
+                return;
+            }
+            _justResumedFromBreakpoint = false;
 
             ushort executedAtPC = PC;
             byte opcode = Read8(PC);

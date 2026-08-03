@@ -42,6 +42,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // `watch` never saw SRAM or either SA-1 memory - see Venus_SA1.md §11.4.
         [EmuSen.Common.SkipInState] public IWriteObserver? WriteObserver;
 
+        // Coprocessor register-window traffic, when a debugger is watching - see `man copflow`.
+        [EmuSen.Common.SkipInState] public EmuSen.DianaOS.DianaOS.Var.RegisterFlowRegistry? RegisterFlow;
+
         [EmuSen.Common.SkipInState] public Coprocessors.Sa1.Sa1? Sa1;
 
         // Non-null only for a SuperFX cartridge - see Venus_SuperFX.md §1. Same
@@ -261,10 +264,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     return Sa1!.IRam[mapped.Offset];
 
                 case CartridgeRegion.CoprocessorRegister:
-                    if (Sa1 != null) return Sa1.ReadRegister((ushort)mapped.Offset);
-                    if (SuperFx != null) return SuperFx.ReadRegister((ushort)mapped.Offset);
-                    if (NecDsp != null) return NecDsp.ReadRegister(mapped.Offset);
-                    return Obc1!.ReadRegister(mapped.Offset);
+                {
+                    byte value = Sa1 != null ? Sa1.ReadRegister((ushort)mapped.Offset)
+                               : SuperFx != null ? SuperFx.ReadRegister((ushort)mapped.Offset)
+                               : NecDsp != null ? NecDsp.ReadRegister(mapped.Offset)
+                               : Obc1!.ReadRegister(mapped.Offset);
+                    RegisterFlow?.Note(mapped.Offset, value, isWrite: false, "cpu");
+                    return value;
+                }
 
                 case CartridgeRegion.Sa1Vector:
                     return Sa1!.VectorByte(mapped.Offset);
@@ -295,6 +302,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     return;
 
                 case CartridgeRegion.CoprocessorRegister:
+                    RegisterFlow?.Note(mapped.Offset, data, isWrite: true, "cpu");
                     if (Sa1 != null) Sa1.WriteRegister((ushort)mapped.Offset, data);
                     else if (SuperFx != null) SuperFx.WriteRegister((ushort)mapped.Offset, data);
                     else if (NecDsp != null) NecDsp.WriteRegister(mapped.Offset, data);

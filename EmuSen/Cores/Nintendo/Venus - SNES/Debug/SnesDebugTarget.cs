@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using EmuSen.Cores.Nintendo.Venus.Processor;
 using EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx;
+using EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp;
+using EmuSen.Cores.Nintendo.Venus.Apu;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Video;
 using EmuSen.DianaOS;
@@ -143,6 +145,25 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly CoverageRegistry _coverage = new CoverageRegistry();
         private readonly CoverageRegistry? _coprocessorCoverage;
 
+        // See `man bt`, `man label`, `man counters`, `man freeze`, `man eval`.
+        private readonly CallStackRegistry _callStack = new CallStackRegistry();
+        private readonly LabelRegistry _labels = new LabelRegistry();
+        private readonly AccessCounterRegistry _accessCounters = new AccessCounterRegistry();
+        private readonly FreezeRegistry _freezes = new FreezeRegistry();
+        private readonly SnesExpressionContext _expressions;
+
+        // The named chip list every scoped command resolves against - see `man cpus`.
+        private readonly List<DebugCpu> _debugCpus = new();
+
+        // Only the SA-1 has both a 65816 and a call/return seam to hang this on.
+        private readonly CallStackRegistry? _coprocessorCallStack;
+
+        private readonly BreakpointRegistry _spcBreakpoints = new BreakpointRegistry();
+        private readonly CoverageRegistry _spcCoverage = new CoverageRegistry();
+
+        // Traffic across the cartridge coprocessor's register window - see `man copflow`.
+        private readonly RegisterFlowRegistry _registerFlow = new RegisterFlowRegistry();
+
         // Optional - VenusCore.LastFrameCpuSpc700Ms/LastFramePpuMs/
         // LastFrameHdmaMs (or EmulatorSession's identical pass-through
         // properties) live on the concrete core/session, not on anything
@@ -209,23 +230,60 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // in this class's own header comment.
             // Coverage rides the same per-instruction seam, and costs one
             // bool test while disarmed - see EmuSen_Debugging_Tools_Reference_v5.md §3.24.
-            bus.BreakpointChecker = pc24 => { _coverage.Record(pc24); return _breakpoints.ShouldBreak(pc24); };
+            bus.BreakpointChecker = pc24 =>
+            {
+                _coverage.Record(pc24);
+                _callStack.NoteInstruction();
+                _accessCounters.NoteExecute("CpuBus", pc24);
+                return _breakpoints.ShouldBreak(pc24);
+            };
+
+            // The seams `bt`, `step over`/`step out` and `runto` read - see `man bt`.
+            cpu.CallStack = _callStack;
+            cpu.Breakpoints = _breakpoints;
+            _callStack.FrameNumberProvider = () => bus.FrameCount;
+            _breakpoints.CallStack = _callStack;
+            bus.ScanlineObserver = _breakpoints.NoteScanline;
+
+            _expressions = new SnesExpressionContext(cpu, bus, _labels, () => _bus.FrameCount, GetMemorySpaces);
+            _breakpoints.ConditionEvaluator = EvaluateCondition;
 
             // Same pull-hook, on the SA-1's PC - see Venus_SA1.md §11.5.
             if (bus.Cart.Sa1 is { } breakableSa1)
             {
                 _coprocessorBreakpoints = new BreakpointRegistry();
                 _coprocessorCoverage = new CoverageRegistry();
-                breakableSa1.BreakpointChecker = pc24 => { _coprocessorCoverage.Record(pc24); return _coprocessorBreakpoints.ShouldBreak(pc24); };
+                _coprocessorCallStack = new CallStackRegistry { FrameNumberProvider = () => bus.FrameCount };
+                breakableSa1.BreakpointChecker = pc24 =>
+                {
+                    _coprocessorCoverage.Record(pc24);
+                    _coprocessorCallStack.NoteInstruction();
+                    return _coprocessorBreakpoints.ShouldBreak(pc24);
+                };
+
+                // The SA-1 runs a 65816, so the same JSR/RTS seam applies - see `man bt`.
+                breakableSa1.Cpu.CallStack = _coprocessorCallStack;
+                breakableSa1.Cpu.Breakpoints = _coprocessorBreakpoints;
+                _coprocessorBreakpoints.CallStack = _coprocessorCallStack;
             }
 
-            // The GSU has no breakpoint hook, but its PC is just as worth
-            // covering - see Venus_SuperFX.md §8.2.
+            // The GSU has its own breakpoint hook now too - see Venus_SuperFX.md §8.2.
             if (bus.Cart.SuperFx is { } coveredGsu)
             {
+                _coprocessorBreakpoints = new BreakpointRegistry();
                 _coprocessorCoverage = new CoverageRegistry();
                 coveredGsu.CoverageRecorder = pc24 => _coprocessorCoverage.Record(pc24);
+                coveredGsu.BreakpointChecker = pc24 => _coprocessorBreakpoints.ShouldBreak(pc24);
             }
+
+            bus.Spc700.BreakpointChecker = pc =>
+            {
+                _spcCoverage.Record(pc);
+                return _spcBreakpoints.ShouldBreak(pc);
+            };
+
+            _registerFlow.FrameNumberProvider = () => bus.FrameCount;
+            bus.Cart.RegisterFlow = _registerFlow;
 
             // Each provider's initial snapshot is read right here, not left
             // default/empty - a caller reading Current before this target's
@@ -244,6 +302,80 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _palettesProvider = new PollingProvider<IReadOnlyList<DebugPaletteInfo>>(ReadPalettesLive, ReadPalettesLive());
             _audioChannelsProvider = new PollingProvider<IReadOnlyList<DebugAudioChannelInfo>>(ReadAudioChannelsLive, ReadAudioChannelsLive());
             _hardwareLoadProvider = new PollingProvider<IReadOnlyList<DebugLoadInfo>>(ReadHardwareLoadLive, ReadHardwareLoadLive());
+
+            // Last: the CPU list hands out the providers built just above.
+            BuildDebugCpus();
+        }
+
+        // One entry per chip this cartridge actually carries - see `man cpus`.
+        private void BuildDebugCpus()
+        {
+            _debugCpus.Add(new DebugCpu("cpu", "Ricoh 5A22 (65816) main CPU", _breakpoints)
+            {
+                Coverage = _coverage,
+                CallStack = _callStack,
+                Expressions = _expressions,
+                CodeSpace = "CpuBus",
+                Registers = _cpuRegistersProvider,
+                ProgramCounter = () => (_cpu.PB << 16) | _cpu.PC,
+            });
+
+            _debugCpus.Add(new DebugCpu("spc", "Sony SPC700 sound CPU", _spcBreakpoints)
+            {
+                Coverage = _spcCoverage,
+                CodeSpace = "APURAM",
+                Registers = _apuRegistersProvider,
+                ProgramCounter = () => _bus.Spc700.PC,
+            });
+
+            var cart = _bus.Cart;
+
+            if (cart.Sa1 is { } sa1 && _coprocessorBreakpoints != null)
+            {
+                _debugCpus.Add(new DebugCpu("sa1", "SA-1 (65816) cartridge coprocessor", _coprocessorBreakpoints)
+                {
+                    Coverage = _coprocessorCoverage,
+                    CallStack = _coprocessorCallStack,
+                    CodeSpace = "SA1BUS",
+                    Registers = _coprocessorRegistersProvider,
+                    ProgramCounter = () => (sa1.Cpu.PB << 16) | sa1.Cpu.PC,
+                });
+            }
+            else if (cart.SuperFx is { } gsu && _coprocessorBreakpoints != null)
+            {
+                _debugCpus.Add(new DebugCpu("gsu", "SuperFX GSU cartridge coprocessor", _coprocessorBreakpoints)
+                {
+                    Coverage = _coprocessorCoverage,
+                    CodeSpace = "GSUBUS",
+                    Registers = _coprocessorRegistersProvider,
+                    ProgramCounter = () => (gsu.DebugPbr << 16) | gsu.R[15],
+                });
+            }
+            else if (cart.NecDsp is { } dsp)
+            {
+                // No halt seam: the firmware runs from ROM this core cannot interrupt.
+                _debugCpus.Add(new DebugCpu("dsp", $"NEC {dsp.Name} cartridge coprocessor", new BreakpointRegistry())
+                {
+                    CodeSpace = "DSPPRG",
+                    Registers = _coprocessorRegistersProvider,
+                    ProgramCounter = () => dsp.DebugPc,
+                    CanHalt = false,
+                });
+            }
+
+            // A chip's conditions read that chip's registers - see `man eval`.
+            foreach (var cpu in _debugCpus)
+            {
+                if (cpu.Breakpoints.ConditionEvaluator != null) continue;
+                var context = cpu.Expressions ?? DebugCpuExpressionContext.For(this, cpu);
+                cpu.Breakpoints.ConditionEvaluator = condition =>
+                {
+                    var evaluator = new ExpressionEvaluator(context);
+                    return evaluator.TryEvaluateBool(condition, out bool result, out string error)
+                        ? (result, null)
+                        : (false, error);
+                };
+            }
         }
 
         public string CoreName => "SNES";
@@ -292,6 +424,29 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         public CoverageRegistry? CoprocessorCoverage => _coprocessorCoverage;
 
+        public CallStackRegistry? CallStack => _callStack;
+
+        public LabelRegistry? Labels => _labels;
+
+        public AccessCounterRegistry? AccessCounters => _accessCounters;
+
+        public FreezeRegistry? Freezes => _freezes;
+
+        public IExpressionContext? Expressions => _expressions;
+
+        public IReadOnlyList<DebugCpu> DebugCpus => _debugCpus;
+
+        public RegisterFlowRegistry? RegisterFlow => _registerFlow;
+
+        // Fresh per call: the evaluator holds parse state - see `man eval`.
+        private (bool Result, string? Error) EvaluateCondition(string condition)
+        {
+            var evaluator = new ExpressionEvaluator(_expressions);
+            return evaluator.TryEvaluateBool(condition, out bool result, out string error)
+                ? (result, null)
+                : (false, error);
+        }
+
         // Reads a (space, address, width) value the same way
         // DebugCommandHelpers.ReadValue does (little-endian accumulation)
         // - duplicated rather than shared since that helper lives in
@@ -311,6 +466,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 return value;
             });
 
+            _breakpoints.NoteFrame(frameCount); // see `man runto`
             ApplyCheats();
         }
 
@@ -359,6 +515,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _watches.RecordWrite(spaceName, address, value,
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
             _breakpoints.NoteWrite(spaceName, address, value);
+            _accessCounters.NoteWrite(spaceName, address);
+            RestoreIfFrozen(spaceName, address, value);
+        }
+
+        // Undoes a write immediately, not next frame - see `man freeze`.
+        private void RestoreIfFrozen(string spaceName, int address, byte value)
+        {
+            if (_freezes.NoteWrite(spaceName, address, value) is not { } frozen) return;
+            var space = GetMemorySpaces().FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
+            if (space is not { IsWritable: true }) return;
+            _freezes.Restore(() => space.Write(address, frozen));
         }
 
         // The S-CPU's PC says nothing about a write the SA-1 made on its own,
@@ -378,6 +545,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         {
             _watches.RecordRead(spaceName, address, value,
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
+            _accessCounters.NoteRead(spaceName, address);
         }
 
         public long FrameCount => _bus.FrameCount;
@@ -408,6 +576,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             // The GSU is not a 65816 - see Venus_SuperFX.md §8.1.
             if (string.Equals(space.Name, "GSUBUS", StringComparison.OrdinalIgnoreCase))
                 return GsuDisassembler.Disassemble(a => space.Read(a), address, count);
+
+            // Nor is the SPC700 - see Venus_APU.md §8.
+            if (string.Equals(space.Name, "APURAM", StringComparison.OrdinalIgnoreCase))
+                return Spc700Disassembler.Disassemble(a => space.Read(a), address, count);
+
+            // <address> is a program-word index here, matching the DSP's own PC - see Venus_NecDSP.md §8.
+            if (string.Equals(space.Name, "DSPPRG", StringComparison.OrdinalIgnoreCase) && _bus.Cart.NecDsp is { } prgDsp)
+                return NecDspDisassembler.Disassemble(prgDsp.DebugProgramWord, address, count);
 
             // Immediate-operand widths come from the CPU that actually runs
             // this space's code, not always the S-CPU - see Venus_SA1.md §11.3.
@@ -549,6 +725,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                             ? (ushort)((word & 0xFF00) | v)
                             : (ushort)((word & 0x00FF) | (v << 8));
                     }));
+            }
+
+            // Firmware, three bytes per 24-bit word. `disasm DSPPRG` indexes
+            // words, not bytes - see Venus_NecDSP.md §8.
+            if (cart.NecDsp is { } prgDsp && prgDsp.DebugProgramWords > 0)
+            {
+                spaces.Add(new DelegateDebugMemorySpace("DSPPRG", prgDsp.DebugProgramWords * 3,
+                    a => (byte)(prgDsp.DebugProgramWord(a / 3) >> (8 * (a % 3))),
+                    (a, v) => { }));
             }
 
             return spaces;

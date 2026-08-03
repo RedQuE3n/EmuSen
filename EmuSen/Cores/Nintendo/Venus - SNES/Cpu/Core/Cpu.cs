@@ -47,6 +47,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         // see Venus_CPU.md §2.
         public ushort LastInstructionPC;
         public byte LastInstructionPB;
+
+        // Debug observers of call/return and interrupt flow - see `man bt`.
+        [EmuSen.Common.SkipInState] public CallStackRegistry? CallStack;
+        [EmuSen.Common.SkipInState] public BreakpointRegistry? Breakpoints;
         
         public byte P;    
         public bool E;    
@@ -296,6 +300,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             PB = 0x00;
             PC = (ushort)((high << 8) | low);
+            NoteInterruptFrame(CallFrameKind.Nmi);
 
             if (DebugSettings.CpuVerboseLogging)
             {
@@ -305,6 +310,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
                 _verboseTrace.Flush();
                 Console.WriteLine($"[CPU] NMI -> PC = 0x00{PC:X4}");
             }
+        }
+
+        // Where `bt` and `runto nmi|irq|brk|cop` learn an interrupt was taken.
+        private void NoteInterruptFrame(CallFrameKind kind)
+        {
+            CallStack?.NotePush((LastInstructionPB << 16) | LastInstructionPC, (PB << 16) | PC, kind);
+            Breakpoints?.NoteInterrupt(kind);
         }
 
         // IRQ entry sequence - see Venus_CPU.md §3.
@@ -334,6 +346,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             PB = 0x00;
             PC = (ushort)((high << 8) | low);
+            NoteInterruptFrame(CallFrameKind.Irq);
 
             if (DebugSettings.CpuVerboseLogging)
             {

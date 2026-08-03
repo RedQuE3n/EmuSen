@@ -43,3 +43,7 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Cheats/
 # tooling, not the dumps it redistributes. See Venus_NecDSP.md §2.
 EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/*
 !EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/.gitkeep
+
+# AI-assistant config. This repo does not carry one and must not depend on one -
+# it has been added and deleted more than once. Ignored so it cannot come back.
+CLAUDE.md

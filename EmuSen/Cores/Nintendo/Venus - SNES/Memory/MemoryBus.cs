@@ -86,6 +86,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // one that always returns false.
         [EmuSen.Common.SkipInState] public Func<int, bool>? BreakpointChecker;
 
+        // Once per scanline, from VenusCore.RunFrame - see `man runto`.
+        [EmuSen.Common.SkipInState] public Action<int>? ScanlineObserver;
+
         // Monotonic frame counter - see IDebugTarget.FrameCount. Incremented
         // by VenusCore.RunFrame.
         public long FrameCount;

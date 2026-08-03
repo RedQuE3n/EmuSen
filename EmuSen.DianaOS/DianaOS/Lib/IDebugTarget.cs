@@ -305,6 +305,40 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // Coverage for the same reason CoprocessorBreakpoints is separate.
         CoverageRegistry? CoprocessorCoverage => null;
 
+        // The live call/return chain (see CallStackRegistry.cs), fed from the
+        // core's own call and return opcodes. Null when a core has no such
+        // seam wired - see EmuSen_Debugging_Tools_Reference_v5.md §3.28.
+        CallStackRegistry? CallStack => null;
+
+        // Named addresses (see LabelRegistry.cs). Owned by the target so a
+        // label set survives for as long as the loaded ROM does, the same
+        // lifetime every other registry here has. Null means `label` is
+        // unavailable for this core - see §3.29.
+        LabelRegistry? Labels => null;
+
+        // Per-address read/write/execute tallies (see
+        // AccessCounterRegistry.cs), fed from the same observer seams
+        // WatchRegistry uses. Null when a core has no such seam - see §3.30.
+        AccessCounterRegistry? AccessCounters => null;
+
+        // Addresses pinned to a value by undoing writes to them (see
+        // FreezeRegistry.cs). Null when a core has no write-observer seam to
+        // hang this on - see §3.31.
+        FreezeRegistry? Freezes => null;
+
+        // Live-state expression evaluation, backing `eval` and conditional
+        // breakpoints (see ExpressionEvaluator.cs). Deliberately the context,
+        // not an evaluator: the language is core-agnostic, only the symbols
+        // and memory behind it are per-core. Null when a core hasn't
+        // published one - see §3.27.
+        IExpressionContext? Expressions => null;
+
+        // Every separately-steppable processor, main CPU first - see `man cpus`.
+        IReadOnlyList<DebugCpu> DebugCpus => System.Array.Empty<DebugCpu>();
+
+        // Traffic across a coprocessor's register window - see `man copflow`.
+        RegisterFlowRegistry? RegisterFlow => null;
+
         // The RAM-poke cheat engine (see CheatRegistry.cs) - same exposure
         // pattern as Watches/FrameLog, but the data flow runs the other
         // direction: instead of the core feeding data into the registry,

@@ -98,6 +98,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
         public ushort DebugDp => _dp;
         public ushort DebugRp => _rp;
 
+        // Firmware words for the disassembler, which decodes 24 bits at a time - see Venus_NecDSP.md §8.
+        public int DebugProgramWords => _program.Length;
+        public int DebugProgramWord(int index) => (int)_program[index & _programMask];
+
         public void Reset()
         {
             System.Array.Clear(_acc);

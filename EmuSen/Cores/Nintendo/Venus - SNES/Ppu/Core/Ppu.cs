@@ -20,6 +20,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // --- Core Memory ---
         public byte[] Vram = new byte[64 * 1024];   // 32K words
         public byte[] Cgram = new byte[512];        // 256 palette entries (15-bit color)
+
+        // Cleared by the renderer's palette cache, set by every CGRAM write - see Venus_PPU.md §7.2.
+        public bool CgramChanged = true;
         public byte[] Oam = new byte[544];          // 512-byte main table + 32-byte high table
 
         // --- Decoded 32-bit ARGB Palette ---

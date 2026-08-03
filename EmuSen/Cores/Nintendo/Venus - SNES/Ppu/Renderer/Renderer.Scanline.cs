@@ -59,12 +59,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
             float brightness = (ppu.Inidisp & 0x0F) / 15f;
 
+            // Before sprite evaluation, which is the first thing to read a palette colour.
+            EnsurePaletteColors(ppu, py, brightness);
+
             long objEvalStart = Stopwatch.GetTimestamp();
             EvaluateSpritesForScanline(ppu, py, brightness);
             _objEvalTicksAccum += Stopwatch.GetTimestamp() - objEvalStart;
 
             // Main screen backdrop: plain CGRAM color 0, as always.
-            Color mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
+            Color mainBackdrop = PaletteColor(0);
 
             // Sub-screen backdrop fallback - see Venus_PPU.md §5.
             Color subBackdrop = new Color(

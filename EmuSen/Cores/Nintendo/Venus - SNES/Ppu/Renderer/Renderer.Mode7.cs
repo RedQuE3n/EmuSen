@@ -39,7 +39,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     // 8bpp indexes the full 256-color CGRAM directly - no
                     // palette-group offset needed, unlike 2bpp/4bpp modes.
                     int cgIdx = colorIndex * 2;
-                    target[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+                    target[px] = PaletteColor(cgIdx);
                     targetLayer[px] = layerId;
                 }
             }
@@ -69,7 +69,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 if (colorIndex != 0 && !(window.Active && window.Masked(px)))
                 {
                     int cgIdx = colorIndex * 2;
-                    target[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+                    target[px] = PaletteColor(cgIdx);
                     targetLayer[px] = layerId;
                 }
             }

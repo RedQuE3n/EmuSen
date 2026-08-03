@@ -216,6 +216,22 @@ It does **not** move the throttled picture — KBL3 at 33% went 17.70 → 17.78 
 
 **Do not "simplify" this by testing every pixel.** Computing the mask unconditionally, including for transparent pixels (common for parallax, sky and background gaps), was tried when `BgLineCache` was first written and made PPU rendering *slower than before the cache existed at all*. The `if (pixel != 0)` guard around the background call sites is load-bearing.
 
+### 7.2 CGRAM is converted to output colours once per palette change, not once per pixel
+
+`SnesColor(lo, hi, brightness)` unpacks a 15-bit BGR entry and scales each channel by brightness. It was called **per opaque pixel per layer per screen** — up to ~229,000 times a frame — to produce one of only **256 distinct results**, because its inputs are always a CGRAM entry and a brightness that is constant for the whole scanline.
+
+`_paletteColor[256]` now holds the converted colours and `PaletteColor(cgIdx)` indexes it. `EnsurePaletteColors` rebuilds when any of three things is true:
+
+- **`Ppu.CgramChanged`** — set by `WriteCGDATA`, the single register path all CGRAM writes (including DMA and HDMA to `$2122`) go through.
+- **the brightness changed** — `INIDISP`'s low nibble, which HDMA drives per scanline for fades.
+- **`py == 0`** — unconditionally, once a frame.
+
+**That third condition is load-bearing, not belt-and-braces.** Save-state restore, the debug tools and most of this project's own PPU tests assign `ppu.Cgram[...]` directly and never touch `WriteCGDATA`, so the dirty flag alone would leave them rendering stale colours. Rebuilding at the top of every frame bounds any missed invalidation to a single frame, and it is what makes the existing test suite — which pokes CGRAM directly and then calls `RunFrame()` — keep passing. A direct poke *mid-frame* is still not seen until the next one; nothing in the emulator does that, and `PaletteColorCacheTests` pins the behaviour either way.
+
+**Measured, three runs each, 600 frames, Release:** SMW 3.33 → 3.12 ms (−6.3%), DKC 2.58 → 2.40 (−7.0%), CT 2.39 → 2.27 (−4.8%), LttP unchanged. Throttled to 33%, SMW went from **30/600 frames over budget to 4/600**. All 12 ROMs byte-identical on `framesum` and `audiosum`.
+
+**Why this was the right target, and the painter's algorithm was not.** `mainComposite` covers two things: each layer's per-pixel *decode*, and the per-layer *composite pass* that writes it into the line buffer. Skipping every composite pass entirely (measured by gating them off) left SMW at 0.88 ms of 1.15, DKC 0.88 of 1.20, KBL3 1.12 of 1.45 — so **the decode is ~75% and the overdraw only ~25%**. Removing the painter's algorithm perfectly would win about 4%, roughly what §7.1 got. The colour conversion was inside the 75%.
+
 ---
 
 ## 8. Pseudo-hi-res vs. true hi-res (Modes 5/6)

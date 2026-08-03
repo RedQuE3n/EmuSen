@@ -168,6 +168,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int memIdx = (idx * 2) & 0x1FF;
                 Cgram[memIdx] = _cgLatch;
                 Cgram[memIdx + 1] = data;
+                CgramChanged = true;
                 _cgramTouched[memIdx] = true;
                 _cgramTouched[memIdx + 1] = true;
                 WriteObserver?.OnWrite("CGRAM", memIdx, _cgLatch);

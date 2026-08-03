@@ -68,6 +68,43 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         public override int GetHashCode() => HashCode.Combine(Name, Value, BitWidth);
     }
 
+    // Where a vector's POINTER lives, not where it points - see `man vectors`.
+    public readonly struct InterruptVector
+    {
+        public string Name { get; }
+        public int Address { get; }
+        public int Width { get; }
+
+        // Which CPU mode this vector belongs to, blank when a core has only one.
+        public string Mode { get; }
+
+        public InterruptVector(string name, int address, int width = 2, string mode = "")
+        {
+            Name = name;
+            Address = address;
+            Width = width;
+            Mode = mode;
+        }
+    }
+
+    // What a CPU-bus address actually decodes to - see `man addr`.
+    public readonly struct PhysicalAddress
+    {
+        // A memory-space name where one exists, else a description of the device.
+        public string Space { get; }
+        public int Offset { get; }
+
+        // True when Offset indexes a real space `mem`/`dump` can be pointed at.
+        public bool IsAddressable { get; }
+
+        public PhysicalAddress(string space, int offset, bool isAddressable = true)
+        {
+            Space = space;
+            Offset = offset;
+            IsAddressable = isAddressable;
+        }
+    }
+
     // One sprite/OBJ entry, shaped generically enough to cover consoles
     // with very different sprite hardware (the SNES's OAM low+high table
     // split, the NES's flatter 4-byte-per-sprite OAM) - a generic sprite
@@ -338,6 +375,12 @@ namespace EmuSen.DianaOS.DianaOS.Lib
 
         // Traffic across a coprocessor's register window - see `man copflow`.
         RegisterFlowRegistry? RegisterFlow => null;
+
+        // Where each interrupt vector lives, for `vectors` to dereference - see `man vectors`.
+        IReadOnlyList<InterruptVector> InterruptVectors => System.Array.Empty<InterruptVector>();
+
+        // Which physical location a CPU-bus address decodes to - see `man addr`.
+        PhysicalAddress? ResolvePhysical(int cpuAddress) => null;
 
         // The RAM-poke cheat engine (see CheatRegistry.cs) - same exposure
         // pattern as Watches/FrameLog, but the data flow runs the other

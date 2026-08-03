@@ -28,6 +28,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
         public Func<int>? ProgramCounter { get; init; }
 
+        // Sets one named register, false if that name is not writable - see `man regs`.
+        public Func<string, ulong, bool>? RegisterWriter { get; init; }
+
         // False when the core can observe this chip but not halt it.
         public bool CanHalt { get; init; } = true;
 

@@ -245,6 +245,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _breakpoints.CallStack = _callStack;
             bus.ScanlineObserver = _breakpoints.NoteScanline;
 
+            // Every call target becomes a discovered routine - see `man cov`.
+            _callStack.EntryPointObserver = _coverage.RecordEntryPoint;
+
             _expressions = new SnesExpressionContext(cpu, bus, _labels, () => _bus.FrameCount, GetMemorySpaces);
             _breakpoints.ConditionEvaluator = EvaluateCondition;
 
@@ -253,7 +256,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             {
                 _coprocessorBreakpoints = new BreakpointRegistry();
                 _coprocessorCoverage = new CoverageRegistry();
-                _coprocessorCallStack = new CallStackRegistry { FrameNumberProvider = () => bus.FrameCount };
+                _coprocessorCallStack = new CallStackRegistry
+                {
+                    FrameNumberProvider = () => bus.FrameCount,
+                    EntryPointObserver = _coprocessorCoverage.RecordEntryPoint,
+                };
                 breakableSa1.BreakpointChecker = pc24 =>
                 {
                     _coprocessorCoverage.Record(pc24);
@@ -308,6 +315,76 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         }
 
         // One entry per chip this cartridge actually carries - see `man cpus`.
+        // Both banks' worth, because which set is live depends on the E flag - see `man vectors`.
+        private static readonly InterruptVector[] Vectors =
+        {
+            new("COP", 0x00FFE4, 2, "Native (E=0)"),
+            new("BRK", 0x00FFE6, 2, "Native (E=0)"),
+            new("ABORT", 0x00FFE8, 2, "Native (E=0)"),
+            new("NMI", 0x00FFEA, 2, "Native (E=0)"),
+            new("IRQ", 0x00FFEE, 2, "Native (E=0)"),
+            new("COP", 0x00FFF4, 2, "Emulation (E=1)"),
+            new("ABORT", 0x00FFF8, 2, "Emulation (E=1)"),
+            new("NMI", 0x00FFFA, 2, "Emulation (E=1)"),
+            new("RESET", 0x00FFFC, 2, "Emulation (E=1)"),
+            new("IRQ/BRK", 0x00FFFE, 2, "Emulation (E=1)"),
+        };
+
+        public IReadOnlyList<InterruptVector> InterruptVectors => Vectors;
+
+        // The cartridge's own decode where it maps, else the bus regions - see `man addr`.
+        public PhysicalAddress? ResolvePhysical(int cpuAddress)
+        {
+            uint address = (uint)(cpuAddress & 0xFFFFFF);
+            byte bank = (byte)(address >> 16);
+            ushort offset = (ushort)(address & 0xFFFF);
+
+            if (_bus.Cart.TryResolvePhysical(address) is { } cartridge) return cartridge;
+
+            // WRAM is mirrored into the low 8KB of every non-cartridge bank.
+            if (bank is >= 0x7E and <= 0x7F) return new PhysicalAddress("WRAM", (int)(address - 0x7E0000));
+            if (offset < 0x2000) return new PhysicalAddress("WRAM", offset);
+            if (offset < 0x8000) return new PhysicalAddress($"hardware register ${offset:X4}", offset, isAddressable: false);
+            return null;
+        }
+
+        private bool WriteCpuRegister(string name, ulong value) => Write65816Register(_cpu, name, value);
+
+        // The GSU and NEC DSP expose their registers read-only, so they publish no writer at all.
+        private static bool Write65816Register(Cpu cpu, string name, ulong value)
+        {
+            switch (name.ToUpperInvariant())
+            {
+                case "A": cpu.A = (ushort)value; return true;
+                case "X": cpu.X = (ushort)value; return true;
+                case "Y": cpu.Y = (ushort)value; return true;
+                case "S": cpu.S = (ushort)value; return true;
+                case "D": cpu.D = (ushort)value; return true;
+                case "PB": cpu.PB = (byte)value; return true;
+                case "PC": cpu.PC = (ushort)value; return true;
+                case "DB": cpu.DB = (byte)value; return true;
+                case "P": cpu.P = (byte)value; return true;
+                case "E": cpu.E = value != 0; return true;
+                default: return false;
+            }
+        }
+
+        private bool WriteSpcRegister(string name, ulong value)
+        {
+            var spc = _bus.Spc700;
+            switch (name.ToUpperInvariant())
+            {
+                case "A": spc.A = (byte)value; return true;
+                case "X": spc.X = (byte)value; return true;
+                case "Y": spc.Y = (byte)value; return true;
+                case "SP": spc.SP = (byte)value; return true;
+                case "PC": spc.PC = (ushort)value; return true;
+                case "PSW": spc.PSW = (byte)value; return true;
+                // InPort0-3 are the S-CPU's side of the mailbox, written through $2140 - see Venus_APU.md.
+                default: return false;
+            }
+        }
+
         private void BuildDebugCpus()
         {
             _debugCpus.Add(new DebugCpu("cpu", "Ricoh 5A22 (65816) main CPU", _breakpoints)
@@ -318,6 +395,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 CodeSpace = "CpuBus",
                 Registers = _cpuRegistersProvider,
                 ProgramCounter = () => (_cpu.PB << 16) | _cpu.PC,
+                RegisterWriter = WriteCpuRegister,
             });
 
             _debugCpus.Add(new DebugCpu("spc", "Sony SPC700 sound CPU", _spcBreakpoints)
@@ -326,6 +404,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 CodeSpace = "APURAM",
                 Registers = _apuRegistersProvider,
                 ProgramCounter = () => _bus.Spc700.PC,
+                RegisterWriter = WriteSpcRegister,
             });
 
             var cart = _bus.Cart;
@@ -339,6 +418,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                     CodeSpace = "SA1BUS",
                     Registers = _coprocessorRegistersProvider,
                     ProgramCounter = () => (sa1.Cpu.PB << 16) | sa1.Cpu.PC,
+                    RegisterWriter = (name, value) => Write65816Register(sa1.Cpu, name, value),
                 });
             }
             else if (cart.SuperFx is { } gsu && _coprocessorBreakpoints != null)
@@ -363,11 +443,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 });
             }
 
-            // A chip's conditions read that chip's registers - see `man eval`.
+            // A chip's conditions and logpoints read that chip's registers - see `man eval`.
             foreach (var cpu in _debugCpus)
             {
-                if (cpu.Breakpoints.ConditionEvaluator != null) continue;
                 var context = cpu.Expressions ?? DebugCpuExpressionContext.For(this, cpu);
+                cpu.Breakpoints.LogEvaluator ??= expression => RenderLog(context, expression);
+
+                if (cpu.Breakpoints.ConditionEvaluator != null) continue;
                 cpu.Breakpoints.ConditionEvaluator = condition =>
                 {
                     var evaluator = new ExpressionEvaluator(context);
@@ -445,6 +527,20 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return evaluator.TryEvaluateBool(condition, out bool result, out string error)
                 ? (result, null)
                 : (false, error);
+        }
+
+        // Renders a logpoint's comma-separated expressions as "expr=value" pairs - see `man bp`.
+        private static (string Text, string? Error) RenderLog(IExpressionContext context, string expression)
+        {
+            var evaluator = new ExpressionEvaluator(context);
+            var rendered = new List<string>();
+
+            foreach (string part in expression.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                try { rendered.Add($"{part}=0x{evaluator.Evaluate(part):X}"); }
+                catch (Exception ex) { return (string.Empty, $"{part}: {ex.Message}"); }
+            }
+            return (string.Join("  ", rendered), null);
         }
 
         // Reads a (space, address, width) value the same way
@@ -545,6 +641,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         {
             _watches.RecordRead(spaceName, address, value,
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
+            _breakpoints.NoteRead(spaceName, address, value);
             _accessCounters.NoteRead(spaceName, address);
         }
 

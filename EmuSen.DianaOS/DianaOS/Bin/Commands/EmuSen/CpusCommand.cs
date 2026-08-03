@@ -35,6 +35,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     cpu.Coverage != null ? "cov" : null,
                     cpu.CallStack != null ? "bt" : null,
                     cpu.Registers != null ? "regs" : null,
+                    cpu.RegisterWriter != null ? "setreg" : null,
                     cpu.CodeSpace != null ? "disasm" : null,
                 }.Where(f => f != null);
 

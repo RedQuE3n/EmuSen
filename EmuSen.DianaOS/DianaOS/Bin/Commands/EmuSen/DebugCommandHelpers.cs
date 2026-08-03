@@ -26,6 +26,18 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             return Convert.ToInt32(s, 16);
         }
 
+        // "<start>-<end>", or a lone address that becomes a one-byte range - see `man bp`.
+        public static (int Start, int End) ParseRange(string s)
+        {
+            s = s.Trim();
+            int split = s.IndexOf('-', 1);
+            if (split < 0) { int only = ParseHex(s); return (only, only); }
+
+            int start = ParseHex(s.Substring(0, split));
+            int end = ParseHex(s.Substring(split + 1));
+            return end < start ? (end, start) : (start, end);
+        }
+
         // Every debug command (mem, regs, watch, ...) fundamentally needs
         // a real emulator session to do anything - unlike the shell-level
         // commands (echo, sed, true/false...) that work with target ==

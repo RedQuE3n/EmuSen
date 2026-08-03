@@ -358,8 +358,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "NAME\n" +
                 "    bp - manage execution breakpoints\n\n" +
                 "SYNOPSIS\n" +
-                "    bp add <addr> [if <expr>]\n" +
-                "    bp write <space> <addr> [<value>] [if <expr>]\n" +
+                "    bp add <addr>[-<end>] [if <expr>] [log <expr>]\n" +
+                "    bp write <space> <addr>[-<end>] [<value>] [changed] [if <expr>]\n" +
+                "    bp read <space> <addr>[-<end>] [<value>] [if <expr>]\n" +
+                "    bp uninit <space>\n" +
+                "    bp depth <n>|off\n" +
+                "    bp forbid <addr>-<end>\n" +
+                "    bp log [<count>] | bp log clear\n" +
                 "    bp list\n" +
                 "    bp on|off <id>\n" +
                 "    bp remove <id>\n" +
@@ -409,18 +414,114 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    coprocessor CPU to break on' when the cartridge has none. Pair it\n" +
                 "    with 'disasm SA1BUS <addr>', which decodes using the SA-1's own\n" +
                 "    M/X/E flags rather than the S-CPU's.\n\n" +
+                "    'bp read' is the mirror image, halting just after anything reads the\n" +
+                "    address. Where 'readers' scans the ROM for instructions that COULD read\n" +
+                "    something, this catches the read that actually happened, including ones\n" +
+                "    through a computed pointer that no static scan can resolve - the way to\n" +
+                "    find out who consumes a flag rather than who sets it.\n\n" +
                 "    'bp on'/'bp off' toggle one breakpoint without losing its address,\n" +
                 "    condition or hit count - the difference between silencing a breakpoint\n" +
                 "    for one experiment and having to retype it afterwards.\n\n" +
                 "    'bp list' resolves each address through the label registry, so a\n" +
                 "    breakpoint on a named address reads '$00A3B2 <NmiHandler>'. See\n" +
-                "    'man label'.\n\n" +
+                "    'man label'. A range prints as a range, since a label names one address.\n\n" +
+                "RANGES\n" +
+                "    Any address argument accepts '<start>-<end>' instead of one address, and\n" +
+                "    the breakpoint then matches anywhere inside it. This is the difference\n" +
+                "    between needing to already know the answer and being able to ask the\n" +
+                "    question: 'bp write WRAM 0100-01FF' catches whoever is clobbering a\n" +
+                "    struct when you do not yet know which byte of it moves first, and\n" +
+                "    'bp add 818000-818FFF' catches whatever in a bank runs at all.\n\n" +
+                "    The halt message names the exact address that matched as well as the\n" +
+                "    range, so a range breakpoint tells you where it landed, not just that\n" +
+                "    it landed.\n\n" +
+                "CHANGED-ONLY WRITES\n" +
+                "    'changed' on a write breakpoint suppresses the halt unless the byte\n" +
+                "    written differs from the last one seen at that address. Games rewrite\n" +
+                "    the same value constantly - a per-frame state byte re-stored every frame\n" +
+                "    will trip a plain write breakpoint sixty times a second while telling\n" +
+                "    you nothing. 'bp write WRAM 0DB3 changed' fires on the transition\n" +
+                "    instead, which is almost always the moment being looked for.\n\n" +
+                "    The first write to an address always counts as a change: there is no\n" +
+                "    previous value to compare against, and a value written exactly once\n" +
+                "    would otherwise never be reported at all. The comparison is against\n" +
+                "    what this breakpoint last SAW, not against memory, so it costs no read\n" +
+                "    and cannot disturb a side-effecting address.\n\n" +
+                "UNINITIALIZED READS\n" +
+                "    'bp uninit <space>' halts the first time the machine reads back a byte\n" +
+                "    of <space> that nothing has written since the breakpoint was armed. That\n" +
+                "    is a real defect nearly every time it happens: the game is consuming\n" +
+                "    whatever the previous contents were, so its behavior depends on power-on\n" +
+                "    garbage. It is also the single most useful check for the emulator\n" +
+                "    itself, because it catches this core failing to initialize something\n" +
+                "    that real hardware would have.\n\n" +
+                "    Each address reports once and is then treated as initialized, or a boot\n" +
+                "    loop over uninitialized memory would halt on the same byte forever.\n" +
+                "    Arming allocates one bool per byte of the space and replaces any\n" +
+                "    previous arming - one space is watched at a time. Note that a space\n" +
+                "    written before arming counts as initialized; arm it early to catch\n" +
+                "    reset-time reads. 'counters' reports the same thing as a whole-run\n" +
+                "    tally when a halt is too blunt.\n\n" +
+                "DEPTH GUARD\n" +
+                "    'bp depth <n>' halts as soon as the call stack gets deeper than <n>.\n" +
+                "    Runaway recursion and a stack that never unwinds both present as a game\n" +
+                "    that slows down and then behaves bizarrely, long after the actual defect\n" +
+                "    - by the time anything visible goes wrong the evidence is gone. This\n" +
+                "    stops the machine while the chain that caused it is still on the stack\n" +
+                "    and readable with 'bt'. Fires once and disarms, so it will not retrigger\n" +
+                "    on every instruction that stays deep. 'bp depth off' cancels it.\n\n" +
+                "FORBID RANGES\n" +
+                "    'bp forbid <start>-<end>' is a suppression rule, not a breakpoint:\n" +
+                "    while the PC is anywhere inside the range, nothing halts - no address\n" +
+                "    breakpoint, no data breakpoint, no uninitialized read. It exists for\n" +
+                "    the case where the interesting breakpoint is drowned by one noisy\n" +
+                "    caller: forbid the NMI handler's range and a watch on a shadow register\n" +
+                "    reports only the game logic that writes it, not the per-frame flush.\n\n" +
+                "    Steps are deliberately exempt. 'step' and 'step over' still work inside\n" +
+                "    a forbidden range, or stepping into one would run away with no way to\n" +
+                "    stop. Forbid ranges are listed by 'bp list' and removed by 'bp remove'\n" +
+                "    like anything else, and 'bp off <id>' suspends one without losing it.\n\n" +
+                "LOGPOINTS\n" +
+                "    A 'log <expr>' clause turns a breakpoint into a logpoint: when it matches,\n" +
+                "    <expr> is evaluated and recorded, and execution CARRIES ON. Read the\n" +
+                "    recording back with 'bp log'.\n\n" +
+                "    This is for the case a halting breakpoint cannot answer. A routine that\n" +
+                "    runs four hundred times a frame cannot be stepped through four hundred\n" +
+                "    times, and halting even once changes the timing of everything after it.\n" +
+                "    'bp add 80A31C log \"a, x, [$7E0DB3]\"' records all four hundred and leaves\n" +
+                "    the machine running at full speed, so the pattern across calls is visible\n" +
+                "    rather than one arbitrary call being inspected in isolation.\n\n" +
+                "    <expr> is a comma-separated list, and each part is rendered as 'expr=value'\n" +
+                "    so a line names what it is showing. 'uote it - commas are fine unquoted\n" +
+                "    but the shell eats the brackets and operators that make it worth logging.\n" +
+                "    Every symbol 'man eval' documents works, evaluated against the chip the\n" +
+                "    breakpoint belongs to.\n\n" +
+                "    A logpoint still honors 'if ', so the two compose: match the address,\n" +
+                "    check the condition, then record instead of halting. A logpoint that\n" +
+                "    fails to evaluate records the error text in place of the value rather\n" +
+                "    than being dropped the way a bad condition is - a logpoint cannot fire\n" +
+                "    forever on every instruction, so there is nothing to protect against.\n\n" +
+                "    The log keeps the most recent 4096 entries and is shared by every\n" +
+                "    logpoint on that processor, so entries interleave in the order they\n" +
+                "    actually happened. 'bp log' shows the last 32 by default, 'bp log 100'\n" +
+                "    more, and 'bp log clear' empties it. Data logpoints record at the moment\n" +
+                "    of the access rather than one instruction later, so a logged write shows\n" +
+                "    the value that was written.\n\n" +
                 "EXAMPLES\n" +
                 "    bp add 8000\n" +
                 "    bp add 80A31C if x == 7\n" +
+                "    bp add 80A31C log \"a, x\"\n" +
+                "    bp write WRAM 0DB3 log \"a, [$7E0100]\" if a > 4\n" +
+                "    bp log 100\n" +
+                "    bp add 818000-818FFF\n" +
                 "    bp add 808000 if \"[$7E0020] != 0 && a > 16\"\n" +
                 "    bp write VRAM 2760\n" +
-                "    bp write WRAM 13c6 if flag.c\n" +
+                "    bp write WRAM 0100-01FF\n" +
+                "    bp write WRAM 0DB3 changed\n" +
+                "    bp read WRAM 13c6\n" +
+                "    bp uninit WRAM\n" +
+                "    bp depth 40\n" +
+                "    bp forbid 0080C4-0080FF\n" +
                 "    bp off 1\n" +
                 "    bp list\n" +
                 "    bp sa1 add 0082D7\n" +
@@ -434,7 +535,115 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    A chip the core cannot halt takes no breakpoints and says so rather\n" +
                 "    than accepting one that would never fire.\n\n" +
                 "SEE ALSO\n" +
-                "    cpus, eval, step, runto, bt, watch, cov",
+                "    cpus, eval, step, runto, bt, watch, cov, counters, readers, writers",
+
+            ["setreg"] =
+                "NAME\n" +
+                "    setreg - write a CPU register\n\n" +
+                "SYNOPSIS\n" +
+                "    setreg <register> <value>\n" +
+                "    setreg <cpu> <register> <value>\n\n" +
+                "DESCRIPTION\n" +
+                "    Sets one of a processor's registers to a value. Until this existed the\n" +
+                "    debugger could read every register and change none of them, which meant\n" +
+                "    a hypothesis could only ever be tested by editing memory and waiting to\n" +
+                "    see whether the machine happened to reload the register from it.\n\n" +
+                "    What it is actually for is counterfactuals. Halt on the compare that\n" +
+                "    gates a routine, flip the register it compares, resume, and watch what\n" +
+                "    the game does down the branch it did not take. That answers 'is this\n" +
+                "    check the reason my sprite never appears' in one step, where coverage\n" +
+                "    and breakpoints can only establish that the branch was not taken.\n\n" +
+                "    It also skips a hang: forcing PC past a spin loop lets a boot sequence\n" +
+                "    continue far enough to show what the NEXT problem is, which is often\n" +
+                "    worth more than the one you are stopped on.\n\n" +
+                "    Values are hex, and are REFUSED rather than truncated if they do not fit\n" +
+                "    the register's width - a silently masked value would be a wrong answer\n" +
+                "    reported as a success. An unknown register name lists the ones that chip\n" +
+                "    actually has.\n\n" +
+                "    Kept separate from 'regs' on purpose. 'regs' is read-only, which is what\n" +
+                "    lets an always-live shell answer it instantly off the emulation thread;\n" +
+                "    folding a write into it would drag every register dump onto the\n" +
+                "    emulation thread's next frame, and writing a register from another\n" +
+                "    thread would be a race besides.\n\n" +
+                "OTHER PROCESSORS\n" +
+                "    A scope word writes another chip's registers - 'cpus' lists which ones\n" +
+                "    support it at all. Not every chip does: the GSU and the NEC DSP report\n" +
+                "    their registers through debug accessors with no write path behind them,\n" +
+                "    so they refuse rather than pretending. 'cpus' prints 'setreg' in a\n" +
+                "    chip's supported list only when it really is writable.\n\n" +
+                "    Take care with a halted coprocessor: only one chip halts at a time, so\n" +
+                "    writing a register on a chip that is still running races its own\n" +
+                "    execution.\n\n" +
+                "EXAMPLES\n" +
+                "    setreg a 0007\n" +
+                "    setreg pc 8123\n" +
+                "    setreg p 34\n" +
+                "    setreg spc a 00\n" +
+                "    setreg sa1 x 0010\n\n" +
+                "SEE ALSO\n" +
+                "    regs, cpus, bp, step, eval",
+
+            ["vectors"] =
+                "NAME\n" +
+                "    vectors - where each interrupt vector points\n\n" +
+                "SYNOPSIS\n" +
+                "    vectors\n\n" +
+                "DESCRIPTION\n" +
+                "    Reads the interrupt vector table out of the running machine and shows\n" +
+                "    what each entry points at, resolved through the label registry. 'Which\n" +
+                "    routine handles NMI' is a question that comes up in almost every\n" +
+                "    investigation, and the alternative is remembering that the SNES keeps\n" +
+                "    its native NMI vector at $00FFEA and hand-reading two bytes.\n\n" +
+                "    Vectors are grouped by CPU mode, because a 65816 has two full sets and\n" +
+                "    which one the hardware uses depends on the E flag at the moment the\n" +
+                "    interrupt is taken. 'regs' shows E. A game that sets up only the native\n" +
+                "    table and then takes an interrupt in emulation mode jumps somewhere it\n" +
+                "    never intended, and seeing both tables side by side is what makes that\n" +
+                "    visible.\n\n" +
+                "    When coverage recording is on ('man cov'), a vector whose target has\n" +
+                "    actually executed is marked '(ran)'. A vector that points at plausible\n" +
+                "    code which never ran is a much stronger signal than one that merely\n" +
+                "    looks wrong - it says the interrupt is not firing at all, rather than\n" +
+                "    firing and doing the wrong thing.\n\n" +
+                "    The pointers are read live through the CpuBus, so a game that rewrites\n" +
+                "    its own vector table (or maps different ROM in) reports what is mapped\n" +
+                "    right now, not what was there at reset.\n\n" +
+                "EXAMPLES\n" +
+                "    vectors\n" +
+                "    cov on; vectors\n\n" +
+                "SEE ALSO\n" +
+                "    runto, bt, cov, label, addr",
+
+            ["addr"] =
+                "NAME\n" +
+                "    addr - decode a CPU-bus address\n\n" +
+                "SYNOPSIS\n" +
+                "    addr <addr>\n\n" +
+                "DESCRIPTION\n" +
+                "    Says what a 24-bit CPU-bus address actually reaches: a ROM file offset,\n" +
+                "    a RAM offset, or a hardware register. The CPU's view and the ROM file's\n" +
+                "    layout are different coordinate systems, and every task that crosses\n" +
+                "    between them - comparing against a ROM in a hex editor, writing a patch,\n" +
+                "    reading a disassembly someone else produced - needs the translation.\n" +
+                "    Doing it by hand means knowing the mapper, which is exactly the detail\n" +
+                "    worth not having to remember.\n\n" +
+                "    The decode is the cartridge's own, the same one a real read goes\n" +
+                "    through, so it is right for whatever mapper this ROM uses rather than\n" +
+                "    assuming LoROM. ROM offsets are reported modulo the ROM's real size,\n" +
+                "    matching how an undersized ROM mirrors on hardware.\n\n" +
+                "    Addressable results print a ready-made 'mem' command underneath, since\n" +
+                "    looking at the bytes is almost always the next thing wanted. A hardware\n" +
+                "    register reports as a register rather than being given a fake offset -\n" +
+                "    there is nothing there to point 'mem' at.\n\n" +
+                "    An address the cartridge does not map and the bus does not claim\n" +
+                "    reports as unmapped, which is itself an answer: a pointer that decodes\n" +
+                "    to nothing is a pointer that was computed wrong.\n\n" +
+                "EXAMPLES\n" +
+                "    addr 808000\n" +
+                "    addr 7E0DB3\n" +
+                "    addr 002100\n\n" +
+                "SEE ALSO\n" +
+                "    mem, dump, spaces, vectors, cheat",
 
             ["cov"] =
                 "NAME\n" +
@@ -443,6 +652,10 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    cov on|off\n" +
                 "    cov clear\n" +
                 "    cov <addr> [<len>]\n" +
+                "    cov mark\n" +
+                "    cov new <addr> [<len>]\n" +
+                "    cov funcs [<count>]\n" +
+                "    cov save|load <file>\n" +
                 "    cov <cpu> on|off|clear|<addr> [<len>]\n\n" +
                 "DESCRIPTION\n" +
                 "    Records every 24-bit address executed between 'cov on' and 'cov off',\n" +
@@ -458,6 +671,40 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    recorded addresses are the real opcode boundaries.\n\n" +
                 "    Recording is off by default and costs one bool test while disarmed;\n" +
                 "    armed, it allocates a 2MB bitmap per processor recorded.\n\n" +
+                "DIFFERENTIAL COVERAGE\n" +
+                "    'cov mark' freezes what has run so far; 'cov new <addr>' then reports\n" +
+                "    only what has run SINCE. This is the sharpest tool here, because it\n" +
+                "    converts a question about code into a question about the machine: mark,\n" +
+                "    press the button (open the door, take the damage, trigger the glitch),\n" +
+                "    and every address 'cov new' reports is code that ran because of what\n" +
+                "    you just did. Whole-run coverage cannot separate that from the boot\n" +
+                "    sequence and the per-frame loop, which together dwarf it.\n\n" +
+                "    Marking does not stop or clear recording, so several marks in a session\n" +
+                "    just move the baseline forward. 'cov clear' drops the mark along with\n" +
+                "    everything else. A mark costs a second 2MB bitmap.\n\n" +
+                "DISCOVERED ROUTINES\n" +
+                "    'cov funcs' lists every address a call actually landed on while\n" +
+                "    recording, with how many times each was entered and whether it was\n" +
+                "    reached by a call or by an interrupt vector. These are real entry\n" +
+                "    points, observed rather than inferred - a static scan finds routines\n" +
+                "    reached by a literal JSR, and misses every one reached through a jump\n" +
+                "    table or a computed pointer, which on a SNES game is most of them.\n\n" +
+                "    Output is designed to be pasted into 'label': the addresses are exactly\n" +
+                "    the ones worth naming, and naming them makes every later 'bt', 'bp\n" +
+                "    list' and 'profile' readable. Where 'profile' ranks routines by the\n" +
+                "    time they cost, this enumerates them, including the cheap ones.\n\n" +
+                "PERSISTENCE\n" +
+                "    'cov save <file>' writes the bitmap and the discovered routines to\n" +
+                "    Logs/<CoreName>/<file>; 'cov load' MERGES a saved map back in rather\n" +
+                "    than replacing what is recorded, so maps from several sessions\n" +
+                "    accumulate into one. A map of a whole playthrough is worth far more\n" +
+                "    than a map of one sitting, and no single sitting reaches every\n" +
+                "    routine.\n\n" +
+                "    Name it with a .covmap extension - the repo gitignores that, and a map\n" +
+                "    is a recording of one person's playthrough rather than source.\n\n" +
+                "    The file is a fixed header, the routine table, then the raw bitmap.\n" +
+                "    It is keyed to nothing - loading a map taken from a different ROM will\n" +
+                "    quietly merge nonsense, so keep the filename tied to the game.\n\n" +
                 "OTHER PROCESSORS\n" +
                 "    A scope word records another chip's instruction stream instead - see\n" +
                 "    'man cpus' for the names. Each chip gets its own bitmap, because each\n" +
@@ -467,10 +714,14 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "EXAMPLES\n" +
                 "    cov on\n" +
                 "    cov 10F452 10\n" +
+                "    cov mark\n" +
+                "    cov new 108000 8000\n" +
+                "    cov funcs 20\n" +
+                "    cov save alttp.covmap\n" +
                 "    cov gsu 0A80E9 40\n" +
                 "    cov spc on\n\n" +
                 "SEE ALSO\n" +
-                "    cpus, bp, callers, disasm",
+                "    cpus, bp, callers, disasm, label, profile",
 
             ["framelog"] =
                 "NAME\n" +

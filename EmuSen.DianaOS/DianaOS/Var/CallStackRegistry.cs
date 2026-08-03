@@ -50,6 +50,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
         // Stamps each push, so `bt` can say how long a frame has been open.
         public Func<long>? FrameNumberProvider { get; set; }
 
+        // Every call target, for whoever is mapping the ROM's routines - see `man cov`.
+        public Action<int, CallFrameKind>? EntryPointObserver { get; set; }
+
         public void ArmProfiler()
         {
             IsProfiling = true;
@@ -82,6 +85,8 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
         public void NotePush(int source, int target, CallFrameKind kind)
         {
+            // Ahead of the depth cap: a runaway recursion's target is still worth recording.
+            EntryPointObserver?.Invoke(target, kind);
             if (_frames.Count >= MaxDepth) return;
             _frames.Add(new CallFrame(source, target, kind, FrameNumberProvider?.Invoke() ?? 0));
             if (IsProfiling)

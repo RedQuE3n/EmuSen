@@ -178,6 +178,7 @@ class Program
                 CpuLogStart = options.CpuLogStart,
                 CpuLogEnd = options.CpuLogEnd,
                 Verbose = options.Verbose,
+                OnHalted = debugTarget.RefreshProviders,
             };
             var scriptRunner = new CommandsScriptRunner(runner, debugTarget, debugCmd, Emit);
             if (!scriptRunner.Run(options.CommandsPath))
@@ -203,6 +204,7 @@ class Program
             CpuLogStart = options.CpuLogStart,
             CpuLogEnd = options.CpuLogEnd,
             Verbose = options.Verbose,
+            OnHalted = debugTarget.RefreshProviders,
         };
         while (classicRunner.CurrentFrame < options.FrameCount)
         {

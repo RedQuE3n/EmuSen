@@ -84,13 +84,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         private void WriteRamByte(ushort address, byte data) => WriteRam(RamAddress(address), data);
 
+        // The high byte lands at address ^ 1, not address + 1 - see Venus_SuperFX.md §5.1a.
         private ushort ReadRamWord(ushort address) =>
-            (ushort)(ReadRamByte(address) | (ReadRamByte((ushort)(address + 1)) << 8));
+            (ushort)(ReadRamByte(address) | (ReadRamByte((ushort)(address ^ 1)) << 8));
 
         private void WriteRamWord(ushort address, ushort data)
         {
             WriteRamByte(address, (byte)data);
-            WriteRamByte((ushort)(address + 1), (byte)(data >> 8));
+            WriteRamByte((ushort)(address ^ 1), (byte)(data >> 8));
         }
 
         private int StepInstruction()
@@ -115,10 +116,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
             CoverageRecorder?.Invoke((_pbr << 16) | _pipelineAddress);
 
+            // Before Pipe(), so registers are this instruction's inputs - the point Mesen records at.
+            bool tracing = EmuSen.Cores.Nintendo.Venus.Debug.GsuBinaryTrace.Enabled;
+            if (tracing)
+            {
+                EmuSen.Cores.Nintendo.Venus.Debug.GsuBinaryTrace.Record(
+                    (uint)((_pbr << 16) | _pipelineAddress), _pipeline, _sfr, _sreg, _dreg, R);
+            }
+
             byte opcode = Pipe();
             _prefixInstruction = false;
             int cycles = Execute(opcode);
             if (!_prefixInstruction) ClearPrefix();
+            if (tracing) EmuSen.Cores.Nintendo.Venus.Debug.GsuBinaryTrace.SetLastCost(cycles * MasterClocksPerCycle);
             return cycles;
         }
 
@@ -160,9 +170,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
                 case >= 0x30 and <= 0x3B: return OpStore(n);
 
                 case 0x3C: return OpLoop();
-                case 0x3D: SetFlag(FlagAlt1, true); _prefixInstruction = true; return 1;
-                case 0x3E: SetFlag(FlagAlt2, true); _prefixInstruction = true; return 1;
-                case 0x3F: SetFlag(FlagAlt1, true); SetFlag(FlagAlt2, true); _prefixInstruction = true; return 1;
+                // Each ALT supersedes a pending WITH - see Venus_SuperFX.md §4.2.
+                case 0x3D: SetFlag(FlagWith, false); SetFlag(FlagAlt1, true); _prefixInstruction = true; return 1;
+                case 0x3E: SetFlag(FlagWith, false); SetFlag(FlagAlt2, true); _prefixInstruction = true; return 1;
+                case 0x3F: SetFlag(FlagWith, false); SetFlag(FlagAlt1, true); SetFlag(FlagAlt2, true); _prefixInstruction = true; return 1;
 
                 case >= 0x40 and <= 0x4B: return OpLoad(n);
 
@@ -265,8 +276,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         {
             _lastRamAddress = R[n];
             ushort value = Alt1 ? ReadRamByte(R[n]) : ReadRamWord(R[n]);
+            // LDW/LDB have no flag effects - see Venus_SuperFX.md §4.4.
             Dst(value);
-            SetZS(value);
             return 5;
         }
 
@@ -499,8 +510,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
                 (false, true) => (ushort)((Src & 0xFF00) | _romBuffer),         // GETBL
                 (true, true) => (ushort)(sbyte)_romBuffer,                      // GETBS
             };
+            // No flag effects on any of the four - see Venus_SuperFX.md §4.4.
             Dst(result);
-            SetZS(result);
             return 1;
         }
 

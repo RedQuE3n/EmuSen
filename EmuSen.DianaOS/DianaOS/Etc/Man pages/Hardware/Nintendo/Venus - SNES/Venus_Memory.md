@@ -128,6 +128,17 @@ SRAM is mapped to the lower 32KB (`$0000-$7FFF`) of banks `$70-$7D` and `$F0-$FF
 
 `SaveSram()` is called periodically (see `VenusCore.RunFrame`'s autosave) and on shutdown, not on every SRAM write — cheap enough (a few KB, plain overwrite) that this is a convenience choice, not a performance necessity.
 
+### 2.4a The battery save is emulator state, and it silently broke a three-day measurement
+
+**On a SuperFX cart the `.srm` *is* GSU work RAM.** Game Pak RAM is one chip holding the GSU's variables, its framebuffer and the battery-backed save (`Venus_SuperFX.md` §1), and `LoadSram()` copies `_batteryRamSize` bytes straight into the low end of it. So restoring a save does not only restore the player's progress — it pre-loads whatever the GSU last left in those addresses.
+
+That interacts badly with state anchoring (`EmuSen_Debugging_Tools_Reference_v5.md` §3.15d). `tapuntil A GSURAM 1E1A F0,01` is supposed to walk Yoshi's Island's file select and its whole opening cutscene. With a `.srm` written by an earlier run of the same script, `$1E1A` **already holds `$01F0` at power-on**, so the verb reports success at frame 0, having pressed nothing, and every command after it measures a machine that is still in its boot sequence. That is exactly what happened to §10.7's "the camera velocity is zero" measurement, and it is why the finding could not be reproduced from a clean boot.
+
+Two consequences worth carrying:
+
+- **A run that persists state is not a reproducible run.** Two invocations of one `--commands` script reached the anchor at frame 789 and at frame 0 purely because the first one wrote a save. Mesen's probe never had the problem — it points `FolderUtilities::SetHomeFolder` at a fresh directory beside its dumps — which means the two emulators were anchored on different scenes for the whole comparison.
+- **`--nobattery` exists for this.** It sets `Cartridge.BatteryRamDisabled`, so the run neither reads nor writes the `.srm`. Every comparison against the Mesen probe should use it; see §3.15's own entry.
+
 ### 2.5 Region detection from the country byte
 
 The header's country byte (`+$19`, so `$FFD9` on HiROM / `$7FD9` on LoROM) says which territory the cartridge was sold in, and therefore which console it expects. `Cartridge` classifies it once at load into a `ConsoleRegion` (`ConsoleRegion.cs`), which `VenusCore.LoadRom` turns into both the frame timing and the `STAT78` region bit — see `Venus_CPU.md` §8.5c.

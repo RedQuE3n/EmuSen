@@ -197,7 +197,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             try
             {
-                if (!File.Exists(SavePath)) return;
+                if (BatteryRamDisabled || !File.Exists(SavePath)) return;
 
                 byte[] saved = File.ReadAllBytes(SavePath);
 
@@ -222,12 +222,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
         }
 
+        // Pharaoh's --nobattery, so a repeated script is reproducible - see Venus_Memory.md §2.4a.
+        public static bool BatteryRamDisabled;
+
         // Called periodically + on shutdown, not on every write - see
         // Venus_Memory.md §2.4.
         public void SaveSram()
         {
             try
             {
+                if (BatteryRamDisabled) return;
                 string? dir = Path.GetDirectoryName(SavePath);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 

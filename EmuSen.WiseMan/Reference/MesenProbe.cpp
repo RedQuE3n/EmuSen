@@ -23,7 +23,7 @@
 
 // Supplied by mesen-gsu-trace.patch; the stock Mesen has no GSU trace hook.
 extern bool g_gsuTraceOn;
-extern std::vector<uint32_t> g_gsuTrace;
+extern std::vector<uint8_t> g_gsuTrace;
 
 // Supplied by mesen-cpu-trace.patch - see EmuSen_Debugging_Tools_Reference_v5.md §3.40.
 extern bool g_cpuTraceOn;
@@ -126,12 +126,15 @@ int main(int argc, char** argv)
 		printf("usage: mesenprobe <rom> <outDir> <startFrame> <endFrame> [stride] [gsuRamAddr] [traceUntilFrame] [--press F:BTN[:DUR]]...\n");
 		printf("  Writes mesen_{vram,cgram,oam,gsuram,wram,apuram,screen}_f<frame>.bin per report.\n");
 		printf("  traceUntilFrame additionally records every GSU instruction from boot\n");
-		printf("  as mesen_gsutrace_f<frame>.bin - 18 uint32 per step: addr, opcode, R0-R15.\n");
+		printf("  as mesen_gsutrace_f<frame>.bin, in the shared 48-byte ESGT record `tracediff`\n");
+		printf("  reads. With --pressuntil it is read as frames AFTER the anchor instead.\n");
 		printf("  --press holds BTN (A/B/X/Y/L/R/Up/Down/Left/Right/Start/Select) on port 1\n");
 		printf("  from frame F for DUR frames (default 4) - repeatable, needed to reach any\n");
 		printf("  scene behind a menu.\n");
 		printf("  --cputrace F records every S-CPU instruction from boot to frame F as\n");
 		printf("  mesen_cputrace_f<frame>.bin, in the shared 24-byte record `tracediff` reads.\n");
+		printf("  --after N reports for N frames past a --pressuntil anchor with no GSU\n");
+		printf("  trace, which is how a value is watched over hundreds of frames.\n");
 		printf("  --pressuntil BTN:ADDR:VALUE[:CAP[:EVERY]] taps BTN until GSU RAM word ADDR\n");
 		printf("  equals VALUE (all hex), the counterpart of the harness's own `tapuntil` -\n");
 		printf("  the only way to reach the same scene in both emulators without frame maths.\n");
@@ -158,7 +161,12 @@ int main(int argc, char** argv)
 	uint32_t cpuTraceFrame = 0xFFFFFFFF;
 	uint16_t untilKey = 0;
 	uint32_t untilAddr = 0, untilValue = 0, untilCap = 6000, untilEvery = 40;
+	uint32_t afterFrames = 0;
 	for(int i = 5; i < argc; i++) {
+		if(string(argv[i]) == "--after" && i + 1 < argc) {
+			afterFrames = (uint32_t)atoi(argv[++i]);
+			continue;
+		}
 		if(string(argv[i]) == "--cputrace" && i + 1 < argc) {
 			cpuTraceFrame = (uint32_t)atoi(argv[++i]);
 			continue;
@@ -272,8 +280,10 @@ int main(int argc, char** argv)
 		if(!reached) { emu->Stop(false); emu->Release(); return 2; }
 		// Report from where the anchor landed; traceUntilFrame is re-read as
 		// "how many frames of GSU trace after it" rather than an absolute frame.
+		// --after is the same span without the trace, for watching a value move
+		// over hundreds of frames - see §3.41.
 		startFrame = emu->GetFrameCount();
-		endFrame = startFrame + (traceFrame == 0xFFFFFFFF ? 0 : traceFrame);
+		endFrame = startFrame + (traceFrame != 0xFFFFFFFF ? traceFrame : afterFrames);
 		if(traceFrame != 0xFFFFFFFF) { traceFrame = endFrame; }
 	}
 
@@ -346,8 +356,10 @@ int main(int argc, char** argv)
 			char path[1024];
 			snprintf(path, sizeof(path), "%s/mesen_gsutrace_f%05u.bin", dumpDir.c_str(), frame);
 			std::ofstream ft(path, std::ios::binary);
-			ft.write((char*)g_gsuTrace.data(), g_gsuTrace.size() * 4);
-			printf("  [gsutrace %zu steps -> %s]\n", g_gsuTrace.size() / 18, path);
+			// Version 1 = the 48-byte record `tracediff` reads - see §3.41.
+			ft.write("ESGT\1\0\0\0", 8);
+			ft.write((char*)g_gsuTrace.data(), g_gsuTrace.size());
+			printf("  [gsutrace %zu steps -> %s]\n", g_gsuTrace.size() / 48, path);
 			g_gsuTrace.clear();
 		}
 

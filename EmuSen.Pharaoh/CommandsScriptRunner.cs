@@ -163,6 +163,22 @@ namespace EmuSen.Pharaoh
                         ? $"[TAPUNTIL] {space.Name} 0x{addr:X} reached {to} after {taps} {button} tap(s), {stepped} frame(s) (frame {runner.CurrentFrame})."
                         : $"[TAPUNTIL] {space.Name} 0x{addr:X} NOT reached - still {to} after {taps} {button} tap(s), {stepped} frame(s) (cap {cap}, frame {runner.CurrentFrame}).");
                 }
+                else if (verb == "gsutrace" && parts.Length >= 3)
+                {
+                    // Armed here, not from power-on, so it starts where tapuntil left off - see §3.41.
+                    emit($"> {cmdLine}");
+                    long frames = long.Parse(parts[1]);
+                    GsuBinaryTrace.Start();
+                    runner.RunFrames(frames);
+                    GsuBinaryTrace.Stop();
+                    GsuBinaryTrace.WriteTo(parts[2]);
+                    emit($"[GSUTRACE] {GsuBinaryTrace.Count} steps over {frames} frame(s) to frame {runner.CurrentFrame} -> {parts[2]}");
+                    if (GsuBinaryTrace.Overflowed)
+                    {
+                        emit("[WARN] The trace buffer filled and recording stopped early - lower the frame count.");
+                    }
+                    GsuBinaryTrace.Reset();
+                }
                 else if ((verb == "waitchange" || verb == "waitvalue") && parts.Length >= 4)
                 {
                     // waitstable's memory-side counterpart - see §3.15.

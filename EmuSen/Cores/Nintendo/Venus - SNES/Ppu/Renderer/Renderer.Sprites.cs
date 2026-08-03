@@ -124,7 +124,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         if (pixel == 0) continue;
 
                         int cgIdx = (pal * 16 + pixel) * 2;
-                        _objColor[screenX] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+                        _objColor[screenX] = PaletteColor(cgIdx);
                         _objPriority[screenX] = spritePriority;
                         _objPalette[screenX] = pal - 8; // OBJ-relative 0-7, for color math's palette-4-7 rule
                         _objSet[screenX] = true;

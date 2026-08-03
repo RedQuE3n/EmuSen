@@ -305,7 +305,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         else
                         {
                             int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 0));
-                            cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+                            cache.PixelColor[px] = PaletteColor(cgIdx);
 
                             if (DebugSettings.ColorMathBlendLogging && !isMainScreen && layerId == LayerBg1 && py == DebugSettings.ColorMathBlendScanline)
                             {
@@ -441,7 +441,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         cache.WindowMasked[px] = window.Active && window.Masked(px);
 
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 1));
-                        cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+                        cache.PixelColor[px] = PaletteColor(cgIdx);
                     }
                 }
                 cache.Py = py;
@@ -555,7 +555,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         cache.WindowMasked[px] = window.Active && window.Masked(px);
 
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 2));
-                        cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+                        cache.PixelColor[px] = PaletteColor(cgIdx);
                     }
                 }
                 cache.Py = py;
@@ -669,7 +669,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         cache.WindowMasked[px] = window.Active && window.Masked(px);
 
                         int cgIdx = BgCgramIndex((entry >> 10) & 0x07, pixel, bpp, Mode0PaletteBase(mode, 3));
-                        cache.PixelColor[px] = SnesColor(ppu.Cgram[cgIdx & 0x1FF], ppu.Cgram[(cgIdx + 1) & 0x1FF], brightness);
+                        cache.PixelColor[px] = PaletteColor(cgIdx);
                     }
                 }
                 cache.Py = py;

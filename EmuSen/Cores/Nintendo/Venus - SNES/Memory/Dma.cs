@@ -29,8 +29,29 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
     {
         private DmaChannel[] _channels;
         [EmuSen.Common.SkipInState] private MemoryBus _bus;
-        
-        
+
+        // Null until `dma log on` arms one, which is the whole cost on a normal run - see `man dma`.
+        [EmuSen.Common.SkipInState] public DmaLogRegistry? DmaLog;
+
+        // The live channel table, in the shape a core-agnostic command prints - see `man dma`.
+        public IReadOnlyList<DebugDmaChannel> DebugChannels()
+        {
+            var result = new List<DebugDmaChannel>(_channels.Length);
+            for (int i = 0; i < _channels.Length; i++)
+            {
+                DmaChannel ch = _channels[i];
+                result.Add(new DebugDmaChannel(i,
+                    generalEnabled: false,
+                    hdmaEnabled: (HdmaEnable & (1 << i)) != 0,
+                    ch.Control, ch.DestinationReg,
+                    (ch.SourceBank << 16) | ch.SourceAddress,
+                    ch.TransferSize == 0 ? 0x10000 : ch.TransferSize,
+                    ch.HdmaActive, (ch.SourceBank << 16) | ch.TableAddress, ch.LineCounter,
+                    (ch.IndirectBank << 16) | ch.IndirectAddress));
+            }
+            return result;
+        }
+
         public byte HdmaEnable;
 
         // General-purpose DMA ($420B) previously transferred every byte
@@ -252,6 +273,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 DmaChannel ch = _channels[i];
                 uint destB = (uint)(0x2100 | ch.DestinationReg);
                 int remaining = ch.TransferSize == 0 ? 0x10000 : ch.TransferSize;
+                int loggedLength = remaining;
+                int loggedSource = (ch.SourceBank << 16) | ch.SourceAddress;
                 bool bToA = (ch.Control & 0x80) != 0;
                 int aStep = (ch.Control & 0x08) != 0 ? 0 : ((ch.Control & 0x10) != 0 ? -1 : 1);
                 int[] pattern = TransferPatterns[ch.Control & 0x07];
@@ -301,6 +324,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
 
                 ch.SourceAddress = addr;
                 ch.TransferSize = 0;
+
+                DmaLog?.Note(i, DmaTransferKind.General, ch.Control, ch.DestinationReg, loggedSource, loggedLength);
             }
         }
 
@@ -342,6 +367,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 {
                     bool bToA = (ch.Control & 0x80) != 0; // real hardware honors this bit for HDMA too, however rarely a game sets it
                     int[] pattern = TransferPatterns[ch.Control & 0x07];
+                    DmaLog?.Note(i, DmaTransferKind.Hdma, ch.Control, ch.DestinationReg,
+                        (ch.Control & 0x40) != 0
+                            ? (ch.IndirectBank << 16) | ch.IndirectAddress
+                            : (ch.SourceBank << 16) | ch.TableAddress,
+                        pattern.Length);
                     for (int p = 0; p < pattern.Length; p++)
                     {
                         uint aBusAddr;

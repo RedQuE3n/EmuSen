@@ -89,6 +89,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // Once per scanline, from VenusCore.RunFrame - see `man runto`.
         [EmuSen.Common.SkipInState] public Action<int>? ScanlineObserver;
 
+        // The S-CPU's registry, for the bus-level `bp when` conditions - see `man bp`.
+        [EmuSen.Common.SkipInState] public EmuSen.DianaOS.DianaOS.Var.BreakpointRegistry? Breakpoints;
+
+        // True while the PPU is drawing, so a VRAM/CGRAM/OAM write would be dropped by hardware.
+        private bool IsRendering => !Interrupts.InVBlank && (Ppu.Inidisp & 0x80) == 0;
+
+        private void NoteBusCondition(string name, uint offset, string what)
+        {
+            if (Breakpoints is not { AnyConditionArmed: true } breakpoints) return;
+            if (!breakpoints.IsConditionArmed(name)) return;
+            breakpoints.NoteCondition(name, (int)offset, $"{what} (${offset:X4}) at scanline {CurrentScanline}");
+        }
+
         // Monotonic frame counter - see IDebugTarget.FrameCount. Incremented
         // by VenusCore.RunFrame.
         public long FrameCount;
@@ -244,6 +257,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
 
                 if (offset == 0x4016) return ObserveRead(Input.ReadJoy1Serial());
                 if (offset == 0x4017) return ObserveRead(Input.ReadJoy2Serial());
+                // Hardware is mid-refresh of these four, so the value read back is not a whole one.
+                if (offset >= 0x4218 && offset <= 0x421F
+                    && Breakpoints is { AnyConditionArmed: true }
+                    && Interrupts.AutoJoypadEnabled
+                    && InterruptController.InAutoJoypadWindow(CurrentScanline, LineCycles))
+                {
+                    NoteBusCondition("autojoy", offset, "joypad register read while the auto-joypad read is still running");
+                }
                 if (offset == 0x4218) return ObserveRead(Input.ReadJoy1Low());
                 if (offset == 0x4219) return ObserveRead(Input.ReadJoy1High());
                 if (offset == 0x421A) return ObserveRead(Input.ReadJoy2Low());
@@ -383,6 +404,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 if (offset >= 0x2100 && offset <= 0x213F)
                 {
                     ObserveWrite();
+                    // Only the data ports: the address ports latch fine mid-frame - see `man bp`.
+                    if (Breakpoints is { AnyConditionArmed: true } && IsRendering
+                        && offset is 0x2104 or 0x2118 or 0x2119 or 0x2122)
+                    {
+                        NoteBusCondition("ppuaccess", offset, "write to a PPU data port while the display is rendering");
+                    }
                     Ppu.WriteRegister(offset, data);
                     return;
                 }

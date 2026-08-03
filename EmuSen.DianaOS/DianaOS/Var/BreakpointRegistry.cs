@@ -60,9 +60,19 @@ namespace EmuSen.DianaOS.DianaOS.Var
             public bool Covers(int address) => address >= Address && address <= EndAddress;
         }
 
+        // A named hardware condition rather than an address - see `man bp`.
+        private sealed class ConditionBreak
+        {
+            public string Name = "";
+            public bool LogOnly;
+            public bool Enabled = true;
+            public long HitCount;
+        }
+
         private readonly List<Breakpoint> _breakpoints = new();
         private readonly List<DataBreakpoint> _dataBreakpoints = new();
         private readonly List<ForbidRange> _forbidRanges = new();
+        private readonly Dictionary<string, ConditionBreak> _conditions = new(StringComparer.OrdinalIgnoreCase);
         private int _nextId = 1;
 
         // A write lands mid-instruction, so the halt waits for the next boundary - see `man bp`.
@@ -310,9 +320,55 @@ namespace EmuSen.DianaOS.DianaOS.Var
             _lastDataBreak = $"uninitialized read of {space} 0x{address:X}";
         }
 
+        // The one test a core makes on its hot paths before computing a detail string - see `man bp`.
+        public bool AnyConditionArmed { get; private set; }
+
+        public bool IsConditionArmed(string name)
+            => _conditions.TryGetValue(name, out var armed) && armed.Enabled;
+
+        public void ArmCondition(string name, bool logOnly)
+        {
+            _conditions[name] = new ConditionBreak { Name = name, LogOnly = logOnly };
+            AnyConditionArmed = true;
+        }
+
+        public bool DisarmCondition(string name)
+        {
+            bool removed = _conditions.Remove(name);
+            AnyConditionArmed = _conditions.Count > 0;
+            return removed;
+        }
+
+        public IReadOnlyList<(string Name, bool LogOnly, bool Enabled, long HitCount)> GetConditions()
+            => _conditions.Values.Select(c => (c.Name, c.LogOnly, c.Enabled, c.HitCount)).ToList();
+
+        // A hardware condition the core detected; halts unless it was armed log-only - see `man bp`.
+        public void NoteCondition(string name, int address, string detail)
+        {
+            if (!_conditions.TryGetValue(name, out var condition) || !condition.Enabled) return;
+            condition.HitCount++;
+
+            if (condition.LogOnly)
+            {
+                if (_log.Count >= LogCapacity) _log.Dequeue();
+                _log.Enqueue(new LogEntry(0, address, detail));
+                _logEntriesRecorded++;
+                return;
+            }
+
+            _eventBreakPending = true;
+            _lastEventBreak = detail;
+        }
+
         // From a core's interrupt entry points - see `man runto`.
         public void NoteInterrupt(CallFrameKind kind)
         {
+            if (AnyConditionArmed && (kind == CallFrameKind.Brk || kind == CallFrameKind.Cop))
+            {
+                string name = kind.ToString().ToLowerInvariant();
+                NoteCondition(name, 0, $"{name.ToUpperInvariant()} taken");
+            }
+
             if (_runToInterrupt != kind) return;
             _runToInterrupt = null;
             _eventBreakPending = true;

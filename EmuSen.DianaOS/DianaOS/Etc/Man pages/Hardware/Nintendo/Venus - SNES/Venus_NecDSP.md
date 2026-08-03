@@ -221,7 +221,53 @@ A v2 file cannot be a NEC DSP cartridge, since none could run when v2 was writte
 
 ---
 
-## 9. Where to look when something is wrong
+## 9. The debug seam
+
+The chip is a first-class debug target: `bp dsp`, `step dsp`, `bt dsp`, `cov dsp`,
+`regs dsp` and `disasm DSPPRG` all work. Earlier revisions of this project said the
+DSP could not be halted "because its firmware runs from mask ROM this core steps as
+a block". That was never quite the reason. The mask ROM makes the firmware
+*unreadable from the cartridge*, which is a different problem, and one a debugger
+does not care about — `Step()` already runs exactly one instruction at a time, and
+one instruction at a time is all a breakpoint needs.
+
+**Addresses are word indices, not bytes.** The DSP's PC counts 24-bit instruction
+words, so `bp dsp add 100` breaks on the 257th instruction and `HaltedAddress`
+reports the same number. `disasm DSPPRG` indexes the same way, so a number seen in
+one can be pasted into the other without conversion. This is deliberately *not*
+multiplied by three to look like a byte address: the DSP's own PC is the only
+number a user ever has to reason about, and inventing a second coordinate system
+for it would mean every value needed to be labelled with which one it was in.
+
+**`BreakpointChecker`** has the same pull-hook shape as `Sa1.BreakpointChecker`
+(Venus_SA1.md §11.5) and `SuperFx.BreakpointChecker`. It is consulted inside
+`Run()`'s budget loop, *before* the instruction executes, and a halt returns with
+`_clockBudget` intact so resuming re-enters the same loop rather than losing the
+unspent clocks. `ResumeFromBreakpoint()` sets a skip-one-check flag so `continue`
+leaves the breakpoint it is sitting on instead of instantly re-halting on the same
+PC. `VenusCore.HaltedCpu` carries `"dsp"` for the same reason it carries `"sa1"`:
+arming the wrong chip's flag would let this one re-break forever.
+
+**The call stack is real, not inferred.** The uPD7725 has a hardware stack with a
+CALL/RET pair — jump types `$140`/`$141` push, and the `$400000` opcode class
+executes-and-returns. `CallObserver` and `ReturnObserver` fire from exactly those
+two sites, which is why `bt dsp` reports frames the chip actually pushed rather
+than a guess reconstructed from a memory stack. That in turn feeds `cov dsp funcs`,
+so a firmware nobody has source for can still be mapped by running it: every
+routine the game actually calls shows up with an entry count.
+
+**The RQM idle loop is a blind spot, on purpose.** `Run()` returns immediately
+while `_inRqmLoop` is set (§4.3), so no breakpoint can fire during it. This is
+correct — the chip is not executing anything worth stopping on — but it does mean
+a breakpoint placed *inside* the two-instruction spin will never be hit. If that
+is what you need, clear the loop by completing the DR handshake first.
+
+**Cost.** One null test per instruction with nothing wired, which is what the SA-1
+and GSU already pay. The observers are null unless a debug target is attached.
+
+---
+
+## 10. Where to look when something is wrong
 
 1. **The game hangs at a loading screen.** Almost always missing firmware — check the console for `firmware not found`, which now names the exact path it wants. In the Avalonia frontend you should have been offered a picker instead; if you weren't, see `EmuSen_Firmware.md` §6. `Cartridge` deliberately continues without the chip rather than refusing the ROM, so the symptom is a hang rather than an error.
 2. **3D geometry is subtly wrong rather than absent.** Suspect the `S1`/`OV1` latch in §5.2 before anything else. It is the only part of the ALU whose behaviour is not obvious from the operation name, and every clamped coordinate passes through it.

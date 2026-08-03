@@ -152,7 +152,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         // True while RunFrame() is halted on the coprocessor - lets a frontend
         // label the halt and read the right PC - see Venus_SA1.md §11.5.
-        public bool IsHaltedOnCoprocessor => IsHaltedAtBreakpoint && HaltedCpu is "sa1" or "gsu";
+        public bool IsHaltedOnCoprocessor => IsHaltedAtBreakpoint && HaltedCpu is "sa1" or "gsu" or "dsp";
 
         // Per-frame phase-timing accumulators - promoted from RunFrame()
         // locals to fields for the same mid-frame-resume reason as
@@ -252,6 +252,7 @@ namespace EmuSen.Cores.Nintendo.Venus
                 {
                     case "sa1": Cart!.Sa1!.ResumeFromBreakpoint(); break;
                     case "gsu": Cart!.SuperFx!.ResumeFromBreakpoint(); break;
+                    case "dsp": Cart!.NecDsp!.ResumeFromBreakpoint(); break;
                     case "spc": Bus.Spc700.ResumeFromBreakpoint(); break;
                     default: _justResumedFromBreakpoint = true; break;
                 }
@@ -406,6 +407,13 @@ namespace EmuSen.Cores.Nintendo.Venus
                     {
                         // No IRQ line: the S-CPU polls SR instead - see Venus_NecDSP.md §3.2.
                         dsp.Run(cpuCycles);
+                        if (dsp.HaltedAtBreakpoint)
+                        {
+                            IsHaltedAtBreakpoint = true;
+                            HaltedCpu = "dsp";
+                            HaltedAddress = dsp.HaltedAddress;
+                            return; // dsp._clockBudget carries the unspent clocks - see Venus_NecDSP.md §9
+                        }
                     }
                 }
 

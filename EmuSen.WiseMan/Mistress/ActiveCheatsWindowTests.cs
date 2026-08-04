@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
@@ -24,10 +25,22 @@ namespace EmuSen.WiseMan.Mistress
 
         private static ActiveCheatsWindow Open(CheatRegistry registry)
         {
-            var window = new ActiveCheatsWindow(registry, Poke(), Patch());
+            var window = new ActiveCheatsWindow(registry, Poke(), Patch(), console: "SNES");
             window.Show();
             return window;
         }
+
+        // The Add box lives on the selected console tab now - see EmuSen_Settings_Reference.md §4.14.
+        private static T OnSelectedTab<T>(ActiveCheatsWindow w, string suffix) where T : Control
+        {
+            var item = (TabItem)w.GetControl<TabControl>("Tabs").SelectedItem!;
+            string console = (string)item.Header!;
+            return ((Control)item.Content!).GetLogicalDescendants().OfType<T>().First(c => c.Name == console + suffix);
+        }
+
+        private static TextBox CodeBox(ActiveCheatsWindow w) => OnSelectedTab<TextBox>(w, "CodeBox");
+        private static TextBox DescriptionBox(ActiveCheatsWindow w) => OnSelectedTab<TextBox>(w, "DescriptionBox");
+        private static Button AddButton(ActiveCheatsWindow w) => OnSelectedTab<Button>(w, "AddButton");
 
         private static CheatRow[] Rows(ActiveCheatsWindow w) =>
             w.GetControl<ListBox>("CheatsList").ItemsSource!.Cast<CheatRow>().ToArray();
@@ -145,15 +158,15 @@ namespace EmuSen.WiseMan.Mistress
             var registry = new CheatRegistry();
             var window = Open(registry);
 
-            window.GetControl<TextBox>("CodeBox").Text = "7E0DBF63";
-            window.GetControl<TextBox>("DescriptionBox").Text = "max coins";
-            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CodeBox(window).Text = "7E0DBF63";
+            DescriptionBox(window).Text = "max coins";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             CheatInfo added = registry.GetCheats().Single();
             Assert.Equal("max coins", added.Description);
             Assert.Equal(CheatKind.RamPoke, added.Kind);
             Assert.True(added.Enabled);
-            Assert.Empty(window.GetControl<TextBox>("CodeBox").Text!);
+            Assert.Empty(CodeBox(window).Text!);
 
             window.Close();
         }, default);
@@ -166,8 +179,8 @@ namespace EmuSen.WiseMan.Mistress
             var registry = new CheatRegistry();
             var window = Open(registry);
 
-            window.GetControl<TextBox>("CodeBox").Text = "DD82-64DD";
-            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CodeBox(window).Text = "DD82-64DD";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             Assert.Equal(CheatKind.RomPatch, registry.GetCheats().Single().Kind);
 
@@ -180,7 +193,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             var window = new ActiveCheatsWindow(registry,
                 new EmuSen.Cores.Nintendo.Moon.Cheats.NesRawCheatCodec(),
-                new EmuSen.Cores.Nintendo.Moon.Cheats.NesGameGenieCheatCodec());
+                new EmuSen.Cores.Nintendo.Moon.Cheats.NesGameGenieCheatCodec(), console: "NES");
             window.Show();
             return window;
         }
@@ -191,8 +204,8 @@ namespace EmuSen.WiseMan.Mistress
             var registry = new CheatRegistry();
             var window = OpenNes(registry);
 
-            window.GetControl<TextBox>("CodeBox").Text = "SXIOPO";
-            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CodeBox(window).Text = "SXIOPO";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             var added = registry.GetCheats().Single();
             Assert.Equal(CheatKind.RomPatch, added.Kind);
@@ -208,8 +221,8 @@ namespace EmuSen.WiseMan.Mistress
             var registry = new CheatRegistry();
             var window = OpenNes(registry);
 
-            window.GetControl<TextBox>("CodeBox").Text = "SLXPLOVS";
-            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CodeBox(window).Text = "SLXPLOVS";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             Assert.Equal((byte)0xDE, registry.GetCheats().Single().Compare);
 
@@ -222,8 +235,8 @@ namespace EmuSen.WiseMan.Mistress
             var registry = new CheatRegistry();
             var window = OpenNes(registry);
 
-            window.GetControl<TextBox>("CodeBox").Text = "0075:09";
-            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CodeBox(window).Text = "0075:09";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             var added = registry.GetCheats().Single();
             Assert.Equal(CheatKind.RamPoke, added.Kind);
@@ -238,8 +251,8 @@ namespace EmuSen.WiseMan.Mistress
             var registry = new CheatRegistry();
             var window = Open(registry);
 
-            window.GetControl<TextBox>("CodeBox").Text = "not-a-code";
-            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CodeBox(window).Text = "not-a-code";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             Assert.Empty(registry.GetCheats());
             Assert.Contains("Couldn't decode", Status(window).Text!);
@@ -253,7 +266,7 @@ namespace EmuSen.WiseMan.Mistress
             var registry = new CheatRegistry();
             var window = Open(registry);
 
-            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             Assert.Empty(registry.GetCheats());
             Assert.Contains("Type a cheat code", Status(window).Text!);
@@ -311,13 +324,70 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // The whole point of the tabs: the same typed text means different things per console.
         [Fact]
-        public Task With_no_codec_the_add_button_is_off_rather_than_failing_on_click() => Session.Dispatch(() =>
+        public Task The_tab_a_code_is_typed_under_decides_how_it_is_parsed() => Session.Dispatch(() =>
+        {
+            var registry = new CheatRegistry();
+            var window = new ActiveCheatsWindow(registry);
+            window.Show();
+            var tabs = window.GetControl<TabControl>("Tabs");
+
+            // Eight hex digits: a Pro Action Replay poke on the SNES.
+            tabs.SelectedItem = tabs.Items.OfType<TabItem>().First(t => (string)t.Header! == "SNES");
+            CodeBox(window).Text = "7E0DBF63";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            // Six letters: a Game Genie ROM patch on the NES.
+            tabs.SelectedItem = tabs.Items.OfType<TabItem>().First(t => (string)t.Header! == "NES");
+            CodeBox(window).Text = "SXIOPO";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            var kinds = registry.GetCheats().Select(c => c.Kind).ToArray();
+            Assert.Equal(new[] { CheatKind.RamPoke, CheatKind.RomPatch }, kinds);
+
+            window.Close();
+        }, default);
+
+        // A list is a list: both consoles' cheats sit in the one live registry.
+        [Fact]
+        public Task Every_tab_shows_the_same_live_list() => Session.Dispatch(() =>
+        {
+            var registry = WithTwoCheats();
+            var window = new ActiveCheatsWindow(registry);
+            window.Show();
+            var tabs = window.GetControl<TabControl>("Tabs");
+
+            foreach (TabItem item in tabs.Items.OfType<TabItem>())
+            {
+                tabs.SelectedItem = item;
+                Assert.Equal(2, Rows(window).Length);
+            }
+
+            window.Close();
+        }, default);
+
+        // Every console in the catalog gets a tab, and each names the formats it takes - see §4.14.
+        [Fact]
+        public Task Each_console_tab_offers_its_own_formats() => Session.Dispatch(() =>
         {
             var window = new ActiveCheatsWindow(new CheatRegistry());
             window.Show();
 
-            Assert.False(window.GetControl<Button>("AddButton").IsEnabled);
+            var tabs = window.GetControl<TabControl>("Tabs");
+            var headers = tabs.Items.OfType<TabItem>().Select(t => (string)t.Header!).ToArray();
+            Assert.Equal(new[] { "General", "NES", "SNES" }, headers);
+
+            foreach (TabItem item in tabs.Items.OfType<TabItem>().Skip(1))
+            {
+                tabs.SelectedItem = item;
+                string console = (string)item.Header!;
+                Assert.True(AddButton(window).IsEnabled, $"{console} should accept a typed code.");
+
+                string formats = ((Control)item.Content!).GetLogicalDescendants().OfType<TextBlock>()
+                    .Select(t => t.Text ?? "").First(t => t.StartsWith("Accepts:"));
+                Assert.Contains("Game Genie", formats);
+            }
 
             window.Close();
         }, default);

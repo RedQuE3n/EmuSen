@@ -144,6 +144,34 @@ namespace EmuSen.Galaxia.Models
         public static ConfigFile<CheatFile> For(string name) =>
             new(CategoryDirName, name + ".json");
 
+        // Any path the user picked, outside the auto-loaded set - see EmuSen_Settings_Reference.md §4.15.
+        public static bool SaveTo(string path, CheatFile file)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+                File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(file, ConfigJson.Options));
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // Null for missing, unreadable or corrupt, matching ConfigFile.Load's own contract.
+        public static CheatFile? LoadFrom(string path)
+        {
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<CheatFile>(File.ReadAllText(path), ConfigJson.Options);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public static string DirectoryPath => Path.Combine(ConfigStore.Directory, CategoryDirName);
 
         public static IReadOnlyList<string> ListNames()

@@ -343,6 +343,24 @@ Restoring happens inside `DropCheatsFromAnotherGame`, which already knew whether
 
 **Test coverage.** `CheatRegistryThreadSafetyTests.cs` reproduces the original failure — a thread applying frames while another clears and refills the list 100 times — and asserts a snapshot already being walked runs to its end. `ActiveCheatsApplyAndSaveTests.cs` covers Apply against a running core, with no game, with nothing ticked and with the master switch off, and Save's file contents, its preservation of enabled state, and its no-game message. `MainWindowCheatListTests.cs` gained the round trip that matters: save under one window, and a new window starting that ROM has the cheats back — but not for a different game, and not over a list already in hand.
 
+### 4.15a The Active Cheats window's console tabs and file buttons
+
+The window is tabbed like the rebind window (§4.6): **General first, then one tab per console oldest-first**, appended by `BuildConsoleTabs` from `CoreCatalog.ConsolesInReleaseOrder`, so a third core adds a tab with no XAML.
+
+**The cheat list is not per tab.** There is one live `CheatRegistry` — the one the running game actually reads — so the list, the master switch and Apply/Remove/Remove All sit *outside* the TabControl and stay on screen whatever tab is selected. Giving each tab its own list would have meant the window no longer showed what was applied, which is the one thing it exists to show.
+
+What *is* per console is the only genuinely console-specific operation: **parsing a typed code**. Each console tab carries its own Add box, and the tab a code is typed under decides which codec reads it — the same eight characters are a Pro Action Replay poke under SNES and nothing at all under NES. Each tab names what it accepts (`Accepts: Game Genie, Pro Action Replay.`) from the codec objects rather than a hardcoded string, so a console whose core has no decoder says so and disables its button instead of offering a dead box. That branch is currently unreachable — both shipped cores have codecs — and is kept for the core that does not.
+
+`OnAddClick` resolves the tab from `sender` rather than from the selection, so the button always parses under the tab it is drawn on even if selection changed underneath it.
+
+**Two names, one console.** Tab headers use `CoreDescriptor.Console` (`"NES"`), but `CoreFactory.CheatCodecsFor` resolves a `DisplayName` (`"NES (Moon)"`), and callers hand this window whichever they happen to hold — `MainWindow` passes `AppSettings.SelectedCore`, a display name, while `ICore.CoreName` is a console. Both the tab match and the codec lookup accept either now; see `EmuSen_Multicore.md` §12 for why that mattered more than it looks.
+
+**Save, Load, Save As, Load From.** Saving stays **per game**, not per console: `Save` writes `CheatFile.For(<game>)`, the file `LoadRom` already looks for by itself, so a Game Genie code written for SMB1 comes back when SMB1 starts and never when anything else does. `Load` is its counterpart and **replaces** the live list rather than merging into it, so what is on screen is what the file says. `Save As...` and `Load From...` use a real file picker and `CheatFile.SaveTo`/`LoadFrom`, writing the identical JSON shape to any path — those copies are never loaded automatically, which is the whole point of them.
+
+`Load From...` is not something that was asked for; a `Save As...` with no way to read the file back would have been a one-way door.
+
+Button states say what is possible rather than failing on click: `Save` needs a running game to name the file after, `Load` needs that file to exist, and `Save As` only needs something in the list.
+
 ### 4.16 Pruning the cheat database (Var/CheatDatabasePruner.cs, Cores/CoreCatalog.cs)
 
 `cheat db update` downloads the whole libretro cheat database: 44 systems, 28,301 files, 250MB. This build implements one core, so 42 of those systems are dead weight — and not merely idle weight, because `CheatDatabase.Scan()` walks the entire tree and a new instance is constructed every time the folder changes or a download finishes. Measured against a real download, pruning to the SNES family leaves 2,779 files: **a 94% reduction**.

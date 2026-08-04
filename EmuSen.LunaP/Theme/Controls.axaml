@@ -152,6 +152,7 @@
                     <luna:Dropdown Grid.Column="1"
                                    Name="PART_Facet"
                                    MinWidth="180"
+                                   Margin="0,0,8,0"
                                    IsVisible="{TemplateBinding ShowFacet}" />
                     <TextBox Grid.Column="2"
                              Name="PART_Search"

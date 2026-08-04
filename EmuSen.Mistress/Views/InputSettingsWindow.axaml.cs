@@ -129,11 +129,7 @@ namespace EmuSen.Mistress.Views
         {
             foreach (CoreDescriptor console in _consoles)
             {
-                Tabs.Items.Add(new TabItem
-                {
-                    Header = console.Console,
-                    Content = new ScrollViewer { Content = BuildConsolePanel(console) },
-                });
+                Tabs.Add(console.Console, new ScrollViewer { Content = BuildConsolePanel(console) });
             }
         }
 

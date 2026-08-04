@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         x:Class="EmuSen.Mistress.Views.CheatDatabaseWindow"
         Title="Cheat Database"
         Width="820" Height="620"
@@ -60,10 +61,10 @@
 
             <DockPanel Grid.Column="2">
                 <TextBlock DockPanel.Dock="Top" x:Name="GamesHeaderText" Text="Games" FontWeight="Bold" Margin="0,0,0,4" />
-                <TextBox DockPanel.Dock="Top"
-                         x:Name="GameFilterBox"
-                         PlaceholderText="Filter games..."
-                         Margin="0,0,0,6" />
+                <luna:FilterBar DockPanel.Dock="Top"
+                                x:Name="GameFilter"
+                                Placeholder="Filter games..."
+                                Margin="0,0,0,6" />
                 <Button DockPanel.Dock="Bottom"
                         x:Name="LoadGameButton"
                         Content="Load into Active Cheats"

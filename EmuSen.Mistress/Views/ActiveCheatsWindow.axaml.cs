@@ -10,6 +10,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.LunaP.Controls;
 
 namespace EmuSen.Mistress.Views
 {
@@ -85,7 +86,7 @@ namespace EmuSen.Mistress.Views
             // that didn't come from a click.
             MasterSwitch.PropertyChanged += (_, args) =>
             {
-                if (args.Property == CheckBox.IsCheckedProperty) OnMasterSwitchChanged();
+                if (args.Property == LunaSwitch.IsCheckedProperty) OnMasterSwitchChanged();
             };
         }
 
@@ -132,7 +133,7 @@ namespace EmuSen.Mistress.Views
                 _consoleTabs.Add(tab);
                 DescribeFormats(tab);
 
-                Tabs.Items.Add(new TabItem { Header = console.Console, Content = panel });
+                Tabs.Add(console.Console, panel);
             }
         }
 

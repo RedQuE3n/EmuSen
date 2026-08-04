@@ -19,6 +19,7 @@ using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Endymion;
 using EmuSen.Nehellania.Input;
 using EmuSen.Mistress.Input;
+using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Galaxia.Models;
@@ -819,9 +820,14 @@ namespace EmuSen.Mistress.Views
         // The one console context the library and both cheat windows share - see EmuSen_Multicore.md §10.
         private string SelectedConsole => _appSettings.SelectedCore;
 
-        private void OnLibraryConsoleFilterChanged(object? sender, SelectionChangedEventArgs e)
+        // One event for both halves of the bar: a facet change rescans, a search change only re-filters what the scan found.
+        private void OnLibraryFilterChanged()
         {
-            if (LibraryConsoleFilter.SelectedItem is not string chosen || chosen == SelectedConsole) return;
+            if (LibraryFilter.Facet is not string chosen || chosen == SelectedConsole)
+            {
+                ShowLibraryEntries();
+                return;
+            }
 
             _appSettings.SelectedCore = chosen;
             _appSettings.Save();
@@ -841,20 +847,21 @@ namespace EmuSen.Mistress.Views
         // Everything the console filter matched, before the search box narrows it.
         private RomLibraryResult _libraryScan = new(RomLibraryStatus.NoDirectoryConfigured, null, Array.Empty<RomEntry>());
 
+        // The filter bar is wired once, on the first library refresh.
+        private bool _libraryFilterReady;
+
         private void RefreshLibrary()
         {
-            if (LibraryConsoleFilter.ItemsSource is null)
+            if (!_libraryFilterReady)
             {
-                LibraryConsoleFilter.ItemsSource = EmuSen.Cores.CoreCatalog.FilterChoices;
-                LibraryConsoleFilter.SelectedItem =
+                _libraryFilterReady = true;
+                LibraryFilter.SetFacets(EmuSen.Cores.CoreCatalog.FilterChoices,
                     EmuSen.Cores.CoreCatalog.FilterChoices.Contains(SelectedConsole)
                         ? SelectedConsole
-                        : EmuSen.Cores.CoreCatalog.AllConsoles;
+                        : EmuSen.Cores.CoreCatalog.AllConsoles);
 
-                LibrarySearchBox.PropertyChanged += (_, args) =>
-                {
-                    if (args.Property == TextBox.TextProperty) ShowLibraryEntries();
-                };
+                LibraryFilter.Changed += OnLibraryFilterChanged;
+                LibraryFilter.Submitted += LaunchSelectedLibraryEntry;
             }
 
             // The disk walk happens here; typing in the search box only re-filters what it found.
@@ -864,13 +871,11 @@ namespace EmuSen.Mistress.Views
 
         private void ShowLibraryEntries()
         {
-            string search = LibrarySearchBox.Text?.Trim() ?? "";
+            string search = LibraryFilter.SearchText;
 
-            _libraryEntries = search.Length == 0
+            _libraryEntries = string.IsNullOrWhiteSpace(search)
                 ? _libraryScan.Entries
-                : _libraryScan.Entries
-                    .Where(e => e.Title.Contains(search, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                : _libraryScan.Entries.Where(e => FilterBar.Matches(search, e.Title)).ToList();
 
             // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
             bool mixed = _libraryScan.Entries.Select(e => e.CoreDisplayName).Distinct().Count() > 1;
@@ -912,6 +917,7 @@ namespace EmuSen.Mistress.Views
         private void OnLibraryItemActivated(object? sender, TappedEventArgs e) => LaunchSelectedLibraryEntry();
 
         // Shared by the list and the search box, so Enter starts a title from either.
+        // Still wired from the list itself; the search box's own Enter arrives as FilterBar.Submitted instead.
         private void OnLibraryKeyDown(object? sender, KeyEventArgs e)
         {
             if (e.Key != Key.Enter) return;

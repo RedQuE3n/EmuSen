@@ -1,4 +1,5 @@
 using System;
+using EmuSen.LunaP.Controls;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -179,7 +180,7 @@ namespace EmuSen.WiseMan.Mistress
             Click(window, "ApplyButton");
 
             Assert.True(registry.MasterEnabled);
-            Assert.True(window.GetControl<CheckBox>("MasterSwitch").IsChecked);
+            Assert.True(window.GetControl<LunaSwitch>("MasterSwitch").IsChecked);
 
             window.Close();
         }, default);

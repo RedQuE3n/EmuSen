@@ -86,12 +86,8 @@ namespace EmuSen.Mistress.Views
             PruneButton.IsEnabled = _supportedSystems is not null;
             Refresh();
 
-            // The property, not the TextChanged event - only this reacts to a
-            // Text set that didn't come from typing.
-            GameFilterBox.PropertyChanged += (_, args) =>
-            {
-                if (args.Property == TextBox.TextProperty) ShowGames();
-            };
+            // FilterBar owns the "a Text set from code counts too" detail this used to spell out - see EmuSen_LunaP.md §14.2.
+            GameFilter.Changed += ShowGames;
         }
 
         // AppSettings when set, the sandbox's own Cheats folder otherwise -
@@ -143,7 +139,7 @@ namespace EmuSen.Mistress.Views
         {
             _games = _selectedSystem is null
                 ? Array.Empty<CheatDatabaseEntry>()
-                : _db.Games(_selectedSystem, GameFilterBox.Text);
+                : _db.Games(_selectedSystem, GameFilter.SearchText);
 
             GamesList.ItemsSource = _games.Select(g => g.Game).ToList();
 

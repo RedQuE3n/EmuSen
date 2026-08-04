@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using EmuSen.WiseMan.LunaP;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -169,7 +170,8 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(selectionAccentDrawn, "No selected library row rendered - the list did not lay out.");
         }, default);
 
-        private static TextBox SearchBox(MainWindow w) => w.GetControl<TextBox>("LibrarySearchBox");
+        // The search box is a FilterBar template part now, so this comes from the visual tree - see EmuSen_LunaP.md §14.2.
+        private static TextBox SearchBox(MainWindow w) => w.FindNamed<TextBox>("PART_Search");
 
         // Real key events, not Text assignments: the bug was purely in routing - see EmuSen_Settings_Reference.md §4.17.
         private static void Press(MainWindow w, Key key, PhysicalKey physical) =>

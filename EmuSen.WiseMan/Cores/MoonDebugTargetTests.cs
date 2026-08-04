@@ -1,3 +1,4 @@
+using EmuSen.Cauldron;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.DianaOS.DianaOS.Lib;
@@ -122,6 +123,9 @@ namespace EmuSen.WiseMan.Cores
             var load = target.HardwareLoad.Current;
             Assert.Equal(50.0, Assert.Single(load, l => l.Name == "CPU+APU").Percent, 1);
             Assert.Equal(25.0, Assert.Single(load, l => l.Name == "PPU").Percent, 1);
+
+            // Wall-clock emulator timings, not guest load - see EmuSen_Cauldron.md §4.5.
+            Assert.All(load, l => Assert.Equal(DebugLoadKind.EmulatorCost, l.Kind));
         }
 
         [Fact]

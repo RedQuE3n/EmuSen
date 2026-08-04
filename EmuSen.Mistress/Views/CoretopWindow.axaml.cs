@@ -102,9 +102,19 @@ namespace EmuSen.Mistress.Views
         private void DrawLoadBars()
         {
             LoadPanel.Children.Clear();
-            foreach (DebugLoadInfo l in _target!.HardwareLoad.Current)
+            // Grouped by kind so emulator cost is never presented as guest load - see EmuSen_Cauldron.md §4.5.
+            foreach (var group in _target!.HardwareLoad.Current.GroupBy(l => l.Kind))
             {
-                LoadPanel.Children.Add(BuildMeterRow(l.Name, l.Percent, $"{l.Percent:0.0}%"));
+                LoadPanel.Children.Add(new TextBlock
+                {
+                    Text = DebugLoadKindText.Header(group.Key),
+                    Foreground = new SolidColorBrush(Color.Parse("#808080")),
+                    FontSize = 11,
+                });
+                foreach (DebugLoadInfo l in group)
+                {
+                    LoadPanel.Children.Add(BuildMeterRow(l.Name, l.Percent, $"{l.Percent:0.0}%"));
+                }
             }
         }
 

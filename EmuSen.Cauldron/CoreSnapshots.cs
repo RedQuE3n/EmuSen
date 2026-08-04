@@ -88,16 +88,40 @@ namespace EmuSen.Cauldron
         }
     }
 
+    // What a load meter is measuring; a dashboard must not present the two alike - see EmuSen_Cauldron.md §4.5.
+    public enum DebugLoadKind
+    {
+        // Wall-clock cost of emulating a subsystem, against one native frame's budget.
+        EmulatorCost = 0,
+
+        // How hard the emulated hardware itself is working, as the guest would see it.
+        GuestUtilization = 1,
+    }
+
+    // The one phrasing every dashboard uses, so the distinction cannot drift between them - see EmuSen_Cauldron.md §4.5.
+    public static class DebugLoadKindText
+    {
+        public static string Header(DebugLoadKind kind) => kind switch
+        {
+            DebugLoadKind.GuestUtilization => "Hardware utilization",
+            _ => "Emulator cost (% of one frame)",
+        };
+    }
+
     // One "how hard is this working" meter, 0-100 - see EmuSen_Cauldron.md §4.5.
     public readonly struct DebugLoadInfo
     {
         public string Name { get; }
         public double Percent { get; }
 
-        public DebugLoadInfo(string name, double percent)
+        // Deliberately has no default: mislabelling one of these as the other is the bug this exists to stop.
+        public DebugLoadKind Kind { get; }
+
+        public DebugLoadInfo(string name, double percent, DebugLoadKind kind)
         {
             Name = name;
             Percent = percent;
+            Kind = kind;
         }
     }
 }

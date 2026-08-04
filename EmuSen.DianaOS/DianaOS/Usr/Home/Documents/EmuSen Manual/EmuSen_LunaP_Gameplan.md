@@ -1,6 +1,6 @@
 # EmuSen.LunaP — Shared UI Toolkit Game Plan
 
-*This revision (2026-08-04): **Phases 0 through 6 are all done — the toolkit is built and both frontends are migrated onto it.** 863 lines net removed from the frontends, eight `.axaml` files deleted, full suite 2,180. What exists is documented in `EmuSen_LunaP.md`; what remains here is **Phase 7**, the widget library proper (dropdowns, switches, tabs, filters), which is the only unbuilt phase. Previous revision (2026-08-04): first version, written after an audit of every `.axaml`/`.axaml.cs` file in `EmuSen.Mistress` and `EmuSen.Hotaru` (~7,200 lines across 46 files); three questions were put to the project owner before drafting and are answered in §2.*
+*This revision (2026-08-04): **All seven phases are done.** The toolkit is built, both frontends are migrated onto it, it is themeable, and it has its widget set. This file is now a record of what was planned and what each phase taught rather than a plan of record; `EmuSen_LunaP.md` documents what exists. Previous revision (2026-08-04): phases 0-6 done, Phase 7 outstanding.*
 
 ---
 
@@ -243,7 +243,22 @@ One window per commit, its existing WiseMan tests staying green throughout. Sugg
 
 ---
 
-### Phase 7 — The widget library proper
+### Phase 7 — The widget library proper ✅ done
+
+*Three commits, full suite 2,205. Built as documented in `EmuSen_LunaP.md` §12-13. Three decisions were put to the project owner at the start of the phase, as this section always said they should be:*
+
+- ***Themes are swappable ResourceDictionaries*** *(`.axaml` in `/etc/EmuSen/themes`), not a bespoke declarative format. §6's long-deferred question is answered.*
+- ***Every settings toggle became a switch***, *not just new UI - the one deliberate visual change in the whole toolkit effort.*
+- ***The widgets were migrated onto their anchors***, *so none of them is speculative.*
+
+*What the phase taught:*
+
+- ***Two parts of the kit would have frozen under a theme***, *and neither was visible without rendering: `MeterRow` computed its ramp colour into a property, and window backgrounds were static assignments. Both are resource-driven now. The general rule: anything that picks a colour in C# is a thing a theme cannot reach.*
+- ***The §5.5 style-key trap bit a second time, harder.*** *`ButtonBar` rendered as nothing; `LunaSwitch` **threw**, because `ToggleSwitch.OnApplyTemplate` requires `PART_MovingKnobs`. Anything deriving from a stock Avalonia control needs its style key pinned to that control and a test that finds a real template part.*
+- ***"Filters" resolved as widget-only, no model.*** *§3's layering rule allowed a generic predicate model, but the two consumers filter differently - one a `Contains`, one a database query - so a shared model would have been speculative where the shared widget had two real anchors.*
+
+<details>
+<summary>Original plan text</summary>
 
 **Added 2026-08-04, on the project owner's direction**, after Phase 2 landed: LunaP is not only a de-duplication exercise, it is *the* common windowing widget set, and it is expected to grow toward the feature surface an EmulationStation-style shell needs.
 
@@ -254,6 +269,10 @@ Concretely, when this phase starts:
 - **Prefer wrapping over reinventing.** Avalonia already ships `ComboBox`, `ToggleSwitch`, `TabControl`. The value LunaP adds is the *theme* and a consistent API, not a reimplementation — the same relationship §4/Phase 2's controls have to `ProgressBar` and `TextBox`. A LunaP widget that reimplements a working Avalonia one needs a stated reason.
 - **"Filters" is the one that is not a widget.** A filter bar over a game library is a data concept (predicate, facets, live result count) with a widget attached, and it will want a home for the non-visual half. Decide then whether that half is in LunaP at all — §3's layering rule is the test, and a filter model that knows what a "system" or a "ROM" is fails it.
 - **Theming stops being deferrable.** §6's open question — how themes are authored — is answerable at leisure while there is one dark palette and eleven controls. A tabbed, skinnable browsing shell is where it becomes load-bearing, so it should be decided at the *start* of this phase rather than discovered in the middle of it.
+
+---
+
+</details>
 
 ---
 

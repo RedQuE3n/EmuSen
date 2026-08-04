@@ -36,7 +36,6 @@ namespace EmuSen.Hotaru.Views
             Title = "DianaOS coretop";
             Width = 480;
             Height = 720;
-            Background = LunaPalette.Surface;
             this.MinSize(360, 360);
 
             _tileSheet.MaxHeight(320);

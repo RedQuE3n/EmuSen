@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 
 namespace EmuSen.LunaP.Windowing
 {
@@ -12,6 +13,9 @@ namespace EmuSen.LunaP.Windowing
 
         // Setting this is what enables geometry persistence; a window without one is never remembered.
         public string? WindowKey { get; set; }
+
+        // Bound rather than styled: FluentTheme's own Window ControlTheme otherwise wins and paints it near-black.
+        public ToolWindow() => this[!BackgroundProperty] = new DynamicResourceExtension("LunaSurface");
 
         // Off by default: Escape inside a console pane means "stop what I am typing", not "close the window".
         public bool ClosesOnEscape

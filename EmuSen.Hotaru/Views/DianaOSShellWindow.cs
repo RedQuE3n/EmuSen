@@ -42,7 +42,6 @@ namespace EmuSen.Hotaru.Views
             Title = "DianaOS";
             Width = 900;
             Height = 560;
-            Background = LunaPalette.Surface;
             this.MinSize(420, 240);
 
             Content = _console.Margin(8);

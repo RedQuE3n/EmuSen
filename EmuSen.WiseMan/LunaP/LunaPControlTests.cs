@@ -55,9 +55,11 @@ namespace EmuSen.WiseMan.LunaP
         [InlineData(10, "#32CD32")]
         [InlineData(70, "#FFD700")]
         [InlineData(95, "#FF4500")]
+        // Asserted on the rendered bar rather than a computed property: the ramp is a pseudo-class and a style now, so a theme can reach it.
         public Task A_meter_row_colours_its_bar_from_the_ramp(double percent, string expected) =>
             Realised(() => new MeterRow { Label = "S-CPU", Percent = percent, ValueText = $"{percent}%" },
-                row => Assert.Equal(Color.Parse(expected), Assert.IsAssignableFrom<ISolidColorBrush>(row.BarBrush).Color));
+                row => Assert.Equal(Color.Parse(expected),
+                    Assert.IsAssignableFrom<ISolidColorBrush>(row.FindPart<ProgressBar>()!.Foreground).Color));
 
         [Fact]
         public Task A_meter_row_builds_its_template() =>

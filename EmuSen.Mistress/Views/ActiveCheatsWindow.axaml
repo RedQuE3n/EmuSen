@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:EmuSen.Mistress.Views"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         x:Class="EmuSen.Mistress.Views.ActiveCheatsWindow"
         Title="Active Cheats"
         Width="720" Height="600"
@@ -10,14 +11,14 @@
 
         <!-- General first, then consoles oldest-first; console tabs are appended
              by BuildConsoleTabs so a new core needs no XAML - see §4.14. -->
-        <TabControl DockPanel.Dock="Top" x:Name="Tabs" SelectionChanged="OnTabChanged" Margin="0,0,0,12">
+        <luna:Tabs DockPanel.Dock="Top" x:Name="Tabs" SelectionChanged="OnTabChanged" Margin="0,0,0,12">
 
             <TabItem Header="General">
                 <StackPanel Spacing="10" Margin="0,8,0,0">
                     <!-- One switch over the whole list, independent of each cheat's own box - see §4.14. -->
                     <Border Padding="10" CornerRadius="4" Background="{DynamicResource SystemChromeLowColor}">
                         <StackPanel Spacing="4">
-                            <CheckBox x:Name="MasterSwitch" Content="Enable cheats" />
+                            <luna:LunaSwitch x:Name="MasterSwitch" Label="Enable cheats" />
                             <TextBlock x:Name="MasterHintText" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource LunaMuted}" />
                         </StackPanel>
                     </Border>
@@ -36,7 +37,7 @@
                 </StackPanel>
             </TabItem>
 
-        </TabControl>
+        </luna:Tabs>
 
         <TextBlock DockPanel.Dock="Top" x:Name="ListHeaderText" FontWeight="Bold" Margin="0,0,0,8" />
 

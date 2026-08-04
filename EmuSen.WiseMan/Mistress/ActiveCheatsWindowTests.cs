@@ -1,4 +1,5 @@
 using System.Linq;
+using EmuSen.LunaP.Controls;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -106,7 +107,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             CheatRegistry registry = WithTwoCheats();
             var window = Open(registry);
-            var master = window.GetControl<CheckBox>("MasterSwitch");
+            var master = window.GetControl<LunaSwitch>("MasterSwitch");
 
             Assert.True(master.IsChecked);
 
@@ -128,7 +129,7 @@ namespace EmuSen.WiseMan.Mistress
             var window = Open(registry);
             Rows(window)[0].Enabled = true;
 
-            window.GetControl<CheckBox>("MasterSwitch").IsChecked = false;
+            window.GetControl<LunaSwitch>("MasterSwitch").IsChecked = false;
 
             Assert.True(Rows(window)[0].Enabled);
             Assert.False(Rows(window)[1].Enabled);
@@ -146,7 +147,7 @@ namespace EmuSen.WiseMan.Mistress
 
             var window = Open(registry);
 
-            Assert.False(window.GetControl<CheckBox>("MasterSwitch").IsChecked);
+            Assert.False(window.GetControl<LunaSwitch>("MasterSwitch").IsChecked);
             Assert.True(registry.MasterEnabled == false, "opening the window must not flip the switch back on");
 
             window.Close();

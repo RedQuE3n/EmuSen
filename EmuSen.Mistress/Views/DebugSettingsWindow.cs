@@ -61,8 +61,8 @@ namespace EmuSen.Mistress.Views
             }),
         };
 
-        private readonly List<CheckBox> _flagCheckBoxes = new();
-        private readonly CheckBox _master = new() { Name = "MasterLoggingCheckBox", Content = "Enable Logging (master switch)", FontWeight = FontWeight.Bold };
+        private readonly List<LunaSwitch> _flagSwitches = new();
+        private readonly LunaSwitch _master = new() { Name = "MasterLoggingCheckBox", Label = "Enable Logging (master switch)", FontWeight = FontWeight.Bold };
         private readonly StackPanel _flags = Ui.Stack(4).Name("FlagsPanel");
 
         public DebugSettingsWindow()
@@ -98,11 +98,11 @@ namespace EmuSen.Mistress.Views
 
                 foreach (Flag flag in flags)
                 {
-                    var checkBox = new CheckBox { Content = flag.Label, IsChecked = flag.Get() };
-                    checkBox.IsCheckedChanged += (_, _) => flag.Set(checkBox.IsChecked == true);
-                    _flagCheckBoxes.Add(checkBox);
+                    var toggle = new LunaSwitch { Label = flag.Label, IsChecked = flag.Get() };
+                    toggle.IsCheckedChanged += (_, _) => flag.Set(toggle.IsChecked == true);
+                    _flagSwitches.Add(toggle);
 
-                    _flags.Children.Add(checkBox);
+                    _flags.Children.Add(toggle);
                     _flags.Children.Add(Ui.Hint(flag.Description).Margin(24, -2, 0, 4));
                 }
             }
@@ -113,7 +113,7 @@ namespace EmuSen.Mistress.Views
         private void UpdateFlagEnabledState()
         {
             bool enabled = _master.IsChecked == true;
-            foreach (CheckBox checkBox in _flagCheckBoxes) checkBox.IsEnabled = enabled;
+            foreach (LunaSwitch toggle in _flagSwitches) toggle.IsEnabled = enabled;
         }
     }
 }

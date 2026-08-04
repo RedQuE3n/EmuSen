@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         x:Class="EmuSen.Mistress.Views.InputSettingsWindow"
         Title="Controller Settings"
         Width="820" Height="720"
@@ -28,7 +29,7 @@
             </Grid>
         </Border>
 
-        <TabControl x:Name="Tabs">
+        <luna:Tabs x:Name="Tabs">
 
             <TabItem Header="General">
                 <ScrollViewer>
@@ -47,8 +48,8 @@
 
                         <TextBlock Text="Gamepad" FontWeight="Bold" Margin="0,0,0,6" />
                         <TextBlock x:Name="ControllerStatusText" Margin="0,0,0,8" />
-                        <CheckBox x:Name="AnalogStickAsDpadCheckBox"
-                                  Content="Use the left stick as a d-pad"
+                        <luna:LunaSwitch x:Name="AnalogStickAsDpadCheckBox"
+                                  Label="Use the left stick as a d-pad"
                                   IsCheckedChanged="OnAnalogStickAsDpadChanged" />
                         <TextBlock Text="Neither of these consoles reads an analog axis, so the stick is only useful mapped onto the d-pad directions."
                                    TextWrapping="Wrap" Foreground="{DynamicResource LunaMuted}" FontSize="11" Margin="24,2,0,8" />
@@ -67,8 +68,8 @@
                         <Separator Margin="0,14,0,10" />
 
                         <TextBlock Text="Player 2" FontWeight="Bold" Margin="0,0,0,6" />
-                        <CheckBox x:Name="MirrorPlayer1ToPlayer2CheckBox"
-                                  Content="Mirror Player 1 input to Player 2"
+                        <luna:LunaSwitch x:Name="MirrorPlayer1ToPlayer2CheckBox"
+                                  Label="Mirror Player 1 input to Player 2"
                                   IsCheckedChanged="OnMirrorPlayer1ToPlayer2Changed" />
                         <TextBlock Text="Compatibility option for games that read Controller 2 instead of Controller 1 (e.g. Super Mario All-Stars' classic Mario games). Leave off for real two-player sessions."
                                    TextWrapping="Wrap"
@@ -82,7 +83,7 @@
 
             <!-- Console tabs are appended here by BuildConsoleTabs, so a new core needs no XAML. -->
 
-        </TabControl>
+        </luna:Tabs>
 
     </DockPanel>
 

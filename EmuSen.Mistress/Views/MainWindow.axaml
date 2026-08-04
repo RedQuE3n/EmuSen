@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         xmlns:serenity="clr-namespace:EmuSen.Serenity;assembly=EmuSen.Serenity"
         x:Class="EmuSen.Mistress.Views.MainWindow"
         Title="EmuSen Testing Studio"
@@ -81,19 +82,13 @@
              GameWindow uses. -->
         <Grid Background="{DynamicResource LunaVoid}">
             <DockPanel x:Name="LibraryView" Margin="12">
-                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*" Margin="2,0,2,8">
-                    <TextBlock Grid.Column="0" Text="Console:" Foreground="{DynamicResource LunaMuted}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <ComboBox Grid.Column="1"
-                              x:Name="LibraryConsoleFilter"
-                              MinWidth="180"
-                              SelectionChanged="OnLibraryConsoleFilterChanged" />
-                    <!-- A full NES set is thousands of titles - see EmuSen_Multicore.md §10. -->
-                    <TextBox Grid.Column="2"
-                             x:Name="LibrarySearchBox"
-                             PlaceholderText="Search titles"
-                             KeyDown="OnLibraryKeyDown"
-                             Margin="8,0,0,0" />
-                </Grid>
+                <!-- A full NES set is thousands of titles - see EmuSen_Multicore.md §10. -->
+                <luna:FilterBar DockPanel.Dock="Top"
+                                x:Name="LibraryFilter"
+                                ShowFacet="True"
+                                FacetLabel="Console:"
+                                Placeholder="Search titles"
+                                Margin="2,0,2,8" />
                 <TextBlock DockPanel.Dock="Top"
                            x:Name="LibraryHeaderText"
                            Foreground="{DynamicResource LunaMuted}"

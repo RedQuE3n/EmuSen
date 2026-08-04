@@ -1,32 +1,16 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.LunaP.Theme;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Media;
 using EmuSen.Debug;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Fluent;
+using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    // Live GUI for DebugSettings' *Logging flags - previously only
-    // reachable by editing DebugSettings.cs and rebuilding, or via the F4
-    // debug prompt's `log`/`trace` commands once a ROM is already running.
-    // Reads/writes DebugSettings directly rather than through a separate
-    // view-model (matches InputSettingsWindow/PreferencesWindow's own
-    // code-behind style) since these are process-wide static toggles, not
-    // something persisted to AppSettings or scoped to a session.
-    //
-    // Descriptions are trimmed summaries of what's in
-    // EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Settings_Reference.md §1 - see that doc for the full
-    // investigation history behind each flag.
-    public partial class DebugSettingsWindow : Window
+    // Live GUI for DebugSettings' *Logging flags - see EmuSen_Settings_Reference.md §1 for the investigation history behind each one.
+    public class DebugSettingsWindow : ToolWindow
     {
         private readonly record struct Flag(string Label, string Description, Func<bool> Get, Action<bool> Set);
 
@@ -78,21 +62,39 @@ namespace EmuSen.Mistress.Views
         };
 
         private readonly List<CheckBox> _flagCheckBoxes = new();
+        private readonly CheckBox _master = new() { Name = "MasterLoggingCheckBox", Content = "Enable Logging (master switch)", FontWeight = FontWeight.Bold };
+        private readonly StackPanel _flags = Ui.Stack(4).Name("FlagsPanel");
 
         public DebugSettingsWindow()
         {
-            InitializeComponent();
+            Title = "Debug Logging";
+            Width = 480;
+            Height = 560;
+            this.MinSize(420, 360);
 
-            MasterLoggingCheckBox.IsChecked = DebugSettings.MasterLoggingEnabled;
+            _master.IsChecked = DebugSettings.MasterLoggingEnabled;
+            _master.IsCheckedChanged += (_, _) =>
+            {
+                DebugSettings.MasterLoggingEnabled = _master.IsChecked == true;
+                UpdateFlagEnabledState();
+            };
 
+            Content = Ui.Dock(
+                _master.Dock(Dock.Top).Margin(0, 0, 0, 4),
+                Ui.Hint("Turns every flag below on/off at once without changing any of them individually - flip it back on to restore whatever was checked before. Individual flags are disabled while this is off.")
+                    .Dock(Dock.Top).Margin(0, 0, 0, 12),
+                Ui.Buttons(Ui.Button("Close", Close)).Dock(Dock.Bottom).Margin(0, 12, 0, 0),
+                Ui.Scroll(_flags)).Margin(16);
+
+            BuildFlagRows();
+            UpdateFlagEnabledState();
+        }
+
+        private void BuildFlagRows()
+        {
             foreach ((string section, Flag[] flags) in _groups)
             {
-                FlagsPanel.Children.Add(new TextBlock
-                {
-                    Text = section,
-                    FontWeight = FontWeight.Bold,
-                    Margin = new Thickness(0, 8, 0, 2),
-                });
+                _flags.Children.Add(new TextBlock { Text = section, FontWeight = FontWeight.Bold }.Margin(0, 8, 0, 2));
 
                 foreach (Flag flag in flags)
                 {
@@ -100,43 +102,18 @@ namespace EmuSen.Mistress.Views
                     checkBox.IsCheckedChanged += (_, _) => flag.Set(checkBox.IsChecked == true);
                     _flagCheckBoxes.Add(checkBox);
 
-                    FlagsPanel.Children.Add(checkBox);
-                    FlagsPanel.Children.Add(new TextBlock
-                    {
-                        Text = flag.Description,
-                        TextWrapping = TextWrapping.Wrap,
-                        Foreground = LunaPalette.Muted,
-                        FontSize = 11,
-                        Margin = new Thickness(24, -2, 0, 4),
-                    });
+                    _flags.Children.Add(checkBox);
+                    _flags.Children.Add(Ui.Hint(flag.Description).Margin(24, -2, 0, 4));
                 }
             }
-
-            UpdateFlagEnabledState();
         }
 
-        private void OnMasterLoggingChanged(object? sender, RoutedEventArgs e)
-        {
-            DebugSettings.MasterLoggingEnabled = MasterLoggingCheckBox.IsChecked == true;
-            UpdateFlagEnabledState();
-        }
-
-        // Individual flags are moot while the master switch is off - every
-        // *Logging property in DebugSettings ANDs against it (see that
-        // class's own comment) - and DebugSettings doesn't expose each
-        // flag's raw pre-AND value, so a checkbox toggled while the master
-        // is off would read back as unchecked the next time this window
-        // opens even though it "took". Disabling them instead is clearer
-        // than a checkbox that silently doesn't seem to stick.
+        // Every *Logging property ANDs against the master switch and DebugSettings exposes no raw pre-AND value,
+        // so a flag toggled while the master is off would read back unchecked next time - see EmuSen_Settings_Reference.md §1.
         private void UpdateFlagEnabledState()
         {
-            bool enabled = MasterLoggingCheckBox.IsChecked == true;
+            bool enabled = _master.IsChecked == true;
             foreach (CheckBox checkBox in _flagCheckBoxes) checkBox.IsEnabled = enabled;
-        }
-
-        private void OnCloseClick(object? sender, RoutedEventArgs e)
-        {
-            Close();
         }
     }
 }

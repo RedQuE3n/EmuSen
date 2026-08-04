@@ -19,6 +19,7 @@ using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Endymion;
 using EmuSen.Nehellania.Input;
 using EmuSen.Mistress.Input;
+using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.DianaOS;
@@ -118,23 +119,23 @@ namespace EmuSen.Mistress.Views
         // is clicked again while one's still open. Cleared on Closed so a
         // later LoadRom() doesn't try to push a target update into a
         // disposed window.
-        private DianaOSConsoleWindow? _consoleWindow;
+        private readonly WindowSlot<DianaOSConsoleWindow> _consoleWindow = new();
 
         // Same at-most-one/reuse/clear-on-Closed pattern as _consoleWindow
         // above - opened from inside the console window itself (typing
         // `coretop`, via CoretopWindowCommand), not from a menu item.
-        private CoretopWindow? _coretopWindow;
+        private readonly WindowSlot<CoretopWindow> _coretopWindow = new();
 
         // Same at-most-one/reuse/clear-on-Closed pattern, but with no
         // target to update - see `man vstop`.
-        private VstopWindow? _vstopWindow;
+        private readonly WindowSlot<VstopWindow> _vstopWindow = new();
 
         // Same at-most-one/reuse/clear-on-Closed pattern, refreshed rather
         // than re-targeted - see EmuSen_Settings_Reference.md §4.14.
-        private ActiveCheatsWindow? _activeCheatsWindow;
+        private readonly WindowSlot<ActiveCheatsWindow> _activeCheatsWindow = new();
 
         // Same at-most-one/reuse/clear-on-Closed pattern, retained so a console switch can retarget it.
-        private CheatDatabaseWindow? _cheatDatabaseWindow;
+        private readonly WindowSlot<CheatDatabaseWindow> _cheatDatabaseWindow = new();
 
         // Owned here, not by _debugTarget, so a cheat list outlives the core
         // a Reset rebuilds - see §4.14.
@@ -387,20 +388,12 @@ namespace EmuSen.Mistress.Views
         // neither of which is a session. See §4.14.
         private void OnCheatDatabaseClick(object? sender, RoutedEventArgs e)
         {
-            if (_cheatDatabaseWindow is not null)
-            {
-                _cheatDatabaseWindow.Activate();
-                return;
-            }
-
-            _cheatDatabaseWindow = new CheatDatabaseWindow(_appSettings, () => _cheats,
+            _cheatDatabaseWindow.Show(this, () => new CheatDatabaseWindow(_appSettings, () => _cheats,
                 ConsoleCodecs(SelectedConsole).AutoDetect,
-                () => _activeCheatsWindow?.Refresh(),
+                () => _activeCheatsWindow.Current?.Refresh(),
                 ShowActiveCheats,
                 () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems,
-                SelectedConsole);
-            _cheatDatabaseWindow.Closed += (_, _) => _cheatDatabaseWindow = null;
-            _cheatDatabaseWindow.Show(this);
+                SelectedConsole));
         }
 
         private void OnActiveCheatsClick(object? sender, RoutedEventArgs e) => ShowActiveCheats();
@@ -410,22 +403,14 @@ namespace EmuSen.Mistress.Views
         // the same door. See §4.14.
         private void ShowActiveCheats()
         {
-            if (_activeCheatsWindow is not null)
-            {
-                _activeCheatsWindow.Refresh();
-                _activeCheatsWindow.Activate();
-                return;
-            }
-
             var codecs = ConsoleCodecs(SelectedConsole);
-            _activeCheatsWindow = new ActiveCheatsWindow(_cheats,
+            _activeCheatsWindow.Show(this, () => new ActiveCheatsWindow(_cheats,
                 codecs.AutoDetect,
                 codecs.Explicit,
                 RequestCheatApply,
                 () => CheatListName(_cheatsRomPath),
-                SelectedConsole);
-            _activeCheatsWindow.Closed += (_, _) => _activeCheatsWindow = null;
-            _activeCheatsWindow.Show(this);
+                SelectedConsole),
+                refresh: w => w.Refresh());
         }
 
         // Hands the poke to the emulation thread rather than doing it here -
@@ -466,22 +451,14 @@ namespace EmuSen.Mistress.Views
             if (saved is null) return 0;
 
             (int loaded, _) = _cheats.LoadFrom(saved);
-            _activeCheatsWindow?.Refresh();
+            _activeCheatsWindow.Current?.Refresh();
             return loaded;
         }
 
         private void OnShellConsoleClick(object? sender, RoutedEventArgs e)
         {
-            if (_consoleWindow is not null)
-            {
-                _consoleWindow.Activate();
-                return;
-            }
-
-            _consoleWindow = new DianaOSConsoleWindow(_debugTarget, MakeEmulationControlCommands(),
-                _session?.CheatAutoDetectCodec, _session?.CheatExplicitCodec, _session?.CpuTraceSwitch);
-            _consoleWindow.Closed += (_, _) => _consoleWindow = null;
-            _consoleWindow.Show(this);
+            _consoleWindow.Show(this, () => new DianaOSConsoleWindow(_debugTarget, MakeEmulationControlCommands(),
+                _session?.CheatAutoDetectCodec, _session?.CheatExplicitCodec, _session?.CpuTraceSwitch));
         }
 
         // Built fresh per DianaOSConsoleWindow construction (not cached) -
@@ -524,37 +501,12 @@ namespace EmuSen.Mistress.Views
             _rewind.Clear(); // a discontinuous jump - see §1.4
         }
 
-        // Opens (or brings forward/updates) CoretopWindow - same at-most-
-        // one/reuse pattern as OnShellConsoleClick uses for
-        // _consoleWindow, just triggered from inside the console window
-        // itself (typing `coretop`) rather than a menu item.
-        private void OpenCoretopWindow(IDebugTarget? target)
-        {
-            if (_coretopWindow is not null)
-            {
-                _coretopWindow.UpdateTarget(target);
-                _coretopWindow.Activate();
-                return;
-            }
-
-            _coretopWindow = new CoretopWindow(target);
-            _coretopWindow.Closed += (_, _) => _coretopWindow = null;
-            _coretopWindow.Show(this);
-        }
+        // Triggered from inside the console window itself (typing `coretop`) rather than a menu item.
+        private void OpenCoretopWindow(IDebugTarget? target) =>
+            _coretopWindow.Show(this, () => new CoretopWindow(target), refresh: w => w.UpdateTarget(target));
 
         // No target to hand over or refresh, unlike OpenCoretopWindow above.
-        private void OpenVstopWindow()
-        {
-            if (_vstopWindow is not null)
-            {
-                _vstopWindow.Activate();
-                return;
-            }
-
-            _vstopWindow = new VstopWindow();
-            _vstopWindow.Closed += (_, _) => _vstopWindow = null;
-            _vstopWindow.Show(this);
-        }
+        private void OpenVstopWindow() => _vstopWindow.Show(this, () => new VstopWindow());
 
         // Defaults to the same Usr/Home/Saves/Save States/ tree the console
         // build and DianaOS shell's `state save`/`state load` write to -
@@ -734,7 +686,7 @@ namespace EmuSen.Mistress.Views
             if (_cheatsRomPath is not null && !sameGame)
             {
                 _cheats.Clear();
-                _activeCheatsWindow?.Refresh();
+                _activeCheatsWindow.Current?.Refresh();
             }
 
             _cheatsRomPath = path;
@@ -789,9 +741,9 @@ namespace EmuSen.Mistress.Views
 
                 // Built by CoreFactory alongside the core, so this window names no concrete target.
                 _debugTarget = _session.DebugTarget;
-                _consoleWindow?.UpdateTarget(_debugTarget, displayName,
+                _consoleWindow.Current?.UpdateTarget(_debugTarget, displayName,
                     _session.CheatAutoDetectCodec, _session.CheatExplicitCodec, _session.CpuTraceSwitch);
-                _coretopWindow?.UpdateTarget(_debugTarget);
+                _coretopWindow.Current?.UpdateTarget(_debugTarget);
 
                 GameFrame.IsVisible = true;
                 LibraryView.IsVisible = false;
@@ -853,8 +805,8 @@ namespace EmuSen.Mistress.Views
 
             // Or an open console/dashboard keeps inspecting the core we just dropped.
             _debugTarget = null;
-            _consoleWindow?.UpdateTarget(null, null);
-            _coretopWindow?.UpdateTarget(null);
+            _consoleWindow.Current?.UpdateTarget(null, null);
+            _coretopWindow.Current?.UpdateTarget(null);
 
             GameFrame.IsVisible = false;
             LibraryView.IsVisible = true;
@@ -876,8 +828,8 @@ namespace EmuSen.Mistress.Views
             RefreshLibrary();
 
             // An open cheat window is showing the old console's systems.
-            _cheatDatabaseWindow?.SetConsole(chosen);
-            _activeCheatsWindow?.SetConsole(chosen, ConsoleCodecs(chosen));
+            _cheatDatabaseWindow.Current?.SetConsole(chosen);
+            _activeCheatsWindow.Current?.SetConsole(chosen, ConsoleCodecs(chosen));
         }
 
         // A running game wins over the filter - its codecs are the ones that can actually be applied.
@@ -1148,7 +1100,7 @@ namespace EmuSen.Mistress.Views
                     // opened on demand and may not exist at all. Must run
                     // on this (the emulation) thread, same reasoning as
                     // RefreshProviders() just above.
-                    _consoleWindow?.DrainPendingFromEmulationThread();
+                    _consoleWindow.Current?.DrainPendingFromEmulationThread();
 
                     // Same rule, same thread: the Apply Cheats button only
                     // sets the flag - see _applyCheatsPending.

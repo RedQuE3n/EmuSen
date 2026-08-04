@@ -1,3 +1,4 @@
+using EmuSen.Cauldron;
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -40,11 +41,11 @@ namespace EmuSen.Mistress.Views
     public partial class CoretopWindow : Window
     {
         private readonly DispatcherTimer _timer;
-        private IDebugTarget? _target;
+        private ICoreTelemetry? _target;
 
         public CoretopWindow() : this(null) { }
 
-        public CoretopWindow(IDebugTarget? target)
+        public CoretopWindow(ICoreTelemetry? target)
         {
             InitializeComponent();
             _target = target;
@@ -65,7 +66,7 @@ namespace EmuSen.Mistress.Views
         // core that's been swapped out from under an already-open
         // dashboard would otherwise keep showing a stale/abandoned
         // core's last-known state forever.
-        public void UpdateTarget(IDebugTarget? target)
+        public void UpdateTarget(ICoreTelemetry? target)
         {
             _target = target;
             Refresh();
@@ -183,12 +184,8 @@ namespace EmuSen.Mistress.Views
 
         private void DrawTileSheet()
         {
-            if (_target!.TilemapEntryStride <= 0)
-            {
-                TileSheetImage.Source = null;
-                return;
-            }
-            (byte[] rgba, int width, int height) = _target.RenderTileSheet();
+            // A core with no tile memory returns 0x0, which ToBitmap already nulls - see EmuSen_Cauldron.md §3.
+            (byte[] rgba, int width, int height) = _target!.RenderTileSheet();
             TileSheetImage.Source = ToBitmap(rgba, width, height);
         }
 

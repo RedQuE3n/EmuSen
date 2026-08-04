@@ -4,25 +4,13 @@ using System.Threading;
 
 namespace EmuSen.Cauldron
 {
-    // An IRealtimeProvider<T> that also remembers the last <capacity>
-    // snapshots, rather than only the most recent one. PollingProvider
-    // answers "what is the machine doing now", which is what a live
-    // dashboard wants; this answers "what was it doing fifty frames ago",
-    // which is what an investigation into a transition wants - when did
-    // the display go blank, when did the coprocessor stop, what changed
-    // either side of it.
-    //
-    // Deliberately a separate type rather than a flag on PollingProvider:
-    // keeping history costs a retained reference per Refresh, so a consumer
-    // that only ever reads Current should not pay for a ring it never
-    // looks at. Use this only where the history is actually wanted.
+    // Also remembers the last <capacity> snapshots - "what was it doing fifty frames ago" - see EmuSen_Cauldron.md §2.2.
     public sealed class HistoryProvider<T> : IRealtimeProvider<T> where T : class
     {
         private readonly Func<T> _readLive;
         private readonly IEqualityComparer<T>? _comparer;
 
-        // Ring of the last <capacity> snapshots. Guarded by _gate, unlike
-        // Current - see the threading note on History below.
+        // Guarded by _gate, unlike Current - see §2.2.
         private readonly T[] _ring;
         private readonly object _gate = new object();
         private int _next;      // next slot to write
@@ -32,10 +20,7 @@ namespace EmuSen.Cauldron
         private long _refreshCount;
         private long _lastChangedRefresh;
 
-        // <capacity> is a hard bound: the ring overwrites its oldest entry
-        // rather than growing, so a run of any length costs the same fixed
-        // memory. <comparer> is optional and only drives the staleness
-        // signal - pass null and RefreshesSinceChange stays 0 forever.
+        // <capacity> is a hard bound; <comparer> is optional and only drives staleness - see §2.2.
         public HistoryProvider(Func<T> readLive, T initial, int capacity, IEqualityComparer<T>? comparer = null)
         {
             if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
@@ -52,25 +37,17 @@ namespace EmuSen.Cauldron
 
         public int Capacity => _ring.Length;
 
-        // Same lock-free contract as PollingProvider - never blocks, safe
-        // from any thread, including during a concurrent Refresh().
+        // Same lock-free contract as PollingProvider - see §2.
         public T Current => Volatile.Read(ref _current);
 
-        // How many times Refresh() has run. The clock the staleness signal
-        // below is measured in; a caller wanting real frame numbers should
-        // pair it with its own frame counter.
+        // The clock RefreshesSinceChange is measured in - see §2.2.
         public long RefreshCount => Volatile.Read(ref _refreshCount);
 
-        // Refreshes since Current last compared unequal to the snapshot
-        // before it - "how long has this been sitting still". Answers
-        // "when did the coprocessor stop updating" directly, without
-        // needing to store or diff any history at all. Always 0 when no
-        // comparer was supplied, since nothing can be judged unchanged.
+        // "How long has this been sitting still"; always 0 without a comparer - see §2.2.
         public long RefreshesSinceChange =>
             _comparer == null ? 0 : Volatile.Read(ref _refreshCount) - Volatile.Read(ref _lastChangedRefresh);
 
-        // Must only be called from the thread that owns the core, same
-        // contract as PollingProvider.Refresh.
+        // Emulation thread only, same contract as PollingProvider.Refresh - see §2.
         public void Refresh()
         {
             T value = _readLive();
@@ -92,20 +69,13 @@ namespace EmuSen.Cauldron
             }
         }
 
-        // The retained snapshots, oldest first, newest last. Copies out
-        // under the lock rather than handing back the live ring, so a
-        // caller iterating it can't have entries overwritten underneath
-        // it by a Refresh() on the emulation thread. That makes this the
-        // one member here that can block - briefly, on an uncontended
-        // lock - which is why it is a method rather than a property that
-        // looks as cheap as Current.
+        // Oldest first; copies out under the lock, so this is the one member here that can block - see §2.2.
         public IReadOnlyList<T> GetHistory()
         {
             lock (_gate)
             {
                 var result = new T[_count];
-                // _next is one past the newest, so the oldest entry is the
-                // slot it is about to overwrite once the ring has wrapped.
+                // _next is one past the newest, so it is also the oldest once wrapped.
                 int start = _count < _ring.Length ? 0 : _next;
                 for (int i = 0; i < _count; i++) result[i] = _ring[(start + i) % _ring.Length];
                 return result;

@@ -93,7 +93,7 @@ Neither. `EmuSen/Cores/CoreCapabilities.cs` holds small optional interfaces a co
 
 | Interface | What it says | Who implements |
 | --- | --- | --- |
-| `IFrameProfiler` | `LastFramePhases` — ordered `(Name, Milliseconds)` | Venus |
+| `IFrameProfiler` | `LastFramePhases` — ordered `(Name, Milliseconds)` | Venus, Moon |
 | `ICoprocessorHalt` | `IsHaltedOnCoprocessor`, `HaltedProcessorName` | Venus |
 | `ICoprocessorLoad` | `CoprocessorClocks` — executed/offered against a per-frame budget | Venus |
 | `ITraceFlushable` | `FlushVerboseTrace()` | Venus |
@@ -131,7 +131,7 @@ This is the pattern for any future switch that is a *property of the run* rather
 
 - **No core swaps consoles mid-session.** `core <name> <path>` reloads through the factory, so loading a `.nes` after a `.smc` does construct a `MoonCore` — but the frontends rebuild a great deal around that and only Mistress' path is well covered by tests.
 - **`AppSettings.SelectedCore` still drives nothing.** It persists a display name and no code reads it to choose a core; the ROM's extension decides. The combo is now populated from the catalog rather than a literal, which is the only part of it that improved.
-- **Moon has no `ICpuTraceSwitch` and no `IFrameProfiler`.** Both are real gaps rather than deliberate omissions. It does now have cheat codecs — see `EmuSen_Cheats.md` and `Moon_Cheats.md`.
+- **Moon has no `ICpuTraceSwitch`.** A real gap rather than a deliberate omission. It does now have cheat codecs (`EmuSen_Cheats.md`, `Moon_Cheats.md`) and, since 2026-08-04, `IFrameProfiler` — a `cpu+apu`/`ppu` split that also fills its `coretop` load bars, see `Moon_Debug.md` §3.2.
 
 ### A bug this pass found
 

@@ -152,7 +152,16 @@ Three things came out of doing it:
 - **The file/folder pickers were pulled forward from Phase 3**, because `PathPickerRow` is meaningless without them. `ConfirmAsync`/`ErrorAsync` stay in Phase 3, where they belong — they need a window of our own, not an OS dialog.
 - **A trap worth carrying into every future control** (`EmuSen_LunaP.md` §5.5): deriving from a templated Avalonia control silently loses its default template, because a control's style key defaults to its own runtime type. `ButtonBar` rendered as nothing, with no error. Anything added here that derives from a templated control needs its own `Template` setter *and* a test that finds a real part in the visual tree — a property assertion alone would have passed.
 
-### Phase 3 — The windowing layer
+### Phase 3 — The windowing layer ✅ done
+
+*Landed as planned; `EmuSen.Galaxia` was added as the ProjectReference Phase 0 deferred. 17 tests, full suite 2,154. Built as documented in `EmuSen_LunaP.md` §9. Three notes:*
+
+- ***`ToolWindow` is deliberately inert by default.*** *Both its features are opt-in (`WindowKey` enables geometry persistence, `ClosesOnEscape` enables Escape). Phase 6 rewrites a dozen windows onto this base, and a base class that silently changed how any of them close or where they open would turn every one of those migrations into a behaviour change hidden inside a refactor.*
+- ***`StartPolling()` is called by the derived constructor, not the base one.*** *Priming from the base constructor calls `Refresh()` before the derived class has assigned its fields — `CoretopWindow` would render against a `_target` that is about to be set. `Opened` starts it anyway, so forgetting costs a later first paint, not a dead window.*
+- ***The suspension tests assert on timer state, not tick counts.*** *Counting ticks means racing a real clock inside a dispatcher the test is itself blocking. `IsPolling` is public for exactly this. Non-vacuousness was checked by mutation: replacing the visibility gate with `true` fails both tests.*
+
+<details>
+<summary>Original plan text</summary>
 
 This is the part that makes it a *framework* rather than a widget bag.
 
@@ -166,6 +175,8 @@ This is the part that makes it a *framework* rather than a widget bag.
   ```
   Seven call sites collapse onto it; `Hotaru/Views/DebugWindows.cs` becomes two `WindowSlot` fields. Its "refresh if open, never create, never steal focus" variant (which `UpdateCoretopWindowTargetIfOpen` implements by hand today) becomes a second method rather than a second hand-written policy.
 - **`Dialogs`** — `ConfirmAsync`, `ErrorAsync`, `PickFileAsync`, `PickFolderAsync`, `SaveFileAsync`. Five hand-rolled `StorageProvider` blocks become five calls.
+
+</details>
 
 ### Phase 4 — The fluent surface
 

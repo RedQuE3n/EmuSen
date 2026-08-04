@@ -71,7 +71,8 @@ namespace EmuSen.Cores.Nintendo.Moon
             Ppu = new Ppu(Cart);
             Apu = new Apu.Apu();
             Apu.SetSampleRate(AudioSampleRate);
-            Bus = new MemoryBus(Cart, Ppu, Apu) { WriteObserver = null };
+            // The core owns Cheats here, so ROM patches work with no debug target attached - see Moon_Cheats.md §3.
+            Bus = new MemoryBus(Cart, Ppu, Apu) { WriteObserver = null, RomPatcher = new CheatRomPatcher(Cheats) };
 
             // DMC fetches go through the real bus, so the APU only gets a reader once one exists.
             Apu.Dmc.ReadMemory = address => Bus.Read(address);

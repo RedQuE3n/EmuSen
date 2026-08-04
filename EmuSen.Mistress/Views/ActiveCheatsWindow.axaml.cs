@@ -209,7 +209,7 @@ namespace EmuSen.Mistress.Views
             string description = (DescriptionBox.Text ?? "").Trim();
             if (description.Length == 0) description = code;
 
-            bool gameGenie = CheatCommand.LooksLikeGameGenieFormat(code);
+            bool gameGenie = CheatCommand.PrefersExplicitCodec(_patchCodec, _pokeCodec, code);
             ICheatCodeCodec? codec = gameGenie ? _patchCodec : _pokeCodec;
             if (codec is null)
             {
@@ -220,7 +220,8 @@ namespace EmuSen.Mistress.Views
             try
             {
                 (int address, byte value) = codec.Decode(code);
-                if (gameGenie) _registry.AddRomPatch(address, value, null, description);
+                // Dropping the compare would not be a lesser cheat but a wrong one - see EmuSen_Cheats.md §2.
+                if (gameGenie) _registry.AddRomPatch(address, value, codec.DecodeCompare(code), description);
                 else _registry.AddRamPoke(codec.SpaceName ?? CheatImport.DefaultSpaceName, address, value, description);
             }
             catch (Exception ex)

@@ -74,7 +74,7 @@ Each of those was its own hardcoded copy of the list before. Three of them said 
 
 ## 4. Cheats and the trace switch
 
-Cheat *codecs* (Game Genie, Action Replay) are per-console: the same printed code means different things on different hardware, so they come out of the bundle rather than being constructed by the frontend. `Moon` has neither codec yet and its bundle passes `null` for both — `DianaOSInterpreter.CreateDefault` already accepts null for every one of these, so the shell simply reports that `cheat` needs a codec instead of decoding an SNES code against NES memory.
+Cheat *codecs* (Game Genie, Action Replay) are per-console: the same printed code means different things on different hardware, so they come out of the bundle rather than being constructed by the frontend. Both cores now fill both slots — Moon with NES Game Genie and a raw `AAAA:VV` format, which are genuinely different decoders from Venus's rather than the same ones renamed (`EmuSen_Cheats.md`). `DianaOSInterpreter.CreateDefault` still accepts null for every one of these, so a future core with no code format reports that `cheat` needs a codec instead of decoding one console's code against another's memory.
 
 Same for `ICpuTraceSwitch`, which arms the verbose per-instruction trace: Venus supplies `VenusCpuTraceSwitch`, Moon supplies nothing yet.
 
@@ -131,7 +131,7 @@ This is the pattern for any future switch that is a *property of the run* rather
 
 - **No core swaps consoles mid-session.** `core <name> <path>` reloads through the factory, so loading a `.nes` after a `.smc` does construct a `MoonCore` — but the frontends rebuild a great deal around that and only Mistress' path is well covered by tests.
 - **`AppSettings.SelectedCore` still drives nothing.** It persists a display name and no code reads it to choose a core; the ROM's extension decides. The combo is now populated from the catalog rather than a literal, which is the only part of it that improved.
-- **Moon has no cheat codec, no `ICpuTraceSwitch`, and no `IFrameProfiler`.** All three are real gaps rather than deliberate omissions.
+- **Moon has no `ICpuTraceSwitch` and no `IFrameProfiler`.** Both are real gaps rather than deliberate omissions. It does now have cheat codecs — see `EmuSen_Cheats.md` and `Moon_Cheats.md`.
 
 ### A bug this pass found
 
@@ -211,3 +211,13 @@ Since nothing ever read the value, a stored `"SNES (Venus)"` cannot be distingui
 - **`RomDirectory` is still one path.** Recursion makes that workable, but there is no multi-root library.
 - **No metadata.** Titles are filenames. No box art, no dedupe of `(U)`/`(J)`/`[hM02]` variants, no "1,432 of these are the same game" grouping — which a 3,537-entry set very much invites.
 - **The console filter does not gate loading.** Opening a `.nes` while SNES is selected still works and still runs Moon; the extension decides the core (§2). The filter is a view, not a mode.
+
+---
+
+## 11. The bus hooks are shared, not per core
+
+`IFrameObserver` and `IRomReadPatcher` began life in `Cores/Nintendo/Venus - SNES/Memory/`, which was right while one core existed. Neither says anything about a console — one is "a frame ended", the other is "a cartridge read happened, do you want to change it" — so when the NES needed the second one they moved to `EmuSen/Cores/CoreHooks.cs` rather than being copied.
+
+Nothing else had to change. Both interfaces were already in namespaces nested under `EmuSen.Cores`, so every existing `EmuSen.Cores.Nintendo.Venus.*` file resolves the new location outward with no `using` edit at all.
+
+`CheatRomPatcher` (`EmuSen/Cores/`) is the shared wire between the second hook and `CheatRegistry`. Both ends were already core-agnostic; a core that owns its own registry can install it directly and get Game Genie-style patches with no debug layer attached — see `EmuSen_Cheats.md` §4 for why Venus does not do this yet.

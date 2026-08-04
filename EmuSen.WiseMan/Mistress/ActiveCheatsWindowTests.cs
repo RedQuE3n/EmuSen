@@ -174,6 +174,64 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // NES codes carry no punctuation to guess from, so the window asks the
+        // codecs which one claims the code - see EmuSen_Cheats.md §2.
+        private static ActiveCheatsWindow OpenNes(CheatRegistry registry)
+        {
+            var window = new ActiveCheatsWindow(registry,
+                new EmuSen.Cores.Nintendo.Moon.Cheats.NesRawCheatCodec(),
+                new EmuSen.Cores.Nintendo.Moon.Cheats.NesGameGenieCheatCodec());
+            window.Show();
+            return window;
+        }
+
+        [Fact]
+        public Task An_unpunctuated_nes_game_genie_code_is_added_as_a_rom_patch() => Session.Dispatch(() =>
+        {
+            var registry = new CheatRegistry();
+            var window = OpenNes(registry);
+
+            window.GetControl<TextBox>("CodeBox").Text = "SXIOPO";
+            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            var added = registry.GetCheats().Single();
+            Assert.Equal(CheatKind.RomPatch, added.Kind);
+            Assert.Equal(0x91D9, added.Writes[0].Address);
+
+            window.Close();
+        }, default);
+
+        // The compare is what makes an 8-letter code target one bank.
+        [Fact]
+        public Task An_eight_letter_nes_code_keeps_its_compare_byte() => Session.Dispatch(() =>
+        {
+            var registry = new CheatRegistry();
+            var window = OpenNes(registry);
+
+            window.GetControl<TextBox>("CodeBox").Text = "SLXPLOVS";
+            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Assert.Equal((byte)0xDE, registry.GetCheats().Single().Compare);
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task An_nes_address_value_code_is_added_as_a_ram_poke() => Session.Dispatch(() =>
+        {
+            var registry = new CheatRegistry();
+            var window = OpenNes(registry);
+
+            window.GetControl<TextBox>("CodeBox").Text = "0075:09";
+            window.GetControl<Button>("AddButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            var added = registry.GetCheats().Single();
+            Assert.Equal(CheatKind.RamPoke, added.Kind);
+            Assert.Equal("CPUBUS", added.Writes[0].Space);
+
+            window.Close();
+        }, default);
+
         [Fact]
         public Task An_undecodable_code_reports_it_and_adds_nothing() => Session.Dispatch(() =>
         {

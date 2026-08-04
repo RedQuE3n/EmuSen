@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Threading;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
@@ -10,24 +8,26 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Fluent;
+using EmuSen.LunaP.Theme;
+using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Hotaru.Views
 {
     // The shell a windowed launch gets in place of the terminal - see EmuSen_Frontend_Driver.md §3c.
-    public partial class DianaOSShellWindow : Window
+    public class DianaOSShellWindow : ToolWindow
     {
         private readonly Func<string, Window>? _launchRom;
         private readonly Func<string, string?>? _resolveCoreCommand;
+
+        private readonly ConsolePane _console = new() { Prompt = "DianaOS #: " };
 
         // Null until a ROM launches; from then on every line goes to the running core instead.
         private ILiveShell? _live;
 
         private DianaOSInterpreter _shell;
 
-        private int _historyIndex = -1;
-        private string _pendingInputText = "";
-
-        // Design-time/XAML-previewer constructor only, matching Hotaru's other windows.
         public DianaOSShellWindow() : this(null, null, null) { }
 
         public DianaOSShellWindow(
@@ -35,38 +35,48 @@ namespace EmuSen.Hotaru.Views
             Func<string, string?>? resolveCoreCommand,
             IEnumerable<string>? supportedCores)
         {
-            InitializeComponent();
             _launchRom = launchRom;
             _resolveCoreCommand = resolveCoreCommand;
             _shell = BuildInterpreter();
 
-            AppendLine(_shell.GetWelcomeBanner(supportedCores ?? Array.Empty<string>()));
-            AppendLine("--- DianaOS (type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
+            Title = "DianaOS";
+            Width = 900;
+            Height = 560;
+            Background = LunaPalette.Surface;
+            this.MinSize(420, 240);
 
-            InputBox.KeyDown += OnInputKeyDown;
-            Opened += (_, _) => InputBox.Focus();
+            Content = _console.Margin(8);
+
+            // The one place the two frontends' console windows genuinely differ: this one follows a live core once a game attaches.
+            _console.HistorySource = HistoryEntries;
+            _console.Submitted += Submit;
+
+            _console.AppendLine(_shell.GetWelcomeBanner(supportedCores ?? Array.Empty<string>()));
+            _console.AppendLine("--- DianaOS (type 'help', 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
+
+            Opened += (_, _) => _console.FocusInput();
         }
 
         private DianaOSInterpreter BuildInterpreter() =>
             DianaOSInterpreter.CreateDefault(null,
-                new IDianaOSCommand[] { new ClearShellWindowCommand(() => OutputText.Text = string.Empty) },
+                new IDianaOSCommand[] { new ClearShellWindowCommand(() => _console.Clear()) },
                 supportedCheatSystems: () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
 
         // Reports a ROM that could not be loaded back into the window that asked for it.
         public void ReportLaunchFailure(string message)
         {
-            AppendLine(message);
-            InputBox.Focus();
+            _console.AppendLine(message);
+            _console.FocusInput();
         }
 
         // Hands this window over to the running core's own interpreter - see EmuSen_Frontend_Driver.md §3c.
         public void AttachLiveShell(ILiveShell live)
         {
             _live = live;
-            _historyIndex = -1;
+            _console.ResetHistoryRecall();
             live.Output += OnLiveOutput;
             Closed += (_, _) => live.Output -= OnLiveOutput;
-            AppendLine("--- Game started. This shell is now attached to the running core. ---");
+            _console.AppendLine("--- Game started. This shell is now attached to the running core. ---");
             SyncPrompt();
         }
 
@@ -75,83 +85,17 @@ namespace EmuSen.Hotaru.Views
             // Raised from the emulation and console-reader threads, never this one.
             Dispatcher.UIThread.Post(() =>
             {
-                if (output.Length > 0) AppendLine(output);
+                if (output.Length > 0) _console.AppendLine(output);
                 SyncPrompt();
             });
         }
 
-        private void OnInputKeyDown(object? sender, KeyEventArgs e)
-        {
-            switch (e.Key)
-            {
-                case Key.Enter:
-                    e.Handled = true;
-                    string line = InputBox.Text ?? "";
-                    InputBox.Text = "";
-                    _historyIndex = -1;
-                    Submit(line);
-                    break;
-
-                case Key.Up:
-                    e.Handled = true;
-                    RecallHistory(older: true);
-                    break;
-
-                case Key.Down:
-                    e.Handled = true;
-                    RecallHistory(older: false);
-                    break;
-            }
-        }
-
-        private string[] HistoryEntries() =>
-            _live is { } live ? live.SnapshotHistory() : _shell.History.Entries.ToArray();
-
-        // Same recall algorithm ConsoleLineReader uses, driven by TextBox key events.
-        private void RecallHistory(bool older)
-        {
-            string[] entries = HistoryEntries();
-            if (entries.Length == 0) return;
-
-            if (older)
-            {
-                if (_historyIndex == -1)
-                {
-                    _pendingInputText = InputBox.Text ?? "";
-                    _historyIndex = entries.Length - 1;
-                }
-                else if (_historyIndex > 0)
-                {
-                    _historyIndex--;
-                }
-            }
-            else
-            {
-                if (_historyIndex == -1) return;
-                if (_historyIndex < entries.Length - 1)
-                {
-                    _historyIndex++;
-                }
-                else
-                {
-                    _historyIndex = -1;
-                    SetInputText(_pendingInputText);
-                    return;
-                }
-            }
-
-            SetInputText(entries[_historyIndex]);
-        }
-
-        private void SetInputText(string text)
-        {
-            InputBox.Text = text;
-            InputBox.CaretIndex = text.Length;
-        }
+        private IReadOnlyList<string> HistoryEntries() =>
+            _live is { } live ? live.SnapshotHistory() : _shell.History.Entries;
 
         private void Submit(string line)
         {
-            AppendLine(CurrentPrompt() + line);
+            _console.AppendLine(CurrentPrompt() + line);
 
             if (_live is { } live)
             {
@@ -168,7 +112,7 @@ namespace EmuSen.Hotaru.Views
             }
 
             (_, string output, HostAction? action) = _shell.Submit(line);
-            if (output.Length > 0) AppendLine(output);
+            if (output.Length > 0) _console.AppendLine(output);
             SyncPrompt();
             if (action is HostAction.Shutdown) Close();
         }
@@ -196,13 +140,9 @@ namespace EmuSen.Hotaru.Views
         private string CurrentPrompt() =>
             _live is { IsAwaitingMoreInput: true } || (_live is null && _shell.IsAwaitingMoreInput) ? "> " : "DianaOS #: ";
 
-        private void SyncPrompt() => PromptText.Text = CurrentPrompt();
+        private void SyncPrompt() => _console.Prompt = CurrentPrompt();
 
-        public void AppendLine(string text)
-        {
-            OutputText.Text = string.IsNullOrEmpty(OutputText.Text) ? text : OutputText.Text + "\n" + text;
-            OutputScroll.ScrollToEnd();
-        }
+        public void AppendLine(string text) => _console.AppendLine(text);
     }
 
     // The live interpreter a running GameWindow lends to the shell window - see EmuSen_Frontend_Driver.md §3c.
@@ -214,7 +154,7 @@ namespace EmuSen.Hotaru.Views
         event Action<string> Output;
     }
 
-    // Replaces ClearCommand's Console.Clear(), which does nothing to a TextBox.
+    // Replaces ClearCommand's Console.Clear(), which does nothing to a widget.
     public class ClearShellWindowCommand : IDianaOSCommand
     {
         private readonly Action _clearOutput;

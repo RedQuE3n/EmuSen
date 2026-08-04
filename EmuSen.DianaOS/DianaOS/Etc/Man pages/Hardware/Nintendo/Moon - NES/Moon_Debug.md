@@ -37,7 +37,7 @@ Until 2026-08-04 this core refreshed itself instead: the constructor set `MoonCo
 
 The push side could not express the case that broke it. `EndFrame` only fires when a frame *completes*, so it says "a frame ran" and nothing else. A rewind, a halt at a breakpoint and a single-step all change machine state without completing a frame, which is exactly why both hosts call `RefreshProviders()` in their rewind branch and why `EmuSen.Pharaoh` sets `OnHalted` to it. On the NES those calls landed on the empty default, so a rewinding or halted NES kept serving the previous frame's snapshot — `coretop` and `regs` showed state the machine had already left. The host knows about frame boundaries *and* about rewind, halt and step; the core's scheduler only knows the first. Pull is therefore strictly more expressive, and it is now the only rule: `RefreshProviders()` is a required interface member, so a core that forgets it fails to compile rather than going quietly stale.
 
-`RefreshProviders()` also refreshes the two providers this core hard-wires to empty (coprocessor registers, hardware load). They cost nothing — `Array.Empty` hands back the same instance every time — and refreshing them keeps "refresh everything I expose" literally true, which is the divergence that caused this in the first place. Hardware load being empty is also why `coretop` renders no load bars at all on the NES: the command skips that whole section on an empty snapshot rather than drawing fake ones. The SNES fills it from real wall-clock subsystem timings; giving the NES the same treatment is outstanding work, not a decision against it.
+`RefreshProviders()` also refreshes the coprocessor register provider, which this core hard-wires to empty. It costs nothing — `Array.Empty` hands back the same instance every time — and refreshing it keeps "refresh everything I expose" literally true, which is the divergence that caused this in the first place.
 
 ### 3.1 Board registers
 
@@ -48,6 +48,22 @@ That counter is diagnostic rather than hardware state, and it earned its place i
 ### 3.1a Cheats, and why `ApplyCheats` stays defaulted
 
 `IDebugTarget.ApplyCheats()` keeps its defaulted no-op body, and that is deliberate rather than the same oversight left half-fixed. This core applies cheats from `EndFrame` via `Cheats.ApplyAll`, one frame at a time, with no host involvement — so there is genuinely nothing for a host-driven call to do. The distinction is that cheat application is a *write* the core performs on its own schedule, whereas a provider refresh is a *read* whose correct moment only the host knows. Mistress's Apply Cheats button therefore takes effect on the NES at the next frame boundary rather than immediately, which is invisible at 60fps and is not the staleness bug in §3.
+
+### 3.2 Hardware load
+
+Two bars, **`CPU+APU`** and **`PPU`**, each a percentage of one native frame's wall-clock budget (`1000 / FrameRateHz`, ≈16.639ms at 60.0985Hz) and clamped to 100 so a frame that ran behind — a debug prompt having just eaten real time — cannot report 300% and look like a rendering bug in a bar only meant to reach "full".
+
+Until 2026-08-04 `HardwareLoad` was hard-wired to `Array.Empty<DebugLoadInfo>()`, so `coretop` skipped the section entirely and the NES had no load bars at all. The empty list is the documented "this core models no timing breakdown" signal, and `coretop` correctly draws nothing rather than fake zeroes — but the NES had no breakdown only because none had been written, not because the concept did not apply.
+
+**What these measure is emulator cost, not guest hardware utilization.** They are wall-clock timings of this emulator's own work, exactly like the SNES's. That distinction is not modeled in `DebugLoadInfo` and a reader will conflate the two; emulator cost is the more useful of the pair and the only one every core can produce. It doubles as the per-subsystem profile the low-end-laptop optimization effort needs on this core.
+
+**Why `CPU+APU` is one bar rather than two.** `Apu.Step(cycles)` is called from inside `RunCpuUntilBudgetSpent`'s instruction loop, clocked from the real CPU cycles each instruction consumed — which is what makes its timers correct (§`Moon_APU.md`). Timing the two separately would mean a `Stopwatch.GetTimestamp()` pair per *instruction* rather than per scanline, which would cost more than the thing being measured. The SNES groups `CPU+SPC700` for the same reason.
+
+The instrumentation sits in `RunFrame`'s scheduler loop: one timestamp before the CPU phase, one between it and `_schedule.RunUntil(deadline)` (which is where `EndScanline` drives the PPU), one after. Three per scanline. Accumulators live in `MoonCore.Schedule.cs` and are converted and reset in `EndFrame`, not per scanline — so a breakpoint halt, which returns from `RunFrame` mid-loop without closing the PPU phase, leaves the partial frame accumulating into the resumed one rather than reporting a frame's cost twice.
+
+`MoonDebugTarget` takes an optional `frameTimings` delegate, defaulting to reading the core. It exists only so a test can assert exact bar percentages against injected values; nothing in the product passes it. `SnesDebugTarget` has the same parameter for a different reason — it is constructed from loose `Cpu`/`MemoryBus`/`Renderer` components and cannot reach `VenusCore` at all.
+
+One deliberate difference from the SNES: this core normalizes against its real `FrameRateHz`, where `SnesDebugTarget` hardcodes a 60fps budget. The real-rate version is what `EmuSen_Cauldron.md` §4.5 documents the contract as; the SNES's hardcode is a ~0.15% error nobody will see on a bar 30 characters wide, and was left alone rather than changed as a side effect of this work.
 
 ---
 

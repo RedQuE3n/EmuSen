@@ -127,7 +127,7 @@ One named "how hard is this working" meter. `Percent` is 0-100, already normaliz
 
 Worth being precise about what this measures: on the SNES it is **emulator cost**, not guest hardware utilization. `ReadHardwareLoadLive` normalizes real millisecond timings against a 60fps frame's ~16.67ms budget and clamps to 100, since a frame running behind can otherwise report over 100% and look like a rendering bug in a bar only meant to reach "full". The type has no field distinguishing emulator cost from guest utilization, so a reader will conflate them; emulator cost is the more useful number and the one every core can produce.
 
-The NES publishes an empty list today — it has no timing breakdown wired up — which is why `coretop` renders no load bars on it at all.
+Both cores publish real bars: `CPU+SPC700`/`PPU`/`HDMA` on the SNES, `CPU+APU`/`PPU` on the NES (`Moon_Debug.md` §3.2). The NES published an empty list until 2026-08-04, which is why `coretop` drew no load section on it at all — the empty list is the real "this core models no breakdown" signal, and a core that genuinely has none should still publish it rather than fake zeroes.
 
 ---
 

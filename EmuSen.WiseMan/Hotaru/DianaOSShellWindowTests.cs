@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.Hotaru
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(DianaOSShellWindowTests).GetTypeInfo().Assembly);
 
-        // The window hosts a LunaP ConsolePane now, so these are its template parts rather than a XAML namescope - see EmuSen_LunaP.md §12.
+        // The window hosts a LunaP ConsolePane now, so these are its template parts rather than a XAML namescope - see EmuSen_LunaP.md §11.
         private static SelectableTextBlock Output(DianaOSShellWindow w) => w.FindNamed<SelectableTextBlock>("PART_Output");
         private static TextBox Input(DianaOSShellWindow w) => w.FindNamed<TextBox>("PART_Input");
         private static TextBlock Prompt(DianaOSShellWindow w) => w.FindNamed<TextBlock>("PART_Prompt");

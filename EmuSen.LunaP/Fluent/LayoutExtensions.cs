@@ -4,7 +4,7 @@ using Avalonia.Layout;
 
 namespace EmuSen.LunaP.Fluent
 {
-    // Every name here is the XAML attribute it sets, so the two ways of building a window stay one vocabulary - see EmuSen_LunaP.md §11.
+    // Every name here is the XAML attribute it sets, so the two ways of building a window stay one vocabulary - see EmuSen_LunaP.md §9.
     public static class LayoutExtensions
     {
         public static T Margin<T>(this T control, double uniform) where T : Control

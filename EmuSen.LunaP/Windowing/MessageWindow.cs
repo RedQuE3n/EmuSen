@@ -5,7 +5,7 @@ using EmuSen.LunaP.Controls;
 
 namespace EmuSen.LunaP.Windowing
 {
-    // The small modal behind Dialogs.ConfirmAsync/ErrorAsync, built from the kit rather than a hand-laid grid - see EmuSen_LunaP.md §9.4.
+    // The small modal behind Dialogs.ConfirmAsync/ErrorAsync, built from the kit rather than a hand-laid grid - see EmuSen_LunaP.md §8.4.
     internal sealed class MessageWindow : ToolWindow
     {
         private MessageWindow(string title, string message, string acceptText, string? cancelText)

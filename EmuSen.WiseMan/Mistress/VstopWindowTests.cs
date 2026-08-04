@@ -91,7 +91,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The dashboard is one of the five that used to poll forever once opened - see EmuSen_LunaP.md §9.2.
+        // The dashboard is one of the five that used to poll forever once opened - see EmuSen_LunaP.md §8.2.
         [Fact]
         public Task The_dashboard_stops_polling_while_it_is_hidden() => Session.Dispatch(() =>
         {

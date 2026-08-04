@@ -37,13 +37,13 @@ namespace EmuSen.WiseMan.Fixtures
         }
     }
 
-    // The one place a UI test dispatches, captures and asserts - see EmuSen_LunaP.md §13.
+    // The one place a UI test dispatches, captures and asserts - see EmuSen_LunaP.md §10.
     public static class UiTest
     {
         // EMUSEN_UI_DUMP names a directory; every capture in the run lands in it as <name>.png.
         private const string DumpVariable = "EMUSEN_UI_DUMP";
 
-        // Opt-in pixel-exact comparison, off unless both are set - see EmuSen_LunaP.md §13.2.
+        // Opt-in pixel-exact comparison, off unless both are set - see EmuSen_LunaP.md §10.2.
         private const string BaselineVariable = "EMUSEN_UI_BASELINE";
         private const string BaselineModeVariable = "EMUSEN_UI_BASELINE_MODE";
 
@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.Fixtures
             return frame;
         }
 
-        // Builds and renders twice. A window that fails this can never be compared against a baseline - see EmuSen_LunaP.md §13.2.
+        // Builds and renders twice. A window that fails this can never be compared against a baseline - see EmuSen_LunaP.md §10.2.
         public static void AssertStable(string name, Func<Window> build)
         {
             Window first = build();

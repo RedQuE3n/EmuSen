@@ -4,7 +4,7 @@ using EmuSen.Cauldron;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // A fixed ICoreTelemetry, so a dashboard can be tested without a core - see EmuSen_LunaP.md §12.
+    // A fixed ICoreTelemetry, so a dashboard can be tested without a core - see EmuSen_LunaP.md §11.
     public sealed class FakeTelemetry : ICoreTelemetry
     {
         private sealed class Fixed<T> : IRealtimeProvider<T>

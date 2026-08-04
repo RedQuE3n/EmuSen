@@ -7,7 +7,7 @@ using EmuSen.WiseMan.LunaP;
 
 namespace EmuSen.WiseMan.Hotaru
 {
-    // Hotaru's `coretop -w`. Held to the same behaviour as Mistress's copy, which is the point of them sharing widgets - see EmuSen_LunaP.md §12.
+    // Hotaru's `coretop -w`. Held to the same behaviour as Mistress's copy, which is the point of them sharing widgets - see EmuSen_LunaP.md §11.
     public class CoretopWindowTests
     {
         [Fact]

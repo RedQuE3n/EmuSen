@@ -31,7 +31,7 @@ namespace EmuSen.Mistress.Views
             CanResize = false;
 
             // Sized to its content rather than a fixed 330px: at that height the Close button sat below the
-            // bottom edge of a window that cannot be resized or scrolled. See EmuSen_LunaP.md §12.1.
+            // bottom edge of a window that cannot be resized or scrolled. See EmuSen_LunaP.md §11.1.
             SizeToContent = SizeToContent.Height;
 
             PathPickerRow logDirectory = Picker("LogDirectoryBox", "(not set)", "Choose Log Directory",

@@ -7,7 +7,7 @@ using EmuSen.WiseMan.LunaP;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The GUI half of `coretop`. Written before the LunaP migration so the two could be compared pixel for pixel - see EmuSen_LunaP.md §12.
+    // The GUI half of `coretop`. Written before the LunaP migration so the two could be compared pixel for pixel - see EmuSen_LunaP.md §11.
     public class CoretopWindowTests
     {
         [Fact]

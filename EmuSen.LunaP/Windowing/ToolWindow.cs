@@ -4,7 +4,7 @@ using Avalonia.Input;
 
 namespace EmuSen.LunaP.Windowing
 {
-    // The base every LunaP window shares. Deliberately thin, and both of its features are opt-in - see EmuSen_LunaP.md §9.
+    // The base every LunaP window shares. Deliberately thin, and both of its features are opt-in - see EmuSen_LunaP.md §8.
     public class ToolWindow : Window
     {
         public static readonly StyledProperty<bool> ClosesOnEscapeProperty =

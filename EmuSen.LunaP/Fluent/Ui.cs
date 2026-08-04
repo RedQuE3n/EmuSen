@@ -5,7 +5,7 @@ using EmuSen.LunaP.Controls;
 
 namespace EmuSen.LunaP.Fluent
 {
-    // Terse constructors for the layouts and kit controls a window is made of - see EmuSen_LunaP.md §11.
+    // Terse constructors for the layouts and kit controls a window is made of - see EmuSen_LunaP.md §9.
     public static class Ui
     {
         public static StackPanel Stack(params Control[] children) => Stack(0, children);

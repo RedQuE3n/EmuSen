@@ -11,7 +11,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Hotaru.Views
 {
-    // The `coretop -w` window - see `man coretop` for why `-w` exists, and EmuSen_LunaP.md §12 for why this is still a separate file from Mistress's.
+    // The `coretop -w` window - see `man coretop` for why `-w` exists, and EmuSen_LunaP.md §11 for why this is still a separate file from Mistress's.
     public class CoretopWindow : PollingWindow
     {
         private ICoreTelemetry? _target;

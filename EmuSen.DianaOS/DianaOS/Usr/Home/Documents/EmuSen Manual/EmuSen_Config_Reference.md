@@ -28,8 +28,8 @@ Config lives inside DianaOS's own sandbox tree, at `<root>/etc/EmuSen` — reach
 ```
 /etc/EmuSen/
   appsettings.json        general app preferences        §3.1
-  keybindings.json        keyboard -> SNES button
-  gamepadbindings.json    pad button -> SNES button
+  keybindings.json        keyboard -> console button      §3.6
+  gamepadbindings.json    pad button -> console button    §3.6
   hotkeybindings.json     keyboard -> emulator action
   audio.json              §3.2
   graphics.json           §3.3
@@ -194,6 +194,23 @@ This is deliberately a *directory setting* rather than a bundled asset. **EmuSen
 ### 3.5 What is deliberately not persisted
 
 `DebugSettings` has no config file. Its flags are trace toggles for a specific investigation, and persisting them means a run three weeks later starts spewing DMA traces because of something enabled once and forgotten — which is exactly the failure `MasterLoggingEnabled` was added to fix (see `EmuSen_Settings_Reference.md` §1). Debug flags default off every run, and `log` sets them for the session.
+
+### 3.6 `keybindings.json` / `gamepadbindings.json` — one map per console
+
+Both were flat `PadButton -> Key` (or `-> SDL.GamepadButton`) dictionaries, shared by every core. They are now nested one level, keyed by console name:
+
+```json
+{
+  "NES":  { "A": "X", "B": "Z", "Start": "Enter" },
+  "SNES": { "A": "X", "B": "Z", "Y": "A", "X": "S", "L": "Q", "R": "W" }
+}
+```
+
+The key is `CoreDescriptor.Console`, the same string as `ICore.CoreName` (`EmuSen_Input.md` §5.1). `ControllerKeyBindings` and `GamepadBindings` own the file; the individual maps no longer have `Load`/`Save`.
+
+**The old flat file still loads, and every console inherits it.** That is what it used to mean — one set of keys applied to whatever core was running — so migration is faithful rather than merely lossless. Each console gets its own *copy* of the dictionary, not a shared reference, or rebinding one console afterwards would silently move the others. The next save rewrites the file nested.
+
+Telling the two shapes apart takes some care, because a wrong guess is worse than either. The load path first reads the file as `Dictionary<string, JsonElement>` purely to ask whether the values are objects (new) or scalars (old). `JsonElement` accepts *any* value, so that probe never fails on a bad enum — which matters, because the whole point of §6.2's converter is that `"DPadUpp"` gets named and corrected rather than swallowed. The probe decides the shape; the typed load that follows is what reads the values and reports. A bad enum is therefore still reported exactly once, and still falls back to defaults.
 
 ---
 

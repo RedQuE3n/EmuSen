@@ -24,8 +24,14 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
     // rather than an edit to the pruner. Empty means "claims nothing", and a
     // registry where every core claims nothing prunes nothing rather than
     // everything - see EmuSen_Settings_Reference.md §4.16.
-    public sealed record CoreDescriptor(string DisplayName, string[] Extensions, string[]? CheatSystems = null)
+    // ConsoleName/Manufacturer/ReleaseYear exist for grouping and ordering a
+    // per-console UI - see EmuSen_Input.md §5.1.
+    public sealed record CoreDescriptor(string DisplayName, string[] Extensions, string[]? CheatSystems = null,
+        string? ConsoleName = null, string Manufacturer = "", int ReleaseYear = 0)
     {
+        // The bare console, with no codename: a tab header, and the key a per-console config file is stored under.
+        public string Console => ConsoleName ?? DisplayName;
+
         public bool SupportsExtension(string extension) =>
             Array.Exists(Extensions, e => e.Equals(extension, StringComparison.OrdinalIgnoreCase));
 

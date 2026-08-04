@@ -20,10 +20,14 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(InputSettingsWindowRenderTests).GetTypeInfo().Assembly);
 
-        [Fact]
-        public Task The_window_renders_its_rows() => Session.Dispatch(() =>
+        // Every tab, because only the selected one is realised - see EmuSen_Settings_Reference.md §4.6.
+        [Theory]
+        [InlineData(null)]
+        [InlineData("NES")]
+        [InlineData("SNES")]
+        public Task The_window_renders_its_rows(string? console) => Session.Dispatch(() =>
         {
-            var window = new InputSettingsWindow(new ControllerKeyMap(), new GamepadBindingMap(), null!, new AppSettings(), new HotkeyBindingMap());
+            var window = new InputSettingsWindow(new ControllerKeyBindings(new[] { "NES", "SNES" }), new GamepadBindings(new[] { "NES", "SNES" }), null!, new AppSettings(), new HotkeyBindingMap(), console);
             window.Show();
 
             WriteableBitmap frame = window.CaptureRenderedFrame()!;
@@ -35,8 +39,10 @@ namespace EmuSen.WiseMan.Mistress
             string? dump = System.Environment.GetEnvironmentVariable("EMUSEN_UI_DUMP");
             if (!string.IsNullOrEmpty(dump))
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(dump)!);
-                BmpFile.Write(dump, pixels, width, height);
+                string path = Path.Combine(Path.GetDirectoryName(dump)!,
+                    $"{Path.GetFileNameWithoutExtension(dump)}_{console ?? "General"}.bmp");
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                BmpFile.Write(path, pixels, width, height);
             }
 
             // A window that failed to lay out renders as one flat colour.

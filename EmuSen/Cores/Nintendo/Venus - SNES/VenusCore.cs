@@ -145,8 +145,10 @@ namespace EmuSen.Cores.Nintendo.Venus
         public long TotalFrames { get; private set; }
 
         // All twelve; PadButton's names were chosen to match SnesButton - see EmuSen_Input.md §3.
-        public IReadOnlyList<PadButton> SupportedButtons { get; } =
-            (PadButton[])Enum.GetValues(typeof(PadButton));
+        public static readonly PadButton[] PadButtons = (PadButton[])Enum.GetValues(typeof(PadButton));
+
+        // Static, so the rebind window can list this console's pad without a ROM - see EmuSen_Input.md §5.1.
+        public IReadOnlyList<PadButton> SupportedButtons => PadButtons;
 
         // Venus's own ports are 1-based, so the generic 0-based port shifts here.
         public void SetButton(int port, PadButton button, bool pressed) =>

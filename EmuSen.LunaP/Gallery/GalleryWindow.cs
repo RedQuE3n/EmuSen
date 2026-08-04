@@ -14,7 +14,7 @@ namespace EmuSen.LunaP.Gallery
         {
             Title = "LunaP gallery";
             Width = 520;
-            Height = 860;
+            Height = 1120;
             Background = LunaPalette.Surface;
 
             var console = new ConsolePane { Prompt = "DianaOS #: ", HistorySource = () => new[] { "help", "coretop" } };
@@ -33,6 +33,14 @@ namespace EmuSen.LunaP.Gallery
                     new("A name long enough to be trimmed by the label column", 5, "5.0%"),
                 },
             };
+
+            var filter = new FilterBar { ShowFacet = true, FacetLabel = "Console:", Placeholder = "Search titles" };
+            filter.SetFacets(new[] { "All consoles", "NES", "SNES" }, "All consoles");
+
+            var tabs = new Tabs();
+            tabs.Add("General", Ui.Hint("A tab's content is any control."));
+            tabs.Add("NES", Ui.Hint("Appended by Tabs.Add, not declared in XAML."));
+            tabs.Add("SNES", Ui.Hint("RemoveFrom(1) drops these again."));
 
             Content = Ui.Scroll(Ui.Stack(10,
                 Ui.Section("Text", Ui.Stack(6,
@@ -55,6 +63,13 @@ namespace EmuSen.LunaP.Gallery
                         Label = "Emulator Core",
                         Content = new ComboBox { ItemsSource = new[] { "SNES", "NES" }, SelectedIndex = 0 }.Grow(),
                     })),
+
+                Ui.Section("Widgets", Ui.Stack(8,
+                    filter,
+                    Ui.Row(16,
+                        new LunaSwitch { Label = "Enable Logging", IsChecked = true },
+                        new LunaSwitch { Label = "Concurrent GC" }),
+                    tabs.Height(90))),
 
                 Ui.Section("Console", console.Height(160)),
 

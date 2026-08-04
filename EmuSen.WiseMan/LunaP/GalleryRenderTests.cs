@@ -1,4 +1,7 @@
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.VisualTree;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Gallery;
 using EmuSen.WiseMan.Fixtures;
@@ -14,7 +17,7 @@ namespace EmuSen.WiseMan.LunaP
             var window = new GalleryWindow();
             window.Show();
 
-            Assert.True(window.CountParts<SectionHeader>() >= 6);
+            Assert.True(window.CountParts<SectionHeader>() >= 7);
             Assert.Equal(1, window.CountParts<MonoText>());
             Assert.Equal(4, window.CountParts<MeterRow>());
             Assert.Equal(1, window.CountParts<RgbaImageView>());
@@ -23,6 +26,13 @@ namespace EmuSen.WiseMan.LunaP
             Assert.Equal(1, window.CountParts<ConsolePane>());
             Assert.Equal(1, window.CountParts<StatusBar>());
             Assert.Equal(1, window.CountParts<ButtonBar>());
+            Assert.Equal(1, window.CountParts<FilterBar>());
+            Assert.Equal(2, window.CountParts<LunaSwitch>());
+            Assert.Equal(1, window.CountParts<Tabs>());
+
+            // Templated, not merely present: a wrapper that lost its base style key renders as nothing - see EmuSen_LunaP.md §14.1.
+            Assert.NotNull(window.FindPart<Tabs>()!.FindPart<TabItem>());
+            Assert.True(window.FindPart<LunaSwitch>()!.GetVisualChildren().Any());
         });
 
         [Fact]

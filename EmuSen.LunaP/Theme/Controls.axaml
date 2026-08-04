@@ -133,6 +133,7 @@
                 <DockPanel>
                     <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*" Margin="0,8,0,0">
                         <TextBlock Grid.Column="0"
+                                   Name="PART_Prompt"
                                    Text="{TemplateBinding Prompt}"
                                    VerticalAlignment="Center"
                                    FontFamily="{DynamicResource LunaMonoFont}"

@@ -1,4 +1,5 @@
 using System;
+using EmuSen.WiseMan.LunaP;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -15,9 +16,10 @@ namespace EmuSen.WiseMan.Hotaru
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(DianaOSShellWindowTests).GetTypeInfo().Assembly);
 
-        private static SelectableTextBlock Output(DianaOSShellWindow w) => w.GetControl<SelectableTextBlock>("OutputText");
-        private static TextBox Input(DianaOSShellWindow w) => w.GetControl<TextBox>("InputBox");
-        private static TextBlock Prompt(DianaOSShellWindow w) => w.GetControl<TextBlock>("PromptText");
+        // The window hosts a LunaP ConsolePane now, so these are its template parts rather than a XAML namescope - see EmuSen_LunaP.md §12.
+        private static SelectableTextBlock Output(DianaOSShellWindow w) => w.FindNamed<SelectableTextBlock>("PART_Output");
+        private static TextBox Input(DianaOSShellWindow w) => w.FindNamed<TextBox>("PART_Input");
+        private static TextBlock Prompt(DianaOSShellWindow w) => w.FindNamed<TextBlock>("PART_Prompt");
 
         private static void Type(DianaOSShellWindow w, string line)
         {

@@ -1,6 +1,6 @@
 # EmuSen.Cauldron — the core-agnostic telemetry layer
 
-*This revision: split `ICoreTelemetry` out of DianaOS's `IDebugTarget` and moved the five snapshot value types into this assembly, so a dashboard depends on Cauldron rather than on the debugger; measured the per-frame refresh cost and settled it (§5.1). Previous revision: providers only (`IRealtimeProvider`, `PollingProvider`, `HistoryProvider`).*
+*This revision: split `ICoreTelemetry` out of DianaOS's `IDebugTarget` and moved the five snapshot value types into this assembly, so a dashboard depends on Cauldron rather than on the debugger; measured the per-frame refresh cost and settled it (§5.1); gave `DebugLoadInfo` a required `Kind` so emulator cost cannot be read as guest load (§4.5). Previous revision: providers only (`IRealtimeProvider`, `PollingProvider`, `HistoryProvider`).*
 
 ---
 
@@ -125,7 +125,16 @@ Built diagnosing a "part of the music is missing" report, where the toolchain co
 
 One named "how hard is this working" meter. `Percent` is 0-100, already normalized against whatever the core considers full — typically the wall-clock budget of one native frame.
 
-Worth being precise about what this measures: on the SNES it is **emulator cost**, not guest hardware utilization. `ReadHardwareLoadLive` normalizes real millisecond timings against a 60fps frame's ~16.67ms budget and clamps to 100, since a frame running behind can otherwise report over 100% and look like a rendering bug in a bar only meant to reach "full". The type has no field distinguishing emulator cost from guest utilization, so a reader will conflate them; emulator cost is the more useful number and the one every core can produce.
+`Kind` says what the number actually is, and there are two very different answers:
+
+- **`EmulatorCost`** — wall-clock time this emulator spent on a subsystem, against one native frame's budget. What both cores publish today.
+- **`GuestUtilization`** — how hard the emulated hardware itself is working, as the guest would see it. Nothing publishes this yet.
+
+The distinction is not cosmetic. A `PPU` bar at 80% means "this emulator is close to missing frames" under the first reading and "the game is close to the console's own limits" under the second — opposite conclusions from the same pixels. Until 2026-08-04 the type had no such field and every consumer drew the bars under a header reading "Hardware load", which invites exactly the wrong one.
+
+`Kind` therefore has **no default**: the constructor requires it, so a new core has to answer the question rather than inherit an assumption. `DebugLoadKindText.Header(kind)` is the single phrasing every dashboard uses ("Emulator cost (% of one frame)" / "Hardware utilization"), so three separate consumers — `CoretopCommand` and both frontends' `CoretopWindow` — cannot drift apart on how they describe it. All three group their bars by `Kind` and emit one header per group, which also means a core mixing both kinds renders correctly without any of them changing.
+
+Normalization is the core's own business: `ReadHardwareLoadLive` converts real millisecond timings to a percentage of the frame budget and clamps to 100, since a frame running behind can otherwise report over 100% and look like a rendering bug in a bar only meant to reach "full".
 
 Both cores publish real bars: `CPU+SPC700`/`PPU`/`HDMA` on the SNES, `CPU+APU`/`PPU` on the NES (`Moon_Debug.md` §3.2). The NES published an empty list until 2026-08-04, which is why `coretop` drew no load section on it at all — the empty list is the real "this core models no breakdown" signal, and a core that genuinely has none should still publish it rather than fake zeroes.
 

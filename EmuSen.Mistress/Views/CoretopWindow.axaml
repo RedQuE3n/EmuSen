@@ -18,7 +18,7 @@
                        Foreground="Gray"
                        IsVisible="False" />
 
-            <TextBlock Text="Hardware load" Foreground="#9CDCFE" FontWeight="Bold" />
+            <TextBlock Text="Load" Foreground="#9CDCFE" FontWeight="Bold" />
             <StackPanel x:Name="LoadPanel" Spacing="3" />
 
             <TextBlock Text="CPU registers" Foreground="#9CDCFE" FontWeight="Bold" />

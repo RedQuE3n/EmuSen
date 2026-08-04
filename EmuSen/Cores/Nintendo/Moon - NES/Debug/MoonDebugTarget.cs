@@ -139,8 +139,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
 
             return new[]
             {
-                new DebugLoadInfo("CPU+APU", ToPercent(cpuApuMs)),
-                new DebugLoadInfo("PPU", ToPercent(ppuMs)),
+                new DebugLoadInfo("CPU+APU", ToPercent(cpuApuMs), DebugLoadKind.EmulatorCost),
+                new DebugLoadInfo("PPU", ToPercent(ppuMs), DebugLoadKind.EmulatorCost),
             };
         }
 

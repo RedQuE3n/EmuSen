@@ -172,11 +172,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 WriteLine($" DianaOS coretop  -  {_target.CoreName}  -  frame {_target.FrameCount}  -  Ctrl+C to exit ");
                 WriteLine(new string('-', Math.Min(width, 70)));
 
-                var load = _target.HardwareLoad.Current;
-                if (load.Count > 0)
+                // Grouped by kind so emulator cost is never presented as guest load - see EmuSen_Cauldron.md §4.5.
+                foreach (var group in _target.HardwareLoad.Current.GroupBy(l => l.Kind))
                 {
-                    WriteLine("Hardware load:");
-                    foreach (DebugLoadInfo l in load)
+                    WriteLine($"{DebugLoadKindText.Header(group.Key)}:");
+                    foreach (DebugLoadInfo l in group)
                     {
                         WriteLine($"  {l.Name,-12} {ColoredBar(l.Percent, 30)} {l.Percent,5:0.0}%");
                     }

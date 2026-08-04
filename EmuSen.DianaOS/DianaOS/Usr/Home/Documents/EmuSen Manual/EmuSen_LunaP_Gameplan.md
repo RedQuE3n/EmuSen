@@ -1,6 +1,6 @@
 # EmuSen.LunaP — Shared UI Toolkit Game Plan
 
-*This revision (2026-08-04): **Phases 0 and 1 are done** — the project exists, the theme is shared, both frontends and the test harness bootstrap through it, and the change was verified byte-identical at the pixel level. What is built is documented in `EmuSen_LunaP.md`; this file stays the plan of record for Phases 2-6. Previous revision (2026-08-04): first version, written after an audit of every `.axaml`/`.axaml.cs` file in `EmuSen.Mistress` and `EmuSen.Hotaru` (~7,200 lines across 46 files); three questions were put to the project owner before drafting and are answered in §2.*
+*This revision (2026-08-04): **Phases 0 through 6 are all done — the toolkit is built and both frontends are migrated onto it.** 863 lines net removed from the frontends, eight `.axaml` files deleted, full suite 2,180. What exists is documented in `EmuSen_LunaP.md`; what remains here is **Phase 7**, the widget library proper (dropdowns, switches, tabs, filters), which is the only unbuilt phase. Previous revision (2026-08-04): first version, written after an audit of every `.axaml`/`.axaml.cs` file in `EmuSen.Mistress` and `EmuSen.Hotaru` (~7,200 lines across 46 files); three questions were put to the project owner before drafting and are answered in §2.*
 
 ---
 
@@ -216,7 +216,17 @@ Per the repo's standing rule, testing extends `EmuSen.WiseMan` rather than launc
 
 </details>
 
-### Phase 6 — Migrate
+### Phase 6 — Migrate ✅ done
+
+*Six commits, one window group each, full suite green throughout and 2,180 at the end. **863 lines net removed from the two frontends; eight `.axaml` files deleted.** Written up in `EmuSen_LunaP.md` §11. What is worth carrying forward:*
+
+- ***The pixel baseline paid for itself twice.*** *`CoretopWindow`'s empty state came out 11,060 pixels wrong on the first attempt (`HintText` is 11pt; the original "No ROM loaded." was body-sized), and `PreferencesWindow` turned out to have never shown its own Close button — content needing ~420px in a window fixed at 330 with `CanResize=false` and no scrolling. That bug long predates the toolkit; the migration's verification is just what surfaced it.*
+- ***Write the tests against the unmigrated window first.*** *`CoretopWindow` and `FeedWindow` had no coverage at all. Writing it first also corrected an assumption of mine — the no-core state does draw one `ProgressBar`, because the sprite bar is a fixed part of the layout sitting at zero.*
+- ***Change lookups, not test bodies.*** *The eleven `DianaOSShellWindow` tests survived the rewrite with only their three lookup helpers changed. They drive real key routing, so intact bodies are what makes them a safety net rather than a restatement of the new code.*
+- ***The two `CoretopWindow`s now differ by six lines,*** *all namespace or comment — the deliberate consequence of sharing widgets but not windows. §11.3 records the one remaining option if that residue is ever worth removing.*
+
+<details>
+<summary>Original plan text</summary>
 
 One window per commit, its existing WiseMan tests staying green throughout. Suggested order, easiest-first, each step delivering real deletion:
 
@@ -226,6 +236,8 @@ One window per commit, its existing WiseMan tests staying green throughout. Sugg
 4. Both DianaOS console windows — `ConsolePane`. Deletes a byte-identical `.axaml`.
 5. `PreferencesWindow`, `DebugSettingsWindow` — `FieldRow`/`PathPickerRow`/`Dialogs`.
 6. `MainWindow`'s five window-opening handlers and `DebugWindows` — `WindowSlot`.
+
+</details>
 
 `MainWindow` and `GameWindow` themselves (1,379 and 893 lines) are **not** migrated wholesale. They own the frame driver, the emulation thread and hotkey dispatch; only their window-opening and dialog code is in scope. Rewriting either is a different project and not this one.
 

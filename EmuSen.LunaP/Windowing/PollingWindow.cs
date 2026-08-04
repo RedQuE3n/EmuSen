@@ -5,7 +5,7 @@ using Avalonia.Threading;
 
 namespace EmuSen.LunaP.Windowing
 {
-    // A dashboard that re-reads its source on a timer. Five windows hand-rolled this; none of them stopped while hidden - see EmuSen_LunaP.md §9.2.
+    // A dashboard that re-reads its source on a timer. Five windows hand-rolled this; none of them stopped while hidden - see EmuSen_LunaP.md §8.2.
     public abstract class PollingWindow : ToolWindow
     {
         private DispatcherTimer? _timer;

@@ -15,7 +15,7 @@ namespace EmuSen.Hotaru.Views
             Coretop.Show(null, () => new CoretopWindow(target), refresh: w => w.UpdateTarget(target));
 
         // Never creates and never activates: a `core <name> <path>` swap should not pop up a dashboard nobody
-        // asked for, nor steal focus mid-gameplay - so this is safe to call on every swap. See EmuSen_LunaP.md §9.3.
+        // asked for, nor steal focus mid-gameplay - so this is safe to call on every swap. See EmuSen_LunaP.md §8.3.
         public static void UpdateCoretopWindowTargetIfOpen(IDebugTarget target) =>
             Coretop.RefreshIfOpen(w => w.UpdateTarget(target));
 

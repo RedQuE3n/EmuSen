@@ -9,7 +9,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.WiseMan.LunaP
 {
-    // Proves the whole point of phases 2-4 end to end: a dashboard is a constructor and a Refresh body - see EmuSen_LunaP.md §11.1.
+    // Proves the whole point of phases 2-4 end to end: a dashboard is a constructor and a Refresh body - see EmuSen_LunaP.md §9.1.
     public class DashboardShapeTests
     {
         private static readonly HeadlessUnitTestSession Session =

@@ -4,7 +4,7 @@ using Avalonia.Threading;
 
 namespace EmuSen.LunaP.Windowing
 {
-    // "At most one of these, else bring it forward" - the pattern seven call sites hand-wrote - see EmuSen_LunaP.md §9.3.
+    // "At most one of these, else bring it forward" - the pattern seven call sites hand-wrote - see EmuSen_LunaP.md §8.3.
     public sealed class WindowSlot<TWindow> where TWindow : Window
     {
         public TWindow? Current { get; private set; }

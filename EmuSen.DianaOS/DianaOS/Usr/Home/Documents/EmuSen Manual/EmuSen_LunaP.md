@@ -1,6 +1,6 @@
 # EmuSen.LunaP — the shared Avalonia toolkit
 
-*This revision (2026-08-04): Phase 5 landed — the shared UI test harness (`UiTest`), an enforced layering rule, and an opt-in pixel baseline mechanism for the migration to come. Everything before the migration now exists; nothing in either frontend consumes the toolkit yet, which is Phase 6. Previous revision (2026-08-04): Phase 4 — the fluent layout surface, closing the build phases. Phase 3 before that — the windowing layer (`ToolWindow`, `PollingWindow`, `WindowSlot`) and the confirm/error dialogs. Phase 2 before that — eleven controls, the file/folder pickers, and a gallery window. Phases 0 and 1 before that — the project, the shared theme, and the one Avalonia bootstrap. `EmuSen_LunaP_Gameplan.md` remains the plan of record for everything not yet built. This doc covers only what is real.*
+*This revision (2026-08-04): **Phase 6 landed — the migration is done.** Six windows moved onto the kit, 863 lines net removed from the two frontends, eight `.axaml` files deleted. LunaP is in real use, not just built. Previous revision (2026-08-04): Phase 5 — the shared UI test harness (`UiTest`), an enforced layering rule, and the pixel baseline mechanism the migration then ran on. Previous revision (2026-08-04): Phase 4 — the fluent layout surface, closing the build phases. Phase 3 before that — the windowing layer (`ToolWindow`, `PollingWindow`, `WindowSlot`) and the confirm/error dialogs. Phase 2 before that — eleven controls, the file/folder pickers, and a gallery window. Phases 0 and 1 before that — the project, the shared theme, and the one Avalonia bootstrap. `EmuSen_LunaP_Gameplan.md` remains the plan of record for everything not yet built. This doc covers only what is real.*
 
 ---
 
@@ -16,7 +16,7 @@ The launcher's entire value is browsing a library with no core loaded. One upwar
 
 This is also why the two frontends share *widgets* but not *windows*: `CoretopWindow` consumes `ICoreTelemetry`, so it stays a file in each frontend even though almost everything inside it is now shared. See `EmuSen_LunaP_Gameplan.md` §2.
 
-The name is Luna-P, Chibiusa's floating gadget ball, which becomes whichever tool is needed. It is **not** `Luna`, the reserved codename for the Nintendo DS core — see `EmuSen_Core_Naming_Scheme.md` §11.
+The name is Luna-P, Chibiusa's floating gadget ball, which becomes whichever tool is needed. It is **not** `Luna`, the reserved codename for the Nintendo DS core — see `EmuSen_Core_Naming_Scheme.md` §9.
 
 ---
 
@@ -154,7 +154,7 @@ The gallery ships in Release. It is ~110 lines with no dependencies beyond the k
 
 ---
 
-## 9. The windowing layer
+## 8. The windowing layer
 
 `Windowing/` is where the kit stops being widgets and starts being a framework. Still nothing consumes it — Phase 6 does that.
 
@@ -200,9 +200,9 @@ Thread marshalling is absorbed, but **not by always posting**: the slot runs inl
 
 ---
 
-## 11. The fluent surface
+## 9. The fluent surface
 
-`Fluent/` is a terser spelling of what XAML already says — `Ui` for the layouts and kit controls a window is made of, and one extension method per layout attribute. It composes §5 and §9's types rather than raw panels, which is exactly why it was built last: written first, it would have been a fluent API over `StackPanel` that the controls then had to fight.
+`Fluent/` is a terser spelling of what XAML already says — `Ui` for the layouts and kit controls a window is made of, and one extension method per layout attribute. It composes §5 and §8's types rather than raw panels, which is exactly why it was built last: written first, it would have been a fluent API over `StackPanel` that the controls then had to fight.
 
 ```csharp
 Content = Ui.Scroll(Ui.Stack(8,
@@ -231,7 +231,7 @@ The goal set in the gameplan was that a new dashboard is *a constructor and a `R
 
 ---
 
-## 13. The test harness
+## 10. The test harness
 
 `EmuSen.WiseMan/Fixtures/UiTest.cs` is the one place a UI test dispatches, captures and asserts. Five files were hand-rolling the capture (`CaptureRenderedFrame` → `Lock()` → `Marshal.Copy`) and two were hand-rolling the dump; all of them now call this.
 
@@ -276,7 +276,47 @@ The gallery is held to it, since it is the kit's own baseline target.
 
 ---
 
-## 14. Where to look next
+## 11. The migration
+
+Six windows moved onto the kit, in six commits: `VstopWindow`, both `CoretopWindow`s, `FeedWindow`, both DianaOS console windows, `PreferencesWindow`, `DebugSettingsWindow`, plus every `WindowSlot` call site. **863 lines net removed from the two frontends**, and eight `.axaml` files deleted — the frontends are down to `App.axaml` plus five windows that were never in scope (`MainWindow`, `GameWindow`, `ActiveCheatsWindow`, `CheatDatabaseWindow`, `InputSettingsWindow`, `RomBrowserWindow`).
+
+What actually went away: three `BuildMeterRow` copies with their `Grid.SetColumn` wiring, three RGBA→bitmap paths (two of which reallocated a `WriteableBitmap` on every 4 Hz tick), five hand-rolled `DispatcherTimer`s, seven "at most one, else `Activate()`" blocks, two copies of the Up/Down history recall state machine, and two byte-identical console layouts.
+
+Every migrated dashboard also stops polling while hidden, which none of them did before.
+
+### 12.1 What the verification caught
+
+Three things, none of which a passing build would have shown:
+
+- **`CoretopWindow`'s empty state was 11,060 pixels wrong on the first attempt.** `HintText` is 11 pt by definition; the original "No ROM loaded." was body-sized. It is a plain muted `TextBlock` now, and both states are byte-identical to the pre-migration render.
+- **`PreferencesWindow` never showed its own Close button.** Rendering the pre-migration window from a `git worktree` showed it stopping at "ROM Directory": the content needed ~420 px in a window fixed at 330 with `CanResize=false` and no scrolling, so the only button on it was unreachable. **This long predates the toolkit** — the migration's verification is just what surfaced it. The window sizes to its content now.
+- **An assumption of mine, not the code's.** I asserted `coretop`'s no-core state draws no `ProgressBar`; it draws one, because the sprite bar is a fixed part of the layout sitting at zero. Writing the tests against the *unmigrated* window is what caught that, and the migration preserves the behaviour.
+
+`DebugSettingsWindow`, `CoretopWindow` (both states) and the gallery all came out byte-identical.
+
+### 12.2 Two judgement calls
+
+**`DrainPendingFromEmulationThread` goes through `slot.Current`, not `RefreshIfOpen`.** `RefreshIfOpen` marshals to the UI thread, which is correct for every other caller and exactly wrong for this one — it must run on the thread that owns the core. Hotaru's `UpdateCoretopWindowTargetIfOpen` is the opposite case and is now a single line.
+
+**`FeedWindow` needs `.Grow()`.** `RgbaImageView` is left-aligned by default, which is right for a palette swatch in a column and wrong for a live game mirror that should fill the window. There is a test asserting the picture is actually wider than 400 px, because the wrong alignment renders as a working window that simply drew small.
+
+### 12.3 What is still duplicated, and the option not taken
+
+The two `CoretopWindow`s are now 138 lines each and **differ by six lines, all namespace or comment**. That is the deliberate consequence of sharing widgets but not windows: `CoretopWindow` consumes `ICoreTelemetry`, which §1's layering rule keeps out of LunaP.
+
+If that residue is worth removing, the remaining option is a small third assembly referencing LunaP *and* Cauldron, holding the shared dashboards — the launcher simply would not reference it, so the layering rule survives. It was not offered when the sharing question was decided, and it is not something to do on the side of a migration commit.
+
+### 12.4 Where the tests moved
+
+Windows that build their own tree have no XAML namescope, so `GetControl<T>(name)` no longer resolves. Test lookups go through `FindNamed<T>` over the visual tree instead (the idiom `InputSettingsWindowLayoutTests` already used).
+
+The eleven `DianaOSShellWindow` tests are the case worth noting: **their bodies were not touched at all**, only the three lookup helpers. Those tests drive real key routing — Enter through `KeyPress`, Up-arrow recall, live-shell attach — so keeping the bodies intact is what makes them a genuine safety net across the rewrite rather than a restatement of whatever the new code happens to do.
+
+`CoretopWindow` and `FeedWindow` had no tests at all before this; they have sixteen now, along with a `FakeTelemetry` fixture that lets any dashboard be driven with no core loaded.
+
+---
+
+## 12. Where to look next
 
 - **`EmuSen_LunaP_Gameplan.md`** — the plan of record: the full duplication audit (§1), the settled decisions (§2), Phases 2–6 (controls, window scaffolding, the fluent surface, harness support, migration), and the questions deliberately left open (§6).
 - **`EmuSen_Launcher_Multicore_Gameplan.md`** — the launcher this project is eventually for. Its Phase 4 (theming) is why §2's palette is a resource dictionary rather than a set of constants.

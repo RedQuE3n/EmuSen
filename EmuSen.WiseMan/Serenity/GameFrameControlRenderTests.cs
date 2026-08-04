@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Serenity
             return (window, control);
         }
 
-        // Plain RGBA8888, the shape FrameHash/BmpFile already take for the core's own frame buffer - see EmuSen_LunaP.md §13.
+        // Plain RGBA8888, the shape FrameHash/BmpFile already take for the core's own frame buffer - see EmuSen_LunaP.md §10.
         private static byte[] ToRgbaBytes(WriteableBitmap bitmap) => EmuSen.WiseMan.Fixtures.UiTest.Capture(bitmap).Rgba;
 
         [Fact]

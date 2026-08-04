@@ -6,7 +6,7 @@ using EmuSen.Galaxia;
 
 namespace EmuSen.LunaP.Windowing
 {
-    // Where a remembered window was, as plain data - see EmuSen_LunaP.md §9.1.
+    // Where a remembered window was, as plain data - see EmuSen_LunaP.md §8.1.
     public sealed class WindowPlacement
     {
         public int X { get; set; }
@@ -41,7 +41,7 @@ namespace EmuSen.LunaP.Windowing
             return IsOnAScreen(all, bounds);
         }
 
-        // Split out from the Screens overload so the rule itself is testable without a display - see EmuSen_LunaP.md §9.1.
+        // Split out from the Screens overload so the rule itself is testable without a display - see EmuSen_LunaP.md §8.1.
         public static bool IsOnAScreen(IReadOnlyList<PixelRect> screenBounds, PixelRect bounds)
         {
             // Nothing to check against is not the same as "off screen"; refusing here would strand the window at the default position instead.

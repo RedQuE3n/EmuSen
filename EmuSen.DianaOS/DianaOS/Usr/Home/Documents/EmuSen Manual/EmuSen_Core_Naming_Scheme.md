@@ -22,7 +22,7 @@ Folder: `Cores/Nintendo/`
 |---|---|---|---|
 | NES | **Moon** | `Cores/Nintendo/Moon - NES/` | Active development — `EmuSen.Cores.Nintendo.Moon.*`. CPU validated against SingleStepTests `nes6502/v1` (2,560,000 cases, traces included); PPU, memory, five mappers, `ICore` and `IDebugTarget` all implemented. No audio synthesis, no PAL, scanline-granularity PPU. See `Man pages/Hardware/Nintendo/Moon - NES/` |
 | SNES | **Venus** | `Cores/Nintendo/Venus - SNES/` | Active development — `EmuSen.Cores.Nintendo.Venus.*` (see §8) |
-| Game Boy / Game Boy Color | **Mercury** | `Cores/Nintendo/Mercury - GB-GBC/` | Not started — reserved. Open question whether GB and GBC are different enough hardware to warrant two separate cores rather than one (undecided; revisit once Venus work is further along and there's a real basis for comparison) |
+| Game Boy / Game Boy Color | **Mercury** | `Cores/Nintendo/Mercury - GB-GBC/` | Active development — `EmuSen.Cores.Nintendo.Mercury.*`. Started 2026-08-04. Full SM83 instruction set, interrupts, timer, joypad, five cartridge boards, save states. No PPU, no APU, no `IDebugTarget`, so not registered in `CoreFactory` yet. **The GB-vs-GBC question is settled: one core, DMG first, colour as an additive mode** — see `Man pages/Hardware/Nintendo/Mercury - GB-GBC/Mercury_Core.md` §1 |
 | Game Boy Advance | **Jupiter** | `Cores/Nintendo/Jupiter - GBA/` | Not started — reserved |
 | N64 | **Mars** | `Cores/Nintendo/Mars - N64/` | Not started — reserved |
 
@@ -46,7 +46,7 @@ Sailor Moon herself (codename **Moon**, not the character's full title) anchors 
 | Console | Codename | Folder | Status |
 |---|---|---|---|
 | Nintendo DS | **Luna** | `Cores/Nintendo/Luna - DS/` | Not started — reserved |
-| Nintendo 3DS / New Nintendo 3DS | **Artemis** | `Cores/Nintendo/Artemis - 3DS-New3DS/` | Not started — reserved. Open question whether the 3DS and New 3DS are different enough hardware to warrant two separate cores rather than one (same shape as the GB/GBC question under Mercury — revisit once there's a real basis for comparison) |
+| Nintendo 3DS / New Nintendo 3DS | **Artemis** | `Cores/Nintendo/Artemis - 3DS-New3DS/` | Not started — reserved. Open question whether the 3DS and New 3DS are different enough hardware to warrant two separate cores rather than one. The GB/GBC question of the same shape was settled as *one core* on 2026-08-04, on the reasoning that an extension of the same CPU and memory map is not different hardware; the same test applies here |
 
 **Luna and Artemis aren't Sailor Senshi themselves** — they're the two guardian cats who mentor and advise the Sailor Guardians throughout the series (Luna mentors Sailor Moon directly; Artemis mentors Sailor Venus and later the whole team). Deliberately kept as their own small group rather than folded into Inner or Outer Senshi above, since they're a different kind of character entirely — fitting company for the *handheld* wing of Nintendo's lineup specifically, companions alongside the main console generations the way the DS/3DS families themselves sit alongside (rather than replacing) Nintendo's home consoles.
 

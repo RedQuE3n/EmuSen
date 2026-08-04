@@ -128,7 +128,7 @@ A `LunaApp.Configure<TApp>()` helper absorbs the `UsePlatformDetect`/`WithInterF
 
 Two things came out of doing it that the plan did not anticipate, both recorded in `EmuSen_LunaP.md` §2.1 and §4.1: `LunaText` (`#D4D4D4`) and `LunaMeterText` (`#DCDCDC`) are the same *role* in two shades and want converging in Phase 2, and one `FontFamily="monospace"` in `ActiveCheatsWindow` is not the shared stack. Neither could be fixed in a phase that guaranteed no visual change; both are one-line deliberate decisions later.
 
-### Phase 2 — The control kit
+### Phase 2 — The control kit ✅ done
 
 Real `TemplatedControl`/`UserControl` types, styled by `Theme/Controls.axaml`, usable from XAML *and* constructible in C#:
 
@@ -144,7 +144,13 @@ Real `TemplatedControl`/`UserControl` types, styled by `Theme/Controls.axaml`, u
 
 `ConsolePane` is the one control that needs care: it must expose a submit hook and a "clear" method as plain delegates, so `DianaOSConsoleWindow` and `DianaOSShellWindow` inject their own interpreters and their existing `ClearConsoleWindowCommand`/`ClearShellWindowCommand` keep working, without LunaP knowing DianaOS exists.
 
-**Done when:** the gallery window (Phase 5) shows every control, and no frontend has been modified yet.
+**Done when:** the gallery window (Phase 5) shows every control, and no frontend has been modified yet. — *Verified: eleven controls, 48 headless tests, full suite 2,137/2,137, no frontend touched. Built as documented in `EmuSen_LunaP.md` §5.*
+
+Three things came out of doing it:
+
+- **The gallery was built here rather than in Phase 5**, because this phase's completion check depends on it and it is ~110 lines. Phase 5 keeps the rest of its harness work.
+- **The file/folder pickers were pulled forward from Phase 3**, because `PathPickerRow` is meaningless without them. `ConfirmAsync`/`ErrorAsync` stay in Phase 3, where they belong — they need a window of our own, not an OS dialog.
+- **A trap worth carrying into every future control** (`EmuSen_LunaP.md` §5.5): deriving from a templated Avalonia control silently loses its default template, because a control's style key defaults to its own runtime type. `ButtonBar` rendered as nothing, with no error. Anything added here that derives from a templated control needs its own `Template` setter *and* a test that finds a real part in the visual tree — a property assertion alone would have passed.
 
 ### Phase 3 — The windowing layer
 
@@ -190,6 +196,20 @@ One window per commit, its existing WiseMan tests staying green throughout. Sugg
 6. `MainWindow`'s five window-opening handlers and `DebugWindows` — `WindowSlot`.
 
 `MainWindow` and `GameWindow` themselves (1,379 and 893 lines) are **not** migrated wholesale. They own the frame driver, the emulation thread and hotkey dispatch; only their window-opening and dialog code is in scope. Rewriting either is a different project and not this one.
+
+---
+
+### Phase 7 — The widget library proper
+
+**Added 2026-08-04, on the project owner's direction**, after Phase 2 landed: LunaP is not only a de-duplication exercise, it is *the* common windowing widget set, and it is expected to grow toward the feature surface an EmulationStation-style shell needs.
+
+Named so far: **dropdowns, switches/toggles, tabs, and filters.** Sequenced after Phase 6 rather than before it, for one specific reason — Phases 2 and 6 are anchored to widgets the codebase demonstrably needs today, and every one of them can be validated by deleting the hand-written copy it replaces. Phase 7's widgets have no such anchor yet, so they are the first work here that is genuinely speculative, and the cheapest way to stop them being speculative is to have the migration done first: a real consumer is a far better specification than a guess.
+
+Concretely, when this phase starts:
+
+- **Prefer wrapping over reinventing.** Avalonia already ships `ComboBox`, `ToggleSwitch`, `TabControl`. The value LunaP adds is the *theme* and a consistent API, not a reimplementation — the same relationship §4/Phase 2's controls have to `ProgressBar` and `TextBox`. A LunaP widget that reimplements a working Avalonia one needs a stated reason.
+- **"Filters" is the one that is not a widget.** A filter bar over a game library is a data concept (predicate, facets, live result count) with a widget attached, and it will want a home for the non-visual half. Decide then whether that half is in LunaP at all — §3's layering rule is the test, and a filter model that knows what a "system" or a "ROM" is fails it.
+- **Theming stops being deferrable.** §6's open question — how themes are authored — is answerable at leisure while there is one dark palette and eleven controls. A tabbed, skinnable browsing shell is where it becomes load-bearing, so it should be decided at the *start* of this phase rather than discovered in the middle of it.
 
 ---
 

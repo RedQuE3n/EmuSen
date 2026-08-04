@@ -1,0 +1,75 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+
+namespace EmuSen.LunaP.Windowing
+{
+    // The OS file/folder pickers, once, instead of per call site - see EmuSen_LunaP.md §6.
+    public static class Dialogs
+    {
+        // Null means the user cancelled, or the control is not in a window yet.
+        public static async Task<string?> PickFolderAsync(Visual owner, string title, string? startIn = null)
+        {
+            if (TopLevel.GetTopLevel(owner) is not { } top) return null;
+
+            IReadOnlyList<IStorageFolder> picked = await top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false,
+                SuggestedStartLocation = await StartLocation(top, startIn),
+            });
+
+            return picked.Count > 0 ? picked[0].Path.LocalPath : null;
+        }
+
+        public static async Task<string?> PickFileAsync(Visual owner, string title,
+            IReadOnlyList<FilePickerFileType>? types = null, string? startIn = null)
+        {
+            if (TopLevel.GetTopLevel(owner) is not { } top) return null;
+
+            IReadOnlyList<IStorageFile> picked = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false,
+                FileTypeFilter = types,
+                SuggestedStartLocation = await StartLocation(top, startIn),
+            });
+
+            return picked.Count > 0 ? picked[0].Path.LocalPath : null;
+        }
+
+        public static async Task<string?> SaveFileAsync(Visual owner, string title, string? suggestedName = null,
+            IReadOnlyList<FilePickerFileType>? types = null, string? startIn = null)
+        {
+            if (TopLevel.GetTopLevel(owner) is not { } top) return null;
+
+            IStorageFile? picked = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = title,
+                SuggestedFileName = suggestedName,
+                FileTypeChoices = types,
+                SuggestedStartLocation = await StartLocation(top, startIn),
+            });
+
+            return picked?.Path.LocalPath;
+        }
+
+        // A path that no longer exists is not an error here; the picker just opens wherever it would have anyway.
+        private static async Task<IStorageFolder?> StartLocation(TopLevel top, string? path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+
+            try
+            {
+                return await top.StorageProvider.TryGetFolderFromPathAsync(new Uri(path));
+            }
+            catch (UriFormatException)
+            {
+                return null;
+            }
+        }
+    }
+}

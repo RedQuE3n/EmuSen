@@ -1,0 +1,161 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls">
+
+    <!-- Every look here is the one the frontends already had; LunaPControlTests
+         asserts these styles actually apply, because a selector that silently
+         stops matching renders as an unstyled control rather than an error.
+         See EmuSen_LunaP.md §5. -->
+
+    <Style Selector="luna|SectionHeader">
+        <Setter Property="Foreground" Value="{DynamicResource LunaSectionHeader}" />
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
+    <Style Selector="luna|HintText">
+        <Setter Property="Foreground" Value="{DynamicResource LunaMuted}" />
+        <Setter Property="FontSize" Value="{DynamicResource LunaHintFontSize}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="luna|MonoText">
+        <Setter Property="Foreground" Value="{DynamicResource LunaText}" />
+        <Setter Property="FontFamily" Value="{DynamicResource LunaMonoFont}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 140/*/55 is what all three hand-written copies used. -->
+    <Style Selector="luna|MeterRow">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="140,*,55">
+                    <TextBlock Grid.Column="0"
+                               Text="{TemplateBinding Label}"
+                               Foreground="{DynamicResource LunaMeterText}"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <ProgressBar Grid.Column="1"
+                                 Minimum="0" Maximum="100"
+                                 Height="14"
+                                 Value="{TemplateBinding Percent}"
+                                 Foreground="{TemplateBinding BarBrush}" />
+                    <TextBlock Grid.Column="2"
+                               Text="{TemplateBinding ValueText}"
+                               Foreground="{DynamicResource LunaMeterText}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="luna|MeterList">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Name="PART_Rows" Spacing="3" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="luna|RgbaImageView">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Image Name="PART_Image"
+                       Source="{TemplateBinding Source}"
+                       Stretch="{TemplateBinding Stretch}"
+                       RenderOptions.BitmapInterpolationMode="None" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="luna|FieldRow">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{TemplateBinding Label}" FontWeight="Bold" />
+                    <luna:HintText Text="{TemplateBinding Hint}" IsVisible="{TemplateBinding HasHint}" />
+                    <ContentPresenter Content="{TemplateBinding Content}" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="luna|PathPickerRow">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0"
+                             IsReadOnly="True"
+                             Text="{TemplateBinding Path}"
+                             PlaceholderText="{TemplateBinding Placeholder}" />
+                    <Button Grid.Column="1" Name="PART_Browse" Content="Browse..." Margin="8,0,0,0" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <!-- Templated explicitly rather than inheriting ItemsControl's: a derived
+         control's style key is its own type, so FluentTheme's ItemsControl
+         theme does not reach it and it would render as nothing. See
+         EmuSen_LunaP.md §5.5. -->
+    <Style Selector="luna|ButtonBar">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}" />
+            </ControlTemplate>
+        </Setter>
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8" />
+            </ItemsPanelTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="luna|StatusBar">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{TemplateBinding Status}"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center" />
+                    <ContentPresenter Grid.Column="1" Content="{TemplateBinding Content}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="luna|ConsolePane">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <DockPanel>
+                    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*" Margin="0,8,0,0">
+                        <TextBlock Grid.Column="0"
+                                   Text="{TemplateBinding Prompt}"
+                                   VerticalAlignment="Center"
+                                   FontFamily="{DynamicResource LunaMonoFont}"
+                                   Foreground="{DynamicResource LunaText}"
+                                   Margin="0,0,4,0" />
+                        <TextBox Grid.Column="1"
+                                 Name="PART_Input"
+                                 FontFamily="{DynamicResource LunaMonoFont}"
+                                 Background="{DynamicResource LunaInputSurface}"
+                                 Foreground="{DynamicResource LunaText}"
+                                 CaretBrush="{DynamicResource LunaText}"
+                                 BorderThickness="1" />
+                    </Grid>
+
+                    <ScrollViewer Name="PART_Scroll">
+                        <SelectableTextBlock Name="PART_Output"
+                                             FontFamily="{DynamicResource LunaMonoFont}"
+                                             Foreground="{DynamicResource LunaText}"
+                                             TextWrapping="Wrap" />
+                    </ScrollViewer>
+                </DockPanel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+</Styles>

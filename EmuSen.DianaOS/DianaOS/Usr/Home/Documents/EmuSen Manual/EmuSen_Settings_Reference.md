@@ -170,7 +170,7 @@ Two gotchas worth knowing before adding cases here:
 
 The arrow-key half of §4.2 does **not** reproduce headlessly — headless has no real focus-navigation pass — so it is reasoned from Avalonia's routing rather than measured, and the theory cases for `Up`/`Left` pass either way.
 
-`InputSettingsWindowRenderTests.cs` renders the window through Avalonia's real Skia pass and asserts the result isn't one flat colour, which catches an unparseable `.axaml` or a collapsed layout. Set `EMUSEN_UI_DUMP=/path/to.bmp` to also write the capture out and look at it — that is how the blank-column bug in §4.5 was found.
+`InputSettingsWindowRenderTests.cs` renders the window through Avalonia's real Skia pass and asserts the result isn't one flat colour, which catches an unparseable `.axaml` or a collapsed layout. Set `EMUSEN_UI_DUMP=/some/dir` to also write the capture out and look at it — that is how the blank-column bug in §4.5 was found. The variable names a *directory* and every capture in the run lands in it as `<name>.png`; it used to be a single file path, which could not serve more than one test. See `EmuSen_LunaP.md` §13.1.
 
 ### 4.8 `EmuSen.Hotaru` suppresses AVLN3001
 
@@ -257,7 +257,7 @@ Two deliberate limits: the scan is **not recursive** (it matches what `RomBrowse
 
 **Test coverage.** `EmuSen.WiseMan/Mistress/RomLibraryTests.cs` covers the scan directly. `MainWindowLibraryTests.cs` drives a real `MainWindow` through `HeadlessUnitTestSession` (§4.7's harness): that a configured directory lists and sorts its games, that an unset one points at Preferences, that activating a title really switches to the game screen — it boots a `SyntheticRom` for that — that `Game Library` returns, and that a ROM added afterwards shows up on refresh.
 
-**The headless harness needed a theme first.** `TestAppBuilder` (§4.7) built a bare `Application` with no styles. Templated controls — `ListBox`, `ListBoxItem`, `Button`, `TextBox` — then have no control template and render as *nothing*, while untemplated `TextBlock`s still draw. A render assertion counting distinct colours therefore passed on the header and hint text alone, with the entire list invisible; the library screen looked correct to the test and blank in a captured frame. `TestAppBuilder` now adds `FluentTheme` and `ThemeVariant.Dark` to match `App.axaml`, and the library's render test asserts specifically that the *selected row's accent colour* is present, which only a real templated `ListBoxItem` can produce. Set `EMUSEN_UI_DUMP=/path/frame.png` to write the captured frame out and look at it.
+**The headless harness needed a theme first.** `TestAppBuilder` (§4.7) built a bare `Application` with no styles. Templated controls — `ListBox`, `ListBoxItem`, `Button`, `TextBox` — then have no control template and render as *nothing*, while untemplated `TextBlock`s still draw. A render assertion counting distinct colours therefore passed on the header and hint text alone, with the entire list invisible; the library screen looked correct to the test and blank in a captured frame. `TestAppBuilder` now adds `FluentTheme` and `ThemeVariant.Dark` to match `App.axaml`, and the library's render test asserts specifically that the *selected row's accent colour* is present, which only a real templated `ListBoxItem` can produce. Set `EMUSEN_UI_DUMP=/some/dir` to write the captured frames out and look at them — a directory, one `<name>.png` per capture. See `EmuSen_LunaP.md` §13.1.
 
 ### 4.12 The Emulation menu (`Views/MainWindow.axaml`)
 

@@ -56,19 +56,8 @@ namespace EmuSen.WiseMan.Serenity
             return (window, control);
         }
 
-        // Reads the captured frame back into a plain RGBA8888 byte[] - the
-        // same shape FrameHash/BmpFile already work with for the core's own
-        // frame buffer (EmuSen.Pharaoh's --autoshot), so this is directly
-        // comparable against that same tooling.
-        private static byte[] ToRgbaBytes(WriteableBitmap bitmap)
-        {
-            int width = bitmap.PixelSize.Width;
-            int height = bitmap.PixelSize.Height;
-            var buffer = new byte[width * height * 4];
-            using ILockedFramebuffer fb = bitmap.Lock();
-            Marshal.Copy(fb.Address, buffer, 0, buffer.Length);
-            return buffer;
-        }
+        // Plain RGBA8888, the shape FrameHash/BmpFile already take for the core's own frame buffer - see EmuSen_LunaP.md §13.
+        private static byte[] ToRgbaBytes(WriteableBitmap bitmap) => EmuSen.WiseMan.Fixtures.UiTest.Capture(bitmap).Rgba;
 
         [Fact]
         public async Task Renders_a_solid_frame_with_the_correct_color_at_its_center()

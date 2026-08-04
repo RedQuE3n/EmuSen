@@ -196,7 +196,16 @@ Success criterion: a new dashboard window is a constructor and a `Refresh()` bod
 
 </details>
 
-### Phase 5 — Harness support
+### Phase 5 — Harness support ✅ done
+
+*Full suite 2,168. Built as documented in `EmuSen_LunaP.md` §13. Three notes:*
+
+- ***`EMUSEN_UI_DUMP` changed meaning, from a file path to a directory.*** *The file-path form had already failed: one test appended `_{console}` to the basename to get three files out of it, and the two sites using it disagreed on BMP versus PNG. Both doc references in `EmuSen_Settings_Reference.md` were updated.*
+- ***Baselines are recorded, not committed.*** *Reference images churn on any font, Skia or theme change, and a stale one fails looking exactly like a real regression. `AssertMatchesBaseline` is a no-op unless `EMUSEN_UI_BASELINE` is set, so nothing goes vacuous in CI, and the migration workflow records from the previous commit in one command. Verified by mutation: a one-value change to a single colour channel failed the comparison with a pixel count.*
+- ***The layering rule is enforced now, not just documented.*** *`Common/LeafAssemblyTests.cs` already pinned Endymion/Nehellania/Serenity/Galaxia; LunaP joined it. §3's rule was prose until this phase, and adding one `ProjectReference` in a hurry is exactly what would otherwise go unnoticed.*
+
+<details>
+<summary>Original plan text</summary>
 
 Per the repo's standing rule, testing extends `EmuSen.WiseMan` rather than launching a window. The infrastructure is already there (`HeadlessUnitTestSession`, `UseSkia`, `CaptureRenderedFrame`, the `EMUSEN_UI_DUMP` BMP escape hatch in `Mistress/InputSettingsWindowRenderTests.cs`) but every render test re-types it.
 
@@ -204,6 +213,8 @@ Per the repo's standing rule, testing extends `EmuSen.WiseMan` rather than launc
 - `UiTest.Capture(window)` → pixels, honouring `EMUSEN_UI_DUMP` generically instead of per-test. **Phase 1 hand-rolled exactly this as a throwaway to prove the palette swap changed no pixels, then deleted it** — a reusable golden-image comparison is worth having, and rebuilding it once per migration is not. Note the trap Phase 1 hit: `VstopWindow` prints live pid/uptime/CPU, so it can never be a golden-image target; the API should make "this window is not deterministic" an explicit choice rather than a surprise.
 - `UiTest.AssertLaidOut(window)` — the ">8 distinct colours, or layout failed" check, written once instead of inline.
 - **`GalleryWindow`** in LunaP itself: every control, one window. One render test then covers the whole kit, and it doubles as the visual reference when adding a control.
+
+</details>
 
 ### Phase 6 — Migrate
 

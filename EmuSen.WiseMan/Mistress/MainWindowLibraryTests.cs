@@ -153,18 +153,7 @@ namespace EmuSen.WiseMan.Mistress
             var window = new MainWindow();
             window.Show();
 
-            var frame = window.CaptureRenderedFrame()!;
-            int width = frame.PixelSize.Width;
-            int height = frame.PixelSize.Height;
-            var pixels = new byte[width * height * 4];
-            using (var fb = frame.Lock()) System.Runtime.InteropServices.Marshal.Copy(fb.Address, pixels, 0, pixels.Length);
-
-            string? dump = Environment.GetEnvironmentVariable("EMUSEN_UI_DUMP");
-            if (!string.IsNullOrEmpty(dump))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(dump)!);
-                EmuSen.Hotaru.Imaging.FrameImageWriter.SavePng(pixels, width, height, dump);
-            }
+            byte[] pixels = EmuSen.WiseMan.Fixtures.UiTest.AssertLaidOut(window, "library").Rgba;
 
             // Every other pixel on this screen is black or grey text, so a
             // strongly colour-cast one can only be the selected row's accent -

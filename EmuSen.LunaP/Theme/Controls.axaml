@@ -138,6 +138,30 @@
         </Setter>
     </Style>
 
+    <!-- The facet label and dropdown collapse together when there is nothing to pick. -->
+    <Style Selector="luna|FilterBar">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="Auto,Auto,*">
+                    <TextBlock Grid.Column="0"
+                               Text="{TemplateBinding FacetLabel}"
+                               IsVisible="{TemplateBinding ShowFacet}"
+                               Foreground="{DynamicResource LunaMuted}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <luna:Dropdown Grid.Column="1"
+                                   Name="PART_Facet"
+                                   MinWidth="180"
+                                   IsVisible="{TemplateBinding ShowFacet}" />
+                    <TextBox Grid.Column="2"
+                             Name="PART_Search"
+                             Text="{TemplateBinding SearchText}"
+                             PlaceholderText="{TemplateBinding Placeholder}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
     <Style Selector="luna|ConsolePane">
         <Setter Property="Template">
             <ControlTemplate>

@@ -46,7 +46,7 @@
             <TextBlock x:Name="AttributionText"
                        TextWrapping="Wrap"
                        FontSize="11"
-                       Foreground="Gray" />
+                       Foreground="{DynamicResource LunaMuted}" />
         </Border>
 
         <!-- Systems on the left, that system's games on the right - see

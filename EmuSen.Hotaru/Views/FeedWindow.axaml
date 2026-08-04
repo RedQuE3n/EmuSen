@@ -4,7 +4,7 @@
         Title="DianaOS feed"
         Width="512" Height="480"
         MinWidth="256" MinHeight="240"
-        Background="Black">
+        Background="{DynamicResource LunaVoid}">
 
     <Image x:Name="FeedImage"
            Stretch="Uniform"

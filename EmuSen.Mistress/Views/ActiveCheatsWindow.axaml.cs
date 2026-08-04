@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmuSen.LunaP.Theme;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -97,7 +98,7 @@ namespace EmuSen.Mistress.Views
                 var codeBox = new TextBox { Name = console.Console + "CodeBox", PlaceholderText = "Code" };
                 var descriptionBox = new TextBox { Name = console.Console + "DescriptionBox", PlaceholderText = "Description", Margin = new Avalonia.Thickness(8, 0, 0, 0) };
                 var addButton = new Button { Name = console.Console + "AddButton", Content = "Add", Margin = new Avalonia.Thickness(8, 0, 0, 0) };
-                var formats = new TextBlock { Foreground = Avalonia.Media.Brushes.Gray, FontSize = 11, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+                var formats = new TextBlock { Foreground = LunaPalette.Muted, FontSize = 11, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
 
                 addButton.Click += OnAddClick;
 

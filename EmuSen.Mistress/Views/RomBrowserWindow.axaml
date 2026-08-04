@@ -9,7 +9,7 @@
         <TextBlock DockPanel.Dock="Top"
                    x:Name="DirectoryText"
                    TextWrapping="Wrap"
-                   Foreground="Gray"
+                   Foreground="{DynamicResource LunaMuted}"
                    FontSize="11"
                    Margin="0,0,0,8" />
 

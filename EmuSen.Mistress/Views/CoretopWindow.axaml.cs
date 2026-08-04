@@ -2,6 +2,7 @@ using EmuSen.Cauldron;
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
+using EmuSen.LunaP.Theme;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -108,7 +109,7 @@ namespace EmuSen.Mistress.Views
                 LoadPanel.Children.Add(new TextBlock
                 {
                     Text = DebugLoadKindText.Header(group.Key),
-                    Foreground = new SolidColorBrush(Color.Parse("#808080")),
+                    Foreground = LunaPalette.Muted,
                     FontSize = 11,
                 });
                 foreach (DebugLoadInfo l in group)
@@ -167,9 +168,9 @@ namespace EmuSen.Mistress.Views
         {
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("140,*,55") };
 
-            var labelText = new TextBlock { Text = label, Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var bar = new ProgressBar { Minimum = 0, Maximum = 100, Value = Math.Clamp(percent, 0, 100), Height = 14, Foreground = ColorForPercent(percent) };
-            var valueTextBlock = new TextBlock { Text = valueText, Foreground = Brushes.Gainsboro, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var labelText = new TextBlock { Text = label, Foreground = LunaPalette.MeterText, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var bar = new ProgressBar { Minimum = 0, Maximum = 100, Value = Math.Clamp(percent, 0, 100), Height = 14, Foreground = LunaPalette.ForLoad(percent) };
+            var valueTextBlock = new TextBlock { Text = valueText, Foreground = LunaPalette.MeterText, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
 
             Grid.SetColumn(labelText, 0);
             Grid.SetColumn(bar, 1);
@@ -179,12 +180,6 @@ namespace EmuSen.Mistress.Views
             grid.Children.Add(valueTextBlock);
             return grid;
         }
-
-        // Same green/yellow/red "getting busy" convention the console
-        // version's ColoredBar uses, so the two never disagree about
-        // what counts as "hot."
-        private static IBrush ColorForPercent(double percent) =>
-            percent >= 85 ? Brushes.OrangeRed : percent >= 60 ? Brushes.Gold : Brushes.LimeGreen;
 
         private void DrawPalette()
         {

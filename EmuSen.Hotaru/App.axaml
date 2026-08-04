@@ -3,8 +3,9 @@
              x:Class="EmuSen.Hotaru.App"
              RequestedThemeVariant="Dark">
 
+    <!-- FluentTheme plus the shared palette - see EmuSen_LunaP.md §3.1. -->
     <Application.Styles>
-        <FluentTheme />
+        <StyleInclude Source="avares://EmuSen.LunaP/Theme/LunaTheme.axaml" />
     </Application.Styles>
 
 </Application>

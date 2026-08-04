@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EmuSen.LunaP.Theme;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -104,7 +105,7 @@ namespace EmuSen.Mistress.Views
                     {
                         Text = flag.Description,
                         TextWrapping = TextWrapping.Wrap,
-                        Foreground = Brushes.Gray,
+                        Foreground = LunaPalette.Muted,
                         FontSize = 11,
                         Margin = new Thickness(24, -2, 0, 4),
                     });

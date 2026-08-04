@@ -160,3 +160,13 @@ Every codename in this doc has been checked against the Sailor Moon Wiki (and, f
 §3 had previously reserved `Endymion` for the Sega Master System. **The Master System is now `Endou`**, and its placeholder folder was renamed to `Cores/Sega/Endou - Master System/`. Nothing depended on the old name — that core has never had code, only a README.
 
 **The general lesson, worth acting on before it bites again:** the infrastructure projects (Galaxia, Serenity, Crystal, Cauldron, Nehellania, Endymion, Hotaru, Mistress, Pharaoh, Tomoe, WiseMan, DianaOS) draw from the same Sailor Moon namespace as the cores, but this document only ever tracked the cores. That is how one name ended up claimed twice without anyone noticing. Either list the infrastructure names here too, or check both pools before reserving a new codename.
+
+---
+
+## 11. `LunaP` — reserved for the shared Avalonia toolkit
+
+**`EmuSen.LunaP` is the shared UI toolkit** — theme, controls, window scaffolding and a fluent layout surface for the frontends to build screens from. Planned, not yet built; see `EmuSen_LunaP_Gameplan.md`. Named for Luna-P, Chibiusa's floating gadget ball, which takes the shape of whichever tool is needed at the time.
+
+**Distinct from `Luna`, §2's reserved codename for the Nintendo DS core** (`Cores/Nintendo/Luna - DS/`, the guardian cat). Same stem, unrelated claims — the same kind of collision §8 already records for Sony's `Wiseman` versus the `EmuSen.WiseMan` test project. No folder or namespace overlap in practice (`EmuSen.LunaP/` at the repo root versus `Cores/Nintendo/Luna - DS/`), but worth knowing about before either name is searched for and mistaken for the other. The DS codename stays `Luna`; nothing about this reservation constrains it.
+
+This section is the first application of §10's lesson: an infrastructure name recorded here at the moment it was claimed, rather than after a collision.

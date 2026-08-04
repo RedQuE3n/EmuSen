@@ -3,6 +3,6 @@
         xmlns:serenity="clr-namespace:EmuSen.Serenity;assembly=EmuSen.Serenity"
         x:Class="EmuSen.Hotaru.Views.GameWindow"
         Title="EmuSen"
-        Background="Black">
+        Background="{DynamicResource LunaVoid}">
     <serenity:GameFrameControl x:Name="GameFrame" />
 </Window>

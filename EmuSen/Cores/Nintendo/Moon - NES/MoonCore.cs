@@ -58,9 +58,6 @@ namespace EmuSen.Cores.Nintendo.Moon
         // Nothing is synthesized yet, but a caller still needs a rate up front - see Moon_APU.md.
         public int AudioSampleRate => 44100;
 
-        // Set by the debug target so its providers re-snapshot once a frame, off the emulation thread.
-        [SkipInState] public Action? FrameRefresh;
-
         // Halted in front of a breakpoint, with the frame left mid-flight for the next call to resume.
         public bool IsHaltedAtBreakpoint { get; private set; }
         public int HaltedAddress { get; private set; }

@@ -75,7 +75,6 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             _hardwareLoad = new(() => Array.Empty<DebugLoadInfo>(), Array.Empty<DebugLoadInfo>());
 
             if (core.Bus != null) core.Bus.WriteObserver = this;
-            core.FrameRefresh = Refresh;
         }
 
         public string CoreName => "NES";
@@ -115,14 +114,16 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             new DebugCpu("cpu", "2A03", _core.Breakpoints),
         };
 
-        public void Refresh()
+        public void RefreshProviders()
         {
             _cpuRegisters.Refresh();
             _videoRegisters.Refresh();
             _apuRegisters.Refresh();
+            _coprocessorRegisters.Refresh();
             _sprites.Refresh();
             _palettes.Refresh();
             _audioChannels.Refresh();
+            _hardwareLoad.Refresh();
         }
 
         public void OnWrite(string spaceName, int address, byte value) =>

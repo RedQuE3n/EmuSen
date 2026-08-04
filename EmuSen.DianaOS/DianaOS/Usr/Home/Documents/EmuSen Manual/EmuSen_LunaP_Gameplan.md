@@ -178,13 +178,23 @@ This is the part that makes it a *framework* rather than a widget bag.
 
 </details>
 
-### Phase 4 — The fluent surface
+### Phase 4 — The fluent surface ✅ done
+
+*11 tests, full suite 2,165. Built as documented in `EmuSen_LunaP.md` §11. Two notes:*
+
+- ***The planned names work, but only because that was checked rather than assumed.*** *`Margin` and `Spacing` are existing properties, so `control.Margin(12)` looks like it cannot compile. It does — C# falls back to extension methods when member lookup produces something that is not a method group. A throwaway probe project confirmed it before the API was designed; the fallback would have been an invented vocabulary (`Pad`, `Spaced`) that broke the one-vocabulary rule for no reason.*
+- ***The success criterion is a test, not a claim.*** *`DashboardShapeTests` builds a `CoretopWindow`-shaped dashboard over plain data with no `.axaml` and drives it end to end. `GalleryWindow` was also rewritten onto the fluent surface, and its render tests passed unchanged — the fluent spelling produces an equivalent visual tree, not merely a compiling one.*
+
+<details>
+<summary>Original plan text</summary>
 
 Deliberately last of the build phases, because it must compose Phase 2/3's types rather than raw panels — building it first would produce a fluent API over `StackPanel` that the controls then have to fight.
 
 Small and mechanical: `Ui.Stack`, `Ui.Dock`, `Ui.Cols`, `Ui.Scroll`, `Ui.Section`, and extension methods `.Margin()`, `.Spacing()`, `.Grow()`. The target is that `BuildMeterRow`'s three manual `Grid.SetColumn` calls become one `Ui.Cols("140,*,55")`.
 
 Success criterion: a new dashboard window is a constructor and a `Refresh()` body, with no `.axaml` file if its author doesn't want one — and no new concept the XAML path doesn't also have.
+
+</details>
 
 ### Phase 5 — Harness support
 

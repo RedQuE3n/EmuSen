@@ -91,15 +91,16 @@
                     <TextBox Grid.Column="2"
                              x:Name="LibrarySearchBox"
                              PlaceholderText="Search titles"
+                             KeyDown="OnLibraryKeyDown"
                              Margin="8,0,0,0" />
                 </Grid>
                 <TextBlock DockPanel.Dock="Top"
                            x:Name="LibraryHeaderText"
                            Foreground="Gray"
                            Margin="2,0,2,8" />
+                <!-- Text is set in ShowLibraryEntries: it depends on whether a game is suspended. -->
                 <TextBlock DockPanel.Dock="Bottom"
                            x:Name="LibraryHintText"
-                           Text="Double-click a title, or press Enter, to start it."
                            Foreground="Gray"
                            Margin="2,8,2,0" />
                 <ListBox x:Name="LibraryList"

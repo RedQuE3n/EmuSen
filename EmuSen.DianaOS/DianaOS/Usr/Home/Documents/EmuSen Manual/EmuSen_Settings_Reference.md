@@ -113,13 +113,13 @@ AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel, handledEven
 
 and setting `e.Handled = true` once the key is consumed, so it never reaches the button underneath. `handledEventsToo` matters for keys something upstream has already claimed.
 
-`MainWindow` captures gameplay input the same way and for the same reason — four of the twelve default game-button bindings are the arrow keys, which the focus manager claims for directional navigation whenever anything focusable (the menu bar) has focus.
+`MainWindow` captures gameplay input the same way and for the same reason — four of the twelve default game-button bindings are the arrow keys, which the focus manager claims for directional navigation whenever anything focusable (the menu bar) has focus. That capture had a cost of its own once a text box appeared on the same window; see §4.17.
 
 **Regression coverage**: `EmuSen.WiseMan/Mistress/InputSettingsWindowTests.cs` drives real Avalonia key events through `Avalonia.Headless` rather than calling the handler directly — a direct call passes against the broken build, because the bug is purely in routing. Reverting the single `AddHandler` line back to `KeyDown +=` fails 3 of its 12 tests (`Enter`, `Space`, and the re-arm check). Note the arrow-key half of the problem does **not** reproduce headlessly, since headless has no real focus-navigation pass; it is reasoned from Avalonia's routing, not measured.
 
 ### 4.3 Hotkeys are bindings too (`Input/HotkeyBindingMap.cs`)
 
-Fast-forward and rewind used to be hardcoded to `Tab` and `Backspace` inside `MainWindow.SetButtonFromKey`, undiscoverable and unchangeable. They're now entries in a `HotkeyAction` map with the same shape, persistence and rebind rules as `ControllerKeyMap`, and they appear as their own section in the settings window. Defaults keep `Tab`/`Backspace` so existing muscle memory survives, and add `F5`/`F8` save/load state, `P` pause, `F11` fullscreen.
+Fast-forward and rewind used to be hardcoded to `Tab` and `Backspace` inside `MainWindow.SetButtonFromKey`, undiscoverable and unchangeable. They're now entries in a `HotkeyAction` map with the same shape, persistence and rebind rules as `ControllerKeyMap`, and they appear as their own section in the settings window. Defaults keep `Tab`/`Backspace` so existing muscle memory survives, and add `F5`/`F8` save/load state, `P` pause, `F11` fullscreen, and `Escape` to step out of a game (§4.18).
 
 `HotkeyBindingMap.IsHeld` splits the two shapes of action: fast-forward and rewind apply *while the key is down* (see `EmuSen_Rewind_And_FastForward.md` §4), everything else fires once on the press. Getting that wrong makes save-state fire once per frame while held.
 
@@ -247,6 +247,8 @@ Activating a title — double-click, or Enter with it selected — prompts for a
 
 **Enter reaches the list even though it is also bound to Start.** `MainWindow`'s key handlers are registered `Tunnel` with `handledEventsToo: true` (§4.2), so they see Enter first — but `SetButtonFromKey` does not mark a bound *button* handled, so the event still bubbles to `LibraryList`. The library's own handler sets `Handled` to stop it going further. The cost is that launching with Enter also latches Start for as long as the key is held, which is harmless and arguably wanted.
 
+The same handler is attached to the search box, so Enter starts the top match after a search too. That "also latches Start" cost is now gone in both cases: the pad map is not consulted from the library screen at all (§4.18).
+
 **Why the scan is its own class.** `RomLibrary.Scan` has no Avalonia dependency, so the interesting behaviour is testable without a window: extension filtering (`.smc`/`.sfc`, case-insensitive), case-insensitive title sort, and the four outcomes a directory can produce — `NoDirectoryConfigured`, `DirectoryNotFound`, `Empty`, `Ok`. `RomLibrary.DescribeEmpty` is the single place the "why is my list empty" wording lives, so the inline library and the older modal `RomBrowserWindow` cannot drift; `RomBrowserWindow` was rewritten onto the same scan and no longer carries its own copy of the extension list.
 
 The list is refreshed on construction, whenever the library is shown, and when `PreferencesWindow` closes — that window is non-modal, so the ROM directory can change while the library sits on screen behind it.
@@ -363,3 +365,48 @@ Venus claims **two** folders: the main SNES one and `Nintendo - Satellaview`, wh
 **Confirmation in both interfaces.** `cheat db prune` lists what would go and does nothing; `--apply` is what deletes. The Mistress button is two-stage for the same reason: the first click measures and re-labels itself `Delete N system(s)?`, the second carries it out, and changing the cheat folder disarms whatever was armed, since the plan was measured against the old one. A finished download arms the offer automatically, because the moment the 250MB lands is the moment the choice is worth putting in front of someone.
 
 **Test coverage.** `CheatDatabasePrunerTests.cs` covers the plan, the deletion, both refusals, case-insensitive folder matching, the symlink escape, and the registry derivation including a core that claims nothing. `CheatPruneCommandTests.cs` covers the shell: report-without-`--apply`, delete-with-it, the already-pruned message, and that a shell built without the injection prunes nothing. `CheatDatabasePruneWindowTests.cs` covers the two-stage button, that one click deletes nothing, that the systems pane updates after, and that the button is off when nothing supplies a supported set.
+
+### 4.17 Fixed bug: the library search box ate keystrokes
+
+Typing in the library screen's search box (§4.11) dropped characters and ignored Backspace. The cause is §4.2's fix meeting the search box: `MainWindow` captures gameplay input on the **tunnel** pass with `handledEventsToo: true`, so its handler runs before the focused control sees anything, and `SetButtonFromKey` marks a key handled whenever it resolves to a `HotkeyAction`.
+
+With the default hotkeys — `Tab`, `Backspace`, `F5`, `F8`, `P`, `F11` (§4.3) — that made three things go wrong in a focused text box:
+
+- **`Backspace` never deleted.** `TextBox.OnKeyDown` runs from a class handler registered without `handledEventsToo`, so a key already marked handled never reaches it.
+- **`p` never typed.** This one is a platform contract rather than a routing detail: `X11Window.DispatchInput` raises the key event, checks `RawInputEventArgs.Handled`, and **returns before constructing the `RawTextInputEventArgs`**. A handled `KeyDown` therefore suppresses the character outright. Win32 does the equivalent by only calling `TranslateMessage` on an unhandled key. So exactly one printable character was unusable, which reads as "the search box is flaky" rather than as a bound hotkey.
+- **`Tab` could not leave the field**, and the game-button half of the map was still latching pad presses (`z` pressing B and so on) while the user typed a title.
+
+**The fix is that a focused text field owns the whole keyboard.** `SetButtonFromKey` returns immediately when the event's source sits inside a `TextBox`:
+
+```csharp
+private static bool TypingIntoATextField(RoutedEventArgs e) =>
+    e.Source is Visual source && source.FindAncestorOfType<TextBox>(includeSelf: true) is not null;
+```
+
+It tests `e.Source` rather than asking the `FocusManager` because the tunnelling event is already being routed *to* the focused element — the answer is in the arguments, and no second source of truth can disagree with it. `includeSelf` matters: focus lands on the `TextBox` itself, not on the `TextPresenter` in its template.
+
+Suppressing *hotkeys* too, not just pad buttons, is deliberate rather than lazy. The alternative is a rule like "F-keys still fire, letters don't", which has an arbitrary boundary and breaks the moment someone rebinds pause to `F5`. Nothing is lost by the blunt rule, because **the search box only exists on the library screen, and no game is running there** — there is no pad to press and no state to save. Text entry elsewhere in the app lives in separate windows, which never had this handler.
+
+**Enter now starts a title from the search box as well.** The library's hint has always read "Double-click a title, or press Enter, to start it", but `OnLibraryKeyDown` was wired only to the `ListBox`; from the search box, Enter hit the tunnel handler, latched Start (§4.11) and did nothing visible. The same handler is now attached to both controls, so a search narrows the list and Enter starts the top match. This is an addition rather than part of the reported bug.
+
+**Test coverage** is in `MainWindowLibraryTests.cs`, and each case fails against the un-fixed build: the hotkey-letter, the Backspace and the focused/unfocused pair fail without the guard, and the Enter case fails without the XAML wiring. The unfocused case is the one that matters for regressions — it presses `z` and `Tab` with the list focused and asserts the pad and fast-forward *do* still respond, so a future over-broad guard cannot quietly disable gameplay input.
+
+**The harness had to be extended to see the character half.** Headless raises key and text input independently — `KeyPress` never produces text at all, whatever the key symbol — so a naive test passes against the broken build for the same reason §4.2's did. `MainWindowLibraryTests.Type` models `DispatchInput`'s contract instead: it raises the `KeyPress`, observes the final `Handled` state through a bubbling probe registered with `handledEventsToo`, and only then raises `KeyTextInput`. `Press` is the raw form, for keys that carry no character.
+
+### 4.18 Stepping out of a game (`HotkeyAction.ExitToLibrary`)
+
+`Escape` leaves a running game for the library screen and **pauses the emulation thread on the way out**; pressing it again returns to the game and resumes it. The game is not unloaded, so this is a different operation from `ShowLibrary` (§4.11), which stays the unload path behind `File ▸ Close Game` and behind a failed load.
+
+It is a `HotkeyAction` rather than a hardcoded key, for the reason §4.3 gives: hardcoding `Tab`/`Backspace` inside `SetButtonFromKey` made them undiscoverable and unchangeable, and repeating that for `Escape` would repeat the mistake. Being an action, it appears in the settings window and rebinds like any other.
+
+**Why pausing matters.** The library screen is a full-window view: switching to it hides `GameFrame` but does nothing to the emulation thread, which would otherwise keep advancing frames — burning CPU, running audio and consuming input for a game nobody is looking at. `ToggleLibrary` pauses *before* swapping the two views, so no frame ever runs unwatched.
+
+**The library screen no longer feeds the pad.** With a game suspended rather than closed, `_session` is live while the user is arrowing through a list and typing in the search box, and every one of those keys is also a game binding — the arrows are the D-pad, `Enter` is Start, `z` is B. `SetButtonFromKey` therefore skips the pad map entirely whenever `LibraryView` is visible, and `TogglePause` is ignored there too, since resuming a game that is off-screen is not something any key on the library screen should be able to do. This is the same principle as §4.17's guard, one level up: the library screen is not the game.
+
+A consequence worth noting against §4.11: launching with `Enter` no longer latches Start for the duration of the keypress, because the pad map is not consulted from that screen at all.
+
+**The suspended game has to stay findable.** Nothing on the library screen otherwise shows that a game is still loaded behind it, so `ShowLibraryEntries` swaps the hint line for `Press <key> to return to <game>` and forces it visible even when the list is empty — a suspended game must not become unreachable just because the ROM directory scan came back with nothing. The key name is read from the binding rather than written as "Escape", so a rebind cannot make the hint lie.
+
+**Adding an action to `HotkeyBindingMap` needed a migration.** `Load()` replaced its whole dictionary with the saved file's, so any config written before `ExitToLibrary` existed would have left it silently unbound — the feature would simply not work for every existing user, which is exactly the class of bug that never shows up in development. `Load()` now backfills defaults for actions the file has no entry for, and **skips a default whose key is already spoken for**, so backfilling can never steal a key the user has deliberately bound elsewhere. `InputSettingsWindowTests` pins both halves: an older file gains `Escape` while keeping its own `TogglePause` preference, and a file that has since bound `Escape` to save-state keeps it, leaving the new action unbound rather than creating a conflict.
+
+**Test coverage** is in `MainWindowLibraryTests.cs`: that `Escape` suspends rather than unloads (checked by the status line, which reads `Paused: <name>` where `ShowLibrary` would read `No ROM loaded`), that a second `Escape` comes back running, that arrowing/`z`/`P` on the library screen reach neither the pad nor the pause signal, and that `Escape` with no game loaded does nothing at all.

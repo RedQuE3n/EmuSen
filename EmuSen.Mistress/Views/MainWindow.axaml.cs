@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Common.Firmware;
 using EmuSen.Cores;
@@ -214,9 +215,16 @@ namespace EmuSen.Mistress.Views
             AddHandler(KeyUpEvent, (_, e) => SetButtonFromKey(e.Key, pressed: false, e), RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
+        // A focused text field owns the whole keyboard - see EmuSen_Settings_Reference.md §4.17.
+        private static bool TypingIntoATextField(RoutedEventArgs e) =>
+            e.Source is Visual source && source.FindAncestorOfType<TextBox>(includeSelf: true) is not null;
+
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
-            if (_keyBindings.For(_activeConsole).TryGetButton(key, out var button))
+            if (TypingIntoATextField(e)) return;
+
+            // A suspended game must not collect the keys used to browse the library - see EmuSen_Settings_Reference.md §4.18.
+            if (!LibraryView.IsVisible && _keyBindings.For(_activeConsole).TryGetButton(key, out var button))
             {
                 _keyboardHeld[(int)button] = pressed;
                 ApplyButtonState(button);
@@ -239,7 +247,9 @@ namespace EmuSen.Mistress.Views
             {
                 case HotkeyAction.SaveState: OnSaveStateClick(this, new RoutedEventArgs()); break;
                 case HotkeyAction.LoadState: OnLoadStateClick(this, new RoutedEventArgs()); break;
-                case HotkeyAction.TogglePause: TogglePause(); break;
+                case HotkeyAction.ExitToLibrary: ToggleLibrary(); break;
+                // Nothing to pause while the library is up: it is already suspended - see §4.18.
+                case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
                 case HotkeyAction.ToggleFullscreen:
                     WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
                     break;
@@ -809,6 +819,26 @@ namespace EmuSen.Mistress.Views
             }
         }
 
+        // Steps out of a game without unloading it, unlike ShowLibrary - see EmuSen_Settings_Reference.md §4.18.
+        private void ToggleLibrary()
+        {
+            if (_session is not { IsRomLoaded: true }) return;
+
+            if (LibraryView.IsVisible)
+            {
+                LibraryView.IsVisible = false;
+                GameFrame.IsVisible = true;
+                ResumeEmulation();
+                return;
+            }
+
+            PauseEmulation(); // before the screens swap, so no frame runs unwatched
+            GameFrame.IsVisible = false;
+            LibraryView.IsVisible = true;
+            RefreshLibrary();
+            StatusText.Text = $"Paused: {_currentDisplayName}";
+        }
+
         // The library is the no-game-running screen, so this is also the
         // unload path - see EmuSen_Settings_Reference.md §4.11.
         private void ShowLibrary()
@@ -896,7 +926,13 @@ namespace EmuSen.Mistress.Views
                 .ToList();
 
             LibraryList.IsVisible = _libraryEntries.Count > 0;
-            LibraryHintText.IsVisible = _libraryEntries.Count > 0;
+
+            // Otherwise a suspended game is unreachable from here - see EmuSen_Settings_Reference.md §4.18.
+            bool suspended = _session is { IsRomLoaded: true };
+            LibraryHintText.IsVisible = _libraryEntries.Count > 0 || suspended;
+            LibraryHintText.Text = suspended
+                ? $"Press {ExitToLibraryKeyName()} to return to {_currentDisplayName}."
+                : "Double-click a title, or press Enter, to start it.";
 
             if (_libraryEntries.Count > 0)
             {
@@ -914,10 +950,15 @@ namespace EmuSen.Mistress.Views
             }
         }
 
+        // Named from the binding, so a rebind cannot make the hint lie.
+        private string ExitToLibraryKeyName() =>
+            _hotkeyBindings.ActionToKey.TryGetValue(HotkeyAction.ExitToLibrary, out Key key) ? key.ToString() : "Escape";
+
         private void OnShowLibraryClick(object? sender, RoutedEventArgs e) => ShowLibrary();
 
         private void OnLibraryItemActivated(object? sender, TappedEventArgs e) => LaunchSelectedLibraryEntry();
 
+        // Shared by the list and the search box, so Enter starts a title from either.
         private void OnLibraryKeyDown(object? sender, KeyEventArgs e)
         {
             if (e.Key != Key.Enter) return;

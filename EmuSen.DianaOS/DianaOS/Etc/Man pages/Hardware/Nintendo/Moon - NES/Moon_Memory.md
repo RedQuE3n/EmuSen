@@ -59,9 +59,39 @@ The PPU has 2 KB of nametable RAM for four 1 KB nametables, so two of the four a
 | 1 | MMC1 | switchable, 3 modes | 4K or 8K banks | serial register, §4.4 |
 | 2 | UxROM | `$8000` switches, `$C000` fixed to last | CHR RAM | |
 | 3 | CNROM | fixed | whole 8K switches | bus conflicts not modelled |
+| 4 | MMC3 | four 8K windows | eight 1K windows | scanline IRQ, §4.6 |
 | 7 | AxROM | 32K switchable | CHR RAM | picks its own single-screen page |
+| 11 | Color Dreams | 32K switchable | 8K switchable | GxROM's fields swapped, §4.7 |
+| 66 | GxROM | 32K switchable | 8K switchable | one register does both, §4.7 |
+| 71 | Camerica | `$C000` switches, `$8000` fixed | CHR RAM | §4.7 |
+| 79 | NINA-003-006 | 32K switchable | 8K switchable | register at `$4100`, §4.7 |
 
-**Mapper 4 (MMC3) is not implemented** and is the single largest gap for library coverage — it is the most common board in the NES library and carries a scanline IRQ counter. `IMapper.OnScanline`/`IrqPending` exist and are already called from the PPU's per-line path specifically so MMC3 can be added without touching the timing loop. An unimplemented mapper number throws a `NotSupportedException` naming the number, rather than loading as NROM and behaving inexplicably.
+Measured against a 3,536-ROM set, these ten boards cover **83.8%** of it, up from 59.0% before MMC3. The largest remaining gaps are mappers 6 (77 ROMs), 64 (66), 65 (56) and 99 (34) — none above 2.2% each. An unimplemented mapper number throws a `NotSupportedException` naming the number, rather than loading as NROM and behaving inexplicably.
+
+### 4.6 MMC3, and the scanline counter
+
+Eight bank registers behind a select/data pair at `$8000`/`$8001`. `$8000` carries the register index **and** both mode bits, so a bank-select write also sets the PRG and CHR layouts — a caller that writes only the index silently resets both modes.
+
+- **PRG**, four 8K windows. Mode 0: `R6`, `R7`, second-to-last, last. Mode 1: second-to-last, `R7`, `R6`, last.
+- **CHR**, eight 1K windows. `R0`/`R1` address 2K pairs and ignore bit 0 of the written value; `R2`-`R5` are single pages. `$8000` bit 7 swaps the two halves.
+- **Work RAM** at `$6000`: `$A001` bit 7 enables, bit 6 write-protects. A disabled window reads 0.
+- **Mirroring** from `$A000` bit 0, unless the header says four-screen.
+
+The IRQ counter reloads when it is zero or a reload was requested, otherwise decrements; it fires when it reaches zero with IRQs enabled. `$C000` latches the reload value, `$C001` requests a reload, `$E000` disables *and* acknowledges, `$E001` enables. The line stays asserted until `$E000`, which is why `MoonCore` treats it as level-triggered.
+
+### 4.6a A12, and the one bug that mattered
+
+On hardware the counter is clocked by the PPU's A12 line rising, which happens once per line during sprite pattern fetches. At this PPU's scanline granularity that becomes one call to `IMapper.OnScanline` per line, from `Ppu.EndScanline`, and only while rendering is enabled.
+
+**The pre-render line counts.** It fetches like any other, so its A12 rise clocks the board too. Omitting it costs one clock per frame, which walks the counter's phase out of step with the line the game latched for — Super Mario Bros. 3's status-bar split landed in the wrong place and corrupted a band of the title screen until the pre-render clock was added. The symptom is a split one line off that drifts, not a split that never happens.
+
+### 4.7 The four simple boards
+
+**GxROM (66)** and **Color Dreams (11)** are the same idea with the register's two fields swapped: GxROM reads PRG from bits 4-5 and CHR from bits 0-1, Color Dreams the reverse. Both switch a whole 32K PRG bank and a whole 8K CHR bank from one write.
+
+**Camerica (71)** is UxROM's layout with the bank register at `$C000-$FFFF` instead of `$8000`. Fire Hawk alone drives single-screen mirroring from `$9000`, so a write there is taken as the tell — a cart that never touches `$9000` keeps its header mirroring.
+
+**NINA-003-006 (79)** puts its one register at `$4100-$5FFF`, below the cartridge window entirely. The bus already routes `$4020-$FFFF` to the mapper, so nothing special was needed to reach it.
 
 ### 4.4 MMC1's serial register, and why the CPU's honesty matters
 

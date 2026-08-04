@@ -214,6 +214,17 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
 
             values.Add(new DebugRegisterValue("FrameCounter", apu.FrameCounter, 8));
             values.Add(new DebugRegisterValue("FrameIRQ", (ulong)(apu.FrameIrqPending ? 1 : 0), 1));
+
+            // The cartridge board's own registers ride along here - see Moon_Debug.md §3.1.
+            if (_core.Cart?.Mapper is { } mapper)
+            {
+                values.Add(new DebugRegisterValue($"Board:{mapper.Name}", 0, 8));
+                foreach (var (name, value, bits) in mapper.DebugState)
+                {
+                    values.Add(new DebugRegisterValue(name, value, bits));
+                }
+            }
+
             return values;
         }
 
@@ -302,8 +313,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
         }
 
         // Nothing is synthesized yet, so there is never a buffer to snapshot.
+        // A non-destructive peek, unlike ICore.DequeueAudioSamples - see EmuSen_Audio_Sync.md §7.
         public (short[] Samples, int SampleRate) GetAudioSamples() =>
-            (Array.Empty<short>(), _core.AudioSampleRate);
+            (_core.Apu?.Peek() ?? Array.Empty<short>(), _core.AudioSampleRate);
 
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
         {

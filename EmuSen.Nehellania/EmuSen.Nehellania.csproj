@@ -1,32 +1,25 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The SDL3 device layer both GUI frontends sit on: real audio output,
-       gamepad polling, the rebindable pad map and the shared config root.
-       One copy, not one per frontend - see EmuSen_Settings_Reference.md §4.10. -->
+  <!-- The SDL3 gamepad layer both GUI frontends sit on: polling and the
+       rebindable pad map. Audio output moved out to EmuSen.Endymion; this
+       project is now a leaf like EmuSen.Serenity - see EmuSen_Input.md §4. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- Audio/AudioPlayer.cs pins its sample array for SDL_PutAudioStreamData
-         - see EmuSen_Settings_Reference.md §4.10. -->
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- SDL3 bindings (gamepad input, audio output) and the SDL3 binary
-         itself - see EmuSen_Settings_Reference.md §4.9. -->
+    <!-- SDL3 bindings (gamepad input) and the SDL3 binary itself - see
+         EmuSen_Settings_Reference.md §4.9. -->
     <PackageReference Include="SDL3-CS" Version="3.4.2" />
     <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- ICore/EmulatorSession (what AudioPlayer pumps), DynamicRateControl
-         and AudioSettings, SnesButton. No Avalonia here on purpose: nothing
-         in this project touches a window. -->
-    <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
-    <!-- ConfigFile, which GamepadBindingMap persists through - reached
-         transitively via EmuSen too, named explicitly because this project
-         uses the type directly. See EmuSen_Config_Reference.md §2. -->
+    <!-- PadButton and ConfigFile, which GamepadBindingMap is keyed by and
+         persists through. The only reference this project has - no core, no
+         Avalonia. See EmuSen_Input.md §4. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 

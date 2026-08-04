@@ -3,11 +3,7 @@ namespace EmuSen.Galaxia.Models
     // General app preferences (log/ROM directories, selected core) - see
     // EmuSen_Config_Reference.md §3.1.
     //
-    // SelectedCore is pure scaffolding for now - there is only one core
-    // (VenusCore/SNES) and nothing reads this value to actually switch
-    // cores yet. It exists so the Preferences UI has a real place to
-    // persist the choice once a second core exists, rather than needing a
-    // settings-file migration at that point.
+    // SelectedCore is the console context the library and both cheat windows share - see EmuSen_Multicore.md §10.
     public class AppSettings
     {
         public string? LogDirectory { get; set; }
@@ -17,7 +13,13 @@ namespace EmuSen.Galaxia.Models
         // The user's own .cht tree - point this at an existing RetroArch
         // cheats folder to use it as-is. See `man cheat`.
         public string? CheatDatabaseDirectory { get; set; }
-        public string SelectedCore { get; set; } = "SNES (Venus)";
+        // The no-filter choice; CoreCatalog re-exports this so a UI has one spelling.
+        public const string AllConsoles = "All consoles";
+
+        // What the value was defaulted to while nothing read it - see Upgraded() below.
+        public const string LegacySelectedCoreDefault = "SNES (Venus)";
+
+        public string SelectedCore { get; set; } = AllConsoles;
 
         // Off by default - forcing this on unconditionally would break any
         // real two-controller game by feeding Controller 2 the same input
@@ -37,6 +39,13 @@ namespace EmuSen.Galaxia.Models
 
         public void Save() => File.Save(this);
 
-        public static AppSettings Load() => File.Load(() => new AppSettings());
+        public static AppSettings Load() => Upgraded(File.Load(() => new AppSettings()));
+
+        // A stored legacy default is not a choice - see EmuSen_Multicore.md §10.3.
+        private static AppSettings Upgraded(AppSettings settings)
+        {
+            if (settings.SelectedCore == LegacySelectedCoreDefault) settings.SelectedCore = AllConsoles;
+            return settings;
+        }
     }
 }

@@ -1,4 +1,5 @@
 using EmuSen.Common.Imaging;
+using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;
@@ -121,15 +122,26 @@ class Program
         }
 
         // Before LoadRom, which is what reads the .srm - see §3.15's --nobattery entry.
-        EmuSen.Cores.Nintendo.Venus.Memory.Cartridge.BatteryRamDisabled = options.NoBattery;
+        EmuSen.Cores.CoreOptions.BatteryRamDisabled = options.NoBattery;
         if (options.NoBattery) Emit("[ROM] --nobattery: the cartridge save is neither read nor written.");
 
         // So a throttled measurement says so in its own log, not just on the parent's console - see §3.42.
         if (CpuThrottle.AlreadyThrottled) Emit("[THROTTLE] This run is inside a CPU quota; every timing below is a slow-machine timing.");
 
         Emit($"[ROM] Loading: {options.RomPath}");
-        var core = new VenusCore(headless: true);
-        core.LoadRom(options.RomPath);
+        ICore core;
+        try
+        {
+            core = CoreFactory.Create(options.RomPath, headless: true);
+            core.LoadRom(options.RomPath);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidDataException)
+        {
+            // A cartridge this build can't map is a bad-input answer, not a crash.
+            Emit($"[ERROR] {ex.Message}");
+            return 1;
+        }
+        Emit($"[ROM] Core: {core.CoreName}");
 
         // Jumping straight to a saved moment (e.g. Link already standing
         // in a room) sidesteps blindly scripting menu-navigation input
@@ -150,20 +162,22 @@ class Program
         // `coretop`'s hardware-load bars (not that this headless entry
         // point has any interactive use for them today, but there's no
         // reason for it to report less than the other two frontends do).
-        var debugTarget = new SnesDebugTarget(core.Cpu!, core.Bus!, core.Renderer!,
-            () => (core.LastFrameCpuSpc700Ms, core.LastFramePpuMs, core.LastFrameHdmaMs));
+        var bundle = CoreFactory.Bundle(core);
+        var debugTarget = bundle.DebugTarget;
         var debugCmd = DianaOSInterpreter.CreateDefault(debugTarget, null,
-            new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-            new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
-            new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch());
+            bundle.CheatAutoDetectCodec, bundle.CheatExplicitCodec, bundle.CpuTraceSwitch);
 
         // Same two ranges registered from power-on in Hotaru's
         // Program.cs for the Yoshi/coin investigation - duplicated here
         // rather than shared, since this entry point has no window/input
         // loop to hang that wiring off of and needs them active before the
         // very first frame regardless.
-        debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
-        debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
+        // Skipped whole on a core with no space by that name, rather than registering watches that never fire.
+        if (debugTarget.GetMemorySpaces().Any(s => s.Name == "WRAM"))
+        {
+            debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
+            debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
+        }
 
         foreach (string spec in options.ExtraWatches)
         {
@@ -302,14 +316,13 @@ class Program
         return 0;
     }
 
-    private static void FinishRun(VenusCore core, Action<string> emit)
+    private static void FinishRun(ICore core, Action<string> emit)
     {
-        core.Cpu?.FlushVerboseTrace();
-        core.Spc700?.FlushVerboseTrace();
+        (core as ITraceFlushable)?.FlushVerboseTrace();
         emit($"[RUN] Done, {core.TotalFrames} total frames executed.");
     }
 
-    private static void WriteSaveStateIfRequested(VenusCore core, string? saveStatePath, Action<string> emit)
+    private static void WriteSaveStateIfRequested(ICore core, string? saveStatePath, Action<string> emit)
     {
         if (saveStatePath == null) return;
         core.SaveState(saveStatePath);

@@ -28,10 +28,16 @@ One `MoonDebugMemorySpace` class routes every space through `MoonCore.ReadSpace`
 
 - **CPU** — `A`/`X`/`Y`/`S`/`PC`/`P`, the six real flags broken out as 1-bit values, and the cycle count.
 - **Video** — `PPUCTRL`/`PPUMASK`/`PPUSTATUS`/`OAMADDR`, the loopy `v`/`t`/`x`/`w` (which is what a scroll bug is actually diagnosed from), the current scanline, and the three status flags.
-- **APU** — all twenty `$4000-$4013` bytes verbatim, plus the frame counter and its IRQ flag.
+- **APU** — all twenty `$4000-$4013` bytes verbatim, plus the frame counter and its IRQ flag, and then the cartridge board's own registers (§3.1).
 - **Coprocessor** — empty. The NES has no cartridge coprocessor in any board implemented here.
 
 All published through `PollingProvider`, refreshed once per frame from `MoonCore.EndFrame` via the `FrameRefresh` hook, so `regs`/`coretop` never touch live core state from a console thread.
+
+### 3.1 Board registers
+
+`IMapper.DebugState` is a defaulted, optional list of `(Name, Value, Bits)`. A board with nothing worth showing reports none and costs a `Board:<name>` header line; MMC3 reports its bank select, both mode bits, all eight bank registers, the whole IRQ block, and a cumulative `IrqsFired` counter.
+
+That counter is diagnostic rather than hardware state, and it earned its place immediately: it is what established that MMC3's IRQ was firing 889 times over 900 frames while Super Mario Bros. 3's status-bar split was still landing in the wrong place, which ruled out "the IRQ never fires" and pointed at counter *phase* instead — the pre-render-line A12 clock (`Moon_Memory.md` §4.6a).
 
 ---
 

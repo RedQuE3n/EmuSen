@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace EmuSen.Cores.Nintendo.Moon.Memory
 {
     // How a cartridge answers the PPU's nametable fetches - see Moon_Memory.md §3.
@@ -31,5 +33,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         void OnScanline() { }
 
         bool IrqPending => false;
+
+        // Board registers for `regs`; a board with nothing worth showing reports none - see Moon_Debug.md §3.1.
+        IReadOnlyList<(string Name, ulong Value, int Bits)> DebugState =>
+            System.Array.Empty<(string, ulong, int)>();
     }
 }

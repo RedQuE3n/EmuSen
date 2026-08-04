@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Nehellania.Input;
 using SDL3;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Galaxia
 {
@@ -81,7 +82,7 @@ namespace EmuSen.WiseMan.Galaxia
             GamepadBindingMap.Load();
 
             string message = Assert.Single(_reported);
-            Assert.Contains("'Strat' is not a valid SnesButton", message);
+            Assert.Contains("'Strat' is not a valid PadButton", message);
             Assert.Contains("Did you mean 'Start'?", message);
         }
 
@@ -131,14 +132,14 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void LastLoadError_is_set_on_failure_and_cleared_on_success()
         {
-            var file = new ConfigFile<Dictionary<SnesButton, SDL.GamepadButton>>("probe.json");
+            var file = new ConfigFile<Dictionary<PadButton, SDL.GamepadButton>>("probe.json");
             Directory.CreateDirectory(_dir);
             File.WriteAllText(file.Path, """{"Up":"DPadUpp"}""");
 
             Assert.Null(file.Load());
             Assert.NotNull(file.LastLoadError);
 
-            file.Save(new Dictionary<SnesButton, SDL.GamepadButton> { [SnesButton.Up] = SDL.GamepadButton.DPadUp });
+            file.Save(new Dictionary<PadButton, SDL.GamepadButton> { [PadButton.Up] = SDL.GamepadButton.DPadUp });
 
             Assert.NotNull(file.Load());
             Assert.Null(file.LastLoadError);

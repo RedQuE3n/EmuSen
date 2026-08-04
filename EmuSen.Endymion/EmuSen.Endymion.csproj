@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The audio output sink: samples in, a real device out. The counterpart
+       to EmuSen.Serenity on the video side, and a leaf for the same reason -
+       it takes plain PCM and a rate, never a core - see EmuSen_Audio_Sync.md §7. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- AudioPlayer pins its sample array for SDL_PutAudioStreamData. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SDL3 bindings and the SDL3 binary. No ProjectReference of any kind:
+         this project is a leaf, like EmuSen.Galaxia. -->
+    <PackageReference Include="SDL3-CS" Version="3.4.2" />
+    <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />
+  </ItemGroup>
+
+</Project>

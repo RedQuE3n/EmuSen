@@ -7,6 +7,7 @@ using EmuSen.Cores.Nintendo.Moon.Processor;
 using EmuSen.Cores.Nintendo.Moon.Video;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.Moon
 {
@@ -69,7 +70,12 @@ namespace EmuSen.Cores.Nintendo.Moon
             Cart = Cartridge.Load(path);
             Ppu = new Ppu(Cart);
             Apu = new Apu.Apu();
+            Apu.SetSampleRate(AudioSampleRate);
             Bus = new MemoryBus(Cart, Ppu, Apu) { WriteObserver = null };
+
+            // DMC fetches go through the real bus, so the APU only gets a reader once one exists.
+            Apu.Dmc.ReadMemory = address => Bus.Read(address);
+
             Cpu = new Cpu(Bus);
             Bus.Cpu = Cpu;
 
@@ -122,7 +128,7 @@ namespace EmuSen.Cores.Nintendo.Moon
                 if (_cpuBudget <= 0) break;
 
                 Cpu!.SetNmiLine(Ppu!.NmiOutput);
-                Cpu.SetIrqLine(Apu!.FrameIrqPending || Cart!.Mapper.IrqPending);
+                Cpu.SetIrqLine(Apu!.IrqAsserted || Cart!.Mapper.IrqPending);
 
                 if (!resuming && Breakpoints.ShouldBreak(Cpu.PC))
                 {
@@ -134,7 +140,16 @@ namespace EmuSen.Cores.Nintendo.Moon
                 resuming = false;
                 if (Coverage.IsArmed) Coverage.Record(Cpu.PC);
 
-                _cpuBudget -= Cpu.Step();
+                int cycles = Cpu.Step();
+                _cpuBudget -= cycles;
+
+                // The APU is clocked from real CPU cycles, which is what makes its timers right.
+                Apu.Step(cycles);
+                if (Apu.Dmc.StallCycles > 0)
+                {
+                    _cpuBudget -= Apu.Dmc.StallCycles;
+                    Apu.Dmc.StallCycles = 0;
+                }
             }
 
             return true;
@@ -142,13 +157,38 @@ namespace EmuSen.Cores.Nintendo.Moon
 
         public byte[] GetFrameBufferRgba() => Ppu?.FrameRgba ?? new byte[ScreenWidth * ScreenHeight * 4];
 
-        // No synthesis yet, so there is never anything to drain - see Moon_APU.md.
-        public short[] DequeueAudioSamples(int maxFrames) => Array.Empty<short>();
+        public short[] DequeueAudioSamples(int maxFrames) => Apu?.Drain(maxFrames) ?? Array.Empty<short>();
 
         public void SetButton(int port, NesButton button, bool pressed)
         {
             var controller = port == 0 ? Bus?.Controller1 : Bus?.Controller2;
             controller?.SetButton(button, pressed);
+        }
+
+        // The eight the pad has; X/Y/L/R have no wire to reach - see EmuSen_Input.md §2.
+        public IReadOnlyList<PadButton> SupportedButtons { get; } = new[]
+        {
+            PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right,
+            PadButton.Select, PadButton.Start, PadButton.B, PadButton.A,
+        };
+
+        // A binding for a button this console lacks is ignored rather than mapped onto another one.
+        public void SetButton(int port, PadButton button, bool pressed)
+        {
+            NesButton? mapped = button switch
+            {
+                PadButton.A => NesButton.A,
+                PadButton.B => NesButton.B,
+                PadButton.Select => NesButton.Select,
+                PadButton.Start => NesButton.Start,
+                PadButton.Up => NesButton.Up,
+                PadButton.Down => NesButton.Down,
+                PadButton.Left => NesButton.Left,
+                PadButton.Right => NesButton.Right,
+                _ => null,
+            };
+
+            if (mapped is { } nesButton) SetButton(port, nesButton, pressed);
         }
 
         public void SaveSram() => Cart?.SaveSram();

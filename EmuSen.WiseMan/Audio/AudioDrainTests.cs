@@ -69,8 +69,8 @@ namespace EmuSen.WiseMan.Audio
         public void EmulatorSession_drains_through_to_the_real_core()
         {
             var session = SyntheticRom.LoadSession(SyntheticRom.BuildBlank());
-            session.Bus.Spc700.Dsp.AudioBuffer.Enqueue(42);
-            session.Bus.Spc700.Dsp.AudioBuffer.Enqueue(-42);
+            ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer.Enqueue(42);
+            ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer.Enqueue(-42);
 
             short[] result = session.DequeueAudioSamples(10);
 

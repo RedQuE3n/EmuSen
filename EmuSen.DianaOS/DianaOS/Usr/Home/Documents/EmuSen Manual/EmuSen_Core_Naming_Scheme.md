@@ -58,7 +58,7 @@ Folder: `Cores/Sega/`
 
 | Console | Codename | Folder | Status |
 |---|---|---|---|
-| Master System | **Endymion** | `Cores/Sega/Endymion - Master System/` | Not started — reserved |
+| Master System | **Endou** | `Cores/Sega/Endou - Master System/` | Not started — reserved. Renamed from Endymion, see §10 |
 | Genesis / Mega Drive | **Beryl** | `Cores/Sega/Beryl - Genesis/` | Not started — reserved |
 | Game Gear | **Jadeite** | `Cores/Sega/Jadeite - Game Gear/` | Not started — reserved |
 | 32X | **Nephrite** | `Cores/Sega/Nephrite - 32X/` | Not started — reserved |
@@ -150,3 +150,13 @@ Every codename in this doc has been checked against the Sailor Moon Wiki (and, f
 **What deliberately did NOT change for Venus, and won't for future cores either:** class names, comments, and display strings describing *real hardware* — `SnesDebugTarget`, `Snes65816Disassembler`, the `CoreName` property returning `"SNES"`, console log lines, hardware-behavior comments citing the SNESdev wiki, etc. A codename governs the organizational layer (folder path, C# namespace) only; it never replaces factually-accurate hardware terminology. Renaming those too would reduce technical clarity for no benefit — "Venus65816Disassembler" would obscure that it's a 65816 disassembler, which is the actually-useful fact about that class.
 
 **No dotnet SDK is available in the environment any of this was performed from**, so none of it could be built/compiled to verify after the fact — same limitation noted elsewhere in the Man pages (see the debugging tools reference's honesty notes on the disassembler and `ffmpeg` integration). Renames were done carefully and systematically (moved via `git mv` to preserve history, then verified via repo-wide `grep` that no old namespace/using references or stale unlabeled/pre-rename path comments remained), but **a real build on the project's own dev machine is the first actual verification any of this has had.** Report back if it doesn't compile clean.
+
+---
+
+## 10. `Endymion` moved from a core to the audio layer
+
+**`EmuSen.Endymion` is the audio output layer** (`EmuSen_Audio_Sync.md` §7) — the leaf that takes PCM and drives a real device, and the counterpart to `EmuSen.Serenity` on the video side. Serenity and Endymion as the video/audio pair is the point: they are the canonical pairing, and the two projects have deliberately identical shapes (a leaf, a data-in contract, no knowledge of any core).
+
+§3 had previously reserved `Endymion` for the Sega Master System. **The Master System is now `Endou`**, and its placeholder folder was renamed to `Cores/Sega/Endou - Master System/`. Nothing depended on the old name — that core has never had code, only a README.
+
+**The general lesson, worth acting on before it bites again:** the infrastructure projects (Galaxia, Serenity, Crystal, Cauldron, Nehellania, Endymion, Hotaru, Mistress, Pharaoh, Tomoe, WiseMan, DianaOS) draw from the same Sailor Moon namespace as the cores, but this document only ever tracked the cores. That is how one name ended up claimed twice without anyone noticing. Either list the infrastructure names here too, or check both pools before reserving a new codename.

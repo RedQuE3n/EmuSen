@@ -1,5 +1,5 @@
 using System;
-using EmuSen.Audio;
+using EmuSen.Endymion;
 
 namespace EmuSen.WiseMan.Audio
 {

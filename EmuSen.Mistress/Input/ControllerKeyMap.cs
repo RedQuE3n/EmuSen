@@ -1,11 +1,12 @@
 using System.Collections.Generic;
 using Avalonia.Input;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Galaxia;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Mistress.Input
 {
-    // Keyboard -> SnesButton mapping for this frontend specifically. This is
+    // Keyboard -> PadButton mapping for this frontend specifically. This is
     // deliberately separate from EmuSen.Hotaru/Input/HotaruKeyMap.cs, which
     // has no rebind/persistence support and gets fed from GameWindow's own
     // KeyDown/KeyUp events instead (see that project's GameWindow.axaml.cs) -
@@ -17,48 +18,48 @@ namespace EmuSen.Mistress.Input
     // Avalonia.Input) aren't the same type.
     public class ControllerKeyMap
     {
-        public Dictionary<SnesButton, Key> ButtonToKey { get; private set; } = DefaultBindings();
+        public Dictionary<PadButton, Key> ButtonToKey { get; private set; } = DefaultBindings();
 
-        private Dictionary<Key, SnesButton> _keyToButton = new();
+        private Dictionary<Key, PadButton> _keyToButton = new();
 
         public ControllerKeyMap()
         {
             RebuildReverseLookup();
         }
 
-        private static Dictionary<SnesButton, Key> DefaultBindings() => new()
+        private static Dictionary<PadButton, Key> DefaultBindings() => new()
         {
-            [SnesButton.Up] = Key.Up,
-            [SnesButton.Down] = Key.Down,
-            [SnesButton.Left] = Key.Left,
-            [SnesButton.Right] = Key.Right,
-            [SnesButton.B] = Key.Z,
-            [SnesButton.A] = Key.X,
-            [SnesButton.Y] = Key.A,
-            [SnesButton.X] = Key.S,
-            [SnesButton.L] = Key.Q,
-            [SnesButton.R] = Key.W,
-            [SnesButton.Start] = Key.Enter,
-            [SnesButton.Select] = Key.RightShift,
+            [PadButton.Up] = Key.Up,
+            [PadButton.Down] = Key.Down,
+            [PadButton.Left] = Key.Left,
+            [PadButton.Right] = Key.Right,
+            [PadButton.B] = Key.Z,
+            [PadButton.A] = Key.X,
+            [PadButton.Y] = Key.A,
+            [PadButton.X] = Key.S,
+            [PadButton.L] = Key.Q,
+            [PadButton.R] = Key.W,
+            [PadButton.Start] = Key.Enter,
+            [PadButton.Select] = Key.RightShift,
         };
 
         private void RebuildReverseLookup()
         {
-            _keyToButton = new Dictionary<Key, SnesButton>();
+            _keyToButton = new Dictionary<Key, PadButton>();
             foreach (var kv in ButtonToKey)
             {
                 _keyToButton[kv.Value] = kv.Key;
             }
         }
 
-        public bool TryGetButton(Key key, out SnesButton button) => _keyToButton.TryGetValue(key, out button);
+        public bool TryGetButton(Key key, out PadButton button) => _keyToButton.TryGetValue(key, out button);
 
         // Rebinds `button` to `newKey`. If newKey was already assigned to a
         // different button, that button is left unbound rather than allowing
-        // two SNES buttons to share one key.
-        public void Rebind(SnesButton button, Key newKey)
+        // two console buttons to share one key.
+        public void Rebind(PadButton button, Key newKey)
         {
-            if (_keyToButton.TryGetValue(newKey, out SnesButton existingOwner) && existingOwner != button)
+            if (_keyToButton.TryGetValue(newKey, out PadButton existingOwner) && existingOwner != button)
             {
                 ButtonToKey.Remove(existingOwner);
             }
@@ -67,7 +68,7 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        public void Unbind(SnesButton button)
+        public void Unbind(PadButton button)
         {
             ButtonToKey.Remove(button);
             RebuildReverseLookup();
@@ -79,7 +80,7 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        private static readonly ConfigFile<Dictionary<SnesButton, Key>> File = new("keybindings.json");
+        private static readonly ConfigFile<Dictionary<PadButton, Key>> File = new("keybindings.json");
 
         public void Save() => File.Save(ButtonToKey);
 

@@ -42,12 +42,9 @@ namespace EmuSen.Mistress.Views
         private DianaOSInterpreter _shell => _sessions.Current!.Interpreter;
         private DianaOSInterpreterScheduler _scheduler => _schedulers[_sessions.Current!];
 
-        // Same single-entry list PreferencesWindow.AvailableCores already
-        // hardcodes for its own core-selection combo - kept as its own
-        // small copy here rather than a shared reference since it's just
-        // display text for the welcome banner (GetWelcomeBanner, below),
-        // not anything either window actually needs to stay in sync on.
-        private static readonly string[] SupportedCores = { "SNES (Venus)" };
+        // Display text for the welcome banner, from the catalog rather than a second copy.
+        private static readonly string[] SupportedCores =
+            EmuSen.Cores.CoreCatalog.Cores.Select(c => c.DisplayName).ToArray();
 
         // Mistress-only builtins (pause/resume today) that DianaOSInterpreter's
         // own CreateDefault doesn't know about and shouldn't - see
@@ -71,11 +68,21 @@ namespace EmuSen.Mistress.Views
 
         private IDebugTarget? _target;
 
-        public DianaOSConsoleWindow(IDebugTarget? target, IEnumerable<IDianaOSCommand>? extraCommands = null)
+        // From the loaded core's bundle, so this window names no core - see EmuSen_Multicore.md §4.
+        private ICheatCodeCodec? _cheatAutoDetectCodec;
+        private ICheatCodeCodec? _cheatExplicitCodec;
+        private ICpuTraceSwitch? _cpuTraceSwitch;
+
+        public DianaOSConsoleWindow(IDebugTarget? target, IEnumerable<IDianaOSCommand>? extraCommands = null,
+            ICheatCodeCodec? cheatAutoDetectCodec = null, ICheatCodeCodec? cheatExplicitCodec = null,
+            ICpuTraceSwitch? cpuTraceSwitch = null)
         {
             InitializeComponent();
             _extraCommands = Combine(extraCommands);
             _target = target;
+            _cheatAutoDetectCodec = cheatAutoDetectCodec;
+            _cheatExplicitCodec = cheatExplicitCodec;
+            _cpuTraceSwitch = cpuTraceSwitch;
             var initial = new DianaOSSession("main", BuildInterpreter());
             _sessions.RegisterInitial(initial);
             _schedulers[initial] = new DianaOSInterpreterScheduler();
@@ -121,9 +128,14 @@ namespace EmuSen.Mistress.Views
         // target-specific to begin with (pausing works with or without a
         // ROM loaded), but rebuilding the interpreter loses them just the
         // same as any other command unless they're passed again.
-        public void UpdateTarget(IDebugTarget? target, string? romDisplayName)
+        public void UpdateTarget(IDebugTarget? target, string? romDisplayName,
+            ICheatCodeCodec? cheatAutoDetectCodec = null, ICheatCodeCodec? cheatExplicitCodec = null,
+            ICpuTraceSwitch? cpuTraceSwitch = null)
         {
             _target = target;
+            _cheatAutoDetectCodec = cheatAutoDetectCodec;
+            _cheatExplicitCodec = cheatExplicitCodec;
+            _cpuTraceSwitch = cpuTraceSwitch;
             _sessions.RebuildAll(BuildInterpreter);
             SyncSchedulersToSessions();
             _historyIndex = -1;
@@ -132,9 +144,7 @@ namespace EmuSen.Mistress.Views
 
         private DianaOSInterpreter BuildInterpreter() =>
             DianaOSInterpreter.CreateDefault(_target, _extraCommands,
-                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch(),
+                _cheatAutoDetectCodec, _cheatExplicitCodec, _cpuTraceSwitch,
                 _sessions,
                 () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
 

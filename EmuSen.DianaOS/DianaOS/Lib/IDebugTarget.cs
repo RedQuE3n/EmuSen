@@ -601,6 +601,12 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // showing empty/fake bars.
         IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad { get; }
 
+        // Defaulted: a target refreshing on its own frame hook has nothing to do - see Moon_Debug.md §3.
+        void RefreshProviders() { }
+
+        // Defaulted for the same reason as RefreshProviders - see Moon_Debug.md §3.
+        void ApplyCheats() { }
+
         // The hardware's real total sprite/OAM capacity (128 on the
         // SNES), or 0 if this core doesn't model a fixed limit - lets a
         // generic dashboard show "N/max active" as a real percentage-of-

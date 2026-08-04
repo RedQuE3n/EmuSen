@@ -173,7 +173,7 @@ hardware is called.
 Virtual Boy being **Saturn**, Guardian of Death and Destruction, is a joke rather than a
 coincidence.
 
-**Sega — Dark Kingdom** (`Cores/Sega/`) — Master System **Endymion**, Game Gear
+**Sega — Dark Kingdom** (`Cores/Sega/`) — Master System **Endou**, Game Gear
 **Jadeite**, Genesis **Beryl**, 32X **Nephrite**, Saturn **Zoisite**, Dreamcast
 **Kunzite**.
 

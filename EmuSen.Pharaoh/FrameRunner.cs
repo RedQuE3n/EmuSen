@@ -1,7 +1,9 @@
+using EmuSen.Cores;
 using EmuSen.Common.Imaging;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Cores.Nintendo.Venus.Debug;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh
 {
@@ -16,7 +18,7 @@ namespace EmuSen.Pharaoh
     {
         private const int ProgressEvery = 600; // ~10s of real 60fps gameplay
 
-        public VenusCore Core { get; }
+        public ICore Core { get; }
         public long FrameCap { get; }
         public long CurrentFrame { get; private set; }
 
@@ -31,12 +33,12 @@ namespace EmuSen.Pharaoh
 
         private readonly Action<string> emit;
         private readonly Action<long>? onFrameAdvanced;
-        private readonly Dictionary<(SnesButton Button, int Controller), bool> held = new();
+        private readonly Dictionary<(PadButton Button, int Controller), bool> held = new();
 
         // Fed by RunFrames() below - see EmuSen_Rewind_And_FastForward.md §3.
         public EmuSen.Common.RewindBuffer Rewind { get; } = new();
 
-        public FrameRunner(VenusCore core, long frameCap, Action<string> emit, Action<long>? onFrameAdvanced = null)
+        public FrameRunner(ICore core, long frameCap, Action<string> emit, Action<long>? onFrameAdvanced = null)
         {
             Core = core;
             FrameCap = frameCap;
@@ -46,7 +48,7 @@ namespace EmuSen.Pharaoh
 
         private void ApplyHeld()
         {
-            foreach (var kv in held) Core.Bus!.Input.SetButton(kv.Key.Button, kv.Value, kv.Key.Controller);
+            foreach (var kv in held) Core.SetButton(kv.Key.Controller - 1, kv.Key.Button, kv.Value);
         }
 
         // Sets a button's held state without advancing any frames - applied
@@ -54,19 +56,19 @@ namespace EmuSen.Pharaoh
         // caller that checks Bus.Input right after this, with no frames
         // advance in between, sees the up-to-date state, matching the old
         // --commands hold/release verb's own explicit ApplyHeld() call.
-        public void Hold(SnesButton button, int controller = 1)
+        public void Hold(PadButton button, int controller = 1)
         {
             held[(button, controller)] = true;
-            Core.Bus!.Input.SetButton(button, true, controller);
+            Core.SetButton(controller - 1, button, true);
         }
 
-        public void Release(SnesButton button, int controller = 1)
+        public void Release(PadButton button, int controller = 1)
         {
             held[(button, controller)] = false;
-            Core.Bus!.Input.SetButton(button, false, controller);
+            Core.SetButton(controller - 1, button, false);
         }
 
-        public void Tap(SnesButton button, int controller, long duration)
+        public void Tap(PadButton button, int controller, long duration)
         {
             Hold(button, controller);
             RunFrames(duration);
@@ -136,7 +138,8 @@ namespace EmuSen.Pharaoh
                     // the PREVIOUS frame's end state at a mid-frame halt -
                     // exactly the moment a breakpoint exists to inspect.
                     OnHalted?.Invoke();
-                    emit($"[BREAK] {(Core.IsHaltedOnCoprocessor ? "SA-1" : "S-CPU")} halted at ${Core.HaltedAddress:X6} (frame {CurrentFrame}).");
+                    string processor = Core is ICoprocessorHalt halt ? halt.HaltedProcessorName : "CPU";
+                    emit($"[BREAK] {processor} halted at ${Core.HaltedAddress:X6} (frame {CurrentFrame}).");
                     return;
                 }
 

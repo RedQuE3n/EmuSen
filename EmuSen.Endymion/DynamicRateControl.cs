@@ -1,9 +1,8 @@
 using System;
 
-namespace EmuSen.Audio
+namespace EmuSen.Endymion
 {
-    // Absorbs clock drift by resampling within a fraction of a percent
-    // instead of discarding audio - see EmuSen_Audio_Sync.md §1/§3.
+    // Absorbs clock drift by resampling, never by discarding - see EmuSen_Audio_Sync.md §1/§3.
     public sealed class DynamicRateControl
     {
         private readonly LinearResampler _resampler = new();
@@ -12,8 +11,8 @@ namespace EmuSen.Audio
         // Where the output queue is steered to sit, in frames.
         public int TargetQueuedFrames { get; set; }
 
-        // Largest resample ratio departure from 1.0 - see EmuSen_Audio_Sync.md §3.
-        public double MaxDeviation { get; set; } = AudioSettings.RateControlMaxDeviation;
+        // Largest resample ratio departure from 1.0; the caller overrides it - see EmuSen_Audio_Sync.md §3.
+        public double MaxDeviation { get; set; } = 0.005;
 
         // Above TargetQueuedFrames * this, input is shed until it drains - see §3.1.
         public double SheddingEntryFactor { get; set; } = 3.0;
@@ -21,15 +20,12 @@ namespace EmuSen.Audio
 
         public double LastRatio { get; private set; } = 1.0;
 
-        // How many times the shedding path has engaged - a stall counter, and
-        // expected to stay at 0 in normal play.
+        // A stall counter; expected to stay at 0 in normal play - see EmuSen_Audio_Sync.md §3.1.
         public int SheddingEvents { get; private set; }
 
         public bool IsShedding => _shedding;
 
-        // Frames in vs frames handed on, cumulative. Their difference is what
-        // this class actually did to the queue, measurable without consulting
-        // the output device's clock - see EmuSen_Audio_Sync.md §3.3.
+        // Their difference is what this class did to the queue - see EmuSen_Audio_Sync.md §3.3.
         public long TotalInputFrames { get; private set; }
         public long TotalOutputFrames { get; private set; }
 
@@ -73,8 +69,7 @@ namespace EmuSen.Audio
             return output;
         }
 
-        // Call on any discontinuity - a ROM load, a state load, resuming from
-        // fast-forward or rewind. See EmuSen_Audio_Sync.md §3.2.
+        // Call on any discontinuity - see EmuSen_Audio_Sync.md §3.2.
         public void Reset()
         {
             _resampler.Reset();

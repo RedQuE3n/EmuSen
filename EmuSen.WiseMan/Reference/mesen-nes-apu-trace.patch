@@ -1,0 +1,37 @@
+diff --git a/Core/NES/NesMemoryManager.cpp b/Core/NES/NesMemoryManager.cpp
+--- a/Core/NES/NesMemoryManager.cpp
++++ b/Core/NES/NesMemoryManager.cpp
+@@ -2,6 +2,7 @@
+ #include "NES/NesMemoryManager.h"
+ #include "NES/BaseMapper.h"
+ #include "NES/NesConsole.h"
++#include "NES/NesCpu.h"
+ #include "Shared/CheatManager.h"
+ #include "Shared/Emulator.h"
+ #include "Shared/EmuSettings.h"
+@@ -135,8 +136,25 @@ uint8_t NesMemoryManager::Read(uint16_t addr, MemoryOperationType operationType)
+ 	return value;
+ }
+
++// 2A03 register write log in EmuSen's 12-byte record - see EmuSen_Debugging_Tools_Reference_v5.md §3.43.
++bool g_nesApuTraceOn = false;
++std::vector<uint8_t> g_nesApuTrace;
++
+ void NesMemoryManager::Write(uint16_t addr, uint8_t value, MemoryOperationType operationType)
+ {
++	if(g_nesApuTraceOn && addr >= 0x4000 && addr <= 0x4017) {
++		uint32_t frame = _emu->GetFrameCount();
++		uint16_t pc = _console->GetCpu()->GetState().PC;
++		uint8_t r[12] = { 0 };
++		r[9] = (uint8_t)operationType;
++		r[0] = (uint8_t)frame;       r[1] = (uint8_t)(frame >> 8);
++		r[2] = (uint8_t)(frame >> 16); r[3] = (uint8_t)(frame >> 24);
++		r[4] = (uint8_t)pc;          r[5] = (uint8_t)(pc >> 8);
++		r[6] = (uint8_t)addr;        r[7] = (uint8_t)(addr >> 8);
++		r[8] = value;
++		g_nesApuTrace.insert(g_nesApuTrace.end(), r, r + 12);
++	}
++
+ 	if(_emu->ProcessMemoryWrite<CpuType::Nes>(addr, value, operationType)) {
+ 		_ramWriteHandlers[addr]->WriteRam(addr, value);
+ 		_openBusHandler.SetOpenBus(value, false);

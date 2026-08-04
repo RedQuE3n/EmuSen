@@ -50,6 +50,9 @@ fi
 if ! grep -q g_cpuTraceOn Core/SNES/SnesCpu.cpp; then
     git apply "$HERE/mesen-cpu-trace.patch"
 fi
+if ! grep -q g_nesApuTrace Core/NES/NesMemoryManager.cpp; then
+    git apply "$HERE/mesen-nes-apu-trace.patch"
+fi
 
 # STATICLINK=false: the stock recipe wants libstdc++.a, which Fedora splits out.
 echo "== building MesenCore.so (this takes a few minutes the first time)"

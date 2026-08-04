@@ -1,5 +1,6 @@
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Pharaoh.Cli;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.HeadlessDebug
 {
@@ -57,7 +58,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var tap = Assert.Single(options!.Taps);
             Assert.Equal(10, tap.Start);
             Assert.Equal(14, tap.End);
-            Assert.Equal(SnesButton.Start, tap.Button);
+            Assert.Equal(PadButton.Start, tap.Button);
             Assert.Equal(1, tap.Controller);
         }
 

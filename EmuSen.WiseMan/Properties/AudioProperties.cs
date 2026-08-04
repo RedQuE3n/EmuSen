@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using CsCheck;
-using EmuSen.Audio;
+using EmuSen.Endymion;
 
 namespace EmuSen.WiseMan.Properties
 {

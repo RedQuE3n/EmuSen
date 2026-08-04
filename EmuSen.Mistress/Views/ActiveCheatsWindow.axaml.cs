@@ -16,8 +16,8 @@ namespace EmuSen.Mistress.Views
     public partial class ActiveCheatsWindow : Window
     {
         private readonly CheatRegistry _registry;
-        private readonly ICheatCodeCodec? _pokeCodec;
-        private readonly ICheatCodeCodec? _patchCodec;
+        private ICheatCodeCodec? _pokeCodec;
+        private ICheatCodeCodec? _patchCodec;
 
         // Queues one immediate apply on the thread that owns the core and
         // says whether there was a core to queue it on - see §4.15.
@@ -31,10 +31,22 @@ namespace EmuSen.Mistress.Views
         // does not write the value straight back into the registry.
         private bool _syncing;
 
+        // Which console a typed code is parsed for - see EmuSen_Multicore.md §10.
+        private string? _console;
+
+        // Called when the library's console filter moves under an already-open window.
+        public void SetConsole(string? console, (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) codecs)
+        {
+            _console = console;
+            _pokeCodec = codecs.AutoDetect;
+            _patchCodec = codecs.Explicit;
+            Refresh();
+        }
+
         public ActiveCheatsWindow() : this(new CheatRegistry()) { }
 
         public ActiveCheatsWindow(CheatRegistry registry, ICheatCodeCodec? pokeCodec = null, ICheatCodeCodec? patchCodec = null,
-            Func<bool>? applyNow = null, Func<string?>? saveName = null)
+            Func<bool>? applyNow = null, Func<string?>? saveName = null, string? console = null)
         {
             InitializeComponent();
             _registry = registry;
@@ -42,7 +54,7 @@ namespace EmuSen.Mistress.Views
             _patchCodec = patchCodec;
             _applyNow = applyNow;
             _saveName = saveName;
-            AddButton.IsEnabled = _pokeCodec is not null || _patchCodec is not null;
+            _console = console;
             Refresh();
 
             // The property, not IsCheckedChanged - only this reacts to a set
@@ -83,6 +95,16 @@ namespace EmuSen.Mistress.Views
             {
                 StatusText.Text = "Load a game's cheats from Settings > Cheat Database..., or add a code below.";
             }
+
+            // A console whose core has no codec cannot parse a typed code at all - see EmuSen_Multicore.md §4.
+            bool canAdd = _pokeCodec is not null || _patchCodec is not null;
+            AddButton.IsEnabled = canAdd;
+            if (!canAdd && _console is { } noCodec)
+            {
+                StatusText.Text = $"{noCodec} has no cheat-code format in this build, so codes cannot be added for it.";
+            }
+
+            ConsoleText.Text = _console is null ? "" : $"Console: {_console}";
 
             ClearButton.IsEnabled = cheats.Count > 0;
             ApplyButton.IsEnabled = cheats.Count > 0;

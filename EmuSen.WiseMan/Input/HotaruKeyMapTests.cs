@@ -1,6 +1,7 @@
 using Avalonia.Input;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Hotaru.Input;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Input
 {
@@ -13,19 +14,19 @@ namespace EmuSen.WiseMan.Input
     public class HotaruKeyMapTests
     {
         [Theory]
-        [InlineData(SnesButton.Up, Key.Up)]
-        [InlineData(SnesButton.Down, Key.Down)]
-        [InlineData(SnesButton.Left, Key.Left)]
-        [InlineData(SnesButton.Right, Key.Right)]
-        [InlineData(SnesButton.B, Key.Z)]
-        [InlineData(SnesButton.A, Key.X)]
-        [InlineData(SnesButton.Y, Key.A)]
-        [InlineData(SnesButton.X, Key.S)]
-        [InlineData(SnesButton.L, Key.Q)]
-        [InlineData(SnesButton.R, Key.W)]
-        [InlineData(SnesButton.Start, Key.Enter)]
-        [InlineData(SnesButton.Select, Key.RightShift)]
-        public void Default_binding_matches_the_console_builds_old_scheme(SnesButton button, Key expectedKey)
+        [InlineData(PadButton.Up, Key.Up)]
+        [InlineData(PadButton.Down, Key.Down)]
+        [InlineData(PadButton.Left, Key.Left)]
+        [InlineData(PadButton.Right, Key.Right)]
+        [InlineData(PadButton.B, Key.Z)]
+        [InlineData(PadButton.A, Key.X)]
+        [InlineData(PadButton.Y, Key.A)]
+        [InlineData(PadButton.X, Key.S)]
+        [InlineData(PadButton.L, Key.Q)]
+        [InlineData(PadButton.R, Key.W)]
+        [InlineData(PadButton.Start, Key.Enter)]
+        [InlineData(PadButton.Select, Key.RightShift)]
+        public void Default_binding_matches_the_console_builds_old_scheme(PadButton button, Key expectedKey)
         {
             Assert.Equal(expectedKey, HotaruKeyMap.ButtonToKey[button]);
         }
@@ -33,16 +34,16 @@ namespace EmuSen.WiseMan.Input
         [Fact]
         public void Every_snes_button_has_exactly_one_binding()
         {
-            Assert.Equal(System.Enum.GetValues<SnesButton>().Length, HotaruKeyMap.ButtonToKey.Count);
+            Assert.Equal(System.Enum.GetValues<PadButton>().Length, HotaruKeyMap.ButtonToKey.Count);
         }
 
         [Theory]
-        [InlineData(Key.Up, SnesButton.Up)]
-        [InlineData(Key.Z, SnesButton.B)]
-        [InlineData(Key.Enter, SnesButton.Start)]
-        public void Reverse_lookup_resolves_back_to_the_same_button(Key key, SnesButton expectedButton)
+        [InlineData(Key.Up, PadButton.Up)]
+        [InlineData(Key.Z, PadButton.B)]
+        [InlineData(Key.Enter, PadButton.Start)]
+        public void Reverse_lookup_resolves_back_to_the_same_button(Key key, PadButton expectedButton)
         {
-            Assert.True(HotaruKeyMap.TryGetButton(key, out SnesButton button));
+            Assert.True(HotaruKeyMap.TryGetButton(key, out PadButton button));
             Assert.Equal(expectedButton, button);
         }
 

@@ -1,4 +1,5 @@
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh.Cli
 {
@@ -26,7 +27,7 @@ namespace EmuSen.Pharaoh.Cli
         public long CpuTraceEnd { get; init; } = -1;
         public string? CpuTracePath { get; init; }
         public List<string> FlagsToEnable { get; init; } = new();
-        public List<(long Start, long End, SnesButton Button, int Controller)> Taps { get; init; } = new();
+        public List<(long Start, long End, PadButton Button, int Controller)> Taps { get; init; } = new();
         public List<(long Frame, string Path)> Screenshots { get; init; } = new();
 
         // Hex, bools and bare names - see §3.15's --flag entry.
@@ -103,7 +104,7 @@ namespace EmuSen.Pharaoh.Cli
             long cpuLogStart = -1, cpuLogEnd = -1, cpuTraceEnd = -1;
             string? cpuTracePath = null;
             var flagsToEnable = new List<string>();
-            var taps = new List<(long Start, long End, SnesButton Button, int Controller)>();
+            var taps = new List<(long Start, long End, PadButton Button, int Controller)>();
             var screenshots = new List<(long Frame, string Path)>();
 
             for (int i = 2; i < args.Length; i++)
@@ -152,7 +153,7 @@ namespace EmuSen.Pharaoh.Cli
                 {
                     string[] p = args[++i].Split(':');
                     long start = long.Parse(p[0]);
-                    var button = Enum.Parse<SnesButton>(p[1], ignoreCase: true);
+                    var button = Enum.Parse<PadButton>(p[1], ignoreCase: true);
                     long duration = p.Length >= 3 ? long.Parse(p[2]) : 4;
                     taps.Add((start, start + duration, button, 1));
                 }
@@ -160,7 +161,7 @@ namespace EmuSen.Pharaoh.Cli
                 {
                     string[] p = args[++i].Split(':');
                     long start = long.Parse(p[0]);
-                    var button = Enum.Parse<SnesButton>(p[1], ignoreCase: true);
+                    var button = Enum.Parse<PadButton>(p[1], ignoreCase: true);
                     long duration = p.Length >= 3 ? long.Parse(p[2]) : 4;
                     taps.Add((start, start + duration, button, 2));
                 }

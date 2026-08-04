@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using EmuSen.Audio;
+using EmuSen.Endymion;
 
 namespace EmuSen.WiseMan.Audio
 {

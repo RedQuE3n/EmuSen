@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Common.Firmware;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores
 {
@@ -13,26 +14,7 @@ namespace EmuSen.Cores
     // the same idea applied to actually *running* a core, not just
     // inspecting it.
     //
-    // Deliberately does NOT try to abstract input. Different consoles have
-    // wildly different controller shapes (SNES's 12 digital buttons vs.
-    // N64's analog stick vs. a Game Boy's 8 buttons), and the Avalonia
-    // frontend already has a substantial amount of code (ControllerKeyMap,
-    // GamepadBindingMap, the rebind UI, persisted JSON bindings) built
-    // specifically around SnesButton. Forcing that through a generic
-    // interface now would be a much bigger, riskier piece of work than
-    // this contract's actual purpose - eliminating the duplicated
-    // frame-timing loop that used to exist separately in both the console
-    // frontend's Program.cs (now EmuSen.Hotaru/Program.cs) and
-    // Common/EmulatorSession.cs. A core's
-    // concrete implementation (e.g. VenusCore) is free to expose its own
-    // real input surface beyond this interface; callers that need it
-    // (a frontend wiring up keyboard/gamepad input) already know which
-    // concrete core they're driving.
-    //
-    // Same reasoning for debug-toolchain access: Program.cs's F1-F9
-    // hotkeys and the F4 debug prompt need real SNES-specific objects
-    // (Cpu, MemoryBus, Renderer) to build a SnesDebugTarget from - those
-    // stay on the concrete core type too, not on this interface.
+    // Input joined this contract late, and console-specific blocks never did - see EmuSen_Input.md §1 and EmuSen_Multicore.md §5.
     public interface ICore
     {
         // Short display name ("SNES", "NES", etc) - same convention as
@@ -50,6 +32,12 @@ namespace EmuSen.Cores
 
         bool IsRomLoaded { get; }
         long TotalFrames { get; }
+
+        // The buttons this console actually has, so a rebind UI can show a real pad - see EmuSen_Input.md §2.
+        IReadOnlyList<PadButton> SupportedButtons => Array.Empty<PadButton>();
+
+        // <port> is 0-based. A core with no input modelled can leave this alone.
+        void SetButton(int port, PadButton button, bool pressed) { }
 
         void LoadRom(string path);
 
@@ -114,6 +102,11 @@ namespace EmuSen.Cores
         // Fast-forward-only hint that this frame's pixels are discarded; a core
         // honoring it may leave render-derived bits stale - see §2.2.
         bool SkipRendering { get; set; }
+
+        // Stopped mid-frame in front of a breakpoint, so the next call resumes it - see EmuSen_Multicore.md §5.
+        bool IsHaltedAtBreakpoint => false;
+
+        int HaltedAddress => 0;
 
         // Flushes battery-backed save data (SRAM or whatever this
         // hardware's equivalent is) to disk. A core with no such concept

@@ -1,7 +1,8 @@
 using System.Text.Json;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Nehellania.Input;
 using SDL3;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Input
 {
@@ -30,21 +31,21 @@ namespace EmuSen.WiseMan.Input
         [Fact]
         public void Sdl2_era_config_still_deserializes_to_the_same_physical_buttons()
         {
-            var loaded = JsonSerializer.Deserialize<Dictionary<SnesButton, SDL.GamepadButton>>(LegacyJson);
+            var loaded = JsonSerializer.Deserialize<Dictionary<PadButton, SDL.GamepadButton>>(LegacyJson);
 
             Assert.NotNull(loaded);
-            Assert.Equal(SDL.GamepadButton.DPadUp, loaded[SnesButton.Up]);
-            Assert.Equal(SDL.GamepadButton.DPadDown, loaded[SnesButton.Down]);
-            Assert.Equal(SDL.GamepadButton.DPadLeft, loaded[SnesButton.Left]);
-            Assert.Equal(SDL.GamepadButton.DPadRight, loaded[SnesButton.Right]);
-            Assert.Equal(SDL.GamepadButton.South, loaded[SnesButton.B]);
-            Assert.Equal(SDL.GamepadButton.East, loaded[SnesButton.A]);
-            Assert.Equal(SDL.GamepadButton.West, loaded[SnesButton.Y]);
-            Assert.Equal(SDL.GamepadButton.North, loaded[SnesButton.X]);
-            Assert.Equal(SDL.GamepadButton.LeftShoulder, loaded[SnesButton.L]);
-            Assert.Equal(SDL.GamepadButton.RightShoulder, loaded[SnesButton.R]);
-            Assert.Equal(SDL.GamepadButton.Start, loaded[SnesButton.Start]);
-            Assert.Equal(SDL.GamepadButton.Back, loaded[SnesButton.Select]);
+            Assert.Equal(SDL.GamepadButton.DPadUp, loaded[PadButton.Up]);
+            Assert.Equal(SDL.GamepadButton.DPadDown, loaded[PadButton.Down]);
+            Assert.Equal(SDL.GamepadButton.DPadLeft, loaded[PadButton.Left]);
+            Assert.Equal(SDL.GamepadButton.DPadRight, loaded[PadButton.Right]);
+            Assert.Equal(SDL.GamepadButton.South, loaded[PadButton.B]);
+            Assert.Equal(SDL.GamepadButton.East, loaded[PadButton.A]);
+            Assert.Equal(SDL.GamepadButton.West, loaded[PadButton.Y]);
+            Assert.Equal(SDL.GamepadButton.North, loaded[PadButton.X]);
+            Assert.Equal(SDL.GamepadButton.LeftShoulder, loaded[PadButton.L]);
+            Assert.Equal(SDL.GamepadButton.RightShoulder, loaded[PadButton.R]);
+            Assert.Equal(SDL.GamepadButton.Start, loaded[PadButton.Start]);
+            Assert.Equal(SDL.GamepadButton.Back, loaded[PadButton.Select]);
         }
 
         [Fact]
@@ -53,10 +54,10 @@ namespace EmuSen.WiseMan.Input
             var defaults = new GamepadBindingMap().ButtonToPad;
 
             string json = JsonSerializer.Serialize(defaults);
-            var reloaded = JsonSerializer.Deserialize<Dictionary<SnesButton, SDL.GamepadButton>>(json);
+            var reloaded = JsonSerializer.Deserialize<Dictionary<PadButton, SDL.GamepadButton>>(json);
 
             Assert.Equal(defaults, reloaded);
-            Assert.Equal(JsonSerializer.Deserialize<Dictionary<SnesButton, SDL.GamepadButton>>(LegacyJson), reloaded);
+            Assert.Equal(JsonSerializer.Deserialize<Dictionary<PadButton, SDL.GamepadButton>>(LegacyJson), reloaded);
         }
     }
 }

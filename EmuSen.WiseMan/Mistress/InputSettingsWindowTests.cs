@@ -8,12 +8,13 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Mistress.Input;
 using EmuSen.Nehellania.Input;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -112,7 +113,7 @@ namespace EmuSen.WiseMan.Mistress
             ClickAsUser(RebindButtonFor(h.Window, "Up", "Rebind Key"));
             Press(h.Window, key);
 
-            Assert.Equal(key, h.Keys.ButtonToKey[SnesButton.Up]);
+            Assert.Equal(key, h.Keys.ButtonToKey[PadButton.Up]);
             Assert.Equal(key.ToString(), LabelTextFor(h.Window, "Up", 1));
         }, default);
 
@@ -120,13 +121,13 @@ namespace EmuSen.WiseMan.Mistress
         public Task Escape_cancels_a_rebind_and_restores_the_prompt() => Session.Dispatch(() =>
         {
             var h = NewWindow();
-            Key before = h.Keys.ButtonToKey[SnesButton.A];
+            Key before = h.Keys.ButtonToKey[PadButton.A];
 
             Button rebind = RebindButtonFor(h.Window, "A", "Rebind Key");
             ClickAsUser(rebind);
             Press(h.Window, Key.Escape);
 
-            Assert.Equal(before, h.Keys.ButtonToKey[SnesButton.A]);
+            Assert.Equal(before, h.Keys.ButtonToKey[PadButton.A]);
             Assert.Equal("Rebind Key", rebind.Content as string);
         }, default);
 
@@ -141,7 +142,7 @@ namespace EmuSen.WiseMan.Mistress
             Press(h.Window, Key.Space);
 
             Assert.Equal("Rebind Key", rebind.Content as string);
-            Assert.Equal(Key.Space, h.Keys.ButtonToKey[SnesButton.Start]);
+            Assert.Equal(Key.Space, h.Keys.ButtonToKey[PadButton.Start]);
         }, default);
 
         // Two SNES buttons must never share one key.
@@ -153,8 +154,8 @@ namespace EmuSen.WiseMan.Mistress
             ClickAsUser(RebindButtonFor(h.Window, "A", "Rebind Key"));
             Press(h.Window, Key.Z); // Z was B's default
 
-            Assert.Equal(Key.Z, h.Keys.ButtonToKey[SnesButton.A]);
-            Assert.False(h.Keys.ButtonToKey.ContainsKey(SnesButton.B));
+            Assert.Equal(Key.Z, h.Keys.ButtonToKey[PadButton.A]);
+            Assert.False(h.Keys.ButtonToKey.ContainsKey(PadButton.B));
             Assert.Equal("(unbound)", LabelTextFor(h.Window, "B", 1));
         }, default);
 
@@ -165,7 +166,7 @@ namespace EmuSen.WiseMan.Mistress
 
             ClickAsUser(RebindButtonFor(h.Window, "Select", "Clear"));
 
-            Assert.False(h.Keys.ButtonToKey.ContainsKey(SnesButton.Select));
+            Assert.False(h.Keys.ButtonToKey.ContainsKey(PadButton.Select));
             Assert.Equal("(unbound)", LabelTextFor(h.Window, "Select", 1));
         }, default);
 
@@ -192,7 +193,7 @@ namespace EmuSen.WiseMan.Mistress
             Press(h.Window, Key.X); // X was A's default
 
             Assert.Equal(Key.X, h.Hotkeys.ActionToKey[HotkeyAction.Rewind]);
-            Assert.False(h.Keys.ButtonToKey.ContainsKey(SnesButton.A));
+            Assert.False(h.Keys.ButtonToKey.ContainsKey(PadButton.A));
         }, default);
 
         // A hand-edited config can still arrive with a clash.
@@ -202,7 +203,7 @@ namespace EmuSen.WiseMan.Mistress
             var keys = new ControllerKeyMap();
             var hotkeys = new HotkeyBindingMap();
             // Straight into the dictionary, bypassing Rebind's guard.
-            keys.ButtonToKey[SnesButton.A] = keys.ButtonToKey[SnesButton.B];
+            keys.ButtonToKey[PadButton.A] = keys.ButtonToKey[PadButton.B];
 
             var window = new InputSettingsWindow(keys, new GamepadBindingMap(), null!, new AppSettings(), hotkeys);
             window.Show();
@@ -226,6 +227,51 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(string.IsNullOrEmpty(conflict.Text));
         }, default);
 
+        // A rebind grid offering X/Y/L/R with an NES ROM loaded - see EmuSen_Input.md §5.
+        [Fact]
+        public Task Only_the_loaded_cores_buttons_get_a_row() => Session.Dispatch(() =>
+        {
+            var nesPad = new[]
+            {
+                PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right,
+                PadButton.Select, PadButton.Start, PadButton.B, PadButton.A,
+            };
+
+            var window = new InputSettingsWindow(new ControllerKeyMap(), new GamepadBindingMap(), null!,
+                new AppSettings(), new HotkeyBindingMap(), nesPad);
+            window.Show();
+
+            Assert.NotNull(RebindButtonFor(window, "A", "Rebind Key"));
+            Assert.Throws<InvalidOperationException>(() => RebindButtonFor(window, "X", "Rebind Key"));
+            Assert.Throws<InvalidOperationException>(() => RebindButtonFor(window, "L", "Rebind Key"));
+        }, default);
+
+        // Filtering is display-only; the shared map keeps every binding.
+        [Fact]
+        public Task A_hidden_buttons_binding_survives() => Session.Dispatch(() =>
+        {
+            var keys = new ControllerKeyMap();
+            Key xBefore = keys.ButtonToKey[PadButton.X];
+
+            var window = new InputSettingsWindow(keys, new GamepadBindingMap(), null!,
+                new AppSettings(), new HotkeyBindingMap(), new[] { PadButton.A, PadButton.B });
+            window.Show();
+
+            Assert.Equal(xBefore, keys.ButtonToKey[PadButton.X]);
+        }, default);
+
+        // No core loaded means no console to be specific about, so show the whole union.
+        [Fact]
+        public Task An_empty_button_list_falls_back_to_all_twelve() => Session.Dispatch(() =>
+        {
+            var window = new InputSettingsWindow(new ControllerKeyMap(), new GamepadBindingMap(), null!,
+                new AppSettings(), new HotkeyBindingMap(), Array.Empty<PadButton>());
+            window.Show();
+
+            Assert.NotNull(RebindButtonFor(window, "X", "Rebind Key"));
+            Assert.NotNull(RebindButtonFor(window, "R", "Rebind Key"));
+        }, default);
+
         [Fact]
         public Task Reset_to_defaults_restores_every_row() => Session.Dispatch(() =>
         {
@@ -233,11 +279,11 @@ namespace EmuSen.WiseMan.Mistress
 
             ClickAsUser(RebindButtonFor(h.Window, "Up", "Rebind Key"));
             Press(h.Window, Key.K);
-            Assert.Equal(Key.K, h.Keys.ButtonToKey[SnesButton.Up]);
+            Assert.Equal(Key.K, h.Keys.ButtonToKey[PadButton.Up]);
 
             ClickAsUser(ButtonByContent(h.Window, "Reset to Defaults"));
 
-            Assert.Equal(Key.Up, h.Keys.ButtonToKey[SnesButton.Up]);
+            Assert.Equal(Key.Up, h.Keys.ButtonToKey[PadButton.Up]);
             Assert.Equal("Up", LabelTextFor(h.Window, "Up", 1));
             Assert.Equal(Key.Tab, h.Hotkeys.ActionToKey[HotkeyAction.FastForward]);
         }, default);

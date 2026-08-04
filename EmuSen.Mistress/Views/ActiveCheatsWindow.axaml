@@ -26,6 +26,9 @@
 
         <TextBlock DockPanel.Dock="Top" x:Name="ListHeaderText" FontWeight="Bold" Margin="0,0,0,4" />
 
+        <!-- Which console a typed code is parsed for - see EmuSen_Multicore.md §10. -->
+        <TextBlock DockPanel.Dock="Top" x:Name="ConsoleText" Foreground="Gray" FontSize="11" Margin="0,0,0,8" />
+
         <!-- Add a code by hand. Raw addresses go through `cheat poke` in the
              DianaOS console - see `man cheat`. -->
         <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">

@@ -8,10 +8,11 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using SDL3;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Mistress.Input;
 using EmuSen.Nehellania.Input;
 using EmuSen.Galaxia.Models;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Mistress.Views
 {
@@ -24,9 +25,9 @@ namespace EmuSen.Mistress.Views
         private readonly AppSettings _appSettings;
 
         // Key and pad listeners are separate - an event vs a poll.
-        private SnesButton? _listeningForKey;
+        private PadButton? _listeningForKey;
         private HotkeyAction? _listeningForHotkey;
-        private SnesButton? _listeningForPad;
+        private PadButton? _listeningForPad;
         private DispatcherTimer? _padPollTimer;
         private DispatcherTimer? _statusPollTimer;
 
@@ -39,19 +40,24 @@ namespace EmuSen.Mistress.Views
         private const string ListeningPadText = "Press a button...";
         private const string Unbound = "(unbound)";
 
-        private readonly Dictionary<SnesButton, TextBlock> _keyLabels = new();
-        private readonly Dictionary<SnesButton, TextBlock> _padLabels = new();
-        private readonly Dictionary<SnesButton, Button> _rebindKeyButtons = new();
-        private readonly Dictionary<SnesButton, Button> _rebindPadButtons = new();
+        private readonly Dictionary<PadButton, TextBlock> _keyLabels = new();
+        private readonly Dictionary<PadButton, TextBlock> _padLabels = new();
+        private readonly Dictionary<PadButton, Button> _rebindKeyButtons = new();
+        private readonly Dictionary<PadButton, Button> _rebindPadButtons = new();
         private readonly Dictionary<HotkeyAction, TextBlock> _hotkeyLabels = new();
         private readonly Dictionary<HotkeyAction, Button> _rebindHotkeyButtons = new();
+
+        // The loaded console's pad, or all twelve when nothing is loaded - see EmuSen_Input.md §5.
+        private readonly IReadOnlyList<PadButton> _buttons;
 
         // For Avalonia's XAML tooling only - real code uses the full ctor.
         public InputSettingsWindow() : this(new ControllerKeyMap(), new GamepadBindingMap(), null!, new AppSettings(), new HotkeyBindingMap()) { }
 
-        public InputSettingsWindow(ControllerKeyMap keyBindings, GamepadBindingMap gamepadBindings, GamepadManager gamepad, AppSettings appSettings, HotkeyBindingMap hotkeyBindings)
+        public InputSettingsWindow(ControllerKeyMap keyBindings, GamepadBindingMap gamepadBindings, GamepadManager gamepad, AppSettings appSettings, HotkeyBindingMap hotkeyBindings,
+            IReadOnlyList<PadButton>? supportedButtons = null)
         {
             InitializeComponent();
+            _buttons = supportedButtons is { Count: > 0 } ? supportedButtons : Enum.GetValues<PadButton>();
             _keyBindings = keyBindings;
             _gamepadBindings = gamepadBindings;
             _hotkeyBindings = hotkeyBindings;
@@ -121,7 +127,7 @@ namespace EmuSen.Mistress.Views
             _rebindKeyButtons.Clear();
             _rebindPadButtons.Clear();
 
-            foreach (SnesButton button in Enum.GetValues<SnesButton>())
+            foreach (PadButton button in _buttons)
             {
                 var row = new Grid { ColumnDefinitions = ButtonRowColumns() };
 
@@ -215,10 +221,10 @@ namespace EmuSen.Mistress.Views
             return control;
         }
 
-        private string CurrentKeyLabel(SnesButton button) =>
+        private string CurrentKeyLabel(PadButton button) =>
             _keyBindings.ButtonToKey.TryGetValue(button, out Key k) ? k.ToString() : Unbound;
 
-        private string CurrentPadLabel(SnesButton button) =>
+        private string CurrentPadLabel(PadButton button) =>
             _gamepadBindings.ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : Unbound;
 
         // The connected pad's printed label where SDL3 knows it, else the
@@ -230,7 +236,7 @@ namespace EmuSen.Mistress.Views
 
         // --- Keyboard capture (game buttons and hotkeys share one listener) ---
 
-        private void StartListeningForKey(SnesButton button)
+        private void StartListeningForKey(PadButton button)
         {
             ClearKeyListening();
             _listeningForKey = button;
@@ -246,7 +252,7 @@ namespace EmuSen.Mistress.Views
 
         private void ClearKeyListening()
         {
-            if (_listeningForKey is SnesButton b) _rebindKeyButtons[b].Content = RebindKeyText;
+            if (_listeningForKey is PadButton b) _rebindKeyButtons[b].Content = RebindKeyText;
             if (_listeningForHotkey is HotkeyAction a) _rebindHotkeyButtons[a].Content = RebindKeyText;
             _listeningForKey = null;
             _listeningForHotkey = null;
@@ -262,7 +268,7 @@ namespace EmuSen.Mistress.Views
 
             if (e.Key != Key.Escape)
             {
-                if (_listeningForKey is SnesButton button)
+                if (_listeningForKey is PadButton button)
                 {
                     // One key must not drive a button and a hotkey at once.
                     if (_hotkeyBindings.TryGetAction(e.Key, out HotkeyAction clash))
@@ -275,7 +281,7 @@ namespace EmuSen.Mistress.Views
                 }
                 else if (_listeningForHotkey is HotkeyAction action)
                 {
-                    if (_keyBindings.TryGetButton(e.Key, out SnesButton clash))
+                    if (_keyBindings.TryGetButton(e.Key, out PadButton clash))
                     {
                         _keyBindings.Unbind(clash);
                         _keyBindings.Save();
@@ -296,7 +302,7 @@ namespace EmuSen.Mistress.Views
 
         private void RefreshKeyLabels()
         {
-            foreach (SnesButton button in Enum.GetValues<SnesButton>())
+            foreach (PadButton button in _buttons)
             {
                 _keyLabels[button].Text = CurrentKeyLabel(button);
                 _rebindKeyButtons[button].Content = RebindKeyText;
@@ -319,7 +325,8 @@ namespace EmuSen.Mistress.Views
         {
             var seen = new Dictionary<Key, List<string>>();
 
-            foreach (var kv in _keyBindings.ButtonToKey)
+            // Displayed buttons only - a button this console lacks is unreachable, so it cannot clash.
+            foreach (var kv in _keyBindings.ButtonToKey.Where(kv => _buttons.Contains(kv.Key)))
             {
                 if (!seen.TryGetValue(kv.Value, out var owners)) seen[kv.Value] = owners = new List<string>();
                 owners.Add(kv.Key.ToString());
@@ -356,11 +363,11 @@ namespace EmuSen.Mistress.Views
 
         // --- Gamepad rebind: polled, since Avalonia has no pad-press event ---
 
-        private void StartListeningForPad(SnesButton button)
+        private void StartListeningForPad(PadButton button)
         {
             if (_gamepad is null) return; // parameterless-ctor / previewer case
 
-            if (_listeningForPad is SnesButton previous) _rebindPadButtons[previous].Content = RebindPadText;
+            if (_listeningForPad is PadButton previous) _rebindPadButtons[previous].Content = RebindPadText;
 
             _listeningForPad = button;
             _rebindPadButtons[button].Content = ListeningPadText;
@@ -374,7 +381,7 @@ namespace EmuSen.Mistress.Views
         private void PollForPadButton()
         {
             // Guarded locally so the timer stops itself - see EmuSen_Settings_Reference.md §4.6.
-            if (_gamepad is null || _listeningForPad is not SnesButton button)
+            if (_gamepad is null || _listeningForPad is not PadButton button)
             {
                 _padPollTimer?.Stop();
                 return;
@@ -393,7 +400,7 @@ namespace EmuSen.Mistress.Views
 
         private void RefreshPadLabels()
         {
-            foreach (SnesButton button in Enum.GetValues<SnesButton>())
+            foreach (PadButton button in _buttons)
             {
                 _padLabels[button].Text = CurrentPadLabel(button);
                 _rebindPadButtons[button].Content = RebindPadText;

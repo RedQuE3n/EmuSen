@@ -49,11 +49,27 @@ namespace EmuSen.Mistress.Views
         private IReadOnlyList<CheatDatabaseEntry> _games = Array.Empty<CheatDatabaseEntry>();
         private string? _selectedSystem;
 
+        // Narrows the systems list to one console's folders - see EmuSen_Multicore.md §10.
+        private string? _console;
+
+        // Called when the library's console filter moves under an already-open window.
+        public void SetConsole(string? console)
+        {
+            _console = console;
+            Refresh();
+        }
+
+        // The libretro folder names the selected console claims, or null for no narrowing.
+        private IReadOnlyList<string>? ConsoleSystems =>
+            EmuSen.Cores.CoreCatalog.ByDisplayName(_console) is { } core && core.CheatSystemNames.Count > 0
+                ? core.CheatSystemNames
+                : null;
+
         public CheatDatabaseWindow() : this(AppSettings.Load()) { }
 
         public CheatDatabaseWindow(AppSettings settings, Func<CheatRegistry?>? activeCheats = null, ICheatCodeCodec? codec = null,
             Action? changed = null, Action? openActiveCheats = null,
-            Func<IReadOnlyCollection<string>>? supportedSystems = null)
+            Func<IReadOnlyCollection<string>>? supportedSystems = null, string? console = null)
         {
             InitializeComponent();
             _settings = settings;
@@ -62,6 +78,7 @@ namespace EmuSen.Mistress.Views
             _changed = changed;
             _openActiveCheats = openActiveCheats;
             _supportedSystems = supportedSystems;
+            _console = console;
             _db = new CheatDatabase(Directory);
             AttributionText.Text = CheatDatabaseInstaller.Attribution;
             DirectoryBox.Text = _settings.CheatDatabaseDirectory;
@@ -84,16 +101,28 @@ namespace EmuSen.Mistress.Views
                 ? DianaOSSandbox.CheatDatabaseDirectory
                 : _settings.CheatDatabaseDirectory;
 
+        // Every system on disk, or only the selected console's when one is chosen.
+        private IReadOnlyList<(string System, int Count)> VisibleSystems()
+        {
+            IReadOnlyList<(string System, int Count)> all = _db.Systems();
+            IReadOnlyList<string>? only = ConsoleSystems;
+            if (only is null) return all;
+
+            return all.Where(s => only.Contains(s.System, StringComparer.OrdinalIgnoreCase)).ToList();
+        }
+
         private void Refresh()
         {
             _db = new CheatDatabase(Directory);
-            IReadOnlyList<(string System, int Count)> systems = _db.Systems();
+            IReadOnlyList<(string System, int Count)> systems = VisibleSystems();
             int total = systems.Sum(s => s.Count);
 
             SystemsList.ItemsSource = systems.Select(s => $"{s.System}  ({s.Count})").ToList();
+
+            string scope = ConsoleSystems is null ? "" : $" for {_console}";
             StatusText.Text = total > 0
-                ? $"{total:N0} cheat file(s) in {Directory}"
-                : $"No cheat files in {Directory}";
+                ? $"{total:N0} cheat file(s){scope} in {Directory}"
+                : $"No cheat files{scope} in {Directory}";
 
             _selectedSystem = null;
             ShowGames();
@@ -104,7 +133,7 @@ namespace EmuSen.Mistress.Views
         private void OnSystemSelected(object? sender, SelectionChangedEventArgs e)
         {
             int index = SystemsList.SelectedIndex;
-            IReadOnlyList<(string System, int Count)> systems = _db.Systems();
+            IReadOnlyList<(string System, int Count)> systems = VisibleSystems();
 
             _selectedSystem = index >= 0 && index < systems.Count ? systems[index].System : null;
             ShowGames();

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using EmuSen.Common.Firmware;
-using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Memory;
-using EmuSen.Cores.Nintendo.Venus.Processor;
-using EmuSen.Cores.Nintendo.Venus.Video;
+using EmuSen.Cores;
+using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Common
 {
@@ -19,20 +19,15 @@ namespace EmuSen.Common
     // how identical the two were). That's gone now; RunFrame()/SaveState()/
     // LoadState()/GetFrameBufferRgba() all delegate straight to an ICore.
     //
-    // Not fully core-agnostic yet: it still constructs a VenusCore
-    // directly in LoadRom() (there's only one core to construct today)
-    // and exposes a Venus-specific Bus property for the one thing ICore
-    // deliberately doesn't abstract - input (see ICore.cs's own comment
-    // on why). A real multi-core frontend would take an ICore factory or
-    // similar in its constructor instead of hardcoding VenusCore; not
-    // worth building until there's a second core to actually need it
-    // against.
+    // Core-agnostic now - LoadRom picks a core from the ROM's extension - see EmuSen_Multicore.md §2.
     public class EmulatorSession
     {
-        private VenusCore? _core;
+        private ICore? _core;
 
         public int ScreenWidth => _core?.ScreenWidth ?? 256;
-        public const int ScreenHeight = 224;
+
+        // Asks the core, or Moon's 240 lines get submitted as Venus's 224 - see EmuSen_Multicore.md §7.
+        public int ScreenHeight => _core?.ScreenHeight ?? 224;
 
         // "SNES" before LoadRom() is called too - there's only one core to
         // report today, but this exists so a caller (e.g. a log directory
@@ -42,34 +37,18 @@ namespace EmuSen.Common
         public long TotalFrames => _core?.TotalFrames ?? 0;
         public bool IsRomLoaded => _core?.IsRomLoaded ?? false;
 
-        // Venus-specific escape hatch for input - see this class's own
-        // header comment and ICore.cs's comment on why input isn't part
-        // of the generic interface.
-        public MemoryBus Bus => _core?.Bus ?? throw new InvalidOperationException("LoadRom() hasn't been called yet.");
+        // Routed to whichever core is loaded - see EmuSen_Input.md §2.
+        public void SetButton(int port, PadButton button, bool pressed) => _core?.SetButton(port, button, pressed);
 
-        // Same escape-hatch pattern as Bus above, added so a caller (the
-        // Avalonia frontend's shell console window) can construct a real
-        // SnesDebugTarget(Cpu, Bus, Renderer) - the exact constructor
-        // shape EmuSen.Hotaru/EmuSen.Pharaoh already use - without this
-        // class needing to grow its own IDebugTarget-building logic. Null
-        // before LoadRom() the same way Bus throws, rather than throwing
-        // itself, since "no target yet" is a normal condition a shell
-        // command dispatch already treats as such (see
-        // Shell/Commands/DebugCommandHelpers.RequireTarget).
-        public Cpu? Cpu => _core?.Cpu;
-        public Renderer? Renderer => _core?.Renderer;
+        public IReadOnlyList<PadButton> SupportedButtons =>
+            _core?.SupportedButtons ?? Array.Empty<PadButton>();
 
-        // Temporary profiling pass-through - see VenusCore's own comment on
-        // these. Not promoted onto ICore for the same reason input/debug
-        // access aren't: this is Venus-specific instrumentation, not a
-        // general execution-contract concern.
-        public double LastFrameCpuSpc700Ms => _core?.LastFrameCpuSpc700Ms ?? 0;
-        public double LastFramePpuMs => _core?.LastFramePpuMs ?? 0;
-        public double LastFrameObjEvalMs => _core?.LastFrameObjEvalMs ?? 0;
-        public double LastFrameBlendMs => _core?.LastFrameBlendMs ?? 0;
-        public double LastFrameMainCompositeMs => _core?.LastFrameMainCompositeMs ?? 0;
-        public double LastFrameSubCompositeMs => _core?.LastFrameSubCompositeMs ?? 0;
-        public double LastFrameHdmaMs => _core?.LastFrameHdmaMs ?? 0;
+        // Built by CoreFactory alongside the core, so this class names no concrete target.
+        public IDebugTarget? DebugTarget { get; private set; }
+
+        public ICheatCodeCodec? CheatAutoDetectCodec { get; private set; }
+        public ICheatCodeCodec? CheatExplicitCodec { get; private set; }
+        public ICpuTraceSwitch? CpuTraceSwitch { get; private set; }
 
         // Firmware <romPath> needs that isn't in the library yet. Answered
         // without loading, so an interactive frontend can offer to go and
@@ -81,12 +60,19 @@ namespace EmuSen.Common
         // Constructs a throwaway core for the same reason LoadRom below
         // hardcodes one: there is exactly one core to construct today.
         public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath) =>
-            FirmwareLibrary.MissingFrom(new VenusCore(headless: true).GetFirmwareRequirements(romPath));
+            FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath).GetFirmwareRequirements(romPath));
+
+        // Set by the frontend before LoadRom so the debug target shares its registry.
+        public CheatRegistry? Cheats { get; set; }
 
         public void LoadRom(string path)
         {
-            _core = new VenusCore(headless: true);
-            _core.LoadRom(path);
+            var bundle = CoreFactory.Load(path, headless: true, Cheats);
+            _core = bundle.Core;
+            DebugTarget = bundle.DebugTarget;
+            CheatAutoDetectCodec = bundle.CheatAutoDetectCodec;
+            CheatExplicitCodec = bundle.CheatExplicitCodec;
+            CpuTraceSwitch = bundle.CpuTraceSwitch;
         }
 
         // Periodic SRAM autosave is handled inside VenusCore.RunFrame()
@@ -106,8 +92,7 @@ namespace EmuSen.Common
         // still-in-progress loop/tail would otherwise never reach the log.
         public void FlushVerboseLogs()
         {
-            _core?.Cpu?.FlushVerboseTrace();
-            _core?.Spc700?.FlushVerboseTrace();
+            (_core as ITraceFlushable)?.FlushVerboseTrace();
         }
 
         public void SaveState(string path)
@@ -122,10 +107,7 @@ namespace EmuSen.Common
             _core.LoadState(path);
         }
 
-        // The ICore this session is driving, for callers that need to hand
-        // a core to something core-agnostic (RewindBuffer) rather than go
-        // through this wrapper's own pass-throughs. Null before LoadRom(),
-        // same convention as Cpu/Renderer above.
+        // For a caller handing the core straight to RewindBuffer; null before LoadRom(), like DebugTarget.
         public EmuSen.Cores.ICore? Core => _core;
 
         // Fast-forward frame skipping - see ICore.SkipRendering.

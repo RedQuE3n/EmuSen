@@ -13,9 +13,9 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EmuSen.Common;
 using EmuSen.Common.Firmware;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus.Debug;
-using EmuSen.Nehellania.Audio;
+using EmuSen.Endymion;
 using EmuSen.Nehellania.Input;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
@@ -26,6 +26,8 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia.Input;
+using EmuSen.Audio;
 
 namespace EmuSen.Mistress.Views
 {
@@ -107,7 +109,7 @@ namespace EmuSen.Mistress.Views
         // ROM that's since been swapped out. Null before the first ROM
         // loads - the console window (and every shell command's own
         // RequireTarget guard) already treats that as a normal condition.
-        private SnesDebugTarget? _debugTarget;
+        private IDebugTarget? _debugTarget;
 
         // At most one console window at a time - Show()n non-modally (same
         // pattern DebugSettingsWindow/InputSettingsWindow already use), and
@@ -129,6 +131,9 @@ namespace EmuSen.Mistress.Views
         // Same at-most-one/reuse/clear-on-Closed pattern, refreshed rather
         // than re-targeted - see EmuSen_Settings_Reference.md §4.14.
         private ActiveCheatsWindow? _activeCheatsWindow;
+
+        // Same at-most-one/reuse/clear-on-Closed pattern, retained so a console switch can retarget it.
+        private CheatDatabaseWindow? _cheatDatabaseWindow;
 
         // Owned here, not by _debugTarget, so a cheat list outlives the core
         // a Reset rebuilds - see §4.14.
@@ -172,14 +177,16 @@ namespace EmuSen.Mistress.Views
         // one"). Without this, a gamepad poll finding a button NOT pressed
         // would incorrectly release a button still being held on the
         // keyboard, and vice versa.
-        private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<SnesButton>().Length];
-        private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<SnesButton>().Length];
+        private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadButton>().Length];
+        private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<PadButton>().Length];
 
         public MainWindow()
         {
             InitializeComponent();
             _gamepad = new GamepadManager(_gamepadBindings);
-            _audioPlayer = new AudioPlayer();
+            // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
+            _audioPlayer = new AudioPlayer(
+                AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
             Closing += (_, _) =>
             {
                 _timer?.Stop();
@@ -234,18 +241,19 @@ namespace EmuSen.Mistress.Views
             e.Handled = true;
         }
 
-        private void ApplyButtonState(SnesButton button)
+        // Through ICore, not the bus - which console's pad this reaches is the core's business.
+        private void ApplyButtonState(PadButton button)
         {
             if (_session is not { IsRomLoaded: true }) return;
             bool held = _keyboardHeld[(int)button] || _gamepadHeld[(int)button];
-            _session.Bus.Input.SetButton(button, held);
-            if (_appSettings.MirrorPlayer1ToPlayer2) _session.Bus.Input.SetButton(button, held, controller: 2);
+            _session.SetButton(0, button, held);
+            if (_appSettings.MirrorPlayer1ToPlayer2) _session.SetButton(1, button, held);
         }
 
         private void PollGamepad()
         {
             _gamepad.Poll();
-            foreach (SnesButton button in Enum.GetValues<SnesButton>())
+            foreach (PadButton button in Enum.GetValues<PadButton>())
             {
                 bool held = _gamepad.IsPressed(button);
                 if (held != _gamepadHeld[(int)button])
@@ -270,11 +278,14 @@ namespace EmuSen.Mistress.Views
                 Title = "Open ROM",
                 AllowMultiple = false,
                 SuggestedStartLocation = startLocation,
-                FileTypeFilter = new[]
-                {
-                    new FilePickerFileType("SNES ROMs") { Patterns = new[] { "*.smc", "*.sfc" } },
-                    new FilePickerFileType("All files") { Patterns = new[] { "*" } },
-                }
+                // One entry per core in this build, so a new core needs no edit here.
+                FileTypeFilter = EmuSen.Cores.CoreCatalog.Cores
+                    .Select(c => new FilePickerFileType($"{c.DisplayName} ROMs")
+                    {
+                        Patterns = c.Extensions.Select(e => "*" + e).ToArray()
+                    })
+                    .Append(new FilePickerFileType("All files") { Patterns = new[] { "*" } })
+                    .ToArray()
             });
 
             var file = files.FirstOrDefault();
@@ -337,7 +348,8 @@ namespace EmuSen.Mistress.Views
 
         private void OnControllerBindingsClick(object? sender, RoutedEventArgs e)
         {
-            new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings).Show(this);
+            new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings,
+                _session?.SupportedButtons).Show(this);
         }
 
         private void OnPreferencesClick(object? sender, RoutedEventArgs e)
@@ -359,10 +371,20 @@ namespace EmuSen.Mistress.Views
         // neither of which is a session. See §4.14.
         private void OnCheatDatabaseClick(object? sender, RoutedEventArgs e)
         {
-            new CheatDatabaseWindow(_appSettings, () => _cheats, new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
+            if (_cheatDatabaseWindow is not null)
+            {
+                _cheatDatabaseWindow.Activate();
+                return;
+            }
+
+            _cheatDatabaseWindow = new CheatDatabaseWindow(_appSettings, () => _cheats,
+                ConsoleCodecs(SelectedConsole).AutoDetect,
                 () => _activeCheatsWindow?.Refresh(),
                 ShowActiveCheats,
-                () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems).Show(this);
+                () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems,
+                SelectedConsole);
+            _cheatDatabaseWindow.Closed += (_, _) => _cheatDatabaseWindow = null;
+            _cheatDatabaseWindow.Show(this);
         }
 
         private void OnActiveCheatsClick(object? sender, RoutedEventArgs e) => ShowActiveCheats();
@@ -379,11 +401,13 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
+            var codecs = ConsoleCodecs(SelectedConsole);
             _activeCheatsWindow = new ActiveCheatsWindow(_cheats,
-                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
+                codecs.AutoDetect,
+                codecs.Explicit,
                 RequestCheatApply,
-                () => CheatListName(_cheatsRomPath));
+                () => CheatListName(_cheatsRomPath),
+                SelectedConsole);
             _activeCheatsWindow.Closed += (_, _) => _activeCheatsWindow = null;
             _activeCheatsWindow.Show(this);
         }
@@ -438,7 +462,8 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            _consoleWindow = new DianaOSConsoleWindow(_debugTarget, MakeEmulationControlCommands());
+            _consoleWindow = new DianaOSConsoleWindow(_debugTarget, MakeEmulationControlCommands(),
+                _session?.CheatAutoDetectCodec, _session?.CheatExplicitCodec, _session?.CpuTraceSwitch);
             _consoleWindow.Closed += (_, _) => _consoleWindow = null;
             _consoleWindow.Show(this);
         }
@@ -734,18 +759,16 @@ namespace EmuSen.Mistress.Views
 
             try
             {
-                _session = new EmulatorSession();
+                _session = new EmulatorSession { Cheats = _cheats };
                 StartLogging(_session.CoreName); // before LoadRom() so Cartridge's own load-time output is captured too
                 _session.LoadRom(path);
                 _rewind.Clear(); // a discontinuous jump - see §1.4
                 _audioPlayer.RateControl.Reset();
 
-                // See SnesDebugTarget's own constructor comment - feeds
-                // `coretop`'s hardware-load bars.
-                _debugTarget = new SnesDebugTarget(_session.Cpu!, _session.Bus, _session.Renderer!,
-                    () => (_session.LastFrameCpuSpc700Ms, _session.LastFramePpuMs, _session.LastFrameHdmaMs),
-                    _cheats);
-                _consoleWindow?.UpdateTarget(_debugTarget, displayName);
+                // Built by CoreFactory alongside the core, so this window names no concrete target.
+                _debugTarget = _session.DebugTarget;
+                _consoleWindow?.UpdateTarget(_debugTarget, displayName,
+                    _session.CheatAutoDetectCodec, _session.CheatExplicitCodec, _session.CpuTraceSwitch);
                 _coretopWindow?.UpdateTarget(_debugTarget);
 
                 GameFrame.IsVisible = true;
@@ -799,20 +822,85 @@ namespace EmuSen.Mistress.Views
             FpsText.Text = "";
         }
 
+        // The one console context the library and both cheat windows share - see EmuSen_Multicore.md §10.
+        private string SelectedConsole => _appSettings.SelectedCore;
+
+        private void OnLibraryConsoleFilterChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (LibraryConsoleFilter.SelectedItem is not string chosen || chosen == SelectedConsole) return;
+
+            _appSettings.SelectedCore = chosen;
+            _appSettings.Save();
+            RefreshLibrary();
+
+            // An open cheat window is showing the old console's systems.
+            _cheatDatabaseWindow?.SetConsole(chosen);
+            _activeCheatsWindow?.SetConsole(chosen, ConsoleCodecs(chosen));
+        }
+
+        // A running game wins over the filter - its codecs are the ones that can actually be applied.
+        private (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) ConsoleCodecs(string console) =>
+            _session is { CheatAutoDetectCodec: not null } live
+                ? (live.CheatAutoDetectCodec, live.CheatExplicitCodec)
+                : CoreFactory.CheatCodecsFor(console);
+
+        // Everything the console filter matched, before the search box narrows it.
+        private RomLibraryResult _libraryScan = new(RomLibraryStatus.NoDirectoryConfigured, null, Array.Empty<RomEntry>());
+
         private void RefreshLibrary()
         {
-            RomLibraryResult result = RomLibrary.Scan(_appSettings.RomDirectory);
-            _libraryEntries = result.Entries;
+            if (LibraryConsoleFilter.ItemsSource is null)
+            {
+                LibraryConsoleFilter.ItemsSource = EmuSen.Cores.CoreCatalog.FilterChoices;
+                LibraryConsoleFilter.SelectedItem =
+                    EmuSen.Cores.CoreCatalog.FilterChoices.Contains(SelectedConsole)
+                        ? SelectedConsole
+                        : EmuSen.Cores.CoreCatalog.AllConsoles;
 
-            LibraryList.ItemsSource = _libraryEntries.Select(e => e.Title).ToList();
+                LibrarySearchBox.PropertyChanged += (_, args) =>
+                {
+                    if (args.Property == TextBox.TextProperty) ShowLibraryEntries();
+                };
+            }
+
+            // The disk walk happens here; typing in the search box only re-filters what it found.
+            _libraryScan = RomLibrary.Scan(_appSettings.RomDirectory, SelectedConsole);
+            ShowLibraryEntries();
+        }
+
+        private void ShowLibraryEntries()
+        {
+            string search = LibrarySearchBox.Text?.Trim() ?? "";
+
+            _libraryEntries = search.Length == 0
+                ? _libraryScan.Entries
+                : _libraryScan.Entries
+                    .Where(e => e.Title.Contains(search, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+            // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
+            bool mixed = _libraryScan.Entries.Select(e => e.CoreDisplayName).Distinct().Count() > 1;
+            LibraryList.ItemsSource = _libraryEntries
+                .Select(e => mixed ? $"{e.Title}   —   {e.CoreDisplayName}" : e.Title)
+                .ToList();
+
             LibraryList.IsVisible = _libraryEntries.Count > 0;
             LibraryHintText.IsVisible = _libraryEntries.Count > 0;
 
-            LibraryHeaderText.Text = _libraryEntries.Count > 0
-                ? $"{_libraryEntries.Count} game{(_libraryEntries.Count == 1 ? "" : "s")} in {result.Directory}"
-                : RomLibrary.DescribeEmpty(result);
-
-            if (_libraryEntries.Count > 0) LibraryList.SelectedIndex = 0;
+            if (_libraryEntries.Count > 0)
+            {
+                string shown = _libraryEntries.Count == _libraryScan.Entries.Count
+                    ? $"{_libraryEntries.Count} game{(_libraryEntries.Count == 1 ? "" : "s")}"
+                    : $"{_libraryEntries.Count} of {_libraryScan.Entries.Count} games";
+                LibraryHeaderText.Text = $"{shown} under {_libraryScan.Directory}";
+                LibraryList.SelectedIndex = 0;
+            }
+            else
+            {
+                LibraryHeaderText.Text = _libraryScan.Entries.Count > 0
+                    ? $"No title matches \"{search}\" in {_libraryScan.Entries.Count} game(s)."
+                    : RomLibrary.DescribeEmpty(_libraryScan);
+            }
         }
 
         private void OnShowLibraryClick(object? sender, RoutedEventArgs e) => ShowLibrary();
@@ -932,18 +1020,10 @@ namespace EmuSen.Mistress.Views
             TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
             var frameStopwatch = new Stopwatch();
 
-            // VenusCore's own per-scanline-granularity phase breakdown
-            // (VenusCore.RunFrame()'s own comment) - averaged the same way
-            // as runFrameTimeInWindow above, to see which subsystem
-            // (CPU+SPC700 stepping, PPU rendering, HDMA) actually accounts
-            // for RunFrame() itself getting slower during real gameplay.
-            double cpuSpc700MsInWindow = 0;
-            double ppuMsInWindow = 0;
-            double hdmaMsInWindow = 0;
-            double objEvalMsInWindow = 0;
-            double blendMsInWindow = 0;
-            double mainCompositeMsInWindow = 0;
-            double subCompositeMsInWindow = 0;
+            // Whatever phases the core publishes, averaged like runFrameTimeInWindow - see EmuSen_Multicore.md §5.
+            var profiler = _session?.Core as IFrameProfiler;
+            string[] phaseNames = profiler?.LastFramePhases.Select(p => p.Name).ToArray() ?? Array.Empty<string>();
+            var phaseMsInWindow = new double[phaseNames.Length];
 
             while (_running)
             {
@@ -985,7 +1065,7 @@ namespace EmuSen.Mistress.Views
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, EmulatorSession.ScreenHeight);
+                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight);
                     SleepUntil(nextTick, clock);
                     continue;
                 }
@@ -1032,30 +1112,25 @@ namespace EmuSen.Mistress.Views
                     // the UI thread - see AudioPlayer.Pump's own comment.
                     if (session.Core is not null) _rewind.OnFrameCompleted(session.Core);
 
-                    // Drained, not just unpumped, when speed outruns the device - see §2.3.
-                    if (_speed.ShouldPlayAudio)
-                    {
-                        _audioPlayer.Pump(session);
-                    }
-                    else
-                    {
-                        session.DequeueAudioSamples(int.MaxValue);
-                        _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                    }
+                    // Drained every frame either way, so a muted stretch can't back the core buffer up - see §2.3.
+                    short[] samples = session.DequeueAudioSamples(int.MaxValue);
+                    if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, session.AudioSampleRate);
+                    else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
 
-                    cpuSpc700MsInWindow += session.LastFrameCpuSpc700Ms;
-                    ppuMsInWindow += session.LastFramePpuMs;
-                    hdmaMsInWindow += session.LastFrameHdmaMs;
-                    objEvalMsInWindow += session.LastFrameObjEvalMs;
-                    blendMsInWindow += session.LastFrameBlendMs;
-                    mainCompositeMsInWindow += session.LastFrameMainCompositeMs;
-                    subCompositeMsInWindow += session.LastFrameSubCompositeMs;
+                    if (profiler is not null)
+                    {
+                        var current = profiler.LastFramePhases;
+                        for (int p = 0; p < phaseMsInWindow.Length && p < current.Count; p++)
+                        {
+                            phaseMsInWindow[p] += current[p].Milliseconds;
+                        }
+                    }
 
                     // Nothing new was drawn on a skipped frame.
                     if (!session.SkipRendering)
                     {
                         byte[] frame = session.GetFrameBufferRgba();
-                        SubmitFrame(frame, session.ScreenWidth, EmulatorSession.ScreenHeight);
+                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight);
                     }
 
                     framesInWindow++;
@@ -1065,26 +1140,21 @@ namespace EmuSen.Mistress.Views
                         double fps = framesInWindow / windowElapsed.TotalSeconds;
                         double runFrameMs = runFrameTimeInWindow.TotalMilliseconds / framesInWindow;
                         double totalMs = windowElapsed.TotalMilliseconds / framesInWindow;
-                        double cpuSpc700Ms = cpuSpc700MsInWindow / framesInWindow;
-                        double ppuMs = ppuMsInWindow / framesInWindow;
-                        double hdmaMs = hdmaMsInWindow / framesInWindow;
-                        double objEvalMs = objEvalMsInWindow / framesInWindow;
-                        double blendMs = blendMsInWindow / framesInWindow;
-                        double mainCompositeMs = mainCompositeMsInWindow / framesInWindow;
-                        double subCompositeMs = subCompositeMsInWindow / framesInWindow;
+                        // A "parent/child" phase sits inside its parent, so it goes in the second group.
+                        string top = string.Join(" / ", phaseNames.Index()
+                            .Where(n => !n.Item.Contains('/'))
+                            .Select(n => $"{n.Item} {phaseMsInWindow[n.Index] / framesInWindow:F2}ms"));
+                        string nested = string.Join(" / ", phaseNames.Index()
+                            .Where(n => n.Item.Contains('/'))
+                            .Select(n => $"{n.Item} {phaseMsInWindow[n.Index] / framesInWindow:F2}ms"));
+
+                        string breakdown = top.Length == 0 ? "" : $" [{top}]";
+                        if (nested.Length > 0) breakdown += $" ({nested})";
+
                         Dispatcher.UIThread.Post(() => FpsText.Text =
-                            $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms) " +
-                            $"[cpu+apu {cpuSpc700Ms:F2}ms / ppu {ppuMs:F2}ms / hdma {hdmaMs:F2}ms] " +
-                            $"(ppu breakdown: objEval {objEvalMs:F2}ms / main {mainCompositeMs:F2}ms / " +
-                            $"sub {subCompositeMs:F2}ms / blend {blendMs:F2}ms)");
+                            $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}");
                         framesInWindow = 0;
-                        cpuSpc700MsInWindow = 0;
-                        ppuMsInWindow = 0;
-                        hdmaMsInWindow = 0;
-                        objEvalMsInWindow = 0;
-                        blendMsInWindow = 0;
-                        mainCompositeMsInWindow = 0;
-                        subCompositeMsInWindow = 0;
+                        Array.Clear(phaseMsInWindow);
                         runFrameTimeInWindow = TimeSpan.Zero;
                         fpsWindowStart = clock.Elapsed;
                     }

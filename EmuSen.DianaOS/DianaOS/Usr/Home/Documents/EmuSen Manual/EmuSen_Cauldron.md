@@ -1,6 +1,6 @@
 # EmuSen.Cauldron — the core-agnostic telemetry layer
 
-*This revision: split `ICoreTelemetry` out of DianaOS's `IDebugTarget` and moved the five snapshot value types into this assembly, so a dashboard depends on Cauldron rather than on the debugger. Previous revision: providers only (`IRealtimeProvider`, `PollingProvider`, `HistoryProvider`).*
+*This revision: split `ICoreTelemetry` out of DianaOS's `IDebugTarget` and moved the five snapshot value types into this assembly, so a dashboard depends on Cauldron rather than on the debugger; measured the per-frame refresh cost and settled it (§5.1). Previous revision: providers only (`IRealtimeProvider`, `PollingProvider`, `HistoryProvider`).*
 
 ---
 
@@ -141,10 +141,19 @@ The push side cannot express the case that broke it. A core's `EndFrame` only fi
 
 The host knows about frame boundaries *and* about rewind, halt, step and state loads. The core's scheduler only knows the first. Pull is therefore strictly more expressive, and it is now the only rule: `RefreshProviders()` is a required interface member, so a core that forgets it fails to compile rather than going quietly stale. `Moon_Debug.md` §3 records the NES side.
 
-### 5.1 Known cost: nothing is gated
+### 5.1 Refreshing unconditionally is measured and settled
 
-Every host calls `RefreshProviders()` unconditionally, every frame, whether or not anything is reading. On the SNES that rebuilds eight lists — 128 sprites, palettes, audio channels, three register sets — sixty times a second even with no dashboard open and DianaOS not running.
+Every host calls `RefreshProviders()` once per frame whether or not anything is reading — no dashboard open, DianaOS not running, still eight lists rebuilt on the SNES. That looks like obvious waste, and gating it on a live-reader count was proposed on exactly that reasoning. **It was measured and rejected.** Do not re-propose it without new numbers.
 
-That is at odds with the low-end-laptop optimization effort, and it is the part of "information provider" Cauldron does not yet own: a real one decides *when* to read, not just *what*. Gating is not free to add, because one-shot consumers like `regs` read `Current` once and exit, so a pure subscription model would hand them a stale snapshot with no subscriber to have triggered a refresh — the clean version needs a one-shot request serviced at the next frame boundary. The pragmatic first step is to gate only the expensive providers (sprites, palettes, audio) on a live-reader count and leave the cheap register ones unconditional.
+Headless, Release, 600 frames on a synthetic ROM after a 60-frame warm-up:
 
-Not yet done.
+| Core | `RunFrame` | `RefreshProviders` | Refresh as % of emulation | Refresh as % of the 16.64ms budget |
+|---|---|---|---|---|
+| SNES | 1.1249 ms | 0.0161 ms | 1.4% | **0.10%** |
+| NES | 1.1224 ms | 0.0039 ms | 0.4% | **0.02%** |
+
+A tenth of one percent of a frame. `ReadSpritesLive` walks all 128 OAM entries unconditionally — the parked-sprite `continue` skips the list add, not the iteration — so the dominant cost is already fixed and a real game with a full OAM only changes how much the `List<>` grows. Even tripling the sprite portion leaves this under 0.3% of budget, and the ratio holds on a slower machine because emulation and refresh scale together.
+
+Gating would also have cost more than the plumbing. DianaOS's whole "Diana always live" model rests on read-only lines running immediately **on whatever thread submitted them** (`DianaOSInterpreterScheduler`, `TryGetReadOnlyFastPath`), which is safe precisely because reading `Current` never touches the core. A dormant provider breaks that: a one-shot `regs` or `sprites` has no safe way to refresh from the console thread, and reclassifying those commands as emulation-thread work would make them hang whenever the loop is not ticking — paused, halted at a breakpoint, no ROM loaded. That is exactly when you most want to read registers.
+
+So the unconditional refresh is not a debt. It is the price of the property that makes the read-only fast path safe, and it costs 0.1% of a frame.

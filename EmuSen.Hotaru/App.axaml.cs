@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using EmuSen.Cores.Nintendo.Venus;
+using EmuSen.Cores;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
@@ -15,7 +15,7 @@ namespace EmuSen.Hotaru
 {
     public partial class App : Application
     {
-        private readonly VenusCore _core;
+        private readonly ICore _core;
         private readonly IEnumerable<IDianaOSCommand> _extraCommands;
         private readonly string _statePath;
 
@@ -31,7 +31,7 @@ namespace EmuSen.Hotaru
         // owns building (and REbuilding, after a `core <name> <path>`
         // swap) the actual interpreter - see that class's own
         // RebuildDebugTargetAndCommands().
-        public App(VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
+        public App(ICore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
             _core = core;
             _extraCommands = extraCommands;

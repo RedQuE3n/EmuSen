@@ -14,6 +14,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.Venus
 {
@@ -34,7 +35,7 @@ namespace EmuSen.Cores.Nintendo.Venus
     // a core-agnostic interface has no business providing - see
     // ICore.cs's own comment for why input and debug-toolchain wiring
     // deliberately stay on the concrete type instead of the interface.
-    public partial class VenusCore : ICore
+    public partial class VenusCore : ICore, IFrameProfiler, ICoprocessorHalt, ICoprocessorLoad, ITraceFlushable
     {
         // Real master clocks per scanline (341 dots x 4 master-clocks/dot),
         // not an abstract "CPU cycle" count - Cpu.Step() now returns actual
@@ -96,6 +97,32 @@ namespace EmuSen.Cores.Nintendo.Venus
         public double LastFrameObjEvalMs => Renderer?.LastFrameObjEvalMs ?? 0;
         public double LastFrameBlendMs => Renderer?.LastFrameBlendMs ?? 0;
 
+        // The IFrameProfiler view of the seven fields above; "ppu/" ones are inside ppu, not beside it.
+        public IReadOnlyList<(string Name, double Milliseconds)> LastFramePhases => new[]
+        {
+            ("cpu+spc700", LastFrameCpuSpc700Ms),
+            ("ppu", LastFramePpuMs),
+            ("hdma", LastFrameHdmaMs),
+            ("ppu/obj-eval", LastFrameObjEvalMs),
+            ("ppu/blend", LastFrameBlendMs),
+            ("ppu/main-composite", LastFrameMainCompositeMs),
+            ("ppu/sub-composite", LastFrameSubCompositeMs),
+        };
+
+        public string HaltedProcessorName => IsHaltedOnCoprocessor ? "SA-1" : "S-CPU";
+
+        // Whether the game is starving or double-clocking the chip - see Venus_SA1.md §2.3.
+        public IReadOnlyList<CoprocessorClocks> CoprocessorClocks => Cart?.Sa1 is { } sa1
+            ? new[] { new CoprocessorClocks("sa-1", sa1.ExecutedMasterClocks, sa1.OfferedMasterClocks, MasterClocksPerFrame) }
+            : Array.Empty<CoprocessorClocks>();
+
+        // Both traces, so a caller does not need to know this core has two processors.
+        public void FlushVerboseTrace()
+        {
+            Cpu?.FlushVerboseTrace();
+            Spc700?.FlushVerboseTrace();
+        }
+
         // Splits the per-scanline BG/OBJ composite into main vs sub screen - see Venus_PPU.md §13.
         public double LastFrameMainCompositeMs => Renderer?.LastFrameMainCompositeMs ?? 0;
         public double LastFrameSubCompositeMs => Renderer?.LastFrameSubCompositeMs ?? 0;
@@ -116,6 +143,14 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
+
+        // All twelve; PadButton's names were chosen to match SnesButton - see EmuSen_Input.md §3.
+        public IReadOnlyList<PadButton> SupportedButtons { get; } =
+            (PadButton[])Enum.GetValues(typeof(PadButton));
+
+        // Venus's own ports are 1-based, so the generic 0-based port shifts here.
+        public void SetButton(int port, PadButton button, bool pressed) =>
+            Bus?.Input.SetButton((Controllers.SnesButton)button, pressed, port + 1);
 
         // Drops the per-scanline pixel pass only - see EmuSen_Rewind_And_FastForward.md §2.2.
         public bool SkipRendering { get; set; }

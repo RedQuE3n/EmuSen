@@ -55,9 +55,6 @@ namespace EmuSen.Cores.Nintendo.Moon
         {
             Ppu!.EndScanline(_currentScanline);
 
-            // Four sequencer steps a frame is the real rate to within a scanline - see Moon_APU.md §2.
-            if (_currentScanline % (Video.Ppu.TotalScanlines / 4) == 0) Apu!.StepFrameSequencer();
-
             _currentScanline++;
             _lineStartClock += MasterClocksPerScanline;
             _schedule.At(_lineStartClock + MasterClocksPerScanline, (int)MoonEvent.ScanlineBoundary);

@@ -49,6 +49,7 @@
          config root - one copy for both frontends, see
          EmuSen_Settings_Reference.md §4.10. -->
     <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
+    <ProjectReference Include="..\EmuSen.Endymion\EmuSen.Endymion.csproj" />
   </ItemGroup>
 
 

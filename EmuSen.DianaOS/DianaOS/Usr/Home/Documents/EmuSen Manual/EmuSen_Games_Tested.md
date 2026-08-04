@@ -74,7 +74,29 @@ A game's category reflects its *current* state, not a permanent verdict — entr
 
 ---
 
-## 3. Notes on methodology
+## 3. Moon (NES)
+
+**Coverage across the local set:** 2,963 of 3,536 ROMs (**83.8%**) boot four frames clean, up from 59.0% before MMC3 and the four simple boards. Every remaining failure is a named `NotSupportedException` for an unimplemented mapper, not a crash — see `Hardware/Nintendo/Moon - NES/Moon_Memory.md` §4.
+
+### Good
+
+- **A Boy and His Blob: Trouble on Blobolonia** — the first real commercial ROM this core ran, and the proof the CPU/PPU/mapper work holds up outside synthetic fixtures. MMC1 (iNES mapper 1), 128 KB PRG + 128 KB CHR. Verified headless through Pharaoh: title screen renders correctly (logo art, colour, and the copyright/licence text), Start reaches gameplay, and the opening Blobolonia street scene draws the boy, Blob, the house, the parallax city skyline and both HUD bars. Holding **Right** walks the character and scrolls the camera, streaming new CHR banks in as it goes. **Audio works** — a WAV capture of the title music reads peak 7797 with the DC offset filtered out. Rated Good rather than Perfect because coverage stops at the opening screen.
+
+- **Super Mario Bros. 2** — **was Unplayable (mapper 4 unimplemented), now plays.** MMC3. Boots to the curtain screen and advances to "PLEASE SELECT PLAYER" on Start, with working audio. Rated Good rather than Perfect because coverage stops at the character select.
+
+- **Super Mario Bros. 3** — **was Unplayable, now plays, but silent.** MMC3, and the game that exposed the pre-render-line A12 bug: its status-bar split landed one line off and corrupted a band of the title screen until the pre-render clock was added (`Moon_Memory.md` §4.6a). Now reaches the World 1 map with the split rendering correctly. **Rated Good only on picture: it produces no sound at all.** The game writes `$4017` once and then never touches `$4000-$4013`, so its sound engine is not running — which is a CPU or mapper question rather than a synthesis one, since SMB2 on the same board has audio. Open issue, see `Moon_APU.md` §6.
+
+- **Super Mario Bros. + Duck Hunt** — **was Unplayable (mapper 66 unimplemented), now boots.** GxROM. Reaches the Super Mario Bros. title screen. Silent there, which is correct — SMB1's title has no music until a game starts. Duck Hunt itself additionally needs the Zapper, which nothing in the input contract models (`EmuSen_Input.md` §6).
+
+- **A Boy and His Blob** — audio now works; see the entry above, which predates the APU.
+
+### Unplayable
+
+- _(nothing currently in the local set that a supported mapper covers)_
+
+---
+
+## 4. Notes on methodology
 
 - Testing uses `EmuSen.Pharaoh` (scripted, reproducible: save states, `--tap` input sequences, screenshot capture, per-pixel/register diagnostics) plus live interactive play via `EmuSen.Hotaru` for anything that needs real-time feedback (precise movement/navigation, timing-sensitive input) that scripted input can't easily reproduce.
 - A bug found and fixed gets *removed* from a game's list of open issues, not just annotated — this document should always reflect current, real behavior, checked against the actual running build, not a historical changelog. (Changelog-style history belongs in commit messages and the hardware docs' own investigation writeups, not here.)

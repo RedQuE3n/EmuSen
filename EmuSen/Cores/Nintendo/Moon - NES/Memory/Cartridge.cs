@@ -121,14 +121,20 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             1 => new Mmc1(cart),
             2 => new UxRom(cart),
             3 => new CnRom(cart),
+            4 => new Mmc3(cart),
             7 => new AxRom(cart),
+            11 => new ColorDreams(cart),
+            66 => new GxRom(cart),
+            71 => new Camerica(cart),
+            79 => new Nina003(cart),
             _ => throw new NotSupportedException(
                 $"iNES mapper {cart.MapperNumber} is not implemented - see Moon_Memory.md §4 for what is."),
         };
 
+        // --nobattery leaves _savePath null, which also disables SaveSram - see Moon_Memory.md §6.
         private void LoadSram()
         {
-            if (!HasBattery || string.IsNullOrEmpty(RomPath)) return;
+            if (!HasBattery || EmuSen.Cores.CoreOptions.BatteryRamDisabled || string.IsNullOrEmpty(RomPath)) return;
 
             _savePath = Path.ChangeExtension(RomPath, ".srm");
             if (!File.Exists(_savePath)) return;

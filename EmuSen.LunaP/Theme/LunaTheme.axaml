@@ -7,6 +7,7 @@
          EmuSen_LunaP.md §3.1. -->
 
     <FluentTheme />
+    <StyleInclude Source="avares://EmuSen.LunaP/Theme/Controls.axaml" />
 
     <Styles.Resources>
         <ResourceDictionary>

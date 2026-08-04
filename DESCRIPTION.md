@@ -160,7 +160,7 @@ hardware is called.
 |---|---|---|
 | SNES | **Venus** | **Implemented** — the only working core |
 | NES | **Moon** | **In progress** — CPU, PPU, memory, five mappers, `ICore` and `IDebugTarget`; silent, NTSC only |
-| Game Boy / Color | **Mercury** | Reserved |
+| Game Boy / Color | **Mercury** | **In progress** — SM83, memory, timer, joypad, five cartridge boards; no PPU or APU yet, so not yet loadable from a frontend |
 | Game Boy Advance | **Jupiter** | Reserved |
 | Nintendo 64 | **Mars** | Reserved |
 | Virtual Boy | **Saturn** | Reserved |

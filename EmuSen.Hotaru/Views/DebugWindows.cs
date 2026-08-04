@@ -1,80 +1,25 @@
 using System;
-using Avalonia.Threading;
-using EmuSen.DianaOS;
-using EmuSen.DianaOS.DianaOS.Bin;
-using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
-using EmuSen.DianaOS.DianaOS.Var;
-using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.DianaOS;
+using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Hotaru.Views
 {
-    // coretop -w / feed -w window management - replaces AvaloniaHost.cs's
-    // static state (deleted - see git history) now that Avalonia is
-    // Hotaru's primary application (see Program.cs/App.axaml.cs) instead
-    // of a second dispatcher thread bootstrapped alongside a separate
-    // Raylib main loop. Dispatcher.UIThread is already pumping by the
-    // time either method here can ever be called - both are only
-    // reachable via commands typed at the F4 prompt or 'feed'/'feed -w'
-    // (see GameWindow.axaml.cs's RunDebugPrompt), which only run after
-    // GameWindow's constructor - and therefore
-    // App.OnFrameworkInitializationCompleted - has already started the
-    // Avalonia dispatcher, so there's no "start a UI thread first" step
-    // left to do at all, just the same at-most-one/reuse-or-create window
-    // pattern AvaloniaHost already had.
+    // `coretop -w` / `feed -w` window management - see EmuSen_Frontend_Driver.md. WindowSlot owns the at-most-one rule and the thread marshalling.
     internal static class DebugWindows
     {
-        private static CoretopWindow? _coretopWindow;
-        private static FeedWindow? _feedWindow;
+        private static readonly WindowSlot<CoretopWindow> Coretop = new();
+        private static readonly WindowSlot<FeedWindow> Feed = new();
 
-        public static void ShowCoretopWindow(IDebugTarget target)
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (_coretopWindow is null)
-                {
-                    _coretopWindow = new CoretopWindow(target);
-                    _coretopWindow.Closed += (_, _) => _coretopWindow = null;
-                    _coretopWindow.Show();
-                }
-                else
-                {
-                    _coretopWindow.UpdateTarget(target);
-                    _coretopWindow.Activate();
-                }
-            });
-        }
+        public static void ShowCoretopWindow(IDebugTarget target) =>
+            Coretop.Show(null, () => new CoretopWindow(target), refresh: w => w.UpdateTarget(target));
 
-        // Keeps an already-open coretop window from silently going stale
-        // after a `core <name> <path>` swap (GameWindow.SwapCore) rebuilds
-        // _debugTarget - unlike ShowCoretopWindow above, this never
-        // CREATES the window (a swap shouldn't pop one up for a user who
-        // never asked for one) and never Activate()s it (stealing window
-        // focus on every swap, mid-gameplay, would be its own new
-        // annoyance) - it only refreshes whatever's already open, so it's
-        // safe to call unconditionally on every swap regardless of
-        // whether coretop is even in use this session.
-        public static void UpdateCoretopWindowTargetIfOpen(IDebugTarget target)
-        {
-            if (_coretopWindow is null) return;
-            Dispatcher.UIThread.Post(() => _coretopWindow?.UpdateTarget(target));
-        }
+        // Never creates and never activates: a `core <name> <path>` swap should not pop up a dashboard nobody
+        // asked for, nor steal focus mid-gameplay - so this is safe to call on every swap. See EmuSen_LunaP.md §9.3.
+        public static void UpdateCoretopWindowTargetIfOpen(IDebugTarget target) =>
+            Coretop.RefreshIfOpen(w => w.UpdateTarget(target));
 
-        public static void ShowFeedWindow(Func<(byte[] Rgba, int Width, int Height)> frameProvider)
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (_feedWindow is null)
-                {
-                    _feedWindow = new FeedWindow(frameProvider);
-                    _feedWindow.Closed += (_, _) => _feedWindow = null;
-                    _feedWindow.Show();
-                }
-                else
-                {
-                    _feedWindow.Activate();
-                }
-            });
-        }
+        public static void ShowFeedWindow(Func<(byte[] Rgba, int Width, int Height)> frameProvider) =>
+            Feed.Show(null, () => new FeedWindow(frameProvider));
     }
 }

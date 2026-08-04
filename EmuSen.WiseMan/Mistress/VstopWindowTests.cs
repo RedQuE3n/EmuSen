@@ -1,5 +1,6 @@
 using System;
 using EmuSen.WiseMan.LunaP;
+using EmuSen.LunaP.Windowing;
 using EmuSen.LunaP.Controls;
 using System.IO;
 using System.Linq;
@@ -143,15 +144,19 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(main.GetControl<MenuItem>("RuntimeDashboardMenuItem").IsEnabled);
             Assert.False(main.GetControl<MenuItem>("HardwareDashboardMenuItem").IsEnabled);
 
-            Click(main, "RuntimeDashboardMenuItem");
-            object? first = Field(main, "_vstopWindow");
-            Assert.NotNull(first);
+            // The at-most-one rule is WindowSlot's now, so this reaches through the slot rather than a nullable field.
+            var slot = (WindowSlot<VstopWindow>)Field(main, "_vstopWindow")!;
 
             Click(main, "RuntimeDashboardMenuItem");
-            Assert.Same(first, Field(main, "_vstopWindow"));
+            Assert.True(slot.IsOpen);
+            VstopWindow first = slot.Current!;
 
-            ((Window)first!).Close();
-            Assert.Null(Field(main, "_vstopWindow"));
+            Click(main, "RuntimeDashboardMenuItem");
+            Assert.Same(first, slot.Current);
+
+            first.Close();
+            Assert.False(slot.IsOpen);
+            Assert.Null(slot.Current);
 
             main.Close();
         }, default);

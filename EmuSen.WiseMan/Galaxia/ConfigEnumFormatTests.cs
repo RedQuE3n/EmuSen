@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings(NumericJson);
 
-            GamepadBindingMap map = GamepadBindingMap.Load();
+            GamepadBindingMap map = GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[PadButton.Up]);
             Assert.Equal(SDL.GamepadButton.South, map.ButtonToPad[PadButton.B]);
@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void Saving_writes_names_rather_than_numbers()
         {
-            new GamepadBindingMap().Save();
+            new GamepadBindings(new[] { "NES", "SNES" }).Save();
 
             string json = File.ReadAllText(Path.Combine(_dir, "gamepadbindings.json"));
 
@@ -85,9 +85,10 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings(NumericJson);
 
-            GamepadBindingMap before = GamepadBindingMap.Load();
-            before.Save();
-            GamepadBindingMap after = GamepadBindingMap.Load();
+            GamepadBindings loaded = GamepadBindings.Load(new[] { "NES", "SNES" });
+            GamepadBindingMap before = loaded.For("NES");
+            loaded.Save();
+            GamepadBindingMap after = GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Contains("\"DPadUp\"", File.ReadAllText(Path.Combine(_dir, "gamepadbindings.json")));
             Assert.Equal(before.ButtonToPad, after.ButtonToPad);
@@ -99,7 +100,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("""{"Up":"DPadUp","Down":12,"B":"South","A":1}""");
 
-            GamepadBindingMap map = GamepadBindingMap.Load();
+            GamepadBindingMap map = GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[PadButton.Up]);
             Assert.Equal(SDL.GamepadButton.DPadDown, map.ButtonToPad[PadButton.Down]);
@@ -112,7 +113,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("""{"Up":"dpadup","B":"SOUTH"}""");
 
-            GamepadBindingMap map = GamepadBindingMap.Load();
+            GamepadBindingMap map = GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[PadButton.Up]);
             Assert.Equal(SDL.GamepadButton.South, map.ButtonToPad[PadButton.B]);
@@ -126,7 +127,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("""{"Up":"DPadUpp","B":"South"}""");
 
-            GamepadBindingMap map = GamepadBindingMap.Load();
+            GamepadBindingMap map = GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Equal(new GamepadBindingMap().ButtonToPad, map.ButtonToPad);
         }
@@ -134,7 +135,7 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void Dictionary_keys_were_already_names_and_still_are()
         {
-            new GamepadBindingMap().Save();
+            new GamepadBindings(new[] { "NES", "SNES" }).Save();
 
             string json = File.ReadAllText(Path.Combine(_dir, "gamepadbindings.json"));
 

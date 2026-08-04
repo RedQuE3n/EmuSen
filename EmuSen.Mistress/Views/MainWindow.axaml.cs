@@ -150,8 +150,14 @@ namespace EmuSen.Mistress.Views
 
         private string? _currentRomPath;
         private string? _currentDisplayName; // for restoring StatusText's "Running: ..." text exactly after a pause, without reformatting from _currentRomPath
-        private readonly ControllerKeyMap _keyBindings = ControllerKeyMap.Load();
-        private readonly GamepadBindingMap _gamepadBindings = GamepadBindingMap.Load();
+        private readonly ControllerKeyBindings _keyBindings =
+            ControllerKeyBindings.Load(EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
+        private readonly GamepadBindings _gamepadBindings =
+            GamepadBindings.Load(EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
+
+        // Which console's bindings are live. Follows the loaded ROM; the first
+        // console in catalog order stands in before one is loaded - see EmuSen_Input.md §5.1.
+        private string _activeConsole = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder[0].Console;
         private readonly HotkeyBindingMap _hotkeyBindings = HotkeyBindingMap.Load();
         private readonly AppSettings _appSettings = AppSettings.Load();
         private readonly GamepadManager _gamepad;
@@ -183,7 +189,7 @@ namespace EmuSen.Mistress.Views
         public MainWindow()
         {
             InitializeComponent();
-            _gamepad = new GamepadManager(_gamepadBindings);
+            _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole));
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
                 AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
@@ -210,7 +216,7 @@ namespace EmuSen.Mistress.Views
 
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
-            if (_keyBindings.TryGetButton(key, out var button))
+            if (_keyBindings.For(_activeConsole).TryGetButton(key, out var button))
             {
                 _keyboardHeld[(int)button] = pressed;
                 ApplyButtonState(button);
@@ -349,7 +355,7 @@ namespace EmuSen.Mistress.Views
         private void OnControllerBindingsClick(object? sender, RoutedEventArgs e)
         {
             new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings,
-                _session?.SupportedButtons).Show(this);
+                _session is null ? null : _activeConsole).Show(this);
         }
 
         private void OnPreferencesClick(object? sender, RoutedEventArgs e)
@@ -762,6 +768,11 @@ namespace EmuSen.Mistress.Views
                 _session = new EmulatorSession { Cheats = _cheats };
                 StartLogging(_session.CoreName); // before LoadRom() so Cartridge's own load-time output is captured too
                 _session.LoadRom(path);
+
+                // The pad this ROM's console reads, not whatever the last one used.
+                _activeConsole = _session.CoreName;
+                _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
+
                 _rewind.Clear(); // a discontinuous jump - see §1.4
                 _audioPlayer.RateControl.Reset();
 

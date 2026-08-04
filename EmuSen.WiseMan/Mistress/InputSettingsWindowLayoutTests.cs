@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.VisualTree;
 using EmuSen.Mistress.Input;
 using EmuSen.Nehellania.Input;
 using EmuSen.Galaxia.Models;
@@ -19,7 +20,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static InputSettingsWindow LaidOutWindow()
         {
-            var window = new InputSettingsWindow(new ControllerKeyMap(), new GamepadBindingMap(), null!, new AppSettings(), new HotkeyBindingMap());
+            var window = new InputSettingsWindow(new ControllerKeyBindings(new[] { "NES", "SNES" }), new GamepadBindings(new[] { "NES", "SNES" }), null!, new AppSettings(), new HotkeyBindingMap(), "SNES");
             window.Show();
             window.CaptureRenderedFrame(); // forces the layout pass the assertions read
             return window;
@@ -28,12 +29,16 @@ namespace EmuSen.WiseMan.Mistress
         private static double LeftEdge(Visual control, Visual relativeTo) =>
             control.TranslatePoint(new Point(0, 0), relativeTo)!.Value.X;
 
+        // Built in code inside the selected console tab, so there is no XAML name scope to ask.
+        private static T ByName<T>(InputSettingsWindow w, string name) where T : Control =>
+            w.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
+
         private static TextBlock HeaderCell(InputSettingsWindow w, string text) =>
-            w.GetControl<Grid>("ButtonHeaderRow").Children.OfType<TextBlock>().Single(t => t.Text == text);
+            ByName<Grid>(w, "ButtonHeaderRow").Children.OfType<TextBlock>().Single(t => t.Text == text);
 
         private static Control FirstRowCell(InputSettingsWindow w, int column)
         {
-            var row = (Grid)w.GetControl<StackPanel>("BindingsPanel").Children[0];
+            var row = (Grid)ByName<StackPanel>(w, "BindingsPanel").Children[0];
             return row.Children.Cast<Control>().Single(c => Grid.GetColumn(c) == column);
         }
 

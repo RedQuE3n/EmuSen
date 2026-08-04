@@ -72,19 +72,11 @@ namespace EmuSen.Nehellania.Input
             RebuildReverseLookup();
         }
 
-        private static readonly ConfigFile<Dictionary<PadButton, SDL.GamepadButton>> File = new("gamepadbindings.json");
-
-        public void Save() => File.Save(ButtonToPad);
-
-        public static GamepadBindingMap Load()
+        // Persistence belongs to GamepadBindings, which owns one of these per console.
+        public void Replace(Dictionary<PadButton, SDL.GamepadButton> bindings)
         {
-            var bindings = new GamepadBindingMap();
-            if (File.Load() is { Count: > 0 } loaded)
-            {
-                bindings.ButtonToPad = loaded;
-                bindings.RebuildReverseLookup();
-            }
-            return bindings;
+            ButtonToPad = bindings;
+            RebuildReverseLookup();
         }
     }
 }

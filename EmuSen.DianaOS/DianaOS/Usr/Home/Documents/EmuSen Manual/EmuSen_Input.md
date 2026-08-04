@@ -104,13 +104,28 @@ Both maps enforce that two console buttons never share one key: `Rebind` unbinds
 
 `InputSettingsWindow` used to iterate `Enum.GetValues<PadButton>()` and build twelve rows unconditionally — so with an NES ROM loaded it offered to rebind X, Y, L and R, four buttons that core drops on the floor.
 
-It now takes the button list as a constructor argument, defaulting to all twelve. `MainWindow` passes `_session.SupportedButtons`, which is the loaded core's list, or empty before a ROM is loaded — in which case the window falls back to all twelve, since with no core loaded there is no console to be specific about.
+It filters to the console's own pad instead. The button list comes from `CoreCatalog.ButtonsFor(console)`, which reads each core's `PadButtons` **static** — `VenusCore.PadButtons` and `MoonCore.PadButtons`, the same arrays their instance `SupportedButtons` returns. It has to be static because the window lists every console's pad whether or not a ROM is loaded, and restating the lists in the catalog is how they would drift from what the core actually reads. `ConsoleBindingsTests` pins the two against each other.
+
+## 5.1 One tab per console, and bindings that do not collide
+
+Filtering alone was not enough. The maps used to be **shared** across cores: one `PadButton -> Key` dictionary, so NES `A` and SNES `A` were by definition the same key, and the window could only ever show the loaded console's slice of it.
+
+The window is now a `TabControl`:
+
+- **General** comes first, and holds everything that is not a console's pad — emulator hotkeys, the gamepad status/stick options, and the Player 2 mirror. These are genuinely global, which is why they are not repeated per console.
+- **One tab per console after it**, ordered by `CoreCatalog.ConsolesInReleaseOrder` — grouped by manufacturer, then oldest console first, so NES precedes SNES. Adding a core adds a tab with no XAML change; `CoreDescriptor` carries `ConsoleName`, `Manufacturer` and `ReleaseYear` for exactly this.
+
+Bindings are per console. `ControllerKeyBindings` and `GamepadBindings` each own one map per console and are the only things that touch the file; `ControllerKeyMap`/`GamepadBindingMap` no longer have `Load`/`Save` of their own. `keybindings.json` and `gamepadbindings.json` are now nested one level, keyed by console name (`EmuSen_Config_Reference.md` §3.6).
+
+The console key is `CoreDescriptor.Console`, which is deliberately the same string as `ICore.CoreName` — `"NES"`, `"SNES"`. `MainWindow` assigns one straight to the other (`_activeConsole = _session.CoreName`), so a test pins that they agree.
 
 Consequences worth knowing:
 
-- **Rows are built once, at window construction.** Loading a different ROM while the settings window is open does not re-lay it out. Closing and reopening it does.
-- **A hidden button keeps its binding.** The maps are shared across cores and the window only filters what it *displays* — nothing is unbound by loading an NES ROM, and the SNES bindings are all still there when a `.sfc` is loaded next.
-- **Conflict detection scans the displayed buttons only.** A clash between two hidden buttons is not reported, because neither is reachable on this console. Since `Rebind` already polices the whole map, the only way to get a clash at all is a hand-edited config file (`EmuSen_Settings_Reference.md` §4.5).
+- **Two consoles may share a key, and that is not a conflict.** Both pads default to Z/X for B/A. Conflict detection runs per console; a clash is only reported between buttons *on the same tab*, or between a button and a hotkey.
+- **Hotkeys stay global, so they still police every console.** Binding a hotkey to a key some console's button uses clears it on **all** of them, not just the visible tab — a hotkey has no console to be scoped to.
+- **Rows are built once, at window construction.** Loading a different ROM while the settings window is open does not re-lay it out, and does not move the selected tab. Closing and reopening it does.
+- **The window opens on the loaded console's tab**, or on General when no ROM is loaded, since then there is no console to prefer.
+- **Which console is live follows the ROM.** `MainWindow` re-points `GamepadManager.Bindings` on every `LoadRom`, and Hotaru does the same in `SwapCore`. Before the first ROM, the first console in catalog order stands in.
 
 ---
 

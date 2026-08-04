@@ -79,9 +79,10 @@ namespace EmuSen.Cores
             (new ActionReplayCheatCodec(), new GameGenieCheatCodec());
 
         // The codecs for a console picked in the UI rather than loaded from a ROM - see EmuSen_Multicore.md §10.
-        public static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) CheatCodecsFor(string? coreDisplayName)
+        // Takes either name a console goes by: an unrecognised one falls back to SNES, which reads as working.
+        public static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) CheatCodecsFor(string? coreName)
         {
-            var core = CoreCatalog.ByDisplayName(coreDisplayName);
+            var core = CoreCatalog.ByAnyName(coreName);
 
             // No console chosen means no console to be wrong about, so the historical pair stands in.
             if (core is null) return DefaultCheatCodecs;

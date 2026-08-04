@@ -221,3 +221,15 @@ Since nothing ever read the value, a stored `"SNES (Venus)"` cannot be distingui
 Nothing else had to change. Both interfaces were already in namespaces nested under `EmuSen.Cores`, so every existing `EmuSen.Cores.Nintendo.Venus.*` file resolves the new location outward with no `using` edit at all.
 
 `CheatRomPatcher` (`EmuSen/Cores/`) is the shared wire between the second hook and `CheatRegistry`. Both ends were already core-agnostic; a core that owns its own registry can install it directly and get Game Genie-style patches with no debug layer attached — see `EmuSen_Cheats.md` §4 for why Venus does not do this yet.
+
+## 12. Naming a console before its core exists
+
+Two questions look the same and are not: *which console is this ROM* and *which console is loaded*. The second has an obvious answer (`ICore.CoreName`); the first has to be answered from the path alone, and getting them mixed up is what `CoreCatalog.ConsoleForRom` exists to stop.
+
+**The bug it was added for.** `MainWindow.LoadRom` opened its log directory with `StartLogging(_session.CoreName)`, deliberately *before* `_session.LoadRom(path)` so the cartridge's own load-time output would be captured. But `EmulatorSession.CoreName` is `_core?.CoreName ?? "SNES"`, and `_core` is only assigned inside `LoadRom` — so the call always read the fallback. **Every Mistress session logged into `<root>/SNES/`, whatever console actually ran.** It was invisible because the fallback is a real console name: the path looked right, the directory existed, and the only symptom was a `Logs/` tree with no `NES` in it however many NES games you played.
+
+`CoreCatalog.ConsoleForRom(path)` answers from the extension instead, via the same `ByExtension` lookup `CoreFactory.Create` dispatches on. It returns `CoreDescriptor.Console`, which is pinned equal to what that core's `ICore.CoreName` reports, so the directory a session logs into is the one it would have chosen after loading — just decided early enough to be right.
+
+`EmulatorSession.CoreName` keeps its fallback, because callers after a load are entitled to a non-null string; its comment now says the fallback is only meaningful post-load rather than claiming there is only one core.
+
+**Two names, one console.** A `CoreDescriptor` carries both `Console` (`"SNES"`) and `DisplayName` (`"SNES (Venus)"`), and different call sites hold different ones — `AppSettings.SelectedCore` is a display name, `ICore.CoreName` is a console. `CoreFactory.CheatCodecsFor` took a display name and fell back to the SNES pair for anything it did not recognise, so passing the *console* name got working-looking SNES codecs for every console. That is the same shape of bug as the log directory: a wrong answer that reads as a right one. It resolves through `CoreCatalog.ByAnyName` now, which accepts either. The fallback itself stays — a window opened with no console chosen still needs some pair — but it is no longer reachable by naming a console correctly in the wrong vocabulary.

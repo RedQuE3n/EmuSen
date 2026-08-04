@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
 using EmuSen.Common;
+using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
@@ -20,20 +21,7 @@ namespace EmuSen.Hotaru
 {
     class Program
     {
-        // Backs both `core <corename> <path>` code paths: RunStandaloneShell's
-        // own pre-window handling below (TryResolveCoreCommand), and, once a
-        // window exists, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreCommand (registered as
-        // part of debugCmd's own extraCommands in Main). One shared registry,
-        // not two - `CoreDescriptor` itself lives in EmuSen.DianaOS.DianaOS.Bin.Commands
-        // now (promoted there for CoreCommand's own use, see that file's own
-        // comment on why it's core-agnostic despite the name) rather than
-        // staying a private nested type here. Only one entry today because
-        // only one core is actually implemented (`VenusCore`, SNES) -
-        // registered under both its internal codename and the console name
-        // most people would actually type.
-        // EmuSen.Cores.CoreCatalog now holds the one copy - `cheat db prune`
-        // is a third reader of "which consoles exist" and three private
-        // copies is how they drift. See EmuSen_Settings_Reference.md 4.16.
+        // Backs both `core <name> <path>` paths off one shared registry - see EmuSen_Multicore.md §3.
         private static IReadOnlyDictionary<string, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor> _coreRegistry
             => EmuSen.Cores.CoreCatalog.Registry;
 
@@ -61,7 +49,7 @@ namespace EmuSen.Hotaru
             // Needed by FlushAndDispose to flush Cpu/Spc700's
             // RepeatCollapsingTrace state before the log writer closes -
             // see that call's own comment below.
-            VenusCore? core = null;
+            ICore? core = null;
 
             // Guards FlushAndDispose against running twice - Ctrl+C alone
             // can reach it via both the SIGINT registration below and the
@@ -82,8 +70,7 @@ namespace EmuSen.Hotaru
                 // loop CpuVerboseLogging/Spc700VerboseLogging was still
                 // mid-repeat on would never reach the file at all. See
                 // DebugTools.RepeatCollapsingTrace<TKey>.Flush().
-                core?.Cpu?.FlushVerboseTrace();
-                core?.Spc700?.FlushVerboseTrace();
+                (core as ITraceFlushable)?.FlushVerboseTrace();
 
                 Console.SetOut(originalOut);
                 logWriter?.Dispose();
@@ -127,7 +114,7 @@ namespace EmuSen.Hotaru
                 // States" subfolder so it doesn't mix with the flat .srm files.
                 string statePath = Path.Combine(DianaOSSandbox.SaveStatesDirectory, Path.GetFileNameWithoutExtension(romPath) + ".state");
 
-                core = new VenusCore(headless: false);
+                core = CoreFactory.Create(romPath, headless: false);
 
                 string logDir = Path.Combine(DianaOSSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
                 Directory.CreateDirectory(logDir);
@@ -196,7 +183,7 @@ namespace EmuSen.Hotaru
         // See EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Project_Overview_v2.md §2a for why Linux
         // is forced onto UseX11() now.
         private static AppBuilder BuildAvaloniaApp(
-            VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
+            ICore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
             var builder = AppBuilder.Configure(() => new App(core, extraCommands, statePath))
                 .UsePlatformDetect()

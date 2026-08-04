@@ -1,12 +1,11 @@
 using System;
 using System.Diagnostics;
 using SDL3;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Nehellania.Input
 {
-    // Polls the first connected SDL3 gamepad and reports SNES button state
-    // against a rebindable GamepadBindingMap - see EmuSen_Settings_Reference.md §4.4/§4.10.
+    // Polls the first connected SDL3 gamepad into PadButton state - see EmuSen_Input.md §4.
     public class GamepadManager : IDisposable
     {
         private readonly GamepadBindingMap _bindings;
@@ -91,7 +90,7 @@ namespace EmuSen.Nehellania.Input
             return label == SDL.GamepadButtonLabel.Unknown ? null : label.ToString();
         }
 
-        public bool IsPressed(SnesButton button)
+        public bool IsPressed(PadButton button)
         {
             if (!IsConnected) return false;
 
@@ -103,16 +102,16 @@ namespace EmuSen.Nehellania.Input
         }
 
         // Axis range is -32768..32767; the deadzone is a fraction of it.
-        private bool StickDirectionPressed(SnesButton button)
+        private bool StickDirectionPressed(PadButton button)
         {
             short threshold = (short)(Math.Clamp(StickDeadzone, 0.05, 0.95) * short.MaxValue);
 
             return button switch
             {
-                SnesButton.Left => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftX) < -threshold,
-                SnesButton.Right => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftX) > threshold,
-                SnesButton.Up => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftY) < -threshold,
-                SnesButton.Down => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftY) > threshold,
+                PadButton.Left => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftX) < -threshold,
+                PadButton.Right => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftX) > threshold,
+                PadButton.Up => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftY) < -threshold,
+                PadButton.Down => SDL.GetGamepadAxis(_gamepad, SDL.GamepadAxis.LeftY) > threshold,
                 _ => false,
             };
         }

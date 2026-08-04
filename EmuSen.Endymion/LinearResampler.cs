@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 
-namespace EmuSen.Audio
+namespace EmuSen.Endymion
 {
-    // Phase-continuous linear resampler for interleaved stereo shorts - see
-    // EmuSen_Audio_Sync.md §2.
+    // Phase-continuous linear resampler for interleaved stereo shorts - see EmuSen_Audio_Sync.md §2.
     public sealed class LinearResampler
     {
         // Position between _prev and the next unconsumed input frame.

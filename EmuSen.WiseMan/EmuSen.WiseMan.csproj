@@ -76,6 +76,7 @@
          its timeline semantics are pinned before any core depends on them -
          see EmuSen_Crystal_Scheduler.md. -->
     <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
+    <ProjectReference Include="..\EmuSen.Endymion\EmuSen.Endymion.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,5 +1,5 @@
+using EmuSen.Cores;
 using EmuSen.Common.Imaging;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
@@ -7,6 +7,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Pharaoh
 {
@@ -19,14 +20,14 @@ namespace EmuSen.Pharaoh
     public sealed class CommandsScriptRunner
     {
         private readonly FrameRunner runner;
-        private readonly SnesDebugTarget debugTarget;
+        private readonly IDebugTarget debugTarget;
         private readonly DianaOSInterpreter debugCmd;
         private readonly Action<string> emit;
 
         // Null until the `record` verb starts one - see §3.15b.
         private FrameRecorder? recorder;
 
-        public CommandsScriptRunner(FrameRunner runner, SnesDebugTarget debugTarget, DianaOSInterpreter debugCmd, Action<string> emit)
+        public CommandsScriptRunner(FrameRunner runner, IDebugTarget debugTarget, DianaOSInterpreter debugCmd, Action<string> emit)
         {
             this.runner = runner;
             this.debugTarget = debugTarget;
@@ -71,14 +72,14 @@ namespace EmuSen.Pharaoh
                 {
                     emit($"> {cmdLine}");
                     int controller = verb == "tap2" ? 2 : 1;
-                    var button = Enum.Parse<SnesButton>(parts[1], ignoreCase: true);
+                    var button = Enum.Parse<PadButton>(parts[1], ignoreCase: true);
                     long duration = parts.Length >= 3 ? long.Parse(parts[2]) : 4;
                     runner.Tap(button, controller, duration);
                 }
                 else if ((verb == "hold" || verb == "release") && parts.Length >= 2)
                 {
                     emit($"> {cmdLine}");
-                    var button = Enum.Parse<SnesButton>(parts[1], ignoreCase: true);
+                    var button = Enum.Parse<PadButton>(parts[1], ignoreCase: true);
                     int controller = parts.Length >= 3 ? int.Parse(parts[2]) : 1;
                     if (verb == "hold") runner.Hold(button, controller);
                     else runner.Release(button, controller);
@@ -120,7 +121,7 @@ namespace EmuSen.Pharaoh
                 {
                     // Scene navigation anchored on state, not frame counts - see §3.15d.
                     emit($"> {cmdLine}");
-                    var button = Enum.Parse<EmuSen.Cores.Nintendo.Venus.Controllers.SnesButton>(parts[1], ignoreCase: true);
+                    var button = Enum.Parse<EmuSen.Galaxia.Input.PadButton>(parts[1], ignoreCase: true);
                     string spaceName = parts[2];
                     var space = debugTarget.GetMemorySpaces()
                         .FirstOrDefault(s => string.Equals(s.Name, spaceName, StringComparison.OrdinalIgnoreCase));
@@ -441,18 +442,17 @@ namespace EmuSen.Pharaoh
         private string RunPerf(long count, int worstCount)
         {
             var core = runner.Core;
+
+            // Probed by capability, not by core - see EmuSen_Multicore.md §5.
+            var profiler = core as IFrameProfiler;
+            string[] phaseNames = profiler?.LastFramePhases.Select(p => p.Name).ToArray() ?? Array.Empty<string>();
+
             var wall = new double[count];
-            var cpu = new double[count];
-            var ppu = new double[count];
-            var hdma = new double[count];
-            var objEval = new double[count];
-            var blend = new double[count];
-            var mainComp = new double[count];
-            var subComp = new double[count];
+            var phases = new double[phaseNames.Length][];
+            for (int p = 0; p < phaseNames.Length; p++) phases[p] = new double[count];
 
             double toMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-            long sa1RunAtStart = core.Cart?.Sa1?.ExecutedMasterClocks ?? 0;
-            long sa1OfferedAtStart = core.Cart?.Sa1?.OfferedMasterClocks ?? 0;
+            var coprocessorsAtStart = (core as ICoprocessorLoad)?.CoprocessorClocks ?? Array.Empty<CoprocessorClocks>();
             long taken = 0;
             for (long i = 0; i < count; i++)
             {
@@ -460,29 +460,15 @@ namespace EmuSen.Pharaoh
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 runner.RunFrames(1);
                 wall[i] = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * toMs;
-                cpu[i] = core.LastFrameCpuSpc700Ms;
-                ppu[i] = core.LastFramePpuMs;
-                hdma[i] = core.LastFrameHdmaMs;
-                objEval[i] = core.LastFrameObjEvalMs;
-                blend[i] = core.LastFrameBlendMs;
-                mainComp[i] = core.LastFrameMainCompositeMs;
-                subComp[i] = core.LastFrameSubCompositeMs;
+
+                if (profiler is not null)
+                {
+                    var current = profiler.LastFramePhases;
+                    for (int p = 0; p < phaseNames.Length && p < current.Count; p++) phases[p][i] = current[p].Milliseconds;
+                }
                 taken++;
             }
             if (taken == 0) return "[PERF] No frames ran - already at the safety cap.";
-
-            // Clocks per frame is the figure that says whether a coprocessor is
-            // being starved or double-clocked, and the offered/run gap is how
-            // long the game parked it - see Venus_SA1.md §2.3.
-            string coprocessorLine = string.Empty;
-            if (core.Cart?.Sa1 is { } perfSa1)
-            {
-                double runPerFrame = (perfSa1.ExecutedMasterClocks - sa1RunAtStart) / (double)taken;
-                double offeredPerFrame = (perfSa1.OfferedMasterClocks - sa1OfferedAtStart) / (double)taken;
-                double expected = core.MasterClocksPerFrame;
-                coprocessorLine = $"  sa-1: {runPerFrame:F0} clocks/frame run of {offeredPerFrame:F0} offered "
-                                + $"({runPerFrame / expected * 100:F1}% of the {expected:F0} a full-rate frame allows)";
-            }
 
             var sortedWall = wall.Take((int)taken).OrderBy(v => v).ToArray();
             double Pct(double p) => sortedWall[Math.Min(sortedWall.Length - 1, (int)(p * sortedWall.Length))];
@@ -493,14 +479,51 @@ namespace EmuSen.Pharaoh
             sb.AppendLine($"[PERF] {taken} frame(s) to frame {runner.CurrentFrame}, budget {budget:F2}ms/frame at {core.FrameRateHz:F2}Hz.");
             sb.AppendLine($"  wall  mean {Mean(wall):F2}ms ({1000.0 / Mean(wall):F1} fps)  p50 {Pct(0.50):F2}  p95 {Pct(0.95):F2}  max {sortedWall[^1]:F2}");
             sb.AppendLine($"  over budget: {sortedWall.Count(v => v > budget)}/{taken} frame(s)");
-            sb.AppendLine($"  cpu+spc700 {Mean(cpu):F2}ms   ppu {Mean(ppu):F2}ms   hdma {Mean(hdma):F2}ms   unattributed {Mean(wall) - Mean(cpu) - Mean(ppu) - Mean(hdma):F2}ms");
-            sb.AppendLine($"  ppu split: mainComposite {Mean(mainComp):F2}ms  subComposite {Mean(subComp):F2}ms  objEval {Mean(objEval):F2}ms  blend {Mean(blend):F2}ms");
-            if (coprocessorLine.Length > 0) sb.AppendLine(coprocessorLine);
+
+            if (phaseNames.Length == 0)
+            {
+                sb.AppendLine($"  {core.CoreName} publishes no per-phase breakdown.");
+            }
+            else
+            {
+                // Only unnested phases sum to the frame; a "parent/child" one is already inside its parent.
+                double attributed = 0;
+                var top = new List<string>();
+                var nested = new List<string>();
+                for (int p = 0; p < phaseNames.Length; p++)
+                {
+                    double mean = Mean(phases[p]);
+                    if (phaseNames[p].Contains('/'))
+                    {
+                        nested.Add($"{phaseNames[p]} {mean:F2}ms");
+                        continue;
+                    }
+                    top.Add($"{phaseNames[p]} {mean:F2}ms");
+                    attributed += mean;
+                }
+                sb.AppendLine("  " + string.Join("   ", top) + $"   unattributed {Mean(wall) - attributed:F2}ms");
+                if (nested.Count > 0) sb.AppendLine("  split: " + string.Join("  ", nested));
+            }
+
+            // Clocks per frame is what says whether a coprocessor is being starved - see Venus_SA1.md §2.3.
+            var coprocessorsNow = (core as ICoprocessorLoad)?.CoprocessorClocks ?? Array.Empty<CoprocessorClocks>();
+            foreach (var chip in coprocessorsNow)
+            {
+                var before = coprocessorsAtStart.FirstOrDefault(c => c.Name == chip.Name);
+                double runPerFrame = (chip.Executed - before.Executed) / (double)taken;
+                double offeredPerFrame = (chip.Offered - before.Offered) / (double)taken;
+                sb.AppendLine($"  {chip.Name}: {runPerFrame:F0} clocks/frame run of {offeredPerFrame:F0} offered "
+                            + $"({runPerFrame / chip.PerFrameBudget * 100:F1}% of the {chip.PerFrameBudget} a full-rate frame allows)");
+            }
 
             var worst = Enumerable.Range(0, (int)taken).OrderByDescending(i => wall[i]).Take(worstCount);
             foreach (int i in worst)
             {
-                sb.AppendLine($"  worst frame +{i}: {wall[i]:F2}ms (cpu {cpu[i]:F2} ppu {ppu[i]:F2} hdma {hdma[i]:F2})");
+                string detail = phaseNames.Length == 0
+                    ? ""
+                    : " (" + string.Join(" ", phaseNames.Index().Where(n => !n.Item.Contains('/'))
+                        .Select(n => $"{n.Item} {phases[n.Index][i]:F2}")) + ")";
+                sb.AppendLine($"  worst frame +{i}: {wall[i]:F2}ms{detail}");
             }
             return sb.ToString().TrimEnd();
         }

@@ -37,7 +37,14 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
                 Sprite0Hit = false;
                 SpriteOverflow = false;
                 AdvanceScroll();
-                if (RenderingEnabled) CopyVertical();
+
+                // The pre-render line fetches too, so its A12 rise clocks the board - see Moon_Memory.md §4.6a.
+                if (RenderingEnabled)
+                {
+                    _cart.Mapper.OnScanline();
+                    CopyVertical();
+                }
+
                 FrameCount++;
             }
         }

@@ -14,9 +14,9 @@ namespace EmuSen.Mistress.Views
     // discard.
     public partial class PreferencesWindow : Window
     {
-        // Only entry today - see AppSettings.SelectedCore's own comment on
-        // why this exists at all despite doing nothing yet.
-        private static readonly string[] AvailableCores = { "SNES (Venus)" };
+        // From the catalog - see AppSettings.SelectedCore for why it still drives nothing.
+        private static readonly string[] AvailableCores =
+            EmuSen.Cores.CoreCatalog.Cores.Select(c => c.DisplayName).ToArray();
 
         private readonly AppSettings _settings;
         private bool _initializing;

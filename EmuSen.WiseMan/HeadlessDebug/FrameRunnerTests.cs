@@ -1,6 +1,7 @@
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Pharaoh;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.HeadlessDebug
 {
@@ -83,7 +84,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var (core, log) = NewCoreAndLog();
             var runner = new FrameRunner(core, frameCap: 100, log.Add);
 
-            runner.Hold(SnesButton.Start);
+            runner.Hold(PadButton.Start);
             runner.RunFrames(1);
 
             ushort latched = (ushort)((core.Bus!.Input.ReadJoy1High() << 8) | core.Bus.Input.ReadJoy1Low());
@@ -96,9 +97,9 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var (core, log) = NewCoreAndLog();
             var runner = new FrameRunner(core, frameCap: 100, log.Add);
 
-            runner.Hold(SnesButton.Start);
+            runner.Hold(PadButton.Start);
             runner.RunFrames(1);
-            runner.Release(SnesButton.Start);
+            runner.Release(PadButton.Start);
             runner.RunFrames(1);
 
             ushort latched = (ushort)((core.Bus!.Input.ReadJoy1High() << 8) | core.Bus.Input.ReadJoy1Low());
@@ -111,7 +112,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
             var (core, log) = NewCoreAndLog();
             var runner = new FrameRunner(core, frameCap: 100, log.Add);
 
-            runner.Tap(SnesButton.A, controller: 1, duration: 4);
+            runner.Tap(PadButton.A, controller: 1, duration: 4);
             Assert.Equal(4, runner.CurrentFrame);
 
             // Release() updates the live register immediately, but the

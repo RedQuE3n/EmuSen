@@ -222,8 +222,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
         }
 
-        // Pharaoh's --nobattery, so a repeated script is reproducible - see Venus_Memory.md §2.4a.
-        public static bool BatteryRamDisabled;
+        // Pharaoh's --nobattery, now core-agnostic - see Venus_Memory.md §2.4a and EmuSen_Multicore.md §6.
+        public static bool BatteryRamDisabled
+        {
+            get => EmuSen.Cores.CoreOptions.BatteryRamDisabled;
+            set => EmuSen.Cores.CoreOptions.BatteryRamDisabled = value;
+        }
 
         // Called periodically + on shutdown, not on every write - see
         // Venus_Memory.md §2.4.

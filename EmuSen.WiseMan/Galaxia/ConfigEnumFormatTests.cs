@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Nehellania.Input;
 using SDL3;
+using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Galaxia
 {
@@ -58,11 +59,11 @@ namespace EmuSen.WiseMan.Galaxia
 
             GamepadBindingMap map = GamepadBindingMap.Load();
 
-            Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[SnesButton.Up]);
-            Assert.Equal(SDL.GamepadButton.South, map.ButtonToPad[SnesButton.B]);
-            Assert.Equal(SDL.GamepadButton.East, map.ButtonToPad[SnesButton.A]);
-            Assert.Equal(SDL.GamepadButton.LeftShoulder, map.ButtonToPad[SnesButton.L]);
-            Assert.Equal(SDL.GamepadButton.Back, map.ButtonToPad[SnesButton.Select]);
+            Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[PadButton.Up]);
+            Assert.Equal(SDL.GamepadButton.South, map.ButtonToPad[PadButton.B]);
+            Assert.Equal(SDL.GamepadButton.East, map.ButtonToPad[PadButton.A]);
+            Assert.Equal(SDL.GamepadButton.LeftShoulder, map.ButtonToPad[PadButton.L]);
+            Assert.Equal(SDL.GamepadButton.Back, map.ButtonToPad[PadButton.Select]);
         }
 
         [Fact]
@@ -100,10 +101,10 @@ namespace EmuSen.WiseMan.Galaxia
 
             GamepadBindingMap map = GamepadBindingMap.Load();
 
-            Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[SnesButton.Up]);
-            Assert.Equal(SDL.GamepadButton.DPadDown, map.ButtonToPad[SnesButton.Down]);
-            Assert.Equal(SDL.GamepadButton.South, map.ButtonToPad[SnesButton.B]);
-            Assert.Equal(SDL.GamepadButton.East, map.ButtonToPad[SnesButton.A]);
+            Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[PadButton.Up]);
+            Assert.Equal(SDL.GamepadButton.DPadDown, map.ButtonToPad[PadButton.Down]);
+            Assert.Equal(SDL.GamepadButton.South, map.ButtonToPad[PadButton.B]);
+            Assert.Equal(SDL.GamepadButton.East, map.ButtonToPad[PadButton.A]);
         }
 
         [Fact]
@@ -113,8 +114,8 @@ namespace EmuSen.WiseMan.Galaxia
 
             GamepadBindingMap map = GamepadBindingMap.Load();
 
-            Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[SnesButton.Up]);
-            Assert.Equal(SDL.GamepadButton.South, map.ButtonToPad[SnesButton.B]);
+            Assert.Equal(SDL.GamepadButton.DPadUp, map.ButtonToPad[PadButton.Up]);
+            Assert.Equal(SDL.GamepadButton.South, map.ButtonToPad[PadButton.B]);
         }
 
         // The cost of names: a misspelling fails the whole file rather than one
@@ -144,8 +145,8 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void The_other_two_binding_files_get_the_same_treatment()
         {
-            var file = new ConfigFile<Dictionary<SnesButton, SDL.GamepadButton>>("sample.json");
-            file.Save(new Dictionary<SnesButton, SDL.GamepadButton> { [SnesButton.Start] = SDL.GamepadButton.Start });
+            var file = new ConfigFile<Dictionary<PadButton, SDL.GamepadButton>>("sample.json");
+            file.Save(new Dictionary<PadButton, SDL.GamepadButton> { [PadButton.Start] = SDL.GamepadButton.Start });
 
             Assert.Contains("\"Start\": \"Start\"", File.ReadAllText(file.Path));
         }

@@ -2,7 +2,7 @@ using System.Diagnostics;
 using EmuSen.Audio;
 using EmuSen.Common;
 using EmuSen.DianaOS.DianaOS.Etc;
-using EmuSen.Nehellania.Audio;
+using EmuSen.Endymion;
 using SDL3;
 
 namespace EmuSen.WiseMan.Audio
@@ -46,12 +46,12 @@ namespace EmuSen.WiseMan.Audio
             double baselineBacklog = BacklogMs(session);
 
             // Simulates MainWindow.axaml.cs's EmulationLoop "fell behind -
-            // resync to now" branch: 1 simulated second of RunFrame()+Pump()
+            // resync to now" branch: 1 simulated second of RunFrame()+Submit()
             // with no sleeping between calls.
             for (int i = 0; i < FramesPerSecond; i++)
             {
                 session.RunFrame();
-                player.Pump(session);
+                player.Submit(session.DequeueAudioSamples(int.MaxValue), session.AudioSampleRate);
             }
             double postStallBacklog = BacklogMs(session);
             int postStallQueue = player.QueuedFrames;
@@ -106,7 +106,7 @@ namespace EmuSen.WiseMan.Audio
 
         private static double BacklogMs(EmulatorSession session)
         {
-            int frames = session.Bus.Spc700.Dsp.AudioBuffer.Count / 2;
+            int frames = ((EmuSen.Cores.Nintendo.Venus.VenusCore)session.Core!).Bus!.Spc700.Dsp.AudioBuffer.Count / 2;
             return frames * 1000.0 / session.AudioSampleRate;
         }
 
@@ -118,7 +118,7 @@ namespace EmuSen.WiseMan.Audio
             {
                 nextTick += FrameInterval;
                 session.RunFrame();
-                player.Pump(session);
+                player.Submit(session.DequeueAudioSamples(int.MaxValue), session.AudioSampleRate);
                 TimeSpan remaining = nextTick - clock.Elapsed;
                 if (remaining > TimeSpan.Zero) Thread.Sleep(remaining);
                 else nextTick = clock.Elapsed; // fell behind - resync instead of bursting to catch up, matching EmulationLoop

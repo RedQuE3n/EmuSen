@@ -9,7 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using EmuSen.Cores.Nintendo.Venus;
-using EmuSen.Cores.Nintendo.Venus.Controllers;
+using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
@@ -19,11 +19,13 @@ using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 using EmuSen.Graphics;
-using EmuSen.Nehellania.Audio;
+using EmuSen.Endymion;
 using EmuSen.Nehellania.Input;
 using EmuSen.Hotaru.Imaging;
 using EmuSen.Hotaru.Input;
 using EmuSen.Serenity;
+using EmuSen.Galaxia.Input;
+using EmuSen.Audio;
 
 namespace EmuSen.Hotaru.Views
 {
@@ -88,7 +90,10 @@ namespace EmuSen.Hotaru.Views
     // console" through the back door.
     public partial class GameWindow : Window
     {
-        private readonly VenusCore _core;
+        private readonly ICore _core;
+
+        // The Venus-only hotkeys below need the real core; null for any other console.
+        private VenusCore? Venus => _core as VenusCore;
 
         // Not readonly, unlike every other field this window was
         // originally handed - all three get rebuilt from scratch by
@@ -102,7 +107,10 @@ namespace EmuSen.Hotaru.Views
         // DianaOSInterpreter, which captures its target at construction
         // with no UpdateTarget of its own - unlike EmuSen.Mistress's
         // console WINDOW) would otherwise go stale.
-        private SnesDebugTarget _debugTarget = null!;
+        private IDebugTarget _debugTarget = null!;
+
+        // The rest of the loaded core's wiring - codecs, trace switch - see EmuSen_Multicore.md §4.
+        private CoreBundle? _bundle;
 
         // See `man tmux`.
         private readonly DianaOSSessionManager _sessions = new();
@@ -127,14 +135,16 @@ namespace EmuSen.Hotaru.Views
 
         private readonly GamepadBindingMap _gamepadBindings = GamepadBindingMap.Load();
         private readonly GamepadManager _gamepad;
-        private readonly AudioPlayer _audioPlayer = new();
+        // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
+        private readonly AudioPlayer _audioPlayer = new(
+            AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
         private readonly DispatcherTimer _gamepadTimer;
 
         // Keyboard and gamepad are tracked separately and combined with OR
         // logic - matches EmuSen.Mistress's own MainWindow convention
         // ("either device works at any time, no need to pick one").
-        private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<SnesButton>().Length];
-        private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<SnesButton>().Length];
+        private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadButton>().Length];
+        private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<PadButton>().Length];
         private bool _mirrorPlayer1ToPlayer2;
 
         private readonly DebugTools.BoundedTrace _bgScrollTrace = new();
@@ -197,7 +207,7 @@ namespace EmuSen.Hotaru.Views
         private FrameData? _pendingFrame;
         private int _presentScheduled;
 
-        public GameWindow(VenusCore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
+        public GameWindow(ICore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
             InitializeComponent();
 
@@ -309,7 +319,7 @@ namespace EmuSen.Hotaru.Views
         {
             if (!_heldPhysicalKeys.Add(e.Key)) return; // OS key-repeat, not a fresh press
 
-            if (HotaruKeyMap.TryGetButton(e.Key, out SnesButton button))
+            if (HotaruKeyMap.TryGetButton(e.Key, out PadButton button))
             {
                 _keyboardHeld[(int)button] = true;
                 ApplyButtonState(button);
@@ -337,7 +347,7 @@ namespace EmuSen.Hotaru.Views
         private void OnKeyUp(object? sender, KeyEventArgs e)
         {
             _heldPhysicalKeys.Remove(e.Key);
-            if (HotaruKeyMap.TryGetButton(e.Key, out SnesButton button))
+            if (HotaruKeyMap.TryGetButton(e.Key, out PadButton button))
             {
                 _keyboardHeld[(int)button] = false;
                 ApplyButtonState(button);
@@ -351,17 +361,18 @@ namespace EmuSen.Hotaru.Views
             }
         }
 
-        private void ApplyButtonState(SnesButton button)
+        // Through ICore, not the bus - which console's pad this reaches is the core's business.
+        private void ApplyButtonState(PadButton button)
         {
             bool held = _keyboardHeld[(int)button] || _gamepadHeld[(int)button];
-            _core.Bus!.Input.SetButton(button, held);
-            if (_mirrorPlayer1ToPlayer2) _core.Bus.Input.SetButton(button, held, controller: 2);
+            _core.SetButton(0, button, held);
+            if (_mirrorPlayer1ToPlayer2) _core.SetButton(1, button, held);
         }
 
         private void PollGamepad()
         {
             _gamepad.Poll();
-            foreach (SnesButton button in Enum.GetValues<SnesButton>())
+            foreach (PadButton button in Enum.GetValues<PadButton>())
             {
                 bool held = _gamepad.IsPressed(button);
                 if (held != _gamepadHeld[(int)button])
@@ -386,8 +397,8 @@ namespace EmuSen.Hotaru.Views
         // `man core`/`man tmux`.
         private void RebuildDebugTargetAndCommands()
         {
-            _debugTarget = new SnesDebugTarget(_core.Cpu!, _core.Bus!, _core.Renderer!,
-                () => (_core.LastFrameCpuSpc700Ms, _core.LastFramePpuMs, _core.LastFrameHdmaMs));
+            _bundle = CoreFactory.Bundle(_core);
+            _debugTarget = _bundle.DebugTarget;
             _frameRecorder = new FrameRecorder(_debugTarget);
 
             if (_sessions.Sessions.Count == 0)
@@ -404,9 +415,7 @@ namespace EmuSen.Hotaru.Views
 
         private DianaOSInterpreter BuildInterpreter() =>
             DianaOSInterpreter.CreateDefault(_debugTarget, _extraCommands,
-                new EmuSen.Cores.Nintendo.Venus.Cheats.ActionReplayCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Cheats.GameGenieCheatCodec(),
-                new EmuSen.Cores.Nintendo.Venus.Debug.VenusCpuTraceSwitch(),
+                _bundle?.CheatAutoDetectCodec, _bundle?.CheatExplicitCodec, _bundle?.CpuTraceSwitch,
                 _sessions,
                 () => EmuSen.Cores.CoreCatalog.SupportedCheatSystems);
 
@@ -519,16 +528,10 @@ namespace EmuSen.Hotaru.Views
 
                     _rewind.OnFrameCompleted(_core);
 
-                    // Drained, not just unpumped, when speed outruns the device - see §2.3.
-                    if (_speed.ShouldPlayAudio)
-                    {
-                        _audioPlayer.Pump(_core);
-                    }
-                    else
-                    {
-                        _core.DequeueAudioSamples(int.MaxValue);
-                        _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                    }
+                    // Drained every frame either way, so a muted stretch can't back the core buffer up - see §2.3.
+                    short[] samples = _core.DequeueAudioSamples(int.MaxValue);
+                    if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, _core.AudioSampleRate);
+                    else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
 
                     // Nothing new was drawn on a skipped frame.
                     if (!_core.SkipRendering) SubmitFrame(_core.GetFrameBufferRgba(), _core.ScreenWidth, _core.ScreenHeight);
@@ -606,10 +609,10 @@ namespace EmuSen.Hotaru.Views
 
             if (_requestToggleRecording) { _requestToggleRecording = false; ToggleRecording(); }
             if (_requestStartBgScrollTrace) { _requestStartBgScrollTrace = false; StartBgScrollTrace(); }
-            if (_requestDumpBackdrop) { _requestDumpBackdrop = false; _core.Renderer!.DumpBackdropAndWindowDebugInfo(_core.Bus!.Ppu, _core.TotalFrames); }
+            if (_requestDumpBackdrop) { _requestDumpBackdrop = false; Venus?.Renderer!.DumpBackdropAndWindowDebugInfo(Venus.Bus!.Ppu, _core.TotalFrames); }
             if (_requestMirrorToggle) { _requestMirrorToggle = false; ToggleMirror(); }
             if (_requestSummary) { _requestSummary = false; Console.WriteLine(_debugTarget.GetSummaryText()); }
-            if (_requestDumpOam) { _requestDumpOam = false; _core.Renderer!.DumpActiveOam(_core.Bus!.Ppu); }
+            if (_requestDumpOam) { _requestDumpOam = false; Venus?.Renderer!.DumpActiveOam(Venus.Bus!.Ppu); }
             if (_requestDebugPrompt) { _requestDebugPrompt = false; if (RunDebugPrompt()) return true; }
             if (_requestScreenshot) { _requestScreenshot = false; TakeScreenshot(); }
             if (_requestSaveState) { _requestSaveState = false; SaveState(_statePath); }
@@ -617,7 +620,7 @@ namespace EmuSen.Hotaru.Views
 
             if (_bgScrollTrace.ShouldLog())
             {
-                Console.WriteLine($"[BG SCROLL] Frame {_core.TotalFrames}: BG1 X={_core.Bus!.Ppu.BgScrollX[0]} Y={_core.Bus.Ppu.BgScrollY[0]}  |  BG2 X={_core.Bus.Ppu.BgScrollX[1]} Y={_core.Bus.Ppu.BgScrollY[1]}");
+                if (Venus is { Bus: { } scrollBus }) Console.WriteLine($"[BG SCROLL] Frame {_core.TotalFrames}: BG1 X={scrollBus.Ppu.BgScrollX[0]} Y={scrollBus.Ppu.BgScrollY[0]}  |  BG2 X={scrollBus.Ppu.BgScrollX[1]} Y={scrollBus.Ppu.BgScrollY[1]}");
                 if (!_bgScrollTrace.IsActive) DebugSettings.AllScrollWriteLogging = false;
             }
 

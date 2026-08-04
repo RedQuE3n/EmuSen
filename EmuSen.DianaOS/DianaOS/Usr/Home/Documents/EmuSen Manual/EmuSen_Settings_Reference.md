@@ -139,9 +139,11 @@ The two maps police **each other** on rebind, not just themselves: one key doing
 
 ### 4.6 How the window is built
 
-**One scrolling page, not tabs.** Every row stays in the visual tree, so conflict detection sees all of them at once and no clashing binding can hide behind an unselected tab.
+**General first, then one tab per console.** This was one scrolling page, on the reasoning that keeping every row in the visual tree let conflict detection see all of them at once. That reasoning stopped applying when bindings became per console (`EmuSen_Input.md` §5.1): two consoles are *allowed* to share a key, so conflicts are computed per console from the maps rather than from what happens to be on screen, and no clash can hide behind an unselected tab because nothing consults the visual tree to find one. Hotkeys are global and live on General, and they still police every console's map.
 
-**Rows are built in code, not XAML**, because they're one per `SnesButton`/`HotkeyAction` enum member. Value labels use `TextTrimming.CharacterEllipsis` because `Key` and `GamepadButton` names (`RightBracket`, `LeftShoulder`) routinely overflow their column.
+The practical cost is that only the selected tab is realised, so a test asserting on rows has to open the window on the tab it means — `InputSettingsWindow` takes the console to select, and passes null for General.
+
+**Rows are built in code, not XAML**, because they're one per `PadButton`/`HotkeyAction` — and now one *set* per console, so the console tabs are built entirely in `BuildConsoleTabs`; adding a core adds a tab with no XAML change. The header `Grid` and the rows `StackPanel` carry `Name` properties purely so the layout tests can still find them, since a code-built control is in no XAML name scope and `GetControl<T>(name)` cannot see it. Value labels use `TextTrimming.CharacterEllipsis` because `Key` and `GamepadButton` names (`RightBracket`, `LeftShoulder`) routinely overflow their column.
 
 **Fixed bug: the `Gamepad` header sat over the keyboard column.** The header `Grid` in the `.axaml` and the row `Grid`s in the code-behind each declared the same column string, `90,130,Auto,Auto,140,Auto,Auto`, and a comment on each told the next reader to keep them in step. They *were* in step, and the header was still wrong by 160 px, because `Auto` sizes to content and each `Grid` sizes its own: the header has nothing in the four button columns, so they collapsed to zero there while the rows gave them the width of `Rebind Key` and `Clear`. Everything past column 1 in the header therefore rendered 160 px left of the data it labelled, putting `Gamepad` squarely over the keyboard rebind buttons.
 

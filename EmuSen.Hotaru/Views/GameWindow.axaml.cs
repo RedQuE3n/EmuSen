@@ -133,7 +133,8 @@ namespace EmuSen.Hotaru.Views
 
         private readonly string _statePath;
 
-        private readonly GamepadBindingMap _gamepadBindings = GamepadBindingMap.Load();
+        private readonly GamepadBindings _gamepadBindings =
+            GamepadBindings.Load(EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
         private readonly GamepadManager _gamepad;
         // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
         private readonly AudioPlayer _audioPlayer = new(
@@ -230,7 +231,7 @@ namespace EmuSen.Hotaru.Views
             Height = GraphicsSettings.WindowHeight;
             CanResize = GraphicsSettings.WindowResizable;
 
-            _gamepad = new GamepadManager(_gamepadBindings);
+            _gamepad = new GamepadManager(_gamepadBindings.For(core.CoreName));
             _gamepadTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60.0) };
             _gamepadTimer.Tick += (_, _) => PollGamepad();
             _gamepadTimer.Start();
@@ -455,6 +456,8 @@ namespace EmuSen.Hotaru.Views
             }
 
             _core.LoadRom(romPath);
+            // The new console's pad, not the outgoing one's - see EmuSen_Input.md §5.1.
+            _gamepad.Bindings = _gamepadBindings.For(_core.CoreName);
             _rewind.Clear(); // a discontinuous jump - see §1.4
             _audioPlayer.RateControl.Reset();
             RebuildDebugTargetAndCommands();

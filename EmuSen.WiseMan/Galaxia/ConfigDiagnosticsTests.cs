@@ -43,7 +43,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("""{"Up":"DPadUpp","B":"South"}""");
 
-            GamepadBindingMap.Load();
+            GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             string message = Assert.Single(_reported);
             Assert.Contains("'DPadUpp' is not a valid GamepadButton", message);
@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("""{"Up":"DPadUpp"}""");
 
-            GamepadBindingMap map = GamepadBindingMap.Load();
+            GamepadBindingMap map = GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Equal(new GamepadBindingMap().ButtonToPad, map.ButtonToPad);
             Assert.Contains("Falling back to defaults", Assert.Single(_reported));
@@ -68,7 +68,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("""{"Up":"DPadUpp"}""");
 
-            GamepadBindingMap.Load();
+            GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Contains(Path.Combine(_dir, "gamepadbindings.json"), Assert.Single(_reported));
         }
@@ -79,7 +79,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("""{"Strat":"Start"}""");
 
-            GamepadBindingMap.Load();
+            GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             string message = Assert.Single(_reported);
             Assert.Contains("'Strat' is not a valid PadButton", message);
@@ -91,7 +91,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("""{"Up":"qwertyuiop"}""");
 
-            GamepadBindingMap.Load();
+            GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             string message = Assert.Single(_reported);
             Assert.Contains("'qwertyuiop' is not a valid", message);
@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             WriteBindings("{ not json at all");
 
-            GamepadBindingMap.Load();
+            GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Single(_reported);
         }
@@ -113,7 +113,7 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void A_missing_file_reports_nothing()
         {
-            GamepadBindingMap.Load();
+            GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Empty(_reported);
             Assert.Null(ConfigDiagnostics.LastMessage);
@@ -122,9 +122,9 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void A_file_that_loads_reports_nothing()
         {
-            new GamepadBindingMap().Save();
+            new GamepadBindings(new[] { "NES", "SNES" }).Save();
 
-            GamepadBindingMap.Load();
+            GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.Empty(_reported);
         }
@@ -152,7 +152,7 @@ namespace EmuSen.WiseMan.Galaxia
             ConfigDiagnostics.Sink = null;
             WriteBindings("""{"Up":"DPadUpp"}""");
 
-            GamepadBindingMap.Load();
+            GamepadBindings.Load(new[] { "NES", "SNES" }).For("NES");
 
             Assert.NotNull(ConfigDiagnostics.LastMessage);
         }

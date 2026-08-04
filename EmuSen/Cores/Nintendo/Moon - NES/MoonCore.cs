@@ -166,11 +166,14 @@ namespace EmuSen.Cores.Nintendo.Moon
         }
 
         // The eight the pad has; X/Y/L/R have no wire to reach - see EmuSen_Input.md §2.
-        public IReadOnlyList<PadButton> SupportedButtons { get; } = new[]
+        public static readonly PadButton[] PadButtons =
         {
             PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right,
             PadButton.Select, PadButton.Start, PadButton.B, PadButton.A,
         };
+
+        // Static, so the rebind window can list this console's pad without a ROM - see EmuSen_Input.md §5.1.
+        public IReadOnlyList<PadButton> SupportedButtons => PadButtons;
 
         // A binding for a button this console lacks is ignored rather than mapped onto another one.
         public void SetButton(int port, PadButton button, bool pressed)

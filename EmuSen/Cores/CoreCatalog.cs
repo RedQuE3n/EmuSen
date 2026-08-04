@@ -26,7 +26,7 @@ namespace EmuSen.Cores
         };
 
         private static readonly CoreDescriptor Venus =
-            new("SNES (Venus)", new[] { ".smc", ".sfc" }, SnesCheatSystems);
+            new("SNES (Venus)", new[] { ".smc", ".sfc" }, SnesCheatSystems, "SNES", "Nintendo", 1990);
 
         // The libretro folder name for the NES; Famicom Disk System is different hardware and is not claimed.
         private static readonly string[] NesCheatSystems =
@@ -35,7 +35,7 @@ namespace EmuSen.Cores
         };
 
         private static readonly CoreDescriptor Moon =
-            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems);
+            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems, "NES", "Nintendo", 1983);
 
         // Keyed by what a user would type - the internal codename and the
         // console name both reach the same core.
@@ -55,6 +55,25 @@ namespace EmuSen.Cores
 
         // One entry per real core, not per alias - what a "which console?" list shows.
         public static IReadOnlyList<CoreDescriptor> Cores { get; } = new[] { Venus, Moon };
+
+        // Cores sorted for display: grouped by manufacturer, oldest console first - see EmuSen_Input.md §5.1.
+        public static IReadOnlyList<CoreDescriptor> ConsolesInReleaseOrder { get; } =
+            Cores.OrderBy(c => c.Manufacturer, StringComparer.OrdinalIgnoreCase)
+                 .ThenBy(c => c.ReleaseYear)
+                 .ThenBy(c => c.Console, StringComparer.OrdinalIgnoreCase)
+                 .ToArray();
+
+        // Read off the core itself rather than restated here, so a pad cannot drift from what the core reads.
+        private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadButton>> ButtonsByConsole =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                [Venus.Console] = Nintendo.Venus.VenusCore.PadButtons,
+                [Moon.Console] = Nintendo.Moon.MoonCore.PadButtons,
+            };
+
+        // The console's pad with no ROM loaded, or every button for a console this build does not know.
+        public static IReadOnlyList<Galaxia.Input.PadButton> ButtonsFor(string console) =>
+            ButtonsByConsole.TryGetValue(console, out var buttons) ? buttons : Enum.GetValues<Galaxia.Input.PadButton>();
 
         // Every extension any core in this build claims - see EmuSen_Multicore.md §3.
         public static IReadOnlyList<string> RomExtensions { get; } =

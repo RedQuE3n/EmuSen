@@ -1404,7 +1404,9 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    /etc/EmuSen       every config file the emulator keeps: appsettings.json,\n" +
                 "                      keybindings.json, gamepadbindings.json,\n" +
                 "                      hotkeybindings.json, audio.json, graphics.json, and\n" +
-                "                      cheats/<name>.json. Plain JSON, meant to be read and\n" +
+                "                      cheats/<name>.json, and themes/<name>.axaml (a\n" +
+                "                      ResourceDictionary overriding EmuSen.LunaP's Luna* keys -\n" +
+                "                      see EmuSen_LunaP.md). Plain JSON, meant to be read and\n" +
                 "                      edited from this shell - comments and trailing commas\n" +
                 "                      are tolerated. Written by EmuSen.Galaxia; these used to\n" +
                 "                      live outside the sandbox under the OS's own per-user\n" +

@@ -1,6 +1,6 @@
 # EmuSen.LunaP — the shared Avalonia toolkit
 
-*This revision (2026-08-04): **Phase 6 landed — the migration is done.** Six windows moved onto the kit, 863 lines net removed from the two frontends, eight `.axaml` files deleted. LunaP is in real use, not just built. Previous revision (2026-08-04): Phase 5 — the shared UI test harness (`UiTest`), an enforced layering rule, and the pixel baseline mechanism the migration then ran on. Previous revision (2026-08-04): Phase 4 — the fluent layout surface, closing the build phases. Phase 3 before that — the windowing layer (`ToolWindow`, `PollingWindow`, `WindowSlot`) and the confirm/error dialogs. Phase 2 before that — eleven controls, the file/folder pickers, and a gallery window. Phases 0 and 1 before that — the project, the shared theme, and the one Avalonia bootstrap. `EmuSen_LunaP_Gameplan.md` remains the plan of record for everything not yet built. This doc covers only what is real.*
+*This revision (2026-08-04): **Phase 7 landed — LunaP is themeable and has its widget set.** User themes load from `/etc/EmuSen/themes`, and dropdowns, switches, tabs and filter bars are built and in use across the settings windows, the library and the cheat database. All seven phases are done. Previous revision (2026-08-04): Phase 6 — the migration; 863 lines net removed from the frontends. `EmuSen_LunaP_Gameplan.md` holds the plan and what each phase taught. This doc covers only what is real.*
 
 ---
 
@@ -316,7 +316,62 @@ The eleven `DianaOSShellWindow` tests are the case worth noting: **their bodies 
 
 ---
 
-## 12. Where to look next
+## 12. Themes
+
+A theme is a `.axaml` `ResourceDictionary` in **`/etc/EmuSen/themes/<name>.axaml`** overriding whichever `Luna*` keys it cares about — the same category shape `cheats/<name>.json` already uses, so `man hier` covers where it lives. `LunaTheme.Apply(name)` merges it *last*, so its keys win, and persists the choice in `luna.json`; `LunaApp.Configure` calls `ApplySaved()` at startup.
+
+```xml
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <SolidColorBrush x:Key="LunaSurface" Color="#12131A" />
+  <SolidColorBrush x:Key="LunaSectionHeader" Color="#7AA2F7" />
+</ResourceDictionary>
+```
+
+Four properties, each pinned by a test:
+
+- **Applying one repaints live**, with no restart, because everything resolves the palette through `DynamicResource`.
+- **Keys a theme does not mention keep their built-in value**, so a two-line theme is a legitimate theme.
+- **Switching replaces rather than stacks** — the previous dictionary is removed first, so a key the new theme is silent about reverts rather than keeping the old override.
+- **A broken or deleted theme falls back without erasing the choice.** Fixing the file and restarting is enough to get it back; the failure is reported through `ConfigDiagnostics`, which became public for exactly this (a theme file is the same "user-editable file did not load, and why" case config files already had).
+
+### 12.1 Two things in the kit would have frozen under a theme
+
+Worth knowing because both were invisible until a test rendered them:
+
+- **`MeterRow` computed its bar colour into a `BarBrush` property.** A computed brush can never follow a palette, so the load ramp would have stayed green/gold/red under every theme. It sets `:nominal`/`:busy`/`:hot` pseudo-classes now and the ramp lives in styles. `LunaPalette.LevelFor` keeps the thresholds in one place; `ForLoad` remains for code that genuinely cannot take a themed brush.
+- **Window backgrounds were static `LunaPalette.Surface` assignments.** `ToolWindow` binds its own background instead, and the five migrated windows dropped the line.
+
+`ToolWindow` *binds* rather than styles it, which is the non-obvious part: a plain `Style` selector lost to FluentTheme's own `Window` `ControlTheme` and the window stayed near-black. That was caught by a test asserting the rendered background, not by reasoning about priority order.
+
+---
+
+## 13. The widgets
+
+Four, all **wrapping** Avalonia's own controls rather than reimplementing them — the value added is the theme plus an API shaped like the calls the frontends actually make.
+
+### 13.1 `LunaSwitch`, `Dropdown`, `Tabs`, and the style-key trap for the second time
+
+All three wrappers pin `StyleKeyOverride` to their base type. §5.5 recorded this for `ButtonBar`, where the symptom was a control that rendered as nothing. **`LunaSwitch` is worse: `ToggleSwitch.OnApplyTemplate` does not degrade to blank, it throws on the missing `PART_MovingKnobs`.** The rule to carry forward: *anything here that derives from a stock Avalonia control needs its style key pinned to that control, and a test that finds a real template part.*
+
+`LunaSwitch` puts its `Label` into `OnContent` **and** `OffContent` rather than `Content`. That places the text beside the knob and keeps it there — the same single line the `CheckBox` it replaces already drew. `Content` stacks it above, and the stock On/Off captions say nothing the knob's own position does not.
+
+`Dropdown.Fill(items, selected)` exists for a real bug from the other direction: setting `ItemsSource` then `SelectedItem` raises `SelectionChanged`, and `PreferencesWindow` already needed an `_initializing` flag so filling a list did not look like a user choice and get written straight back to config. `Fill` does that suppression once, and `Chose` fires only for a genuine pick.
+
+`Tabs.Add(header, content)` and `RemoveFrom(index)` replace the "construct a `TabItem`, push it into `Items`" chore both frontends hand-wrote for their per-console tabs.
+
+### 13.2 `FilterBar`
+
+A search box, optionally preceded by a labelled facet dropdown. Two windows had built this independently, and it owns the detail one of them had a comment about:
+
+> **It watches `TextBox.TextProperty`, not `TextChanged`** — only the property change reacts to a `Text` set that did not come from typing.
+
+A test covers the programmatic case specifically, because that is the half a naive rewrite drops. `FilterBar.Matches` is the case-insensitive "empty matches everything" test both callers wanted, and `Submitted` is Enter in the search box.
+
+The gap between facet and search sits on the *dropdown*, so it collapses with it: the library shows both, the cheat database only the search box, and neither gains a stray indent.
+
+---
+
+## 14. Where to look next
 
 - **`EmuSen_LunaP_Gameplan.md`** — the plan of record: the full duplication audit (§1), the settled decisions (§2), Phases 2–6 (controls, window scaffolding, the fluent surface, harness support, migration), and the questions deliberately left open (§6).
 - **`EmuSen_Launcher_Multicore_Gameplan.md`** — the launcher this project is eventually for. Its Phase 4 (theming) is why §2's palette is a resource dictionary rather than a set of constants.

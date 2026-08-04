@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
@@ -25,7 +26,7 @@ namespace EmuSen.Hotaru.Views
             Title = "DianaOS feed";
             Width = 512;
             Height = 480;
-            Background = LunaPalette.Void;
+            this[!BackgroundProperty] = new DynamicResourceExtension("LunaVoid");
             this.MinSize(256, 240);
 
             Content = _image;

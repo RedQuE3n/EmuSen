@@ -28,7 +28,6 @@ namespace EmuSen.Mistress.Views
             Title = "DianaOS vstop";
             Width = 480;
             Height = 620;
-            Background = LunaPalette.Surface;
             this.MinSize(360, 360);
 
             Content = Ui.Dock(

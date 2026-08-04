@@ -15,7 +15,8 @@ namespace EmuSen.Galaxia
 
         public static void Reset() => LastMessage = null;
 
-        internal static void Report(string message)
+        // Public since EmuSen.LunaP reports the same kind of thing for a theme file that would not load.
+        public static void Report(string message)
         {
             LastMessage = message;
             Sink?.Invoke(message);

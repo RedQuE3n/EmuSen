@@ -58,7 +58,6 @@ namespace EmuSen.Mistress.Views
             Title = "DianaOS";
             Width = 860;
             Height = 540;
-            Background = LunaPalette.Surface;
             this.MinSize(420, 240);
 
             Content = _console.Margin(8);

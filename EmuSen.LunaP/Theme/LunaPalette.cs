@@ -3,6 +3,14 @@ using Avalonia.Media.Immutable;
 
 namespace EmuSen.LunaP.Theme
 {
+    // How hard something is working, in the three bands every dashboard shares.
+    public enum LoadLevel
+    {
+        Nominal,
+        Busy,
+        Hot,
+    }
+
     // The C# half of Theme/Palette.axaml, for controls built in code; LunaPaletteTests pins the two together - see EmuSen_LunaP.md §2.1.
     public static class LunaPalette
     {
@@ -28,9 +36,17 @@ namespace EmuSen.LunaP.Theme
         public const double BusyPercent = 60;
         public const double HotPercent = 85;
 
-        // The one place that decides what "getting busy" looks like, so no two dashboards disagree - see EmuSen_LunaP.md §2.2.
-        public static ISolidColorBrush ForLoad(double percent) =>
-            percent >= HotPercent ? Hot : percent >= BusyPercent ? Busy : Nominal;
+        // The one place that decides what "getting busy" means, so no two dashboards disagree - see EmuSen_LunaP.md §2.2.
+        public static LoadLevel LevelFor(double percent) =>
+            percent >= HotPercent ? LoadLevel.Hot : percent >= BusyPercent ? LoadLevel.Busy : LoadLevel.Nominal;
+
+        // The static answer, for code that cannot take a themed one; MeterRow uses pseudo-classes instead so a theme reaches it.
+        public static ISolidColorBrush ForLoad(double percent) => LevelFor(percent) switch
+        {
+            LoadLevel.Hot => Hot,
+            LoadLevel.Busy => Busy,
+            _ => Nominal,
+        };
 
         private static ImmutableSolidColorBrush Brush(string hex) => new(Color.Parse(hex));
     }

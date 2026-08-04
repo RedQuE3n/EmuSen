@@ -35,10 +35,10 @@
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" />
                     <ProgressBar Grid.Column="1"
+                                 Name="PART_Bar"
                                  Minimum="0" Maximum="100"
                                  Height="14"
-                                 Value="{TemplateBinding Percent}"
-                                 Foreground="{TemplateBinding BarBrush}" />
+                                 Value="{TemplateBinding Percent}" />
                     <TextBlock Grid.Column="2"
                                Text="{TemplateBinding ValueText}"
                                Foreground="{DynamicResource LunaMeterText}"
@@ -47,6 +47,17 @@
                 </Grid>
             </ControlTemplate>
         </Setter>
+    </Style>
+
+    <!-- The ramp lives in styles, not in a computed brush, so a loaded theme reaches it - see EmuSen_LunaP.md §13.2. -->
+    <Style Selector="luna|MeterRow:nominal /template/ ProgressBar#PART_Bar">
+        <Setter Property="Foreground" Value="{DynamicResource LunaNominal}" />
+    </Style>
+    <Style Selector="luna|MeterRow:busy /template/ ProgressBar#PART_Bar">
+        <Setter Property="Foreground" Value="{DynamicResource LunaBusy}" />
+    </Style>
+    <Style Selector="luna|MeterRow:hot /template/ ProgressBar#PART_Bar">
+        <Setter Property="Foreground" Value="{DynamicResource LunaHot}" />
     </Style>
 
     <Style Selector="luna|MeterList">

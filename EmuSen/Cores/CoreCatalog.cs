@@ -89,9 +89,18 @@ namespace EmuSen.Cores
         public static CoreDescriptor? ByExtension(string extension) =>
             Cores.FirstOrDefault(c => c.SupportsExtension(extension));
 
+        // The console a ROM will load as, answerable before the core exists - see EmuSen_Multicore.md §12.
+        public static string? ConsoleForRom(string romPath) =>
+            ByExtension(System.IO.Path.GetExtension(romPath))?.Console;
+
         // Null for AllConsoles, an unknown name, or a name from a build that had a core this one lacks.
         public static CoreDescriptor? ByDisplayName(string? displayName) =>
             Cores.FirstOrDefault(c => string.Equals(c.DisplayName, displayName, StringComparison.OrdinalIgnoreCase));
+
+        // Either name a console goes by: "SNES (Venus)" or "SNES" - see EmuSen_Multicore.md §10.
+        public static CoreDescriptor? ByAnyName(string? name) =>
+            ByDisplayName(name)
+            ?? Cores.FirstOrDefault(c => string.Equals(c.Console, name, StringComparison.OrdinalIgnoreCase));
 
         // AllConsoles first, so a filter combo can bind straight to it.
         public static IReadOnlyList<string> FilterChoices { get; } =

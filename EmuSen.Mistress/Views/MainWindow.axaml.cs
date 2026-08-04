@@ -776,7 +776,8 @@ namespace EmuSen.Mistress.Views
             try
             {
                 _session = new EmulatorSession { Cheats = _cheats };
-                StartLogging(_session.CoreName); // before LoadRom() so Cartridge's own load-time output is captured too
+                // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
+                StartLogging(EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown");
                 _session.LoadRom(path);
 
                 // The pad this ROM's console reads, not whatever the last one used.

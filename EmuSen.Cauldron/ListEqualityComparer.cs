@@ -2,16 +2,7 @@ using System.Collections.Generic;
 
 namespace EmuSen.Cauldron
 {
-    // Element-wise equality for the IReadOnlyList<T> snapshots every
-    // provider in this project publishes. Exists so HistoryProvider's
-    // staleness signal has something meaningful to compare with: the
-    // snapshots are freshly built each Refresh, so reference equality
-    // would report "changed" every single time and the signal would
-    // always read 0.
-    //
-    // Kept core-agnostic like the rest of EmuSen.Cauldron - it compares
-    // whatever TItem's own Equals says, so a register/sprite/load
-    // snapshot all work without this knowing what any of them are.
+    // Element-wise equality, so HistoryProvider's staleness signal has something real to compare - see EmuSen_Cauldron.md §2.3.
     public sealed class ListEqualityComparer<TItem> : IEqualityComparer<IReadOnlyList<TItem>>
     {
         public static readonly ListEqualityComparer<TItem> Instance = new ListEqualityComparer<TItem>();

@@ -38,36 +38,6 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         bool HasSideEffects { get; }
     }
 
-    // One named register/flag value for display. BitWidth drives formatting
-    // (e.g. pad to 2 hex digits for an 8-bit register, 4 for 16-bit) - kept
-    // generic rather than typed per-register because different CPUs have
-    // wildly different register sets (the 65816 has PB/DB/D/an E flag the
-    // 6502 doesn't; a 6502 target would just report a different list
-    // through this same shape).
-    // IEquatable so EqualityComparer<T>.Default takes the fast path rather
-    // than reflection-based ValueType.Equals, which boxes - this is compared
-    // per-frame per-register by HistoryProvider's staleness signal.
-    public readonly struct DebugRegisterValue : IEquatable<DebugRegisterValue>
-    {
-        public string Name { get; }
-        public ulong Value { get; }
-        public int BitWidth { get; }
-
-        public DebugRegisterValue(string name, ulong value, int bitWidth)
-        {
-            Name = name;
-            Value = value;
-            BitWidth = bitWidth;
-        }
-
-        public bool Equals(DebugRegisterValue other) =>
-            Value == other.Value && BitWidth == other.BitWidth && Name == other.Name;
-
-        public override bool Equals(object? obj) => obj is DebugRegisterValue other && Equals(other);
-
-        public override int GetHashCode() => HashCode.Combine(Name, Value, BitWidth);
-    }
-
     // Where a vector's POINTER lives, not where it points - see `man vectors`.
     public readonly struct InterruptVector
     {
@@ -155,88 +125,6 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         }
     }
 
-    // One sprite/OBJ entry, shaped generically enough to cover consoles
-    // with very different sprite hardware (the SNES's OAM low+high table
-    // split, the NES's flatter 4-byte-per-sprite OAM) - a generic sprite
-    // viewer just needs a rectangle, a tile/palette reference, and flip/
-    // priority flags, regardless of how the underlying hardware actually
-    // stores that.
-    public readonly struct DebugSpriteInfo
-    {
-        public int Index { get; }
-        public int X { get; }
-        public int Y { get; }
-        public int Width { get; }
-        public int Height { get; }
-        public int TileIndex { get; }
-        public int PaletteIndex { get; }
-        public int Priority { get; }
-        public bool FlipX { get; }
-        public bool FlipY { get; }
-
-        public DebugSpriteInfo(int index, int x, int y, int width, int height, int tileIndex, int paletteIndex, int priority, bool flipX, bool flipY)
-        {
-            Index = index;
-            X = x;
-            Y = y;
-            Width = width;
-            Height = height;
-            TileIndex = tileIndex;
-            PaletteIndex = paletteIndex;
-            Priority = priority;
-            FlipX = flipX;
-            FlipY = flipY;
-        }
-    }
-
-    // One palette's worth of colors, already resolved to display-ready RGB
-    // - so a palette-viewer widget never needs to know a given console's
-    // native color format (SNES BGR555, NES's 64-color master palette,
-    // etc.); each DebugTarget converts its own native format once, here.
-    public readonly struct DebugPaletteInfo
-    {
-        public int Index { get; }
-        public IReadOnlyList<(byte r, byte g, byte b)> Colors { get; }
-
-        public DebugPaletteInfo(int index, IReadOnlyList<(byte r, byte g, byte b)> colors)
-        {
-            Index = index;
-            Colors = colors;
-        }
-    }
-
-    // One audio channel/voice's current debug-relevant state, generic
-    // enough to cover very different sound hardware - a SNES core reports
-    // its 8 S-DSP voices through this shape, an eventual NES core would
-    // report its 5 APU channels (2 pulse, triangle, noise, DMC) the same
-    // way, even though the underlying synthesis (BRR sample playback vs.
-    // simple waveform generators) has nothing in common. `Level` is
-    // deliberately a plain 0-100 scale rather than the SNES's native
-    // 0-2047 envelope range, so a generic channel-viewer UI doesn't need
-    // to know any one core's internal units; `Info` is a free-text escape
-    // hatch for whatever's too core-specific to model generically (ADSR
-    // stage, current sample source, pitch) - same "structured where cheap,
-    // free-text where not" split GetSummaryText() already uses.
-    public readonly struct DebugAudioChannelInfo
-    {
-        public int Index { get; }
-        public string Name { get; }
-        public bool Active { get; }
-        public int Level { get; }
-        public bool Muted { get; }
-        public string Info { get; }
-
-        public DebugAudioChannelInfo(int index, string name, bool active, int level, bool muted, string info)
-        {
-            Index = index;
-            Name = name;
-            Active = active;
-            Level = level;
-            Muted = muted;
-            Info = info;
-        }
-    }
-
     // One disassembled instruction, already fully formatted - a generic
     // disassembly viewer just prints Address/Bytes/Mnemonic/OperandText for
     // each entry without needing to know anything about the source CPU's
@@ -268,27 +156,6 @@ namespace EmuSen.DianaOS.DianaOS.Lib
     // from X" instructions won't share the 65816's mnemonic names either.
     public enum StaticReferenceKind { Call, Write, Read }
 
-    // One named "how hard is this piece of hardware working right now"
-    // meter - backs the `coretop` command's htop-style load bars.
-    // Percent is 0-100, already normalized against whatever this core
-    // considers "full" for that piece (typically the wall-clock budget
-    // of one native frame at this console's real refresh rate) - a
-    // generic dashboard just draws a bar, it doesn't need to know what
-    // "CPU+SPC700" vs "PPU" vs "HDMA" actually measure for a given core,
-    // the same way AudioChannels' 0-100 `Level` scale means whatever
-    // is loudest, not any one core's native envelope units.
-    public readonly struct DebugLoadInfo
-    {
-        public string Name { get; }
-        public double Percent { get; }
-
-        public DebugLoadInfo(string name, double percent)
-        {
-            Name = name;
-            Percent = percent;
-        }
-    }
-
     // The contract a console core implements to plug into the shared debug
     // toolchain. Started out scoped to read/query capabilities only, with
     // breakpoints and single-stepping called out as a future extension
@@ -297,62 +164,10 @@ namespace EmuSen.DianaOS.DianaOS.Lib
     // handling), added the same additive way this comment originally
     // anticipated: a new property, no breaking change to what was already
     // here.
-    public interface IDebugTarget
+    // The read surface lives on ICoreTelemetry - see EmuSen_Cauldron.md §3.1 for what stayed here and why.
+    public interface IDebugTarget : ICoreTelemetry
     {
-        // Short console name for display ("SNES", "NES", etc).
-        string CoreName { get; }
-
         IReadOnlyList<IDebugMemorySpace> GetMemorySpaces();
-
-        // Grouped separately (CPU vs "video") since almost every console
-        // draws this exact line in its own documentation and debuggers -
-        // keeps a generic register-panel UI able to show two logical
-        // sections without needing to know which registers belong to which
-        // half itself.
-        //
-        // Real-time providers (see EmuSen.Cauldron), not plain get-methods,
-        // as of the "Diana isn't drowning" work: `regs`/`coretop`/etc. no
-        // longer touch live core state on every call (potentially from a
-        // console-reader thread running concurrently with emulation) -
-        // they read whatever snapshot this target's own Refresh() cadence
-        // (see each implementation's own comment on who calls it, and how
-        // often) last published. A target that never calls Refresh() on its
-        // own providers is still correct, just always reporting whatever
-        // its constructor-time initial snapshot was.
-        IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CpuRegisters { get; }
-        IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> VideoRegisters { get; }
-
-        // The sound co-processor's own registers (65816-side cores: the
-        // SPC700) plus the CPU<->APU communication ports (both
-        // directions - see Spc700.ReadPort/WritePort's own comments on
-        // why those are two independent one-byte latches per port, not
-        // one). Added investigating a Super Metroid boot hang where the
-        // only prior way to see SPC700 state at all was reading raw
-        // verbose-trace text - there was no structured equivalent of
-        // `regs` for it. A core without a distinct sound co-processor
-        // (or one not yet modeled this way) can publish an empty list.
-        IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters { get; }
-
-        // Whatever cartridge coprocessor is present, if any (65816-side
-        // cores: the SA-1, the SuperFX GSU, a NEC DSP). Added because the
-        // whole DianaOS toolchain was blind to these chips - `regs`,
-        // `watch`, `framelog`, `waitvalue`, `coretop` and the rest saw the
-        // CPU, PPU and APU but not a single GSU register, so every
-        // coprocessor investigation degenerated into hand-patching
-        // Console.WriteLine into the interpreter and rebuilding. Same
-        // reasoning that added ApuRegisters for the SPC700.
-        //
-        // Reads must be side-effect-free: the real register windows
-        // acknowledge interrupts ($3031 on the GSU) and advance transfer
-        // handshakes (the NEC DSP's DR/SR), so implementations read
-        // dedicated Debug* views rather than routing through the chip's own
-        // ReadRegister. Same trap APURAM avoids by wrapping raw RAM instead
-        // of Spc700.Read8. A cartridge with no coprocessor - the common
-        // case - publishes an empty list.
-        IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters { get; }
-
-        IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites { get; }
-        IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes { get; }
 
         // The watchpoint mechanism (see WatchRegistry.cs) - exposed
         // directly rather than re-wrapped into more IDebugTarget methods,
@@ -455,14 +270,6 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // anything except adding the cheat itself.
         CheatRegistry Cheats { get; }
 
-        // Monotonic frame counter, incremented once per rendered frame -
-        // the shared "what moment is this" reference used to correlate a
-        // screenshot, a log line, or a future GUI debugger's state all
-        // against the exact same instant, regardless of which core is
-        // running (an NES target reports its own frame counter through
-        // this same property, no different in kind from SNES's).
-        long FrameCount { get; }
-
         // Disassembles <count> instructions starting at <address> in the
         // given memory space. Deliberately just this one method rather
         // than a richer disassembler object - the interface doesn't need
@@ -499,12 +306,6 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // no meaningful concept of this (or that just hasn't implemented it
         // yet) can always return null for every instruction.
         (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(DisassembledInstruction instr);
-
-        // Free-text escape hatch covering whatever isn't (yet) exposed as
-        // structured data above - lets a target be genuinely useful on day
-        // one without needing every possible piece of state modeled
-        // up front. A generic UI can render this in a fallback text panel.
-        string GetSummaryText();
 
         // How many bytes one DecodeTilemapEntry() call consumes - 2 for
         // the SNES's packed BG screen word (tile index/palette/priority/
@@ -543,44 +344,6 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // name already fails via FindSpace.
         byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp);
 
-        // Exports the current tile/character memory as a plain RGBA image,
-        // for a headless harness to write straight to disk (see
-        // EmuSen.Pharaoh's `vramsheet` verb) without ever needing a
-        // Raylib window. Deliberately not "VRAM sheet" at the interface
-        // level - an NES core's CHR-ROM/CHR-RAM pattern tables aren't VRAM
-        // in the SNES sense, but the shape (some tile memory, decoded to a
-        // grayscale/indexed sheet image) is the same across consoles. A
-        // core with nothing analogous can return a 0x0 empty buffer.
-        (byte[] Rgba, int Width, int Height) RenderTileSheet();
-
-        // Exports the current color palette memory as a plain RGBA swatch
-        // grid image, same rationale as RenderTileSheet() above - SNES
-        // CGRAM vs an NES core's completely different palette RAM shape
-        // are both just "N colors, already resolved to RGB" once decoded.
-        // A core with no palette memory can return a 0x0 empty buffer.
-        (byte[] Rgba, int Width, int Height) RenderPaletteSwatch();
-
-        // Non-destructive snapshot of whatever audio samples are currently
-        // buffered for output - Queue<short>.ToArray() under the hood on
-        // the SNES side, specifically so this never steals samples out from
-        // under a live audio-playback consumer of the same queue (see
-        // Spc700.Dsp.AudioBuffer). Returned as already-interleaved 16-bit
-        // PCM plus the sample rate it was produced at, so a headless
-        // harness can write a standard .wav file without knowing anything
-        // about the source sound co-processor. A core with no audio output
-        // modeled yet can return an empty array.
-        (short[] Samples, int SampleRate) GetAudioSamples();
-
-        // Live per-channel/voice state - see DebugAudioChannelInfo's own
-        // comment for why this is modeled generically. Built diagnosing a
-        // "part of the music is missing" report, where the existing
-        // toolchain could only inspect the final mixed audio output
-        // (GetAudioSamples) or a KeyOn event as it happened (console-only
-        // DspKeyOnLogging) - neither answers "is voice N currently active,
-        // and what's its envelope actually doing right now." A core with
-        // no distinct channel/voice concept can publish an empty list.
-        IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels { get; }
-
         // Mutes/unmutes one channel/voice for isolation testing - the
         // channel's own playback/envelope state keeps advancing normally
         // (matching real hardware muting semantics, same reasoning as
@@ -593,24 +356,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // no such channel can no-op.
         void SetChannelMuted(int index, bool muted);
 
-        // Per-subsystem load, backing `coretop`'s htop-style bars - see
-        // DebugLoadInfo's own comment. A core with no per-subsystem
-        // timing breakdown modeled (or not wired up to whatever produces
-        // one - see SnesDebugTarget's own constructor comment) publishes an
-        // empty list; `coretop` just skips that section rather than
-        // showing empty/fake bars.
-        IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad { get; }
-
-        // Required, not defaulted, and host-driven - see Moon_Debug.md §3.
-        void RefreshProviders();
-
         // Defaulted: a core applying cheats on its own frame hook has nothing to do - see Moon_Debug.md §3.1a.
         void ApplyCheats() { }
-
-        // The hardware's real total sprite/OAM capacity (128 on the
-        // SNES), or 0 if this core doesn't model a fixed limit - lets a
-        // generic dashboard show "N/max active" as a real percentage-of-
-        // capacity bar instead of just a bare, context-free count.
-        int MaxSprites { get; }
     }
 }

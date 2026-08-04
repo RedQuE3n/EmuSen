@@ -1,3 +1,4 @@
+using EmuSen.Cauldron;
 using System;
 using System.Linq;
 using EmuSen.DianaOS.DianaOS.Bin;

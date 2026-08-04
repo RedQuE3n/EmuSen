@@ -3,23 +3,13 @@ using System.Threading;
 
 namespace EmuSen.Cauldron
 {
-    // The one IRealtimeProvider<T> implementation this project needs so
-    // far: wraps a plain "go read the live core" delegate, so a core
-    // supplies a Func<T> instead of writing its own IRealtimeProvider
-    // boilerplate. Constrained to T : class (every current use is an
-    // IReadOnlyList<...> snapshot) so Current can be published via
-    // Volatile.Write/read via Volatile.Read - a plain reference swap,
-    // not a lock - matching this project's own "Current never blocks"
-    // contract even under concurrent Refresh()/Current access.
+    // Wraps a "go read the live core" delegate; lock-free reference swap - see EmuSen_Cauldron.md §2.1.
     public sealed class PollingProvider<T> : IRealtimeProvider<T> where T : class
     {
         private readonly Func<T> _readLive;
         private T _current;
 
-        // <initial> is read once, here, rather than left null/default -
-        // a provider should never hand back "nothing" before its first
-        // real Refresh() just because that hasn't happened yet on
-        // whatever thread owns the core.
+        // <initial> is read once here so Current is never "nothing" before the first Refresh - see §2.1.
         public PollingProvider(Func<T> readLive, T initial)
         {
             _readLive = readLive;

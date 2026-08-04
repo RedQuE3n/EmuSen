@@ -1,3 +1,4 @@
+using EmuSen.Cauldron;
 using System;
 using System.Linq;
 using System.Text;

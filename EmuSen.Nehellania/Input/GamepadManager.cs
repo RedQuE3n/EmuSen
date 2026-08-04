@@ -8,7 +8,9 @@ namespace EmuSen.Nehellania.Input
     // Polls the first connected SDL3 gamepad into PadButton state - see EmuSen_Input.md §4.
     public class GamepadManager : IDisposable
     {
-        private readonly GamepadBindingMap _bindings;
+        // Swapped when a ROM for a different console loads - see EmuSen_Input.md §5.1.
+        public GamepadBindingMap Bindings { get; set; }
+
         private IntPtr _gamepad;
         private bool _available;
         private readonly bool _sdlInitialized;
@@ -20,7 +22,7 @@ namespace EmuSen.Nehellania.Input
 
         public GamepadManager(GamepadBindingMap bindings)
         {
-            _bindings = bindings;
+            Bindings = bindings;
 
             // Gamepad subsystem only, and InitSubSystem rather than Init -
             // see EmuSen_Settings_Reference.md §4.10.
@@ -96,7 +98,7 @@ namespace EmuSen.Nehellania.Input
 
             if (AnalogStickAsDpad && StickDirectionPressed(button)) return true;
 
-            if (!_bindings.ButtonToPad.TryGetValue(button, out SDL.GamepadButton sdlButton)) return false;
+            if (!Bindings.ButtonToPad.TryGetValue(button, out SDL.GamepadButton sdlButton)) return false;
 
             return SDL.GetGamepadButton(_gamepad, sdlButton);
         }

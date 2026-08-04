@@ -80,19 +80,11 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        private static readonly ConfigFile<Dictionary<PadButton, Key>> File = new("keybindings.json");
-
-        public void Save() => File.Save(ButtonToKey);
-
-        public static ControllerKeyMap Load()
+        // Persistence belongs to ControllerKeyBindings, which owns one of these per console.
+        public void Replace(Dictionary<PadButton, Key> bindings)
         {
-            var bindings = new ControllerKeyMap();
-            if (File.Load() is { Count: > 0 } loaded)
-            {
-                bindings.ButtonToKey = loaded;
-                bindings.RebuildReverseLookup();
-            }
-            return bindings;
+            ButtonToKey = bindings;
+            RebuildReverseLookup();
         }
     }
 }

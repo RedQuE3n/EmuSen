@@ -39,20 +39,27 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_configDir)) Directory.Delete(_configDir, recursive: true); } catch { }
         }
 
+        private static readonly string[] Consoles = { "NES", "SNES" };
+
         private sealed class Harness
         {
             public required InputSettingsWindow Window { get; init; }
+            public required ControllerKeyBindings Bindings { get; init; }
+            // The tab NewWindow opens on, so the button assertions below read as they always did.
             public required ControllerKeyMap Keys { get; init; }
             public required HotkeyBindingMap Hotkeys { get; init; }
         }
 
-        private static Harness NewWindow()
+        // Opens on the SNES tab, the only one with all twelve buttons. Pass null
+        // for General, which is where the hotkey rows live.
+        private static Harness NewWindow(string? console = "SNES")
         {
-            var keys = new ControllerKeyMap();
+            var keys = new ControllerKeyBindings(Consoles);
             var hotkeys = new HotkeyBindingMap();
-            var window = new InputSettingsWindow(keys, new GamepadBindingMap(), null!, new AppSettings(), hotkeys);
+            var window = new InputSettingsWindow(keys, new GamepadBindings(Consoles), null!, new AppSettings(), hotkeys, console);
             window.Show();
-            return new Harness { Window = window, Keys = keys, Hotkeys = hotkeys };
+            window.UpdateLayout();
+            return new Harness { Window = window, Bindings = keys, Keys = keys.For(console ?? "SNES"), Hotkeys = hotkeys };
         }
 
         // Column 0 only, or the match picks the wrong row - see EmuSen_Settings_Reference.md §4.7.
@@ -174,7 +181,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Rebinding_a_hotkey_updates_the_row_and_the_map() => Session.Dispatch(() =>
         {
-            var h = NewWindow();
+            var h = NewWindow(null); // hotkeys are on General
 
             ClickAsUser(RebindButtonFor(h.Window, "Fast Forward", "Rebind Key"));
             Press(h.Window, Key.F5);
@@ -185,27 +192,29 @@ namespace EmuSen.WiseMan.Mistress
 
         // The two maps must police each other, not just themselves.
         [Fact]
+        // A hotkey is global, so it must clear that key on every console.
         public Task A_hotkey_taking_a_game_buttons_key_unbinds_the_game_button() => Session.Dispatch(() =>
         {
-            var h = NewWindow();
+            var h = NewWindow(null); // hotkeys are on General
 
             ClickAsUser(RebindButtonFor(h.Window, "Rewind", "Rebind Key"));
-            Press(h.Window, Key.X); // X was A's default
+            Press(h.Window, Key.X); // X was A's default on both consoles
 
             Assert.Equal(Key.X, h.Hotkeys.ActionToKey[HotkeyAction.Rewind]);
-            Assert.False(h.Keys.ButtonToKey.ContainsKey(PadButton.A));
+            Assert.False(h.Bindings.For("SNES").ButtonToKey.ContainsKey(PadButton.A));
+            Assert.False(h.Bindings.For("NES").ButtonToKey.ContainsKey(PadButton.A));
         }, default);
 
         // A hand-edited config can still arrive with a clash.
         [Fact]
         public Task A_config_that_already_conflicts_is_reported() => Session.Dispatch(() =>
         {
-            var keys = new ControllerKeyMap();
+            var keys = new ControllerKeyBindings(Consoles);
             var hotkeys = new HotkeyBindingMap();
             // Straight into the dictionary, bypassing Rebind's guard.
-            keys.ButtonToKey[PadButton.A] = keys.ButtonToKey[PadButton.B];
+            keys.For("SNES").ButtonToKey[PadButton.A] = keys.For("SNES").ButtonToKey[PadButton.B];
 
-            var window = new InputSettingsWindow(keys, new GamepadBindingMap(), null!, new AppSettings(), hotkeys);
+            var window = new InputSettingsWindow(keys, new GamepadBindings(Consoles), null!, new AppSettings(), hotkeys, "SNES");
             window.Show();
 
             TextBlock conflict = window.GetVisualDescendants().OfType<TextBlock>()
@@ -227,49 +236,77 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(string.IsNullOrEmpty(conflict.Text));
         }, default);
 
-        // A rebind grid offering X/Y/L/R with an NES ROM loaded - see EmuSen_Input.md §5.
+        // The NES tab must not offer X/Y/L/R - see EmuSen_Input.md §5.1.
         [Fact]
-        public Task Only_the_loaded_cores_buttons_get_a_row() => Session.Dispatch(() =>
+        public Task The_NES_tab_offers_only_the_eight_buttons_that_pad_has() => Session.Dispatch(() =>
         {
-            var nesPad = new[]
-            {
-                PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right,
-                PadButton.Select, PadButton.Start, PadButton.B, PadButton.A,
-            };
+            var h = NewWindow("NES");
 
-            var window = new InputSettingsWindow(new ControllerKeyMap(), new GamepadBindingMap(), null!,
-                new AppSettings(), new HotkeyBindingMap(), nesPad);
-            window.Show();
-
-            Assert.NotNull(RebindButtonFor(window, "A", "Rebind Key"));
-            Assert.Throws<InvalidOperationException>(() => RebindButtonFor(window, "X", "Rebind Key"));
-            Assert.Throws<InvalidOperationException>(() => RebindButtonFor(window, "L", "Rebind Key"));
+            Assert.NotNull(RebindButtonFor(h.Window, "A", "Rebind Key"));
+            Assert.NotNull(RebindButtonFor(h.Window, "Select", "Rebind Key"));
+            Assert.Throws<InvalidOperationException>(() => RebindButtonFor(h.Window, "X", "Rebind Key"));
+            Assert.Throws<InvalidOperationException>(() => RebindButtonFor(h.Window, "L", "Rebind Key"));
         }, default);
 
-        // Filtering is display-only; the shared map keeps every binding.
         [Fact]
-        public Task A_hidden_buttons_binding_survives() => Session.Dispatch(() =>
+        public Task The_SNES_tab_offers_all_twelve() => Session.Dispatch(() =>
         {
-            var keys = new ControllerKeyMap();
-            Key xBefore = keys.ButtonToKey[PadButton.X];
+            var h = NewWindow("SNES");
 
-            var window = new InputSettingsWindow(keys, new GamepadBindingMap(), null!,
-                new AppSettings(), new HotkeyBindingMap(), new[] { PadButton.A, PadButton.B });
-            window.Show();
-
-            Assert.Equal(xBefore, keys.ButtonToKey[PadButton.X]);
+            Assert.NotNull(RebindButtonFor(h.Window, "X", "Rebind Key"));
+            Assert.NotNull(RebindButtonFor(h.Window, "L", "Rebind Key"));
+            Assert.NotNull(RebindButtonFor(h.Window, "R", "Rebind Key"));
         }, default);
 
-        // No core loaded means no console to be specific about, so show the whole union.
+        // The whole point of separate tabs - see EmuSen_Input.md §5.1.
         [Fact]
-        public Task An_empty_button_list_falls_back_to_all_twelve() => Session.Dispatch(() =>
+        public Task Rebinding_on_one_console_leaves_the_other_alone() => Session.Dispatch(() =>
         {
-            var window = new InputSettingsWindow(new ControllerKeyMap(), new GamepadBindingMap(), null!,
-                new AppSettings(), new HotkeyBindingMap(), Array.Empty<PadButton>());
+            var h = NewWindow("NES");
+            Key snesBefore = h.Bindings.For("SNES").ButtonToKey[PadButton.A];
+
+            ClickAsUser(RebindButtonFor(h.Window, "A", "Rebind Key"));
+            Press(h.Window, Key.K);
+
+            Assert.Equal(Key.K, h.Bindings.For("NES").ButtonToKey[PadButton.A]);
+            Assert.Equal(snesBefore, h.Bindings.For("SNES").ButtonToKey[PadButton.A]);
+        }, default);
+
+        // Two consoles may share a key, so a clash on one must not paint the other.
+        [Fact]
+        public Task The_same_key_on_two_consoles_is_not_a_conflict() => Session.Dispatch(() =>
+        {
+            var h = NewWindow("NES");
+
+            TextBlock conflict = h.Window.GetVisualDescendants().OfType<TextBlock>()
+                .First(t => t.Name == "ConflictText");
+
+            // Every NES button defaults to the same key its SNES twin uses.
+            Assert.True(string.IsNullOrEmpty(conflict.Text));
+        }, default);
+
+        // General is index 0, then one tab per console oldest-first - see EmuSen_Input.md §5.1.
+        [Fact]
+        public Task Tabs_are_General_then_the_consoles_oldest_first() => Session.Dispatch(() =>
+        {
+            var h = NewWindow();
+
+            TabControl tabs = h.Window.GetVisualDescendants().OfType<TabControl>().First();
+            string?[] headers = tabs.Items.OfType<TabItem>().Select(t => t.Header as string).ToArray();
+
+            Assert.Equal(new[] { "General", "NES", "SNES" }, headers);
+        }, default);
+
+        // With no ROM loaded there is no console to prefer, so General stays selected.
+        [Fact]
+        public Task No_loaded_console_opens_on_General() => Session.Dispatch(() =>
+        {
+            var window = new InputSettingsWindow(new ControllerKeyBindings(Consoles), new GamepadBindings(Consoles),
+                null!, new AppSettings(), new HotkeyBindingMap());
             window.Show();
 
-            Assert.NotNull(RebindButtonFor(window, "X", "Rebind Key"));
-            Assert.NotNull(RebindButtonFor(window, "R", "Rebind Key"));
+            TabControl tabs = window.GetVisualDescendants().OfType<TabControl>().First();
+            Assert.Equal(0, tabs.SelectedIndex);
         }, default);
 
         [Fact]

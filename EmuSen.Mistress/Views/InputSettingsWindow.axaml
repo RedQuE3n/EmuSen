@@ -6,11 +6,11 @@
         MinWidth="760" MinHeight="420"
         CanResize="True">
 
-    <!-- One scrolling page, not tabs - see EmuSen_Settings_Reference.md §4.6. -->
+    <!-- General first, then one tab per console - see EmuSen_Input.md §5.1. -->
     <DockPanel Margin="16">
 
         <TextBlock DockPanel.Dock="Top"
-                   Text="Click Rebind, then press the key or controller button you want. Escape cancels. A key can only do one thing, so binding it somewhere new clears it from wherever it was."
+                   Text="Click Rebind, then press the key or controller button you want. Escape cancels. A key can only do one thing on the same console, so binding it somewhere new clears it from wherever it was."
                    TextWrapping="Wrap"
                    Margin="0,0,0,10" />
 
@@ -28,66 +28,61 @@
             </Grid>
         </Border>
 
-        <ScrollViewer>
-            <StackPanel Spacing="4">
+        <TabControl x:Name="Tabs">
 
-                <TextBlock Text="Game Buttons" FontWeight="Bold" Margin="0,0,0,2" />
-                <TextBlock Text="What the emulated SNES controller reads."
-                           Foreground="Gray" FontSize="11" Margin="0,0,0,6" />
-                <!-- Columns come from BuildButtonRows, not from here - see EmuSen_Settings_Reference.md §4.6. -->
-                <Grid x:Name="ButtonHeaderRow" Margin="0,0,0,2">
-                    <TextBlock Grid.Column="0" Text="Button" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Text="Keyboard" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="4" Text="Gamepad" FontWeight="SemiBold" />
-                </Grid>
-                <StackPanel x:Name="BindingsPanel" Spacing="6" />
+            <TabItem Header="General">
+                <ScrollViewer>
+                    <StackPanel Spacing="4" Margin="0,8,0,0">
 
-                <Separator Margin="0,14,0,10" />
+                        <TextBlock Text="Emulator Hotkeys" FontWeight="Bold" Margin="0,0,0,2" />
+                        <TextBlock Text="Actions on the emulator itself, shared by every console. Fast Forward and Rewind apply while held; the rest fire once per press."
+                                   Foreground="Gray" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6" />
+                        <Grid x:Name="HotkeyHeaderRow" Margin="0,0,0,2">
+                            <TextBlock Grid.Column="0" Text="Action" FontWeight="SemiBold" />
+                            <TextBlock Grid.Column="1" Text="Keyboard" FontWeight="SemiBold" />
+                        </Grid>
+                        <StackPanel x:Name="HotkeysPanel" Spacing="6" />
 
-                <TextBlock Text="Emulator Hotkeys" FontWeight="Bold" Margin="0,0,0,2" />
-                <TextBlock Text="Actions on the emulator itself. Fast Forward and Rewind apply while held; the rest fire once per press."
-                           Foreground="Gray" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6" />
-                <Grid x:Name="HotkeyHeaderRow" Margin="0,0,0,2">
-                    <TextBlock Grid.Column="0" Text="Action" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Text="Keyboard" FontWeight="SemiBold" />
-                </Grid>
-                <StackPanel x:Name="HotkeysPanel" Spacing="6" />
+                        <Separator Margin="0,14,0,10" />
 
-                <Separator Margin="0,14,0,10" />
+                        <TextBlock Text="Gamepad" FontWeight="Bold" Margin="0,0,0,6" />
+                        <TextBlock x:Name="ControllerStatusText" Margin="0,0,0,8" />
+                        <CheckBox x:Name="AnalogStickAsDpadCheckBox"
+                                  Content="Use the left stick as a d-pad"
+                                  IsCheckedChanged="OnAnalogStickAsDpadChanged" />
+                        <TextBlock Text="Neither of these consoles reads an analog axis, so the stick is only useful mapped onto the d-pad directions."
+                                   TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="24,2,0,8" />
+                        <Grid ColumnDefinitions="Auto,240,Auto" Margin="24,0,0,0">
+                            <TextBlock Grid.Column="0" Text="Stick deadzone" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <Slider Grid.Column="1"
+                                    x:Name="DeadzoneSlider"
+                                    Minimum="0.05" Maximum="0.95"
+                                    SmallChange="0.05" LargeChange="0.1"
+                                    ValueChanged="OnDeadzoneChanged" />
+                            <TextBlock Grid.Column="2" x:Name="DeadzoneText" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        </Grid>
+                        <TextBlock Text="How far the stick must travel before it counts as a direction. Raise it if your stick drifts."
+                                   TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="24,2,0,0" />
 
-                <TextBlock Text="Gamepad" FontWeight="Bold" Margin="0,0,0,6" />
-                <TextBlock x:Name="ControllerStatusText" Margin="0,0,0,8" />
-                <CheckBox x:Name="AnalogStickAsDpadCheckBox"
-                          Content="Use the left stick as a d-pad"
-                          IsCheckedChanged="OnAnalogStickAsDpadChanged" />
-                <TextBlock Text="No SNES game reads an analog axis, so the stick is only useful mapped onto the d-pad directions."
-                           TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="24,2,0,8" />
-                <Grid ColumnDefinitions="Auto,240,Auto" Margin="24,0,0,0">
-                    <TextBlock Grid.Column="0" Text="Stick deadzone" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <Slider Grid.Column="1"
-                            x:Name="DeadzoneSlider"
-                            Minimum="0.05" Maximum="0.95"
-                            SmallChange="0.05" LargeChange="0.1"
-                            ValueChanged="OnDeadzoneChanged" />
-                    <TextBlock Grid.Column="2" x:Name="DeadzoneText" VerticalAlignment="Center" Margin="10,0,0,0" />
-                </Grid>
-                <TextBlock Text="How far the stick must travel before it counts as a direction. Raise it if your stick drifts."
-                           TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="24,2,0,0" />
+                        <Separator Margin="0,14,0,10" />
 
-                <Separator Margin="0,14,0,10" />
+                        <TextBlock Text="Player 2" FontWeight="Bold" Margin="0,0,0,6" />
+                        <CheckBox x:Name="MirrorPlayer1ToPlayer2CheckBox"
+                                  Content="Mirror Player 1 input to Player 2"
+                                  IsCheckedChanged="OnMirrorPlayer1ToPlayer2Changed" />
+                        <TextBlock Text="Compatibility option for games that read Controller 2 instead of Controller 1 (e.g. Super Mario All-Stars' classic Mario games). Leave off for real two-player sessions."
+                                   TextWrapping="Wrap"
+                                   Foreground="Gray"
+                                   FontSize="11"
+                                   Margin="24,2,0,0" />
 
-                <TextBlock Text="Player 2" FontWeight="Bold" Margin="0,0,0,6" />
-                <CheckBox x:Name="MirrorPlayer1ToPlayer2CheckBox"
-                          Content="Mirror Player 1 input to Player 2"
-                          IsCheckedChanged="OnMirrorPlayer1ToPlayer2Changed" />
-                <TextBlock Text="Compatibility option for games that read Controller 2 instead of Controller 1 (e.g. Super Mario All-Stars' classic Mario games). Leave off for real two-player sessions."
-                           TextWrapping="Wrap"
-                           Foreground="Gray"
-                           FontSize="11"
-                           Margin="24,2,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
 
-            </StackPanel>
-        </ScrollViewer>
+            <!-- Console tabs are appended here by BuildConsoleTabs, so a new core needs no XAML. -->
+
+        </TabControl>
 
     </DockPanel>
 

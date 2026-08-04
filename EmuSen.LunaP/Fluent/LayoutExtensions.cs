@@ -101,6 +101,13 @@ namespace EmuSen.LunaP.Fluent
             return control;
         }
 
+        // Must be set before the control joins a visual tree, which is what building it fluently already guarantees.
+        public static T Name<T>(this T control, string name) where T : Control
+        {
+            control.Name = name;
+            return control;
+        }
+
         public static T Visible<T>(this T control, bool visible) where T : Control
         {
             control.IsVisible = visible;

@@ -1,86 +1,99 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.LunaP.Theme;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
-using Avalonia.Layout;
-using Avalonia.Media;
-using Avalonia.Threading;
 using EmuSen.DianaOS.DianaOS.Lib;
+using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Fluent;
+using EmuSen.LunaP.Theme;
+using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
     // The GUI counterpart to DianaOS's `vstop` - see `man vstop`. Needs no
     // IDebugTarget at all, so unlike CoretopWindow it has no no-ROM state.
-    public partial class VstopWindow : Window
+    public class VstopWindow : PollingWindow
     {
         private readonly RuntimeSampler _sampler = new();
-        private readonly DispatcherTimer _timer;
+
+        private readonly MonoText _header = new() { Name = "HeaderText", FontWeight = Avalonia.Media.FontWeight.Bold, FontSize = LunaPalette.HeaderFontSize };
+        private readonly MonoText _host = new() { Name = "HostText", Foreground = LunaPalette.Muted, FontSize = LunaPalette.HintFontSize };
+        private readonly MeterList _meters = new() { Name = "MetersPanel" };
+        private readonly MonoText _memory = new() { Name = "MemoryText" };
+        private readonly MonoText _gc = new() { Name = "GcText" };
+        private readonly MonoText _threads = new() { Name = "ThreadsText" };
+        private readonly HintText _hint = new() { Name = "HintText" };
 
         public VstopWindow()
         {
-            InitializeComponent();
+            Title = "DianaOS vstop";
+            Width = 480;
+            Height = 620;
+            Background = LunaPalette.Surface;
+            this.MinSize(360, 360);
 
-            // Same 500ms cadence the console dashboard refreshes at.
+            Content = Ui.Dock(
+                Ui.Cols("*,Auto",
+                    _hint.Center(),
+                    Ui.Button("Collect now", CollectNow).Name("CollectButton")).Dock(Dock.Bottom).Margin(12, 8),
+                Ui.Scroll(Ui.Stack(8,
+                    _header,
+                    _host,
+                    _meters,
+                    Ui.Section("Memory", _memory),
+                    Ui.Section("Garbage collector", _gc),
+                    Ui.Section("Threads", _threads)).Margin(12)));
+
             _sampler.Sample(); // primes the rate counters - see `man vstop`
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-            _timer.Tick += (_, _) => Refresh();
-            _timer.Start();
-            Closed += (_, _) => _timer.Stop();
-
-            Refresh();
+            StartPolling();
         }
 
-        private void OnCollectClick(object? sender, RoutedEventArgs e)
+        // Same 500ms cadence the console dashboard refreshes at.
+        protected override TimeSpan RefreshInterval => TimeSpan.FromMilliseconds(500);
+
+        private void CollectNow()
         {
             GC.Collect();
-            Refresh();
+            RefreshNow();
         }
 
-        private void Refresh()
+        protected override void Refresh()
         {
             RuntimeSnapshot s = _sampler.Sample();
 
-            HeaderText.Text = $"pid {s.ProcessId}   up {RuntimeSampler.FormatUptime(s.Uptime)}";
-            HostText.Text = $"{s.Framework} on {s.Architecture} - {s.ProcessorCount} cores\n{s.OperatingSystem}";
+            _header.Text = $"pid {s.ProcessId}   up {RuntimeSampler.FormatUptime(s.Uptime)}";
+            _host.Text = $"{s.Framework} on {s.Architecture} - {s.ProcessorCount} cores\n{s.OperatingSystem}";
 
-            HintText.Text = s.HasGcData
+            _hint.Text = s.HasGcData
                 ? "Refreshing twice a second."
                 : "Heap figures stay blank until the first collection - see `man vstop`.";
 
-            var meters = new List<Control>
+            var meters = new List<MeterEntry>
             {
-                BuildMeterRow("CPU", s.CpuPercent, $"{s.CpuPercent:0.0}%"),
+                new("CPU", s.CpuPercent, $"{s.CpuPercent:0.0}%"),
             };
 
             // GCMemoryInfo describes the LAST collection, so these read zero
             // in a process that has not had one - see `man vstop`.
             if (s.HasGcData)
             {
-                meters.Add(BuildMeterRow("Machine memory", s.MemoryLoadPercent,
-                    $"{s.MemoryLoadPercent:0.0}%"));
-                meters.Add(BuildMeterRow("Heap fragmentation", s.FragmentationPercent,
-                    $"{s.FragmentationPercent:0.0}%"));
+                meters.Add(new("Machine memory", s.MemoryLoadPercent, $"{s.MemoryLoadPercent:0.0}%"));
+                meters.Add(new("Heap fragmentation", s.FragmentationPercent, $"{s.FragmentationPercent:0.0}%"));
             }
             else
             {
-                meters.Add(BuildMeterRow("Machine memory", 0, "-"));
-                meters.Add(BuildMeterRow("Heap fragmentation", 0, "-"));
+                meters.Add(new("Machine memory", 0, "-"));
+                meters.Add(new("Heap fragmentation", 0, "-"));
             }
 
-            meters.Add(BuildMeterRow("Thread pool", s.ThreadPoolSaturationPercent,
-                $"{s.ThreadPoolSaturationPercent:0.0}%"));
-
-            MetersPanel.Children.Clear();
-            foreach (Control meter in meters) MetersPanel.Children.Add(meter);
+            meters.Add(new("Thread pool", s.ThreadPoolSaturationPercent, $"{s.ThreadPoolSaturationPercent:0.0}%"));
+            _meters.Meters = meters;
 
             string committed = s.HasGcData ? RuntimeSampler.FormatBytes(s.HeapCommittedBytes) : "-";
             string generations = s.HasGcData && s.GenerationSizes.Length > 0
                 ? string.Join("   ", Enumerate(s.GenerationSizes))
                 : "(no collection yet)";
 
-            MemoryText.Text =
+            _memory.Text =
                 $"Working set   {RuntimeSampler.FormatBytes(s.WorkingSetBytes),12}\n" +
                 $"Private       {RuntimeSampler.FormatBytes(s.PrivateMemoryBytes),12}\n" +
                 $"Managed heap  {RuntimeSampler.FormatBytes(s.ManagedHeapBytes),12}\n" +
@@ -89,7 +102,7 @@ namespace EmuSen.Mistress.Views
                 $"Alloc rate    {RuntimeSampler.FormatBytes(s.AllocatedBytesPerSecond) + "/s",12}\n" +
                 generations;
 
-            GcText.Text =
+            _gc.Text =
                 $"Mode          {(s.IsServerGc ? "server" : "workstation"),12}\n" +
                 $"Concurrent    {(s.IsConcurrentGc ? "yes" : "no"),12}\n" +
                 $"Latency       {s.LatencyMode,12}\n" +
@@ -97,7 +110,7 @@ namespace EmuSen.Mistress.Views
                 $"Collections   gen0 {s.Gen0Collections}  gen1 {s.Gen1Collections}  gen2 {s.Gen2Collections}\n" +
                 $"              {s.CollectionsPerMinute:0.0}/min, {s.TotalPauseDuration.TotalMilliseconds:0} ms paused total";
 
-            ThreadsText.Text =
+            _threads.Text =
                 $"OS threads    {s.OsThreads,12}\n" +
                 $"Handles       {s.HandleCount,12}\n" +
                 $"Pool threads  {s.ThreadPoolThreads,12}\n" +
@@ -115,24 +128,6 @@ namespace EmuSen.Mistress.Views
                 string name = i switch { 0 or 1 or 2 => $"gen{i}", 3 => "LOH", 4 => "POH", _ => $"g{i}" };
                 yield return $"{name} {RuntimeSampler.FormatBytes(sizes[i])}";
             }
-        }
-
-        // Same shape and thresholds as CoretopWindow's own meter rows.
-        private static Control BuildMeterRow(string label, double percent, string valueText)
-        {
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("140,*,55") };
-
-            var labelText = new TextBlock { Text = label, Foreground = LunaPalette.MeterText, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var bar = new ProgressBar { Minimum = 0, Maximum = 100, Value = Math.Clamp(percent, 0, 100), Height = 14, Foreground = LunaPalette.ForLoad(percent) };
-            var valueTextBlock = new TextBlock { Text = valueText, Foreground = LunaPalette.MeterText, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-
-            Grid.SetColumn(labelText, 0);
-            Grid.SetColumn(bar, 1);
-            Grid.SetColumn(valueTextBlock, 2);
-            grid.Children.Add(labelText);
-            grid.Children.Add(bar);
-            grid.Children.Add(valueTextBlock);
-            return grid;
         }
     }
 }

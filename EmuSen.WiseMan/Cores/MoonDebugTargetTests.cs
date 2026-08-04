@@ -99,11 +99,24 @@ namespace EmuSen.WiseMan.Cores
 
             core.Cpu!.A = 0x12;
             core.Cpu.X = 0x34;
-            target.Refresh();
+            target.RefreshProviders();
 
             var registers = target.CpuRegisters.Current;
             Assert.Equal(0x12u, registers.First(r => r.Name == "A").Value);
             Assert.Equal(0x34u, registers.First(r => r.Name == "X").Value);
+        }
+
+        // Guards the defaulted-no-op regression, not the refresh itself - see Moon_Debug.md §3.
+        [Fact]
+        public void Refreshing_through_the_interface_publishes_without_a_frame()
+        {
+            var (core, concrete) = Load();
+            IDebugTarget target = concrete;
+
+            core.Cpu!.A = 0x5A;
+            target.RefreshProviders();
+
+            Assert.Equal(0x5Au, target.CpuRegisters.Current.First(r => r.Name == "A").Value);
         }
 
         [Fact]
@@ -113,7 +126,7 @@ namespace EmuSen.WiseMan.Cores
 
             core.Ppu!.WriteRegister(6, 0x21);
             core.Ppu.WriteRegister(6, 0x08);
-            target.Refresh();
+            target.RefreshProviders();
 
             var registers = target.VideoRegisters.Current;
             Assert.Equal(0x2108u, registers.First(r => r.Name == "v").Value);
@@ -256,7 +269,7 @@ namespace EmuSen.WiseMan.Cores
         public void Eight_palettes_of_four_colours_are_published()
         {
             var (_, target) = Load();
-            target.Refresh();
+            target.RefreshProviders();
 
             var palettes = target.Palettes.Current;
             Assert.Equal(8, palettes.Count);
@@ -271,7 +284,7 @@ namespace EmuSen.WiseMan.Cores
             core.Ppu!.Oam[0] = 0x20;   // visible
             core.Ppu.Oam[3] = 0x40;
             core.Ppu.Oam[4] = 0xF0;    // parked off the bottom
-            target.Refresh();
+            target.RefreshProviders();
 
             var sprites = target.Sprites.Current;
             Assert.Contains(sprites, s => s.Index == 0 && s.X == 0x40);
@@ -312,7 +325,7 @@ namespace EmuSen.WiseMan.Cores
         public void Audio_channels_are_published_as_the_five_the_apu_has()
         {
             var (_, target) = Load();
-            target.Refresh();
+            target.RefreshProviders();
 
             var channels = target.AudioChannels.Current;
             Assert.Equal(5, channels.Count);

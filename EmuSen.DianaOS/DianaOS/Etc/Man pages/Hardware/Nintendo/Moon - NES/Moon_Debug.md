@@ -31,13 +31,23 @@ One `MoonDebugMemorySpace` class routes every space through `MoonCore.ReadSpace`
 - **APU** — all twenty `$4000-$4013` bytes verbatim, plus the frame counter and its IRQ flag, and then the cartridge board's own registers (§3.1).
 - **Coprocessor** — empty. The NES has no cartridge coprocessor in any board implemented here.
 
-All published through `PollingProvider`, refreshed once per frame from `MoonCore.EndFrame` via the `FrameRefresh` hook, so `regs`/`coretop` never touch live core state from a console thread.
+All published through `PollingProvider`, refreshed by the host calling `RefreshProviders()` once per frame, so `regs`/`coretop` never touch live core state from a console thread.
+
+Until 2026-08-04 this core refreshed itself instead: the constructor set `MoonCore.FrameRefresh = Refresh` and `EndFrame` invoked it, while `IDebugTarget.RefreshProviders()` was a defaulted no-op the NES never implemented. Both cores were then "correct" by different mechanisms — SNES pulled from the host loop, NES pushed from its own scheduler — and nothing checked that a core had picked one.
+
+The push side could not express the case that broke it. `EndFrame` only fires when a frame *completes*, so it says "a frame ran" and nothing else. A rewind, a halt at a breakpoint and a single-step all change machine state without completing a frame, which is exactly why both hosts call `RefreshProviders()` in their rewind branch and why `EmuSen.Pharaoh` sets `OnHalted` to it. On the NES those calls landed on the empty default, so a rewinding or halted NES kept serving the previous frame's snapshot — `coretop` and `regs` showed state the machine had already left. The host knows about frame boundaries *and* about rewind, halt and step; the core's scheduler only knows the first. Pull is therefore strictly more expressive, and it is now the only rule: `RefreshProviders()` is a required interface member, so a core that forgets it fails to compile rather than going quietly stale.
+
+`RefreshProviders()` also refreshes the two providers this core hard-wires to empty (coprocessor registers, hardware load). They cost nothing — `Array.Empty` hands back the same instance every time — and refreshing them keeps "refresh everything I expose" literally true, which is the divergence that caused this in the first place. Hardware load being empty is also why `coretop` renders no load bars at all on the NES: the command skips that whole section on an empty snapshot rather than drawing fake ones. The SNES fills it from real wall-clock subsystem timings; giving the NES the same treatment is outstanding work, not a decision against it.
 
 ### 3.1 Board registers
 
 `IMapper.DebugState` is a defaulted, optional list of `(Name, Value, Bits)`. A board with nothing worth showing reports none and costs a `Board:<name>` header line; MMC3 reports its bank select, both mode bits, all eight bank registers, the whole IRQ block, and a cumulative `IrqsFired` counter.
 
 That counter is diagnostic rather than hardware state, and it earned its place immediately: it is what established that MMC3's IRQ was firing 889 times over 900 frames while Super Mario Bros. 3's status-bar split was still landing in the wrong place, which ruled out "the IRQ never fires" and pointed at counter *phase* instead — the pre-render-line A12 clock (`Moon_Memory.md` §4.6a).
+
+### 3.1a Cheats, and why `ApplyCheats` stays defaulted
+
+`IDebugTarget.ApplyCheats()` keeps its defaulted no-op body, and that is deliberate rather than the same oversight left half-fixed. This core applies cheats from `EndFrame` via `Cheats.ApplyAll`, one frame at a time, with no host involvement — so there is genuinely nothing for a host-driven call to do. The distinction is that cheat application is a *write* the core performs on its own schedule, whereas a provider refresh is a *read* whose correct moment only the host knows. Mistress's Apply Cheats button therefore takes effect on the NES at the next frame boundary rather than immediately, which is invisible at 60fps and is not the staleness bug in §3.
 
 ---
 

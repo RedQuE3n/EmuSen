@@ -72,7 +72,6 @@ namespace EmuSen.Cores.Nintendo.Moon
 
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             Cheats.ApplyAll(ReadForCheat, WriteForCheat);
-            FrameRefresh?.Invoke();
 
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
 

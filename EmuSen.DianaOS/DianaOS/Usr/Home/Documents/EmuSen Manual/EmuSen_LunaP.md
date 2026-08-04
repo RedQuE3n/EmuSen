@@ -1,6 +1,6 @@
 # EmuSen.LunaP — the shared Avalonia toolkit
 
-*This revision (2026-08-04): Phase 4 landed — the fluent layout surface, bringing LunaP to 76 headless tests, and with it the end of the build phases. Everything the toolkit offers now exists; nothing in either frontend consumes any of it yet, which is Phase 6. Previous revision (2026-08-04): Phase 3 — the windowing layer (`ToolWindow`, `PollingWindow`, `WindowSlot`) and the confirm/error dialogs. Phase 2 before that — eleven controls, the file/folder pickers, and a gallery window. Phases 0 and 1 before that — the project, the shared theme, and the one Avalonia bootstrap. `EmuSen_LunaP_Gameplan.md` remains the plan of record for everything not yet built. This doc covers only what is real.*
+*This revision (2026-08-04): Phase 5 landed — the shared UI test harness (`UiTest`), an enforced layering rule, and an opt-in pixel baseline mechanism for the migration to come. Everything before the migration now exists; nothing in either frontend consumes the toolkit yet, which is Phase 6. Previous revision (2026-08-04): Phase 4 — the fluent layout surface, closing the build phases. Phase 3 before that — the windowing layer (`ToolWindow`, `PollingWindow`, `WindowSlot`) and the confirm/error dialogs. Phase 2 before that — eleven controls, the file/folder pickers, and a gallery window. Phases 0 and 1 before that — the project, the shared theme, and the one Avalonia bootstrap. `EmuSen_LunaP_Gameplan.md` remains the plan of record for everything not yet built. This doc covers only what is real.*
 
 ---
 
@@ -231,7 +231,52 @@ The goal set in the gameplan was that a new dashboard is *a constructor and a `R
 
 ---
 
-## 12. Where to look next
+## 13. The test harness
+
+`EmuSen.WiseMan/Fixtures/UiTest.cs` is the one place a UI test dispatches, captures and asserts. Five files were hand-rolling the capture (`CaptureRenderedFrame` → `Lock()` → `Marshal.Copy`) and two were hand-rolling the dump; all of them now call this.
+
+- **`UiTest.Run(body)`** — dispatches onto the one headless UI thread the session owns.
+- **`UiTest.Capture(window)`** → a `RenderedFrame` (RGBA8888, width, height) with `Hash`, `DistinctColours(stopAt)` and `SavePng`. The same shape `FrameHash` and `BmpFile` already take for the core's own frame buffer, so a captured window is directly comparable against `EmuSen.Pharaoh`'s `--autoshot` tooling.
+- **`UiTest.AssertLaidOut(window, name, minColours = 8)`** — the always-on assertion: a window that failed to lay out, or whose controls have no template, renders as one flat colour. It dumps, asserts, and checks the baseline if one is configured.
+- **`UiTest.AssertStable(name, build)`** — builds and renders twice, asserting the two are identical.
+
+### 13.1 `EMUSEN_UI_DUMP` is now a directory
+
+It used to be a *file path*, and that had already stopped working: `InputSettingsWindowRenderTests` appended `_{console}` to the basename to get three files out of one variable, and the two sites that used it disagreed about whether it wrote BMP or PNG. It now names a **directory**, and every capture in the run lands in it as `<name>.png`.
+
+```
+EMUSEN_UI_DUMP=/tmp/ui dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj --filter "FullyQualifiedName~RenderTests"
+```
+
+### 13.2 Baselines, and why they are not committed
+
+`AssertLaidOut` also calls `AssertMatchesBaseline`, which is **a no-op unless `EMUSEN_UI_BASELINE` is set**. That is deliberate: the surrounding test always has its own real assertion, so nothing becomes vacuous when the baseline is absent, and a fresh clone or a CI run has nothing to fail against.
+
+The migration workflow is two commands — record on the commit before the change, compare after:
+
+```
+git worktree add /tmp/before HEAD
+EMUSEN_UI_BASELINE=/tmp/frames EMUSEN_UI_BASELINE_MODE=write   dotnet test /tmp/before/EmuSen.WiseMan/...
+EMUSEN_UI_BASELINE=/tmp/frames EMUSEN_UI_BASELINE_MODE=compare dotnet test EmuSen.WiseMan/...
+```
+
+A mismatch reports how many pixels differ, not just that something changed. **This was verified by mutation rather than assumed**: changing `LunaSectionHeader` from `#9CDCFE` to `#9CDCFF` — one channel, one value — failed the comparison with "gallery rendered 904 pixels differently from its baseline."
+
+**Reference images are deliberately not committed.** They are binary blobs that churn on any font, Skia or theme change, and a stale one fails in a way that looks like a real regression. Recording a baseline from the previous commit costs one command and is never stale.
+
+### 13.3 `AssertStable`, and the trap it encodes
+
+Phase 1 found that `VstopWindow` can never be a baseline target: it prints live pid, uptime and CPU figures, so its pixels differ between any two runs. `AssertStable` makes that an explicit, testable property rather than something discovered when a comparison mysteriously fails — a window that shows a clock, a pid or a frame counter fails it by design, and the message says so.
+
+The gallery is held to it, since it is the kit's own baseline target.
+
+### 13.4 The layering rule is now enforced
+
+`Common/LeafAssemblyTests.cs` already pinned Endymion, Nehellania, Serenity and Galaxia to their allowed references. **LunaP is in that list now**, asserting it references `EmuSen.Galaxia` and nothing else, and that it never reaches the core assembly. §1's rule was documentation until this phase; adding one `ProjectReference` in a hurry is exactly the kind of thing that would otherwise go unnoticed until the launcher inherited the emulator.
+
+---
+
+## 14. Where to look next
 
 - **`EmuSen_LunaP_Gameplan.md`** — the plan of record: the full duplication audit (§1), the settled decisions (§2), Phases 2–6 (controls, window scaffolding, the fluent surface, harness support, migration), and the questions deliberately left open (§6).
 - **`EmuSen_Launcher_Multicore_Gameplan.md`** — the launcher this project is eventually for. Its Phase 4 (theming) is why §2's palette is a resource dictionary rather than a set of constants.

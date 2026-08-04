@@ -42,6 +42,15 @@ namespace EmuSen.WiseMan.Common
             Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(serenity));
         }
 
+        // The launcher's whole value is browsing a library with no core loaded - see EmuSen_LunaP.md §1.
+        [Fact]
+        public void LunaP_references_only_Galaxia()
+        {
+            Assembly lunaP = typeof(EmuSen.LunaP.Controls.MeterRow).Assembly;
+
+            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(lunaP));
+        }
+
         [Fact]
         public void Galaxia_is_the_root_leaf()
         {
@@ -56,6 +65,7 @@ namespace EmuSen.WiseMan.Common
         [InlineData(typeof(EmuSen.Endymion.AudioPlayer))]
         [InlineData(typeof(EmuSen.Nehellania.Input.GamepadManager))]
         [InlineData(typeof(EmuSen.Serenity.GameFrameControl))]
+        [InlineData(typeof(EmuSen.LunaP.Controls.MeterRow))]
         [InlineData(typeof(EmuSen.Galaxia.Input.PadButton))]
         public void No_leaf_reaches_the_core_assembly(Type witness)
         {

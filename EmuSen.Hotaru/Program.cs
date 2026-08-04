@@ -17,6 +17,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 using EmuSen.Hotaru.Views;
+using EmuSen.LunaP;
 
 namespace EmuSen.Hotaru
 {
@@ -228,23 +229,9 @@ namespace EmuSen.Hotaru
             };
         }
 
-        // Mirrors EmuSen.Mistress's own Program.cs/BuildAvaloniaApp idiom.
-        // See EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Project_Overview_v2.md §2a for why Linux
-        // is forced onto UseX11() now.
-        private static AppBuilder BuildAvaloniaApp(Func<Window> mainWindow)
-        {
-            var builder = AppBuilder.Configure(() => new App(mainWindow))
-                .UsePlatformDetect()
-                .WithInterFont()
-                .LogToTrace();
-
-            if (OperatingSystem.IsLinux())
-            {
-                builder = builder.UseX11();
-            }
-
-            return builder;
-        }
+        // The platform/font/X11 sequence this used to spell out lives in LunaApp now - see EmuSen_LunaP.md §3.
+        private static AppBuilder BuildAvaloniaApp(Func<Window> mainWindow) =>
+            LunaApp.Configure(() => new App(mainWindow));
 
         // Hotaru's entire launch experience: no core, no window, no audio
         // device yet, just DianaOS against a null IDebugTarget - the shell

@@ -50,6 +50,12 @@
          EmuSen_Settings_Reference.md §4.10. -->
     <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
     <ProjectReference Include="..\EmuSen.Endymion\EmuSen.Endymion.csproj" />
+    <!-- The shared theme (App.axaml's one StyleInclude), the Avalonia
+         bootstrap sequence Program.cs used to spell out, and the controls/
+         window scaffolding Views/ is migrating onto - see EmuSen_LunaP.md.
+         Same reference EmuSen.Mistress carries; the two frontends share
+         widgets, not windows - see EmuSen_LunaP_Gameplan.md §2. -->
+    <ProjectReference Include="..\EmuSen.LunaP\EmuSen.LunaP.csproj" />
   </ItemGroup>
 
 

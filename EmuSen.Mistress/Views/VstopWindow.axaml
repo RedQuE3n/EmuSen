@@ -4,7 +4,7 @@
         Title="DianaOS vstop"
         Width="480" Height="620"
         MinWidth="360" MinHeight="360"
-        Background="#1E1E1E">
+        Background="{DynamicResource LunaSurface}">
 
     <DockPanel>
 
@@ -12,7 +12,7 @@
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0"
                            x:Name="HintText"
-                           Foreground="Gray"
+                           Foreground="{DynamicResource LunaMuted}"
                            FontSize="11"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
@@ -23,34 +23,34 @@
         <ScrollViewer>
             <StackPanel Margin="12" Spacing="8">
                 <TextBlock x:Name="HeaderText"
-                           Foreground="#D4D4D4"
-                           FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource LunaText}"
+                           FontFamily="{DynamicResource LunaMonoFont}"
                            FontWeight="Bold"
                            FontSize="14" />
                 <TextBlock x:Name="HostText"
-                           Foreground="Gray"
-                           FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource LunaMuted}"
+                           FontFamily="{DynamicResource LunaMonoFont}"
                            FontSize="11"
                            TextWrapping="Wrap" />
 
                 <StackPanel x:Name="MetersPanel" Spacing="3" />
 
-                <TextBlock Text="Memory" Foreground="#9CDCFE" FontWeight="Bold" />
+                <TextBlock Text="Memory" Foreground="{DynamicResource LunaSectionHeader}" FontWeight="Bold" />
                 <TextBlock x:Name="MemoryText"
-                           Foreground="#D4D4D4"
-                           FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource LunaText}"
+                           FontFamily="{DynamicResource LunaMonoFont}"
                            TextWrapping="Wrap" />
 
-                <TextBlock Text="Garbage collector" Foreground="#9CDCFE" FontWeight="Bold" />
+                <TextBlock Text="Garbage collector" Foreground="{DynamicResource LunaSectionHeader}" FontWeight="Bold" />
                 <TextBlock x:Name="GcText"
-                           Foreground="#D4D4D4"
-                           FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource LunaText}"
+                           FontFamily="{DynamicResource LunaMonoFont}"
                            TextWrapping="Wrap" />
 
-                <TextBlock Text="Threads" Foreground="#9CDCFE" FontWeight="Bold" />
+                <TextBlock Text="Threads" Foreground="{DynamicResource LunaSectionHeader}" FontWeight="Bold" />
                 <TextBlock x:Name="ThreadsText"
-                           Foreground="#D4D4D4"
-                           FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource LunaText}"
+                           FontFamily="{DynamicResource LunaMonoFont}"
                            TextWrapping="Wrap" />
             </StackPanel>
         </ScrollViewer>

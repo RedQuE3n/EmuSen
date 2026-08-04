@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The shared Avalonia toolkit: theme, controls, window scaffolding and a
+       fluent layout surface, so EmuSen.Mistress, EmuSen.Hotaru and the future
+       launcher stop rebuilding chrome from raw primitives. See
+       EmuSen_LunaP.md for what exists and EmuSen_LunaP_Gameplan.md for what
+       is planned; named for Luna-P, Chibiusa's gadget ball (naming scheme
+       §11 - distinct from Luna, the reserved DS core codename).
+
+       THE LAYERING RULE, and it is load-bearing: this project may reference
+       Avalonia and EmuSen.Galaxia and NOTHING ELSE. Not EmuSen (the core),
+       not EmuSen.DianaOS, not EmuSen.Cauldron, not EmuSen.Nehellania. The
+       launcher's whole value is browsing a library with no core loaded, and
+       one upward reference here hands it the entire emulator. EmuSen.Serenity
+       already holds this line on the video side - it presents game frames
+       while taking (byte[] rgba, int w, int h) rather than an ICore, and
+       every control here takes plain data or a delegate for the same reason.
+       See EmuSen_LunaP.md §1. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Versions pinned to match EmuSen.Mistress exactly, the convention
+         EmuSen.Serenity's csproj already follows. Desktop/Fonts.Inter/X11 are
+         here for LunaApp.Configure, which owns the UsePlatformDetect/
+         WithInterFont/LogToTrace/UseX11 sequence both frontends' Program.cs
+         used to spell out separately - see EmuSen_LunaP.md §3. -->
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <PackageReference Include="Avalonia.X11" Version="12.1.0" />
+  </ItemGroup>
+
+</Project>

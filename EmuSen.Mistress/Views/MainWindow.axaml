@@ -79,10 +79,10 @@
              §4.11. GameFrameControl is EmuSen.Serenity's shared GPU
              (Skia/Ganesh) presentation surface, the same control Hotaru's
              GameWindow uses. -->
-        <Grid Background="Black">
+        <Grid Background="{DynamicResource LunaVoid}">
             <DockPanel x:Name="LibraryView" Margin="12">
                 <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*" Margin="2,0,2,8">
-                    <TextBlock Grid.Column="0" Text="Console:" Foreground="Gray" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Grid.Column="0" Text="Console:" Foreground="{DynamicResource LunaMuted}" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <ComboBox Grid.Column="1"
                               x:Name="LibraryConsoleFilter"
                               MinWidth="180"
@@ -96,12 +96,12 @@
                 </Grid>
                 <TextBlock DockPanel.Dock="Top"
                            x:Name="LibraryHeaderText"
-                           Foreground="Gray"
+                           Foreground="{DynamicResource LunaMuted}"
                            Margin="2,0,2,8" />
                 <!-- Text is set in ShowLibraryEntries: it depends on whether a game is suspended. -->
                 <TextBlock DockPanel.Dock="Bottom"
                            x:Name="LibraryHintText"
-                           Foreground="Gray"
+                           Foreground="{DynamicResource LunaMuted}"
                            Margin="2,8,2,0" />
                 <ListBox x:Name="LibraryList"
                          Background="Transparent"

@@ -156,6 +156,28 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             return false; // no separator at all - assume Pro Action Replay/Game Wizard
         }
 
+        // The punctuation guess above is a last resort, not a first move. Ask
+        // the codecs first: where exactly one of them claims the code, that is
+        // an answer rather than a guess. NES is the case that needs it - its
+        // Game Genie alphabet is letters the raw hex format cannot contain, so
+        // "SXIOPO" is unambiguous, while the two SNES formats share one
+        // character set and still fall through to the convention.
+        //
+        // Static and public because EmuSen.Mistress's Active Cheats window has
+        // to make the identical choice, and two copies of a guess drift.
+        public static bool PrefersExplicitCodec(ICheatCodeCodec? explicitCodec, ICheatCodeCodec? autoDetectCodec, string code)
+        {
+            bool explicitClaims = explicitCodec?.CanDecode(code) == true;
+            bool autoClaims = autoDetectCodec?.CanDecode(code) == true;
+
+            if (explicitClaims != autoClaims) return explicitClaims;
+
+            return LooksLikeGameGenieFormat(code);
+        }
+
+        private bool PrefersExplicitCodec(string code) =>
+            PrefersExplicitCodec(_explicitCodec, _autoDetectCodec, code);
+
         // One header line per cheat, then one indented line per write when
         // there is more than one - a cheat is one toggle however many
         // addresses it drives, and the list has to show that.
@@ -210,12 +232,14 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     string code = parts[2];
                     string description = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : code;
 
-                    if (LooksLikeGameGenieFormat(code))
+                    if (PrefersExplicitCodec(code))
                     {
                         if (_explicitCodec is null) return "No Game Genie-style cheat codec is registered for this target.";
                         (int ggAddress, byte ggValue) = _explicitCodec.Decode(code);
-                        int ggId = cheats.AddRomPatch(ggAddress, ggValue, null, description);
-                        return $"Cheat #{ggId} added (detected {_explicitCodec.Name} format): ROM 0x{ggAddress:X6} = 0x{ggValue:X2} ({description})";
+                        byte? ggCompare = _explicitCodec.DecodeCompare(code);
+                        int ggId = cheats.AddRomPatch(ggAddress, ggValue, ggCompare, description);
+                        string ggIf = ggCompare.HasValue ? $" if==0x{ggCompare.Value:X2}" : "";
+                        return $"Cheat #{ggId} added (detected {_explicitCodec.Name} format): ROM 0x{ggAddress:X6} = 0x{ggValue:X2}{ggIf} ({description})";
                     }
 
                     if (_autoDetectCodec is null) return "No cheat codec is registered for this target.";
@@ -239,9 +263,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     if (parts.Length < 3) return "Usage: cheat gg <code> [description]";
                     if (_explicitCodec is null) return "No Game Genie-style cheat codec is registered for this target.";
                     (int ggAddress, byte ggValue) = _explicitCodec.Decode(parts[2]);
+                    byte? ggCompare = _explicitCodec.DecodeCompare(parts[2]);
                     string ggDescription = parts.Length > 3 ? string.Join(' ', parts.Skip(3)) : parts[2];
-                    int ggId = cheats.AddRomPatch(ggAddress, ggValue, null, ggDescription);
-                    return $"Cheat #{ggId} added: ROM 0x{ggAddress:X6} = 0x{ggValue:X2} ({ggDescription})";
+                    int ggId = cheats.AddRomPatch(ggAddress, ggValue, ggCompare, ggDescription);
+                    string ggIfText = ggCompare.HasValue ? $" if==0x{ggCompare.Value:X2}" : "";
+                    return $"Cheat #{ggId} added: ROM 0x{ggAddress:X6} = 0x{ggValue:X2}{ggIfText} ({ggDescription})";
                 }
                 case "rompatch":
                 {

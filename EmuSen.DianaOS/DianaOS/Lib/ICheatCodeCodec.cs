@@ -40,5 +40,14 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         string? SpaceName { get; }
 
         (int Address, byte Value) Decode(string code);
+
+        // A format whose codes carry a compare byte returns it here; null is
+        // an unconditional patch. NES Game Genie's 8-letter codes are the
+        // reason this exists - the compare is what makes a code target one
+        // bank rather than every bank that maps to the same CPU address, so
+        // dropping it would not be a lesser cheat but a wrong one. Defaulted
+        // so a format without one (SNES Game Genie, Pro Action Replay) says
+        // nothing - see EmuSen_Cheats.md §2.
+        byte? DecodeCompare(string code) => null;
     }
 }

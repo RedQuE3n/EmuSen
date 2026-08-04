@@ -85,9 +85,13 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.NotNull(CoreFactory.CheatCodecsFor(snes).AutoDetect);
 
-            // Moon has no cheat-code format yet - see EmuSen_Multicore.md §4.
-            Assert.Null(CoreFactory.CheatCodecsFor(nes).AutoDetect);
-            Assert.Null(CoreFactory.CheatCodecsFor(nes).Explicit);
+            // Both consoles decode now, and not with each other's formats - see EmuSen_Cheats.md §2.
+            Assert.NotNull(CoreFactory.CheatCodecsFor(nes).AutoDetect);
+            Assert.NotNull(CoreFactory.CheatCodecsFor(nes).Explicit);
+
+            // A NES Game Genie code is letters the SNES device's alphabet has no room for.
+            Assert.True(CoreFactory.CheatCodecsFor(nes).Explicit!.CanDecode("SXIOPO"));
+            Assert.False(CoreFactory.CheatCodecsFor(snes).Explicit!.CanDecode("SXIOPO"));
         }
 
         // With no console chosen there is no console to be wrong about.

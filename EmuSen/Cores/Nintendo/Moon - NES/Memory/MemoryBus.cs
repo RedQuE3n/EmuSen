@@ -26,6 +26,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // Set by the debug layer; the bus itself names no debug type - see Moon_Memory.md §6.
         [SkipInState] public IWriteObserver? WriteObserver;
 
+        // Game Genie's edge-connector intercept, on cartridge reads only - see Moon_Cheats.md §3.
+        [SkipInState] public IRomReadPatcher? RomPatcher;
+
         // Cycles a $4014 transfer stole, collected by the core's timing loop.
         public int PendingDmaCycles;
 
@@ -73,6 +76,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             else
             {
                 value = Cart.Mapper.ReadPrg(address);
+
+                // The CPU address, not a ROM offset: that is what a Game Genie sees.
+                if (RomPatcher is not null && RomPatcher.TryPatch(address, value, out byte patched)) value = patched;
             }
 
             OpenBus = value;

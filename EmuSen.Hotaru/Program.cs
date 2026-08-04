@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia;
+using Avalonia.Controls;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus;
@@ -94,6 +95,22 @@ namespace EmuSen.Hotaru
                 ctx.Cancel = false;
             });
 
+            string? initialRomPath = LaunchMode.RomPathFrom(args);
+
+            // A launch with no terminal to type into gets the shell as a window - see EmuSen_Frontend_Driver.md §3c.
+            if (LaunchMode.Decide(args, LaunchMode.InteractiveTerminal(), LaunchMode.DisplayAvailable()) == ShellMode.Window)
+            {
+                try
+                {
+                    RunWindowedShell(args, initialRomPath, originalOut, c => core = c, w => logWriter = w);
+                }
+                finally
+                {
+                    FlushAndDispose();
+                }
+                return;
+            }
+
             // ROM path resolution - see EmuSen_Frontend_Driver.md §1.
             // DianaOS is the ONLY thing shown at launch, whether or not a
             // ROM path was given on the command line - RunStandaloneShell
@@ -101,68 +118,18 @@ namespace EmuSen.Hotaru
             // window at all) ever starts. Returns null only if the user
             // actually asked to shut down (or hit EOF) with no ROM ever
             // resolved, in which case there's nothing left to do.
-            string? romPathFromShell = RunStandaloneShell(args.Length > 0 ? args[0] : null);
+            string? romPathFromShell = RunStandaloneShell(initialRomPath);
             if (romPathFromShell is null) return;
             string romPath = romPathFromShell;
 
             try
             {
-                // Separate from Usr/Home/Saves' battery-backed cartridge SRAM
-                // (owned by Cartridge.SavePath) - a save state is a full
-                // snapshot of emulator state, a different kind of artifact
-                // with a different lifetime. Nested under its own "Save
-                // States" subfolder so it doesn't mix with the flat .srm files.
-                string statePath = Path.Combine(DianaOSSandbox.SaveStatesDirectory, Path.GetFileNameWithoutExtension(romPath) + ".state");
+                Session session = BuildSession(romPath, originalOut);
+                core = session.Core;
+                logWriter = session.LogWriter;
 
-                core = CoreFactory.Create(romPath, headless: false);
-
-                string logDir = Path.Combine(DianaOSSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
-                Directory.CreateDirectory(logDir);
-                logWriter = new CategorizedLogWriter(originalOut, logDir);
-                Console.SetOut(logWriter);
-
-                core.LoadRom(romPath);
-                DebugSettings.CpuVerboseLogging = true;
-                DebugSettings.Spc700VerboseLogging = true;
-
-                // The debug toolchain itself (SnesDebugTarget,
-                // DianaOSInterpreter, the power-on watch registration) is
-                // built inside GameWindow now, not here - it has to be
-                // REBUILDABLE after a `core <name> <path>` swap
-                // (HostAction.LoadCore), and GameWindow is the only thing
-                // that ever reacts to that signal. Main just builds the
-                // extraCommands list once: none of these three commands'
-                // own delegates depend on anything that changes across a
-                // swap - `core` itself is never replaced, only reloaded in
-                // place (VenusCore.LoadRom is a re-initializer, not a
-                // constructor-only step), so CoretopCommand/StateCommand's
-                // closures over `core`/`statePath` and CoreCommand's own
-                // static registry all stay valid for the whole process.
-                // CoretopCommand replaces the standard registry's plain,
-                // window-less default via extraCommands' override-by-name
-                // behavior, same mechanism EmuSen.Mistress uses; State/
-                // CoreCommand are both new registrations, not overrides.
-                IDianaOSCommand[] extraCommands =
-                {
-                    new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoretopCommand(DebugWindows.ShowCoretopWindow),
-                    new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.StateCommand(core.SaveState, core.LoadState, () => statePath),
-                    new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreCommand(_coreRegistry),
-                };
-
-                // Everything below hands off to GameWindow (Views/GameWindow.axaml.cs) -
-                // the window, emulation thread, audio, input, and every
-                // hotkey/debug-prompt concern now live there instead of a
-                // Raylib-driven loop in this method. AppBuilder.Configure<App>
-                // with a factory Func<App> (rather than the parameterless
-                // Configure<App>()) is what lets the already-constructed
-                // core/extraCommands/statePath above get threaded into the
-                // Avalonia app instead of reconstructed inside
-                // OnFrameworkInitializationCompleted. Blocks until the
-                // window closes. GameWindow's own Closing handler already
-                // runs core.SaveSram() and disposes audio/gamepad before
-                // this returns - see Views/GameWindow.axaml.cs's own
-                // Shutdown().
-                BuildAvaloniaApp(core, extraCommands, statePath)
+                // Blocks until the window closes; GameWindow's own Closing handler does the teardown - see §1.
+                BuildAvaloniaApp(() => new GameWindow(session.Core, session.ExtraCommands, session.StatePath))
                     .StartWithClassicDesktopLifetime(args);
             }
             catch (Exception ex)
@@ -179,13 +146,94 @@ namespace EmuSen.Hotaru
             }
         }
 
+        // Everything a GameWindow needs, built the same way whichever shell resolved the ROM - see §3c.
+        private sealed record Session(ICore Core, IDianaOSCommand[] ExtraCommands, string StatePath, CategorizedLogWriter LogWriter);
+
+        private static Session BuildSession(string romPath, TextWriter originalOut)
+        {
+            // Separate from Usr/Home/Saves' battery-backed cartridge SRAM - see §1.
+            string statePath = Path.Combine(DianaOSSandbox.SaveStatesDirectory, Path.GetFileNameWithoutExtension(romPath) + ".state");
+
+            ICore core = CoreFactory.Create(romPath, headless: false);
+
+            // Needs core.CoreName, so it cannot be built any earlier - see §1 step 3.
+            string logDir = Path.Combine(DianaOSSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
+            Directory.CreateDirectory(logDir);
+            var logWriter = new CategorizedLogWriter(originalOut, logDir);
+            Console.SetOut(logWriter);
+
+            core.LoadRom(romPath);
+            DebugSettings.CpuVerboseLogging = true;
+            DebugSettings.Spc700VerboseLogging = true;
+
+            // Built once here; GameWindow rebuilds the interpreter around them after a `core` swap - see §1.
+            IDianaOSCommand[] extraCommands =
+            {
+                new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoretopCommand(DebugWindows.ShowCoretopWindow),
+                new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.StateCommand(core.SaveState, core.LoadState, () => statePath),
+                new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreCommand(_coreRegistry),
+            };
+
+            return new Session(core, extraCommands, statePath, logWriter);
+        }
+
+        // The windowed counterpart to RunStandaloneShell - see EmuSen_Frontend_Driver.md §3c.
+        private static void RunWindowedShell(
+            string[] args, string? initialRomPath, TextWriter originalOut,
+            Action<ICore> onCore, Action<CategorizedLogWriter> onLogWriter)
+        {
+            DianaOSShellWindow? shell = null;
+
+            Window LaunchGame(string romPath)
+            {
+                Session session = BuildSession(romPath, originalOut);
+                onCore(session.Core);
+                onLogWriter(session.LogWriter);
+
+                var game = new GameWindow(session.Core, session.ExtraCommands, session.StatePath);
+                shell!.AttachLiveShell(game);
+                // Closing the game ends the session, exactly as it does for a console launch.
+                game.Closing += (_, _) => shell!.Close();
+                return game;
+            }
+
+            Window BuildShell()
+            {
+                shell = new DianaOSShellWindow(
+                    LaunchGame,
+                    line => TryResolveCoreCommand(line, m => shell!.AppendLine(m)),
+                    _coreRegistry.Values.Select(d => d.DisplayName).Distinct());
+
+                if (initialRomPath != null) StartInitialRom(shell, initialRomPath, LaunchGame);
+                return shell;
+            }
+
+            BuildAvaloniaApp(BuildShell).StartWithClassicDesktopLifetime(args);
+        }
+
+        // A CLI ROM path is a shortcut for typing `core`, in this shell as much as the console one - see §3.
+        private static void StartInitialRom(DianaOSShellWindow shell, string initialRomPath, Func<string, Window> launchGame)
+        {
+            if (!File.Exists(initialRomPath))
+            {
+                shell.AppendLine($"[ERROR] ROM not found: {initialRomPath}");
+                return;
+            }
+
+            shell.AppendLine($"[ROM] Loading: {initialRomPath}");
+            shell.Opened += (_, _) =>
+            {
+                try { launchGame(initialRomPath).Show(); }
+                catch (Exception ex) { shell.ReportLaunchFailure($"[CPU HALT] {ex.Message}"); }
+            };
+        }
+
         // Mirrors EmuSen.Mistress's own Program.cs/BuildAvaloniaApp idiom.
         // See EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Project_Overview_v2.md §2a for why Linux
         // is forced onto UseX11() now.
-        private static AppBuilder BuildAvaloniaApp(
-            ICore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
+        private static AppBuilder BuildAvaloniaApp(Func<Window> mainWindow)
         {
-            var builder = AppBuilder.Configure(() => new App(core, extraCommands, statePath))
+            var builder = AppBuilder.Configure(() => new App(mainWindow))
                 .UsePlatformDetect()
                 .WithInterFont()
                 .LogToTrace();
@@ -263,12 +311,15 @@ namespace EmuSen.Hotaru
         // parsing here instead. Prints its own error and returns null for
         // anything wrong so the caller can just loop back to the prompt -
         // only a fully validated ROM path is ever returned.
-        private static string? TryResolveCoreCommand(string trimmedLine)
+        // `report` is where the refusals go: the terminal for a console launch, the shell window for a windowed one.
+        internal static string? TryResolveCoreCommand(string trimmedLine, Action<string>? report = null)
         {
+            report ??= Console.WriteLine;
+
             string[] parts = trimmedLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length != 3)
             {
-                Console.WriteLine("Usage: core <corename> <path-to-rom>");
+                report("Usage: core <corename> <path-to-rom>");
                 return null;
             }
 
@@ -277,20 +328,20 @@ namespace EmuSen.Hotaru
 
             if (!_coreRegistry.TryGetValue(coreName, out EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.CoreDescriptor? descriptor))
             {
-                Console.WriteLine($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_coreRegistry.Keys, StringComparer.OrdinalIgnoreCase))}");
+                report($"core: unknown core '{coreName}'. Supported: {string.Join(", ", new SortedSet<string>(_coreRegistry.Keys, StringComparer.OrdinalIgnoreCase))}");
                 return null;
             }
 
             if (!File.Exists(romPath))
             {
-                Console.WriteLine($"core: ROM not found: {romPath}");
+                report($"core: ROM not found: {romPath}");
                 return null;
             }
 
             string extension = Path.GetExtension(romPath);
             if (!descriptor.SupportsExtension(extension))
             {
-                Console.WriteLine($"core: '{(extension.Length > 0 ? extension : "(no extension)")}' is not a supported ROM type for {descriptor.DisplayName} - expected: {string.Join(", ", descriptor.Extensions)}");
+                report($"core: '{(extension.Length > 0 ? extension : "(no extension)")}' is not a supported ROM type for {descriptor.DisplayName} - expected: {string.Join(", ", descriptor.Extensions)}");
                 return null;
             }
 

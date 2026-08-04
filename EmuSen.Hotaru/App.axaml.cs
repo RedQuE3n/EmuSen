@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using EmuSen.Cores;
@@ -15,9 +17,8 @@ namespace EmuSen.Hotaru
 {
     public partial class App : Application
     {
-        private readonly ICore _core;
-        private readonly IEnumerable<IDianaOSCommand> _extraCommands;
-        private readonly string _statePath;
+        // A factory, not a window: Avalonia has to be running before any Window is constructed.
+        private readonly Func<Window> _mainWindow;
 
         // Takes every already-constructed piece of emulator/debug state
         // Program.cs's Main built before Avalonia ever starts (see that
@@ -31,11 +32,9 @@ namespace EmuSen.Hotaru
         // owns building (and REbuilding, after a `core <name> <path>`
         // swap) the actual interpreter - see that class's own
         // RebuildDebugTargetAndCommands().
-        public App(ICore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
+        public App(Func<Window> mainWindow)
         {
-            _core = core;
-            _extraCommands = extraCommands;
-            _statePath = statePath;
+            _mainWindow = mainWindow;
         }
 
         public override void Initialize()
@@ -47,7 +46,9 @@ namespace EmuSen.Hotaru
         {
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                desktop.MainWindow = new GameWindow(_core, _extraCommands, _statePath);
+                // The shell window outlives the game window it opens, so the last one out ends the process.
+                desktop.ShutdownMode = ShutdownMode.OnLastWindowClose;
+                desktop.MainWindow = _mainWindow();
             }
 
             base.OnFrameworkInitializationCompleted();

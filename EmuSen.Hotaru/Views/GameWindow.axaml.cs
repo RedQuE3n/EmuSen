@@ -88,7 +88,7 @@ namespace EmuSen.Hotaru.Views
     // the duration of one command's Execute, never across a blocking
     // read, so it can't turn into "the emulation thread waits on the
     // console" through the back door.
-    public partial class GameWindow : Window
+    public partial class GameWindow : Window, ILiveShell
     {
         private readonly ICore _core;
 
@@ -287,8 +287,28 @@ namespace EmuSen.Hotaru.Views
                 if (line is null) return;
 
                 var result = _scheduler.SubmitFromAnyThread(shell, line);
-                if (result is { } r) Console.WriteLine(r.Output);
+                if (result is { } r) EmitShellOutput(r.Output);
             }
+        }
+
+        // ILiveShell: the same interpreter the terminal drives, lent to a shell window - see EmuSen_Frontend_Driver.md §3c.
+        public event Action<string>? Output;
+
+        bool ILiveShell.IsAwaitingMoreInput => _debugCmd.IsAwaitingMoreInput;
+
+        string[] ILiveShell.SnapshotHistory() => _scheduler.SnapshotHistory(_debugCmd);
+
+        void ILiveShell.Submit(string line)
+        {
+            var result = _scheduler.SubmitFromAnyThread(_debugCmd, line);
+            if (result is { } r) EmitShellOutput(r.Output);
+        }
+
+        // Console when nobody is attached, so a terminal launch behaves exactly as it always did.
+        private void EmitShellOutput(string output)
+        {
+            if (Output is { } sink) sink(output);
+            else Console.WriteLine(output);
         }
 
         // Drains lines the reader thread queued because they weren't
@@ -302,7 +322,7 @@ namespace EmuSen.Hotaru.Views
         {
             foreach (var (_, output, action) in _scheduler.DrainPending(_debugCmd))
             {
-                Console.WriteLine(output);
+                EmitShellOutput(output);
 
                 if (action is HostAction.Shutdown) return true;
                 if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); continue; }

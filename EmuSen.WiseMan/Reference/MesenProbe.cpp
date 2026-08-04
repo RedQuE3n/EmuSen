@@ -18,6 +18,11 @@
 #include "SNES/BaseCartridge.h"
 #include "SNES/Coprocessors/GSU/Gsu.h"
 #include "SNES/Coprocessors/GSU/GsuTypes.h"
+#include "NES/NesConsole.h"
+#include "NES/BaseNesPpu.h"
+#include "NES/APU/NesApu.h"
+#include "NES/NesTypes.h"
+#include "Shared/Audio/SoundMixer.h"
 #include "Utilities/VirtualFile.h"
 #include "Utilities/FolderUtilities.h"
 
@@ -28,6 +33,10 @@ extern std::vector<uint8_t> g_gsuTrace;
 // Supplied by mesen-cpu-trace.patch - see EmuSen_Debugging_Tools_Reference_v5.md §3.40.
 extern bool g_cpuTraceOn;
 extern std::vector<uint8_t> g_cpuTrace;
+
+// Supplied by mesen-nes-apu-trace.patch - see EmuSen_Debugging_Tools_Reference_v5.md §3.43.
+extern bool g_nesApuTraceOn;
+extern std::vector<uint8_t> g_nesApuTrace;
 
 // Synthetic scan codes this probe assigns to the SNES pad, so a --press
 // script can hold a button without a real keyboard - see the man page.
@@ -138,6 +147,10 @@ int main(int argc, char** argv)
 		printf("  --pressuntil BTN:ADDR:VALUE[:CAP[:EVERY]] taps BTN until GSU RAM word ADDR\n");
 		printf("  equals VALUE (all hex), the counterpart of the harness's own `tapuntil` -\n");
 		printf("  the only way to reach the same scene in both emulators without frame maths.\n");
+		printf("  NES ROMs dump mesen_{ram,sram,nametable,oam,palette,chr,screen}_f<frame>.bin\n");
+		printf("  instead, anchor --pressuntil on internal RAM, and take --apulog F to record\n");
+		printf("  every $4000-$4017 write to frame F as mesen_apulog_f<frame>.bin - see §3.43.\n");
+		printf("  --wav PATH records the mixed output, the only ground truth for silence.\n");
 		return 1;
 	}
 
@@ -159,6 +172,9 @@ int main(int argc, char** argv)
 	unique_ptr<Emulator> emu(new Emulator());
 	unique_ptr<ScriptedKeyManager> km(new ScriptedKeyManager());
 	uint32_t cpuTraceFrame = 0xFFFFFFFF;
+	uint32_t apuLogFrame = 0xFFFFFFFF;
+	string wavPath;
+	RamState ramState = RamState::AllZeros;
 	uint16_t untilKey = 0;
 	uint32_t untilAddr = 0, untilValue = 0, untilCap = 6000, untilEvery = 40;
 	uint32_t afterFrames = 0;
@@ -169,6 +185,19 @@ int main(int argc, char** argv)
 		}
 		if(string(argv[i]) == "--cputrace" && i + 1 < argc) {
 			cpuTraceFrame = (uint32_t)atoi(argv[++i]);
+			continue;
+		}
+		if(string(argv[i]) == "--apulog" && i + 1 < argc) {
+			apuLogFrame = (uint32_t)atoi(argv[++i]);
+			continue;
+		}
+		if(string(argv[i]) == "--wav" && i + 1 < argc) {
+			wavPath = argv[++i];
+			continue;
+		}
+		if(string(argv[i]) == "--ramstate" && i + 1 < argc) {
+			string s = argv[++i];
+			ramState = s == "ones" ? RamState::AllOnes : s == "random" ? RamState::Random : RamState::AllZeros;
 			continue;
 		}
 		if(string(argv[i]) == "--pressuntil" && i + 1 < argc) {
@@ -214,7 +243,7 @@ int main(int argc, char** argv)
 	SnesConfig scfg = emu->GetSettings()->GetSnesConfig();
 	// Mesen defaults to a random power-on RAM fill, which makes it non-reproducible
 	// run to run - measured, not assumed. Zero matches our own fill - see §3.40.
-	scfg.RamPowerOnState = RamState::AllZeros;
+	scfg.RamPowerOnState = ramState;
 	scfg.Port1.Type = ControllerType::SnesController;
 	KeyMapping& kmap = scfg.Port1.Keys.Mapping1;
 	kmap.A = KeyA; kmap.B = KeyB; kmap.X = KeyX; kmap.Y = KeyY;
@@ -223,13 +252,33 @@ int main(int argc, char** argv)
 	kmap.Start = KeyStart; kmap.Select = KeySelect;
 	emu->GetSettings()->SetSnesConfig(scfg);
 
+	// The same treatment for the NES, since one probe binary drives both - see §3.43.
+	NesConfig ncfg = emu->GetSettings()->GetNesConfig();
+	ncfg.RamPowerOnState = ramState;
+	// A headless NesConfig has every ChannelVolumes[] entry at zero, which mutes the
+	// mixer no matter what the 2A03 does - see EmuSen_Debugging_Tools_Reference_v5.md §3.43.
+	for(uint32_t& v : ncfg.ChannelVolumes) { v = 100; }
+	ncfg.Port1.Type = ControllerType::NesController;
+	KeyMapping& nmap = ncfg.Port1.Keys.Mapping1;
+	nmap.A = KeyA; nmap.B = KeyB;
+	nmap.Up = KeyUp; nmap.Down = KeyDown; nmap.Left = KeyLeft; nmap.Right = KeyRight;
+	nmap.Start = KeyStart; nmap.Select = KeySelect;
+	emu->GetSettings()->SetNesConfig(ncfg);
+
 	// Armed before LoadRom, which is what starts execution - the reset vector
 	// and the whole boot sequence are the point of this trace.
 	if(cpuTraceFrame != 0xFFFFFFFF) { g_cpuTrace.reserve(64u * 1024 * 1024); g_cpuTraceOn = true; }
+	if(apuLogFrame != 0xFFFFFFFF) { g_nesApuTrace.reserve(16u * 1024 * 1024); g_nesApuTraceOn = true; }
 
 	if(!emu->LoadRom((VirtualFile)romPath, VirtualFile())) {
 		printf("[ERROR] failed to load %s\n", romPath.c_str());
 		return 1;
+	}
+
+	// Recording starts after the ROM is up, since the mixer is rebuilt on load.
+	if(!wavPath.empty()) {
+		emu->GetSoundMixer()->StartRecording(wavPath);
+		printf("[INFO] recording audio to %s\n", wavPath.c_str());
 	}
 
 	// The S-CPU's own RAM, so a divergence that starts on the CPU side can be
@@ -247,9 +296,32 @@ int main(int argc, char** argv)
 	SnesConsole* console = dynamic_cast<SnesConsole*>(emu->GetConsole().get());
 	Gsu* gsu = console ? console->GetCartridge()->GetGsu() : nullptr;
 
+	// One binary drives both machines; which memories exist is what tells them apart.
+	NesConsole* nes = dynamic_cast<NesConsole*>(emu->GetConsole().get());
+	ConsoleMemoryInfo nesRam = emu->GetMemory(MemoryType::NesInternalRam);
+	ConsoleMemoryInfo nesWork = emu->GetMemory(MemoryType::NesWorkRam);
+	ConsoleMemoryInfo nesSave = emu->GetMemory(MemoryType::NesSaveRam);
+	ConsoleMemoryInfo nesNt = emu->GetMemory(MemoryType::NesNametableRam);
+	ConsoleMemoryInfo nesOam = emu->GetMemory(MemoryType::NesSpriteRam);
+	ConsoleMemoryInfo nesPal = emu->GetMemory(MemoryType::NesPaletteRam);
+	ConsoleMemoryInfo nesChrRam = emu->GetMemory(MemoryType::NesChrRam);
+	ConsoleMemoryInfo nesChrRom = emu->GetMemory(MemoryType::NesChrRom);
+	ConsoleMemoryInfo nesChr = nesChrRam.Size ? nesChrRam : nesChrRom;
+	if(nes) {
+		printf("[INFO] NES RAM %u, WORK %u, SAVE %u, NT %u, OAM %u, PAL %u, CHR %u (%s)\n",
+			nesRam.Size, nesWork.Size, nesSave.Size, nesNt.Size, nesOam.Size, nesPal.Size,
+			nesChr.Size, nesChrRam.Size ? "RAM" : "ROM");
+	}
+
 	// Anchors the run on game state instead of a frame count, so the same scene
 	// is reached here and in the harness even though the two emulators do not
 	// agree on how many frames it takes - see §3.15d and §3.40.
+	// On the NES there is no GSU RAM, so the anchor watches internal RAM instead.
+	ConsoleMemoryInfo anchorMem = nes ? nesRam : gsuRam;
+	const char* anchorName = nes ? "RAM" : "GSURAM";
+
+	if(untilKey != 0 && anchorMem.Size == 0) { printf("[ERROR] --pressuntil has no %s to watch\n", anchorName); return 1; }
+
 	if(untilKey != 0) {
 		uint32_t lastPress = 0;
 		bool reached = false;
@@ -258,8 +330,8 @@ int main(int argc, char** argv)
 			emu->Pause();
 			while(!emu->IsPaused()) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
 			frame = emu->GetFrameCount();
-			uint32_t got = ((uint8_t*)gsuRam.Memory)[(untilAddr + 1) & (gsuRam.Size - 1)] << 8
-			             | ((uint8_t*)gsuRam.Memory)[untilAddr & (gsuRam.Size - 1)];
+			uint32_t got = ((uint8_t*)anchorMem.Memory)[(untilAddr + 1) & (anchorMem.Size - 1)] << 8
+			             | ((uint8_t*)anchorMem.Memory)[untilAddr & (anchorMem.Size - 1)];
 			if(got == untilValue) { reached = true; emu->Resume(); break; }
 
 			// Held for four frames then released; a held button reads as one
@@ -273,9 +345,9 @@ int main(int argc, char** argv)
 		}
 		km->LiveKey.store(0);
 		printf(reached
-			? "[PRESSUNTIL] GSURAM $%04X reached $%04X after %u tap(s) at frame %u\n"
-			: "[PRESSUNTIL] GSURAM $%04X NOT reached ($%04X) after %u tap(s), frame %u\n",
-			untilAddr, untilValue, taps, frame);
+			? "[PRESSUNTIL] %s $%04X reached $%04X after %u tap(s) at frame %u\n"
+			: "[PRESSUNTIL] %s $%04X NOT reached ($%04X) after %u tap(s), frame %u\n",
+			anchorName, untilAddr, untilValue, taps, frame);
 		fflush(stdout);
 		if(!reached) { emu->Stop(false); emu->Release(); return 2; }
 		// Report from where the anchor landed; traceUntilFrame is re-read as
@@ -326,17 +398,60 @@ int main(int argc, char** argv)
 					(int)ps.WindowMaskMain[i], (int)ps.WindowMaskSub[i]);
 			}
 		}
-		DumpHex("  GSURAM", (uint8_t*)gsuRam.Memory, gsuRam.Size, dumpAddr, 16);
+		if(nes) {
+			NesPpuState ps = {};
+			nes->GetPpu()->GetState(ps);
+			ApuState as = nes->GetApu()->GetState();
+			printf("  PPU bgChr $%04X sprChr $%04X inc32 %d 8x16 %d nmi %d | bg %d spr %d bgLeft %d sprLeft %d gray %d | spr0 %d ovf %d vbl %d | v %04X t %04X x %d line %d cyc %u\n",
+				ps.Control.BackgroundPatternAddr, ps.Control.SpritePatternAddr, (int)ps.Control.VerticalWrite,
+				(int)ps.Control.LargeSprites, (int)ps.Control.NmiOnVerticalBlank,
+				(int)ps.Mask.BackgroundEnabled, (int)ps.Mask.SpritesEnabled, (int)ps.Mask.BackgroundMask,
+				(int)ps.Mask.SpriteMask, (int)ps.Mask.Grayscale,
+				(int)ps.StatusFlags.Sprite0Hit, (int)ps.StatusFlags.SpriteOverflow, (int)ps.StatusFlags.VerticalBlank,
+				ps.VideoRamAddr, ps.TmpVideoRamAddr, (int)ps.ScrollX, ps.Scanline, ps.Cycle);
+			printf("  APU sq1 en %d per %4u vol %2u | sq2 en %d per %4u vol %2u | tri en %d per %4u vol %2u | noi en %d per %4u vol %2u | dmc len %u out %u | frame 5step %d irq %d\n",
+				(int)as.Square1.Enabled, as.Square1.Period, as.Square1.OutputVolume,
+				(int)as.Square2.Enabled, as.Square2.Period, as.Square2.OutputVolume,
+				(int)as.Triangle.Enabled, as.Triangle.Period, as.Triangle.OutputVolume,
+				(int)as.Noise.Enabled, as.Noise.Period, as.Noise.OutputVolume,
+				as.Dmc.BytesRemaining, as.Dmc.OutputVolume,
+				(int)as.FrameCounter.FiveStepMode, (int)as.FrameCounter.IrqEnabled);
+			DumpHex("  RAM", (uint8_t*)nesRam.Memory, nesRam.Size, dumpAddr, 16);
 
-		WriteBlob(dumpDir, "vram", frame, vram.Memory, vram.Size);
-		WriteBlob(dumpDir, "cgram", frame, cgram.Memory, cgram.Size);
-		WriteBlob(dumpDir, "oam", frame, oam.Memory, oam.Size);
-		WriteBlob(dumpDir, "gsuram", frame, gsuRam.Memory, gsuRam.Size);
-		WriteBlob(dumpDir, "wram", frame, wram.Memory, wram.Size);
-		WriteBlob(dumpDir, "apuram", frame, apuRam.Memory, apuRam.Size);
-		if(console) {
-			// Raw BGR555, row stride is the reported width - not 512.
-			WriteBlob(dumpDir, "screen", frame, console->GetPpu()->GetScreenBuffer(), 512 * 478 * 2);
+			WriteBlob(dumpDir, "ram", frame, nesRam.Memory, nesRam.Size);
+			WriteBlob(dumpDir, "sram", frame, nesSave.Memory, nesSave.Size);
+			WriteBlob(dumpDir, "work", frame, nesWork.Memory, nesWork.Size);
+			WriteBlob(dumpDir, "nametable", frame, nesNt.Memory, nesNt.Size);
+			WriteBlob(dumpDir, "oam", frame, nesOam.Memory, nesOam.Size);
+			WriteBlob(dumpDir, "palette", frame, nesPal.Memory, nesPal.Size);
+			WriteBlob(dumpDir, "chr", frame, nesChr.Memory, nesChr.Size);
+			// Raw palette indices, one byte per pixel, 256x240 - not RGB.
+			WriteBlob(dumpDir, "screen", frame, nes->GetPpu()->GetScreenBuffer(true), 256 * 240 * 2);
+		} else {
+			DumpHex("  GSURAM", (uint8_t*)gsuRam.Memory, gsuRam.Size, dumpAddr, 16);
+
+			WriteBlob(dumpDir, "vram", frame, vram.Memory, vram.Size);
+			WriteBlob(dumpDir, "cgram", frame, cgram.Memory, cgram.Size);
+			WriteBlob(dumpDir, "oam", frame, oam.Memory, oam.Size);
+			WriteBlob(dumpDir, "gsuram", frame, gsuRam.Memory, gsuRam.Size);
+			WriteBlob(dumpDir, "wram", frame, wram.Memory, wram.Size);
+			WriteBlob(dumpDir, "apuram", frame, apuRam.Memory, apuRam.Size);
+			if(console) {
+				// Raw BGR555, row stride is the reported width - not 512.
+				WriteBlob(dumpDir, "screen", frame, console->GetPpu()->GetScreenBuffer(), 512 * 478 * 2);
+			}
+		}
+
+		if(g_nesApuTraceOn && frame >= apuLogFrame) {
+			g_nesApuTraceOn = false;
+			char path[1024];
+			snprintf(path, sizeof(path), "%s/mesen_apulog_f%05u.bin", dumpDir.c_str(), frame);
+			std::ofstream fa(path, std::ios::binary);
+			// Version 1 = the 12-byte record `apudiff` reads - see §3.43.
+			fa.write("ESAW\1\0\0\0", 8);
+			fa.write((char*)g_nesApuTrace.data(), g_nesApuTrace.size());
+			printf("  [apulog %zu writes -> %s]\n", g_nesApuTrace.size() / 12, path);
+			g_nesApuTrace.clear();
 		}
 
 		if(g_cpuTraceOn && frame >= cpuTraceFrame) {
@@ -368,6 +483,8 @@ int main(int argc, char** argv)
 		emu->Resume();
 		if(frame >= endFrame) { break; }
 	}
+
+	if(!wavPath.empty()) { emu->GetSoundMixer()->StopRecording(); }
 
 	emu->Stop(false);
 	emu->Release();

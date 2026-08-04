@@ -118,4 +118,24 @@ Two consequences:
 - **DMC fetch cost is a flat 4 cycles** rather than the real 3-4 depending on alignment, and the fetch does not steal the specific cycle that corrupts a controller read on hardware — the bug some games are written to work around.
 - **No per-channel mute.** Venus has `mute` in the shell; Moon has no equivalent, which makes isolating a channel harder than it should be.
 - **The sweep unit's reload subtlety** — a reload and a clock on the same half frame — follows the common implementation rather than being verified against hardware.
-- **Super Mario Bros. 3 is silent**, the one known real-game audio failure. It writes `$4017` once and then never touches `$4000-$4013`, so its sound engine is not running at all — a CPU or mapper question, not a synthesis one, since Super Mario Bros. 2 on the same board has working audio. See `EmuSen_Games_Tested.md` §3.
+
+## 7. The SMB3 "silence" was not a bug
+
+This section exists because the wrong conclusion was recorded here first, and the way it was wrong is worth keeping.
+
+Super Mario Bros. 3 was carried as *the* known real-game audio failure: a harness run showed it writing `$4017` once and then never touching `$4000-$400F`, so the sound engine looked dead — and Super Mario Bros. 2, on the same MMC3 board, had working audio, which made it look like a CPU or mapper problem rather than a synthesis one.
+
+The run had no input in it. **SMB3's title screen is genuinely silent**; its music starts when you leave the title.
+
+Checked against Mesen through the probe's NES mode (`EmuSen_Debugging_Tools_Reference_v5.md` §3.43):
+
+- With no input, Mesen writes exactly the same registers we do — `$4015 = $0F` once at boot from `$FF70`, then `$4010 = $00` twice a frame and `$4017 = $FF` once a frame from `$A005`, and nothing in `$4000-$400F` through frame 1200. Its recorded WAV is digital silence, peak 0.
+- With Start tapped at frames 400/500/620, the first music-register write lands on **frame 501** and the full channel set follows. Mesen's own state line reads `sq1 per 106 vol 7`, `tri per 319 vol 1`, `dmc out 64`.
+- EmuSen does the same thing: peak 0 / RMS 0 with no input, peak 17 373 / RMS 2 007 with the same presses.
+
+Frame-aligned to identical press timing, EmuSen's frame 900 is **pixel-identical to Mesen's frame 897**, 0 of 61 440 pixels differing. The three-frame offset is how long each emulator took to accept the press. Every byte-level difference at a fixed frame number turned out to be animation phase riding on that offset — palette entry 3 blinking `3C`↔`36` (the item boxes), OAM slots rotating for sprite flicker, one-pixel sprite positions.
+
+The two traps worth remembering, because both produce a *confident* wrong answer:
+
+- A negative audio result from an emulator you have not first validated on a ROM that makes noise. The reference was muted by `NesConfig::ChannelVolumes` defaulting to zeros; it would have "agreed" with any silence claim.
+- Reading a no-input run as evidence about a game whose behaviour depends on input. There was nothing wrong with the measurement — only with what it was taken to measure.

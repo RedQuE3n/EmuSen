@@ -7,9 +7,17 @@ using Avalonia.Platform.Storage;
 
 namespace EmuSen.LunaP.Windowing
 {
-    // The OS file/folder pickers, once, instead of per call site - see EmuSen_LunaP.md §6.
+    // The OS file/folder pickers and the two small modals, once, instead of per call site - see EmuSen_LunaP.md §6 and §9.4.
     public static class Dialogs
     {
+        // False for cancel, for Escape, and for closing the window - anything that is not a deliberate yes.
+        public static async Task<bool> ConfirmAsync(Window owner, string title, string message,
+            string acceptText = "OK", string cancelText = "Cancel") =>
+            await MessageWindow.Confirm(title, message, acceptText, cancelText).ShowDialog<bool>(owner);
+
+        public static async Task ErrorAsync(Window owner, string title, string message) =>
+            await MessageWindow.Notice(title, message, "Close").ShowDialog<bool>(owner);
+
         // Null means the user cancelled, or the control is not in a window yet.
         public static async Task<string?> PickFolderAsync(Visual owner, string title, string? startIn = null)
         {

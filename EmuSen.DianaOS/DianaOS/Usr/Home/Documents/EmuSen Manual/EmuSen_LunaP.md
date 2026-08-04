@@ -1,6 +1,6 @@
 # EmuSen.LunaP — the shared Avalonia toolkit
 
-*This revision (2026-08-04): Phase 2 landed — eleven controls, the file/folder pickers, and a gallery window, all covered by 48 headless tests. No frontend consumes them yet; that is Phase 6. Previous revision (2026-08-04): Phases 0 and 1 — the project, the shared theme, and the one Avalonia bootstrap. `EmuSen_LunaP_Gameplan.md` remains the plan of record for everything not yet built. This doc covers only what is real.*
+*This revision (2026-08-04): Phase 3 landed — the windowing layer (`ToolWindow`, `PollingWindow`, `WindowSlot`) and the confirm/error dialogs, bringing LunaP to 65 headless tests. Still nothing in either frontend consumes any of it; that is Phase 6. Previous revision (2026-08-04): Phase 2 — eleven controls, the file/folder pickers, and a gallery window. Phases 0 and 1 before that — the project, the shared theme, and the one Avalonia bootstrap. `EmuSen_LunaP_Gameplan.md` remains the plan of record for everything not yet built. This doc covers only what is real.*
 
 ---
 
@@ -154,7 +154,53 @@ The gallery ships in Release. It is ~110 lines with no dependencies beyond the k
 
 ---
 
-## 8. Where to look next
+## 9. The windowing layer
+
+`Windowing/` is where the kit stops being widgets and starts being a framework. Still nothing consumes it — Phase 6 does that.
+
+### 9.1 `ToolWindow`
+
+The base class, and **deliberately thin: both of its features are opt-in, so inheriting it changes nothing by itself.** That was a design choice, not an oversight. Phase 6 rewrites a dozen windows onto this base, and a base class that silently altered how they close or where they open would make every one of those migrations a behaviour change hiding inside a refactor.
+
+- **`WindowKey`** — set it and the window's size, position and maximised state are remembered in `windows.json`; leave it null and nothing is written at all.
+- **`ClosesOnEscape`** — off by default, because Escape inside a console pane means "stop what I am typing", not "close the window".
+
+Restoring geometry has one non-obvious rule: **a remembered position is checked against the attached screens before it is used.** A window last closed on a monitor that is no longer plugged in would otherwise reopen off every screen, where it cannot be dragged back. The check is split into a pure `IsOnAScreen(IReadOnlyList<PixelRect>, PixelRect)` precisely so it can be tested without a display, and "no screens known" is treated as *allow* — refusing there would strand the window at the default position for a reason no user could see.
+
+A maximised window's own bounds are the screen's, so saving them would lose the restore size. Closing while maximised keeps the previously stored normal geometry and records only the flag.
+
+### 9.2 `PollingWindow`
+
+Declare `RefreshInterval` and override `Refresh()`. Timer construction, start, priming, stop-on-close and disposal happen once, here, instead of five times across two frontends.
+
+**It also does something none of the five hand-written copies did: it stops while the window is hidden or minimised.** A forgotten-but-open dashboard was a permanent 4 Hz tax, which matters directly to the weak-machine work. Restoring the window refreshes immediately, so the first thing seen is current rather than however stale it got. Occlusion is not detectable portably and is not attempted.
+
+Two details worth knowing before writing one:
+
+- **`StartPolling()` is called by the derived constructor, not the base one.** Priming from the base constructor would call `Refresh()` before the derived class had assigned its own fields — `CoretopWindow` would render "no target" against a `_target` that was about to be set. `Opened` calls `StartPolling()` too, so forgetting it costs a slightly later first paint rather than a window that never updates.
+- **`IsPolling` is public for the tests.** Asserting "it stopped" by counting ticks would mean racing a real clock inside a dispatcher the test is itself blocking; asserting on the timer's state is deterministic. That the tests are not vacuous was checked by mutation — replacing the visibility gate with `true` fails both of them.
+
+### 9.3 `WindowSlot<TWindow>`
+
+The "at most one of these, else bring it forward" pattern, which seven call sites hand-wrote (five in Mistress's `MainWindow`, two in Hotaru's `DebugWindows`), each with its own nullable field and its own `Closed` unhook.
+
+```csharp
+_coretop.Show(owner: this,
+              create: () => new CoretopWindow(target),
+              refresh: w => w.UpdateTarget(target));
+```
+
+`RefreshIfOpen` is the second, quieter half: it **never creates and never activates**. Hotaru needs exactly this after a `core <name> <path>` swap — refreshing a dashboard that happens to be open, without popping one up for someone who never asked and without stealing focus mid-game. That was a hand-written policy in one place; now it is a method.
+
+Thread marshalling is absorbed, but **not by always posting**: the slot runs inline when it is already on the UI thread and posts otherwise. Always posting would make `Current` unset when `Show` returns, which is surprising for Mistress, where every call is already on the UI thread. Hotaru's calls arrive from the emulation and console-reader threads and are posted.
+
+### 9.4 Confirm and error dialogs
+
+`Dialogs.ConfirmAsync` and `ErrorAsync` complete §6's pickers. These are the half that needed a window of our own rather than an OS dialog, which is why they waited for this phase — `MessageWindow` is built from the Phase 2 kit. Confirm returns false for cancel, for Escape and for closing the window: anything that is not a deliberate yes.
+
+---
+
+## 10. Where to look next
 
 - **`EmuSen_LunaP_Gameplan.md`** — the plan of record: the full duplication audit (§1), the settled decisions (§2), Phases 2–6 (controls, window scaffolding, the fluent surface, harness support, migration), and the questions deliberately left open (§6).
 - **`EmuSen_Launcher_Multicore_Gameplan.md`** — the launcher this project is eventually for. Its Phase 4 (theming) is why §2's palette is a resource dictionary rather than a set of constants.

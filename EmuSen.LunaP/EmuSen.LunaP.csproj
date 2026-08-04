@@ -36,4 +36,11 @@
     <PackageReference Include="Avalonia.X11" Version="12.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- ConfigFile, which Windowing/WindowPlacementStore.cs persists remembered
+         window geometry through. The only ProjectReference this project is
+         allowed to have; see the layering rule above. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+  </ItemGroup>
+
 </Project>

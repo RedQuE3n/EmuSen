@@ -13,6 +13,7 @@ namespace EmuSen.Mistress.Input
         LoadState,
         TogglePause,
         ToggleFullscreen,
+        ExitToLibrary,
     }
 
     // Keyboard -> HotkeyAction, shaped like ControllerKeyMap - see EmuSen_Settings_Reference.md §4.3.
@@ -36,6 +37,7 @@ namespace EmuSen.Mistress.Input
             [HotkeyAction.LoadState] = Key.F8,
             [HotkeyAction.TogglePause] = Key.P,
             [HotkeyAction.ToggleFullscreen] = Key.F11,
+            [HotkeyAction.ExitToLibrary] = Key.Escape,
         };
 
         public static string DisplayName(HotkeyAction action) => action switch
@@ -46,6 +48,7 @@ namespace EmuSen.Mistress.Input
             HotkeyAction.LoadState => "Load State",
             HotkeyAction.TogglePause => "Pause / Resume",
             HotkeyAction.ToggleFullscreen => "Fullscreen",
+            HotkeyAction.ExitToLibrary => "Exit to Library",
             _ => action.ToString(),
         };
 
@@ -97,6 +100,12 @@ namespace EmuSen.Mistress.Input
             var bindings = new HotkeyBindingMap();
             if (File.Load() is { Count: > 0 } loaded)
             {
+                // An action added after this file was written has no entry - see EmuSen_Settings_Reference.md §4.18.
+                foreach (var kv in DefaultBindings())
+                {
+                    if (!loaded.ContainsKey(kv.Key) && !loaded.ContainsValue(kv.Value)) loaded[kv.Key] = kv.Value;
+                }
+
                 bindings.ActionToKey = loaded;
                 bindings.RebuildReverseLookup();
             }

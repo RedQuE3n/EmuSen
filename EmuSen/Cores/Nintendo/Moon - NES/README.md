@@ -1,13 +1,13 @@
 # Moon (NES)
 
-**In progress — the machine runs, and makes no sound.**
+**In progress — the machine runs, renders and makes sound; it has had far less play-testing than Venus.**
 
 | Component | State |
 |---|---|
 | CPU (2A03 / 6502) | Implemented. Validated against SingleStepTests `nes6502/v1` — 256/256 opcode files, 2,560,000 cases, final state *and* per-cycle bus traces |
-| Cartridge / mappers | iNES + partial NES 2.0; boards 0 (NROM), 1 (MMC1), 2 (UxROM), 3 (CNROM), 7 (AxROM). **Mapper 4 (MMC3) is the biggest gap** |
+| Cartridge / mappers | iNES + partial NES 2.0; ten boards — NROM, MMC1, UxROM, CNROM, AxROM, **MMC3**, GxROM, Colour Dreams, Camerica, NINA-003 |
 | PPU (2C02) | Registers, loopy `v`/`t`/`x`/`w`, background and sprite rendering, sprite 0, NMI. Scanline granularity, no emphasis bits |
-| APU | Registers, length counters and the frame IRQ only. **No sound is synthesized** |
+| APU | All five channels synthesize — two pulse (with pulse 1's ones-complement sweep negate), triangle, noise, DMC — mixed into a drained sample buffer |
 | Input | Two standard controllers |
 | `ICore` | Implemented — `MoonCore`, on the Crystal scheduler, with save states |
 | `IDebugTarget` | Implemented — `MoonDebugTarget`, the second implementation this interface has ever had |
@@ -31,8 +31,8 @@ dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj --filter "FullyQualifiedName~Mo
 
 `EmuSen.WiseMan/Fixtures/SyntheticNesRom.cs` builds its own iNES images; no commercial ROM is ever needed or committed.
 
-## Not yet wired
+## Wired up
 
-No frontend constructs a `MoonCore` yet — `EmuSen.Hotaru`, `EmuSen.Mistress` and `EmuSen.Pharaoh` still build a `VenusCore` and a `SnesDebugTarget` directly. The debug target is exercised against the interface in tests, but no DianaOS command has been run against it. See `Moon_Debug.md` §6.
+`CoreFactory` builds a `MoonCore` and a `MoonDebugTarget` for any `.nes`, and `CoreCatalog` lists the console, so every frontend loads NES ROMs through the same path it loads SNES ones and the DianaOS shell talks to this core through the same `IDebugTarget`. See `Moon_Debug.md` §6.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the naming scheme and `Man pages/EmuSen_Core_Gameplan.md` §7 for how this core is sequenced against Venus.

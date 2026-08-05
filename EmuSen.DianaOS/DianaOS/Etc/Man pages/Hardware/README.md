@@ -27,7 +27,8 @@ One page per piece of hardware being abstracted, rather than the long inline `//
   - [`Moon_PPU.md`](Nintendo/Moon%20-%20NES/Moon_PPU.md) — 2C02: the loopy `v`/`t`/`x`/`w` registers, the `$2007` read buffer, palette holes, background and sprite composition, sprite 0 hit.
   - [`Moon_APU.md`](Nintendo/Moon%20-%20NES/Moon_APU.md) — the register surface, length counters and frame IRQ that are modelled, and the synthesis that is not.
   - [`Moon_Debug.md`](Nintendo/Moon%20-%20NES/Moon_Debug.md) — `IDebugTarget`'s second implementation: memory spaces, registers, tile/tilemap decoders, the disassembler, and what that second implementation proved.
-- `Mercury - GB-GBC/`, `Jupiter - GBA/`, `Mars - N64/`, `Saturn - Virtual Boy/`, `Uranus - GameCube/`, `Neptune - Wii/`, `Pluto - Wii U/`, `Luna - DS/`, `Artemis - 3DS-New3DS/` — stubs, not started yet.
+- `Mercury - GB-GBC/` — CPU, memory and cartridge documented; no PPU or APU yet.
+- `Jupiter - GBA/`, `Mars - N64/`, `Saturn - Virtual Boy/`, `Uranus - GameCube/`, `Neptune - Wii/`, `Pluto - Wii U/`, `Luna - DS/`, `Artemis - 3DS-New3DS/` — stubs, not started yet.
 
 ## Sega
 

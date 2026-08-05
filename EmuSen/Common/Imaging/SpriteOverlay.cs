@@ -1,3 +1,4 @@
+using EmuSen.Cauldron;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;

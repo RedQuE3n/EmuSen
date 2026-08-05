@@ -115,7 +115,9 @@ Verbs are listed in `EmuSen_Debugging_Tools_Reference_v5.md` §3.15.
 
 **Why rewind is worth having in a headless harness at all:** it turns "when did this go wrong?" into a bisection instead of a re-run. Finding the exact frame a glitch appears currently means re-launching from boot with a different `--screenshot` frame each time; with rewind you overshoot once, then step back until it disappears, in a single process.
 
-**A rewind must refresh the debug target's providers.** `SnesDebugTarget.RefreshProviders()` normally runs right after `RunFrame()`, and a rewind runs no frame — so without an explicit refresh, `regs`/`sprites`/`pal` keep reporting the frame you rewound *away from*. This was a real bug during bring-up and it is quietly misleading rather than obviously broken: the readout looks plausible, it is just the wrong frame. All three drivers (harness and both frontends) refresh explicitly after a rewind.
+**A rewind must refresh the debug target's providers.** `IDebugTarget.RefreshProviders()` normally runs right after `RunFrame()`, and a rewind runs no frame — so without an explicit refresh, `regs`/`sprites`/`pal` keep reporting the frame you rewound *away from*. This was a real bug during bring-up and it is quietly misleading rather than obviously broken: the readout looks plausible, it is just the wrong frame. All three drivers (harness and both frontends) refresh explicitly after a rewind.
+
+Those explicit calls did nothing on the NES until 2026-08-04. `RefreshProviders()` was a defaulted no-op that the Moon core never implemented — it refreshed itself from its own `EndFrame` hook instead, which never runs during a rewind. So the exact bug this paragraph warns about was live on one of the two cores the whole time, in a driver that looked like it had handled it. The interface member is now required rather than defaulted; see `Moon_Debug.md` §3.
 
 ---
 

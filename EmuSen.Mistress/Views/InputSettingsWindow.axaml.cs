@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmuSen.LunaP.Theme;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -128,11 +129,7 @@ namespace EmuSen.Mistress.Views
         {
             foreach (CoreDescriptor console in _consoles)
             {
-                Tabs.Items.Add(new TabItem
-                {
-                    Header = console.Console,
-                    Content = new ScrollViewer { Content = BuildConsolePanel(console) },
-                });
+                Tabs.Add(console.Console, new ScrollViewer { Content = BuildConsolePanel(console) });
             }
         }
 
@@ -149,7 +146,7 @@ namespace EmuSen.Mistress.Views
             panel.Children.Add(new TextBlock
             {
                 Text = $"What the emulated {console.Console} controller reads. These bindings are this console's alone.",
-                Foreground = Brushes.Gray,
+                Foreground = LunaPalette.Muted,
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Avalonia.Thickness(0, 0, 0, 6),

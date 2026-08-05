@@ -1,58 +1,28 @@
-using System.IO;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using Avalonia.Headless;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
-using EmuSen.Common.Imaging;
 using EmuSen.Mistress.Input;
 using EmuSen.Nehellania.Input;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
     // Real Skia render pass over the settings window - see EmuSen_Settings_Reference.md §4.7.
     public class InputSettingsWindowRenderTests
     {
-        private static readonly HeadlessUnitTestSession Session =
-            HeadlessUnitTestSession.GetOrStartForAssembly(typeof(InputSettingsWindowRenderTests).GetTypeInfo().Assembly);
-
         // Every tab, because only the selected one is realised - see EmuSen_Settings_Reference.md §4.6.
         [Theory]
         [InlineData(null)]
         [InlineData("NES")]
         [InlineData("SNES")]
-        public Task The_window_renders_its_rows(string? console) => Session.Dispatch(() =>
+        public Task The_window_renders_its_rows(string? console) => UiTest.Run(() =>
         {
-            var window = new InputSettingsWindow(new ControllerKeyBindings(new[] { "NES", "SNES" }), new GamepadBindings(new[] { "NES", "SNES" }), null!, new AppSettings(), new HotkeyBindingMap(), console);
+            var window = new InputSettingsWindow(new ControllerKeyBindings(new[] { "NES", "SNES" }),
+                new GamepadBindings(new[] { "NES", "SNES" }), null!, new AppSettings(), new HotkeyBindingMap(), console);
             window.Show();
 
-            WriteableBitmap frame = window.CaptureRenderedFrame()!;
-            int width = frame.PixelSize.Width;
-            int height = frame.PixelSize.Height;
-            var pixels = new byte[width * height * 4];
-            using (ILockedFramebuffer fb = frame.Lock()) Marshal.Copy(fb.Address, pixels, 0, pixels.Length);
-
-            string? dump = System.Environment.GetEnvironmentVariable("EMUSEN_UI_DUMP");
-            if (!string.IsNullOrEmpty(dump))
-            {
-                string path = Path.Combine(Path.GetDirectoryName(dump)!,
-                    $"{Path.GetFileNameWithoutExtension(dump)}_{console ?? "General"}.bmp");
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                BmpFile.Write(path, pixels, width, height);
-            }
-
-            // A window that failed to lay out renders as one flat colour.
-            var distinct = new System.Collections.Generic.HashSet<uint>();
-            for (int i = 0; i + 3 < pixels.Length; i += 4)
-            {
-                distinct.Add((uint)(pixels[i] | (pixels[i + 1] << 8) | (pixels[i + 2] << 16)));
-                if (distinct.Count > 8) break;
-            }
-            Assert.True(distinct.Count > 8, "Settings window rendered as a flat image - layout probably failed.");
-        }, default);
+            UiTest.AssertLaidOut(window, $"input-settings-{console ?? "General"}");
+        });
     }
 }

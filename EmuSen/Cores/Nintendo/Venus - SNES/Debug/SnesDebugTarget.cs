@@ -1318,9 +1318,9 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
             return new[]
             {
-                new DebugLoadInfo("CPU+SPC700", ToPercent(cpuMs)),
-                new DebugLoadInfo("PPU", ToPercent(ppuMs)),
-                new DebugLoadInfo("HDMA", ToPercent(hdmaMs)),
+                new DebugLoadInfo("CPU+SPC700", ToPercent(cpuMs), DebugLoadKind.EmulatorCost),
+                new DebugLoadInfo("PPU", ToPercent(ppuMs), DebugLoadKind.EmulatorCost),
+                new DebugLoadInfo("HDMA", ToPercent(hdmaMs), DebugLoadKind.EmulatorCost),
             };
         }
 

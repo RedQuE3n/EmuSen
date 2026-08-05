@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mercury.Memory.Mappers;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores.Nintendo.Mercury.Memory
 {
@@ -148,16 +149,15 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private void LoadSram()
         {
             if (!HasBattery || _savePath is null || Ram.Length == 0) return;
-            if (!File.Exists(_savePath)) return;
+            if (AtomicFile.TryRead(_savePath) is not { } saved) return;
 
-            byte[] saved = File.ReadAllBytes(_savePath);
             Array.Copy(saved, Ram, Math.Min(saved.Length, Ram.Length));
         }
 
         public void SaveSram()
         {
             if (!HasBattery || _savePath is null || Ram.Length == 0) return;
-            File.WriteAllBytes(_savePath, Ram);
+            AtomicFile.Write(_savePath, Ram);
         }
     }
 }

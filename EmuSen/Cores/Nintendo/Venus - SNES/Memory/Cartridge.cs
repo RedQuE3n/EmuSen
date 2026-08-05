@@ -7,6 +7,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {
@@ -177,9 +178,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             byte country = _rom.Length > headerBase + 0x19 ? _rom[headerBase + 0x19] : (byte)0x01;
             _region = ConsoleRegions.FromCountryCode(country);
 
-            string saveDir = DianaOSSandbox.SavesDirectory;
-            string romName = Path.GetFileNameWithoutExtension(romPath);
-            SavePath = Path.Combine(saveDir, romName + ".srm");
+            SavePath = SaveLibrary.SramPathFor(romPath);
             LoadSram();
 
             Console.WriteLine("=== Cartridge Loaded ===");
@@ -197,9 +196,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             try
             {
-                if (BatteryRamDisabled || !File.Exists(SavePath)) return;
-
-                byte[] saved = File.ReadAllBytes(SavePath);
+                if (BatteryRamDisabled) return;
+                if (AtomicFile.TryRead(SavePath) is not { } saved) return;
 
                 // On an ST010/ST011 the .srm is the DSP's own data RAM - see Venus_NecDSP.md §6.
                 if (NecDsp is { HasBatteryRam: true } dsp)
@@ -236,17 +234,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             try
             {
                 if (BatteryRamDisabled) return;
-                string? dir = Path.GetDirectoryName(SavePath);
-                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
                 if (NecDsp is { HasBatteryRam: true } dsp)
                 {
-                    File.WriteAllBytes(SavePath, dsp.ExportBatteryRam());
+                    AtomicFile.Write(SavePath, dsp.ExportBatteryRam());
                     return;
                 }
 
                 if (_batteryRamSize == 0) return;
-                File.WriteAllBytes(SavePath, _sram.AsSpan(0, _batteryRamSize).ToArray());
+                AtomicFile.Write(SavePath, _sram.AsSpan(0, _batteryRamSize).ToArray());
             }
             catch (Exception ex)
             {
@@ -384,7 +380,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         }
 
         // Takes the firmware off the end of the ROM if it's there, otherwise
-        // out of Usr/Home/Firmware. Returns null - leaving the cartridge on its
+        // out of home/Firmware. Returns null - leaving the cartridge on its
         // plain map - if neither has it, since there is nothing useful to run
         // without it. See Venus_NecDSP.md §2.
         private Coprocessors.NecDsp.NecDsp? BuildNecDsp(Coprocessors.NecDsp.NecDspVariant variant)

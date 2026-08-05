@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Every config file this program keeps on disk, and the one answer to
-       where they live - see EmuSen_Config_Reference.md.
+  <!-- The librarian: the one answer to where anything this program keeps on
+       disk lives, and how it is read and written safely - config files
+       (EmuSen_Config_Reference.md) and saved data alike (EmuSen_Galaxia.md).
 
        Deliberately a leaf: no ProjectReference, no PackageReference. It has
        to be, because EmuSen.DianaOS references it (CheatRegistry's save/load)

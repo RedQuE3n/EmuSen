@@ -37,8 +37,8 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 
         public DianaOSResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
-            // See `man cd` on why this joins every word instead of just args[1].
-            string dir = args.Length >= 2 ? string.Join(' ', args.Skip(1)) : $"/home/{_self().CurrentUser}";
+            // Joins every word (see `man cd`); no argument means '/', which is home (see `man hier`).
+            string dir = args.Length >= 2 ? string.Join(' ', args.Skip(1)) : "/";
 
             if (!DianaOSSandbox.TryResolve(dir, out string resolved))
             {

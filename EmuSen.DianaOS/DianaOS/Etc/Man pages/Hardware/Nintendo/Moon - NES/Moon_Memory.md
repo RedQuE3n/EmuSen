@@ -130,3 +130,13 @@ Bit order is `A, B, Select, Start, Up, Down, Left, Right`. Past the eighth read 
 `Moon.Memory.IWriteObserver` is a deliberate twin of `Venus.Memory.IWriteObserver` rather than a shared type. Two identical one-method interfaces is not yet evidence of the right shared abstraction, and hoisting it would mean editing Venus to serve a Moon convenience. Worth revisiting when a third core makes the shape a rule instead of a coincidence.
 
 Currently wired: work RAM, PPU register writes, APU register writes, and PRG RAM. The CHR/CIRAM/OAM/palette write paths inside the PPU do not report yet — the same additive gap Venus's own `Man pages` note for its VRAM/CGRAM/OAM paths.
+
+## 7. The battery save
+
+Boards with a battery (`HasBattery`, §4) keep PRG RAM across sessions in a `.srm` file, autosaved every 300 frames by `MoonCore` and again on shutdown.
+
+**The path is still `Path.ChangeExtension(RomPath, ".srm")` — beside the ROM**, which is where it has always been and where Venus deliberately does *not* put it (`Venus_Memory.md` §2.4: a ROM can live anywhere, including somewhere read-only, and the ROM folder is the user's own library rather than emulator output). Moving Moon onto `SaveLibrary.SramPathFor` alongside Venus is a known, deliberately deferred change — it is user-visible and needs a copy-don't-move migration for saves that already exist. See `EmuSen_Galaxia.md` §6.
+
+What did change: both directions go through `Galaxia`'s `AtomicFile`, so an interrupted autosave leaves the previous save whole instead of truncated (`EmuSen_Galaxia.md` §4). `LoadSram` copies whichever of the file and PRG RAM is smaller, tolerating a size mismatch rather than refusing to boot.
+
+`CoreOptions.BatteryRamDisabled` (Pharaoh's `--nobattery`) leaves `_savePath` null, which disables the write as well as the read — see `EmuSen_Multicore.md` §6.

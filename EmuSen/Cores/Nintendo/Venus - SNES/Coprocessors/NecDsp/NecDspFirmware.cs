@@ -5,7 +5,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 {
     // The program and data ROMs masked into the DSP die. Nintendo never put
     // them on the cartridge bus, so they can only come from a dump - either
-    // appended to the ROM file or dropped in Usr/Home/Firmware. See Venus_NecDSP.md §2.
+    // appended to the ROM file or dropped in home/Firmware. See Venus_NecDSP.md §2.
     public sealed class NecDspFirmware
     {
         public byte[] Program { get; }
@@ -57,7 +57,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
                 Purpose: $"the {variant} coprocessor's mask ROM, which the cartridge does not carry");
         }
 
-        // Usr/Home/Firmware, as either one combined dump or the split pair.
+        // home/Firmware, as either one combined dump or the split pair.
         // The combined form goes through FirmwareLibrary so it shares the
         // whole engine's discovery and validation rules; the split pair is a
         // NEC-DSP-specific convention and stays here.

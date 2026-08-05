@@ -6,7 +6,7 @@ namespace EmuSen.WiseMan.Coprocessors
     // The only tests here that run Nintendo's own firmware rather than
     // hand-assembled code. That firmware is not in this repo and never will
     // be (see Venus_NecDSP.md §2), so each of these returns early when
-    // Usr/Home/Firmware is empty - they verify a real dump when a developer
+    // home/Firmware is empty - they verify a real dump when a developer
     // has one and cost nothing when they don't.
     public class NecDspRealFirmwareTests
     {
@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Coprocessors
         [Fact]
         public void The_firmware_directory_is_where_the_man_page_says_it_is()
         {
-            Assert.EndsWith(Path.Combine("Usr", "Home", "Firmware"), DianaOSSandbox.FirmwareDirectory);
+            Assert.EndsWith(Path.Combine("home", "Firmware"), DianaOSSandbox.FirmwareDirectory);
         }
     }
 }

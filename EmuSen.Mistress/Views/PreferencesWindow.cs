@@ -51,7 +51,7 @@ namespace EmuSen.Mistress.Views
                 new FieldRow
                 {
                     Label = "Save State Directory",
-                    Hint = "Where Save State/Load State write and read .state files. Leave blank to use the default (Usr/Home/Saves/Save States/).",
+                    Hint = "Where Save State/Load State write and read .state files. Leave blank to use the default (home/Saves/Save States/).",
                     Content = stateDirectory,
                 },
                 new FieldRow

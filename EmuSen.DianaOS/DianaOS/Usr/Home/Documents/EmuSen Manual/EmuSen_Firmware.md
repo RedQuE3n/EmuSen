@@ -24,7 +24,7 @@ Answering before loading is the whole point. Once `LoadRom` has run, the core ha
 
 ## 2. The library
 
-`FirmwareLibrary` is `Usr/Home/Firmware/` treated as a store, and it knows nothing about any console.
+`FirmwareLibrary` is `home/Firmware/` treated as a store, and it knows nothing about any console.
 
 | Call | Meaning |
 |---|---|
@@ -64,7 +64,7 @@ Because `Install` copies into the library, this is a once-ever prompt per chip, 
 
 ```
 [Cartridge] Dsp1B firmware not found - the chip will not be emulated.
-[Cartridge]   expected 8,192 bytes at .../Usr/Home/Firmware/dsp1b.rom
+[Cartridge]   expected 8,192 bytes at .../home/Firmware/dsp1b.rom
 ```
 
 One line of core code serves every non-picker frontend, which is why this is worth having even though Mistress has a real dialog.
@@ -89,7 +89,7 @@ The mask ROM inside a DSP-1 is Nintendo's. A BIOS pack's own MIT or GPL license 
 
 EmuSen is GPL-3.0, which obliges us to grant downstream recipients rights we would not hold. Bundling firmware would therefore be both a copyright problem and a licensing contradiction, which is why bsnes and Mesen refuse to do it either.
 
-`Usr/Home/Firmware/` is gitignored for exactly this reason. Dumps a developer puts there are theirs, stay local, and never enter version control.
+`home/Firmware/` is gitignored for exactly this reason. Dumps a developer puts there are theirs, stay local, and never enter version control.
 
 ---
 

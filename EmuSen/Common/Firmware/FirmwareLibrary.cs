@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.DianaOS.DianaOS.Etc;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Common.Firmware
 {
-    // Usr/Home/Firmware, as a core-agnostic store: what is installed, what is
+    // home/Firmware, as a core-agnostic store: what is installed, what is
     // missing, and how a file the user picked gets put there. Knows nothing
     // about any particular console. See EmuSen_Firmware.md §2.
     public static class FirmwareLibrary
@@ -17,7 +17,7 @@ namespace EmuSen.Common.Firmware
         // one; null means the sandbox's own Firmware directory.
         public static string Directory
         {
-            get => _directoryOverride ?? DianaOSSandbox.FirmwareDirectory;
+            get => _directoryOverride ?? DataStore.Firmware;
             set => _directoryOverride = value;
         }
 

@@ -13,10 +13,10 @@ namespace EmuSen.WiseMan.Reference
     {
         // Reference/dumps/<romStem>/mesen_<space>_f<frame>.bin, beside this source.
         private static string DumpRoot =>
-            Path.Combine(DianaOSSandbox.RootDirectory, "EmuSen.WiseMan", "Reference", "dumps");
+            Path.Combine(DianaOSSandbox.InstallDirectory, "EmuSen.WiseMan", "Reference", "dumps");
 
         private static string RomPath(string stem) =>
-            Path.Combine(DianaOSSandbox.UsrHomeDirectory, "Games", "SNES", stem + ".smc");
+            Fixtures.RealRom.Find("SNES", stem + ".smc") ?? "";
 
         private sealed record Fixture(string RomStem, long Frame, string DumpDir);
 

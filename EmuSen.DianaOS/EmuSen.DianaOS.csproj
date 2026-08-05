@@ -40,8 +40,8 @@
        source already reads these straight out of the repo, so copying them
        into every bin/ would be ~770KB of duplication nothing ever reads. -->
   <ItemGroup>
-    <None Include="DianaOS\Etc\Man pages\**\*" Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Etc\Man pages\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="DianaOS\Usr\Home\Documents\**\*" Link="DianaOSRoot\EmuSen.DianaOS\DianaOS\Usr\Home\Documents\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="DianaOS\Etc\Man pages\**\*" Link="DianaOSRoot\home\Documents\Man pages\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="DianaOS\Usr\Home\Documents\**\*" Link="DianaOSRoot\home\Documents\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 

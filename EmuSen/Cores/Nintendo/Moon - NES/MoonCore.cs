@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Moon.Input;
@@ -12,7 +14,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.Moon
 {
     // The NES's ICore implementation; the hardware is public beyond the interface - see Moon_Core.md §1.
-    public partial class MoonCore : global::EmuSen.Cores.ICore
+    public partial class MoonCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.IFrameProfiler
     {
         public const int MasterClockHz = 21477272;
         public const int MasterClocksPerCpuCycle = 12;
@@ -58,8 +60,16 @@ namespace EmuSen.Cores.Nintendo.Moon
         // Nothing is synthesized yet, but a caller still needs a rate up front - see Moon_APU.md.
         public int AudioSampleRate => 44100;
 
-        // Set by the debug target so its providers re-snapshot once a frame, off the emulation thread.
-        [SkipInState] public Action? FrameRefresh;
+        // Wall-clock cost of the last frame, by phase - see Moon_Debug.md §3.2.
+        public double LastFrameCpuApuMs { get; private set; }
+        public double LastFramePpuMs { get; private set; }
+
+        // The APU is clocked from inside the CPU loop, so the two cannot be separated - see Moon_Debug.md §3.2.
+        public IReadOnlyList<(string Name, double Milliseconds)> LastFramePhases => new[]
+        {
+            ("cpu+apu", LastFrameCpuApuMs),
+            ("ppu", LastFramePpuMs),
+        };
 
         // Halted in front of a breakpoint, with the frame left mid-flight for the next call to resume.
         public bool IsHaltedAtBreakpoint { get; private set; }
@@ -71,7 +81,8 @@ namespace EmuSen.Cores.Nintendo.Moon
             Ppu = new Ppu(Cart);
             Apu = new Apu.Apu();
             Apu.SetSampleRate(AudioSampleRate);
-            Bus = new MemoryBus(Cart, Ppu, Apu) { WriteObserver = null };
+            // The core owns Cheats here, so ROM patches work with no debug target attached - see Moon_Cheats.md §3.
+            Bus = new MemoryBus(Cart, Ppu, Apu) { WriteObserver = null, RomPatcher = new CheatRomPatcher(Cheats) };
 
             // DMC fetches go through the real bus, so the APU only gets a reader once one exists.
             Apu.Dmc.ReadMemory = address => Bus.Read(address);
@@ -113,9 +124,14 @@ namespace EmuSen.Cores.Nintendo.Moon
                 long deadline = _schedule.NextEventTime();
                 _cpuBudget += _cpuClock.Advance(deadline - _schedule.Now, CpuRatio);
 
+                // A halt returns without closing the phase, so the resumed frame keeps accumulating - see Moon_Debug.md §3.2.
+                long phaseStart = Stopwatch.GetTimestamp();
                 if (!RunCpuUntilBudgetSpent(ref resuming)) return;
+                long afterCpu = Stopwatch.GetTimestamp();
+                _cpuApuTicksAccum += afterCpu - phaseStart;
 
                 _schedule.RunUntil(deadline);
+                _ppuTicksAccum += Stopwatch.GetTimestamp() - afterCpu;
             }
         }
 

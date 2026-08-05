@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using EmuSen.Cores.Nintendo.Moon;
+using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.Moon.Debug;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Cheats;
@@ -58,8 +59,12 @@ namespace EmuSen.Cores
                         new VenusCpuTraceSwitch());
 
                 case MoonCore moon:
-                    // No Game Genie/Action Replay codec for this core yet - see EmuSen_Multicore.md §4.
-                    return new CoreBundle(moon, new MoonDebugTarget(moon), null, null, null);
+                    return new CoreBundle(
+                        moon,
+                        new MoonDebugTarget(moon),
+                        new NesRawCheatCodec(),
+                        new NesGameGenieCheatCodec(),
+                        null);
 
                 default:
                     throw new NotSupportedException($"No debug target is registered for {core.GetType().Name}.");
@@ -74,15 +79,17 @@ namespace EmuSen.Cores
             (new ActionReplayCheatCodec(), new GameGenieCheatCodec());
 
         // The codecs for a console picked in the UI rather than loaded from a ROM - see EmuSen_Multicore.md §10.
-        public static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) CheatCodecsFor(string? coreDisplayName)
+        // Takes either name a console goes by: an unrecognised one falls back to SNES, which reads as working.
+        public static (ICheatCodeCodec? AutoDetect, ICheatCodeCodec? Explicit) CheatCodecsFor(string? coreName)
         {
-            var core = CoreCatalog.ByDisplayName(coreDisplayName);
+            var core = CoreCatalog.ByAnyName(coreName);
 
             // No console chosen means no console to be wrong about, so the historical pair stands in.
             if (core is null) return DefaultCheatCodecs;
 
             // Dispatched on extension for the same reason Create is - no new public surface on the catalog.
             if (core.SupportsExtension(".sfc")) return (new ActionReplayCheatCodec(), new GameGenieCheatCodec());
+            if (core.SupportsExtension(".nes")) return (new NesRawCheatCodec(), new NesGameGenieCheatCodec());
 
             return (null, null);
         }

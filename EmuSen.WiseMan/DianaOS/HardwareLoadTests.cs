@@ -62,6 +62,16 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.All(load, l => Assert.Equal(100.0, l.Percent));
         }
 
+        // These are wall-clock emulator timings, not guest load - see EmuSen_Cauldron.md §4.5.
+        [Fact]
+        public void Every_bar_is_labelled_as_emulator_cost()
+        {
+            var target = BuildTarget(() => (8.33, 4.0, 0.5));
+
+            Assert.All(target.HardwareLoad.Current,
+                l => Assert.Equal(EmuSen.Cauldron.DebugLoadKind.EmulatorCost, l.Kind));
+        }
+
         [Fact]
         public void Max_sprites_is_the_real_snes_oam_capacity()
         {

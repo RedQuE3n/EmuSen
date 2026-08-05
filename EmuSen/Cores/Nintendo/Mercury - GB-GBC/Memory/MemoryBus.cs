@@ -1,0 +1,267 @@
+using System;
+using EmuSen.Common;
+using EmuSen.Cores.Nintendo.Mercury.Cpu.Core;
+using EmuSen.Cores.Nintendo.Mercury.Input;
+
+namespace EmuSen.Cores.Nintendo.Mercury.Memory
+{
+    // The five interrupt sources, in priority order - the bit index each occupies in IE and IF.
+    public enum Interrupt
+    {
+        VBlank = 0,
+        LcdStat = 1,
+        Timer = 2,
+        Serial = 3,
+        Joypad = 4,
+    }
+
+    // Everything at the far end of the CPU's address pins - see Mercury_Memory.md §3.
+    public sealed class MemoryBus : ICpuBus
+    {
+        public const int WramBankSize = 0x1000;
+
+        private readonly Cartridge _cart;
+
+        public byte[] Vram = new byte[0x2000];
+        public byte[] Wram = new byte[WramBankSize * 2];
+        public byte[] Oam = new byte[0xA0];
+        public byte[] HighRam = new byte[0x7F];
+
+        // $FF00-$FF7F verbatim, for the registers no device has claimed yet.
+        public byte[] Io = new byte[0x80];
+
+        public byte InterruptEnable;
+        public byte InterruptFlags;
+
+        [SkipInState] public IWriteObserver? WriteObserver;
+        [SkipInState] public Joypad Joypad = new();
+
+        // The 16-bit counter DIV is the top half of - see Mercury_Memory.md §5.
+        private ushort _divCounter;
+        private byte _tima;
+        private byte _tma;
+        private byte _tac;
+        private bool _lastTimerEdge;
+        private int _timaReloadDelay;
+
+        public MemoryBus(Cartridge cart) => _cart = cart;
+
+        public Cartridge Cart => _cart;
+
+        public byte Div => (byte)(_divCounter >> 8);
+        public byte Tima => _tima;
+        public byte Tma => _tma;
+        public byte Tac => _tac;
+
+        public void Request(Interrupt source) => InterruptFlags |= (byte)(1 << (int)source);
+
+        public byte Read(ushort address)
+        {
+            switch (address)
+            {
+                case < 0x8000:
+                    return _cart.Mapper.ReadRom(address);
+
+                case < 0xA000:
+                    return Vram[address - 0x8000];
+
+                case < 0xC000:
+                    return _cart.Mapper.ReadRam(address);
+
+                case < 0xE000:
+                    return Wram[address - 0xC000];
+
+                // $E000-$FDFF mirrors WRAM; real hardware wires the address lines straight through.
+                case < 0xFE00:
+                    return Wram[address - 0xE000];
+
+                case < 0xFEA0:
+                    return Oam[address - 0xFE00];
+
+                // Prohibited on a DMG, and it reads back as zero rather than open bus.
+                case < 0xFF00:
+                    return 0x00;
+
+                case < 0xFF80:
+                    return ReadIo(address);
+
+                case < 0xFFFF:
+                    return HighRam[address - 0xFF80];
+
+                default:
+                    return InterruptEnable;
+            }
+        }
+
+        public void Write(ushort address, byte data)
+        {
+            switch (address)
+            {
+                case < 0x8000:
+                    _cart.Mapper.WriteRom(address, data);
+                    return;
+
+                case < 0xA000:
+                    Vram[address - 0x8000] = data;
+                    WriteObserver?.OnWrite(MercuryCore.SpaceVram, address - 0x8000, data);
+                    return;
+
+                case < 0xC000:
+                    _cart.Mapper.WriteRam(address, data);
+                    WriteObserver?.OnWrite(MercuryCore.SpaceCartRam, address - 0xA000, data);
+                    return;
+
+                case < 0xE000:
+                    Wram[address - 0xC000] = data;
+                    WriteObserver?.OnWrite(MercuryCore.SpaceWram, address - 0xC000, data);
+                    return;
+
+                case < 0xFE00:
+                    Wram[address - 0xE000] = data;
+                    return;
+
+                case < 0xFEA0:
+                    Oam[address - 0xFE00] = data;
+                    WriteObserver?.OnWrite(MercuryCore.SpaceOam, address - 0xFE00, data);
+                    return;
+
+                case < 0xFF00:
+                    return;
+
+                case < 0xFF80:
+                    WriteIo(address, data);
+                    return;
+
+                case < 0xFFFF:
+                    HighRam[address - 0xFF80] = data;
+                    WriteObserver?.OnWrite(MercuryCore.SpaceHram, address - 0xFF80, data);
+                    return;
+
+                default:
+                    InterruptEnable = data;
+                    return;
+            }
+        }
+
+        private byte ReadIo(ushort address) => address switch
+        {
+            0xFF00 => Joypad.Read(Io[0x00]),
+            0xFF04 => Div,
+            0xFF05 => _tima,
+            0xFF06 => _tma,
+            0xFF07 => (byte)(_tac | 0xF8),
+            0xFF0F => (byte)(InterruptFlags | 0xE0),
+            _ => Io[address - 0xFF00],
+        };
+
+        private void WriteIo(ushort address, byte data)
+        {
+            switch (address)
+            {
+                // Only the two select bits are writable; the button lines are inputs.
+                case 0xFF00:
+                    Io[0x00] = (byte)(data & 0x30);
+                    return;
+
+                // Any write zeroes the whole counter, which is also how a game resets the timer's phase.
+                case 0xFF04:
+                    _divCounter = 0;
+                    return;
+
+                case 0xFF05:
+                    _tima = data;
+                    _timaReloadDelay = 0;
+                    return;
+
+                case 0xFF06:
+                    _tma = data;
+                    return;
+
+                case 0xFF07:
+                    _tac = (byte)(data & 0x07);
+                    return;
+
+                case 0xFF0F:
+                    InterruptFlags = (byte)(data & 0x1F);
+                    return;
+
+                case 0xFF46:
+                    Io[0x46] = data;
+                    RunOamDma(data);
+                    return;
+
+                default:
+                    Io[address - 0xFF00] = data;
+                    return;
+            }
+        }
+
+        // Real hardware takes 160 machine cycles and locks most of the bus; this copies at once - see Mercury_Memory.md §6.
+        private void RunOamDma(byte page)
+        {
+            ushort source = (ushort)(page << 8);
+            for (int i = 0; i < Oam.Length; i++) Oam[i] = Read((ushort)(source + i));
+        }
+
+        public void Tick(int cycles)
+        {
+            for (int i = 0; i < cycles; i++) StepOneCycle();
+            _cart.Mapper.Tick(cycles);
+        }
+
+        // TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.
+        private void StepOneCycle()
+        {
+            _divCounter++;
+
+            if (_timaReloadDelay > 0 && --_timaReloadDelay == 0)
+            {
+                _tima = _tma;
+                Request(Interrupt.Timer);
+            }
+
+            bool edge = (_divCounter & TimerBitMask) != 0 && (_tac & 0x04) != 0;
+
+            if (_lastTimerEdge && !edge && ++_tima == 0)
+            {
+                // The reload is not instant: TIMA reads 0 for four cycles before TMA lands.
+                _timaReloadDelay = 4;
+            }
+
+            _lastTimerEdge = edge;
+        }
+
+        private int TimerBitMask => (_tac & 0x03) switch
+        {
+            0 => 1 << 9,
+            1 => 1 << 3,
+            2 => 1 << 5,
+            _ => 1 << 7,
+        };
+
+        public void Reset()
+        {
+            Array.Clear(Vram);
+            Array.Clear(Wram);
+            Array.Clear(Oam);
+            Array.Clear(HighRam);
+            Array.Clear(Io);
+
+            InterruptEnable = 0;
+            InterruptFlags = 0;
+            _divCounter = 0;
+            _tima = 0;
+            _tma = 0;
+            _tac = 0;
+            _lastTimerEdge = false;
+            _timaReloadDelay = 0;
+
+            // What the DMG boot ROM leaves behind, since Mercury starts past it - see Mercury_Cpu.md §5.
+            Io[0x00] = 0x30;
+            Io[0x40] = 0x91;
+            Io[0x47] = 0xFC;
+            Io[0x48] = 0xFF;
+            Io[0x49] = 0xFF;
+        }
+    }
+}

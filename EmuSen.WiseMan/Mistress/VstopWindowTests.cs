@@ -1,4 +1,7 @@
 using System;
+using EmuSen.WiseMan.LunaP;
+using EmuSen.LunaP.Windowing;
+using EmuSen.LunaP.Controls;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -36,7 +39,8 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static TextBlock Text(VstopWindow w, string name) => w.GetControl<TextBlock>(name);
+        // The window builds its own tree now, so these come from the visual tree rather than a XAML namescope.
+        private static string Text(VstopWindow w, string name) => w.FindNamed<TextBlock>(name).Text!;
 
         [Fact]
         public Task The_window_fills_in_every_section_on_open() => Session.Dispatch(() =>
@@ -46,29 +50,29 @@ namespace EmuSen.WiseMan.Mistress
             var window = new VstopWindow();
             window.Show();
 
-            Assert.Contains("pid", Text(window, "HeaderText").Text!);
-            Assert.Contains(".NET", Text(window, "HostText").Text!);
-            Assert.Contains("Working set", Text(window, "MemoryText").Text!);
-            Assert.Contains("Collections", Text(window, "GcText").Text!);
-            Assert.Contains("OS threads", Text(window, "ThreadsText").Text!);
+            Assert.Contains("pid", Text(window, "HeaderText"));
+            Assert.Contains(".NET", Text(window, "HostText"));
+            Assert.Contains("Working set", Text(window, "MemoryText"));
+            Assert.Contains("Collections", Text(window, "GcText"));
+            Assert.Contains("OS threads", Text(window, "ThreadsText"));
 
             // CPU, machine memory, heap fragmentation, thread pool.
-            Assert.Equal(4, window.GetControl<StackPanel>("MetersPanel").Children.Count);
+            Assert.Equal(4, window.FindNamed<MeterList>("MetersPanel").Meters.Count);
+            Assert.Equal(4, window.CountParts<MeterRow>());
 
             window.Close();
         }, default);
 
+        // Asserted on the rendered bar, not the source figure: that is what a reader of the dashboard actually sees.
         [Fact]
         public Task Every_meter_bar_stays_inside_its_range() => Session.Dispatch(() =>
         {
             var window = new VstopWindow();
             window.Show();
 
-            foreach (Control row in window.GetControl<StackPanel>("MetersPanel").Children)
-            {
-                ProgressBar bar = ((Grid)row).Children.OfType<ProgressBar>().Single();
-                Assert.InRange(bar.Value, 0, 100);
-            }
+            ProgressBar[] bars = window.FindParts<ProgressBar>().ToArray();
+            Assert.Equal(4, bars.Length);
+            foreach (ProgressBar bar in bars) Assert.InRange(bar.Value, 0, 100);
 
             window.Close();
         }, default);
@@ -79,10 +83,24 @@ namespace EmuSen.WiseMan.Mistress
             var window = new VstopWindow();
             window.Show();
 
-            window.GetControl<Button>("CollectButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.FindNamed<Button>("CollectButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            Assert.DoesNotContain("(no collection yet)", Text(window, "MemoryText").Text!);
-            Assert.DoesNotContain("stay blank", Text(window, "HintText").Text!);
+            Assert.DoesNotContain("(no collection yet)", Text(window, "MemoryText"));
+            Assert.DoesNotContain("stay blank", Text(window, "HintText"));
+
+            window.Close();
+        }, default);
+
+        // The dashboard is one of the five that used to poll forever once opened - see EmuSen_LunaP.md §8.2.
+        [Fact]
+        public Task The_dashboard_stops_polling_while_it_is_hidden() => Session.Dispatch(() =>
+        {
+            var window = new VstopWindow();
+            window.Show();
+            Assert.True(window.IsPolling);
+
+            window.Hide();
+            Assert.False(window.IsPolling);
 
             window.Close();
         }, default);
@@ -126,15 +144,19 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(main.GetControl<MenuItem>("RuntimeDashboardMenuItem").IsEnabled);
             Assert.False(main.GetControl<MenuItem>("HardwareDashboardMenuItem").IsEnabled);
 
-            Click(main, "RuntimeDashboardMenuItem");
-            object? first = Field(main, "_vstopWindow");
-            Assert.NotNull(first);
+            // The at-most-one rule is WindowSlot's now, so this reaches through the slot rather than a nullable field.
+            var slot = (WindowSlot<VstopWindow>)Field(main, "_vstopWindow")!;
 
             Click(main, "RuntimeDashboardMenuItem");
-            Assert.Same(first, Field(main, "_vstopWindow"));
+            Assert.True(slot.IsOpen);
+            VstopWindow first = slot.Current!;
 
-            ((Window)first!).Close();
-            Assert.Null(Field(main, "_vstopWindow"));
+            Click(main, "RuntimeDashboardMenuItem");
+            Assert.Same(first, slot.Current);
+
+            first.Close();
+            Assert.False(slot.IsOpen);
+            Assert.Null(slot.Current);
 
             main.Close();
         }, default);

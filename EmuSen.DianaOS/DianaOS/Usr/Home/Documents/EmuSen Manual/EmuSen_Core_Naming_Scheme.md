@@ -22,7 +22,7 @@ Folder: `Cores/Nintendo/`
 |---|---|---|---|
 | NES | **Moon** | `Cores/Nintendo/Moon - NES/` | Active development — `EmuSen.Cores.Nintendo.Moon.*`. CPU validated against SingleStepTests `nes6502/v1` (2,560,000 cases, traces included); PPU, memory, five mappers, `ICore` and `IDebugTarget` all implemented. No audio synthesis, no PAL, scanline-granularity PPU. See `Man pages/Hardware/Nintendo/Moon - NES/` |
 | SNES | **Venus** | `Cores/Nintendo/Venus - SNES/` | Active development — `EmuSen.Cores.Nintendo.Venus.*` (see §8) |
-| Game Boy / Game Boy Color | **Mercury** | `Cores/Nintendo/Mercury - GB-GBC/` | Not started — reserved. Open question whether GB and GBC are different enough hardware to warrant two separate cores rather than one (undecided; revisit once Venus work is further along and there's a real basis for comparison) |
+| Game Boy / Game Boy Color | **Mercury** | `Cores/Nintendo/Mercury - GB-GBC/` | Active development — `EmuSen.Cores.Nintendo.Mercury.*`. Started 2026-08-04. Full SM83 instruction set, interrupts, timer, joypad, five cartridge boards, save states. No PPU, no APU, no `IDebugTarget`, so not registered in `CoreFactory` yet. **The GB-vs-GBC question is settled: one core, DMG first, colour as an additive mode** — see `Man pages/Hardware/Nintendo/Mercury - GB-GBC/Mercury_Core.md` §1 |
 | Game Boy Advance | **Jupiter** | `Cores/Nintendo/Jupiter - GBA/` | Not started — reserved |
 | N64 | **Mars** | `Cores/Nintendo/Mars - N64/` | Not started — reserved |
 
@@ -46,7 +46,7 @@ Sailor Moon herself (codename **Moon**, not the character's full title) anchors 
 | Console | Codename | Folder | Status |
 |---|---|---|---|
 | Nintendo DS | **Luna** | `Cores/Nintendo/Luna - DS/` | Not started — reserved |
-| Nintendo 3DS / New Nintendo 3DS | **Artemis** | `Cores/Nintendo/Artemis - 3DS-New3DS/` | Not started — reserved. Open question whether the 3DS and New 3DS are different enough hardware to warrant two separate cores rather than one (same shape as the GB/GBC question under Mercury — revisit once there's a real basis for comparison) |
+| Nintendo 3DS / New Nintendo 3DS | **Artemis** | `Cores/Nintendo/Artemis - 3DS-New3DS/` | Not started — reserved. Open question whether the 3DS and New 3DS are different enough hardware to warrant two separate cores rather than one. The GB/GBC question of the same shape was settled as *one core* on 2026-08-04, on the reasoning that an extension of the same CPU and memory map is not different hardware; the same test applies here |
 
 **Luna and Artemis aren't Sailor Senshi themselves** — they're the two guardian cats who mentor and advise the Sailor Guardians throughout the series (Luna mentors Sailor Moon directly; Artemis mentors Sailor Venus and later the whole team). Deliberately kept as their own small group rather than folded into Inner or Outer Senshi above, since they're a different kind of character entirely — fitting company for the *handheld* wing of Nintendo's lineup specifically, companions alongside the main console generations the way the DS/3DS families themselves sit alongside (rather than replacing) Nintendo's home consoles.
 
@@ -160,3 +160,13 @@ Every codename in this doc has been checked against the Sailor Moon Wiki (and, f
 §3 had previously reserved `Endymion` for the Sega Master System. **The Master System is now `Endou`**, and its placeholder folder was renamed to `Cores/Sega/Endou - Master System/`. Nothing depended on the old name — that core has never had code, only a README.
 
 **The general lesson, worth acting on before it bites again:** the infrastructure projects (Galaxia, Serenity, Crystal, Cauldron, Nehellania, Endymion, Hotaru, Mistress, Pharaoh, Tomoe, WiseMan, DianaOS) draw from the same Sailor Moon namespace as the cores, but this document only ever tracked the cores. That is how one name ended up claimed twice without anyone noticing. Either list the infrastructure names here too, or check both pools before reserving a new codename.
+
+---
+
+## 11. `LunaP` — reserved for the shared Avalonia toolkit
+
+**`EmuSen.LunaP` is the shared UI toolkit** — theme, controls, window scaffolding and a fluent layout surface for the frontends to build screens from. Planned, not yet built; see `EmuSen_LunaP_Gameplan.md`. Named for Luna-P, Chibiusa's floating gadget ball, which takes the shape of whichever tool is needed at the time.
+
+**Distinct from `Luna`, §2's reserved codename for the Nintendo DS core** (`Cores/Nintendo/Luna - DS/`, the guardian cat). Same stem, unrelated claims — the same kind of collision §8 already records for Sony's `Wiseman` versus the `EmuSen.WiseMan` test project. No folder or namespace overlap in practice (`EmuSen.LunaP/` at the repo root versus `Cores/Nintendo/Luna - DS/`), but worth knowing about before either name is searched for and mistaken for the other. The DS codename stays `Luna`; nothing about this reservation constrains it.
+
+This section is the first application of §10's lesson: an infrastructure name recorded here at the moment it was claimed, rather than after a collision.

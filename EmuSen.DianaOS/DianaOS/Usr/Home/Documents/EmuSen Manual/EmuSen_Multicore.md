@@ -74,7 +74,7 @@ Each of those was its own hardcoded copy of the list before. Three of them said 
 
 ## 4. Cheats and the trace switch
 
-Cheat *codecs* (Game Genie, Action Replay) are per-console: the same printed code means different things on different hardware, so they come out of the bundle rather than being constructed by the frontend. `Moon` has neither codec yet and its bundle passes `null` for both — `DianaOSInterpreter.CreateDefault` already accepts null for every one of these, so the shell simply reports that `cheat` needs a codec instead of decoding an SNES code against NES memory.
+Cheat *codecs* (Game Genie, Action Replay) are per-console: the same printed code means different things on different hardware, so they come out of the bundle rather than being constructed by the frontend. Both cores now fill both slots — Moon with NES Game Genie and a raw `AAAA:VV` format, which are genuinely different decoders from Venus's rather than the same ones renamed (`EmuSen_Cheats.md`). `DianaOSInterpreter.CreateDefault` still accepts null for every one of these, so a future core with no code format reports that `cheat` needs a codec instead of decoding one console's code against another's memory.
 
 Same for `ICpuTraceSwitch`, which arms the verbose per-instruction trace: Venus supplies `VenusCpuTraceSwitch`, Moon supplies nothing yet.
 
@@ -93,7 +93,7 @@ Neither. `EmuSen/Cores/CoreCapabilities.cs` holds small optional interfaces a co
 
 | Interface | What it says | Who implements |
 | --- | --- | --- |
-| `IFrameProfiler` | `LastFramePhases` — ordered `(Name, Milliseconds)` | Venus |
+| `IFrameProfiler` | `LastFramePhases` — ordered `(Name, Milliseconds)` | Venus, Moon |
 | `ICoprocessorHalt` | `IsHaltedOnCoprocessor`, `HaltedProcessorName` | Venus |
 | `ICoprocessorLoad` | `CoprocessorClocks` — executed/offered against a per-frame budget | Venus |
 | `ITraceFlushable` | `FlushVerboseTrace()` | Venus |
@@ -131,7 +131,7 @@ This is the pattern for any future switch that is a *property of the run* rather
 
 - **No core swaps consoles mid-session.** `core <name> <path>` reloads through the factory, so loading a `.nes` after a `.smc` does construct a `MoonCore` — but the frontends rebuild a great deal around that and only Mistress' path is well covered by tests.
 - **`AppSettings.SelectedCore` still drives nothing.** It persists a display name and no code reads it to choose a core; the ROM's extension decides. The combo is now populated from the catalog rather than a literal, which is the only part of it that improved.
-- **Moon has no cheat codec, no `ICpuTraceSwitch`, and no `IFrameProfiler`.** All three are real gaps rather than deliberate omissions.
+- **Moon has no `ICpuTraceSwitch`.** A real gap rather than a deliberate omission. It does now have cheat codecs (`EmuSen_Cheats.md`, `Moon_Cheats.md`) and, since 2026-08-04, `IFrameProfiler` — a `cpu+apu`/`ppu` split that also fills its `coretop` load bars, see `Moon_Debug.md` §3.2.
 
 ### A bug this pass found
 
@@ -211,3 +211,25 @@ Since nothing ever read the value, a stored `"SNES (Venus)"` cannot be distingui
 - **`RomDirectory` is still one path.** Recursion makes that workable, but there is no multi-root library.
 - **No metadata.** Titles are filenames. No box art, no dedupe of `(U)`/`(J)`/`[hM02]` variants, no "1,432 of these are the same game" grouping — which a 3,537-entry set very much invites.
 - **The console filter does not gate loading.** Opening a `.nes` while SNES is selected still works and still runs Moon; the extension decides the core (§2). The filter is a view, not a mode.
+
+---
+
+## 11. The bus hooks are shared, not per core
+
+`IFrameObserver` and `IRomReadPatcher` began life in `Cores/Nintendo/Venus - SNES/Memory/`, which was right while one core existed. Neither says anything about a console — one is "a frame ended", the other is "a cartridge read happened, do you want to change it" — so when the NES needed the second one they moved to `EmuSen/Cores/CoreHooks.cs` rather than being copied.
+
+Nothing else had to change. Both interfaces were already in namespaces nested under `EmuSen.Cores`, so every existing `EmuSen.Cores.Nintendo.Venus.*` file resolves the new location outward with no `using` edit at all.
+
+`CheatRomPatcher` (`EmuSen/Cores/`) is the shared wire between the second hook and `CheatRegistry`. Both ends were already core-agnostic; a core that owns its own registry can install it directly and get Game Genie-style patches with no debug layer attached — see `EmuSen_Cheats.md` §4 for why Venus does not do this yet.
+
+## 12. Naming a console before its core exists
+
+Two questions look the same and are not: *which console is this ROM* and *which console is loaded*. The second has an obvious answer (`ICore.CoreName`); the first has to be answered from the path alone, and getting them mixed up is what `CoreCatalog.ConsoleForRom` exists to stop.
+
+**The bug it was added for.** `MainWindow.LoadRom` opened its log directory with `StartLogging(_session.CoreName)`, deliberately *before* `_session.LoadRom(path)` so the cartridge's own load-time output would be captured. But `EmulatorSession.CoreName` is `_core?.CoreName ?? "SNES"`, and `_core` is only assigned inside `LoadRom` — so the call always read the fallback. **Every Mistress session logged into `<root>/SNES/`, whatever console actually ran.** It was invisible because the fallback is a real console name: the path looked right, the directory existed, and the only symptom was a `Logs/` tree with no `NES` in it however many NES games you played.
+
+`CoreCatalog.ConsoleForRom(path)` answers from the extension instead, via the same `ByExtension` lookup `CoreFactory.Create` dispatches on. It returns `CoreDescriptor.Console`, which is pinned equal to what that core's `ICore.CoreName` reports, so the directory a session logs into is the one it would have chosen after loading — just decided early enough to be right.
+
+`EmulatorSession.CoreName` keeps its fallback, because callers after a load are entitled to a non-null string; its comment now says the fallback is only meaningful post-load rather than claiming there is only one core.
+
+**Two names, one console.** A `CoreDescriptor` carries both `Console` (`"SNES"`) and `DisplayName` (`"SNES (Venus)"`), and different call sites hold different ones — `AppSettings.SelectedCore` is a display name, `ICore.CoreName` is a console. `CoreFactory.CheatCodecsFor` took a display name and fell back to the SNES pair for anything it did not recognise, so passing the *console* name got working-looking SNES codecs for every console. That is the same shape of bug as the log directory: a wrong answer that reads as a right one. It resolves through `CoreCatalog.ByAnyName` now, which accepts either. The fallback itself stays — a window opened with no console chosen still needs some pair — but it is no longer reachable by naming a console correctly in the wrong vocabulary.

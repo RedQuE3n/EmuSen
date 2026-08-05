@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using EmuSen.WiseMan.LunaP;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using EmuSen.DianaOS.DianaOS.Var;
@@ -258,7 +259,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             Systems(window).SelectedIndex = 0;
 
-            window.GetControl<TextBox>("GameFilterBox").Text = "chrono";
+            window.FindNamed<TextBox>("PART_Search").Text = "chrono";
 
             Assert.Equal("Chrono Trigger (USA)", Games(window).ItemsSource!.Cast<string>().Single());
 

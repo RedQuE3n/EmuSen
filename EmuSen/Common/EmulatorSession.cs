@@ -29,9 +29,7 @@ namespace EmuSen.Common
         // Asks the core, or Moon's 240 lines get submitted as Venus's 224 - see EmuSen_Multicore.md §7.
         public int ScreenHeight => _core?.ScreenHeight ?? 224;
 
-        // "SNES" before LoadRom() is called too - there's only one core to
-        // report today, but this exists so a caller (e.g. a log directory
-        // path) doesn't need its own core-specific fallback string.
+        // Only meaningful after LoadRom; ask CoreCatalog.ConsoleForRom before that - see EmuSen_Multicore.md §12.
         public string CoreName => _core?.CoreName ?? "SNES";
 
         public long TotalFrames => _core?.TotalFrames ?? 0;

@@ -205,6 +205,38 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(h.Bindings.For("NES").ButtonToKey.ContainsKey(PadButton.A));
         }, default);
 
+        // A file written before an action existed leaves it unbound - see EmuSen_Settings_Reference.md §4.18.
+        [Fact]
+        public Task An_older_hotkey_file_gains_the_defaults_it_predates() => Session.Dispatch(() =>
+        {
+            var stale = new HotkeyBindingMap();
+            stale.ActionToKey.Remove(HotkeyAction.ExitToLibrary);
+            stale.Rebind(HotkeyAction.TogglePause, Key.F2); // a real preference, which must survive
+            stale.Save();
+
+            var loaded = HotkeyBindingMap.Load();
+
+            Assert.Equal(Key.Escape, loaded.ActionToKey[HotkeyAction.ExitToLibrary]);
+            Assert.Equal(Key.F2, loaded.ActionToKey[HotkeyAction.TogglePause]);
+        }, default);
+
+        // ...but not by stealing a key the user has since bound elsewhere.
+        [Fact]
+        public Task A_backfilled_default_never_overwrites_an_existing_binding() => Session.Dispatch(() =>
+        {
+            var stale = new HotkeyBindingMap();
+            stale.ActionToKey.Remove(HotkeyAction.ExitToLibrary);
+            stale.Rebind(HotkeyAction.SaveState, Key.Escape);
+            stale.Save();
+
+            var loaded = HotkeyBindingMap.Load();
+
+            Assert.Equal(Key.Escape, loaded.ActionToKey[HotkeyAction.SaveState]);
+            Assert.False(loaded.ActionToKey.ContainsKey(HotkeyAction.ExitToLibrary));
+            Assert.True(loaded.TryGetAction(Key.Escape, out HotkeyAction owner));
+            Assert.Equal(HotkeyAction.SaveState, owner);
+        }, default);
+
         // A hand-edited config can still arrive with a clash.
         [Fact]
         public Task A_config_that_already_conflicts_is_reported() => Session.Dispatch(() =>

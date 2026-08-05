@@ -228,8 +228,8 @@ EmuSen Project/
 │   │   │   │   │                              #   decoding moved.
 │   │   │   │   └── Input/
 │   │   │   │       └── Input.cs
-│   │   │   ├── Moon - NES/README.md          # Reserved - future NES core
-│   │   │   ├── Mercury - GB-GBC/README.md    # Reserved - future GB/GBC core
+│   │   │   ├── Moon - NES/                   # Implemented - CPU, PPU, memory, five mappers
+│   │   │   ├── Mercury - GB-GBC/             # In progress - SM83, memory, cartridge; no PPU/APU
 │   │   │   ├── Jupiter - GBA/README.md       # Reserved - future GBA core
 │   │   │   ├── Mars - N64/README.md          # Reserved - future N64 core
 │   │   │   ├── Saturn - Virtual Boy/README.md   # Reserved - future Virtual Boy core (Outer Senshi)

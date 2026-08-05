@@ -32,7 +32,8 @@
       "Bash(magick hold_right.bmp hold_right.png)",
       "Bash(magick hold_down.bmp hold_down.png)",
       "Bash(magick step_a.bmp step_a.png)",
-      "Bash(magick step_b.bmp step_b.png)"
+      "Bash(magick step_b.bmp step_b.png)",
+      "Bash(awk '{printf \"%-10s %s\\\\n\", $5, $9}')"
     ],
     "additionalDirectories": [
       "/home/red/Projects/EmuSen Project/EmuSen.DianaOS/DianaOS/Usr/Home/Saves/SNES"

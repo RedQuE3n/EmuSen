@@ -23,6 +23,10 @@ namespace EmuSen.Cores.Nintendo.Moon
         private long _lineStartClock;
         private bool _frameComplete;
 
+        // Reset each EndFrame, not each scanline - see Moon_Debug.md §3.2.
+        private long _cpuApuTicksAccum;
+        private long _ppuTicksAccum;
+
         public Scheduler Schedule => _schedule;
 
         public long MasterClock => _schedule.Now;
@@ -70,9 +74,14 @@ namespace EmuSen.Cores.Nintendo.Moon
         {
             TotalFrames++;
 
+            double ticksToMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            LastFrameCpuApuMs = _cpuApuTicksAccum * ticksToMs;
+            LastFramePpuMs = _ppuTicksAccum * ticksToMs;
+            _cpuApuTicksAccum = 0;
+            _ppuTicksAccum = 0;
+
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             Cheats.ApplyAll(ReadForCheat, WriteForCheat);
-            FrameRefresh?.Invoke();
 
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
 

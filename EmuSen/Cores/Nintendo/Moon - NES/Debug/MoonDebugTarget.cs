@@ -59,9 +59,13 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
 
         private readonly bool[] _muted = new bool[Apu.Apu.ChannelCount];
 
-        public MoonDebugTarget(MoonCore core)
+        // Injectable only so a test can assert exact bar percentages - see Moon_Debug.md §3.2.
+        private readonly Func<(double CpuApuMs, double PpuMs)> _frameTimings;
+
+        public MoonDebugTarget(MoonCore core, Func<(double CpuApuMs, double PpuMs)>? frameTimings = null)
         {
             _core = core;
+            _frameTimings = frameTimings ?? (() => (core.LastFrameCpuApuMs, core.LastFramePpuMs));
 
             BuildSpaces();
 
@@ -72,10 +76,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             _sprites = new(ReadSpritesLive, ReadSpritesLive());
             _palettes = new(ReadPalettesLive, ReadPalettesLive());
             _audioChannels = new(ReadAudioChannelsLive, ReadAudioChannelsLive());
-            _hardwareLoad = new(() => Array.Empty<DebugLoadInfo>(), Array.Empty<DebugLoadInfo>());
+            _hardwareLoad = new(ReadHardwareLoadLive, ReadHardwareLoadLive());
 
             if (core.Bus != null) core.Bus.WriteObserver = this;
-            core.FrameRefresh = Refresh;
         }
 
         public string CoreName => "NES";
@@ -115,14 +118,30 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             new DebugCpu("cpu", "2A03", _core.Breakpoints),
         };
 
-        public void Refresh()
+        public void RefreshProviders()
         {
             _cpuRegisters.Refresh();
             _videoRegisters.Refresh();
             _apuRegisters.Refresh();
+            _coprocessorRegisters.Refresh();
             _sprites.Refresh();
             _palettes.Refresh();
             _audioChannels.Refresh();
+            _hardwareLoad.Refresh();
+        }
+
+        // Percent of one native frame's wall-clock budget, clamped so a frame running behind never exceeds "full" - see Moon_Debug.md §3.2.
+        private IReadOnlyList<DebugLoadInfo> ReadHardwareLoadLive()
+        {
+            var (cpuApuMs, ppuMs) = _frameTimings();
+            double frameBudgetMs = 1000.0 / _core.FrameRateHz;
+            double ToPercent(double ms) => Math.Min(100.0, ms / frameBudgetMs * 100.0);
+
+            return new[]
+            {
+                new DebugLoadInfo("CPU+APU", ToPercent(cpuApuMs), DebugLoadKind.EmulatorCost),
+                new DebugLoadInfo("PPU", ToPercent(ppuMs), DebugLoadKind.EmulatorCost),
+            };
         }
 
         public void OnWrite(string spaceName, int address, byte value) =>

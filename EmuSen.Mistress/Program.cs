@@ -1,5 +1,6 @@
 using System;
 using Avalonia;
+using EmuSen.LunaP;
 
 namespace EmuSen.Mistress
 {
@@ -24,21 +25,7 @@ namespace EmuSen.Mistress
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
 
-        public static AppBuilder BuildAvaloniaApp()
-        {
-            // See EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Project_Overview_v2.md §2a for why
-            // Linux is forced onto UseX11() now.
-            var builder = AppBuilder.Configure<App>()
-                .UsePlatformDetect()
-                .WithInterFont()
-                .LogToTrace();
-
-            if (OperatingSystem.IsLinux())
-            {
-                builder = builder.UseX11();
-            }
-
-            return builder;
-        }
+        // The platform/font/X11 sequence this used to spell out lives in LunaApp now - see EmuSen_LunaP.md §3.
+        public static AppBuilder BuildAvaloniaApp() => LunaApp.Configure<App>();
     }
 }

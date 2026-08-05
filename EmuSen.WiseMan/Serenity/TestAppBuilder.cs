@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Styling;
-using Avalonia.Themes.Fluent;
 
 [assembly: AvaloniaTestApplication(typeof(EmuSen.WiseMan.Serenity.TestAppBuilder))]
 
@@ -16,16 +16,17 @@ namespace EmuSen.WiseMan.Serenity
     // instead of a live GPU one.
     public class TestAppBuilder
     {
-        // FluentTheme/Dark to match the real frontends (App.axaml) - without a
-        // theme, templated controls have no template and render as nothing at
-        // all, which silently makes any render assertion over them vacuous.
+        // The frontends' own LunaTheme.axaml, not a hand-built lookalike - see EmuSen_LunaP.md §3.1 for the bug class that closes.
         public static AppBuilder BuildAvaloniaApp() =>
             AppBuilder.Configure<Application>()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .UseSkia()
                 .AfterSetup(builder =>
                 {
-                    builder.Instance!.Styles.Add(new FluentTheme());
+                    builder.Instance!.Styles.Add(new StyleInclude(null as System.Uri)
+                    {
+                        Source = new System.Uri("avares://EmuSen.LunaP/Theme/LunaTheme.axaml"),
+                    });
                     builder.Instance.RequestedThemeVariant = ThemeVariant.Dark;
                 });
     }

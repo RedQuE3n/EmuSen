@@ -1,4 +1,5 @@
 using System;
+using EmuSen.LunaP.Controls;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -51,6 +52,79 @@ namespace EmuSen.WiseMan.Mistress
             w.GetControl<Button>(name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
         private static string Status(ActiveCheatsWindow w) => w.GetControl<TextBlock>("StatusText").Text!;
+
+        // Save's counterpart: pulls the running game's saved list back - see §4.15.
+        [Fact]
+        public Task Load_restores_the_saved_list_over_whatever_is_live() => Session.Dispatch(() =>
+        {
+            var saved = new CheatRegistry();
+            saved.AddRamPoke("CpuBus", 0x7E005E, 0x10, "fast walk");
+            Assert.True(CheatFile.For("Alpha").Save(saved.ToCheatFile()));
+
+            var live = new CheatRegistry();
+            live.AddRamPoke("CpuBus", 0x7E0001, 0x01, "something else");
+            var window = Open(live, saveName: () => "Alpha");
+
+            Click(window, "LoadButton");
+
+            Assert.Equal("fast walk", live.GetCheats().Single().Description);
+            Assert.Contains("Loaded 1 cheat(s)", Status(window));
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task Load_is_off_until_there_is_a_file_to_load() => Session.Dispatch(() =>
+        {
+            var window = Open(WithOneCheat(), saveName: () => "NeverSaved");
+            Assert.False(window.GetControl<Button>("LoadButton").IsEnabled);
+
+            Click(window, "SaveButton");
+
+            Assert.True(window.GetControl<Button>("LoadButton").IsEnabled);
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task Load_with_no_game_running_says_what_it_needs() => Session.Dispatch(() =>
+        {
+            var window = Open(WithOneCheat());
+
+            Click(window, "LoadButton");
+
+            Assert.Contains("Start a game first", Status(window));
+            window.Close();
+        }, default);
+
+        // Save As writes the same shape, so a Load From round-trips it - see §4.15.
+        [Fact]
+        public Task A_save_as_file_round_trips_through_load_from() => Session.Dispatch(() =>
+        {
+            string path = Path.Combine(_root, "elsewhere", "mycheats.json");
+            var source = WithOneCheat();
+            Assert.True(CheatFile.SaveTo(path, source.ToCheatFile()));
+
+            CheatFile? read = CheatFile.LoadFrom(path);
+            Assert.NotNull(read);
+
+            var target = new CheatRegistry();
+            (int loaded, int skipped) = target.LoadFrom(read!);
+
+            Assert.Equal(1, loaded);
+            Assert.Equal(0, skipped);
+            Assert.Equal("fast walk", target.GetCheats().Single().Description);
+            return Task.CompletedTask;
+        }, default);
+
+        [Fact]
+        public void Load_from_a_path_that_is_not_a_cheat_list_returns_null()
+        {
+            string path = Path.Combine(_root, "junk.json");
+            Directory.CreateDirectory(_root);
+            File.WriteAllText(path, "this is not json");
+
+            Assert.Null(CheatFile.LoadFrom(path));
+        }
 
         [Fact]
         public Task Apply_pokes_the_running_core_and_says_how_many() => Session.Dispatch(() =>
@@ -106,7 +180,7 @@ namespace EmuSen.WiseMan.Mistress
             Click(window, "ApplyButton");
 
             Assert.True(registry.MasterEnabled);
-            Assert.True(window.GetControl<CheckBox>("MasterSwitch").IsChecked);
+            Assert.True(window.GetControl<LunaSwitch>("MasterSwitch").IsChecked);
 
             window.Close();
         }, default);

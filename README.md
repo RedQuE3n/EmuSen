@@ -161,8 +161,7 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 | `EmuSen.LunaP` | The shared Avalonia toolkit: palette and themes, controls, window scaffolding, fluent layout. References Avalonia and `EmuSen.Galaxia` and nothing else |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
-| `EmuSen.Pharaoh` | The headless scripted harness |
-| `EmuSen.Tomoe` | CLI runner for ground-truth CPU/hardware test vectors |
+| `EmuSen.Pharaoh` | The headless scripted harness, and the CLI runner for ground-truth CPU test vectors |
 | `EmuSen.WiseMan` | The xUnit test suite |
 
 The SNES core lives under `EmuSen/Cores/Nintendo/Venus - SNES/`, namespaced `EmuSen.Cores.Nintendo.Venus.*`, with reserved sibling folders for every other planned console.

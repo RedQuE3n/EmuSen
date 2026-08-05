@@ -19,14 +19,14 @@
                     <Border Padding="10" CornerRadius="4" Background="{DynamicResource SystemChromeLowColor}">
                         <StackPanel Spacing="4">
                             <luna:LunaSwitch x:Name="MasterSwitch" Label="Enable cheats" />
-                            <TextBlock x:Name="MasterHintText" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource LunaMuted}" />
+                            <luna:HintText x:Name="MasterHintText" />
                         </StackPanel>
                     </Border>
 
                     <!-- Saving is per game, not per console - see §4.15. -->
                     <StackPanel Spacing="6">
                         <TextBlock Text="Saved cheat list" FontWeight="Bold" />
-                        <TextBlock x:Name="SaveTargetText" Foreground="{DynamicResource LunaMuted}" FontSize="11" TextWrapping="Wrap" />
+                        <luna:HintText x:Name="SaveTargetText" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button x:Name="SaveButton" Content="Save" Click="OnSaveClick" />
                             <Button x:Name="LoadButton" Content="Load" Click="OnLoadClick" />
@@ -47,12 +47,12 @@
                            x:Name="StatusText"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <luna:ButtonBar Grid.Column="1">
                     <Button x:Name="ApplyButton" Content="Apply Cheats" Click="OnApplyClick" />
                     <Button x:Name="RemoveButton" Content="Remove" IsEnabled="False" Click="OnRemoveClick" />
                     <Button x:Name="ClearButton" Content="Remove All" Click="OnClearClick" />
                     <Button Content="Close" Click="OnCloseClick" />
-                </StackPanel>
+                </luna:ButtonBar>
             </Grid>
         </Border>
 

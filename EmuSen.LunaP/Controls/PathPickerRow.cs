@@ -70,7 +70,7 @@ namespace EmuSen.LunaP.Controls
         {
             string? picked = Mode switch
             {
-                PathPickerMode.OpenFile => await Dialogs.PickFileAsync(this, BrowseTitle, startIn: Path),
+                PathPickerMode.OpenFile => (await Dialogs.PickFileAsync(this, BrowseTitle, startIn: Path))?.Path,
                 _ => await Dialogs.PickFolderAsync(this, BrowseTitle, Path),
             };
 

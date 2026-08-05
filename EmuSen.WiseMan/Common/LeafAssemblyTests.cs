@@ -42,13 +42,23 @@ namespace EmuSen.WiseMan.Common
             Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(serenity));
         }
 
-        // The launcher's whole value is browsing a library with no core loaded - see EmuSen_LunaP.md §1.
+        // The launcher's whole value is browsing a library with no core loaded - see EmuSen_LunaP.md §1, and §16 for why Cauldron is on the list.
         [Fact]
-        public void LunaP_references_only_Galaxia()
+        public void LunaP_references_only_Galaxia_and_Cauldron()
         {
             Assembly lunaP = typeof(EmuSen.LunaP.Controls.MeterRow).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(lunaP));
+            Assert.Equal(new[] { "EmuSen.Cauldron", "EmuSen.Galaxia" }, EmuSenReferencesOf(lunaP));
+        }
+
+        // The precondition §16's amendment rests on: a reference added to Cauldron would reach LunaP transitively and silently.
+        [Fact]
+        public void Cauldron_is_a_leaf_so_LunaP_inherits_nothing_through_it()
+        {
+            Assembly cauldron = typeof(EmuSen.Cauldron.ICoreTelemetry).Assembly;
+
+            Assert.Equal("EmuSen.Cauldron", cauldron.GetName().Name);
+            Assert.Empty(EmuSenReferencesOf(cauldron));
         }
 
         [Fact]
@@ -67,6 +77,7 @@ namespace EmuSen.WiseMan.Common
         [InlineData(typeof(EmuSen.Serenity.GameFrameControl))]
         [InlineData(typeof(EmuSen.LunaP.Controls.MeterRow))]
         [InlineData(typeof(EmuSen.Galaxia.Input.PadButton))]
+        [InlineData(typeof(EmuSen.Cauldron.ICoreTelemetry))]
         public void No_leaf_reaches_the_core_assembly(Type witness)
         {
             Assert.DoesNotContain("EmuSen", EmuSenReferencesOf(witness.Assembly));

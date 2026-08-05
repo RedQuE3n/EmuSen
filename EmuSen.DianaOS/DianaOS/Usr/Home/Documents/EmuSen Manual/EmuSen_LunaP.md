@@ -300,11 +300,13 @@ Three things, none of which a passing build would have shown:
 
 **`FeedWindow` needs `.Grow()`.** `RgbaImageView` is left-aligned by default, which is right for a palette swatch in a column and wrong for a live game mirror that should fill the window. There is a test asserting the picture is actually wider than 400 px, because the wrong alignment renders as a working window that simply drew small.
 
-### 12.3 What is still duplicated, and the option not taken
+### 12.3 What was still duplicated, and how it was actually resolved
 
-The two `CoretopWindow`s are now 138 lines each and **differ by six lines, all namespace or comment**. That is the deliberate consequence of sharing widgets but not windows: `CoretopWindow` consumes `ICoreTelemetry`, which §1's layering rule keeps out of LunaP.
+*Superseded on 2026-08-04 by §16 — kept because the reasoning recorded here was wrong in an instructive way.*
 
-If that residue is worth removing, the remaining option is a small third assembly referencing LunaP *and* Cauldron, holding the shared dashboards — the launcher simply would not reference it, so the layering rule survives. It was not offered when the sharing question was decided, and it is not something to do on the side of a migration commit.
+The two `CoretopWindow`s were 138 lines each and **differed by six lines, all namespace or comment**. This section framed that as the deliberate consequence of sharing widgets but not windows, and named the only remaining option as "a small third assembly referencing LunaP *and* Cauldron."
+
+**That framing was too narrow, and taking it at face value cost a wrong turn.** A third assembly was actually built before anyone asked the prior question: *does referencing Cauldron from LunaP violate what the layering rule is for?* It does not — see §16. The window is in `Dashboards/` and there is no third assembly.
 
 ### 12.4 Where the tests moved
 
@@ -371,8 +373,54 @@ The gap between facet and search sits on the *dropdown*, so it collapses with it
 
 ---
 
-## 14. Where to look next
+## 15. `Input/DefaultPadKeyMap`
+
+The keyboard scheme both frontends start from — arrows for the d-pad, `Z`/`X`/`A`/`S` for B/A/Y/X, `Q`/`W` for the shoulders, `Enter`/`RightShift` for Start/Select — plus the `Key → PadButton` reverse lookup they both need.
+
+**It was spelled twice**, in Hotaru's `HotaruKeyMap` and Mistress's `ControllerKeyMap`, along with two copies of the reverse-lookup loop. A test asserted the two tables stayed equal, which is the shape of a problem being *guarded* rather than *fixed*.
+
+**Why here and not in `EmuSen.Galaxia`, which is where the config models live.** Galaxia's csproj states the constraint plainly: it is a leaf with no `ProjectReference` and no `PackageReference`, because `EmuSen.DianaOS` references it and `EmuSen` references DianaOS — anything Galaxia depended on upward would close a cycle. So **Galaxia cannot name `Avalonia.Input.Key`**, and "the typed maps that use foreign enums keep their own homes" is that csproj's own conclusion. This table needs `Key` *and* `PadButton`, and LunaP is the one project that already references both Avalonia and Galaxia.
+
+`Bindings()` returns a **fresh dictionary per call**, not a shared readonly instance: Mistress rebinds into its copy, and a shared instance would leak one frontend's edits into the other.
+
+---
+
+## 16. `Dashboards/` — and the one amendment to the layering rule
+
+`Dashboards/` holds windows that are LunaP chrome plus an `ICoreTelemetry`. `CoretopWindow` is the only one today.
+
+**This is the one place in the project allowed to name `EmuSen.Cauldron`**, and §1's rule is amended to permit it. The reasoning matters more than the amendment:
+
+> §1's rule exists because *"the launcher's whole value is browsing a library with no core loaded, and one upward reference here hands it the whole emulator."* **`EmuSen.Cauldron` is a dependency-free leaf** — six files of read-only telemetry contracts, no `PackageReference`, no `ProjectReference`. Referencing it hands the launcher one small interfaces assembly and no core at all. The rule's *purpose* is untouched; only its letter changed.
+
+The distinction that keeps this from becoming a slippery slope: **controls take plain data or a delegate, dashboards may take a contract.** A `MeterRow` still takes `(string, double, string)` and never a `DebugLoadInfo`. If a control wants an `ICoreTelemetry`, it is a control that should have taken plain data.
+
+`EmuSen`, `EmuSen.DianaOS` and `EmuSen.Nehellania` remain forbidden, and none of them is a leaf. A window needing `IDebugTarget` is not a dashboard — that interface stays in DianaOS (`EmuSen_Cauldron.md` §3.1) and such a window belongs in a frontend.
+
+### 16.1 The wrong turn, recorded because the doc caused it
+
+§12.3 named "a small third assembly referencing LunaP *and* Cauldron" as the only remaining option. **A whole project was created on that basis** — csproj, solution entry, references from both frontends and the test project, a codename claimed out of the Sailor Moon pool, its own reference doc — to hold one 137-line file. It was deleted the same day.
+
+The prior question was never asked: *is Cauldron actually the kind of dependency this rule is about?* It is not. **An assembly per layering exception grows the project faster than an entry on an allow-list does**, and a codename is a permanent claim on a finite pool (`EmuSen_Core_Naming_Scheme.md` §11 carries the same lesson from the other side).
+
+The general form, since a plan naming exactly one option is how this happened: **a doc that says "the remaining option is X" is recording what was considered, not what is possible.** Re-derive before building on it.
+
+### 16.2 `CoretopWindow`
+
+The GUI counterpart to DianaOS's own `coretop` (`man coretop`). A `PollingWindow` on the same 250 ms/4 Hz cadence the console version uses. Both frontends open the same class and differ only in how they reach it — Hotaru via `DebugWindows.ShowCoretopWindow` from `coretop -w`, Mistress via `MainWindow.OpenCoretopWindow` from the Hardware Dashboard menu item.
+
+Two behaviours that are load-bearing and non-obvious, both pinned by tests:
+
+- **`UpdateTarget(null)` is a real state**, not a defensive check — the window drops to "No ROM loaded." That text is a plain muted `TextBlock` and **not** a `HintText`, because it is the window's whole content in that state rather than an explanation under something. `HintText` is 11 pt by definition, and using it here measured 11,060 pixels wrong (§12.1).
+- **The sprite bar stays on screen at zero when no core is loaded.** It is a fixed part of the layout, not a per-core meter. The natural assumption is that the empty state draws no `ProgressBar`; it draws exactly one.
+
+The two frontends' `CoretopWindowTests` merged too. Mistress's was a strict superset — it covered the no-tile-memory case and the `UpdateTarget(null)` unload — so the merged file is its body, in `EmuSen.WiseMan/LunaP/`. What was genuinely dropped is the second pair of render baselines: with one window class there is one render to pin, and a second baseline under another name asserted the same pixels twice.
+
+---
+
+## 17. Where to look next
 
 - **`EmuSen_LunaP_Gameplan.md`** — the plan of record: the full duplication audit (§1), the settled decisions (§2), Phases 2–6 (controls, window scaffolding, the fluent surface, harness support, migration), and the questions deliberately left open (§6).
 - **`EmuSen_Launcher_Multicore_Gameplan.md`** — the launcher this project is eventually for. Its Phase 4 (theming) is why §2's palette is a resource dictionary rather than a set of constants.
-- **`EmuSen_Core_Naming_Scheme.md` §11** — the name reservation and the `Luna`/`LunaP` collision note.
+- **`EmuSen_Cauldron.md`** — `ICoreTelemetry` and the snapshot/provider contract §16's dashboards consume; §3.1 for the Cauldron-versus-`IDebugTarget` split that keeps this reference safe.
+- **`EmuSen_Core_Naming_Scheme.md` §11** — the name reservation and the `Luna`/`LunaP` collision note, plus the closing note on §16.1's near-miss.

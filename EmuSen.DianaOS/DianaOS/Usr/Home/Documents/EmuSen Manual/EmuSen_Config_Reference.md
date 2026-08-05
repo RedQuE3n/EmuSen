@@ -220,7 +220,7 @@ Telling the two shapes apart takes some care, because a wrong guess is worse tha
 
 `AudioSettings.LoadFromDisk()` and `GraphicsSettings.LoadFromDisk()` are called from `Main` in both GUI frontends (`EmuSen.Mistress/Program.cs`, `EmuSen.Hotaru/Program.cs`), before any window exists — graphics config decides the window's size, so it has to be applied first.
 
-`EmuSen.Pharaoh` and `EmuSen.Tomoe` do not load either. They are headless CLI tools with no window and no audio device; window size and master volume mean nothing there.
+`EmuSen.Pharaoh` does not load either. It is a headless CLI tool with no window and no audio device; window size and master volume mean nothing there.
 
 No GUI or shell command edits `audio.json`/`graphics.json` yet — they are read at startup and hand-edited. The Preferences window still writes `appsettings.json` as before, and the input settings window still writes the three binding files.
 

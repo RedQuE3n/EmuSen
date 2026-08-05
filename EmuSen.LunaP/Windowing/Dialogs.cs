@@ -30,10 +30,11 @@ namespace EmuSen.LunaP.Windowing
                 SuggestedStartLocation = await StartLocation(top, startIn),
             });
 
-            return picked.Count > 0 ? picked[0].Path.LocalPath : null;
+            return picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
         }
 
-        public static async Task<string?> PickFileAsync(Visual owner, string title,
+        // The picked file's name comes back too - callers that show it want the leaf, not the whole path.
+        public static async Task<(string Path, string Name)?> PickFileAsync(Visual owner, string title,
             IReadOnlyList<FilePickerFileType>? types = null, string? startIn = null)
         {
             if (TopLevel.GetTopLevel(owner) is not { } top) return null;
@@ -46,11 +47,13 @@ namespace EmuSen.LunaP.Windowing
                 SuggestedStartLocation = await StartLocation(top, startIn),
             });
 
-            return picked.Count > 0 ? picked[0].Path.LocalPath : null;
+            if (picked.Count == 0 || picked[0].TryGetLocalPath() is not { } path) return null;
+
+            return (path, picked[0].Name);
         }
 
         public static async Task<string?> SaveFileAsync(Visual owner, string title, string? suggestedName = null,
-            IReadOnlyList<FilePickerFileType>? types = null, string? startIn = null)
+            IReadOnlyList<FilePickerFileType>? types = null, string? startIn = null, string? defaultExtension = null)
         {
             if (TopLevel.GetTopLevel(owner) is not { } top) return null;
 
@@ -58,11 +61,12 @@ namespace EmuSen.LunaP.Windowing
             {
                 Title = title,
                 SuggestedFileName = suggestedName,
+                DefaultExtension = defaultExtension,
                 FileTypeChoices = types,
                 SuggestedStartLocation = await StartLocation(top, startIn),
             });
 
-            return picked?.Path.LocalPath;
+            return picked?.TryGetLocalPath();
         }
 
         // A path that no longer exists is not an error here; the picker just opens wherever it would have anyway.

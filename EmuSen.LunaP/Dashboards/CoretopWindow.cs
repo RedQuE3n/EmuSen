@@ -9,9 +9,9 @@ using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
 
-namespace EmuSen.Hotaru.Views
+namespace EmuSen.LunaP.Dashboards
 {
-    // The `coretop -w` window - see `man coretop` for why `-w` exists, and EmuSen_LunaP.md §11 for why this is still a separate file from Mistress's.
+    // The GUI counterpart to DianaOS's own `coretop` - see `man coretop`, and EmuSen_LunaP.md §16 for why one copy now serves both frontends.
     public class CoretopWindow : PollingWindow
     {
         private ICoreTelemetry? _target;
@@ -56,7 +56,7 @@ namespace EmuSen.Hotaru.Views
         // Same 250ms/4Hz cadence the console version refreshes at.
         protected override TimeSpan RefreshInterval => TimeSpan.FromMilliseconds(250);
 
-        // Called after a `core <name> <path>` swap rebuilds the target - see `man coretop`.
+        // Called whenever the host's loaded core changes - a `core <name> <path>` swap in Hotaru, a new ROM in Mistress.
         public void UpdateTarget(ICoreTelemetry? target)
         {
             _target = target;

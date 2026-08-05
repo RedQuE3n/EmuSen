@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
+using EmuSen.LunaP.Windowing;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -97,27 +99,16 @@ namespace EmuSen.Mistress.Views
                 var codecs = EmuSen.Cores.CoreFactory.CheatCodecsFor(console.DisplayName);
 
                 var codeBox = new TextBox { Name = console.Console + "CodeBox", PlaceholderText = "Code" };
-                var descriptionBox = new TextBox { Name = console.Console + "DescriptionBox", PlaceholderText = "Description", Margin = new Avalonia.Thickness(8, 0, 0, 0) };
-                var addButton = new Button { Name = console.Console + "AddButton", Content = "Add", Margin = new Avalonia.Thickness(8, 0, 0, 0) };
-                var formats = new TextBlock { Foreground = LunaPalette.Muted, FontSize = 11, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+                TextBox descriptionBox = new TextBox { Name = console.Console + "DescriptionBox", PlaceholderText = "Description" }.Margin(8, 0, 0, 0);
+                Button addButton = new Button { Name = console.Console + "AddButton", Content = "Add" }.Margin(8, 0, 0, 0);
+                HintText formats = Ui.Hint("");
 
                 addButton.Click += OnAddClick;
 
-                var row = new Grid();
-                row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-                row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-                row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-                Grid.SetColumn(codeBox, 0);
-                Grid.SetColumn(descriptionBox, 1);
-                Grid.SetColumn(addButton, 2);
-                row.Children.Add(codeBox);
-                row.Children.Add(descriptionBox);
-                row.Children.Add(addButton);
-
-                var panel = new StackPanel { Spacing = 6, Margin = new Avalonia.Thickness(0, 8, 0, 0) };
-                panel.Children.Add(new TextBlock { Text = $"Add a {console.Console} cheat", FontWeight = Avalonia.Media.FontWeight.Bold });
-                panel.Children.Add(formats);
-                panel.Children.Add(row);
+                StackPanel panel = Ui.Stack(6,
+                    new TextBlock { Text = $"Add a {console.Console} cheat", FontWeight = Avalonia.Media.FontWeight.Bold },
+                    formats,
+                    Ui.Cols("*,*,Auto", codeBox, descriptionBox, addButton)).Margin(0, 8, 0, 0);
 
                 var tab = new ConsoleTab
                 {
@@ -315,15 +306,10 @@ namespace EmuSen.Mistress.Views
 
         private async void OnSaveAsClick(object? sender, RoutedEventArgs e)
         {
-            var picked = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            {
-                Title = "Save cheat list as",
-                SuggestedFileName = (_saveName?.Invoke() ?? "cheats") + ".json",
-                DefaultExtension = "json",
-                FileTypeChoices = new[] { CheatFileType },
-            });
+            string? path = await Dialogs.SaveFileAsync(this, "Save cheat list as",
+                (_saveName?.Invoke() ?? "cheats") + ".json", new[] { CheatFileType }, defaultExtension: "json");
 
-            if (picked?.TryGetLocalPath() is not string path) return;
+            if (path is null) return;
 
             StatusText.Text = CheatFile.SaveTo(path, _registry.ToCheatFile())
                 ? $"Saved {_registry.GetCheats().Count} cheat(s) to {path}. This copy is not loaded automatically."
@@ -332,22 +318,15 @@ namespace EmuSen.Mistress.Views
 
         private async void OnLoadFromClick(object? sender, RoutedEventArgs e)
         {
-            var picked = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = "Load cheat list",
-                AllowMultiple = false,
-                FileTypeFilter = new[] { CheatFileType },
-            });
+            if (await Dialogs.PickFileAsync(this, "Load cheat list", new[] { CheatFileType }) is not { } picked) return;
 
-            if (picked.Count == 0 || picked[0].TryGetLocalPath() is not string path) return;
-
-            if (CheatFile.LoadFrom(path) is not CheatFile loaded)
+            if (CheatFile.LoadFrom(picked.Path) is not CheatFile loaded)
             {
-                StatusText.Text = $"Couldn't read a cheat list from {path}";
+                StatusText.Text = $"Couldn't read a cheat list from {picked.Path}";
                 return;
             }
 
-            ReplaceWith(loaded, path);
+            ReplaceWith(loaded, picked.Path);
         }
 
         private static FilePickerFileType CheatFileType => new("Cheat list") { Patterns = new[] { "*.json" } };

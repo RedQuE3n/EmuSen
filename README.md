@@ -4,7 +4,7 @@ A multi-system emulator written from scratch in C# / .NET 10, with a Unix-like d
 
 EmuSen is written against published hardware documentation rather than by porting an existing emulator. It is a working emulator, but it is a **hobby project in active development** — see [Status](#status) before expecting to play anything start to finish.
 
-**License:** GPL-3.0 · **Platforms:** Linux, Windows, macOS · **Cores:** SNES
+**License:** GPL-3.0 · **Platforms:** Linux, Windows, macOS · **Cores:** SNES, NES (in progress)
 
 ---
 
@@ -27,20 +27,30 @@ EmuSen is written against published hardware documentation rather than by portin
 
 ## What exists so far
 
-A cycle-budgeted SNES emulator — 65816 CPU, SPC700 + S-DSP audio, a full PPU, and the cartridge coprocessors — plus the tooling built around making it *debuggable*. That tooling is the part that makes this project unusual:
+A cycle-budgeted SNES emulator — 65816 CPU, SPC700 + S-DSP audio, a full PPU, and the cartridge coprocessors — a younger NES core beside it, and the tooling built around making both *debuggable*. That tooling is the part that makes this project unusual:
 
 - **DianaOS**, a genuine bash-alike shell embedded in the emulator, with pipes, variables, redirection, control flow, a coreutils subset, and hardware inspection commands (`mem`, `regs`, `watch`, `disasm`, `coretop`, …).
 - **Pharaoh**, a headless, scriptable harness that runs the real core with no window and no human, so bugs can be reproduced deterministically and fixes proven byte-identical across the ROM library.
 
 The emulation core is a pure library with no window, no `Main`, and no frontend knowledge. Everything else — presentation, frontends, debug tooling — sits above it and depends on it one-directionally.
 
-The project is structured for more than one console. Only the SNES core is playable today. The NES core (**Moon**) has been started and currently consists of its 2A03 CPU and nothing else — see `EmuSen/Cores/Nintendo/Moon - NES/README.md`. Every other core is a reserved, empty folder.
+The project is structured for more than one console, and **two cores are now wired end to end**: hand a frontend a `.smc`/`.sfc` and it builds the SNES core, hand it a `.nes` and it builds the NES one, each with its own debug target behind the same shell.
+
+- **Venus (SNES)** — the mature core. Runs real commercial games.
+- **Moon (NES)** — CPU, PPU, a full APU and ten mapper boards. Younger and less play-tested than Venus, but no longer a skeleton. See `EmuSen/Cores/Nintendo/Moon - NES/README.md`.
+- **Mercury (Game Boy / Game Boy Color)** — started 2026-08-04: the SM83, the bus and five cartridge boards. No PPU, no APU, deliberately not registered with the core factory yet. One core covers both DMG and colour.
+
+Every other console is a reserved, empty folder.
+
+That second wired core is the point of the architecture rather than a bonus: `IDebugTarget` had exactly one implementation for most of this project's life, and `MoonDebugTarget` is the first thing to prove the interface was genuinely core-agnostic rather than SNES-shaped by accident.
 
 ---
 
 ## Status
 
-**Honest summary: the SNES core runs real commercial games, and several boot correctly and play, but very few have been verified end to end.**
+**Honest summary: the SNES core runs real commercial games, and several boot correctly and play, but very few have been verified end to end. The NES core is complete enough to run and make sound, and has had far less play-testing.**
+
+The rows down to *Timing accuracy* describe the SNES core; the other cores follow.
 
 | Area | State |
 |---|---|
@@ -56,7 +66,9 @@ The project is structured for more than one console. Only the SNES core is playa
 | Rewind / fast-forward | Working, core-agnostic (XOR-delta chain) |
 | Input | Rebindable keyboard + gamepad, per-game hotkeys, gamepad hot-plug |
 | Timing accuracy | Scanline granularity, not per-dot. A deliberate, documented tradeoff |
-| Cores other than SNES | None. Reserved folders only |
+| NES core (Moon) | CPU validated against SingleStepTests `nes6502/v1` (2,560,000 cases, final state *and* per-cycle bus traces); PPU renders backgrounds, sprites, sprite 0 and NMI; all five APU channels synthesize (two pulse, triangle, noise, DMC); ten mapper boards including MMC3. Scanline granularity, NTSC only |
+| Game Boy core (Mercury) | SM83, interrupts, timer, joypad, five cartridge boards, save states. No PPU or APU yet |
+| Consoles beyond those three | Reserved folders only |
 
 **Coprocessors, chip by chip.** The **SA-1** is the most solid — Kirby's Dream Land 3 and Kirby Super Star both play, and its one known gap is character-conversion DMA, which neither game requests. The **SuperFX** runs Yoshi's Island: it boots and plays through the intro, with one open cosmetic defect (a strip of 18 tiles the game never uploads). The **NEC DSP** interpreter covers all seven uPD7725/uPD96050 variants from one implementation, but **it cannot run without a firmware dump, and none is shipped** — a DSP game sitting on a loading screen is a missing dump, not an emulation bug. The **OBC1** is implemented and tested.
 
@@ -68,13 +80,15 @@ Verified builds: **Linux x64 is launch-tested.** Windows and macOS binaries are 
 
 ## The two frontends
 
-Both are Avalonia applications sharing one presentation layer, and neither owns any emulation logic.
+Both are Avalonia applications, and neither owns any emulation logic. They share two libraries: **Serenity** presents the game picture, and **LunaP** is everything around it — the palette, the controls, the window scaffolding and a fluent layout surface, so a new screen is a constructor and a refresh method rather than another hand-built window.
 
 **Mistress** — the fuller GUI, scoped as bug-testing tooling rather than a polished launcher. ROM picker and ROM browser, save/load state, rebindable keyboard + gamepad, emulator hotkeys, preferences, per-session file logging, and a menu entry that opens the DianaOS console against the running game.
 
 **Hotaru** — a lighter, console-first frontend. Takes a ROM path on the command line and puts the DianaOS shell on the terminal it was launched from, with the game in its own window.
 
-A polished, EmulationStation-style launcher is explicitly *not* either of these; it is planned as a separate project.
+**Themes** are a drop-in file: a `ResourceDictionary` at `/etc/EmuSen/themes/<name>.axaml` overriding whichever palette keys it cares about. Keys it does not mention keep their built-in value, and applying one repaints every open window live, with no restart.
+
+A polished, EmulationStation-style launcher is explicitly *not* either of these; it is planned as a separate project, and LunaP exists partly so that project starts with a widget set rather than a blank page.
 
 ---
 
@@ -140,8 +154,11 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 | `EmuSen` | The emulation core: CPU, PPU, APU, memory, save states, audio resampling. A pure library — no `Main`, no window |
 | `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command. Core-agnostic |
 | `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
+| `EmuSen.Crystal` | Core-agnostic timing scheduler: master timeline, deadline-driven devices, drift-free clock conversion |
 | `EmuSen.Serenity` | Shared presentation: the Avalonia/Skia `GameFrameControl`, shader pipeline, graphics settings |
+| `EmuSen.Endymion` | The audio sink — takes PCM and drives a real device. Serenity's counterpart on the sound side |
 | `EmuSen.Nehellania` | Shared device I/O: SDL3 audio output, gamepad polling, pad bindings |
+| `EmuSen.LunaP` | The shared Avalonia toolkit: palette and themes, controls, window scaffolding, fluent layout. References Avalonia and `EmuSen.Galaxia` and nothing else |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
 | `EmuSen.Pharaoh` | The headless scripted harness |
@@ -150,7 +167,7 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 
 The SNES core lives under `EmuSen/Cores/Nintendo/Venus - SNES/`, namespaced `EmuSen.Cores.Nintendo.Venus.*`, with reserved sibling folders for every other planned console.
 
-The layering is enforced in practice, not just described: the PPU exposes a small `IWriteObserver` hook and has no idea a watchpoint exists; the debug layer implements that interface and supplies the meaning.
+The layering is enforced in practice, not just described. The PPU exposes a small `IWriteObserver` hook and has no idea a watchpoint exists; the debug layer implements that interface and supplies the meaning. And where a layer's boundary actually matters, a test holds it: `LeafAssemblyTests` asserts that Galaxia, Endymion, Nehellania, Serenity and LunaP reference what they are allowed to and never reach back into the core — which is what keeps a future launcher able to browse a library without loading an emulator.
 
 ---
 
@@ -220,7 +237,9 @@ codesign --force --deep --sign - Mistress.app
 dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj
 ```
 
-1302 tests across 110 files: CPU and PPU hardware behaviour, APU/DSP, the cartridge coprocessors and their debug exposure, audio sync and drain, save-state round-tripping, the DianaOS shell (lexer, parser, pipes, control flow, multi-line continuation, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
+2205 tests across 168 files: CPU and PPU hardware behaviour for both cores, APU/DSP, the cartridge coprocessors and their debug exposure, audio sync and drain, save-state round-tripping, the DianaOS shell (lexer, parser, pipes, control flow, multi-line continuation, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
+
+The UI tests run against real Skia render passes rather than checking flags, because the failure mode that matters there is silent: a control whose style stopped matching renders as *nothing* and throws no error. `UiTest.AssertLaidOut` catches the flat-image case, and `EMUSEN_UI_BASELINE` records a pixel baseline from one commit and compares the next against it — which is how two visual defects were caught during the toolkit migration, one of them a window whose Close button had been sitting off the bottom edge for a long time.
 
 Some of those are **property-based** (CsCheck), asserting laws rather than examples: that the rewind delta codec's `Apply` really is its own inverse, that resampled audio never leaves the range its input spanned, that a fuller audio queue never asks the resampler to speed up, and that `CanDecode` never promises a cheat-code decode that then throws. Each runs hundreds to thousands of generated cases and shrinks any failure to a minimal counterexample.
 
@@ -233,7 +252,8 @@ Beyond unit tests, the project leans on **output-identity digests**: `framesum` 
 This project documents heavily, and deliberately keeps rationale *out* of code comments and *in* man pages. Code comments are one line and point at a section.
 
 - `EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/` — per-console hardware notes. The SNES set (`Venus - SNES/`) covers CPU, PPU, APU, memory and each cartridge coprocessor, including full root-cause writeups for real bugs found and fixed — and, where a lead turned out to be wrong, the measurement that retired it, so the same ground does not get walked twice.
-- `EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/` — project-level docs: overview, debugging tools reference, save states, audio sync, rewind/fast-forward, settings, games tested, roadmap.
+- `EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/` — project-level docs: overview, debugging tools reference, save states, audio sync, rewind/fast-forward, settings, games tested, roadmap, the shared-toolkit reference, and the per-subsystem writeups (`EmuSen_Cauldron.md`, `EmuSen_Crystal_Scheduler.md`, `EmuSen_LunaP.md`, …).
+- `EmuSen.DianaOS/DianaOS/Etc/Man pages/README.md` — the index to all of the above. Start there rather than guessing a filename.
 
 These are readable on GitHub, and also from inside the emulator via DianaOS's own `man` and `cat`.
 
@@ -244,11 +264,12 @@ These are readable on GitHub, and also from inside the emulator via DianaOS's ow
 Near-term, roughly in order:
 
 1. Finish verifying the games that currently boot but have not been played through.
-2. Close out the SuperFX cosmetic defect in Yoshi's Island (18 tiles that never reach VRAM).
-3. Character-conversion DMA on the SA-1 — unused by both Kirby titles, but a game that asks for it gets wrong tile data.
-4. Real per-Player-2 input bindings (only a mirror-P1 toggle exists today).
-5. The Mesen-style multi-pane GUI debugger, built on `IDebugTarget`.
-6. A second core — NES (**Moon**) — which is the long-term goal the whole architecture has been built toward.
+2. Play-test the NES core against real games the way the SNES core has been.
+3. Close out the SuperFX cosmetic defect in Yoshi's Island (18 tiles that never reach VRAM).
+4. Character-conversion DMA on the SA-1 — unused by both Kirby titles, but a game that asks for it gets wrong tile data.
+5. Real per-Player-2 input bindings (only a mirror-P1 toggle exists today).
+6. Carry Mercury (Game Boy) up to a PPU and register it with the core factory.
+7. The Mesen-style multi-pane GUI debugger, built on `IDebugTarget` and LunaP.
 
 Explicitly deferred: true doubled-resolution interlace, and per-dot H-position timing.
 

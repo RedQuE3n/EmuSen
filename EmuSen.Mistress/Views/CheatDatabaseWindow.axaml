@@ -25,14 +25,14 @@
                            x:Name="StatusText"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <luna:ButtonBar Grid.Column="1">
                     <Button x:Name="ActiveCheatsButton" Content="Active Cheats..." Click="OnActiveCheatsClick" />
                     <!-- Two-stage on purpose: the first click only reports
                          what would go - see EmuSen_Settings_Reference.md §4.16. -->
                     <Button x:Name="PruneButton" Content="Prune Unsupported" Click="OnPruneClick" />
                     <Button x:Name="DownloadButton" Content="Download from libretro" Click="OnDownloadClick" />
                     <Button Content="Close" Click="OnCloseClick" />
-                </StackPanel>
+                </luna:ButtonBar>
             </Grid>
         </Border>
 
@@ -44,10 +44,7 @@
                 Margin="0,12,0,0"
                 CornerRadius="4"
                 Background="{DynamicResource SystemChromeLowColor}">
-            <TextBlock x:Name="AttributionText"
-                       TextWrapping="Wrap"
-                       FontSize="11"
-                       Foreground="{DynamicResource LunaMuted}" />
+            <luna:HintText x:Name="AttributionText" />
         </Border>
 
         <!-- Systems on the left, that system's games on the right - see

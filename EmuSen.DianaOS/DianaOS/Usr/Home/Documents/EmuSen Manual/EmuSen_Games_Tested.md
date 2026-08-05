@@ -1,6 +1,6 @@
 # EmuSen — Games Tested
 
-*(Living document — tracks real-game compatibility testing across EmuSen's cores, separate from the CPU/PPU ground-truth test suites in `EmuSen.Tomoe`. Those prove individual opcodes/registers match hardware in isolation; this tracks what actually happens when a real, complete commercial ROM is played.)*
+*(Living document — tracks real-game compatibility testing across EmuSen's cores, separate from the CPU/PPU ground-truth test suites run by `EmuSen.Pharaoh --singlestep`. Those prove individual opcodes/registers match hardware in isolation; this tracks what actually happens when a real, complete commercial ROM is played.)*
 
 ---
 

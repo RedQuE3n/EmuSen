@@ -8,14 +8,22 @@
        §11 - distinct from Luna, the reserved DS core codename).
 
        THE LAYERING RULE, and it is load-bearing: this project may reference
-       Avalonia and EmuSen.Galaxia and NOTHING ELSE. Not EmuSen (the core),
-       not EmuSen.DianaOS, not EmuSen.Cauldron, not EmuSen.Nehellania. The
+       Avalonia, EmuSen.Galaxia and EmuSen.Cauldron, and NOTHING ELSE. Not
+       EmuSen (the core), not EmuSen.DianaOS, not EmuSen.Nehellania. The
        launcher's whole value is browsing a library with no core loaded, and
-       one upward reference here hands it the entire emulator. EmuSen.Serenity
-       already holds this line on the video side - it presents game frames
-       while taking (byte[] rgba, int w, int h) rather than an ICore, and
-       every control here takes plain data or a delegate for the same reason.
-       See EmuSen_LunaP.md §1. -->
+       an upward reference to any of those hands it the entire emulator.
+       EmuSen.Serenity already holds this line on the video side - it presents
+       game frames while taking (byte[] rgba, int w, int h) rather than an
+       ICore, and every CONTROL here takes plain data or a delegate for the
+       same reason. See EmuSen_LunaP.md §1.
+
+       Cauldron is on the list and the other three are not, because Cauldron
+       is a dependency-free leaf: six files of read-only telemetry contracts,
+       no PackageReference and no ProjectReference of its own. Referencing it
+       costs the launcher one small interfaces assembly, not a core - which is
+       the thing this rule exists to prevent. Dashboards/ is the only folder
+       allowed to name it; a control that wants an ICoreTelemetry is a control
+       that should have taken plain data. See EmuSen_LunaP.md §16. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -42,6 +50,7 @@
          window geometry through. The only ProjectReference this project is
          allowed to have; see the layering rule above. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+    <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
   </ItemGroup>
 
 </Project>

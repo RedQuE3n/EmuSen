@@ -138,6 +138,21 @@ namespace EmuSen.WiseMan.LunaP
                 Assert.True(field.FindPart<HintText>()!.IsVisible);
             });
 
+        // The XAML shape - children written between the tags rather than handed over as ItemsSource. Four windows use it and nothing covered it.
+        [Fact]
+        public Task A_button_bar_realises_buttons_declared_as_its_children() =>
+            Realised(() =>
+            {
+                var bar = new ButtonBar();
+                bar.Items.Add(new Button { Content = "Reset to Defaults" });
+                bar.Items.Add(new Button { Content = "Close" });
+                return bar;
+            }, bar =>
+            {
+                Assert.Equal(2, bar.CountParts<Button>());
+                Assert.Contains(bar.FindParts<TextBlock>(), t => t.Text == "Close");
+            });
+
         [Fact]
         public Task A_status_bar_shows_its_status_and_its_buttons() =>
             Realised(() => new StatusBar

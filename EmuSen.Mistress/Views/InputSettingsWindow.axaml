@@ -22,10 +22,10 @@
                            Foreground="{DynamicResource LunaWarning}"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <luna:ButtonBar Grid.Column="1">
                     <Button Content="Reset to Defaults" Click="OnResetClick" />
                     <Button Content="Close" Click="OnCloseClick" IsCancel="False" />
-                </StackPanel>
+                </luna:ButtonBar>
             </Grid>
         </Border>
 
@@ -36,8 +36,8 @@
                     <StackPanel Spacing="4" Margin="0,8,0,0">
 
                         <TextBlock Text="Emulator Hotkeys" FontWeight="Bold" Margin="0,0,0,2" />
-                        <TextBlock Text="Actions on the emulator itself, shared by every console. Fast Forward and Rewind apply while held; the rest fire once per press."
-                                   Foreground="{DynamicResource LunaMuted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6" />
+                        <luna:HintText Text="Actions on the emulator itself, shared by every console. Fast Forward and Rewind apply while held; the rest fire once per press."
+                                       Margin="0,0,0,6" />
                         <Grid x:Name="HotkeyHeaderRow" Margin="0,0,0,2">
                             <TextBlock Grid.Column="0" Text="Action" FontWeight="SemiBold" />
                             <TextBlock Grid.Column="1" Text="Keyboard" FontWeight="SemiBold" />
@@ -51,8 +51,8 @@
                         <luna:LunaSwitch x:Name="AnalogStickAsDpadCheckBox"
                                   Label="Use the left stick as a d-pad"
                                   IsCheckedChanged="OnAnalogStickAsDpadChanged" />
-                        <TextBlock Text="Neither of these consoles reads an analog axis, so the stick is only useful mapped onto the d-pad directions."
-                                   TextWrapping="Wrap" Foreground="{DynamicResource LunaMuted}" FontSize="11" Margin="24,2,0,8" />
+                        <luna:HintText Text="Neither of these consoles reads an analog axis, so the stick is only useful mapped onto the d-pad directions."
+                                       Margin="24,2,0,8" />
                         <Grid ColumnDefinitions="Auto,240,Auto" Margin="24,0,0,0">
                             <TextBlock Grid.Column="0" Text="Stick deadzone" VerticalAlignment="Center" Margin="0,0,10,0" />
                             <Slider Grid.Column="1"
@@ -62,8 +62,8 @@
                                     ValueChanged="OnDeadzoneChanged" />
                             <TextBlock Grid.Column="2" x:Name="DeadzoneText" VerticalAlignment="Center" Margin="10,0,0,0" />
                         </Grid>
-                        <TextBlock Text="How far the stick must travel before it counts as a direction. Raise it if your stick drifts."
-                                   TextWrapping="Wrap" Foreground="{DynamicResource LunaMuted}" FontSize="11" Margin="24,2,0,0" />
+                        <luna:HintText Text="How far the stick must travel before it counts as a direction. Raise it if your stick drifts."
+                                       Margin="24,2,0,0" />
 
                         <Separator Margin="0,14,0,10" />
 
@@ -71,11 +71,8 @@
                         <luna:LunaSwitch x:Name="MirrorPlayer1ToPlayer2CheckBox"
                                   Label="Mirror Player 1 input to Player 2"
                                   IsCheckedChanged="OnMirrorPlayer1ToPlayer2Changed" />
-                        <TextBlock Text="Compatibility option for games that read Controller 2 instead of Controller 1 (e.g. Super Mario All-Stars' classic Mario games). Leave off for real two-player sessions."
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource LunaMuted}"
-                                   FontSize="11"
-                                   Margin="24,2,0,0" />
+                        <luna:HintText Text="Compatibility option for games that read Controller 2 instead of Controller 1 (e.g. Super Mario All-Stars' classic Mario games). Leave off for real two-player sessions."
+                                       Margin="24,2,0,0" />
 
                     </StackPanel>
                 </ScrollViewer>

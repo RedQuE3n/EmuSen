@@ -2,7 +2,7 @@ using EmuSen.Cores.Nintendo.Moon.Processor;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Self-contained 2A03 checks; the exhaustive vector run is EmuSen.Tomoe's - see Moon_CPU.md §7.4.
+    // Self-contained 2A03 checks; the exhaustive vector run is Pharaoh's --singlestep - see Moon_CPU.md §7.4.
     public class Nes6502CpuTests
     {
         private sealed class FlatBus : ICpuBus

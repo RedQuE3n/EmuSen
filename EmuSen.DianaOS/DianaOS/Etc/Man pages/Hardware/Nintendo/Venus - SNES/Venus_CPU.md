@@ -295,7 +295,7 @@ The fast path was therefore reverted; it added a null test to every bus access f
 
 ### 10.1 What was kept: `MemoryBus` is sealed, and the flat test bus stands alone
 
-`MemoryBus.Read8`/`Write8` were `virtual` for exactly one reason: `FlatTestMemoryBus`, the 16 MB flat-RAM double used by the `SingleStepTests/65816` harness (§8.6, `EmuSen.Tomoe`), subclassed `MemoryBus` and overrode them to bypass all SNES bank/register decoding. A test double was making two of the hottest methods in the emulator overridable.
+`MemoryBus.Read8`/`Write8` were `virtual` for exactly one reason: `FlatTestMemoryBus`, the 16 MB flat-RAM double used by the `SingleStepTests/65816` harness (§8.6, `EmuSen.Pharaoh --singlestep`), subclassed `MemoryBus` and overrode them to bypass all SNES bank/register decoding. A test double was making two of the hottest methods in the emulator overridable.
 
 `FlatTestMemoryBus` now implements `ICpuBus` directly instead. It never used anything from `MemoryBus` other than the two methods it overrode, so the inheritance was buying nothing — and it forced the double to construct a `Cartridge`, which reads a real file, which is why the harness used to generate a throwaway 32 KB dummy ROM into the temp directory just to satisfy a constructor. That is gone too. `GetAccessSpeedCycles` returns a flat 6 and `TakePendingDmaCycles` returns 0, both unused: the suite discards `Step()`'s return value and checks only registers and memory.
 

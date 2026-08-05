@@ -181,10 +181,10 @@ Once `Jammed` is set, `Step()` burns one access per call forever rather than loo
 
 ### 7.1 What was run
 
-`EmuSen.Tomoe`'s `nes6502` target, against **SingleStepTests/ProcessorTests `nes6502/v1`** — 256 files, 10,000 cases each, 2,560,000 instructions. The data is third-party and is not committed here; fetch it from `https://github.com/SingleStepTests/ProcessorTests`.
+`EmuSen.Pharaoh --singlestep`'s `nes6502` target, against **SingleStepTests/ProcessorTests `nes6502/v1`** — 256 files, 10,000 cases each, 2,560,000 instructions. The data is third-party and is not committed here; fetch it from `https://github.com/SingleStepTests/ProcessorTests`.
 
 ```sh
-dotnet run -c Release --project EmuSen.Tomoe -- nes6502 /path/to/nes6502/v1
+dotnet run -c Release --project EmuSen.Pharaoh -- --singlestep nes6502 /path/to/nes6502/v1
 ```
 
 The suite covers every opcode including the undocumented and unstable ones. It does **not** cover interrupts, reset, or anything about `SetNmiLine`/`SetIrqLine` — see §5.4.
@@ -199,7 +199,7 @@ Consequence worth stating: for this CPU, "passes the vectors" means every dummy 
 
 ### 7.3 What this says about the core-agnostic claim
 
-The shared rig took this core with one new file implementing `ISingleStepTarget`, one JSON loader, and one line in `EmuSen.Tomoe`'s registry. Nothing in `SingleStepTestRunner` or `ISingleStepTarget` needed changing to accommodate a second CPU architecture; the one addition (§7.2) was to exploit richer source data, not to work around an assumption baked in for the 65816.
+The shared rig took this core with one new file implementing `ISingleStepTarget`, one JSON loader, and one line in `EmuSen.Pharaoh --singlestep`'s registry. Nothing in `SingleStepTestRunner` or `ISingleStepTarget` needed changing to accommodate a second CPU architecture; the one addition (§7.2) was to exploit richer source data, not to work around an assumption baked in for the 65816.
 
 That is a genuine result for `ISingleStepTarget`, and it is worth being precise about its scope: it says nothing yet about `IDebugTarget`, which is the much larger core-agnostic claim and has still never been implemented twice. See `Man pages/EmuSen_Core_Gameplan.md` §7.
 

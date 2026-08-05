@@ -20,7 +20,7 @@ Hardware notes live in `Man pages/Hardware/Nintendo/Moon - NES/`: `Moon_CPU.md`,
 The CPU's ground-truth run needs third-party data that is deliberately not committed — fetch `nes6502/v1` from https://github.com/SingleStepTests/ProcessorTests:
 
 ```sh
-dotnet run -c Release --project EmuSen.Tomoe -- nes6502 /path/to/nes6502/v1
+dotnet run -c Release --project EmuSen.Pharaoh -- --singlestep nes6502 /path/to/nes6502/v1
 ```
 
 Everything else is self-contained in `EmuSen.WiseMan`:

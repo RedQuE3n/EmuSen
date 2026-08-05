@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -104,26 +105,10 @@ namespace EmuSen.Mistress.Views
 
         // --- Row construction ---
 
-        // The header and every data row take their columns from here. No Auto
-        // anywhere - see EmuSen_Settings_Reference.md §4.6.
-        private static ColumnDefinitions ButtonRowColumns() => new()
-        {
-            new ColumnDefinition(new GridLength(90)),  // button name
-            new ColumnDefinition(new GridLength(130)), // bound key
-            new ColumnDefinition(new GridLength(110)), // Rebind Key / "Press a key..."
-            new ColumnDefinition(new GridLength(68)),  // Clear, plus its margin
-            new ColumnDefinition(new GridLength(140)), // bound pad button
-            new ColumnDefinition(new GridLength(130)), // Rebind Pad / "Press a button..."
-            new ColumnDefinition(new GridLength(85)),  // Clear Pad, plus its margin
-        };
+        // The header and every data row take their columns from here. No Auto anywhere, and see §4.6 for what each width is holding.
+        private const string ButtonRowColumns = "90,130,110,68,140,130,85";
 
-        private static ColumnDefinitions HotkeyRowColumns() => new()
-        {
-            new ColumnDefinition(new GridLength(130)),
-            new ColumnDefinition(new GridLength(130)),
-            new ColumnDefinition(new GridLength(110)),
-            new ColumnDefinition(new GridLength(56)),
-        };
+        private const string HotkeyRowColumns = "130,130,110,56";
 
         private void BuildConsoleTabs()
         {
@@ -143,26 +128,15 @@ namespace EmuSen.Mistress.Views
                 FontWeight = FontWeight.Bold,
                 Margin = new Avalonia.Thickness(0, 0, 0, 2),
             });
-            panel.Children.Add(new TextBlock
-            {
-                Text = $"What the emulated {console.Console} controller reads. These bindings are this console's alone.",
-                Foreground = LunaPalette.Muted,
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Avalonia.Thickness(0, 0, 0, 6),
-            });
+            panel.Children.Add(Ui.Hint($"What the emulated {console.Console} controller reads. These bindings are this console's alone.")
+                .Margin(0, 0, 0, 6));
 
             // Named so a layout test can find them; these are built in code, so there is no XAML name scope.
-            var header = new Grid
-            {
-                Name = "ButtonHeaderRow",
-                ColumnDefinitions = ButtonRowColumns(),
-                Margin = new Avalonia.Thickness(0, 0, 0, 2),
-            };
-            header.Children.Add(Cell(new TextBlock { Text = "Button", FontWeight = FontWeight.SemiBold }, 0));
-            header.Children.Add(Cell(new TextBlock { Text = "Keyboard", FontWeight = FontWeight.SemiBold }, 1));
-            header.Children.Add(Cell(new TextBlock { Text = "Gamepad", FontWeight = FontWeight.SemiBold }, 4));
-            panel.Children.Add(header);
+            panel.Children.Add(Ui.Cols(ButtonRowColumns,
+                    ColumnHeader("Button"),
+                    ColumnHeader("Keyboard"),
+                    ColumnHeader("Gamepad").AtColumn(4))
+                .Name("ButtonHeaderRow").Margin(0, 0, 0, 2));
 
             var rows = new StackPanel { Name = "BindingsPanel", Spacing = 6 };
             foreach (PadButton button in CoreCatalog.ButtonsFor(console.Console))
@@ -177,47 +151,37 @@ namespace EmuSen.Mistress.Views
         private Control BuildButtonRow(string console, PadButton button)
         {
             var key = (console, button);
-            var row = new Grid { ColumnDefinitions = ButtonRowColumns() };
 
-            row.Children.Add(Cell(new TextBlock { Text = button.ToString(), VerticalAlignment = VerticalAlignment.Center }, 0));
-
-            var keyText = NewValueLabel(CurrentKeyLabel(console, button));
+            TextBlock keyText = NewValueLabel(CurrentKeyLabel(console, button));
             _keyLabels[key] = keyText;
-            row.Children.Add(Cell(keyText, 1));
 
-            var rebindKey = new Button { Content = RebindKeyText };
-            rebindKey.Click += (_, _) => StartListeningForKey(console, button);
+            Button rebindKey = Ui.Button(RebindKeyText, () => StartListeningForKey(console, button));
             _rebindKeyButtons[key] = rebindKey;
-            row.Children.Add(Cell(rebindKey, 2));
 
-            var clearKey = new Button { Content = "Clear", Margin = new Avalonia.Thickness(4, 0, 12, 0) };
-            clearKey.Click += (_, _) =>
+            Button clearKey = Ui.Button("Clear", () =>
             {
                 _keyBindings.For(console).Unbind(button);
                 _keyBindings.Save();
                 RefreshKeyLabels();
-            };
-            row.Children.Add(Cell(clearKey, 3));
+            }).Margin(4, 0, 12, 0);
 
-            var padText = NewValueLabel(CurrentPadLabel(console, button));
+            TextBlock padText = NewValueLabel(CurrentPadLabel(console, button));
             _padLabels[key] = padText;
-            row.Children.Add(Cell(padText, 4));
 
-            var rebindPad = new Button { Content = RebindPadText };
-            rebindPad.Click += (_, _) => StartListeningForPad(console, button);
+            Button rebindPad = Ui.Button(RebindPadText, () => StartListeningForPad(console, button));
             _rebindPadButtons[key] = rebindPad;
-            row.Children.Add(Cell(rebindPad, 5));
 
-            var clearPad = new Button { Content = "Clear Pad", Margin = new Avalonia.Thickness(4, 0, 0, 0) };
-            clearPad.Click += (_, _) =>
+            Button clearPad = Ui.Button("Clear Pad", () =>
             {
                 _gamepadBindings.For(console).Unbind(button);
                 _gamepadBindings.Save();
                 RefreshPadLabels();
-            };
-            row.Children.Add(Cell(clearPad, 6));
+            }).Margin(4, 0, 0, 0);
 
-            return row;
+            // Columns are assigned by position, which is exactly the order the row reads in.
+            return Ui.Cols(ButtonRowColumns,
+                Ui.Text(button.ToString()).Center(),
+                keyText, rebindKey, clearKey, padText, rebindPad, clearPad);
         }
 
         // Opens on the loaded console's tab, since that is the one being played.
@@ -235,36 +199,31 @@ namespace EmuSen.Mistress.Views
 
         private void BuildHotkeyRows()
         {
-            HotkeyHeaderRow.ColumnDefinitions = HotkeyRowColumns();
+            HotkeyHeaderRow.ColumnDefinitions = new ColumnDefinitions(HotkeyRowColumns);
             HotkeysPanel.Children.Clear();
             _hotkeyLabels.Clear();
             _rebindHotkeyButtons.Clear();
 
             foreach (HotkeyAction action in Enum.GetValues<HotkeyAction>())
             {
-                var row = new Grid { ColumnDefinitions = HotkeyRowColumns() };
+                HotkeyAction captured = action;
 
-                row.Children.Add(Cell(new TextBlock { Text = HotkeyBindingMap.DisplayName(action), VerticalAlignment = VerticalAlignment.Center }, 0));
-
-                var keyText = NewValueLabel(CurrentHotkeyLabel(action));
+                TextBlock keyText = NewValueLabel(CurrentHotkeyLabel(action));
                 _hotkeyLabels[action] = keyText;
-                row.Children.Add(Cell(keyText, 1));
 
-                var rebind = new Button { Content = RebindKeyText };
-                rebind.Click += (_, _) => StartListeningForHotkey(action);
+                Button rebind = Ui.Button(RebindKeyText, () => StartListeningForHotkey(captured));
                 _rebindHotkeyButtons[action] = rebind;
-                row.Children.Add(Cell(rebind, 2));
 
-                var clear = new Button { Content = "Clear", Margin = new Avalonia.Thickness(4, 0, 0, 0) };
-                clear.Click += (_, _) =>
+                Button clear = Ui.Button("Clear", () =>
                 {
-                    _hotkeyBindings.Unbind(action);
+                    _hotkeyBindings.Unbind(captured);
                     _hotkeyBindings.Save();
                     RefreshHotkeyLabels();
-                };
-                row.Children.Add(Cell(clear, 3));
+                }).Margin(4, 0, 0, 0);
 
-                HotkeysPanel.Children.Add(row);
+                HotkeysPanel.Children.Add(Ui.Cols(HotkeyRowColumns,
+                    Ui.Text(HotkeyBindingMap.DisplayName(action)).Center(),
+                    keyText, rebind, clear));
             }
         }
 
@@ -275,11 +234,7 @@ namespace EmuSen.Mistress.Views
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
-        private static T Cell<T>(T control, int column) where T : Control
-        {
-            Grid.SetColumn(control, column);
-            return control;
-        }
+        private static TextBlock ColumnHeader(string text) => new() { Text = text, FontWeight = FontWeight.SemiBold };
 
         private string CurrentKeyLabel(string console, PadButton button) =>
             _keyBindings.For(console).ButtonToKey.TryGetValue(button, out Key k) ? k.ToString() : Unbound;

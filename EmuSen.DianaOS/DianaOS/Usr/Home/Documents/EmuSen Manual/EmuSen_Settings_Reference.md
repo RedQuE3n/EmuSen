@@ -147,7 +147,21 @@ The practical cost is that only the selected tab is realised, so a test assertin
 
 **Fixed bug: the `Gamepad` header sat over the keyboard column.** The header `Grid` in the `.axaml` and the row `Grid`s in the code-behind each declared the same column string, `90,130,Auto,Auto,140,Auto,Auto`, and a comment on each told the next reader to keep them in step. They *were* in step, and the header was still wrong by 160 px, because `Auto` sizes to content and each `Grid` sizes its own: the header has nothing in the four button columns, so they collapsed to zero there while the rows gave them the width of `Rebind Key` and `Clear`. Everything past column 1 in the header therefore rendered 160 px left of the data it labelled, putting `Gamepad` squarely over the keyboard rebind buttons.
 
-The obvious repair — `Grid.IsSharedSizeScope` on the containing `StackPanel` and a `SharedSizeGroup` on each `Auto` column — does not work in Avalonia 12.1. The scope registers and the groups attach (both confirmed by probe), but the header's members stay 1 px wide across any number of layout passes; Avalonia's port does not equalise content-sized columns the way WPF's does. Rather than carry a framework workaround, **no column is `Auto` any more.** `ButtonRowColumns()`/`HotkeyRowColumns()` are the single source of truth for both the header and every row — the header's `ColumnDefinitions` are assigned from them in `BuildButtonRows`/`BuildHotkeyRows`, so the duplication that made the bug possible is gone rather than merely re-synchronised — and every width is explicit. That is no loss of flexibility: three of the seven columns were already fixed pixel widths.
+The obvious repair — `Grid.IsSharedSizeScope` on the containing `StackPanel` and a `SharedSizeGroup` on each `Auto` column — does not work in Avalonia 12.1. The scope registers and the groups attach (both confirmed by probe), but the header's members stay 1 px wide across any number of layout passes; Avalonia's port does not equalise content-sized columns the way WPF's does. Rather than carry a framework workaround, **no column is `Auto` any more.** `ButtonRowColumns`/`HotkeyRowColumns` are the single source of truth for both the header and every row — the header takes its columns from the same constant the rows do, so the duplication that made the bug possible is gone rather than merely re-synchronised — and every width is explicit. That is no loss of flexibility: three of the seven columns were already fixed pixel widths.
+
+They are now `ColumnDefinitions` *strings* (`"90,130,110,68,140,130,85"` and `"130,130,110,56"`) rather than hand-built `ColumnDefinition` lists, because that is the form `Ui.Cols` takes — see `EmuSen_LunaP.md` §9. **What each button-row width is holding**, in order, since the string cannot say so itself:
+
+| Column | Width | Holds |
+|---|---|---|
+| 0 | 90 | button name |
+| 1 | 130 | bound key |
+| 2 | 110 | Rebind Key / `Press a key...` |
+| 3 | 68 | Clear, plus its margin |
+| 4 | 140 | bound pad button |
+| 5 | 130 | Rebind Pad / `Press a button...` |
+| 6 | 85 | Clear Pad, plus its margin |
+
+`Ui.Cols` assigns columns by child position, which is exactly the order a row reads in, so `BuildButtonRow` passes its seven controls in order and sets no column explicitly. The header is the one place that does: it labels columns 0, 1 and 4, so `Gamepad` carries an explicit `.AtColumn(4)` and the other two fall where they are passed.
 
 The fixed widths are sized to the *widest* content each column can hold, not the resting content, which fixes a second bug in the same stroke. A rebind button's text changes to `Press a key...` (102 px against `Rebind Key`'s 92) or `Press a button...` (125 px against `Rebind Pad`'s 93) while it waits for input, so under `Auto` the column grew the instant you clicked it and shoved the whole gamepad half of the row sideways — mid-rebind, which is exactly when you are looking at it. The columns are 110 and 130 px, so nothing moves.
 

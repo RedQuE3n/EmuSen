@@ -23,6 +23,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 //   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--tap2 frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...
 //   dotnet run -- <rom> <maxframes> --commands path [other flags above except --tap/--tap2/--screenshot/--script]
 //   dotnet run -- --diffshot <bmp1> <bmp2> <outpath>
+//   dotnet run -- --singlestep <target> <test-dir> [max-examples-per-file]
 //
 // Internally this is now just dispatch: HeadlessDebugOptions.Parse turns
 // argv into a plain options object, FrameRunner is the one shared
@@ -65,6 +66,23 @@ class Program
                 return 1;
             }
             return TraceDiffRunner.Run(args[1], args[2]);
+        }
+
+        // Also standalone: third-party opcode vectors, no ROM needed - see §3.16.
+        if (args.Length >= 1 && args[0] == "--singlestep")
+        {
+            if (args.Length < 3)
+            {
+                Console.WriteLine("Usage: dotnet run -- --singlestep <target> <test-dir> [max-examples-per-file]");
+                Console.WriteLine($"Available targets: {SingleStepRunner.TargetNames}");
+                return 1;
+            }
+            if (args.Length >= 4 && !int.TryParse(args[3], out _))
+            {
+                Console.WriteLine($"[ERROR] max-examples-per-file must be a number, got '{args[3]}'");
+                return 1;
+            }
+            return SingleStepRunner.Run(args[1], args[2], args.Length >= 4 ? int.Parse(args[3]) : 3);
         }
 
         var (options, warnings, error) = HeadlessDebugOptions.Parse(args);

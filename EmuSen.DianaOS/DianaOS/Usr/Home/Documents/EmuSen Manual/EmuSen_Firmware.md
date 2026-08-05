@@ -18,7 +18,7 @@ Three pieces make that tractable:
 
 Answering before loading is the whole point. Once `LoadRom` has run, the core has already come up with the chip absent, and the only fix is to load again — so a frontend that wants to *offer* the user a way out has to ask first.
 
-**A missing image is never fatal.** `LoadRom` still succeeds; the core runs with that chip missing. That is what makes the prompt optional rather than a gate, and it is why `Pharaoh` and `Tomoe` need no firmware code at all.
+**A missing image is never fatal.** `LoadRom` still succeeds; the core runs with that chip missing. That is what makes the prompt optional rather than a gate, and it is why `Pharaoh` needs no firmware code at all.
 
 ---
 
@@ -58,7 +58,7 @@ Because `Install` copies into the library, this is a once-ever prompt per chip, 
 
 **`EmuSen.Hotaru`** (Avalonia, but shell-driven) — no OS picker; ROMs arrive from the DianaOS shell. It gets the log path below.
 
-**`EmuSen.Pharaoh` / `EmuSen.Tomoe`** (headless CLI) — must never block on a prompt. They get the log path too.
+**`EmuSen.Pharaoh`** (headless CLI, including its no-ROM `--singlestep`/`--diffshot`/`--tracediff` verbs) — must never block on a prompt. It gets the log path too.
 
 **The log path** — when a core can't find firmware it prints what is missing *and the exact path it wants it at*:
 

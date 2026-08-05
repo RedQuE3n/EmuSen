@@ -52,7 +52,7 @@ namespace EmuSen.Common
         // without loading, so an interactive frontend can offer to go and
         // find it BEFORE LoadRom - afterwards is too late, the core has
         // already come up with the chip absent. A frontend that can't ask
-        // (Pharaoh, Tomoe) simply skips this and gets the missing-chip
+        // (Pharaoh) simply skips this and gets the missing-chip
         // behaviour. See EmuSen_Firmware.md §3.
         //
         // Constructs a throwaway core for the same reason LoadRom below

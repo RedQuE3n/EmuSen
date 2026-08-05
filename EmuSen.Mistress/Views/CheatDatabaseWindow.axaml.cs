@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
+using EmuSen.LunaP.Windowing;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
@@ -245,13 +245,7 @@ namespace EmuSen.Mistress.Views
 
         private async void OnBrowseClick(object? sender, RoutedEventArgs e)
         {
-            IReadOnlyList<IStorageFolder> folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-            {
-                Title = "Choose a cheat folder (a RetroArch cheats folder works as-is)",
-                AllowMultiple = false,
-            });
-
-            if (folders.FirstOrDefault()?.Path.LocalPath is not string picked) return;
+            if (await Dialogs.PickFolderAsync(this, "Choose a cheat folder (a RetroArch cheats folder works as-is)") is not { } picked) return;
 
             _settings.CheatDatabaseDirectory = picked;
             _settings.Save();

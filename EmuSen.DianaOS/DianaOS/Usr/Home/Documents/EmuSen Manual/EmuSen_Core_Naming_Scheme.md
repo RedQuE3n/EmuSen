@@ -95,7 +95,7 @@ Folder: `Cores/Atari/`
 | Atari Lynx | **Viluy** | `Cores/Atari/Viluy - Atari Lynx/` | Not started — reserved |
 | Atari Jaguar | **Cyprine & Ptilol** | `Cores/Atari/Cyprine & Ptilol - Atari Jaguar/` | Not started — reserved |
 
-The Witches 5 (Eudial, Mimete, Tellu, Viluy, and the linked pair Cyprine/Ptilol) map to Atari's five major systems. Cyprine and Ptilol are canonically inseparable (a conjoined/split-personality pair depending on adaptation), which is why they share one folder/slot rather than being split across Jaguar and Jaguar CD — if a Jaguar CD core is ever wanted separately, it'll need a villain from outside this faction rather than trying to split the pair. Kaolinite and Professor Tomoe (the Witches 5's superiors) are the natural next pull from this faction.
+The Witches 5 (Eudial, Mimete, Tellu, Viluy, and the linked pair Cyprine/Ptilol) map to Atari's five major systems. Cyprine and Ptilol are canonically inseparable (a conjoined/split-personality pair depending on adaptation), which is why they share one folder/slot rather than being split across Jaguar and Jaguar CD — if a Jaguar CD core is ever wanted separately, it'll need a villain from outside this faction rather than trying to split the pair. Kaolinite and Professor Tomoe (the Witches 5's superiors) are the natural next pull from this faction. `Tomoe` is free to use: it was an infrastructure project (the ground-truth single-step CLI) until that folded into `EmuSen.Pharaoh` as its `--singlestep` verb, which released the name back to this pool.
 
 ---
 
@@ -159,7 +159,7 @@ Every codename in this doc has been checked against the Sailor Moon Wiki (and, f
 
 §3 had previously reserved `Endymion` for the Sega Master System. **The Master System is now `Endou`**, and its placeholder folder was renamed to `Cores/Sega/Endou - Master System/`. Nothing depended on the old name — that core has never had code, only a README.
 
-**The general lesson, worth acting on before it bites again:** the infrastructure projects (Galaxia, Serenity, Crystal, Cauldron, Nehellania, Endymion, Hotaru, Mistress, Pharaoh, Tomoe, WiseMan, DianaOS) draw from the same Sailor Moon namespace as the cores, but this document only ever tracked the cores. That is how one name ended up claimed twice without anyone noticing. Either list the infrastructure names here too, or check both pools before reserving a new codename.
+**The general lesson, worth acting on before it bites again:** the infrastructure projects (Galaxia, Serenity, Crystal, Cauldron, Nehellania, Endymion, Hotaru, Mistress, Pharaoh, WiseMan, LunaP, DianaOS) draw from the same Sailor Moon namespace as the cores, but this document only ever tracked the cores. That is how one name ended up claimed twice without anyone noticing. Either list the infrastructure names here too, or check both pools before reserving a new codename. (`Tomoe` was on that list too, until §3.16 of `EmuSen_Debugging_Tools_Reference_v5.md` folded that project into `EmuSen.Pharaoh` — a name leaving the infrastructure pool is exactly as worth recording here as one entering it.)
 
 ---
 
@@ -170,3 +170,7 @@ Every codename in this doc has been checked against the Sailor Moon Wiki (and, f
 **Distinct from `Luna`, §2's reserved codename for the Nintendo DS core** (`Cores/Nintendo/Luna - DS/`, the guardian cat). Same stem, unrelated claims — the same kind of collision §8 already records for Sony's `Wiseman` versus the `EmuSen.WiseMan` test project. No folder or namespace overlap in practice (`EmuSen.LunaP/` at the repo root versus `Cores/Nintendo/Luna - DS/`), but worth knowing about before either name is searched for and mistaken for the other. The DS codename stays `Luna`; nothing about this reservation constrains it.
 
 This section is the first application of §10's lesson: an infrastructure name recorded here at the moment it was claimed, rather than after a collision.
+
+**A name was very nearly claimed here on 2026-08-04 and should not have been.** The two `CoretopWindow` copies needed a home that could see both `EmuSen.LunaP` and `EmuSen.Cauldron`, and the first answer reached for was a new infrastructure project with a new codename. It was the wrong answer: `EmuSen.Cauldron` is a dependency-free leaf, so **letting LunaP reference it directly costs the launcher one small interfaces assembly rather than a core** — which is the only thing LunaP's layering rule exists to prevent. The window lives in `EmuSen.LunaP/Dashboards/` and no name was spent. See `EmuSen_LunaP.md` §16.
+
+The lesson is narrower than §10's and worth keeping separate from it: **§10 says check both pools before claiming a name. This says check whether a name is needed at all.** An assembly per layering exception grows the project faster than an entry on an allow-list does, and a codename is not free — it is a permanent claim on a finite pool.

@@ -125,8 +125,7 @@ core. Frontends sit on top of both and are interchangeable.
 | `EmuSen.Nehellania` | Shared device layer — SDL3 audio output and gamepad input, one copy for both frontends |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
-| `EmuSen.Pharaoh` | The headless scripted harness |
-| `EmuSen.Tomoe` | CLI runner for ground-truth CPU/hardware test vectors |
+| `EmuSen.Pharaoh` | The headless scripted harness, and the CLI runner for ground-truth CPU test vectors |
 | `EmuSen.WiseMan` | The xUnit test suite |
 
 The layering is enforced in practice, not merely described. The PPU exposes a small

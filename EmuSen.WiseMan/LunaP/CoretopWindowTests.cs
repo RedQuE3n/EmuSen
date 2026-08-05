@@ -1,13 +1,13 @@
 using System.Threading.Tasks;
 using System.Linq;
 using Avalonia.Controls;
-using EmuSen.Mistress.Views;
+using EmuSen.LunaP.Dashboards;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.WiseMan.LunaP;
 
-namespace EmuSen.WiseMan.Mistress
+namespace EmuSen.WiseMan.LunaP
 {
-    // The GUI half of `coretop`. Written before the LunaP migration so the two could be compared pixel for pixel - see EmuSen_LunaP.md §11.
+    // The GUI half of `coretop`, now one window rather than one per frontend - see EmuSen_LunaP.md §16.
     public class CoretopWindowTests
     {
         [Fact]
@@ -66,6 +66,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         });
 
+        // Both hosts' swap path: Hotaru's `core <name> <path>`, Mistress's new ROM.
         [Fact]
         public Task Swapping_the_core_out_from_under_it_updates_the_header() => UiTest.Run(() =>
         {

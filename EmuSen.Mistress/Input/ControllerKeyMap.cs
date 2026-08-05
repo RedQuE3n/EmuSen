@@ -1,24 +1,14 @@
 using System.Collections.Generic;
 using Avalonia.Input;
-using EmuSen.Cores;
-using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
+using EmuSen.LunaP.Input;
 
 namespace EmuSen.Mistress.Input
 {
-    // Keyboard -> PadButton mapping for this frontend specifically. This is
-    // deliberately separate from EmuSen.Hotaru/Input/HotaruKeyMap.cs, which
-    // has no rebind/persistence support and gets fed from GameWindow's own
-    // KeyDown/KeyUp events instead (see that project's GameWindow.axaml.cs) -
-    // this class supports rebinding/saving, which Hotaru's console-first
-    // frontend has no settings UI to drive.
-    //
-    // Defaults match HotaruKeyMap's keyboard scheme for consistency
-    // between the two frontends, even though the two Key enums (Raylib_cs vs
-    // Avalonia.Input) aren't the same type.
+    // The rebindable, persisted half of the keyboard mapping - Hotaru's HotaruKeyMap is the fixed one. See EmuSen_Input.md §5.1.
     public class ControllerKeyMap
     {
-        public Dictionary<PadButton, Key> ButtonToKey { get; private set; } = DefaultBindings();
+        public Dictionary<PadButton, Key> ButtonToKey { get; private set; } = DefaultPadKeyMap.Bindings();
 
         private Dictionary<Key, PadButton> _keyToButton = new();
 
@@ -27,30 +17,7 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        private static Dictionary<PadButton, Key> DefaultBindings() => new()
-        {
-            [PadButton.Up] = Key.Up,
-            [PadButton.Down] = Key.Down,
-            [PadButton.Left] = Key.Left,
-            [PadButton.Right] = Key.Right,
-            [PadButton.B] = Key.Z,
-            [PadButton.A] = Key.X,
-            [PadButton.Y] = Key.A,
-            [PadButton.X] = Key.S,
-            [PadButton.L] = Key.Q,
-            [PadButton.R] = Key.W,
-            [PadButton.Start] = Key.Enter,
-            [PadButton.Select] = Key.RightShift,
-        };
-
-        private void RebuildReverseLookup()
-        {
-            _keyToButton = new Dictionary<Key, PadButton>();
-            foreach (var kv in ButtonToKey)
-            {
-                _keyToButton[kv.Value] = kv.Key;
-            }
-        }
+        private void RebuildReverseLookup() => _keyToButton = DefaultPadKeyMap.Reverse(ButtonToKey);
 
         public bool TryGetButton(Key key, out PadButton button) => _keyToButton.TryGetValue(key, out button);
 
@@ -76,7 +43,7 @@ namespace EmuSen.Mistress.Input
 
         public void ResetToDefaults()
         {
-            ButtonToKey = DefaultBindings();
+            ButtonToKey = DefaultPadKeyMap.Bindings();
             RebuildReverseLookup();
         }
 

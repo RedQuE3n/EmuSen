@@ -18,6 +18,7 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Endymion;
 using EmuSen.Nehellania.Input;
+using EmuSen.LunaP.Dashboards;
 using EmuSen.Mistress.Input;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
@@ -285,33 +286,20 @@ namespace EmuSen.Mistress.Views
 
         private async void OnOpenRomClick(object? sender, RoutedEventArgs e)
         {
-            IStorageFolder? startLocation = null;
-            if (!string.IsNullOrWhiteSpace(_appSettings.RomDirectory) && Directory.Exists(_appSettings.RomDirectory))
-            {
-                // TryGetFolderFromPathAsync takes a Uri, not a plain path string.
-                startLocation = await StorageProvider.TryGetFolderFromPathAsync(new Uri(_appSettings.RomDirectory));
-            }
+            // One entry per core in this build, so a new core needs no edit here.
+            FilePickerFileType[] types = EmuSen.Cores.CoreCatalog.Cores
+                .Select(c => new FilePickerFileType($"{c.DisplayName} ROMs")
+                {
+                    Patterns = c.Extensions.Select(e => "*" + e).ToArray()
+                })
+                .Append(new FilePickerFileType("All files") { Patterns = new[] { "*" } })
+                .ToArray();
 
-            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = "Open ROM",
-                AllowMultiple = false,
-                SuggestedStartLocation = startLocation,
-                // One entry per core in this build, so a new core needs no edit here.
-                FileTypeFilter = EmuSen.Cores.CoreCatalog.Cores
-                    .Select(c => new FilePickerFileType($"{c.DisplayName} ROMs")
-                    {
-                        Patterns = c.Extensions.Select(e => "*" + e).ToArray()
-                    })
-                    .Append(new FilePickerFileType("All files") { Patterns = new[] { "*" } })
-                    .ToArray()
-            });
+            string? startIn = Directory.Exists(_appSettings.RomDirectory) ? _appSettings.RomDirectory : null;
+            if (await Dialogs.PickFileAsync(this, "Open ROM", types, startIn) is not { } file) return;
 
-            var file = files.FirstOrDefault();
-            if (file is null) return;
-
-            await PromptForMissingFirmwareAsync(file.Path.LocalPath);
-            LoadRom(file.Path.LocalPath, file.Name);
+            await PromptForMissingFirmwareAsync(file.Path);
+            LoadRom(file.Path, file.Name);
         }
 
         // Offers the OS picker for anything this ROM needs that the firmware
@@ -323,32 +311,22 @@ namespace EmuSen.Mistress.Views
         {
             foreach (FirmwareRequest request in EmulatorSession.MissingFirmwareFor(romPath))
             {
-                var picked = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+                var types = new[]
                 {
-                    Title = $"{request.ChipName} firmware needed - pick {request.FileName} ({request.Size:N0} bytes), or cancel to play without it",
-                    AllowMultiple = false,
-                    FileTypeFilter = new[]
-                    {
-                        new FilePickerFileType($"{request.ChipName} firmware") { Patterns = new[] { request.FileName, "*.rom", "*.bin" } },
-                        new FilePickerFileType("All files") { Patterns = new[] { "*" } },
-                    }
-                });
+                    new FilePickerFileType($"{request.ChipName} firmware") { Patterns = new[] { request.FileName, "*.rom", "*.bin" } },
+                    new FilePickerFileType("All files") { Patterns = new[] { "*" } },
+                };
 
-                var chosen = picked.FirstOrDefault();
-                if (chosen is null)
+                string title = $"{request.ChipName} firmware needed - pick {request.FileName} ({request.Size:N0} bytes), or cancel to play without it";
+                if (await Dialogs.PickFileAsync(this, title, types) is not { } chosen)
                 {
                     StatusText.Text = $"No {request.ChipName} firmware selected - that chip will not be emulated.";
                     continue;
                 }
 
-                if (FirmwareLibrary.Install(request, chosen.Path.LocalPath))
-                {
-                    StatusText.Text = $"Installed {request.ChipName} firmware.";
-                }
-                else
-                {
-                    StatusText.Text = $"{chosen.Name} is not a {request.ChipName} dump ({request.Size:N0} bytes expected) - that chip will not be emulated.";
-                }
+                StatusText.Text = FirmwareLibrary.Install(request, chosen.Path)
+                    ? $"Installed {request.ChipName} firmware."
+                    : $"{chosen.Name} is not a {request.ChipName} dump ({request.Size:N0} bytes expected) - that chip will not be emulated.";
             }
         }
 

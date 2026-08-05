@@ -1,6 +1,7 @@
 using System;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS;
+using EmuSen.LunaP.Dashboards;
 using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Hotaru.Views

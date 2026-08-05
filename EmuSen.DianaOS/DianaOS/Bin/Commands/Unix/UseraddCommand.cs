@@ -41,7 +41,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
                 return DianaOSResult.Fail($"useradd: '{name}' already exists.");
             }
 
-            System.IO.Directory.CreateDirectory(DianaOSSandbox.HomeDirectory(name));
+            // An account is an identity, not a directory - see `man hier`.
             return $"Added user '{name}'.";
         }
     }

@@ -252,13 +252,13 @@ namespace EmuSen.WiseMan.DianaOS
         }
 
         [Fact]
-        public void Cd_with_no_argument_goes_to_the_current_users_home_directory()
+        public void Cd_with_no_argument_goes_home_whoever_is_logged_in()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
             string name = UniqueName("kid");
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
-            shell.Submit("cd /SourceLogs");
+            shell.Submit("cd /tmp");
 
             shell.Submit("cd");
 
@@ -266,10 +266,10 @@ namespace EmuSen.WiseMan.DianaOS
         }
 
         [Fact]
-        public void Cd_with_no_argument_defaults_to_roots_own_home()
+        public void Cd_with_no_argument_goes_home_for_root_too()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
-            shell.Submit("cd /SourceLogs");
+            shell.Submit("cd /tmp");
 
             shell.Submit("cd");
 

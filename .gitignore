@@ -10,10 +10,12 @@ out/
 .vs/
 .vscode/
 
-# DianaOS's own Unix-shaped runtime tree (home/<user>, etc, tmp, and
-# SourceLogs at the repo root) - see `man hier` - real, uncommitted data,
-# not source. *.srm/*.state kept for anything still written outside
-# Usr/Home/Saves (EmuSen.Mistress's own AppData-based save path).
+# DianaOS's runtime tree - see `man hier` - real, uncommitted data, not
+# source. home/ IS the shell's root and holds all of it: Games, Saves,
+# Firmware, Cheats, Logs, etc/EmuSen and tmp. The bare etc/, tmp/ and
+# SourceLogs/ entries cover trees left by builds from before the move.
+# *.srm/*.state cover saves still written outside it - the NES and Game
+# Boy cores keep theirs beside the ROM for now, see EmuSen_Galaxia.md §6.
 home/
 etc/
 tmp/

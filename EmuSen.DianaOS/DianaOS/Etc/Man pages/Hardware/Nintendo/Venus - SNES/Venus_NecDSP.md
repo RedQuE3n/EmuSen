@@ -52,9 +52,9 @@ Most DSP ROM images in circulation carry the firmware glued to the end. `NecDspF
 
 When one is found it is **removed from the addressable ROM**. `Cartridge` reallocates `_rom` shorter, because on hardware those bytes are not on the bus and a game mirroring past the end of its own ROM must see open bus, not firmware.
 
-### 2.2 Usr/Home/Firmware
+### 2.2 home/Firmware
 
-Failing that, `Usr/Home/Firmware/` (gitignored) is checked for either a combined `dsp1.rom` (or `dsp1b`, `dsp2`, `dsp3`, `dsp4`, `st010`, `st011`) or the split pair `dsp1.program.rom` + `dsp1.data.rom`. A file of the wrong size is ignored rather than padded — a truncated dump would run as garbage and be much harder to diagnose than a missing one.
+Failing that, `home/Firmware/` (gitignored) is checked for either a combined `dsp1.rom` (or `dsp1b`, `dsp2`, `dsp3`, `dsp4`, `st010`, `st011`) or the split pair `dsp1.program.rom` + `dsp1.data.rom`. A file of the wrong size is ignored rather than padded — a truncated dump would run as garbage and be much harder to diagnose than a missing one.
 
 The combined form goes through the **core-agnostic firmware layer** (`EmuSen_Firmware.md`), which is also what lets the Avalonia frontend offer a file picker when a dump is missing, and what installs the picked file so nothing asks twice. The split pair is a NEC-DSP-specific convention and stays local to `NecDspFirmware`. `NecDspFirmware.RequestFor(variant)` is the bridge: it turns a variant into the generic `FirmwareRequest` the shared layer understands.
 

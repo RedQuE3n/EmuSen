@@ -57,7 +57,7 @@
     <ItemGroup>
       <_DianaOSLeakedCheat
         Include="@(ResolvedFileToPublish)"
-        Condition="'%(Extension)' == '.cht' OR $([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').Contains('Usr/Home/Cheats'))" />
+        Condition="'%(Extension)' == '.cht' OR $([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').Contains('home/Cheats')) OR $([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').Contains('Usr/Home/Cheats'))" />
     </ItemGroup>
     <Error Condition="'@(_DianaOSLeakedCheat)' != ''"
            Text="Refusing to publish cheat data - EmuSen ships none. @(_DianaOSLeakedCheat->'%(RelativePath)', ', ')" />

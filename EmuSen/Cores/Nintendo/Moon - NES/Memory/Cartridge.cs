@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Moon.Memory.Mappers;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores.Nintendo.Moon.Memory
 {
@@ -136,17 +137,17 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         {
             if (!HasBattery || EmuSen.Cores.CoreOptions.BatteryRamDisabled || string.IsNullOrEmpty(RomPath)) return;
 
-            _savePath = Path.ChangeExtension(RomPath, ".srm");
-            if (!File.Exists(_savePath)) return;
+            // Still beside the ROM this pass; relocation is its own change - see EmuSen_Galaxia.md §6.
+            _savePath = Path.ChangeExtension(RomPath, SaveLibrary.SramExtension);
+            if (AtomicFile.TryRead(_savePath) is not { } saved) return;
 
-            byte[] saved = File.ReadAllBytes(_savePath);
             Array.Copy(saved, PrgRam, Math.Min(saved.Length, PrgRam.Length));
         }
 
         public void SaveSram()
         {
             if (!HasBattery || _savePath is null) return;
-            File.WriteAllBytes(_savePath, PrgRam);
+            AtomicFile.Write(_savePath, PrgRam);
         }
     }
 }

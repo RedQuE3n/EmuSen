@@ -22,6 +22,7 @@ using EmuSen.Mistress.Input;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
+using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
@@ -509,7 +510,7 @@ namespace EmuSen.Mistress.Views
         // No target to hand over or refresh, unlike OpenCoretopWindow above.
         private void OpenVstopWindow() => _vstopWindow.Show(this, () => new VstopWindow());
 
-        // Defaults to the same Usr/Home/Saves/Save States/ tree the console
+        // Defaults to the same home/Saves/Save States/ tree the console
         // build and DianaOS shell's `state save`/`state load` write to -
         // overridable in Preferences (AppSettings.StateDirectory) for
         // anyone who wants states somewhere else.
@@ -520,11 +521,7 @@ namespace EmuSen.Mistress.Views
         private string? StatePathForSlot(int slot) =>
             _currentRomPath is null
                 ? null
-                : System.IO.Path.Combine(
-                    string.IsNullOrWhiteSpace(_appSettings.StateDirectory)
-                        ? DianaOSSandbox.SaveStatesDirectory
-                        : _appSettings.StateDirectory,
-                    System.IO.Path.GetFileNameWithoutExtension(_currentRomPath) + (slot == 1 ? "" : $".slot{slot}") + ".state");
+                : SaveLibrary.StatePathFor(_currentRomPath, slot, _appSettings.StateDirectory);
 
         private void OnSaveStateClick(object? sender, RoutedEventArgs e)
         {

@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.Coprocessors
         [Fact]
         public void A_dsp_cartridge_with_no_appended_firmware_still_boots()
         {
-            // Whether a dump turns up in Usr/Home/Firmware is a property of
+            // Whether a dump turns up in home/Firmware is a property of
             // the machine, not of this ROM - so what is pinned here is that
             // loading succeeds either way, and that the map agrees with
             // whether the chip actually got built.

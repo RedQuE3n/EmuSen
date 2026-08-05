@@ -9,14 +9,14 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.WiseMan.DianaOS
 {
-    // DianaOSSandbox's Unix-shaped layout (`man hier`) - the chroot-style
-    // leading-'/' reinterpretation, the real-path-already-inside-root
-    // pass-through, and the skeleton directories it creates. Calls
-    // DianaOSInterpreter.CreateDefault(null) at least once per test purely
-    // to trigger DianaOSSandbox.EnsureInitialWorkingDirectory() the same
-    // way every other test in this assembly already relies on - the
-    // skeleton (Usr/Home/Logs, Usr/Home/Saves, SourceLogs, home/root, etc,
-    // tmp) only gets created the first time any shell exists in the process.
+    // DianaOSSandbox's layout (`man hier`) - the chroot-style leading-'/'
+    // reinterpretation, the real-path-already-inside-root pass-through, and
+    // the skeleton it creates. Calls DianaOSInterpreter.CreateDefault(null)
+    // at least once per test purely to trigger
+    // DianaOSSandbox.EnsureInitialWorkingDirectory() the same way every
+    // other test in this assembly already relies on - the skeleton
+    // (home/{Logs,Saves,Firmware,Cheats,Games}, etc, tmp) only gets created
+    // the first time any shell exists in the process.
     public class DianaOSSandboxTests
     {
         public DianaOSSandboxTests() => DianaOSInterpreter.CreateDefault(null);
@@ -24,10 +24,10 @@ namespace EmuSen.WiseMan.DianaOS
         [Fact]
         public void A_short_virtual_absolute_path_resolves_relative_to_the_sandbox_root()
         {
-            bool ok = DianaOSSandbox.TryResolve("/SourceLogs", out string resolved);
+            bool ok = DianaOSSandbox.TryResolve("/tmp/WiseMan", out string resolved);
 
             Assert.True(ok);
-            Assert.Equal(DianaOSSandbox.SourceLogsDirectory, resolved);
+            Assert.Equal(DianaOSSandbox.ScratchDirectory, resolved);
         }
 
         [Fact]
@@ -68,30 +68,73 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.True(Directory.Exists(DianaOSSandbox.LogsDirectory));
             Assert.True(Directory.Exists(DianaOSSandbox.SavesDirectory));
             Assert.True(Directory.Exists(DianaOSSandbox.SaveStatesDirectory));
-            Assert.True(Directory.Exists(DianaOSSandbox.SourceLogsDirectory));
-            Assert.True(Directory.Exists(Path.Combine(root, "home", "root")));
-            Assert.True(Directory.Exists(Path.Combine(root, "etc")));
+            Assert.True(Directory.Exists(Path.Combine(root, "etc", "EmuSen")));
             Assert.True(Directory.Exists(Path.Combine(root, "tmp")));
         }
 
-        // Empty in a published build, already populated from source - either way the
-        // shell must find them rather than reporting a missing directory.
+        // Scratch lives in /tmp so the shell can still reach the scripts tests source.
+        [Fact]
+        public void Scratch_lives_under_tmp_inside_the_shell_root()
+        {
+            Assert.Equal(Path.Combine(DianaOSSandbox.RootDirectory, "tmp", "WiseMan"), DianaOSSandbox.ScratchDirectory);
+        }
+
+        // The whole point of rooting at home: nothing resolves into the install
+        // tree, whether it is asked for by absolute path or chroot-style.
         [Theory]
-        [InlineData("Roms")]
+        [InlineData("/EmuSen.sln")]
+        [InlineData("/.git")]
+        [InlineData("../EmuSen.sln")]
+        [InlineData("../../EmuSen.sln")]
+        public void No_request_ever_resolves_into_the_install_tree(string requested)
+        {
+            string install = DianaOSSandbox.InstallDirectory;
+
+            if (!DianaOSSandbox.TryResolve(requested, out string resolved)) return; // refused outright is also fine
+
+            Assert.StartsWith(DianaOSSandbox.RootDirectory, resolved);
+            Assert.NotEqual(Path.Combine(install, Path.GetFileName(requested)), resolved);
+        }
+
+        // An absolute path pointing at the install is re-rooted under home rather
+        // than honored - the chroot rule, which is what keeps it in.
+        [Fact]
+        public void An_absolute_install_path_is_re_rooted_not_honored()
+        {
+            string outside = Path.Combine(DianaOSSandbox.InstallDirectory, "EmuSen.sln");
+
+            DianaOSSandbox.TryResolve(outside, out string resolved);
+
+            Assert.NotEqual(outside, resolved);
+            Assert.StartsWith(DianaOSSandbox.RootDirectory, resolved);
+        }
+
+        [Theory]
         [InlineData("Games")]
-        [InlineData("Music")]
-        [InlineData("Pictures")]
-        public void The_usr_home_stub_directories_exist(string name)
+        [InlineData("Saves")]
+        [InlineData("Firmware")]
+        [InlineData("Cheats")]
+        public void The_user_home_directories_exist(string name)
         {
             Assert.True(Directory.Exists(Path.Combine(DianaOSSandbox.UsrHomeDirectory, name)));
         }
 
-        [Fact]
-        public void HomeDirectory_returns_the_real_path_under_home()
+        // Music and Pictures were cargo cult; Roms merged into Games - see `man hier`.
+        [Theory]
+        [InlineData("Music")]
+        [InlineData("Pictures")]
+        [InlineData("Roms")]
+        public void The_retired_stub_directories_are_not_created(string name)
         {
-            Assert.Equal(
-                Path.Combine(DianaOSSandbox.RootDirectory, "home", "kid"),
-                DianaOSSandbox.HomeDirectory("kid"));
+            Assert.False(Directory.Exists(Path.Combine(DianaOSSandbox.UsrHomeDirectory, name)));
+        }
+
+        // An account is an identity now, not a directory - see `man hier`.
+        [Fact]
+        public void Every_account_shares_the_one_home()
+        {
+            Assert.Equal(DianaOSSandbox.UsrHomeDirectory, DianaOSSandbox.HomeDirectory("kid"));
+            Assert.Equal(DianaOSSandbox.UsrHomeDirectory, DianaOSSandbox.HomeDirectory("root"));
         }
 
         // ComputeRootFor's two branches - see `man hier`'s "where the root actually is".
@@ -151,11 +194,10 @@ namespace EmuSen.WiseMan.DianaOS
             finally { Directory.Delete(temp, true); }
         }
 
-        // The bug the app dir being one level down avoids: a published build ships an
-        // apphost named EmuSen.DianaOS, and the skeleton's own first segment is that
-        // same name - the two sharing a directory made the skeleton unbuildable.
+        // The skeleton's first segment used to be EmuSen.DianaOS, colliding with the
+        // apphost FILE of that name; rooting at /home means it cannot recur - see `man hier`.
         [Fact]
-        public void The_skeleton_is_creatable_beside_an_app_dir_holding_that_apphost()
+        public void The_skeleton_no_longer_shares_a_name_with_the_apphost()
         {
             string temp = NewTempDir();
             try
@@ -166,11 +208,12 @@ namespace EmuSen.WiseMan.DianaOS
                 File.WriteAllText(Path.Combine(appDir, "EmuSen.DianaOS"), "apphost");
 
                 string root = DianaOSSandbox.ComputeRootFor(appDir);
-                string logs = Path.Combine(root, "EmuSen.DianaOS", "DianaOS", "Usr", "Home", "Logs");
+                string logs = Path.Combine(root, "home", "Logs");
                 Directory.CreateDirectory(logs);
 
                 Assert.True(Directory.Exists(logs));
                 Assert.True(File.Exists(Path.Combine(appDir, "EmuSen.DianaOS")));
+                Assert.False(Directory.Exists(Path.Combine(root, "EmuSen.DianaOS")));
             }
             finally { Directory.Delete(temp, true); }
         }

@@ -21,7 +21,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         public bool IsReadOnly => true;
         public string Usage => string.Join('\n', new[]
         {
-            "  dump <space> <addr> <len> <file> write raw bytes to EmuSen.DianaOS/DianaOS/Usr/Home/Logs/<CoreName>/<file>",
+            "  dump <space> <addr> <len> <file> write raw bytes to home/Logs/<CoreName>/<file>",
         });
 
         public global::EmuSen.DianaOS.DianaOS.Lib.DianaOSResult Execute(IDebugTarget? target, string[] parts, string? stdin)

@@ -14,8 +14,13 @@ namespace EmuSen.Galaxia
         // from ConfigRoot, which stays fixed - see EmuSen_Config_Reference.md §1.3.
         public static string? OverrideDirectory { get; set; }
 
-        public static string Directory =>
-            OverrideDirectory ?? Path.Combine(ConfigRoot.Directory, ConfigDirName, ProgramDirName);
+        // Under home so /etc/EmuSen stays inside the shell root; built from ConfigRoot, not DataStore - see EmuSen_Galaxia.md §3.1.
+        public static string Directory => OverrideDirectory ?? Path.Combine(
+            ConfigRoot.Directory, Library.DataStore.HomeDirName, ConfigDirName, ProgramDirName);
+
+        // Where config sat before it moved under home - see EmuSen_Galaxia.md §3.2.
+        public static string PreviousDirectory =>
+            Path.Combine(ConfigRoot.Directory, ConfigDirName, ProgramDirName);
 
         public static string For(string fileName) => Path.Combine(Directory, fileName);
 

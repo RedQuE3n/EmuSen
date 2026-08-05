@@ -402,7 +402,7 @@ Two structural facts frame what to do about it. `CompositeScreen` is a painter's
 
 ### 13.5 Save states older than the current field layout resume into a dead machine
 
-Noted here because it silently invalidates any attempt to benchmark real gameplay by resuming a state. `StateSerializer` has no field-name tagging (`EmuSen_Save_States.md` §1/§3), so a `.state` written before a field was added or reordered still loads without error and produces a machine that runs but renders nothing — `LastFramePpuMs` collapses to ~0.06 ms while the renderer's own `LastFrame*` properties keep reporting their last real values, which is what the inconsistency looks like from the outside. The three states in `Usr/Home/Saves/Save States` are all in this condition. Verify a resumed state by dumping the framebuffer before trusting any measurement taken from it.
+Noted here because it silently invalidates any attempt to benchmark real gameplay by resuming a state. `StateSerializer` has no field-name tagging (`EmuSen_Save_States.md` §1/§3), so a `.state` written before a field was added or reordered still loads without error and produces a machine that runs but renders nothing — `LastFramePpuMs` collapses to ~0.06 ms while the renderer's own `LastFrame*` properties keep reporting their last real values, which is what the inconsistency looks like from the outside. The three states in `home/Saves/Save States` are all in this condition. Verify a resumed state by dumping the framebuffer before trusting any measurement taken from it.
 
 ---
 

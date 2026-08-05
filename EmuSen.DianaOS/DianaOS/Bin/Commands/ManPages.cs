@@ -882,7 +882,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    anything:\n\n" +
                 "        Use one you already have. Set AppSettings.CheatDatabaseDirectory to\n" +
                 "        an existing RetroArch cheats folder and it is indexed as-is - no\n" +
-                "        copying, no conversion. Unset, it defaults to Usr/Home/Cheats (see\n" +
+                "        copying, no conversion. Unset, it defaults to home/Cheats (see\n" +
                 "        'man hier').\n\n" +
                 "        'cheat db update' downloads one. It fetches the same archive\n" +
                 "        RetroArch's own Online Updater does, straight from libretro to your\n" +
@@ -1052,7 +1052,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    dump <space> <addr> <len> <file>\n\n" +
                 "DESCRIPTION\n" +
                 "    Writes <len> raw bytes from <space> starting at <addr> to\n" +
-                "    EmuSen.DianaOS/DianaOS/Usr/Home/Logs/<CoreName>/<file> - no header or\n" +
+                "    home/Logs/<CoreName>/<file> - no header or\n" +
                 "    metadata, so a hex editor can open the result directly. The write-side\n" +
                 "    counterpart is 'load'. Same live-hardware-space refusal as\n" +
                 "    'search'/'snapshot'.\n\n" +
@@ -1065,7 +1065,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "SYNOPSIS\n" +
                 "    load <space> <addr> <file>\n\n" +
                 "DESCRIPTION\n" +
-                "    Reads EmuSen.DianaOS/DianaOS/Usr/Home/Logs/<CoreName>/<file> (typically\n" +
+                "    Reads home/Logs/<CoreName>/<file> (typically\n" +
                 "    one 'dump' produced, or hand-edited afterward) and pokes its raw bytes\n" +
                 "    into <space> starting at\n" +
                 "    <addr>. Refuses if <space> isn't writable.\n\n" +
@@ -1398,9 +1398,16 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "DESCRIPTION\n" +
                 "    A real Unix precedent for this exact page: 'man hier' documents a\n" +
                 "    filesystem's layout without 'hier' being a runnable command - same here.\n\n" +
-                "    /home/root        root's own home directory\n" +
-                "    /home/<user>      created by 'useradd <user>'; 'cd' with no argument goes\n" +
-                "                      to the current account's own home - see 'whoami'/'su'\n" +
+                "    /                 your home, and the whole of what this shell can see.\n" +
+                "                      'cd' with no argument comes back here. The install\n" +
+                "                      itself - the binaries, the repo when running from\n" +
+                "                      source - sits ABOVE this root and is unreachable.\n\n" +
+                "    /Games            your ROM library\n" +
+                "    /Saves            battery-backed cartridge SRAM ('.srm')\n" +
+                "    /Saves/Save States   'state save'/'state load' snapshots\n" +
+                "    /Firmware         coprocessor dumps you supply\n" +
+                "    /Cheats           your own .cht tree - see 'man cheat'\n" +
+                "    /Logs             'dump'/'load'/screenshot/recording output\n" +
                 "    /etc/EmuSen       every config file the emulator keeps: appsettings.json,\n" +
                 "                      keybindings.json, gamepadbindings.json,\n" +
                 "                      hotkeybindings.json, audio.json, graphics.json, and\n" +
@@ -1420,32 +1427,33 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "                      '/usr/lib/<app>' shape: private libraries of one app,\n" +
                 "                      not a shared library dir. Absent from source\n" +
 
-                "    /SourceLogs       was 'var/log' - WiseMan test-run scratch space only;\n" +
-                "                      dev/test artifacts, not emulator output\n" +
-                "    /tmp              scratch space, nothing here is ever auto-deleted\n\n" +
-                "    EmuSen.DianaOS/DianaOS/Usr/Home/Logs   was 'var/log' (before that,\n" +
-                "                      'Logs/') - 'dump'/'load'/screenshot/recording output\n" +
-                "    EmuSen.DianaOS/DianaOS/Usr/Home/Saves  was 'var/lib' + 'var/games'\n" +
-                "                      (before that, 'SaveStates/' + 'Saves/') - 'state\n" +
-                "                      save'/'state load' snapshots and battery-backed\n" +
-                "                      cartridge SRAM ('.srm')\n" +
-                "    .../Usr/Home/Documents                 the EmuSen Manual - project\n" +
-                "                      overview, settings, save states, debugging tools\n" +
-                "    .../Etc/Man pages                      the per-console hardware notes\n" +
-                "                      these shell pages cross-reference\n" +
-                "    .../Usr/Home/{Roms,Games,Music,Pictures}\n" +
-                "                      created empty if absent; nothing is shipped into\n" +
-                "                      them, they exist so the paths are always valid\n\n" +
-                "    Unlike the short mnemonic paths above, Logs and Saves live several\n" +
-                "    levels deep in the real tree, inside the DianaOS project's own source\n" +
-                "    folder - there's no short '/...' alias for them (yet).\n\n" +
-                "    A leading '/' in any path means THIS root, not the real OS filesystem\n" +
-                "    root - see 'cd'. Candidly: the sandbox's root is the REAL project\n" +
-                "    directory (see 'ls'), not a fully separate synthetic tree, so this\n" +
-                "    project's own real source folders ('EmuSen.Hotaru', '.git',\n" +
-                "    'EmuSen.sln', ...) are still visible at the top level alongside the\n" +
-                "    layout above - this shell was always meant to let you poke around the\n" +
-                "    project's own files, not hide them.\n\n" +
+                "    /tmp              scratch space, nothing here is ever auto-deleted.\n" +
+                "                      '/tmp/WiseMan' is the test suite's own scratch\n\n" +
+                "    /Documents        published builds only: the EmuSen Manual and the\n" +
+                "                      per-console hardware notes under 'Man pages/', staged\n" +
+                "                      in at publish time. Running from source they stay in\n" +
+                "                      the repo where they are edited, which is above this\n" +
+                "                      root - use 'man' rather than 'cat' from source\n\n" +
+                "    Every directory above is located by EmuSen.Galaxia, not by this shell -\n" +
+                "    the sandbox forwards to it, so a core never asks a debugger where a save\n" +
+                "    goes. See EmuSen_Galaxia.md.\n\n" +
+                "    '/home' used to be five levels down, at 'EmuSen.DianaOS/DianaOS/Usr/\n" +
+                "    Home' - a published user's save folder named after a C# project. If you\n" +
+                "    have an install from before the move, everything the emulator wrote\n" +
+                "    (saves, states, firmware, cheats, logs) was COPIED to '/home' on first\n" +
+                "    run and the originals left untouched. Your ROMs were NOT copied - a\n" +
+                "    library is too big to duplicate behind your back. They are still in\n" +
+                "    'EmuSen.DianaOS/DianaOS/Usr/Home/{Games,Roms}'; move them into\n" +
+                "    '/home/Games' when convenient, or just point RomDirectory at them in\n" +
+                "    Preferences, which is where the library is configured anyway.\n\n" +
+                "    A leading '/' means THIS root - your home - not the real OS filesystem\n" +
+                "    root, and not the install directory. Every real-file command ('cat',\n" +
+                "    'ls', 'find', 'awk', 'nano', redirection, 'source') resolves through the\n" +
+                "    same check and refuses anything above it, so no amount of '../..' walks\n" +
+                "    out. This shell used to be rooted at the project directory, which meant\n" +
+                "    'ls /' listed '.git', 'EmuSen.sln' and every C# project beside your\n" +
+                "    saves; rooting at home is what stopped that. It is a guardrail against\n" +
+                "    accidents, not a security boundary.\n\n" +
                 "WHERE THE ROOT ACTUALLY IS\n" +
                 "    Decided once at startup by walking up from the running assembly's own\n" +
                 "    folder (not the current directory, which a launcher or shortcut gets\n" +
@@ -1465,29 +1473,21 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    That is what a publish looks like WITHOUT the layout below - the doc\n" +
                 "    trees stage into 'DianaOSRoot/' either way, so an app dir copied out by\n" +
                 "    hand still finds its own manual instead of coming up rootless.\n\n" +
-                "    A published tree puts the binaries in '/lib/EmuSen' and the root at the\n" +
-                "    top, rather than the other way round. Two things follow. The first is\n" +
-                "    that the skeleton is buildable at all: this tree's own first path\n" +
-                "    segment is 'EmuSen.DianaOS', and a published build has a FILE of\n" +
-                "    exactly that name - the DianaOS project's apphost. Rooting at the\n" +
-                "    binary's own folder put the two in the same directory and creating the\n" +
-                "    skeleton died on 'Not a directory'; from '/lib/EmuSen' they never meet.\n\n" +
-                "    The second is a deliberate narrowing of the walled garden. Every\n" +
-                "    shipped .dll and the running executable now sit INSIDE the sandbox,\n" +
-                "    where before the root was one level in and could only ever reach its\n" +
-                "    own data. That is the cost of the layout being an honest Unix\n" +
-                "    hierarchy: real '/' contains real '/lib'.\n\n" +
-                "    'rm' and 'mv' are suspended for exactly this reason - they are the two\n" +
-                "    commands that could have destroyed the install, and nothing in this\n" +
-                "    shell distinguishes '/lib/EmuSen' from your own files. Both still\n" +
-                "    exist, still document themselves, and refuse to run. Note this is a\n" +
-                "    guardrail against accidents, not a security boundary: 'cp', 'touch',\n" +
-                "    'nano' and '>' redirection can all still write into '/lib'.\n\n" +
-                "    A published root is NOT empty. The two read-only doc trees - Documents\n" +
-                "    (the EmuSen Manual) and Etc/Man pages - are copied in at publish time,\n" +
-                "    so 'man', 'cat', 'find' and 'grep' have the same reference material\n" +
-                "    there as they do running from source. Everything else - Roms, Games,\n" +
-                "    Music, Pictures, Logs, Saves - is created empty on first run.\n\n" +
+                "    A published tree puts the binaries in 'lib/EmuSen', the launchers in\n" +
+                "    'bin', and the shell's root at 'home' BESIDE them - so every shipped\n" +
+                "    .dll and the running executable are now ABOVE this shell's root and\n" +
+                "    cannot be reached from it at all.\n\n" +
+                "    That was not always true. When the shell was rooted at the install\n" +
+                "    directory, real '/' contained real '/lib', and 'rm' and 'mv' were\n" +
+                "    suspended precisely because nothing here distinguished '/lib/EmuSen'\n" +
+                "    from your own files. Rooting at home removed the exposure those two\n" +
+                "    suspensions existed for; they are still suspended, which is now a\n" +
+                "    stricter setting than the layout requires rather than a necessity.\n\n" +
+                "    A published root is NOT empty. Both read-only doc trees stage into\n" +
+                "    '/Documents' at publish time, so 'man', 'cat', 'find' and 'grep' have\n" +
+                "    the same reference material there as they do from source. Everything\n" +
+                "    else - the six directories under '/home' - is created empty on first\n" +
+                "    run.\n\n" +
                 "    The layout is MSBuild's doing, not this shell's: see\n" +
                 "    EmuSen.DianaOS/Publish/DianaOSPublishLayout.targets, imported by each\n" +
                 "    publishable frontend. It only rewrites where files are copied - the\n" +
@@ -1497,7 +1497,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "EXAMPLES\n" +
                 "    man hier\n" +
                 "    ls /\n" +
-                "    cd EmuSen.DianaOS/DianaOS/Usr/Home/Logs && ls",
+                "    cd /home/Logs && ls",
 
             ["pwd"] =
                 "NAME\n" +
@@ -1599,7 +1599,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    just this same one layout under a second, equally-reached-for name.\n\n" +
                 "EXAMPLES\n" +
                 "    dump WRAM 0 256 wram.bin\n" +
-                "    xxd EmuSen.DianaOS/DianaOS/Usr/Home/Logs/SNES/wram.bin\n" +
+                "    xxd home/Logs/SNES/wram.bin\n" +
                 "    echo hi | xxd",
 
             ["nano"] =
@@ -1808,7 +1808,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    (no -i prompt anywhere in this shell, by design). Both <src> and <dst>\n" +
                 "    must resolve inside the project's own directory tree - see 'cd'.\n\n" +
                 "EXAMPLES\n" +
-                "    mv scratch.txt EmuSen.DianaOS/DianaOS/Usr/Home/Logs/",
+                "    mv scratch.txt home/Logs/",
 
             ["cp"] =
                 "NAME\n" +
@@ -1825,7 +1825,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    project's own directory tree - see 'cd'.\n\n" +
                 "EXAMPLES\n" +
                 "    cp notes.txt notes.bak.txt\n" +
-                "    cp -r EmuSen.DianaOS/DianaOS/Usr/Home/Logs/Run1 EmuSen.DianaOS/DianaOS/Usr/Home/Logs/Run1Backup",
+                "    cp -r home/Logs/Run1 home/Logs/Run1Backup",
 
             ["rm"] =
                 "NAME\n" +
@@ -1853,7 +1853,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    optional -r is treated as the literal path.\n\n" +
                 "EXAMPLES\n" +
                 "    rm scratch.txt\n" +
-                "    rm -r EmuSen.DianaOS/DianaOS/Usr/Home/Logs/OldRun\n" +
+                "    rm -r home/Logs/OldRun\n" +
                 "    rm -r My Folder",
 
             ["true"] =
@@ -1942,7 +1942,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "EXAMPLES\n" +
                 "    state save\n" +
                 "    state load\n" +
-                "    state save EmuSen.DianaOS/DianaOS/Usr/Home/Saves/Save States/before-boss.state",
+                "    state save home/Saves/Save States/before-boss.state",
 
             ["resume"] =
                 "NAME\n" +

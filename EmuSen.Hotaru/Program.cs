@@ -16,6 +16,7 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.Galaxia.Library;
 using EmuSen.Hotaru.Views;
 using EmuSen.LunaP;
 
@@ -152,8 +153,8 @@ namespace EmuSen.Hotaru
 
         private static Session BuildSession(string romPath, TextWriter originalOut)
         {
-            // Separate from Usr/Home/Saves' battery-backed cartridge SRAM - see §1.
-            string statePath = Path.Combine(DianaOSSandbox.SaveStatesDirectory, Path.GetFileNameWithoutExtension(romPath) + ".state");
+            // Separate from home/Saves' battery-backed cartridge SRAM - see §1.
+            string statePath = SaveLibrary.StatePathFor(romPath);
 
             ICore core = CoreFactory.Create(romPath, headless: false);
 

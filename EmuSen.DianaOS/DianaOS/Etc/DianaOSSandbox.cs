@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
@@ -6,6 +7,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 using EmuSen.Galaxia;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.DianaOS.DianaOS.Etc
 {
@@ -27,55 +29,52 @@ namespace EmuSen.DianaOS.DianaOS.Etc
         // Written to a published tree's root by DianaOSPublishLayout.targets.
         public const string RootMarkerFileName = ConfigRoot.RootMarkerFileName;
 
-        public static string RootDirectory => ConfigRoot.Directory;
+        // What '/' means to this shell: the user's home, and nothing above it - see `man hier`.
+        public static string RootDirectory => DataStore.UsrHome;
+
+        // Where the install actually lives. Outside the shell's reach on purpose - see `man hier`.
+        public static string InstallDirectory => ConfigRoot.Directory;
 
         public static string ComputeRootFor(string baseDirectory) => ConfigRoot.ComputeFor(baseDirectory);
 
-        // The DianaOS project's own "user data" home - emulator-facing
-        // output (dump/load/screenshot/recording logs, SRAM + state
-        // saves) lives here now instead of under var/, see `man hier`.
-        public static string UsrHomeDirectory => Path.Combine(RootDirectory, "EmuSen.DianaOS", "DianaOS", "Usr", "Home");
-        public static string LogsDirectory => Path.Combine(UsrHomeDirectory, "Logs");
-        public static string SavesDirectory => Path.Combine(UsrHomeDirectory, "Saves");
-        public static string SaveStatesDirectory => Path.Combine(SavesDirectory, "Save States");
+        // These six forward to EmuSen.Galaxia's DataStore - see EmuSen_Galaxia.md §2.
+        public static string UsrHomeDirectory => DataStore.UsrHome;
+        public static string LogsDirectory => DataStore.Logs;
+        public static string SavesDirectory => DataStore.Saves;
+        public static string SaveStatesDirectory => DataStore.SaveStates;
+        public static string FirmwareDirectory => DataStore.Firmware;
+        public static string CheatDatabaseDirectory => DataStore.Cheats;
 
-        // Coprocessor firmware dumps the user supplies (dsp1.rom, st010.rom, ...) - see Venus_NecDSP.md §2.
-        public static string FirmwareDirectory => Path.Combine(UsrHomeDirectory, "Firmware");
+        public static string TempDirectory => Path.Combine(RootDirectory, "tmp");
 
-        // The user's own .cht tree - never shipped with EmuSen, see `man cheat`.
-        public static string CheatDatabaseDirectory => Path.Combine(UsrHomeDirectory, "Cheats");
+        // WiseMan test-run scratch, inside /tmp so the shell can reach it - see `man hier`.
+        public static string ScratchDirectory => Path.Combine(TempDirectory, "WiseMan");
 
-        // WiseMan test-run scratch space only - dev/test artifacts, not
-        // emulator output, kept out of Usr/Home so it isn't mistaken for it.
-        public static string SourceLogsDirectory => Path.Combine(RootDirectory, "SourceLogs");
-
-        // The user-facing Usr/Home folders that hold no shipped content - empty in a
-        // published build, already populated when running from source. See `man hier`.
-        private static readonly string[] UsrHomeStubs = { "Roms", "Games", "Music", "Pictures" };
-
-        // The real directories this shell's Unix-shaped tree needs - see `man hier`.
+        // The real directories this shell's tree needs - see `man hier`.
         private static void EnsureSkeleton()
         {
-            string root = RootDirectory;
             Directory.CreateDirectory(LogsDirectory);
             Directory.CreateDirectory(SavesDirectory);
             Directory.CreateDirectory(SaveStatesDirectory);
             Directory.CreateDirectory(FirmwareDirectory);
-            Directory.CreateDirectory(SourceLogsDirectory);
-            foreach (string stub in UsrHomeStubs) Directory.CreateDirectory(Path.Combine(UsrHomeDirectory, stub));
-            Directory.CreateDirectory(Path.Combine(root, "home", "root"));
-            Directory.CreateDirectory(Path.Combine(root, "etc"));
+            Directory.CreateDirectory(DataStore.Cheats);
+            Directory.CreateDirectory(DataStore.Games);
             Directory.CreateDirectory(ConfigStore.Directory);
-            Directory.CreateDirectory(Path.Combine(root, "tmp"));
+            Directory.CreateDirectory(TempDirectory);
         }
 
-        public static string HomeDirectory(string userName) => Path.Combine(RootDirectory, "home", userName);
+        // One home for everyone; the account name no longer picks a directory - see `man hier`.
+        public static string HomeDirectory(string userName) => DataStore.UsrHome;
 
-        // Forces the process's cwd to root's own home dir exactly once - see `man cd` and EmuSen_Debugging_Tools_Reference_v5.md §3.18.
+        // Old ROM folders still holding files, for the startup notice - see EmuSen_Galaxia.md §3.3.
+        public static IReadOnlyList<string> UnmigratedLibraryDirectories => DataMigration.RemainingLibraryDirectories();
+
+        // Forces the process's cwd to the user home exactly once - see `man cd` and EmuSen_Debugging_Tools_Reference_v5.md §3.18.
         private static readonly Lazy<bool> _initialized = new(() =>
         {
             EnsureSkeleton();
-            Environment.CurrentDirectory = HomeDirectory("root");
+            DataMigration.Run();
+            Environment.CurrentDirectory = DataStore.UsrHome;
             return true;
         });
 

@@ -99,3 +99,11 @@ Eight buttons behind one register, read as two selectable nibbles. Only bits 4 a
 ## 8. Named spaces
 
 `ROM`, `VRAM`, `CARTRAM`, `WRAM`, `OAM`, `HRAM` and `CPUBUS` are what `mem`, `watch` and the cheat engine address. All but `CPUBUS` are direct array windows with wrapping; `CPUBUS` goes through the real decode, side effects included, which is why it is separate. `ROM` is read-only — a debug write must not corrupt the loaded image.
+
+## 9. The battery save
+
+Cartridge types carrying a battery (§4) keep `CARTRAM` across sessions in a `.srm` file, autosaved every 300 frames by `MercuryCore` and again on shutdown. `.srm` is the RetroArch spelling rather than the `.sav` most standalone Game Boy emulators use; EmuSen is internally consistent across its three cores instead.
+
+**The path is still `Path.ChangeExtension(path, ".srm")` — beside the ROM.** Venus deliberately does not do this (`Venus_Memory.md` §2.4), and moving Mercury to match is a known, deliberately deferred change: it is user-visible and needs a copy-don't-move migration. See `EmuSen_Galaxia.md` §6.
+
+Reads and writes go through `Galaxia`'s `AtomicFile`, so an interrupted autosave cannot truncate a live save (`EmuSen_Galaxia.md` §4). `LoadSram` copies whichever of the file and `Ram` is smaller; a cartridge with no battery or no RAM at all does neither.

@@ -9,12 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.WiseMan.DianaOS
 {
-    // DianaOSSandbox's Unix-shaped layout - see `man hier` and
-    // EmuSen_Debugging_Tools_Reference_v5.md §3.3. Covers the real
-    // Usr/Home/Logs|Saves + SourceLogs + home/<user> + etc + tmp skeleton,
-    // the chroot-style leading-'/' resolution (and the "already a real
-    // absolute path inside root" disambiguation it needs), and cd's
-    // no-argument "go to my own home" behavior.
+    // The shell's one-home layout - see `man hier` and EmuSen_Galaxia.md §3.
     public class HierTests
     {
         [Fact]
@@ -26,66 +21,85 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.True(Directory.Exists(DianaOSSandbox.LogsDirectory));
             Assert.True(Directory.Exists(DianaOSSandbox.SavesDirectory));
             Assert.True(Directory.Exists(DianaOSSandbox.SaveStatesDirectory));
-            Assert.True(Directory.Exists(DianaOSSandbox.SourceLogsDirectory));
-            Assert.True(Directory.Exists(Path.Combine(root, "home", "root")));
-            Assert.True(Directory.Exists(Path.Combine(root, "etc")));
+            Assert.True(Directory.Exists(DianaOSSandbox.FirmwareDirectory));
+            Assert.True(Directory.Exists(Path.Combine(root, "etc", "EmuSen")));
             Assert.True(Directory.Exists(Path.Combine(root, "tmp")));
         }
 
+        // The user home is /home itself, not a folder buried in a source project.
         [Fact]
-        public void HomeDirectory_returns_the_expected_real_path()
+        public void The_user_home_is_the_short_path()
         {
-            Assert.Equal(
-                Path.Combine(DianaOSSandbox.RootDirectory, "home", "kid"),
-                DianaOSSandbox.HomeDirectory("kid"));
+            Assert.Equal(DianaOSSandbox.RootDirectory, DianaOSSandbox.UsrHomeDirectory);
+            Assert.Equal(Path.Combine(DianaOSSandbox.InstallDirectory, "home"), DianaOSSandbox.RootDirectory);
         }
 
         [Fact]
-        public void Cd_with_no_argument_goes_to_roots_home_by_default()
+        public void Every_account_shares_the_one_home()
+        {
+            Assert.Equal(DianaOSSandbox.UsrHomeDirectory, DianaOSSandbox.HomeDirectory("kid"));
+        }
+
+        [Fact]
+        public void Cd_with_no_argument_goes_to_the_one_home()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
-            shell.Submit("cd /SourceLogs"); // move away from home first
+            shell.Submit("cd /tmp"); // move away from home first
 
             shell.Submit("cd");
 
-            Assert.Equal(DianaOSSandbox.HomeDirectory("root"), shell.Submit("pwd").Output.Trim());
+            Assert.Equal(DianaOSSandbox.UsrHomeDirectory, shell.Submit("pwd").Output.Trim());
         }
 
+        // su changes identity, not location - see `man hier`.
         [Fact]
-        public void Cd_with_no_argument_goes_to_the_current_users_home_after_su()
+        public void Cd_with_no_argument_still_goes_home_after_su()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
             string name = $"kid_{Guid.NewGuid():N}";
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
+            shell.Submit("cd /tmp");
 
             shell.Submit("cd");
 
-            Assert.Equal(DianaOSSandbox.HomeDirectory(name), shell.Submit("pwd").Output.Trim());
+            Assert.Equal(DianaOSSandbox.UsrHomeDirectory, shell.Submit("pwd").Output.Trim());
         }
 
+        // The 6,179 stale folders this used to leave behind are why - see `man hier`.
         [Fact]
-        public void Useradd_creates_a_real_home_directory()
+        public void Useradd_creates_no_directory_at_all()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
             string name = $"kid_{Guid.NewGuid():N}";
 
             shell.Submit($"useradd {name}");
 
-            Assert.True(Directory.Exists(DianaOSSandbox.HomeDirectory(name)));
+            Assert.False(Directory.Exists(Path.Combine(DianaOSSandbox.RootDirectory, name)));
+        }
+
+        [Fact]
+        public void Useradd_still_registers_the_account()
+        {
+            var shell = DianaOSInterpreter.CreateDefault(null);
+            string name = $"kid_{Guid.NewGuid():N}";
+
+            shell.Submit($"useradd {name}");
+            shell.Submit($"su {name}");
+
+            Assert.Equal(name, shell.Submit("whoami").Output.Trim());
         }
 
         [Fact]
         public void Leading_slash_resolves_against_this_shells_own_root_not_the_real_os_root()
         {
             var shell = DianaOSInterpreter.CreateDefault(null);
-            string nested = Path.Combine(DianaOSSandbox.RootDirectory, "EmuSen.DianaOS");
+            string nested = DianaOSSandbox.SavesDirectory;
             shell.Submit($"cd \"{nested}\""); // start somewhere nested, not the root
 
-            shell.Submit("cd /SourceLogs");
+            shell.Submit("cd /");
 
-            string expected = DianaOSSandbox.SourceLogsDirectory;
-            Assert.Equal(expected, shell.Submit("pwd").Output.Trim());
+            Assert.Equal(DianaOSSandbox.UsrHomeDirectory, shell.Submit("pwd").Output.Trim());
         }
 
         [Fact]
@@ -99,6 +113,32 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.Equal(real, shell.Submit("pwd").Output.Trim());
         }
 
+        // What the whole re-rooting was for: 'ls /' shows your data, not the repo.
+        [Fact]
+        public void Ls_of_root_shows_the_users_data_and_none_of_the_install()
+        {
+            var shell = DianaOSInterpreter.CreateDefault(null);
+
+            string listing = shell.Submit("ls /").Output;
+
+            Assert.Contains("Saves", listing);
+            Assert.Contains("Games", listing);
+            Assert.DoesNotContain("EmuSen.sln", listing);
+            Assert.DoesNotContain("EmuSen.Hotaru", listing);
+            Assert.DoesNotContain(".git", listing);
+        }
+
+        // Config kept its shell-visible path across the move - see EmuSen_Galaxia.md §3.2.
+        [Fact]
+        public void Config_is_still_reachable_at_its_documented_path()
+        {
+            var shell = DianaOSInterpreter.CreateDefault(null);
+
+            shell.Submit("cd /etc/EmuSen");
+
+            Assert.Equal(EmuSen.Galaxia.ConfigStore.Directory, shell.Submit("pwd").Output.Trim());
+        }
+
         [Fact]
         public void Man_hier_documents_the_filesystem_layout()
         {
@@ -106,8 +146,8 @@ namespace EmuSen.WiseMan.DianaOS
 
             var result = shell.Submit("man hier");
 
-            Assert.Contains("/home", result.Output);
-            Assert.Contains("/SourceLogs", result.Output);
+            Assert.Contains("/etc/EmuSen", result.Output);
+            Assert.Contains("/Saves", result.Output);
         }
     }
 }

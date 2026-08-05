@@ -122,11 +122,11 @@ SRAM is mapped to the lower 32KB (`$0000-$7FFF`) of banks `$70-$7D` and `$F0-$FF
 
 ### 2.4 Save file convention
 
-`var/games/<rom-name>.srm` — a dedicated folder under the project root's Unix-shaped layout (see `EmuSen_Debugging_Tools_Reference_v5.md` §3.3/`man hier` - this was `Saves/` before that layout existed), deliberately *not* derived from the ROM's own directory (which could be anywhere on disk, possibly read-only, and isn't necessarily "ours" to write into — ROMs can load from any path via the CLI arg or the Avalonia frontend's file picker). Only the save *filename* comes from the ROM; the folder is always relative to where the emulator runs from.
+`home/Saves/<rom-name>.srm`, resolved by `SaveLibrary.SramPathFor` — deliberately *not* derived from the ROM's own directory (which could be anywhere on disk, possibly read-only, and isn't necessarily "ours" to write into — ROMs can load from any path via the CLI arg or the Avalonia frontend's file picker). Only the save *filename* comes from the ROM; the folder is always relative to where the emulator runs from. The path used to be composed here from `DianaOSSandbox.SavesDirectory`; it now comes from `EmuSen.Galaxia`, so the core no longer asks the shell where the user's saves go — see `EmuSen_Galaxia.md` §2. The location is unchanged.
 
 `LoadSram()` tolerates a save file that doesn't exactly match the allocated SRAM size (copies whichever is smaller) rather than failing outright — a mismatch most likely means this ROM's header-reported SRAM size differs from whatever created the file, not a corrupted save. A save that fails to load doesn't prevent the game from booting.
 
-`SaveSram()` is called periodically (see `VenusCore.RunFrame`'s autosave) and on shutdown, not on every SRAM write — cheap enough (a few KB, plain overwrite) that this is a convenience choice, not a performance necessity.
+`SaveSram()` is called periodically (see `VenusCore.RunFrame`'s autosave, every 300 frames) and on shutdown, not on every SRAM write. Both directions go through `AtomicFile`, which writes a temp file and renames over the target, so one of those ~5-second autosaves being interrupted leaves the previous save whole rather than truncated — see `EmuSen_Galaxia.md` §4.
 
 ### 2.4a The battery save is emulator state, and it silently broke a three-day measurement
 

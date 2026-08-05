@@ -22,7 +22,7 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void The_shell_and_Galaxia_agree_on_the_root()
         {
-            Assert.Equal(ConfigRoot.Directory, DianaOSSandbox.RootDirectory);
+            Assert.Equal(ConfigRoot.Directory, DianaOSSandbox.InstallDirectory);
             Assert.Equal(ConfigRoot.PublishedRootDirName, DianaOSSandbox.PublishedRootDirName);
             Assert.Equal(ConfigRoot.RootMarkerFileName, DianaOSSandbox.RootMarkerFileName);
         }
@@ -69,7 +69,6 @@ namespace EmuSen.WiseMan.Galaxia
             ConfigStore.OverrideDirectory = Path.Combine(Path.GetTempPath(), "EmuSenCfg_" + Guid.NewGuid().ToString("N"));
 
             Assert.Equal(root, DianaOSSandbox.RootDirectory);
-            Assert.Equal(root, ConfigRoot.Directory);
         }
     }
 }

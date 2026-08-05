@@ -19,7 +19,7 @@ namespace EmuSen.WiseMan.Audio
         private static readonly TimeSpan FrameInterval = TimeSpan.FromSeconds(1.0 / FramesPerSecond);
 
         // Real ROM, not SyntheticRom's blank one - see .gitignore.
-        private static string RomPath => Path.Combine(DianaOSSandbox.UsrHomeDirectory, "Games", "SNES", "SMW.smc");
+        private static string RomPath => Fixtures.RealRom.Find("SNES", "SMW.smc") ?? "";
 
         [Fact]
         public void Audio_backlog_stays_bounded_after_a_single_stall()

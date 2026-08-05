@@ -21,6 +21,8 @@ That constraint is what makes the project genuinely agnostic rather than merely 
 
 The same constraint moved root discovery. `DianaOSSandbox` used to own the walk-up that finds the project root; it now delegates to `ConfigRoot`, which holds the walk and both markers. `DianaOSSandbox.RootDirectory`, `ComputeRootFor`, `PublishedRootDirName` and `RootMarkerFileName` all still exist and still mean the same thing — they forward. Nothing about how the root is found changed, only which project holds the code. `ConfigStoreTests` pins the two to the same answer.
 
+**That move has since been repeated for saved data.** The `Usr/Home` directories — saves, save states, firmware, cheats, logs — left `DianaOSSandbox` for Galaxia's own `DataStore` on the same reasoning, and the sandbox forwards those six properties too. This document remains the reference for the *config* half (the files under `/etc/EmuSen`, and how each is read and written); **`EmuSen_Galaxia.md` covers the project as a whole**, including the data half, `AtomicFile`'s durability contract and the save/state naming rules.
+
 ### 1.2 The paths
 
 Config lives inside DianaOS's own sandbox tree, at `<root>/etc/EmuSen` — reachable from the shell as `/etc/EmuSen`, which is the point. See `man hier`.
@@ -185,7 +187,7 @@ Three behaviours worth stating:
 
 ### 3.4a `CheatDatabaseDirectory` — using a cheat tree you already have
 
-`AppSettings.CheatDatabaseDirectory` points at a directory tree of `.cht` files, one per game in per-system folders — the exact shape RetroArch stores its cheats in. Point it at an existing RetroArch cheats folder and it is indexed in place: no copying, no conversion, no import step. Unset, it falls back to `DianaOSSandbox.CheatDatabaseDirectory` (`Usr/Home/Cheats`).
+`AppSettings.CheatDatabaseDirectory` points at a directory tree of `.cht` files, one per game in per-system folders — the exact shape RetroArch stores its cheats in. Point it at an existing RetroArch cheats folder and it is indexed in place: no copying, no conversion, no import step. Unset, it falls back to `DianaOSSandbox.CheatDatabaseDirectory` (`home/Cheats`).
 
 This is deliberately a *directory setting* rather than a bundled asset. **EmuSen ships no cheat data and redistributes none.** The libretro cheat database is licensed CC BY-SA 4.0, but its own README states the codes were "collected from any available source on the web" — so the grant is only as good as libretro's rights in an aggregated corpus, and the EU sui generis database right applies independently of copyright either way. Indexing a folder the user already has, or downloading one to their machine at their explicit request (`cheat db update`, `Settings > Cheat Database...`), keeps that question off this project entirely. Attribution is shown at the point of download, since it is a licence condition rather than a footnote.
 

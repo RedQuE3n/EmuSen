@@ -1,5 +1,6 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores;
+using EmuSen.Cores.Nintendo.Moon.Validation;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;
@@ -24,6 +25,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 //   dotnet run -- <rom> <maxframes> --commands path [other flags above except --tap/--tap2/--screenshot/--script]
 //   dotnet run -- --diffshot <bmp1> <bmp2> <outpath>
 //   dotnet run -- --singlestep <target> <test-dir> [max-examples-per-file]
+//   dotnet run -- --testroms <dir|rom> [frame-budget]
 //
 // Internally this is now just dispatch: HeadlessDebugOptions.Parse turns
 // argv into a plain options object, FrameRunner is the one shared
@@ -83,6 +85,24 @@ class Program
                 return 1;
             }
             return SingleStepRunner.Run(args[1], args[2], args.Length >= 4 ? int.Parse(args[3]) : 3);
+        }
+
+        // Also standalone: third-party NES test ROMs, which report through PRG RAM - see Moon_TestRoms.md.
+        if (args.Length >= 1 && args[0] == "--testroms")
+        {
+            if (args.Length < 2)
+            {
+                Console.WriteLine("Usage: dotnet run -- --testroms <dir|rom> [frame-budget]");
+                return 1;
+            }
+            if (args.Length >= 3 && !int.TryParse(args[2], out _))
+            {
+                Console.WriteLine($"[ERROR] frame-budget must be a number, got '{args[2]}'");
+                return 1;
+            }
+            return TestRomRunner.Run(
+                args[1],
+                args.Length >= 3 ? int.Parse(args[2]) : NesTestRomRunner.DefaultFrameBudget);
         }
 
         var (options, warnings, error) = HeadlessDebugOptions.Parse(args);
@@ -241,6 +261,8 @@ class Program
                 CpuLogEnd = options.CpuLogEnd,
                 CpuTraceEnd = options.CpuTraceEnd,
                 CpuTracePath = options.CpuTracePath,
+                ApuLogEnd = options.ApuLogEnd,
+                ApuLogPath = options.ApuLogPath,
                 Verbose = options.Verbose,
                 OnHalted = debugTarget.RefreshProviders,
             };
@@ -269,6 +291,8 @@ class Program
             CpuLogEnd = options.CpuLogEnd,
             CpuTraceEnd = options.CpuTraceEnd,
             CpuTracePath = options.CpuTracePath,
+            ApuLogEnd = options.ApuLogEnd,
+            ApuLogPath = options.ApuLogPath,
             Verbose = options.Verbose,
             OnHalted = debugTarget.RefreshProviders,
         };

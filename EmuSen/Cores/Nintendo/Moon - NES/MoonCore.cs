@@ -26,9 +26,8 @@ namespace EmuSen.Cores.Nintendo.Moon
 
         // "MOON" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4E4F4F4D;
-        private const int StateVersion = 1;
-
-        private int _currentScanline;
+        // Bumped when the timeline folded into the core, replacing Crystal's span - see Moon_Core.md §5.
+        private const int StateVersion = 3;
 
         public Cartridge? Cart { get; private set; }
         public Cpu? Cpu { get; private set; }
@@ -100,16 +99,28 @@ namespace EmuSen.Cores.Nintendo.Moon
             ResetSchedule();
         }
 
+        // The RESET button: the processors restart, RAM and PRG RAM keep what they held - see Moon_Core.md §6.
+        public void Reset()
+        {
+            if (Bus is null || Cpu is null || Ppu is null || Apu is null)
+            {
+                throw new InvalidOperationException("Reset() called before LoadRom().");
+            }
+
+            Ppu.SoftReset();
+            Apu.SoftReset();
+            Bus.SoftReset();
+            Cpu.SoftReset();
+
+            IsHaltedAtBreakpoint = false;
+            ResetSchedule();
+        }
+
         public void RunFrame()
         {
             if (Bus is null || Cpu is null || Ppu is null || Apu is null)
             {
                 throw new InvalidOperationException("RunFrame() called before LoadRom().");
-            }
-
-            if (!_schedule.IsScheduled((int)MoonEvent.ScanlineBoundary))
-            {
-                throw new InvalidOperationException("RunFrame() called with no scanline boundary scheduled - see ResetSchedule().");
             }
 
             // Let the instruction we stopped in front of run before re-arming, or `continue` re-halts on it.
@@ -118,11 +129,12 @@ namespace EmuSen.Cores.Nintendo.Moon
 
             _frameComplete = false;
             Ppu.SkipRendering = SkipRendering;
+            Bus.ApuTraceFrame = (uint)TotalFrames;
 
             while (!_frameComplete)
             {
-                long deadline = _schedule.NextEventTime();
-                _cpuBudget += _cpuClock.Advance(deadline - _schedule.Now, CpuRatio);
+                long deadline = NextScanlineBoundary;
+                _cpuBudget += EarnCpuCycles(deadline - _masterClock);
 
                 // A halt returns without closing the phase, so the resumed frame keeps accumulating - see Moon_Debug.md §3.2.
                 long phaseStart = Stopwatch.GetTimestamp();
@@ -130,7 +142,7 @@ namespace EmuSen.Cores.Nintendo.Moon
                 long afterCpu = Stopwatch.GetTimestamp();
                 _cpuApuTicksAccum += afterCpu - phaseStart;
 
-                _schedule.RunUntil(deadline);
+                EndScanline(deadline);
                 _ppuTicksAccum += Stopwatch.GetTimestamp() - afterCpu;
             }
         }
@@ -143,8 +155,8 @@ namespace EmuSen.Cores.Nintendo.Moon
                 _cpuBudget -= Bus!.TakePendingDmaCycles();
                 if (_cpuBudget <= 0) break;
 
+                // Both lines are refreshed per cycle by the bus now; this is the pre-instruction edge - see Moon_CPU.md §5.5.
                 Cpu!.SetNmiLine(Ppu!.NmiOutput);
-                Cpu.SetIrqLine(Apu!.IrqAsserted || Cart!.Mapper.IrqPending);
 
                 if (!resuming && Breakpoints.ShouldBreak(Cpu.PC))
                 {
@@ -156,16 +168,15 @@ namespace EmuSen.Cores.Nintendo.Moon
                 resuming = false;
                 if (Coverage.IsArmed) Coverage.Record(Cpu.PC);
 
-                int cycles = Cpu.Step();
-                _cpuBudget -= cycles;
+                // The APU and PPU are clocked inside the CPU's own bus cycles now - see Moon_CPU.md §5.5.
+                _cpuBudget -= Cpu.Step();
+                _cpuBudget -= Bus.TakeStolenCycles();
 
-                // The APU is clocked from real CPU cycles, which is what makes its timers right.
-                Apu.Step(cycles);
-                if (Apu.Dmc.StallCycles > 0)
-                {
-                    _cpuBudget -= Apu.Dmc.StallCycles;
-                    Apu.Dmc.StallCycles = 0;
-                }
+                if (!Ppu.FrameComplete) continue;
+
+                Ppu.FrameComplete = false;
+                EndFrame();
+                return true;
             }
 
             return true;
@@ -236,13 +247,10 @@ namespace EmuSen.Cores.Nintendo.Moon
             w.Write(StateMagic);
             w.Write(StateVersion);
             w.Write(TotalFrames);
-            w.Write(_currentScanline);
             w.Write(_lineStartClock);
             w.Write(_cpuBudget);
-
-            Span<long> timeline = stackalloc long[_schedule.StateLength];
-            _schedule.CaptureState(timeline);
-            foreach (long value in timeline) w.Write(value);
+            w.Write(_masterClock);
+            w.Write(_cpuRemainder);
 
             StateSerializer.Write(w, Cart);
             StateSerializer.Write(w, Cart.Mapper);
@@ -273,14 +281,10 @@ namespace EmuSen.Cores.Nintendo.Moon
             }
 
             TotalFrames = r.ReadInt64();
-            _currentScanline = r.ReadInt32();
             _lineStartClock = r.ReadInt64();
             _cpuBudget = r.ReadInt64();
-
-            Span<long> timeline = stackalloc long[_schedule.StateLength];
-            for (int i = 0; i < timeline.Length; i++) timeline[i] = r.ReadInt64();
-            _schedule.RestoreState(timeline);
-            _schedule.SetHandler(this);
+            _masterClock = r.ReadInt64();
+            _cpuRemainder = r.ReadInt64();
 
             StateSerializer.Read(r, Cart);
             StateSerializer.Read(r, Cart.Mapper);

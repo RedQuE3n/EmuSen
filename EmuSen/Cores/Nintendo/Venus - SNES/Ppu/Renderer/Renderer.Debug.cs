@@ -1,6 +1,5 @@
 using System;
 using System.Numerics;
-using Raylib_cs;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
@@ -33,7 +32,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     {
                         int pixel = ((p0 >> cbit) & 1) | (((p1 >> cbit) & 1) << 1) | (((p2 >> cbit) & 1) << 2) | (((p3 >> cbit) & 1) << 3);
                         byte v = (byte)(pixel * 17);
-                        _sheetPixels[(baseY + r) * SheetW + baseX + (7 - cbit)] = new Color(v, v, v, (byte)255);
+                        _sheetPixels[(baseY + r) * SheetW + baseX + (7 - cbit)] = new Rgba32(v, v, v, (byte)255);
                     }
                 }
             }
@@ -124,8 +123,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             // revealing a WRONG backdrop, not bad tile/palette data (both of
             // which just checked out fine).
             float brightness = (ppu.Inidisp & 0x0F) / 15f;
-            Color mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
-            Color subBackdrop = new Color(
+            Rgba32 mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
+            Rgba32 subBackdrop = new Rgba32(
                 (byte)(((ppu.FixedColorR & 0x1F) << 3) * brightness),
                 (byte)(((ppu.FixedColorG & 0x1F) << 3) * brightness),
                 (byte)(((ppu.FixedColorB & 0x1F) << 3) * brightness),
@@ -134,7 +133,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             bool subtractMode = (ppu.Cgadsub & 0x80) != 0;
             bool halfMode = (ppu.Cgadsub & 0x40) != 0;
             bool backdropMathEnabled = (ppu.Cgadsub & 0x20) != 0;
-            Color blended = backdropMathEnabled ? BlendColors(mainBackdrop, subBackdrop, subtractMode, halfMode) : mainBackdrop;
+            Rgba32 blended = backdropMathEnabled ? BlendColors(mainBackdrop, subBackdrop, subtractMode, halfMode) : mainBackdrop;
 
             Console.WriteLine($"[BACKDROP] CGRAM[0]=0x{ppu.Cgram[0]:X2}{ppu.Cgram[1]:X2} (ever written: {ppu.WasCgramTouched(0) || ppu.WasCgramTouched(1)}) -> mainBackdrop=({mainBackdrop.R},{mainBackdrop.G},{mainBackdrop.B})");
             Console.WriteLine($"[BACKDROP] FixedColor R={ppu.FixedColorR} G={ppu.FixedColorG} B={ppu.FixedColorB} (2132 ever written: {ppu.FixedColorEverWritten}) -> subBackdrop=({subBackdrop.R},{subBackdrop.G},{subBackdrop.B})");
@@ -162,7 +161,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             {
                 for (int px = 0; px < ScreenW; px += 4)
                 {
-                    Color c = _screenPixels[py * ScreenW + px];
+                    Rgba32 c = _screenPixels[py * ScreenW + px];
                     if (c.R != 0 || c.G != 0 || c.B != 0) continue;
                     blackPixelCount++;
 
@@ -297,7 +296,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                             if (bg1Pixel != 0)
                             {
                                 int cgIdx1 = (pal * 16 + bg1Pixel) * 2;
-                                Color bg1Color = SnesColor(ppu.Cgram[cgIdx1 & 0x1FF], ppu.Cgram[(cgIdx1 + 1) & 0x1FF], brightness);
+                                Rgba32 bg1Color = SnesColor(ppu.Cgram[cgIdx1 & 0x1FF], ppu.Cgram[(cgIdx1 + 1) & 0x1FF], brightness);
                                 Console.WriteLine($"[BLACK TILE]    BG1 is OPAQUE here - its own color should be ({bg1Color.R},{bg1Color.G},{bg1Color.B}). If the actual pixel is black instead, the bug is in BG1's own palette lookup, not the backdrop/BG2 path at all.");
                             }
                             else
@@ -327,8 +326,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                                 Console.WriteLine($"[BLACK TILE]    BG1 transparent. BG2 actual pixel index here: {bg2Pixel} (0=transparent)");
 
                                 bool backdropMathEnabled = (ppu.Cgadsub & 0x20) != 0;
-                                Color mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
-                                Color subContribution;
+                                Rgba32 mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
+                                Rgba32 subContribution;
                                 if (bg2Pixel != 0)
                                 {
                                     int cgIdx2 = (pal2 * 16 + bg2Pixel) * 2;
@@ -337,13 +336,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                                 }
                                 else
                                 {
-                                    subContribution = new Color((byte)(((ppu.FixedColorR & 0x1F) << 3) * brightness), (byte)(((ppu.FixedColorG & 0x1F) << 3) * brightness), (byte)(((ppu.FixedColorB & 0x1F) << 3) * brightness), (byte)255);
+                                    subContribution = new Rgba32((byte)(((ppu.FixedColorR & 0x1F) << 3) * brightness), (byte)(((ppu.FixedColorG & 0x1F) << 3) * brightness), (byte)(((ppu.FixedColorB & 0x1F) << 3) * brightness), (byte)255);
                                     Console.WriteLine($"[BLACK TILE]    BG2 also transparent here, sub-screen falls back to fixed color = ({subContribution.R},{subContribution.G},{subContribution.B})");
                                 }
 
                                 bool subtractMode = (ppu.Cgadsub & 0x80) != 0;
                                 bool halfMode = (ppu.Cgadsub & 0x40) != 0;
-                                Color expected = backdropMathEnabled ? BlendColors(mainBackdrop, subContribution, subtractMode, halfMode) : mainBackdrop;
+                                Rgba32 expected = backdropMathEnabled ? BlendColors(mainBackdrop, subContribution, subtractMode, halfMode) : mainBackdrop;
                                 Console.WriteLine($"[BLACK TILE]    EXPECTED final color (backdropMath={backdropMathEnabled}): ({expected.R},{expected.G},{expected.B}) vs ACTUAL displayed ({c.R},{c.G},{c.B})");
                             }
 
@@ -375,7 +374,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                                 if (bg3Priority && bg3Pixel != 0)
                                 {
                                     int cgIdx3 = (pal3 * 4 + bg3Pixel) * 2;
-                                    Color bg3Color = SnesColor(ppu.Cgram[cgIdx3 & 0x1FF], ppu.Cgram[(cgIdx3 + 1) & 0x1FF], brightness);
+                                    Rgba32 bg3Color = SnesColor(ppu.Cgram[cgIdx3 & 0x1FF], ppu.Cgram[(cgIdx3 + 1) & 0x1FF], brightness);
                                     Console.WriteLine($"[BLACK TILE]    BG3's color here = ({bg3Color.R},{bg3Color.G},{bg3Color.B}) - THIS is what's actually winning the pixel, not BG1.");
                                 }
                             }

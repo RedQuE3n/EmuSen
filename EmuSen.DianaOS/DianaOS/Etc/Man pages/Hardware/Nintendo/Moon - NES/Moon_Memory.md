@@ -79,11 +79,15 @@ Eight bank registers behind a select/data pair at `$8000`/`$8001`. `$8000` carri
 
 The IRQ counter reloads when it is zero or a reload was requested, otherwise decrements; it fires when it reaches zero with IRQs enabled. `$C000` latches the reload value, `$C001` requests a reload, `$E000` disables *and* acknowledges, `$E001` enables. The line stays asserted until `$E000`, which is why `MoonCore` treats it as level-triggered.
 
-### 4.6a A12, and the one bug that mattered
+### 4.6a A12 is watched per fetch, not counted per line
 
-On hardware the counter is clocked by the PPU's A12 line rising, which happens once per line during sprite pattern fetches. At this PPU's scanline granularity that becomes one call to `IMapper.OnScanline` per line, from `Ppu.EndScanline`, and only while rendering is enabled.
+The counter is clocked by the PPU's **A12 line rising**, and `Mmc3.OnPpuAddress` now sees every address the PPU puts on its bus — one call per fetch, from `Ppu.SetBusAddress`. A rise counts only if A12 was low for at least three PPU clocks first, which is what stops the rapid low-high-low of a normal fetch pattern from clocking the board several times per tile. The model is Mesen's `MMC3::IsA12RisingEdge`.
 
-**The pre-render line counts.** It fetches like any other, so its A12 rise clocks the board too. Omitting it costs one clock per frame, which walks the counter's phase out of step with the line the game latched for — Super Mario Bros. 3's status-bar split landed in the wrong place and corrupted a band of the title screen until the pre-render clock was added. The symptom is a split one line off that drifts, not a split that never happens.
+**Writes to `$2006` clock it too**, and that is the half that is easy to miss. A CPU write to `PPUADDR` drives the PPU's address bus directly, so a game can toggle A12 and step the counter with no rendering happening at all. `mmc3_test`'s `1-clocking` and `3-A12_clocking` test exactly this and fail without it — "Should decrement when A12 is toggled via PPUADDR". `$2007` reads and writes re-drive the bus the same way when they advance the pointer.
+
+The sentinel matters: "A12 not currently low" is `-1`, not `0`, because dot 0 is a real clock the first fetch of a run can land on. Using `0` made the very first rise of the machine's life invisible.
+
+**Previously this was one clock per rendered line**, from `Ppu.EndScanline`. That was enough for Super Mario Bros. 3 — including the pre-render line, whose omission once put its status-bar split one line off and corrupted a band of the title screen — but it is not enough for the suite: `mmc3_test` was 0/6 under it and is 3/6 with real edge detection. What remains failing (`2-details`, `4-scanline_timing`, `6-MMC6`) is finer still.
 
 ### 4.7 The four simple boards
 

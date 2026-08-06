@@ -1,6 +1,5 @@
 using System;
 using System.Numerics;
-using Raylib_cs;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
@@ -17,7 +16,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         // Mode 7 - BG1 as a single affine-transformed layer. See
         // Venus_PPU.md §3 for the transform formula, VRAM layout, and what's
         // not implemented.
-        private void RenderMode7(Ppu ppu, int py, float brightness, Color[] target, int[] targetLayer, int layerId, bool isMainScreen)
+        private void RenderMode7(Ppu ppu, int py, float brightness, Rgba32[] target, int[] targetLayer, int layerId, bool isMainScreen)
         {
             bool hFlip = (ppu.M7Sel & 0x01) != 0;
             bool vFlip = (ppu.M7Sel & 0x02) != 0;
@@ -46,7 +45,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         }
 
         // EXTBG (SETINI bit 6) - see Venus_PPU.md §3.4.
-        private void RenderMode7Bg2Extbg(Ppu ppu, int py, float brightness, Color[] target, int[] targetLayer, int layerId, bool isMainScreen, bool highPriorityOnly)
+        private void RenderMode7Bg2Extbg(Ppu ppu, int py, float brightness, Rgba32[] target, int[] targetLayer, int layerId, bool isMainScreen, bool highPriorityOnly)
         {
             bool hFlip = (ppu.M7Sel & 0x01) != 0;
             bool vFlip = (ppu.M7Sel & 0x02) != 0;

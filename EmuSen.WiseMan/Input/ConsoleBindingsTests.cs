@@ -8,7 +8,7 @@ using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Mistress.Input;
-using EmuSen.Nehellania.Input;
+using EmuSen.Endymion.Input;
 
 namespace EmuSen.WiseMan.Input
 {

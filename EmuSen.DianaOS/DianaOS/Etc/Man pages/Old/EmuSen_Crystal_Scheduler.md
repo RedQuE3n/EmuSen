@@ -1,5 +1,18 @@
 # EmuSen.Crystal — the core-agnostic timing scheduler
 
+> **RETIRED 2026-08-05. `EmuSen.Crystal` no longer exists.** Both cores that used it
+> drove it with a single event at a constant stride, so the assembly was folded back
+> into them and deleted: the timeline lives in `MoonCore.Schedule.cs` and
+> `VenusCore.Schedule.cs` now. For what is actually running, read `Moon_Core.md` §2
+> and `Venus_CPU.md` §8.5d.
+>
+> This file is kept because two of its arguments outlived its mechanism. **§7.1** is
+> the finding that a lagging device wants a clock and a sync point rather than an
+> event id — still the right guidance for the 27–35% Venus PPU-threading win. **§1**
+> is the `HTime` case (`$4207`/`$4208`), still unimplemented, and still the one place
+> a hardcoded loop genuinely has nowhere to put a game-chosen IRQ position. Everything
+> below describes code that has been deleted; read it for the reasoning, not the API.
+
 *This revision: Venus now schedules against Crystal (`VenusCore.Schedule.cs`), digest-clean. The event decomposition and the PPU-as-lagging-device work are still ahead — see §7.*
 
 *Previous revision: initial, mechanism only.*
@@ -97,6 +110,18 @@ A core supplies exactly three things, all of them code:
 **It has exactly one event, and that is a finding rather than a shortcut.** Every event in the old `RunFrame` fired at a scanline boundary, and end-of-line-N is separated from start-of-line-(N+1) only by the scanline increment. So a conversion that changes no behaviour necessarily collapses to one `ScanlineBoundary` event; splitting HDMA, render, vblank and the IRQ check apart means moving them to their true hardware times, which *changes* digests by definition. **This commit buys the timeline, not the decomposition.**
 
 What that unlocks is the point: with a master clock in place, the PPU can become a device that lags. That is the 27–35% (`Venus_PPU.md` §13.4), and it is the next step. `HTime` comes after, as its own commit, because it will legitimately change digests for any game using mid-scanline IRQs and that diff must not be tangled with a refactor that is supposed to change nothing.
+
+### 7.1 Moon adopted it, then took its PPU back — 2026-08-05
+
+Moon (NES) is the second Crystal core, and it is the one that actually needed §5's `ClockAccumulator`: 1364 master clocks per scanline over 12 per CPU cycle is 113.667, where Venus's 1364/6 divides evenly. That carry is still Crystal's, and it is still the awkwardest arithmetic in Moon's timing model.
+
+**But Moon's PPU no longer runs from a scheduled event.** It is clocked three dots per CPU cycle from inside `MemoryBus.Tick`, so it advances within the CPU's own bus cycles (`Moon_PPU.md` §1). `ScanlineBoundary` still fires; its handler now only re-arms itself and gives `RunFrame` a deadline to advance the CPU budget to. Frame completion comes from `Ppu.FrameComplete`, not from the scheduler.
+
+That is worth recording because it contradicts §7's expectation directly. The prediction was that finer timing means *more* events — HDMA, render, vblank and the IRQ check pulled apart onto the timeline. What per-dot timing actually wanted was the opposite: a device with **its own free-running clock**, ticked by whatever is driving time, rather than a queue of appointments. Mesen's `NesPpu::Run(runTo)` has the same shape — catch up to a master clock, not fire at a scheduled instant.
+
+So the "PPU as a lagging device" idea in §7 is half-confirmed and half-refuted. The lagging-catch-up *model* is right and is what Moon now does. The mechanism it needs is a clock and a sync point, not an event id — which means Crystal's event queue is the wrong tool for the 27-35% Venus win, and `Sync(device)` (§7 item 3) is the right one. Anyone doing that work on Venus should read Moon's `Ppu.Timing.cs` first.
+
+Moon **is** still a Crystal core: it implements `IScheduleHandler`, `Scheduler.Now` is its master clock, and unlike Venus its timeline *is* captured in save states (see the gap below, which Moon does not have).
 
 **Known gap: the timeline is not in the save state.** `VenusCore.SaveState` serialises `Cart`/`Cpu`/`Bus`/`Spc700`, not `VenusCore` itself, so `Scheduler.Now` and `_lineStartClock` are not written — exactly as `_lineCycles` and `_scanlineStarted` never were. A loaded state therefore resumes on the running instance's timeline rather than the saved one. That is pre-existing behaviour and not a regression (the digests confirm it), but `Scheduler.CaptureState`/`RestoreState` (§6) exist for when it is fixed properly.
 

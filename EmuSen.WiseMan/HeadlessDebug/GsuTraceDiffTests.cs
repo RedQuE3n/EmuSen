@@ -1,3 +1,4 @@
+using EmuSen.Cores.Debug;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using Gsu = EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx.SuperFx;
 

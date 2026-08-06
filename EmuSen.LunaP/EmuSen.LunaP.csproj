@@ -9,7 +9,7 @@
 
        THE LAYERING RULE, and it is load-bearing: this project may reference
        Avalonia, EmuSen.Galaxia and EmuSen.Cauldron, and NOTHING ELSE. Not
-       EmuSen (the core), not EmuSen.DianaOS, not EmuSen.Nehellania. The
+       EmuSen (the core), not EmuSen.DianaOS, not EmuSen.Endymion. The
        launcher's whole value is browsing a library with no core loaded, and
        an upward reference to any of those hands it the entire emulator.
        EmuSen.Serenity already holds this line on the video side - it presents

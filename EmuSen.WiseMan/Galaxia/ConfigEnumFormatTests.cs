@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using EmuSen.Cores;
 using EmuSen.Galaxia;
-using EmuSen.Nehellania.Input;
+using EmuSen.Endymion.Input;
 using SDL3;
 using EmuSen.Galaxia.Input;
 

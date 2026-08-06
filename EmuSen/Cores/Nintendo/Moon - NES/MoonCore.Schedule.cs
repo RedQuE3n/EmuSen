@@ -1,73 +1,58 @@
-using EmuSen.Crystal;
-
 namespace EmuSen.Cores.Nintendo.Moon
 {
-    // Moon's half of the Crystal contract - see EmuSen_Crystal_Scheduler.md and Moon_Core.md §2.
-    public partial class MoonCore : IScheduleHandler
+    // Moon's own timeline: a master clock and the scanline the CPU is paced against - see Moon_Core.md §2.
+    public partial class MoonCore
     {
-        internal enum MoonEvent
-        {
-            ScanlineBoundary = 0,
-        }
+        // Where the machine has reached on its master clock.
+        private long _masterClock;
 
-        private readonly Scheduler _schedule = new(8);
+        // Where the scanline being paced began; the CPU is budgeted up to the next boundary.
+        private long _lineStartClock;
 
-        // The CPU's rate against the master clock; 1364 master clocks a line is not a whole number of them.
-        private static readonly ClockRatio CpuRatio = new(1, MasterClocksPerCpuCycle);
-
-        private ClockAccumulator _cpuClock;
+        // Master clocks earned but not yet worth a whole CPU cycle, carried so 1364/12 cannot drift - see Moon_Core.md §2.1.
+        private long _cpuRemainder;
 
         // Cycles the CPU has run beyond its budget, carried so the overshoot never accumulates as drift.
         private long _cpuBudget;
 
-        private long _lineStartClock;
         private bool _frameComplete;
 
         // Reset each EndFrame, not each scanline - see Moon_Debug.md §3.2.
         private long _cpuApuTicksAccum;
         private long _ppuTicksAccum;
 
-        public Scheduler Schedule => _schedule;
+        public long MasterClock => _masterClock;
 
-        public long MasterClock => _schedule.Now;
+        // The PPU owns its own position now; this mirrors it for the shell - see Moon_PPU.md §1.
+        public int CurrentScanline => Ppu?.Scanline ?? 0;
 
-        public int CurrentScanline => _currentScanline;
+        // How far the CPU may run before the loop checks back; the PPU decides when a frame ends - see Moon_Core.md §2.2.
+        private long NextScanlineBoundary => _lineStartClock + MasterClocksPerScanline;
 
         private void ResetSchedule()
         {
-            _schedule.Reset();
-            _schedule.SetHandler(this);
-            _schedule.At(MasterClocksPerScanline, (int)MoonEvent.ScanlineBoundary);
-            _cpuClock.Reset();
-            _cpuBudget = 0;
+            _masterClock = 0;
             _lineStartClock = 0;
-            _currentScanline = 0;
+            _cpuRemainder = 0;
+            _cpuBudget = 0;
             _frameComplete = false;
         }
 
-        public void OnScheduledEvent(int eventId, long now)
+        // Whole CPU cycles earned by masterDelta, remainder carried to the next call - see Moon_Core.md §2.1.
+        private long EarnCpuCycles(long masterDelta)
         {
-            switch ((MoonEvent)eventId)
-            {
-                case MoonEvent.ScanlineBoundary:
-                    EndScanline();
-                    break;
-            }
+            if (masterDelta < 0) throw new ArgumentOutOfRangeException(nameof(masterDelta), "A clock cannot run backwards.");
+
+            long scaled = masterDelta + _cpuRemainder;
+            _cpuRemainder = scaled % MasterClocksPerCpuCycle;
+            return scaled / MasterClocksPerCpuCycle;
         }
 
-        private void EndScanline()
+        // Closes the line the CPU was paced against and opens the next one.
+        private void EndScanline(long deadline)
         {
-            Ppu!.EndScanline(_currentScanline);
-
-            _currentScanline++;
+            if (deadline > _masterClock) _masterClock = deadline;
             _lineStartClock += MasterClocksPerScanline;
-            _schedule.At(_lineStartClock + MasterClocksPerScanline, (int)MoonEvent.ScanlineBoundary);
-
-            if (_currentScanline >= Video.Ppu.TotalScanlines)
-            {
-                _currentScanline = 0;
-                EndFrame();
-            }
         }
 
         private void EndFrame()

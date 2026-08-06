@@ -283,12 +283,6 @@ namespace EmuSen.Cores.Nintendo.Venus
                 throw new InvalidOperationException("RunFrame() called before LoadRom().");
             }
 
-            // Without the boundary event the frame would never end; a hang is worse than a message.
-            if (!_schedule.IsScheduled((int)VenusEvent.ScanlineBoundary))
-            {
-                throw new InvalidOperationException("RunFrame() called with no scanline boundary scheduled - see ResetSchedule().");
-            }
-
             // Resuming from a prior halt: let exactly the instruction we
             // stopped in front of execute before re-arming breakpoint
             // checks, or `continue` would just instantly re-halt on the
@@ -355,17 +349,17 @@ namespace EmuSen.Cores.Nintendo.Venus
                     }
 
                     _phaseStart = Stopwatch.GetTimestamp();
-                    // The overshoot carries itself now: it is Now minus the line's own start - see Venus_CPU.md §8.5a.
-                    _lineCycles = (int)(_schedule.Now - _lineStartClock);
+                    // The overshoot carries itself now: it is the master clock minus the line's own start - see Venus_CPU.md §8.5a.
+                    _lineCycles = (int)(_masterClock - _lineStartClock);
                     _refreshedThisLine = false;
                     Bus.LineCycles = _lineCycles;
                     Bus.ScanlineObserver?.Invoke(_currentScanline); // see `man runto`
                     _scanlineStarted = true;
                 }
 
-                long lineDeadline = _lineStartClock + CyclesPerScanline;
+                long lineDeadline = NextScanlineBoundary;
 
-                while (_schedule.Now < lineDeadline)
+                while (_masterClock < lineDeadline)
                 {
                     int pc24 = (Cpu.PB << 16) | Cpu.PC;
                     if (!_justResumedFromBreakpoint && Bus.BreakpointChecker != null && Bus.BreakpointChecker(pc24))
@@ -387,8 +381,8 @@ namespace EmuSen.Cores.Nintendo.Venus
                         cpuCycles += DramRefreshClocks;
                     }
 
-                    _schedule.Advance(cpuCycles);
-                    _lineCycles = (int)(_schedule.Now - _lineStartClock);
+                    _masterClock += cpuCycles;
+                    _lineCycles = (int)(_masterClock - _lineStartClock);
                     Bus.LineCycles = _lineCycles;
 
                     // Cpu.Step()'s returned cycle count is real elapsed
@@ -485,8 +479,8 @@ namespace EmuSen.Cores.Nintendo.Venus
                 _phaseEndCpu = Stopwatch.GetTimestamp();
                 _cpuSpc700TicksAccum += _phaseEndCpu - _phaseStart;
 
-                // Everything that used to follow this loop now lives in OnScheduledEvent.
-                _schedule.RunUntil(lineDeadline);
+                // Everything that used to follow this loop now lives in EndScanline.
+                EndScanline();
 
                 if (_frameComplete)
                 {

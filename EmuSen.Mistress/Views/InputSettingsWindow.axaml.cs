@@ -13,7 +13,7 @@ using SDL3;
 using EmuSen.Cores;
 using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
 using EmuSen.Mistress.Input;
-using EmuSen.Nehellania.Input;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Input;
 

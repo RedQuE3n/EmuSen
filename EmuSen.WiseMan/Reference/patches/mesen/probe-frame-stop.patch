@@ -1,0 +1,32 @@
+diff --git a/Core/Shared/Emulator.cpp b/Core/Shared/Emulator.cpp
+index c1271640..3729f10b 100644
+--- a/Core/Shared/Emulator.cpp
++++ b/Core/Shared/Emulator.cpp
+@@ -107,6 +107,10 @@ void Emulator::Release()
+ 	_shortcutKeyHandler.reset();
+ }
+ 
++// Set by the probe backend; zero disables. Defined here so the stock build is
++// unaffected when nothing ever writes it.
++std::atomic<uint32_t> g_probeStopFrame{0};
++
+ void Emulator::Run()
+ {
+ 	if(!_console) {
+@@ -147,6 +151,16 @@ void Emulator::Run()
+ 
+ 		WaitForLock();
+ 
++		// Exact frame stop for EmuSen's reference probe - see EmuSen_Debugging_Tools_Reference_v5.md §3.45.
++		// Pause() only sets a flag the control thread reads straight back, so
++		// polling GetFrameCount() from outside always overshoots at max speed.
++		// Stopping here, on the emulation thread, is the only way to land on a
++		// requested frame and have the machine actually quiescent when it does.
++		if(g_probeStopFrame != 0 && GetFrameCount() >= g_probeStopFrame) {
++			g_probeStopFrame = 0;
++			_paused = true;
++		}
++
+ 		if(_pauseOnNextFrame) {
+ 			_pauseOnNextFrame = false;
+ 			_paused = true;

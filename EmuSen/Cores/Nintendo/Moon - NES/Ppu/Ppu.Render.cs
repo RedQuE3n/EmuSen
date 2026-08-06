@@ -18,46 +18,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             204, 210, 120,  180, 222, 120,  168, 226, 144, 152, 226, 180, 160, 214, 228, 160, 162, 160, 0, 0, 0,       0, 0, 0,
         };
 
-        // Called once per scanline by MoonCore, after that line's CPU time - see Moon_PPU.md §1.1.
-        public void EndScanline(int line)
-        {
-            if (line < VisibleScanlines)
-            {
-                RenderScanline(line);
-                AdvanceScroll();
-                if (RenderingEnabled) _cart.Mapper.OnScanline();
-            }
-            else if (line == VBlankScanline)
-            {
-                VBlankFlag = true;
-            }
-            else if (line == PreRenderScanline)
-            {
-                VBlankFlag = false;
-                Sprite0Hit = false;
-                SpriteOverflow = false;
-                AdvanceScroll();
-
-                // The pre-render line fetches too, so its A12 rise clocks the board - see Moon_Memory.md §4.6a.
-                if (RenderingEnabled)
-                {
-                    _cart.Mapper.OnScanline();
-                    CopyVertical();
-                }
-
-                FrameCount++;
-            }
-        }
-
-        private void AdvanceScroll()
-        {
-            if (!RenderingEnabled) return;
-            IncrementY();
-            CopyHorizontal();
-        }
-
-        // Coarse X wraps by flipping the horizontal nametable bit, not by carrying into coarse Y.
-        private void IncrementCoarseX(ref ushort v)
+        internal void IncrementCoarseX(ref ushort v)
         {
             if ((v & 0x001F) == 0x001F)
             {
@@ -70,7 +31,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
         }
 
         // Coarse Y wraps at 29, not 31 - rows 30 and 31 are the attribute table, not tiles.
-        private void IncrementY()
+        internal void IncrementY()
         {
             if ((V & 0x7000) != 0x7000)
             {
@@ -98,11 +59,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             V = (ushort)((V & ~0x03E0) | (y << 5));
         }
 
-        private void CopyHorizontal() => V = (ushort)((V & ~0x041F) | (T & 0x041F));
+        internal void CopyHorizontal() => V = (ushort)((V & ~0x041F) | (T & 0x041F));
 
-        private void CopyVertical() => V = (ushort)((V & ~0x7BE0) | (T & 0x7BE0));
+        internal void CopyVertical() => V = (ushort)((V & ~0x7BE0) | (T & 0x7BE0));
 
-        private void RenderScanline(int line)
+        internal void RenderScanline(int line)
         {
             Array.Clear(_bgLine);
 
@@ -114,7 +75,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
         // Walks 33 tiles so fine X can shift the first one partly off the left edge.
         private void RenderBackground()
         {
-            ushort v = V;
+            ushort v = RenderV;
             int fineY = (v >> 12) & 0x07;
             int screenX = -FineX;
 

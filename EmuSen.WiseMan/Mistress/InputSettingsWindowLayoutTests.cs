@@ -6,7 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.VisualTree;
 using EmuSen.Mistress.Input;
-using EmuSen.Nehellania.Input;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
 

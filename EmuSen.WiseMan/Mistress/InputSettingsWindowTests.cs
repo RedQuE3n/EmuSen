@@ -10,7 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using EmuSen.Cores;
 using EmuSen.Mistress.Input;
-using EmuSen.Nehellania.Input;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;

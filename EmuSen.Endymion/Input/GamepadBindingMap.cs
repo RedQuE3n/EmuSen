@@ -3,7 +3,7 @@ using SDL3;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 
-namespace EmuSen.Nehellania.Input
+namespace EmuSen.Endymion.Input
 {
     // Gamepad-button -> PadButton mapping, persisted like ControllerKeyMap.
     // Defaults bind by physical button POSITION, not label - see

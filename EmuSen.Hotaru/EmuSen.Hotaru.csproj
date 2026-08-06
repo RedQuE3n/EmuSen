@@ -48,7 +48,6 @@
     <!-- AudioPlayer/GamepadManager/GamepadBindingMap and the shared
          config root - one copy for both frontends, see
          EmuSen_Settings_Reference.md §4.10. -->
-    <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
     <ProjectReference Include="..\EmuSen.Endymion\EmuSen.Endymion.csproj" />
     <!-- The shared theme (App.axaml's one StyleInclude), the Avalonia
          bootstrap sequence Program.cs used to spell out, and the controls/

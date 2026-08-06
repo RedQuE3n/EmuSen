@@ -1,6 +1,5 @@
 using System;
 using System.Numerics;
-using Raylib_cs;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
@@ -17,7 +16,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private static readonly (int w, int h)[] ObjSmallSize = { (8, 8), (8, 8), (8, 8), (16, 16), (16, 16), (32, 32), (16, 32), (16, 32) };
         private static readonly (int w, int h)[] ObjLargeSize = { (16, 16), (32, 32), (64, 64), (32, 32), (64, 64), (64, 64), (32, 64), (32, 32) };
 
-        private readonly Color[] _objColor = new Color[ScreenW];
+        private readonly Rgba32[] _objColor = new Rgba32[ScreenW];
         private readonly int[] _objPriority = new int[ScreenW];
         private readonly bool[] _objSet = new bool[ScreenW];
 
@@ -135,7 +134,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             if (sliversUsed > 34) ppu.TimeOver = true;
         }
 
-        private void RenderObj(Ppu ppu, int py, float brightness, Color[] target, int[] targetLayer, int layerId, int priorityFilter, bool isMainScreen)
+        private void RenderObj(Ppu ppu, int py, float brightness, Rgba32[] target, int[] targetLayer, int layerId, int priorityFilter, bool isMainScreen)
         {
             WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
 

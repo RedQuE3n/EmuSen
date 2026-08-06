@@ -1,6 +1,5 @@
 using System;
 using System.Numerics;
-using Raylib_cs;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
@@ -46,7 +45,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             public readonly bool[] Opaque = new bool[ScreenW];
             public readonly bool[] HighPriority = new bool[ScreenW];
             public readonly bool[] WindowMasked = new bool[ScreenW];
-            public readonly Color[] PixelColor = new Color[ScreenW];
+            public readonly Rgba32[] PixelColor = new Rgba32[ScreenW];
         }
 
         private readonly BgLineCache _bg1MainCache = new();
@@ -122,7 +121,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return (paletteBase + entryPalette * colorsPerPalette + pixel) * 2;
         }
 
-        private static Color DirectColor(int pixel, int entryPalette, float brightness)
+        private static Rgba32 DirectColor(int pixel, int entryPalette, float brightness)
         {
             int r5 = ((pixel & 0x07) << 2) | ((entryPalette & 0x01) << 1);
             int g5 = (((pixel >> 3) & 0x07) << 2) | (((entryPalette >> 1) & 0x01) << 1);
@@ -169,7 +168,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return (hofs, vofs);
         }
 
-        private void RenderBg1(Ppu ppu, int py, bool priorityOnly, float brightness, Color[] target, int[] targetLayer, int layerId, bool isMainScreen)
+        private void RenderBg1(Ppu ppu, int py, bool priorityOnly, float brightness, Rgba32[] target, int[] targetLayer, int layerId, bool isMainScreen)
         {
             BgLineCache cache = isMainScreen ? _bg1MainCache : _bg1SubCache;
 
@@ -325,7 +324,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        private void RenderBg2(Ppu ppu, int py, bool priorityOnly, float brightness, Color[] target, int[] targetLayer, int layerId, bool isMainScreen)
+        private void RenderBg2(Ppu ppu, int py, bool priorityOnly, float brightness, Rgba32[] target, int[] targetLayer, int layerId, bool isMainScreen)
         {
             if (py == 0 && DebugSettings.RenderReadLogging)
             {
@@ -455,7 +454,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        private void RenderBg3(Ppu ppu, int py, bool priorityOnly, float brightness, Color[] target, int[] targetLayer, int layerId, bool isMainScreen)
+        private void RenderBg3(Ppu ppu, int py, bool priorityOnly, float brightness, Rgba32[] target, int[] targetLayer, int layerId, bool isMainScreen)
         {
             int mode = ppu.Bgmode & 0x07;
 
@@ -569,7 +568,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        private void RenderBg4(Ppu ppu, int py, bool priorityOnly, float brightness, Color[] target, int[] targetLayer, int layerId, bool isMainScreen)
+        private void RenderBg4(Ppu ppu, int py, bool priorityOnly, float brightness, Rgba32[] target, int[] targetLayer, int layerId, bool isMainScreen)
         {
 
             int mode = ppu.Bgmode & 0x07;

@@ -1,8 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The audio output sink: samples in, a real device out. The counterpart
-       to EmuSen.Serenity on the video side, and a leaf for the same reason -
-       it takes plain PCM and a rate, never a core - see EmuSen_Audio_Sync.md §7. -->
+  <!-- The SDL3 device layer: audio out and gamepad in. Samples and a rate go
+       to a real device; a real pad comes back as PadButton state. Never a
+       core, in either direction - see EmuSen_Audio_Sync.md §7 and
+       EmuSen_Input.md §4.
+
+       Absorbed EmuSen.Nehellania on 2026-08-05. Both projects wrapped the
+       same two SDL3 packages for the same set of consumers, and no assembly
+       ever took one without the other - see EmuSen_Multicore.md §9.2. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -12,10 +17,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- SDL3 bindings and the SDL3 binary. No ProjectReference of any kind:
-         this project is a leaf, like EmuSen.Galaxia. -->
+    <!-- SDL3 bindings and the SDL3 binary, for both halves. -->
     <PackageReference Include="SDL3-CS" Version="3.4.2" />
     <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PadButton and ConfigFile, which GamepadBindingMap is keyed by and
+         persists through. The only reference, and Galaxia is itself
+         core-free, so nothing arrives transitively - see EmuSen_Input.md §4. -->
+    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
 </Project>

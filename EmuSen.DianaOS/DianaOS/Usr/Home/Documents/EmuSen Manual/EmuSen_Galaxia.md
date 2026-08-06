@@ -20,7 +20,7 @@ It has two halves, deliberately the same shape:
 
 **It is a leaf, and that is load-bearing.** `EmuSen.Galaxia.csproj` has no `ProjectReference` and no `PackageReference`, by hard constraint rather than preference: `EmuSen.DianaOS` references Galaxia, and `EmuSen` (the core) references DianaOS, so anything Galaxia depended on upward would close a cycle. `EmuSen_Config_Reference.md` §1.1 has the full argument. That constraint is also what makes it the *only* possible home for this: DianaOS, all three cores, LunaP and both frontends already depend on it, and nothing else in the tree is reachable from all of them.
 
-A consequence worth stating plainly: **the cores do not live here and never will.** A core needs DianaOS for logging, Crystal for scheduling and Cauldron for telemetry. What moved into Galaxia is the *question* a core asks ("what path does this ROM's save go to") and the *mechanism* it uses to write, not the cartridge, the mapper, or a single byte of SRAM.
+A consequence worth stating plainly: **the cores do not live here and never will.** A core needs DianaOS for logging and Cauldron for telemetry, and owns its own timing outright. What moved into Galaxia is the *question* a core asks ("what path does this ROM's save go to") and the *mechanism* it uses to write, not the cartridge, the mapper, or a single byte of SRAM.
 
 ---
 
@@ -72,9 +72,22 @@ Copying rather than moving buys a verification window, not a permanent fallback.
 
 ### 3.3 The ROM library is never migrated
 
-`Games` and `Roms` are excluded from that copy on purpose. They are the user's own content rather than something the emulator wrote, they are large (95 MB in the author's own tree at the time of the move), and `Games/` is under a standing never-delete rule. Silently duplicating a ROM library is bad behaviour regardless of whether it is destructive.
+`Games` and `Roms` are excluded from that copy on purpose. They are the user's own content rather than something the emulator wrote, they are large (95 MB in the author's own tree at the time of the move), and the library is under a standing never-delete rule. Silently duplicating a ROM library is bad behaviour regardless of whether it is destructive.
 
-So the old directories are left exactly as they are, and `DataMigration.RemainingLibraryDirectories()` reports any that still hold files so a caller can say where they went. `AppSettings.RomDirectory` is user-configured anyway, so a library keeps working from wherever it sits. `Roms` merged into `Games` as a name — one concept had grown two directories.
+So the old directories are left exactly as they are, and `DataMigration.RemainingLibraryDirectories()` reports any that still hold files so a caller can say where they went.
+
+### 3.3a Where the library actually lives
+
+**`AppSettings.RomDirectory` is the answer, and it is the only one.** It is user-configured, so a library works from wherever it sits, and nothing in the codebase resolves a game through a hardcoded path.
+
+That is worth stating flatly because the surrounding names invite the opposite conclusion, and did:
+
+- **`DataStore.Games` is not the ROM library.** It is one entry in the skeleton `DianaOSSandbox.EnsureSkeleton()` creates so `hier` and `ls` show a populated tree. Three things touch it — that `CreateDirectory`, the `RealRom` test fixture's fallback list, and a `DataStoreTests` path-shape assertion. Nothing looks up a game in it. Its comment used to claim otherwise, which is exactly how a second `DataStore.Roms` property nearly got added beside it as "where the library *actually* lives"; two properties, neither authoritative, and the real mechanism untouched in a config file.
+- **`DataMigration.LibraryDirectories` is not a locator either.** It is the list of directory names that might still hold files after the tree move, so startup can report where they went.
+
+**As of 2026-08-05 the in-tree ROMs are gone.** `Usr/Home/Roms/` held eight ROMs used as the test corpus; every one had a byte-identical copy in the author's configured library, and they were removed rather than kept as a second copy that could drift. `Usr/Home/Roms/` itself stays — an end user is free to keep a library inside the shell's tree in a finished build, and `RealRom` still falls back to it — but development reads `AppSettings.RomDirectory`.
+
+`RealRom.Find` therefore tries the configured library first, and searches recursively under the console directory when the flat `<root>/<console>/<file>` path misses. A real library sorts by region (`NES/USA/Super Mario Bros 3 (U) (PRG 0).nes`), so the flat guess is the exception rather than the rule.
 
 ---
 

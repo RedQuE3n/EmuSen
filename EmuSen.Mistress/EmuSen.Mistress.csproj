@@ -26,7 +26,7 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
     <!-- Views/InputSettingsWindow.axaml.cs names SDL.GamepadButton directly,
          so the bindings are referenced explicitly rather than leant on
-         transitively via EmuSen.Nehellania - the same convention
+         transitively via EmuSen.Endymion - the same convention
          EmuSen.Serenity's csproj follows. The native comes with that
          project reference; see EmuSen_Settings_Reference.md §4.9. -->
     <PackageReference Include="SDL3-CS" Version="3.4.2" />
@@ -57,13 +57,12 @@
          context) presentation surface EmuSen.Hotaru's GameWindow uses,
          replacing the old CPU-side WriteableBitmap here. -->
     <ProjectReference Include="..\EmuSen.Serenity\EmuSen.Serenity.csproj" />
-    <!-- AudioPlayer/GamepadManager/GamepadBindingMap and the shared
-         config root - one copy for both frontends, see
-         EmuSen_Settings_Reference.md §4.10. -->
-    <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
     <!-- AppSettings, and the ConfigFile that ControllerKeyMap/
          HotkeyBindingMap persist through - see EmuSen_Config_Reference.md. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+    <!-- AudioPlayer/GamepadManager/GamepadBindingMap and the shared
+         config root - one copy for both frontends, see
+         EmuSen_Settings_Reference.md §4.10. -->
     <ProjectReference Include="..\EmuSen.Endymion\EmuSen.Endymion.csproj" />
     <!-- The shared theme (App.axaml's one StyleInclude), the Avalonia
          bootstrap sequence Program.cs used to spell out, and the controls/

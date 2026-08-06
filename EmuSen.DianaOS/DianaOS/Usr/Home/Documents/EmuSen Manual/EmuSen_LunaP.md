@@ -10,7 +10,7 @@
 
 **The layering rule is load-bearing and is the reason the project is worth having:**
 
-> LunaP may reference **Avalonia** and **`EmuSen.Galaxia`** and nothing else. Not `EmuSen` (the core), not `EmuSen.DianaOS`, not `EmuSen.Cauldron`, not `EmuSen.Nehellania`.
+> LunaP may reference **Avalonia** and **`EmuSen.Galaxia`** and nothing else. Not `EmuSen` (the core), not `EmuSen.DianaOS`, not `EmuSen.Cauldron`, not `EmuSen.Endymion`.
 
 The launcher's entire value is browsing a library with no core loaded. One upward reference here hands it the whole emulator, permanently. `EmuSen.Serenity` already holds this line on the video side — it presents frames while taking `(byte[] rgba, int width, int height)` rather than an `ICore` — and **every LunaP control takes plain data or a delegate for the same reason.** A meter row takes `(string, double, string)`, never a `DebugLoadInfo`. A console pane takes a `Func<string, string>`, never a `DianaOSInterpreter`.
 
@@ -272,7 +272,7 @@ The gallery is held to it, since it is the kit's own baseline target.
 
 ### 13.4 The layering rule is now enforced
 
-`Common/LeafAssemblyTests.cs` already pinned Endymion, Nehellania, Serenity and Galaxia to their allowed references. **LunaP is in that list now**, asserting it references `EmuSen.Galaxia` and nothing else, and that it never reaches the core assembly. §1's rule was documentation until this phase; adding one `ProjectReference` in a hurry is exactly the kind of thing that would otherwise go unnoticed until the launcher inherited the emulator.
+`Common/LeafAssemblyTests.cs` already pinned Endymion, Serenity and Galaxia to their allowed references. **LunaP is in that list now**, asserting it references `EmuSen.Galaxia` and nothing else, and that it never reaches the core assembly. §1's rule was documentation until this phase; adding one `ProjectReference` in a hurry is exactly the kind of thing that would otherwise go unnoticed until the launcher inherited the emulator.
 
 ---
 
@@ -395,7 +395,7 @@ The keyboard scheme both frontends start from — arrows for the d-pad, `Z`/`X`/
 
 The distinction that keeps this from becoming a slippery slope: **controls take plain data or a delegate, dashboards may take a contract.** A `MeterRow` still takes `(string, double, string)` and never a `DebugLoadInfo`. If a control wants an `ICoreTelemetry`, it is a control that should have taken plain data.
 
-`EmuSen`, `EmuSen.DianaOS` and `EmuSen.Nehellania` remain forbidden, and none of them is a leaf. A window needing `IDebugTarget` is not a dashboard — that interface stays in DianaOS (`EmuSen_Cauldron.md` §3.1) and such a window belongs in a frontend.
+`EmuSen`, `EmuSen.DianaOS` and `EmuSen.Endymion` remain forbidden, and none of them is a leaf. A window needing `IDebugTarget` is not a dashboard — that interface stays in DianaOS (`EmuSen_Cauldron.md` §3.1) and such a window belongs in a frontend.
 
 ### 16.1 The wrong turn, recorded because the doc caused it
 

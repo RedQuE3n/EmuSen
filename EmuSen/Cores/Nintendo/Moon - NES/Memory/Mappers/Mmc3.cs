@@ -167,9 +167,25 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory.Mappers
         // Diagnostic only; a board that never fires is the usual sign of a bad IRQ setup.
         private ulong _irqsFired;
 
-        // One A12 rise per rendered line at this PPU's granularity - see Moon_Memory.md §4.6a.
-        public void OnScanline()
+        // A12 must have been low a while for the rise to register - see Moon_Memory.md §4.6a.
+        private const int A12MinimumLowClocks = 3;
+
+        // -1 rather than 0, because clock 0 is a real dot the very first fetch can land on.
+        private long _a12LowSince = -1;
+
+        // Every PPU fetch is offered here; only a genuine low-to-high A12 transition counts.
+        public void OnPpuAddress(ushort address, long ppuClock)
         {
+            if ((address & 0x1000) == 0)
+            {
+                if (_a12LowSince < 0) _a12LowSince = ppuClock;
+                return;
+            }
+
+            bool rising = _a12LowSince >= 0 && ppuClock - _a12LowSince >= A12MinimumLowClocks;
+            _a12LowSince = -1;
+            if (!rising) return;
+
             if (_irqCounter == 0 || _irqReload) _irqCounter = _irqReloadValue;
             else _irqCounter--;
 

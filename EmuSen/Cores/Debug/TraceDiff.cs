@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace EmuSen.Cores.Nintendo.Venus.Debug
+namespace EmuSen.Cores.Debug
 {
     // What the differ below needs of a trace record, whichever processor emitted it.
     public interface ITraceStep<T> where T : ITraceStep<T>

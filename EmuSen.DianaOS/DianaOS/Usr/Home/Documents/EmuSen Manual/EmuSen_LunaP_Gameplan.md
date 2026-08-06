@@ -96,7 +96,7 @@ EmuSen.LunaP/
     GalleryWindow.cs      every control, one window, for the render test
 ```
 
-**The layering rule, and it is the load-bearing constraint of this whole plan:** LunaP may reference **Avalonia and `EmuSen.Galaxia` (config, for window-geometry persistence) and nothing else.** Not `EmuSen` (the core), not `EmuSen.DianaOS`, not `EmuSen.Cauldron`, not `EmuSen.Nehellania`.
+**The layering rule, and it is the load-bearing constraint of this whole plan:** LunaP may reference **Avalonia and `EmuSen.Galaxia` (config, for window-geometry persistence) and nothing else.** Not `EmuSen` (the core), not `EmuSen.DianaOS`, not `EmuSen.Cauldron`, not `EmuSen.Endymion`.
 
 The moment LunaP references any of those, the launcher — whose entire value is being able to browse a library without a core loaded — inherits the emulator. `EmuSen.Serenity` already demonstrates the discipline: it presents game frames while referencing only `EmuSen.Galaxia`, taking `(byte[] rgba, int w, int h)` rather than an `ICore`. **Every LunaP control takes plain data or a delegate for the same reason.** `MeterRow` takes `(string, double, string)`, never a `DebugLoadInfo`. `ConsolePane` takes a `Func<string, string>` submit handler, never a `DianaOSInterpreter`.
 
@@ -202,7 +202,7 @@ Success criterion: a new dashboard window is a constructor and a `Refresh()` bod
 
 - ***`EMUSEN_UI_DUMP` changed meaning, from a file path to a directory.*** *The file-path form had already failed: one test appended `_{console}` to the basename to get three files out of it, and the two sites using it disagreed on BMP versus PNG. Both doc references in `EmuSen_Settings_Reference.md` were updated.*
 - ***Baselines are recorded, not committed.*** *Reference images churn on any font, Skia or theme change, and a stale one fails looking exactly like a real regression. `AssertMatchesBaseline` is a no-op unless `EMUSEN_UI_BASELINE` is set, so nothing goes vacuous in CI, and the migration workflow records from the previous commit in one command. Verified by mutation: a one-value change to a single colour channel failed the comparison with a pixel count.*
-- ***The layering rule is enforced now, not just documented.*** *`Common/LeafAssemblyTests.cs` already pinned Endymion/Nehellania/Serenity/Galaxia; LunaP joined it. §3's rule was prose until this phase, and adding one `ProjectReference` in a hurry is exactly what would otherwise go unnoticed.*
+- ***The layering rule is enforced now, not just documented.*** *`Common/LeafAssemblyTests.cs` already pinned Endymion/Serenity/Galaxia; LunaP joined it. §3's rule was prose until this phase, and adding one `ProjectReference` in a hurry is exactly what would otherwise go unnoticed.*
 
 <details>
 <summary>Original plan text</summary>
@@ -306,4 +306,4 @@ The files Phase 6 touches carry the project's largest comment-rule violations: `
 
 ### 7.3 This document's own successor
 
-Once Phase 6 completes, this gameplan stops being a plan. At that point it should be replaced by a reference doc (`EmuSen_LunaP.md`) covering what the controls are and how to add one — the shape `EmuSen_Cauldron.md` and `EmuSen_Crystal_Scheduler.md` already have — with this file retired to `Man pages/Old/`.
+Once Phase 6 completes, this gameplan stops being a plan. At that point it should be replaced by a reference doc (`EmuSen_LunaP.md`) covering what the controls are and how to add one — the shape `EmuSen_Cauldron.md` already has — with this file retired to `Man pages/Old/`.

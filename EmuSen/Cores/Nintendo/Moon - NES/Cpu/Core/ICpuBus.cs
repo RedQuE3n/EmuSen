@@ -6,5 +6,14 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         byte Read(ushort address);
 
         void Write(ushort address, byte data);
+
+        // Runs the cycle-accurate peripherals for the cycle this access occupies - see Moon_CPU.md §5.5.
+        void Tick() { }
+
+        // Cycles stolen by DMA, which still clock those peripherals - see Moon_CPU.md §5.5.
+        void TickStolen(int cycles)
+        {
+            for (int i = 0; i < cycles; i++) Tick();
+        }
     }
 }

@@ -110,17 +110,26 @@ namespace EmuSen.WiseMan.Cores
             m.WritePrg(0xC001, 0);    // reload on next clock
             m.WritePrg(0xE001, 0);    // enable
 
-            m.OnScanline();           // reloads to 4
+            long clock = 0;
+            void A12Rise()
+            {
+                m.OnPpuAddress(0x0000, clock);
+                clock += 8;
+                m.OnPpuAddress(0x1000, clock);
+                clock += 8;
+            }
+
+            A12Rise();                // reloads to 4
             Assert.False(m.IrqPending);
 
-            // Four more clocks to walk 4 down to 0.
+            // Four more rises to walk 4 down to 0.
             for (int i = 0; i < 3; i++)
             {
-                m.OnScanline();
+                A12Rise();
                 Assert.False(m.IrqPending);
             }
 
-            m.OnScanline();
+            A12Rise();
             Assert.True(m.IrqPending);
         }
 
@@ -130,14 +139,23 @@ namespace EmuSen.WiseMan.Cores
             Cartridge cart = Mmc3Cart();
             IMapper m = cart.Mapper;
 
+            long clock = 0;
+            void A12Rise()
+            {
+                m.OnPpuAddress(0x0000, clock);
+                clock += 8;
+                m.OnPpuAddress(0x1000, clock);
+                clock += 8;
+            }
+
             m.WritePrg(0xC000, 1);
             m.WritePrg(0xC001, 0);
-            for (int i = 0; i < 4; i++) m.OnScanline();
+            for (int i = 0; i < 4; i++) A12Rise();
             Assert.False(m.IrqPending); // never enabled
 
             m.WritePrg(0xE001, 0);
-            m.OnScanline();
-            m.OnScanline();
+            A12Rise();
+            A12Rise();
             Assert.True(m.IrqPending);
 
             m.WritePrg(0xE000, 0);

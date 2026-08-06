@@ -1,5 +1,4 @@
 using System;
-using Raylib_cs;
 using EmuSen.Graphics;
 
 namespace EmuSen.Cores.Nintendo.Venus.Video
@@ -31,30 +30,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         // Allocated at max width so a hi-res toggle never needs
         // reallocation - see Venus_PPU.md §8.
-        private Color[] _screenPixels = new Color[MaxOutputW * ScreenH];
-        private Color[] _sheetPixels = new Color[SheetW * SheetH];
+        private Rgba32[] _screenPixels = new Rgba32[MaxOutputW * ScreenH];
+        private Rgba32[] _sheetPixels = new Rgba32[SheetW * SheetH];
 
         // Per-scanline working buffers for the main and sub screens. Real hardware
         // computes both independently, then blends them per CGADSUB - these hold one
         // scanline's worth at a time rather than a full frame, since they're
         // discarded once RenderScanline finishes blending into _screenPixels.
-        private Color[] _mainLineBuf = new Color[ScreenW];
-        private Color[] _subLineBuf = new Color[ScreenW];
+        private Rgba32[] _mainLineBuf = new Rgba32[ScreenW];
+        private Rgba32[] _subLineBuf = new Rgba32[ScreenW];
         private int[] _mainLineLayer = new int[ScreenW];
         private int[] _subLineLayer = new int[ScreenW];
 
-        // headless=true is a no-op flag today - kept for call-site/save-
-        // state-format stability (every VenusCore(headless:) call site and
-        // EmulatorSession still pass one) after the on-window Raylib debug
-        // overlay (VRAM tile sheet, CGRAM swatch, PPU register text - see
-        // git history for DrawDebugPanels/Shutdown) was removed entirely
-        // rather than ported: DianaOS's regs/sprites/pal/tile/vramsheet/
-        // paletteswatch commands and the coretop dashboard already cover
-        // the exact same data, and EmuSen.Mistress (always headless: true)
-        // never had this overlay to begin with, proving it wasn't load-
-        // bearing. RenderScanline and the Bg/Obj compositing it calls have
-        // no rendering-API dependency at all (they only touch the plain
-        // Color[] buffers below), so this flag no longer gates anything.
+        // A no-op today, kept for call-site and save-state stability - see Venus_PPU.md §15.
         private readonly bool _headless;
 
         public Renderer(bool headless = false)
@@ -62,10 +50,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             _headless = headless;
         }
 
-        // Plain RGBA8888 copy of the finished frame - the boundary non-
-        // Raylib frontends should use instead of reaching for
-        // _screenPixels/Color directly. Callers MUST check FrameWidth
-        // rather than assuming a fixed size - see Venus_PPU.md §8.
+        // The frame boundary; callers must read FrameWidth rather than assume a size - see Venus_PPU.md §8.
         public byte[] GetFrameBufferRgba()
         {
             byte[] buffer = new byte[_frameWidth * ScreenH * 4];
@@ -75,7 +60,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int rowStart = py * MaxOutputW;
                 for (int px = 0; px < _frameWidth; px++)
                 {
-                    Color c = _screenPixels[rowStart + px];
+                    Rgba32 c = _screenPixels[rowStart + px];
                     buffer[o] = c.R;
                     buffer[o + 1] = c.G;
                     buffer[o + 2] = c.B;
@@ -86,12 +71,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return buffer;
         }
 
-        // Headless-safe VRAM tile-sheet export - same 4bpp grayscale decode
-        // DrawDebugPanels already uses for its on-screen texture, just
-        // returned as a plain RGBA buffer instead of pushed into a Raylib
-        // Texture2D. RenderVramSheet itself makes no GPU calls (it only
-        // writes _sheetPixels), so calling it here works fine even with no
-        // window at all - see the headless-mode comment on _headless above.
+        // 4bpp grayscale tile sheet as plain RGBA; makes no GPU calls - see Venus_PPU.md §15.
         public (byte[] Rgba, int Width, int Height) GetVramTileSheetRgba(Ppu ppu)
         {
             RenderVramSheet(ppu);
@@ -99,7 +79,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             int o = 0;
             for (int i = 0; i < _sheetPixels.Length; i++)
             {
-                Color c = _sheetPixels[i];
+                Rgba32 c = _sheetPixels[i];
                 buffer[o] = c.R;
                 buffer[o + 1] = c.G;
                 buffer[o + 2] = c.B;
@@ -109,10 +89,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return (buffer, SheetW, SheetH);
         }
 
-        // Headless-safe CGRAM palette export - same 256-color, 16-column
-        // grid and SnesColor conversion DrawDebugPanels uses for its swatch
-        // panel, just written straight into an RGBA byte array instead of
-        // Raylib.DrawRectangle calls (which need an active render target).
+        // 256-colour CGRAM swatch grid as plain RGBA, no render target needed - see Venus_PPU.md §15.
         public (byte[] Rgba, int Width, int Height) GetPaletteSwatchRgba(Ppu ppu, int swatchSize = 12)
         {
             const int cols = 16;
@@ -123,7 +100,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
             for (int i = 0; i < 256; i++)
             {
-                Color c = SnesColor(ppu.Cgram[i * 2], ppu.Cgram[i * 2 + 1], 1f);
+                Rgba32 c = SnesColor(ppu.Cgram[i * 2], ppu.Cgram[i * 2 + 1], 1f);
                 int originX = (i % cols) * swatchSize;
                 int originY = (i / cols) * swatchSize;
                 for (int y = 0; y < swatchSize; y++)
@@ -142,7 +119,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return (buffer, width, height);
         }
 
-        private readonly Color[] _paletteColor = new Color[256];
+        private readonly Rgba32[] _paletteColor = new Rgba32[256];
         private float _paletteBrightness = float.NaN;
 
         // Rebuilt on a CGRAM write, a brightness change, or the top of a frame - see Venus_PPU.md §7.2.
@@ -159,15 +136,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         }
 
         // cgIdx is always an even byte offset, so this is the entry it names.
-        private Color PaletteColor(int cgIdx) => _paletteColor[(cgIdx >> 1) & 0xFF];
+        private Rgba32 PaletteColor(int cgIdx) => _paletteColor[(cgIdx >> 1) & 0xFF];
 
-        private static Color SnesColor(byte lo, byte hi, float brightness)
+        private static Rgba32 SnesColor(byte lo, byte hi, float brightness)
         {
             int c = lo | (hi << 8);
             int r = (c & 0x1F) << 3;
             int g = ((c >> 5) & 0x1F) << 3;
             int b = ((c >> 10) & 0x1F) << 3;
-            return new Color((byte)(r * brightness), (byte)(g * brightness), (byte)(b * brightness), (byte)255);
+            return new Rgba32((byte)(r * brightness), (byte)(g * brightness), (byte)(b * brightness), (byte)255);
         }
 
         private static int BgTilemapEntryAddress(int mapBase, int sizeBits, int tx, int ty)
@@ -200,7 +177,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         // Combines a main-screen pixel with the corresponding sub-screen pixel per
         // CGADSUB's add/subtract and half-color bits.
-        private Color BlendColors(Color main, Color sub, bool subtract, bool half)
+        private Rgba32 BlendColors(Rgba32 main, Rgba32 sub, bool subtract, bool half)
         {
             if (subtract)
             {
@@ -215,7 +192,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 }
 
                 // CRITICAL: alpha must stay 255 here - see Venus_PPU.md §5.
-                return new Color((byte)r, (byte)g, (byte)b, (byte)255);
+                return new Rgba32((byte)r, (byte)g, (byte)b, (byte)255);
             }
             else
             {
@@ -228,7 +205,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     r /= 2; g /= 2; b /= 2;
                 }
 
-                return new Color((byte)r, (byte)g, (byte)b, (byte)255);
+                return new Rgba32((byte)r, (byte)g, (byte)b, (byte)255);
             }
         }
 

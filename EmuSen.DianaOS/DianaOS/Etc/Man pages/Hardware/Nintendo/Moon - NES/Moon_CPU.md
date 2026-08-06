@@ -116,9 +116,13 @@ Note this is the mirror image of `Venus`'s gap: the 65816 there *does* have deci
 
 ### 5.1 Reset
 
-`Reset()` zeroes `A`/`X`/`Y`, sets `P` to `I|U`, sets `S` to `0xFD`, and reads `PC` from `$FFFC`. The stack pointer's value is not arbitrary: the reset sequence performs three stack *reads* where a real interrupt would push, decrementing `S` three times from an undefined power-on value. `0xFD` is what that produces from the `0x00` a cold chip is usually observed at, and it is what every other implementation and every test ROM assumes.
+There are two of these, and conflating them was a real bug. **`Reset()` is the power switch; `SoftReset()` is the RESET line.** `blargg`'s `cpu_reset/registers` states the rule for the second in one line: *"Reset should set I flag, subtract 3 from S, nothing more."*
 
-`Reset()` fetches the vector over the bus, so a caller that cares about cycle accounting pays the real chip's startup reads rather than teleporting.
+So `SoftReset()` sets `I`, subtracts 3 from `S`, and re-vectors — `A`, `X`, `Y` and every other flag survive. `Reset()` adds what a cold start does on top: zero `A`/`X`/`Y`, set `P` to `I|U`, and set `S` to **0** so that `SoftReset`'s own three phantom pushes produce the familiar `0xFD`. That is where `0xFD` actually comes from — three stack *reads* where an interrupt would push — and expressing it that way means the two paths cannot disagree.
+
+**The eight idle cycles matter.** The vector read at `$FFFC` is *not* clocked, and the chip then spends `ResetCycles` (8) doing nothing before the first instruction. That is what NESdev means by "the APU acts as if `$4017` were written with `$00` from 9 to 12 clocks before the first instruction begins" — the `$4017` write the APU schedules at reset (`Moon_APU.md` §2.2) lands partway through those eight cycles. Modelled from Mesen's `NesCpu::Reset`, which does exactly this and says so. Without it `apu_reset/4017_written` and `4017_timing` both fail, and no amount of adjusting the APU's own constants fixes them, because the error is on this side.
+
+**A hardware interrupt costs seven cycles, not six.** `ServiceInterrupt` does *two* discarded reads before the three pushes and the vector fetch — the chip fetches an opcode and its operand and throws both away. `BRK` reaches the same seven by a different route: its opcode fetch and signature byte are real, so it has its own implementation rather than sharing this one. Missing the second discarded read left every IRQ entry a cycle short, which `5-branch_delays_irq` reports as a `CK` column uniformly one low while the `PC` column is already correct.
 
 ### 5.2 NMI is an edge, IRQ is a level
 
@@ -133,13 +137,39 @@ The real chip polls for interrupts partway through an instruction, before that i
 
 `SetInterruptDisable` and `OpPLP` therefore stash the new `I` in `_delayedI`/`_hasDelayedI` and leave `P`'s `I` bit alone; `PollInterrupts()` samples the interrupt state and *then* applies the stashed write, at the end of `Step()`. Because the write lands before `Step()` returns, a caller reading `P` afterwards sees the new value — the delay is visible to interrupt dispatch only, which is the point.
 
-### 5.4 Known deviation: the poll is at the instruction boundary
+### 5.4 The interrupt lines are sampled every cycle
 
-`PollInterrupts()` runs once, after the instruction completes, rather than before the instruction's last cycle where the hardware polls.
+Superseded 2026-08-05. This section used to describe polling once at the instruction boundary, called out as "a deliberate, documented approximation, and it is not validated by anything". `cpu_interrupts_v2` validates it now, and it was wrong in the way that note predicted.
 
-For the case the delay actually matters — the flag-writing opcodes above — §5.3's mechanism reproduces the hardware result exactly. For the general case it does not: hardware's mid-instruction poll means a long instruction can latch an interrupt that arrives partway through it, and this model defers that to the next boundary. The visible effect is at most one instruction of latency on IRQ recognition.
+Every bus access is a cycle (§2), so `Read`/`Write` are also where the lines get sampled. `SampleInterrupts` keeps two levels of history, and the decision at the end of the instruction uses the **earlier** one:
 
-This is a **deliberate, documented approximation, and it is not validated by anything** — the `nes6502` suite does not exercise interrupts at all (§7.1). Stated plainly rather than implied: everything in §7 is evidence about the instruction set, and none of it is evidence about this section. Revisit when a PPU exists and sprite-0/NMI timing gives something real to check against.
+```
+_nmiSampledEarlier = _nmiSampledLast;
+_irqSampledEarlier = _irqSampledLast;
+_nmiSampledLast    = _nmiPending;
+_irqSampledLast    = _irqLine && !I;
+```
+
+NESdev puts it as *"it's really the status of the interrupt lines at the end of the second-to-last cycle that matters"*, and carrying one cycle of history is what makes the last cycle too late to count. This mirrors Mesen's `_prevRunIrq`/`_runIrq` pair in `NesCpu::EndCpuCycle` exactly; the naming differs, the mechanism does not.
+
+### 5.5 A taken branch drops an IRQ that just arrived
+
+*"A taken non-page-crossing branch ignores IRQ during its last clock, so that next instruction executes before the IRQ."*
+
+The tempting reading is that a branch should poll one cycle earlier than everything else, and a third level of sample history implements that. It is wrong, and it fails the test. What hardware does — and what `Cpu.SuppressJustArrivedIrq` now does, from Mesen's `BranchRelative` — is cancel an IRQ that became pending *on this very cycle* at the moment the branch is taken:
+
+```
+if (_irqSampledLast && !_irqSampledEarlier) _irqSampledLast = false;
+```
+
+An IRQ that was already pending before the branch is untouched and still fires. The suppression runs before the dummy read, and applies whether or not the branch crosses a page — the page-cross cycle comes afterwards and does not get a say. NMI is deliberately not suppressed.
+
+### 5.6 What is still wrong
+
+`cpu_interrupts_v2` sits at 2/6. The two that remain reachable are blocked elsewhere rather than here:
+
+- **`2-nmi_and_brk` and `3-nmi_and_irq`** need an NMI to arrive *partway through* an instruction — the BRK hijack, where an NMI landing inside `BRK` sends the CPU through the NMI vector with `B` still set on the stack. The CPU side could express that, but the NMI source cannot: the PPU advances a scanline at a time (`Moon_Core.md` §3), so its vblank edge always lands on an instruction boundary. Blocked on per-dot PPU timing, not on this file.
+- **`4-irq_and_dma`** needs OAM DMA to be cycle-stepped rather than run instantaneously and billed 513 cycles afterwards (`Moon_Memory.md` §5.1).
 
 ---
 

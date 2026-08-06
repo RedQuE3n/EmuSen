@@ -219,19 +219,21 @@ dotnet publish <app>/<app>.csproj -c Release -r <rid> --self-contained true \
 
 **macOS cannot be finished from Linux.** Apple Silicon refuses to execute an unsigned arm64 binary outright, so clearing quarantine is not enough; the user must ad-hoc sign (`codesign --force --deep --sign - <name>.app`). There is no signing tool on the Linux build machine.
 
-### 4.10 The SDL3 layer (`EmuSen.Nehellania`)
+### 4.10 The SDL3 layer (`EmuSen.Endymion`, formerly `EmuSen.Nehellania`)
 
 Both frontends moved from `Silk.NET.SDL` (SDL2) to `SDL3-CS` on 2026-08-01. Silk.NET has no SDL3 binding and none is planned in the 2.x line, so this was a binding swap, not a version bump.
 
-**One copy, in its own project.** `AudioPlayer`, `GamepadManager`, `GamepadBindingMap` and the config-root helper used to be duplicated per frontend — `EmuSen.Mistress` and `EmuSen.Hotaru` each carried a near-identical file, and the SDL3 port had to be written twice and kept in sync by hand. They now live once in **`EmuSen.Nehellania`**, which both GUIs reference. It depends on `EmuSen` (for `ICore`/`EmulatorSession`, `DynamicRateControl`, `SnesButton`) and on SDL3; deliberately not on Avalonia, since nothing in it touches a window — that stays split between `EmuSen.Serenity` (presentation) and the frontends themselves.
+**One copy, in its own project.** `AudioPlayer`, `GamepadManager`, `GamepadBindingMap` and the config-root helper used to be duplicated per frontend — `EmuSen.Mistress` and `EmuSen.Hotaru` each carried a near-identical file, and the SDL3 port had to be written twice and kept in sync by hand. They now live once in **`EmuSen.Endymion`**, which both GUIs reference. It depends on `EmuSen.Galaxia` and on SDL3; deliberately not on Avalonia, since nothing in it touches a window — that stays split between `EmuSen.Serenity` (presentation) and the frontends themselves.
+
+Two later moves got it there, and the section below describes the first of them. The merge landed in `EmuSen.Nehellania`; audio was then split out into `EmuSen.Endymion` (`EmuSen_Audio_Sync.md` §7.1), and on 2026-08-05 the gamepad half was folded back the other way and Nehellania deleted (`EmuSen_Multicore.md` §9.2). The reference on `EmuSen` named here went with the first of those — `PadButton` moved to Galaxia (`EmuSen_Input.md` §3).
 
 The merge resolved three real differences between the two old copies rather than picking one at random:
 
 - **`Pump`** took `EmulatorSession` in Mistress and `ICore` in Hotaru. The shared class takes `ICore?` and keeps a one-line `Pump(EmulatorSession)` overload forwarding to it, so both call sites are unchanged. `EmulatorSession` lives in the core library, so this costs the shared project no extra dependency.
 - **`GamepadManager`** carried the rebind-capture members (`GetAnyPressedButton`, `ControllerName`, `ButtonLabel`, the stick-as-d-pad options) in Mistress only. The shared class is Mistress's superset; Hotaru simply doesn't call them.
-- **`GamepadBindingMap`** resolved its config path through Mistress's redirectable `SettingsPaths` in one copy and a hardcoded `%AppData%/EmuSen` in the other. `SettingsPaths` moved into the shared project too, so both frontends went through the redirectable one — which is what lets `EmuSen.WiseMan`'s fixtures point rebind tests at a scratch directory instead of overwriting the developer's real bindings. That role has since moved again, out of `EmuSen.Nehellania` entirely and into `EmuSen.Galaxia` (`ConfigStore`), where every config file in the project shares it — see `EmuSen_Config_Reference.md` §1.
+- **`GamepadBindingMap`** resolved its config path through Mistress's redirectable `SettingsPaths` in one copy and a hardcoded `%AppData%/EmuSen` in the other. `SettingsPaths` moved into the shared project too, so both frontends went through the redirectable one — which is what lets `EmuSen.WiseMan`'s fixtures point rebind tests at a scratch directory instead of overwriting the developer's real bindings. That role has since moved again, out of the SDL3 layer entirely and into `EmuSen.Galaxia` (`ConfigStore`), where every config file in the project shares it — see `EmuSen_Config_Reference.md` §1.
 
-`AllowUnsafeBlocks` moved with the code: `EmuSen.Nehellania` sets it (for `AudioPlayer`'s pinned sample array), and both frontends dropped it, having no unsafe code of their own left.
+`AllowUnsafeBlocks` moved with the code: `EmuSen.Endymion` sets it (for `AudioPlayer`'s pinned sample array), and both frontends dropped it, having no unsafe code of their own left.
 
 **Subsystem init, never `SDL_Init`/`SDL_Quit`.** `AudioPlayer` takes `InitFlags.Audio`, `GamepadManager` takes `InitFlags.Gamepad`, and each calls `QuitSubSystem` for its own flag on dispose. `SDL_Quit` tears down the whole library regardless of who asked, so whichever object disposed first would break the other. `InitSubSystem` is refcounted per subsystem and does not have that problem. Neither one ever asks for `InitFlags.Video`: Avalonia owns the window, and SDL is only ever an input/audio source here. The return type flipped in SDL3 — `true` means success, where SDL2 returned `0`.
 

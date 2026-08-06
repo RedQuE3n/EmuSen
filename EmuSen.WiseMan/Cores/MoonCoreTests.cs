@@ -20,6 +20,18 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // Runs the dot clock forward to a given scanline and dot - see Moon_PPU.md §1.
+        private static void StepTo(MoonPpu ppu, int scanline, int cycle)
+        {
+            for (int i = 0; i < MoonPpu.TotalScanlines * MoonPpu.DotsPerScanline; i++)
+            {
+                if (ppu.Scanline == scanline && ppu.Cycle == cycle) return;
+                ppu.Step(1);
+            }
+
+            throw new InvalidOperationException($"never reached scanline {scanline} dot {cycle}");
+        }
+
         private MoonCore Load(byte[]? image = null)
         {
             string path = SyntheticNesRom.WriteTemp(image ?? SyntheticNesRom.Build());
@@ -103,7 +115,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void The_scheduler_lands_exactly_on_a_frame_boundary()
+        public void The_timeline_lands_exactly_on_a_frame_boundary()
         {
             var core = Load();
 
@@ -111,6 +123,21 @@ namespace EmuSen.WiseMan.Cores
 
             long expected = (long)MoonPpu.TotalScanlines * MoonCore.MasterClocksPerScanline;
             Assert.Equal(expected, core.MasterClock);
+        }
+
+        // The whole point of carrying the remainder: 1364/12 is 113.667, and truncating
+        // every line would lose ~175 cycles a frame - see Moon_Core.md §2.1.
+        [Fact]
+        public void The_cpu_budget_does_not_drift_from_the_master_clock_across_many_frames()
+        {
+            var core = Load();
+
+            for (int i = 0; i < 20; i++) core.RunFrame();
+
+            long earned = core.MasterClock / MoonCore.MasterClocksPerCpuCycle;
+
+            // The only slack is the instruction straddling the last boundary, which the budget carries.
+            Assert.InRange(core.Cpu!.Cycles, earned - 8, earned + 8);
         }
 
         // Nothing else in the frame loop matters if the game never gets its vblank interrupt.
@@ -121,9 +148,9 @@ namespace EmuSen.WiseMan.Cores
             core.Ppu!.Control = 0x80;
 
             bool sawNmi = false;
-            for (int line = 0; line < MoonPpu.TotalScanlines; line++)
+            for (int dot = 0; dot < MoonPpu.TotalScanlines * MoonPpu.DotsPerScanline; dot++)
             {
-                core.Ppu.EndScanline(line);
+                core.Ppu.Step(1);
                 if (core.Ppu.NmiOutput) sawNmi = true;
             }
 
@@ -136,12 +163,12 @@ namespace EmuSen.WiseMan.Cores
             var core = Load();
             var ppu = core.Ppu!;
 
-            ppu.EndScanline(MoonPpu.VBlankScanline);
+            StepTo(ppu, MoonPpu.VBlankScanline, 1);
             Assert.True(ppu.VBlankFlag);
 
             ppu.Sprite0Hit = true;
             ppu.SpriteOverflow = true;
-            ppu.EndScanline(MoonPpu.PreRenderScanline);
+            StepTo(ppu, MoonPpu.PreRenderScanline, 1);
 
             Assert.False(ppu.VBlankFlag);
             Assert.False(ppu.Sprite0Hit);

@@ -1,51 +1,34 @@
 using System.Diagnostics;
 using EmuSen.Cores.Nintendo.Venus.Memory;
-using EmuSen.Crystal;
 using EmuSen.Debug;
 
 namespace EmuSen.Cores.Nintendo.Venus
 {
-    // Venus's half of the Crystal contract: the master timeline and its events - see EmuSen_Crystal_Scheduler.md §7.
-    public partial class VenusCore : IScheduleHandler
+    // Venus's own timeline: the master clock and what closes a scanline on it - see Venus_CPU.md §8.5a.
+    public partial class VenusCore
     {
-        // Every event still fires at a scanline boundary, which is why there is only one - see §7's note.
-        internal enum VenusEvent
-        {
-            ScanlineBoundary = 0,
-        }
-
-        private readonly Scheduler _schedule = new(8);
+        // Where the machine has reached on its master clock; the CPU overshoots a line and carries it.
+        private long _masterClock;
 
         // Where the current scanline began, so LineCycles is a subtraction rather than a running carry.
         private long _lineStartClock;
 
-        // A frame ends inside an event, but RunFrame has to be the thing that returns.
+        // A frame ends inside EndScanline, but RunFrame has to be the thing that returns.
         private bool _frameComplete;
 
-        public Scheduler Schedule => _schedule;
+        public long MasterClock => _masterClock;
 
-        public long MasterClock => _schedule.Now;
+        // Where the CPU loop stops and hands the line to EndScanline.
+        private long NextScanlineBoundary => _lineStartClock + CyclesPerScanline;
 
         private void ResetSchedule()
         {
-            _schedule.Reset();
-            _schedule.SetHandler(this);
-            _schedule.At(CyclesPerScanline, (int)VenusEvent.ScanlineBoundary);
+            _masterClock = 0;
             _lineStartClock = 0;
             _frameComplete = false;
         }
 
         // Everything that used to sit after RunFrame's per-scanline inner loop, in the same order.
-        public void OnScheduledEvent(int eventId, long now)
-        {
-            switch ((VenusEvent)eventId)
-            {
-                case VenusEvent.ScanlineBoundary:
-                    EndScanline();
-                    break;
-            }
-        }
-
         private void EndScanline()
         {
             Bus!.CurrentScanline = _currentScanline;
@@ -82,7 +65,6 @@ namespace EmuSen.Cores.Nintendo.Venus
             _scanlineStarted = false;
             _currentScanline++;
             _lineStartClock += CyclesPerScanline;
-            _schedule.At(_lineStartClock + CyclesPerScanline, (int)VenusEvent.ScanlineBoundary);
 
             if (_currentScanline >= _totalScanlines)
             {

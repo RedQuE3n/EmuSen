@@ -398,7 +398,45 @@ All three miss the budget on a real fraction of frames, and the SA-1 title misse
 
 The shape is unambiguous: **`mainComposite` alone costs 4.4–7.3 ms of a 16.64 ms budget** — a third to nearly half the entire frame, in one function family, on every ROM regardless of which phase dominates overall. It is the largest single item at full speed too (§13.1) and it grows fastest under constraint. Anything spent on `objEval` (≤0.26 ms even throttled) or HDMA (≤0.12) is spent in the wrong place.
 
-Two structural facts frame what to do about it. `CompositeScreen` is a painter's algorithm: every enabled layer writes every pixel and later layers overwrite, so a four-layer mode pays up to 4× the necessary writes. And the whole console runs on one thread (`MainWindow.axaml.cs`'s `EmuSen-Emulation`), so Venus today needs one fast core and cannot use a second — the wrong shape for cheap hardware, which has several mediocre cores instead. Reducing the work comes before parallelising it; there is no point spending two cores on writes that should not happen.
+Two structural facts frame what to do about it. `CompositeScreen` decodes the same scanline twice — once for the main screen and once for the sub screen (§13.4a) — and the decode is the ~75% of `mainComposite` that §7.2 measured. And the whole console runs on one thread (`MainWindow.axaml.cs`'s `EmuSen-Emulation`), so Venus today needs one fast core and cannot use a second — the wrong shape for cheap hardware, which has several mediocre cores instead. Reducing the work comes before parallelising it; there is no point spending two cores on a decode that should happen once.
+
+This paragraph used to blame the painter's algorithm's overdraw — "a four-layer mode pays up to 4× the necessary writes". That is true and it is **not** where the time goes: §7.2 gated every composite pass off and found the overdraw is only ~25%, so removing it perfectly buys about 4%. Do not re-open it.
+
+### 13.4a How Mesen composites, and where ours does redundant work
+
+Read from MesenCE (`Core/SNES/SnesPpu.cpp`) rather than reasoned about, because the previous two attempts at this question were reasoned about and both were wrong. `RenderMode1` is the whole shape:
+
+```cpp
+void SnesPpu::RenderMode1() {
+    RenderSprites({2, 4, 7, 10});
+    RenderTilemap<0, 4, 6, 9>();   // BG1: normalPriority 6, highPriority 9
+    RenderTilemap<1, 4, 5, 8>();   // BG2: 5 / 8
+    RenderTilemap<2, 2, 1, 3>();   // BG3: 1 / 3
+}
+```
+
+and the inner loop of `RenderTilemap` (`SnesPpu.cpp` ~1047) writes both screens from one decoded pixel:
+
+```cpp
+if(drawMain && (_mainScreenFlags[x] & 0x0F) < priority && !ProcessMaskWindow<layerIndex>(mainWindowCount, x))
+    DrawMainPixel(x, rgbColor, priority | pixelFlags);
+if(drawSub && _subScreenPriority[x] < priority && !ProcessMaskWindow<layerIndex>(subWindowCount, x))
+    DrawSubPixel(x, rgbColor, priority);
+```
+
+Three differences from `Renderer.Scanline.cs`, in order of how much they are worth:
+
+| | Mesen | Venus | Worth |
+|---|---|---|---|
+| Main and sub screens | one pass fills both, off one decode | `CompositeScreen` called twice (lines ~106 and ~112), each with its own `BgLineCache` | **the real one** — this is duplicated *decode*, the 75% |
+| Priority levels | one pass per layer; the tile's priority bit selects `normalPriority` or `highPriority` from a global scale | two passes, `priorityOnly: false` then `true` | small — the second pass is a blit over a warm cache |
+| Layer order | sprites first, then BG1→BG4, each write gated on `existing < new` | back-to-front painter's, later layers overwrite | ~4% (§7.2), already ruled out |
+
+The priority scale is what makes one pass per layer possible: priorities are global across all layers, not per-layer, so a single scalar per pixel orders sprites and backgrounds together. Mode 1 is sprites 2/4/7/10, BG1 6/9, BG2 5/8, BG3 1/3 — and `Mode1Bg3Priority` is expressed by handing BG3 a high priority of 11 instead of 3, rather than by a separate forced-top pass like `bg3ForcedTop`.
+
+**What not to try.** Memoizing the sub screen's decode off the main screen's `BgLineCache` was attempted on 2026-08-05 and reverted. It reproduced every `framesum` exactly and bought nothing, because the sharing path never fired once across four ROMs — the guard needs main to have decoded the same layer on the same line first, and the two screens are composited under different layer-enable masks (`Tm` vs `Ts`), so that is not reliably true. The duplicate decode has to be removed by structure, not by a cache: one pass that fills both line buffers. That is a change to `CompositeScreen` and to all six `RenderBgN`/`RenderObj` signatures, not a local edit.
+
+Note that `subScreenUsed` (§5.1) already skips the second composite entirely when the blend cannot read it, so this win only applies to the frames that genuinely use a sub screen — measure which ROMs those are before sizing the work.
 
 ### 13.5 Save states older than the current field layout resume into a dead machine
 
@@ -422,3 +460,35 @@ Mode 0 is the only mode where all four backgrounds are 2bpp, and it is the only 
 **How it surfaced.** Yoshi's Island's intro switches to Mode 0 with `TM = $08` (BG4 only) for scanlines 152-197 to draw the story text over the bottom of the screen — see `Venus_SuperFX.md` §10.5. The tilemap there uses palettes 6 and 7, which resolve to CGRAM 120-123 and 124-127, both white-on-transparent. Read without the base, they landed on CGRAM 24-31 and the text came out dark red. **The glyph shapes were already correct at that point**, which is the useful diagnostic: a palette-indexing bug leaves geometry intact and only moves colour, so "right shape, wrong colour" points at the CGRAM index and not at the tile decode.
 
 This was invisible until the HDMA fix in `Venus_Memory.md` §3.2a, because nothing had ever driven this core into Mode 0 with a non-zero palette field before. Two independent bugs stacked on the same symptom — worth remembering when a fix improves an artifact without clearing it.
+
+---
+
+## 15. The compositor's pixel, and the headless flag beside it
+
+### 15.1 `Rgba32` — and the Raylib dependency it removed
+
+`Renderer` composites into `Rgba32`, a four-byte `readonly struct` declared next to it in `Ppu/Renderer/Rgba32.cs`. Until 2026-08-05 that type was **`Raylib_cs.Color`**, and the core carried a `Raylib-cs 8.0.0` package reference to obtain it.
+
+That reference was the last trace of the Raylib frontend, which `EmuSen.Hotaru` migrated off entirely (`EmuSen_Frontend_Driver.md`). What it cost, measured before removal:
+
+| | |
+|---|---|
+| Raylib functions ever called | **none**, anywhere in the solution |
+| Raylib types used | `Color` only — no `Image`, no `Texture2D`, no `Rectangle` in live code |
+| Shipped artefacts | 21 × `Raylib-cs.dll`, plus native `raylib.dll` (win-x64, win-x86), `libraylib.dylib` (osx-arm64) and `libraylib.so` (linux-x64) |
+
+The published Avalonia frontend was carrying a native game framework, on four platforms, for a struct with four byte fields and no method calls.
+
+**`Rgba32` is `internal` on purpose.** `EmuSen_Project_Overview_v2.md` §7 item 7 previously argued that replacing the type was "zero-payoff busywork," on the reasoning that the goal had been removing Raylib's *window ownership* rather than every mention of it. That reasoning was sound at the time and is now overturned — the payoff was not tidiness, it was deleting a shipped native dependency. The `internal` modifier is what proves the change was safe: the assembly compiles with it, so the pixel type demonstrably never crossed the assembly boundary, and the frame contract (`byte[] GetFrameBufferRgba()`, §8) was always the real seam.
+
+**Verified byte-identical.** `framesum` and `audiosum` over 300 frames across nine SNES and nine NES titles, before and after, produced identical digests. A pixel-type change is exactly the kind that a passing test suite would not catch and a digest would.
+
+**One thing deliberately not done:** `Rgba32` was not promoted to a shared location for Moon or Mercury to use. Moon's PPU already emits `byte[]` RGBA directly and asks for nothing. A second consumer would justify moving it; a hypothetical one would not — see `EmuSen_Multicore.md` §9.1 and §9.2 for why that test now governs.
+
+### 15.2 `_headless`
+
+`Renderer(bool headless)` is a no-op flag. It survives because every `VenusCore(headless:)` call site and `EmulatorSession` pass one, and because the save-state format is positional.
+
+It used to gate an on-window debug overlay — VRAM tile sheet, CGRAM swatch and PPU register text, drawn at fixed pixel offsets around a 2×-scaled game view. That overlay was removed rather than ported during the Avalonia migration, because DianaOS's `regs`/`sprites`/`pal`/`tile`/`vramsheet`/`paletteswatch` commands and the `coretop` dashboard already carry the same data, and `EmuSen.Mistress` — always `headless: true` — never had it and never missed it.
+
+What remains is headless in every mode: `RenderScanline` and the BG/OBJ compositing it drives touch nothing but the `Rgba32[]` buffers, and `GetVramTileSheetRgba`/`GetPaletteSwatchRgba` write plain RGBA arrays with no render target. The flag gates nothing today.

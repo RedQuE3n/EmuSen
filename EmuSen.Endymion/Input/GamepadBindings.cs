@@ -5,7 +5,7 @@ using SDL3;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 
-namespace EmuSen.Nehellania.Input
+namespace EmuSen.Endymion.Input
 {
     // The gamepad counterpart to ControllerKeyBindings: one map per console,
     // loaded and saved as one file - see EmuSen_Input.md §5.1.

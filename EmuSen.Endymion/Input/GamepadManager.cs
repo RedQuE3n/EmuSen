@@ -3,7 +3,7 @@ using System.Diagnostics;
 using SDL3;
 using EmuSen.Galaxia.Input;
 
-namespace EmuSen.Nehellania.Input
+namespace EmuSen.Endymion.Input
 {
     // Polls the first connected SDL3 gamepad into PadButton state - see EmuSen_Input.md §4.
     public class GamepadManager : IDisposable

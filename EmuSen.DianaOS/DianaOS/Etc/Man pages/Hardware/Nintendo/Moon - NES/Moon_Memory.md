@@ -38,6 +38,21 @@ PRG RAM is always allocated as 8 KB regardless of what byte 8 says, because that
 
 Detected by byte 7 bits 2-3 reading exactly `0b10` — that specific pattern, not merely "nonzero". When present, the mapper number gains four more bits from byte 8 and the PRG/CHR sizes gain upper bits from byte 9. Submappers, exponent-form sizes and the extended RAM fields are not read.
 
+### 2.2 The archaic header, and why byte 7 is often not a header byte
+
+Byte 7's high nibble carries the mapper number's upper four bits — but only if byte 7 is a header byte at all, and on a large fraction of circulating dumps it is not. Copiers of the early 1990s wrote their own signature into bytes 7-15, the commonest being the ASCII string `DiskDude!`. Its leading `D` is `$44`, so a naive read hands the mapper an unearned `$40`.
+
+Two tells distinguish an archaic header, and this loader requires **neither** individually — either one is enough:
+
+- **Byte 7 bits 2-3 are neither `0b10` (NES 2.0) nor `0b00`.** This is the rule the reference implementation uses (`NesHeader::GetRomHeaderVersion`), and it catches `DiskDude!` intact, since `$44 & $0C == $04`.
+- **Bytes 12-15 are not all zero.** This catches the partially-scrubbed case, where a tool has cleared byte 7's low bits to `$40` but left `ude!` in bytes 12-15. The reference does not test this; the iNES specification does, and on this library it is the difference between a correct and an incorrect mapper for a further thirty images.
+
+When a header is archaic the mapper is byte 6's high nibble alone. Measured over a 3,536-image set, 184 images change interpretation, and the correction alone moves board coverage from 84.2% to 88.5% — **more than the six boards added alongside it were worth**, which is worth stating plainly because the boards were the intended work and the header was not.
+
+The failure mode this replaced is the reason it was found. Before mappers 64-69 existed, a `DiskDude!` image asked for mapper 65, found nothing, and threw a `NotSupportedException` naming the number: loud, immediate, and obviously a loader problem. The moment those boards existed, the same image would have loaded silently into the wrong board and rendered a blank screen — a *worse* outcome produced by adding correct code. An unimplemented mapper is a diagnosable state; a wrongly-implemented one is not, and a feature that converts the first into the second is a regression however much it adds.
+
+The residue is honest. Two images in this set (`Adventures in the Magic Kingdom (U) [a1]`, `Dr Blario (Dr Mario Hack)`) carry byte 6 and byte 7 nibbles that are simply transposed, with clean bytes 12-15; no structural rule recovers them. The reference plays them correctly because it looks the ROM up by CRC in a game database and overrides the header outright (`GameDatabase::SetGameInfo`). That is a different mechanism, not a better version of this one, and it is the reason those two images cannot be used to test a board here — see §4.11.
+
 ---
 
 ## 3. Mirroring
@@ -61,12 +76,22 @@ The PPU has 2 KB of nametable RAM for four 1 KB nametables, so two of the four a
 | 3 | CNROM | fixed | whole 8K switches | bus conflicts not modelled |
 | 4 | MMC3 | four 8K windows | eight 1K windows | scanline IRQ, §4.6 |
 | 7 | AxROM | 32K switchable | CHR RAM | picks its own single-screen page |
+| 9 | MMC2 | `$8000` switches, three fixed | two 4K windows | PPU-driven CHR latch, §4.10 |
 | 11 | Color Dreams | 32K switchable | 8K switchable | GxROM's fields swapped, §4.7 |
+| 64 | RAMBO-1 | three 8K windows | eight 1K windows | scanline **or** cycle IRQ, §4.15 |
+| 65 | Irem H3001 | three 8K windows | eight 1K windows | 16-bit cycle IRQ, §4.11 |
 | 66 | GxROM | 32K switchable | 8K switchable | one register does both, §4.7 |
+| 67 | Sunsoft-3 | `$8000` switches, `$C000` fixed | four 2K windows | 16-bit cycle IRQ, §4.12 |
+| 68 | Sunsoft-4 | `$8000` switches, `$C000` fixed | four 2K windows | CHR ROM as nametables, §4.13 |
+| 69 | Sunsoft FME-7 | three 8K windows plus `$6000` | eight 1K windows | command/parameter pair, §4.14 |
 | 71 | Camerica | `$C000` switches, `$8000` fixed | CHR RAM | §4.7 |
 | 79 | NINA-003-006 | 32K switchable | 8K switchable | register at `$4100`, §4.7 |
 
-Measured against a 3,536-ROM set, these ten boards cover **83.8%** of it, up from 59.0% before MMC3. The largest remaining gaps are mappers 6 (77 ROMs), 64 (66), 65 (56) and 99 (34) — none above 2.2% each. An unimplemented mapper number throws a `NotSupportedException` naming the number, rather than loading as NROM and behaving inexplicably.
+Measured against a 3,536-image set, these sixteen boards cover **89.2%** of it. The progression is worth recording because it is not what was expected: the ten boards before this pass covered 84.2%, correcting the archaic-header rule (§2.2) moved that to 88.5% without adding a single board, and the six boards then added 0.7%. The headline number moved four times as far from a five-line change in the loader as from six new mappers, and the six mappers were the intended work.
+
+The remaining gaps are mappers 6 (77 images) and 17 (29), which are not boards but FFE copier formats and sit almost entirely under `Hacks` and `Pirate`; 99 (33), the VS System, which needs a second console and a DIP-switch bank rather than a mapper; and then a long tail of one- and two-image multicarts. Nothing above 2.2% each.
+
+An unimplemented mapper number throws a `NotSupportedException` naming the number rather than loading as NROM and behaving inexplicably. §2.2 argues that this loudness is load-bearing and not merely tidy.
 
 ### 4.6 MMC3, and the scanline counter
 
@@ -121,9 +146,103 @@ The trap: **an RMW instruction writes twice on consecutive cycles**, and the rea
 
 `Cartridge.CpuCycle` is stamped by the bus before every mapper write for this reason alone, and `Mmc1.WritePrg` drops a write whose cycle is exactly one past the previous one. This is a case where getting the CPU right first made a downstream bug possible to avoid rather than possible to discover.
 
-### 4.5 The scanline hook
+### 4.5 The scanline hook — **retired 2026-08-08**
 
-`IMapper.OnScanline()` is called from `Ppu.EndScanline` for each visible line, and only while rendering is enabled — a real MMC3 counts PPU address-line transitions that only happen when the PPU is fetching, so a counter that ticked with rendering off would fire IRQs during vblank that hardware never would.
+This section described `IMapper.OnScanline()`, called from `Ppu.EndScanline` once per visible line. That hook no longer exists; §4.6a replaced it with per-fetch A12 edge detection, and §4.6b then corrected the filter's units. The argument it made — that a counter which ticked with rendering disabled would fire IRQs hardware never would — survives the replacement and is now a property of the fetch path itself, since `FetchForDot` returns immediately when rendering is off.
+
+The prose is kept rather than deleted because the reasoning was correct and only the mechanism changed; a reader who finds `OnScanline` in an old commit should be able to learn why it existed and why it stopped.
+
+---
+
+### 4.8 Boards that count CPU cycles, and the cycles this core does not give them
+
+Three of the boards below (§4.11, §4.12, §4.14) and one mode of a fourth (§4.15) drive their IRQ counter from the CPU clock rather than from the PPU's address bus. `IMapper` exposes that as `OnCpuCycle()`, gated behind `ClocksOnCpuCycle`.
+
+**The gate is not decoration.** `MemoryBus.Tick` is the hottest loop in the core, and every board would otherwise pay an interface dispatch per CPU cycle for a feature ten of the sixteen do not use. The bus asks once, in its constructor, and stores the answer; the reference does the same thing for the same reason (`BaseMapper::EnableCpuClockHook`).
+
+**What the hook deliberately omits is more interesting than what it includes.** `RunOamDma` transfers all 256 bytes in one call and charges 513 cycles to the frame budget; the PPU is *not* stepped for them. The same is true of the cycles the DMC steals. So in this core the PPU's timeline runs 513 cycles per DMA behind the CPU's, and a board clocked on the CPU's would drift ahead of the picture by that much every frame.
+
+The first implementation clocked the mapper through both, on the reasoning that hardware plainly does. Skull & Crossbones then rendered its entire raster **five scanlines too high**, stably, at every frame sampled. 513 CPU cycles is 1539 dots is 4.51 scanlines, and the game re-latches its counter five times a frame, so the error could neither accumulate nor cancel — it simply sat there at one DMA's worth. Removing those two calls made the frame pixel-identical to the reference.
+
+This is a **compensating error and is recorded as one**. The physically correct fix is for the PPU to advance during OAM DMA; the mapper hook is then free to count every cycle, as hardware does. What is implemented instead keeps the board on the same timeline the PPU is actually on in this core, which produces the right picture for the wrong reason. It was chosen over the correct fix because stepping the PPU through DMA touches the frame loop that §4.6b's MMC3 work was validated against days earlier, and buying one board's raster with a regression in another's would be a poor trade. The correct fix remains open; when it lands, `OnCpuCycle` should be restored to every cycle in the same change, and Skull & Crossbones is the test that will say whether both halves were done.
+
+### 4.9 Nametables that are not the PPU's
+
+`IMapper.SuppliesNametables` lets a board answer `$2000-$2FFF` from its own memory instead of the PPU's 2 KB of CIRAM. Only Sunsoft-4 uses it here (§4.13). `Ppu.ReadCiram` consults it per read rather than caching the answer, because the board toggles it at runtime; writes are dropped while it is on, since the substituted memory is CHR ROM.
+
+**The `CIRAM` debug space does not follow it.** `MoonCore.ReadSpace` reads `Ppu.Ciram` directly, so while a board is supplying nametables the debugger shows the PPU's own RAM — which is stale, not what is on screen. This is left as it is deliberately: the space is named CIRAM and shows CIRAM, and a space that silently changed its backing store depending on a mapper register would be worse to debug against than one that is consistently literal. Anyone chasing a Sunsoft-4 nametable should read `CHR` at the page the board selected instead.
+
+### 4.10 MMC2, and a bank chosen by the PPU rather than the CPU
+
+Punch-Out!!'s board is the only one here whose CHR banking is driven by the *PPU's own fetches*. Two 4 KB windows each have two banks and a one-bit latch selecting between them; the latch is set by the address of a pattern fetch. The `$0000` window watches two exact addresses, `$0FD8` and `$0FE8`; the `$1000` window watches two eight-byte runs, `$1FD8-$1FDF` and `$1FE8-$1FEF`. The asymmetry is real hardware behaviour and not a simplification — MMC4 (mapper 10, not implemented) uses ranges for both.
+
+**The ordering is the part worth getting right.** The fetch that trips a latch is still served by the bank on its way out; only the next fetch sees the new one. The reference expresses this with a deferred `_needChrUpdate` flag applied at the head of the following address change; `Mmc2.ReadChr` gets the same result by reading first and updating the latch afterwards, which is the same statement written from the other side.
+
+**This core drives the latch from `ReadChr`, not from `OnPpuAddress`.** That looks like the wrong seam — `OnPpuAddress` is where every other board watches the bus — and it is a deliberate consequence of §4.6a. The addresses `Ppu.FetchForDot` publishes for pattern fetches are `BackgroundPatternBase | ((V >> 12) & 0x07)`: correct in bit 12, which is all an A12 watcher needs, and wrong in every other bit. A latch that must recognise `$0FD8` exactly cannot be driven from them. Should the fetch path ever publish true tile addresses, this should move to `OnPpuAddress` and the note should go with it.
+
+### 4.11 Irem H3001, and a board with nothing to test it
+
+Three switchable 8 KB PRG windows (`$8000`, `$A000`, `$C000`) with the fourth fixed to the last page, eight 1 KB CHR windows at `$B000-$B007`, and a 16-bit IRQ counter that decrements once per CPU cycle. The registers are decoded in full, so only the exact addresses listed do anything — a write to `$8001` is not a write to `$8000`.
+
+The counter's latch is loaded high byte first (`$9005`) then low (`$9006`); `$9004` copies the latch into the counter and acknowledges; `$9003` bit 7 arms it and also acknowledges. Reaching zero fires **and disarms**, so a game gets one interrupt per reload — unlike the FME-7's counter (§4.14), which wraps and keeps running. The two are easy to conflate and the difference is the whole behaviour.
+
+**No image in the reference library exercises this board.** The genuine H3001 titles are Japanese-only (`Daiku no Gen-san 2`, `Kaiketsu Yanchamaru 3`, `Spartan X 2`) and none is present. The four images the library reports as mapper 65 are: two hacks and one unknown whose headers are archaic and are really mapper 1 once §2.2 applies, and `Adventures in the Magic Kingdom (U) [a1]`, whose byte 6 and byte 7 nibbles are transposed — it is really an MMC3 game, and it renders a blank screen here whether loaded as mapper 65 or forced to mapper 4, so it is a bad dump rather than a board test.
+
+**This board is verified by unit tests alone**, and that should be said out loud rather than inferred from the absence of a screenshot.
+
+**One open difference, and a retracted explanation.** `Adventures in the Magic Kingdom (U) [a1]` renders a blank screen here and renders content in the reference. This was first written up as a non-finding on the grounds that the reference had overridden the header from its game database and so was running MMC3 rather than this board. **That explanation was wrong and was never checked.** The reference loads no database in a probe run — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.47 — and the comparability gate added afterwards reports `mesen board=65` against `emusen board=65`. Both emulators are running *this* board on that file, and only one of them draws anything.
+
+What is known: the game writes no bank register at all in 300 frames, `PPUMASK` reads `$1E` so rendering is enabled, the palette is still all zeroes, and `PC` sits at `$8020`. Forcing the same image to mapper 4 renders nothing either, so the dump is damaged in some way beyond its mapper nibble. That does not clear this board, and the difference should be treated as open rather than as understood.
+
+### 4.12 Sunsoft-3
+
+One switchable 16 KB PRG window with the second fixed to the last page, and four 2 KB CHR windows. Registers are decoded on `addr & $F800`, so each lives in the upper half of a 4 KB block: `$8800`, `$9800`, `$A800`, `$B800` for CHR, `$E800` for mirroring, `$F800` for PRG.
+
+The counter is 16 bits fed through **one** address, `$C800`, high half first, with an internal toggle deciding which half a write lands in; `$D800` both arms the counter and resets that toggle to "high next", so a game that writes `$D800` before its two `$C800` writes always knows which half it is setting. The counter fires on the underflow *past* zero rather than on zero itself, then disarms.
+
+**No image in the reference library uses this board either** — every image the library reported as mapper 67 turned out to be mapper 3 with a `DiskDude!` header (§2.2). Unit tests only, same as §4.11.
+
+### 4.13 Sunsoft-4, and CHR ROM standing in for the nametables
+
+PRG and CHR are conventional: one switchable 16 KB window, four 2 KB CHR windows at `$8000`-`$B000`, `$F000` carrying both the PRG bank (bits 0-2) and the work-RAM enable (bit 4).
+
+What makes the board unusual is `$E000` bit 4, which hands the nametables to CHR ROM. `$C000` and `$D000` then hold two 1 KB CHR page numbers, and the board's own mirroring decides which of the two each of the four nametables shows. Both registers force bit 7 of the written value, because the nametable pages live in the upper half of CHR.
+
+**The unit mismatch is the trap.** The CHR windows count in 2 KB pages and the nametable registers count in 1 KB pages, in the same board, written through adjacent registers. Getting this wrong produces a screen that is plausibly wrong rather than obviously wrong, and §4.6b is a recent reminder of how expensive a quantity copied without its unit can be.
+
+After Burner is the one genuine image present. It matches the reference exactly at frames 300, 900 and 1800.
+
+### 4.14 Sunsoft FME-7
+
+Everything on this board goes through a command/parameter pair: `$8000` selects one of sixteen commands, `$A000` supplies its argument. Commands 0-7 are the eight 1 KB CHR windows, 9-11 the three switchable 8 KB PRG windows, 12 mirroring, 13-15 the IRQ.
+
+**`$6000` is a PRG ROM window by default**, which is unlike every other board here and is worth stating because it is the state the machine boots in. Command 8's bit 6 switches it to RAM and bit 7 then enables that RAM; with bit 6 clear the low six bits are an 8 KB ROM bank instead.
+
+The counter decrements once per CPU cycle when command 13's bit 7 is set, and on underflow it **wraps and keeps counting**, raising the line only if bit 0 is also set. Acknowledging does not stop it — the interrupt returns one full period later. This is the opposite of §4.11's behaviour and the distinction is why both are spelled out.
+
+The 5B expansion audio at `$C000`/`$E000` is accepted and discarded. This core carries no expansion audio for any board, so that is the existing state of the project rather than a gap introduced here; Mr. Gimmick is the only image in the library that would use it.
+
+Batman: Return of the Joker matches the reference exactly at frames 300, 900 and 1800.
+
+**Mr. Gimmick does not count as a second confirmation, though it was first recorded as one.** `Mr. Gimmick (E)` is a PAL image; the reference detects that and runs it at PAL timing, while this core reports NTSC unconditionally. The frames matched pixel for pixel anyway — the screen in question is static, and a static screen matches across almost any timing — so the agreement was real and meaningless at once. The comparability gate (`EmuSen_Debugging_Tools_Reference_v5.md` §3.48) reports it as `NOT-COMPARABLE: region differs`, which is the correct reading and was not the one taken by hand an hour earlier. Whether this core models PAL timing at all is a separate question this raised and did not answer.
+
+### 4.15 RAMBO-1, and two ways to clock one counter
+
+Tengen's board is MMC3's shape with three differences that matter.
+
+**A third switchable PRG bank.** Register 15 joins 6 and 7, and `$8000` bit 6 decides whether the fixed page sits in the third window or the first.
+
+**CHR that can be eight 1 KB pages instead of six.** `$8000` bit 5 gives the two 2 KB pairs their own registers (8 and 9). When it is clear the pairs are `R0`/`R0+1` and `R1`/`R1+1` — note that unlike MMC3 the low bit of the register is *not* masked, so an odd value moves the pair rather than being ignored.
+
+**A counter that can be clocked by the CPU.** `$C001` bit 0 selects cycle mode, in which the counter advances once every four CPU cycles and the A12 path is disconnected entirely. Three details make this work:
+
+- **The A12 filter is far wider than MMC3's.** The reference passes `30` to its shared `A12Watcher` where MMC3 effectively passes three CPU cycles; in this core both go through `Mappers/A12Watcher.cs` with the threshold stated in PPU dots, 30 against MMC3's 9. Deriving 30 from the reference needs care: its `_cyclesDown` starts at 1 on the falling edge and its test is `> minDelay`, so `> 30` means thirty dots elapsed, not thirty-one.
+- **A reload lands one or two above the latch**, never on it — `latch + 1` when the latch is 0 or 1, `latch + 2` otherwise. This is what puts a RAMBO-1 split a line below where the same latch would put an MMC3's.
+- **Leaving cycle mode still owes the counter one clock.** `$C001` clearing bit 0 while cycle mode was on sets a force-clock flag that survives until the divider next completes. The reference attributes this to Skull & Crossbones, which is the game that found the §4.8 bug here too.
+
+The line falls two CPU cycles after an A12-clocked counter reaches zero and one after a cycle-clocked one, modelled as a small countdown in `OnCpuCycle`.
+
+Klax, Shinobi and Skull & Crossbones all match the reference exactly at frames 300 and 900. Skull & Crossbones is the interesting one: it drives five `$C001` writes per frame, alternating between the two modes with latches of 227, 113, 116 and 206, and it is the only image found so far whose picture depends on the CPU-cycle path being on the same timeline as the PPU.
 
 ---
 

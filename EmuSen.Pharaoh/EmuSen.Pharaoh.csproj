@@ -14,9 +14,20 @@
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+
 
   <!-- A published build's output directory is DianaOS's own root: the .NET
        app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
   <Import Project="..\EmuSen.DianaOS\Publish\DianaOSPublishLayout.targets" />
 
+
+  <!-- The dictionary ships as SQL, never as a built .db: a binary in git cannot be
+       reviewed, and reviewability is the whole point of a proof requirement - see §3.49. -->
+  <ItemGroup>
+    <None Include="Reference\Dictionary\*.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -1750,6 +1750,108 @@ This is roughly how the toolchain got used across the coin/Yoshi rendering inves
 
 ---
 
+### 3.47 Two ways a screenshot diff lies, found while verifying the 2026-08-08 mappers
+
+The probe makes it cheap to compare a frame against the reference, and cheap comparisons invite over-reading. Six new NES boards were verified this way; two of the comparisons were meaningless, and neither announced itself.
+
+**The reference may not be running the board you asked for.** Mesen carries a game database and, on a CRC hit, overwrites the header's mapper number outright (`GameDatabase::SetGameInfo` assigning `romData.Info.MapperID`). For images with damaged headers — which, per `Moon_Memory.md` §2.2, is a large minority of any real library — the two emulators can in principle be running *different boards* on the same file, and nothing in the probe's output would reveal it.
+
+> **Corrected 2026-08-08.** This section first named `Adventures in the Magic Kingdom (U) [a1]` as a case where that had happened, and asserted the reference was playing it as MMC3. **That was wrong, and it was asserted without being checked.** `GameDatabase::InitDatabase` loads `MesenNesDB.txt` from the emulator's home folder, and the probe points the home folder at its own dump directory (`ProbeOptions::HomeFolder`), which never contains one. No database is loaded in a probe run at all. Once the identity gate below existed it reported `mesen board=65` against `emusen board=65` — the same board — in the first second of being pointed at the problem.
+>
+> The mechanism is still real and still worth guarding, which is why the gate exists and why this paragraph stays. What was wrong was reaching for it as an explanation because it was available, rather than measuring. The blank screen that prompted all this is an unexplained difference in this core's Irem H3001 or in that dump, and is recorded as open in `Moon_Memory.md` §4.11 rather than as solved.
+
+**A tapped run is not a comparison.** Feeding both sides the same `--press`/`--tap` schedule does not keep them in the same place. Mr. Gimmick with three Start taps diffed at 79% of the frame and After Burner at 1.22%; with no input at all, at a later frame, both were pixel-identical. The taps had landed on different menu states, and a menu state difference reads exactly like a catastrophic rendering bug. The existing `--pressuntil` anchor exists precisely for this and should be preferred; where an anchor is not known, **an unattended run at a later frame is stronger evidence than a driven run at an earlier one**, which inverts the intuition that more input means more coverage.
+
+The general form of both: a differential test proves two systems agree, and says nothing about whether they were asked the same question. The cost here was roughly an hour split between a board that was never wrong and a divergence that was never a bug.
+
+---
+
+### 3.48 The comparability gate, and EmuSen as a peer backend
+
+§3.47 records two comparisons that were valid-looking and meaningless. The response is not a better differ — the differ was correct every time — but a layer that decides whether a difference *means* anything before measuring one, and a symmetric arrangement in which this project is one backend among several rather than the privileged consumer.
+
+**The contract that matters is the file protocol, not the C++ vtable.** `IProbeBackend` stays what it was: the in-process adapter for an emulator that has to be driven. A *peer* is anything that writes the same files. `EmuSen.Pharaoh --probe` does exactly that, emitting `emusen_<space>_f<frame>.bin`, `emusen_manifest_f<frame>.json` and `emusen_screen_f<frame>.bin` beside the reference's. `--compare` then reads two directories and never learns which emulator made either.
+
+Two additions to the protocol:
+
+- **`identity` in every manifest** — the board, region, PRG/CHR sizes, save presence and header trust the backend *settled on*, as opposed to what it did. Empty fields are legal and meaningful: a libretro core cannot report a mapper, and a gate that reads silence as agreement is worse than one that reports a one-sided check.
+- **`<backend>_sig.csv`** — one row of CRC32s per frame, from frame 0, with a `#`-prefixed header carrying the identity and a column list that is the schema. A consumer intersects on column names rather than assuming two emulators expose the same spaces.
+
+The gates, cheapest first:
+
+1. **Identity.** Board, region, sizes and system, before a single pixel is read. A mismatch is `NOT-COMPARABLE` and the pixel count is not reported at all, because it would describe the mismatch.
+2. **Divergence.** Where the two streams first parted, on columns that have first been shown capable of answering — see §3.48a, which is the part that did not work as designed.
+3. **Informativeness.** Whether the frame could have disagreed: colour count, dominant-colour fraction, and whether the reference *moves* across the phase window. A reference that is static across the window makes every phase offset match, so a phase "match" proves nothing about timing.
+
+The verdicts are `PASS`, `PASS(vacuous)`, `NOT-COMPARABLE`, `DIVERGED-AT`, and `DIFFERS`, carried out as exit codes 0/3/2/4/1 so a script can branch on the *kind* of answer.
+
+**One inversion worth stating, because it was written wrongly first.** Vacuity grades an agreement. A frame that plainly disagreed is never vacuous however uniform either side is — the first cut reported Adventures in the Magic Kingdom as `PASS(vacuous)` while 87.53% of its pixels differed, on the grounds that our own screen was a single colour. A blank screen where the reference draws content is the strongest evidence of a fault available, and the gate had been built to file it as a pass.
+
+**Measured against the four cases from §3.47, plus one nobody had identified:**
+
+| ROM | Verdict |
+|---|---|
+| Klax | `PASS` — 14 colours, reference moving, phase +2 stable |
+| After Burner | `PASS(vacuous)` — 3 colours, reference static across the window |
+| Adventures in the Magic Kingdom | `DIFFERS: 53778 px (87.53%) and no gate explains it` |
+| Mr. Gimmick (E) | `NOT-COMPARABLE: region differs: emusen=ntsc mesen=pal` |
+
+The last was not one of the ghosts this was built to catch. `Mr. Gimmick (E)` is a PAL image, the reference runs it at PAL timing, and an hour earlier it had been recorded by hand as a pixel-exact confirmation of the FME-7. It matched because the screen was static. The tool found that on its first outing against real data, which is the strongest argument for it that exists here.
+
+### 3.48a Memory is not comparable across emulators, and the gate has to measure that
+
+The divergence gate was designed around a per-frame RAM hash: find the first frame where the two streams differ, and classify by whether an input preceded it. **It does not work, and the measurement that shows why is worth keeping.**
+
+Agreement rate per column, aligned on the best offset, over ~300 frames:
+
+| ROM | `ram` | `work` | `oam` | `palette` |
+|---|---|---|---|---|
+| Klax — pixel-identical | 62.0% | 100% | 1.6% | 0% |
+| After Burner — pixel-identical | 0.3% | 100% | 100% | 0% |
+| Magic Kingdom — 87% of pixels differ | 1.0% | 100% | 10.2% | 0% |
+
+A frame that is *pixel for pixel identical* carries 62% RAM agreement in one game and 0.3% in another, and a genuinely broken one sits between them. Three causes, none of them a bug in either emulator:
+
+- **The frame boundary is not the same instant.** Two emulators stop at different points relative to the game's own update, so a space the game is halfway through writing is sampled at different moments and disagrees while nothing is wrong.
+- **Power-on contents are undefined.** NES palette RAM has no defined reset state; each emulator fills it differently and `palette` therefore agrees 0% of the time, permanently, on every ROM.
+- **Layout and size differ.** This core's nametable mirror is 4 KB against the reference's physical 2 KB, and CHR banking differs in arrangement without differing in effect. Neither can agree byte for byte even when the machines do.
+
+So the gate **measures each column's comparability rather than assuming it**, classifying by agreement rate as `stable` (≥95%), `intermittent`, or `never` (≤5%), and admits only `stable` columns as divergence evidence. With none available it reports `INCONCLUSIVE` and claims no divergence frame — a gate that cannot answer says so rather than inventing a number, which is the failure mode the whole section exists to prevent.
+
+Three consequences fell out of building it:
+
+- **Alignment cannot use a constant column.** A column that never changes agrees at every offset, so it carries no timing information; `work` is constant in most runs and dragged the alignment to a nonsense offset until it was excluded. Alignment now uses only columns that vary.
+- **Alignment is mandatory, not a refinement.** This core runs two frames behind the reference on boot. Comparing frame *N* to frame *N* reports a divergence in the first row of every ROM ever tested.
+- **A column must be rated on a leading window, not on the whole stream.** Rating over everything is self-defeating: a genuine divergence half way through a run drags that column's agreement rate below the threshold and disqualifies the one column that would have revealed it. The first cut did exactly this and reported `INCONCLUSIVE` on a fixture built to diverge at a known frame. The rating is now computed over the first quarter of the aligned frames and then used to judge the rest, which is an ordinary calibrate-then-detect arrangement and carries its usual limitation: a divergence *inside* the calibration window makes the column look unreliable and is missed. That case is left to the screen, which catches it as `DIFFERS`.
+
+**The screen remains the reliable signal** — normalised to RGB, it compared correctly in every case all day. Memory is the cheap signal that must be calibrated before it is believed. That asymmetry was not the expected result and is the main thing this section has to hand over.
+
+---
+
+### 3.49 The known-differences dictionary, and why "proven" is a schema constraint
+
+The gates in §3.48 tell you *that* two emulators disagree on a column. What they cannot tell you is whether that disagreement is already understood. Accumulating those explanations is obviously useful and just as obviously dangerous: **a wrong entry is worse than no entry**, because it teaches the comparator to explain away a real defect, silently, forever, on every future run. §3.47 records exactly that mistake being made by hand — an explanation reached for because it was available rather than because it was measured, and written into two man pages as fact.
+
+So the dictionary is built around the assumption that its author is not to be trusted, including when its author is the person adding the row.
+
+**Storage.** SQLite, via `Microsoft.Data.Sqlite`, with the native library pinned to `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 — the 2.1.11 that `Microsoft.Data.Sqlite` 10.0.10 resolves by default carries GHSA-2m69-gcr7-jv3q, which the build surfaces as `NU1903`.
+
+**What is committed is SQL, not a database.** `schema.sql` and `seed.sql` are the reviewable source; `known-differences.db` is a build artifact, rebuilt when missing, and is not in the repository. A binary in git cannot be diffed, reviewed or merged, which would defeat the point: the entire value of a proof requirement is that a claim can be *argued with* on the merits before it is believed.
+
+**Four tables, and the interesting part is the fourth.** `definition` is the claim, `evidence` is what motivated it, `assertion` is the falsifiable predicate a machine can re-run, and `verification` is one row per time an assertion was actually executed, carrying the commit it ran against. A definition is `provisional`, `proven` or `retracted`.
+
+**Promotion is enforced by triggers, not by discipline.** Writing `status = 'proven'` in a seed file aborts the insert. Promoting a definition with no passing verification aborts. Promoting one with no assertion aborts. And because `verification` has a foreign key to `assertion`, a definition with nothing to re-run cannot have a verification recorded against it at all — the stronger invariant, which a test tried to state the weaker version of and was corrected by the schema.
+
+**The dictionary annotates; it never suppresses.** A proven entry adds `known: <slug>` beside a column and nothing else. It does not remove the column, hide the rate, or change a verdict. This is the deliberate part: a difference that stopped being reported the day it was explained is a difference nobody notices the day its cause is fixed. Columns with no proven explanation are marked `UNEXPLAINED`, which is the state most of them should be in.
+
+**Demotion is automatic.** `--verify-dictionary <ours> <theirs>` re-runs every assertion against a real pair; anything that fails is demoted to provisional rather than deleted, because a claim that has stopped holding here may still hold elsewhere and its history is worth keeping.
+
+The first run of the verifier demoted one of its own seed entries. `moon-reports-ntsc-unconditionally` was asserted with a fixture of "any NES pair" and evaluated against Klax, where both sides correctly report NTSC, so the assertion failed and the entry lost its status. The claim is true; the *assertion* was wrong, because a claim about PAL images cannot be demonstrated on an NTSC one. Assertions now name the fixture that demonstrates them and skip on any other pair. That a badly-scoped claim was rejected rather than believed is the system doing its job on its own author, an hour after that author had made the same class of error by hand.
+
+The retracted game-database claim from §3.47 is seeded as a `retracted` row, with its reasoning in `retracted_why`, so the dictionary carries a worked example of the failure it exists to prevent.
+
+---
+
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders
 
 Four efforts landed in one commit, which is not the house style and is worth explaining rather than leaving as an oddity.

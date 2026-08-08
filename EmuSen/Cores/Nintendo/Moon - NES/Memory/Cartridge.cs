@@ -6,6 +6,18 @@ using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores.Nintendo.Moon.Memory
 {
+    // How much of the header survived the copiers - see Moon_Memory.md §2.2.
+    public enum HeaderTrust
+    {
+        Clean,
+
+        // Byte 7 carried a mapper nibble this loader had to accept on faith.
+        Unverifiable,
+
+        // Byte 7 held a copier signature, so only byte 6 was believed.
+        Archaic,
+    }
+
     // One iNES/NES 2.0 image and the board it describes - see Moon_Memory.md §2.
     public sealed class Cartridge
     {
@@ -23,6 +35,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
 
         [SkipInState] public bool ChrIsRam;
         [SkipInState] public int MapperNumber;
+
+        // How far the header can be trusted, which a differential run must know - see Moon_Memory.md §2.2.
+        [SkipInState] public HeaderTrust Trust;
         [SkipInState] public bool HasBattery;
         [SkipInState] public bool IsNes20;
         [SkipInState] public Mirroring HeaderMirroring;
@@ -48,6 +63,29 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             return cart;
         }
 
+        // The header alone, with no board built. A catalogue has to be able to
+        // record an image whose mapper this program does not implement, and
+        // CreateMapper throws for exactly those - see EmuSen_Galaxia.md §7.
+        public static Cartridge Describe(byte[] image)
+        {
+            var cart = new Cartridge();
+            cart.Parse(image);
+            return cart;
+        }
+
+        public static bool IsBoardImplemented(int mapperNumber)
+        {
+            try
+            {
+                CreateMapper(new Cartridge { MapperNumber = mapperNumber, PrgRom = new byte[0x4000], Chr = new byte[0x2000] });
+                return true;
+            }
+            catch (NotSupportedException)
+            {
+                return false;
+            }
+        }
+
         // Kept separate from Load so a test can build an image in memory - see EmuSen.WiseMan's SyntheticNesRom.
         public static Cartridge FromImage(byte[] image)
         {
@@ -68,9 +106,20 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             // Byte 7 bits 2-3 reading exactly 0b10 is the whole NES 2.0 detection - see Moon_Memory.md §2.1.
             IsNes20 = (image[7] & 0x0C) == 0x08;
 
+            // Either tell means byte 7 is not a header byte at all - see Moon_Memory.md §2.2.
+            bool archaic = !IsNes20 &&
+                ((image[7] & 0x0C) != 0x00 ||
+                 image[12] != 0 || image[13] != 0 || image[14] != 0 || image[15] != 0);
+
             int prgBanks = image[4];
             int chrBanks = image[5];
-            MapperNumber = (image[6] >> 4) | (image[7] & 0xF0);
+
+            MapperNumber = image[6] >> 4;
+            if (!archaic) MapperNumber |= image[7] & 0xF0;
+
+            Trust = archaic ? HeaderTrust.Archaic
+                : IsNes20 || (image[7] & 0xF0) == 0 ? HeaderTrust.Clean
+                : HeaderTrust.Unverifiable;
 
             if (IsNes20)
             {
@@ -124,8 +173,14 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             3 => new CnRom(cart),
             4 => new Mmc3(cart),
             7 => new AxRom(cart),
+            9 => new Mmc2(cart),
             11 => new ColorDreams(cart),
+            64 => new Rambo1(cart),
+            65 => new IremH3001(cart),
             66 => new GxRom(cart),
+            67 => new Sunsoft3(cart),
+            68 => new Sunsoft4(cart),
+            69 => new SunsoftFme7(cart),
             71 => new Camerica(cart),
             79 => new Nina003(cart),
             _ => throw new NotSupportedException(

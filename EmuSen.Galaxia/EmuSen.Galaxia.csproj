@@ -11,6 +11,14 @@
        rather than just shared: nothing here can name Avalonia's Key, SDL's
        GamepadButton or SnesButton, so the config models are plain data and
        the typed maps that use foreign enums keep their own homes. -->
+  <!-- The catalogue's schema ships as SQL beside the contract that describes it.
+       Galaxia owns where things live and what shape they are in; the driver that
+       executes this lives above her, because a leaf cannot take a database
+       engine - see EmuSen_Galaxia.md §7.1. -->
+  <ItemGroup>
+    <None Include="Library\Catalogue\*.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

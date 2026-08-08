@@ -79,4 +79,10 @@
     <ProjectReference Include="..\EmuSen.LunaP\EmuSen.LunaP.csproj" />
   </ItemGroup>
 
+
+  <!-- Galaxia's catalogue schema, so a test can build the real thing - see EmuSen_Galaxia.md §7. -->
+  <ItemGroup>
+    <None Include="..\EmuSen.Galaxia\Library\Catalogue\*.sql"
+          Link="Library\Catalogue\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

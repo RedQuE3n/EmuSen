@@ -60,3 +60,7 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/*
 # AI-assistant config. This repo does not carry one and must not depend on one -
 # it has been added and deleted more than once. Ignored so it cannot come back.
 CLAUDE.md
+known-differences.db
+*.db-wal
+*.db-shm
+catalogue.db

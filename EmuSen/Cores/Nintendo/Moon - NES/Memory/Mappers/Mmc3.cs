@@ -167,26 +167,15 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory.Mappers
         // Diagnostic only; a board that never fires is the usual sign of a bad IRQ setup.
         private ulong _irqsFired;
 
-        // A12 must have been low a while for the rise to register - see Moon_Memory.md §4.6a.
-        // The board's filter is specified in M2 (CPU) cycles, and this counter is
-        // in PPU dots; three of the former is nine of the latter.
-        private const int A12MinimumLowClocks = 3 * MemoryBus.DotsPerCpuCycle;
+        // The board's filter is specified in M2 (CPU) cycles and the watcher counts dots - see Moon_Memory.md §4.6b.
+        public const int A12MinimumLowDots = 3 * MemoryBus.DotsPerCpuCycle;
 
-        // -1 rather than 0, because clock 0 is a real dot the very first fetch can land on.
-        private long _a12LowSince = -1;
+        private readonly A12Watcher _a12 = new(A12MinimumLowDots);
 
         // Every PPU fetch is offered here; only a genuine low-to-high A12 transition counts.
         public void OnPpuAddress(ushort address, long ppuClock)
         {
-            if ((address & 0x1000) == 0)
-            {
-                if (_a12LowSince < 0) _a12LowSince = ppuClock;
-                return;
-            }
-
-            bool rising = _a12LowSince >= 0 && ppuClock - _a12LowSince >= A12MinimumLowClocks;
-            _a12LowSince = -1;
-            if (!rising) return;
+            if (!_a12.Rose(address, ppuClock)) return;
 
             if (_irqCounter == 0 || _irqReload) _irqCounter = _irqReloadValue;
             else _irqCounter--;

@@ -54,7 +54,8 @@ void ProbeDump::WriteTrace(const std::string& dir, const std::string& backend, c
 }
 
 void ProbeDump::WriteManifest(const std::string& dir, const std::string& backend, const std::string& system,
-	const std::string& romPath, uint32_t frame, const std::vector<MemorySpace>& spaces, const ScreenView* screen)
+	const std::string& romPath, uint32_t frame, const std::vector<MemorySpace>& spaces, const ScreenView* screen,
+	const ProbeIdentity& identity)
 {
 	std::ofstream file(BlobPath(dir, backend, "manifest", frame, "json"));
 	file << "{\n";
@@ -62,6 +63,16 @@ void ProbeDump::WriteManifest(const std::string& dir, const std::string& backend
 	file << "  \"system\": \"" << JsonEscape(system) << "\",\n";
 	file << "  \"rom\": \"" << JsonEscape(romPath) << "\",\n";
 	file << "  \"frame\": " << frame << ",\n";
+
+	// An empty string here means "this backend cannot say", which the gate treats
+	// as reduced confidence rather than as agreement - see §3.48.
+	file << "  \"identity\": { \"board\": \"" << JsonEscape(identity.Board)
+	     << "\", \"region\": \"" << JsonEscape(identity.Region)
+	     << "\", \"headerTrust\": \"" << JsonEscape(identity.HeaderTrust)
+	     << "\", \"prg\": " << identity.PrgBytes
+	     << ", \"chr\": " << identity.ChrBytes
+	     << ", \"saveLoaded\": " << (identity.SaveLoaded ? "true" : "false") << " },\n";
+
 	file << "  \"spaces\": [";
 
 	bool first = true;
@@ -106,4 +117,82 @@ const MemorySpace* ProbeDump::Find(const std::vector<MemorySpace>& spaces, const
 		if(space.Name == name) { return &space; }
 	}
 	return nullptr;
+}
+
+// Table built once on first use; the polynomial is the ordinary reflected
+// 0xEDB88320 so a consumer in any language agrees without being told.
+uint32_t ProbeDump::Crc32(const void* data, size_t bytes)
+{
+	static uint32_t table[256];
+	static bool built = false;
+	if(!built) {
+		for(uint32_t i = 0; i < 256; i++) {
+			uint32_t c = i;
+			for(int k = 0; k < 8; k++) { c = (c & 1) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1); }
+			table[i] = c;
+		}
+		built = true;
+	}
+
+	uint32_t crc = 0xFFFFFFFFu;
+	const uint8_t* p = (const uint8_t*)data;
+	for(size_t i = 0; i < bytes; i++) { crc = table[(crc ^ p[i]) & 0xFF] ^ (crc >> 8); }
+	return crc ^ 0xFFFFFFFFu;
+}
+
+bool ProbeDump::SignatureWriter::Open(const std::string& path)
+{
+	_file.open(path);
+	return _file.is_open();
+}
+
+void ProbeDump::SignatureWriter::WriteHeader(const std::string& backend, const std::string& system,
+	const std::string& romPath, const ProbeIdentity& identity, const ScreenView* screen,
+	const std::vector<MemorySpace>& spaces)
+{
+	if(!_file.is_open()) { return; }
+
+	_file << "# emusen-probe-signature 1\n";
+	_file << "# backend=" << backend << "\n";
+	_file << "# system=" << system << "\n";
+	_file << "# rom=" << romPath << "\n";
+	_file << "# board=" << identity.Board << "\n";
+	_file << "# region=" << identity.Region << "\n";
+	_file << "# headerTrust=" << identity.HeaderTrust << "\n";
+	_file << "# prg=" << identity.PrgBytes << "\n";
+	_file << "# chr=" << identity.ChrBytes << "\n";
+	_file << "# saveLoaded=" << (identity.SaveLoaded ? 1 : 0) << "\n";
+	_file << "# screenFormat=" << (screen != nullptr ? ScreenFormatName(screen->Format) : "None") << "\n";
+
+	// The column list is the schema: a consumer intersects on names rather than
+	// assuming two backends expose the same spaces, which they do not.
+	_columns.clear();
+	for(const MemorySpace& space : spaces) {
+		if(space.Data != nullptr && space.Size != 0) { _columns.push_back(space.Name); }
+	}
+
+	_file << "frame";
+	for(const std::string& name : _columns) { _file << "," << name; }
+	_file << ",screen\n";
+}
+
+void ProbeDump::SignatureWriter::WriteRow(uint32_t frame, const std::vector<MemorySpace>& spaces,
+	const ScreenView* screen)
+{
+	if(!_file.is_open()) { return; }
+
+	char row[64];
+	snprintf(row, sizeof(row), "%u", frame);
+	_file << row;
+
+	for(const std::string& name : _columns) {
+		const MemorySpace* space = Find(spaces, name);
+		uint32_t crc = space != nullptr && space->Data != nullptr ? Crc32(space->Data, space->Size) : 0;
+		snprintf(row, sizeof(row), ",%08x", crc);
+		_file << row;
+	}
+
+	uint32_t screenCrc = screen != nullptr && screen->Data != nullptr ? Crc32(screen->Data, screen->Bytes) : 0;
+	snprintf(row, sizeof(row), ",%08x\n", screenCrc);
+	_file << row;
 }

@@ -168,7 +168,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory.Mappers
         private ulong _irqsFired;
 
         // A12 must have been low a while for the rise to register - see Moon_Memory.md §4.6a.
-        private const int A12MinimumLowClocks = 3;
+        // The board's filter is specified in M2 (CPU) cycles, and this counter is
+        // in PPU dots; three of the former is nine of the latter.
+        private const int A12MinimumLowClocks = 3 * MemoryBus.DotsPerCpuCycle;
 
         // -1 rather than 0, because clock 0 is a real dot the very first fetch can land on.
         private long _a12LowSince = -1;

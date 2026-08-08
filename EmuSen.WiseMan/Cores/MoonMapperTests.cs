@@ -111,12 +111,14 @@ namespace EmuSen.WiseMan.Cores
             m.WritePrg(0xE001, 0);    // enable
 
             long clock = 0;
+            // The gap is in PPU dots and has to clear the board's filter, which is
+            // three CPU cycles - nine dots, not three. See Moon_Memory.md §4.6a.
             void A12Rise()
             {
                 m.OnPpuAddress(0x0000, clock);
-                clock += 8;
+                clock += 12;
                 m.OnPpuAddress(0x1000, clock);
-                clock += 8;
+                clock += 12;
             }
 
             A12Rise();                // reloads to 4
@@ -140,12 +142,14 @@ namespace EmuSen.WiseMan.Cores
             IMapper m = cart.Mapper;
 
             long clock = 0;
+            // The gap is in PPU dots and has to clear the board's filter, which is
+            // three CPU cycles - nine dots, not three. See Moon_Memory.md §4.6a.
             void A12Rise()
             {
                 m.OnPpuAddress(0x0000, clock);
-                clock += 8;
+                clock += 12;
                 m.OnPpuAddress(0x1000, clock);
-                clock += 8;
+                clock += 12;
             }
 
             m.WritePrg(0xC000, 1);
@@ -160,6 +164,39 @@ namespace EmuSen.WiseMan.Cores
 
             m.WritePrg(0xE000, 0);
             Assert.False(m.IrqPending);
+        }
+
+        // The filter is the whole reason the sprite-fetch phase does not clock the
+        // counter eight times a line. It is specified in CPU cycles, and this
+        // counter is in PPU dots; measuring three *dots* instead of three cycles
+        // made SMB3's title split fire six scanlines early - see Moon_Memory.md §4.6a.
+        [Fact]
+        public void Mmc3_ignores_an_a12_rise_that_was_not_low_for_three_cpu_cycles()
+        {
+            Cartridge cart = Mmc3Cart();
+            IMapper m = cart.Mapper;
+
+            m.WritePrg(0xC000, 1);
+            m.WritePrg(0xC001, 0);
+            m.WritePrg(0xE001, 0);
+
+            long clock = 0;
+            void Toggle(int lowDots)
+            {
+                m.OnPpuAddress(0x0000, clock);
+                clock += lowDots;
+                m.OnPpuAddress(0x1000, clock);
+                clock += 2;
+            }
+
+            // Eight dots is the gap between two sprite pattern fetches; it must not count.
+            for (int i = 0; i < 20; i++) Toggle(8);
+            Assert.False(m.IrqPending);
+
+            // Nine is three CPU cycles, which does.
+            Toggle(9);
+            Toggle(9);
+            Assert.True(m.IrqPending);
         }
 
         // $A001 bit 7 gates the 8K work RAM MMC3 carries at $6000.

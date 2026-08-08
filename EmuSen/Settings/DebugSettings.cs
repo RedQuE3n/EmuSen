@@ -164,6 +164,13 @@ namespace EmuSen.Debug
             get => MasterLoggingEnabled && _renderReadLogging;
             set => _renderReadLogging = value;
         }
+        // Per-frame $2000-$2007 traffic with the dot it landed on - see Moon_PPU.md §7.
+        private static bool _nesPpuWriteLogging = true;
+        public static bool NesPpuWriteLogging
+        {
+            get => MasterLoggingEnabled && _nesPpuWriteLogging;
+            set => _nesPpuWriteLogging = value;
+        }
         // Per-frame $21xx traffic during active display - see Venus_PPU.md §7.3.
         private static bool _ppuActiveDisplayWriteLogging = true;
         public static bool PpuActiveDisplayWriteLogging

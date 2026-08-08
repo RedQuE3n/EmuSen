@@ -137,6 +137,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             if (address < 0x4000)
             {
                 int register = address & 0x07;
+                // Stamped before the write, so the dot is the one the PPU was on when it landed - see Moon_PPU.md §7.
+                if (EmuSen.Debug.DebugSettings.NesPpuWriteLogging)
+                {
+                    Console.WriteLine($"[PPUW] f{Ppu.FrameCount} line {Ppu.Scanline,3} dot {Ppu.Cycle,3}  $200{register} = ${data:X2}");
+                }
                 Ppu.WriteRegister(register, data);
                 WriteObserver?.OnWrite("PPUREG", register, data);
                 return;

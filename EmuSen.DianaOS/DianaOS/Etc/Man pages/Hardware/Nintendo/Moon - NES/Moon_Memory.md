@@ -89,6 +89,22 @@ The sentinel matters: "A12 not currently low" is `-1`, not `0`, because dot 0 is
 
 **Previously this was one clock per rendered line**, from `Ppu.EndScanline`. That was enough for Super Mario Bros. 3 — including the pre-render line, whose omission once put its status-bar split one line off and corrupted a band of the title screen — but it is not enough for the suite: `mmc3_test` was 0/6 under it and is 3/6 with real edge detection. What remains failing (`2-details`, `4-scanline_timing`, `6-MMC6`) is finer still.
 
+### 4.6b The filter is measured in CPU cycles, and the empty sprite slots still clock it
+
+Two bugs, found together on 2026-08-07 by diffing SMB3's title screen against Mesen and Nestopia through the reference probe (`EmuSen_Debugging_Tools_Reference_v5.md` §3.45). Both are about *how often* the counter clocks, and between them they moved the frame from 5043 differing pixels to 1536.
+
+**The filter's units.** §4.6a says a rise counts only after A12 has been low "at least three PPU clocks". That is the wrong unit. Mesen's `IsA12RisingEdge` compares against `_console->GetMasterClock()`, and `NesConsole::GetMasterClock()` returns `_cpu->GetCycleCount()` — **CPU cycles**. Three CPU cycles is nine PPU dots, and this counter is in dots, so the threshold was three times too permissive.
+
+What that costs is specific. During the sprite-fetch phase (dots 257-320) each of the eight slots reads two garbage nametable bytes (A12 low) and then two pattern bytes (A12 high). The low stretch between one slot's pattern fetch and the next slot's is about four dots — under the real filter, over a three-dot one. So the board saw **eight rises per scanline instead of one**, and SMB3's title split fired six scanlines early: its floor was drawn from row 190 where hardware puts it at 196.
+
+**The empty slots are not idle.** Fixing the units alone made the floor vanish entirely, which is the more interesting half. `SpritePatternBaseForLine` returned `$0000` whenever no sprite on the line had bit 0 of its tile index set — including when the line had *no sprites at all*. On the SMB3 title screen most lines are empty, so A12 never rose on them, the counter barely moved, and the IRQ never arrived.
+
+Hardware does not idle those slots. It fetches tile `$FF` through every unused one, and for 8x16 sprites the table is chosen by the tile index's low bit, so `$FF` always selects `$1000`. Mesen's `LoadSpriteTileInfo` does the same and labels it: *"Fetches to sprite 0xFF for remaining sprites/hidden - used by MMC3 IRQ counter"*. The counter therefore clocks once on **every** rendered line whether anything is on it or not, which is exactly the property a scanline counter needs to be worth having.
+
+**The lesson worth carrying.** Both bugs are the same shape: a quantity copied from a reference implementation without its unit, and a fetch modelled as "nothing happens" because nothing is *displayed*. A board watching the address bus does not care what is displayed. `MoonMapperTests` now pins the filter width directly — twenty rises with an eight-dot gap must not clock the counter, and a nine-dot gap must.
+
+**Still open.** 1536 pixels (2.5% of the frame) remain: our floor spans rows 197-225 against Mesen's 196-224, one scanline late, and rows 194-195 are the right shape in the wrong colour. Latching `RenderV` at dot 321 instead of 257 — which is where hardware's next-line prefetch actually reads — was tried and changed *nothing measurable*, so it was reverted rather than kept on the strength of an argument. The remaining line is not yet explained.
+
 ### 4.7 The four simple boards
 
 **GxROM (66)** and **Color Dreams (11)** are the same idea with the register's two fields swapped: GxROM reads PRG from bits 4-5 and CHR from bits 0-1, Color Dreams the reverse. Both switch a whole 32K PRG bank and a whole 8K CHR bank from one write.

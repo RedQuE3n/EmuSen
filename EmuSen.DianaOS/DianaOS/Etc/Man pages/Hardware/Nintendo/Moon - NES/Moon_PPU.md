@@ -141,3 +141,21 @@ Fast-forward (`SkipRendering`) skips only the framebuffer writes. Sprite evaluat
 - The sprite overflow hardware bug (§3.2).
 - The `$2003`/`$2004` OAM corruption quirks.
 - PAL.
+
+## 7. `NesPpuWriteLogging` — every $2000-$2007 write, with the dot it landed on
+
+The NES counterpart of Venus's `PpuActiveDisplayWriteLogging`, added 2026-08-07 because a mid-frame scroll split cannot be reasoned about without knowing *when* the game wrote. Gated by `DebugSettings.NesPpuWriteLogging` behind the master switch, so `log on` in a `--commands` script windows it to the frames of interest.
+
+It emits one line per write: frame, scanline, dot, register and value. On SMB3's title screen it shows the split plainly — `$2006` twice during HBlank of the split line, `$2000` during the prefetch window, then `$2005` twice early on the next line:
+
+```
+[PPUW] f130 line 193 dot 272  $2006 = $0B
+[PPUW] f130 line 193 dot 284  $2006 = $00
+[PPUW] f130 line 193 dot 326  $2000 = $A8
+[PPUW] f130 line 194 dot  15  $2005 = $00
+[PPUW] f130 line 194 dot  33  $2005 = $EF
+```
+
+That trace is what turned "the floor is in the wrong place" into "the IRQ fires six scanlines early", because the line number in the first column *is* the answer — see `Moon_Memory.md` §4.6b.
+
+**A caution about the renderer this feeds.** `RenderV` is latched at dot 257, so a write landing in dots 258-320 does not reach the line hardware would apply it to. That is a real deviation, and moving the latch to 321 was tried on 2026-08-07: it changed no pixel on SMB3 and was reverted rather than kept unproven. If a game turns up whose split lands one line off, this is the first thing to re-examine.

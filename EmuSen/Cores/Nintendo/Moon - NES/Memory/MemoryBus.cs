@@ -44,11 +44,15 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // The last value the CPU put on the bus, returned for addresses nothing drives.
         public byte OpenBus;
 
+        // Asked once, because most boards say no and the check is on the hottest path there is.
+        [SkipInState] private readonly bool _mapperClocksOnCpu;
+
         public MemoryBus(Cartridge cart, Ppu ppu, Apu.Apu apu)
         {
             Cart = cart;
             Ppu = ppu;
             Apu = apu;
+            _mapperClocksOnCpu = cart.Mapper.ClocksOnCpuCycle;
         }
 
         // Three PPU dots to a CPU cycle on NTSC - see Moon_PPU.md §1.
@@ -61,6 +65,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             Cpu?.SetNmiLine(Ppu.NmiOutput);
 
             Apu.Step(1);
+            if (_mapperClocksOnCpu) Cart.Mapper.OnCpuCycle();
 
             // The DMC steals its fetch cycle from the CPU, and those cycles clock the APU too.
             if (Apu.Dmc.StallCycles > 0)

@@ -4,6 +4,7 @@
 
 #include "ProbeBackend.h"
 
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -24,7 +25,32 @@ namespace ProbeDump
 	// space, its size and file, and the screen's dimensions and pixel format.
 	void WriteManifest(const std::string& dir, const std::string& backend, const std::string& system,
 		const std::string& romPath, uint32_t frame, const std::vector<MemorySpace>& spaces,
-		const ScreenView* screen);
+		const ScreenView* screen, const ProbeIdentity& identity);
+
+	uint32_t Crc32(const void* data, size_t bytes);
+
+	// One row per frame of hashes, which is what locating a divergence needs and
+	// what 900 full dumps would cost too much to give - see §3.48.
+	//
+	// Memory spaces only, plus a screen column the consumer must not trust unless
+	// both sides declare the same pixel format: bytes are bytes everywhere, but a
+	// palette index and an RGBA quad describe the same picture and never hash
+	// alike. The limitation is declared in the header rather than worked around,
+	// because memory divergence precedes screen divergence in every case this was
+	// built for.
+	class SignatureWriter
+	{
+	public:
+		bool Open(const std::string& path);
+		void WriteHeader(const std::string& backend, const std::string& system, const std::string& romPath,
+			const ProbeIdentity& identity, const ScreenView* screen, const std::vector<MemorySpace>& spaces);
+		void WriteRow(uint32_t frame, const std::vector<MemorySpace>& spaces, const ScreenView* screen);
+		bool IsOpen() const { return _file.is_open(); }
+
+	private:
+		std::ofstream _file;
+		std::vector<std::string> _columns;
+	};
 
 	// The "RAM @ $0A00: xx xx ..." report line, off a named space rather than a
 	// backend-specific pointer.

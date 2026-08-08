@@ -22,6 +22,7 @@
 #include "SNES/Coprocessors/GSU/Gsu.h"
 #include "SNES/Coprocessors/GSU/GsuTypes.h"
 #include "NES/NesConsole.h"
+#include "NES/BaseMapper.h"
 #include "NES/BaseNesPpu.h"
 #include "NES/APU/NesApu.h"
 #include "NES/NesTypes.h"
@@ -92,6 +93,7 @@ namespace
 	public:
 		const char* Name() const override { return "mesen"; }
 		const char* System() const override { return _nes ? "nes" : "snes"; }
+		ProbeIdentity Identity() override;
 		const char* AnchorSpace() const override { return _nes ? "ram" : "gsuram"; }
 
 		bool Load(const std::string& romPath, const ProbeOptions& options) override
@@ -254,6 +256,40 @@ namespace
 		Gsu* _gsu = nullptr;
 		bool _recording = false;
 	};
+
+	// The mapper id here is the one the emulator *settled on*, not the one in the
+	// file's header - this reference overrides a damaged header from a CRC-keyed
+	// game database, and that difference is exactly what a comparability gate has
+	// to see. See EmuSen_Debugging_Tools_Reference_v5.md §3.48.
+	ProbeIdentity MesenBackend::Identity()
+	{
+		ProbeIdentity id;
+		if(!_emu) { return id; }
+
+		switch(_emu->GetRegion()) {
+			case ConsoleRegion::Ntsc: id.Region = "ntsc"; break;
+			case ConsoleRegion::NtscJapan: id.Region = "ntsc"; break;
+			case ConsoleRegion::Pal: id.Region = "pal"; break;
+			case ConsoleRegion::Dendy: id.Region = "dendy"; break;
+			default: id.Region = "auto"; break;
+		}
+
+		if(_nes && _nes->GetMapper()) {
+			char board[32];
+			snprintf(board, sizeof(board), "%u", _nes->GetMapper()->GetRomInfo().MapperID);
+			id.Board = board;
+			// HasBattery() is protected, so presence of save RAM stands in for it.
+			id.SaveLoaded = _emu->GetMemory(MemoryType::NesSaveRam).Size > 0;
+			id.PrgBytes = _emu->GetMemory(MemoryType::NesPrgRom).Size;
+			ConsoleMemoryInfo chrRam = _emu->GetMemory(MemoryType::NesChrRam);
+			id.ChrBytes = chrRam.Size ? chrRam.Size : _emu->GetMemory(MemoryType::NesChrRom).Size;
+		}
+
+		// Deliberately left empty: this reference has no notion of how much of a
+		// header it believed, so the gate must read it as "cannot say".
+		id.HeaderTrust = "";
+		return id;
+	}
 
 	void MesenBackend::Add(const char* name, MemoryType type)
 	{

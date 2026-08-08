@@ -38,6 +38,24 @@ struct ScreenView
 	ScreenFormat Format;
 };
 
+// What the backend decided the machine *is*, as opposed to what it did. A
+// differential run compares this before it compares a single pixel, because two
+// emulators can resolve the same file to different boards and neither will say
+// so - see EmuSen_Debugging_Tools_Reference_v5.md §3.48.
+//
+// Every field may be left empty. "Unknown" is a real answer here and a useful
+// one: a libretro core cannot report its mapper, and a gate that treats silence
+// as agreement is worse than one that reports reduced confidence.
+struct ProbeIdentity
+{
+	std::string Board;
+	std::string Region;
+	std::string HeaderTrust;
+	uint64_t PrgBytes = 0;
+	uint64_t ChrBytes = 0;
+	bool SaveLoaded = false;
+};
+
 struct ProbeOptions
 {
 	std::string RamState = "zeros";
@@ -79,6 +97,9 @@ public:
 	virtual const char* Name() const = 0;
 	// Which machine the loaded ROM turned out to be: "nes", "snes", ...
 	virtual const char* System() const = 0;
+
+	// What this backend resolved the cartridge to be. Empty fields are honest.
+	virtual ProbeIdentity Identity() { return {}; }
 
 	virtual bool Load(const std::string& romPath, const ProbeOptions& options) = 0;
 	virtual void Shutdown() {}

@@ -52,6 +52,9 @@ namespace
 		printf("  --apulog F       record every $4000-$4017 write from boot to frame F\n");
 		printf("  --wav PATH       record mixed audio - the only ground truth for silence\n");
 		printf("  --ramstate zeros|ones|random   power-on RAM fill (default zeros)\n");
+		printf("  --sig            also write <backend>_sig.csv: one row of CRCs per frame\n");
+		printf("                       from frame 0, which is what locates a divergence\n");
+		printf("                       rather than measuring one at the end - see §3.48\n");
 	}
 
 	std::vector<std::string> Split(const std::string& text, char separator)
@@ -99,6 +102,7 @@ int main(int argc, char** argv)
 
 	InputSchedule schedule;
 	uint32_t cpuTraceFrame = NoFrame, apuLogFrame = NoFrame, afterFrames = 0;
+	bool wantSignature = false;
 	bool haveUntil = false;
 	ProbeButton untilButton = ProbeButton::A;
 	uint32_t untilAddr = 0, untilValue = 0, untilCap = 6000, untilEvery = 40;
@@ -107,6 +111,7 @@ int main(int argc, char** argv)
 		std::string flag = argv[i];
 		bool hasValue = i + 1 < argc;
 
+		if(flag == "--sig") { wantSignature = true; continue; }
 		if(flag == "--backend" && hasValue) { backendName = argv[++i]; continue; }
 		if(flag == "--core" && hasValue) { corePath = argv[++i]; continue; }
 		if(flag == "--after" && hasValue) { afterFrames = (uint32_t)atoi(argv[++i]); continue; }
@@ -175,10 +180,43 @@ int main(int argc, char** argv)
 
 	std::string prefix = backend->Name();
 	std::string system = backend->System();
+	ProbeIdentity identity = backend->Identity();
+
 	printf("[INFO] backend %s, system %s\n", prefix.c_str(), system.c_str());
+	printf("[INFO] identity board=%s region=%s headerTrust=%s prg=%llu chr=%llu save=%d\n",
+		identity.Board.empty() ? "?" : identity.Board.c_str(),
+		identity.Region.empty() ? "?" : identity.Region.c_str(),
+		identity.HeaderTrust.empty() ? "?" : identity.HeaderTrust.c_str(),
+		(unsigned long long)identity.PrgBytes, (unsigned long long)identity.ChrBytes, identity.SaveLoaded ? 1 : 0);
 	for(const MemorySpace& space : backend->Spaces()) {
 		printf("[INFO]   space %-10s %u bytes\n", space.Name.c_str(), space.Size);
 	}
+
+	ProbeDump::SignatureWriter signature;
+	if(wantSignature) {
+		std::string sigPath = dumpDir + "/" + prefix + "_sig.csv";
+		if(!signature.Open(sigPath)) {
+			printf("[WARN] could not open %s; --sig ignored\n", sigPath.c_str());
+		} else {
+			ScreenView view = {};
+			bool have = backend->Screen(view);
+			signature.WriteHeader(prefix, system, romPath, identity, have ? &view : nullptr, backend->Spaces());
+			signature.WriteRow(backend->FrameCount(), backend->Spaces(), have ? &view : nullptr);
+			printf("[INFO] signature stream -> %s\n", sigPath.c_str());
+		}
+	}
+
+	// Every frame gets a row, because a divergence hides anywhere inside a stride
+	// and the whole point of the stream is finding the first one - see §3.48.
+	auto advanceTo = [&](uint32_t target) {
+		if(!signature.IsOpen()) { backend->RunUntil(target); return; }
+		while(backend->FrameCount() < target) {
+			backend->RunUntil(backend->FrameCount() + 1);
+			ScreenView view = {};
+			bool have = backend->Screen(view);
+			signature.WriteRow(backend->FrameCount(), backend->Spaces(), have ? &view : nullptr);
+		}
+	};
 
 	// Anchors the run on game state instead of a frame count, so the same scene
 	// is reached here and in the harness even though the two emulators do not
@@ -203,7 +241,7 @@ int main(int argc, char** argv)
 			if(phase >= untilEvery) { backend->SetButton(untilButton, true); lastPress = frame; taps++; }
 			else if(phase >= 4) { backend->SetButton(untilButton, false); }
 
-			backend->RunUntil(frame + 1);
+			advanceTo(frame + 1);
 		}
 		backend->SetButton(untilButton, false);
 
@@ -225,7 +263,7 @@ int main(int argc, char** argv)
 
 	uint32_t nextReport = startFrame;
 	while(true) {
-		backend->RunUntil(nextReport);
+		advanceTo(nextReport);
 		uint32_t frame = backend->FrameCount();
 
 		std::vector<MemorySpace> spaces = backend->Spaces();
@@ -243,7 +281,7 @@ int main(int argc, char** argv)
 			ProbeDump::WriteBlob(dumpDir, prefix, space.Name, frame, space.Data, space.Size);
 		}
 		if(haveScreen) { ProbeDump::WriteBlob(dumpDir, prefix, "screen", frame, screen.Data, screen.Bytes); }
-		ProbeDump::WriteManifest(dumpDir, prefix, system, romPath, frame, spaces, haveScreen ? &screen : nullptr);
+		ProbeDump::WriteManifest(dumpDir, prefix, system, romPath, frame, spaces, haveScreen ? &screen : nullptr, identity);
 
 		std::vector<uint8_t> trace;
 		if(apuLogFrame != NoFrame && frame >= apuLogFrame && backend->EndTrace(TraceKind::ApuWrites, trace)) {

@@ -18,7 +18,9 @@
          a real dependency of this project and not just something inherited
          through EmuSen.Serenity - listed explicitly to match this file's
          own "be explicit about what's actually used" convention. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>
 
   <ItemGroup>

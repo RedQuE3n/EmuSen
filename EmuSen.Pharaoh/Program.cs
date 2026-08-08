@@ -5,6 +5,7 @@ using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;
 using EmuSen.Pharaoh.Cli;
+using EmuSen.Pharaoh.Reference;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
@@ -57,6 +58,45 @@ class Program
                 return 1;
             }
             return DiffShotRunner.Run(args[1], args[2], args[3]);
+        }
+
+        // Walks the ROM library once and catalogues it - see EmuSen_Galaxia.md §7.
+        if (args.Length >= 1 && args[0] == "--index-library")
+        {
+            return LibraryIndexer.Run(args);
+        }
+
+        // Re-runs every dictionary assertion against a real pair - see §3.49.
+        if (args.Length >= 1 && args[0] == "--verify-dictionary")
+        {
+            if (args.Length < 3)
+            {
+                Console.WriteLine("Usage: dotnet run -- --verify-dictionary <oursDir> <theirsDir>");
+                return 1;
+            }
+            return DictionaryVerifier.Run(args);
+        }
+
+        // Two dump sets and no emulator: the gates read files, not machines - see §3.48.
+        if (args.Length >= 1 && args[0] == "--compare")
+        {
+            if (args.Length < 4)
+            {
+                Console.WriteLine("Usage: dotnet run -- --compare <oursDir> <theirsDir> <frame> [phaseWindow] [--input F]...");
+                return 1;
+            }
+            return CompareRunner.Run(args);
+        }
+
+        // EmuSen writing the reference probe's own dump protocol - see §3.48.
+        if (args.Length >= 1 && args[0] == "--probe")
+        {
+            if (args.Length < 5)
+            {
+                Console.WriteLine("Usage: dotnet run -- --probe <rom> <outDir> <startFrame> <endFrame> [stride] [--sig] [--tap F:BTN[:DUR]]...");
+                return 1;
+            }
+            return ProbeRunner.Run(args);
         }
 
         // Also standalone: two --cputrace blobs, no ROM needed - see §3.40.

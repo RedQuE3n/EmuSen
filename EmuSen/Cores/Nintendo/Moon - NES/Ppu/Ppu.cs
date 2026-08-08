@@ -300,7 +300,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             }
             else if (address < 0x3F00)
             {
-                Ciram[NametableOffset(address)] = value;
+                // Nametables backed by CHR ROM swallow the write rather than aliasing into CIRAM.
+                if (!_cart.Mapper.SuppliesNametables) Ciram[NametableOffset(address)] = value;
             }
             else
             {
@@ -308,7 +309,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             }
         }
 
-        private byte ReadCiram(ushort address) => Ciram[NametableOffset(address)];
+        // A board can answer these instead of the PPU's own RAM - see Moon_Memory.md §4.9.
+        private byte ReadCiram(ushort address) => _cart.Mapper.SuppliesNametables
+            ? _cart.Mapper.ReadNametable(address)
+            : Ciram[NametableOffset(address)];
 
         private byte ReadPalette(ushort address)
         {

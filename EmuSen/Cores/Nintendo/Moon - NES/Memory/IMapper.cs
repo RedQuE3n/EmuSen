@@ -32,6 +32,17 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // Every address the PPU puts on its bus, for boards that watch A12 - see Moon_Memory.md §4.6a.
         void OnPpuAddress(ushort address, long ppuClock) { }
 
+        // Opt-in, because the bus checks it once and a board that says no costs nothing - see Moon_Memory.md §4.8.
+        bool ClocksOnCpuCycle => false;
+
+        // Only cycles the PPU also lived through, which is not every CPU cycle here - see Moon_Memory.md §4.8.
+        void OnCpuCycle() { }
+
+        // A board that answers the PPU's nametable fetches from its own CHR - see Moon_Memory.md §4.9.
+        bool SuppliesNametables => false;
+
+        byte ReadNametable(ushort address) => 0;
+
         bool IrqPending => false;
 
         // Board registers for `regs`; a board with nothing worth showing reports none - see Moon_Debug.md §3.1.

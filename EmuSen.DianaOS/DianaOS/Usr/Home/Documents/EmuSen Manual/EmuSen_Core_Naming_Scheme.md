@@ -174,3 +174,15 @@ This section is the first application of §10's lesson: an infrastructure name r
 **A name was very nearly claimed here on 2026-08-04 and should not have been.** The two `CoretopWindow` copies needed a home that could see both `EmuSen.LunaP` and `EmuSen.Cauldron`, and the first answer reached for was a new infrastructure project with a new codename. It was the wrong answer: `EmuSen.Cauldron` is a dependency-free leaf, so **letting LunaP reference it directly costs the launcher one small interfaces assembly rather than a core** — which is the only thing LunaP's layering rule exists to prevent. The window lives in `EmuSen.LunaP/Dashboards/` and no name was spent. See `EmuSen_LunaP.md` §16.
 
 The lesson is narrower than §10's and worth keeping separate from it: **§10 says check both pools before claiming a name. This says check whether a name is needed at all.** An assembly per layering exception grows the project faster than an entry on an allow-list does, and a codename is not free — it is a permanent claim on a finite pool.
+
+---
+
+## 12. `Pegasus` — the shared notepad, and the one F# assembly
+
+**`EmuSen.Pegasus` is the live collaborative notepad this project is developed through** — two people editing one document at once across two machines, backed by a CRDT so that neither can lose work. See `EmuSen_Pegasus.md`. Named for Pegasus/Helios, who reaches people who are not in the same place by appearing in their dreams; the reach across distance is the whole point of the tool.
+
+This is the second application of §10's lesson, recorded at the moment the name was claimed rather than after a collision. **`Pegasus` was checked against both pools first** — it is claimed by neither a console codename in §§2–4 nor an infrastructure project in §§10–11, and it is not close enough to any of them to be misread the way `Luna`/`LunaP` and `Wiseman`/`WiseMan` are.
+
+It also passes §11's harder test, the one about whether a name is needed at all. Pegasus arrived from outside as four projects and was collapsed to **two** on the way in — `EmuSen.Pegasus` and `EmuSen.Pegasus.Tests` — because nothing outside it consumes its document model or its transport, and F#'s compilation order already enforces the layering the extra assemblies were bought for. The tests are separate only because `EmuSen.WiseMan` is C# and these are F#; the reasoning is in `EmuSen_Pegasus.md` §9.
+
+**Two things about this entry are unlike every other name here.** It is the only project in the repository written in F#, which `EmuSen_Pegasus.md` §3 argues for against the `F#ascent` branch's rejection rather than in ignorance of it — the objection there was that `FSharp.Core` landed on every frontend's dependency path, and Pegasus is a leaf that nothing references. And it is the first name claimed for something that is not part of the emulator at all: Pegasus is a tool the project is built *with*, not a component of what the project builds. If a second such tool ever arrives, this section is the precedent for keeping it in the same pool rather than starting another.

@@ -19,7 +19,7 @@ These are stated as ownership, not as preference. A new subsystem does not get t
 
 ### 2.1 Rust — the probe, and the reason it is not more than the probe
 
-`EmuSen.WiseMan/Reference/probe-rs/` is the whole of it: three backends over one policy layer, driving Mesen through the `probe-c-api.patch` ABI and any libretro core through `dlopen`. See `EmuSen_Debugging_Tools_Reference_v5.md` §3.50 for why Mesen's own C ABI could not close the gap and §3.52 for the shape that replaced it.
+`EmuSen.WiseMan/Reference/probe-rs/` is the whole of it: three backends over one policy layer, driving Mesen through the `probe-c-api.patch` ABI and any libretro core through `dlopen`. Which emulators exist is known only to `src/backends/`, and a test holds the layers above it to that — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.53, including the twenty places the separation had quietly leaked. See `EmuSen_Debugging_Tools_Reference_v5.md` §3.50 for why Mesen's own C ABI could not close the gap and §3.52 for the shape that replaced it.
 
 The rule's phrasing matters: *accurately, safely, and with performance*, all three. The probe qualifies because it loads foreign C++ into its own address space and reads emulator-internal memory out of it — C# can do that, but not without either a marshalling layer that changes the timing being measured or an `unsafe` surface large enough to stop being reviewable.
 
@@ -32,7 +32,7 @@ The rule's phrasing matters: *accurately, safely, and with performance*, all thr
 The rule says Python owns testing, and `CLAUDE.md` says tests run headless through `EmuSen.WiseMan`. Both are true, because they are about different things, and the seam is **whether the thing under test has to be alive**.
 
 - **In-process verification stays C#/WiseMan.** A test that steps a CPU, drives `IDebugTarget`, renders an Avalonia control headlessly or drains `ICore`'s audio needs the live object graph. Nothing is gained by reaching it from another process, and the harness rule (`extend the harness, do not spawn a window`) is unaffected.
-- **Offline analysis over artifacts is Python.** Once a run has produced files — dump sets, signatures, traces — the analysis is arithmetic over data and has no reason to be in the emulator's language. `gsudiff.py` was the first instance; §3 is the second and much larger one.
+- **Offline analysis over artifacts is Python.** Once a run has produced files — dump sets, signatures, traces — the analysis is arithmetic over data and has no reason to be in the emulator's language. `gsudiff.py` was the first instance; §3 is the second and much larger one. It sat at `Reference/` until 2026-08-09 and now lives in `Reference/analysis/` with the rest, which is what let it acquire the `unittest` this section already required of a new tool — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.53 for the format drift that went unnoticed while it had none.
 
 That seam is not arbitrary: it is exactly where the emulator dependency ends. `--compare` and `--verify-dictionary` never load a ROM, while `--probe` cannot avoid it.
 

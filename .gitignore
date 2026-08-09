@@ -40,7 +40,9 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Roms/*
 *.sfc
 *.nes
 
-# Reference-emulator dumps written by MesenProbe (see EmuSen.WiseMan/Reference).
+# Reference-emulator dumps written by the probe (see EmuSen.WiseMan/Reference),
+# whichever backend produced them - the profile directories it sites beside them
+# are named for that backend and are covered by the same rule.
 # These are VRAM/OAM/GSU-RAM snapshots of a commercial game - the same
 # redistribution rule as the ROMs above applies to state extracted from one.
 EmuSen.WiseMan/Reference/dumps/

@@ -553,3 +553,72 @@ is no second mechanism to write, test, or reason about.
 
 Deletion tombstones the index entry and leaves the file on disk. Nothing the user
 authored is removed by the application.
+
+---
+
+## 11. The blank window, and what "agnostic" has to mean to be worth anything
+
+### 11.1 It shipped rendering nothing, and the suite was green
+
+The first published build opened a white rectangle. Every control existed, the
+window sized correctly, the socket layer worked, and 53 tests passed.
+
+The cause is one missing line. Every EmuSen `App` includes
+`avares://EmuSen.LunaP/Theme/LunaTheme.axaml`, which is `FluentTheme` plus the
+shared palette; `Mistress` does it in `App.axaml` and `Hotaru` the same way.
+Pegasus, ported from a standalone repo where it had added `FluentTheme` by hand,
+overrode `Initialize` **not at all** after the move. Without a control theme,
+`TextBox` and `ListBox` have no `Template`, and a control with no template
+occupies layout and draws nothing.
+
+**The suite missed it for a reason worth stating.** `LunaTheme.axaml` carries a
+comment predicting exactly this — *"the one WiseMan's TestAppBuilder includes
+too — a headless render pass that misses the theme silently asserts over
+untemplated controls."* The UI tests built their headless `Application` with a
+bare `FluentTheme()` instead of LunaP's theme. Every assertion walked the
+**logical** tree, which is fully populated whether or not anything is
+templated, so the tests were structurally incapable of seeing the defect and
+were also loading a different theme than the application. Both halves were
+wrong in the same direction.
+
+Two changes, and the second matters more than the first:
+
+- `Shell.applyTheme` is now the single place the style is loaded, and both the
+  application and the tests call it. They can no longer diverge.
+- A guard asserts every `TemplatedControl` in the window has a `Template` after
+  measure and arrange, and it was **made to go red on purpose**: with the theme
+  removed it fails naming `TextBox, ListBox`, which is the shipped symptom in
+  words. §3.53's rule about guard tests applies here exactly — the green was
+  worth nothing until the red existed.
+
+The general lesson for any LunaP consumer: a headless test that queries the
+logical tree proves the tree, not the rendering. If what can break is *whether
+anything is drawn*, the assertion has to be about templates or pixels.
+
+### 11.2 What agnostic means here
+
+Pegasus is a notepad built on a windowing toolkit. It is not part of the
+emulator, and `EmuSen.LunaP` is intended to be published on its own as a general
+Avalonia toolkit. Both statements are only true while Pegasus depends on LunaP
+and on nothing else in this repository.
+
+That is now a test rather than an intention: `Pegasus references the toolkit and
+nothing else of EmuSen` reflects over the assembly's own references and fails
+naming anything `EmuSen.*` other than `EmuSen.LunaP`. It reads direct references
+deliberately — LunaP's own dependencies on Galaxia and Cauldron are LunaP's
+business and will be settled when it is packaged, not Pegasus's.
+
+Agnostic also means the three RIDs the project publishes are real targets rather
+than aspirations, and one defect was found by taking that seriously:
+`defaultWorkspaceRoot` was `~/.local/share/pegasus/workspace`, built from a
+literal `.local/share`. That is a Linux convention, wrong on Windows and
+unidiomatic on macOS, in a project whose `out/` has carried `osx-arm64`,
+`osx-x64` and `win-x64` since before Pegasus existed. It resolves through
+`SpecialFolder.LocalApplicationData` now.
+
+Changing that path could have stranded an existing workspace, so it does not: an
+existing directory at the old location keeps being used. This mirrors
+`ConfigStore`'s own Directory / PreviousDirectory / LegacyDirectory order rather
+than inventing a second migration idiom — and it is the same rule the ROM
+library gets, which is that data a user authored is read, never quietly
+abandoned.

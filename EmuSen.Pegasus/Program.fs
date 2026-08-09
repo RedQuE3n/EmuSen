@@ -11,6 +11,8 @@ type App() =
 
     let pad = new Notepad(defaultWorkspaceRoot, Environment.UserName)
 
+    override this.Initialize() = Shell.applyTheme this
+
     override this.OnFrameworkInitializationCompleted() =
         match this.ApplicationLifetime with
         | :? IClassicDesktopStyleApplicationLifetime as desktop ->

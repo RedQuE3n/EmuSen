@@ -5,9 +5,19 @@ open Avalonia.Controls
 open Avalonia.Layout
 open Avalonia.Media
 open Avalonia.Threading
+open Avalonia.Markup.Xaml.Styling
 open EmuSen.LunaP.Fluent
 open EmuSen.LunaP.Windowing
 open EmuSen.Pegasus.Controller
+
+/// The one style line every EmuSen App includes. It lives here rather than in
+/// Program so the tests load exactly what the application loads; a headless
+/// pass that misses it asserts over untemplated controls and passes green,
+/// which is how the blank window shipped. See EmuSen_Pegasus.md §11.
+let applyTheme (app: Avalonia.Application) =
+    let theme = StyleInclude(Uri("avares://EmuSen.Pegasus/", UriKind.Absolute))
+    theme.Source <- Uri("avares://EmuSen.LunaP/Theme/LunaTheme.axaml", UriKind.Absolute)
+    app.Styles.Add theme
 
 /// Built from LunaP rather than raw Avalonia, so Pegasus inherits the shared
 /// theme, the placement memory and the bootstrap. See EmuSen_Pegasus.md §8.

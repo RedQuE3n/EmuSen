@@ -39,7 +39,7 @@ pub fn usage_lines() -> Vec<&'static str> {
     #[allow(unused_mut)]
     let mut lines = Vec::new();
     #[cfg(feature = "libretro")]
-    lines.push("  --core PATH      libretro backend only: the *_libretro.so to drive");
+    lines.push("  --core PATH      libretro backend only: the *_libretro.so/.dylib to drive");
     lines
 }
 
@@ -57,7 +57,7 @@ pub fn make(name: &str, core: &str) -> Option<Box<dyn ProbeBackend>> {
     #[cfg(feature = "libretro")]
     if name == "libretro" {
         if core.is_empty() {
-            println!("[ERROR] --backend libretro needs --core <path to *_libretro.so>");
+            println!("[ERROR] --backend libretro needs --core <path to *_libretro.so/.dylib>");
             return None;
         }
         return Some(Box::new(libretro::LibretroBackend::new(core)));

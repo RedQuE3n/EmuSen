@@ -170,6 +170,35 @@ plausible place for a four-day-old subsystem to fail:
 - **No CGB-exclusive cartridge.** Yellow is `$80`, colour-enhanced. Nothing has
   exercised double speed, HDMA under real pressure, or `$C0`-only code, because
   the library on this machine is a DMG set.
+
+### 6.1 The header scan, because one image is not what its filename says
+
+*Added 2026-08-09.* §6 asserted "the library on this machine is a DMG set" from the
+filenames. Reading `$0143` out of all seven images confirms it, and corrects one
+assumption worth writing down:
+
+| Image | `$0143` | Meaning |
+|---|---|---|
+| Dr. Mario | `$00` | monochrome |
+| Kirby's Dream Land | `$44` | **not a flag** — see below |
+| Zelda: Link's Awakening | `$00` | monochrome |
+| Zelda: Link's Awakening **DX** (Proto, 1998-11-08) | `$00` | **monochrome** |
+| Pokémon Yellow | `$80` | colour-enhanced |
+| Super Mario Land | `$00` | monochrome |
+| Tetris (Rev 1) | `$00` | monochrome |
+
+**The DX proto is not colour coverage.** A shelf holding "Link's Awakening DX" reads
+like the CGB gap is half closed; that build is flagged `$00` and Mercury takes its
+monochrome path. It is an early proto that had not yet set the flag. Anyone reaching
+for colour evidence should not reach for this file.
+
+**Kirby's `$44` is the title, not a flag,** and it is correct that nothing treats it
+as one. `$0134`–`$0143` is a sixteen-byte title field on pre-CGB carts, and
+`KIRBY DREAM LAND` is exactly sixteen characters — the final `D` is `$44`, sitting
+in the byte the CGB later reassigned. `Cartridge.cs` matches `$C0` and `$80`
+exactly rather than testing bit 7, so `$44` falls through to monochrome. A
+`(b & 0x80)` test would agree here by luck and disagree on a title ending in a
+letter above `$7F`; the exact match is the reason this never became a bug.
 - **No audio differential**, per §4.
 - **Deep gameplay.** Everything here is title screens, attract demos, and a few
   hundred frames past a tapped Start. Nothing has been played.

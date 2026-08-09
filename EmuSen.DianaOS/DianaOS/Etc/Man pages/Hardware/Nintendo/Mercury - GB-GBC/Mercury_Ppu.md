@@ -229,28 +229,62 @@ The choice is a presentation decision, and it does **not** generalise to Phase D
 CGB palettes are real RGB555 values a game chose, and those get converted, not
 substituted.
 
-## 7. Access blocking, and why it is deliberately absent
+## 7. Access blocking
+
+*Rewritten 2026-08-09. This section spent Phases B through D arguing that blocking
+should be **absent**, and named the single condition that would reverse it. That
+condition was met, so the argument is preserved below rather than deleted — it was
+correct for as long as its premise held, and the shape of it is reusable.*
 
 Hardware makes VRAM unreadable during mode 3 and OAM unreadable during modes 2 and
-3; reads return `$FF` and writes are dropped. Mercury implements none of this, and
-the reason is a consequence of the CPU's timing model rather than a shortcut.
+3; reads return `$FF` and writes are dropped. **Mercury now implements this**, plus
+the OAM lock an in-flight DMA holds (`Mercury_Memory.md` §6).
 
-`Cpu.Step` runs a whole instruction and *then* the bus is ticked by its full cost
-(`Mercury_Core.md` §2). At the moment a memory access is decoded, the PPU is
-therefore still at the position it held at the start of the instruction — up to
-about 24 T-cycles behind where hardware would have it. Enforcing the blocking
-against a PPU that is systematically early would drop writes that hardware
-accepts: a game that writes to VRAM on the first instruction after a mode-0 STAT
-interrupt is the common case, and it would see mode 3.
+Blocking applies to the CPU's view only. The renderer indexes `Vram` directly and
+is unaffected, which is asserted rather than assumed — a test drives a full frame
+with the background enabled and checks the pixels still come out, because a
+plausible way to get this wrong is to block the PPU from its own memory.
 
-The trade is therefore between two failure modes, not between accuracy and
-laziness. Not blocking loses the games that *read* `$FF` during mode 3 to detect
-timing, which is a small and mostly homebrew set. Blocking loses graphics updates
-in ordinary commercial titles. The second is worse.
+### 7.1 The argument that used to be here, and why it was right
 
-**This changes when the bus becomes cycle-granular, and not before.** If Mercury
-ever moves to interleaving the bus with each of an instruction's accesses, the
-objection above disappears and blocking should be added in the same change.
+The old text ran:
+
+> `Cpu.Step` runs a whole instruction and *then* the bus is ticked by its full
+> cost. At the moment a memory access is decoded, the PPU is therefore still at the
+> position it held at the start of the instruction — up to about 24 T-cycles behind
+> where hardware would have it. Enforcing the blocking against a PPU that is
+> systematically early would drop writes that hardware accepts: a game that writes
+> to VRAM on the first instruction after a mode-0 STAT interrupt is the common
+> case, and it would see mode 3.
+>
+> The trade is therefore between two failure modes, not between accuracy and
+> laziness. Not blocking loses the games that *read* `$FF` during mode 3 to detect
+> timing, which is a small and mostly homebrew set. Blocking loses graphics updates
+> in ordinary commercial titles. The second is worse.
+>
+> **This changes when the bus becomes cycle-granular, and not before.**
+
+Every clause of that held. The value in keeping it is the method: the section did
+not say "not implemented", it said *which* failure each choice buys, *which* is
+worse, and *what single change* flips the answer. When `Mercury_Cpu.md` §3 landed,
+no fresh judgement was needed — the condition had been written down in advance, and
+the work became mechanical.
+
+The general form worth reusing: **a simplification is worth documenting as a
+prediction with a trigger, not as an apology.** A trigger that later fires converts
+a debate into a task.
+
+### 7.2 What blocking does not fix
+
+- **The renderer is still per scanline** (§1). Blocking changes what the CPU may
+  do during mode 3; it does not make the PPU consume its writes pixel by pixel, so
+  a mid-line palette or scroll change still takes effect for the whole line.
+- **The mode-3 length is still `172 + (SCX & 7)`.** Sprites extend it on hardware
+  and do not here, so the window in which blocking applies is slightly too short on
+  a busy line.
+- **`oam_bug` is still expected to fail.** The DMG's OAM corruption defect is a
+  separate behaviour from access blocking, and Mercury does not reproduce it —
+  `Mercury_HardwareTests.md` §4.
 
 ## 8. State
 

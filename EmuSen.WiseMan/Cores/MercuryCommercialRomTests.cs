@@ -151,6 +151,14 @@ namespace EmuSen.WiseMan.Cores
 
             string name = Path.GetFileName(path);
 
+            // Opt-in, so the suite writes nothing by default - see Mercury_HardwareTests.md §6.
+            if (AudioCapture.DumpDirectory is string folder)
+            {
+                Directory.CreateDirectory(folder);
+                AudioCapture.WriteWav(
+                    Path.Combine(folder, Path.ChangeExtension(name, ".wav")), samples, core.AudioSampleRate);
+            }
+
             Assert.True(notes.Count > 4,
                 $"{name} only ever held {notes.Count} distinct channel settings - its sound driver is not running.");
 

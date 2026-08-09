@@ -107,11 +107,8 @@ both.
 Two transfer modes behind one register block, distinguished by bit 7 of the byte
 written to `$FF55`.
 
-- **General purpose** (bit 7 clear) copies the whole length immediately. Hardware
-  stalls the CPU for the duration; Mercury does not model the stall, on the same
-  grounds as OAM DMA (`Mercury_Memory.md` §6) — nothing can observe the difference
-  without cycle-granular blocking, which Mercury does not have (`Mercury_Ppu.md`
-  §7).
+- **General purpose** (bit 7 clear) copies the whole length immediately and
+  **charges the CPU for the time**, as of 2026-08-09 — see §4.1.
 - **HBlank-driven** (bit 7 set) copies 16 bytes each time a visible line enters
   mode 0, and this one *is* timing-dependent, which is why it is real. The PPU
   calls `OnHBlankStarted` at the mode 3 → 0 transition and the bus moves one block.
@@ -125,6 +122,42 @@ same write means two different things depending on state.
 
 The destination register only has bits 12-4; a transfer is always 16-byte aligned
 and always lands in VRAM, in whichever bank `$FF4F` currently selects.
+
+### 4.1 The stall, and why the copy is still instant
+
+*Added 2026-08-09 with the cycle-granular bus (`Mercury_Cpu.md` §3).*
+
+Hardware moves 16 bytes in eight machine cycles and the CPU is stopped for all of
+them. Mercury splits those two facts apart: the **copy** happens at once inside the
+`$FF55` write, and the **cost** is accumulated in `_stallCycles` and taken by
+`MercuryCore` after the instruction, which ticks the rest of the machine by that
+much before running another one.
+
+Doing it this way rather than interleaving the copy with the clock is a real
+decision and not laziness. What a program can observe about a general-purpose HDMA
+is that time passed — the PPU has moved on, the timer has counted, an interrupt may
+now be pending. What it cannot observe is the *order* the sixteen bytes arrived in,
+because it is not running while they arrive. Splitting cost from copy buys the
+observable half at a fraction of the complexity, and the half left behind is the
+one with no observer.
+
+Two details follow from the clock rather than from the transfer:
+
+- **Double speed halves it.** The transfer is eight machine cycles either way, and a
+  machine cycle is half as long, so the charge is 16 T-cycles a block rather than
+  32. A test asserts both numbers, because getting this backwards is invisible in
+  single speed.
+- **The stall is taken once.** `TakePendingStall` clears as it reads. An accumulator
+  that is read without clearing would charge every subsequent instruction for the
+  same transfer, and the symptom would be a game that runs progressively slower
+  after its first HDMA rather than an obvious fault.
+
+**HBlank-driven transfers accumulate the same charge**, block by block, but the
+block is moved from inside the PPU's tick rather than from a CPU write. The stall
+is therefore drained at the end of whichever instruction happened to be running
+when the line entered mode 0, which is up to one instruction late. Left as is: the
+mode exists precisely so the copy hides inside hblank where the CPU has nothing to
+do, so the misplacement lands in the window that was already idle.
 
 ## 5. Double speed
 

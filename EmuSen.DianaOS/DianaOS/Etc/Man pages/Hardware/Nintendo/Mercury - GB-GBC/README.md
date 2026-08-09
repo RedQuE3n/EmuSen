@@ -8,4 +8,5 @@
 - **`Mercury_Apu.md`** — the four sound channels: the frame sequencer as a DIV bit rather than a divider, the envelope period that means off, the sweep's two overflow checks, and why a live DAC at digital zero is not silence.
 - **`Mercury_Debug.md`** — `MercuryDebugTarget`/`IDebugTarget`: what registration was waiting on, the memory spaces, the telemetry that carries something other than the obvious, and the SM83 disassembler's template table.
 - **`Mercury_Cheats.md`** — Game Genie and GameShark: the two mechanisms, the Game Genie cipher and its three easy mistakes, and why there is no plain address:value form.
+- **`Mercury_RealCartridges.md`** — what running seven commercial images found: the `--nobattery` switch that was lying, a screen-and-WRAM diff against gambatte, why Super Mario Land is silent and why that is not the emulator, and the audio differential the harness still cannot do.
 - **`Mercury_Memory.md`** — the header, the memory map, the five cartridge boards, the timer's edge detector, OAM DMA and the joypad matrix.

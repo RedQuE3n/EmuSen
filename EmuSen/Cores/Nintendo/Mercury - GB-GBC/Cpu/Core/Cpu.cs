@@ -64,13 +64,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             set { H = (byte)(value >> 8); L = (byte)value; }
         }
 
-        // Post-boot-ROM state on a DMG, since Mercury starts with the cartridge - see Mercury_Cpu.md §5.
-        public void Reset()
+        // Post-boot-ROM state, since Mercury starts with the cartridge; A is how a game tells the two consoles apart - see Mercury_Cpu.md §5.
+        public void Reset(bool cgb = false)
         {
-            AF = 0x01B0;
-            BC = 0x0013;
-            DE = 0x00D8;
-            HL = 0x014D;
+            AF = cgb ? (ushort)0x1180 : (ushort)0x01B0;
+            BC = cgb ? (ushort)0x0000 : (ushort)0x0013;
+            DE = cgb ? (ushort)0xFF56 : (ushort)0x00D8;
+            HL = cgb ? (ushort)0x000D : (ushort)0x014D;
             SP = 0xFFFE;
             PC = 0x0100;
 

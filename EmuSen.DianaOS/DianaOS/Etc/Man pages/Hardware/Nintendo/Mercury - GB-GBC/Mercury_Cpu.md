@@ -36,7 +36,18 @@ If `HALT` executes with IME clear *and* an interrupt already pending, the CPU do
 
 ## 5. Post-boot state
 
-Mercury starts *after* the boot ROM, because there is no boot ROM to run: `AF=$01B0 BC=$0013 DE=$00D8 HL=$014D SP=$FFFE PC=$0100`. The bus does the matching half, seeding the I/O registers the boot ROM would have left behind (`Mercury_Memory.md` §5). A cartridge's own entry stub at `$0100` is almost always `NOP` then `JP $0150`, jumping clear of the header.
+Mercury starts *after* the boot ROM, because there is no boot ROM to run. There are two register files, and which one `Reset` installs depends on the cartridge header:
+
+| | DMG | CGB |
+|---|---|---|
+| `AF` | `$01B0` | `$1180` |
+| `BC` | `$0013` | `$0000` |
+| `DE` | `$00D8` | `$FF56` |
+| `HL` | `$014D` | `$000D` |
+
+`SP=$FFFE` and `PC=$0100` either way. The bus does the matching half, seeding the I/O registers the boot ROM would have left behind (`Mercury_Memory.md` §5). A cartridge's own entry stub at `$0100` is almost always `NOP` then `JP $0150`, jumping clear of the header.
+
+`A` is not decoration here. A CGB-enhanced cartridge branches on it to choose between its colour and monochrome rendering paths, so a core that hardcodes `$01` puts an enhanced game down its monochrome path while rendering it in colour — `Mercury_Cgb.md` §1.1 records the blank-white-screen that produces.
 
 This is also why the header checksum is computed but never enforced: a real boot ROM locks up on a mismatch, and Mercury never runs one. `Cartridge.HeaderChecksumValid` records the answer for anything that wants it.
 

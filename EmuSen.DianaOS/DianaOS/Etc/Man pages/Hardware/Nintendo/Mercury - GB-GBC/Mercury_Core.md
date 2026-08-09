@@ -1,7 +1,8 @@
 # Mercury (Game Boy) — the core
 
-*Started 2026-08-04. CPU, memory, cartridge and (since 2026-08-08) the LCD
-controller; there is still no APU — see §5 for what that means in practice.*
+*Started 2026-08-04. CPU, memory, cartridge, the LCD controller and the Game Boy
+Color extensions, the last two both added 2026-08-08; there is still no APU — see
+§5 for what that means in practice.*
 
 ---
 
@@ -9,7 +10,7 @@ controller; there is still no APU — see §5 for what that means in practice.*
 
 `Mercury` covers the Game Boy **and** the Game Boy Color. The naming scheme left this open ("whether GB and GBC are different enough hardware to warrant two separate cores… revisit once there's a real basis for comparison"), and the basis now exists: the CGB is the same SM83 at the same instruction set with the same memory map, plus double-speed mode, a second VRAM bank, seven WRAM banks, colour palettes and HDMA. That is an *extension*, the way an NES mapper extends a cartridge — not different hardware the way NES and SNES are. Splitting would duplicate almost everything and force every later fix in two places.
 
-The build order is DMG first, colour as an additive mode on this same core. Nothing in the code branches on model yet; `Cartridge.Cgb` already reads the `$0143` flag (`Mercury_Memory.md` §2.1) so the seam is there when colour lands.
+The build order was DMG first, colour as an additive mode on this same core, and as of 2026-08-08 both halves exist. The prediction held: colour cost one extra file each in the bus and the PPU plus a handful of gated branches in the renderer, against the two full copies of everything a split would have required. `Mercury_Cgb.md` is the whole of the difference.
 
 ## 2. Frame timing
 
@@ -33,8 +34,9 @@ This section used to describe a stand-in: with no LY to drive it from, `EndFrame
 
 - **No APU.** The four channels do not exist.
 - **No `IDebugTarget`.** This is why Mercury is deliberately *not* registered in `CoreCatalog` or `CoreFactory` yet: `CoreFactory.Load` builds a `CoreBundle` that requires a debug target, so registering the core before one exists would put a `NotSupportedException` behind a ROM the catalog claims to support. The core is reachable from tests and nowhere else until that is written.
-- **No serial, no STOP/double-speed.** `STOP` consumes its second byte and otherwise does nothing.
+- **No serial.** Nothing needs it.
+- **No boot ROM,** on either console, which is why the post-boot register file is hardcoded and why DMG-on-CGB colourisation does not exist (`Mercury_Cgb.md` §1.1 and §6).
 
-The PPU is built but not complete; `Mercury_Ppu.md` §2.2, §3.2 and §7 state its own gaps, of which the absent VRAM access blocking is the one with real consequences.
+The PPU is built but not complete; `Mercury_Ppu.md` §2.2, §3.2 and §7 state its own gaps, of which the absent VRAM access blocking is the one with real consequences. The colour extensions state theirs in `Mercury_Cgb.md` §6.
 
-The pieces that *are* built are real: the full unprefixed and `$CB` instruction sets, interrupts with the EI delay and the HALT bug, the DIV/TIMA timer with falling-edge detection, the joypad matrix, OAM DMA, five cartridge boards, background/window/sprite rendering, and save states.
+The pieces that *are* built are real: the full unprefixed and `$CB` instruction sets, interrupts with the EI delay and the HALT bug, the DIV/TIMA timer with falling-edge detection, the joypad matrix, OAM DMA, five cartridge boards, background/window/sprite rendering, the colour palettes, VRAM and WRAM banking, HDMA, double speed, and save states.

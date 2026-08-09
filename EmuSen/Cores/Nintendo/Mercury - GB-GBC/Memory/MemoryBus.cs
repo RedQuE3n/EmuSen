@@ -17,14 +17,18 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
     }
 
     // Everything at the far end of the CPU's address pins - see Mercury_Memory.md §3.
-    public sealed class MemoryBus : ICpuBus
+    public sealed partial class MemoryBus : ICpuBus
     {
         public const int WramBankSize = 0x1000;
+        public const int VramBankSize = 0x2000;
 
         private readonly Cartridge _cart;
 
-        public byte[] Vram = new byte[0x2000];
-        public byte[] Wram = new byte[WramBankSize * 2];
+        // Colour mode is decided once at construction from the header - see Mercury_Cgb.md §1.
+        [SkipInState] public readonly bool Cgb;
+
+        public byte[] Vram;
+        public byte[] Wram;
         public byte[] Oam = new byte[0xA0];
         public byte[] HighRam = new byte[0x7F];
 
@@ -50,6 +54,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public MemoryBus(Cartridge cart)
         {
             _cart = cart;
+            Cgb = cart.Cgb != CgbSupport.None;
+
+            Vram = new byte[VramBankSize * (Cgb ? 2 : 1)];
+            Wram = new byte[WramBankSize * (Cgb ? 8 : 2)];
+
             Ppu = new Ppu(this);
         }
 
@@ -70,17 +79,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     return _cart.Mapper.ReadRom(address);
 
                 case < 0xA000:
-                    return Vram[address - 0x8000];
+                    return Vram[VramOffset(address)];
 
                 case < 0xC000:
                     return _cart.Mapper.ReadRam(address);
 
-                case < 0xE000:
-                    return Wram[address - 0xC000];
-
                 // $E000-$FDFF mirrors WRAM; real hardware wires the address lines straight through.
                 case < 0xFE00:
-                    return Wram[address - 0xE000];
+                    return Wram[WramOffset(address)];
 
                 case < 0xFEA0:
                     return Oam[address - 0xFE00];
@@ -109,23 +115,25 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     return;
 
                 case < 0xA000:
-                    Vram[address - 0x8000] = data;
-                    WriteObserver?.OnWrite(MercuryCore.SpaceVram, address - 0x8000, data);
+                {
+                    int offset = VramOffset(address);
+                    Vram[offset] = data;
+                    WriteObserver?.OnWrite(MercuryCore.SpaceVram, offset, data);
                     return;
+                }
 
                 case < 0xC000:
                     _cart.Mapper.WriteRam(address, data);
                     WriteObserver?.OnWrite(MercuryCore.SpaceCartRam, address - 0xA000, data);
                     return;
 
-                case < 0xE000:
-                    Wram[address - 0xC000] = data;
-                    WriteObserver?.OnWrite(MercuryCore.SpaceWram, address - 0xC000, data);
-                    return;
-
                 case < 0xFE00:
-                    Wram[address - 0xE000] = data;
+                {
+                    int offset = WramOffset(address);
+                    Wram[offset] = data;
+                    WriteObserver?.OnWrite(MercuryCore.SpaceWram, offset, data);
                     return;
+                }
 
                 case < 0xFEA0:
                     Oam[address - 0xFE00] = data;
@@ -169,7 +177,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             0xFF49 => Ppu.Obp1,
             0xFF4A => Ppu.Wy,
             0xFF4B => Ppu.Wx,
-            _ => Io[address - 0xFF00],
+            _ => Cgb ? ReadCgbIo(address) : Io[address - 0xFF00],
         };
 
         private void WriteIo(ushort address, byte data)
@@ -253,6 +261,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     return;
 
                 default:
+                    if (Cgb && WriteCgbIo(address, data)) return;
                     Io[address - 0xFF00] = data;
                     return;
             }
@@ -274,7 +283,17 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         // TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.
         private void StepOneCycle()
         {
-            Ppu.Tick();
+            // The CPU and the timer double; the LCD does not - see Mercury_Cgb.md §5.
+            if (DoubleSpeed)
+            {
+                _ppuHalfCycle = !_ppuHalfCycle;
+                if (_ppuHalfCycle) Ppu.Tick();
+            }
+            else
+            {
+                Ppu.Tick();
+            }
+
             _divCounter++;
 
             if (_timaReloadDelay > 0 && --_timaReloadDelay == 0)
@@ -322,6 +341,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             // What the DMG boot ROM leaves behind, since Mercury starts past it - see Mercury_Cpu.md §5.
             Io[0x00] = 0x30;
 
+            ResetCgb();
             Ppu.Reset();
         }
     }

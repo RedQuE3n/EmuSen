@@ -64,7 +64,17 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Firmware/*
 # AI-assistant config. This repo does not carry one and must not depend on one -
 # it has been added and deleted more than once. Ignored so it cannot come back.
 CLAUDE.md
+
+# Databases. The schema is committed and the .db is a build artifact - a binary
+# cannot be reviewed and a schema is the part worth reviewing. Named one by one
+# rather than globbed, so adding a database is a deliberate line here.
+# See EmuSen_Stack.md §2.3.
 known-differences.db
 *.db-wal
 *.db-shm
 catalogue.db
+dumps.db
+
+# Python bytecode from the analysis tools.
+__pycache__/
+*.pyc

@@ -1,0 +1,42 @@
+diff --git a/Core/Shared/Emulator.cpp b/Core/Shared/Emulator.cpp
+index c1271640..73606556 100644
+--- a/Core/Shared/Emulator.cpp
++++ b/Core/Shared/Emulator.cpp
+@@ -107,6 +107,11 @@ void Emulator::Release()
+ 	_shortcutKeyHandler.reset();
+ }
+ 
++// Set by the probe backend; zero disables. Defined here so the stock build is
++// unaffected when nothing ever writes it.
++std::atomic<uint32_t> g_probeStopFrame{0};
++std::atomic<bool> g_probeStopArmed{false};
++
+ void Emulator::Run()
+ {
+ 	if(!_console) {
+@@ -133,6 +138,25 @@ void Emulator::Run()
+ 	_lastFrameTimer.Reset();
+ 
+ 	while(!_stopFlag) {
++		// Exact frame stop for EmuSen's reference probe - see EmuSen_Debugging_Tools_Reference_v5.md
++		// §3.45 and §3.45a. Pause() only sets a flag the control thread reads straight back, so
++		// polling GetFrameCount() from outside always overshoots at max speed. Stopping here, on
++		// the thread that owns the state, is the only construction that is both exact and quiescent.
++		//
++		// Checked at the top of the loop rather than the bottom (§3.45b): a target the machine
++		// has already reached must park it where it stands, not one frame later. Without this
++		// the probe's first report samples a *running* machine, because RunUntil returns early
++		// when the frame is already reached and so never arms anything.
++		//
++		// This does not make frame 0 reachable - LoadRom runs a frame before it returns, so the
++		// counter is already 1 by the time any external code can arm the stop. Measured, not
++		// assumed; the probe's first observable frame on Mesen is 1, as it was before.
++		if(g_probeStopArmed && GetFrameCount() >= g_probeStopFrame) {
++			g_probeStopArmed = false;
++			_paused = true;
++			WaitForPauseEnd();
++		}
++
+ 		bool useRunAhead = _settings->GetEmulationConfig().RunAheadFrames > 0 && !_debugger && !_audioPlayerHud && !_rewindManager->IsRewinding() && _settings->GetEmulationSpeed() > 0 && _settings->GetEmulationSpeed() <= 100;
+ 		if(useRunAhead) {
+ 			RunFrameWithRunAhead();

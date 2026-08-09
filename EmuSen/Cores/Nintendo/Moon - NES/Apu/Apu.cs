@@ -34,6 +34,19 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         // The pulse and noise timers run at half the CPU rate, so they tick on alternate cycles.
         private bool _apuCycle;
 
+        // A $4017 write restarts the sequencer 3-4 cycles later, not at once - see Moon_APU.md §2.2.
+        private int _writeDelayCounter;
+        private int _pendingFrameValue = -1;
+
+        // The mode only takes effect once that delay expires, unlike the inhibit bit.
+        private bool _stepMode;
+
+        // One tick blocks the next two cycles from producing another - see Moon_APU.md §2.2.
+        private int _blockFrameCounterTick;
+
+        // Parity decides the write delay, so the sequencer needs its own cycle count.
+        private long _cycleCount;
+
         // Box-filter accumulator: every output sample is the mean of the cycles it covers - see Moon_APU.md §4.
         [SkipInState] private double _sampleAccumulator;
         [SkipInState] private int _sampleCount;
@@ -58,7 +71,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         public int BufferedSamples => _buffer.Count;
 
         public bool IrqInhibited => (FrameCounter & 0x40) != 0;
-        public bool FiveStepMode => (FrameCounter & 0x80) != 0;
+        public bool FiveStepMode => _stepMode;
 
         // Everything the CPU should see as one IRQ line.
         public bool IrqAsserted => FrameIrqPending || Dmc.IrqPending;
@@ -106,16 +119,41 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
             Noise.LengthCounter, Dmc.Active ? 1 : 0,
         };
 
+        // A debugging aid, not hardware, so it is never part of a save state - see Moon_APU.md §5.
+        [SkipInState] private readonly bool[] _channelMuted = new bool[ChannelCount];
+
+        public bool IsChannelMuted(int index) =>
+            (uint)index < (uint)_channelMuted.Length && _channelMuted[index];
+
+        public void SetChannelMuted(int index, bool muted)
+        {
+            if ((uint)index < (uint)_channelMuted.Length) _channelMuted[index] = muted;
+        }
+
         public void Reset()
         {
             Array.Clear(Registers);
+
+            // Only a cold start writes $4017 with $00; RESET rewrites whatever was there - see Moon_APU.md §2.2.
             FrameCounter = 0;
+            _stepMode = false;
+            _cycleCount = 0;
+            SoftReset();
+            Dmc.Reset();
+            _buffer.Clear();
+        }
+
+        // RESET silences every channel and rewrites $4017 with the mode it already had - see Moon_APU.md §2.2.
+        public void SoftReset()
+        {
+            WriteEnable(0);
             FrameIrqPending = false;
             _frameCycle = 0;
             _frameStep = 0;
             _apuCycle = false;
-            Dmc.Reset();
-            _buffer.Clear();
+            _blockFrameCounterTick = 0;
+            _pendingFrameValue = _stepMode ? 0x80 : 0x00;
+            _writeDelayCounter = 3;
         }
 
         public void WriteRegister(int address, byte value)
@@ -174,12 +212,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
 
                 case 0x4017:
                     FrameCounter = value;
-                    _frameCycle = 0;
-                    _frameStep = 0;
                     if (IrqInhibited) FrameIrqPending = false;
 
-                    // Setting the five-step bit clocks everything once immediately.
-                    if (FiveStepMode) { ClockQuarterFrame(); ClockHalfFrame(); }
+                    // A write between two APU cycles takes 4 CPU cycles to land, one during them 3.
+                    _pendingFrameValue = value;
+                    _writeDelayCounter = (_cycleCount & 1) != 0 ? 4 : 3;
                     break;
             }
         }
@@ -239,6 +276,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         {
             for (int i = 0; i < cpuCycles; i++)
             {
+                _cycleCount++;
                 Triangle.StepTimer();
                 Dmc.StepTimer();
 
@@ -286,39 +324,74 @@ namespace EmuSen.Cores.Nintendo.Moon.Apu
         // The two halves of the DAC are non-linear and summed separately - see Moon_APU.md §4.
         private double Mix()
         {
-            int pulseSum = Pulse1.Output + Pulse2.Output;
+            // Muting drops a channel's contribution to the DAC, which is not the same as disabling it.
+            int pulseSum = (_channelMuted[0] ? 0 : Pulse1.Output) + (_channelMuted[1] ? 0 : Pulse2.Output);
             double pulseOut = pulseSum == 0 ? 0.0 : 95.88 / ((8128.0 / pulseSum) + 100.0);
 
-            double tnd = (Triangle.Output / 8227.0) + (Noise.Output / 12241.0) + (Dmc.Output / 22638.0);
+            double tnd = ((_channelMuted[2] ? 0 : Triangle.Output) / 8227.0)
+                + ((_channelMuted[3] ? 0 : Noise.Output) / 12241.0)
+                + ((_channelMuted[4] ? 0 : Dmc.Output) / 22638.0);
+
             double tndOut = tnd == 0.0 ? 0.0 : 159.79 / ((1.0 / tnd) + 100.0);
 
             return pulseOut + tndOut;
         }
 
-        private static readonly int[] FourStepCycles = { 7457, 14913, 22371, 29829 };
-        private static readonly int[] FiveStepCycles = { 7457, 14913, 22371, 29829, 37281 };
+        // Six entries, not four: the sequence runs two cycles past its last clock - see Moon_APU.md §2.1.
+        private const int FrameNone = 0;
+        private const int FrameQuarter = 1;
+        private const int FrameHalf = 2;
+        private const int StepCount = 6;
 
-        // Four or five steps across one sequencer period - see Moon_APU.md §2.
+        private static readonly int[] FourStepCycles = { 7457, 14913, 22371, 29828, 29829, 29830 };
+        private static readonly int[] FiveStepCycles = { 7457, 14913, 22371, 29829, 37281, 37282 };
+        private static readonly int[] FrameTypes = { FrameQuarter, FrameHalf, FrameQuarter, FrameNone, FrameHalf, FrameNone };
+
+        // Modelled on Mesen's ApuFrameCounter, which is the reference for every edge case here - see §2.1.
         private void StepFrameCounter()
         {
             _frameCycle++;
 
-            int[] steps = FiveStepMode ? FiveStepCycles : FourStepCycles;
-            if (_frameStep >= steps.Length || _frameCycle < steps[_frameStep]) return;
+            int[] steps = _stepMode ? FiveStepCycles : FourStepCycles;
 
-            bool half = FiveStepMode ? _frameStep is 1 or 4 : _frameStep is 1 or 3;
-            bool quarter = !FiveStepMode || _frameStep != 3;
+            if (_frameCycle >= steps[_frameStep])
+            {
+                // Four-step mode holds the IRQ across all three of the sequence's last cycles.
+                if (!_stepMode && _frameStep >= 3 && !IrqInhibited) FrameIrqPending = true;
 
-            if (quarter) ClockQuarterFrame();
-            if (half) ClockHalfFrame();
+                int type = FrameTypes[_frameStep];
+                if (type != FrameNone && _blockFrameCounterTick == 0)
+                {
+                    ClockQuarterFrame();
+                    if (type == FrameHalf) ClockHalfFrame();
+                    _blockFrameCounterTick = 2;
+                }
 
-            if (!FiveStepMode && _frameStep == 3 && !IrqInhibited) FrameIrqPending = true;
+                _frameStep++;
+                if (_frameStep == StepCount)
+                {
+                    _frameStep = 0;
+                    _frameCycle = 0;
+                }
+            }
 
-            _frameStep++;
-            if (_frameStep < steps.Length) return;
+            if (_pendingFrameValue >= 0 && --_writeDelayCounter == 0)
+            {
+                _stepMode = (_pendingFrameValue & 0x80) != 0;
+                _pendingFrameValue = -1;
+                _frameStep = 0;
+                _frameCycle = 0;
 
-            _frameStep = 0;
-            _frameCycle = 0;
+                // Selecting five-step mode clocks both units once, immediately.
+                if (_stepMode && _blockFrameCounterTick == 0)
+                {
+                    ClockQuarterFrame();
+                    ClockHalfFrame();
+                    _blockFrameCounterTick = 2;
+                }
+            }
+
+            if (_blockFrameCounterTick > 0) _blockFrameCounterTick--;
         }
 
         private void ClockQuarterFrame()

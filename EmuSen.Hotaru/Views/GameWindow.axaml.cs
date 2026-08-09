@@ -20,7 +20,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 using EmuSen.Graphics;
 using EmuSen.Endymion;
-using EmuSen.Nehellania.Input;
+using EmuSen.Endymion.Input;
 using EmuSen.Hotaru.Imaging;
 using EmuSen.Hotaru.Input;
 using EmuSen.Serenity;

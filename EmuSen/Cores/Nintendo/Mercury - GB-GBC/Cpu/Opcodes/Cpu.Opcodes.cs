@@ -14,7 +14,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             3 => E,
             4 => H,
             5 => L,
-            6 => _bus.Read(HL),
+            6 => ReadCycle(HL),
             _ => A,
         };
 
@@ -28,7 +28,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 3: E = value; break;
                 case 4: H = value; break;
                 case 5: L = value; break;
-                case 6: _bus.Write(HL, value); break;
+                case 6: WriteCycle(HL, value); break;
                 default: A = value; break;
             }
         }
@@ -44,7 +44,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0x00: return 4;
 
                 // Two bytes on real hardware even though the second is ignored.
-                case 0x10: Fetch(); return 4;
+                case 0x10: Fetch(); _bus.Stop(); return 4;
 
                 case 0x76: return Halt();
 
@@ -53,15 +53,15 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0x21: HL = Fetch16(); return 12;
                 case 0x31: SP = Fetch16(); return 12;
 
-                case 0x02: _bus.Write(BC, A); return 8;
-                case 0x12: _bus.Write(DE, A); return 8;
-                case 0x22: _bus.Write(HL, A); HL++; return 8;
-                case 0x32: _bus.Write(HL, A); HL--; return 8;
+                case 0x02: WriteCycle(BC, A); return 8;
+                case 0x12: WriteCycle(DE, A); return 8;
+                case 0x22: WriteCycle(HL, A); HL++; return 8;
+                case 0x32: WriteCycle(HL, A); HL--; return 8;
 
-                case 0x0A: A = _bus.Read(BC); return 8;
-                case 0x1A: A = _bus.Read(DE); return 8;
-                case 0x2A: A = _bus.Read(HL); HL++; return 8;
-                case 0x3A: A = _bus.Read(HL); HL--; return 8;
+                case 0x0A: A = ReadCycle(BC); return 8;
+                case 0x1A: A = ReadCycle(DE); return 8;
+                case 0x2A: A = ReadCycle(HL); HL++; return 8;
+                case 0x3A: A = ReadCycle(HL); HL--; return 8;
 
                 case 0x03: BC++; return 8;
                 case 0x13: DE++; return 8;
@@ -79,7 +79,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0x1C: E = Inc8(E); return 4;
                 case 0x24: H = Inc8(H); return 4;
                 case 0x2C: L = Inc8(L); return 4;
-                case 0x34: _bus.Write(HL, Inc8(_bus.Read(HL))); return 12;
+                case 0x34: WriteCycle(HL, Inc8(ReadCycle(HL))); return 12;
                 case 0x3C: A = Inc8(A); return 4;
 
                 case 0x05: B = Dec8(B); return 4;
@@ -88,7 +88,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0x1D: E = Dec8(E); return 4;
                 case 0x25: H = Dec8(H); return 4;
                 case 0x2D: L = Dec8(L); return 4;
-                case 0x35: _bus.Write(HL, Dec8(_bus.Read(HL))); return 12;
+                case 0x35: WriteCycle(HL, Dec8(ReadCycle(HL))); return 12;
                 case 0x3D: A = Dec8(A); return 4;
 
                 case 0x06: B = Fetch(); return 8;
@@ -97,7 +97,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0x1E: E = Fetch(); return 8;
                 case 0x26: H = Fetch(); return 8;
                 case 0x2E: L = Fetch(); return 8;
-                case 0x36: _bus.Write(HL, Fetch()); return 12;
+                case 0x36: WriteCycle(HL, Fetch()); return 12;
                 case 0x3E: A = Fetch(); return 8;
 
                 case 0x09: AddHl(BC); return 8;
@@ -119,8 +119,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0x08:
                 {
                     ushort target = Fetch16();
-                    _bus.Write(target, (byte)SP);
-                    _bus.Write((ushort)(target + 1), (byte)(SP >> 8));
+                    WriteCycle(target, (byte)SP);
+                    WriteCycle((ushort)(target + 1), (byte)(SP >> 8));
                     return 20;
                 }
 
@@ -181,13 +181,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0xFE: Cp8(Fetch()); return 8;
 
                 // The $FF00 page is reachable by an 8-bit operand, which is why the I/O registers live there.
-                case 0xE0: _bus.Write((ushort)(0xFF00 + Fetch()), A); return 12;
-                case 0xF0: A = _bus.Read((ushort)(0xFF00 + Fetch())); return 12;
-                case 0xE2: _bus.Write((ushort)(0xFF00 + C), A); return 8;
-                case 0xF2: A = _bus.Read((ushort)(0xFF00 + C)); return 8;
+                case 0xE0: WriteCycle((ushort)(0xFF00 + Fetch()), A); return 12;
+                case 0xF0: A = ReadCycle((ushort)(0xFF00 + Fetch())); return 12;
+                case 0xE2: WriteCycle((ushort)(0xFF00 + C), A); return 8;
+                case 0xF2: A = ReadCycle((ushort)(0xFF00 + C)); return 8;
 
-                case 0xEA: _bus.Write(Fetch16(), A); return 16;
-                case 0xFA: A = _bus.Read(Fetch16()); return 16;
+                case 0xEA: WriteCycle(Fetch16(), A); return 16;
+                case 0xFA: A = ReadCycle(Fetch16()); return 16;
 
                 case 0xE8: SP = AddSpOffset(); return 16;
                 case 0xF8: HL = AddSpOffset(); return 12;

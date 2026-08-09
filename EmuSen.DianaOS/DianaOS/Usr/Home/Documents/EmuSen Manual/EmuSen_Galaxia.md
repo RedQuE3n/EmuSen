@@ -20,7 +20,7 @@ It has two halves, deliberately the same shape:
 
 **It is a leaf, and that is load-bearing.** `EmuSen.Galaxia.csproj` has no `ProjectReference` and no `PackageReference`, by hard constraint rather than preference: `EmuSen.DianaOS` references Galaxia, and `EmuSen` (the core) references DianaOS, so anything Galaxia depended on upward would close a cycle. `EmuSen_Config_Reference.md` §1.1 has the full argument. That constraint is also what makes it the *only* possible home for this: DianaOS, all three cores, LunaP and both frontends already depend on it, and nothing else in the tree is reachable from all of them.
 
-A consequence worth stating plainly: **the cores do not live here and never will.** A core needs DianaOS for logging, Crystal for scheduling and Cauldron for telemetry. What moved into Galaxia is the *question* a core asks ("what path does this ROM's save go to") and the *mechanism* it uses to write, not the cartridge, the mapper, or a single byte of SRAM.
+A consequence worth stating plainly: **the cores do not live here and never will.** A core needs DianaOS for logging and Cauldron for telemetry, and owns its own timing outright. What moved into Galaxia is the *question* a core asks ("what path does this ROM's save go to") and the *mechanism* it uses to write, not the cartridge, the mapper, or a single byte of SRAM.
 
 ---
 
@@ -72,9 +72,22 @@ Copying rather than moving buys a verification window, not a permanent fallback.
 
 ### 3.3 The ROM library is never migrated
 
-`Games` and `Roms` are excluded from that copy on purpose. They are the user's own content rather than something the emulator wrote, they are large (95 MB in the author's own tree at the time of the move), and `Games/` is under a standing never-delete rule. Silently duplicating a ROM library is bad behaviour regardless of whether it is destructive.
+`Games` and `Roms` are excluded from that copy on purpose. They are the user's own content rather than something the emulator wrote, they are large (95 MB in the author's own tree at the time of the move), and the library is under a standing never-delete rule. Silently duplicating a ROM library is bad behaviour regardless of whether it is destructive.
 
-So the old directories are left exactly as they are, and `DataMigration.RemainingLibraryDirectories()` reports any that still hold files so a caller can say where they went. `AppSettings.RomDirectory` is user-configured anyway, so a library keeps working from wherever it sits. `Roms` merged into `Games` as a name — one concept had grown two directories.
+So the old directories are left exactly as they are, and `DataMigration.RemainingLibraryDirectories()` reports any that still hold files so a caller can say where they went.
+
+### 3.3a Where the library actually lives
+
+**`AppSettings.RomDirectory` is the answer, and it is the only one.** It is user-configured, so a library works from wherever it sits, and nothing in the codebase resolves a game through a hardcoded path.
+
+That is worth stating flatly because the surrounding names invite the opposite conclusion, and did:
+
+- **`DataStore.Games` is not the ROM library.** It is one entry in the skeleton `DianaOSSandbox.EnsureSkeleton()` creates so `hier` and `ls` show a populated tree. Three things touch it — that `CreateDirectory`, the `RealRom` test fixture's fallback list, and a `DataStoreTests` path-shape assertion. Nothing looks up a game in it. Its comment used to claim otherwise, which is exactly how a second `DataStore.Roms` property nearly got added beside it as "where the library *actually* lives"; two properties, neither authoritative, and the real mechanism untouched in a config file.
+- **`DataMigration.LibraryDirectories` is not a locator either.** It is the list of directory names that might still hold files after the tree move, so startup can report where they went.
+
+**As of 2026-08-05 the in-tree ROMs are gone.** `Usr/Home/Roms/` held eight ROMs used as the test corpus; every one had a byte-identical copy in the author's configured library, and they were removed rather than kept as a second copy that could drift. `Usr/Home/Roms/` itself stays — an end user is free to keep a library inside the shell's tree in a finished build, and `RealRom` still falls back to it — but development reads `AppSettings.RomDirectory`.
+
+`RealRom.Find` therefore tries the configured library first, and searches recursively under the console directory when the flat `<root>/<console>/<file>` path misses. A real library sorts by region (`NES/USA/Super Mario Bros 3 (U) (PRG 0).nes`), so the flat guess is the exception rather than the rule.
 
 ---
 
@@ -125,7 +138,39 @@ Two things were separated out rather than bundled in, so each stands on its own 
 
 ---
 
-## 7. Test coverage
+## 7. The catalogue — an index of the library, which the librarian did not have
+
+Galaxia's own csproj calls her "the one answer to where anything this program keeps on disk lives", and until 2026-08-08 that was true of everything except the largest thing on disk. There was no index of the ROM library at all. `RomBrowserWindow` walked the filesystem live on every open, and answering "which images use mapper 5" meant walking 3,536 files and re-parsing every header — which was done four separate times in one afternoon before anyone noticed it was a missing table rather than a slow question.
+
+`ICatalogue` and `catalogue-schema.sql` live in `Library/Catalogue/`. One row per image: path, name, system, size, the board the **loader resolved** (not the one the header claimed — the two differ across 758 images here, see `Moon_Memory.md` §2.2), header trust, PRG/CHR sizes, and whether a board exists for it today.
+
+**The catalogue is a cache and never an authority.** It is always safe to delete, it is rebuilt by one pass, and it is read-only with respect to the library it describes. `playable = 0` is a fact about this program, not about the image, which is why such rows are recorded rather than skipped: an image whose board is unimplemented is exactly the one a coverage question is about.
+
+The first index recorded 393 images as unreadable, which was wrong and instructive. `Cartridge.FromImage` builds the board as part of loading, and an unimplemented board throws — so "damaged dump" and "board this program lacks" arrived as the same exception, and the images a coverage query most wants were catalogued with no board at all. `Cartridge.Describe` now parses the header without building a board, and `IsBoardImplemented` answers the other half separately. The real count of unreadable images is **15**.
+
+### 7.1 Why Galaxia owns the schema and not the driver
+
+Galaxia is a leaf on purpose: `EmuSen.DianaOS` references her and `EmuSen` references DianaOS, so anything she depended on upward would close a cycle, and the no-`PackageReference` half of that rule keeps her models plain data.
+
+A database engine is not plain data. Taking `Microsoft.Data.Sqlite` here would put a native driver at the bottom of the stack, where every consumer ships it — including the emulator cores, which have no use for one. So the split is: **Galaxia owns the contract, the models and the schema; the driver lives above her and is injected.** She remains the answer to where things live and what shape they are in; she simply does not hold the engine.
+
+This follows the split `EmuSen.Cauldron` already uses for `ICoreTelemetry`.
+
+**The driver lives in `EmuSen`** (`Common/Catalogue/SqliteCatalogue.cs`), decided 2026-08-08. The reasoning is convergence rather than fit: every consumer that wants a catalogue — both frontends, `EmuSen.Pharaoh`, `EmuSen.WiseMan` — already references `EmuSen`, and no other assembly is common to all of them. The alternatives were all worse on inspection: `LunaP` is a themeable UI toolkit, `Endymion` is the SDL3 device layer, `Serenity` is neither, and a new assembly would have to justify a boundary against a project actively pruning them. `EmuSen` already carries package references (SkiaSharp, explicitly), so nothing about it forbade one.
+
+The cost is stated plainly rather than hidden: the emulator core assembly now carries a native database driver it does not itself use. That is a real objection and it was overruled deliberately, on the grounds that no consumer of this project takes the cores without the application around them.
+
+**The one thing that does not follow is the shell.** `EmuSen` references `EmuSen.DianaOS`, not the other way round, so DianaOS cannot construct a driver that lives here. Anything in the shell that wants a catalogue — or, when it moves, a cheat store — takes the interface it is handed and reports honestly when nobody handed it one. That is the same seam, applied in the one direction where convergence on `EmuSen` does not reach.
+
+### 7.2 What stays JSON, and why that is not inconsistency
+
+The user-authored configuration — `appsettings.json`, `keybindings.json`, `gamepadbindings.json` — is 570 bytes across three files, and it stays exactly as it is.
+
+A database would be a straight downgrade there. Those files are edited by hand, they follow the XDG convention every other program on the machine follows, and a corrupted one is a five-second fix in an editor where a corrupted SQLite file is unrecoverable. The atomicity a database would buy is already provided by `AtomicFile` (§4).
+
+The distinction is authorship, and it is the same one that governs the known-differences dictionary (`EmuSen_Debugging_Tools_Reference_v5.md` §3.49), whose schema is committed as SQL while its `.db` is a build artifact: **where a human is the author, human-readable wins; where the program is the author and the data has shape, a database wins.** Preferences are written by a person. A catalogue of 3,586 images is not.
+
+## 8. Test coverage
 
 In `EmuSen.WiseMan/Galaxia/`:
 

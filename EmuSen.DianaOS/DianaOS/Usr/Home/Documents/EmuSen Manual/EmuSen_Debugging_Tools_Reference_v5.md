@@ -1320,6 +1320,8 @@ One honest blind spot: `Run()` returns immediately while the chip is in its RQM 
 
 ### 3.39 Mesen as a *running* reference, not a source reference (`EmuSen.WiseMan/Reference/`)
 
+> **Superseded 2026-08-06 by §3.45, and two of its claims are now known false.** `MesenProbe.cpp` and `build-mesen-probe.sh` no longer exist; the probe is a policy layer plus a backend per emulator, and Mesen is one backend. More seriously, every memory dump described below was read out of a *running* emulation thread — see §3.45a — so the run-to-run reproducibility asserted here and in §3.40 did not hold for dumps. The VRAM/CGRAM conclusions survive (those spaces are quiescent at a frame boundary); anything resting on WRAM, GSU RAM, OAM or the screen buffer at a mid-action frame does not. Kept for the reasoning, not as instructions.
+
 Every Mesen pass above (§3.33, §3.36, §3.37, §3.38) read Mesen's **source** and imported capabilities from it. This is a different thing: driving Mesen as a second emulator on the same ROM and diffing the two machines' state at the same frame. It exists because the Yoshi's Island missing-sprites bug could not be found any other way — see `Venus_SuperFX.md` §9 for that investigation end to end.
 
 **What's in the directory.** `MesenProbe.cpp` is a headless `main()` linked against a Mesen2 checkout's `MesenCore.so`; it runs a ROM to a frame, pauses on the frame boundary, prints the GSU and PPU register state, and writes `mesen_{vram,cgram,oam,gsuram,screen}_f<frame>.bin`. `build-mesen-probe.sh` builds it, including the two things that make Mesen build unattended on a machine without SDL2/X11 development packages: the headers are fetched as RPMs and unpacked into a work directory (`CPATH`/`LIBRARY_PATH` plus a shim `sdl2-config`), and `STATICLINK=false` is forced because the stock link line wants `libstdc++.a`. `mesen-gsu-trace.patch` adds the one hook Mesen has no equivalent of — a per-GSU-instruction record of address, opcode and all sixteen registers. `gsudiff.py` aligns that against our own `SuperFxTraceCountdown` trace and reports the first divergence. `MesenReferenceTests.cs` consumes the dumps from inside `EmuSen.WiseMan`.
@@ -1395,7 +1397,7 @@ Registers are captured **before** the instruction executes, on both sides — Me
 
 ```
 # Mesen, from the Mesen checkout (its DT_NEEDED is the relative bin/pgohelperlib.so)
-cd /path/to/mesen2 && /tmp/emusen-mesen-probe/mesenprobe rom.smc outdir 80 80 --cputrace 80
+cd /path/to/mesen2 && ~/.cache/emusen/probe/mesen/probe rom.smc outdir 80 80 --cputrace 80
 
 # EmuSen
 dotnet run --project EmuSen.Pharaoh -c Release -- rom.smc 81 --cputrace 80:outdir/emusen_cputrace_f00080.bin
@@ -1428,7 +1430,7 @@ The next step is the master-clock cost of that specific two-instruction spin aga
 
 **The cost field is what actually found the timing bugs.** Recording *what each instruction cost* rather than an absolute clock makes the two sides directly comparable even after they drift, and lets the differ aggregate: it reports one row per `(opcode, leftCost, rightCost)` with a count and the total drift, sorted by how much damage each combination does. That table is what turned "we run 9% fast somewhere in 80 frames" into four named bugs in one afternoon — see `Venus_CPU.md` §8.7 and §8.8. Read it as a table, not as individual findings; a systemic bug shows up as one row with a huge count, and a `left = right + 40` row is DRAM-refresh *attribution* rather than a cost error.
 
-**Mesen is not deterministic out of the box, and this was measured, not assumed.** Its default power-on RAM fill is `RamState::Random`, and two identical no-trace runs of Yoshi's Island differ in VRAM, GSU RAM, WRAM *and* APU RAM at the same frame — which means every single-run comparison ever made against it carried noise, and the four-run masking in §3.39 was treating the symptom. The probe now sets `scfg.RamPowerOnState = RamState::AllZeros` before `LoadRom`, matching our own fill. After that every dump and the whole instruction trace are byte-identical across runs. **If a reference disagrees with itself, nothing measured against it means anything** — check that first, before believing any diff. Note `BaseCartridge::InitRamPowerOnState` overrides the setting for four named carts; none of them are relevant here, but check before trusting it on a new game.
+**Mesen is not deterministic out of the box, and this was measured, not assumed.** *(Corrected 2026-08-06: the conclusion drawn below — that after `AllZeros` "every dump and the whole instruction trace are byte-identical across runs" — was true of the instruction trace and false of every memory dump, for a reason that had nothing to do with the RAM fill. See §3.45a.)* Its default power-on RAM fill is `RamState::Random`, and two identical no-trace runs of Yoshi's Island differ in VRAM, GSU RAM, WRAM *and* APU RAM at the same frame — which means every single-run comparison ever made against it carried noise, and the four-run masking in §3.39 was treating the symptom. The probe now sets `scfg.RamPowerOnState = RamState::AllZeros` before `LoadRom`, matching our own fill. After that every dump and the whole instruction trace are byte-identical across runs. **If a reference disagrees with itself, nothing measured against it means anything** — check that first, before believing any diff. Note `BaseCartridge::InitRamPowerOnState` overrides the setting for four named carts; none of them are relevant here, but check before trusting it on a new game.
 
 **`--pressuntil`, the probe's half of state anchoring.** `tapuntil` (§3.15d) solves this on our side; the probe needs the same thing or the two runs still cannot be brought to the same place. `--pressuntil BTN:ADDR:VALUE[:CAP[:EVERY]]` taps a button until the GSU RAM word at `ADDR` equals `VALUE`, polling on the control thread while the emulator runs (the key manager grew an atomic `LiveKey` for it, since the frame-indexed schedule is fixed before boot and cannot answer a question decided at runtime).
 
@@ -1468,7 +1470,7 @@ Used in anger: `--pressuntil A:1E1A:01F0:12000:40` walks Yoshi's Island's file s
 
 ```
 # Mesen: walk to the anchor, then trace 4 frames past it
-cd /path/to/mesen2 && /tmp/emusen-mesen-probe/mesenprobe rom.smc outdir 0 0 4 1E1A 4 \
+cd /path/to/mesen2 && ~/.cache/emusen/probe/mesen/probe rom.smc outdir 0 0 4 1E1A 4 \
     --pressuntil A:1E1A:01F0:12000:40
 
 # EmuSen: the same anchor, then the `gsutrace <frames> <path>` verb
@@ -1523,6 +1525,8 @@ systemd-run --user --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms -- <self> <a
 
 ### 3.43 The probe learns a second console (NES mode, `--apulog`, `--wav`, `--ramstate`)
 
+> **Superseded 2026-08-06 by §3.45 and §3.46.** The console fork described here is gone: a backend reports named memory spaces and the dump loop has no per-console branch. `apudiff`, described below as though it existed, did not — it was built on 2026-08-06 (§3.46). The worked SMB3 result at the end of this section was measured with the racing probe of §3.45a and has been re-taken: see §3.46a for what replaces it. The `ChannelVolumes` trap and the palette-mirror note are still current and still worth reading.
+
 §3.39 built `MesenProbe.cpp` against a Mesen2 checkout so the SNES core could be diffed against a *running* reference rather than against Mesen's source. Moon (NES) needed the same thing the day it got a 2A03, and the probe is now one binary that drives either machine — it `dynamic_cast`s the loaded console and picks its dump set from that, so nothing at the call site changes.
 
 **What an NES run dumps.** `mesen_{ram,work,sram,nametable,oam,palette,chr,screen}_f<frame>.bin`, in place of the SNES set. `screen` is 256×240 `uint16` **palette indices**, not RGB — mask with `0x3F` and index the 64-entry NTSC table (the same table Moon's `Ppu.NesPalette` carries) to render it. The per-report text line prints the PPU's control/mask/status decode plus `v`/`t`/`x`/scanline/cycle, and a full `ApuState` line: per-channel enabled/period/volume, DMC bytes-remaining and output, and the frame counter's mode and IRQ-inhibit bits.
@@ -1540,6 +1544,187 @@ systemd-run --user --scope -p CPUQuota=33% -p CPUQuotaPeriodSec=5ms -- <self> <a
 **On diffing NES palette RAM.** Moon's `Ppu.PaletteOffset` folds `$3F10/$14/$18/$1C` onto `$3F00/$04/$08/$0C` on **read and write both**, so those four slots in `PaletteRam[]` are never stored and keep their power-on zero. Mesen stores the value in both the real entry and its mirror. Rendering is identical either way; a raw 32-byte diff is not, and will always show those four bytes as `00` against `0F`. Expect it and ignore it — it is not a divergence.
 
 **The worked result.** SMB3 (MMC3) was carried as a known audio failure on the strength of a no-input harness run in which it never wrote `$4000-$400F`. The probe reproduced that exactly — Mesen is *also* silent through frame 1200 on the title screen, writing only `$4015` once at boot and then `$4010`/`$4017` as per-frame housekeeping. With Start tapped at frames 400/500/620 the engine starts on frame 501 in both, and the register log fills in with the full channel set. Frame-aligned, EmuSen's frame 900 is **pixel-identical to Mesen's frame 897** — 0 of 61 440 pixels differ — the three-frame offset being how long each took to accept the press, not a rendering difference. Every remaining byte-level difference at a fixed frame number (palette entry 3 blinking `3C`↔`36`, sprite slots rotating for flicker, one-pixel sprite positions) is animation phase from that same offset. See `Moon_APU.md` §6.
+
+### 3.44 `--testroms` — third-party NES test suites, reporting through PRG RAM
+
+The fourth standalone verb, alongside `--diffshot` (§3.15), `--singlestep` (§3.16) and `--tracediff` (§3.40): a real tool in this toolchain that needs no debug session, no window and no human.
+
+```
+dotnet run -c Release --project EmuSen.Pharaoh -- --testroms <dir|rom> [frame-budget]
+```
+
+Where `--singlestep` (§3.16) validates one CPU against vectors, this validates *everything else* against ROMs written on real hardware by someone who never saw this implementation. A blargg test ROM reports its verdict into the cartridge's PRG RAM — `$6000` status, `$DE $B0 $61` signature at `$6001`, ASCII detail from `$6004` — so the whole run is machine-readable. One line per ROM: `[PASS]`, `[FAIL]` with the ROM's own text, `[----]` for no verdict inside the budget, `[SKIP]` for an unimplemented board, `[ERR ]` for a bad image or a crash. Exit code 0 only if nothing failed, errored or went silent.
+
+Two details are load-bearing and are easy to get wrong in the direction of a **false pass**. The status is read straight out of `PrgRam[]` rather than through `CPUBUS`, because `Mmc3.ReadPrg` returns `0` when WRAM is disabled — and `0` is also the code for "passed". And a completion code is ignored until `$80` has been seen at least once, because the poll runs once per frame and can otherwise land between the ROM writing its signature and writing its status, reading a pass off a test that has not started. Both are covered in `Moon_TestRoms.md` §2.
+
+The ROMs are third-party and not vendored, the same rule §3.16's vectors follow — fetch from [christopherpow/nes-test-roms](https://github.com/christopherpow/nes-test-roms). The runner forces `--nobattery` for the whole run so a shared suite directory is never written to.
+
+**What this is expected to find.** `Moon_PPU.md` §4 and `Moon_APU.md` §6 already name their gaps — per-dot timing, the odd-frame dot skip, the sprite overflow bug, DMC fetch alignment, the open-bus latch. A suite failing on one of those is the harness confirming something already written down. The interesting results are the ones nothing predicted, and `cpu_interrupts_v2` is the one to watch: `Moon_CPU.md` §5.4's instruction-boundary interrupt polling is a documented approximation that **nothing currently validates at all**, because the `nes6502` vectors do not exercise interrupts.
+
+`MoonCore.Reset()` — the first soft reset in this project, on either core — exists because of this verb: status `$81` means "press RESET now", and a suite using it cannot run without one. See `Moon_Core.md` §6.
+
+---
+
+### 3.45 The probe stops being about Mesen (`Reference/probe/`, `IProbeBackend`, the libretro backend)
+
+§3.39 built `MesenProbe.cpp` and §3.43 taught it a second console. Both are now history: the tool is one policy layer plus a backend per emulator, because a single reference is a single opinion, and the next cores to be checked against (SameBoy for Mercury, bsnes or ares for Venus) are not Mesen and never will be.
+
+> **Status.** The architecture below is current and is the reason the rest of the port was possible. Only the *language* moved afterwards: the C++ paths named here (`probe/ProbeMain.cpp`, `probe/ProbeBackend.h`, `probe/backends/`) became `Reference/probe-rs/src/` on 2026-08-08 and `Reference/probe/` was deleted. Read the file names as roles, not as paths — §3.50 and §3.52 have the current ones. The section's central claim is unaffected and was in fact what made the port legal: **the contract is the file protocol, not any one language's interface.**
+
+**The split.** `probe/ProbeMain.cpp` parses arguments, holds the press script, runs the state anchor, drives the report loop and writes dumps. It includes no emulator header and names no emulator. Everything machine-specific is behind `probe/ProbeBackend.h`:
+
+| member | why it is in the contract |
+| --- | --- |
+| `Name()` | becomes the dump prefix, so a Mesen dump set keeps the filenames every consumer already globs |
+| `System()` | `nes`/`snes`/`gb`; the console, which is not the same question as the emulator |
+| `RunUntil(frame)` | advance and **stop on that frame**; everything else on the interface is only valid while stopped |
+| `Spaces()` | named blocks, so the dump loop has no console fork and no fixed struct |
+| `SetSchedule()` / `SetButton()` | the frame-indexed script, and the live override `--pressuntil` decides at runtime |
+| `BeginTrace()` / `EndTrace()` | optional, and **false by default** |
+
+Two of those carry the reasoning worth keeping.
+
+**Why the schedule is sampled by the backend and not by the report loop.** A probe that free-runs between reports cannot set the pad itself without dropping presses, because it does not stop on every frame. Only the backend knows when its emulator polls input. So the *parsing* of `--press` is policy and the schedule is an emulator-neutral list of `(startFrame, endFrame, button)`, but the *sampling* is the backend's, resolved against its own frame counter at poll time. Getting this backwards silently drops presses on exactly the runs that need them.
+
+**Why traces stay optional.** A per-instruction trace cannot be had from an arbitrary emulator without patching its source. A backend without such a hook returns false and the tool says so, rather than writing an empty file that reads as "the reference agrees nothing happened" — §3.20's rule again.
+
+**The libretro backend, which is the point of the exercise.** `probe/backends/LibretroBackend.cpp` `dlopen`s any `*_libretro.so` and drives it through the standard ABI, with **no per-emulator code whatsoever**. `retro_run()` is one frame and is called from the probe's own thread, so frame landing is exact by construction — the entire class of problem the Mesen backend needed a source patch for does not arise. Cores are ordinary Fedora packages (`libretro-nestopia`, `libretro-gambatte`, `libretro-bsnes-mercury`, `libretro-mgba`, …) and `build-probe.sh libretro-core <package>` unpacks one into the work directory without installing anything, the same trick §3.39 already used for SDL2. `libretro.h` comes from `retroarch-devel` rather than being vendored, so it cannot drift from the real ABI.
+
+**What libretro cannot reach, stated up front so it is not rediscovered.** The ABI standardises `SYSTEM_RAM`, `SAVE_RAM`, `VIDEO_RAM` and `RTC`, and nothing else. There is no OAM, no palette, no nametable, no CHR, and no trace of any kind. A libretro backend is a **breadth** instrument — main RAM and the framebuffer across a dozen emulators — and not a replacement for the depth a native backend buys. Nestopia, for instance, exposes exactly one space on an NES cartridge: the 2 KB of internal RAM.
+
+**One binary per backend.** Linking is not free — Mesen's pulls in a 14 MB `MesenCore.so`, libretro's needs only `dlopen` — so the backend is a compile-time choice (`-DPROBE_BACKEND_*`) and `build-probe.sh <backend>` produces `~/.cache/emusen/probe/<backend>/probe`.
+
+**The work directory is no longer in `/tmp`.** It holds both the unpacked headers and the built probe, and defaulting it to `/tmp` meant every session re-downloaded the RPMs and relinked — which was the whole of "we keep building it each time". The emulator's own object tree was never the cost. It is now `~/.cache/emusen/probe/<backend>/`, plus an up-to-date check that makes a no-op invocation take 0.024s instead of minutes.
+
+**The manifest.** Each report also writes `<backend>_manifest_f<frame>.json`, naming every space with its size and file, and the screen's dimensions and pixel format. This is what makes a dump set from an emulator this project has never seen readable at all: the old layout could only be interpreted by knowing in advance which emulator wrote it and which console it was.
+
+---
+
+### 3.45a The probe was reading memory out of a running emulator, and had been all along
+
+This is the most important thing in this section, and it invalidates measurements rather than adding a capability.
+
+`Emulator::Pause()` sets `_paused`, and `Emulator::IsPaused()` returns that same field. The probe's idiom was therefore a no-op:
+
+```cpp
+emu->Pause();
+while(!emu->IsPaused()) { sleep(1ms); }   // true on the first read, always
+```
+
+Every dump the probe ever took was read while the emulation thread was still running. This was confirmed against the **old** binary, not inferred: two consecutive runs of the same ROM at the same frames differ, by 22 bytes of NES internal RAM at frame 180. §3.40 states that after `RamState::AllZeros` "every dump and the whole instruction trace are byte-identical across runs"; that held for the instruction trace, which is written by the emulation thread itself, and was **false for every memory dump**. Its own warning is the one that applies — *if a reference disagrees with itself, nothing measured against it means anything.*
+
+**Why the obvious fixes do not work.** `AcquireLock()` genuinely parks the emulation thread at a frame boundary, but only once the control thread has noticed the frame went by, and at `MaximumSpeed` that notice arrives two to five frames late — the probe then lands on frame 305 having been asked for 300. Polling `GetFrameCount()` more tightly cannot close this: the emulator runs thousands of frames a second and the control thread sleeps in milliseconds.
+
+**The fix is `patches/mesen/probe-frame-stop.patch`**, a fourth patch alongside the three trace hooks. The emulation thread compares its own frame count against `g_probeStopFrame` and stops *itself*, inside the emulation loop, after `WaitForLock()` and before `WaitForPauseEnd()`. Stopping on the thread that owns the state is the only construction that is both exact and quiescent. After it: **35 of 35 files identical across three runs, landing exactly on the requested frames**, and 7 of 7 on the SNES side.
+
+**How wrong the old dumps were**, measured against the corrected probe on SMB3 (differing bytes):
+
+| space | f60 | f120 | f180 | f240 | f300 |
+| --- | --- | --- | --- | --- | --- |
+| `ram` | 10 | 2 | 34 | 20 | 37 |
+| `oam` | ok | ok | 6 | 16 | 10 |
+| `nametable` | ok | ok | 32 | ok | ok |
+| `screen` | ok | ok | **96** | **287** | **167** |
+| `work`, `palette`, `chr` | ok | ok | ok | ok | ok |
+
+On Yoshi's Island at frame 1500 only `gsuram` was affected, by 384 of 32768 bytes; VRAM, CGRAM, OAM and the screen all matched. That is why §3.39's VRAM/CGRAM conclusions survive this and the SuperFX work was not built on sand — the spaces that investigation leaned on happen to be quiescent at a frame boundary, and the ones the coprocessor and CPU write continuously are the ones that were torn. **The rule to carry: a space that is being written when you sample it is the one that will lie to you, and which spaces those are depends on the game, not on the emulator.**
+
+---
+
+### 3.45b The frame stop covers advancing, not arriving — a report at an already-reached frame still reads a running machine
+
+§3.45a is not quite complete, and the remainder was found on 2026-08-08 while verifying an unrelated fix. `MesenBackend::RunUntil` opens with
+
+```cpp
+if(_emu->GetFrameCount() >= frame) { return; }   // never sets g_probeStopFrame
+```
+
+so when the requested frame has **already** been reached the function returns without arming the stop and without parking anything. The emulation thread was left running by `LoadRom` and stays running; the report that follows samples a live machine. §3.45a fixed the case where the probe *advances* to a frame and forgot the case where it is *already there*.
+
+**The reproduction is `--pressuntil` landing at frame 0**, which is ordinary: anchoring on a value the machine already holds at power-on succeeds before a single frame is run, so `RunUntil` is never called with an advancing target. Five consecutive runs of the same binary, same ROM, same arguments:
+
+| run | 1 | 2 | 3 | 4 | 5 |
+| --- | --- | --- | --- | --- | --- |
+| `line` / `cyc` | 0 / 216 | 3 / 113 | 2 / 129 | 2 / 225 | 5 / 169 |
+
+Against a report that does advance (`probe rom out 60 60`), the same field is `line 240 cyc 5` on every run. The tell is exactly §3.45a's own rule — *a space that is being written when you sample it is the one that will lie to you* — and the PPU's scanline and dot counters are the fastest-moving state the probe prints.
+
+**How much this actually cost, stated carefully so it is neither dismissed nor inflated.** In the measured cases the *memory dumps and the manifest were byte-identical across runs*; only the state line's `line`/`cyc` varied. That was not a guarantee, it was a consequence of RAM being quiescent so soon after power-on. A frame-0 anchor on a game that is mid-DMA would tear the way §3.45a's table shows. Every `--pressuntil` run that reached its anchor immediately was affected; runs that tapped their way to a later frame were not, because those advance and therefore park.
+
+#### The fix, and the claim it retired
+
+Two changes, both additive:
+
+1. `probe-frame-stop.patch` gains `g_probeStopArmed` and moves the stop check to the **top** of the emulation loop. A separate armed flag is what allows a target of 0 to mean "stop", which `g_probeStopFrame != 0` could not express; checking before `RunFrame` rather than after is what parks a machine that has already arrived instead of one frame later.
+2. `MesenBackend::Load` arms the stop **before** `LoadRom`, which is what starts the emulation thread. Arming afterwards is a race the probe cannot win — at `MaximumSpeed` an unknown number of frames elapses between reading the counter and storing a target — and `Load` then waits for the park before any caller reads identity, spaces or the first signature row. `RunUntil`'s early return is now correct rather than accidental: every exit from it leaves the machine parked, so "already at the frame" finally means "already stopped at the frame".
+
+Six runs of the frame-0 anchor, before and after, same ROM and arguments:
+
+| | 1 | 2 | 3 | 4 | 5 | 6 |
+| --- | --- | --- | --- | --- | --- | --- |
+| before | 1 / 0 | 2 / 53 | 2 / 51 | 2 / 100 | 2 / 323 | 0 / 177 |
+| after | 0 / 25 | 0 / 25 | 0 / 25 | 0 / 25 | 0 / 25 | 0 / 25 |
+
+Advancing reports still land exactly (`frame 60`, `line 240 cyc 5`, every run), and the dumps are byte-identical across runs.
+
+**A prediction made while designing this was wrong and is retired.** The change was expected to make **frame 0** observable, on the reasoning that the loop ran a frame before the old bottom-of-loop check could fire. Instrumenting `Load` showed otherwise:
+
+```
+[DBG] before LoadRom frame=0 armed=1
+[DBG] after  LoadRom frame=1 armed=0 paused=1
+```
+
+`Emulator::LoadRom` runs a frame before it returns, so the counter is already 1 by the time any external code can arm anything. **Frame 0 is not reachable on this backend at all**, and the first observable frame is 1 — which is what the pre-fix probe reported too, verified by rebuilding the old binary against a core carrying the old patch and running it six times. The fix therefore changes *determinism*, not *numbering*.
+
+This leaves a real off-by-one between backends: Mesen's first observable frame is 1, libretro's is 0, because `retro_load_game` runs no frames. It is inherent to the two emulators rather than to the probe, the comparator's ±16-frame alignment search absorbs it, and it is recorded here so it is not diagnosed a third time.
+
+---
+
+### 3.46 `apudiff` — the NES register-write differ, and what it says about SMB3
+
+§3.43 documented `apudiff` as the consumer for `mesen_apulog_*.bin`. It did not exist; nothing in the repo implemented it, and our side emitted no APU log to compare against, so the logs sat unread for two days. Both halves are now built.
+
+**Our side.** `ApuWriteTrace` (`Moon - NES/Debug/`) emits the same 12-byte `ESAW\1` record the probe does, driven by `EmuSen.Pharaoh --apulog <frame>:<path>`. **The hook is at the very top of `MemoryBus.Write`**, before any branch, which matters more than it sounds: `$4014` and `$4016` are handled by their own early-returning branches, and a first attempt that hooked the APU branch logged **zero** writes to both while Mesen logged 1176 and 9430. The reference's hook is at the top of *its* funnel for the same reason.
+
+**The differ** reuses §3.40's `TraceDiff` unchanged, through an `ApuWriteTrace.Step : ITraceStep<Step>` adapter. That reuse earns its keep here rather than being tidiness: a sound engine rewrites the same registers every frame, so loop collapsing is the difference between a readable diff and thousands of identical lines. `--tracediff` picks the parser off the magic, so the same verb now reads `ESCT`, `ESGT` and `ESAW`. It also prints a per-register write count for both sides, which is the summary that actually answers an audio question — the trace diff says *where* the streams parted, the table says *which channel*.
+
+`TraceDiff.cs` moved to `EmuSen.Cores.Debug` for this. It was already generic over `ITraceStep<T>`; it now has a consumer on a second console, which is the bar a shared location has to clear. `CpuTraceDiff.cs` and `GsuTraceDiff.cs` stay where they are, being record-layout-specific.
+
+**The SMB3 result, 1200 frames with Start tapped at 400/500/620.** 17,286 writes on Mesen against 16,802 on ours. Every register agrees within six writes except one:
+
+| register | Mesen | EmuSen |
+| --- | --- | --- |
+| `$4010` | 2377 | **1899** |
+| `$4014` | 1176 | 1178 |
+| `$4016` | 9430 | 9424 |
+| `$4017` | 1177 | 1179 |
+| all others | — | within 1 |
+
+`$4010` is the DMC rate/IRQ/loop register, and the gap is 478 writes — about 20%, against roughly two writes per frame on the reference and 1.6 on ours. A register the game writes conditionally, that we write measurably less often, on a console whose DMC is already the documented weak point (`Moon_APU.md` §6: flat 4-cycle fetch cost, the two failing `apu_test` suites). **Not chased here** — this section is the tool landing, not the investigation — but it is the first hard number anyone has had on it, and it is the obvious next thread.
+
+---
+
+### 3.46a What the SMB3 comparison actually says
+
+The question that started this was "load SMB3 and find what we did wrong". On the evidence, in video memory: **nothing**.
+
+- `nametable`, `palette`, `chr` and `oam` reproduce the reference **byte-exactly** across 75 consecutive frames, once compared at the right instant.
+- The one apparent failure was `nametable` at frame 180, 64 bytes of 2048. It is not a divergence. **Our frame 180 is byte-identical to Mesen's frame 182**, and the difference grows by exactly 32 bytes per frame in both directions — SMB3 scrolls its title screen 32 nametable bytes per frame, so this is the same data, two frames later. A perfectly linear gradient like that is proof the *content* is right and only the *phase* differs.
+- Internal RAM differs by 11-52 bytes of 2048, and **this is not a defect either**. Three-way against Nestopia (via the libretro backend):
+
+| frame | Mesen↔Nestopia | Mesen↔EmuSen | Nestopia↔EmuSen |
+| --- | --- | --- | --- |
+| 60 | 9 | 11 | 11 |
+| 120 | 16 | 30 | 26 |
+| 180 | 32 | 40 | **21** |
+| 240 | 39 | 52 | **28** |
+| 300 | 30 | 46 | 30 |
+
+Two mature, independent, unrelated emulators disagree with each other by 9 to 39 bytes at the same frames, and EmuSen sits inside that spread — closer to Nestopia than Mesen is, at three of the five. **Byte-exact internal RAM at a given frame is not a property any pair of emulators has**, because a frame boundary is not the same instant in two machines and whatever the CPU was part-way through writing differs accordingly. This is the first question in this project that a *second* reference answered and a single reference could not, and it is the argument for the libretro backend in one table.
+
+What remains genuinely open is the two-frame lag and the `$4010` write gap. Both are timing, neither is data, and both now have a number attached.
+
+**What the tests assert, and why they do not assert more.** `ReferenceDumpTests` replaces `MesenReferenceTests`; it discovers dump sets by globbing `<backend>_<space>_f<frame>.bin` and reads the console and ROM from the manifest, so it is no longer SNES-only nor tied to Mesen having produced the data. The old one keyed fixture discovery on `mesen_vram_f*.bin`, which no NES dump set contains, so **every NES dump was structurally invisible to it** — the suite went from 2268 tests to 2469 by making them visible. Video memory is asserted byte-exact, allowing a match against an adjacent dumped frame, which is a *stronger* claim than any tolerance would be and reports the offset when it uses one. A frame within the phase search of either end of the dumped window is skipped rather than failed, because the neighbour that would prove an offset may simply not have been dumped, and "no match" then says nothing. Internal RAM gets a 5% tripwire and an explanation of why it is a tripwire and not a proof: a real fault diverges hundreds or thousands of bytes, not tens.
 
 ---
 
@@ -1613,3 +1798,344 @@ This is roughly how the toolchain got used across the coin/Yoshi rendering inves
 - **Programmatic controller input** — Mesen's `LuaApi::SetInput`. The one item from §3.37 parked rather than dismissed: several open questions in `Games_Tested.md` are input-related (the SMAS controller-port assignment, the IoG title screen), and a `pad` command that injects a button press would test them directly. It belongs with the frontend's input plumbing rather than in a debug registry, which is why it was not built alongside the rest of that pass.
 - **A conditional trace** — Mesen's `TraceLoggerOptions.Condition`/`Format`. `trace` is still count-only. Deferred in §3.37 because the condition would have to be evaluated inside the core's own verbose-log path, and logpoints cover the case that actually comes up more precisely.
 - **A ROM database/mapper for known per-title quirks** — not built yet. The idea: a small lookup (by ROM checksum, not filename) that lets a frontend auto-apply a known cartridge-specific behavior - the concrete case that prompted this is Super Mario All-Stars' Controller 2 quirk (`Games_Tested.md`'s SMAS entry), where the mirroring workaround exists but currently has to be turned on by hand (F7 in `EmuSen.Hotaru`, a checkbox in `EmuSen.Mistress`) rather than being applied automatically for that specific cartridge. Needs to stay **core-agnostic** if built - EmuSen is adding cores beyond the SNES before it ever reaches disk-based generations, and a "quirks database" keyed on some SNES-specific identifier (or living inside `EmuSen.Cores.Nintendo.Venus` at all) wouldn't carry over to an NES/other core needing the exact same kind of per-title override; the lookup mechanism belongs at a level every core can plug into, the same way `IDebugTarget` itself doesn't assume any one console's shape.
+
+---
+
+### 3.47 Two ways a screenshot diff lies, found while verifying the 2026-08-08 mappers
+
+The probe makes it cheap to compare a frame against the reference, and cheap comparisons invite over-reading. Six new NES boards were verified this way; two of the comparisons were meaningless, and neither announced itself.
+
+**The reference may not be running the board you asked for.** Mesen carries a game database and, on a CRC hit, overwrites the header's mapper number outright (`GameDatabase::SetGameInfo` assigning `romData.Info.MapperID`). For images with damaged headers — which, per `Moon_Memory.md` §2.2, is a large minority of any real library — the two emulators can in principle be running *different boards* on the same file, and nothing in the probe's output would reveal it.
+
+> **Corrected 2026-08-08.** This section first named `Adventures in the Magic Kingdom (U) [a1]` as a case where that had happened, and asserted the reference was playing it as MMC3. **That was wrong, and it was asserted without being checked.** `GameDatabase::InitDatabase` loads `MesenNesDB.txt` from the emulator's home folder, and the probe points the home folder at its own dump directory (`ProbeOptions::HomeFolder`), which never contains one. No database is loaded in a probe run at all. Once the identity gate below existed it reported `mesen board=65` against `emusen board=65` — the same board — in the first second of being pointed at the problem.
+>
+> The mechanism is still real and still worth guarding, which is why the gate exists and why this paragraph stays. What was wrong was reaching for it as an explanation because it was available, rather than measuring. The blank screen that prompted all this is an unexplained difference in this core's Irem H3001 or in that dump, and is recorded as open in `Moon_Memory.md` §4.11 rather than as solved.
+
+**A tapped run is not a comparison.** Feeding both sides the same `--press`/`--tap` schedule does not keep them in the same place. Mr. Gimmick with three Start taps diffed at 79% of the frame and After Burner at 1.22%; with no input at all, at a later frame, both were pixel-identical. The taps had landed on different menu states, and a menu state difference reads exactly like a catastrophic rendering bug. The existing `--pressuntil` anchor exists precisely for this and should be preferred; where an anchor is not known, **an unattended run at a later frame is stronger evidence than a driven run at an earlier one**, which inverts the intuition that more input means more coverage.
+
+The general form of both: a differential test proves two systems agree, and says nothing about whether they were asked the same question. The cost here was roughly an hour split between a board that was never wrong and a divergence that was never a bug.
+
+---
+
+### 3.48 The comparability gate, and EmuSen as a peer backend
+
+*Where it lives now: `EmuSen.WiseMan/Reference/analysis/compare.py`, not `--compare`. The gates read files and never load a ROM, which puts them on the Python side of the seam `EmuSen_Stack.md` §2.2 draws, and the signature stream they read is now a SQLite table rather than a CSV parsed per query. The design below is unchanged and was held to byte-identical output through the move — see `EmuSen_Stack.md` §3 for the differential result. `EmuSen.Pharaoh --compare` prints where the tool went and exits 1.*
+
+§3.47 records two comparisons that were valid-looking and meaningless. The response is not a better differ — the differ was correct every time — but a layer that decides whether a difference *means* anything before measuring one, and a symmetric arrangement in which this project is one backend among several rather than the privileged consumer.
+
+**The contract that matters is the file protocol, not the C++ vtable.** `IProbeBackend` stays what it was: the in-process adapter for an emulator that has to be driven. A *peer* is anything that writes the same files. `EmuSen.Pharaoh --probe` does exactly that, emitting `emusen_<space>_f<frame>.bin`, `emusen_manifest_f<frame>.json` and `emusen_screen_f<frame>.bin` beside the reference's. `compare.py` then reads two directories and never learns which emulator made either.
+
+Two additions to the protocol:
+
+- **`identity` in every manifest** — the board, region, PRG/CHR sizes, save presence and header trust the backend *settled on*, as opposed to what it did. Empty fields are legal and meaningful: a libretro core cannot report a mapper, and a gate that reads silence as agreement is worse than one that reports a one-sided check.
+- **`<backend>_sig.csv`** — one row of CRC32s per frame, from frame 0, with a `#`-prefixed header carrying the identity and a column list that is the schema. A consumer intersects on column names rather than assuming two emulators expose the same spaces.
+
+The gates, cheapest first:
+
+1. **Identity.** Board, region, sizes and system, before a single pixel is read. A mismatch is `NOT-COMPARABLE` and the pixel count is not reported at all, because it would describe the mismatch.
+2. **Divergence.** Where the two streams first parted, on columns that have first been shown capable of answering — see §3.48a, which is the part that did not work as designed.
+3. **Informativeness.** Whether the frame could have disagreed: colour count, dominant-colour fraction, and whether the reference *moves* across the phase window. A reference that is static across the window makes every phase offset match, so a phase "match" proves nothing about timing.
+
+The verdicts are `PASS`, `PASS(vacuous)`, `NOT-COMPARABLE`, `DIVERGED-AT`, and `DIFFERS`, carried out as exit codes 0/3/2/4/1 so a script can branch on the *kind* of answer.
+
+**One inversion worth stating, because it was written wrongly first.** Vacuity grades an agreement. A frame that plainly disagreed is never vacuous however uniform either side is — the first cut reported Adventures in the Magic Kingdom as `PASS(vacuous)` while 87.53% of its pixels differed, on the grounds that our own screen was a single colour. A blank screen where the reference draws content is the strongest evidence of a fault available, and the gate had been built to file it as a pass.
+
+**Measured against the four cases from §3.47, plus one nobody had identified:**
+
+| ROM | Verdict |
+|---|---|
+| Klax | `PASS` — 14 colours, reference moving, phase +2 stable |
+| After Burner | `PASS(vacuous)` — 3 colours, reference static across the window |
+| Adventures in the Magic Kingdom | `DIFFERS: 53778 px (87.53%) and no gate explains it` |
+| Mr. Gimmick (E) | `NOT-COMPARABLE: region differs: emusen=ntsc mesen=pal` |
+
+The last was not one of the ghosts this was built to catch. `Mr. Gimmick (E)` is a PAL image, the reference runs it at PAL timing, and an hour earlier it had been recorded by hand as a pixel-exact confirmation of the FME-7. It matched because the screen was static. The tool found that on its first outing against real data, which is the strongest argument for it that exists here.
+
+### 3.48a Memory is not comparable across emulators, and the gate has to measure that
+
+The divergence gate was designed around a per-frame RAM hash: find the first frame where the two streams differ, and classify by whether an input preceded it. **It does not work, and the measurement that shows why is worth keeping.**
+
+Agreement rate per column, aligned on the best offset, over ~300 frames:
+
+| ROM | `ram` | `work` | `oam` | `palette` |
+|---|---|---|---|---|
+| Klax — pixel-identical | 62.0% | 100% | 1.6% | 0% |
+| After Burner — pixel-identical | 0.3% | 100% | 100% | 0% |
+| Magic Kingdom — 87% of pixels differ | 1.0% | 100% | 10.2% | 0% |
+
+A frame that is *pixel for pixel identical* carries 62% RAM agreement in one game and 0.3% in another, and a genuinely broken one sits between them. Three causes, none of them a bug in either emulator:
+
+- **The frame boundary is not the same instant.** Two emulators stop at different points relative to the game's own update, so a space the game is halfway through writing is sampled at different moments and disagrees while nothing is wrong.
+- **Power-on contents are undefined.** NES palette RAM has no defined reset state; each emulator fills it differently and `palette` therefore agrees 0% of the time, permanently, on every ROM.
+- **Layout and size differ.** This core's nametable mirror is 4 KB against the reference's physical 2 KB, and CHR banking differs in arrangement without differing in effect. Neither can agree byte for byte even when the machines do.
+
+So the gate **measures each column's comparability rather than assuming it**, classifying by agreement rate as `stable` (≥95%), `intermittent`, or `never` (≤5%), and admits only `stable` columns as divergence evidence. With none available it reports `INCONCLUSIVE` and claims no divergence frame — a gate that cannot answer says so rather than inventing a number, which is the failure mode the whole section exists to prevent.
+
+Three consequences fell out of building it:
+
+- **Alignment cannot use a constant column.** A column that never changes agrees at every offset, so it carries no timing information; `work` is constant in most runs and dragged the alignment to a nonsense offset until it was excluded. Alignment now uses only columns that vary.
+- **Alignment is mandatory, not a refinement.** This core runs two frames behind the reference on boot. Comparing frame *N* to frame *N* reports a divergence in the first row of every ROM ever tested.
+- **A column must be rated on a leading window, not on the whole stream.** Rating over everything is self-defeating: a genuine divergence half way through a run drags that column's agreement rate below the threshold and disqualifies the one column that would have revealed it. The first cut did exactly this and reported `INCONCLUSIVE` on a fixture built to diverge at a known frame. The rating is now computed over the first quarter of the aligned frames and then used to judge the rest, which is an ordinary calibrate-then-detect arrangement and carries its usual limitation: a divergence *inside* the calibration window makes the column look unreliable and is missed. That case is left to the screen, which catches it as `DIFFERS`.
+
+**The screen remains the reliable signal** — normalised to RGB, it compared correctly in every case all day. Memory is the cheap signal that must be calibrated before it is believed. That asymmetry was not the expected result and is the main thing this section has to hand over.
+
+---
+
+### 3.49 The known-differences dictionary, and why "proven" is a schema constraint
+
+The gates in §3.48 tell you *that* two emulators disagree on a column. What they cannot tell you is whether that disagreement is already understood. Accumulating those explanations is obviously useful and just as obviously dangerous: **a wrong entry is worse than no entry**, because it teaches the comparator to explain away a real defect, silently, forever, on every future run. §3.47 records exactly that mistake being made by hand — an explanation reached for because it was available rather than because it was measured, and written into two man pages as fact.
+
+So the dictionary is built around the assumption that its author is not to be trusted, including when its author is the person adding the row.
+
+**Storage.** SQLite. The schema, seed and reader now live in `EmuSen.WiseMan/Reference/analysis/` and are read from Python's stdlib `sqlite3`, which needs no package and so retires the `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 pin *for this database* — that pin was needed because the 2.1.11 `Microsoft.Data.Sqlite` 10.0.10 resolves by default carries GHSA-2m69-gcr7-jv3q, surfaced as `NU1903`, and it is still required wherever the C# catalogue driver runs. **None of the discipline below is affected**: it is enforced by the schema's triggers, so it holds whatever language opens the file, which is the entire reason it was built that way rather than as reader-side checks.
+
+**What is committed is SQL, not a database.** `schema.sql` and `seed.sql` are the reviewable source; `known-differences.db` is a build artifact, rebuilt when missing, and is not in the repository. A binary in git cannot be diffed, reviewed or merged, which would defeat the point: the entire value of a proof requirement is that a claim can be *argued with* on the merits before it is believed.
+
+**Four tables, and the interesting part is the fourth.** `definition` is the claim, `evidence` is what motivated it, `assertion` is the falsifiable predicate a machine can re-run, and `verification` is one row per time an assertion was actually executed, carrying the commit it ran against. A definition is `provisional`, `proven` or `retracted`.
+
+**Promotion is enforced by triggers, not by discipline.** Writing `status = 'proven'` in a seed file aborts the insert. Promoting a definition with no passing verification aborts. Promoting one with no assertion aborts. And because `verification` has a foreign key to `assertion`, a definition with nothing to re-run cannot have a verification recorded against it at all — the stronger invariant, which a test tried to state the weaker version of and was corrected by the schema.
+
+**The dictionary annotates; it never suppresses.** A proven entry adds `known: <slug>` beside a column and nothing else. It does not remove the column, hide the rate, or change a verdict. This is the deliberate part: a difference that stopped being reported the day it was explained is a difference nobody notices the day its cause is fixed. Columns with no proven explanation are marked `UNEXPLAINED`, which is the state most of them should be in.
+
+**Demotion is automatic.** `verify_dictionary.py <ours> <theirs>` re-runs every assertion against a real pair; anything that fails is demoted to provisional rather than deleted, because a claim that has stopped holding here may still hold elsewhere and its history is worth keeping.
+
+The first run of the verifier demoted one of its own seed entries. `moon-reports-ntsc-unconditionally` was asserted with a fixture of "any NES pair" and evaluated against Klax, where both sides correctly report NTSC, so the assertion failed and the entry lost its status. The claim is true; the *assertion* was wrong, because a claim about PAL images cannot be demonstrated on an NTSC one. Assertions now name the fixture that demonstrates them and skip on any other pair. That a badly-scoped claim was rejected rather than believed is the system doing its job on its own author, an hour after that author had made the same class of error by hand.
+
+The retracted game-database claim from §3.47 is seeded as a `retracted` row, with its reasoning in `retracted_why`, so the dictionary carries a worked example of the failure it exists to prevent.
+
+---
+
+### 3.50 The probe in Rust, and what a language change actually bought
+
+The probe was ported to Rust on 2026-08-08. This section records what the port could and could not reach, because the interesting result is a negative one: **the C++ does not go away, it moves**, and the reasons it cannot go away are structural rather than incidental.
+
+> **Status.** This section is the Phase 1 record and is kept for its reasoning, not as a description of the tree. Its file inventory is historical: `Reference/probe/` was deleted the same day once the Mesen backend followed, and the design sketched under "a fifth patch, not a Rust file" was built and accepted. **§3.52 is the current account of the Mesen side.** What remains live here is the analysis of *why* the split falls where it does, the two byte-compatibility prohibitions, and the three defects — all of which still hold.
+
+**The three parts have nothing in common but a build rule.** The policy layer (`ProbeMain.cpp`, `ProbeDump.cpp`, `ProbeBackend.h`, 727 lines) is ordinary argument parsing, formatting and file writing, and transcribes directly. `LibretroBackend.cpp` (364 lines) is `dlopen` over a stable C ABI, which is the case Rust FFI handles best. `MesenBackend.cpp` (405 lines) cannot be written in Rust at all, and the reason is worth stating precisely rather than as "C++ interop is hard": it **subclasses `IKeyManager`**, and Rust cannot synthesise a C++ vtable. `dynamic_cast<SnesConsole*>`, the `std::vector<uint8_t>` trace globals and the by-value `SnesConfig`/`GsuState`/`NesPpuState` are each individually workable; an abstract base class that must be *implemented* is not.
+
+**Mesen's own C ABI does not rescue this, which was checked rather than assumed.** `InteropDLL/` exports 210 `extern "C"` functions and looked like the obvious escape. It fails on four counts, all verified in the source: `InitializeEmu` only constructs a key manager when a real window handle is passed and on Linux constructs `LinuxKeyManager` (evdev), so headless `SetKeyState` is a silent no-op; there is **no `GetFrameCount` export at all** (the C# UI receives it through notification callbacks); there is no screen-buffer export, only `TakeScreenshot` to a PNG and the AVI recorder; and `GetMemoryState` is a `WithDebugger` API, so using it would force the debugger on. A probe needs exactly frame count, headless input, raw framebuffer and memory — the four things the C ABI does not offer.
+
+**So the Mesen backend's replacement is a fifth patch, not a Rust file.** The design that follows is an add-only `Core/EmuSenProbeApi.cpp` exposing a small `extern "C"` surface, with the key-manager subclass living *there*, next to the class it derives from. This is cheap for a reason worth recording: `makefile:138` is `CORESRC := $(shell find Core -name '*.cpp')`, so a new file in `Core/` is compiled with no makefile edit, and a patch that only *creates* a file cannot conflict on `git apply` however far upstream drifts. The 112 lines that modify upstream stay at 112.
+
+**Staging.** The libretro half landed first and the C++ probe was kept as the A/B baseline, because §3.45's own contract makes that legal: *the contract that matters is the file protocol, not the C++ vtable, and a peer is anything that writes the same files.* Two probes writing the same protocol is the arrangement the architecture already describes for Pharaoh.
+
+#### What byte-compatibility forbade
+
+The port is not an opportunity to improve the format, and two attractive Rust conveniences had to be refused:
+
+- **No `serde_json` on the writing side.** A serialiser is free to reorder keys and reflow whitespace, and either breaks a consumer that is byte-shaped. The writer stays hand-rolled, on both the Rust and C# sides, and the byte-parity tests between them depend on it. *Reading* was the same way — `DumpSet.ReadManifest` and `ReferenceDumpTests.SystemOf` both used regexes — but that was a consequence of the writer's constraint rather than a requirement of its own, and the Python ingest (`dumpdb.py`) uses a real parser. `ReferenceDumpTests.SystemOf` still does not.
+- **No `clap`.** The existing parser ignores unknown flags and ends optional positionals on a leading `-`; `clap` would reject both. Hand-rolled parsing, and `atoi`/`strtoul` semantics reimplemented deliberately, because a port that rejected `12abc` would refuse command lines that used to run.
+
+The honest summary of the gain is therefore narrower than "modern": what Rust bought here is that `Spaces()` returns slices whose lifetime is tied to the backend, `libloading` in place of raw `dlsym`, `Result` in place of `printf`-and-return, and a dump layer with 27 unit tests pinning the wire format. Performance was not a goal and is not the argument, though the Rust probe runs a 400-frame signature sweep in 0.19s against the C++ probe's 0.35s.
+
+#### Three defects the port surfaced
+
+Transcribing code is an unusually thorough way to read it, and it found things.
+
+**The state anchor was a dangling pointer, and this is a real use-after-free rather than a theoretical one.** `ProbeMain.cpp:226` read
+
+```cpp
+const MemorySpace* anchor = ProbeDump::Find(backend->Spaces(), anchorName);
+```
+
+`Spaces()` returns a `std::vector` **by value**, and `Find` returns a pointer into it; the temporary dies at the semicolon, and the pointer was then dereferenced on every iteration of the `--pressuntil` loop. It never visibly misbehaved because the freed bytes were not reused and the `Data` pointers inside addressed emulator memory that genuinely outlived the vector.
+
+Built with `-fsanitize=address` and given a `--pressuntil` that has to tap, the unfixed probe aborts on the first read:
+
+```
+ERROR: AddressSanitizer: heap-use-after-free
+READ of size 4 at 0x7b7f1aa314f8 thread T0
+0x7b7f1aa314f8 is located 40 bytes inside of 48-byte region
+freed by thread T0 here:   [~std::vector]
+```
+
+The arithmetic identifies the field exactly: a `MemorySpace` is 48 bytes (32-byte `std::string`, 8-byte pointer, 4-byte size, 4 padding), and the 4-byte read at offset 40 is `space.Size` — the first thing `AnchorWord` touches.
+
+**Both implementations now look the anchor up by name on every read.** The Rust port could not express the original at all; the C++ was fixed to match rather than left to rot until Phase 3, because it is still the only way to drive Mesen. The fixed C++ is clean under ASan on the anchor-reached, cap-exhausted and advancing paths, and a full A/B — seven scenarios across two cores — shows the dump trees, stdout and exit codes unchanged, which is the evidence that the fix is behaviour-preserving and not merely quieter.
+
+Verifying it also turned up §3.45b, which is a separate defect and is written up there rather than here.
+
+**A documented argument behaviour was only half-implemented, and now matches its comment.** The comment at `ProbeMain.cpp:91` says a `-` flag "ends the optional positionals". The lambda tested each slot independently, so it did no such thing: it stopped `--press` being read as a *stride*, but the flag's **value** still fell into the next slot. `probe rom out 0 120 --press 10:Start` set `anchorAddr` to `0x10` rather than the default `0x0A00`, and `--backend libretro` set it to `0`. Only the report's hex line moved, which is why it went unnoticed for the tool's whole life.
+
+It was preserved through the port so that Phase 1 could be accepted on byte-for-byte agreement, then fixed **in both implementations together** so the A/B stayed meaningful: a slot is a positional only if every slot before it was one too. `--press 10:Start` now leaves the anchor at `$00A00` in the Rust and C++ probes alike. Fixing it separately from the port is the point — a behaviour change to a documented CLI deserves its own before-and-after, not a free ride inside a transcription.
+
+**Declining the log interface is not the same as suppressing it.** `retro_log_printf_t` is a printf-style variadic, and defining one is nightly-only in Rust, so the first implementation simply returned `false` for `GET_LOG_INTERFACE` on the assumption that a core's fallback logger writes to stderr. Measured, it does not: gambatte then emits five `[Gambatte]` INFO lines to **stdout**, in the middle of the dump report, which the C++ probe had been suppressing all along by answering the callback and dropping everything below `WARN`. The fix installs a non-variadic function into the variadic slot — sound on every ABI this builds for, since the callee reads only the two leading arguments — reproducing the C++ behaviour exactly for messages with no arguments and printing the format string literally for the rest, rather than silently wrong.
+
+#### Acceptance
+
+The port is accepted on a byte-for-byte A/B against the C++ probe, not on the dumps in `Reference/dumps/`. **That corpus cannot serve as a regression net and the assumption that it could was wrong**: it is gitignored, so `git ls-files` reports nothing, and its manifests carry no `identity` object, meaning they predate `ProbeDump.cpp`'s identity block and not even the current C++ probe reproduces them. A baseline has to be regenerated, not read off disk.
+
+What was run, with both binaries built from the same sources and pointed at the same core and ROM:
+
+| scenario | core | files | stdout | exit |
+| --- | --- | --- | --- | --- |
+| 0–400, stride 20, `--sig`, two presses | nestopia | identical | identical | 0/0 |
+| 60–80, stride 10, `--sig` | gambatte | identical | identical | 0/0 |
+| 0–300, stride 25, `--sig`, press | gambatte | identical | identical | 0/0 |
+| `--pressuntil` reaching its anchor | nestopia | identical | identical | 0/0 |
+| `--pressuntil` exhausting its cap | nestopia | identical | identical | **2/2** |
+| `--after` span past an anchor | nestopia | identical | identical | 0/0 |
+
+Argument and load failures agree on exit `1` across five paths. On the C# side, `--compare` reads the Rust probe's manifests and signature stream and reports `board=? trust=? prg=0 chr=0` — the honest "libretro cannot say" of §3.48 — and WiseMan's 267 `Reference` tests pass unchanged.
+
+One difference is **not** attributable to the port: `bsnes_mercury_performance_libretro.so` segfaults during `retro_load_game` under **both** probes, at exit 139. It is a pre-existing limitation of the libretro backend with that core and is recorded here so it is not rediscovered as a port regression.
+
+---
+
+### 3.51 What a dump set costs, and why the audio codec was the wrong lever first
+
+A dump set is disposable, but it is not free, and the two changes here were sized by measurement rather than intuition. The prompt was a fair objection — WAV in 2026 is a bulky choice — and the measurement agreed with the objection while disagreeing about where the bytes were.
+
+**An 11-report SMB3 run, 4,865,532 bytes:**
+
+| | bytes | share |
+| --- | --- | --- |
+| `wav` | 1,916,620 | 39.4% |
+| `chr` | 1,441,792 | 29.6% |
+| `screen` | 1,351,680 | 27.8% |
+| everything else | 155,440 | 3.2% |
+
+Audio really is the largest single component at a coarse stride. But the ranking inverts as the stride tightens, because the WAV is one file for the whole run while `screen` and `chr` are one file per report: at stride 1 over the same 600 frames those two would be ~152 MB against an unchanged 1.9 MB of audio.
+
+**The two levers, measured against each other:**
+
+| | bytes | share |
+| --- | --- | --- |
+| raw | 4,865,532 | 100% |
+| FLAC the audio, leave the rest | 2,958,658 | 60.8% |
+| `zstd -19` the whole directory | 72,520 | **1.5%** |
+
+The codec is worth 1.6×; compressing the directory is worth 67×. The reason is visible in the blob census — `chr` was **11 files and one distinct value**, and a blank screen blob compresses from 122,880 bytes to 25 — so the redundancy is *between* files, where no per-file codec can reach it.
+
+#### Deduplication
+
+A blob unchanged since the last report is hard-linked to the file that already holds it. The 11-report run above drops to 3 distinct CHR inodes; a `--pressuntil` run reports `15 blob(s) written, 10 unchanged and hard-linked`.
+
+A link rather than a `"sameAs"` manifest field, deliberately: every consumer already globs `<backend>_<space>_f<frame>.bin` and stats its size, and a new field would have to be taught to `DumpSet`, `ReferenceDumpTests`, the comparator and anything written later. The file is still there, still the right length, and `diff -r` between two dump sets still compares content — which is what kept the Rust/C++ A/B valid across this change.
+
+The comparison is **byte-exact, not hashed**. A 32-bit digest over 128 KB collides rarely enough to survive testing and often enough to eventually publish one frame's memory as another's, silently. That is §3.49's rule about a wrong entry being worse than no entry, applied to storage.
+
+#### FLAC by default, WAV as the fallback
+
+`--audio PATH` is the new flag and writes FLAC unless `PATH` ends in `.wav`. The reference emulator can only write WAV, so the backend records a `.capture.wav` and the policy layer re-encodes after `Shutdown` — which is what closes the file.
+
+Measured on 20 seconds of SMB3 gameplay: 3,833,464 bytes of WAV to 553,337 of FLAC, **14.4%**. `flac -8` is preferred and `ffmpeg -c:a flac` is the fallback, the latter being a dependency the project already carries for frame recording.
+
+**WAV survives on three paths, and this is the point rather than an afterthought.** `--wav` asks for it outright, which is what deep troubleshooting wants: every language reads it with no dependency and `xxd` on a WAV is a real debugging step. An encode that fails leaves the capture in place. And an encode whose **round-trip does not match** does the same, because lossless is a claim rather than an observation until the samples come back out identical — the encoded file is decoded, its PCM compared against the capture's, and only a match retires the WAV. Verified end-to-end: decoded FLAC and a directly-recorded WAV of the same run hash to the same SHA-256 over their sample data.
+
+Comparing PCM rather than whole files matters, and the chunk walk that makes it possible is not decoration: a decoder's WAV carries chunks Mesen's writer does not, so a byte-for-byte file comparison would fail on padding while the audio was identical.
+
+#### A false alarm worth recording
+
+Investigating this began with a WAV that compressed 1483:1 and contained zero non-zero samples across 958,288 of them, which read as the §3.43 muted-mixer defect returning. It was not: SMB1 and SMB3 title screens are genuinely silent until Start is pressed, and the same ROM with `--press 200:Start` records 56% non-zero samples at peak 10447. The pre-§3.45b probe produced identical silence, which is what settled it.
+
+The same measurement retired an open caveat from §3.45b: that run parks four times, so `WaitForPauseEnd`'s `OnBeforePause` → `StopAudio` on each park does **not** damage the recording, and the suspicion that it might is closed.
+
+---
+
+### 3.52 The Mesen C ABI, and where a language boundary actually belongs
+
+§3.50 ended on a prediction: that the Mesen backend's replacement would be *a fifth patch, not a Rust file*, and that the C++ would move rather than disappear. Both halves held, and this section records what the move cost and what it did not buy. The work landed on 2026-08-08 and completed the port; `Reference/probe/` no longer exists.
+
+**The boundary is drawn at the vtable, and that is the whole design.** `probe-c-api.patch` creates `Core/Shared/EmuSenProbeApi.cpp`, exposing seventeen `extern "C"` functions. Two things stayed on the C++ side, and the reason each stayed is the reason the boundary is where it is rather than one function further out:
+
+- **`ScheduledKeyManager`**, the `IKeyManager` subclass. Rust cannot synthesise a C++ vtable, so the class has to live next to the class it derives from. What crosses the ABI is the press schedule as a flat `uint32_t` triple array, and Mesen resolves it against `GetFrameCount()` *at the moment the pad is polled* — the invariant §3.45 measured, now preserved by construction rather than by discipline, since the caller has no way to sample it late.
+- **`probe_state_line`**, the per-report register decode. It reads `SnesPpuState`, `NesPpuState`, `ApuState` and `GsuState` by value. A caller that re-declared those layouts in Rust would be silently wrong the first time upstream added a field, and silently wrong is the failure mode this whole toolchain exists to avoid. **The formatted line is the stable artifact; the structs behind it are not.**
+
+Everything else — frame count, memory-space enumeration, screen, identity, traces, the live button override — marshals cleanly, and `mesen.rs` is 266 lines of marshalling with `mesen_sys.rs` at 74. That ratio is the honest summary of the exercise: the Rust file is thin because the hard part did not move.
+
+**Add-only, and that is load-bearing.** The patch only *creates* a file, so `git apply` cannot conflict however far upstream drifts, and `makefile:138` (`CORESRC := $(shell find Core -name '*.cpp')`) compiles it with no makefile edit. It changes not one line of upstream Mesen.
+
+The patch set as a whole is **173 insertions and zero deletions** across five upstream files, plus the add-only sixth. Zero deletions is checked rather than assumed, and it caught something: the NES CPU hook below initially reported two deletions, both of them upstream trailing whitespace this editor had tidied on lines it happened to touch. Restoring them cost nothing and keeps the property exact. The set is verified reproducible by reverting the checkout to pristine, re-running `build-probe.sh`, and confirming all six files come back **byte-identical** to what they replaced.
+
+#### Two decisions that look like nits and are not
+
+**The ABI is guarded by a version number rather than a shared header.** The two sides live in different repositories, so a header would have to be authored in one and consumed in the other, and would drift the moment a checkout carried an older patch. `probe_abi_version()` is checked once before the first call, and a mismatch is a startup error naming the fix. The alternative — generating the binding with `bindgen`, as the libretro side does — is right *there* and wrong *here*, and the distinction generalises: bindgen protects against drift from a header you do not control, and there is no such header in this case.
+
+**The link is deliberately not improved.** Cargo could easily have produced a position-independent binary with an `RPATH`, freeing the probe from the documented `cd <checkout>` invocation. It does not: `build.rs` emits `-L<checkout>` plus `-l:bin/pgohelperlib.so` so the recorded `DT_NEEDED` is the relative `bin/pgohelperlib.so`, byte-identical to what the C++ probe carried. **An A/B is only meaningful if both binaries load the same library the same way**, and a nicer link would have been a worse experiment. `readelf -d` on both confirmed the match before any dump was compared.
+
+One incidental finding, recorded because it contradicts what the Cargo book's phrasing suggests: **build scripts do receive the crate's feature `cfg`s**, not merely the `CARGO_FEATURE_*` environment variables. This was measured with a throwaway crate rather than assumed, and it matters because `bindgen` is an *optional* build-dependency — under `--features mesen` alone it is not linked into the build script at all, so an environment-variable check would still have to name `bindgen::` and fail to compile. `#[cfg(feature = ...)]` is the construction that works.
+
+#### Acceptance
+
+Both probes built from the same sources, run from the same checkout against the same ROMs, comparing dump trees, stdout and exit codes.
+
+| scenario | ROM | files | stdout | exit |
+| --- | --- | --- | --- | --- |
+| 60–140, stride 20, `--sig`, two presses, `--cputrace`, `--apulog` | SMB3 (NES) | identical | identical | 0/0 |
+| `--pressuntil` reaching its anchor, `--after 12`, `--sig` | SMB3 | identical | identical | 0/0 |
+| `--pressuntil` exhausting its cap | SMB3 | identical | identical | **2/2** |
+| too few arguments | SMB3 | identical | identical | **1/1** |
+| 80–200, stride 40, `--sig`, GSU trace | Yoshi's Island (SuperFX) | identical | identical | 0/0 |
+| 60–120, stride 30, `--sig`, press, `--cputrace` | Yoshi's Island | identical | identical | 0/0 |
+
+Two consecutive Rust runs are identical to each other — the §3.45a determinism check that originally caught the 22-byte NES RAM drift, and it now passes with **no exclusions at all**, which it could not before the `.rgd` fix below. The traces are substantive rather than trivially empty: a 28.6 MB GSU trace (596,590 steps), a 19.3 MB SNES CPU trace (803,877 steps), a 13.6 MB NES CPU trace (567,455 steps, once the hook below existed) and a 6,956-byte NES APU log (579 writes) — each byte-identical and each additionally reporting **no divergence** through `EmuSen.Pharaoh --tracediff`, which compares semantically after loop collapsing rather than by bytes. The libretro A/B was re-run afterwards, since `dump.rs` is shared: still identical across nestopia, gambatte and the `--pressuntil` path. WiseMan's 267 `Reference` tests pass, 37 and 38 Rust tests pass under the two feature sets, and `clippy -D warnings` is clean under both.
+
+#### Three defects the acceptance run surfaced, and their fixes
+
+The A/B was clean, but running it turned up three things that were wrong independently of the port. All three are now fixed; they are written up together because each was found by the *next* one's investigation.
+
+**The probe was writing a timestamped file into its own dump tree.** The first A/B reported `DIFFER` on all four substantive scenarios, on `mesenhome/RecentGames/<rom>.rgd`. What settled its cause was not inspection but the determinism run: **two consecutive runs of the same probe differ in that file too**. It is a zip of a screenshot and a save state that `Emulator::LoadRom` writes on every load, and it made every dump tree compare unequal to every other.
+
+The first response was to exclude the directory from the diff. That was the wrong instinct and it is worth saying so plainly: an exclusion list is a standing invitation to hide a real difference behind it. Mesen already has the switch — `SaveStateManager::SaveRecentGame` returns early under `EmulationFlags::ConsoleMode` or `EmulationFlags::TestMode`, described in its own comment as the testrunner path — so the probe now sets it and the file is never created. **`TestMode` and not `ConsoleMode`**, and the difference is not cosmetic: the two gate this identically, but `ConsoleMode` also reaches `Emulator.cpp:519` and calls `InitDebugger()`. Choosing it would have switched the debugger on for every probe run, which is precisely the disqualification §3.50 records against Mesen's own C API. A dump tree now compares with **no exclusions at all**.
+
+**`--cputrace` on an NES ROM produced an empty trace, and always had.** The file was 8 bytes — magic only — and the probe honestly reported `[cputrace 0 steps]`. The cause was that `cpu-trace.patch` instruments `Core/SNES/SnesCpu.cpp` and nothing else, so there was no 6502 hook to fire. `begin_trace` cannot warn about it either, because the console is not known until after load.
+
+`nes-cpu-trace.patch` adds the hook, and it fills **the same buffer and the same 24-byte `ESCT` record** as the S-CPU rather than inventing a second format. One machine runs at a time so one buffer suffices, and one record layout means `--cputrace` and `--tracediff` mean the same thing on both consoles. The 65816-only fields become the constants the 6502 makes them — `D` and `DBR` zero, `E` set, the 8-bit registers in the low byte — and the cost field carries CPU cycles where the S-CPU carries master-clock ticks, which never meet because a trace is only ever compared with another trace of the same machine.
+
+Being non-empty is not the same as being right, so the trace was checked against the cartridge rather than against expectation: the first traced PC is `$FF40`, which is the value at the ROM's own `$FFFC` reset vector; the opening stream is `SEI`/`CLD`/`LDA #`/`STA abs`/`LDX #` with `A` and `X` updating in step and `SP` at the 6502's power-on `$FD`; and **all 55,268 traced opcodes that fall in the MMC3 fixed bank match the ROM image byte for byte, with none mismatched**. A maximum instruction cost of 520 cycles is the OAM DMA stall, which is the right answer rather than a suspicious one.
+
+**A trace ended at the next report rather than at the frame it was asked for.** This was found while checking the step count of the new NES trace: 567,455 instructions is roughly sixty frames of 6502, not the twenty that `--cputrace 20` had requested. The measurement is unambiguous — the same flag captured 179,959 steps from `startFrame` 20, 373,707 from 40 and 567,454 from 60. `PendingTraces::flush` only ran at report boundaries, so **the captured span was a function of `startFrame`**, and the flag's documented meaning, "from boot to frame F", was true only when the first report happened to land on F. It affected the S-CPU and APU traces identically and had done since the traces existed; the Phase 2 A/B agreed byte for byte precisely because both probes were wrong in the same way.
+
+The report loop now stops at any pending trace's own frame before advancing to the next report. `--cputrace 20` records 179,959 steps from every `startFrame`, and the three files are byte-identical.
+
+Two things had to be got right along with it, and the first attempt got the second wrong:
+
+- `flush` now clears a due frame **whether or not the backend produced anything**. `end_trace` returning `None` is a statement about a backend's capabilities, not a transient failure, so retrying could only spin — and once the loop stops *at* a due frame, a due that never clears is an infinite loop rather than a harmless retry. Verified against libretro, which has no trace hook at all, on both the `--cputrace` and `traceUntilFrame` paths.
+- A due frame **already behind the machine** is left to the next report. The first version of the fix did not check this, and it broke every GSU trace: `traceUntilFrame` is a positional whose idle value is `0`, so the loop dutifully stopped at frame 0 and wrote an empty 8-byte file where a 28.6 MB trace had been. It was caught by the same C++ baseline the port was accepted against, which is the argument for keeping a baseline around after it has served its original purpose. Three unit tests now pin the ahead/behind/at boundaries.
+
+Also retired: §3.50 predicted that the Rust `write_trace`'s record-size validation — a `[WARN]` the C++ never emitted — would be a deliberate stdout divergence the Phase 2 A/B had to expect. It never fired. Every trace produced across both machines and all four kinds is a whole number of records, so the check guards a failure that has not yet occurred rather than a difference to account for.
+
+#### What was retired, and one estimate that was wrong
+
+`Reference/probe/` is gone: 8 files, 1,496 lines. `build-probe.sh` lost its `libretro-cpp` target and its C++ compile steps and is now a fetch-and-cargo script.
+
+The plan's arithmetic does not survive contact, and the correction is worth stating because it was the headline number: C++ in this repository was predicted to fall from ~1,700 lines to ~400. It is **620** — 157 lines across five patches that modify upstream Mesen, plus 463 in the add-only C ABI — because that ABI came in far above an estimate that implicitly assumed something nearer the 112 the other patches then totalled. The direction was right and the magnitude was not: a 64% reduction rather than 76%.
+
+**The count that actually matters was never the total.** It is the number of lines that modify code someone else maintains, and even that is no longer the 122 quoted above: `nes-cpu-trace.patch` took it to 157 by fixing a real gap. A patch set that grows because it closed a defect is not the same kind of growth as one that grows because the boundary leaked, and conflating the two is how a line count stops being a useful measure. What has not changed is the shape: still five small hooks in upstream files, still zero deletions, still one add-only file carrying everything that could be carried there.
+
+---
+
+### 3.53 The policy layer said it named no emulator, and named one twenty times
+
+`backend.rs` has claimed since the Rust port that "nothing in this module names an emulator. A backend is the only place that knows what 'Mesen' or 'libretro' means; the policy layer above parses arguments, schedules presses, anchors on state and writes dumps without ever naming one." §3.45 makes the same claim for the architecture as a whole. The claim was false when it was written and stayed false through two ports.
+
+**The argument.** A comment asserting an invariant is a prediction about future edits, and this project has now watched that prediction fail twice — once in the C++ probe, once in the transcription that inherited the comment verbatim. The interesting part is not that the leaks existed but that nobody could see them: the invariant was stated in prose in one file and violated in code in another, and no artifact connected the two. The fix that matters is therefore not the twenty edits, it is `tests::no_emulator_is_named_in_the_agnostic_layers` — the same move `PythonPaletteTests` makes in C# and the known-differences dictionary's triggers make in SQL, which §3.49 already argues for in the general case: **express the constraint as something an author cannot talk past, rather than as a convention they might forget.**
+
+**The mechanism.** The test reads `main.rs`, `backend.rs`, `dump.rs` and `audio.rs` with `include_str!`, strips `//` comments, stops at `#[cfg(test)]`, and fails if any surviving line contains a name from a fixed list of nine emulators. Comments may still name a backend to explain why it exists — that is where the rationale belongs — and the test fixtures use real names deliberately. It reported twenty sites: three module declarations, the `DEFAULT_BACKEND` cfg pair, a usage line, the `make_backend` factory, an error message, and one that reached disk.
+
+**The one that reached disk.** `ProbeOptions.home_folder` was built in `parse_args` as `format!("{dump_dir}/mesenhome")` — before any backend existed, so *every* backend got it. A libretro core is handed that path as its system, save and assets directory: nestopia and gambatte were writing into a folder named after Mesen, and on a libretro-only run the directory the core was told to use had never been created by anything. It is now `home_folder(dump_dir, backend.name())`, computed after the backend is constructed and before `load`, and the policy layer creates it. **Mesen's path is byte-identical** — `mesen` still yields `mesenhome` — which is why existing dump sets keep working and why this is a fix rather than a format change.
+
+**The roster.** Backend construction moved to `src/backends/mod.rs`, which now owns the module declarations, the `DEFAULT` cfg pair, the compiled-in name list, the backend-specific usage lines and the factory. `main.rs` asks for `backends::DEFAULT` and `backends::make(name, core)` and prints `backends::usage_lines()` without knowing what any of them mean. This does not remove the knowledge — something must map a string to a constructor — it *locates* it, which is the only thing the invariant was ever asking for. `--core` survives in the policy layer as an opaque string, on the grounds that "core" names a concept rather than an emulator.
+
+**A second-order finding.** With the profile directory now per-backend, the libretro backend's pre-load name was still the literal `"libretro"`, because it only learns its real name from `retro_get_system_info` during `load` — after `home_folder` has to be decided. Two cores probing into one dump directory would therefore have shared one profile and one save file, which is the same defect one level down. `core_stem` now derives the name from the core path (`gambatte_libretro.so` → `gambatte`) in `LibretroBackend::new`, and `load` still overwrites it with the authoritative `library_name`. Verified against gambatte and bsnes-mercury into a single directory: two profiles, correctly named.
+
+**`gsudiff.py`, found while auditing the consumers.** It was reading the pre-Rust-port trace layout — 18 `u32` per step from byte zero — against a probe that has written an 8-byte `ESGT` header and 48-byte records with `u16` registers since §3.52. Given two byte-identical streams it reported a confident divergence at step 0 whose address was `$54475345`, which is `ESGT`. This is the failure mode §3.39 already warns about in its own terms — "a confident divergence at step 0 that is pure bookkeeping" — arriving by a different route, and it is worth noting that the warning did not prevent it, because the earlier instance was understood as being about pipeline alignment rather than about trusting a differ's frame of reference at all. Fixed, moved to `Reference/analysis/` where the stack doc says Python tools live, given a `unittest`, and given a label taken from the dump's own filename prefix so a nestopia trace is not reported as Mesen's. Its retirement for cross-core SuperFX work (§3.40, `Venus_SuperFX.md` §9) is unchanged and now recorded in the docstring rather than only here.
+
+**What this does not cover.** Three things, deliberately:
+
+- **The probe is emulator-agnostic, not console-agnostic.** `TraceKind::Gsu` names a SuperFX coprocessor in a trait every backend implements, `--apulog` is documented in terms of `$4000-$4017`, and the default anchor address `0x0A00` is a SNES habit. That is a different axis with a different argument — a trace kind genuinely is machine-specific in a way an emulator name is not — and the guard does not police it.
+- **The guard's comment-stripping is a heuristic.** It cuts at the first `//`, so an emulator name inside a string literal that also contains `//` would be missed. No such literal exists today; the check is a ratchet against the failure that actually happened, not a proof.
+- **The emulator list is manual.** A backend for an emulator not in `EMULATORS` can leak freely until someone adds the name. The list is append-only by convention, which is a convention — precisely the kind of thing this section argues is insufficient. It is accepted here because the cost of the alternative (a general "proper noun in code" check) is false positives on every ordinary identifier.
+
+---
+
+## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders
+
+Four efforts landed in one commit, which is not the house style and is worth explaining rather than leaving as an oddity.
+
+The Crystal fold (the master clock, scanline boundary and CPU-budget accumulator moving out of the deleted `EmuSen.Crystal` and into Moon and Venus, with the PPU gaining a per-dot `Ppu.Timing.cs`), the assembly pruning it belonged to (`EmuSen.Nehellania` folding into `EmuSen.Endymion`), the Venus renderer work alongside it, and the reference-probe rewrite in §3.45 were all in flight at the same time. They overlap in `MoonCore.cs` and `MemoryBus.cs` — the probe's APU write hook sits directly on top of the new timeline's frame counter — and there is no split by path that leaves both halves compiling. Committing the probe work alone produced a tree that failed with twenty errors; adding only the Moon core left nine; the smallest set that builds is all of it.
+
+The lesson is the ordinary one about interleaving refactors, and the reason it is written down here rather than regretted quietly: **when a change needs a field that an in-flight refactor is still moving, the two are one commit whether or not they were one intention.** The alternative — landing the probe work first against the old timeline and rewriting it after — would have cost more than the muddled history does.
+
+Each effort keeps its own documentation, and those are the places to read: `Moon_Core.md` §5 and `Venus_CPU.md` §8.5d for the timeline, `EmuSen_LunaP.md` §16.1 and the assembly-pruning notes for the pruning, §3.45 and §3.46 above for the probe.

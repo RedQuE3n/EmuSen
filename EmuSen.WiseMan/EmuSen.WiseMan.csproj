@@ -45,10 +45,6 @@
     <!-- IRealtimeProvider/PollingProvider - see IDebugTarget.cs's own
          comment on why these live separately from DianaOS. -->
     <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
-    <!-- AudioPlayer/GamepadBindingMap - see Audio/AudioPlayerTests.cs and
-         Input/GamepadBindingMapTests.cs. Real SDL3 calls against the dummy
-         driver; nothing here opens a window. -->
-    <ProjectReference Include="..\EmuSen.Nehellania\EmuSen.Nehellania.csproj" />
     <!-- InputSettingsWindow and the rest of the Mistress GUI under test -
          see Mistress/*Tests.cs. Pulls in Avalonia transitively, which is
          fine for a test project; nothing here opens an actual window. -->
@@ -72,10 +68,9 @@
          Galaxia/*Tests.cs. ConfigStore.OverrideDirectory is what keeps
          those tests off the real config tree. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
-    <!-- The scheduler is tested directly rather than only through a core, so
-         its timeline semantics are pinned before any core depends on them -
-         see EmuSen_Crystal_Scheduler.md. -->
-    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
+    <!-- AudioPlayer/GamepadBindingMap - see Audio/AudioPlayerTests.cs and
+         Input/GamepadBindingMapTests.cs. Real SDL3 calls against the dummy
+         driver; nothing here opens a window. -->
     <ProjectReference Include="..\EmuSen.Endymion\EmuSen.Endymion.csproj" />
     <!-- LunaPalette and the shared theme - Serenity/TestAppBuilder.cs now
          includes the same LunaTheme.axaml the real frontends do, instead of
@@ -84,4 +79,10 @@
     <ProjectReference Include="..\EmuSen.LunaP\EmuSen.LunaP.csproj" />
   </ItemGroup>
 
+
+  <!-- Galaxia's catalogue schema, so a test can build the real thing - see EmuSen_Galaxia.md §7. -->
+  <ItemGroup>
+    <None Include="..\EmuSen.Galaxia\Library\Catalogue\*.sql"
+          Link="Library\Catalogue\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

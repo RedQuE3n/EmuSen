@@ -14,23 +14,23 @@ namespace EmuSen.WiseMan.Common
                 .OrderBy(n => n, StringComparer.Ordinal)
                 .ToArray();
 
-        // Endymion takes PCM and a rate; it has no reason to know a core exists.
+        // Endymion takes PCM and a rate, and reports PadButton - Galaxia covers both halves.
         [Fact]
-        public void Endymion_references_no_other_EmuSen_assembly()
+        public void Endymion_references_only_Galaxia()
         {
             Assembly endymion = typeof(EmuSen.Endymion.AudioPlayer).Assembly;
 
-            Assert.Equal("EmuSen.Endymion", endymion.GetName().Name);
-            Assert.Empty(EmuSenReferencesOf(endymion));
+            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(endymion));
         }
 
-        // Nehellania reports PadButton and persists a binding map - Galaxia covers both.
+        // Both halves of the SDL3 layer ship in one assembly - see EmuSen_Multicore.md §9.2.
         [Fact]
-        public void Nehellania_references_only_Galaxia()
+        public void Endymion_carries_the_gamepad_layer_too()
         {
-            Assembly nehellania = typeof(EmuSen.Nehellania.Input.GamepadManager).Assembly;
+            Assembly audio = typeof(EmuSen.Endymion.AudioPlayer).Assembly;
+            Assembly input = typeof(EmuSen.Endymion.Input.GamepadManager).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(nehellania));
+            Assert.Same(audio, input);
         }
 
         // The model both of the above are held to - see EmuSen_Audio_Sync.md §7.
@@ -73,7 +73,7 @@ namespace EmuSen.WiseMan.Common
         // Whatever else moves, no leaf may pull in a console core.
         [Theory]
         [InlineData(typeof(EmuSen.Endymion.AudioPlayer))]
-        [InlineData(typeof(EmuSen.Nehellania.Input.GamepadManager))]
+        [InlineData(typeof(EmuSen.Endymion.Input.GamepadManager))]
         [InlineData(typeof(EmuSen.Serenity.GameFrameControl))]
         [InlineData(typeof(EmuSen.LunaP.Controls.MeterRow))]
         [InlineData(typeof(EmuSen.Galaxia.Input.PadButton))]

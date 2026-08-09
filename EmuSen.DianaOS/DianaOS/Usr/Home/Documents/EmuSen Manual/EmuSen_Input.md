@@ -84,13 +84,15 @@ Nothing below names a console:
 
 | Layer | Type | Persists to |
 | --- | --- | --- |
-| `EmuSen.Nehellania/Input/GamepadBindingMap` | `Dictionary<PadButton, SDL.GamepadButton>` | `gamepadbindings.json` |
-| `EmuSen.Nehellania/Input/GamepadManager` | polls SDL3, emits `PadButton` | — |
+| `EmuSen.Endymion/Input/GamepadBindingMap` | `Dictionary<PadButton, SDL.GamepadButton>` | `gamepadbindings.json` |
+| `EmuSen.Endymion/Input/GamepadManager` | polls SDL3, emits `PadButton` | — |
 | `EmuSen.Mistress/Input/ControllerKeyMap` | `Dictionary<PadButton, Avalonia Key>` | `keybindings.json` |
 | `EmuSen.Hotaru/Input/HotaruKeyMap` | `IReadOnlyDictionary<PadButton, Key>` | — (fixed defaults) |
 | `EmuSen.Pharaoh/FrameRunner` | `Dictionary<(PadButton, int Controller), bool>` | — |
 
-`EmuSen.Nehellania` now references **only** `EmuSen.Galaxia` (plus the SDL3 packages) and contains only the two gamepad files — audio output moved out to `EmuSen.Endymion`. `EmuSen.WiseMan/Common/LeafAssemblyTests.cs` pins that reference set so it cannot quietly regrow.
+**The gamepad files live in `EmuSen.Endymion` as of 2026-08-05.** They were `EmuSen.Nehellania`'s entire contents; that project was folded into Endymion and deleted, because the two wrapped the same two SDL3 packages and no consumer ever took one without the other (`EmuSen_Multicore.md` §9.2). Endymion references **only** `EmuSen.Galaxia` (plus SDL3), and `EmuSen.WiseMan/Common/LeafAssemblyTests.cs` pins that reference set so it cannot quietly regrow.
+
+Nothing about the input stack itself changed in the fold — same three types, same namespace shape (`EmuSen.Endymion.Input`), same `gamepadbindings.json`. The rebind window and both frontends only changed a `using`.
 
 The two key maps stay separate on purpose — Hotaru has no settings UI to drive a rebind, so it carries fixed defaults that `EmuSen.WiseMan/Input/HotaruKeyMapTests.cs` asserts are table-equal to Mistress's defaults. Neither imports a core.
 

@@ -2,7 +2,7 @@
 
 *This revision: initial. Written when Moon (NES) became the second real core and the frontends had to stop assuming there was only one.*
 
-Companion docs: `EmuSen_Input.md` (the pad contract, which came out of the same pass), `EmuSen_Crystal_Scheduler.md` (the core-agnostic timing mechanism), `EmuSen_Project_Overview_v2.md` (the directory/namespace map), `EmuSen_Launcher_Multicore_Gameplan.md` (the separate, later-stage launcher project this is *not*).
+Companion docs: `EmuSen_Input.md` (the pad contract, which came out of the same pass), `Moon_Core.md` §2 and `Venus_CPU.md` §8.5d (each core's own timeline — there is deliberately no shared timing assembly; see §9.1), `EmuSen_Project_Overview_v2.md` (the directory/namespace map), `EmuSen_Launcher_Multicore_Gameplan.md` (the separate, later-stage launcher project this is *not*).
 
 ---
 
@@ -141,15 +141,13 @@ This is the pattern for any future switch that is a *property of the run* rather
 
 ## 9. The leaf layers
 
-Four assemblies sit below everything else and are **not allowed to know a core exists**. Three of them are true leaves — zero project references of any kind:
+Three assemblies sit below everything else and are **not allowed to know a core exists**. One of them is a true leaf — zero project references of any kind:
 
 | Project | Project references | Job |
 |---|---|---|
 | `EmuSen.Galaxia` | **none** | config persistence, and `PadButton` (`EmuSen_Input.md` §3) |
-| `EmuSen.Crystal` | **none** | the core-agnostic scheduler (`EmuSen_Crystal_Scheduler.md`) |
-| `EmuSen.Endymion` | **none** | audio output sink (`EmuSen_Audio_Sync.md` §7) |
 | `EmuSen.Serenity` | `Galaxia` | video presentation |
-| `EmuSen.Nehellania` | `Galaxia` | gamepad polling and the rebindable pad map |
+| `EmuSen.Endymion` | `Galaxia` | the SDL3 device layer: audio out, gamepad in (`EmuSen_Audio_Sync.md` §7, `EmuSen_Input.md` §4) |
 
 Serenity is the model the others were held to. Its contract is `UpdateFrame(byte[] rgba, int width, int height)` — payload plus the metadata to read it, and nothing else. Endymion's `Submit(short[] pcm, int sampleRate)` is the same contract for audio.
 
@@ -158,6 +156,35 @@ The rule that keeps them leaves: **a device layer is handed what it needs and re
 `EmuSen.WiseMan/Common/LeafAssemblyTests.cs` asserts each of these reference sets against the actual compiled metadata. What it catches is a leaf *using* a type from the core assembly; what it does not catch is an unused `ProjectReference` sitting in a `.csproj`, because the compiler drops references nothing consumes.
 
 **What is not a leaf, and should not be:** `EmuSen.Hotaru`, `EmuSen.Mistress` and `EmuSen.Pharaoh` are frontends — their whole job is to hold a core and drive it, so they reference everything. `EmuSen.DianaOS` is agnostic about which cores exist but is not a leaf for other reasons.
+
+### 9.1 There was a fifth leaf, and timing is why it went away
+
+`EmuSen.Crystal` was on that list until 2026-08-05: a core-agnostic timing scheduler with a master timeline, an event table indexed by a core-defined `int`, an `IClockedDevice` catch-up contract and exact clock-ratio conversion. It was built agnostic from the start, on the reasoning that §1 of this doc applies to timing as much as to anything else — every one of the reserved consoles needs a timeline, so extract it once rather than from Venus later.
+
+**It was folded back into the two cores and deleted.** Both of them scheduled exactly one event, `ScanlineBoundary`, at a constant stride. The event table, the tie-break rule, the runaway-dispatch guard and `IClockedDevice` were exercised by nothing but the scheduler's own unit tests, and what each core actually wanted collapsed to two `long`s and a subtraction. Moon kept the one piece that carried its weight — the drift-free remainder carry, which it needs because 1364/12 is not a whole number and Venus's 1364/6 is (`Moon_Core.md` §2.1). Everything else was ceremony around a `+=`.
+
+**The distinction worth taking from this**, because it cuts against §1's instinct and both are right in their place: `ICore`, `PadButton` and `ICoreTelemetry` were extracted to kill *duplication that already existed* — a second core arrived and the same frame loop, the same button enum, the same telemetry shape were about to be written twice. Crystal was extracted to serve consoles that do not exist yet, against a design (runtime-chosen event times, several devices contending for one timeline) that neither shipped core turned out to need. A shared abstraction is cheap to add once two callers are visibly doing the same work, and expensive to carry when its second caller is hypothetical.
+
+That is not a verdict on schedulers. `HTime` (`$4207`/`$4208`) is still unimplemented and still the real case for a timeline with more than one appointment on it — see `Old/EmuSen_Crystal_Scheduler.md` §1, kept for exactly that argument. When it lands it should land in Venus, and it should be lifted out again only when a second core is provably asking for the same thing.
+
+### 9.2 `Nehellania` folded into `Endymion`, and which half of the leaf rule was load-bearing
+
+`EmuSen.Nehellania` was the gamepad half of the SDL3 layer — `GamepadManager`, `GamepadBindingMap`, `GamepadBindings`, 318 lines — sitting beside `EmuSen.Endymion`'s 262 lines of audio sink. On 2026-08-05 it was folded into Endymion and deleted. The two projects took **the same two SDL3 package references**, and the decisive fact is at the consumer end: `EmuSen.Hotaru`, `EmuSen.Mistress` and `EmuSen.WiseMan` each referenced *both*, and nothing anywhere referenced one without the other. The split bought no consumer any separability it was using.
+
+**The interesting part is what this cost, because it exposes an ambiguity in §9's own rule.** Endymion was a *true* leaf — zero project references. Nehellania referenced Galaxia (for `PadButton` and `ConfigFile`), so the merged assembly inherits that edge and Endymion is no longer reference-free.
+
+That turns out not to matter, and the reason is worth stating because it distinguishes two rules that had been treated as one:
+
+| Rule | Status | What it protects |
+|---|---|---|
+| "true leaf" — zero outgoing references | **broken here, and it was ceremony** | nothing that exists; Galaxia is itself core-free, so nothing arrives transitively |
+| "no leaf reaches the core assembly" | **kept, and it earns its keep** | a launcher browsing a ROM library with no core loaded (`EmuSen_LunaP.md` §1) |
+
+`LeafAssemblyTests` had already encoded both — `Endymion_references_no_other_EmuSen_assembly` and the separate `No_leaf_reaches_the_core_assembly` theory — without anyone noticing which was doing the work. The strict one is now `Endymion_references_only_Galaxia`, matching Serenity exactly. The theory is untouched and still has teeth.
+
+**The direction to keep straight**, since it is easy to argue past: "leaf" is about a project's *outgoing* references, not how many things depend on it. Every frontend needing Endymion is not an argument against Endymion being a leaf — if anything the opposite, since an assembly that widely depended-upon reaching *up* into the core would drag the core into all of them. What actually retired the strict rule was that no consumer takes Endymion without a core anyway, so zero-references guarded a case with no instance.
+
+**What should not be folded in next:** `EmuSen.LunaP`. It shares no package with Endymion (six Avalonia packages against two SDL3 ones), neither names the other, and folding it in would put Avalonia on the dependency path of anything that just wants sound. It is also the one assembly whose core-free status has a real, roadmapped consumer.
 
 ---
 

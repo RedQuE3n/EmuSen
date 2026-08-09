@@ -57,7 +57,6 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
         private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels;
         private readonly PollingProvider<IReadOnlyList<DebugLoadInfo>> _hardwareLoad;
 
-        private readonly bool[] _muted = new bool[Apu.Apu.ChannelCount];
 
         // Injectable only so a test can assert exact bar percentages - see Moon_Debug.md §3.2.
         private readonly Func<(double CpuApuMs, double PpuMs)> _frameTimings;
@@ -309,29 +308,33 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             var apu = _core.Apu;
             if (apu is null) return Array.Empty<DebugAudioChannelInfo>();
 
-            string[] names = { "Pulse 1", "Pulse 2", "Triangle", "Noise", "DMC" };
-            var channels = new List<DebugAudioChannelInfo>();
+            int[] lengths = apu.LengthCounters;
 
-            for (int i = 0; i < names.Length; i++)
+            // Level is a 0-100 rescale of whatever stands in for the channel's volume - see Moon_APU.md §5.
+            var channels = new List<DebugAudioChannelInfo>(Apu.Apu.ChannelCount)
             {
-                channels.Add(new DebugAudioChannelInfo(
-                    i,
-                    names[i],
-                    apu.LengthCounters[i] > 0,
-                    0,
-                    _muted[i],
-                    "no synthesis - see Moon_APU.md"));
-            }
+                Pulse(apu, 0, "Pulse 1", apu.Pulse1, lengths[0]),
+                Pulse(apu, 1, "Pulse 2", apu.Pulse2, lengths[1]),
+                new(2, "Triangle", lengths[2] > 0, lengths[2] > 0 && apu.Triangle.TimerPeriod >= 2 ? 100 : 0,
+                    apu.IsChannelMuted(2),
+                    $"Period={apu.Triangle.TimerPeriod} Len={lengths[2]} Halt={apu.Triangle.ControlFlag}"),
+                new(3, "Noise", lengths[3] > 0, Scale(apu.Noise.Envelope.Output, 15), apu.IsChannelMuted(3),
+                    $"PeriodIndex={apu.Noise.PeriodIndex} Vol={apu.Noise.Envelope.Output} Len={lengths[3]} Short={apu.Noise.ShortMode}"),
+                new(4, "DMC", apu.Dmc.Active, Scale(apu.Dmc.OutputLevel, 127), apu.IsChannelMuted(4),
+                    $"Rate={apu.Dmc.RateIndex} Out={apu.Dmc.OutputLevel} Addr=0x{apu.Dmc.SampleAddress:X4} Len={apu.Dmc.SampleLength} Loop={apu.Dmc.Loop}"),
+            };
 
             return channels;
         }
 
-        public void SetChannelMuted(int index, bool muted)
-        {
-            if ((uint)index < (uint)_muted.Length) _muted[index] = muted;
-        }
+        private static DebugAudioChannelInfo Pulse(Apu.Apu apu, int index, string name, Apu.PulseChannel pulse, int length) =>
+            new(index, name, length > 0 && !pulse.Muted, Scale(pulse.Envelope.Output, 15), apu.IsChannelMuted(index),
+                $"Duty={pulse.Duty} Period={pulse.TimerPeriod} Vol={pulse.Envelope.Output} Len={length} Sweep={pulse.SweepEnabled}");
 
-        // Nothing is synthesized yet, so there is never a buffer to snapshot.
+        private static int Scale(int value, int max) => (int)Math.Round(value / (double)max * 100.0);
+
+        public void SetChannelMuted(int index, bool muted) => _core.Apu?.SetChannelMuted(index, muted);
+
         // A non-destructive peek, unlike ICore.DequeueAudioSamples - see EmuSen_Audio_Sync.md §7.
         public (short[] Samples, int SampleRate) GetAudioSamples() =>
             (_core.Apu?.Peek() ?? Array.Empty<short>(), _core.AudioSampleRate);

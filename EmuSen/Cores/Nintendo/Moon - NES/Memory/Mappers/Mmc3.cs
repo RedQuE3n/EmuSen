@@ -167,9 +167,16 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory.Mappers
         // Diagnostic only; a board that never fires is the usual sign of a bad IRQ setup.
         private ulong _irqsFired;
 
-        // One A12 rise per rendered line at this PPU's granularity - see Moon_Memory.md §4.6a.
-        public void OnScanline()
+        // The board's filter is specified in M2 (CPU) cycles and the watcher counts dots - see Moon_Memory.md §4.6b.
+        public const int A12MinimumLowDots = 3 * MemoryBus.DotsPerCpuCycle;
+
+        private readonly A12Watcher _a12 = new(A12MinimumLowDots);
+
+        // Every PPU fetch is offered here; only a genuine low-to-high A12 transition counts.
+        public void OnPpuAddress(ushort address, long ppuClock)
         {
+            if (!_a12.Rose(address, ppuClock)) return;
+
             if (_irqCounter == 0 || _irqReload) _irqCounter = _irqReloadValue;
             else _irqCounter--;
 

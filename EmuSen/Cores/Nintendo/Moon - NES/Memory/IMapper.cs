@@ -29,8 +29,19 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
 
         Mirroring Mirroring { get; }
 
-        // Called at the end of each rendered scanline for boards that count them - see Moon_Memory.md §4.5.
-        void OnScanline() { }
+        // Every address the PPU puts on its bus, for boards that watch A12 - see Moon_Memory.md §4.6a.
+        void OnPpuAddress(ushort address, long ppuClock) { }
+
+        // Opt-in, because the bus checks it once and a board that says no costs nothing - see Moon_Memory.md §4.8.
+        bool ClocksOnCpuCycle => false;
+
+        // Only cycles the PPU also lived through, which is not every CPU cycle here - see Moon_Memory.md §4.8.
+        void OnCpuCycle() { }
+
+        // A board that answers the PPU's nametable fetches from its own CHR - see Moon_Memory.md §4.9.
+        bool SuppliesNametables => false;
+
+        byte ReadNametable(ushort address) => 0;
 
         bool IrqPending => false;
 

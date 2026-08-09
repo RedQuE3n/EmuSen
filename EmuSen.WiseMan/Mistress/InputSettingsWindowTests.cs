@@ -10,7 +10,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using EmuSen.Cores;
 using EmuSen.Mistress.Input;
-using EmuSen.Nehellania.Input;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
@@ -326,7 +326,7 @@ namespace EmuSen.WiseMan.Mistress
             TabControl tabs = h.Window.GetVisualDescendants().OfType<TabControl>().First();
             string?[] headers = tabs.Items.OfType<TabItem>().Select(t => t.Header as string).ToArray();
 
-            Assert.Equal(new[] { "General", "NES", "SNES" }, headers);
+            Assert.Equal(new[] { "General", "NES", "GB", "SNES" }, headers);
         }, default);
 
         // With no ROM loaded there is no console to prefer, so General stays selected.

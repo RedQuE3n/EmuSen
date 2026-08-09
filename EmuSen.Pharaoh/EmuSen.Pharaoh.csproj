@@ -14,6 +14,13 @@
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- For LibraryIndexer/SqliteCatalogue only, now that the dictionary is read
+         from Python. The bundle_e_sqlite3 pin is deliberate - see EmuSen.csproj. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+
 
   <!-- A published build's output directory is DianaOS's own root: the .NET
        app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->

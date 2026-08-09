@@ -19,7 +19,9 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
-        private const int StateVersion = 1;
+
+        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port - see EmuSen_Save_States.md §1.
+        private const int StateVersion = 5;
 
         private const int SaveEveryNFrames = 300;
 
@@ -35,13 +37,17 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public CoverageRegistry Coverage { get; } = new();
         public LabelRegistry Labels { get; } = new();
 
-        private byte[] _frame = new byte[ScreenWidthPixels * ScreenHeightPixels * 4];
+        // Handed out before a ROM exists; once one does, the PPU's own buffer is returned instead.
+        private readonly byte[] _frame = new byte[ScreenWidthPixels * ScreenHeightPixels * 4];
+
         private long _cyclesIntoFrame;
+        private bool _skipRendering;
 
         public const int ScreenWidthPixels = 160;
         public const int ScreenHeightPixels = 144;
 
-        public string CoreName => "GB";
+        // The header decides, once, at load - see Mercury_Cgb.md §1.
+        public string CoreName => Cart?.Cgb is null or Memory.CgbSupport.None ? "GB" : "GBC";
 
         public int ScreenWidth => ScreenWidthPixels;
         public int ScreenHeight => ScreenHeightPixels;
@@ -52,9 +58,17 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
 
-        public bool SkipRendering { get; set; }
+        public bool SkipRendering
+        {
+            get => _skipRendering;
+            set
+            {
+                _skipRendering = value;
+                if (Bus != null) Bus.Ppu.SkipRendering = value;
+            }
+        }
 
-        // No synthesis yet, but a caller still needs a rate up front - see Mercury_Core.md §4.
+        // Fixed for the session, and told to the APU at load rather than read back from it - see Mercury_Core.md §4.
         public int AudioSampleRate => 44100;
 
         public bool IsHaltedAtBreakpoint { get; private set; }
@@ -72,11 +86,13 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public void LoadRom(string path)
         {
             Cart = Cartridge.Load(path);
-            Bus = new MemoryBus(Cart);
+            Bus = new MemoryBus(Cart) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats) };
             Cpu = new Cpu.Core.Cpu(Bus);
 
             Bus.Reset();
-            Cpu.Reset();
+            Cpu.Reset(Bus.Cgb);
+            Bus.Ppu.SkipRendering = _skipRendering;
+            Bus.Apu.SetSampleRate(AudioSampleRate);
 
             TotalFrames = 0;
             _cyclesIntoFrame = 0;
@@ -100,7 +116,10 @@ namespace EmuSen.Cores.Nintendo.Mercury
             bool resuming = IsHaltedAtBreakpoint;
             IsHaltedAtBreakpoint = false;
 
-            while (_cyclesIntoFrame < CyclesPerFrame)
+            // Double speed spends twice the CPU cycles on the same frame, so the watchdog has to double too.
+            long budget = Bus.DoubleSpeed ? CyclesPerFrame * 2 : CyclesPerFrame;
+
+            while (_cyclesIntoFrame < budget)
             {
                 if (!resuming && Breakpoints.ShouldBreak(Cpu.PC))
                 {
@@ -112,14 +131,27 @@ namespace EmuSen.Cores.Nintendo.Mercury
                 resuming = false;
                 if (Coverage.IsArmed) Coverage.Record(Cpu.PC);
 
+                // Step ticks the bus itself, one machine cycle at a time - see Mercury_Cpu.md §3.
                 int cycles = Cpu.Step(Bus.InterruptEnable, Bus.InterruptFlags, out int serviced);
                 if (serviced >= 0) Bus.InterruptFlags &= (byte)~(1 << serviced);
 
-                Bus.Tick(cycles);
-                _cyclesIntoFrame += cycles;
+                // A general-purpose HDMA takes the bus away from the CPU - see Mercury_Cgb.md §4.1.
+                int stall = Bus.TakePendingStall();
+                if (stall > 0) Bus.Tick(stall);
+
+                _cyclesIntoFrame += cycles + stall;
+
+                // The PPU is the clock a frame actually ends on; the budget below only covers an off LCD.
+                if (Bus.Ppu.FrameComplete)
+                {
+                    Bus.Ppu.FrameComplete = false;
+                    _cyclesIntoFrame = 0;
+                    EndFrame();
+                    return;
+                }
             }
 
-            _cyclesIntoFrame -= CyclesPerFrame;
+            _cyclesIntoFrame -= budget;
             EndFrame();
         }
 
@@ -130,15 +162,12 @@ namespace EmuSen.Cores.Nintendo.Mercury
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             Cheats.ApplyAll(ReadForCheat, WriteForCheat);
 
-            // The PPU is not built yet, so vblank is raised on the frame boundary instead - see Mercury_Core.md §3.
-            Bus!.Request(Interrupt.VBlank);
-
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
         }
 
-        public byte[] GetFrameBufferRgba() => _frame;
+        public byte[] GetFrameBufferRgba() => Bus?.Ppu.FrameRgba ?? _frame;
 
-        public short[] DequeueAudioSamples(int maxFrames) => Array.Empty<short>();
+        public short[] DequeueAudioSamples(int maxFrames) => Bus?.Apu.Drain(maxFrames) ?? Array.Empty<short>();
 
         public void SaveSram() => Cart?.SaveSram();
 

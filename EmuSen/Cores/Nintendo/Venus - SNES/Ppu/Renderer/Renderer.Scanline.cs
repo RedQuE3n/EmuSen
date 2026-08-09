@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Numerics;
-using Raylib_cs;
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Debug;
 using EmuSen.DianaOS;
@@ -50,7 +49,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
             if (forceBlank)
             {
-                for (int px = 0; px < _frameWidth; px++) _screenPixels[py * MaxOutputW + px] = new Color(0, 0, 0, 255);
+                for (int px = 0; px < _frameWidth; px++) _screenPixels[py * MaxOutputW + px] = new Rgba32(0, 0, 0, 255);
                 return;
             }
 
@@ -67,10 +66,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             _objEvalTicksAccum += Stopwatch.GetTimestamp() - objEvalStart;
 
             // Main screen backdrop: plain CGRAM color 0, as always.
-            Color mainBackdrop = PaletteColor(0);
+            Rgba32 mainBackdrop = PaletteColor(0);
 
             // Sub-screen backdrop fallback - see Venus_PPU.md §5.
-            Color subBackdrop = new Color(
+            Rgba32 subBackdrop = new Rgba32(
                 (byte)(((ppu.FixedColorR & 0x1F) << 3) * brightness),
                 (byte)(((ppu.FixedColorG & 0x1F) << 3) * brightness),
                 (byte)(((ppu.FixedColorB & 0x1F) << 3) * brightness),
@@ -143,7 +142,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         mathAllowed = (colorMathEnable == 1) ? inWindow : !inWindow;
                     }
 
-                    Color resultColor;
+                    Rgba32 resultColor;
                     if (participates && mathAllowed)
                     {
                         // Half-color-math-disabled-for-fixed-color quirk - see Venus_PPU.md §5.
@@ -154,7 +153,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                             actualHalfMode = false;
                         }
 
-                        Color mathOperand = useSubScreen ? _subLineBuf[px] : subBackdrop;
+                        Rgba32 mathOperand = useSubScreen ? _subLineBuf[px] : subBackdrop;
                         resultColor = BlendColors(_mainLineBuf[px], mathOperand, subtractMode, actualHalfMode);
                     }
                     else
@@ -165,8 +164,8 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                     if (DebugSettings.ColorMathBlendLogging && py == DebugSettings.ColorMathBlendScanline)
                     {
-                        Color mc = _mainLineBuf[px];
-                        Color sc = _subLineBuf[px];
+                        Rgba32 mc = _mainLineBuf[px];
+                        Rgba32 sc = _subLineBuf[px];
                         Console.WriteLine($"[COLORMATH] px={px} mainLayer={winningLayer} main=({mc.R},{mc.G},{mc.B}) subLayer={_subLineLayer[px]} sub=({sc.R},{sc.G},{sc.B}) participates={participates} mathAllowed={mathAllowed} -> ({resultColor.R},{resultColor.G},{resultColor.B})");
                     }
                 }
@@ -192,7 +191,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         }
 
         // One screen's layer stack, main or sub - layerEnable is TM or TS. See Venus_PPU.md §4.1.
-        private void CompositeScreen(Ppu ppu, int py, int mode, float brightness, byte layerEnable, Color[] lineBuf, int[] lineLayer, bool isMainScreen)
+        private void CompositeScreen(Ppu ppu, int py, int mode, float brightness, byte layerEnable, Rgba32[] lineBuf, int[] lineLayer, bool isMainScreen)
         {
             // Diagnostic isolation only; 0x1F normally - see EmuSen_Debugging_Tools_Reference_v5.md §3.19.
             layerEnable &= (byte)DebugSettings.LayerEnableMask;

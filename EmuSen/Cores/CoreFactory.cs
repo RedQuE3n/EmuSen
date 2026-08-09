@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using EmuSen.Cores.Nintendo.Mercury;
+using EmuSen.Cores.Nintendo.Mercury.Cheats;
+using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.Moon.Debug;
@@ -29,6 +32,7 @@ namespace EmuSen.Cores
         {
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => new MoonCore(),
+            ".gb" or ".gbc" => new MercuryCore(),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };
@@ -66,6 +70,14 @@ namespace EmuSen.Cores
                         new NesGameGenieCheatCodec(),
                         null);
 
+                case MercuryCore mercury:
+                    return new CoreBundle(
+                        mercury,
+                        new MercuryDebugTarget(mercury),
+                        new GbGameSharkCheatCodec(),
+                        new GbGameGenieCheatCodec(),
+                        null);
+
                 default:
                     throw new NotSupportedException($"No debug target is registered for {core.GetType().Name}.");
             }
@@ -90,6 +102,7 @@ namespace EmuSen.Cores
             // Dispatched on extension for the same reason Create is - no new public surface on the catalog.
             if (core.SupportsExtension(".sfc")) return (new ActionReplayCheatCodec(), new GameGenieCheatCodec());
             if (core.SupportsExtension(".nes")) return (new NesRawCheatCodec(), new NesGameGenieCheatCodec());
+            if (core.SupportsExtension(".gb")) return (new GbGameSharkCheatCodec(), new GbGameGenieCheatCodec());
 
             return (null, null);
         }

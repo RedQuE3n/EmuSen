@@ -25,7 +25,7 @@ namespace EmuSen.Galaxia.Library
         // The user's own .cht tree, never shipped with EmuSen - see `man cheat`.
         public static string Cheats => Path.Combine(UsrHome, "Cheats");
 
-        // The user's ROM library; never migrated automatically - see EmuSen_Galaxia.md §3.3.
+        // A skeleton directory of the shell's tree, not the ROM library - see EmuSen_Galaxia.md §3.3.
         public static string Games => Path.Combine(UsrHome, "Games");
     }
 }

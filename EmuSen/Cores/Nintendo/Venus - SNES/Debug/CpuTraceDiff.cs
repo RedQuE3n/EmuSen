@@ -1,3 +1,4 @@
+using EmuSen.Cores.Debug;
 using System.Collections.Generic;
 using System.IO;
 

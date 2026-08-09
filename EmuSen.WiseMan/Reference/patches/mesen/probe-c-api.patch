@@ -1,0 +1,522 @@
+diff --git a/Core/Shared/EmuSenProbeApi.cpp b/Core/Shared/EmuSenProbeApi.cpp
+new file mode 100644
+index 00000000..d043f17d
+--- /dev/null
++++ b/Core/Shared/EmuSenProbeApi.cpp
+@@ -0,0 +1,516 @@
++// A C ABI for EmuSen's reference probe - see EmuSen_Debugging_Tools_Reference_v5.md §3.52.
++//
++// This file exists so the probe can be written in a language that is not C++.
++// The probe's Mesen backend used to be C++ purely because two things here are
++// unreachable across a plain C boundary: IKeyManager is an abstract class whose
++// vtable only a C++ compiler can lay out, and the per-frame register decode
++// reads a dozen by-value state structs whose layouts would otherwise have to be
++// mirrored, field for field, in the caller. Both stay on this side.
++//
++// Stock Mesen's own extern "C" surface (InteropDLL) cannot serve instead, and
++// the four reasons were each verified rather than assumed: InitializeEmu only
++// constructs a key manager when given a real window handle, so on Linux a
++// headless SetKeyState silently does nothing; there is no GetFrameCount export;
++// there is no screen-buffer export, only TakeScreenshot to a PNG; and
++// GetMemoryState is a WithDebugger API, so reading RAM would switch the
++// debugger on and change the timing being measured.
++//
++// The file is only ever *added* to a checkout - makefile:138 globs Core for
++// .cpp - so the patch that carries it cannot conflict on a rebase. The 122
++// lines that genuinely modify upstream Mesen live in the other four patches.
++#include "pch.h"
++
++#include <atomic>
++#include <chrono>
++#include <string>
++#include <thread>
++#include <vector>
++
++#include "Shared/Emulator.h"
++#include "Shared/EmuSettings.h"
++#include "Shared/KeyManager.h"
++#include "Shared/SettingTypes.h"
++#include "Shared/Interfaces/IKeyManager.h"
++#include "Shared/MemoryType.h"
++#include "Shared/Video/VideoDecoder.h"
++#include "Shared/Audio/SoundMixer.h"
++#include "SNES/SnesConsole.h"
++#include "SNES/SnesPpu.h"
++#include "SNES/BaseCartridge.h"
++#include "SNES/Coprocessors/GSU/Gsu.h"
++#include "SNES/Coprocessors/GSU/GsuTypes.h"
++#include "NES/NesConsole.h"
++#include "NES/BaseMapper.h"
++#include "NES/BaseNesPpu.h"
++#include "NES/APU/NesApu.h"
++#include "NES/NesTypes.h"
++#include "Utilities/VirtualFile.h"
++#include "Utilities/FolderUtilities.h"
++
++// Supplied by the other patches under Reference/patches/mesen; stock Mesen has
++// no trace hook for any of these, and no way to stop on an exact frame.
++extern bool g_gsuTraceOn;
++extern std::vector<uint8_t> g_gsuTrace;
++extern bool g_cpuTraceOn;
++extern std::vector<uint8_t> g_cpuTrace;
++extern bool g_nesApuTraceOn;
++extern std::vector<uint8_t> g_nesApuTrace;
++extern std::atomic<uint32_t> g_probeStopFrame;
++extern std::atomic<bool> g_probeStopArmed;
++
++// Mirrors of the caller's enums. Duplicated deliberately: the whole point of a
++// C ABI is that the caller need not share a header, so these values are the
++// contract and may not be renumbered - see §3.52's table.
++namespace
++{
++	enum ProbeButton { PB_A, PB_B, PB_X, PB_Y, PB_L, PB_R, PB_Up, PB_Down, PB_Left, PB_Right, PB_Start, PB_Select, PB_Count };
++	enum ProbeScreenFormat { PSF_None, PSF_PaletteIndex16, PSF_Bgr555, PSF_Rgb565, PSF_Xrgb8888 };
++	enum ProbeTraceKind { PTK_Cpu, PTK_Gsu, PTK_ApuWrites };
++
++	// Synthetic scan codes, because a headless Mesen has no keyboard and the
++	// stock config carries no binding at all - port 1 would read as idle
++	// whatever the schedule said.
++	uint16_t ScanCode(int button) { return (uint16_t)button + 1; }
++
++	struct ScheduleEntry { uint32_t StartFrame; uint32_t EndFrame; uint32_t Button; };
++
++	// Mesen drives input through a registered key manager, so headless needs one.
++	// The schedule is resolved against GetFrameCount() *here*, at the moment the
++	// pad is polled, rather than by the caller's report loop: the probe runs at
++	// maximum speed and free-runs between reports, so anything sampled out there
++	// would skip whole presses. Live is the --pressuntil override, written from
++	// the control thread and read from the emulation thread.
++	//
++	// This class is the reason the boundary is here and not further out. A caller
++	// in another language cannot supply Mesen with a vtable, so the poll-time
++	// sampling invariant has to be implemented on this side of the ABI; what
++	// crosses it is the schedule as flat data.
++	class ScheduledKeyManager : public IKeyManager
++	{
++	public:
++		std::vector<ScheduleEntry> Schedule;
++		Emulator* Emu = nullptr;
++		std::atomic<uint32_t> Live{0};
++
++		void RefreshState() {}
++		void UpdateDevices() {}
++		bool IsMouseButtonPressed(MouseButton button) { (void)button; return false; }
++
++		bool HeldAt(uint32_t frame, uint32_t button)
++		{
++			for(const ScheduleEntry& e : Schedule) {
++				if(e.Button == button && frame >= e.StartFrame && frame < e.EndFrame) { return true; }
++			}
++			return false;
++		}
++
++		bool IsKeyPressed(uint16_t keyCode)
++		{
++			if(keyCode == 0 || keyCode > (uint16_t)PB_Count) { return false; }
++			if(Live.load(std::memory_order_relaxed) & (1u << (keyCode - 1))) { return true; }
++			return Emu && HeldAt(Emu->GetFrameCount(), (uint32_t)(keyCode - 1));
++		}
++
++		vector<uint16_t> GetPressedKeys()
++		{
++			vector<uint16_t> keys;
++			for(uint16_t i = 1; i <= (uint16_t)PB_Count; i++) {
++				if(IsKeyPressed(i)) { keys.push_back(i); }
++			}
++			return keys;
++		}
++
++		string GetKeyName(uint16_t keyCode) { return std::to_string(keyCode); }
++		uint16_t GetKeyCode(string keyName) { return (uint16_t)atoi(keyName.c_str()); }
++		bool SetKeyState(uint16_t scanCode, bool state) { (void)scanCode; (void)state; return false; }
++		void ResetKeyState() { Live.store(0); }
++		void SetDisabled(bool disabled) { (void)disabled; }
++	};
++
++	struct CachedSpace { std::string Name; const uint8_t* Data; uint32_t Size; };
++
++	// One probe drives one emulator; the caller is single-instance by
++	// construction, exactly as the C++ backend's g_backend was.
++	struct ProbeState
++	{
++		std::unique_ptr<Emulator> Emu;
++		std::unique_ptr<ScheduledKeyManager> Keys;
++		std::vector<CachedSpace> Spaces;
++		std::vector<ScheduleEntry> Pending;
++		SnesConsole* Snes = nullptr;
++		NesConsole* Nes = nullptr;
++		Gsu* Gsu = nullptr;
++		bool Recording = false;
++		// Held across the trace_end call so the caller can copy at its leisure;
++		// swapped rather than copied, so ending a trace costs nothing.
++		std::vector<uint8_t> TraceOut;
++		std::string Board;
++		std::string Region;
++		std::string StateLine;
++	};
++
++	ProbeState g_probe;
++
++	void AddSpace(const char* name, MemoryType type)
++	{
++		ConsoleMemoryInfo info = g_probe.Emu->GetMemory(type);
++		if(info.Memory != nullptr && info.Size > 0) {
++			g_probe.Spaces.push_back({ name, (const uint8_t*)info.Memory, info.Size });
++		}
++	}
++
++	// Which memories exist is what tells the two machines apart; the names are
++	// the ones already on disk, so an existing dump set keeps its filenames.
++	void CacheSpaces()
++	{
++		g_probe.Spaces.clear();
++		if(g_probe.Nes) {
++			AddSpace("ram", MemoryType::NesInternalRam);
++			AddSpace("sram", MemoryType::NesSaveRam);
++			AddSpace("work", MemoryType::NesWorkRam);
++			AddSpace("nametable", MemoryType::NesNametableRam);
++			AddSpace("oam", MemoryType::NesSpriteRam);
++			AddSpace("palette", MemoryType::NesPaletteRam);
++			// CHR is RAM on some boards and ROM on others; only one is present.
++			ConsoleMemoryInfo chrRam = g_probe.Emu->GetMemory(MemoryType::NesChrRam);
++			AddSpace("chr", chrRam.Size ? MemoryType::NesChrRam : MemoryType::NesChrRom);
++		} else {
++			AddSpace("vram", MemoryType::SnesVideoRam);
++			AddSpace("cgram", MemoryType::SnesCgRam);
++			AddSpace("oam", MemoryType::SnesSpriteRam);
++			AddSpace("gsuram", MemoryType::GsuWorkRam);
++			AddSpace("wram", MemoryType::SnesWorkRam);
++			AddSpace("apuram", MemoryType::SpcRam);
++		}
++	}
++
++	std::string BuildStateLine()
++	{
++		char buffer[4096];
++		std::string out;
++
++		if(g_probe.Gsu) {
++			GsuState& s = g_probe.Gsu->GetState();
++			snprintf(buffer, sizeof(buffer), "SFR %04X PBR %02X RAMBR %02X SCBR %02X objMode %d bpp %d h %d",
++				s.SFR.GetFlagsHigh() << 8 | s.SFR.GetFlagsLow(), s.ProgramBank, s.RamBank,
++				s.ScreenBase, (int)s.ObjMode, (int)s.PlotBpp, (int)s.ScreenHeight);
++			out += buffer;
++		}
++		out += "\n";
++
++		if(g_probe.Snes) {
++			SnesPpuState ps = g_probe.Snes->GetPpu()->GetState();
++			FrameInfo fi = g_probe.Emu->GetVideoDecoder()->GetBaseFrameInfo(true);
++			snprintf(buffer, sizeof(buffer),
++				"  PPU %ux%u: mode %d bg3prio %d TM %02X TS %02X hires %d overscan %d interlace %d extbg %d directcolor %d\n",
++				fi.Width, fi.Height, ps.BgMode, (int)ps.Mode1Bg3Priority, ps.MainScreenLayers, ps.SubScreenLayers,
++				(int)ps.HiResMode, (int)ps.OverscanMode, (int)ps.ScreenInterlace, (int)ps.ExtBgEnabled, (int)ps.DirectColorMode);
++			out += buffer;
++
++			for(int i = 0; i < 4; i++) {
++				LayerConfig& L = ps.Layers[i];
++				snprintf(buffer, sizeof(buffer),
++					"       BG%d tilemap $%04X chr $%04X hscroll %04X vscroll %04X dblW %d dblH %d largeTiles %d wMain %d wSub %d\n",
++					i + 1, L.TilemapAddress, L.ChrAddress, L.HScroll, L.VScroll,
++					(int)L.DoubleWidth, (int)L.DoubleHeight, (int)L.LargeTiles,
++					(int)ps.WindowMaskMain[i], (int)ps.WindowMaskSub[i]);
++				out += buffer;
++			}
++		}
++
++		if(g_probe.Nes) {
++			NesPpuState ps = {};
++			g_probe.Nes->GetPpu()->GetState(ps);
++			ApuState as = g_probe.Nes->GetApu()->GetState();
++			snprintf(buffer, sizeof(buffer),
++				"  PPU bgChr $%04X sprChr $%04X inc32 %d 8x16 %d nmi %d | bg %d spr %d bgLeft %d sprLeft %d gray %d | spr0 %d ovf %d vbl %d | v %04X t %04X x %d line %d cyc %u\n",
++				ps.Control.BackgroundPatternAddr, ps.Control.SpritePatternAddr, (int)ps.Control.VerticalWrite,
++				(int)ps.Control.LargeSprites, (int)ps.Control.NmiOnVerticalBlank,
++				(int)ps.Mask.BackgroundEnabled, (int)ps.Mask.SpritesEnabled, (int)ps.Mask.BackgroundMask,
++				(int)ps.Mask.SpriteMask, (int)ps.Mask.Grayscale,
++				(int)ps.StatusFlags.Sprite0Hit, (int)ps.StatusFlags.SpriteOverflow, (int)ps.StatusFlags.VerticalBlank,
++				ps.VideoRamAddr, ps.TmpVideoRamAddr, (int)ps.ScrollX, ps.Scanline, ps.Cycle);
++			out += buffer;
++
++			snprintf(buffer, sizeof(buffer),
++				"  APU sq1 en %d per %4u vol %2u | sq2 en %d per %4u vol %2u | tri en %d per %4u vol %2u | noi en %d per %4u vol %2u | dmc len %u out %u | frame 5step %d irq %d\n",
++				(int)as.Square1.Enabled, as.Square1.Period, as.Square1.OutputVolume,
++				(int)as.Square2.Enabled, as.Square2.Period, as.Square2.OutputVolume,
++				(int)as.Triangle.Enabled, as.Triangle.Period, as.Triangle.OutputVolume,
++				(int)as.Noise.Enabled, as.Noise.Period, as.Noise.OutputVolume,
++				as.Dmc.BytesRemaining, as.Dmc.OutputVolume,
++				(int)as.FrameCounter.FiveStepMode, (int)as.FrameCounter.IrqEnabled);
++			out += buffer;
++		}
++
++		return out;
++	}
++}
++
++extern "C"
++{
++	// The caller hand-declares these signatures rather than sharing a header,
++	// because the header would have to live in one of two repositories and drift
++	// in the other. This is what makes that safe: the caller checks the number
++	// before its first call and refuses a checkout whose patch predates it, so a
++	// renumbered enum or a changed signature is a startup error rather than a
++	// silently wrong dump. Bump it for any change to the surface below.
++	uint32_t probe_abi_version() { return 1; }
++
++	// The schedule is fixed before boot and passed as flat data, because the
++	// poll-time sampling it feeds has to happen on this side of the ABI.
++	void probe_set_schedule(const uint32_t* entries, uint32_t count)
++	{
++		g_probe.Pending.clear();
++		for(uint32_t i = 0; i < count; i++) {
++			g_probe.Pending.push_back({ entries[i * 3 + 0], entries[i * 3 + 1], entries[i * 3 + 2] });
++		}
++		if(g_probe.Keys) { g_probe.Keys->Schedule = g_probe.Pending; }
++	}
++
++	// Arming a trace is valid before load, which is what the CPU and APU traces
++	// need: their hooks fire from the first instruction the machine executes.
++	int probe_trace_begin(int kind)
++	{
++		switch(kind) {
++			case PTK_Cpu: g_cpuTrace.reserve(64u * 1024 * 1024); g_cpuTraceOn = true; return 1;
++			case PTK_ApuWrites: g_nesApuTrace.reserve(16u * 1024 * 1024); g_nesApuTraceOn = true; return 1;
++			case PTK_Gsu: g_gsuTraceOn = true; return 1;
++		}
++		return 0;
++	}
++
++	// The buffer stays valid until the next probe_trace_end, which is all the
++	// caller needs to copy it out. Swapped, not copied: a 64 MB CPU trace would
++	// otherwise be duplicated at the one moment memory is tightest.
++	int probe_trace_end(int kind, const uint8_t** data, uint32_t* size)
++	{
++		g_probe.TraceOut.clear();
++		switch(kind) {
++			case PTK_Cpu: g_cpuTraceOn = false; g_probe.TraceOut.swap(g_cpuTrace); break;
++			case PTK_ApuWrites: g_nesApuTraceOn = false; g_probe.TraceOut.swap(g_nesApuTrace); break;
++			case PTK_Gsu: g_gsuTraceOn = false; g_probe.TraceOut.swap(g_gsuTrace); break;
++			default: return 0;
++		}
++		*data = g_probe.TraceOut.data();
++		*size = (uint32_t)g_probe.TraceOut.size();
++		return 1;
++	}
++
++	int probe_load(const char* romPath, const char* ramState, const char* wavPath, const char* homeFolder)
++	{
++		// Before the Emulator exists, which is what reads it.
++		if(homeFolder && homeFolder[0]) { FolderUtilities::SetHomeFolder(homeFolder); }
++
++		g_probe.Keys.reset(new ScheduledKeyManager());
++		g_probe.Emu.reset(new Emulator());
++		g_probe.Keys->Emu = g_probe.Emu.get();
++		g_probe.Keys->Schedule = g_probe.Pending;
++
++		KeyManager::RegisterKeyManager(g_probe.Keys.get());
++		KeyManager::SetSettings(g_probe.Emu->GetSettings());
++
++		g_probe.Emu->Initialize();
++		g_probe.Emu->GetSettings()->SetFlag(EmulationFlags::MaximumSpeed);
++
++		// Stops LoadRom writing HomeFolder/RecentGames/<rom>.rgd, which embeds a
++		// screenshot and a save state and therefore differs between two runs of
++		// the same probe - it made every dump tree compare unequal. TestMode and
++		// not ConsoleMode: they gate this identically, but ConsoleMode also calls
++		// InitDebugger(), and forcing the debugger on is exactly what §3.50 says
++		// disqualified Mesen's own C API. See §3.52.
++		g_probe.Emu->GetSettings()->SetFlag(EmulationFlags::TestMode);
++
++		std::string ram = ramState ? ramState : "";
++		RamState ramPowerOn = ram == "ones" ? RamState::AllOnes
++		                    : ram == "random" ? RamState::Random
++		                    : RamState::AllZeros;
++
++		// Mesen's own default is a random power-on fill, which makes it
++		// disagree with itself run to run - measured, not assumed. See §3.40.
++		SnesConfig scfg = g_probe.Emu->GetSettings()->GetSnesConfig();
++		scfg.RamPowerOnState = ramPowerOn;
++		scfg.Port1.Type = ControllerType::SnesController;
++		KeyMapping& smap = scfg.Port1.Keys.Mapping1;
++		smap.A = ScanCode(PB_A);         smap.B = ScanCode(PB_B);
++		smap.X = ScanCode(PB_X);         smap.Y = ScanCode(PB_Y);
++		smap.L = ScanCode(PB_L);         smap.R = ScanCode(PB_R);
++		smap.Up = ScanCode(PB_Up);       smap.Down = ScanCode(PB_Down);
++		smap.Left = ScanCode(PB_Left);   smap.Right = ScanCode(PB_Right);
++		smap.Start = ScanCode(PB_Start); smap.Select = ScanCode(PB_Select);
++		g_probe.Emu->GetSettings()->SetSnesConfig(scfg);
++
++		NesConfig ncfg = g_probe.Emu->GetSettings()->GetNesConfig();
++		ncfg.RamPowerOnState = ramPowerOn;
++		// A headless NesConfig has every ChannelVolumes[] entry at zero, which
++		// mutes the mixer no matter what the 2A03 does - see §3.43.
++		for(uint32_t& volume : ncfg.ChannelVolumes) { volume = 100; }
++		ncfg.Port1.Type = ControllerType::NesController;
++		KeyMapping& nmap = ncfg.Port1.Keys.Mapping1;
++		nmap.A = ScanCode(PB_A);         nmap.B = ScanCode(PB_B);
++		nmap.Up = ScanCode(PB_Up);       nmap.Down = ScanCode(PB_Down);
++		nmap.Left = ScanCode(PB_Left);   nmap.Right = ScanCode(PB_Right);
++		nmap.Start = ScanCode(PB_Start); nmap.Select = ScanCode(PB_Select);
++		g_probe.Emu->GetSettings()->SetNesConfig(ncfg);
++
++		// Armed *before* LoadRom, which is what starts the emulation thread. Arming
++		// afterwards is a race the probe cannot win: at MaximumSpeed an unknown
++		// number of frames elapses between reading the counter and storing a target,
++		// so the machine parks somewhere that varies run to run. See §3.45b.
++		g_probeStopFrame.store(0);
++		g_probeStopArmed.store(true);
++
++		if(!g_probe.Emu->LoadRom((VirtualFile)romPath, VirtualFile())) { return 0; }
++
++		// Everything below - identity, the space cache, the first signature row -
++		// reads emulator state, so nothing may run until the thread has parked.
++		while(!g_probe.Emu->IsPaused()) { std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
++
++		// After LoadRom, which rebuilds the mixer.
++		if(wavPath && wavPath[0]) {
++			g_probe.Emu->GetSoundMixer()->StartRecording(wavPath);
++			printf("[INFO] recording audio to %s\n", wavPath);
++			g_probe.Recording = true;
++		}
++
++		g_probe.Snes = dynamic_cast<SnesConsole*>(g_probe.Emu->GetConsole().get());
++		g_probe.Nes = dynamic_cast<NesConsole*>(g_probe.Emu->GetConsole().get());
++		g_probe.Gsu = g_probe.Snes ? g_probe.Snes->GetCartridge()->GetGsu() : nullptr;
++		CacheSpaces();
++		return 1;
++	}
++
++	void probe_shutdown()
++	{
++		if(!g_probe.Emu) { return; }
++		// Resume first, or Stop waits on a thread parked in WaitForPauseEnd.
++		g_probeStopArmed.store(false);
++		g_probeStopFrame.store(0);
++		g_probe.Emu->Resume();
++		if(g_probe.Recording) { g_probe.Emu->GetSoundMixer()->StopRecording(); }
++		g_probe.Emu->Stop(false);
++		g_probe.Emu->Release();
++	}
++
++	// Free-runs at maximum speed and stops *on* the requested frame, because the
++	// emulation thread stops itself there (probe-frame-stop.patch).
++	//
++	// The two obvious ways both fail, and both were measured. Pause() only sets
++	// _paused, which IsPaused() reads straight back, so "pause then wait for
++	// IsPaused" returns immediately and every dump is read out of a running
++	// machine - two runs of the old probe differ by 22 bytes of NES RAM at frame
++	// 180. AcquireLock() does genuinely park the thread, but only once the
++	// control thread has noticed the frame went by, and at max speed that notice
++	// arrives two to five frames late.
++	//
++	// The early return is safe, which it was not before §3.45b: load parks the
++	// machine and every exit from here leaves it parked, so "already at the
++	// frame" means "already stopped at the frame" rather than "still running
++	// past it".
++	void probe_run_until(uint32_t frame)
++	{
++		if(g_probe.Emu->GetFrameCount() >= frame) { return; }
++		g_probeStopFrame.store(frame);
++		g_probeStopArmed.store(true);
++		g_probe.Emu->Resume();
++		while(!g_probe.Emu->IsPaused() || g_probe.Emu->GetFrameCount() < frame) {
++			std::this_thread::sleep_for(std::chrono::milliseconds(1));
++		}
++	}
++
++	uint32_t probe_frame_count() { return g_probe.Emu ? g_probe.Emu->GetFrameCount() : 0; }
++
++	// "nes" or "snes" - which machine the file turned out to be, not what it
++	// claimed. The caller uses it to pick an anchor space and to label the dump.
++	const char* probe_system() { return g_probe.Nes ? "nes" : "snes"; }
++
++	uint32_t probe_space_count() { return (uint32_t)g_probe.Spaces.size(); }
++	const char* probe_space_name(uint32_t index)
++	{
++		return index < g_probe.Spaces.size() ? g_probe.Spaces[index].Name.c_str() : "";
++	}
++	// The raw pointer the emulator itself holds, not a debugger copy: reading a
++	// space must not perturb the machine being measured.
++	const uint8_t* probe_space_data(uint32_t index)
++	{
++		return index < g_probe.Spaces.size() ? g_probe.Spaces[index].Data : nullptr;
++	}
++	uint32_t probe_space_size(uint32_t index)
++	{
++		return index < g_probe.Spaces.size() ? g_probe.Spaces[index].Size : 0;
++	}
++
++	int probe_screen(const void** data, uint32_t* width, uint32_t* height, uint32_t* bytes, int* format)
++	{
++		if(g_probe.Nes) {
++			// Raw palette indices, one uint16 per pixel - not RGB. See §3.43.
++			*data = g_probe.Nes->GetPpu()->GetScreenBuffer(true);
++			*width = 256; *height = 240; *bytes = 256 * 240 * 2; *format = PSF_PaletteIndex16;
++			return 1;
++		}
++		if(g_probe.Snes) {
++			// Raw BGR555; the row stride is the reported width, not 512.
++			*data = g_probe.Snes->GetPpu()->GetScreenBuffer();
++			*width = 512; *height = 478; *bytes = 512 * 478 * 2; *format = PSF_Bgr555;
++			return 1;
++		}
++		return 0;
++	}
++
++	// The live --pressuntil override, on top of the schedule.
++	void probe_set_button(int button, int held)
++	{
++		if(!g_probe.Keys || button < 0 || button >= PB_Count) { return; }
++		uint32_t bit = 1u << (ScanCode(button) - 1);
++		if(held) { g_probe.Keys->Live.fetch_or(bit); } else { g_probe.Keys->Live.fetch_and(~bit); }
++	}
++
++	// The mapper id here is the one the emulator *settled on*, not the one in the
++	// file's header - this reference overrides a damaged header from a CRC-keyed
++	// game database, and that difference is exactly what a comparability gate has
++	// to see. See §3.48.
++	//
++	// headerTrust is deliberately absent: this reference has no notion of how
++	// much of a header it believed, so the gate must read it as "cannot say".
++	void probe_identity(const char** board, const char** region, uint64_t* prgBytes, uint64_t* chrBytes, int* saveLoaded)
++	{
++		g_probe.Board.clear();
++		g_probe.Region = "auto";
++		*prgBytes = 0;
++		*chrBytes = 0;
++		*saveLoaded = 0;
++
++		if(g_probe.Emu) {
++			switch(g_probe.Emu->GetRegion()) {
++				case ConsoleRegion::Ntsc: g_probe.Region = "ntsc"; break;
++				case ConsoleRegion::NtscJapan: g_probe.Region = "ntsc"; break;
++				case ConsoleRegion::Pal: g_probe.Region = "pal"; break;
++				case ConsoleRegion::Dendy: g_probe.Region = "dendy"; break;
++				default: g_probe.Region = "auto"; break;
++			}
++
++			if(g_probe.Nes && g_probe.Nes->GetMapper()) {
++				g_probe.Board = std::to_string(g_probe.Nes->GetMapper()->GetRomInfo().MapperID);
++				// HasBattery() is protected, so presence of save RAM stands in for it.
++				*saveLoaded = g_probe.Emu->GetMemory(MemoryType::NesSaveRam).Size > 0 ? 1 : 0;
++				*prgBytes = g_probe.Emu->GetMemory(MemoryType::NesPrgRom).Size;
++				ConsoleMemoryInfo chrRam = g_probe.Emu->GetMemory(MemoryType::NesChrRam);
++				*chrBytes = chrRam.Size ? chrRam.Size : g_probe.Emu->GetMemory(MemoryType::NesChrRom).Size;
++			}
++		}
++
++		*board = g_probe.Board.c_str();
++		*region = g_probe.Region.c_str();
++	}
++
++	// Kept in C++ rather than mirrored by the caller: the decode reads
++	// SnesPpuState, NesPpuState, ApuState and GsuState by value, and a caller
++	// that re-declared those layouts would be silently wrong the first time
++	// upstream added a field. The formatted line is the stable thing, not the
++	// structs behind it.
++	const char* probe_state_line()
++	{
++		g_probe.StateLine = BuildStateLine();
++		return g_probe.StateLine.c_str();
++	}
++}

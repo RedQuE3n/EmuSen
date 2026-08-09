@@ -48,14 +48,20 @@ console core implements that interface and inherits the entire toolchain — the
 scripting harness, the watchpoint system, the screenshot and digest tooling — without a
 line of it being rewritten.
 
-**What is actually built today: one playable core, the SNES.** The NES (**Moon**) has been
-started, but only its CPU exists — no PPU, no APU, no mappers, and nothing implementing
-`ICore` or `IDebugTarget` yet, so it runs no games. Every other console listed below is a
-reserved, empty folder with a documentation stub. The multi-system claim in this document
-is a claim about *architecture*, not about a shipping feature list — the debug toolchain is
-core-agnostic and has been used in anger for months, and it has still never been proven
-against a second `IDebugTarget`. The narrower `ISingleStepTarget` rig now *has* been: it
-took the 6502 with one adapter, one loader and one line of registry, unchanged otherwise.
+**What is actually built today: two cores that run games, and a third that does not yet.**
+The SNES (**Venus**) is the mature one and runs real commercial cartridges. The NES
+(**Moon**) renders, makes sound and plays: CPU, PPU, all five APU channels, ten mapper
+boards, `ICore` and `IDebugTarget` — younger and far less play-tested than Venus, NTSC
+only. The Game Boy (**Mercury**) has its CPU, bus and cartridge boards but no PPU or APU,
+so it is deliberately not registered with the core factory. Every other console listed
+below is a reserved, empty folder with a documentation stub.
+
+The multi-system claim in this document is a claim about *architecture*, and it is no
+longer only a claim: `IDebugTarget` had exactly one implementation for most of this
+project's life, and `MoonDebugTarget` is the first thing to prove the interface was
+genuinely core-agnostic rather than SNES-shaped by accident. The narrower
+`ISingleStepTarget` rig was proven the same way earlier — it took the 6502 with one
+adapter, one loader and one line of registry, unchanged otherwise.
 
 ---
 
@@ -122,7 +128,7 @@ core. Frontends sit on top of both and are interchangeable.
 | `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
 | `EmuSen.Galaxia` | Config persistence — the single answer to "where does a config file go". Depends on nothing |
 | `EmuSen.Serenity` | Shared presentation — the Avalonia/Skia frame control, shader pipeline, graphics settings |
-| `EmuSen.Nehellania` | Shared device layer — SDL3 audio output and gamepad input, one copy for both frontends |
+| `EmuSen.Endymion` | Shared SDL3 device layer — audio output and gamepad input, one copy for both frontends |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
 | `EmuSen.Pharaoh` | The headless scripted harness, and the CLI runner for ground-truth CPU test vectors |
@@ -158,7 +164,7 @@ hardware is called.
 | Console | Codename | State |
 |---|---|---|
 | SNES | **Venus** | **Implemented** — the only working core |
-| NES | **Moon** | **In progress** — CPU, PPU, memory, five mappers, `ICore` and `IDebugTarget`; silent, NTSC only |
+| NES | **Moon** | **In progress** — CPU, PPU, all five APU channels, ten mappers, `ICore` and `IDebugTarget`; runs games, NTSC only |
 | Game Boy / Color | **Mercury** | **In progress** — SM83, memory, timer, joypad, five cartridge boards; no PPU or APU yet, so not yet loadable from a frontend |
 | Game Boy Advance | **Jupiter** | Reserved |
 | Nintendo 64 | **Mars** | Reserved |
@@ -195,11 +201,11 @@ systems, the Quartet has four and Microsoft has four.
 Shadow Galactica is the one major faction still unassigned, held for whichever
 manufacturer is added next.
 
-**Ordering.** NES (**Moon**) is underway, starting from its CPU, and is the milestone the
-whole architecture was built toward: it is the first real test of whether `IDebugTarget`
-is genuinely generic or merely
-asserted to be. Nothing beyond it is scheduled — the reserved folders are a naming and
-layout commitment, not a promise of delivery dates.
+**Ordering.** NES (**Moon**) was the milestone the whole architecture was built toward: the
+first real test of whether `IDebugTarget` is genuinely generic or merely asserted to be. It
+passed, and the core now runs games. Game Boy (**Mercury**) followed and is mid-build.
+Nothing beyond those is scheduled — the reserved folders are a naming and layout
+commitment, not a promise of delivery dates.
 
 ---
 

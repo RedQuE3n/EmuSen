@@ -29,6 +29,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
         public const int SpritesPerLine = 10;
         public const int SpriteCount = 40;
 
+        // How far into VRAM bank 1 sits; the map attributes and half the tiles live there on a CGB.
+        public const int VramBankStride = MemoryBus.VramBankSize;
+
         [SkipInState] private readonly MemoryBus _bus;
 
         public byte Lcdc;
@@ -73,6 +76,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
         // Pre-palette background colour per pixel of the current line, which is what sprite priority tests.
         [SkipInState] private readonly byte[] _bgColorIndex = new byte[ScreenWidth];
+
+        // The CGB map attribute's own priority bit, kept per pixel because it is per tile - see Mercury_Cgb.md §3.
+        [SkipInState] private readonly bool[] _bgPriority = new bool[ScreenWidth];
 
         // Pixels a sprite has already claimed this line; a later sprite never overwrites one - see Mercury_Ppu.md §5.2.
         [SkipInState] private readonly bool[] _spriteClaimed = new bool[ScreenWidth];
@@ -142,6 +148,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
             FrameCount = 0;
             FrameComplete = false;
 
+            ResetCgbPalettes();
             ClearScreen();
         }
     }

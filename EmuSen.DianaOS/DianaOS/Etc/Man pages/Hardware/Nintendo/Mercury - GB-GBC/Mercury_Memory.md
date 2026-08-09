@@ -32,9 +32,10 @@ RAM size codes are `$02`=8K, `$03`=32K, `$04`=128K, `$05`=64K — note that `$04
 |---|---|
 | `$0000-$3FFF` | ROM, bank 0 (or a banked window on MBC1 in advanced mode) |
 | `$4000-$7FFF` | ROM, switchable bank |
-| `$8000-$9FFF` | VRAM |
+| `$8000-$9FFF` | VRAM (one bank on a DMG, two selected by `$FF4F` on a CGB) |
 | `$A000-$BFFF` | Cartridge RAM, switchable |
-| `$C000-$DFFF` | Work RAM |
+| `$C000-$CFFF` | Work RAM, bank 0 |
+| `$D000-$DFFF` | Work RAM, bank 1 on a DMG, one of seven selected by `$FF70` on a CGB |
 | `$E000-$FDFF` | Echo of `$C000-$DDFF` |
 | `$FE00-$FE9F` | OAM |
 | `$FEA0-$FEFF` | Prohibited |
@@ -45,6 +46,8 @@ RAM size codes are `$02`=8K, `$03`=32K, `$04`=128K, `$05`=64K — note that `$04
 **Echo RAM is not a copy.** The hardware simply does not decode the relevant address line, so `$E005` and `$C005` are the same storage cell. Games really do read through it.
 
 The **prohibited region** reads back `$00` on a DMG rather than open bus.
+
+The banking in the VRAM and work RAM rows is the only change the colour hardware makes to this table — same ranges, more storage behind two of them. `Mercury_Cgb.md` §1 covers how the sizes are chosen, and the register block that selects between the banks.
 
 ---
 

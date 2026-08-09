@@ -1,12 +1,12 @@
 # Mercury — where this stands, and what comes next
 
-*Pinned 2026-08-04, updated 2026-08-08 when Phase A landed. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It is a living document: when a phase lands, move it into §1 and delete it from §3.*
+*Pinned 2026-08-04, updated 2026-08-08 when Phases A and D landed. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It is a living document: when a phase lands, move it into §1 and delete it from §3.*
 
 ---
 
 ## 1. What is built and verified
 
-All of it is covered by `EmuSen.WiseMan` — 68 tests across `MercuryCpuTests`, `MercuryCartridgeTests`, `MercuryCoreTests` and `MercuryPpuTests`, run headless against `SyntheticGbRom`. No real cartridge is needed or committed.
+All of it is covered by `EmuSen.WiseMan` — 89 tests across `MercuryCpuTests`, `MercuryCartridgeTests`, `MercuryCoreTests`, `MercuryPpuTests` and `MercuryCgbTests`, run headless against `SyntheticGbRom`. No real cartridge is needed or committed.
 
 | Piece | State |
 |---|---|
@@ -17,6 +17,7 @@ All of it is covered by `EmuSen.WiseMan` — 68 tests across `MercuryCpuTests`, 
 | **Joypad** | The two-nibble matrix, pressed-reads-0, both-halves-selected ANDing. |
 | **OAM DMA** | Copies, immediately rather than over 160 cycles (§4). |
 | **PPU** | The mode machine on a per-cycle clock, LY/LYC, STAT as one level-triggered line, background, window with its own line counter, sprites with both DMG orderings. Renderer is per scanline. `Mercury_Ppu.md`. |
+| **Colour** | VRAM and WRAM banking, both palette ports, map and sprite attributes, CGB sprite priority, HDMA in both modes, double speed. `Mercury_Cgb.md`. |
 | **Cartridge** | Header, title (both lengths), colour flag, checksum, ROM/RAM sizing. |
 | **Boards** | No-MBC, MBC1 (both modes), MBC2, MBC3 with a latched RTC, MBC5. |
 | **Core** | `ICore` surface, frame budget, breakpoints, coverage, cheats, named debug spaces, save states. |
@@ -26,7 +27,8 @@ All of it is covered by `EmuSen.WiseMan` — 68 tests across `MercuryCpuTests`, 
 - **One core for GB and GBC.** DMG first, colour additive. Reasoning in `Mercury_Core.md` §1. `Cartridge.Cgb` already reads `$0143`.
 - **Not registered in `CoreCatalog`/`CoreFactory`.** Deliberate, and it stays that way until Phase B lands — `CoreFactory.Load` builds a `CoreBundle` that requires an `IDebugTarget`, so registering first would put a `NotSupportedException` behind a `.gb` file the catalog claims to handle.
 - **Illegal opcodes throw.** A game reaching one means something upstream already went wrong; treating them as NOPs hides the real bug.
-- **`.gbc` is not claimed** as an extension yet. It arrives with colour, not before — running a CGB-only cart in DMG mode would fail confusingly rather than cleanly.
+- **`.gbc` is not claimed** as an extension yet. This survived Phase D: colour has arrived, but claiming an extension is a `CoreCatalog` change and the catalog cannot have Mercury until Phase B gives it a debug target. It lands with B, not with D.
+- **Colour mode is decided by the header, once, at load.** Both `$80` and `$C0` select it, matching the real console. No runtime toggle — `Mercury_Cgb.md` §1.
 
 ## 3. Phases, in the order they should be done
 
@@ -42,10 +44,6 @@ When this lands, register in `CoreCatalog` (`.gb`, `"Nintendo - Game Boy"` cheat
 
 Four channels: two pulse with sweep and envelope, a programmable wave channel, and noise with an LFSR. `AudioSampleRate` already answers 44100 and `DequeueAudioSamples` already returns empty, so the seam is in place.
 
-### Phase D — Game Boy Color
-
-Double-speed mode, VRAM bank 2, WRAM banks 1-7, BG/OBJ colour palettes with their auto-increment index registers, HDMA/GDBA, and the CGB sprite priority rule. This is where `Cartridge.Cgb` finally gets read for something, `.gbc` joins the catalog, and `CoreName` stops being unconditionally `"GB"`.
-
 ## 4. Known simplifications, and when each will matter
 
 - **Instruction-granular timing.** `Step` returns the whole instruction's T-cycles and the bus is ticked afterwards. The timer is unaffected (`MemoryBus.Tick` loops one cycle at a time internally), but a mid-instruction write cannot land at an exact cycle relative to a PPU mode change. Revisit only if a real game proves it needs sub-instruction timing — this is the same call Moon made.
@@ -53,7 +51,7 @@ Double-speed mode, VRAM bank 2, WRAM banks 1-7, BG/OBJ colour palettes with thei
 - **No VRAM or OAM access blocking**, and this is a deliberate consequence of the instruction-granular bus rather than a shortcut. `Mercury_Ppu.md` §7 states the trade and the condition that reverses it.
 - **The renderer is per scanline** under a per-cycle clock. `Mercury_Ppu.md` §1.
 - **No boot ROM.** Mercury starts at `$0100` with the post-boot register state hardcoded, which is also why the header checksum is computed but never enforced.
-- **`STOP` consumes its second byte and does nothing.** It only matters for CGB double-speed switching, which is Phase D.
+- **`STOP` performs the speed switch on a CGB** and still does nothing on a DMG. The switch is instantaneous rather than the ~2050 cycles hardware spends on it — `Mercury_Cgb.md` §5.
 - **No serial link.** Nothing needs it yet.
 
 ## 5. Resuming

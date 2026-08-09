@@ -30,10 +30,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
         private void RenderBackground(int line, bool windowOnThisLine)
         {
-            // On a DMG, clearing LCDC bit 0 blanks both layers rather than showing colour 0.
-            if (!BgEnabled)
+            // On a DMG, clearing LCDC bit 0 blanks both layers; on a CGB the same bit means something else - see Mercury_Cgb.md §3.
+            if (!Cgb && !BgEnabled)
             {
                 Array.Clear(_bgColorIndex);
+                Array.Clear(_bgPriority);
                 for (int x = 0; x < ScreenWidth; x++) WritePixel(line, x, 0);
                 return;
             }
@@ -50,14 +51,26 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
                 int mapX = inWindow ? x - windowStartX : (x + Scx) & 0xFF;
                 int mapY = inWindow ? WindowLine : backgroundY;
 
-                byte tile = vram[mapBase + ((mapY >> 3) << 5) + ((mapX >> 3) & 0x1F)];
-                int address = TileRowAddress(tile, mapY & 0x07);
+                int mapEntry = mapBase + ((mapY >> 3) << 5) + ((mapX >> 3) & 0x1F);
+                byte tile = vram[mapEntry];
 
-                int bit = 7 - (mapX & 0x07);
+                // The attribute for a map entry lives at the same address in VRAM bank 1.
+                byte attributes = Cgb ? vram[mapEntry + VramBankStride] : (byte)0x00;
+
+                int row = mapY & 0x07;
+                if ((attributes & 0x40) != 0) row = 7 - row;
+
+                int address = TileRowAddress(tile, row) + ((attributes & 0x08) != 0 ? VramBankStride : 0);
+
+                int column = mapX & 0x07;
+                int bit = (attributes & 0x20) != 0 ? column : 7 - column;
                 int color = ((vram[address] >> bit) & 0x01) | (((vram[address + 1] >> bit) & 0x01) << 1);
 
                 _bgColorIndex[x] = (byte)color;
-                WritePixel(line, x, Shade(Bgp, color));
+                _bgPriority[x] = (attributes & 0x80) != 0;
+
+                if (Cgb) WriteColorPixel(line, x, BgPaletteRam, attributes & 0x07, color);
+                else WritePixel(line, x, Shade(Bgp, color));
             }
         }
 
@@ -92,6 +105,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
                 if (height == 16) tile &= 0xFE;
 
                 int address = (tile * 16) + (row * 2);
+                if (Cgb && (attributes & 0x08) != 0) address += VramBankStride;
+
                 byte low = vram[address];
                 byte high = vram[address + 1];
 
@@ -109,11 +124,21 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
 
                     // The pixel is spoken for even when the background wins it - see Mercury_Ppu.md §5.2.
                     _spriteClaimed[x] = true;
-                    if (behindBackground && _bgColorIndex[x] != 0) continue;
+                    if (BackgroundWins(x, behindBackground)) continue;
 
-                    WritePixel(line, x, Shade(palette, color));
+                    if (Cgb) WriteColorPixel(line, x, ObjPaletteRam, attributes & 0x07, color);
+                    else WritePixel(line, x, Shade(palette, color));
                 }
             }
+        }
+
+        // On a CGB the background gets a second way to claim the pixel, and LCDC bit 0 can waive both - see Mercury_Cgb.md §3.
+        private bool BackgroundWins(int x, bool spriteIsBehind)
+        {
+            if (_bgColorIndex[x] == 0) return false;
+            if (!Cgb) return spriteIsBehind;
+
+            return BgEnabled && (spriteIsBehind || _bgPriority[x]);
         }
 
         // Ten per line, taken in OAM order; then reordered so the leftmost sprite draws first - see Mercury_Ppu.md §5.1.
@@ -132,7 +157,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
                 _spriteIndices[_spriteCount++] = i;
             }
 
-            SortByDmgPriority(oam);
+            // A CGB resolves overlap by OAM index alone, so the selection order is already the priority order.
+            if (!Cgb) SortByDmgPriority(oam);
         }
 
         // Insertion sort on X, and it must be stable so equal X keeps the lower OAM index in front.

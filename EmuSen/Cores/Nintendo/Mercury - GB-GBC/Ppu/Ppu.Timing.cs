@@ -32,6 +32,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
             {
                 RenderScanline(Ly);
                 EnterMode(PpuMode.HBlank);
+
+                // An hblank-driven HDMA moves its next block here, which is the whole point of it - see Mercury_Cgb.md §4.
+                _bus.OnHBlankStarted();
             }
         }
 

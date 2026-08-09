@@ -20,8 +20,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
 
-        // 2 added the PPU's fields to the bus walk - see EmuSen_Save_States.md §1.
-        private const int StateVersion = 2;
+        // 2 added the PPU to the bus walk, 3 the colour banks, palettes and HDMA - see EmuSen_Save_States.md §1.
+        private const int StateVersion = 3;
 
         private const int SaveEveryNFrames = 300;
 
@@ -46,7 +46,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public const int ScreenWidthPixels = 160;
         public const int ScreenHeightPixels = 144;
 
-        public string CoreName => "GB";
+        // The header decides, once, at load - see Mercury_Cgb.md §1.
+        public string CoreName => Cart?.Cgb is null or Memory.CgbSupport.None ? "GB" : "GBC";
 
         public int ScreenWidth => ScreenWidthPixels;
         public int ScreenHeight => ScreenHeightPixels;
@@ -89,7 +90,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
             Cpu = new Cpu.Core.Cpu(Bus);
 
             Bus.Reset();
-            Cpu.Reset();
+            Cpu.Reset(Bus.Cgb);
             Bus.Ppu.SkipRendering = _skipRendering;
 
             TotalFrames = 0;
@@ -114,7 +115,10 @@ namespace EmuSen.Cores.Nintendo.Mercury
             bool resuming = IsHaltedAtBreakpoint;
             IsHaltedAtBreakpoint = false;
 
-            while (_cyclesIntoFrame < CyclesPerFrame)
+            // Double speed spends twice the CPU cycles on the same frame, so the watchdog has to double too.
+            long budget = Bus.DoubleSpeed ? CyclesPerFrame * 2 : CyclesPerFrame;
+
+            while (_cyclesIntoFrame < budget)
             {
                 if (!resuming && Breakpoints.ShouldBreak(Cpu.PC))
                 {
@@ -142,7 +146,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
                 }
             }
 
-            _cyclesIntoFrame -= CyclesPerFrame;
+            _cyclesIntoFrame -= budget;
             EndFrame();
         }
 

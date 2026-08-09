@@ -44,7 +44,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
                 case 0x00: return 4;
 
                 // Two bytes on real hardware even though the second is ignored.
-                case 0x10: Fetch(); return 4;
+                case 0x10: Fetch(); _bus.Stop(); return 4;
 
                 case 0x76: return Halt();
 

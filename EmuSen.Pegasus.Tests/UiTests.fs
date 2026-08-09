@@ -5,6 +5,7 @@ open System.IO
 open System.Threading
 open Avalonia
 open Avalonia.Controls
+open Avalonia.Controls.Primitives
 open Avalonia.Headless
 open Avalonia.LogicalTree
 open Avalonia.Threading
@@ -15,7 +16,9 @@ open EmuSen.Pegasus.Controller
 
 type private HeadlessApp() =
     inherit Application()
-    override this.Initialize() = this.Styles.Add(FluentTheme())
+    // Shell.applyTheme, not a bare FluentTheme: loading a different theme than
+    // the application loads is what let a blank window pass the suite.
+    override this.Initialize() = Shell.applyTheme this
 
 // Avalonia may only be initialised once per process, so every test shares this.
 // LunaApp is deliberately not used here -- it resolves the saved theme through
@@ -66,6 +69,39 @@ let ``the window renders an editor bound to the open note`` () =
     Dispatcher.UIThread.RunJobs()
 
     Assert.Equal("typed into the window", pad.Text)
+    window.Close()
+
+[<Fact>]
+let ``every control in the window is actually templated`` () =
+    // The blank-window regression: without LunaP's theme the controls exist in
+    // the logical tree and render nothing, so every other test here still
+    // passed. Applying a template is the thing that was missing, so it is the
+    // thing asserted. See EmuSen_Pegasus.md §11.
+    started.Force()
+    use pad = new Notepad(tempRoot (), "alice")
+    pad.CreateNote "scratch" |> ignore
+
+    let window = Shell.PegasusWindow pad
+    window.Show()
+    Dispatcher.UIThread.RunJobs()
+    window.Measure(Size(1000.0, 680.0))
+    window.Arrange(Rect(0.0, 0.0, 1000.0, 680.0))
+    Dispatcher.UIThread.RunJobs()
+
+    let untemplated =
+        window.GetLogicalDescendants()
+        |> Seq.choose (fun c ->
+            match box c with
+            | :? TemplatedControl as t when isNull t.Template -> Some(t.GetType().Name)
+            | _ -> None)
+        |> Seq.distinct
+        |> Seq.toArray
+
+    Assert.True(
+        untemplated.Length = 0,
+        $"""controls with no template, so they render blank: {String.Join(", ", untemplated)}"""
+    )
+
     window.Close()
 
 [<Fact>]

@@ -428,3 +428,33 @@ let ``an unchanged buffer never moves the caret`` () =
 let ``an adjusted caret always lands inside the new buffer`` (before: NonNull<string>) (after: NonNull<string>) (NonNegativeInt caret) =
     let result = Caret.adjust before.Get after.Get caret
     result >= 0 && result <= after.Get.Length
+
+// ---------------------------------------------------------------------------
+// Agnosticism. Pegasus is a notepad on a windowing toolkit, not a part of the
+// emulator, and LunaP is intended to be published on its own. Both claims are
+// only true while this holds. See EmuSen_Pegasus.md §11.
+// ---------------------------------------------------------------------------
+
+[<Fact>]
+let ``Pegasus references the toolkit and nothing else of EmuSen`` () =
+    let allowed = set [ "EmuSen.LunaP" ]
+
+    let referenced =
+        typeof<DocumentActor>.Assembly.GetReferencedAssemblies()
+        |> Array.map _.Name
+        |> Array.filter (fun n -> n.StartsWith("EmuSen.", StringComparison.Ordinal))
+        |> Array.filter (fun n -> not (allowed.Contains n))
+        |> Array.distinct
+
+    Assert.True(
+        referenced.Length = 0,
+        $"""Pegasus reaches past the toolkit into: {String.Join(", ", referenced)}"""
+    )
+
+[<Fact>]
+let ``the workspace path is not hardcoded to one platform`` () =
+    // ".local/share" is Linux-only and was wrong on the macOS and Windows RIDs
+    // this project publishes for.
+    let root = Controller.defaultWorkspaceRoot
+    Assert.False(String.IsNullOrWhiteSpace root)
+    Assert.True(Path.IsPathRooted root)

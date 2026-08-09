@@ -13,14 +13,26 @@ type ConnectionState =
     | Connected of peer: string
     | Failed of reason: string
 
+/// Where notes live. Resolved through SpecialFolder rather than a literal
+/// ".local/share", which was Linux-only and wrong on the two other RIDs we
+/// publish. An existing workspace at the old path keeps being used rather than
+/// being stranded, the same order ConfigStore already follows for settings.
+/// See EmuSen_Pegasus.md §11.
 let defaultWorkspaceRoot =
-    Path.Combine(
-        Environment.GetFolderPath Environment.SpecialFolder.UserProfile,
-        ".local",
-        "share",
-        "pegasus",
-        "workspace"
-    )
+    let home = Environment.GetFolderPath Environment.SpecialFolder.UserProfile
+
+    let data =
+        match Environment.GetFolderPath Environment.SpecialFolder.LocalApplicationData with
+        | "" -> Path.Combine(home, ".local", "share")
+        | path -> path
+
+    let current = Path.Combine(data, "Pegasus", "workspace")
+    let legacy = Path.Combine(home, ".local", "share", "pegasus", "workspace")
+
+    if not (Directory.Exists current) && Directory.Exists legacy then
+        legacy
+    else
+        current
 
 /// Owns the workspace, the open note and the session, so the view stays a
 /// function of state. Compaction threshold and projection policy live here.

@@ -1,6 +1,6 @@
 # EmuSen.LunaP — the shared Avalonia toolkit
 
-*This revision (2026-08-04): **Phase 7 landed — LunaP is themeable and has its widget set.** User themes load from `/etc/EmuSen/themes`, and dropdowns, switches, tabs and filter bars are built and in use across the settings windows, the library and the cheat database. All seven phases are done. Previous revision (2026-08-04): Phase 6 — the migration; 863 lines net removed from the frontends. `EmuSen_LunaP_Gameplan.md` holds the plan and what each phase taught. This doc covers only what is real.*
+*This revision (2026-08-09): **a theme may now be written in CSS**, and building it turned up an Avalonia behaviour that had been sitting under the theme system unnoticed — mutating `Application.Styles` at runtime strips every already-realized control of its styling, LunaP's own included. §12.2 is the format, §12.3 is the finding and the reattach that answers it. Previous revision (2026-08-04): Phase 7 — LunaP is themeable and has its widget set; user themes load from `/etc/EmuSen/themes`, and dropdowns, switches, tabs and filter bars are in use across the settings windows, the library and the cheat database. All seven phases are done. Before that (2026-08-04): Phase 6, the migration; 863 lines net removed from the frontends. `EmuSen_LunaP_Gameplan.md` holds the plan and what each phase taught. This doc covers only what is real.*
 
 ---
 
@@ -320,7 +320,9 @@ The eleven `DianaOSShellWindow` tests are the case worth noting: **their bodies 
 
 ## 12. Themes
 
-A theme is a `.axaml` `ResourceDictionary` in **`/etc/EmuSen/themes/<name>.axaml`** overriding whichever `Luna*` keys it cares about — the same category shape `cheats/<name>.json` already uses, so `man hier` covers where it lives. `LunaTheme.Apply(name)` merges it *last*, so its keys win, and persists the choice in `luna.json`; `LunaApp.Configure` calls `ApplySaved()` at startup.
+A theme is a file in **`/etc/EmuSen/themes/<name>.<ext>`**, written either as an `.axaml` `ResourceDictionary` (below) or as `.css` (§12.2). Both spell the same thing — overrides of whichever `Luna*` keys the theme cares about — and one name is one theme: `Available()` lists it once however many formats are on disk, and `.axaml` wins if both exist.
+
+The `.axaml` form overrides whichever `Luna*` keys it cares about — the same category shape `cheats/<name>.json` already uses, so `man hier` covers where it lives. `LunaTheme.Apply(name)` merges it *last*, so its keys win, and persists the choice in `luna.json`; `LunaApp.Configure` calls `ApplySaved()` at startup.
 
 ```xml
 <ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -344,6 +346,62 @@ Worth knowing because both were invisible until a test rendered them:
 - **Window backgrounds were static `LunaPalette.Surface` assignments.** `ToolWindow` binds its own background instead, and the five migrated windows dropped the line.
 
 `ToolWindow` *binds* rather than styles it, which is the non-obvious part: a plain `Style` selector lost to FluentTheme's own `Window` `ControlTheme` and the window stayed near-black. That was caught by a test asserting the rendered background, not by reasoning about priority order.
+
+### 12.2 The CSS form
+
+`Theme/CssTheme.cs` compiles a restricted CSS to the same `ResourceDictionary` §12 already merges, plus — for rule blocks — a `Styles` collection. It is a **format, not an engine**: there is no cascade, no specificity, no inheritance and no box model, and none is planned.
+
+```css
+/* Nocturne. */
+:root {
+  --luna-surface:        #12131A;
+  --luna-section-header: #7AA2F7;
+  --luna-mono-font:      "Fira Code", monospace;
+  --luna-hint-font-size: 12;
+}
+
+section-header       { font-weight: normal; }
+meter-row.hot .bar   { color: var(--luna-hot); }
+console-pane .output { font-family: "Fira Code"; }
+```
+
+**`:root` is the palette.** `--luna-section-header` is the resource key `LunaSectionHeader` in kebab-case, and a colour defines *both* halves the palette spells (§2.1) — `LunaSectionHeaderColor` and the brush — because a theme that set only one would half-apply. Either spelling of the key is accepted and means the same declaration.
+
+**The key's suffix decides the type, not the value's shape.** `…Size` is a number, `…Font` a font family, everything else a colour. Inferring from the value was the obvious alternative and is a coin flip: `monospace` and `gainsboro` are the same token shape. The cost of the rule is real and worth stating — a future palette key that is none of those three needs a line here, and until then it would be read as a colour and reported as unparsable.
+
+**Colours may be written any CSS way**: `#RGB`, `#RRGGBB`, `#RGBA`, `#RRGGBBAA`, `rgb()`, `rgba()` (alpha `0`–`1`, unlike every other channel) and the named colours. The eight-digit form is the one place CSS and Avalonia genuinely disagree — `Color.Parse` reads `#AARRGGBB`, CSS puts alpha last — and **inside a `.css` file CSS wins**. A test pins both orders.
+
+**Rule blocks are two allow-lists, deliberately.** A selector is `element[.state] [part]`: the element name is the control's own type name in kebab-case and is *derived from the type*, so a rename moves the CSS name with it instead of leaving a selector that silently matches nothing. States and parts are per-element; only `meter-row` has states today (`.nominal`/`.busy`/`.hot`, the pseudo-classes §12.1 introduced), and parts exist for `meter-row`, `filter-bar` and `console-pane`. Properties are `color`, `background`/`background-color`, `font-family`, `font-size`, `font-weight`, resolved against the *target's* type through `AvaloniaPropertyRegistry` — so `color` means `TextBlock.Foreground` on a text control and `TemplatedControl.Foreground` on a progress bar without the format needing to know they are different properties.
+
+`var(--luna-hot)` compiles to a `DynamicResourceExtension`, so a rule that points at a token follows it. A rule that restated the colour instead would freeze exactly the way §12.1's computed brush did.
+
+**Failure is two-tier, and the split is the design.** A *syntax* error refuses the whole file and leaves the previous theme in force, the same outcome a malformed `.axaml` theme already had: an unbalanced brace, a declaration with no colon, an unterminated comment, an at-rule, a nested rule. An *unknown* selector, state, part, property or unparsable value is reported through `ConfigDiagnostics` and skipped, and the rest of the theme applies — because a theme written against a later LunaP has to keep loading, and refusing the file would make every control added to the kit a breaking change for every theme on disk.
+
+Reported line numbers are the file's own: comments are replaced by whitespace of the same shape rather than deleted, so a warning after a twenty-line comment block still names the right line. There is a test for that specifically, since it is the one part of a hand-written parser that silently drifts.
+
+**Why a parser and not `AvaloniaRuntimeXamlLoader`.** Two arguments, and the second is the stronger one. Hand-editability is a stated goal for user-facing files here — the same argument `EmuSen_Stack.md` §4.1 makes for config staying JSON. And the XAML loader will instantiate *arbitrary Avalonia types* out of a file in `/etc`, where this parser structurally cannot: it emits brushes, doubles, font families and setters, or it emits nothing. The `.axaml` form keeps its capability and its exposure; the CSS form has neither.
+
+**A negative result, recorded so nobody looks for the missing test.** The "this property does not apply to this target" guard is currently *unreachable*. Every property in the allow-list is registered on `TemplatedControl` or `TextBlock`, and every selectable target is one or the other, so no allow-listed property can miss. The check stays, because the two allow-lists are meant to grow independently and the first `Image` or `Panel` part will reach it — but no test covers it and none can be written today. A test asserting it was written, failed, and was deleted rather than weakened.
+
+### 12.3 Mutating `Application.Styles` at runtime strips realized controls
+
+This is the finding the CSS work turned up, and it had been sitting under the theme system since Phase 7 without being visible, because until rule blocks existed nothing ever added a style at runtime.
+
+Measured, from a throwaway diagnostic run against a live `SectionHeader`:
+
+```
+before=#ff9cdcfe   mutated=White   reparented=#ff7aa2f7   clearedThenReparented=#ff9cdcfe
+```
+
+A header on screen shows its themed `#9CDCFE`. Adding a single `Style` to `Application.Styles` drops it to `White` — **not** to the new rule's colour and **not** back to the built-in one. The new style is not winning wrongly; the control has lost the LunaP style it already had, and removing the style again does not give it back. Controls realized *after* the mutation pick the new style up correctly, which is exactly why this is invisible at startup: `LunaApp.Configure` applies the saved theme before any window exists, so only a live theme *switch* can hit it.
+
+Detaching and reattaching the window's content re-runs the style pass and fixes both directions. That is all `LunaTheme.Restyle(ContentControl)` is, and `ToolWindow` subscribes to `LunaTheme.StylesChanged` so every LunaP window does it for itself.
+
+Three consequences worth carrying:
+
+- **The event fires only when `Application.Styles` actually changed.** Every `.axaml` theme and most `.css` ones are palette-only, and those repaint through `DynamicResource` exactly as before at no cost. A test asserts the restyle count is zero for that case, so the cheap path cannot quietly become the expensive one.
+- **A reattach is not free**: keyboard focus and scroll position inside the window are lost. That is acceptable for a deliberate, rare theme switch and would not be acceptable anywhere near a frame path. `ConsolePane` survives it only because it buffers output in the control rather than in the template part — §5.6's decision paying off a second time, for a reason that did not exist when it was made.
+- **A window that is not a `ToolWindow` is not covered**, and the frontends still have five of those (§11). They need `LunaTheme.Restyle(window)` if a rule-block theme is switched while they are open. The uncovered case has its own test — asserting that a plain `Window` *does* lose its styling — so the hook is not deleted later as redundant.
 
 ---
 

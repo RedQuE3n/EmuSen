@@ -5,6 +5,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
 using EmuSen.Galaxia;
 
 namespace EmuSen.LunaP.Theme
@@ -20,27 +21,48 @@ namespace EmuSen.LunaP.Theme
     {
         public const string BuiltIn = "Built-in";
         public const string Extension = ".axaml";
+        public const string CssExtension = ".css";
+
+        // Tried in this order, so a name spelled both ways resolves to the .axaml - see EmuSen_LunaP.md §12.2.
+        public static readonly IReadOnlyList<string> Extensions = new[] { Extension, CssExtension };
 
         private static readonly ConfigFile<ThemeChoice> Choice = new("luna.json");
 
         // The one dictionary a theme's keys live in; kept so applying a second theme replaces rather than stacks.
         private static ResourceDictionary? _applied;
 
+        // The styles half, which only a .css theme produces; removed with the dictionary.
+        private static Styles? _appliedStyles;
+
         public static string Current { get; private set; } = BuiltIn;
+
+        // Raised only when Application.Styles changed, which is the one case an open window must be restyled - see EmuSen_LunaP.md §12.3.
+        public static event Action? StylesChanged;
+
+        // Detaching and reattaching the content is what re-runs the style pass over controls that are already realized.
+        public static void Restyle(ContentControl root)
+        {
+            object? content = root.Content;
+            if (content is null) return;
+
+            root.Content = null;
+            root.Content = content;
+        }
 
         // /etc/EmuSen/themes, the same category shape cheats/<name>.json already uses - see `man hier`.
         public static string Directory => Path.GetDirectoryName(ConfigStore.For("themes", "x"))!;
 
-        // Built-in first, then whatever is on disk, alphabetically.
+        // Built-in first, then whatever is on disk, alphabetically. A name is listed once however many formats spell it.
         public static IReadOnlyList<string> Available()
         {
             var names = new List<string> { BuiltIn };
             if (!System.IO.Directory.Exists(Directory)) return names;
 
-            names.AddRange(System.IO.Directory
-                .EnumerateFiles(Directory, "*" + Extension)
+            names.AddRange(Extensions
+                .SelectMany(ext => System.IO.Directory.EnumerateFiles(Directory, "*" + ext))
                 .Select(Path.GetFileNameWithoutExtension)
                 .Where(n => !string.IsNullOrEmpty(n) && !string.Equals(n, BuiltIn, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)!);
 
             return names;
@@ -74,35 +96,53 @@ namespace EmuSen.LunaP.Theme
 
             if (string.Equals(name, BuiltIn, StringComparison.OrdinalIgnoreCase))
             {
-                Remove(app);
+                if (Remove(app)) StylesChanged?.Invoke();
                 Current = BuiltIn;
                 return true;
             }
 
-            string path = Path.Combine(Directory, name + Extension);
-            if (!File.Exists(path))
+            string? path = Resolve(name);
+            if (path is null)
             {
-                ConfigDiagnostics.Report($"theme '{name}' not found at {path}.");
+                ConfigDiagnostics.Report($"theme '{name}' not found in {Directory}.");
                 return false;
             }
 
-            ResourceDictionary? loaded = Read(path);
-            if (loaded is null) return false;
+            if (Read(path) is not { } content) return false;
+
+            (ResourceDictionary loaded, Styles? styles) = content;
+            bool touchedStyles = Remove(app);
 
             // Merged last, so its keys win over Theme/Palette.axaml's; every consumer uses DynamicResource and updates live.
-            Remove(app);
             app.Resources.MergedDictionaries.Add(loaded);
             _applied = loaded;
+
+            // Appended last for the same reason, so a theme's rules beat Theme/Controls.axaml's.
+            if (styles is { Count: > 0 })
+            {
+                app.Styles.Add(styles);
+                _appliedStyles = styles;
+                touchedStyles = true;
+            }
+
             Current = name;
+            if (touchedStyles) StylesChanged?.Invoke();
             return true;
         }
 
-        private static ResourceDictionary? Read(string path)
+        // The first format that exists wins; a theme is one name, whatever it is written in.
+        private static string? Resolve(string name) =>
+            Extensions.Select(ext => Path.Combine(Directory, name + ext)).FirstOrDefault(File.Exists);
+
+        private static (ResourceDictionary Resources, Styles? Styles)? Read(string path)
         {
             try
             {
-                return AvaloniaRuntimeXamlLoader.Load(File.ReadAllText(path)) as ResourceDictionary
-                    ?? Reported(path, "the file is not a ResourceDictionary");
+                return Path.GetExtension(path).Equals(CssExtension, StringComparison.OrdinalIgnoreCase)
+                    ? ReadCss(path)
+                    : AvaloniaRuntimeXamlLoader.Load(File.ReadAllText(path)) is ResourceDictionary dictionary
+                        ? (dictionary, null)
+                        : Reported(path, "the file is not a ResourceDictionary");
             }
             catch (Exception ex)
             {
@@ -111,18 +151,37 @@ namespace EmuSen.LunaP.Theme
             }
         }
 
-        private static ResourceDictionary? Reported(string path, string why)
+        private static (ResourceDictionary, Styles?) ReadCss(string path)
+        {
+            CssThemeResult css = CssTheme.Parse(File.ReadAllText(path));
+
+            // Skipped rules are reported but do not refuse the theme - see EmuSen_LunaP.md §12.2.
+            if (css.Warnings.Count > 0) ConfigDiagnostics.Report($"{path}: {string.Join(" ", css.Warnings)}");
+
+            return (css.Resources, css.Styles);
+        }
+
+        private static (ResourceDictionary, Styles?)? Reported(string path, string why)
         {
             ConfigDiagnostics.Report($"{path}: {why} Falling back to the previous theme.");
             return null;
         }
 
-        private static void Remove(Application app)
+        // True when Application.Styles was touched, which is the case a realized control cannot survive on its own.
+        private static bool Remove(Application app)
         {
-            if (_applied is null) return;
+            bool touchedStyles = _appliedStyles is not null;
+            if (_appliedStyles is not null)
+            {
+                app.Styles.Remove(_appliedStyles);
+                _appliedStyles = null;
+            }
+
+            if (_applied is null) return touchedStyles;
 
             app.Resources.MergedDictionaries.Remove(_applied);
             _applied = null;
+            return touchedStyles;
         }
     }
 }

@@ -245,7 +245,9 @@ impl LibretroBackend {
     pub fn new(core_path: &str) -> LibretroBackend {
         LibretroBackend {
             core_path: core_path.to_string(),
-            name: "libretro".to_string(),
+            // load() replaces this with the core's own library_name, but the
+            // probe needs a name before then to site the profile directory.
+            name: core_stem(core_path),
             system: "unknown",
             library: None,
             api: None,
@@ -285,6 +287,15 @@ impl LibretroBackend {
         self.add_space("vram", sys::RETRO_MEMORY_VIDEO_RAM);
         self.add_space("rtc", sys::RETRO_MEMORY_RTC);
     }
+}
+
+// "…/gambatte_libretro.so" -> "gambatte": the pre-load name, taken from the path
+// because retro_get_system_info needs a library this backend has not opened yet.
+fn core_stem(core_path: &str) -> String {
+    let file = core_path.rsplit('/').next().unwrap_or(core_path);
+    let stem = file.strip_suffix(".so").unwrap_or(file);
+    let stem = stem.strip_suffix("_libretro").unwrap_or(stem);
+    if stem.is_empty() { "libretro".to_string() } else { stem.to_ascii_lowercase() }
 }
 
 // Resolves in the order the C++ did and stops at the first missing symbol, so a
@@ -518,6 +529,17 @@ fn libc_rtld_now_local() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The pre-load name has to distinguish two cores, or they share one profile
+    // directory and one save file - see §3.53.
+    #[test]
+    fn the_core_stem_names_the_core_not_the_api() {
+        assert_eq!(core_stem("/usr/lib64/libretro/gambatte_libretro.so"), "gambatte");
+        assert_eq!(core_stem("nestopia_libretro.so"), "nestopia");
+        assert_eq!(core_stem("/x/bsnes_mercury_performance_libretro.so"), "bsnes_mercury_performance");
+        assert_eq!(core_stem("/x/Gambatte.so"), "gambatte");
+        assert_eq!(core_stem(""), "libretro");
+    }
 
     #[test]
     fn system_comes_from_the_rom_extension() {

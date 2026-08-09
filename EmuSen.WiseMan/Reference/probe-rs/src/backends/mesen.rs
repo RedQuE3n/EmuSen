@@ -19,7 +19,7 @@ use crate::backend::{
     InputSchedule, MemorySpace, ProbeBackend, ProbeButton, ProbeIdentity, ProbeOptions,
     ScreenFormat, ScreenView, TraceKind,
 };
-use crate::mesen_sys as sys;
+use crate::backends::mesen_sys as sys;
 
 // Checked before the first call rather than trusted, because the two sides of
 // this ABI live in different repositories: a checkout carrying an older

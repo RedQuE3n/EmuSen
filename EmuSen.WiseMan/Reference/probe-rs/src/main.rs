@@ -4,15 +4,8 @@
 // See EmuSen_Debugging_Tools_Reference_v5.md §3.50.
 mod audio;
 mod backend;
+mod backends;
 mod dump;
-
-#[cfg(feature = "libretro")]
-mod libretro;
-
-#[cfg(feature = "mesen")]
-mod mesen;
-#[cfg(feature = "mesen")]
-mod mesen_sys;
 
 use backend::{
     InputSchedule, MemorySpace, ProbeBackend, ProbeButton, ProbeIdentity, ProbeOptions, TraceKind,
@@ -21,20 +14,14 @@ use backend::{
 use audio::AudioFormat;
 use dump::{BlobCache, SignatureWriter};
 
-// Which backends are compiled in is a build-time choice, because linking one is
-// not free: the Mesen backend pulls in a 14 MB MesenCore.so, the libretro one
-// needs nothing but dlopen. One binary per backend, one policy layer for all.
-#[cfg(feature = "mesen")]
-const DEFAULT_BACKEND: &str = "mesen";
-#[cfg(all(feature = "libretro", not(feature = "mesen")))]
-const DEFAULT_BACKEND: &str = "libretro";
-
 const NO_FRAME: u32 = 0xFFFF_FFFF;
 
 fn usage() {
     println!("usage: probe <rom> <outDir> <startFrame> <endFrame> [stride] [anchorAddr] [traceUntilFrame] [flags]");
-    println!("  --backend NAME   which reference emulator to drive (default: {DEFAULT_BACKEND})");
-    println!("  --core PATH      libretro backend only: the *_libretro.so to drive");
+    println!("  --backend NAME   which reference emulator to drive (default: {})", backends::DEFAULT);
+    for line in backends::usage_lines() {
+        println!("{line}");
+    }
     println!("  Writes <backend>_<space>_f<frame>.bin for every memory space the backend");
     println!("  exposes, plus <backend>_screen_f<frame>.bin and a manifest naming all of");
     println!("  them with sizes and the screen's pixel format.");
@@ -162,13 +149,11 @@ fn parse_args(argv: &[String]) -> Result<Args, i32> {
         stride: positional(argv, 5).map_or(1, atoi),
         anchor_addr: positional(argv, 6).map_or(0x0A00, strtoul_hex),
         trace_frame: positional(argv, 7).map_or(NO_FRAME, atoi),
-        backend_name: DEFAULT_BACKEND.to_string(),
+        backend_name: backends::DEFAULT.to_string(),
         core_path: String::new(),
         audio_path: String::new(),
-        options: ProbeOptions {
-            home_folder: format!("{dump_dir}/mesenhome"),
-            ..Default::default()
-        },
+        // home_folder is filled in once the backend exists - see home_folder().
+        options: ProbeOptions::default(),
         dump_dir,
         schedule: InputSchedule::default(),
         cpu_trace_frame: NO_FRAME,
@@ -298,26 +283,10 @@ fn positional(argv: &[String], index: usize) -> Option<&str> {
     argv.get(index).map(String::as_str).filter(|t| !t.starts_with('-'))
 }
 
-fn make_backend(args: &Args) -> Option<Box<dyn ProbeBackend>> {
-    #[cfg(feature = "mesen")]
-    if args.backend_name == "mesen" {
-        if !mesen::check_abi() {
-            return None;
-        }
-        return Some(Box::new(mesen::MesenBackend::new()));
-    }
-
-    #[cfg(feature = "libretro")]
-    if args.backend_name == "libretro" {
-        if args.core_path.is_empty() {
-            println!("[ERROR] --backend libretro needs --core <path to *_libretro.so>");
-            return None;
-        }
-        return Some(Box::new(libretro::LibretroBackend::new(&args.core_path)));
-    }
-
-    println!("[ERROR] backend '{}' is not compiled into this probe", args.backend_name);
-    None
+// Beside the dumps and named for whichever backend is driving, so two backends
+// probing one ROM never share a profile - see §3.53.
+fn home_folder(dump_dir: &str, backend: &str) -> String {
+    format!("{dump_dir}/{backend}home")
 }
 
 fn main() {
@@ -332,10 +301,17 @@ fn run(argv: &[String]) -> i32 {
         Err(code) => return code,
     };
 
-    let Some(mut backend) = make_backend(&args) else {
+    let Some(mut backend) = backends::make(&args.backend_name, &args.core_path) else {
         return 1;
     };
     let backend = backend.as_mut();
+
+    // A libretro core is handed this as its system, save and assets directory
+    // and will not create it itself.
+    args.options.home_folder = home_folder(&args.dump_dir, backend.name());
+    if let Err(error) = std::fs::create_dir_all(&args.options.home_folder) {
+        println!("[WARN] could not create {}: {error}", args.options.home_folder);
+    }
 
     backend.set_schedule(args.schedule.clone());
 
@@ -645,6 +621,53 @@ impl PendingTraces {
 mod tests {
     use super::*;
 
+    // The header's claim that these layers name no emulator, made checkable -
+    // see EmuSen_Debugging_Tools_Reference_v5.md §3.53.
+    const AGNOSTIC: [(&str, &str); 4] = [
+        ("main.rs", include_str!("main.rs")),
+        ("backend.rs", include_str!("backend.rs")),
+        ("dump.rs", include_str!("dump.rs")),
+        ("audio.rs", include_str!("audio.rs")),
+    ];
+
+    // Every emulator this probe has ever had a backend for or been compared
+    // against. A name is added here when a backend is added, never removed.
+    const EMULATORS: [&str; 9] = [
+        "mesen", "libretro", "nestopia", "gambatte", "bsnes", "snes9x", "retroarch", "bizhawk",
+        "ares",
+    ];
+
+    // Comments may name a backend to explain why it exists; code may not. The
+    // scan stops at the test module, whose fixtures use real names on purpose.
+    fn code_lines(source: &str) -> Vec<(usize, &str)> {
+        source
+            .lines()
+            .take_while(|line| !line.starts_with("#[cfg(test)]"))
+            .enumerate()
+            .map(|(n, line)| (n + 1, line.split("//").next().unwrap_or("")))
+            .filter(|(_, code)| !code.trim().is_empty())
+            .collect()
+    }
+
+    #[test]
+    fn no_emulator_is_named_in_the_agnostic_layers() {
+        let mut found = Vec::new();
+        for (file, source) in AGNOSTIC {
+            for (number, code) in code_lines(source) {
+                let lowered = code.to_lowercase();
+                if EMULATORS.iter().any(|e| lowered.contains(e)) {
+                    found.push(format!("  {file}:{number}: {}", code.trim()));
+                }
+            }
+        }
+        assert!(
+            found.is_empty(),
+            "the policy layer names an emulator in {} place(s):\n{}",
+            found.len(),
+            found.join("\n")
+        );
+    }
+
     fn pending(apu: u32, cpu: u32, gsu: u32) -> PendingTraces {
         PendingTraces { apu_log_frame: apu, cpu_trace_frame: cpu, trace_frame: gsu }
     }
@@ -793,11 +816,21 @@ mod tests {
         assert_eq!(parse_args(&argv).err(), Some(1));
     }
 
+    // Until 2026-08-09 the policy layer hardcoded "mesenhome" here, so a
+    // libretro core was handed a save directory named after a different
+    // emulator entirely. The mesen path is unchanged, which is why an existing
+    // dump set keeps working - see §3.53.
     #[test]
-    fn home_folder_sits_beside_the_dumps() {
+    fn the_home_folder_is_named_for_the_backend_driving_it() {
+        assert_eq!(home_folder("/out/dir", "mesen"), "/out/dir/mesenhome");
+        assert_eq!(home_folder("/out/dir", "libretro"), "/out/dir/libretrohome");
+    }
+
+    #[test]
+    fn parsing_alone_does_not_choose_a_home_folder() {
         let argv = args(&["probe", "r.nes", "/out/dir", "0", "1"]);
         let parsed = parse_args(&argv).ok().unwrap();
-        assert_eq!(parsed.options.home_folder, "/out/dir/mesenhome");
+        assert_eq!(parsed.options.home_folder, "");
         assert_eq!(parsed.options.ram_state, "zeros");
     }
 

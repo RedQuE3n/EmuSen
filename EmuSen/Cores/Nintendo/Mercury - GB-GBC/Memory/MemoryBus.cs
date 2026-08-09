@@ -1,6 +1,7 @@
 using System;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mercury.Cpu.Core;
+using EmuSen.Cores.Nintendo.Mercury.Audio;
 using EmuSen.Cores.Nintendo.Mercury.Input;
 using EmuSen.Cores.Nintendo.Mercury.Video;
 
@@ -45,6 +46,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         [SkipInState] public Joypad Joypad = new();
 
         public readonly Ppu Ppu;
+        public readonly Apu Apu = new();
 
         // The 16-bit counter DIV is the top half of - see Mercury_Memory.md §5.
         private ushort _divCounter;
@@ -173,6 +175,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             0xFF06 => _tma,
             0xFF07 => (byte)(_tac | 0xF8),
             0xFF0F => (byte)(InterruptFlags | 0xE0),
+            >= 0xFF10 and <= 0xFF26 => Apu.ReadRegister(address),
+            >= 0xFF30 and <= 0xFF3F => Apu.ReadRegister(address),
             0xFF40 => Ppu.Lcdc,
             0xFF41 => Ppu.ReadStat(),
             0xFF42 => Ppu.Scy,
@@ -216,6 +220,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
                 case 0xFF0F:
                     InterruptFlags = (byte)(data & 0x1F);
+                    return;
+
+                case >= 0xFF10 and <= 0xFF26:
+                case >= 0xFF30 and <= 0xFF3F:
+                    Apu.WriteRegister(address, data);
                     return;
 
                 case 0xFF40:
@@ -290,18 +299,21 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         // TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.
         private void StepOneCycle()
         {
-            // The CPU and the timer double; the LCD does not - see Mercury_Cgb.md §5.
+            // The CPU and the timer double; the LCD and the sound hardware do not - see Mercury_Cgb.md §5.
             if (DoubleSpeed)
             {
-                _ppuHalfCycle = !_ppuHalfCycle;
-                if (_ppuHalfCycle) Ppu.Tick();
+                _baseClockPhase = !_baseClockPhase;
+                if (_baseClockPhase) StepBaseClock();
             }
             else
             {
-                Ppu.Tick();
+                StepBaseClock();
             }
 
             _divCounter++;
+
+            // The frame sequencer watches a DIV bit, so a DIV write can clock it early - see Mercury_Apu.md §2.
+            Apu.OnDivBit((_divCounter & (DoubleSpeed ? 0x2000 : 0x1000)) != 0);
 
             if (_timaReloadDelay > 0 && --_timaReloadDelay == 0)
             {
@@ -318,6 +330,12 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             }
 
             _lastTimerEdge = edge;
+        }
+
+        private void StepBaseClock()
+        {
+            Ppu.Tick();
+            Apu.Tick();
         }
 
         private int TimerBitMask => (_tac & 0x03) switch
@@ -350,6 +368,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
             ResetCgb();
             Ppu.Reset();
+            Apu.Reset();
         }
     }
 }

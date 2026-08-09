@@ -1,8 +1,8 @@
 # Mercury (Game Boy) — the core
 
-*Started 2026-08-04. CPU, memory, cartridge, the LCD controller and the Game Boy
-Color extensions, the last two both added 2026-08-08; there is still no APU — see
-§5 for what that means in practice.*
+*Started 2026-08-04, feature-complete 2026-08-08: CPU, memory, cartridge, the LCD
+controller, the Game Boy Color extensions, the debug target and the sound
+hardware. §5 is now a list of gaps rather than a list of absences.*
 
 ---
 
@@ -28,15 +28,15 @@ This section used to describe a stand-in: with no LY to drive it from, `EndFrame
 
 ## 4. Audio
 
-`AudioSampleRate` answers 44100 and `DequeueAudioSamples` returns nothing. The rate has to be known before any samples exist for a caller opening a real device, which is why it is a property rather than something bundled into the drain call.
+`AudioSampleRate` answers 44100 and is told to the APU at load rather than read back from it. The rate has to be known before any samples exist for a caller opening a real device, which is why it is a property rather than something bundled into the drain call.
+
+`DequeueAudioSamples` drains the APU's own queue. The output is genuinely stereo, unlike Moon's — see `Mercury_Apu.md` §1.
 
 ## 5. What is not built
 
-- **No APU.** The four channels do not exist.
-- **No `IDebugTarget`.** This is why Mercury is deliberately *not* registered in `CoreCatalog` or `CoreFactory` yet: `CoreFactory.Load` builds a `CoreBundle` that requires a debug target, so registering the core before one exists would put a `NotSupportedException` behind a ROM the catalog claims to support. The core is reachable from tests and nowhere else until that is written.
 - **No serial.** Nothing needs it.
 - **No boot ROM,** on either console, which is why the post-boot register file is hardcoded and why DMG-on-CGB colourisation does not exist (`Mercury_Cgb.md` §1.1 and §6).
 
-The PPU is built but not complete; `Mercury_Ppu.md` §2.2, §3.2 and §7 state its own gaps, of which the absent VRAM access blocking is the one with real consequences. The colour extensions state theirs in `Mercury_Cgb.md` §6.
+Every subsystem states its own gaps: `Mercury_Ppu.md` §2.2, §3.2 and §7 (of which the absent VRAM access blocking is the one with real consequences), `Mercury_Cgb.md` §6, `Mercury_Apu.md` §7 and `Mercury_Debug.md` §6.
 
-The pieces that *are* built are real: the full unprefixed and `$CB` instruction sets, interrupts with the EI delay and the HALT bug, the DIV/TIMA timer with falling-edge detection, the joypad matrix, OAM DMA, five cartridge boards, background/window/sprite rendering, the colour palettes, VRAM and WRAM banking, HDMA, double speed, and save states.
+The pieces that *are* built are real: the full unprefixed and `$CB` instruction sets, interrupts with the EI delay and the HALT bug, the DIV/TIMA timer with falling-edge detection, the joypad matrix, OAM DMA, five cartridge boards, background/window/sprite rendering, the colour palettes, VRAM and WRAM banking, HDMA, double speed, all four sound channels, a debug target, and save states.

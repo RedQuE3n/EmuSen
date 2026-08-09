@@ -1,12 +1,12 @@
 # Mercury — where this stands, and what comes next
 
-*Pinned 2026-08-04, updated 2026-08-08 when Phases A, D and B landed. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It is a living document: when a phase lands, move it into §1 and delete it from §3.*
+*Pinned 2026-08-04. **All four phases landed 2026-08-08** and §3 is now empty. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It stays a living document: what belongs in §3 from here is whatever a real cartridge turns out to need, not a plan written in advance.*
 
 ---
 
 ## 1. What is built and verified
 
-All of it is covered by `EmuSen.WiseMan` — 123 tests across `MercuryCpuTests`, `MercuryCartridgeTests`, `MercuryCoreTests`, `MercuryPpuTests`, `MercuryCgbTests` and `MercuryDebugTargetTests`, run headless against `SyntheticGbRom`. No real cartridge is needed or committed.
+All of it is covered by `EmuSen.WiseMan` — 146 tests across `MercuryCpuTests`, `MercuryCartridgeTests`, `MercuryCoreTests`, `MercuryPpuTests`, `MercuryCgbTests`, `MercuryDebugTargetTests` and `MercuryApuTests`, run headless against `SyntheticGbRom`. No real cartridge is needed or committed.
 
 | Piece | State |
 |---|---|
@@ -18,6 +18,7 @@ All of it is covered by `EmuSen.WiseMan` — 123 tests across `MercuryCpuTests`,
 | **OAM DMA** | Copies, immediately rather than over 160 cycles (§4). |
 | **PPU** | The mode machine on a per-cycle clock, LY/LYC, STAT as one level-triggered line, background, window with its own line counter, sprites with both DMG orderings. Renderer is per scanline. `Mercury_Ppu.md`. |
 | **Colour** | VRAM and WRAM banking, both palette ports, map and sprite attributes, CGB sprite priority, HDMA in both modes, double speed. `Mercury_Cgb.md`. |
+| **APU** | Four channels, the frame sequencer off a DIV bit, stereo panning, the DC-removing high-pass. `Mercury_Apu.md`. |
 | **Cartridge** | Header, title (both lengths), colour flag, checksum, ROM/RAM sizing. |
 | **Boards** | No-MBC, MBC1 (both modes), MBC2, MBC3 with a latched RTC, MBC5. |
 | **Core** | `ICore` surface, frame budget, breakpoints, coverage, cheats, named debug spaces, save states. |
@@ -31,13 +32,14 @@ All of it is covered by `EmuSen.WiseMan` — 123 tests across `MercuryCpuTests`,
 - **`.gb` and `.gbc` both reach the same core**, and which console it becomes is the header's answer rather than the extension's — a `.gb` file with `$0143 = $C0` runs in colour. The prediction that the extension would arrive with Phase B rather than Phase D held.
 - **Colour mode is decided by the header, once, at load.** Both `$80` and `$C0` select it, matching the real console. No runtime toggle — `Mercury_Cgb.md` §1.
 
-## 3. Phases, in the order they should be done
+## 3. Phases
 
-### Phase C — the APU
+**None left.** A, B, C and D are all in §1.
 
-The last phase, and now the only one. Four channels: two pulse with sweep and envelope, a programmable wave channel, and noise with an LFSR. `AudioSampleRate` already answers 44100 and `DequeueAudioSamples` already returns empty, so the seam is in place.
+What comes next is not another phase, because the remaining gaps are not a plan — they are conditions. Each of the four subsystem pages ends with its own "what is not modelled" list, and every entry there names the evidence that would justify doing the work. The two most likely to be reached first:
 
-Three places already hold a documented empty waiting for it, and each should be filled in the same change: `MercuryDebugTarget`'s `AudioChannels` and `SetChannelMuted`, and its `ApuRegisters`, which currently carries the timer and the cartridge board because they had nowhere better to live (`Mercury_Debug.md` §3).
+- **A real cartridge.** Nothing in Mercury has run a commercial ROM; every test is against `SyntheticGbRom`. That is the single largest source of unknown-unknowns left, and it is what should happen before any accuracy work is planned.
+- **A cycle-granular bus.** Three separate simplifications share this one prerequisite — VRAM and OAM access blocking, OAM DMA's 160-cycle transfer, and HDMA's CPU stall. They should be done together or not at all, and none of them before a game proves it needs them.
 
 ## 4. Known simplifications, and when each will matter
 
@@ -49,6 +51,8 @@ Three places already hold a documented empty waiting for it, and each should be 
 - **`STOP` performs the speed switch on a CGB** and still does nothing on a DMG. The switch is instantaneous rather than the ~2050 cycles hardware spends on it — `Mercury_Cgb.md` §5.
 - **No serial link.** Nothing needs it yet.
 - **No call stack, expression context, access counters or freezes** on the debug target. Each is a seam the core does not have; the interface allows null for all of them - `Mercury_Debug.md` §6.
+- **The APU mixes at the output rate**, so a channel period above Nyquist aliases rather than being filtered. No game plays notes there - `Mercury_Apu.md` §7.
+- **No commercial ROM has ever been run through this core.** Every test is synthetic. This is a gap in the evidence rather than in the code, and it is the most important one on this list.
 
 ## 5. Resuming
 
@@ -57,3 +61,5 @@ dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj --filter "FullyQualifiedName~Me
 ```
 
 Read `Mercury_Cpu.md` before touching the CPU — §1 lists the ways the SM83 is not the chip people assume it is, and most of them are one-line mistakes that pass casual review.
+
+Mercury is now in `CoreCatalog`, so a `.gb` or `.gbc` file also reaches it through either frontend and through DianaOS. `emusen` and `disasm cpu` work against it the same way they do against Moon.

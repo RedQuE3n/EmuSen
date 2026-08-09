@@ -1,7 +1,9 @@
 -- Seed entries for the known-differences dictionary - see §3.49.
 --
--- Everything here is inserted as 'provisional'. Nothing in this file may say
--- 'proven'; the schema's trigger refuses it, deliberately. Promotion happens only
+-- Nothing in this file may say 'proven'; the schema's trigger refuses it,
+-- deliberately. Entries are seeded 'provisional', except where a claim has since
+-- been retracted - a retraction is kept here as history rather than deleted, so
+-- the seed is not uniformly provisional. Promotion happens only
 -- when `--verify-dictionary` re-runs an assertion against a real pair of dump
 -- sets and records that it passed.
 

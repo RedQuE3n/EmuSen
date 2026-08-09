@@ -66,6 +66,18 @@ The migration is therefore one change, not two: the signature becomes a SQLite t
 
 **What SQLite did and did not buy here.** It removed regex-parsing of JSON, made the ingest/analysis seam explicit, and gave the join an honest expression. It did **not** make anything measurably faster: on a 75-frame set the in-memory dictionaries were already fast, and no speed improvement was measured or claimed. The performance argument only begins to apply at run lengths this project has not yet taken — thousands of frames across many columns — and is recorded here as a prediction, not a result.
 
+### 3.1 The differential, and what it caught
+
+Nothing was deleted on the strength of the port looking right. `PythonPortDifferentialTests` ran both implementations over the same argv and asserted byte-identical stdout and exit code across seventeen cases: each identity gate, both warnings, the column ratings, a located divergence, input blame, the stream-offset search, both screen formats, the vacuity gate, a vertical shift, a static reference, a missing screen, an empty signature, and the committed Mesen dump set. It passed, and it was then deleted along with the C# it verified — which is why the result is recorded here instead.
+
+Beyond the fixtures, one real pair: `--probe --sig` over SMB3 frames 120–194 against `EmuSen.WiseMan/Reference/dumps/SMB3`. Both implementations produced the same output down to the byte, including the one-sided board warning, the real `PaletteIndex16` decode through the NES palette (5 colours, dominant 92.7%), 1536 differing pixels at 2.50%, and phase +2 — the two-frame boot offset §3.48 predicts.
+
+**The differential earned its cost on one case.** The port was written believing that percentages needed special handling: .NET's `F` format was assumed to round half away from zero while Python rounds half to even, and the values are reachable — 384 differing pixels out of 256×240 is exactly 0.625%. `_fixed()` was accordingly implemented with a decimal round-half-away-from-zero. The test failed on precisely that case, **in the opposite direction to the prediction**. Measured against .NET 10 across eighteen values chosen to cover every dyadic midpoint at zero, one and two decimals: `F` rounds half to **even**, exactly as Python's `format()` does. The deliberate correction disagreed with .NET on seven of eighteen; doing nothing disagreed on none.
+
+The prediction is retained in `compare.py`'s header rather than deleted. "Two languages must round differently" is a plausible claim that would otherwise be re-derived, believed and re-implemented by the next person to look at the file — and the belief was not idle, it was acted upon and shipped a bug that only a differential caught.
+
+**Where this does not generalise:** a byte-identical differential was affordable because the tool's entire output is a text report and an exit code. A port whose output is a data structure, a rendered image, or a timing would need a different and weaker notion of "the same", and should not cite this as precedent for deleting the original.
+
 ## 4. Reasoned exceptions
 
 Everything below violates a rule in §1 and stays that way on purpose.

@@ -1,12 +1,12 @@
 # Mercury — where this stands, and what comes next
 
-*Pinned 2026-08-04, at the end of the first session on this core. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It is a living document: when a phase lands, move it into §1 and delete it from §3.*
+*Pinned 2026-08-04, updated 2026-08-08 when Phase A landed. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It is a living document: when a phase lands, move it into §1 and delete it from §3.*
 
 ---
 
 ## 1. What is built and verified
 
-All of it is covered by `EmuSen.WiseMan` — 41 tests across `MercuryCpuTests`, `MercuryCartridgeTests` and `MercuryCoreTests`, run headless against `SyntheticGbRom`. No real cartridge is needed or committed.
+All of it is covered by `EmuSen.WiseMan` — 68 tests across `MercuryCpuTests`, `MercuryCartridgeTests`, `MercuryCoreTests` and `MercuryPpuTests`, run headless against `SyntheticGbRom`. No real cartridge is needed or committed.
 
 | Piece | State |
 |---|---|
@@ -16,6 +16,7 @@ All of it is covered by `EmuSen.WiseMan` — 41 tests across `MercuryCpuTests`, 
 | **Timer** | DIV as the top half of the real 16-bit counter; TIMA as a falling-edge detector on a selected bit, with the 4-cycle reload window. |
 | **Joypad** | The two-nibble matrix, pressed-reads-0, both-halves-selected ANDing. |
 | **OAM DMA** | Copies, immediately rather than over 160 cycles (§4). |
+| **PPU** | The mode machine on a per-cycle clock, LY/LYC, STAT as one level-triggered line, background, window with its own line counter, sprites with both DMG orderings. Renderer is per scanline. `Mercury_Ppu.md`. |
 | **Cartridge** | Header, title (both lengths), colour flag, checksum, ROM/RAM sizing. |
 | **Boards** | No-MBC, MBC1 (both modes), MBC2, MBC3 with a latched RTC, MBC5. |
 | **Core** | `ICore` surface, frame budget, breakpoints, coverage, cheats, named debug spaces, save states. |
@@ -28,16 +29,6 @@ All of it is covered by `EmuSen.WiseMan` — 41 tests across `MercuryCpuTests`, 
 - **`.gbc` is not claimed** as an extension yet. It arrives with colour, not before — running a CGB-only cart in DMG mode would fail confusingly rather than cleanly.
 
 ## 3. Phases, in the order they should be done
-
-### Phase A — the PPU
-
-The largest remaining piece and the one that makes this visibly a Game Boy. Nothing draws pixels today.
-
-Wants: LCDC/STAT/SCY/SCX/LY/LYC/WY/WX/BGP/OBP0/OBP1, the four PPU modes with their real scanline timing, background and window rendering, sprite rendering with the 10-per-line limit and the DMG x-coordinate priority rule, the STAT interrupt on all four sources, and LY=LYC.
-
-Start here because it also removes a stand-in: `EndFrame` currently raises VBlank on the frame boundary because there is no LY to drive it from (`Mercury_Core.md` §3). Once the PPU exists, the interrupt comes from LY reaching 144 like the hardware.
-
-Scanline granularity is the right first target, matching Moon. A pixel FIFO is only needed if a game turns out to depend on mid-scanline register writes.
 
 ### Phase B — `MercuryDebugTarget`
 
@@ -58,7 +49,9 @@ Double-speed mode, VRAM bank 2, WRAM banks 1-7, BG/OBJ colour palettes with thei
 ## 4. Known simplifications, and when each will matter
 
 - **Instruction-granular timing.** `Step` returns the whole instruction's T-cycles and the bus is ticked afterwards. The timer is unaffected (`MemoryBus.Tick` loops one cycle at a time internally), but a mid-instruction write cannot land at an exact cycle relative to a PPU mode change. Revisit only if a real game proves it needs sub-instruction timing — this is the same call Moon made.
-- **OAM DMA copies immediately** rather than over 160 machine cycles with the bus locked. Nothing can observe the difference until the PPU exists.
+- **OAM DMA copies immediately** rather than over 160 machine cycles with the bus locked. The PPU now exists, so this is observable in principle — a game reading OAM during the transfer sees the finished copy — but not in practice while access blocking is absent (`Mercury_Ppu.md` §7). Both want the same cycle-granular bus, and should be done together.
+- **No VRAM or OAM access blocking**, and this is a deliberate consequence of the instruction-granular bus rather than a shortcut. `Mercury_Ppu.md` §7 states the trade and the condition that reverses it.
+- **The renderer is per scanline** under a per-cycle clock. `Mercury_Ppu.md` §1.
 - **No boot ROM.** Mercury starts at `$0100` with the post-boot register state hardcoded, which is also why the header checksum is computed but never enforced.
 - **`STOP` consumes its second byte and does nothing.** It only matters for CGB double-speed switching, which is Phase D.
 - **No serial link.** Nothing needs it yet.

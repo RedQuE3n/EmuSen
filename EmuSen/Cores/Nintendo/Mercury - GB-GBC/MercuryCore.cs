@@ -86,7 +86,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public void LoadRom(string path)
         {
             Cart = Cartridge.Load(path);
-            Bus = new MemoryBus(Cart);
+            Bus = new MemoryBus(Cart) { RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats) };
             Cpu = new Cpu.Core.Cpu(Bus);
 
             Bus.Reset();

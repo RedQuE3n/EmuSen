@@ -39,6 +39,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public byte InterruptFlags;
 
         [SkipInState] public IWriteObserver? WriteObserver;
+
+        // Where a Game Genie code lands: every cartridge-routed read passes through it - see Mercury_Cheats.md §2.
+        [SkipInState] public EmuSen.Cores.IRomReadPatcher? RomPatcher;
         [SkipInState] public Joypad Joypad = new();
 
         public readonly Ppu Ppu;
@@ -76,7 +79,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             switch (address)
             {
                 case < 0x8000:
-                    return _cart.Mapper.ReadRom(address);
+                {
+                    byte value = _cart.Mapper.ReadRom(address);
+                    if (RomPatcher is not null && RomPatcher.TryPatch(address, value, out byte patched)) value = patched;
+                    return value;
+                }
 
                 case < 0xA000:
                     return Vram[VramOffset(address)];

@@ -118,7 +118,9 @@ Two of the four commonly-documented dynamic 65816 cycle penalties are now modele
 
 `VenusCore`'s scanline loop is `while (_lineCycles < CyclesPerScanline)`, so the instruction that crosses the boundary always overshoots — `_lineCycles` ends the scanline somewhere in `1364 .. 1364 + (that instruction's master clocks - 1)`, never exactly `1364`. The scanline-start block then used to reset `_lineCycles = 0`, **throwing that overshoot away**. Every scanline therefore consumed slightly *more* than 1364 master clocks of emulated machine time while the counter pretended it had consumed exactly 1364.
 
-It now carries the remainder instead (`_lineCycles -= CyclesPerScanline`), the same explicit-remainder discipline `_spc700CycleRemainder` already used a few lines below for the SPC700 conversion — the SPC700 side had it right, the scanline side did not.
+It carries the remainder instead, the same explicit-remainder discipline `_spc700CycleRemainder` already used a few lines below for the SPC700 conversion — the SPC700 side had it right, the scanline side did not.
+
+**The carry is now structural rather than a statement.** The fix was originally `_lineCycles -= CyclesPerScanline`. `VenusCore` keeps a running `_masterClock` and a `_lineStartClock`, and `_lineCycles` is the subtraction of the two — so an instruction that overshoots a boundary simply starts the next line partway in, with nothing to remember to carry. See §8.5d for the timeline that shape came from.
 
 **Size of the error:** average overshoot is roughly half an instruction (~10-11 master clocks), across 262 scanlines ≈ **2,800 extra master clocks per frame, ~0.79%**. Emulated frames were that much *longer* than real hardware's 262 × 1364 = 357,368.
 
@@ -182,6 +184,18 @@ Both machines run 341 dots x 4 master clocks per scanline; PAL simply spends mor
 **What this does not model.** PAL games' extra 50 vblank lines are real time the CPU gets to work in, and that is modelled; what isn't is that the *display* on a real PAL set is 239 lines tall, with games choosing either 224-line output (letterboxed, what nearly everything including DKC2 does) or true 239-line mode via `SETINI` bit 2 (§10 of `Venus_PPU.md`, stored but not implemented). A 239-line PAL game would render its bottom 15 lines missing. Frame *pacing* at 50 Hz is honest, but this is emulating a PAL machine's timing, not a PAL machine's overscan.
 
 **Validated by** `EmuSen.WiseMan/Memory/ConsoleRegionTests.cs` (country-byte classification, both frame rates to 3 decimal places, the `STAT78` bit in both directions, and that the region bit doesn't disturb the PPU2 version nibble sharing that byte), and end-to-end by Donkey Kong Country 2 — the European dump that motivated the work — now booting past the region lockout into playable gameplay (`EmuSen_Games_Tested.md`).
+
+### 8.5d The frame loop's timeline, and the scheduler that used to hold it
+
+`VenusCore.Schedule.cs` is three fields. `_masterClock` is the machine's position, `_lineStartClock` is where the current scanline began, and `_frameComplete` is how `EndScanline` tells `RunFrame` to return. `RunFrame` runs the CPU while `_masterClock < NextScanlineBoundary`, then calls `EndScanline`, which does HDMA, the render, vblank/NMI, the auto-joypad latch and the line increment in that order.
+
+That order is load-bearing and always was — HDMA before the render is the rule that once produced a visible band in an A Link to the Past rain scene when it was wrong.
+
+**This used to be `EmuSen.Crystal`, a separate core-agnostic scheduler assembly**, folded back into the two cores and deleted on 2026-08-05. Venus drove it with a single `ScanlineBoundary` event fired at a constant stride; `_schedule.Advance(cpuCycles)` became `_masterClock += cpuCycles` and `_schedule.RunUntil(lineDeadline)` became `EndScanline()`, because with one appointment per core those calls had no other meaning. What was lost is an event table indexed by id, tie-breaking between simultaneous events, a runaway-reschedule guard and an `IClockedDevice` interface — machinery for a generality that never arrived in either core, and which nothing but the scheduler's own tests exercised.
+
+The design doc is retired to `Man pages/Old/EmuSen_Crystal_Scheduler.md`. Read §7.1 before rebuilding anything like it: the case Crystal was actually written for is `HTime` (`$4207`/`$4208`), where a game picks an IRQ position at runtime and a hardcoded loop has nowhere to put it. That case is still unimplemented, and it is a real argument for a timeline with more than one appointment on it — but it is an argument for scheduling *what Venus needs*, in Venus, not for a shared assembly ten unbuilt cores might one day want.
+
+Also still true from that doc: **Venus's timeline is not in its save state.** `VenusCore.SaveState` serialises `Cart`/`Cpu`/`Bus`/`Spc700`, not `VenusCore` itself, so `_masterClock` and `_lineStartClock` are not written and a loaded state resumes on the running instance's line position. That is pre-existing and digest-confirmed, not a regression — Moon does write its timeline (`Moon_Core.md` §5), and Venus should eventually.
 
 ### 8.6 Validation
 

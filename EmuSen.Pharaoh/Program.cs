@@ -1,9 +1,11 @@
 using EmuSen.Common.Imaging;
 using EmuSen.Cores;
+using EmuSen.Cores.Nintendo.Moon.Validation;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Pharaoh;
 using EmuSen.Pharaoh.Cli;
+using EmuSen.Pharaoh.Reference;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
@@ -24,6 +26,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 //   dotnet run -- <rom> <maxframes> --commands path [other flags above except --tap/--tap2/--screenshot/--script]
 //   dotnet run -- --diffshot <bmp1> <bmp2> <outpath>
 //   dotnet run -- --singlestep <target> <test-dir> [max-examples-per-file]
+//   dotnet run -- --testroms <dir|rom> [frame-budget]
 //
 // Internally this is now just dispatch: HeadlessDebugOptions.Parse turns
 // argv into a plain options object, FrameRunner is the one shared
@@ -57,6 +60,35 @@ class Program
             return DiffShotRunner.Run(args[1], args[2], args[3]);
         }
 
+        // Walks the ROM library once and catalogues it - see EmuSen_Galaxia.md §7.
+        if (args.Length >= 1 && args[0] == "--index-library")
+        {
+            return LibraryIndexer.Run(args);
+        }
+
+        // --compare and --verify-dictionary are Python now - see EmuSen_Stack.md §3.
+        if (args.Length >= 1 && (args[0] == "--compare" || args[0] == "--verify-dictionary"))
+        {
+            Console.WriteLine($"{args[0]} moved to EmuSen.WiseMan/Reference/analysis - it reads files,");
+            Console.WriteLine("not machines, so it no longer needs the emulator to be built:");
+            Console.WriteLine();
+            Console.WriteLine("  cd EmuSen.WiseMan/Reference/analysis");
+            Console.WriteLine("  ./compare.py <oursDir> <theirsDir> <frame> [phaseWindow] [--input F]...");
+            Console.WriteLine("  ./verify_dictionary.py <oursDir> <theirsDir>");
+            return 1;
+        }
+
+        // EmuSen writing the reference probe's own dump protocol - see §3.48.
+        if (args.Length >= 1 && args[0] == "--probe")
+        {
+            if (args.Length < 5)
+            {
+                Console.WriteLine("Usage: dotnet run -- --probe <rom> <outDir> <startFrame> <endFrame> [stride] [--sig] [--tap F:BTN[:DUR]]...");
+                return 1;
+            }
+            return ProbeRunner.Run(args);
+        }
+
         // Also standalone: two --cputrace blobs, no ROM needed - see §3.40.
         if (args.Length >= 1 && args[0] == "--tracediff")
         {
@@ -83,6 +115,24 @@ class Program
                 return 1;
             }
             return SingleStepRunner.Run(args[1], args[2], args.Length >= 4 ? int.Parse(args[3]) : 3);
+        }
+
+        // Also standalone: third-party NES test ROMs, which report through PRG RAM - see Moon_TestRoms.md.
+        if (args.Length >= 1 && args[0] == "--testroms")
+        {
+            if (args.Length < 2)
+            {
+                Console.WriteLine("Usage: dotnet run -- --testroms <dir|rom> [frame-budget]");
+                return 1;
+            }
+            if (args.Length >= 3 && !int.TryParse(args[2], out _))
+            {
+                Console.WriteLine($"[ERROR] frame-budget must be a number, got '{args[2]}'");
+                return 1;
+            }
+            return TestRomRunner.Run(
+                args[1],
+                args.Length >= 3 ? int.Parse(args[2]) : NesTestRomRunner.DefaultFrameBudget);
         }
 
         var (options, warnings, error) = HeadlessDebugOptions.Parse(args);
@@ -241,6 +291,8 @@ class Program
                 CpuLogEnd = options.CpuLogEnd,
                 CpuTraceEnd = options.CpuTraceEnd,
                 CpuTracePath = options.CpuTracePath,
+                ApuLogEnd = options.ApuLogEnd,
+                ApuLogPath = options.ApuLogPath,
                 Verbose = options.Verbose,
                 OnHalted = debugTarget.RefreshProviders,
             };
@@ -269,6 +321,8 @@ class Program
             CpuLogEnd = options.CpuLogEnd,
             CpuTraceEnd = options.CpuTraceEnd,
             CpuTracePath = options.CpuTracePath,
+            ApuLogEnd = options.ApuLogEnd,
+            ApuLogPath = options.ApuLogPath,
             Verbose = options.Verbose,
             OnHalted = debugTarget.RefreshProviders,
         };

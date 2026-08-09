@@ -37,7 +37,24 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
         // $2007 reads below the palette lag one access behind - see Moon_PPU.md §2.3.
         public byte ReadBuffer;
 
+        // What the CPU last drove onto the PPU bus; every unreadable bit reads back from here - see Moon_PPU.md §2.5.
+        public byte OpenBus;
+
+        // Frames left per bit before that bit leaks back to zero; ~600ms on hardware - see Moon_PPU.md §2.5.
+        public readonly byte[] OpenBusDecay = new byte[8];
+
+        public const byte OpenBusDecayFrames = 36;
+
         public long FrameCount;
+
+        // What the PPU last drove on its own address bus, for boards watching A12 - see Moon_Memory.md §4.6a.
+        public ushort BusAddress;
+
+        // A $2002 read on the dot vblank would be set eats it - see Moon_PPU.md §1.2.
+        public bool SuppressVBlank;
+
+        // Where the line being drawn starts, latched before the fetches walk V along it - see Moon_PPU.md §3.1.
+        public ushort RenderV;
 
         // Set while the PPU wants the CPU's NMI line asserted; the CPU latches the edge itself.
         public bool NmiOutput => NmiEnabled && VBlankFlag;
@@ -88,37 +105,91 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
 
         public void Reset()
         {
-            Control = 0;
-            Mask = 0;
+            SoftReset();
             Status = 0;
             OamAddress = 0;
             V = 0;
             T = 0;
             FineX = 0;
-            WriteToggle = false;
-            ReadBuffer = 0;
             FrameCount = 0;
+            Cycle = 0;
+            Scanline = 0;
+            PpuClock = 0;
+            FrameComplete = false;
+            BusAddress = 0;
             Array.Clear(Ciram);
             Array.Clear(PaletteRam);
             Array.Clear(Oam);
             Array.Clear(FrameRgba);
         }
 
-        // $2000-$2007, already mirrored down by the bus.
+        // What the RESET line clears; VRAM, OAM and the palette survive it - see Moon_Core.md §6.
+        public void SoftReset()
+        {
+            Control = 0;
+            Mask = 0;
+            WriteToggle = false;
+            ReadBuffer = 0;
+            OpenBus = 0;
+            SuppressVBlank = false;
+            Array.Clear(OpenBusDecay);
+        }
+
+        // Every move of the VRAM pointer re-drives the PPU's address bus - see Moon_Memory.md §4.6a.
+        private void AdvanceVramAddress()
+        {
+            V = (ushort)((V + AddressIncrement) & 0x7FFF);
+            SetBusAddress((ushort)(V & 0x3FFF));
+        }
+
+        // <mask> is which bits the PPU actually drove; the rest keep their charge - see Moon_PPU.md §2.5.
+        private void RefreshOpenBus(byte value, byte mask = 0xFF)
+        {
+            OpenBus = (byte)((OpenBus & ~mask) | (value & mask));
+
+            for (int bit = 0; bit < 8; bit++)
+            {
+                if ((mask & (1 << bit)) != 0) OpenBusDecay[bit] = OpenBusDecayFrames;
+            }
+        }
+
+        // Called once a frame; the latch is charge on a capacitor, and it leaks a bit at a time.
+        public void DecayOpenBus()
+        {
+            for (int bit = 0; bit < 8; bit++)
+            {
+                if (OpenBusDecay[bit] == 0) continue;
+                if (--OpenBusDecay[bit] == 0) OpenBus &= (byte)~(1 << bit);
+            }
+        }
+
+        // $2000-$2007, already mirrored down by the bus. Every path refreshes the latch - see Moon_PPU.md §2.5.
         public byte ReadRegister(int register)
         {
             switch (register & 0x07)
             {
                 case 2:
                 {
-                    byte value = Status;
+                    // Only the three flag bits are driven; the low five keep whatever charge they had.
+                    byte value = (byte)((Status & 0xE0) | (OpenBus & 0x1F));
+
+                    // Read on the dot before vblank is set and the flag never appears at all.
+                    if (Scanline == VBlankScanline && Cycle == 0) SuppressVBlank = true;
+
                     VBlankFlag = false;
                     WriteToggle = false;
+                    RefreshOpenBus(value, 0xE0);
                     return value;
                 }
 
                 case 4:
-                    return Oam[OamAddress];
+                {
+                    // Attribute bits 2-4 have no storage behind them and always read back clear.
+                    byte value = Oam[OamAddress];
+                    if ((OamAddress & 0x03) == 0x02) value &= 0xE3;
+                    RefreshOpenBus(value);
+                    return value;
+                }
 
                 case 7:
                 {
@@ -127,28 +198,32 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
 
                     if (address >= 0x3F00)
                     {
-                        // Palette reads are immediate, but the buffer still takes the byte mirrored beneath.
-                        value = ReadPalette(address);
+                        // A palette entry is six bits wide, so the top two come off the latch undriven.
+                        value = (byte)((OpenBus & 0xC0) | (ReadPalette(address) & 0x3F));
                         ReadBuffer = ReadCiram(address);
-                    }
-                    else
-                    {
-                        value = ReadBuffer;
-                        ReadBuffer = ReadVram(address);
+                        AdvanceVramAddress();
+                        RefreshOpenBus(value, 0x3F);
+                        return value;
                     }
 
-                    V = (ushort)((V + AddressIncrement) & 0x7FFF);
+                    value = ReadBuffer;
+                    ReadBuffer = ReadVram(address);
+
+                    AdvanceVramAddress();
+                    RefreshOpenBus(value);
                     return value;
                 }
 
                 default:
-                    // The open-bus latch is not modelled; unreadable registers read back as zero.
-                    return 0;
+                    // $2000/$2001/$2003/$2005/$2006 are write-only and drive nothing.
+                    return OpenBus;
             }
         }
 
         public void WriteRegister(int register, byte value)
         {
+            RefreshOpenBus(value);
+
             switch (register & 0x07)
             {
                 case 0:
@@ -192,13 +267,16 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
                     {
                         T = (ushort)((T & 0xFF00) | value);
                         V = T;
+
+                        // The address goes straight onto the PPU bus, which is a board's A12 - see Moon_Memory.md §4.6a.
+                        SetBusAddress((ushort)(V & 0x3FFF));
                     }
                     WriteToggle = !WriteToggle;
                     break;
 
                 case 7:
                     WriteVram((ushort)(V & 0x3FFF), value);
-                    V = (ushort)((V + AddressIncrement) & 0x7FFF);
+                    AdvanceVramAddress();
                     break;
             }
         }
@@ -222,7 +300,8 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             }
             else if (address < 0x3F00)
             {
-                Ciram[NametableOffset(address)] = value;
+                // Nametables backed by CHR ROM swallow the write rather than aliasing into CIRAM.
+                if (!_cart.Mapper.SuppliesNametables) Ciram[NametableOffset(address)] = value;
             }
             else
             {
@@ -230,7 +309,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
             }
         }
 
-        private byte ReadCiram(ushort address) => Ciram[NametableOffset(address)];
+        // A board can answer these instead of the PPU's own RAM - see Moon_Memory.md §4.9.
+        private byte ReadCiram(ushort address) => _cart.Mapper.SuppliesNametables
+            ? _cart.Mapper.ReadNametable(address)
+            : Ciram[NametableOffset(address)];
 
         private byte ReadPalette(ushort address)
         {

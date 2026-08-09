@@ -34,6 +34,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         // What HALT needs to know at execute time, captured before the fetch.
         private bool _interruptPending;
 
+        // Always zero at an instruction boundary, so it is an accumulator rather than machine state.
+        [SkipInState] private int _tickedThisStep;
+
         public ushort LastInstructionPC { get; private set; }
 
         public long Cycles { get; private set; }
@@ -64,13 +67,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             set { H = (byte)(value >> 8); L = (byte)value; }
         }
 
-        // Post-boot-ROM state on a DMG, since Mercury starts with the cartridge - see Mercury_Cpu.md §5.
-        public void Reset()
+        // Post-boot-ROM state, since Mercury starts with the cartridge; A is how a game tells the two consoles apart - see Mercury_Cpu.md §5.
+        public void Reset(bool cgb = false)
         {
-            AF = 0x01B0;
-            BC = 0x0013;
-            DE = 0x00D8;
-            HL = 0x014D;
+            AF = cgb ? (ushort)0x1180 : (ushort)0x01B0;
+            BC = cgb ? (ushort)0x0000 : (ushort)0x0013;
+            DE = cgb ? (ushort)0xFF56 : (ushort)0x00D8;
+            HL = cgb ? (ushort)0x000D : (ushort)0x014D;
             SP = 0xFFFE;
             PC = 0x0100;
 
@@ -81,10 +84,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             Cycles = 0;
         }
 
-        // Returns the T-cycles this step consumed; the caller runs the rest of the machine by that much.
+        // Runs the machine itself as it goes; returns the T-cycles consumed - see Mercury_Cpu.md §3.
         public int Step(byte interruptEnable, byte interruptFlags, out int servicedBit)
         {
             servicedBit = -1;
+            _tickedThisStep = 0;
 
             bool pending = (interruptEnable & interruptFlags & 0x1F) != 0;
             _interruptPending = pending;
@@ -121,10 +125,27 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             return Advance(Execute(opcode));
         }
 
+        // The cycles an instruction spends thinking rather than on the bus, settled at its end - see Mercury_Cpu.md §3.1.
         private int Advance(int cycles)
         {
             Cycles += cycles;
+            if (cycles > _tickedThisStep) _bus.Tick(cycles - _tickedThisStep);
             return cycles;
+        }
+
+        // One machine cycle: the rest of the machine runs, then the transfer lands at its end - see Mercury_Cpu.md §3.
+        private byte ReadCycle(ushort address)
+        {
+            _bus.Tick(4);
+            _tickedThisStep += 4;
+            return _bus.Read(address);
+        }
+
+        private void WriteCycle(ushort address, byte data)
+        {
+            _bus.Tick(4);
+            _tickedThisStep += 4;
+            _bus.Write(address, data);
         }
 
         private static int LowestSetBit(byte value)
@@ -145,7 +166,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             return 20;
         }
 
-        private byte Fetch() => _bus.Read(PC++);
+        private byte Fetch() => ReadCycle(PC++);
 
         private ushort Fetch16()
         {
@@ -156,14 +177,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
 
         private void Push(ushort value)
         {
-            _bus.Write(--SP, (byte)(value >> 8));
-            _bus.Write(--SP, (byte)value);
+            WriteCycle(--SP, (byte)(value >> 8));
+            WriteCycle(--SP, (byte)value);
         }
 
         private ushort Pop()
         {
-            byte low = _bus.Read(SP++);
-            byte high = _bus.Read(SP++);
+            byte low = ReadCycle(SP++);
+            byte high = ReadCycle(SP++);
             return (ushort)(low | (high << 8));
         }
 

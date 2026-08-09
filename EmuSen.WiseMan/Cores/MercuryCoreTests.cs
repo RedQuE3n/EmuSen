@@ -116,7 +116,51 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 0xA0; i++) core.Bus!.Write((ushort)(0xC000 + i), (byte)(i ^ 0x5A));
             core.Bus!.Write(0xFF46, 0xC0);
 
+            // 160 machine cycles, not an instant copy - see Mercury_Memory.md §6.
+            core.Bus.Tick(0xA0 * 4);
+
             for (int i = 0; i < 0xA0; i++) Assert.Equal((byte)(i ^ 0x5A), core.Bus.Oam[i]);
+        }
+
+        // The transfer occupies the bus for a real duration, which is the whole point of it taking cycles.
+        [Fact]
+        public void Oam_dma_is_still_running_half_way_through()
+        {
+            var core = Load();
+
+            for (int i = 0; i < 0xA0; i++) core.Bus!.Write((ushort)(0xC000 + i), (byte)(i ^ 0x5A));
+            core.Bus!.Write(0xFF46, 0xC0);
+
+            Assert.True(core.Bus.OamDmaActive);
+
+            core.Bus.Tick(0x50 * 4);
+
+            Assert.True(core.Bus.OamDmaActive);
+            Assert.Equal((byte)(0x00 ^ 0x5A), core.Bus.Oam[0x00]);
+
+            // The far end of the page has not been reached yet.
+            Assert.Equal(0x00, core.Bus.Oam[0x9F]);
+
+            core.Bus.Tick(0x50 * 4);
+
+            Assert.False(core.Bus.OamDmaActive);
+            Assert.Equal((byte)(0x9F ^ 0x5A), core.Bus.Oam[0x9F]);
+        }
+
+        // The LCD is off so only the DMA's own OAM lock can be answering - see Mercury_Ppu.md §7.
+        [Fact]
+        public void Oam_reads_ff_while_a_dma_is_running()
+        {
+            var core = Load();
+            core.Bus!.Write(0xFF40, 0x00);
+
+            Assert.NotEqual(0xFF, core.Bus.Read(0xFE00));
+
+            core.Bus.Write(0xFF46, 0xC0);
+            Assert.Equal(0xFF, core.Bus.Read(0xFE00));
+
+            core.Bus.Tick(0xA0 * 4);
+            Assert.NotEqual(0xFF, core.Bus.Read(0xFE00));
         }
 
         [Fact]

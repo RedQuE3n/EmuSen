@@ -49,7 +49,6 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         {
             var cart = FromImage(File.ReadAllBytes(path));
             cart.RomPath = path;
-            cart._savePath = Path.ChangeExtension(path, ".srm");
             cart.LoadSram();
             return cart;
         }
@@ -146,9 +145,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                 $"Cartridge type ${other:X2} is not implemented - see Mercury_Memory.md §4."),
         };
 
+        // --nobattery leaves _savePath null, which is also what disables SaveSram - see Mercury_Memory.md §6.
         private void LoadSram()
         {
-            if (!HasBattery || _savePath is null || Ram.Length == 0) return;
+            if (!HasBattery || EmuSen.Cores.CoreOptions.BatteryRamDisabled || string.IsNullOrEmpty(RomPath)) return;
+
+            _savePath = Path.ChangeExtension(RomPath, ".srm");
+            if (Ram.Length == 0) return;
             if (AtomicFile.TryRead(_savePath) is not { } saved) return;
 
             Array.Copy(saved, Ram, Math.Min(saved.Length, Ram.Length));

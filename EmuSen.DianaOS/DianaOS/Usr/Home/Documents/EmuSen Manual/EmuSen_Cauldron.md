@@ -17,7 +17,9 @@ Two rules define it:
 
 ### 1.1 Why it is a separate assembly
 
-The same reasoning that made `EmuSen.Crystal` a leaf: *agnostic mechanism, core-owned policy*. Cauldron owns the vocabulary (what a register value, a sprite, a load meter looks like) and the publication mechanism. Each core owns the policy — which registers are worth reporting, what "load" means for its hardware, how a native palette format becomes RGB. Cauldron never encodes a per-core answer, and there is no declarative per-core profile, for the same reason Crystal rejected one.
+The rule is *agnostic mechanism, core-owned policy*. Cauldron owns the vocabulary (what a register value, a sprite, a load meter looks like) and the publication mechanism. Each core owns the policy — which registers are worth reporting, what "load" means for its hardware, how a native palette format becomes RGB. Cauldron never encodes a per-core answer, and there is no declarative per-core profile.
+
+`EmuSen.Crystal` was built on the same principle and was still deleted (`EmuSen_Multicore.md` §9.1), which is worth knowing before citing this section as precedent. The difference is what the mechanism is worth on its own: Cauldron's snapshot/provider contract has several real consumers today — `coretop`, the dashboards, two cores publishing into it — while Crystal's timeline had one appointment per core at a fixed stride. Agnostic mechanism is a good rule for shaping an abstraction; it is not on its own a reason to have one.
 
 ---
 

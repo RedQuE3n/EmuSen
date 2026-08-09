@@ -154,10 +154,8 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 | `EmuSen` | The emulation core: CPU, PPU, APU, memory, save states, audio resampling. A pure library — no `Main`, no window |
 | `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command. Core-agnostic |
 | `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
-| `EmuSen.Crystal` | Core-agnostic timing scheduler: master timeline, deadline-driven devices, drift-free clock conversion |
 | `EmuSen.Serenity` | Shared presentation: the Avalonia/Skia `GameFrameControl`, shader pipeline, graphics settings |
-| `EmuSen.Endymion` | The audio sink — takes PCM and drives a real device. Serenity's counterpart on the sound side |
-| `EmuSen.Nehellania` | Shared device I/O: SDL3 audio output, gamepad polling, pad bindings |
+| `EmuSen.Endymion` | The SDL3 device layer: audio out, gamepad polling, pad bindings. Serenity's counterpart on the sound-and-input side |
 | `EmuSen.LunaP` | The shared Avalonia toolkit: palette and themes, controls, window scaffolding, fluent layout. References Avalonia and `EmuSen.Galaxia` and nothing else |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
@@ -166,7 +164,7 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 
 The SNES core lives under `EmuSen/Cores/Nintendo/Venus - SNES/`, namespaced `EmuSen.Cores.Nintendo.Venus.*`, with reserved sibling folders for every other planned console.
 
-The layering is enforced in practice, not just described. The PPU exposes a small `IWriteObserver` hook and has no idea a watchpoint exists; the debug layer implements that interface and supplies the meaning. And where a layer's boundary actually matters, a test holds it: `LeafAssemblyTests` asserts that Galaxia, Endymion, Nehellania, Serenity and LunaP reference what they are allowed to and never reach back into the core — which is what keeps a future launcher able to browse a library without loading an emulator.
+The layering is enforced in practice, not just described. The PPU exposes a small `IWriteObserver` hook and has no idea a watchpoint exists; the debug layer implements that interface and supplies the meaning. And where a layer's boundary actually matters, a test holds it: `LeafAssemblyTests` asserts that Galaxia, Endymion, Serenity and LunaP reference what they are allowed to and never reach back into the core — which is what keeps a future launcher able to browse a library without loading an emulator.
 
 ---
 
@@ -251,7 +249,7 @@ Beyond unit tests, the project leans on **output-identity digests**: `framesum` 
 This project documents heavily, and deliberately keeps rationale *out* of code comments and *in* man pages. Code comments are one line and point at a section.
 
 - `EmuSen.DianaOS/DianaOS/Etc/Man pages/Hardware/` — per-console hardware notes. The SNES set (`Venus - SNES/`) covers CPU, PPU, APU, memory and each cartridge coprocessor, including full root-cause writeups for real bugs found and fixed — and, where a lead turned out to be wrong, the measurement that retired it, so the same ground does not get walked twice.
-- `EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/` — project-level docs: overview, debugging tools reference, save states, audio sync, rewind/fast-forward, settings, games tested, roadmap, the shared-toolkit reference, and the per-subsystem writeups (`EmuSen_Cauldron.md`, `EmuSen_Crystal_Scheduler.md`, `EmuSen_LunaP.md`, …).
+- `EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/` — project-level docs: overview, debugging tools reference, save states, audio sync, rewind/fast-forward, settings, games tested, roadmap, the shared-toolkit reference, and the per-subsystem writeups (`EmuSen_Cauldron.md`, `EmuSen_Galaxia.md`, `EmuSen_LunaP.md`, …).
 - `EmuSen.DianaOS/DianaOS/Etc/Man pages/README.md` — the index to all of the above. Start there rather than guessing a filename.
 
 These are readable on GitHub, and also from inside the emulator via DianaOS's own `man` and `cat`.

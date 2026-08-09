@@ -149,11 +149,13 @@ It lives in **`EmuSen.Endymion`**, its own project, for the same reason Serenity
 | | `EmuSen.Serenity` | `EmuSen.Endymion` |
 |---|---|---|
 | Contract | `UpdateFrame(byte[] rgba, int w, int h)` | `Submit(short[] pcm, int sampleRate)` |
-| Project references | `EmuSen.Galaxia` | **none** |
+| Project references | `EmuSen.Galaxia` | `EmuSen.Galaxia` |
 | Package references | Avalonia, SkiaSharp | SDL3 |
 | Knows about cores | no | no |
 
-Endymion is a **true leaf — zero project references at all**, the only other assemblies in that position being `EmuSen.Galaxia` and `EmuSen.Crystal`. It carries `AudioPlayer`, `DynamicRateControl` and `LinearResampler`; the first two moved out of `EmuSen.Nehellania`, the DSP pair out of `EmuSen/Audio/` (where nothing but the sink ever used them).
+The reference sets are identical, which is the symmetry this section was arguing for. It was not always so: Endymion was briefly a *true* leaf with zero references, until it absorbed `EmuSen.Nehellania` on 2026-08-05 and inherited that project's Galaxia edge — see `EmuSen_Multicore.md` §9.2 for why the strict version of the leaf rule turned out to be the ceremonial one.
+
+Endymion carries `AudioPlayer`, `DynamicRateControl` and `LinearResampler` on the audio side; the first two moved out of `EmuSen.Nehellania`, the DSP pair out of `EmuSen/Audio/` (where nothing but the sink ever used them). Since the fold it also carries `Input/GamepadManager` and `Input/GamepadBindingMap` — the other half of the same SDL3 dependency, described in `EmuSen_Input.md` §4.
 
 The caller does the pull, the same way it already does for pixels:
 
@@ -175,7 +177,9 @@ new AudioPlayer(AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, A
 
 The frontend, which already owns settings, passes them in. This is the same principle as `Submit` itself, applied to configuration: **the sink is handed what it needs and reaches for nothing.**
 
-**What this bought Nehellania.** With audio gone, `EmuSen.Nehellania` is gamepad-only, and its own reference to `EmuSen` went with it — the last user was `PadButton`, which moved to `EmuSen.Galaxia.Input` (`EmuSen_Input.md` §3). Nehellania now references Galaxia alone, exactly like Serenity. Both are leaves; the asymmetry this section opened with is gone.
+**What this bought Nehellania, and how that ended.** With audio gone, `EmuSen.Nehellania` became gamepad-only, and its own reference to `EmuSen` went with it — the last user was `PadButton`, which moved to `EmuSen.Galaxia.Input` (`EmuSen_Input.md` §3). Nehellania then referenced Galaxia alone, exactly like Serenity, and the asymmetry this section opened with was gone.
+
+**That symmetry is also what made the split pointless.** Two projects, one SDL3 package pair, the same reference set, and — decisively — no consumer anywhere that took one without the other. Nehellania was folded back into Endymion on 2026-08-05 and deleted (`EmuSen_Multicore.md` §9.2). Splitting audio out of Nehellania was still the right move at the time: it is what let `PadButton` leave the core and what proved the sink could take its settings as parameters. The mistake was leaving two assemblies behind where the work only ever justified one.
 
 Pinned by `EmuSen.WiseMan/Common/LeafAssemblyTests.cs`, which asserts the actual compiled reference sets. Note what that test can and cannot catch: `Assembly.GetReferencedAssemblies()` reports references the compiler kept, so it catches someone *using* a core type from a leaf, not an unused `ProjectReference` left in a `.csproj`.
 

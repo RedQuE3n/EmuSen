@@ -1,0 +1,27 @@
+[package]
+name = "probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "probe"
+path = "src/main.rs"
+
+# Which backends are compiled in is a build-time choice, exactly as the C++
+# probe's -DPROBE_BACKEND_* was: linking one is not free, so one binary per
+# backend and one policy layer for all. See EmuSen_Debugging_Tools_Reference_v5.md §3.49.
+[features]
+default = ["libretro"]
+libretro = ["dep:libloading", "dep:bindgen"]
+mesen = []
+
+[dependencies]
+crc32fast = "1.5"
+libloading = { version = "0.9", optional = true }
+
+[build-dependencies]
+bindgen = { version = "0.72", optional = true }
+
+[profile.release]
+panic = "abort"

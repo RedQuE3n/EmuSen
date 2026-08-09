@@ -8,6 +8,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             sbyte offset = (sbyte)Read(PC++);
             if (!taken) return;
 
+            SuppressJustArrivedIrq();
             Read(PC);
             ushort target = (ushort)(PC + offset);
 

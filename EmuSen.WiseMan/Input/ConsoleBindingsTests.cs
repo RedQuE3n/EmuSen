@@ -8,7 +8,7 @@ using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Mistress.Input;
-using EmuSen.Nehellania.Input;
+using EmuSen.Endymion.Input;
 
 namespace EmuSen.WiseMan.Input
 {
@@ -179,7 +179,7 @@ namespace EmuSen.WiseMan.Input
         {
             string[] order = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToArray();
 
-            Assert.Equal(new[] { "NES", "SNES" }, order);
+            Assert.Equal(new[] { "NES", "GB", "SNES" }, order);
         }
 
         // The rebind window lists a console's pad with no ROM loaded, so this must
@@ -189,6 +189,7 @@ namespace EmuSen.WiseMan.Input
         {
             Assert.Equal(new EmuSen.Cores.Nintendo.Moon.MoonCore().SupportedButtons, CoreCatalog.ButtonsFor("NES"));
             Assert.Equal(new EmuSen.Cores.Nintendo.Venus.VenusCore().SupportedButtons, CoreCatalog.ButtonsFor("SNES"));
+            Assert.Equal(new EmuSen.Cores.Nintendo.Mercury.MercuryCore().SupportedButtons, CoreCatalog.ButtonsFor("GB"));
         }
 
         [Fact]

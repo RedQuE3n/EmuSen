@@ -29,6 +29,9 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         // ANE/LXA mix in a constant the real chip's analog behavior produces - see Moon_CPU.md §6.3.
         public const byte UnstableMagic = 0xEE;
 
+        // Idle cycles the chip spends before the first instruction of a reset - see Moon_CPU.md §5.1.
+        public const int ResetCycles = 8;
+
         private readonly ICpuBus _bus;
 
         public byte A;
@@ -57,6 +60,13 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
         private bool _serviceNmi;
         private bool _serviceIrq;
 
+        // Per-cycle samples; <Earlier> is the one from before the current cycle - see Moon_CPU.md §5.5.
+        private bool _nmiSampledLast;
+        private bool _nmiSampledEarlier;
+        private bool _irqSampledLast;
+        private bool _irqSampledEarlier;
+
+
         // CLI/SEI/PLP land their I write after the interrupt poll - see Moon_CPU.md §5.3.
         private bool _hasDelayedI;
         private bool _delayedI;
@@ -80,20 +90,47 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             A = 0;
             X = 0;
             Y = 0;
-            S = ResetStackPointer;
+
+            // A cold chip is observed at 0; SoftReset's three phantom pushes are what make it 0xFD.
+            S = 0;
             P = (byte)(CpuFlags.I | CpuFlags.U);
+            Cycles = 0;
+            SoftReset();
+        }
+
+        // RESET only sets I and spends three phantom pushes; A/X/Y and the other flags survive - see Moon_CPU.md §5.1.
+        public void SoftReset()
+        {
+            S -= 3;
+            P |= (byte)(CpuFlags.I | CpuFlags.U);
             Jammed = false;
             _nmiLine = false;
             _nmiPending = false;
             _irqLine = false;
             _serviceNmi = false;
             _serviceIrq = false;
+            _nmiSampledLast = false;
+            _nmiSampledEarlier = false;
+            _irqSampledLast = false;
+            _irqSampledEarlier = false;
             _hasDelayedI = false;
             _delayedI = false;
             _instructionCycles = 0;
-            Cycles = 0;
-            PC = ReadVector(ResetVector);
+            ResetSequence();
+        }
+
+        // The vector read is not clocked; the eight cycles that follow it are - see Moon_CPU.md §5.1.
+        private void ResetSequence()
+        {
+            PC = (ushort)(_bus.Read(ResetVector) | (_bus.Read((ushort)(ResetVector + 1)) << 8));
             LastInstructionPC = PC;
+
+            for (int i = 0; i < ResetCycles; i++)
+            {
+                Cycles++;
+                _bus.Tick();
+                SampleInterrupts();
+            }
         }
 
         // Edge-triggered: the latch arms on a low-to-high transition and stays armed until serviced.
@@ -121,11 +158,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             if (_serviceNmi)
             {
                 _nmiPending = false;
-                ServiceInterrupt(NmiVector, false);
+                ServiceInterrupt(NmiVector);
             }
             else if (_serviceIrq)
             {
-                ServiceInterrupt(IrqVector, false);
+                ServiceInterrupt(IrqVector);
             }
             else
             {
@@ -136,11 +173,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             return _instructionCycles;
         }
 
-        // Sampled at the instruction boundary, before any delayed I write lands - see Moon_CPU.md §5.3.
+        // The last cycle of an instruction is too late to be recognised, so the earlier sample wins - see Moon_CPU.md §5.5.
         private void PollInterrupts()
         {
-            _serviceNmi = _nmiPending;
-            _serviceIrq = !_serviceNmi && _irqLine && !GetFlag(CpuFlags.I);
+            _serviceNmi = _nmiSampledEarlier;
+            _serviceIrq = !_serviceNmi && _irqSampledEarlier;
 
             if (_hasDelayedI)
             {
@@ -149,13 +186,14 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
             }
         }
 
-        // <fromBrk> is the only case that pushes the B bit set - see Moon_CPU.md §4.1.
-        private void ServiceInterrupt(ushort vector, bool fromBrk)
+        // Seven cycles: the chip fetches an opcode and its operand, discards both, then vectors - see Moon_CPU.md §5.1.
+        private void ServiceInterrupt(ushort vector)
         {
+            Read(PC);
             Read(PC);
             Push((byte)(PC >> 8));
             Push((byte)PC);
-            Push((byte)(fromBrk ? P | 0x30 : (P & ~(byte)CpuFlags.B) | (byte)CpuFlags.U));
+            Push((byte)((P & ~(byte)CpuFlags.B) | (byte)CpuFlags.U));
             SetFlag(CpuFlags.I, true);
             PC = ReadVector(vector);
         }
@@ -169,16 +207,41 @@ namespace EmuSen.Cores.Nintendo.Moon.Processor
 
         private byte Read(ushort address)
         {
-            _instructionCycles++;
-            Cycles++;
-            return _bus.Read(address);
+            BeginCycle();
+            byte value = _bus.Read(address);
+            SampleInterrupts();
+            return value;
         }
 
         private void Write(ushort address, byte data)
         {
+            BeginCycle();
+            _bus.Write(address, data);
+            SampleInterrupts();
+        }
+
+        // The cycle's clock edge runs before the access, so a read sees this cycle - see Moon_CPU.md §5.5.
+        private void BeginCycle()
+        {
             _instructionCycles++;
             Cycles++;
-            _bus.Write(address, data);
+            _bus.Tick();
+        }
+
+        // The decision uses the sample from before the final cycle, so this keeps one cycle of history - see Moon_CPU.md §5.5.
+        private void SampleInterrupts()
+        {
+            _nmiSampledEarlier = _nmiSampledLast;
+            _irqSampledEarlier = _irqSampledLast;
+
+            _nmiSampledLast = _nmiPending;
+            _irqSampledLast = _irqLine && !GetFlag(CpuFlags.I);
+        }
+
+        // A taken branch drops an IRQ that arrived only this cycle - see Moon_CPU.md §5.5.
+        internal void SuppressJustArrivedIrq()
+        {
+            if (_irqSampledLast && !_irqSampledEarlier) _irqSampledLast = false;
         }
 
         private void Push(byte value) => Write((ushort)(0x0100 | S--), value);

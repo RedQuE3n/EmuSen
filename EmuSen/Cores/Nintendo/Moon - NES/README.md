@@ -9,11 +9,11 @@
 | PPU (2C02) | Registers, loopy `v`/`t`/`x`/`w`, background and sprite rendering, sprite 0, NMI. Scanline granularity, no emphasis bits |
 | APU | All five channels synthesize — two pulse (with pulse 1's ones-complement sweep negate), triangle, noise, DMC — mixed into a drained sample buffer |
 | Input | Two standard controllers |
-| `ICore` | Implemented — `MoonCore`, on the Crystal scheduler, with save states |
+| `ICore` | Implemented — `MoonCore`, on its own master-clock timeline, with save states |
 | `IDebugTarget` | Implemented — `MoonDebugTarget`, the second implementation this interface has ever had |
 | PAL | Not implemented; NTSC is assumed |
 
-Hardware notes live in `Man pages/Hardware/Nintendo/Moon - NES/`: `Moon_CPU.md`, `Moon_Core.md`, `Moon_Memory.md`, `Moon_PPU.md`, `Moon_APU.md`, `Moon_Debug.md`. Those pages are the explanation for everything here; the code comments only point at them.
+Hardware notes live in `Man pages/Hardware/Nintendo/Moon - NES/`: `Moon_CPU.md`, `Moon_Core.md`, `Moon_Memory.md`, `Moon_PPU.md`, `Moon_APU.md`, `Moon_Debug.md`, `Moon_TestRoms.md`. Those pages are the explanation for everything here; the code comments only point at them.
 
 ## Verifying it
 
@@ -22,6 +22,14 @@ The CPU's ground-truth run needs third-party data that is deliberately not commi
 ```sh
 dotnet run -c Release --project EmuSen.Pharaoh -- --singlestep nes6502 /path/to/nes6502/v1
 ```
+
+The PPU, APU and mappers are checked with third-party test ROMs, also not committed — fetch them from https://github.com/christopherpow/nes-test-roms:
+
+```sh
+dotnet run -c Release --project EmuSen.Pharaoh -- --testroms /path/to/nes-test-roms
+```
+
+One `[PASS]`/`[FAIL]`/`[----]`/`[SKIP]` line per ROM, read out of the blargg `$6000` protocol block. See `Moon_TestRoms.md` for the protocol, the two false-pass traps in it, and what the runner does not cover.
 
 Everything else is self-contained in `EmuSen.WiseMan`:
 

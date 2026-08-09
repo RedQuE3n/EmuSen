@@ -26,11 +26,17 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // Set by the debug layer; the bus itself names no debug type - see Moon_Memory.md §6.
         [SkipInState] public IWriteObserver? WriteObserver;
 
+        // Stamped on each APU register-write record so a log aligns with the reference's - see §3.46.
+        [SkipInState] public uint ApuTraceFrame;
+
         // Game Genie's edge-connector intercept, on cartridge reads only - see Moon_Cheats.md §3.
         [SkipInState] public IRomReadPatcher? RomPatcher;
 
         // Cycles a $4014 transfer stole, collected by the core's timing loop.
         public int PendingDmaCycles;
+
+        // DMC fetch cycles, already charged to the APU here but still owed to the frame budget.
+        public int StolenCycles;
 
         // Stamped onto the cartridge so a board can reject back-to-back writes.
         [SkipInState] public Cpu? Cpu;
@@ -38,11 +44,39 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         // The last value the CPU put on the bus, returned for addresses nothing drives.
         public byte OpenBus;
 
+        // Asked once, because most boards say no and the check is on the hottest path there is.
+        [SkipInState] private readonly bool _mapperClocksOnCpu;
+
         public MemoryBus(Cartridge cart, Ppu ppu, Apu.Apu apu)
         {
             Cart = cart;
             Ppu = ppu;
             Apu = apu;
+            _mapperClocksOnCpu = cart.Mapper.ClocksOnCpuCycle;
+        }
+
+        // Three PPU dots to a CPU cycle on NTSC - see Moon_PPU.md §1.
+        public const int DotsPerCpuCycle = 3;
+
+        // One CPU cycle of everything clocked from the CPU's own clock - see Moon_CPU.md §5.5.
+        public void Tick()
+        {
+            Ppu.Step(DotsPerCpuCycle);
+            Cpu?.SetNmiLine(Ppu.NmiOutput);
+
+            Apu.Step(1);
+            if (_mapperClocksOnCpu) Cart.Mapper.OnCpuCycle();
+
+            // The DMC steals its fetch cycle from the CPU, and those cycles clock the APU too.
+            if (Apu.Dmc.StallCycles > 0)
+            {
+                int stolen = Apu.Dmc.StallCycles;
+                Apu.Dmc.StallCycles = 0;
+                StolenCycles += stolen;
+                Apu.Step(stolen);
+            }
+
+            Cpu?.SetIrqLine(Apu.IrqAsserted || Cart.Mapper.IrqPending);
         }
 
         public byte Read(ushort address)
@@ -89,6 +123,15 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         {
             OpenBus = data;
 
+            // At the top of the funnel, where the reference's hook is: $4014 and
+            // $4016 are handled by their own branches below and would never reach
+            // an APU-branch hook, which is exactly how a first attempt logged zero
+            // writes to both while Mesen logged 1176 and 9430 - see §3.46.
+            if (Debug.ApuWriteTrace.Enabled && address >= 0x4000 && address <= 0x4017)
+            {
+                Debug.ApuWriteTrace.Record(ApuTraceFrame, Cpu?.PC ?? 0, address, data);
+            }
+
             if (address < 0x2000)
             {
                 Ram[address & 0x07FF] = data;
@@ -99,6 +142,11 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             if (address < 0x4000)
             {
                 int register = address & 0x07;
+                // Stamped before the write, so the dot is the one the PPU was on when it landed - see Moon_PPU.md §7.
+                if (EmuSen.Debug.DebugSettings.NesPpuWriteLogging)
+                {
+                    Console.WriteLine($"[PPUW] f{Ppu.FrameCount} line {Ppu.Scanline,3} dot {Ppu.Cycle,3}  $200{register} = ${data:X2}");
+                }
                 Ppu.WriteRegister(register, data);
                 WriteObserver?.OnWrite("PPUREG", register, data);
                 return;
@@ -143,6 +191,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             }
 
             PendingDmaCycles += OamDmaCycles;
+
+            // The transfer is instantaneous here, but the APU still lived through those cycles.
+            Apu.Step(OamDmaCycles);
+            Cpu?.SetIrqLine(Apu.IrqAsserted || Cart.Mapper.IrqPending);
         }
 
         public int TakePendingDmaCycles()
@@ -152,9 +204,22 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             return cycles;
         }
 
+        public int TakeStolenCycles()
+        {
+            int cycles = StolenCycles;
+            StolenCycles = 0;
+            return cycles;
+        }
+
         public void Reset()
         {
             System.Array.Clear(Ram);
+            SoftReset();
+        }
+
+        // The RESET line does not clear work RAM; only the transient bus state goes - see Moon_Core.md §6.
+        public void SoftReset()
+        {
             PendingDmaCycles = 0;
             OpenBus = 0;
             Controller1.Reset();

@@ -1,3 +1,4 @@
+using EmuSen.Cores.Debug;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using Step = EmuSen.Cores.Nintendo.Venus.Debug.CpuTraceDiff.Step;
 

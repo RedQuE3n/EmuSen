@@ -478,7 +478,61 @@ The two frontends' `CoretopWindowTests` merged too. Mistress's was a strict supe
 
 ---
 
-## 17. Where to look next
+## 17. LunaP as a package, and the consumer outside this solution
+
+`EmuSen.Pegasus` left this repository on 2026-08-09 for
+<https://github.com/RedQuE3n/EmuSen.Pegasus>. It still builds its window from
+LunaP, so LunaP is now packed and consumed as a NuGet package rather than as a
+`ProjectReference`.
+
+Three projects are packed at 0.1.0: `EmuSen.LunaP`, and the two leaves its
+layering rule already allowed it to name, `EmuSen.Galaxia` and `EmuSen.Cauldron`.
+The two leaves are packed only because a package's dependencies must themselves
+be resolvable — a consumer outside this repository cannot follow a
+`ProjectReference` into it.
+
+**This does not relax the layering rule in the `.csproj`; it is the first thing
+that has ever enforced it.** That rule — LunaP may reference Avalonia, Galaxia
+and Cauldron and nothing else — exists so the eventual launcher can browse a
+library with no core loaded. Until now it was a comment that a careless
+`ProjectReference` could contradict. A package cannot reach up into a core at
+all, so the constraint is now a property of the artifact rather than of
+somebody's attention.
+
+The practical consequence for work in this repository: **LunaP's public surface
+has a consumer that does not appear in `EmuSen.sln`.** Renaming `LunaApp.Configure`,
+`Windowing.ToolWindow`, the `Fluent.Ui` helpers, or the
+`avares://EmuSen.LunaP/Theme/LunaTheme.axaml` URI will not break any build here
+and will break Pegasus. That URI in particular is load-bearing across the
+boundary: it resolves out of the packaged assembly's compiled resources, and a
+consumer that fails to include it gets a window in which every control occupies
+layout and draws nothing. That failure has shipped once — the account is now in
+the Pegasus repository's `docs/Pegasus_Design.md` §11, having left with the
+project, and `LunaTheme.axaml`'s own comment predicted it before it happened.
+§5.5 and §13 are the in-repository cousins of the same failure, where an
+untemplated control renders as nothing.
+
+Two limitations, recorded now rather than discovered later:
+
+- **The feed is a folder.** Pegasus's `NuGet.config` points at a `local-packages/`
+  directory populated by `dotnet pack` here. GitHub Packages is the intended
+  destination; nothing about the arrangement depends on which feed serves it,
+  and the folder exists only because the packages have not been pushed yet.
+- **Galaxia's catalogue schema does not travel.** `Library/Catalogue/*.sql` are
+  `None` items copied to build output, which is not the same as packaged content,
+  so the package carries the assembly and not the SQL. Pegasus never touches the
+  catalogue, so this is free here. Anyone packaging Galaxia for a consumer that
+  *does* want the catalogue must fix it first, and should not assume the 0.1.0
+  package is a working example.
+
+A version discipline is not yet established, and pretending otherwise would be
+worse than saying so: 0.1.0 was chosen to start somewhere, and there is no
+release process, no changelog and no automated republish. The first time LunaP
+changes under Pegasus, that gap is what will be felt.
+
+---
+
+## 18. Where to look next
 
 - **`EmuSen_LunaP_Gameplan.md`** — the plan of record: the full duplication audit (§1), the settled decisions (§2), Phases 2–6 (controls, window scaffolding, the fluent surface, harness support, migration), and the questions deliberately left open (§6).
 - **`EmuSen_Launcher_Multicore_Gameplan.md`** — the launcher this project is eventually for. Its Phase 4 (theming) is why §2's palette is a resource dictionary rather than a set of constants.

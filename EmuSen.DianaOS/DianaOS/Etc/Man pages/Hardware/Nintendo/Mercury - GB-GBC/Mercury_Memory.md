@@ -93,7 +93,19 @@ On overflow `TIMA` reads **0 for four cycles** before `TMA` is loaded and the in
 
 ## 6. OAM DMA
 
-Writing a page number to `$FF46` copies `$XX00-$XX9F` into OAM. Real hardware takes 160 machine cycles and locks the CPU out of most of the bus for the duration, which is why real games run the DMA trigger from a routine copied into HRAM. Mercury copies the whole page **immediately**. Nothing yet observes the difference; it will matter once the PPU exists.
+Writing a page number to `$FF46` copies `$XX00-$XX9F` into OAM. Real hardware takes 160 machine cycles and locks the CPU out of most of the bus for the duration, which is why real games run the DMA trigger from a routine copied into HRAM.
+
+**Mercury copies one byte per machine cycle, as of 2026-08-09** — the trigger arms the transfer and `StepOamDma` advances it from the bus's own per-cycle clock, so it finishes 640 T-cycles later and finishes twice as fast in double speed. OAM reads `$FF` for the CPU throughout (`Mercury_Ppu.md` §7).
+
+The controller reads through `ReadForDma` rather than the normal decode, because it drives the bus itself and the PPU's CPU-side blocking does not apply to it. A DMA sourced from VRAM during mode 3 copies real data, which is what hardware does and what routing it through `Read` would have got wrong.
+
+### 6.1 What is still not modelled
+
+**The CPU is not locked out of anything but OAM.** On hardware, everything except HRAM returns the DMA's in-flight byte while a transfer runs — which is the entire reason games copy the trigger routine into HRAM first. Mercury lets ROM and WRAM accesses through normally.
+
+This is deliberate and worth a sentence on why, because it is the one remaining piece of the "cycle-granular bus" cluster that did **not** land with the others. Enforcing it means an instruction fetch during DMA returns garbage, and every game that triggers DMA from ROM — which is every game that has the bug this behaviour exists to punish — would break in a way that looks like an emulator fault. Hardware punishes that code too, but hardware is not being judged against a screenshot of the correct output.
+
+The condition to revisit: a test ROM that specifically asserts the lock. `oam_dma` in mooneye's suite is that test (`Mercury_HardwareTests.md` §4), and it should be run before this is implemented rather than after.
 
 
 **`CoreOptions.BatteryRamDisabled` is honoured here as of 2026-08-09**, and was not before: `Load` used to set the save path unconditionally, so `--nobattery` printed its message and Mercury saved anyway. No synthetic test could catch it because `SyntheticGbRom` never sets a battery flag - see `Mercury_RealCartridges.md` §2.
@@ -112,3 +124,49 @@ Cartridge types carrying a battery (§4) keep `CARTRAM` across sessions in a `.s
 **The path is still `Path.ChangeExtension(path, ".srm")` — beside the ROM.** Venus deliberately does not do this (`Venus_Memory.md` §2.4), and moving Mercury to match is a known, deliberately deferred change: it is user-visible and needs a copy-don't-move migration. See `EmuSen_Galaxia.md` §6.
 
 Reads and writes go through `Galaxia`'s `AtomicFile`, so an interrupted autosave cannot truncate a live save (`EmuSen_Galaxia.md` §4). `LoadSram` copies whichever of the file and `Ram` is smaller; a cartridge with no battery or no RAM at all does neither.
+
+## 10. The serial port — a sink, deliberately not a link
+
+*Added 2026-08-09. Until this landed, `grep -rn "FF01\|FF02"` over the core returned
+nothing and `Mercury_Gameplan.md` §4 said "No serial link. Nothing needs it yet."
+Something did: see `Mercury_Gameplan.md` §3.2 for why this is the cheapest unmet
+prerequisite in the core.*
+
+`$FF01` (`SB`) is the shift register and `$FF02` (`SC`) its control byte. A transfer
+is started by writing bit 7. Bit 0 chooses who supplies the clock — 1 for the
+internal one, 0 for the partner's — and on a CGB bit 1 selects the fast rate.
+
+Mercury implements **the output half only**. Writing `$81` captures `SB` into a log,
+shifts `$FF` back in, clears bit 7 and requests interrupt 3. Writing `$80` does
+nothing but arm: with no cable there is no external clock, so the transfer stays
+pending forever with bit 7 set, which is what real hardware does and the reason
+this is not simply "complete every transfer".
+
+### 10.1 Why an emulator wants this before it wants a link cable
+
+Not for multiplayer. **The Game Boy's hardware-test corpus reports through this
+port.** blargg's and mooneye's suites were written against real silicon and print
+`Passed` or `Failed #3` down the wire, so a headless harness reads a verdict as text
+rather than diffing a screenshot against another emulator's screenshot. That is an
+oracle which names no emulator, which is the property `Mercury_Gameplan.md` §3.2
+argues the Game Boy needs and the SNES does not.
+
+The read-back mask is worth stating because it is the one detail a casual
+implementation gets wrong: unused `SC` bits read as **1**, so the byte comes back
+`| $7E` on a DMG and `| $7C` on a CGB, where bit 1 is real. A ROM that polls `SC`
+waiting for bit 7 to clear sees the right thing either way, but a ROM that compares
+the whole byte does not.
+
+### 10.2 What this is not
+
+- **Not a link.** No bit clocking, no 512-T-cycle transfer, no second Game Boy.
+  Nothing here makes two Mercurys connectable, and a game waiting on an external
+  clock still hangs — correctly.
+- **Not machine state, on the log side.** `_serialData` and `_serialControl`
+  serialize; the captured log is `[SkipInState]` because it is an observation *about*
+  the run, not part of it. Save-stating mid-suite and reloading keeps the port's
+  registers and drops the transcript, which is the right split — the alternative
+  makes a save state grow without bound on a ROM that prints.
+- **Not a reason to trust the APU's output.** The sound tests this unlocks assert
+  register and length-counter behaviour, not that the mixer sounds correct. See
+  `Mercury_Apu.md` §7, which none of this touches.

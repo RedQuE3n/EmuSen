@@ -48,6 +48,19 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public readonly Ppu Ppu;
         public readonly Apu Apu = new();
 
+        private byte _serialData;
+        private byte _serialControl;
+
+        private byte _oamDmaPage;
+        private int _oamDmaCyclesLeft;
+        private int _oamDmaIndex;
+
+        // Cycles a DMA took from the CPU, drained by the core after the instruction - see Mercury_Cgb.md §4.1.
+        private int _stallCycles;
+
+        // Not machine state: what the test corpus printed, for the harness to read - see Mercury_Memory.md §10.
+        [SkipInState] private readonly System.Collections.Generic.List<byte> _serialLog = new();
+
         // The 16-bit counter DIV is the top half of - see Mercury_Memory.md §5.
         private ushort _divCounter;
         private byte _tima;
@@ -76,6 +89,30 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
         public void Request(Interrupt source) => InterruptFlags |= (byte)(1 << (int)source);
 
+        // Every byte the ROM has clocked out of the link port, oldest first - see Mercury_Memory.md §10.
+        public System.Collections.Generic.IReadOnlyList<byte> SerialLog => _serialLog;
+
+        public string SerialText => string.Concat(Array.ConvertAll(_serialLog.ToArray(), b => (char)b));
+
+        public void ClearSerialLog() => _serialLog.Clear();
+
+        public bool OamDmaActive => _oamDmaCyclesLeft > 0;
+
+        // The CPU loses VRAM while the PPU is drawing from it - see Mercury_Ppu.md §7.
+        public bool VramAccessibleToCpu => !Ppu.LcdEnabled || Ppu.Mode != PpuMode.Drawing;
+
+        // ...and OAM for the scan as well, plus the whole of an OAM DMA - see Mercury_Ppu.md §7.
+        public bool OamAccessibleToCpu =>
+            !OamDmaActive && (!Ppu.LcdEnabled || Ppu.Mode is not (PpuMode.OamScan or PpuMode.Drawing));
+
+        // What a DMA charged the CPU, taken once and cleared - see Mercury_Cgb.md §4.1.
+        public int TakePendingStall()
+        {
+            int stall = _stallCycles;
+            _stallCycles = 0;
+            return stall;
+        }
+
         public byte Read(ushort address)
         {
             switch (address)
@@ -88,7 +125,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                 }
 
                 case < 0xA000:
-                    return Vram[VramOffset(address)];
+                    return VramAccessibleToCpu ? Vram[VramOffset(address)] : (byte)0xFF;
 
                 case < 0xC000:
                     return _cart.Mapper.ReadRam(address);
@@ -98,7 +135,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     return Wram[WramOffset(address)];
 
                 case < 0xFEA0:
-                    return Oam[address - 0xFE00];
+                    return OamAccessibleToCpu ? Oam[address - 0xFE00] : (byte)0xFF;
 
                 // Prohibited on a DMG, and it reads back as zero rather than open bus.
                 case < 0xFF00:
@@ -125,6 +162,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
                 case < 0xA000:
                 {
+                    if (!VramAccessibleToCpu) return;
+
                     int offset = VramOffset(address);
                     Vram[offset] = data;
                     WriteObserver?.OnWrite(MercuryCore.SpaceVram, offset, data);
@@ -145,6 +184,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                 }
 
                 case < 0xFEA0:
+                    if (!OamAccessibleToCpu) return;
+
                     Oam[address - 0xFE00] = data;
                     WriteObserver?.OnWrite(MercuryCore.SpaceOam, address - 0xFE00, data);
                     return;
@@ -170,6 +211,10 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private byte ReadIo(ushort address) => address switch
         {
             0xFF00 => Joypad.Read(Io[0x00]),
+            0xFF01 => _serialData,
+
+            // Bit 1 is the CGB's clock-speed select; on a DMG it reads back as one with the rest.
+            0xFF02 => (byte)(_serialControl | (Cgb ? 0x7C : 0x7E)),
             0xFF04 => Div,
             0xFF05 => _tima,
             0xFF06 => _tma,
@@ -198,6 +243,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                 // Only the two select bits are writable; the button lines are inputs.
                 case 0xFF00:
                     Io[0x00] = (byte)(data & 0x30);
+                    return;
+
+                case 0xFF01:
+                    _serialData = data;
+                    return;
+
+                case 0xFF02:
+                    WriteSerialControl(data);
                     return;
 
                 // Any write zeroes the whole counter, which is also how a game resets the timer's phase.
@@ -253,7 +306,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
                 case 0xFF46:
                     Io[0x46] = data;
-                    RunOamDma(data);
+                    StartOamDma(data);
                     return;
 
                 case 0xFF47:
@@ -283,12 +336,49 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             }
         }
 
-        // Real hardware takes 160 machine cycles and locks most of the bus; this copies at once - see Mercury_Memory.md §6.
-        private void RunOamDma(byte page)
+        // A sink, not a link: an internally clocked transfer completes at once and shifts in $FF - see Mercury_Memory.md §10.
+        private void WriteSerialControl(byte data)
         {
-            ushort source = (ushort)(page << 8);
-            for (int i = 0; i < Oam.Length; i++) Oam[i] = Read((ushort)(source + i));
+            _serialControl = (byte)(data & (Cgb ? 0x83 : 0x81));
+
+            // Bit 0 low means the partner supplies the clock, and an unconnected port never gets one.
+            if ((_serialControl & 0x81) != 0x81) return;
+
+            _serialLog.Add(_serialData);
+            _serialData = 0xFF;
+            _serialControl &= 0x7F;
+            Request(Interrupt.Serial);
         }
+
+        // 160 machine cycles, one OAM byte each, with OAM closed to the CPU throughout - see Mercury_Memory.md §6.
+        private void StartOamDma(byte page)
+        {
+            _oamDmaPage = page;
+            _oamDmaIndex = 0;
+            _oamDmaCyclesLeft = Oam.Length * 4;
+        }
+
+        private void StepOamDma()
+        {
+            if (_oamDmaCyclesLeft == 0) return;
+
+            _oamDmaCyclesLeft--;
+
+            // One byte per machine cycle, which lands the 160th on the last cycle of the transfer.
+            if ((_oamDmaCyclesLeft & 3) != 0 || _oamDmaIndex >= Oam.Length) return;
+
+            Oam[_oamDmaIndex] = ReadForDma((ushort)((_oamDmaPage << 8) + _oamDmaIndex));
+            _oamDmaIndex++;
+        }
+
+        // The DMA controller drives the bus itself, so the PPU's CPU-side blocking does not apply to it.
+        private byte ReadForDma(ushort address) => address switch
+        {
+            < 0x8000 => _cart.Mapper.ReadRom(address),
+            < 0xA000 => Vram[VramOffset(address)],
+            < 0xC000 => _cart.Mapper.ReadRam(address),
+            _ => Wram[WramOffset((ushort)(address & 0xDFFF))],
+        };
 
         public void Tick(int cycles)
         {
@@ -309,6 +399,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             {
                 StepBaseClock();
             }
+
+            StepOamDma();
 
             _divCounter++;
 
@@ -356,6 +448,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
             InterruptEnable = 0;
             InterruptFlags = 0;
+            _serialData = 0;
+            _serialControl = 0;
+            _serialLog.Clear();
+            _oamDmaPage = 0;
+            _oamDmaCyclesLeft = 0;
+            _oamDmaIndex = 0;
+            _stallCycles = 0;
             _divCounter = 0;
             _tima = 0;
             _tma = 0;

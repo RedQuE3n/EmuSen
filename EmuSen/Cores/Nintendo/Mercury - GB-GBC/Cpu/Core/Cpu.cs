@@ -34,6 +34,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
         // What HALT needs to know at execute time, captured before the fetch.
         private bool _interruptPending;
 
+        // Always zero at an instruction boundary, so it is an accumulator rather than machine state.
+        [SkipInState] private int _tickedThisStep;
+
         public ushort LastInstructionPC { get; private set; }
 
         public long Cycles { get; private set; }
@@ -81,10 +84,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             Cycles = 0;
         }
 
-        // Returns the T-cycles this step consumed; the caller runs the rest of the machine by that much.
+        // Runs the machine itself as it goes; returns the T-cycles consumed - see Mercury_Cpu.md §3.
         public int Step(byte interruptEnable, byte interruptFlags, out int servicedBit)
         {
             servicedBit = -1;
+            _tickedThisStep = 0;
 
             bool pending = (interruptEnable & interruptFlags & 0x1F) != 0;
             _interruptPending = pending;
@@ -121,10 +125,27 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             return Advance(Execute(opcode));
         }
 
+        // The cycles an instruction spends thinking rather than on the bus, settled at its end - see Mercury_Cpu.md §3.1.
         private int Advance(int cycles)
         {
             Cycles += cycles;
+            if (cycles > _tickedThisStep) _bus.Tick(cycles - _tickedThisStep);
             return cycles;
+        }
+
+        // One machine cycle: the rest of the machine runs, then the transfer lands at its end - see Mercury_Cpu.md §3.
+        private byte ReadCycle(ushort address)
+        {
+            _bus.Tick(4);
+            _tickedThisStep += 4;
+            return _bus.Read(address);
+        }
+
+        private void WriteCycle(ushort address, byte data)
+        {
+            _bus.Tick(4);
+            _tickedThisStep += 4;
+            _bus.Write(address, data);
         }
 
         private static int LowestSetBit(byte value)
@@ -145,7 +166,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
             return 20;
         }
 
-        private byte Fetch() => _bus.Read(PC++);
+        private byte Fetch() => ReadCycle(PC++);
 
         private ushort Fetch16()
         {
@@ -156,14 +177,14 @@ namespace EmuSen.Cores.Nintendo.Mercury.Cpu.Core
 
         private void Push(ushort value)
         {
-            _bus.Write(--SP, (byte)(value >> 8));
-            _bus.Write(--SP, (byte)value);
+            WriteCycle(--SP, (byte)(value >> 8));
+            WriteCycle(--SP, (byte)value);
         }
 
         private ushort Pop()
         {
-            byte low = _bus.Read(SP++);
-            byte high = _bus.Read(SP++);
+            byte low = ReadCycle(SP++);
+            byte high = ReadCycle(SP++);
             return (ushort)(low | (high << 8));
         }
 

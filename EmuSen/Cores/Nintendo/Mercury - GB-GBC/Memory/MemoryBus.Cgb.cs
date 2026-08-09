@@ -140,7 +140,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
             if (HdmaIsHBlankDriven) return;
 
-            // General-purpose DMA runs to completion here rather than stalling the CPU - see Mercury_Cgb.md §4.
+            // General-purpose DMA copies everything at once and charges the CPU for it - see Mercury_Cgb.md §4.1.
             while (HdmaBlocksLeft > 0) TransferHdmaBlock();
         }
 
@@ -150,8 +150,13 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             if (HdmaIsHBlankDriven && HdmaBlocksLeft > 0) TransferHdmaBlock();
         }
 
+        // Eight machine cycles a block, and they are half as long in double speed - see Mercury_Cgb.md §4.1.
+        private void ChargeHdmaBlock() => _stallCycles += DoubleSpeed ? 16 : 32;
+
         private void TransferHdmaBlock()
         {
+            ChargeHdmaBlock();
+
             for (int i = 0; i < 16; i++)
             {
                 byte value = Read(HdmaSource);

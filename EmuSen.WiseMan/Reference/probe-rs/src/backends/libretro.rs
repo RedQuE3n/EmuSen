@@ -36,6 +36,9 @@ struct Shared {
     live: u32,
     schedule: InputSchedule,
     frame: u32,
+    // Interleaved stereo, accumulated across the whole run - see Mercury_Gameplan.md §3.1.
+    audio: Vec<i16>,
+    capture_audio: bool,
 }
 
 // Safety: the pointer is installed by load() before the core can call anything
@@ -205,9 +208,26 @@ unsafe extern "C" fn input_state(port: c_uint, device: c_uint, _index: c_uint, i
     0
 }
 
-unsafe extern "C" fn audio_sample(_left: i16, _right: i16) {}
+// A core pushes audio here; discarding it is what made --wav look impossible.
+unsafe extern "C" fn audio_sample(left: i16, right: i16) {
+    let Some(state) = shared() else { return };
+    if !state.capture_audio {
+        return;
+    }
 
-unsafe extern "C" fn audio_batch(_data: *const i16, frames: usize) -> usize {
+    state.audio.push(left);
+    state.audio.push(right);
+}
+
+unsafe extern "C" fn audio_batch(data: *const i16, frames: usize) -> usize {
+    let Some(state) = shared() else { return frames };
+    if !state.capture_audio || data.is_null() {
+        return frames;
+    }
+
+    // libretro counts a "frame" as one sample per channel, always two channels here.
+    let batch = unsafe { std::slice::from_raw_parts(data, frames * 2) };
+    state.audio.extend_from_slice(batch);
     frames
 }
 
@@ -218,6 +238,7 @@ struct CoreApi {
     unload_game: unsafe extern "C" fn(),
     load_game: unsafe extern "C" fn(*const sys::retro_game_info) -> bool,
     get_system_info: unsafe extern "C" fn(*mut sys::retro_system_info),
+    get_system_av_info: unsafe extern "C" fn(*mut sys::retro_system_av_info),
     set_controller_port_device: unsafe extern "C" fn(c_uint, c_uint),
     get_memory_data: unsafe extern "C" fn(c_uint) -> *mut c_void,
     get_memory_size: unsafe extern "C" fn(c_uint) -> usize,
@@ -239,9 +260,29 @@ pub struct LibretroBackend {
     rom_data: Vec<u8>,
     spaces: Vec<SpaceRef>,
     loaded: bool,
+    wav_path: String,
+    sample_rate: u32,
 }
 
 impl LibretroBackend {
+    // Runs from shutdown(), which is before main's audio::finish re-encodes it.
+    fn write_capture(&mut self) {
+        if self.wav_path.is_empty() || !self.shared.capture_audio {
+            return;
+        }
+
+        let samples = std::mem::take(&mut self.shared.audio);
+        if samples.is_empty() {
+            println!("[WARN] core produced no audio; not writing {}", self.wav_path);
+            return;
+        }
+
+        match crate::audio::write_wav(std::path::Path::new(&self.wav_path), &samples, 2, self.sample_rate) {
+            Ok(()) => println!("[INFO] captured {} stereo frames", samples.len() / 2),
+            Err(reason) => println!("[ERROR] {reason}"),
+        }
+    }
+
     pub fn new(core_path: &str) -> LibretroBackend {
         LibretroBackend {
             core_path: core_path.to_string(),
@@ -261,10 +302,14 @@ impl LibretroBackend {
                 live: 0,
                 schedule: InputSchedule::default(),
                 frame: 0,
+                audio: Vec::new(),
+                capture_audio: false,
             }),
             rom_data: Vec::new(),
             spaces: Vec::new(),
             loaded: false,
+            wav_path: String::new(),
+            sample_rate: 0,
         }
     }
 
@@ -352,6 +397,7 @@ impl ProbeBackend for LibretroBackend {
             load_game: match resolve(&library, "retro_load_game") { Some(f) => f, None => return false },
             unload_game: match resolve(&library, "retro_unload_game") { Some(f) => f, None => return false },
             get_system_info: match resolve(&library, "retro_get_system_info") { Some(f) => f, None => return false },
+            get_system_av_info: match resolve(&library, "retro_get_system_av_info") { Some(f) => f, None => return false },
             set_controller_port_device: match resolve(&library, "retro_set_controller_port_device") { Some(f) => f, None => return false },
             get_memory_data: match resolve(&library, "retro_get_memory_data") { Some(f) => f, None => return false },
             get_memory_size: match resolve(&library, "retro_get_memory_size") { Some(f) => f, None => return false },
@@ -420,10 +466,24 @@ impl ProbeBackend for LibretroBackend {
         self.loaded = true;
 
         unsafe { (api.set_controller_port_device)(0, sys::RETRO_DEVICE_JOYPAD) };
+
+        // The core reports its own rate; assuming 44100 would resample nothing and
+        // mislabel everything - see EmuSen_Debugging_Tools_Reference_v5.md §3.51.
+        let get_av = api.get_system_av_info;
         self.cache_spaces();
 
+        let mut av: sys::retro_system_av_info = unsafe { std::mem::zeroed() };
+        unsafe { get_av(&raw mut av) };
+        self.sample_rate = av.timing.sample_rate.round().max(0.0) as u32;
+
         if !options.wav_path.is_empty() {
-            println!("[WARN] --wav is not supported by the libretro backend");
+            if self.sample_rate == 0 {
+                println!("[WARN] core reported no sample rate; not recording audio");
+            } else {
+                self.wav_path = options.wav_path.clone();
+                self.shared.capture_audio = true;
+                println!("[INFO] recording audio at {} Hz", self.sample_rate);
+            }
         }
         if options.ram_state != "zeros" {
             println!("[WARN] --ramstate is not settable through libretro");
@@ -432,6 +492,8 @@ impl ProbeBackend for LibretroBackend {
     }
 
     fn shutdown(&mut self) {
+        self.write_capture();
+
         if let Some(api) = self.api.as_ref() {
             if self.loaded {
                 unsafe { (api.unload_game)() };

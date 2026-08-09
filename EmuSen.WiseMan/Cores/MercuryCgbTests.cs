@@ -338,6 +338,46 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0xFF, core.Bus.Read(0xFF55));
         }
 
+        // Copying at once is a modelling choice; the cycles it costs the CPU are not - see Mercury_Cgb.md §4.1.
+        [Fact]
+        public void A_general_purpose_hdma_charges_the_cpu_eight_machine_cycles_a_block()
+        {
+            var core = Load();
+
+            core.Bus!.Write(0xFF51, 0xC0);
+            core.Bus.Write(0xFF52, 0x00);
+            core.Bus.Write(0xFF53, 0x00);
+            core.Bus.Write(0xFF54, 0x10);
+            core.Bus.Write(0xFF55, 0x03);   // four blocks, immediate
+
+            Assert.Equal(4 * 32, core.Bus.TakePendingStall());
+
+            // Taken once and cleared, or the core would charge for the same transfer every instruction.
+            Assert.Equal(0, core.Bus.TakePendingStall());
+        }
+
+        // Double speed halves the wall-clock cost of the same transfer - see Mercury_Cgb.md §4.1.
+        [Fact]
+        public void A_general_purpose_hdma_costs_half_as_much_in_double_speed()
+        {
+            var core = Load();
+
+            core.Bus!.Write(0xFF4D, 0x01);
+            core.Bus.Write(0xFF51, 0xC0);
+            core.Bus.Write(0xFF52, 0x00);
+            core.Bus.Write(0xFF53, 0x00);
+            core.Bus.Write(0xFF54, 0x10);
+
+            core.Cpu!.Halted = false;
+            core.Bus.Stop();
+            Assert.True(core.Bus.DoubleSpeed);
+
+            core.Bus.TakePendingStall();
+            core.Bus.Write(0xFF55, 0x03);
+
+            Assert.Equal(4 * 16, core.Bus.TakePendingStall());
+        }
+
         [Fact]
         public void An_hblank_hdma_moves_one_block_per_line_and_counts_down()
         {

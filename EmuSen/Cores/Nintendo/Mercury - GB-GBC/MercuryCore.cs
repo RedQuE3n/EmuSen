@@ -20,8 +20,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
 
-        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU - see EmuSen_Save_States.md §1.
-        private const int StateVersion = 4;
+        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port - see EmuSen_Save_States.md §1.
+        private const int StateVersion = 5;
 
         private const int SaveEveryNFrames = 300;
 
@@ -131,11 +131,15 @@ namespace EmuSen.Cores.Nintendo.Mercury
                 resuming = false;
                 if (Coverage.IsArmed) Coverage.Record(Cpu.PC);
 
+                // Step ticks the bus itself, one machine cycle at a time - see Mercury_Cpu.md §3.
                 int cycles = Cpu.Step(Bus.InterruptEnable, Bus.InterruptFlags, out int serviced);
                 if (serviced >= 0) Bus.InterruptFlags &= (byte)~(1 << serviced);
 
-                Bus.Tick(cycles);
-                _cyclesIntoFrame += cycles;
+                // A general-purpose HDMA takes the bus away from the CPU - see Mercury_Cgb.md §4.1.
+                int stall = Bus.TakePendingStall();
+                if (stall > 0) Bus.Tick(stall);
+
+                _cyclesIntoFrame += cycles + stall;
 
                 // The PPU is the clock a frame actually ends on; the budget below only covers an off LCD.
                 if (Bus.Ppu.FrameComplete)

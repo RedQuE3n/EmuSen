@@ -1,9 +1,15 @@
 // Audio capture format - see EmuSen_Debugging_Tools_Reference_v5.md §3.51.
 //
-// The reference emulator only knows how to write WAV, so the probe records one
-// and re-encodes it after the run. FLAC is the default because a 20-second
-// gameplay capture is 3.8 MB of WAV and 553 KB of FLAC - measured, 14.4% - and
-// nothing downstream reads the file as anything but sample data.
+// A run always lands on WAV first and is re-encoded afterwards. Which side writes
+// that WAV depends on the backend, and both paths now exist: a backend that drives
+// an emulator with its own recorder hands it a path, and a backend that is *handed
+// samples* writes the container here with write_wav(). The second case is what
+// libretro needs, and until 2026-08-09 its absence was misread as libretro being
+// unable to supply audio at all - see Mercury_Gameplan.md §3.1.
+//
+// FLAC is the default because a 20-second gameplay capture is 3.8 MB of WAV and
+// 553 KB of FLAC - measured, 14.4% - and nothing downstream reads the file as
+// anything but sample data.
 //
 // WAV survives as a deliberate fallback, on two paths. `--wav` asks for it
 // outright, which is what deep troubleshooting wants: every language reads it
@@ -30,9 +36,38 @@ impl AudioFormat {
     }
 }
 
+// Interleaved stereo i16 to a RIFF/WAVE file. A backend that receives samples
+// rather than writing files needs this; see EmuSen_Debugging_Tools_Reference_v5.md §3.51.
+pub fn write_wav(path: &Path, samples: &[i16], channels: u16, sample_rate: u32) -> std::result::Result<(), String> {
+    let bits = 16u16;
+    let block_align = channels * (bits / 8);
+    let byte_rate = sample_rate * u32::from(block_align);
+    let data_bytes = (samples.len() * 2) as u32;
+
+    let mut out = Vec::with_capacity(44 + samples.len() * 2);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    out.extend_from_slice(b"WAVE");
+    out.extend_from_slice(b"fmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&channels.to_le_bytes());
+    out.extend_from_slice(&sample_rate.to_le_bytes());
+    out.extend_from_slice(&byte_rate.to_le_bytes());
+    out.extend_from_slice(&block_align.to_le_bytes());
+    out.extend_from_slice(&bits.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data_bytes.to_le_bytes());
+    for sample in samples {
+        out.extend_from_slice(&sample.to_le_bytes());
+    }
+
+    std::fs::write(path, &out).map_err(|e| format!("cannot write {}: {e}", path.display()))
+}
+
 // Where the backend is told to record. Always a WAV, because that is the only
-// thing the reference emulator can write; the requested path is what the run
-// ends up with.
+// container the probe and the reference emulator agree on; the requested path is
+// what the run ends up with.
 pub fn capture_path(requested: &str, format: AudioFormat) -> PathBuf {
     match format {
         AudioFormat::Wav => PathBuf::from(requested),
@@ -247,6 +282,30 @@ mod tests {
         let path = std::env::temp_dir().join("emusen-probe-chunkwalk.wav");
         std::fs::write(&path, &wav).unwrap();
         assert_eq!(read_pcm(&path).unwrap(), vec![1, 2, 3, 4]);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // The probe now writes the container it used to only read, so the two must agree.
+    #[test]
+    fn a_written_wav_reads_back_through_the_chunk_walker() {
+        let samples: Vec<i16> = vec![0, -1, 32767, -32768, 1234, -1234];
+        let path = std::env::temp_dir().join("emusen-probe-writewav.wav");
+
+        write_wav(&path, &samples, 2, 32768).unwrap();
+
+        let pcm = read_pcm(&path).unwrap();
+        assert_eq!(pcm.len(), samples.len() * 2);
+
+        let decoded: Vec<i16> =
+            pcm.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
+        assert_eq!(decoded, samples);
+
+        // The header must describe what was actually written, or a decoder resamples it.
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(u16::from_le_bytes([bytes[22], bytes[23]]), 2);
+        assert_eq!(u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]), 32768);
+
         let _ = std::fs::remove_file(&path);
     }
 

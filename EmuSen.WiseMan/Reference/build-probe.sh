@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Builds the reference probe against an emulator - see EmuSen_Debugging_Tools_Reference_v5.md §3.45.
+# Builds the reference probe against an emulator - see EmuSen_Debugging_Tools_Reference_v5.md
+# §3.45 for the architecture, §3.50 for the Rust port and §3.52 for the Mesen C ABI.
 #
 #   ./build-probe.sh <backend> [checkout] [work-dir]
 #
 # Backends:
-#   mesen     <checkout> is a Mesen2 source tree. Mesen's makefile wants SDL2 and
+#   mesen     <checkout> is a Mesen2 source tree. The probe is built from
+#             probe-rs/ with cargo and linked against the checkout's
+#             bin/pgohelperlib.so, which carries the C ABI added by
+#             patches/mesen/probe-c-api.patch. Mesen's makefile wants SDL2 and
 #             X11 headers; rather than install them system-wide this fetches the
 #             RPMs and unpacks them into <work-dir>, then points the compiler at
 #             that tree with CPATH/LIBRARY_PATH plus a shim sdl2-config. Nothing
@@ -14,7 +18,7 @@
 #             rather than vendored so it cannot drift from the real ABI. Cores
 #             are ordinary packages too (libretro-nestopia, libretro-gambatte,
 #             libretro-bsnes-mercury, libretro-mgba, ...), unpacked the same way.
-#
+#             Built from probe-rs/ with cargo; bindgen reads that same header.
 # One binary per backend, because linking one is not free - Mesen's pulls in a
 # 14 MB MesenCore.so and libretro's needs nothing but dlopen.
 #
@@ -28,8 +32,6 @@ BACKEND="${1:?usage: build-probe.sh <backend> [checkout] [work-dir]}"
 CHECKOUT="${2:-}"
 WORK="${3:-${XDG_CACHE_HOME:-$HOME/.cache}/emusen/probe/$BACKEND}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-POLICY_SOURCES=("$HERE/probe/ProbeMain.cpp" "$HERE/probe/ProbeDump.cpp")
 
 # Unpacks distro packages into <work-dir> without installing anything, the same
 # trick the Mesen path already uses for SDL2 - see the header comment.
@@ -53,10 +55,12 @@ libretro)
     fetch_rpms usr/include/libretro-common/libretro.h retroarch-devel
     mkdir -p "$WORK"
     echo "== building the probe"
-    clang++ -fPIC -Wall --std=c++17 -m64 -O2 \
-        -DPROBE_BACKEND_LIBRETRO -DPROBE_DEFAULT_BACKEND='"libretro"' \
-        -I"$WORK/deps/usr/include/libretro-common" \
-        -o "$WORK/probe" "${POLICY_SOURCES[@]}" "$HERE/probe/backends/LibretroBackend.cpp" -ldl
+    # bindgen reads the same header the C++ backend included, so the Rust ABI
+    # cannot drift from the real one either - see §3.50.
+    LIBRETRO_INCLUDE_DIR="$WORK/deps/usr/include/libretro-common" \
+        cargo build --release --manifest-path "$HERE/probe-rs/Cargo.toml" \
+        --features libretro --target-dir "$WORK/target"
+    cp "$WORK/target/release/probe" "$WORK/probe"
     echo
     echo "Built: $WORK/probe"
     echo "Cores are packages; fetch one without installing it, e.g.:"
@@ -112,32 +116,26 @@ cd "$CHECKOUT"
 grep -q g_gsuTraceOn    Core/SNES/Coprocessors/GSU/Gsu.cpp || git apply "$HERE/patches/mesen/gsu-trace.patch"
 grep -q g_cpuTraceOn    Core/SNES/SnesCpu.cpp              || git apply "$HERE/patches/mesen/cpu-trace.patch"
 grep -q g_nesApuTrace   Core/NES/NesMemoryManager.cpp      || git apply "$HERE/patches/mesen/nes-apu-trace.patch"
-grep -q g_probeStopFrame Core/Shared/Emulator.cpp          || git apply "$HERE/patches/mesen/probe-frame-stop.patch"
+# Fills the same buffer cpu-trace.patch declares, so it must be applied after it.
+grep -q g_cpuTraceOn    Core/NES/NesCpu.cpp                || git apply "$HERE/patches/mesen/nes-cpu-trace.patch"
+# The sentinel is g_probeStopArmed, not g_probeStopFrame: a checkout carrying the
+# pre-§3.45b patch has the latter already and would silently keep the old stop.
+grep -q g_probeStopArmed Core/Shared/Emulator.cpp         || git apply "$HERE/patches/mesen/probe-frame-stop.patch"
+# Add-only: it creates Core/Shared/EmuSenProbeApi.cpp, which makefile:138 globs
+# in with no makefile edit, so it can never conflict on a rebase - see §3.52.
+[ -f Core/Shared/EmuSenProbeApi.cpp ]                     || git apply "$HERE/patches/mesen/probe-c-api.patch"
 
 # STATICLINK=false: the stock recipe wants libstdc++.a, which Fedora splits out.
 echo "== building MesenCore.so (a few minutes the first time, a no-op after)"
 LTO=false STATICLINK=false make core -j"$(nproc)"
 
-SOURCES=("${POLICY_SOURCES[@]}" "$HERE/probe/backends/MesenBackend.cpp")
+echo "== building the probe"
+# cargo does its own staleness tracking, so there is no hand-rolled -nt check
+# here as there was for the C++ link step.
+MESEN_CHECKOUT="$CHECKOUT" cargo build --release --manifest-path "$HERE/probe-rs/Cargo.toml" \
+    --no-default-features --features mesen --target-dir "$WORK/target"
+cp "$WORK/target/release/probe" "$WORK/probe"
 
-# Relinking a probe nothing has changed is pure latency, and this script runs far
-# more often than its inputs move.
-NEEDS_BUILD=0
-[ -x "$WORK/probe" ] || NEEDS_BUILD=1
-for src in "${SOURCES[@]}" "$HERE/probe/ProbeBackend.h" "$HERE/probe/ProbeDump.h" bin/pgohelperlib.so; do
-    if [ "$src" -nt "$WORK/probe" ]; then NEEDS_BUILD=1; fi
-done
-
-if [ "$NEEDS_BUILD" = 0 ]; then
-    echo "== probe already up to date"
-else
-    echo "== building the probe"
-    clang++ -fPIC -Wall --std=c++17 -m64 -O2 \
-        -DPROBE_BACKEND_MESEN -DPROBE_DEFAULT_BACKEND='"mesen"' \
-        -I"$WORK/deps/usr/include/SDL2" -I. -ICore -IUtilities -ISdl -ILinux \
-        -o "$WORK/probe" "${SOURCES[@]}" bin/pgohelperlib.so \
-        -pthread -lstdc++fs -L"$WORK/deps/usr/lib64" -lSDL2 -lX11
-fi
 
 echo
 echo "Built: $WORK/probe"

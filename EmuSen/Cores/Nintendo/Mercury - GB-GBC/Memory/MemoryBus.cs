@@ -2,6 +2,7 @@ using System;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mercury.Cpu.Core;
 using EmuSen.Cores.Nintendo.Mercury.Input;
+using EmuSen.Cores.Nintendo.Mercury.Video;
 
 namespace EmuSen.Cores.Nintendo.Mercury.Memory
 {
@@ -36,6 +37,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         [SkipInState] public IWriteObserver? WriteObserver;
         [SkipInState] public Joypad Joypad = new();
 
+        public readonly Ppu Ppu;
+
         // The 16-bit counter DIV is the top half of - see Mercury_Memory.md §5.
         private ushort _divCounter;
         private byte _tima;
@@ -44,7 +47,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         private bool _lastTimerEdge;
         private int _timaReloadDelay;
 
-        public MemoryBus(Cartridge cart) => _cart = cart;
+        public MemoryBus(Cartridge cart)
+        {
+            _cart = cart;
+            Ppu = new Ppu(this);
+        }
 
         public Cartridge Cart => _cart;
 
@@ -151,6 +158,17 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             0xFF06 => _tma,
             0xFF07 => (byte)(_tac | 0xF8),
             0xFF0F => (byte)(InterruptFlags | 0xE0),
+            0xFF40 => Ppu.Lcdc,
+            0xFF41 => Ppu.ReadStat(),
+            0xFF42 => Ppu.Scy,
+            0xFF43 => Ppu.Scx,
+            0xFF44 => Ppu.Ly,
+            0xFF45 => Ppu.Lyc,
+            0xFF47 => Ppu.Bgp,
+            0xFF48 => Ppu.Obp0,
+            0xFF49 => Ppu.Obp1,
+            0xFF4A => Ppu.Wy,
+            0xFF4B => Ppu.Wx,
             _ => Io[address - 0xFF00],
         };
 
@@ -185,9 +203,53 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
                     InterruptFlags = (byte)(data & 0x1F);
                     return;
 
+                case 0xFF40:
+                    Ppu.WriteLcdc(data);
+                    return;
+
+                case 0xFF41:
+                    Ppu.WriteStat(data);
+                    return;
+
+                case 0xFF42:
+                    Ppu.Scy = data;
+                    return;
+
+                case 0xFF43:
+                    Ppu.Scx = data;
+                    return;
+
+                // LY is the counter itself; a write is a reset request on hardware, and Mercury ignores it.
+                case 0xFF44:
+                    return;
+
+                case 0xFF45:
+                    Ppu.WriteLyc(data);
+                    return;
+
                 case 0xFF46:
                     Io[0x46] = data;
                     RunOamDma(data);
+                    return;
+
+                case 0xFF47:
+                    Ppu.Bgp = data;
+                    return;
+
+                case 0xFF48:
+                    Ppu.Obp0 = data;
+                    return;
+
+                case 0xFF49:
+                    Ppu.Obp1 = data;
+                    return;
+
+                case 0xFF4A:
+                    Ppu.Wy = data;
+                    return;
+
+                case 0xFF4B:
+                    Ppu.Wx = data;
                     return;
 
                 default:
@@ -212,6 +274,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         // TIMA counts falling edges of one selected bit of the DIV counter - see Mercury_Memory.md §5.
         private void StepOneCycle()
         {
+            Ppu.Tick();
             _divCounter++;
 
             if (_timaReloadDelay > 0 && --_timaReloadDelay == 0)
@@ -258,10 +321,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
             // What the DMG boot ROM leaves behind, since Mercury starts past it - see Mercury_Cpu.md §5.
             Io[0x00] = 0x30;
-            Io[0x40] = 0x91;
-            Io[0x47] = 0xFC;
-            Io[0x48] = 0xFF;
-            Io[0x49] = 0xFF;
+
+            Ppu.Reset();
         }
     }
 }

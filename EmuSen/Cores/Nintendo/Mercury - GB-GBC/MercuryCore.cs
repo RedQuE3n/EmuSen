@@ -19,7 +19,9 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
-        private const int StateVersion = 1;
+
+        // 2 added the PPU's fields to the bus walk - see EmuSen_Save_States.md §1.
+        private const int StateVersion = 2;
 
         private const int SaveEveryNFrames = 300;
 
@@ -35,8 +37,11 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public CoverageRegistry Coverage { get; } = new();
         public LabelRegistry Labels { get; } = new();
 
-        private byte[] _frame = new byte[ScreenWidthPixels * ScreenHeightPixels * 4];
+        // Handed out before a ROM exists; once one does, the PPU's own buffer is returned instead.
+        private readonly byte[] _frame = new byte[ScreenWidthPixels * ScreenHeightPixels * 4];
+
         private long _cyclesIntoFrame;
+        private bool _skipRendering;
 
         public const int ScreenWidthPixels = 160;
         public const int ScreenHeightPixels = 144;
@@ -52,7 +57,15 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public bool IsRomLoaded => Bus != null;
         public long TotalFrames { get; private set; }
 
-        public bool SkipRendering { get; set; }
+        public bool SkipRendering
+        {
+            get => _skipRendering;
+            set
+            {
+                _skipRendering = value;
+                if (Bus != null) Bus.Ppu.SkipRendering = value;
+            }
+        }
 
         // No synthesis yet, but a caller still needs a rate up front - see Mercury_Core.md §4.
         public int AudioSampleRate => 44100;
@@ -77,6 +90,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
             Bus.Reset();
             Cpu.Reset();
+            Bus.Ppu.SkipRendering = _skipRendering;
 
             TotalFrames = 0;
             _cyclesIntoFrame = 0;
@@ -117,6 +131,15 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
                 Bus.Tick(cycles);
                 _cyclesIntoFrame += cycles;
+
+                // The PPU is the clock a frame actually ends on; the budget below only covers an off LCD.
+                if (Bus.Ppu.FrameComplete)
+                {
+                    Bus.Ppu.FrameComplete = false;
+                    _cyclesIntoFrame = 0;
+                    EndFrame();
+                    return;
+                }
             }
 
             _cyclesIntoFrame -= CyclesPerFrame;
@@ -130,13 +153,10 @@ namespace EmuSen.Cores.Nintendo.Mercury
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
             Cheats.ApplyAll(ReadForCheat, WriteForCheat);
 
-            // The PPU is not built yet, so vblank is raised on the frame boundary instead - see Mercury_Core.md §3.
-            Bus!.Request(Interrupt.VBlank);
-
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
         }
 
-        public byte[] GetFrameBufferRgba() => _frame;
+        public byte[] GetFrameBufferRgba() => Bus?.Ppu.FrameRgba ?? _frame;
 
         public short[] DequeueAudioSamples(int maxFrames) => Array.Empty<short>();
 

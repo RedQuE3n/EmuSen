@@ -1,6 +1,7 @@
 # Mercury (Game Boy) — the core
 
-*Started 2026-08-04. CPU, memory and cartridge only; there is no PPU and no APU yet — see §5 for what that means in practice.*
+*Started 2026-08-04. CPU, memory, cartridge and (since 2026-08-08) the LCD
+controller; there is still no APU — see §5 for what that means in practice.*
 
 ---
 
@@ -14,13 +15,15 @@ The build order is DMG first, colour as an additive mode on this same core. Noth
 
 A frame is **70224 T-cycles**: 154 scanlines of 456. At the 4194304 Hz CPU clock that is 59.7275 Hz, which is what `FrameRateHz` reports rather than a rounded 60.
 
-`RunFrame` steps the CPU until that budget is spent, carrying the overshoot into the next frame rather than discarding it — an instruction that straddles the boundary must not have its remainder lost, or the clock drifts.
+`RunFrame` steps the CPU until the PPU completes a frame, or until that budget is spent if the LCD is off and the PPU is therefore frozen (§3). The budget carries its overshoot into the next frame rather than discarding it — an instruction that straddles the boundary must not have its remainder lost, or the clock drifts. When the PPU ends the frame the carry is dropped instead, because the PPU's own dot counter is then holding the phase.
 
-Timing is **instruction-granular**, not cycle-granular: `Cpu.Step` returns the whole instruction's T-cycles and the bus is ticked by that amount afterwards, rather than the bus advancing between each of an instruction's individual memory accesses. The timer still sees every intermediate cycle because `MemoryBus.Tick` loops one at a time internally (`Mercury_Memory.md` §5), so DIV and TIMA are correct; what is not modelled is a mid-instruction write landing at exactly the right cycle relative to a PPU mode change. This is the same class of simplification as Moon's scanline-granularity PPU, and it is the thing to revisit first if a game turns out to depend on sub-instruction timing.
+Timing is **instruction-granular**, not cycle-granular: `Cpu.Step` returns the whole instruction's T-cycles and the bus is ticked by that amount afterwards, rather than the bus advancing between each of an instruction's individual memory accesses. The timer still sees every intermediate cycle because `MemoryBus.Tick` loops one at a time internally (`Mercury_Memory.md` §5), so DIV and TIMA are correct; what is not modelled is a mid-instruction write landing at exactly the right cycle relative to a PPU mode change. This is the same class of simplification as Moon's scanline-granularity PPU, and it is the thing to revisit first if a game turns out to depend on sub-instruction timing. It is also why Mercury does not enforce VRAM access blocking — see `Mercury_Ppu.md` §7, which is the clearest statement of what this simplification actually costs.
 
-## 3. What raises VBlank today
+## 3. What raises VBlank
 
-With no PPU there is no LY, no STAT and no real vblank period, so `EndFrame` requests the VBlank interrupt on the frame boundary. That is enough for a game's main loop to tick over — most Game Boy games are structured as "wait for vblank, then do everything" — but it is a stand-in, not the hardware. It goes away when the PPU lands and starts driving the interrupt from LY 144.
+The PPU does, from LY reaching 144, like the hardware.
+
+This section used to describe a stand-in: with no LY to drive it from, `EndFrame` requested VBlank on the frame boundary so a game's main loop would tick over. That is gone as of 2026-08-08. The frame boundary itself has moved with it — `RunFrame` now returns when the PPU wraps LY to 0, and the 70224-cycle budget survives only as a watchdog for a disabled LCD, which does not advance at all. See `Mercury_Ppu.md` §1.1 for why the budget could not stay the authority.
 
 ## 4. Audio
 
@@ -28,9 +31,10 @@ With no PPU there is no LY, no STAT and no real vblank period, so `EndFrame` req
 
 ## 5. What is not built
 
-- **No PPU.** `GetFrameBufferRgba` returns a correctly-sized black buffer. Nothing writes pixels.
 - **No APU.** The four channels do not exist.
 - **No `IDebugTarget`.** This is why Mercury is deliberately *not* registered in `CoreCatalog` or `CoreFactory` yet: `CoreFactory.Load` builds a `CoreBundle` that requires a debug target, so registering the core before one exists would put a `NotSupportedException` behind a ROM the catalog claims to support. The core is reachable from tests and nowhere else until that is written.
 - **No serial, no STOP/double-speed.** `STOP` consumes its second byte and otherwise does nothing.
 
-The pieces that *are* built are real: the full unprefixed and `$CB` instruction sets, interrupts with the EI delay and the HALT bug, the DIV/TIMA timer with falling-edge detection, the joypad matrix, OAM DMA, five cartridge boards, and save states.
+The PPU is built but not complete; `Mercury_Ppu.md` §2.2, §3.2 and §7 state its own gaps, of which the absent VRAM access blocking is the one with real consequences.
+
+The pieces that *are* built are real: the full unprefixed and `$CB` instruction sets, interrupts with the EI delay and the HALT bug, the DIV/TIMA timer with falling-edge detection, the joypad matrix, OAM DMA, five cartridge boards, background/window/sprite rendering, and save states.

@@ -349,6 +349,8 @@ Worth knowing because both were invisible until a test rendered them:
 
 ### 12.2 The CSS form
 
+**`man theme` is the definition**, and it is the one a theme author should be reading: the complete token list, the element/state/part vocabulary, the properties, and what happens when a file will not load. This section is the argument behind it, not a second copy of it — the two cannot disagree, because `EmuSen.WiseMan/LunaP/ThemeVocabularyTests.cs` compares the page against `CssTheme`'s real allow-lists by **set equality in both directions**. A control added to the kit and left undocumented fails it; a token documented for a palette key that no longer resolves fails it too. That second direction is not hypothetical — it failed on the first run, against a `var(--luna-x)` placeholder in the page's own prose, which is exactly the class of thing hand-written reference text accumulates.
+
 `Theme/CssTheme.cs` compiles a restricted CSS to the same `ResourceDictionary` §12 already merges, plus — for rule blocks — a `Styles` collection. It is a **format, not an engine**: there is no cascade, no specificity, no inheritance and no box model, and none is planned.
 
 ```css

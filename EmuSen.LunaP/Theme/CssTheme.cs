@@ -34,6 +34,20 @@ namespace EmuSen.LunaP.Theme
         // A syntax error refuses the whole file, the way a malformed .axaml theme already does.
         public static CssThemeResult Parse(string css) => new Parser(css ?? string.Empty).Run();
 
+        // The vocabulary, read out of the real allow-lists so `man theme` and its drift test cannot describe a format that does not exist.
+        public static IReadOnlyList<string> ElementNames => Elements.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+        public static IReadOnlyList<string> PropertyNames => Properties.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+        public static IReadOnlyList<string> StatesOf(string element) =>
+            Elements.TryGetValue(element, out ElementSpec? spec) ? spec.Classes.Keys.ToList() : Array.Empty<string>();
+
+        public static IReadOnlyList<string> PartsOf(string element) =>
+            Elements.TryGetValue(element, out ElementSpec? spec) ? spec.Parts.Keys.ToList() : Array.Empty<string>();
+
+        // LunaSectionHeader becomes --luna-section-header; the inverse of what a :root declaration is read as.
+        public static string TokenFor(string resourceKey) => TokenPrefix[..2] + Kebab(resourceKey);
+
         // Which control each element name selects, and the pseudo-classes and template parts it admits.
         private sealed record ElementSpec(
             Type Target,

@@ -1500,6 +1500,88 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    ls /\n" +
                 "    cd /home/Logs && ls",
 
+            // Not a command - a topic page, like 'hier'. ThemeVocabularyTests pins every name below against EmuSen.LunaP's real allow-lists.
+            ["theme"] =
+                "NAME\n" +
+                "    theme - the colours and fonts every EmuSen window is drawn with\n\n" +
+                "SYNOPSIS\n" +
+                "    /etc/EmuSen/themes/<name>.css\n" +
+                "    /etc/EmuSen/themes/<name>.axaml\n\n" +
+                "DESCRIPTION\n" +
+                "    A theme overrides whichever of the Luna* palette keys it cares about\n" +
+                "    and leaves the rest alone, so a two-line theme is a legitimate theme.\n" +
+                "    Drop a file in the directory above and pick it in Preferences; there is\n" +
+                "    no registration step and no restart. One name is one theme: if both\n" +
+                "    formats spell it, the .axaml is the one that loads.\n\n" +
+                "    The .css form is a restricted CSS - a format, not an engine. There is\n" +
+                "    no cascade, no specificity, no inheritance and no box model, and the\n" +
+                "    only things it can produce are colours, numbers, font families and the\n" +
+                "    property setters listed below. The .axaml form is an Avalonia\n" +
+                "    ResourceDictionary and is documented in EmuSen_LunaP.md section 12.\n\n" +
+                "THE PALETTE\n" +
+                "    Written inside ':root'. Each token is a Luna* resource key in kebab\n" +
+                "    case, and setting a colour sets both halves the palette spells (the\n" +
+                "    Color and the brush), so nothing half-applies.\n\n" +
+                "    --luna-surface           tool-window background\n" +
+                "    --luna-input-surface     text-input background\n" +
+                "    --luna-void              letterbox area behind a game frame\n" +
+                "    --luna-text              body and monospace text\n" +
+                "    --luna-meter-text        meter-row labels and values\n" +
+                "    --luna-muted             hints, group headers, disabled captions\n" +
+                "    --luna-section-header    section headings\n" +
+                "    --luna-warning           inline caution text\n" +
+                "    --luna-nominal           load ramp, below 60%\n" +
+                "    --luna-busy              load ramp, 60% and above\n" +
+                "    --luna-hot               load ramp, 85% and above\n" +
+                "    --luna-mono-font         the monospace family list\n" +
+                "    --luna-hint-font-size    hint text size\n" +
+                "    --luna-header-font-size  section heading size\n\n" +
+                "    The key's SUFFIX decides how its value is read: '...-size' is a number,\n" +
+                "    '...-font' a font family, everything else a colour. A font family and a\n" +
+                "    named colour are written identically ('monospace', 'gainsboro'), so the\n" +
+                "    value alone could not settle it.\n\n" +
+                "    Colours take any CSS spelling - #RGB, #RRGGBB, #RGBA, #RRGGBBAA,\n" +
+                "    rgb(), rgba() with alpha 0-1, and the named colours. In the eight-digit\n" +
+                "    form ALPHA IS LAST, the CSS order; Avalonia's own #AARRGGBB reads the\n" +
+                "    same digits backwards, and inside a .css file CSS wins.\n\n" +
+                "RULES\n" +
+                "    Outside ':root', a block styles one kind of control. The selector is\n" +
+                "    'element', 'element.state' or 'element part', and the element is the\n" +
+                "    control's own name in kebab case:\n\n" +
+                "    button-bar        field-row         path-picker-row   status-bar\n" +
+                "    console-pane      filter-bar        rgba-image-view   tabs\n" +
+                "    dropdown          hint-text         section-header\n" +
+                "    luna-switch       meter-list        meter-row\n" +
+                "    mono-text\n\n" +
+                "    States: meter-row.nominal, meter-row.busy, meter-row.hot.\n" +
+                "    Parts:  meter-row .bar; filter-bar .search, .facet;\n" +
+                "            console-pane .output, .input, .prompt.\n\n" +
+                "    Properties: background, background-color, color, font-family,\n" +
+                "    font-size, font-weight. A value may be a token - 'var(--luna-hot)' -\n" +
+                "    which FOLLOWS that token rather than copying it; a rule that restates a\n" +
+                "    colour stops tracking the palette.\n\n" +
+                "WHEN IT DOES NOT LOAD\n" +
+                "    Two tiers, on purpose. A SYNTAX error refuses the whole file and leaves\n" +
+                "    the previous theme in force: an unbalanced brace, a declaration with no\n" +
+                "    colon, an unterminated comment, an at-rule, a nested rule. An UNKNOWN\n" +
+                "    selector, state, part, property or unreadable value is reported and\n" +
+                "    skipped, and the rest of the theme still applies - so a theme written\n" +
+                "    for a later EmuSen keeps working here.\n\n" +
+                "    Either way the reason is printed the same way a config file's is, with\n" +
+                "    the line number from your file: comments are not stripped before\n" +
+                "    counting, so the number matches what your editor shows.\n\n" +
+                "    A theme that is deleted or broken between runs falls back to built-in\n" +
+                "    WITHOUT forgetting the choice. Fix the file, restart, and it returns.\n\n" +
+                "EXAMPLES\n" +
+                "    cat > /etc/EmuSen/themes/Nocturne.css\n" +
+                "    :root {\n" +
+                "      --luna-surface:        #12131A;\n" +
+                "      --luna-section-header: #7AA2F7;\n" +
+                "      --luna-mono-font:      \"Fira Code\", monospace;\n" +
+                "    }\n" +
+                "    meter-row.hot .bar { color: var(--luna-hot); }\n\n" +
+                "    ls /etc/EmuSen/themes",
+
             ["pwd"] =
                 "NAME\n" +
                 "    pwd - print the current directory\n\n" +

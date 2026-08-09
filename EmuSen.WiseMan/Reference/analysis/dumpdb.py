@@ -137,10 +137,10 @@ def ingest(db, directory):
     """
     directory = os.path.abspath(directory)
 
-    identity, _, rows = {}, [], {}
+    identity, order, rows = {}, [], {}
     sig_files = sorted(glob.glob(os.path.join(directory, "*_sig.csv")))
     if sig_files:
-        identity, _, rows = read_signature(sig_files[0])
+        identity, order, rows = read_signature(sig_files[0])
 
     manifests = _manifests(directory)
     spaces, screens = [], []
@@ -196,6 +196,9 @@ def ingest(db, directory):
         set_id = cursor.lastrowid
 
         db.executemany(
+            "INSERT INTO signature_column (set_id, ordinal, name) VALUES (?, ?, ?)",
+            [(set_id, ordinal, name) for ordinal, name in enumerate(order)])
+        db.executemany(
             "INSERT INTO signature (set_id, frame, column_name, crc) VALUES (?, ?, ?, ?)",
             [(set_id, frame, column, crc)
              for frame, row in rows.items() for column, crc in row.items()])
@@ -222,9 +225,9 @@ def set_for(db, directory):
 
 
 def columns(db, set_id):
+    """The columns in the order the probe wrote them, which the report preserves."""
     return [r[0] for r in db.execute(
-        "SELECT DISTINCT column_name FROM signature WHERE set_id = ? ORDER BY column_name",
-        (set_id,))]
+        "SELECT name FROM signature_column WHERE set_id = ? ORDER BY ordinal", (set_id,))]
 
 
 def frames(db, set_id):
@@ -239,6 +242,38 @@ def signature(db, set_id):
             "SELECT frame, column_name, crc FROM signature WHERE set_id = ?", (set_id,)):
         rows.setdefault(frame, {})[column] = crc
     return rows
+
+
+def varies(db, set_id, column):
+    """Whether a column ever takes a second value. Two rows is enough to know."""
+    return db.execute(
+        "SELECT COUNT(*) FROM (SELECT DISTINCT crc FROM signature "
+        "WHERE set_id = ? AND column_name = ? LIMIT 2)", (set_id, column)).fetchone()[0] > 1
+
+
+def agreement_rate(db, left_id, right_id, column, offset, through_frame=None):
+    """The share of frames on which one column agrees once the right side is shifted.
+
+    This is the operation the whole comparison is built on, and the reason the
+    signature is a table at all: it is a self-join with the offset applied to the
+    join key. Frames present on only one side, and a column present on only one
+    side, drop out of the join rather than being counted as disagreement.
+    """
+    row = db.execute(
+        """SELECT COUNT(*), COALESCE(SUM(a.crc = b.crc), 0)
+             FROM signature a
+             JOIN signature b
+               ON b.set_id = ? AND b.frame = a.frame + ? AND b.column_name = a.column_name
+            WHERE a.set_id = ? AND a.column_name = ? AND a.frame <= ?""",
+        (right_id, offset, left_id, column,
+         _MAX_FRAME if through_frame is None else through_frame)).fetchone()
+
+    common, agreed = row[0], row[1]
+    return 0.0 if common == 0 else agreed / float(common)
+
+
+# Stands in for "no limit" in the agreement query, above any real frame number.
+_MAX_FRAME = 2 ** 62
 
 
 def _pick(candidate, current):

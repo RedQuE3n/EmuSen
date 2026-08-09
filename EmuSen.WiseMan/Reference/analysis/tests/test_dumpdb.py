@@ -147,13 +147,15 @@ class IngestTests(unittest.TestCase):
         os.makedirs(self.dir, exist_ok=True)
         self.assertIsNone(dumpdb.ingest(self.db, self.dir))
 
-    def test_the_columns_are_whatever_the_probe_exposed(self):
+    def test_the_columns_keep_the_order_the_probe_wrote_them_in(self):
+        # Not alphabetical: the report prints its column lines in this order and
+        # joins the differing ones in it too.
         fixtures.write_signature(self.dir, "emusen", [(0, 1, 2, 3)],
                                  columns=("ram", "nametable", "chr"))
 
         set_id = dumpdb.ingest(self.db, self.dir)
 
-        self.assertEqual(["chr", "nametable", "ram", "screen"],
+        self.assertEqual(["ram", "nametable", "chr", "screen"],
                          dumpdb.columns(self.db, set_id))
 
     def test_set_for_ingests_a_directory_it_has_not_seen(self):
@@ -183,7 +185,7 @@ class IngestTests(unittest.TestCase):
         with self.db:
             self.db.execute("DELETE FROM dump_set WHERE id = ?", (set_id,))
 
-        for table in ("signature", "space", "screen"):
+        for table in ("signature", "signature_column", "space", "screen"):
             self.assertEqual(0, self.db.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE set_id = ?", (set_id,)).fetchone()[0])
 

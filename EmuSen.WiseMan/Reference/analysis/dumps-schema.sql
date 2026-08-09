@@ -43,6 +43,19 @@ CREATE TABLE IF NOT EXISTS dump_set (
     ingested_at     TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+-- The CSV header's column order, which is load-bearing and would otherwise be
+-- lost: the comparison intersects one side's column list with the other's and
+-- keeps the first side's order, and that order is what the report prints and what
+-- the summary's list of differing columns is joined in. A set of names alone
+-- would silently reorder both.
+CREATE TABLE IF NOT EXISTS signature_column (
+    set_id          INTEGER NOT NULL REFERENCES dump_set(id) ON DELETE CASCADE,
+    ordinal         INTEGER NOT NULL,
+    name            TEXT    NOT NULL,
+
+    PRIMARY KEY (set_id, ordinal)
+) WITHOUT ROWID;
+
 -- The CRC32 stream: the whole of what a divergence search reads. One row per
 -- (frame, column) rather than one per frame, because the two sides rarely expose
 -- the same spaces and the comparison intersects on column names.

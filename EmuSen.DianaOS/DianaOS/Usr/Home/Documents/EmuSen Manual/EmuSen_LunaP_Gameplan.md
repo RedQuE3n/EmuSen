@@ -247,7 +247,7 @@ One window per commit, its existing WiseMan tests staying green throughout. Sugg
 
 *Three commits, full suite 2,205. Built as documented in `EmuSen_LunaP.md` §12-13. Three decisions were put to the project owner at the start of the phase, as this section always said they should be:*
 
-- ***Themes are swappable ResourceDictionaries*** *(`.axaml` in `/etc/EmuSen/themes`), not a bespoke declarative format. §6's long-deferred question is answered.*
+- ***Themes are swappable ResourceDictionaries*** *(`.axaml` in `/etc/EmuSen/themes`), not a bespoke declarative format. §6's long-deferred question is answered.* **Amended 2026-08-09**: *a theme may also be written in CSS, on the project owner's direction. The decision recorded here was not wrong about the seam — the CSS form compiles to the same `ResourceDictionary` — but "not a bespoke declarative format" turned out to be the wrong axis. What the second format bought was hand-editability and a loader that cannot instantiate arbitrary types, not a different theming model. See `EmuSen_LunaP.md` §12.2.*
 - ***Every settings toggle became a switch***, *not just new UI - the one deliberate visual change in the whole toolkit effort.*
 - ***The widgets were migrated onto their anchors***, *so none of them is speculative.*
 

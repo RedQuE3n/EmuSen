@@ -1,12 +1,12 @@
 # Mercury — where this stands, and what comes next
 
-*Pinned 2026-08-04. **All four phases landed 2026-08-08** and §3 is now empty. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It stays a living document: what belongs in §3 from here is whatever a real cartridge turns out to need, not a plan written in advance.*
+*Pinned 2026-08-04. **All four phases landed 2026-08-08**, and on 2026-08-09 the core ran commercial cartridges for the first time (`Mercury_RealCartridges.md`). §3 is a list of conditions rather than phases. This is the "what should I work on next" doc for Mercury, the same role `EmuSen_Core_Gameplan.md` plays for Venus. It stays a living document: what belongs in §3 from here is whatever a real cartridge turns out to need, not a plan written in advance.*
 
 ---
 
 ## 1. What is built and verified
 
-All of it is covered by `EmuSen.WiseMan` — 146 tests across `MercuryCpuTests`, `MercuryCartridgeTests`, `MercuryCoreTests`, `MercuryPpuTests`, `MercuryCgbTests`, `MercuryDebugTargetTests` and `MercuryApuTests`, run headless against `SyntheticGbRom`. No real cartridge is needed or committed.
+All of it is covered by `EmuSen.WiseMan` — 146 synthetic tests plus 42 against real cartridges, across `MercuryCpuTests`, `MercuryCartridgeTests`, `MercuryCoreTests`, `MercuryPpuTests`, `MercuryCgbTests`, `MercuryDebugTargetTests` and `MercuryApuTests`, run headless against `SyntheticGbRom`, and `MercuryCommercialRomTests` against whatever is in the gitignored `TestRoms/`. No real cartridge is committed, and the suite passes with none present.
 
 | Piece | State |
 |---|---|
@@ -36,9 +36,10 @@ All of it is covered by `EmuSen.WiseMan` — 146 tests across `MercuryCpuTests`,
 
 **None left.** A, B, C and D are all in §1.
 
-What comes next is not another phase, because the remaining gaps are not a plan — they are conditions. Each of the four subsystem pages ends with its own "what is not modelled" list, and every entry there names the evidence that would justify doing the work. The two most likely to be reached first:
+What comes next is not another phase, because the remaining gaps are not a plan — they are conditions. Each of the four subsystem pages ends with its own "what is not modelled" list, and every entry there names the evidence that would justify doing the work. The three most likely to be reached first:
 
-- **A real cartridge.** Nothing in Mercury has run a commercial ROM; every test is against `SyntheticGbRom`. That is the single largest source of unknown-unknowns left, and it is what should happen before any accuracy work is planned.
+- **An audio differential.** This is now the top item, and the blocker is concrete: the probe's libretro backend refuses `--wav`, and the Mesen backend has no Game Boy. Until one of those changes there is no way to check Game Boy sound against anything, which is what left the Super Mario Land question in `Mercury_RealCartridges.md` §4 unresolved.
+- **A CGB-exclusive cartridge.** Pokémon Yellow is colour-*enhanced*; nothing has yet exercised double speed or `$C0`-only code under a real game.
 - **A cycle-granular bus.** Three separate simplifications share this one prerequisite — VRAM and OAM access blocking, OAM DMA's 160-cycle transfer, and HDMA's CPU stall. They should be done together or not at all, and none of them before a game proves it needs them.
 
 ## 4. Known simplifications, and when each will matter
@@ -52,7 +53,8 @@ What comes next is not another phase, because the remaining gaps are not a plan 
 - **No serial link.** Nothing needs it yet.
 - **No call stack, expression context, access counters or freezes** on the debug target. Each is a seam the core does not have; the interface allows null for all of them - `Mercury_Debug.md` §6.
 - **The APU mixes at the output rate**, so a channel period above Nyquist aliases rather than being filtered. No game plays notes there - `Mercury_Apu.md` §7.
-- **No commercial ROM has ever been run through this core.** Every test is synthetic. This is a gap in the evidence rather than in the code, and it is the most important one on this list.
+- **Seven commercial cartridges now run** (no-MBC, MBC1, MBC3, MBC5; 32K to 1 MB; one colour-enhanced), and hold six invariants including a save-state round trip and a screen diff against gambatte. What they have *not* done is be played - everything so far is title screens and attract demos. See `Mercury_RealCartridges.md` §6.
+- **Mercury boots about four frames ahead of gambatte**, since neither runs a boot ROM but they hardcode different amounts of the startup. Any frame-indexed differential has to align for that first.
 
 ## 5. Resuming
 

@@ -95,6 +95,8 @@ On overflow `TIMA` reads **0 for four cycles** before `TMA` is loaded and the in
 
 Writing a page number to `$FF46` copies `$XX00-$XX9F` into OAM. Real hardware takes 160 machine cycles and locks the CPU out of most of the bus for the duration, which is why real games run the DMA trigger from a routine copied into HRAM. Mercury copies the whole page **immediately**. Nothing yet observes the difference; it will matter once the PPU exists.
 
+
+**`CoreOptions.BatteryRamDisabled` is honoured here as of 2026-08-09**, and was not before: `Load` used to set the save path unconditionally, so `--nobattery` printed its message and Mercury saved anyway. No synthetic test could catch it because `SyntheticGbRom` never sets a battery flag - see `Mercury_RealCartridges.md` §2.
 ## 7. The joypad
 
 Eight buttons behind one register, read as two selectable nibbles. Only bits 4 and 5 of `$FF00` are writable — they select the d-pad half, the action half, both, or neither. A **pressed button reads 0**, not 1, and an unselected half reads all ones. Selecting both halves at once ANDs them together, which is real hardware behaviour and not a bug.

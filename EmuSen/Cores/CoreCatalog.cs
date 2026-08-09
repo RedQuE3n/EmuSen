@@ -37,6 +37,16 @@ namespace EmuSen.Cores
         private static readonly CoreDescriptor Moon =
             new("NES (Moon)", new[] { ".nes" }, NesCheatSystems, "NES", "Nintendo", 1983);
 
+        // Two libretro folders for one core, the same way Venus claims Satellaview - see Mercury_Core.md §1.
+        private static readonly string[] GameBoyCheatSystems =
+        {
+            "Nintendo - Game Boy",
+            "Nintendo - Game Boy Color",
+        };
+
+        private static readonly CoreDescriptor Mercury =
+            new("Game Boy (Mercury)", new[] { ".gb", ".gbc" }, GameBoyCheatSystems, "GB", "Nintendo", 1989);
+
         // Keyed by what a user would type - the internal codename and the
         // console name both reach the same core.
         public static IReadOnlyDictionary<string, CoreDescriptor> Registry { get; } =
@@ -46,6 +56,9 @@ namespace EmuSen.Cores
                 ["snes"] = Venus,
                 ["moon"] = Moon,
                 ["nes"] = Moon,
+                ["mercury"] = Mercury,
+                ["gb"] = Mercury,
+                ["gbc"] = Mercury,
             };
 
         // What `cheat db prune` keeps. Deduplicated, since one core is
@@ -54,7 +67,7 @@ namespace EmuSen.Cores
             CoreDescriptor.SupportedCheatSystems(Registry.Values);
 
         // One entry per real core, not per alias - what a "which console?" list shows.
-        public static IReadOnlyList<CoreDescriptor> Cores { get; } = new[] { Venus, Moon };
+        public static IReadOnlyList<CoreDescriptor> Cores { get; } = new[] { Venus, Moon, Mercury };
 
         // Cores sorted for display: grouped by manufacturer, oldest console first - see EmuSen_Input.md §5.1.
         public static IReadOnlyList<CoreDescriptor> ConsolesInReleaseOrder { get; } =
@@ -69,6 +82,7 @@ namespace EmuSen.Cores
             {
                 [Venus.Console] = Nintendo.Venus.VenusCore.PadButtons,
                 [Moon.Console] = Nintendo.Moon.MoonCore.PadButtons,
+                [Mercury.Console] = Nintendo.Mercury.MercuryCore.PadButtons,
             };
 
         // The console's pad with no ROM loaded, or every button for a console this build does not know.

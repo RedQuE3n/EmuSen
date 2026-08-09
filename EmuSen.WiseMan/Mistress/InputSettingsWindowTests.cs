@@ -326,7 +326,7 @@ namespace EmuSen.WiseMan.Mistress
             TabControl tabs = h.Window.GetVisualDescendants().OfType<TabControl>().First();
             string?[] headers = tabs.Items.OfType<TabItem>().Select(t => t.Header as string).ToArray();
 
-            Assert.Equal(new[] { "General", "NES", "SNES" }, headers);
+            Assert.Equal(new[] { "General", "NES", "GB", "SNES" }, headers);
         }, default);
 
         // With no ROM loaded there is no console to prefer, so General stays selected.

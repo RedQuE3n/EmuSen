@@ -9,6 +9,7 @@
 ```sh
 EmuSen.Mistress                       # the GUI frontend
 EmuSen.Hotaru /path/to/game.smc       # the console-first frontend
+EmuSen.Hotaru /path/to/game.gb        # .smc/.sfc, .nes, .gb, .gbc all reach a core
 EmuSen.Pharaoh game.smc 3000 --commands script.txt   # headless, scripted
 ```
 
@@ -48,20 +49,24 @@ console core implements that interface and inherits the entire toolchain — the
 scripting harness, the watchpoint system, the screenshot and digest tooling — without a
 line of it being rewritten.
 
-**What is actually built today: two cores that run games, and a third that does not yet.**
-The SNES (**Venus**) is the mature one and runs real commercial cartridges. The NES
-(**Moon**) renders, makes sound and plays: CPU, PPU, all five APU channels, ten mapper
-boards, `ICore` and `IDebugTarget` — younger and far less play-tested than Venus, NTSC
-only. The Game Boy (**Mercury**) has its CPU, bus and cartridge boards but no PPU or APU,
-so it is deliberately not registered with the core factory. Every other console listed
-below is a reserved, empty folder with a documentation stub.
+**What is actually built today: three cores that run games.** The SNES (**Venus**) is the
+mature one and runs real commercial cartridges, coprocessors included. The NES (**Moon**)
+renders, makes sound and plays: CPU, PPU, all five APU channels, ten mapper boards, `ICore`
+and `IDebugTarget` — younger and far less play-tested than Venus, NTSC only. The Game Boy
+and Game Boy Color (**Mercury**) is the newest, and ran its first commercial cartridges in
+August 2026: SM83, a cycle-granular bus, the full PPU, all four APU channels, colour, five
+cartridge boards and a debug target. It is registered with the core factory and claims
+`.gb` and `.gbc`, so a Game Boy ROM opens from either frontend and answers the same shell.
+Every other console listed below is a reserved, empty folder with a documentation stub.
 
 The multi-system claim in this document is a claim about *architecture*, and it is no
 longer only a claim: `IDebugTarget` had exactly one implementation for most of this
-project's life, and `MoonDebugTarget` is the first thing to prove the interface was
-genuinely core-agnostic rather than SNES-shaped by accident. The narrower
-`ISingleStepTarget` rig was proven the same way earlier — it took the 6502 with one
-adapter, one loader and one line of registry, unchanged otherwise.
+project's life and now has three. `MoonDebugTarget` was the one that proved the interface
+was genuinely core-agnostic rather than SNES-shaped by accident; `MercuryDebugTarget` cost
+a fraction of it, which is the result worth having — the second implementation tests the
+abstraction, the third one uses it. The narrower `ISingleStepTarget` rig was proven the
+same way earlier: it took the 6502 with one adapter, one loader and one line of registry,
+unchanged otherwise.
 
 ---
 
@@ -125,10 +130,11 @@ core. Frontends sit on top of both and are interchangeable.
 |---|---|
 | `EmuSen` | The emulation core — CPU, PPU, APU, memory, save states, resampling. A pure library: no `Main`, no window, no frontend knowledge |
 | `EmuSen.DianaOS` | The shell, `IDebugTarget`, and every debug command. **Core-agnostic** |
-| `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
-| `EmuSen.Galaxia` | Config persistence — the single answer to "where does a config file go". Depends on nothing |
+| `EmuSen.Cauldron` | Core-agnostic telemetry — `ICoreTelemetry` and the realtime/polling/history providers the dashboards read |
+| `EmuSen.Galaxia` | Config *and* saved-data persistence — the single answer to "where does a file go". Depends on nothing |
 | `EmuSen.Serenity` | Shared presentation — the Avalonia/Skia frame control, shader pipeline, graphics settings |
 | `EmuSen.Endymion` | Shared SDL3 device layer — audio output and gamepad input, one copy for both frontends |
+| `EmuSen.LunaP` | Shared Avalonia toolkit — controls, window scaffolding, user themes and dashboards, which both frontends build their windows from |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
 | `EmuSen.Pharaoh` | The headless scripted harness, and the CLI runner for ground-truth CPU test vectors |
@@ -163,9 +169,9 @@ hardware is called.
 
 | Console | Codename | State |
 |---|---|---|
-| SNES | **Venus** | **Implemented** — the only working core |
-| NES | **Moon** | **In progress** — CPU, PPU, all five APU channels, ten mappers, `ICore` and `IDebugTarget`; runs games, NTSC only |
-| Game Boy / Color | **Mercury** | **In progress** — SM83, memory, timer, joypad, five cartridge boards; no PPU or APU yet, so not yet loadable from a frontend |
+| SNES | **Venus** | **Implemented** — the mature core; real commercial cartridges, all four coprocessors it has met |
+| NES | **Moon** | **Implemented** — CPU, PPU, all five APU channels, ten mappers, `ICore` and `IDebugTarget`; runs games, NTSC only |
+| Game Boy / Color | **Mercury** | **Implemented** — SM83, cycle-granular bus, PPU, four APU channels, colour, five cartridge boards; runs commercial cartridges in both DMG and CGB modes |
 | Game Boy Advance | **Jupiter** | Reserved |
 | Nintendo 64 | **Mars** | Reserved |
 | Virtual Boy | **Saturn** | Reserved |
@@ -203,9 +209,11 @@ manufacturer is added next.
 
 **Ordering.** NES (**Moon**) was the milestone the whole architecture was built toward: the
 first real test of whether `IDebugTarget` is genuinely generic or merely asserted to be. It
-passed, and the core now runs games. Game Boy (**Mercury**) followed and is mid-build.
-Nothing beyond those is scheduled — the reserved folders are a naming and layout
-commitment, not a promise of delivery dates.
+passed, and the core now runs games. Game Boy (**Mercury**) followed and reached commercial
+cartridges in four phases between 4 and 9 August 2026 — which is the number that says what
+the shared toolchain is worth, since none of those days went on a shell, a harness, a watch
+system or a frontend. Nothing beyond those three is scheduled; the reserved folders are a naming and
+layout commitment, not a promise of delivery dates.
 
 ---
 
@@ -221,9 +229,22 @@ country byte and drives 312-scanline/50 Hz timing and the `STAT78` bit together.
 Very few titles have been verified end to end. Per-title ratings live in
 `EmuSen_Games_Tested.md`, which carries the investigation behind each rating and should be
 read over any summary here — with the caveat that it lags actual core state, since a fix
-that moves a title up is not always written back the same day. Known gaps include 65816
-decimal mode, save states lacking a version header, SA-1 character-conversion DMA, and
-scanline- rather than per-dot timing granularity (a deliberate, documented tradeoff).
+that moves a title up is not always written back the same day. Known gaps are SA-1
+character-conversion DMA, which no game on this shelf requests, and scanline- rather than
+per-dot timing granularity: a deliberate, documented tradeoff that also costs the real
+H-position registers.
+
+The Game Boy core is the youngest and arrived better instrumented than either of its
+predecessors did: 226 headless tests, seven commercial cartridges booting and rendering,
+save states that resume into a byte-identical future 120 frames later, and colour confirmed
+on a real cartridge. Its accuracy evidence is deliberately *not* another emulator — the
+Game Boy has something the SNES does not, a mature corpus of hardware tests written against
+real silicon that grade themselves and report the verdict through the link port, so the
+oracle names no emulator at all. Mercury has the serial sink that captures those verdicts
+and the harness that reads them; running the corpus against it is the largest single piece
+of outstanding work on the core, and until that happens its timing claims are argued rather
+than demonstrated. The known simplifications are a per-scanline renderer under a per-cycle
+clock, no boot ROM, a serial sink rather than a real link, and no Super Game Boy.
 
 Linux x64 is launch-tested. Windows and macOS builds are produced and structurally correct
 but have not been executed; macOS builds are unsigned.

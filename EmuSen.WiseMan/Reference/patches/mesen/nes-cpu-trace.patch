@@ -1,0 +1,79 @@
+diff --git a/Core/NES/NesCpu.cpp b/Core/NES/NesCpu.cpp
+index 9b473d86..a08ac758 100644
+--- a/Core/NES/NesCpu.cpp
++++ b/Core/NES/NesCpu.cpp
+@@ -164,10 +164,52 @@ void NesCpu::Reset(bool softReset, ConsoleRegion region)
+ 	}
+ }
+ 
++// 6502 trace in the same 24-byte ESCT record the S-CPU uses, and into the same
++// buffer - see EmuSen_Debugging_Tools_Reference_v5.md §3.52. One machine runs at
++// a time, so one buffer is enough, and one record layout means --cputrace and
++// Pharaoh's --tracediff mean the same thing on both consoles. The 65816-only
++// fields are the constants the 6502 makes them: D and DBR zero, E set, and the
++// 8-bit registers in the low byte. Defined by patches/mesen/cpu-trace.patch.
++extern bool g_cpuTraceOn;
++extern std::vector<uint8_t> g_cpuTrace;
++
++static void PushNesCpuTrace(NesCpuState& s, uint16_t addr, uint8_t opcode, uint8_t kind)
++{
++	if(!g_cpuTraceOn || g_cpuTrace.size() >= 2000000000u) { return; }
++
++	uint8_t r[24] = {};
++	r[0] = (uint8_t)addr;       r[1] = (uint8_t)(addr >> 8);
++	r[4] = opcode;              r[5] = kind;
++	r[6] = s.A;
++	r[8] = s.X;
++	r[10] = s.Y;
++	r[12] = s.SP;
++	r[17] = s.PS;               r[18] = 1;
++	g_cpuTrace.insert(g_cpuTrace.end(), r, r + 24);
++}
++
++// The cost field is CPU cycles here and master-clock ticks on the S-CPU. Both
++// are self-consistent, and a trace is only ever compared with another trace of
++// the same machine, so the units never meet.
++static void SetLastNesCpuTraceCost(uint32_t cycles)
++{
++	size_t n = g_cpuTrace.size();
++	if(n < 24) { return; }
++	g_cpuTrace[n - 4] = (uint8_t)cycles;         g_cpuTrace[n - 3] = (uint8_t)(cycles >> 8);
++	g_cpuTrace[n - 2] = (uint8_t)(cycles >> 16); g_cpuTrace[n - 1] = (uint8_t)(cycles >> 24);
++}
++
+ void NesCpu::Exec()
+ {
+ #ifndef DUMMYCPU
+ 	_emu->ProcessInstruction<CpuType::Nes>();
++	uint64_t cycleBefore = 0;
++	if(g_cpuTraceOn) {
++		// DebugRead, not GetOPCode: the real fetch advances PC and burns a cycle,
++		// so tracing has to read the opcode without touching the machine.
++		PushNesCpuTrace(_state, _state.PC, _memoryManager->DebugRead(_state.PC), 0);
++		cycleBefore = _state.CycleCount;
++	}
+ #endif
+ 
+ 	uint8_t opCode = GetOPCode();
+@@ -175,6 +217,11 @@ void NesCpu::Exec()
+ 	_operand = FetchOperand();
+ 	(this->*_opTable[opCode])();
+ 	
++#ifndef DUMMYCPU
++	// Backfilled after the opcode runs, so the record carries what it cost.
++	if(g_cpuTraceOn) { SetLastNesCpuTraceCost((uint32_t)(_state.CycleCount - cycleBefore)); }
++#endif
++
+ 	if(_prevRunIrq || _prevNeedNmi) {
+ 		IRQ();
+ 	}
+@@ -184,6 +231,9 @@ void NesCpu::IRQ()
+ {
+ #ifndef DUMMYCPU
+ 	uint16_t originalPc = PC();
++	// Kind is decided here rather than below, because the branch that picks the
++	// vector also clears _needNmi.
++	if(g_cpuTraceOn) { PushNesCpuTrace(_state, originalPc, 0, _needNmi ? 1 : 2); }
+ #endif
+ 
+ 	if(_console->GetRegion() == ConsoleRegion::Pal) {

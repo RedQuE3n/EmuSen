@@ -45,6 +45,10 @@ EmuSen.DianaOS/DianaOS/Usr/Home/Roms/*
 # redistribution rule as the ROMs above applies to state extracted from one.
 EmuSen.WiseMan/Reference/dumps/
 
+# Cargo's build output for the Rust probe. build-probe.sh directs it into the
+# work dir instead, so this only catches a bare `cargo build` in the crate.
+EmuSen.WiseMan/Reference/probe-rs/target/
+
 # The libretro cheat database, downloaded at runtime - ~28k files and
 # 250MB of CC BY-SA data that `cheat db update` fetches on demand. See
 # `man cheat`.

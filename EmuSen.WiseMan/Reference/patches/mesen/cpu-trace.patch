@@ -1,12 +1,13 @@
 diff --git a/Core/SNES/SnesCpu.cpp b/Core/SNES/SnesCpu.cpp
-index e8441981..bdfa020f 100644
+index e8441981..b52f513b 100644
 --- a/Core/SNES/SnesCpu.cpp
 +++ b/Core/SNES/SnesCpu.cpp
-@@ -26,6 +26,39 @@ SnesCpu::~SnesCpu()
+@@ -26,6 +26,40 @@ SnesCpu::~SnesCpu()
  {
  }
  
-+// S-CPU trace in EmuSen's shared 20-byte record - see EmuSen_Debugging_Tools_Reference_v5.md §3.40.
++// S-CPU trace in EmuSen's shared 24-byte record - see EmuSen_Debugging_Tools_Reference_v5.md §3.40.
++// The NES 6502 fills the same record from NesCpu.cpp; see §3.52.
 +bool g_cpuTraceOn = false;
 +std::vector<uint8_t> g_cpuTrace;
 +
@@ -42,7 +43,7 @@ index e8441981..bdfa020f 100644
  void SnesCpu::Exec()
  {
  	_immediateMode = false;
-@@ -34,9 +67,19 @@ void SnesCpu::Exec()
+@@ -34,9 +68,19 @@ void SnesCpu::Exec()
  	if(_state.StopState == SnesCpuStopState::Running) {
  #ifndef DUMMYCPU
  		_emu->ProcessInstruction<CpuType::Snes>();
@@ -62,7 +63,7 @@ index e8441981..bdfa020f 100644
  		CheckForInterrupts();
  	} else {
  		ProcessHaltedState();
-@@ -50,11 +93,13 @@ void SnesCpu::CheckForInterrupts()
+@@ -50,11 +94,13 @@ void SnesCpu::CheckForInterrupts()
  	if(_state.NeedNmi) {
  		_state.NeedNmi = false;
  		uint32_t originalPc = GetProgramAddress(_state.PC);

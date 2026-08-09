@@ -6,4 +6,17 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- Packed because EmuSen.LunaP is packed and names this as a dependency; a
+       consumer outside this repository cannot resolve a ProjectReference. The
+       argument for packaging at all is in EmuSen_LunaP.md §17. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>EmuSen.Cauldron</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Tristan Pelland</Authors>
+    <Description>Read-only telemetry contracts shared by EmuSen frontends.</Description>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/RedQuE3n/EmuSen-Project</RepositoryUrl>
+  </PropertyGroup>
+
 </Project>

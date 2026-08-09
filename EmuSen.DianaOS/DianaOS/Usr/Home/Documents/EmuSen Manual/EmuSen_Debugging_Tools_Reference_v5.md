@@ -1819,9 +1819,11 @@ The general form of both: a differential test proves two systems agree, and says
 
 ### 3.48 The comparability gate, and EmuSen as a peer backend
 
+*Where it lives now: `EmuSen.WiseMan/Reference/analysis/compare.py`, not `--compare`. The gates read files and never load a ROM, which puts them on the Python side of the seam `EmuSen_Stack.md` §2.2 draws, and the signature stream they read is now a SQLite table rather than a CSV parsed per query. The design below is unchanged and was held to byte-identical output through the move — see `EmuSen_Stack.md` §3 for the differential result. `EmuSen.Pharaoh --compare` prints where the tool went and exits 1.*
+
 §3.47 records two comparisons that were valid-looking and meaningless. The response is not a better differ — the differ was correct every time — but a layer that decides whether a difference *means* anything before measuring one, and a symmetric arrangement in which this project is one backend among several rather than the privileged consumer.
 
-**The contract that matters is the file protocol, not the C++ vtable.** `IProbeBackend` stays what it was: the in-process adapter for an emulator that has to be driven. A *peer* is anything that writes the same files. `EmuSen.Pharaoh --probe` does exactly that, emitting `emusen_<space>_f<frame>.bin`, `emusen_manifest_f<frame>.json` and `emusen_screen_f<frame>.bin` beside the reference's. `--compare` then reads two directories and never learns which emulator made either.
+**The contract that matters is the file protocol, not the C++ vtable.** `IProbeBackend` stays what it was: the in-process adapter for an emulator that has to be driven. A *peer* is anything that writes the same files. `EmuSen.Pharaoh --probe` does exactly that, emitting `emusen_<space>_f<frame>.bin`, `emusen_manifest_f<frame>.json` and `emusen_screen_f<frame>.bin` beside the reference's. `compare.py` then reads two directories and never learns which emulator made either.
 
 Two additions to the protocol:
 
@@ -1885,7 +1887,7 @@ The gates in §3.48 tell you *that* two emulators disagree on a column. What the
 
 So the dictionary is built around the assumption that its author is not to be trusted, including when its author is the person adding the row.
 
-**Storage.** SQLite, via `Microsoft.Data.Sqlite`, with the native library pinned to `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 — the 2.1.11 that `Microsoft.Data.Sqlite` 10.0.10 resolves by default carries GHSA-2m69-gcr7-jv3q, which the build surfaces as `NU1903`.
+**Storage.** SQLite. The schema, seed and reader now live in `EmuSen.WiseMan/Reference/analysis/` and are read from Python's stdlib `sqlite3`, which needs no package and so retires the `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5 pin *for this database* — that pin was needed because the 2.1.11 `Microsoft.Data.Sqlite` 10.0.10 resolves by default carries GHSA-2m69-gcr7-jv3q, surfaced as `NU1903`, and it is still required wherever the C# catalogue driver runs. **None of the discipline below is affected**: it is enforced by the schema's triggers, so it holds whatever language opens the file, which is the entire reason it was built that way rather than as reader-side checks.
 
 **What is committed is SQL, not a database.** `schema.sql` and `seed.sql` are the reviewable source; `known-differences.db` is a build artifact, rebuilt when missing, and is not in the repository. A binary in git cannot be diffed, reviewed or merged, which would defeat the point: the entire value of a proof requirement is that a claim can be *argued with* on the merits before it is believed.
 
@@ -1895,7 +1897,7 @@ So the dictionary is built around the assumption that its author is not to be tr
 
 **The dictionary annotates; it never suppresses.** A proven entry adds `known: <slug>` beside a column and nothing else. It does not remove the column, hide the rate, or change a verdict. This is the deliberate part: a difference that stopped being reported the day it was explained is a difference nobody notices the day its cause is fixed. Columns with no proven explanation are marked `UNEXPLAINED`, which is the state most of them should be in.
 
-**Demotion is automatic.** `--verify-dictionary <ours> <theirs>` re-runs every assertion against a real pair; anything that fails is demoted to provisional rather than deleted, because a claim that has stopped holding here may still hold elsewhere and its history is worth keeping.
+**Demotion is automatic.** `verify_dictionary.py <ours> <theirs>` re-runs every assertion against a real pair; anything that fails is demoted to provisional rather than deleted, because a claim that has stopped holding here may still hold elsewhere and its history is worth keeping.
 
 The first run of the verifier demoted one of its own seed entries. `moon-reports-ntsc-unconditionally` was asserted with a fixture of "any NES pair" and evaluated against Klax, where both sides correctly report NTSC, so the assertion failed and the entry lost its status. The claim is true; the *assertion* was wrong, because a claim about PAL images cannot be demonstrated on an NTSC one. Assertions now name the fixture that demonstrates them and skip on any other pair. That a badly-scoped claim was rejected rather than believed is the system doing its job on its own author, an hour after that author had made the same class of error by hand.
 
@@ -1921,7 +1923,7 @@ The probe was ported to Rust on 2026-08-08. This section records what the port c
 
 The port is not an opportunity to improve the format, and two attractive Rust conveniences had to be refused:
 
-- **No `serde_json` on the writing side.** `DumpSet.ReadManifest` and `ReferenceDumpTests.SystemOf` read the manifest with regexes, not a parser. A serialiser is free to reorder keys and reflow whitespace, and either breaks a consumer that is byte-shaped. The writer stays hand-rolled.
+- **No `serde_json` on the writing side.** A serialiser is free to reorder keys and reflow whitespace, and either breaks a consumer that is byte-shaped. The writer stays hand-rolled, on both the Rust and C# sides, and the byte-parity tests between them depend on it. *Reading* was the same way — `DumpSet.ReadManifest` and `ReferenceDumpTests.SystemOf` both used regexes — but that was a consequence of the writer's constraint rather than a requirement of its own, and the Python ingest (`dumpdb.py`) uses a real parser. `ReferenceDumpTests.SystemOf` still does not.
 - **No `clap`.** The existing parser ignores unknown flags and ends optional positionals on a leading `-`; `clap` would reject both. Hand-rolled parsing, and `atoi`/`strtoul` semantics reimplemented deliberately, because a port that rejected `12abc` would refuse command lines that used to run.
 
 The honest summary of the gain is therefore narrower than "modern": what Rust bought here is that `Spaces()` returns slices whose lifetime is tied to the backend, `libloading` in place of raw `dlsym`, `Result` in place of `printf`-and-return, and a dump layer with 27 unit tests pinning the wire format. Performance was not a goal and is not the argument, though the Rust probe runs a 400-frame signature sweep in 0.19s against the C++ probe's 0.35s.

@@ -66,26 +66,16 @@ class Program
             return LibraryIndexer.Run(args);
         }
 
-        // Re-runs every dictionary assertion against a real pair - see §3.49.
-        if (args.Length >= 1 && args[0] == "--verify-dictionary")
+        // --compare and --verify-dictionary are Python now - see EmuSen_Stack.md §3.
+        if (args.Length >= 1 && (args[0] == "--compare" || args[0] == "--verify-dictionary"))
         {
-            if (args.Length < 3)
-            {
-                Console.WriteLine("Usage: dotnet run -- --verify-dictionary <oursDir> <theirsDir>");
-                return 1;
-            }
-            return DictionaryVerifier.Run(args);
-        }
-
-        // Two dump sets and no emulator: the gates read files, not machines - see §3.48.
-        if (args.Length >= 1 && args[0] == "--compare")
-        {
-            if (args.Length < 4)
-            {
-                Console.WriteLine("Usage: dotnet run -- --compare <oursDir> <theirsDir> <frame> [phaseWindow] [--input F]...");
-                return 1;
-            }
-            return CompareRunner.Run(args);
+            Console.WriteLine($"{args[0]} moved to EmuSen.WiseMan/Reference/analysis - it reads files,");
+            Console.WriteLine("not machines, so it no longer needs the emulator to be built:");
+            Console.WriteLine();
+            Console.WriteLine("  cd EmuSen.WiseMan/Reference/analysis");
+            Console.WriteLine("  ./compare.py <oursDir> <theirsDir> <frame> [phaseWindow] [--input F]...");
+            Console.WriteLine("  ./verify_dictionary.py <oursDir> <theirsDir>");
+            return 1;
         }
 
         // EmuSen writing the reference probe's own dump protocol - see §3.48.

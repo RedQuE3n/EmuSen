@@ -23,18 +23,8 @@ DB_NAME = "known-differences.db"
 
 
 def dictionary_directory():
-    """Where the schema and the database live.
-
-    Beside this module once the SQL has moved here; until then, where the C#
-    reader still owns it. Both are checked so that the two implementations can be
-    run against the same committed schema while the port is being verified.
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    if os.path.exists(os.path.join(here, "schema.sql")):
-        return here
-
-    root = os.path.dirname(os.path.dirname(os.path.dirname(here)))
-    return os.path.join(root, "EmuSen.Pharaoh", "Reference", "Dictionary")
+    """Where the schema, the seed and the database live: beside this module."""
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def open_dictionary(directory=None):

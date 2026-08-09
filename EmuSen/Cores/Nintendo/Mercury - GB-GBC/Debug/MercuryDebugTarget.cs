@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using EmuSen.Cauldron;
+using EmuSen.Cores.Nintendo.Mercury.Audio;
 using EmuSen.Cores.Nintendo.Mercury.Cpu.Disassembler;
 using EmuSen.Cores.Nintendo.Mercury.Memory;
 using EmuSen.Cores.Nintendo.Mercury.Video;
@@ -69,7 +70,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             _coprocessorRegisters = new(() => Array.Empty<DebugRegisterValue>(), Array.Empty<DebugRegisterValue>());
             _sprites = new(ReadSpritesLive, ReadSpritesLive());
             _palettes = new(ReadPalettesLive, ReadPalettesLive());
-            _audioChannels = new(() => Array.Empty<DebugAudioChannelInfo>(), Array.Empty<DebugAudioChannelInfo>());
+            _audioChannels = new(ReadAudioChannelsLive, ReadAudioChannelsLive());
 
             // Mercury does not time its own subsystems, and an empty list is the documented way to say so.
             _hardwareLoad = new(() => Array.Empty<DebugLoadInfo>(), Array.Empty<DebugLoadInfo>());
@@ -255,19 +256,28 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
             return values;
         }
 
-        // No APU yet, so this window carries the timer and the board instead of silence - see Mercury_Debug.md §3.
+        // The sound registers, and the timer and board that ride along here - see Mercury_Debug.md §3.
         private IReadOnlyList<DebugRegisterValue> ReadApuRegistersLive()
         {
             var bus = _core.Bus;
             if (bus is null) return Array.Empty<DebugRegisterValue>();
 
-            var values = new List<DebugRegisterValue>
+            var apu = bus.Apu;
+            var values = new List<DebugRegisterValue>();
+
+            for (int i = 0; i < Apu.RegisterCount; i++)
             {
-                new("DIV", bus.Div, 8),
-                new("TIMA", bus.Tima, 8),
-                new("TMA", bus.Tma, 8),
-                new("TAC", bus.Tac, 8),
-            };
+                int address = Apu.RegisterBase + i;
+                values.Add(new DebugRegisterValue($"${address:X4}", apu.ReadRegister(address), 8));
+            }
+
+            values.Add(new DebugRegisterValue("Power", (ulong)(apu.PoweredOn ? 1 : 0), 1));
+            values.Add(new DebugRegisterValue("SeqStep", (ulong)apu.SequencerStep, 3));
+
+            values.Add(new DebugRegisterValue("DIV", bus.Div, 8));
+            values.Add(new DebugRegisterValue("TIMA", bus.Tima, 8));
+            values.Add(new DebugRegisterValue("TMA", bus.Tma, 8));
+            values.Add(new DebugRegisterValue("TAC", bus.Tac, 8));
 
             if (_core.Cart is { } cart)
             {
@@ -276,6 +286,33 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
 
             return values;
         }
+
+        // Level is a 0-100 rescale of the channel's own volume, which for the wave is a shift - see Mercury_Apu.md §3.4.
+        private IReadOnlyList<DebugAudioChannelInfo> ReadAudioChannelsLive()
+        {
+            var apu = _core.Bus?.Apu;
+            if (apu is null) return Array.Empty<DebugAudioChannelInfo>();
+
+            return new[]
+            {
+                Pulse(apu, 0, "Pulse 1", apu.Pulse1),
+                Pulse(apu, 1, "Pulse 2", apu.Pulse2),
+                new DebugAudioChannelInfo(2, "Wave", apu.Wave.Enabled && apu.Wave.DacEnabled,
+                    apu.Wave.VolumeCode == 0 ? 0 : Scale(4 - apu.Wave.VolumeCode, 3), apu.IsChannelMuted(2),
+                    $"Freq={apu.Wave.Frequency} Vol={apu.Wave.VolumeCode} Len={apu.Wave.Length.Counter} Dac={apu.Wave.DacEnabled}"),
+                new DebugAudioChannelInfo(3, "Noise", apu.Noise.Enabled && apu.Noise.DacEnabled,
+                    Scale(apu.Noise.Envelope.Volume, 15), apu.IsChannelMuted(3),
+                    $"Shift={apu.Noise.ClockShift} Div={apu.Noise.DivisorCode} Short={apu.Noise.ShortMode} " +
+                    $"Vol={apu.Noise.Envelope.Volume} Len={apu.Noise.Length.Counter}"),
+            };
+        }
+
+        private static DebugAudioChannelInfo Pulse(Apu apu, int index, string name, PulseChannel pulse) =>
+            new(index, name, pulse.Enabled && pulse.DacEnabled, Scale(pulse.Envelope.Volume, 15), apu.IsChannelMuted(index),
+                $"Duty={pulse.Duty} Freq={pulse.Frequency} Vol={pulse.Envelope.Volume} Len={pulse.Length.Counter}" +
+                (pulse.HasSweep ? $" Sweep={pulse.SweepPeriod}/{pulse.SweepShift}{(pulse.SweepNegate ? "-" : "+")}" : ""));
+
+        private static int Scale(int value, int max) => (int)Math.Round(value / (double)max * 100.0);
 
         private IReadOnlyList<DebugSpriteInfo> ReadSpritesLive()
         {
@@ -366,11 +403,11 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
 
         private static byte Expand(int channel) => (byte)((channel << 3) | (channel >> 2));
 
-        // Nothing to mute until Phase C exists - see Mercury_Gameplan.md §3.
-        public void SetChannelMuted(int index, bool muted) { }
+        public void SetChannelMuted(int index, bool muted) => _core.Bus?.Apu.SetChannelMuted(index, muted);
 
+        // A non-destructive peek, unlike ICore.DequeueAudioSamples - see EmuSen_Audio_Sync.md §7.
         public (short[] Samples, int SampleRate) GetAudioSamples() =>
-            (Array.Empty<short>(), _core.AudioSampleRate);
+            (_core.Bus?.Apu.Peek() ?? Array.Empty<short>(), _core.AudioSampleRate);
 
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
         {
@@ -586,7 +623,9 @@ namespace EmuSen.Cores.Nintendo.Mercury.Debug
                                 $"HDMA={(bus.HdmaBlocksLeft == 0 ? "idle" : $"{bus.HdmaBlocksLeft} blocks")}");
             }
 
-            text.Append("APU  not built - see Mercury_Gameplan.md phase C");
+            var apu = bus.Apu;
+            text.Append($"APU  power={(apu.PoweredOn ? "on" : "off")} vol={apu.LeftVolume}/{apu.RightVolume} " +
+                        $"pan={apu.Panning:X2} buffered={apu.BufferedSamples / 2} frames");
 
             return text.ToString();
         }

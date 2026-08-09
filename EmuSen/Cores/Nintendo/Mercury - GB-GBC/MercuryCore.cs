@@ -20,8 +20,8 @@ namespace EmuSen.Cores.Nintendo.Mercury
         // "MERC" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x4352454D;
 
-        // 2 added the PPU to the bus walk, 3 the colour banks, palettes and HDMA - see EmuSen_Save_States.md §1.
-        private const int StateVersion = 3;
+        // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU - see EmuSen_Save_States.md §1.
+        private const int StateVersion = 4;
 
         private const int SaveEveryNFrames = 300;
 
@@ -68,7 +68,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
             }
         }
 
-        // No synthesis yet, but a caller still needs a rate up front - see Mercury_Core.md §4.
+        // Fixed for the session, and told to the APU at load rather than read back from it - see Mercury_Core.md §4.
         public int AudioSampleRate => 44100;
 
         public bool IsHaltedAtBreakpoint { get; private set; }
@@ -92,6 +92,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
             Bus.Reset();
             Cpu.Reset(Bus.Cgb);
             Bus.Ppu.SkipRendering = _skipRendering;
+            Bus.Apu.SetSampleRate(AudioSampleRate);
 
             TotalFrames = 0;
             _cyclesIntoFrame = 0;
@@ -162,7 +163,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
         public byte[] GetFrameBufferRgba() => Bus?.Ppu.FrameRgba ?? _frame;
 
-        public short[] DequeueAudioSamples(int maxFrames) => Array.Empty<short>();
+        public short[] DequeueAudioSamples(int maxFrames) => Bus?.Apu.Drain(maxFrames) ?? Array.Empty<short>();
 
         public void SaveSram() => Cart?.SaveSram();
 

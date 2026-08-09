@@ -11,8 +11,8 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
         public bool DoubleSpeed;
         public bool SpeedSwitchArmed;
 
-        // Halves the LCD's clock relative to the CPU's while double speed is on.
-        private bool _ppuHalfCycle;
+        // Halves the LCD's and the APU's clock relative to the CPU's while double speed is on.
+        private bool _baseClockPhase;
 
         public ushort HdmaSource;
         public ushort HdmaDestination;
@@ -122,7 +122,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
 
             DoubleSpeed = !DoubleSpeed;
             SpeedSwitchArmed = false;
-            _ppuHalfCycle = false;
+            _baseClockPhase = false;
         }
 
         private void StartHdma(byte data)
@@ -170,7 +170,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Memory
             WramBank = 1;
             DoubleSpeed = false;
             SpeedSwitchArmed = false;
-            _ppuHalfCycle = false;
+            _baseClockPhase = false;
             HdmaSource = 0;
             HdmaDestination = 0;
             HdmaBlocksLeft = 0;

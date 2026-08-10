@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using EmuSen.LunaP.Controls;
 using EmuSen.WiseMan.LunaP;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
@@ -155,7 +156,9 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.Contains("network is down", Status(window).Text!);
             Assert.True(window.GetControl<Button>("DownloadButton").IsEnabled, "the button must come back after a failure");
-            Assert.True(window.GetControl<Button>("BrowseButton").IsEnabled);
+            // The whole picker row, not a Browse button: the folder box and its button are one
+            // luna:PathPickerRow now, and disabling the row is what disables both (§7.2).
+            Assert.True(window.GetControl<PathPickerRow>("DirectoryPicker").IsEnabled);
 
             window.Close();
         }, default);
@@ -167,7 +170,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
 
             Assert.Contains("Cheats", Status(window).Text!);
-            Assert.True(string.IsNullOrEmpty(window.GetControl<TextBox>("DirectoryBox").Text));
+            Assert.True(string.IsNullOrEmpty(window.GetControl<PathPickerRow>("DirectoryPicker").Path));
 
             window.Close();
         }, default);

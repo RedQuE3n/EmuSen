@@ -89,3 +89,75 @@ The first time the toolkit changed under this project since the split, and there
 Invisible at 60 fps — the next frame is 16 ms away and carries the fix — and visible the moment the stream stops, where the frame at risk is the last one drawn. `EmuSen_Serenity.md` §4 carries the correction in full; `LunaP.md` §22.1 has the fix and the test that pins it.
 
 The point worth keeping is the one about duplication rather than the one about frames: **three identical copies meant one bug in three places and no single place to fix it.** Deleting them is what makes that impossible to repeat.
+---
+
+## 7. The 0.5.0 bump, and what a toolkit fix is worth downstream
+
+All four `PackageReference`s moved 0.3.0 → 0.5.0 together, skipping 0.4.0. **The bump cost nothing at all** — no man page, no code change, 2598 tests green on the first run — which is the opposite of §6's experience and worth the same amount of writing down.
+
+The reason is stated in `LunaP.md` §24.7 and holds: 0.4.0 added a light palette column and 0.5.0 added accessibility, and **neither added a control or a palette token**. `ThemeVocabularyTests` compares `man theme` against the parser's allow-lists by set equality in both directions, so it goes red for new vocabulary and is indifferent to everything else. §6 predicted the bill would arrive for a toolkit that grows a control; this bump grew none, and the prediction held in the negative direction too.
+
+### 7.1 The measurement, and what the bump bought for free
+
+Eleven windows, probed with `ControlAutomationPeer.CreatePeerForElement` — the route a screen reader's platform bridge takes — counting how many of the controls a keyboard can reach announce a name at all. The same instrument `LunaP.md` §24.1 and `Pegasus_Design.md` §13.1 used.
+
+**The identical windows, the identical application code, two versions of the toolkit:**
+
+| Window | LunaP 0.3.0 | LunaP 0.5.0 |
+|---|---|---|
+| `DebugSettingsWindow` | 1 of 16 | **16 of 16** |
+| `PreferencesWindow` | 4 of 8 | **8 of 8** |
+| `InputSettingsWindow` | 20 of 23 | 22 of 23 |
+| `MainWindow` | 20 of 22 | 22 of 22 |
+| `CheatDatabaseWindow` | 8 of 10 | 9 of 10 |
+| `ActiveCheatsWindow` | 12 of 13 | 13 of 13 |
+| `DianaOSConsoleWindow` | 1 of 2 | 2 of 2 |
+| **Total** | **69 of 97** | **95 of 97** |
+
+**Twenty-six controls became reachable to a screen reader without a line changing in this repository.** `DebugSettingsWindow` is the clearest case: fifteen of its sixteen tab stops are `LunaSwitch`es, and every one of them announced as an unnamed button because §14.1 of the toolkit's own record put their labels in `OnContent` rather than `Content`, which is where Avalonia's toggle peer looks. `PreferencesWindow` doubled because `PathPickerRow` and `FieldRow` now name their own parts.
+
+This is the strongest evidence so far for §3.1's arrangement being worth its cost. A defect in shared chrome is fixed once and lands in four applications; the same defect in three hand-rolled copies is what §6.1 had to go and delete.
+
+### 7.2 The two the toolkit could not reach
+
+**A `Slider` with no name**, in `InputSettingsWindow`. Its label is the `TextBlock` to its left, which a reader has no reason to connect to it. A nameless slider is worse than a nameless button: it announces a bare number that changes as you press an arrow key, with nothing to say what it measures.
+
+**A hand-rolled path row** in `CheatDatabaseWindow` — a read-only `TextBox` and a `Browse...` button, built as XAML rather than as `luna:PathPickerRow`, so it got none of the naming the toolkit control gives itself.
+
+The first repair was to name the copy by hand, and that was the wrong repair. **It is the toolkit control now.** Naming the copy would have closed the visible gap and kept the thing that produced it: `PreferencesWindow` used the real `PathPickerRow` three times and this window spelled out its own, the two were indistinguishable on screen, and they stopped being indistinguishable only when 0.5.0 taught the real one to name its own parts. The copy did not learn. That is §6.1's argument about three copies of a frame hand-off, in slower motion — **a copied control does not go wrong the day it is written, it goes wrong the day the original learns something.**
+
+The swap also deleted the window's own folder-dialog call, its `null`-check for a cancelled pick, and one of the two `IsEnabled` assignments it was making by hand: `PathPickerRow.PathPicked` raises only for a real pick, and disabling the row disables the box and the button together.
+
+`HandRolledControlTests` is what stops it coming back. A `Browse...` button whose `TemplatedParent` is not a `PathPickerRow` is a picker somebody rebuilt, and the test names the window it found one in — checking the templated parent rather than counting buttons is what makes it specific enough to be worth having. Restoring the old XAML turns it red with exactly the sentence a reader needs: *"CheatDatabaseWindow: a 'Browse...' button outside a PathPickerRow"*. Its companion asserts the two windows really do hold one and three rows, so it cannot pass by there being no path rows at all.
+
+### 7.3 Fourteen buttons, two captions
+
+The real defect in this repository, and it does not show up in the count above because every one of these buttons *has* a name.
+
+`InputSettingsWindow` builds seven binding rows, each with `Rebind Key`, `Clear`, `Rebind Pad` and `Clear Pad`. A sighted user reads across the row to see which button it belongs to. A screen reader user got the same two or four words, seven times over, with nothing to tell them apart.
+
+**The captions stay.** The obvious repair — renaming the button to `Rebind A on SNES` — breaks voice control, because somebody saying "click rebind key" needs those words to be the accessible name. So the row context goes in `HelpText`, which is announced after the name. Same trade `LunaP.md` §24.2 made for `PathPickerRow`'s Browse buttons, and the reason it is the same trade is that it is the same problem.
+
+### 7.4 What only the application could say
+
+`LunaP.md` §24.2 draws a line: the toolkit gives `MeterList` and `RgbaImageView` a control type and puts them in the automation tree, and deliberately supplies **no name**, because it cannot know whether a run of meters is audio channels or core load, and a guessed description of a live pixel buffer would be a wrong alt text — which is believed — rather than a missing one, which is asked about.
+
+This is the consumer's half of that line. `CoretopWindow` names its audio meters, its palette view and its tile sheet; `FeedWindow` names its one control "Game screen". Five list boxes across four windows gained names, because a list whose rows announce as themselves is still a list of nothing in particular. Three status lines became `Polite` live regions — `MainWindow`'s is assigned from seventeen places and carries transient results, permanent state and failures on one line, none of which arrives for a reader who is not watching that corner of the window.
+
+### 7.5 The guards, and a test that survived a sabotage it should have caught
+
+`EmuSen.WiseMan/LunaP/AccessibilityTests.cs`, 21 tests, plus `HandRolledControlTests.cs`, 2. The suite is **2621**, from 2598.
+
+Six sabotages were run. Five turned the expected test red immediately. The sixth stripped the help text off every console rebind button and **`Every_rebind_button_says_which_binding_it_belongs_to` stayed green.**
+
+The cause is a fact this repository already knew and had written down: **Avalonia realises only the selected tab.** The test built the window with no console, which opens on General, so the seven console binding rows it claimed to cover were not in the visual tree at all — it was asserting over the hotkey rows and nothing else. `InputSettingsWindowRenderTests` had a comment saying exactly this, with a `§` citation, and the new test was written without reading it.
+
+It is a `[Theory]` over `null`, `NES` and `SNES` now, and the sabotage turns two of the three red. The general lesson is the one §5 of the design record keeps making — a guard is not trusted until it has failed on purpose — with a sharper corollary: **a guard whose subject is empty passes, and passing is what that looks like from the outside.** `Pegasus_Design.md` §13.5 records the same failure arriving by a different route, where a window that was never shown reported no tab stops at all.
+
+### 7.6 What is not covered
+
+**No screen reader has been run against any of this.** Every measurement is of Avalonia's automation tree, which is what a platform bridge reads; it is not Orca or NVDA reading it aloud. Being in the control view is necessary and is not the same as verified end to end.
+
+`GameWindow` is not in the table. It is 888 lines that build a fullscreen surface with a menu, and it has no ordinary tab stops to count; what it needs is a pass of its own against how it behaves during play rather than at rest.
+
+`ToolTip` remains unused across the repository, and no control has an explicit `TabIndex` — tab order follows the visual tree and read correctly in every window measured, so there was nothing to reorder.

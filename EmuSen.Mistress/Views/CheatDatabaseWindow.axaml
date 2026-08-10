@@ -14,15 +14,29 @@
                    Margin="0,0,0,12" />
 
         <TextBlock DockPanel.Dock="Top" Text="Cheat Folder" FontWeight="Bold" />
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,12">
-            <TextBox x:Name="DirectoryBox" Grid.Column="0" IsReadOnly="True" PlaceholderText="(default)" />
-            <Button x:Name="BrowseButton" Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Click="OnBrowseClick" />
-        </Grid>
+        <!-- luna:PathPickerRow, NOT a read-only TextBox and a Browse button
+             spelled out again. It was the second of those until the 0.5.0 bump
+             made the difference visible: the toolkit control names its own parts
+             and the copy named nothing, so the same row was accessible in
+             PreferencesWindow and silent here. Naming the copy by hand would
+             have closed that gap and kept the thing that caused it - which is
+             the argument EmuSen_LunaP.md §6.1 already made about three copies of
+             a frame hand-off sharing one bug. §7.2. -->
+        <luna:PathPickerRow DockPanel.Dock="Top"
+                            x:Name="DirectoryPicker"
+                            Margin="0,4,0,12"
+                            Placeholder="(default)"
+                            BrowseTitle="Choose a cheat folder (a RetroArch cheats folder works as-is)" />
 
         <Border DockPanel.Dock="Bottom" Margin="0,12,0,0">
             <Grid ColumnDefinitions="*,Auto">
+                <!-- Carries the result of a download or a prune, which is
+                     read rather than sought. Polite waits for a pause instead of
+                     interrupting; a status line carries far more that can wait
+                     than that cannot. -->
                 <TextBlock Grid.Column="0"
                            x:Name="StatusText"
+                           AutomationProperties.LiveSetting="Polite"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
                 <luna:ButtonBar Grid.Column="1">
@@ -53,7 +67,7 @@
 
             <DockPanel Grid.Column="0">
                 <TextBlock DockPanel.Dock="Top" Text="Installed" FontWeight="Bold" Margin="0,0,0,4" />
-                <ListBox x:Name="SystemsList" SelectionChanged="OnSystemSelected" />
+                <ListBox x:Name="SystemsList" AutomationProperties.Name="Systems with cheat files" SelectionChanged="OnSystemSelected" />
             </DockPanel>
 
             <DockPanel Grid.Column="2">
@@ -71,6 +85,7 @@
                         IsEnabled="False"
                         Click="OnLoadGameClick" />
                 <ListBox x:Name="GamesList"
+                         AutomationProperties.Name="Games in the selected system"
                          SelectionChanged="OnGameSelected"
                          DoubleTapped="OnGameActivated" />
             </DockPanel>

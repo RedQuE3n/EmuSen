@@ -19,13 +19,27 @@ namespace EmuSen.Serenity.Dashboards
         private readonly MonoText _header = new() { FontWeight = FontWeight.Bold, FontSize = LunaPalette.HeaderFontSize };
         // Muted but body-sized, not a HintText: this one is the window's whole content when no core is loaded.
         private readonly TextBlock _noTarget = new() { Text = "No ROM loaded.", Foreground = LunaPalette.Muted, IsVisible = false };
-        private readonly StackPanel _load = Ui.Stack(3);
+        private readonly StackPanel _load = Ui.Stack(3).AccessibleName("Core load");
         private readonly MonoText _cpuRegs = new();
-        private readonly ProgressBar _spritesBar = new() { Minimum = 0, Maximum = 100, Height = 16 };
+        // The one bar in this window that is not a MeterRow, so it does not get MeterRow's name.
+        private readonly ProgressBar _spritesBar = new ProgressBar { Minimum = 0, Maximum = 100, Height = 16 }
+            .AccessibleName("Sprites in use");
         private readonly TextBlock _spritesText = new() { Foreground = LunaPalette.Text };
-        private readonly MeterList _audio = new();
-        private readonly RgbaImageView _palette = new();
-        private readonly RgbaImageView _tileSheet = new() { Stretch = Stretch.Uniform };
+        // NAMED HERE BECAUSE ONLY THIS WINDOW KNOWS WHAT THEY SHOW. LunaP 0.5.0 puts these controls
+        // into the automation tree and gives them a control type, but deliberately supplies no name
+        // for a MeterList or an RgbaImageView: the toolkit cannot know whether a run of meters is
+        // audio channels or core load, and a guessed description of a live pixel buffer would be a
+        // wrong alt text, which is believed, rather than a missing one, which is asked about.
+        // LunaP.md §24.2 states that division; this is the consumer's half of it.
+        private readonly MeterList _audio = new MeterList().AccessibleName("Audio channel levels");
+
+        private readonly RgbaImageView _palette = new RgbaImageView()
+            .AccessibleName("Palette")
+            .HelpText("The core's colour RAM, drawn as a grid of swatches.");
+
+        private readonly RgbaImageView _tileSheet = new RgbaImageView { Stretch = Stretch.Uniform }
+            .AccessibleName("VRAM tile sheet")
+            .HelpText("Every tile currently in video memory, drawn as one sheet.");
 
         public CoretopWindow() : this(null) { }
 

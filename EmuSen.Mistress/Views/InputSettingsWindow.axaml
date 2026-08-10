@@ -55,8 +55,17 @@
                                        Margin="24,2,0,8" />
                         <Grid ColumnDefinitions="Auto,240,Auto" Margin="24,0,0,0">
                             <TextBlock Grid.Column="0" Text="Stick deadzone" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <!-- The label is the TextBlock to its left, which a
+                                 screen reader has no reason to connect to it.
+                                 This was the one control in this window with no
+                                 name at all, and a nameless slider is worse than
+                                 a nameless button: it announces a bare number,
+                                 changing as you press an arrow key, with nothing
+                                 to say what it measures. LunaP.md §24.2. -->
                             <Slider Grid.Column="1"
                                     x:Name="DeadzoneSlider"
+                                    AutomationProperties.Name="Stick deadzone"
+                                    AutomationProperties.HelpText="How far the stick must travel before it counts as a direction."
                                     Minimum="0.05" Maximum="0.95"
                                     SmallChange="0.05" LargeChange="0.1"
                                     ValueChanged="OnDeadzoneChanged" />

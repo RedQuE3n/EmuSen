@@ -6,7 +6,10 @@ use std::ffi::{CStr, CString, c_char, c_uint, c_void};
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
+#[cfg(unix)]
 use libloading::os::unix::Library;
+#[cfg(windows)]
+use libloading::os::windows::Library;
 
 use crate::backend::{
     InputSchedule, MemorySpace, ProbeBackend, ProbeButton, ProbeOptions, ScreenFormat, ScreenView,
@@ -336,9 +339,15 @@ impl LibretroBackend {
 
 // "…/gambatte_libretro.so" -> "gambatte": the pre-load name, taken from the path
 // because retro_get_system_info needs a library this backend has not opened yet.
+// Every separator and every extension is handled on every host rather than
+// per-target, so the same core dumps into the same directory wherever it ran.
 fn core_stem(core_path: &str) -> String {
-    let file = core_path.rsplit('/').next().unwrap_or(core_path);
-    let stem = file.strip_suffix(".so").unwrap_or(file);
+    let file = core_path.rsplit(['/', '\\']).next().unwrap_or(core_path);
+    let stem = file
+        .strip_suffix(".so")
+        .or_else(|| file.strip_suffix(".dylib"))
+        .or_else(|| file.strip_suffix(".dll"))
+        .unwrap_or(file);
     let stem = stem.strip_suffix("_libretro").unwrap_or(stem);
     if stem.is_empty() { "libretro".to_string() } else { stem.to_ascii_lowercase() }
 }
@@ -375,12 +384,10 @@ impl ProbeBackend for LibretroBackend {
         self.shared.home_folder = CString::new(options.home_folder.as_str()).unwrap_or_default();
         SHARED.store(&raw mut *self.shared, Ordering::Relaxed);
 
-        // RTLD_NOW | RTLD_LOCAL, matching the C++: a core with an unresolved
-        // symbol should fail here rather than mid-frame.
-        let library = match unsafe { Library::open(Some(&self.core_path), libc_rtld_now_local()) } {
+        let library = match open_core(&self.core_path) {
             Ok(library) => library,
             Err(error) => {
-                println!("[ERROR] dlopen {}: {error}", self.core_path);
+                println!("[ERROR] loading {}: {error}", self.core_path);
                 return false;
             }
         };
@@ -580,8 +587,24 @@ fn cstr_or(text: *const c_char, fallback: &str) -> String {
     unsafe { CStr::from_ptr(text) }.to_string_lossy().into_owned()
 }
 
+// The guarantee wanted is the same on every host - a core with an unresolved
+// symbol fails at open rather than mid-frame - but only one host needs to ask
+// for it, which is why this is two functions and not a flag. See §3.54.
+#[cfg(unix)]
+fn open_core(path: &str) -> Result<Library, String> {
+    unsafe { Library::open(Some(path), libc_rtld_now_local()) }.map_err(|error| error.to_string())
+}
+
+// LoadLibrary resolves every import before it returns, so RTLD_NOW is the
+// default rather than an option, and RTLD_LOCAL has no PE equivalent to ask for.
+#[cfg(windows)]
+fn open_core(path: &str) -> Result<Library, String> {
+    unsafe { Library::new(path) }.map_err(|error| error.to_string())
+}
+
 // libloading does not re-export the dlopen flags, and the defaults are
 // RTLD_LAZY; the C++ asked for RTLD_NOW so a broken core fails at open.
+#[cfg(unix)]
 fn libc_rtld_now_local() -> i32 {
     const RTLD_NOW: i32 = 0x2;
     const RTLD_LOCAL: i32 = 0;
@@ -601,6 +624,22 @@ mod tests {
         assert_eq!(core_stem("/x/bsnes_mercury_performance_libretro.so"), "bsnes_mercury_performance");
         assert_eq!(core_stem("/x/Gambatte.so"), "gambatte");
         assert_eq!(core_stem(""), "libretro");
+    }
+
+    // The property that matters is agreement, not the extension: the same core
+    // must dump into the same directory whichever host ran it - see §3.54.
+    #[test]
+    fn the_same_core_names_itself_the_same_on_every_host() {
+        for stem in ["gambatte", "nestopia", "bsnes_mercury_performance"] {
+            let hosts = [
+                format!("/usr/lib64/libretro/{stem}_libretro.so"),
+                format!("/opt/emusen/{stem}_libretro.dylib"),
+                format!("C:\\Users\\red\\.cache\\emusen\\{stem}_libretro.dll"),
+            ];
+            for path in &hosts {
+                assert_eq!(core_stem(path), stem, "{path}");
+            }
+        }
     }
 
     #[test]

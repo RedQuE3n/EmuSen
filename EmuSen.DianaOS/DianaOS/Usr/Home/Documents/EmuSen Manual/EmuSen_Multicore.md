@@ -186,6 +186,24 @@ That turns out not to matter, and the reason is worth stating because it disting
 
 **What should not be folded in next:** `EmuSen.LunaP`. It shares no package with Endymion (six Avalonia packages against two SDL3 ones), neither names the other, and folding it in would put Avalonia on the dependency path of anything that just wants sound. It is also the one assembly whose core-free status has a real, roadmapped consumer.
 
+### 9.3 Why a deleted project appears to come back
+
+Both `EmuSen.Crystal` and `EmuSen.Nehellania` were reported as having returned, repeatedly, months after §9.1 and §9.2 deleted them. They had not. What survived was `bin/` and `obj/` — and because those are gitignored, **git cannot remove them and `git status` cannot see them**, so the directory stays in the file explorer with no source in it and looks exactly like a project that came back.
+
+The regeneration was traced rather than guessed, and the mechanism is ordinary:
+
+    02:51:34   checkout: moving from WiseMan to main
+    02:51:35   obj/Debug/net10.0/EmuSen.Nehellania.AssemblyInfo.cs written
+    02:51:53   merge WiseMan into main
+
+The deletion happened on `WiseMan`. `main` had not yet taken it, so checking `main` out restored the `.csproj`, an IDE design-time build regenerated `obj/` one second later, and the merge eighteen seconds after that deleted the tracked files again — leaving the build output behind. Every `ls` afterwards shows a folder. Nothing was rebuilding it; nothing had to.
+
+The general shape, worth carrying to any future pruning: **deleting a project from a branch does not delete it from the working tree.** The tracked files go, the ignored ones stay, and the leftovers are invisible to precisely the tool anyone would use to check. `git clean -xfd <path>` removes them; a plain `git clean -fd` does not, because it respects the ignore file.
+
+The corollary is that this can still happen once more per stale ref. `backup-prepurge-WiseMan` and `backup-prepurge-main` both still contain these projects, by design — checking either out and building will recreate the directories. That is the backups doing their job, not a recurrence.
+
+Both directories were removed on 2026-08-09 after confirming they contained no hand-written file: everything under them was SDK-generated (`AssemblyInfo.cs`, `GlobalUsings.g.cs`, `.cache`, `.deps.json`), nothing was tracked, and no `.csproj`, `.sln` entry or `ProjectReference` named either. The only surviving mention is the historical note in `EmuSen.Endymion.csproj`, which is correct and should stay.
+
 ---
 
 ## 10. The console context in Mistress

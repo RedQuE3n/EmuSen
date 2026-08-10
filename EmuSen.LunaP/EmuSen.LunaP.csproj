@@ -31,6 +31,20 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
+  <!-- Packed so EmuSen.Pegasus can consume the toolkit from its own repository
+       rather than a ProjectReference across a repo boundary. This does not
+       relax the layering rule above; it is what enforces it, because a package
+       cannot reach back up into a core. See EmuSen_LunaP.md §17. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>EmuSen.LunaP</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Tristan Pelland</Authors>
+    <Description>Shared Avalonia toolkit for EmuSen: theme, controls, window scaffolding and a fluent layout surface.</Description>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/RedQuE3n/EmuSen-Project</RepositoryUrl>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- Versions pinned to match EmuSen.Mistress exactly, the convention
          EmuSen.Serenity's csproj already follows. Desktop/Fonts.Inter/X11 are

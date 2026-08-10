@@ -76,7 +76,7 @@
          includes the same LunaTheme.axaml the real frontends do, instead of
          hand-building FluentTheme/Dark and risking a render pass over
          untemplated controls. See LunaP/LunaPaletteTests.cs. -->
-    <PackageReference Include="EmuSen.LunaP" Version="0.2.0" />
+    <PackageReference Include="EmuSen.LunaP" Version="0.3.0" />
   </ItemGroup>
 
 

@@ -21,6 +21,7 @@ using EmuSen.Endymion.Input;
 using EmuSen.Serenity.Dashboards;
 using EmuSen.Mistress.Input;
 using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Threading;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Galaxia.Library;
@@ -105,8 +106,17 @@ namespace EmuSen.Mistress.Views
             public required int Width;
             public required int Height;
         }
-        private FrameData? _pendingFrame;
-        private int _presentScheduled;
+        // "Newest wins, at most one UI-thread callback outstanding" is LunaP's Latest<T> now. This
+        // class, Hotaru's GameWindow and Serenity's FramePresenter each wrote it out identically,
+        // which is what argued it into the toolkit - and all three carried the same defect: the
+        // scheduled flag was cleared AFTER the hand-off, so a frame submitted while the UI thread
+        // was inside UpdateFrame could neither schedule a callback nor be picked up by the running
+        // one. It sat there until the next frame displaced it.
+        //
+        // Invisible at 60 fps, because the next frame arrives 16 ms later carrying the fix. Visible
+        // the moment the stream stops - pause, and the frame at risk is the last one drawn, which
+        // is the one somebody is about to sit and look at. LunaP.md §22.1.
+        private readonly Latest<FrameData> _frames;
 
         // Rebuilt on every LoadRom() call (see LoadRom below) so a shell
         // command run in _consoleWindow always sees whatever core is
@@ -193,6 +203,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
+            _frames = new Latest<FrameData>(PresentPendingFrame);
             InitializeComponent();
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole));
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
@@ -1200,12 +1211,7 @@ namespace EmuSen.Mistress.Views
         // see _pendingFrame's own field comment for why.
         private void SubmitFrame(byte[] pixels, int width, int height)
         {
-            Interlocked.Exchange(ref _pendingFrame, new FrameData { Pixels = pixels, Width = width, Height = height });
-
-            if (Interlocked.CompareExchange(ref _presentScheduled, 1, 0) == 0)
-            {
-                Dispatcher.UIThread.Post(PresentPendingFrame);
-            }
+            _frames.Offer(new FrameData { Pixels = pixels, Width = width, Height = height });
         }
 
         // Runs on the UI thread. Always presents whatever the newest frame
@@ -1217,22 +1223,9 @@ namespace EmuSen.Mistress.Views
         // hi-res width changes (SETINI bit 3) just fall out for free -
         // unlike the old WriteableBitmap this replaced, there's no fixed-
         // size backing surface to resize.
-        private void PresentPendingFrame()
+        private void PresentPendingFrame(FrameData frame)
         {
-            try
-            {
-                FrameData? frame = Interlocked.Exchange(ref _pendingFrame, null);
-                if (frame is null) return;
-                GameFrame.UpdateFrame(frame.Pixels, frame.Width, frame.Height);
-            }
-            finally
-            {
-                // Reset only after the copy/invalidate above finishes, so
-                // while a Present is actually running, _emuThread keeps
-                // overwriting _pendingFrame without scheduling another one -
-                // the coalescing this whole mechanism exists for.
-                Interlocked.Exchange(ref _presentScheduled, 0);
-            }
+            GameFrame.UpdateFrame(frame.Pixels, frame.Width, frame.Height);
         }
 
         private void OnExitClick(object? sender, RoutedEventArgs e)

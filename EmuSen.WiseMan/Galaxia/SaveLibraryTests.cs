@@ -1,10 +1,12 @@
 using System;
 using System.IO;
 using EmuSen.Galaxia.Library;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
     // The one spelling of what a ROM's save files are called - see EmuSen_Galaxia.md §5.
+    [Collection(TestCollections.ProcessGlobals)]
     public class SaveLibraryTests : IDisposable
     {
         public void Dispose() => DataStore.OverrideDirectory = null;

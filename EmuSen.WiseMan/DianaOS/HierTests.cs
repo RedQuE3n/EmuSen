@@ -6,10 +6,12 @@ using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaOS
 {
     // The shell's one-home layout - see `man hier` and EmuSen_Galaxia.md §3.
+    [Collection(TestCollections.ProcessGlobals)]
     public class HierTests
     {
         [Fact]

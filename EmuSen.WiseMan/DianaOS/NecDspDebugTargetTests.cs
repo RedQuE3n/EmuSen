@@ -9,6 +9,7 @@ using static EmuSen.WiseMan.Fixtures.NecDspFirmwareBuilder;
 namespace EmuSen.WiseMan.DianaOS
 {
     // The NEC DSP as a first-class debug CPU, through the shell - see `man cpus`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class NecDspDebugTargetTests
     {
         // 0: CALL 3   1: LD A   2: LD A   3: RET

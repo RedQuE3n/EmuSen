@@ -3,10 +3,12 @@ using System.IO;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
     // Where saved data resolves to, and that the shell now forwards here - see EmuSen_Galaxia.md §3.
+    [Collection(TestCollections.ProcessGlobals)]
     public class DataStoreTests : IDisposable
     {
         public void Dispose()

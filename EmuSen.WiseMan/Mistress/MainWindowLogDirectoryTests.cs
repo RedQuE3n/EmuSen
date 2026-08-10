@@ -14,6 +14,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Mistress
 {
     // A session's logs land under the console that ran them - see EmuSen_Multicore.md §12.
+    [Collection(TestCollections.ProcessGlobals)]
     public class MainWindowLogDirectoryTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

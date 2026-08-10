@@ -1,10 +1,12 @@
 using EmuSen.Cores.Debug;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using Gsu = EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx.SuperFx;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.HeadlessDebug
 {
     // The GSU half of the trace differ - see EmuSen_Debugging_Tools_Reference_v5.md §3.41.
+    [Collection(TestCollections.ProcessGlobals)]
     public class GsuTraceDiffTests
     {
         private const ushort Clsr = 0x3039, R15Low = 0x301E, R15High = 0x301F;

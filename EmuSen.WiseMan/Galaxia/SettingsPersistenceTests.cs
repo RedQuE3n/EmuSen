@@ -4,12 +4,14 @@ using EmuSen.Audio;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Graphics;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
     // The static settings hubs against their on-disk mirrors - see
     // EmuSen_Config_Reference.md §3.2 and §3.3. Both hubs are process-global
     // mutable state, so every value touched here is restored on the way out.
+    [Collection(TestCollections.ProcessGlobals)]
     public class SettingsPersistenceTests : IDisposable
     {
         private readonly string _dir;

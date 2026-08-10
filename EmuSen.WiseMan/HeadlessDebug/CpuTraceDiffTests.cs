@@ -1,10 +1,12 @@
 using EmuSen.Cores.Debug;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using Step = EmuSen.Cores.Nintendo.Venus.Debug.CpuTraceDiff.Step;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.HeadlessDebug
 {
     // The resyncing S-CPU trace differ - see EmuSen_Debugging_Tools_Reference_v5.md §3.40.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CpuTraceDiffTests
     {
         private static Step At(uint addr, ushort a = 0, uint cost = 8) =>
@@ -158,6 +160,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
     }
 
     // Its own class because CpuBinaryTrace is process-wide state, like DebugSettings.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CpuBinaryTraceRoundTripTests
     {
         [Fact]

@@ -8,6 +8,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.DianaOS
 {
     // Named debug CPUs and the scope word every command takes - see `man cpus`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CoprocessorDebugTests
     {
         private static SnesDebugTarget BuildTarget()

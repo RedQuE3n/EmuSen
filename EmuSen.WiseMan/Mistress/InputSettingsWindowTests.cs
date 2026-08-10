@@ -15,10 +15,12 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
 using EmuSen.Galaxia.Input;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
     // Rebind capture, driven through real Avalonia key events - see EmuSen_Settings_Reference.md §4.7.
+    [Collection(TestCollections.ProcessGlobals)]
     public class InputSettingsWindowTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

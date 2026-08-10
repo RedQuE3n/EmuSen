@@ -4,10 +4,12 @@ using System.Linq;
 using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
     // The one console context the library and both cheat windows share - see EmuSen_Multicore.md §10.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConsoleContextTests : IDisposable
     {
         private readonly string _configDir;

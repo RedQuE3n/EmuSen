@@ -8,6 +8,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.DianaOS
 {
     // `bp when` and `dma`, the fifth Mesen pass - see `man bp`, `man dma`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConditionBreakAndDmaTests
     {
         private static (SnesDebugTarget Target, EmuSen.Cores.Nintendo.Venus.VenusCore Core) Build(params (int Offset, byte[] Bytes)[] patches)

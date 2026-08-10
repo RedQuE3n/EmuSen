@@ -6,11 +6,13 @@ using EmuSen.Galaxia;
 using EmuSen.Endymion.Input;
 using SDL3;
 using EmuSen.Galaxia.Input;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
     // A config file that won't parse still falls back to defaults, but says
     // so and names the value - see EmuSen_Config_Reference.md §6.2.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConfigDiagnosticsTests : IDisposable
     {
         private readonly string _dir;

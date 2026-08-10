@@ -9,6 +9,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.DianaOS
 {
     // The live call stack and the step modes built on it - see `man bt` and `man step`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CallStackAndStepTests
     {
         // $008005 JSR $8010 / $008008 JMP $8008 / $008010 NOP NOP RTS.

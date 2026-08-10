@@ -11,6 +11,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.DianaOS
 {
     // `cheat db prune` - see `man cheat`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CheatPruneCommandTests : IDisposable
     {
         private readonly string _root;

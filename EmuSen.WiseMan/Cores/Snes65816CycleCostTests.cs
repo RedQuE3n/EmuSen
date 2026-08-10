@@ -1,9 +1,11 @@
 using EmuSen.Cores.Nintendo.Venus.Memory;
 using EmuSen.Cores.Nintendo.Venus.Processor;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
     // Master-clock cost per instruction, against Mesen's own - see Venus_CPU.md §8.8.
+    [Collection(TestCollections.ProcessGlobals)]
     public class Snes65816CycleCostTests
     {
         // Uniform 8 master clocks, so a 6-clock internal cycle is distinguishable.

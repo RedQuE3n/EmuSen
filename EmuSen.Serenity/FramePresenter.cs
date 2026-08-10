@@ -3,6 +3,7 @@ using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using EmuSen.Graphics;
+using EmuSen.LunaP.Threading;
 
 namespace EmuSen.Serenity
 {
@@ -28,8 +29,17 @@ namespace EmuSen.Serenity
             public required int Height;
         }
 
-        private FrameData? _pendingFrame;
-        private int _presentScheduled;
+        // "Newest wins, at most one UI-thread callback outstanding" - the mechanism this class,
+        // Mistress's MainWindow and Hotaru's GameWindow each wrote out identically, now the
+        // toolkit's. LunaP.md §22.1 records both the generalisation and the defect all three
+        // copies shared: they cleared the scheduled flag AFTER the hand-off, so a frame submitted
+        // while the UI thread was inside UpdateFrame could neither schedule a callback nor be
+        // collected by the running one, and sat there until the next frame pushed it out.
+        //
+        // At 60 fps that is invisible - the next frame arrives 16 ms later carrying the fix. It
+        // shows when the stream STOPS: pause the emulator and the frame at risk is the last one,
+        // which is the frame somebody is about to sit and look at.
+        private readonly Latest<FrameData> _frames;
 
         public ShaderEffect Effect
         {
@@ -54,6 +64,7 @@ namespace EmuSen.Serenity
 
         public FramePresenter()
         {
+            _frames = new Latest<FrameData>(PresentPendingFrame);
             _control = new GameFrameControl();
             _window = new Window
             {
@@ -69,31 +80,15 @@ namespace EmuSen.Serenity
 
         public bool IsOpen() => _isOpen;
 
-        public void Present(byte[] rgba, int width, int height)
-        {
-            Interlocked.Exchange(ref _pendingFrame, new FrameData { Rgba = rgba, Width = width, Height = height });
-
-            if (Interlocked.CompareExchange(ref _presentScheduled, 1, 0) == 0)
-            {
-                Dispatcher.UIThread.Post(PresentPendingFrame);
-            }
-        }
+        public void Present(byte[] rgba, int width, int height) =>
+            _frames.Offer(new FrameData { Rgba = rgba, Width = width, Height = height });
 
         // Presents the newest frame at the moment it runs; stale ones drop by design - see EmuSen_Serenity.md §4.
-        private void PresentPendingFrame()
+        private void PresentPendingFrame(FrameData frame)
         {
-            try
-            {
-                FrameData? frame = Interlocked.Exchange(ref _pendingFrame, null);
-                if (frame == null || !_isOpen) return;
+            if (!_isOpen) return;
 
-                _control.UpdateFrame(frame.Rgba, frame.Width, frame.Height);
-            }
-            finally
-            {
-                // Reset after the hand-off, so an in-flight Present keeps coalescing - see EmuSen_Serenity.md §4.
-                Interlocked.Exchange(ref _presentScheduled, 0);
-            }
+            _control.UpdateFrame(frame.Rgba, frame.Width, frame.Height);
         }
 
         public void Shutdown()

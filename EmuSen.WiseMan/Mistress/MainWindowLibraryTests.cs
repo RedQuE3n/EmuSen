@@ -18,6 +18,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Mistress
 {
     // The library screen and the switch to the game screen - see EmuSen_Settings_Reference.md §4.11.
+    [Collection(TestCollections.ProcessGlobals)]
     public class MainWindowLibraryTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

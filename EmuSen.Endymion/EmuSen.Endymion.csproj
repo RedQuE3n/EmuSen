@@ -23,6 +23,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Avalonia's base package only - Input/DefaultPadKeyMap.cs maps
+         Avalonia.Input.Key onto PadButton, which is the same subject
+         GamepadBindingMap already owns. Not Desktop, not Themes: nothing here
+         draws anything - see EmuSen_Input.md §4.3. -->
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- PadButton and ConfigFile, which GamepadBindingMap is keyed by and
          persists through. The only reference, and Galaxia is itself
          core-free, so nothing arrives transitively - see EmuSen_Input.md §4. -->

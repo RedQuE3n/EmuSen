@@ -2,11 +2,13 @@ using System;
 using System.IO;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.Galaxia;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
     // Where config resolves to, and the delegation that keeps one root
     // discovery in the project - see EmuSen_Config_Reference.md §1.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConfigStoreTests : IDisposable
     {
         public void Dispose() => ConfigStore.OverrideDirectory = null;

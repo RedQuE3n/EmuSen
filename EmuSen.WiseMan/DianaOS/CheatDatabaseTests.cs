@@ -18,6 +18,7 @@ namespace EmuSen.WiseMan.DianaOS
 {
     // The cheat database: using a tree the user already has, and fetching
     // one on request. EmuSen redistributes no cheat data - see `man cheat`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CheatDatabaseTests : IDisposable
     {
         private readonly string _root;

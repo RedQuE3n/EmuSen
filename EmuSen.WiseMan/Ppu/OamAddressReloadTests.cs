@@ -8,6 +8,7 @@ namespace EmuSen.WiseMan.Ppu
     // Kong Country is the game that needs it: it never writes $2102/$2103
     // at all after setup, and DMAs all 544 OAM bytes to $2104 each frame,
     // trusting the reload to put the pointer back at 0.
+    [Collection(TestCollections.ProcessGlobals)]
     public class OamAddressReloadTests
     {
         private const uint OamAddL = 0x2102;

@@ -4,10 +4,12 @@ using EmuSen.Common;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.Endymion;
 using SDL3;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Audio
 {
     // Audio-behind-video regression coverage - see EmuSen_Settings_Reference.md §2.
+    [Collection(TestCollections.ProcessGlobals)]
     public class AudioLatencyDriftTests
     {
         static AudioLatencyDriftTests()

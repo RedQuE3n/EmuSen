@@ -33,27 +33,27 @@ namespace EmuSen.WiseMan.Common
             Assert.Same(audio, input);
         }
 
-        // The model both of the above are held to - see EmuSen_Audio_Sync.md §7.
+        // The core-agnostic Avalonia layer: it took CoretopWindow when the toolkit had to stop naming EmuSen - see EmuSen_LunaP.md §19.3.
         [Fact]
-        public void Serenity_references_only_Galaxia()
+        public void Serenity_references_only_core_free_leaves()
         {
             Assembly serenity = typeof(EmuSen.Serenity.GameFrameControl).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(serenity));
+            Assert.Equal(new[] { "EmuSen.Cauldron", "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
         }
 
-        // The launcher's whole value is browsing a library with no core loaded - see EmuSen_LunaP.md §1, and §16 for why Cauldron is on the list.
+        // LunaP is a package from another repository now, and this is what would notice the split quietly regressing - see EmuSen_LunaP.md §4.
         [Fact]
-        public void LunaP_references_only_Galaxia_and_Cauldron()
+        public void LunaP_references_nothing_of_EmuSen()
         {
             Assembly lunaP = typeof(EmuSen.LunaP.Controls.MeterRow).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.Cauldron", "EmuSen.Galaxia" }, EmuSenReferencesOf(lunaP));
+            Assert.Empty(EmuSenReferencesOf(lunaP));
         }
 
-        // The precondition §16's amendment rests on: a reference added to Cauldron would reach LunaP transitively and silently.
+        // Cauldron is still a leaf, and Serenity now depends on that the way LunaP used to - see EmuSen_LunaP.md §16.
         [Fact]
-        public void Cauldron_is_a_leaf_so_LunaP_inherits_nothing_through_it()
+        public void Cauldron_is_a_leaf_so_Serenity_inherits_nothing_through_it()
         {
             Assembly cauldron = typeof(EmuSen.Cauldron.ICoreTelemetry).Assembly;
 

@@ -9,10 +9,12 @@ using Avalonia.Interactivity;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
     // The Prune button's two-stage confirm - see EmuSen_Settings_Reference.md §4.16.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CheatDatabasePruneWindowTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

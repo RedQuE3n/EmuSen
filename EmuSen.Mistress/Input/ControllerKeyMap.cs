@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Avalonia.Input;
 using EmuSen.Galaxia.Input;
-using EmuSen.LunaP.Input;
+using EmuSen.Endymion.Input;
 
 namespace EmuSen.Mistress.Input
 {

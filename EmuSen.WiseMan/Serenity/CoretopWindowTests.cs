@@ -1,11 +1,11 @@
 using System.Threading.Tasks;
 using System.Linq;
 using Avalonia.Controls;
-using EmuSen.LunaP.Dashboards;
+using EmuSen.Serenity.Dashboards;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.WiseMan.LunaP;
 
-namespace EmuSen.WiseMan.LunaP
+namespace EmuSen.WiseMan.Serenity
 {
     // The GUI half of `coretop`, now one window rather than one per frontend - see EmuSen_LunaP.md §16.
     public class CoretopWindowTests

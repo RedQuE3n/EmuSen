@@ -4,11 +4,13 @@ using System.Linq;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
     // Saved cheat sets, and the hex-text on-disk shape that makes them
     // editable from the shell - see EmuSen_Config_Reference.md §3.4.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CheatFileTests : IDisposable
     {
         private readonly string _dir;

@@ -4,6 +4,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Cores
 {
     // Venus's folded timeline: the master clock and the line overshoot it carries - see Venus_CPU.md §8.5a.
+    [Collection(TestCollections.ProcessGlobals)]
     public class VenusTimelineTests
     {
         [Fact]

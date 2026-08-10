@@ -9,6 +9,7 @@ namespace EmuSen.WiseMan.Memory
     // the local dump is a European (country $02) cartridge, and it stops on
     // Nintendo's "not designed for your SUPER NES" lockout screen unless the
     // console reports itself as PAL.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConsoleRegionTests
     {
         private const uint Stat78 = 0x213F;

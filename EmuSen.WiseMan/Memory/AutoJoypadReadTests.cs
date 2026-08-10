@@ -8,6 +8,7 @@ namespace EmuSen.WiseMan.Memory
     // $4212 bit 0 and the auto-joypad-read window it reports - see
     // Venus_Memory.md §4.4. The window is a pure function of scanline and
     // line cycles, so most of this needs no core at all.
+    [Collection(TestCollections.ProcessGlobals)]
     public class AutoJoypadReadTests
     {
         private const int Vblank = InterruptController.AutoJoypadScanline;

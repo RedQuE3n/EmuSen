@@ -15,6 +15,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Mistress
 {
     // Pause/Reset/Close Game - see EmuSen_Settings_Reference.md §4.12.
+    [Collection(TestCollections.ProcessGlobals)]
     public class MainWindowEmulationMenuTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

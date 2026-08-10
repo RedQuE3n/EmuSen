@@ -17,6 +17,7 @@ namespace EmuSen.WiseMan.Mistress
 {
     // Who owns the cheat list, and what a ROM change does to it - see
     // EmuSen_Settings_Reference.md §4.14.
+    [Collection(TestCollections.ProcessGlobals)]
     public class MainWindowCheatListTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

@@ -118,6 +118,8 @@ It now lives on `EmuSen/Cores/CoreOptions.cs` and both cartridges read it. Venus
 
 This is the pattern for any future switch that is a *property of the run* rather than of one console. It is deliberately not on `ICore`: it has to be set **before** `LoadRom`, which is exactly when there is no core to set it on.
 
+**"Before `LoadRom`" is now enforced rather than assumed.** Mercury and Moon always honoured it — each reads the flag once in `LoadSram()` during `LoadRom` and latches the result. Venus did not: it re-read the static on every save and every load, so a switch flipped after a cartridge existed still reached it. `Cartridge` now takes a copy at construction, with an optional `bool? batteryRamDisabled` parameter for a caller that wants to name the value instead of inheriting it. Nothing in the project assigns the switch after a cartridge exists, so this changes no behaviour any frontend can observe — what it changes is that a *second* run in the same process can no longer disturb the first, which is what let the test suite stop serializing every cartridge test. `EmuSen_Debugging_Tools_Reference_v5.md` §3.56 has the measurement and the guard test.
+
 ---
 
 ## 7. What is still core-specific, on purpose

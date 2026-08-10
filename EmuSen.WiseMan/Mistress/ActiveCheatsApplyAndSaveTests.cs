@@ -11,10 +11,12 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
     // The Apply and Save buttons - see EmuSen_Settings_Reference.md §4.15.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ActiveCheatsApplyAndSaveTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

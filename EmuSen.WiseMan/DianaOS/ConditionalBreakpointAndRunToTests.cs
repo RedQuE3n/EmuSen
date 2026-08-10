@@ -8,6 +8,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.DianaOS
 {
     // Conditional breakpoints and `runto` - see `man bp` and `man runto`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConditionalBreakpointAndRunToTests
     {
         private static SnesDebugTarget BuildTarget()

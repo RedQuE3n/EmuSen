@@ -8,6 +8,7 @@ namespace EmuSen.WiseMan.HeadlessDebug
     // FrameRunner is the one shared frame-stepping primitive the classic
     // loop and --commands mode both drive - see FrameRunner.cs's own
     // comment for why it replaced two separately-drifting implementations.
+    [Collection(TestCollections.ProcessGlobals)]
     public class FrameRunnerTests
     {
         private static (EmuSen.Cores.Nintendo.Venus.VenusCore Core, List<string> Log) NewCoreAndLog()

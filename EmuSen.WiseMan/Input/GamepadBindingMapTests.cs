@@ -3,11 +3,13 @@ using EmuSen.Cores;
 using EmuSen.Endymion.Input;
 using SDL3;
 using EmuSen.Galaxia.Input;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Input
 {
     // Pins the on-disk bindings contract across the SDL2 -> SDL3 migration -
     // see EmuSen_Settings_Reference.md §4.6.
+    [Collection(TestCollections.ProcessGlobals)]
     public class GamepadBindingMapTests
     {
         // Verbatim gamepadbindings.json written by the Silk.NET.SDL build.

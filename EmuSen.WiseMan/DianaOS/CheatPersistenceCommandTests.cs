@@ -12,6 +12,7 @@ namespace EmuSen.WiseMan.DianaOS
 {
     // `cheat save`/`load`/`files` against a real target - see
     // EmuSen_Config_Reference.md §3.4 and `man cheat`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CheatPersistenceCommandTests : IDisposable
     {
         private readonly string _dir;

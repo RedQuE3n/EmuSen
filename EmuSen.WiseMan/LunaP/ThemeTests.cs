@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
 using EmuSen.Galaxia;
+using EmuSen.LunaP.Settings;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
@@ -16,18 +17,22 @@ namespace EmuSen.WiseMan.LunaP
     {
         private readonly string _configDir;
 
+        // What LunaP reported, captured through the hook a host normally owns.
+        private string? _reported;
+
         public ThemeTests()
         {
             _configDir = Path.Combine(Path.GetTempPath(), "lunap-theme-" + Guid.NewGuid().ToString("N"));
-            ConfigStore.OverrideDirectory = _configDir;
-            ConfigDiagnostics.Reset();
+            LunaSettings.Store = new JsonSettingsStore(_configDir);
+            _reported = null;
+            LunaSettings.Diagnostics = m => _reported = m;
         }
 
         // The applied dictionary is global to the headless application, so every test here has to put it back.
         public void Dispose()
         {
             UiTest.Run(() => LunaTheme.Apply(LunaTheme.BuiltIn)).GetAwaiter().GetResult();
-            ConfigStore.OverrideDirectory = null;
+            LunaSettings.Store = new JsonSettingsStore(Path.Combine(Path.GetTempPath(), "lunap-unset"));
             if (Directory.Exists(_configDir)) Directory.Delete(_configDir, recursive: true);
         }
 
@@ -143,7 +148,7 @@ namespace EmuSen.WiseMan.LunaP
 
             Assert.False(LunaTheme.Apply("Broken"));
             Assert.Equal(Color.Parse("#9CDCFE"), Brush(header));
-            Assert.Contains("Broken", ConfigDiagnostics.LastMessage ?? "");
+            Assert.Contains("Broken", _reported ?? "");
 
             window.Close();
         });
@@ -152,7 +157,7 @@ namespace EmuSen.WiseMan.LunaP
         public Task A_missing_theme_is_refused_rather_than_throwing() => UiTest.Run(() =>
         {
             Assert.False(LunaTheme.Apply("NoSuchTheme"));
-            Assert.Contains("NoSuchTheme", ConfigDiagnostics.LastMessage ?? "");
+            Assert.Contains("NoSuchTheme", _reported ?? "");
         });
 
         [Fact]

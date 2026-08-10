@@ -272,7 +272,13 @@ The gallery is held to it, since it is the kit's own baseline target.
 
 ### 13.4 The layering rule is now enforced
 
-`Common/LeafAssemblyTests.cs` already pinned Endymion, Serenity and Galaxia to their allowed references. **LunaP is in that list now**, asserting it references `EmuSen.Galaxia` and nothing else, and that it never reaches the core assembly. §1's rule was documentation until this phase; adding one `ProjectReference` in a hurry is exactly the kind of thing that would otherwise go unnoticed until the launcher inherited the emulator.
+`Common/LeafAssemblyTests.cs` already pinned Endymion, Serenity and Galaxia to their allowed references. **LunaP is in that list now.** §1's rule was documentation until this phase; adding one `ProjectReference` in a hurry is exactly the kind of thing that would otherwise go unnoticed until the launcher inherited the emulator.
+
+What it asserts has since tightened twice: first to `EmuSen.Galaxia` and `EmuSen.Cauldron`, then — when the toolkit was made extractable — to **nothing at all**, as `LunaP_references_nothing_of_EmuSen`. Serenity's own assertion widened to `Cauldron, Galaxia, LunaP` in the same change, because it took what LunaP put down.
+
+**A blind spot worth knowing about, found by sabotaging this guard and watching it pass.** These tests read `Assembly.GetReferencedAssemblies()`, and the C# compiler elides a reference used *only* for `const` values, because a constant is inlined at the call site. A first attempt to make the guard fail added a `ProjectReference` back to Galaxia and used `ConfigStore.ProgramDirName` — a `const string` — and the built assembly named Galaxia nowhere. The guard was correct and the sabotage was not. Repeating it against `ConfigStore.Directory`, an ordinary static property, reddened it immediately.
+
+The consequence is real and applies to every assertion in that file: **a project can depend on another project's constants and these tests cannot see it.** That is a narrow hole — a `const` carries no behaviour, so nothing it inlines can drag an emulator in — but a reader should not believe the guard covers more than it does.
 
 ---
 
@@ -433,19 +439,31 @@ The gap between facet and search sits on the *dropdown*, so it collapses with it
 
 ---
 
-## 15. `Input/DefaultPadKeyMap`
+## 15. `Input/DefaultPadKeyMap` — moved to `EmuSen.Endymion`
+
+**This no longer lives here.** It is `EmuSen.Endymion/Input/DefaultPadKeyMap.cs`, in the namespace `EmuSen.Endymion.Input`, and `EmuSen_Input.md` §4.3 is now the section that describes it. Everything below is kept because the reasoning that put it here is what decided where it went instead — see §19.3.
 
 The keyboard scheme both frontends start from — arrows for the d-pad, `Z`/`X`/`A`/`S` for B/A/Y/X, `Q`/`W` for the shoulders, `Enter`/`RightShift` for Start/Select — plus the `Key → PadButton` reverse lookup they both need.
 
 **It was spelled twice**, in Hotaru's `HotaruKeyMap` and Mistress's `ControllerKeyMap`, along with two copies of the reverse-lookup loop. A test asserted the two tables stayed equal, which is the shape of a problem being *guarded* rather than *fixed*.
 
-**Why here and not in `EmuSen.Galaxia`, which is where the config models live.** Galaxia's csproj states the constraint plainly: it is a leaf with no `ProjectReference` and no `PackageReference`, because `EmuSen.DianaOS` references it and `EmuSen` references DianaOS — anything Galaxia depended on upward would close a cycle. So **Galaxia cannot name `Avalonia.Input.Key`**, and "the typed maps that use foreign enums keep their own homes" is that csproj's own conclusion. This table needs `Key` *and* `PadButton`, and LunaP is the one project that already references both Avalonia and Galaxia.
+**Why here and not in `EmuSen.Galaxia`, which is where the config models live.** Galaxia's csproj states the constraint plainly: it is a leaf with no `ProjectReference` and no `PackageReference`, because `EmuSen.DianaOS` references it and `EmuSen` references DianaOS — anything Galaxia depended on upward would close a cycle. So **Galaxia cannot name `Avalonia.Input.Key`**, and "the typed maps that use foreign enums keep their own homes" is that csproj's own conclusion. This table needs `Key` *and* `PadButton`, and LunaP was the one project that already referenced both Avalonia and Galaxia.
+
+**And that is exactly why it had to leave.** "The one project that references both" was a statement about this repository, not about the toolkit's subject. A general Avalonia toolkit has no business naming a console gamepad button, and the argument above never claimed otherwise — it argued from what was convenient. Endymion already owns the mapping of physical input onto `PadButton` (`GamepadBindingMap`), already references Galaxia, and is already referenced by both frontends; it took one `Avalonia` base package reference to hold this file too, which is a smaller price than a toolkit that cannot leave the repository.
 
 `Bindings()` returns a **fresh dictionary per call**, not a shared readonly instance: Mistress rebinds into its copy, and a shared instance would leak one frontend's edits into the other.
 
 ---
 
-## 16. `Dashboards/` — and the one amendment to the layering rule
+## 16. `Dashboards/` — moved to `EmuSen.Serenity`
+
+**This no longer lives here either.** `CoretopWindow` is `EmuSen.Serenity/Dashboards/CoretopWindow.cs`, in the namespace `EmuSen.Serenity.Dashboards`, and the amendment below was withdrawn with it — §1's rule is back to its unamended form and is now stricter than it ever was: Avalonia and nothing else.
+
+The amendment was not wrong. Cauldron is a dependency-free leaf and referencing it really did cost a consumer one small interfaces assembly rather than an emulator. What changed is the question being asked. It stopped being "does this reference hand the launcher a core" and became "can somebody outside this repository resolve it at all" — see §19. A reference to anything called EmuSen fails that second test whatever it costs.
+
+Serenity took it because Serenity already *is* the core-agnostic Avalonia layer: it presents game frames while taking `(byte[] rgba, int w, int h)` rather than an `ICore`, which is the same standard a dashboard reading `ICoreTelemetry` is held to. It gained `EmuSen.LunaP` and `EmuSen.Cauldron`, both core-free, and `LeafAssemblyTests` pins the new list.
+
+Everything below is the original reasoning, kept.
 
 `Dashboards/` holds windows that are LunaP chrome plus an `ICoreTelemetry`. `CoretopWindow` is the only one today.
 
@@ -474,7 +492,7 @@ Two behaviours that are load-bearing and non-obvious, both pinned by tests:
 - **`UpdateTarget(null)` is a real state**, not a defensive check — the window drops to "No ROM loaded." That text is a plain muted `TextBlock` and **not** a `HintText`, because it is the window's whole content in that state rather than an explanation under something. `HintText` is 11 pt by definition, and using it here measured 11,060 pixels wrong (§12.1).
 - **The sprite bar stays on screen at zero when no core is loaded.** It is a fixed part of the layout, not a per-core meter. The natural assumption is that the empty state draws no `ProgressBar`; it draws exactly one.
 
-The two frontends' `CoretopWindowTests` merged too. Mistress's was a strict superset — it covered the no-tile-memory case and the `UpdateTarget(null)` unload — so the merged file is its body, in `EmuSen.WiseMan/LunaP/`. What was genuinely dropped is the second pair of render baselines: with one window class there is one render to pin, and a second baseline under another name asserted the same pixels twice.
+The two frontends' `CoretopWindowTests` merged too. Mistress's was a strict superset — it covered the no-tile-memory case and the `UpdateTarget(null)` unload — so the merged file is its body, now in `EmuSen.WiseMan/Serenity/` beside the code it tests. What was genuinely dropped is the second pair of render baselines: with one window class there is one render to pin, and a second baseline under another name asserted the same pixels twice.
 
 ---
 
@@ -538,3 +556,48 @@ changes under Pegasus, that gap is what will be felt.
 - **`EmuSen_Launcher_Multicore_Gameplan.md`** — the launcher this project is eventually for. Its Phase 4 (theming) is why §2's palette is a resource dictionary rather than a set of constants.
 - **`EmuSen_Cauldron.md`** — `ICoreTelemetry` and the snapshot/provider contract §16's dashboards consume; §3.1 for the Cauldron-versus-`IDebugTarget` split that keeps this reference safe.
 - **`EmuSen_Core_Naming_Scheme.md` §11** — the name reservation and the `Luna`/`LunaP` collision note, plus the closing note on §16.1's near-miss.
+- **`EmuSen_Input.md` §4.3** — `DefaultPadKeyMap`, in the project that owns it now.
+
+## 19. Cutting the toolkit loose
+
+`EmuSen.Pegasus` consumes LunaP from another repository already (§17), and it has turned out to be worth more than that: a general Avalonia toolkit — theme, chrome, remembered geometry, a fluent layout surface — is useful to people who will never run an emulator. The goal is its own repository, so it can be taken on its own terms.
+
+That goal changes the question §16's amendment was answering. It stopped being *"does this reference hand a launcher a core"*, where `EmuSen.Cauldron` passed honestly, and became *"can somebody outside this repository resolve this at all"*, where nothing named EmuSen passes. `LunaP_references_nothing_of_EmuSen` is that question written as an assertion.
+
+Three things carried the old references, and each went somewhere different:
+
+| What | Reference | Where it went |
+|---|---|---|
+| `Windowing/WindowPlacementStore.cs`, `Theme/LunaTheme.cs` | `Galaxia.ConfigFile`, `ConfigStore`, `ConfigDiagnostics` | §19.1 — a seam, so the toolkit keeps the behaviour and stops naming the provider |
+| `Input/DefaultPadKeyMap.cs` | `Galaxia.Input.PadButton` | `EmuSen.Endymion` — §15 |
+| `Dashboards/CoretopWindow.cs` | `Cauldron.ICoreTelemetry` | `EmuSen.Serenity` — §16 |
+
+**No new project was created, and §16.1 is why.** That section records a whole assembly being stood up — csproj, solution entry, references from three projects, a codename out of a finite pool — to hold one 137-line file, and deleted the same day. The same file was in play here. Two files needing a home is a stronger case than one, and it was still the wrong shape: each file has a subject, and each subject already had a project that owned it. Input mapping is Endymion's. A core-agnostic Avalonia window is Serenity's. Asking "what is this file *about*" got a better answer than asking "what does it *reference*".
+
+### 19.1 The settings seam
+
+`Settings/ISettingsStore.cs` is three methods — `Directory(category)`, `Load<T>`, `Save<T>` — and `Settings/LunaSettings.cs` holds the one the host has chosen, plus a `Diagnostics` sink for "this file would not load, and why".
+
+`Settings/JsonSettingsStore.cs` is the default, and it is deliberately a near-copy of what Galaxia's `ConfigFile` does for these two files: indented JSON, comments and trailing commas tolerated, case-insensitive properties, and a full-write-then-rename so an interrupted save leaves the previous file intact rather than a truncated one. A toolkit that only worked when a host supplied a store would be a toolkit with a required setup step, so `LunaSettings.Store` resolves on first use to a store named after the entry assembly.
+
+Two things Galaxia's `ConfigFile` does that this does not, both deliberate:
+
+- **No migration from a legacy directory.** That is a fact about EmuSen's own history and belongs to the host, which can hand LunaP a store pointed wherever it likes.
+- **No `SuggestingEnumConverterFactory`.** It exists for config files full of enum names; LunaP stores a `Dictionary<string, WindowPlacement>` and a one-string `ThemeChoice`, neither of which has an enum in it.
+
+The two files themselves — `windows.json` and `luna.json` — are unchanged in name, location and content for EmuSen, because §19.2 points the store at the same directory.
+
+### 19.2 What the frontends do about it
+
+Two lines each, in `Program.cs`, beside the `ConfigDiagnostics.Sink` line that was already there:
+
+    LunaSettings.Store = new JsonSettingsStore(ConfigStore.Directory);
+    LunaSettings.Diagnostics = ConfigDiagnostics.Report;
+
+That is the whole adapter, and its being two lines rather than a class is why no project was needed to hold it. EmuSen's files stay where EmuSen puts them and its diagnostics keep arriving on its own sink.
+
+The three test fixtures that used to redirect `ConfigStore.OverrideDirectory` now assign `LunaSettings.Store` instead, which is a small improvement on top: they exercise the seam the toolkit actually ships rather than a provider it no longer knows about. `ThemeTests` and `CssThemeTests` capture through `LunaSettings.Diagnostics` for the same reason.
+
+### 19.3 What is left before it can move
+
+The references are gone and the guard holds. What has not been done: the repository itself, a `README` written for somebody who has never heard of EmuSen, and the package version stamping — LunaP, Cauldron, Galaxia and `EmuSen.Pegasus.Core` are all `0.1.0` and static, which is the root of the folder-feed trap `EmuSen.Chariot`'s `NuGet.config` records. Nothing in this section is blocked on that; it is the next thing.

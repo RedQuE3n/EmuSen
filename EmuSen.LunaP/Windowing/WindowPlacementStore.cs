@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
-using EmuSen.Galaxia;
+using EmuSen.LunaP.Settings;
 
 namespace EmuSen.LunaP.Windowing
 {
@@ -19,16 +19,20 @@ namespace EmuSen.LunaP.Windowing
     // One windows.json keyed by ToolWindow.WindowKey; opt-in, so a window without a key is never remembered.
     public static class WindowPlacementStore
     {
-        private static readonly ConfigFile<Dictionary<string, WindowPlacement>> File = new("windows.json");
+        public const string FileName = "windows.json";
+
+        // Read through LunaSettings.Store rather than a captured file object: a host may replace the store after this type is first touched.
+        private static Dictionary<string, WindowPlacement> All() =>
+            LunaSettings.Store.Load<Dictionary<string, WindowPlacement>>(null, FileName) ?? new Dictionary<string, WindowPlacement>();
 
         public static WindowPlacement? Load(string key) =>
-            File.Load(() => new Dictionary<string, WindowPlacement>()).TryGetValue(key, out WindowPlacement? p) ? p : null;
+            All().TryGetValue(key, out WindowPlacement? p) ? p : null;
 
         public static void Save(string key, WindowPlacement placement)
         {
-            Dictionary<string, WindowPlacement> all = File.Load(() => new Dictionary<string, WindowPlacement>());
+            Dictionary<string, WindowPlacement> all = All();
             all[key] = placement;
-            File.Save(all);
+            LunaSettings.Store.Save(null, FileName, all);
         }
 
         // A monitor that is no longer attached would otherwise restore a window off every screen, where it cannot be dragged back.

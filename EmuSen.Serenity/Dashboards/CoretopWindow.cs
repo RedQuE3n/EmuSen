@@ -9,9 +9,9 @@ using EmuSen.LunaP.Fluent;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
 
-namespace EmuSen.LunaP.Dashboards
+namespace EmuSen.Serenity.Dashboards
 {
-    // The GUI counterpart to DianaOS's own `coretop` - see `man coretop`, and EmuSen_LunaP.md §16 for why one copy now serves both frontends.
+    // The GUI counterpart to DianaOS's own `coretop` - see `man coretop`, and EmuSen_LunaP.md §16 for why it is here rather than in the toolkit.
     public class CoretopWindow : PollingWindow
     {
         private ICoreTelemetry? _target;

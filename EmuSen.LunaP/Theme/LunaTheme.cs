@@ -6,7 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
-using EmuSen.Galaxia;
+using EmuSen.LunaP.Settings;
 
 namespace EmuSen.LunaP.Theme
 {
@@ -26,7 +26,10 @@ namespace EmuSen.LunaP.Theme
         // Tried in this order, so a name spelled both ways resolves to the .axaml - see EmuSen_LunaP.md §12.2.
         public static readonly IReadOnlyList<string> Extensions = new[] { Extension, CssExtension };
 
-        private static readonly ConfigFile<ThemeChoice> Choice = new("luna.json");
+        public const string ChoiceFileName = "luna.json";
+
+        // The category the themes folder is, which is also the shape cheats/<name>.json already uses - see `man hier`.
+        public const string ThemeCategory = "themes";
 
         // The one dictionary a theme's keys live in; kept so applying a second theme replaces rather than stacks.
         private static ResourceDictionary? _applied;
@@ -49,8 +52,7 @@ namespace EmuSen.LunaP.Theme
             root.Content = content;
         }
 
-        // /etc/EmuSen/themes, the same category shape cheats/<name>.json already uses - see `man hier`.
-        public static string Directory => Path.GetDirectoryName(ConfigStore.For("themes", "x"))!;
+        public static string Directory => LunaSettings.Store.Directory(ThemeCategory);
 
         // Built-in first, then whatever is on disk, alphabetically. A name is listed once however many formats spell it.
         public static IReadOnlyList<string> Available()
@@ -74,12 +76,12 @@ namespace EmuSen.LunaP.Theme
             if (!TryApply(name)) return false;
 
             Current = name;
-            Choice.Save(new ThemeChoice { Name = name });
+            LunaSettings.Store.Save(null, ChoiceFileName, new ThemeChoice { Name = name });
             return true;
         }
 
         // The saved name, whether or not it still resolves to a readable theme.
-        public static string Saved => Choice.Load(() => new ThemeChoice()).Name;
+        public static string Saved => (LunaSettings.Store.Load<ThemeChoice>(null, ChoiceFileName) ?? new ThemeChoice()).Name;
 
         // Called once at startup. A theme since deleted or broken falls back to built-in without overwriting the saved choice,
         // so fixing the file and restarting is enough to get it back.
@@ -104,7 +106,7 @@ namespace EmuSen.LunaP.Theme
             string? path = Resolve(name);
             if (path is null)
             {
-                ConfigDiagnostics.Report($"theme '{name}' not found in {Directory}.");
+                LunaSettings.Report($"theme '{name}' not found in {Directory}.");
                 return false;
             }
 
@@ -156,14 +158,14 @@ namespace EmuSen.LunaP.Theme
             CssThemeResult css = CssTheme.Parse(File.ReadAllText(path));
 
             // Skipped rules are reported but do not refuse the theme - see EmuSen_LunaP.md §12.2.
-            if (css.Warnings.Count > 0) ConfigDiagnostics.Report($"{path}: {string.Join(" ", css.Warnings)}");
+            if (css.Warnings.Count > 0) LunaSettings.Report($"{path}: {string.Join(" ", css.Warnings)}");
 
             return (css.Resources, css.Styles);
         }
 
         private static (ResourceDictionary, Styles?)? Reported(string path, string why)
         {
-            ConfigDiagnostics.Report($"{path}: {why} Falling back to the previous theme.");
+            LunaSettings.Report($"{path}: {why} Falling back to the previous theme.");
             return null;
         }
 

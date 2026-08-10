@@ -18,7 +18,7 @@ using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus.Debug;
 using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
-using EmuSen.LunaP.Dashboards;
+using EmuSen.Serenity.Dashboards;
 using EmuSen.Mistress.Input;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;

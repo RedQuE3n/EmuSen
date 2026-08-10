@@ -31,6 +31,14 @@
          EmuSen_Config_Reference.md §3.3. The only reference this
          presentation-layer project has. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+    <!-- Dashboards/CoretopWindow.cs is a LunaP PollingWindow reading Cauldron's
+         read-only telemetry contracts. It lived in the toolkit until the
+         toolkit had to stop naming anything of EmuSen's - see EmuSen_LunaP.md
+         §16 and §19.3. Both are core-free: Cauldron is a dependency-free leaf
+         and LunaP now references nothing but Avalonia, so this stays the
+         core-agnostic layer it already was. -->
+    <ProjectReference Include="..\EmuSen.LunaP\EmuSen.LunaP.csproj" />
+    <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
   </ItemGroup>
 
 </Project>

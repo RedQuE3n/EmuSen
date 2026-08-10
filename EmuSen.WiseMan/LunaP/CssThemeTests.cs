@@ -7,6 +7,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Styling;
 using EmuSen.Galaxia;
+using EmuSen.LunaP.Settings;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
@@ -19,18 +20,22 @@ namespace EmuSen.WiseMan.LunaP
     {
         private readonly string _configDir;
 
+        // What LunaP reported, captured through the hook a host normally owns.
+        private string? _reported;
+
         public CssThemeTests()
         {
             _configDir = Path.Combine(Path.GetTempPath(), "lunap-css-" + Guid.NewGuid().ToString("N"));
-            ConfigStore.OverrideDirectory = _configDir;
-            ConfigDiagnostics.Reset();
+            LunaSettings.Store = new JsonSettingsStore(_configDir);
+            _reported = null;
+            LunaSettings.Diagnostics = m => _reported = m;
         }
 
         // The applied theme is global to the headless application, so every test here has to put it back.
         public void Dispose()
         {
             UiTest.Run(() => LunaTheme.Apply(LunaTheme.BuiltIn)).GetAwaiter().GetResult();
-            ConfigStore.OverrideDirectory = null;
+            LunaSettings.Store = new JsonSettingsStore(Path.Combine(Path.GetTempPath(), "lunap-unset"));
             if (Directory.Exists(_configDir)) Directory.Delete(_configDir, recursive: true);
         }
 
@@ -221,7 +226,7 @@ namespace EmuSen.WiseMan.LunaP
 
             Assert.False(LunaTheme.Apply("Broken"));
             Assert.Equal(Color.Parse("#9CDCFE"), Brush(header));
-            Assert.Contains("Broken", ConfigDiagnostics.LastMessage ?? "");
+            Assert.Contains("Broken", _reported ?? "");
 
             window.Close();
         });

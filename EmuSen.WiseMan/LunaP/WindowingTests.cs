@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using EmuSen.Galaxia;
+using EmuSen.LunaP.Settings;
 using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.WiseMan.LunaP
@@ -23,12 +24,12 @@ namespace EmuSen.WiseMan.LunaP
         public WindowingTests()
         {
             _configDir = Path.Combine(Path.GetTempPath(), "lunap-windowing-" + Guid.NewGuid().ToString("N"));
-            ConfigStore.OverrideDirectory = _configDir;
+            LunaSettings.Store = new JsonSettingsStore(_configDir);
         }
 
         public void Dispose()
         {
-            ConfigStore.OverrideDirectory = null;
+            LunaSettings.Store = new JsonSettingsStore(Path.Combine(Path.GetTempPath(), "lunap-unset"));
             if (Directory.Exists(_configDir)) Directory.Delete(_configDir, recursive: true);
         }
 
@@ -157,7 +158,7 @@ namespace EmuSen.WiseMan.LunaP
             window.Show();
             window.Close();
 
-            Assert.False(new ConfigFile<System.Collections.Generic.Dictionary<string, WindowPlacement>>("windows.json").Exists);
+            Assert.False(File.Exists(Path.Combine(_configDir, WindowPlacementStore.FileName)));
         }, default);
 
         [Fact]

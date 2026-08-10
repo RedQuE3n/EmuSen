@@ -2,9 +2,9 @@ using System.Collections.Generic;
 using Avalonia.Input;
 using EmuSen.Galaxia.Input;
 
-namespace EmuSen.LunaP.Input
+namespace EmuSen.Endymion.Input
 {
-    // The keyboard scheme both frontends start from, and the reverse lookup they both need - see EmuSen_LunaP.md §15.
+    // The keyboard scheme both frontends start from, and the reverse lookup they both need - see EmuSen_Input.md §4.3.
     public static class DefaultPadKeyMap
     {
         // A fresh dictionary per call: Mistress rebinds into its copy, so a shared instance would leak one frontend's edits into the other.

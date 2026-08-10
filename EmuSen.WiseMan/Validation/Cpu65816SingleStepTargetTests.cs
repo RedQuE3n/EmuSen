@@ -1,4 +1,5 @@
 using EmuSen.Cores.Nintendo.Venus.Validation;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Validation
 {
@@ -6,6 +7,7 @@ namespace EmuSen.WiseMan.Validation
     // third-party data this repo doesn't ship - so nothing else covers it.
     // What matters here is the flat 16MB model: no SNES bank or register
     // decoding may leak in - see Venus_CPU.md §10.1.
+    [Collection(TestCollections.ProcessGlobals)]
     public class Cpu65816SingleStepTargetTests
     {
         // Emulation mode with M/X set, i.e. 8-bit A and index registers.

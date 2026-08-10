@@ -1530,6 +1530,9 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    --luna-muted             hints, group headers, disabled captions\n" +
                 "    --luna-section-header    section headings\n" +
                 "    --luna-warning           inline caution text\n" +
+                "    --luna-error             a failure, a refusal, an invalid field\n" +
+                "    --luna-success           a thing that worked\n" +
+                "    --luna-info              a thing in progress, or worth noticing\n" +
                 "    --luna-nominal           load ramp, below 60%\n" +
                 "    --luna-busy              load ramp, 60% and above\n" +
                 "    --luna-hot               load ramp, 85% and above\n" +
@@ -1548,14 +1551,14 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    Outside ':root', a block styles one kind of control. The selector is\n" +
                 "    'element', 'element.state' or 'element part', and the element is the\n" +
                 "    control's own name in kebab case:\n\n" +
-                "    button-bar        field-row         path-picker-row   status-bar\n" +
-                "    console-pane      filter-bar        rgba-image-view   tabs\n" +
-                "    dropdown          hint-text         section-header\n" +
-                "    luna-switch       meter-list        meter-row\n" +
-                "    mono-text\n\n" +
+                "    button-bar        empty-state       hint-text         mono-text\n" +
+                "    console-pane      field-row         luna-switch       path-picker-row\n" +
+                "    dropdown          filter-bar        meter-list        rgba-image-view\n" +
+                "    section-header    status-bar        meter-row         tabs\n\n" +
                 "    States: meter-row.nominal, meter-row.busy, meter-row.hot.\n" +
                 "    Parts:  meter-row .bar; filter-bar .search, .facet;\n" +
-                "            console-pane .output, .input, .prompt.\n\n" +
+                "            console-pane .output, .input, .prompt;\n" +
+                "            empty-state .message, .detail.\n\n" +
                 "    Properties: background, background-color, color, font-family,\n" +
                 "    font-size, font-weight. A value may be a token - 'var(--luna-hot)' -\n" +
                 "    which FOLLOWS that token rather than copying it; a rule that restates a\n" +

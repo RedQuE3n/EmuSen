@@ -6,12 +6,14 @@ using EmuSen.Galaxia;
 using EmuSen.Endymion.Input;
 using SDL3;
 using EmuSen.Galaxia.Input;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
     // Enum values are written as names rather than numbers - see
     // EmuSen_Config_Reference.md §2.1. Numbers still read, so no config file
     // written before this change is orphaned.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConfigEnumFormatTests : IDisposable
     {
         // Verbatim gamepadbindings.json as every build before this one wrote it.

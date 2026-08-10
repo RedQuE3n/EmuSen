@@ -25,11 +25,16 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Packed because EmuSen.LunaP is packed and names this as a dependency; a
-       consumer outside this repository cannot resolve a ProjectReference. The
-       argument for packaging at all is in EmuSen_LunaP.md §17. -->
+  <!-- No longer packed, and the reason it was is worth keeping. EmuSen.LunaP
+       named this as a dependency and is packed, so a consumer outside this
+       repository could not have resolved a ProjectReference to it - which made
+       this a package too, and made anyone consuming the toolkit carry it. LunaP
+       stopped naming anything of EmuSen's, so nothing outside this repository
+       wants this assembly and there is nothing for a package to be for. The
+       metadata is kept rather than deleted: if a consumer does turn up, the id
+       and the licence are already decided. See EmuSen_LunaP.md §19 and §20. -->
   <PropertyGroup>
-    <IsPackable>true</IsPackable>
+    <IsPackable>false</IsPackable>
     <PackageId>EmuSen.Galaxia</PackageId>
     <Version>0.1.0</Version>
     <Authors>Tristan Pelland</Authors>

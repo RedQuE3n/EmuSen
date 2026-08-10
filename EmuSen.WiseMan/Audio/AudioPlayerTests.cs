@@ -8,6 +8,7 @@ namespace EmuSen.WiseMan.Audio
 {
     // Exercises AudioPlayer's real SDL3 P/Invoke calls against SDL's "dummy"
     // audio driver - see EmuSen_Settings_Reference.md §4.10.
+    [Collection(TestCollections.ProcessGlobals)]
     public class AudioPlayerTests
     {
         static AudioPlayerTests()

@@ -23,8 +23,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Galaxia", "EmuSen.Ga
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.Endymion", "EmuSen.Endymion\EmuSen.Endymion.csproj", "{AAD1EB6D-8611-4D46-BC0F-FC090EA749F2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmuSen.LunaP", "EmuSen.LunaP\EmuSen.LunaP.csproj", "{391871DE-4F8F-4AB3-A3BF-6A459B236C25}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -155,18 +153,6 @@ Global
 		{AAD1EB6D-8611-4D46-BC0F-FC090EA749F2}.Release|x64.Build.0 = Release|Any CPU
 		{AAD1EB6D-8611-4D46-BC0F-FC090EA749F2}.Release|x86.ActiveCfg = Release|Any CPU
 		{AAD1EB6D-8611-4D46-BC0F-FC090EA749F2}.Release|x86.Build.0 = Release|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Debug|x64.Build.0 = Debug|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Debug|x86.Build.0 = Debug|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Release|Any CPU.Build.0 = Release|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Release|x64.ActiveCfg = Release|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Release|x64.Build.0 = Release|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Release|x86.ActiveCfg = Release|Any CPU
-		{391871DE-4F8F-4AB3-A3BF-6A459B236C25}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

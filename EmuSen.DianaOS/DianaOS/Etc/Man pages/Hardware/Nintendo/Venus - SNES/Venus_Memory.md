@@ -138,6 +138,7 @@ Two consequences worth carrying:
 
 - **A run that persists state is not a reproducible run.** Two invocations of one `--commands` script reached the anchor at frame 789 and at frame 0 purely because the first one wrote a save. Mesen's probe never had the problem — it points `FolderUtilities::SetHomeFolder` at a fresh directory beside its dumps — which means the two emulators were anchored on different scenes for the whole comparison.
 - **`--nobattery` exists for this.** It sets `Cartridge.BatteryRamDisabled`, so the run neither reads nor writes the `.srm`. Every comparison against the Mesen probe should use it; see §3.15's own entry.
+- **The switch is latched at construction, not read live.** `Cartridge` takes its copy in the constructor, which is what `CoreOptions` and `EmuSen_Multicore.md` §6 always said the contract was; Mercury and Moon already worked this way and Venus was the outlier. A caller that wants to name the value rather than inherit the global passes `new Cartridge(path, batteryRamDisabled: …)`. Two consequences: a second cartridge built later in the same process cannot retroactively change an earlier one's save behaviour, and the reference-dump tests — which load SMW2, an SRAM cart, and had never set the switch at all — now disable the battery explicitly. See `EmuSen_Debugging_Tools_Reference_v5.md` §3.55 and §3.56.
 
 ### 2.5 Region detection from the country byte
 

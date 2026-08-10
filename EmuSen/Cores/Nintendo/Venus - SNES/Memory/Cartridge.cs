@@ -101,8 +101,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             return new HeaderInfo(headerBase, isHiRom, At(0x15), At(0x16), At(-0x01), ReadCartName(rom, headerBase));
         }
 
-        public Cartridge(string romPath)
+        // Latched here, not read live: CoreOptions calls itself a switch set before LoadRom - see EmuSen_Multicore.md §6.
+        public Cartridge(string romPath, bool? batteryRamDisabled = null)
         {
+            _batteryRamDisabled = batteryRamDisabled ?? EmuSen.Cores.CoreOptions.BatteryRamDisabled;
             _rom = StripCopierHeader(File.ReadAllBytes(romPath), announce: true);
 
             HeaderInfo header = ReadHeader(_rom);
@@ -196,7 +198,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             try
             {
-                if (BatteryRamDisabled) return;
+                if (_batteryRamDisabled) return;
                 if (AtomicFile.TryRead(SavePath) is not { } saved) return;
 
                 // On an ST010/ST011 the .srm is the DSP's own data RAM - see Venus_NecDSP.md §6.
@@ -227,13 +229,16 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             set => EmuSen.Cores.CoreOptions.BatteryRamDisabled = value;
         }
 
+        // This cartridge's own copy, taken once at construction - see Venus_Memory.md §2.4a.
+        private readonly bool _batteryRamDisabled;
+
         // Called periodically + on shutdown, not on every write - see
         // Venus_Memory.md §2.4.
         public void SaveSram()
         {
             try
             {
-                if (BatteryRamDisabled) return;
+                if (_batteryRamDisabled) return;
 
                 if (NecDsp is { HasBatteryRam: true } dsp)
                 {

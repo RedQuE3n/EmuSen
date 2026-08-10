@@ -13,10 +13,12 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
     // The GUI half of the cheat database - see `man cheat`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class CheatDatabaseWindowTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

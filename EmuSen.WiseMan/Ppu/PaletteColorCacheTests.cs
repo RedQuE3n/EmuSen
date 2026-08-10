@@ -4,6 +4,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Ppu
 {
     // The renderer caches CGRAM as converted colours; these pin its invalidation - see Venus_PPU.md §7.2.
+    [Collection(TestCollections.ProcessGlobals)]
     public class PaletteColorCacheTests
     {
         private const ushort Cgadd = 0x2121, Cgdata = 0x2122;

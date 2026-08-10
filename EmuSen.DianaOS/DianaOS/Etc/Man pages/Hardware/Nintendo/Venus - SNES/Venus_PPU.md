@@ -380,7 +380,7 @@ Comments in `VenusCore.cs` and `Renderer.Scanline.cs` used to state that `RunFra
 Worth knowing before blaming the core for a frontend-side frame time:
 
 - **Rewind capture.** `MainWindow` constructs its `RewindBuffer` with `Enabled = true` unconditionally, so every 4th frame is a full reflection-based `SaveState` (~600 KB) plus an XOR delta. Measured at **~0.20–0.25 ms per frame amortized** across SMW/LttP/SM/DKC/FFVI/KSS — real, but not a suspect.
-- **Frame hand-off.** `SubmitFrame` is an `Interlocked.Exchange` of a reference plus a coalesced `Dispatcher.UIThread.Post`; the actual upload happens once on the UI thread and stale frames are dropped by design. Not a per-frame cost on the emulation thread.
+- **Frame hand-off.** `SubmitFrame` offers the frame to `EmuSen.LunaP.Threading.Latest<T>`, which keeps the newest and posts at most one UI-thread callback; the actual upload happens once on the UI thread and stale frames are dropped by design. Not a per-frame cost on the emulation thread.
 
 The frontend readout separates `run Xms` (the `RunFrame()` call alone) from `total Yms` (wall clock per frame, *including* the pacing sleep). A `total` at ~16.6 ms with `run` at ~3 ms is the 60 Hz pacer working correctly, not a slow emulator. Only a `run` figure near the budget indicates a core problem.
 

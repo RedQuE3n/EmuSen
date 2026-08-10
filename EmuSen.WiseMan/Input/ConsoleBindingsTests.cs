@@ -9,10 +9,12 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Mistress.Input;
 using EmuSen.Endymion.Input;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Input
 {
     // Bindings are per console, and a file written before they were - see EmuSen_Input.md §5.1.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConsoleBindingsTests : IDisposable
     {
         private static readonly string[] Consoles = { "NES", "SNES" };

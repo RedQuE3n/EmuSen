@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Galaxia;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
     // The persistence every config file in the project now shares - see
     // EmuSen_Config_Reference.md §2.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ConfigFileTests : IDisposable
     {
         private sealed class Sample

@@ -102,6 +102,18 @@ Both maps enforce that two console buttons never share one key: `Rebind` unbinds
 
 ---
 
+### 4.3 `Input/DefaultPadKeyMap`
+
+The keyboard scheme both frontends start from — arrows for the d-pad, `Z`/`X`/`A`/`S` for B/A/Y/X, `Q`/`W` for the shoulders, `Enter`/`RightShift` for Start/Select — plus the `Key → PadButton` reverse lookup they both need.
+
+It was spelled twice, in Hotaru's `HotaruKeyMap` and Mistress's `ControllerKeyMap`, with two copies of the reverse-lookup loop and a test asserting the two tables stayed equal — a problem being guarded rather than fixed.
+
+`Bindings()` returns a **fresh dictionary per call**, not a shared readonly instance: Mistress rebinds into its copy, and a shared instance would leak one frontend's edits into the other.
+
+**It lived in `EmuSen.LunaP` first, and moving it here is what let the toolkit leave the repository** (`EmuSen_LunaP.md` §19). LunaP was chosen originally for a reason that was true and beside the point: it was the one project referencing both Avalonia and Galaxia. But a general Avalonia toolkit has no business naming a console gamepad button, and this project already owns the mapping of physical input onto `PadButton` — `GamepadBindingMap` is the same subject from the SDL3 side. Holding it cost one `Avalonia` base package reference. Not `Avalonia.Desktop`, not the themes: nothing in this project draws anything, and `Avalonia.Input.Key` is the whole of what it needs.
+
+Galaxia still cannot hold it, and that part of the original argument stands: Galaxia is a leaf with no references at all, because DianaOS references it and the core references DianaOS, so anything it depended on upward would close a cycle. It cannot name `Avalonia.Input.Key`.
+
 ## 5. The rebind window shows the loaded console's pad
 
 `InputSettingsWindow` used to iterate `Enum.GetValues<PadButton>()` and build twelve rows unconditionally — so with an NES ROM loaded it offered to rebind X, Y, L and R, four buttons that core drops on the floor.

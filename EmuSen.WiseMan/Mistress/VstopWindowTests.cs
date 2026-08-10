@@ -15,10 +15,12 @@ using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
     // The GUI half of `vstop` - see `man vstop`.
+    [Collection(TestCollections.ProcessGlobals)]
     public class VstopWindowTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

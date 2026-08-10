@@ -18,6 +18,11 @@ namespace EmuSen.Mistress
             // this is what stops it doing so silently - see §6.2.
             EmuSen.Galaxia.ConfigDiagnostics.Sink = m => Console.WriteLine("[config] " + m);
 
+            // LunaP keeps windows.json and luna.json where Galaxia keeps everything else, and reports through the same sink - see EmuSen_LunaP.md §19.2.
+            EmuSen.LunaP.Settings.LunaSettings.Store = new EmuSen.LunaP.Settings.JsonSettingsStore(EmuSen.Galaxia.ConfigStore.Directory);
+            EmuSen.LunaP.Settings.LunaSettings.Diagnostics = EmuSen.Galaxia.ConfigDiagnostics.Report;
+
+
             // Before any window exists, since GraphicsSettings decides its size.
             EmuSen.Audio.AudioSettings.LoadFromDisk();
             EmuSen.Graphics.GraphicsSettings.LoadFromDisk();

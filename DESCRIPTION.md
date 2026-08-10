@@ -155,6 +155,26 @@ Adding a console therefore means: implement the core in its reserved folder, imp
 (already core-agnostic, an XOR-delta chain over opaque state) and the frontends all work
 against it unchanged.
 
+The layering is now load-bearing outside this repository too. `EmuSen.LunaP` is published
+as a NuGet package for **EmuSen.Pegasus** — a collaborative notepad the project is
+developed through, which lived here until it needed nothing of EmuSen but the toolkit, and
+now lives at <https://github.com/RedQuE3n/EmuSen.Pegasus>. That turns LunaP's "never reach
+back into a core" rule from a comment into a property of the artifact, since a package
+cannot. It also means the toolkit's public surface has a consumer no build here will catch
+breaking (`EmuSen_LunaP.md` §17).
+
+The solution has shrunk as readily as it has grown: `EmuSen.Crystal` and
+`EmuSen.Nehellania` were folded back into the cores and into Endymion once it was clear
+neither boundary bought any consumer separability it was using.
+
+**The emulator is C#; two development tools beside it deliberately are not.** The reference
+probe is Rust — a policy layer plus a backend per emulator, including a libretro backend
+that drives any core, so it names no emulator in its own vocabulary — and the dump
+comparator is Python, offline analysis rather than in-process test code. SQLite backs the
+two databases that were already relational. Config stays JSON and coverage maps stay
+bitsets, as reasoned exceptions. `EmuSen_Stack.md` §4 is the argument, and should be read
+before proposing that anything move languages.
+
 ---
 
 ## CORES

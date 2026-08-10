@@ -80,3 +80,7 @@ dumps.db
 # Python bytecode from the analysis tools.
 __pycache__/
 *.pyc
+
+# The folder feed NuGet.config points at. EmuSen.LunaP is built from its own
+# repository and is not this one's to carry.
+local-packages/

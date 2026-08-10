@@ -15,7 +15,12 @@ namespace EmuSen.Hotaru.Views
         private readonly Func<(byte[] Rgba, int Width, int Height)> _frameProvider;
 
         // Grow() overrides the kit's left-aligned default: this one is the whole window, not a swatch in a column.
-        private readonly RgbaImageView _image = new RgbaImageView { Stretch = Stretch.Uniform }.Grow();
+        // The whole window is this one control, and the toolkit has no way to know it is a game
+        // rather than a palette or a tile sheet - so the name comes from here. LunaP.md §24.2.
+        private readonly RgbaImageView _image = new RgbaImageView { Stretch = Stretch.Uniform }
+            .Grow()
+            .AccessibleName("Game screen")
+            .HelpText("A live view of what the running core is drawing.");
 
         public FeedWindow() : this(() => (Array.Empty<byte>(), 0, 0)) { }
 

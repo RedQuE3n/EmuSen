@@ -155,7 +155,17 @@ namespace EmuSen.Mistress.Views
             TextBlock keyText = NewValueLabel(CurrentKeyLabel(console, button));
             _keyLabels[key] = keyText;
 
-            Button rebindKey = Ui.Button(RebindKeyText, () => StartListeningForKey(console, button));
+            // FOURTEEN BUTTONS IN SEVEN IDENTICAL PAIRS, and until LunaP 0.5.0 gave this window a
+            // way to say otherwise, every one of them announced as "Rebind Key" or "Clear" with
+            // nothing to say which binding it belonged to. A sighted user reads the row; a screen
+            // reader user got the same two words seven times over and no way to tell them apart.
+            //
+            // The CAPTION stays and the context goes in help text, which is announced after the
+            // name. Renaming the button to "Rebind A on SNES" would break voice control, because
+            // somebody saying "click rebind key" needs those words to be the name. This is the same
+            // trade LunaP made for PathPickerRow's Browse buttons - LunaP.md §24.2.
+            Button rebindKey = Ui.Button(RebindKeyText, () => StartListeningForKey(console, button))
+                .HelpText($"Keyboard key for {console} {button}");
             _rebindKeyButtons[key] = rebindKey;
 
             Button clearKey = Ui.Button("Clear", () =>
@@ -163,12 +173,13 @@ namespace EmuSen.Mistress.Views
                 _keyBindings.For(console).Unbind(button);
                 _keyBindings.Save();
                 RefreshKeyLabels();
-            }).Margin(4, 0, 12, 0);
+            }).Margin(4, 0, 12, 0).HelpText($"Clear the keyboard key for {console} {button}");
 
             TextBlock padText = NewValueLabel(CurrentPadLabel(console, button));
             _padLabels[key] = padText;
 
-            Button rebindPad = Ui.Button(RebindPadText, () => StartListeningForPad(console, button));
+            Button rebindPad = Ui.Button(RebindPadText, () => StartListeningForPad(console, button))
+                .HelpText($"Gamepad button for {console} {button}");
             _rebindPadButtons[key] = rebindPad;
 
             Button clearPad = Ui.Button("Clear Pad", () =>
@@ -176,7 +187,7 @@ namespace EmuSen.Mistress.Views
                 _gamepadBindings.For(console).Unbind(button);
                 _gamepadBindings.Save();
                 RefreshPadLabels();
-            }).Margin(4, 0, 0, 0);
+            }).Margin(4, 0, 0, 0).HelpText($"Clear the gamepad button for {console} {button}");
 
             // Columns are assigned by position, which is exactly the order the row reads in.
             return Ui.Cols(ButtonRowColumns,
@@ -211,7 +222,10 @@ namespace EmuSen.Mistress.Views
                 TextBlock keyText = NewValueLabel(CurrentHotkeyLabel(action));
                 _hotkeyLabels[action] = keyText;
 
-                Button rebind = Ui.Button(RebindKeyText, () => StartListeningForHotkey(captured));
+                string hotkeyName = HotkeyBindingMap.DisplayName(action);
+
+                Button rebind = Ui.Button(RebindKeyText, () => StartListeningForHotkey(captured))
+                    .HelpText($"Shortcut key for {hotkeyName}");
                 _rebindHotkeyButtons[action] = rebind;
 
                 Button clear = Ui.Button("Clear", () =>
@@ -219,10 +233,10 @@ namespace EmuSen.Mistress.Views
                     _hotkeyBindings.Unbind(captured);
                     _hotkeyBindings.Save();
                     RefreshHotkeyLabels();
-                }).Margin(4, 0, 0, 0);
+                }).Margin(4, 0, 0, 0).HelpText($"Clear the shortcut key for {hotkeyName}");
 
                 HotkeysPanel.Children.Add(Ui.Cols(HotkeyRowColumns,
-                    Ui.Text(HotkeyBindingMap.DisplayName(action)).Center(),
+                    Ui.Text(hotkeyName).Center(),
                     keyText, rebind, clear));
             }
         }

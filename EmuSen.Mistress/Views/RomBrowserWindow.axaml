@@ -16,7 +16,7 @@
             <Button Content="Cancel" Click="OnCancelClick" />
         </luna:ButtonBar>
 
-        <ListBox x:Name="RomList" DoubleTapped="OnRomListDoubleTapped" />
+        <ListBox x:Name="RomList" AutomationProperties.Name="ROMs in this folder" DoubleTapped="OnRomListDoubleTapped" />
 
     </DockPanel>
 

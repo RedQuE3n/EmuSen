@@ -81,7 +81,8 @@ namespace EmuSen.Mistress.Views
             _console = console;
             _db = new CheatDatabase(Directory);
             AttributionText.Text = CheatDatabaseInstaller.Attribution;
-            DirectoryBox.Text = _settings.CheatDatabaseDirectory;
+            DirectoryPicker.Path = _settings.CheatDatabaseDirectory ?? "";
+            DirectoryPicker.PathPicked += OnDirectoryPicked;
             ActiveCheatsButton.IsEnabled = _openActiveCheats is not null;
             PruneButton.IsEnabled = _supportedSystems is not null;
             Refresh();
@@ -243,13 +244,13 @@ namespace EmuSen.Mistress.Views
                               "Prune Unsupported deletes them.";
         }
 
-        private async void OnBrowseClick(object? sender, RoutedEventArgs e)
+        // PathPickerRow raises this only for a real pick, never for a cancel, so there is no
+        // null to check and no "did they actually choose something" branch. The folder dialog,
+        // the read-only box and the Browse button are all the control's now.
+        private void OnDirectoryPicked(string picked)
         {
-            if (await Dialogs.PickFolderAsync(this, "Choose a cheat folder (a RetroArch cheats folder works as-is)") is not { } picked) return;
-
             _settings.CheatDatabaseDirectory = picked;
             _settings.Save();
-            DirectoryBox.Text = picked;
             // The armed plan was measured against the old folder.
             DisarmPrune();
             Refresh();
@@ -258,7 +259,7 @@ namespace EmuSen.Mistress.Views
         private async void OnDownloadClick(object? sender, RoutedEventArgs e)
         {
             DownloadButton.IsEnabled = false;
-            BrowseButton.IsEnabled = false;
+            DirectoryPicker.IsEnabled = false;
             StatusText.Text = "Downloading from libretro...";
 
             string target = Directory;
@@ -284,7 +285,7 @@ namespace EmuSen.Mistress.Views
             finally
             {
                 DownloadButton.IsEnabled = true;
-                BrowseButton.IsEnabled = true;
+                DirectoryPicker.IsEnabled = true;
             }
         }
 

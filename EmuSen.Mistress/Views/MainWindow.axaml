@@ -63,7 +63,14 @@
                 Padding="6,3"
                 Background="{DynamicResource SystemChromeLowColor}">
             <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" x:Name="StatusText" Text="No ROM loaded" />
+                <!-- Assigned from seventeen places, carrying transient results ("Applied 12
+                     cheats"), permanent state ("No ROM loaded") and failures alike.
+                     Polite announces a change at the next pause rather than
+                     interrupting; a status line that interrupted on every update
+                     would make the emulator unusable with a reader running. -->
+                <TextBlock Grid.Column="0" x:Name="StatusText"
+                           AutomationProperties.LiveSetting="Polite"
+                           Text="No ROM loaded" />
                 <!-- Measured emulated frames/sec (TotalFrames delta over real
                      elapsed time), not a presentation/paint-rate counter -
                      see MainWindow.axaml.cs's EmulationLoop. Diagnostic for
@@ -99,6 +106,7 @@
                            Foreground="{DynamicResource LunaMuted}"
                            Margin="2,8,2,0" />
                 <ListBox x:Name="LibraryList"
+                         AutomationProperties.Name="ROM library"
                          Background="Transparent"
                          DoubleTapped="OnLibraryItemActivated"
                          KeyDown="OnLibraryKeyDown" />

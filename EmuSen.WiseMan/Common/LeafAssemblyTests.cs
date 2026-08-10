@@ -42,7 +42,7 @@ namespace EmuSen.WiseMan.Common
             Assert.Equal(new[] { "EmuSen.Cauldron", "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
         }
 
-        // The condition for LunaP leaving this repository at all: a package cannot resolve a reference to something outside it - see EmuSen_LunaP.md §19.
+        // LunaP is a package from another repository now, and this is what would notice the split quietly regressing - see EmuSen_LunaP.md §4.
         [Fact]
         public void LunaP_references_nothing_of_EmuSen()
         {

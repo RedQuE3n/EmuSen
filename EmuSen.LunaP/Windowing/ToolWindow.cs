@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml.MarkupExtensions;
+using EmuSen.LunaP.Theme;
 
 namespace EmuSen.LunaP.Windowing
 {
@@ -15,7 +16,16 @@ namespace EmuSen.LunaP.Windowing
         public string? WindowKey { get; set; }
 
         // Bound rather than styled: FluentTheme's own Window ControlTheme otherwise wins and paints it near-black.
-        public ToolWindow() => this[!BackgroundProperty] = new DynamicResourceExtension("LunaSurface");
+        public ToolWindow()
+        {
+            this[!BackgroundProperty] = new DynamicResourceExtension("LunaSurface");
+
+            // A theme carrying rule blocks cannot reach a realized control on its own - see EmuSen_LunaP.md §12.3.
+            LunaTheme.StylesChanged += Restyle;
+            Closed += (_, _) => LunaTheme.StylesChanged -= Restyle;
+        }
+
+        private void Restyle() => LunaTheme.Restyle(this);
 
         // Off by default: Escape inside a console pane means "stop what I am typing", not "close the window".
         public bool ClosesOnEscape

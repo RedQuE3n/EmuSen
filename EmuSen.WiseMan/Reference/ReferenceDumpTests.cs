@@ -58,6 +58,22 @@ namespace EmuSen.WiseMan.Reference
             }
         }
 
+        // Catches a half-synced machine, whose dumps all early-return green - see §3.54.
+        [Fact]
+        public void Every_dump_set_that_names_its_rom_can_find_it()
+        {
+            // Pre-manifest sets are matched by directory name, which was only ever a guess.
+            Fixture[] fixtures = Discover().Where(HasManifest).ToArray();
+            if (fixtures.Length == 0) return;
+
+            string[] orphaned = fixtures.Where(f => RomPath(f) is null)
+                .Select(f => f.RomStem).Distinct().OrderBy(stem => stem).ToArray();
+
+            Assert.True(orphaned.Length == 0,
+                $"{orphaned.Length} dump set(s) under {DumpRoot} have no ROM in the library, " +
+                $"so their comparisons silently do nothing: {string.Join(", ", orphaned)}");
+        }
+
         // The manifest is authoritative; the fallback reads the console off which
         // spaces exist, which is all the pre-manifest dump sets can tell us.
         private static string SystemOf(string dir, string backend, long frame)
@@ -89,8 +105,14 @@ namespace EmuSen.WiseMan.Reference
                 }
             }
 
-            return RealRom.Find("SNES", fixture.RomStem + ".smc");
+            // The manifest branch above maps the console; this one used to assume SNES.
+            return fixture.System == "nes"
+                ? RealRom.Find("NES", fixture.RomStem + ".nes")
+                : RealRom.Find("SNES", fixture.RomStem + ".smc");
         }
+
+        private static bool HasManifest(Fixture fixture) =>
+            File.Exists(Path.Combine(fixture.DumpDir, $"{fixture.Backend}_manifest_f{fixture.Frame:D5}.json"));
 
         private static byte[]? Reference(Fixture fixture, string space)
         {

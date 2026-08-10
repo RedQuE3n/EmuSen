@@ -4,7 +4,9 @@ A multi-system emulator written from scratch in C# / .NET 10, with a Unix-like d
 
 EmuSen is written against published hardware documentation rather than by porting an existing emulator. It is a working emulator, but it is a **hobby project in active development** — see [Status](#status) before expecting to play anything start to finish.
 
-**License:** GPL-3.0 · **Platforms:** Linux, Windows, macOS · **Cores:** SNES, NES (in progress)
+**License:** GPL-3.0 · **Platforms:** Linux, Windows, macOS · **Cores:** SNES, NES, Game Boy / Color
+
+The emulator itself is C#. Two development tools beside it are not, and deliberately so: the reference probe is Rust and the dump comparator is Python. See [Development tooling](#development-tooling).
 
 ---
 
@@ -19,6 +21,7 @@ EmuSen is written against published hardware documentation rather than by portin
 - [Why the names?](#why-the-names)
 - [Building and running](#building-and-running)
 - [Tests](#tests)
+- [Development tooling](#development-tooling)
 - [Documentation](#documentation)
 - [Roadmap](#roadmap)
 - [ROMs](#roms)
@@ -34,21 +37,21 @@ A cycle-budgeted SNES emulator — 65816 CPU, SPC700 + S-DSP audio, a full PPU, 
 
 The emulation core is a pure library with no window, no `Main`, and no frontend knowledge. Everything else — presentation, frontends, debug tooling — sits above it and depends on it one-directionally.
 
-The project is structured for more than one console, and **two cores are now wired end to end**: hand a frontend a `.smc`/`.sfc` and it builds the SNES core, hand it a `.nes` and it builds the NES one, each with its own debug target behind the same shell.
+The project is structured for more than one console, and **three cores are now wired end to end**: hand a frontend a `.smc`/`.sfc` and it builds the SNES core, a `.nes` and it builds the NES one, a `.gb`/`.gbc` and it builds the Game Boy one — each with its own debug target behind the same shell.
 
-- **Venus (SNES)** — the mature core. Runs real commercial games.
+- **Venus (SNES)** — the mature core. Runs real commercial games, cartridge coprocessors included.
 - **Moon (NES)** — CPU, PPU, a full APU and ten mapper boards. Younger and less play-tested than Venus, but no longer a skeleton. See `EmuSen/Cores/Nintendo/Moon - NES/README.md`.
-- **Mercury (Game Boy / Game Boy Color)** — started 2026-08-04: the SM83, the bus and five cartridge boards. No PPU, no APU, deliberately not registered with the core factory yet. One core covers both DMG and colour.
+- **Mercury (Game Boy / Game Boy Color)** — built in four phases between 4 and 9 August 2026 and now feature-complete: SM83, a cycle-granular bus, the full PPU, all four APU channels, colour, five cartridge boards, save states and a debug target. One core covers both DMG and CGB, and it is registered with the core factory.
 
 Every other console is a reserved, empty folder.
 
-That second wired core is the point of the architecture rather than a bonus: `IDebugTarget` had exactly one implementation for most of this project's life, and `MoonDebugTarget` is the first thing to prove the interface was genuinely core-agnostic rather than SNES-shaped by accident.
+The extra cores are the point of the architecture rather than a bonus: `IDebugTarget` had exactly one implementation for most of this project's life and now has three. `MoonDebugTarget` was the one that proved the interface was genuinely core-agnostic rather than SNES-shaped by accident; `MercuryDebugTarget` cost a fraction of it, which is the more useful result — the second implementation tests an abstraction, the third one just uses it. None of Mercury's four days went on a shell, a harness, a watch system or a frontend.
 
 ---
 
 ## Status
 
-**Honest summary: the SNES core runs real commercial games, and several boot correctly and play, but very few have been verified end to end. The NES core is complete enough to run and make sound, and has had far less play-testing.**
+**Honest summary: the SNES core runs real commercial games, and several boot correctly and play, but very few have been verified end to end. The NES core is complete enough to run and make sound, and has had far less play-testing. The Game Boy core is feature-complete and the best instrumented of the three, but its timing claims are argued rather than demonstrated until the hardware test corpus is actually run against it.**
 
 The rows down to *Timing accuracy* describe the SNES core; the other cores follow.
 
@@ -61,18 +64,19 @@ The rows down to *Timing accuracy* describe the SNES core; the other cores follo
 | PPU sprites | Full OAM decode, real per-scanline 32-sprite / 34-sliver limits |
 | Colour math / windowing | Implemented, including the fixed-colour and half-math hardware quirks |
 | Memory mapping | LoROM and HiROM, general DMA + HDMA, header-driven SRAM sizing |
+| Region / PAL | Real, not faked — region comes off the cartridge country byte and drives 312-scanline / 50 Hz timing and the `STAT78` bit together |
 | Cartridge coprocessors | **SA-1** (second 65C816, Super MMC banking, arithmetic + bit-stream units), **SuperFX / GSU**, **NEC DSP** family (DSP-1/1B/2/3/4, ST010/ST011), **OBC1**. Verification differs per chip — see the note under this table |
 | Save states | Working, via a reflective serializer, with a version header — a state from a newer build is rejected rather than misread |
 | Rewind / fast-forward | Working, core-agnostic (XOR-delta chain) |
 | Input | Rebindable keyboard + gamepad, per-game hotkeys, gamepad hot-plug |
 | Timing accuracy | Scanline granularity, not per-dot. A deliberate, documented tradeoff |
 | NES core (Moon) | CPU validated against SingleStepTests `nes6502/v1` (2,560,000 cases, final state *and* per-cycle bus traces); PPU renders backgrounds, sprites, sprite 0 and NMI; all five APU channels synthesize (two pulse, triangle, noise, DMC); ten mapper boards including MMC3. Scanline granularity, NTSC only |
-| Game Boy core (Mercury) | SM83, interrupts, timer, joypad, five cartridge boards, save states. No PPU or APU yet |
+| Game Boy core (Mercury) | SM83, interrupts, timer, joypad, a cycle-granular bus with access blocking, 160-cycle OAM DMA, HDMA stall, the full PPU, all four APU channels, CGB colour, five cartridge boards, a serial sink and save states. 226 headless tests. Per-scanline renderer under a per-cycle clock; no boot ROM, no real link, no Super Game Boy |
 | Consoles beyond those three | Reserved folders only |
 
-**Coprocessors, chip by chip.** The **SA-1** is the most solid — Kirby's Dream Land 3 and Kirby Super Star both play, and its one known gap is character-conversion DMA, which neither game requests. The **SuperFX** runs Yoshi's Island: it boots and plays through the intro, with one open cosmetic defect (a strip of 18 tiles the game never uploads). The **NEC DSP** interpreter covers all seven uPD7725/uPD96050 variants from one implementation, but **it cannot run without a firmware dump, and none is shipped** — a DSP game sitting on a loading screen is a missing dump, not an emulation bug. The **OBC1** is implemented and tested.
+**Coprocessors, chip by chip.** The **SA-1** is the most solid — Kirby's Dream Land 3 and Kirby Super Star both play, and its one known gap is character-conversion DMA, which neither game requests. The **SuperFX / GSU** runs Yoshi's Island through its intro, title screen, file menu and into 1-1, and diffs to zero against the reference probe on instruction behaviour; what is left there is cycle cost, plus one open cosmetic defect — a strip of BG3 tiles in the intro whose VRAM upload has not been located. Six real GSU bugs were found and fixed getting that far, each written up in `Venus_SuperFX.md`. The **NEC DSP** interpreter covers all seven uPD7725/uPD96050 variants from one implementation, but **it cannot run without a firmware dump, and none is shipped** — a DSP game sitting on a loading screen is a missing dump, not an emulation bug. The **OBC1** is implemented and tested.
 
-**Game compatibility** is tracked properly in [`EmuSen_Games_Tested.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md), which rates each title Perfect → Unplayable and links to the investigation behind the rating. As of now nothing sits in Unplayable, several titles boot and play with known cosmetic bugs, and no title has a claimed full playthrough. Treat that file as the source of truth, not this table.
+**Game compatibility** is tracked properly in [`EmuSen_Games_Tested.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md), which rates each title Perfect → Unplayable and links to the investigation behind the rating. As of now nothing sits in Unplayable, several titles boot and play with known cosmetic bugs, and no title has a claimed full playthrough. Treat that file as the source of truth over this table — with the caveat that it *lags* actual core state, because a fix that moves a title up is not always written back the same day.
 
 Verified builds: **Linux x64 is launch-tested.** Windows and macOS binaries are produced and structurally correct but have not been executed — there is no Windows or Mac on the build machine, and macOS builds are unsigned (Apple Silicon requires an ad-hoc signature before it will run them at all).
 
@@ -86,7 +90,7 @@ Both are Avalonia applications, and neither owns any emulation logic. They share
 
 **Hotaru** — a lighter, console-first frontend. Takes a ROM path on the command line and puts the DianaOS shell on the terminal it was launched from, with the game in its own window.
 
-**Themes** are a drop-in file: a `ResourceDictionary` at `/etc/EmuSen/themes/<name>.axaml` overriding whichever palette keys it cares about. Keys it does not mention keep their built-in value, and applying one repaints every open window live, with no restart.
+**Themes** are a drop-in file at `/etc/EmuSen/themes/<name>.<ext>`, written either as an `.axaml` `ResourceDictionary` or as `.css`, both spelling the same thing — overrides of whichever palette keys the theme cares about. Keys it does not mention keep their built-in value, and applying one repaints every open window live, with no restart.
 
 A polished, EmulationStation-style launcher is explicitly *not* either of these; it is planned as a separate project, and LunaP exists partly so that project starts with a widget set rather than a blank page.
 
@@ -156,7 +160,7 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 | `EmuSen.Cauldron` | Small realtime-provider abstractions the debug layer polls |
 | `EmuSen.Serenity` | Shared presentation: the Avalonia/Skia `GameFrameControl`, shader pipeline, graphics settings |
 | `EmuSen.Endymion` | The SDL3 device layer: audio out, gamepad polling, pad bindings. Serenity's counterpart on the sound-and-input side |
-| `EmuSen.LunaP` | The shared Avalonia toolkit: palette and themes, controls, window scaffolding, fluent layout. References Avalonia and `EmuSen.Galaxia` and nothing else |
+| `EmuSen.LunaP` | The shared Avalonia toolkit: palette and themes, controls, window scaffolding, fluent layout, dashboards. References Avalonia, `EmuSen.Galaxia` and `EmuSen.Cauldron`, and nothing else |
 | `EmuSen.Mistress` | The fuller Avalonia GUI frontend |
 | `EmuSen.Hotaru` | The console-first Avalonia frontend |
 | `EmuSen.Pharaoh` | The headless scripted harness, and the CLI runner for ground-truth CPU test vectors |
@@ -165,6 +169,10 @@ Layered bottom-to-top; each layer depends only on the ones below it.
 The SNES core lives under `EmuSen/Cores/Nintendo/Venus - SNES/`, namespaced `EmuSen.Cores.Nintendo.Venus.*`, with reserved sibling folders for every other planned console.
 
 The layering is enforced in practice, not just described. The PPU exposes a small `IWriteObserver` hook and has no idea a watchpoint exists; the debug layer implements that interface and supplies the meaning. And where a layer's boundary actually matters, a test holds it: `LeafAssemblyTests` asserts that Galaxia, Endymion, Serenity and LunaP reference what they are allowed to and never reach back into the core — which is what keeps a future launcher able to browse a library without loading an emulator.
+
+**LunaP now has a consumer outside this repository.** It is published as a NuGet package, together with the two dependency-free leaves it names, for [EmuSen.Pegasus](https://github.com/RedQuE3n/EmuSen.Pegasus) — a collaborative notepad this project is developed through, which lived here until it needed nothing of EmuSen but the toolkit. That makes the layering rule a property of the artifact rather than a comment: a package cannot reach up into a core at all. It also means LunaP's public surface can be broken by a rename that no build in this repository will catch. `EmuSen_LunaP.md` §17 has the details.
+
+A count worth reading as a design outcome rather than trivia: the solution has shrunk twice this year. `EmuSen.Crystal` and `EmuSen.Nehellania` were folded into the cores and into Endymion, because a project boundary has to buy somebody separability they are actually using.
 
 ---
 
@@ -234,13 +242,29 @@ codesign --force --deep --sign - Mistress.app
 dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj
 ```
 
-2205 tests across 168 files: CPU and PPU hardware behaviour for both cores, APU/DSP, the cartridge coprocessors and their debug exposure, audio sync and drain, save-state round-tripping, the DianaOS shell (lexer, parser, pipes, control flow, multi-line continuation, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
+2726 tests across 202 files: CPU and PPU hardware behaviour for all three cores, APU/DSP, the cartridge coprocessors and their debug exposure, audio sync and drain, save-state round-tripping, the DianaOS shell (lexer, parser, pipes, control flow, multi-line continuation, sandboxing, man pages), and Avalonia UI tests that drive real key events through a headless window.
+
+Everything runs headless. No window is ever opened on anyone's screen, including for the UI tests — if the harness cannot express something, the harness gets extended rather than a real window launched.
 
 The UI tests run against real Skia render passes rather than checking flags, because the failure mode that matters there is silent: a control whose style stopped matching renders as *nothing* and throws no error. `UiTest.AssertLaidOut` catches the flat-image case, and `EMUSEN_UI_BASELINE` records a pixel baseline from one commit and compares the next against it — which is how two visual defects were caught during the toolkit migration, one of them a window whose Close button had been sitting off the bottom edge for a long time.
 
 Some of those are **property-based** (CsCheck), asserting laws rather than examples: that the rewind delta codec's `Apply` really is its own inverse, that resampled audio never leaves the range its input spanned, that a fuller audio queue never asks the resampler to speed up, and that `CanDecode` never promises a cheat-code decode that then throws. Each runs hundreds to thousands of generated cases and shrinks any failure to a minimal counterexample.
 
-Beyond unit tests, the project leans on **output-identity digests**: `framesum` and `audiosum` over a fixed window across all 43 ROMs in the local library, so a change to the renderer or the mixer can be shown to alter exactly the games it was meant to and nothing else.
+Beyond unit tests, the project leans on **output-identity digests**: `framesum` and `audiosum` over a fixed window across the whole local ROM library (48 titles at present), so a change to the renderer or the mixer can be shown to alter exactly the games it was meant to and nothing else.
+
+The Game Boy core is graded differently on purpose. Its oracle is **not another emulator** — the Game Boy has something the SNES does not, a mature corpus of hardware tests written against real silicon that grade themselves and report the verdict down the link port. Mercury has the serial sink that captures those verdicts and the harness that reads them; actually running the corpus is the largest single piece of outstanding work on the core.
+
+---
+
+## Development tooling
+
+The emulator is C#. Two tools beside it are not, and the boundaries are argued rather than incidental — see [`EmuSen_Stack.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Stack.md) §4 before proposing that anything move languages.
+
+- **The reference probe is Rust** (`EmuSen.WiseMan/Reference/probe-rs/`). It is a policy layer plus a backend per emulator — including a libretro backend that drives any core — so it names no emulator in its own vocabulary. Built with `build-probe.sh <backend>`. Its job is to take ground-truth dumps of a running machine that EmuSen's own output can be diffed against; the GSU work above is what it is for.
+- **The comparator is Python** (`EmuSen.WiseMan/Reference/analysis/`). Dump database, signature store, palette and audio analysis, `gsudiff.py`. Offline analysis, deliberately not in-process test code.
+- **SQLite** backs the two databases that were already relational — the dump set and the game catalogue.
+
+Config stays JSON and coverage maps stay bitsets; both are reasoned exceptions rather than oversights, documented in the same place.
 
 ---
 
@@ -260,15 +284,19 @@ These are readable on GitHub, and also from inside the emulator via DianaOS's ow
 
 Near-term, roughly in order:
 
-1. Finish verifying the games that currently boot but have not been played through.
-2. Play-test the NES core against real games the way the SNES core has been.
-3. Close out the SuperFX cosmetic defect in Yoshi's Island (18 tiles that never reach VRAM).
-4. Character-conversion DMA on the SA-1 — unused by both Kirby titles, but a game that asks for it gets wrong tile data.
-5. Real per-Player-2 input bindings (only a mirror-P1 toggle exists today).
-6. Carry Mercury (Game Boy) up to a PPU and register it with the core factory.
-7. The Mesen-style multi-pane GUI debugger, built on `IDebugTarget` and LunaP.
+1. **Run the Game Boy hardware test corpus through Mercury's serial sink.** The sink and the harness exist; until the corpus actually runs, Mercury's timing claims are argued rather than demonstrated. Biggest single item on the board.
+2. Finish verifying the games that currently boot but have not been played through, and write the results back into `EmuSen_Games_Tested.md`, which lags the cores.
+3. Play-test the NES core against real games the way the SNES core has been.
+4. Locate the missing VRAM upload behind the Yoshi's Island intro strip — the question is now narrow and concrete, and `Venus_SuperFX.md` §10 records exactly which measurement comes next.
+5. Close the SuperFX gap that is left after instruction behaviour: cycle cost.
+6. Character-conversion DMA on the SA-1 — unused by both Kirby titles, but a game that asks for it gets wrong tile data.
+7. Real per-Player-2 input bindings (only a mirror-P1 toggle exists today).
+8. **Make it run acceptably on a low-end x86-64 laptop.** An open effort since 2026-08-03, and a different question from raw throughput — `mainComposite` is the target, and the duplicated main/sub decode is the next win. Four other optimizations were measured and rejected; `Venus_PPU.md` §13.1 records them so they are not retried.
+9. The Mesen-style multi-pane GUI debugger, built on `IDebugTarget` and LunaP.
 
 Explicitly deferred: true doubled-resolution interlace, and per-dot H-position timing.
+
+Consoles beyond the three are a naming and layout commitment, not a schedule.
 
 ---
 

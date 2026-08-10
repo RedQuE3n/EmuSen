@@ -58,6 +58,20 @@ fn generate_libretro_bindings() {
 fn link_mesen() {
     println!("cargo:rerun-if-env-changed=MESEN_CHECKOUT");
 
+    // Refused rather than attempted: Mesen's MSVC projects list all 296 of their
+    // sources, so the add-only probe-c-api.patch that makefile:138 globs in is
+    // never compiled, and a PE import names a DLL rather than a path so the
+    // checkout-relative load this backend exists to preserve has no expression
+    // at all. Both are properties of the toolchain, not gaps in this file - the
+    // libretro backend is the supported route on Windows. See §3.54.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        panic!(
+            "the mesen backend cannot be built for Windows - see \
+             EmuSen_Debugging_Tools_Reference_v5.md §3.54. Use --features libretro \
+             on Windows, or the mesen backend under WSL."
+        );
+    }
+
     let checkout = std::env::var("MESEN_CHECKOUT").expect(
         "MESEN_CHECKOUT is not set. Build the mesen backend through \
          ./build-probe.sh mesen <checkout>, which builds MesenCore.so first.",
@@ -69,6 +83,17 @@ fn link_mesen() {
         library.display()
     );
     println!("cargo:rerun-if-changed={}", library.display());
+
+    // Mach-O has no -l: and records the *dylib's own* install name rather than
+    // the path given here, so the relative load cannot be expressed at link
+    // time at all; build-probe.sh rewrites it afterwards with install_name_tool
+    // and the resulting binary loads the same relative path the ELF one does.
+    // CARGO_CFG_TARGET_OS, not cfg!(target_os): a build script is compiled for
+    // the host, so cfg! here would answer the wrong question when cross-built.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        println!("cargo:rustc-link-arg={}", library.display());
+        return;
+    }
 
     // -l:<relative path> against -L<checkout>: ld finds the file by
     // concatenation and records the name exactly as written, which is how the
@@ -87,9 +112,12 @@ fn find_include_dir() -> Option<PathBuf> {
 
     // Where build-probe.sh unpacks retroarch-devel, so a plain `cargo build`
     // works after a `./build-probe.sh libretro` without any environment.
+    // HOME covers Linux, macOS and every Windows shell that sets it (MSYS2, Git
+    // Bash); USERPROFILE is the fallback for a native Windows shell that does not.
     let cache = std::env::var("XDG_CACHE_HOME")
         .map(PathBuf::from)
-        .or_else(|_| std::env::var("HOME").map(|h| Path::new(&h).join(".cache")));
+        .or_else(|_| std::env::var("HOME").map(|h| Path::new(&h).join(".cache")))
+        .or_else(|_| std::env::var("USERPROFILE").map(|h| Path::new(&h).join(".cache")));
     if let Ok(cache) = cache {
         candidates.push(cache.join("emusen/probe/libretro/deps/usr/include/libretro-common"));
     }

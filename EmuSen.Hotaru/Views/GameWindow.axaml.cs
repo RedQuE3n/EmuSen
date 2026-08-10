@@ -8,6 +8,7 @@ using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
+using EmuSen.LunaP.Threading;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Venus.Debug;
@@ -205,11 +206,20 @@ namespace EmuSen.Hotaru.Views
             public required int Width;
             public required int Height;
         }
-        private FrameData? _pendingFrame;
-        private int _presentScheduled;
+        // "Newest wins, at most one UI-thread callback outstanding" is LunaP's Latest<T> now. This
+        // window, Mistress's MainWindow and Serenity's FramePresenter each wrote it out
+        // identically, which is what argued it into the toolkit - and all three carried the same
+        // defect: the scheduled flag was cleared AFTER the hand-off, so a frame submitted while the
+        // UI thread was inside UpdateFrame could neither schedule a callback nor be picked up by
+        // the running one, and sat there until the next frame displaced it.
+        //
+        // Invisible at 60 fps, and visible the moment the stream stops - pause, and the frame at
+        // risk is the last one drawn. LunaP.md §22.1.
+        private readonly Latest<FrameData> _frames;
 
         public GameWindow(ICore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
         {
+            _frames = new Latest<FrameData>(PresentPendingFrame);
             InitializeComponent();
 
             _core = core;
@@ -834,26 +844,11 @@ namespace EmuSen.Hotaru.Views
 
         private void SubmitFrame(byte[] rgba, int width, int height)
         {
-            Interlocked.Exchange(ref _pendingFrame, new FrameData { Rgba = rgba, Width = width, Height = height });
-            if (Interlocked.CompareExchange(ref _presentScheduled, 1, 0) == 0)
-            {
-                Dispatcher.UIThread.Post(PresentPendingFrame);
-            }
+            _frames.Offer(new FrameData { Rgba = rgba, Width = width, Height = height });
         }
 
-        private void PresentPendingFrame()
-        {
-            try
-            {
-                FrameData? frame = Interlocked.Exchange(ref _pendingFrame, null);
-                if (frame is null) return;
-                GameFrame.UpdateFrame(frame.Rgba, frame.Width, frame.Height);
-            }
-            finally
-            {
-                Interlocked.Exchange(ref _presentScheduled, 0);
-            }
-        }
+        private void PresentPendingFrame(FrameData frame) =>
+            GameFrame.UpdateFrame(frame.Rgba, frame.Width, frame.Height);
 
         private void Shutdown()
         {

@@ -28,12 +28,9 @@ No new project was created to hold either, and the near-miss recorded in the old
 
 ## 3. How EmuSen consumes it
 
-A `PackageReference`, from a folder feed, in four projects: `EmuSen.Mistress`, `EmuSen.Hotaru`, `EmuSen.Serenity` and `EmuSen.WiseMan`.
+A `PackageReference` from **nuget.org**, in four projects: `EmuSen.Mistress`, `EmuSen.Hotaru`, `EmuSen.Serenity` and `EmuSen.WiseMan`. There is nothing to set up and nothing to hand-carry; a bare clone builds.
 
-    dotnet pack src/EmuSen.LunaP/EmuSen.LunaP.csproj -c Release \
-        -o "<path>/EmuSen Project/local-packages"
-
-`NuGet.config` points at `local-packages/`, which is gitignored — the package is built from the other repository and is not this one's to carry. Replace that source with a real feed when the package is pushed to one.
+It was a folder feed for exactly as long as it took to publish the package, and `NuGet.config` records what that cost. LunaP is published from a tag by a workflow holding no credential at all — NuGet Trusted Publishing exchanges a GitHub OIDC token, which proves which repository and which workflow *file* is running, for a key valid for minutes.
 
 **The frontends fill in the settings seam**, two lines each in `Program.cs`, beside the `ConfigDiagnostics.Sink` line that was already there:
 
@@ -44,9 +41,11 @@ That is the whole adapter, and its being two lines rather than a class is why no
 
 ### 3.1 What the split costs
 
-Stated plainly, because it is a real cost and it is paid daily: **iterating on the toolkit while working on EmuSen now takes a `dotnet pack` and a version bump.**
+Stated plainly, because it is real and it is paid by whoever changes both at once: **a change to the toolkit reaches this project only through a published version.** Tag LunaP, let the workflow publish, bump the `PackageReference` here.
 
-NuGet caches by package id **and** version. Repacking at a version already in `~/.nuget/packages` does not propagate, and the build then fails on code that was just written as though it did not exist. Either bump `<Version>` in LunaP's csproj, or `rm -rf ~/.nuget/packages/emusen.lunap` before repacking. `NuGet.config` carries this warning too, because that is the file somebody will be looking at when it happens.
+For a change you are still iterating on, a local `dotnet pack` into a folder source is still the fastest loop — and the trap is waiting there: NuGet caches by package id **and** version, so repacking at a version already in `~/.nuget/packages` does not propagate and the build fails on code that was just written. Either use a prerelease version that changes every pack, or `rm -rf ~/.nuget/packages/emusen.lunap` first. `NuGet.config` carries the warning, because that is the file somebody will be looking at when it happens.
+
+What this bought is worth naming against that cost: a clone of this repository builds with `dotnet build`, and so does a clone of `EmuSen.Pegasus`, and so does a clone of anything else that ever wants the toolkit.
 
 `EmuSen.Cauldron` and `EmuSen.Galaxia` were made packable only because LunaP named them and a consumer outside this repository could not resolve a `ProjectReference`. Nothing outside wants them now, so both are back to `IsPackable=false` with their package metadata kept in place in case that changes.
 

@@ -54,7 +54,7 @@
          window scaffolding Views/ is migrating onto - see EmuSen_LunaP.md.
          Same reference EmuSen.Mistress carries; the two frontends share
          widgets, not windows - see EmuSen_LunaP_Gameplan.md §2. -->
-    <PackageReference Include="EmuSen.LunaP" Version="0.5.0" />
+    <PackageReference Include="EmuSen.LunaP" Version="0.6.0" />
   </ItemGroup>
 
 

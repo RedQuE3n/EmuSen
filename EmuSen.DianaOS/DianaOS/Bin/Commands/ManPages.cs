@@ -1885,6 +1885,40 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    vstop\n" +
                 "    vstop -w",
 
+            ["feed"] =
+                "NAME\n" +
+                "    feed - resume the game and keep watching it\n\n" +
+                "SYNOPSIS\n" +
+                "    feed [-w]\n\n" +
+                "DESCRIPTION\n" +
+                "    Resumes gameplay, like 'resume', but leaves a way back to the prompt\n" +
+                "    that does not depend on the game window having keyboard focus: press\n" +
+                "    Ctrl+C at the TERMINAL and the prompt reopens.\n\n" +
+                "    That watch is a per-frame poll of Console.KeyAvailable, not a blocking\n" +
+                "    read - the same non-blocking technique coretop's dashboard uses, spread\n" +
+                "    across frames because gameplay has to keep running underneath it. While\n" +
+                "    armed, Console.TreatControlCAsInput is set, so Ctrl+C arrives as a\n" +
+                "    readable key rather than the process-terminating signal it is\n" +
+                "    everywhere else. Entering the prompt by ANY path disarms it, so a plain\n" +
+                "    Ctrl+C means 'shut down' again the moment you are back at a prompt.\n\n" +
+                "    -w  Also opens the live picture in a separate window, so gameplay is\n" +
+                "        visible without the game window itself being on screen. Refreshed\n" +
+                "        at ~30Hz into one reused bitmap. Same accepted read-only race as\n" +
+                "        coretop -w: the timer reads core state off the UI thread with no\n" +
+                "        synchronization against the emulation thread's own RunFrame.\n\n" +
+                "    In EmuSen.Mistress the word means the same thing but does much less,\n" +
+                "    and deliberately so. That frontend's game view is already on screen\n" +
+                "    continuously, in the same window, the whole time its console window is\n" +
+                "    open - the two are just independent Avalonia windows - so there is no\n" +
+                "    separate feed to open. 'feed' there brings the game window to the\n" +
+                "    front, for when the console (or something else) is covering it, and\n" +
+                "    ignores '-w' the same way that frontend's own 'coretop' does. The\n" +
+                "    command exists there for consistency: one word means 'let me see the\n" +
+                "    game' everywhere DianaOS runs.\n\n" +
+                "EXAMPLES\n" +
+                "    feed\n" +
+                "    feed -w",
+
             ["mv"] =
                 "NAME\n" +
                 "    mv - move or rename a file or directory\n\n" +
@@ -2039,6 +2073,42 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    state save\n" +
                 "    state load\n" +
                 "    state save home/Saves/Save States/before-boss.state",
+
+            ["pause"] =
+                "NAME\n" +
+                "    pause - stop the emulation thread so its state can be read safely\n\n" +
+                "SYNOPSIS\n" +
+                "    pause\n\n" +
+                "DESCRIPTION\n" +
+                "    EmuSen.Mistress only, and it exists because of that frontend's\n" +
+                "    threading model rather than because pausing is a feature. Its console\n" +
+                "    window runs on the UI thread while RunFrame runs concurrently on a\n" +
+                "    separate emulation thread, with no synchronization between them - so a\n" +
+                "    command that reads or writes CPU/bus/renderer state races the core\n" +
+                "    unless that thread is actually stopped. 'pause' stops it; 'resume'\n" +
+                "    starts it again. Already-paused and not-paused are both reported and\n" +
+                "    are not errors.\n\n" +
+                "    EmuSen.Hotaru registers neither command and needs neither: its debug\n" +
+                "    prompt runs ON the emulation thread, so the prompt and RunFrame can\n" +
+                "    never overlap by construction.\n\n" +
+                "    Why a command, rather than pausing automatically whenever the console\n" +
+                "    window is open: opening a window does not make anything safe, only\n" +
+                "    actually pausing does, and leaving the game running while the console\n" +
+                "    merely sits open is a reasonable thing to want - typing up a command\n" +
+                "    while watching gameplay, then pausing immediately before running the\n" +
+                "    one that touches live state.\n\n" +
+                "    Both commands reach the window through plain constructor-injected\n" +
+                "    delegates rather than a reference to it, so neither knows anything\n" +
+                "    about that type beyond 'something I can pause and resume'. This is\n" +
+                "    also why they cannot live in the core-agnostic command registry: they\n" +
+                "    do not act on an IDebugTarget at all, they act on a frontend's own\n" +
+                "    emulation thread, which IDebugTarget deliberately has no concept of.\n\n" +
+                "    'Apply Cheats' in the Active Cheats window relies on this: while\n" +
+                "    paused the emulation thread is parked outside the core, so the poke\n" +
+                "    happens immediately instead of being queued for the next frame.\n\n" +
+                "EXAMPLES\n" +
+                "    pause\n" +
+                "    resume",
 
             ["resume"] =
                 "NAME\n" +

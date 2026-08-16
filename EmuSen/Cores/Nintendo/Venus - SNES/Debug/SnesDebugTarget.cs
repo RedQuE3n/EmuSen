@@ -17,8 +17,7 @@ using EmuSen.Cauldron;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
-    // Wraps a byte[] directly (WRAM, VRAM, CGRAM, OAM) - no address
-    // translation needed, the array index IS the address.
+    // Wraps a byte[] directly - the array index is the address.
     internal sealed class ByteArrayDebugMemorySpace : IDebugMemorySpace
     {
         private readonly byte[] _data;
@@ -26,8 +25,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public int Size => _data.Length;
         public bool IsWritable { get; }
 
-        // Plain array access - never touches live hardware, so never has
-        // a side effect beyond returning a byte.
+        // Plain array access, so never a side effect beyond returning a byte.
         public bool HasSideEffects => false;
 
         public ByteArrayDebugMemorySpace(string name, byte[] data, bool isWritable = true)
@@ -45,11 +43,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         }
     }
 
-    // Routes through MemoryBus.Read8/Write8 at a fixed bank offset - used
-    // for spaces that only make sense in terms of CPU address-space
-    // addressing (the raw 24-bit CPU bus itself, and SRAM, which is more
-    // naturally viewed at its mapped CPU address $70:0000 than as a bare
-    // byte offset).
+    // Bus-routed at a fixed bank, for spaces only meaningful as CPU addresses - see §3.2.
     internal sealed class BusDebugMemorySpace : IDebugMemorySpace
     {
         private readonly MemoryBus _bus;
@@ -58,14 +52,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public int Size { get; }
         public bool IsWritable => true;
 
-        // Conservative by default (true) - a bus-routed read CAN hit a
-        // live hardware register (RDNMI clears the pending-NMI flag on
-        // read, OPHCT/OPVCT toggle a byte-order latch, the manual joypad
-        // serial port shifts on every read), so assume the worst unless a
-        // caller knows better. SRAM specifically passes false: its
-        // address range ($70:0000+) only ever reaches inert cartridge
-        // SRAM, never a hardware register, even though it's routed
-        // through the same bus path as CpuBus.
+        // Conservative by default; SRAM opts out because its range is inert - see §3.2a.
         public bool HasSideEffects { get; }
 
         public BusDebugMemorySpace(string name, MemoryBus bus, uint baseAddress, int size, bool hasSideEffects = true)
@@ -81,9 +68,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public void Write(int address, byte value) => _bus.Write8((uint)(_baseAddress + (uint)address), value);
     }
 
-    // A space backed by a read/write pair rather than an array or the S-CPU
-    // bus - what a coprocessor's own address space needs, since its decode
-    // lives on the chip and not on MemoryBus - see Venus_SA1.md §11.2.
+    // A read/write pair, which is what a coprocessor's own decode needs - see Venus_SA1.md §11.2.
     internal sealed class DelegateDebugMemorySpace : IDebugMemorySpace
     {
         private readonly Func<int, byte> _read;
@@ -110,22 +95,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         }
     }
 
-    // SNES implementation of IDebugTarget - see that interface for why the
-    // shapes here are generic rather than SNES-specific. Everything below
-    // wraps already-existing, already-verified state (Cpu's register
-    // fields, Ppu's register bytes, the same OAM-decoding logic
-    // DumpActiveOam already used) rather than recomputing anything new -
-    // this is a reshaping of existing data into a queryable form, not new
-    // emulation logic.
-    //
-    // Also implements IWriteObserver (EmuSen.Cores.Nintendo.Venus.Memory) and owns the
-    // WatchRegistry directly - previously both the registry and a Cpu
-    // back-reference lived on MemoryBus itself, mixing debug-toolchain
-    // plumbing into the "real" bus class. Now MemoryBus just calls a
-    // generic WriteObserver hook with no idea what's on the other end;
-    // this class supplies the actual watch-recording logic AND the PC
-    // context (from its own _cpu reference, already held for other
-    // reasons) in one place.
+    // Reshapes already-verified state; also owns the WatchRegistry - see §3.2.
     public class SnesDebugTarget : IDebugTarget, IWriteObserver, IReadObserver, IFrameObserver, IRomReadPatcher, EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.IHistoricalCoprocessorTarget
     {
         private readonly Cpu _cpu;
@@ -134,8 +104,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly Renderer _renderer;
         private readonly WatchRegistry _watches = new WatchRegistry();
         private readonly FrameLogRegistry _frameLog = new FrameLogRegistry();
-        // A frontend that outlives any one core passes its own, so a cheat
-        // list survives a reset - see EmuSen_Settings_Reference.md §4.14.
+        // A frontend passes its own, so a cheat list survives a reset - see EmuSen_Settings_Reference.md §4.14.
         private readonly CheatRegistry _cheats;
         private readonly BreakpointRegistry _breakpoints = new BreakpointRegistry();
 
@@ -165,39 +134,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         private readonly RegisterFlowRegistry _registerFlow = new RegisterFlowRegistry();
         private readonly DmaLogRegistry _dmaLog = new DmaLogRegistry();
 
-        // Optional - VenusCore.LastFrameCpuSpc700Ms/LastFramePpuMs/
-        // LastFrameHdmaMs (or EmulatorSession's identical pass-through
-        // properties) live on the concrete core/session, not on anything
-        // this class already holds a reference to (Cpu/MemoryBus/
-        // Renderer), so a caller that wants HardwareLoad to report
-        // real numbers passes a delegate reading them; a caller that
-        // doesn't care (the WiseMan test fixtures, anything constructing
-        // this without a live per-frame loop behind it) just omits it,
-        // and HardwareLoad reports "not modeled" the same way
-        // ApuRegisters/AudioChannels do for a core with nothing to
-        // show, rather than every caller needing to pass real-looking
-        // stand-in numbers just to satisfy the constructor.
+        // Optional: a caller with no per-frame loop omits it and load reports "not modeled" - see §3.2a.
         private readonly Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? _frameTimings;
 
-        // Real-time providers backing IDebugTarget's provider properties
-        // below - see EmuSen.Cauldron.IRealtimeProvider's own comment.
-        // Each wraps the same live-read logic this class always had (now
-        // the private ReadXLive methods), just no longer re-run on every
-        // single call - Refresh() is expected to be called once per frame
-        // by whatever owns this target's core (see each host's own
-        // EmulationLoop), and Current then serves any number of reads -
-        // from any thread - against that one snapshot until the next
-        // Refresh().
+        // Refreshed once per frame, then read from any thread - see EmuSen_Cauldron.md §2.
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegistersProvider;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _videoRegistersProvider;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _apuRegistersProvider;
-        // The one provider that keeps history rather than just the latest
-        // snapshot. Coprocessor bugs are transitions - the chip renders,
-        // then stops - so "what were SFR/PBR/R15 doing in the seconds
-        // before it stopped" is the question that actually gets asked, and
-        // Current alone can never answer it. 600 refreshes is ~10 seconds
-        // of frames, comfortably spanning a transition without the ring
-        // becoming a memory cost worth thinking about.
+        // Coprocessor bugs are transitions, so this one keeps history - see §3.2a.
         private const int CoprocessorHistoryFrames = 600;
         private readonly HistoryProvider<IReadOnlyList<DebugRegisterValue>> _coprocessorRegistersProvider;
         private readonly PollingProvider<IReadOnlyList<DebugSpriteInfo>> _spritesProvider;
@@ -224,15 +168,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             bus.RomPatcher = this;
             bus.DebugPcProvider = () => (_cpu.LastInstructionPB, _cpu.LastInstructionPC);
 
-            // Pull hook, same shape as DebugPcProvider just above - VenusCore's
-            // RunFrame() loop calls this once per instruction (before it
-            // executes) with the CPU's current 24-bit PC, with no idea what's
-            // behind it beyond "a bool that means halt here". Keeps
-            // BreakpointRegistry itself off MemoryBus/Cpu entirely, same
-            // reasoning as the WriteObserver/ReadObserver split documented
-            // in this class's own header comment.
-            // Coverage rides the same per-instruction seam, and costs one
-            // bool test while disarmed - see EmuSen_Debugging_Tools_Reference_v5.md §3.24.
+            // A pull hook per instruction; coverage rides the same seam - see §3.2a.
             bus.BreakpointChecker = pc24 =>
             {
                 _coverage.Record(pc24);
@@ -321,11 +257,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _dmaLog.ScanlineProvider = () => bus.CurrentScanline;
             bus.Dma.DmaLog = _dmaLog;
 
-            // Each provider's initial snapshot is read right here, not left
-            // default/empty - a caller reading Current before this target's
-            // owner ever calls Refresh() (every WiseMan test fixture, for
-            // instance) should still see real, current state, not "nothing
-            // published yet".
+            // Primed here, so a fixture reading Current before any Refresh sees real state - see §3.2a.
             _cpuRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadCpuRegistersLive, ReadCpuRegistersLive());
             _videoRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadVideoRegistersLive, ReadVideoRegistersLive());
             _apuRegistersProvider = new PollingProvider<IReadOnlyList<DebugRegisterValue>>(ReadApuRegistersLive, ReadApuRegistersLive());
@@ -372,8 +304,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return name == null ? $"${0x2100 + register:X4}" : $"{name} ${0x2100 + register:X4}";
         }
 
-        // One entry per chip this cartridge actually carries - see `man cpus`.
-        // Both banks' worth, because which set is live depends on the E flag - see `man vectors`.
+        // One entry per chip the cartridge carries, both banks' vectors - see `man cpus` and `man vectors`.
         private static readonly InterruptVector[] Vectors =
         {
             new("COP", 0x00FFE4, 2, "Native (E=0)"),
@@ -525,19 +456,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> ApuRegisters => _apuRegistersProvider;
         public IRealtimeProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorRegisters => _coprocessorRegistersProvider;
 
-        // The history behind CoprocessorRegisters, for anything that wants
-        // the transition rather than the instant - see the field's comment.
+        // The transition rather than the instant - see §3.2a.
         public HistoryProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorHistory => _coprocessorRegistersProvider;
         public IRealtimeProvider<IReadOnlyList<DebugSpriteInfo>> Sprites => _spritesProvider;
         public IRealtimeProvider<IReadOnlyList<DebugPaletteInfo>> Palettes => _palettesProvider;
         public IRealtimeProvider<IReadOnlyList<DebugAudioChannelInfo>> AudioChannels => _audioChannelsProvider;
         public IRealtimeProvider<IReadOnlyList<DebugLoadInfo>> HardwareLoad => _hardwareLoadProvider;
 
-        // Refreshes every provider above from live core state in one call -
-        // the one method a host's per-frame loop needs to know about (see
-        // each host's own EmulationLoop) rather than seven individual
-        // Refresh() calls. Must only run on the thread that owns this
-        // target's core, same contract as every individual Refresh().
+        // One call per frame, on the thread that owns the core - see EmuSen_Cauldron.md §5.
         public void RefreshProviders()
         {
             _cpuRegistersProvider.Refresh();
@@ -601,14 +527,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return (string.Join("  ", rendered), null);
         }
 
-        // Reads a (space, address, width) value the same way
-        // DebugCommandHelpers.ReadValue does (little-endian accumulation)
-        // - duplicated rather than shared since that helper lives in
-        // Shell/Commands and takes an already-resolved IDebugMemorySpace,
-        // while this needs to resolve the space by name itself. Called
-        // once per registered frame-log entry, once per frame - cheap
-        // even with several entries active, since GetMemorySpaces()
-        // allocates a small fixed array rather than anything heavier.
+        // Duplicated rather than shared: the helper takes an already-resolved space.
         public void OnFrame(long frameCount)
         {
             _frameLog.RecordFrame(frameCount, (spaceName, address, width) =>
@@ -624,16 +543,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             ApplyCheats();
         }
 
-        // Re-pokes every enabled cheat - see CheatRegistry's own comment on
-        // why this needs to happen every frame rather than once when a cheat
-        // is added. Read as well as write: increase/decrease and bit-position
-        // cheats have to see what is already there - see `man cheat`.
-        //
-        // Public so a frontend's "Apply Cheats" can force one immediately
-        // rather than waiting for the next frame, which is the difference
-        // between a paused game showing the effect and not - see
-        // EmuSen_Settings_Reference.md §4.15. Must be called on the thread
-        // that owns the core, same as OnFrame itself.
+        // Public so an Apply button need not wait a frame - see EmuSen_Settings_Reference.md §4.15.
         public void ApplyCheats()
         {
             _cheats.ApplyAll(
@@ -649,11 +559,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 });
         }
 
-        // Game Genie-style ROM-read intercept - see IRomReadPatcher and
-        // CheatRegistry.TryPatchRom. Called from MemoryBus.RomPatcher for
-        // every cartridge-routed read, so this has to stay cheap when no
-        // RomPatch cheat is active, same "cheap when nothing matches"
-        // contract WatchRegistry's Record already has.
+        // On every cartridge read, so it must stay cheap when nothing matches - see EmuSen_Cheats.md.
         public bool TryPatch(uint address, byte originalValue, out byte patchedValue)
         {
             return _cheats.TryPatchRom(address, originalValue, out patchedValue);
@@ -661,11 +567,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         public void OnWrite(string spaceName, int address, byte value)
         {
-            // Called synchronously from within MemoryBus.Write8, so _cpu's
-            // LastInstructionPC/PB are still exactly whichever instruction
-            // caused this write - same correctness property the earlier,
-            // MemoryBus-owned version relied on, just without MemoryBus
-            // needing to hold a Cpu reference to get it.
+            // Called inside Write8, so the CPU's last-instruction PC still names this write - see §3.2a.
             _watches.RecordWrite(spaceName, address, value,
                 () => $"PC=0x{_cpu.LastInstructionPB:X2}{_cpu.LastInstructionPC:X4}");
             _breakpoints.NoteWrite(spaceName, address, value);
@@ -682,8 +584,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             _freezes.Restore(() => space.Write(address, frozen));
         }
 
-        // The S-CPU's PC says nothing about an access a cartridge chip made on
-        // its own, so label these with that chip's own PC - see Venus_SA1.md §11.4.
+        // A chip's own access gets that chip's PC, not the S-CPU's - see Venus_SA1.md §11.4.
         public void OnCoprocessorWrite(string spaceName, int address, byte value)
         {
             if (CoprocessorContext() is not { } context) { OnWrite(spaceName, address, value); return; }
@@ -708,9 +609,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return null;
         }
 
-        // Mirror of OnWrite for reads - see IReadObserver's comment on why
-        // this is a separate interface/method rather than folded into
-        // OnWrite.
+        // Mirror of OnWrite for reads - see IReadObserver.
         public void OnRead(string spaceName, int address, byte value)
         {
             _watches.RecordRead(spaceName, address, value,
@@ -721,25 +620,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         public long FrameCount => _bus.FrameCount;
 
-        // Uses the CPU's CURRENT E (emulation mode) and M/X (accumulator/
-        // index width) flags as the starting point for <address> - the
-        // disassembler itself now tracks REP/SEP as it walks forward, so a
-        // requested range that crosses one decodes correctly on both
-        // sides (see Snes65816Disassembler's comment for the remaining
-        // XCE/eFlag gap that isn't covered by that fix).
-        //
-        // IMPORTANT REMAINING CAVEAT, not fixed by the above: M/X are
-        // properties of a specific point in the CPU's actual control flow,
-        // not global constants - if <address> isn't the CPU's current PC
-        // (the normal case: disassembling some other routine while
-        // emulation is paused elsewhere), the flags in effect when that
-        // code *actually* runs could differ from the CPU's flags *right
-        // now*, and there's no way to know that without either tracing
-        // real execution to that address or doing full control-flow
-        // analysis - neither of which a static, read-only disassembler
-        // does. Treat disassembly of anywhere other than the current PC
-        // as best-effort for immediate-mode operand widths specifically;
-        // opcode/addressing-mode decoding itself is unaffected.
+        // REP/SEP are tracked, but immediate widths away from the current PC are best-effort - see §3.2a.
         public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
             => Disassemble(spaceName, address, count, System.Array.Empty<string>());
 
@@ -760,8 +641,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             if (string.Equals(space.Name, "DSPPRG", StringComparison.OrdinalIgnoreCase) && _bus.Cart.NecDsp is { } prgDsp)
                 return NecDspDisassembler.Disassemble(prgDsp.DebugProgramWord, address, count);
 
-            // Immediate-operand widths come from the CPU that actually runs
-            // this space's code, not always the S-CPU - see Venus_SA1.md §11.3.
+            // Widths come from whichever CPU runs this space's code - see Venus_SA1.md §11.3.
             Cpu decodingCpu = DecodingCpuFor(space.Name);
             bool mFlagSet = (decodingCpu.P & (byte)CpuFlags.M) != 0;
             bool xFlagSet = (decodingCpu.P & (byte)CpuFlags.X) != 0;
@@ -785,30 +665,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return sa1Space && _bus.Cart.Sa1 is { } sa1 ? sa1.Cpu : _cpu;
         }
 
-        // Moved from CallersCommand/WritersCommand/ReadersCommand (which
-        // used to hardcode this exact opcode-byte switch directly in the
-        // "core-agnostic" shell layer, despite their own doc comments
-        // claiming otherwise) - see IDebugTarget.ClassifyStaticReference's
-        // own comment for the full rationale. Deliberately only matches
-        // addressing modes whose target is knowable from the instruction
-        // bytes alone:
-        //   - Absolute (JSR/JMP/STA/STX/STY/STZ/LDA/LDX/LDY $nnnn) - bank
-        //     assumed to equal the instruction's own bank (DBR-as-PB for
-        //     stores/loads, PB-as-PB for JSR/JMP, both the same convention
-        //     this scan always used). Not always true at runtime (DBR can
-        //     differ from PB) but it's the same best-effort assumption this
-        //     mechanism has always made, not a new one introduced by this
-        //     move.
-        //   - Absolute long (JSL/STA/LDA $nnnnnn) - exact 24-bit target, no
-        //     assumption needed. LDX/LDY/STX/STY/STZ have no long form on
-        //     the 65816, so they only ever contribute the absolute case.
-        // Everything else (direct-page, indexed, indirect, stack-relative,
-        // immediate) is excluded rather than guessed at - their real target
-        // depends on runtime register/D-register/S-register state a static
-        // scan has no way to know. JMP ($nnnn)/JMP ($nnnn,X) (indirect
-        // forms - same 3-byte length and "JMP" mnemonic as the direct form,
-        // but opcodes 0x6C/0x7C, not matched below) are the same kind of
-        // deliberate exclusion.
+        // Absolute and absolute-long only; everything else is excluded, not guessed - see §3.2a.
         public (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(DisassembledInstruction instr)
         {
             byte opcode = instr.Bytes[0];
@@ -842,42 +699,24 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             var spaces = new List<IDebugMemorySpace>
             {
                 new BusDebugMemorySpace("CpuBus", _bus, 0x000000, 0x1000000),
-                // Registers mirror identically across every hardware bank,
-                // so bank 0's 64KB is the whole address space that matters
-                // here - `watch add IO 4016 1` (or `mem IO 4218 4`) means
-                // exactly the $4016/$4218 a CPU trace's Target Addr already
-                // shows, no bank prefix needed. Exists specifically so
-                // MemoryBus's "IO"-tagged ObserveRead/ObserveWrite calls
-                // (ReadInternal/Write8's own comments) pass FindSpace's
-                // validation - before this, `watch add IO ...` failed
-                // outright with "No memory space named 'IO'" even though
-                // the observer hook itself was already wired up.
+                // Bank 0, because registers mirror across every hardware bank - see §3.2a.
                 new BusDebugMemorySpace("IO", _bus, 0x000000, 0x10000),
                 new ByteArrayDebugMemorySpace("WRAM", _bus.Ram),
                 new ByteArrayDebugMemorySpace("VRAM", _ppu.Vram),
                 new ByteArrayDebugMemorySpace("CGRAM", _ppu.Cgram),
                 new ByteArrayDebugMemorySpace("OAM", _ppu.Oam),
                 new BusDebugMemorySpace("SRAM", _bus, 0x700000, _bus.SramSize, hasSideEffects: false),
-                // Raw APU RAM, so mem/disasm/watch/snapshot reach the sound
-                // driver the same way they already reach the 65816's world.
-                // Deliberately the underlying array, not Spc700.Read8 - reads
-                // here must not consume timer counters or return the IPL
-                // overlay instead of the RAM beneath it (Venus_APU.md §1.1).
+                // The underlying array, not Spc700.Read8, which would consume timers - see Venus_APU.md §1.1.
                 new ByteArrayDebugMemorySpace("APURAM", _bus.Spc700.Ram),
             };
 
-            // Coprocessor RAM, only when the cartridge actually carries the
-            // chip - listing a space that can't be read would break `spaces`
-            // and FindSpace's "does this name exist" contract. GSURAM is the
-            // GSU's work RAM and framebuffer both, so snapshot/diff over it
-            // answers "is the chip still plotting" - see Venus_SuperFX.md §5.1.
+            // Only when the cartridge carries the chip - see §3.2a and Venus_SuperFX.md §5.1.
             var cart = _bus.Cart;
             if (cart.SuperFx is { } gsu)
             {
                 spaces.Add(new ByteArrayDebugMemorySpace("GSURAM", gsu.DebugRam));
 
-                // The GSU's own program space, so `disasm GSUBUS <pbr><r15>`
-                // decodes what the chip is executing - see Venus_SuperFX.md §8.1.
+                // The GSU's own program space, so `disasm GSUBUS` decodes it - see Venus_SuperFX.md §8.1.
                 spaces.Add(new DelegateDebugMemorySpace("GSUBUS", 0x1000000,
                     a => gsu.DebugReadProgram(a), (a, v) => gsu.DebugWriteProgram(a, v)));
             }
@@ -885,22 +724,15 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             {
                 spaces.Add(new ByteArrayDebugMemorySpace("SA1IRAM", sa1.IRam));
 
-                // BW-RAM. The SRAM space above cannot reach it: that one is
-                // anchored at bank $70, and an SA-1 cart maps BW-RAM at
-                // $40-$4F, so `mem SRAM` reads an unmapped bank and reports
-                // 32KB of zeroes - see Venus_SA1.md §11.2.
+                // SRAM is anchored at bank $70 and cannot reach BW-RAM - see Venus_SA1.md §11.2.
                 if (sa1.BwRamSize > 0) spaces.Add(new ByteArrayDebugMemorySpace("BWRAM", sa1.DebugBwRam));
 
-                // The SA-1's own 24-bit address space, Super MMC banking
-                // applied, so `disasm SA1BUS <pc>` decodes what the chip is
-                // actually executing - see Venus_SA1.md §11.3.
+                // The SA-1's own space with Super MMC banking applied - see Venus_SA1.md §11.3.
                 spaces.Add(new DelegateDebugMemorySpace("SA1BUS", 0x1000000,
                     a => sa1.DebugReadSa1((uint)a), (a, v) => sa1.WriteSa1((uint)a, v)));
             }
 
-            // The NEC DSP's RAM is ushort[]; this presents it little-endian,
-            // matching how the chip's own 16-bit words reach the S-CPU over
-            // DR - see Venus_NecDSP.md §6.
+            // ushort[] presented little-endian, as its words reach the S-CPU - see Venus_NecDSP.md §6.
             if (cart.NecDsp is { } necDsp && necDsp.Ram.Length > 0)
             {
                 spaces.Add(new DelegateDebugMemorySpace("DSPRAM", necDsp.Ram.Length * 2,
@@ -914,8 +746,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                     }));
             }
 
-            // Firmware, three bytes per 24-bit word. `disasm DSPPRG` indexes
-            // words, not bytes - see Venus_NecDSP.md §8.
+            // `disasm DSPPRG` indexes words, not bytes - see Venus_NecDSP.md §8.
             if (cart.NecDsp is { } prgDsp && prgDsp.DebugProgramWords > 0)
             {
                 spaces.Add(new DelegateDebugMemorySpace("DSPPRG", prgDsp.DebugProgramWords * 3,
@@ -943,8 +774,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             };
         }
 
-        // Every value here comes from a Debug* view, never the chip's own
-        // ReadRegister - see IDebugTarget.CoprocessorRegisters.
+        // Every value comes from a Debug* view, never the chip's own ReadRegister.
         private IReadOnlyList<DebugRegisterValue> ReadCoprocessorRegistersLive()
         {
             var cart = _bus.Cart;
@@ -976,8 +806,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                     new DebugRegisterValue("PLOTADRHI", (ulong)gsu.DebugPlotMaxAddr, 32),
                     new DebugRegisterValue("Running", (ulong)(gsu.Running ? 1 : 0), 1),
                 };
-                // R15 is the program counter, so the register file is the
-                // GSU's trace in structured form - see Venus_SuperFX.md §3.1.
+                // R15 is the program counter, so the file is the GSU's trace - see Venus_SuperFX.md §3.1.
                 for (int i = 0; i < 16; i++) values.Add(new DebugRegisterValue($"R{i}", gsu.R[i], 16));
                 return values;
             }
@@ -1059,13 +888,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             };
         }
 
-        // See IDebugTarget.ApuRegisters's own comment for why this
-        // exists. InPort<n> is what the CPU most recently wrote (what the
-        // SPC700 reads back at $00F4-F7) - OutPort<n> is what the SPC700
-        // most recently wrote (what the CPU reads back at $2140-2143).
-        // Same asymmetric-direction split as Spc700.ReadPort/WritePort;
-        // printing both together is the point, since a stuck handshake
-        // typically shows as one direction moving and the other not.
+        // Both directions together, because a stuck handshake moves only one - see Venus_APU.md §2.7.
         private IReadOnlyList<DebugRegisterValue> ReadApuRegistersLive()
         {
             var spc = _bus.Spc700;
@@ -1086,16 +909,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
                 new DebugRegisterValue("OutPort2", spc.ReadPort(2), 8),
                 new DebugRegisterValue("OutPort3", spc.ReadPort(3), 8),
 
-                // The S-DSP's own global (non-per-voice) register file -
-                // previously entirely invisible to the debug toolchain
-                // (this method only ever exposed the SPC700 CPU's own
-                // regs/ports, never anything from SDsp itself). Added
-                // diagnosing a "part of the music is missing" report -
-                // NON/PMON specifically are documented as unimplemented
-                // (Venus_APU.md §4.1), so seeing whether a game actually
-                // sets them non-zero is the fastest way to confirm or
-                // rule that out as the cause, instead of guessing from
-                // audio output alone.
+                // NON/PMON are unimplemented, so seeing a game set them rules that in or out - see Venus_APU.md §4.1.
                 new DebugRegisterValue("DSP_MVOLL", spc.Dsp.PeekRegister(0x0C), 8),
                 new DebugRegisterValue("DSP_MVOLR", spc.Dsp.PeekRegister(0x1C), 8),
                 new DebugRegisterValue("DSP_EVOLL", spc.Dsp.PeekRegister(0x2C), 8),
@@ -1114,13 +928,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             };
         }
 
-        // Same size-select/high-table decoding DumpActiveOam already does
-        // (Renderer.Debug.cs) - reshaped into structured records instead of
-        // printed lines. Parked sprites (Y=$E0/$F0, the same heuristic
-        // DumpActiveOam already used) are skipped here too, for the same
-        // reason: a generic sprite viewer showing 128 entries where ~120
-        // are conventionally-parked filler isn't more informative, just
-        // noisier.
+        // Parked sprites are skipped, as DumpActiveOam already skips them - see Renderer.Debug.cs.
         private IReadOnlyList<DebugSpriteInfo> ReadSpritesLive()
         {
             var result = new List<DebugSpriteInfo>();
@@ -1162,11 +970,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return result;
         }
 
-        // 16 palettes of 16 colors each (256 CGRAM entries total) -
-        // reports all of it rather than splitting BG (0-7) vs OBJ (8-15)
-        // at the interface level, since that split is itself an SNES-
-        // specific convention; a generic palette-viewer just shows however
-        // many DebugPaletteInfo entries a target reports.
+        // All 256 entries: the BG/OBJ split is an SNES convention, not an interface one.
         private IReadOnlyList<DebugPaletteInfo> ReadPalettesLive()
         {
             var result = new List<DebugPaletteInfo>();
@@ -1189,15 +993,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return result;
         }
 
-        // Delegates to the existing, already-verified StateDump formatter
-        // rather than re-deriving the same text - this is exactly the
-        // "free-text escape hatch" case the interface comment describes.
+        // The free-text escape hatch, delegated to StateDump rather than re-derived - see §3.1.
         public string GetSummaryText() => StateDump.DumpAll(_cpu, _bus);
 
-        // SNES BG screen entry: 2 bytes, bits 0-9 tile index, 10-12
-        // palette, 13 priority, 14 h-flip, 15 v-flip - the same layout
-        // for every BG mode's tilemap. See Venus_PPU.md for the real
-        // hardware reference this matches.
+        // Two bytes: tile 0-9, palette 10-12, priority 13, flips 14-15 - see Venus_PPU.md.
         public int TilemapEntryStride => 2;
 
         public string DecodeTilemapEntry(IDebugMemorySpace space, int address)
@@ -1215,15 +1014,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return $"{tileIndex:X3}{palette}{(priority ? 'P' : '.')}{(hFlip ? 'H' : '.')}{(vFlip ? 'V' : '.')}";
         }
 
-        // Moved from TileCommand (which used to hardcode this exact
-        // bitplane layout directly in the "core-agnostic" shell layer) -
-        // see IDebugTarget.DecodeTilePixels's own comment for the full
-        // rationale. Standard SNES planar tile format, consistent across
-        // every BG/OBJ layer: bpp/2 bitplane pairs of 16 bytes each (2bpp =
-        // 1 pair/16 bytes, 4bpp = 2 pairs/32 bytes, 8bpp = 4 pairs/64
-        // bytes), each pair row-interleaved (2 bytes per row, low bit of
-        // each byte contributing one bitplane) - same layout SampleBgPixel
-        // in Renderer.Backgrounds.cs uses for real rendering.
+        // Planar, bpp/2 row-interleaved pairs, as SampleBgPixel reads for real rendering.
         public byte[] DecodeTilePixels(IDebugMemorySpace space, int address, int bpp)
         {
             if (bpp != 2 && bpp != 4 && bpp != 8)
@@ -1262,27 +1053,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return pixels;
         }
 
-        // Delegates straight to Renderer's own headless-safe export -
-        // see that method's comment for why it's safe to call with no
-        // window at all (it only ever touches plain C# arrays).
+        // Renderer's headless-safe export, which only touches plain arrays.
         public (byte[] Rgba, int Width, int Height) RenderTileSheet() => _renderer.GetVramTileSheetRgba(_ppu);
 
         public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => _renderer.GetPaletteSwatchRgba(_ppu);
 
-        // ToArray() rather than dequeuing - see IDebugTarget.GetAudioSamples's
-        // own comment on why this must never steal samples from a live
-        // audio-playback consumer of the same queue.
+        // ToArray, never dequeue: it must not steal from a live audio consumer - see §3.1.
         public (short[] Samples, int SampleRate) GetAudioSamples()
         {
             short[] samples = _bus.Spc700.Dsp.AudioBuffer.ToArray();
             return (samples, EmuSen.Audio.AudioSettings.SampleRate);
         }
 
-        // Reshapes SDsp's own per-voice debug snapshot into the generic
-        // DebugAudioChannelInfo shape - see that struct's and
-        // IDebugTarget.AudioChannels's own comments for why. Level is
-        // the voice's 0-2047 envelope value rescaled to 0-100 so a generic
-        // viewer doesn't need to know that range is SNES-specific.
+        // Envelope rescaled to 0-100, so a viewer needs no SNES-specific range.
         private IReadOnlyList<DebugAudioChannelInfo> ReadAudioChannelsLive()
         {
             var dsp = _bus.Spc700.Dsp;
@@ -1300,14 +1083,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
 
         public void SetChannelMuted(int index, bool muted) => _bus.Spc700.Dsp.SetVoiceMuted(index, muted);
 
-        // Normalizes each raw millisecond timing against a 60fps frame's
-        // real wall-clock budget (~16.67ms) - the same "percent of one
-        // frame" framing VenusCore's own profiling comments already use
-        // internally, just exposed generically here. Clamped to 100 since
-        // a frame running behind (dropped frames, a debug prompt having
-        // just eaten wall-clock time) can otherwise report over 100%,
-        // which would look like a rendering bug in a bar that's only
-        // ever meant to go up to "full."
+        // Percent of a 60fps frame, clamped so a late frame cannot read over full.
         private IReadOnlyList<DebugLoadInfo> ReadHardwareLoadLive()
         {
             if (_frameTimings is null) return Array.Empty<DebugLoadInfo>();
@@ -1324,8 +1100,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             };
         }
 
-        // 128 sprites total in OAM - a fixed, documented real-hardware
-        // constant, not something derived from live state.
+        // 128 sprites in OAM - a documented hardware constant, not derived state.
         public int MaxSprites => 128;
     }
 }

@@ -18,35 +18,10 @@ using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Cores.Nintendo.Venus
 {
-    // The SNES's ICore implementation - owns and drives Cpu/MemoryBus/
-    // Spc700/Renderer frame-by-frame. This is the ONE place the per-
-    // scanline timing loop lives now; it used to exist as two separately-
-    // maintained copies (the console frontend's Main loop, now
-    // EmuSen.Hotaru/Program.cs, and Common/EmulatorSession.cs's
-    // RunFrame()) that had to be kept in sync
-    // by hand - EmulatorSession's own header comment even said so
-    // explicitly. Both now construct a VenusCore and call RunFrame() on
-    // it instead.
-    //
-    // Exposes Cart/Spc700/Bus/Cpu/Renderer as public properties beyond
-    // what ICore requires. This is deliberate, not a leaky abstraction:
-    // Program.cs's debug toolchain (SnesDebugTarget, DianaOSInterpreter,
-    // the F1-F9 hotkeys, the F4 prompt) all need real SNES-specific access
-    // a core-agnostic interface has no business providing - see
-    // ICore.cs's own comment for why input and debug-toolchain wiring
-    // deliberately stay on the concrete type instead of the interface.
+    // The SNES ICore, and the one place the per-scanline loop lives - see EmuSen_Multicore.md.
     public partial class VenusCore : ICore, IFrameProfiler, ICoprocessorHalt, ICoprocessorLoad, ITraceFlushable
     {
-        // Real master clocks per scanline (341 dots x 4 master-clocks/dot),
-        // not an abstract "CPU cycle" count - Cpu.Step() now returns actual
-        // elapsed master clocks directly (see its own comment), computed
-        // from real per-access region speeds instead of a flat assumed
-        // rate. This used to be 227, a CPU-cycle-unit figure back-derived
-        // assuming every access ran at FastROM's 6-master-clock rate
-        // uniformly (227 = 1364/6) - wrong for the common SlowROM case
-        // (real hardware only fits ~1364/8 ≈ 170 CPU cycles per scanline
-        // there), and the source of this project's ~8% SPC700 audio-pacing
-        // undershoot (see Venus_APU.md).
+        // Real master clocks per scanline, not back-derived CPU cycles - see Venus_CPU.md §8.
         public const int CyclesPerScanline = 1364;
 
         // The once-per-scanline DRAM refresh stall - see Venus_CPU.md §8.7.
@@ -65,9 +40,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         // "SNES" little-endian, then the format version - see EmuSen_Save_States.md §3.
         private const uint StateMagic = 0x53454E53;
-        // v2 appends the SA-1's state after the four original blobs, v3 the
-        // NEC DSP's, each only for a cartridge carrying that chip - see
-        // EmuSen_Save_States.md §3.
+        // Each version appends a chip's state, only for a cart carrying it - see EmuSen_Save_States.md §3.
         private const int StateVersion = 3;
 
         private readonly bool _headless;
@@ -87,8 +60,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         public string CoreName => "SNES";
 
-        // Per-phase breakdown of the last completed RunFrame() call, timed
-        // at per-scanline granularity - see Venus_PPU.md §13.
+        // Per-phase breakdown of the last RunFrame, at scanline granularity - see Venus_PPU.md §13.
         public double LastFrameCpuSpc700Ms { get; private set; }
         public double LastFramePpuMs { get; private set; }
         public double LastFrameHdmaMs { get; private set; }
@@ -127,18 +99,14 @@ namespace EmuSen.Cores.Nintendo.Venus
         public double LastFrameMainCompositeMs => Renderer?.LastFrameMainCompositeMs ?? 0;
         public double LastFrameSubCompositeMs => Renderer?.LastFrameSubCompositeMs ?? 0;
 
-        // Not a fixed constant - pseudo-hi-res (SETINI bit 3) can make a
-        // frame 512 pixels wide instead of 256. See Renderer.cs's
-        // FrameWidth field for the full citation. Defaults to 256 before
-        // a ROM is loaded (no renderer exists yet).
+        // Pseudo-hi-res can make a frame 512 wide, so this is read, not fixed - see Venus_CPU.md §12.
         public int ScreenWidth => Renderer?.FrameWidth ?? 256;
         public int ScreenHeight => 224;
 
         // NTSC 21477272/(262*1364) ~= 60.098, PAL 21281370/(312*1364) ~= 50.007 - see Venus_CPU.md §8.5b.
         public double FrameRateHz => _masterClockHz / (_totalScanlines * (double)CyclesPerScanline);
 
-        // The master clocks one frame is worth - what a coprocessor's own
-        // per-frame clock total has to match - see Venus_SA1.md §2.3.
+        // What a coprocessor's own per-frame clock total must match - see Venus_SA1.md §2.3.
         public long MasterClocksPerFrame => (long)_totalScanlines * CyclesPerScanline;
 
         public bool IsRomLoaded => Bus != null;
@@ -157,26 +125,13 @@ namespace EmuSen.Cores.Nintendo.Venus
         // Drops the per-scanline pixel pass only - see EmuSen_Rewind_And_FastForward.md §2.2.
         public bool SkipRendering { get; set; }
 
-        // True from the instant RunFrame() halts on a breakpoint (or an
-        // armed single-step - see BreakpointRegistry) until the next
-        // RunFrame() call resumes past it. Kept on the concrete type
-        // rather than ICore, same call EmulatorSession's own comment
-        // already makes for the LastFrame*Ms profiling properties: nothing
-        // consumes this except the console frontend's own debug prompt
-        // (EmuSen.Hotaru/Program.cs), which already holds a
-        // concrete VenusCore, not just an ICore.
+        // On the concrete type, because only a frontend's debug prompt reads it - see Venus_CPU.md §12.
         public bool IsHaltedAtBreakpoint { get; private set; }
 
-        // The 24-bit CPU address RunFrame() halted in front of - only
-        // meaningful while IsHaltedAtBreakpoint is true.
+        // Only meaningful while IsHaltedAtBreakpoint is true.
         public int HaltedAddress { get; private set; }
 
-        // Mid-scanline resume state - see RunFrame()'s own comment on why
-        // these are fields instead of locals. Reset once a scanline's
-        // instruction loop actually finishes (not on every RunFrame() call,
-        // since a breakpoint can return out of this method partway through
-        // a scanline and a later call needs to pick up exactly where it
-        // left off rather than redoing that scanline's start-of-line work).
+        // Fields, because a halt can return mid-scanline - see Venus_CPU.md §12.
         private bool _scanlineStarted;
         private int _lineCycles;
         private bool _refreshedThisLine;
@@ -185,55 +140,30 @@ namespace EmuSen.Cores.Nintendo.Venus
         // Taken where the old inline block took afterCpuSpc700, so the phase split is unchanged.
         private long _phaseEndCpu;
 
-        // Skips exactly one breakpoint check right after resuming from a
-        // halt, so `continue`ing past a breakpoint executes the instruction
-        // it's sitting on instead of instantly re-halting on the same PC
-        // forever. Set for exactly one instruction each time RunFrame() is
-        // (re)entered while IsHaltedAtBreakpoint is true.
+        // Or `continue` re-halts forever on the same PC - see Venus_CPU.md §12.
         private bool _justResumedFromBreakpoint;
 
         // Which chip the pending halt came from, "cpu" when it was the S-CPU - see `man cpus`.
         public string HaltedCpu { get; private set; } = "cpu";
 
-        // True while RunFrame() is halted on the coprocessor - lets a frontend
-        // label the halt and read the right PC - see Venus_SA1.md §11.5.
+        // Lets a frontend label the halt and read the right PC - see Venus_SA1.md §11.5.
         public bool IsHaltedOnCoprocessor => IsHaltedAtBreakpoint && HaltedCpu is "sa1" or "gsu" or "dsp";
 
-        // Per-frame phase-timing accumulators - promoted from RunFrame()
-        // locals to fields for the same mid-frame-resume reason as
-        // _lineCycles above: a breakpoint can pause a frame partway through,
-        // so these need to keep accumulating across however many RunFrame()
-        // calls it actually takes to finish one frame, only resetting once
-        // the frame genuinely completes. NOTE: if a breakpoint halt sits
-        // open for a while (the user inspecting state at the F4 prompt),
-        // the wall-clock gap while halted gets counted into whichever
-        // phase's Stopwatch span was in progress at the time - an accepted
-        // distortion of that one frame's LastFrame*Ms numbers, since this
-        // is a debug/profiling readout, not anything gameplay-affecting.
+        // Fields for the same mid-frame reason; a long halt distorts them - see Venus_CPU.md §12.
         private long _cpuSpc700TicksAccum;
         private long _ppuTicksAccum;
         private long _hdmaTicksAccum;
 
-        // Fractional carry for the CPU-cycle -> SPC700-cycle conversion
-        // just below - see that call site's own comment for why this is
-        // needed at all. Kept as a field (not a RunFrame local) so the
-        // remainder isn't silently discarded/reset every RunFrame() call,
-        // which would reintroduce slow, cumulative drift over a long play
-        // session even after the per-call scaling itself was fixed.
+        // A field, or the remainder resets every call and drift returns - see Venus_CPU.md §12.
         private int _spc700CycleRemainder;
 
-        // headless: true skips window/texture creation entirely (see
-        // Renderer.cs) - the console/Raylib build (Program.cs) wants a
-        // real on-screen window, the Avalonia frontend (via
-        // EmulatorSession) doesn't; it blits GetFrameBufferRgba() into
-        // its own WriteableBitmap instead.
+        // headless skips window and texture creation entirely - see Renderer.cs.
         public VenusCore(bool headless = false)
         {
             _headless = headless;
         }
 
-        // Delegated to Cartridge, which can answer from the header alone - see
-        // EmuSen_Firmware.md §1.
+        // Delegated to Cartridge, which answers from the header alone - see EmuSen_Firmware.md §1.
         public System.Collections.Generic.IReadOnlyList<Common.Firmware.FirmwareRequest> GetFirmwareRequirements(string romPath) =>
             Cartridge.FirmwareRequirements(romPath);
 
@@ -252,8 +182,7 @@ namespace EmuSen.Cores.Nintendo.Venus
             Bus.Ppu.IsPal = pal;
             if (Cart.Sa1 != null) Cart.Sa1.TotalScanlines = _totalScanlines;
 
-            // The NEC DSPs have their own crystal, so they need the master
-            // rate to convert against - see Venus_NecDSP.md §4.1.
+            // The NEC DSPs have their own crystal and need the master rate - see Venus_NecDSP.md §4.1.
             if (Cart.NecDsp != null) Cart.NecDsp.MasterClockHz = _masterClockHz;
 
             _currentScanline = 0;
@@ -261,21 +190,7 @@ namespace EmuSen.Cores.Nintendo.Venus
             ResetSchedule();
         }
 
-        // Runs up to one frame's worth of scanlines: CPU/APU stepping,
-        // HDMA, NMI, and PPU scanline compositing into the renderer's
-        // pixel buffer. Doesn't touch any window/presentation surface -
-        // every caller (Program.cs's FramePresenter, Avalonia's
-        // EmulatorSession) gets pixels via GetFrameBufferRgba() afterward
-        // and presents them itself.
-        //
-        // Can now return EARLY, mid-frame, if a breakpoint (or an armed
-        // single-step) halts execution - check IsHaltedAtBreakpoint after
-        // every call. When that happens, _currentScanline/_lineCycles/the
-        // phase-timing accumulators are all left exactly as they were so
-        // the NEXT call to RunFrame() resumes this same in-progress frame
-        // instead of restarting it - see _scanlineStarted's own comment for
-        // why the top-of-scanline block below only runs once per scanline
-        // even across a halt/resume.
+        // Can return early mid-frame; check IsHaltedAtBreakpoint after every call - see Venus_CPU.md §12.
         public void RunFrame()
         {
             if (Bus is null || Cpu is null || Spc700 is null || Renderer is null)
@@ -283,17 +198,12 @@ namespace EmuSen.Cores.Nintendo.Venus
                 throw new InvalidOperationException("RunFrame() called before LoadRom().");
             }
 
-            // Resuming from a prior halt: let exactly the instruction we
-            // stopped in front of execute before re-arming breakpoint
-            // checks, or `continue` would just instantly re-halt on the
-            // same PC every time.
+            // Let the halted instruction run before re-arming, or `continue` loops - see Venus_CPU.md §12.
             if (IsHaltedAtBreakpoint)
             {
                 IsHaltedAtBreakpoint = false;
 
-                // Whichever CPU the halt was on is the one that has to skip a
-                // check - arming the S-CPU's flag for an SA-1 halt would let
-                // the SA-1 re-break instantly - see Venus_SA1.md §11.5.
+                // The CPU the halt was on is the one that skips a check - see Venus_SA1.md §11.5.
                 switch (HaltedCpu)
                 {
                     case "sa1": Cart!.Sa1!.ResumeFromBreakpoint(); break;
@@ -315,25 +225,14 @@ namespace EmuSen.Cores.Nintendo.Venus
                         Bus.Dma.InitHdma();
                     }
 
-                    // Documented NMI-enable-during-vblank quirk - see
-                    // PendingImmediateNmi's comment in InterruptController.cs.
-                    // Checked here at the same once-per-scanline granularity
-                    // as the H/V-IRQ check just below, for the same reason.
+                    // The NMI-enable-during-vblank quirk - see InterruptController.PendingImmediateNmi.
                     if (Bus.Interrupts.PendingImmediateNmi)
                     {
                         Bus.Interrupts.PendingImmediateNmi = false;
                         Cpu.Nmi();
                     }
 
-                    // H/V-IRQ trigger check, done here (before this scanline's
-                    // CPU code runs) so a handler's register changes - e.g.
-                    // SMW's classic status-bar screen split - take effect in
-                    // time for THIS scanline's render, not the next one.
-                    // H-only fires every line; V-only and HV fire once per
-                    // frame at the target scanline. This approximates real
-                    // hardware's dot-precise H-position check as "the whole
-                    // target scanline", since our timing runs at
-                    // per-scanline granularity rather than per-dot.
+                    // Before this scanline's code runs, so a split takes effect on this line, not the next.
                     if (DebugSettings.HvIrqEnabled)
                     {
                         if (Bus.Interrupts.HIrqEnabled && !Bus.Interrupts.VIrqEnabled)
@@ -373,8 +272,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
                     int cpuCycles = Cpu.Step();
 
-                    // Hardware stops the CPU once per scanline to refresh DRAM; the
-                    // instruction spanning that point is charged for it - see Venus_CPU.md §8.7.
+                    // DRAM refresh stops the CPU once a scanline; the spanning instruction pays - see Venus_CPU.md §8.7.
                     if (!_refreshedThisLine && _lineCycles + cpuCycles >= DramRefreshPosition)
                     {
                         _refreshedThisLine = true;
@@ -385,42 +283,11 @@ namespace EmuSen.Cores.Nintendo.Venus
                     _lineCycles = (int)(_masterClock - _lineStartClock);
                     Bus.LineCycles = _lineCycles;
 
-                    // Cpu.Step()'s returned cycle count is real elapsed
-                    // master clocks now (see its own comment) - each
-                    // instruction's byte/cycle accounting is converted
-                    // through the actual region speed of whatever address
-                    // it touched (MemoryBus.GetAccessSpeedCycles), instead
-                    // of this loop assuming a single flat "1 CPU cycle-unit
-                    // = 6 master clocks" rate for the whole machine. SPC700
-                    // cycle (its own independent 1.024MHz crystal,
-                    // universally approximated as master/21 since it isn't
-                    // derived from the main clock at all) = ~21 master
-                    // clocks, so master clocks convert straight to SPC700
-                    // cycles by dividing by 21 - scaled here with an
-                    // explicit remainder carry (not float math) so the
-                    // fractional part isn't silently dropped every single
-                    // call.
-                    //
-                    // Before this dynamic per-access accounting existed,
-                    // the whole machine was scaled at a flat FastROM-style
-                    // 6-master-clocks-per-cycle rate regardless of the
-                    // ROM's actual (usually SlowROM, 8mc) speed, which fed
-                    // the SPC700 a fixed ~59474*6/21 SPC cycles/frame no
-                    // matter what the CPU actually executed - a systematic
-                    // ~7.5-8% audio-pacing undershoot relative to the real
-                    // NTSC frame rate, confirmed via EmuSen.Pharaoh's
-                    // `audiodump` verb (see Venus_APU.md). Master clocks are
-                    // now real per-instruction quantities, so SPC700 pacing
-                    // tracks actual elapsed hardware time directly, the
-                    // same approach MesenCE's Spc.cpp uses.
-                    // Exact 1.024MHz/21.477272MHz ratio, not /21 - see Venus_CPU.md §8.5b.
+                    // Real master clocks converted with a remainder carry, not float - see Venus_CPU.md §8.5b.
                     long scaledSpc700Cycles = (long)cpuCycles * ApuClockHz + _spc700CycleRemainder;
                     _spc700CycleRemainder = (int)(scaledSpc700Cycles % _masterClockHz);
                     Spc700.CycleBudget += (int)(scaledSpc700Cycles / _masterClockHz);
-                    // Only run an instruction the budget actually covers - running
-                    // past it made SPC700 port writes visible to the CPU up to a
-                    // whole instruction early, corrupting audio uploads whose
-                    // handshake acks before reading - see Venus_APU.md §1.6.
+                    // Running past the budget made port writes visible a whole instruction early - see Venus_APU.md §1.6.
                     while (Spc700.CycleBudget >= Spc700.PeekStepCycles())
                     {
                         Spc700.Step();
@@ -433,11 +300,7 @@ namespace EmuSen.Cores.Nintendo.Venus
                         }
                     }
 
-                    // The SA-1 shares the master clock rather than having its
-                    // own crystal, so it takes the same figure directly - see
-                    // Venus_SA1.md §2.2. Its IRQ line into the S-CPU is polled
-                    // here, at the same per-instruction granularity the two
-                    // chips actually interleave at on hardware.
+                    // The SA-1 shares the master clock, so it takes the figure directly - see Venus_SA1.md §2.2.
                     if (Cart!.Sa1 is { } sa1)
                     {
                         sa1.Run(cpuCycles);
@@ -490,9 +353,7 @@ namespace EmuSen.Cores.Nintendo.Venus
             }
         }
 
-        // Plain RGBA8888 bytes (ScreenWidth*ScreenHeight*4 long), ready to
-        // copy straight into e.g. an Avalonia WriteableBitmap or a Raylib
-        // texture. No Raylib types cross this boundary.
+        // Plain RGBA8888, ready to copy; no renderer types cross this boundary.
         public byte[] GetFrameBufferRgba()
         {
             if (Renderer is null)
@@ -504,15 +365,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
         public int AudioSampleRate => EmuSen.Audio.AudioSettings.SampleRate;
 
-        // Moved from EmuSen.Hotaru/Program.cs's own PumpAudio,
-        // which used to reach directly into Spc700.Dsp.AudioBuffer (a real
-        // SNES/S-DSP-specific type) - the exact same "core-agnostic caller
-        // shouldn't touch Venus-specific internals" gap GetFrameBufferRgba
-        // above already closed for video. Same drain logic, unchanged:
-        // AudioBuffer is interleaved L/R shorts, so framesAvailable is
-        // half its Count; capped at <maxFrames> so a caller with its own
-        // per-call limit (avoiding a huge dump after a stall) doesn't need
-        // to slice the result down itself.
+        // Interleaved L/R shorts, so frames are half the count; capped for the caller.
         public short[] DequeueAudioSamples(int maxFrames)
         {
             if (Spc700 is null) return Array.Empty<short>();
@@ -527,13 +380,7 @@ namespace EmuSen.Cores.Nintendo.Venus
             return data;
         }
 
-        // Full point-in-time snapshot of everything except the renderer
-        // (which holds Raylib texture/window handles that have no
-        // business in a save file, and is fully re-derivable from PPU
-        // state anyway - the next RunFrame() call rebuilds it). See
-        // StateSerializer's own header comment for the real limitation
-        // here: no version header, no field tagging - a save state only
-        // loads correctly against the exact build that created it.
+        // Everything but the renderer, which is re-derivable from PPU state - see EmuSen_Save_States.md.
         public void SaveState(string path)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -579,8 +426,7 @@ namespace EmuSen.Cores.Nintendo.Venus
 
             using var r = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
 
-            // Pre-v1 files start straight in on TotalFrames with no header,
-            // and carry the DSP RAM aliases - see EmuSen_Save_States.md §2.
+            // Pre-v1 files start at TotalFrames with no header - see EmuSen_Save_States.md §2.
             int version = ReadHeaderVersion(r, stream);
             bool legacy = version == 0;
 
@@ -591,13 +437,11 @@ namespace EmuSen.Cores.Nintendo.Venus
             StateSerializer.Read(r, Bus, legacy);
             StateSerializer.Read(r, Spc700, legacy);
 
-            // Only v2 onward carries it, and only for an SA-1 cartridge - a v1
-            // file can't be one, since SA-1 games couldn't run when v1 was written.
+            // v2 onward, and only for an SA-1 cart: a v1 file cannot be one.
             if (version >= 2 && Cart.Sa1 != null) StateSerializer.Read(r, Cart.Sa1);
             if (version >= 2 && Cart.SuperFx != null) StateSerializer.Read(r, Cart.SuperFx);
 
-            // Same reasoning as v2's, one chip later: a v2 file can't be a NEC
-            // DSP cartridge, since none could run when v2 was written.
+            // Same reasoning one chip later: a v2 file cannot be a NEC DSP cart.
             if (version >= 3 && Cart.NecDsp != null) StateSerializer.Read(r, Cart.NecDsp);
         }
 
@@ -619,8 +463,7 @@ namespace EmuSen.Cores.Nintendo.Venus
             {
                 throw new InvalidDataException($"Save state is version {version}; this build understands up to {StateVersion}.");
             }
-            // Magic matched but the version is nonsense - a pre-v1 file whose
-            // TotalFrames happened to collide. Treat it as one.
+            // Magic matched but the version is nonsense, so treat it as pre-v1.
             if (version < 1) { stream.Position = start; return 0; }
             return version;
         }

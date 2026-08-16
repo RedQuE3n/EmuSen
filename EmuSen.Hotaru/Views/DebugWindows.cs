@@ -11,6 +11,7 @@ namespace EmuSen.Hotaru.Views
     {
         private static readonly WindowSlot<CoretopWindow> Coretop = new();
         private static readonly WindowSlot<FeedWindow> Feed = new();
+        private static readonly WindowSlot<HotkeyHelpWindow> Hotkeys = new();
 
         public static void ShowCoretopWindow(IDebugTarget target) =>
             Coretop.Show(null, () => new CoretopWindow(target), refresh: w => w.UpdateTarget(target));
@@ -19,6 +20,9 @@ namespace EmuSen.Hotaru.Views
         // asked for, nor steal focus mid-gameplay - so this is safe to call on every swap. See EmuSen_LunaP.md §8.3.
         public static void UpdateCoretopWindowTargetIfOpen(IDebugTarget target) =>
             Coretop.RefreshIfOpen(w => w.UpdateTarget(target));
+
+        // The only discoverability this frontend has: it owns no menu bar - see §4.5.
+        public static void ShowHotkeyHelpWindow() => Hotkeys.Show(null, () => new HotkeyHelpWindow());
 
         public static void ShowFeedWindow(Func<(byte[] Rgba, int Width, int Height)> frameProvider) =>
             Feed.Show(null, () => new FeedWindow(frameProvider));

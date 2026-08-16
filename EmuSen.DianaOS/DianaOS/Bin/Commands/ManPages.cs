@@ -1525,10 +1525,16 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    --luna-surface           tool-window background\n" +
                 "    --luna-input-surface     text-input background\n" +
                 "    --luna-void              letterbox area behind a game frame\n" +
+                "    --luna-border            card edges, panel rules, splitter dividers\n" +
                 "    --luna-text              body and monospace text\n" +
                 "    --luna-meter-text        meter-row labels and values\n" +
                 "    --luna-muted             hints, group headers, disabled captions\n" +
                 "    --luna-section-header    section headings\n" +
+                "    --luna-accent            selection, focus and the filled half of a\n" +
+                "                             stock control - the first token in this\n" +
+                "                             palette for something LunaP does not draw\n" +
+                "    --luna-on-accent         whatever is drawn ON the accent: a tick, a\n" +
+                "                             label inside a selected row\n" +
                 "    --luna-warning           inline caution text\n" +
                 "    --luna-error             a failure, a refusal, an invalid field\n" +
                 "    --luna-success           a thing that worked\n" +
@@ -1551,14 +1557,18 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    Outside ':root', a block styles one kind of control. The selector is\n" +
                 "    'element', 'element.state' or 'element part', and the element is the\n" +
                 "    control's own name in kebab case:\n\n" +
-                "    button-bar        empty-state       hint-text         mono-text\n" +
-                "    console-pane      field-row         luna-switch       path-picker-row\n" +
-                "    dropdown          filter-bar        meter-list        rgba-image-view\n" +
-                "    section-header    status-bar        meter-row         tabs\n\n" +
+                "    button-bar        card              console-pane      dropdown\n" +
+                "    empty-state       error-text        field-row         filter-bar\n" +
+                "    hint-text         luna-switch       menu-bar          meter-list\n" +
+                "    meter-row         mono-text         path-picker-row   rgba-image-view\n" +
+                "    section-header    side-panel        split-pane        status-bar\n" +
+                "    tabs              tool-bar\n\n" +
                 "    States: meter-row.nominal, meter-row.busy, meter-row.hot.\n" +
                 "    Parts:  meter-row .bar; filter-bar .search, .facet;\n" +
                 "            console-pane .output, .input, .prompt;\n" +
-                "            empty-state .message, .detail.\n\n" +
+                "            empty-state .message, .detail;\n" +
+                "            card .header, .content; split-pane .rule;\n" +
+                "            side-panel .title, .close, .content.\n\n" +
                 "    Properties: background, background-color, color, font-family,\n" +
                 "    font-size, font-weight. A value may be a token - 'var(--luna-hot)' -\n" +
                 "    which FOLLOWS that token rather than copying it; a rule that restates a\n" +

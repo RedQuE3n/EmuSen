@@ -9,12 +9,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Classic "first scan, then narrow" memory search - find where a
-    // game stores something without already knowing the address (score,
-    // lives, a flag), the one common reverse-engineering workflow the
-    // rest of this toolchain (mem/write/watch/tile) doesn't cover on its
-    // own. Pure IDebugMemorySpace.Read() scans - no SNES-specific logic,
-    // works the same for any future core's memory spaces.
+    // First scan, then narrow - see §3.9.
     public class SearchCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "search";
@@ -30,16 +25,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "  search reset                  clear the current search",
         });
 
-        // A single active search session, the same "first scan, then
-        // narrow with next scan" workflow classic memory-search tools
-        // use. Deliberately just plain fields, not its own class: one
-        // session at a time is exactly what the command's own UX
-        // implies (starting a new `search <space> ...` replaces
-        // whatever was active), so there's nothing a richer structure
-        // would buy here. DianaOSInterpreter constructs this command
-        // once and reuses the same instance for every call, so this
-        // state persists across F4 prompt invocations exactly the way
-        // it did as private fields directly on the processor before.
+        // One session at a time is what the command's own UX implies - see §3.9.
         private string? _searchSpace;
         private int _searchWidth = 1;
         private List<int>? _searchCandidates;
@@ -77,10 +63,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 if (_searchCandidates == null) return "No active search - run 'search <space> <value>' first.";
                 if (parts.Length < 3) return "Usage: search refine <value>";
                 IDebugMemorySpace refineSpace = FindSpace(target, _searchSpace!);
-                // & 0xFFFFFFFFL: ParseHex returns a signed int, so a
-                // width-4 value with the high bit set (e.g. FFFFFFFF)
-                // would otherwise parse as a negative number and never
-                // match ReadValue's always-non-negative accumulation.
+                // Or a width-4 value with the high bit set parses negative and never matches.
                 long targetValue = ParseHex(parts[2]) & 0xFFFFFFFFL;
                 _searchCandidates = _searchCandidates.Where(a => ReadValue(refineSpace, a, _searchWidth) == targetValue).ToList();
                 UpdateSearchLastValues(refineSpace);
@@ -108,21 +91,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 return $"{_searchCandidates.Count} candidate(s) remain.";
             }
 
-            // Otherwise: parts[1] is a memory space name - start a brand
-            // new search, replacing whatever was active before.
+            // Otherwise parts[1] is a space name, replacing whatever search was active.
             if (parts.Length < 3) return "Usage: search <space> <value> [<width>]";
             IDebugMemorySpace newSpace = FindSpace(target, parts[1]);
 
-            // A bulk, read-every-address scan is exactly the case
-            // IDebugMemorySpace.HasSideEffects exists for - a space
-            // routed through live hardware (the SNES's CpuBus) can have
-            // registers that change real emulation state just by being
-            // read (RDNMI clearing the pending-NMI flag, OPHCT/OPVCT
-            // toggling a latch, the manual joypad port shifting on every
-            // read). Refuse outright rather than silently corrupting a
-            // running session - there's no legitimate reason to bulk-
-            // search live registers anyway; real game state (scores,
-            // flags, counters) lives in WRAM/SRAM, not there.
+            // A bulk read is exactly what HasSideEffects exists to refuse - see §3.1a.
             if (newSpace.HasSideEffects)
             {
                 return $"{newSpace.Name} can have real side effects on read (live hardware registers) - refusing a bulk search there. Try WRAM (or another plain-memory space) instead.";

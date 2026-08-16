@@ -8,26 +8,12 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `test` (and its `[ ... ]` alias) - the main way an `if`/`while`
-    // condition does anything besides check another command's own exit
-    // code. Deliberately a small subset of real test(1): one value (true
-    // if non-empty), a unary operator + value (-z/-n for string
-    // emptiness, -f/-d for real file/directory existence - genuinely
-    // useful here since redirection already reads/writes real host
-    // files), or value OP value (3 tokens: string = / != , or numeric
-    // -eq/-ne/-lt/-le/-gt/-ge). No `-a`/`-o`/parenthesized compound
-    // expressions - combine conditions with the shell's own `&&`/`||`
-    // instead (`[ -f a ] && [ -f b ]`), which is both simpler to implement
-    // correctly and arguably clearer to read.
+    // A small subset; compound conditions use the shell's own && instead - see §3.17.
     public static class TestEvaluator
     {
         public static bool Evaluate(string[] expr)
         {
-            // '!' negates whatever follows, regardless of its own arity
-            // (`! -f missing`, `! a = b`, `! ""` all work) - checked before
-            // the length-based dispatch below rather than as its own
-            // 2-token case, so it composes with every other form instead
-            // of only the single-value one.
+            // '!' is checked before the arity dispatch, so it composes with every form.
             if (expr.Length > 0 && expr[0] == "!") return !Evaluate(expr[1..]);
 
             switch (expr.Length)
@@ -89,9 +75,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
         }
     }
 
-    // Same evaluator as TestCommand, just spelled `[ EXPR ]` - the
-    // trailing ']' is required and stripped, matching real bash's own
-    // `[` builtin (which really is just a differently-named `test`).
+    // The same evaluator spelled `[ EXPR ]`, with the trailing ']' required.
     public class BracketCommand : IDianaOSCommand
     {
         public string Name => "[";

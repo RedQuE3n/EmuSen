@@ -18,8 +18,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         // Serialized maps carry this so a stale file fails loudly - see `man cov`.
         private static readonly byte[] FileMagic = { (byte)'E', (byte)'M', (byte)'C', (byte)'V', 1 };
 
-        // One bit per 24-bit address, allocated only once armed - 2MB, which
-        // is why this is not on by default.
+        // One bit per 24-bit address, allocated only once armed - 2MB - see `man cov`.
         private byte[]? _seen;
         private long _instructionsRecorded;
 
@@ -59,8 +58,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             _entryPoints.Clear();
         }
 
-        // Called once per instruction, before it executes. Must stay cheap
-        // when disarmed - that is the whole cost this imposes on a normal run.
+        // Once per instruction, so the disarmed case is the cost this imposes on a normal run.
         public void Record(int address)
         {
             if (!IsArmed || _seen == null) return;
@@ -97,8 +95,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return hits;
         }
 
-        // The executed addresses in a range, in order - the answer to "which
-        // part of this routine ran", not just "how much of it".
+        // Which part of a routine ran, not just how much of it - see `man cov`.
         public IReadOnlyList<int> ExecutedAddresses(int address, int length, int limit)
         {
             var hits = new List<int>();

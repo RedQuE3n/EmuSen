@@ -9,16 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `wc` - counts lines/words/bytes. Unlike sed/grep, real `wc`
-    // routinely takes a real file path argument (not just stdin), so this
-    // does too - reads a trailing path directly off disk when there's no
-    // piped input, the same way `sed ... < file` or `cat file` would, just
-    // without needing the `<` redirection spelled out.
-    //
-    // With no flags, prints all three counts in the same order real wc
-    // does (lines, words, bytes) regardless of which order flags were
-    // given in - matches real wc's own behavior when multiple flags are
-    // combined.
+    // Takes a real file path as well as stdin, as real wc does - see §3.17.
     public class WcCommand : IDianaOSCommand
     {
         public string Name => "wc";
@@ -52,11 +43,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 
             string text = stdin ?? (resolvedPath != null ? File.ReadAllText(resolvedPath) : "");
 
-            // wc counts a trailing-newline-free last line too (real wc
-            // counts newline CHARACTERS, not lines-with-content) - close
-            // enough here since this shell's own text never carries a
-            // meaningful distinction between "N lines" and "N-1 newlines
-            // plus a final unterminated line" for anything piped through it.
+            // Counts a trailing-newline-free last line too; the distinction never matters here.
             int lineCount = text.Length == 0 ? 0 : text.Split('\n').Length;
             int wordCount = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
             int byteCount = System.Text.Encoding.UTF8.GetByteCount(text);

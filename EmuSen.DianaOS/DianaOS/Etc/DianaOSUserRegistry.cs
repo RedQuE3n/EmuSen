@@ -10,31 +10,10 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Etc
 {
-    // The process-wide "who exists" directory - like a real /etc/passwd -
-    // shared by every tmux session in this one process (see
-    // DianaOSInterpreter.CurrentUser for the separate, per-shell "who's
-    // ACTIVE right now" concept this backs). Same bare-static-class shape
-    // as DianaOSLogging: no per-target/per-session scoping, just one
-    // process-wide table.
-    //
-    // In-memory only, like every other piece of DianaOS state (bp/watch/
-    // cheat all reset on process restart too) - no persistence mechanism
-    // yet. Real persistence (surviving a relaunch) is future work, for
-    // whenever a GUI frontend's own "add yourself as a player" flow
-    // actually needs accounts to survive that long.
-    //
-    // Built for Unix-shell FLAVOR (whoami/who/su/useradd/userdel/passwd),
-    // not real access control - see `man su`/`man useradd`. A password
-    // hash is stored here so a future permission system has somewhere to
-    // check against, but nothing in this codebase reads GetPasswordHash
-    // for gating yet; `su` today switches identity unconditionally for
-    // any existing account, same as every other command in this shell
-    // trusts the local process rather than enforcing anything.
+    // Unix flavour, in memory only, with a hash nothing gates on - see `man su` and `man useradd`.
     public static class DianaOSUserRegistry
     {
-        // root always exists and can't be removed - the one bedrock
-        // account, same role uid 0 plays on a real system. No password by
-        // default (null), matching every other account's default state.
+        // root always exists and cannot be removed, as uid 0 cannot.
         private static readonly Dictionary<string, string?> _passwordHashes =
             new(StringComparer.OrdinalIgnoreCase) { ["root"] = null };
 
@@ -53,11 +32,7 @@ namespace EmuSen.DianaOS.DianaOS.Etc
         public static string? GetPasswordHash(string name) =>
             _passwordHashes.TryGetValue(name, out string? hash) ? hash : null;
 
-        // SHA-256 of the raw string - same "good enough for flavor, not a
-        // real security boundary" spirit as the rest of this shell (see
-        // this file's own header comment). Real password hashing needs a
-        // salt and a slow KDF (PBKDF2/bcrypt/Argon2); neither matters here
-        // since nothing checks this hash against anything yet.
+        // Flavour, not a security boundary; a real hash would need a salt and a slow KDF.
         private static string Hash(string password)
         {
             byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));

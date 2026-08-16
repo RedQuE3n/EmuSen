@@ -24,9 +24,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         }
     }
 
-    // The live call/return chain, and the depth `step over`/`step out` measure
-    // against - see `man bt`. Core-agnostic; a core notifies it from its own
-    // call/return opcodes. Addresses are full 24-bit CPU addresses.
+    // The chain `step over`/`step out` measure against - see `man bt`.
     public class CallStackRegistry
     {
         // A runaway chain must not grow without bound - see `man bt`.

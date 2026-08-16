@@ -4,8 +4,7 @@ using System.Linq;
 
 namespace EmuSen.DianaOS.DianaOS.Var
 {
-    // Pins an address by undoing every write to it - see `man freeze`.
-    // Core-agnostic: fed from the same write-observer seam WatchRegistry uses.
+    // Pins an address by undoing writes to it - see `man freeze`.
     public class FreezeRegistry
     {
         private sealed class FrozenAddress

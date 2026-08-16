@@ -8,13 +8,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Captures a named, non-mutating baseline of a memory space's full
-    // current contents - the other half of the "what changed" workflow
-    // SearchCommand's changed/unchanged/increased/decreased covers for a
-    // fixed set of candidate addresses. DiffCommand (separate class,
-    // sharing this one's SnapshotStore) is the general case: no need to
-    // already know which addresses might be interesting, just "what's
-    // different from before" over an entire space.
+    // A named baseline for `diff`, which needs no candidate addresses first - see §3.10.
     public class SnapshotCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "snapshot";
@@ -55,15 +49,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 return removed ? $"Snapshot '{parts[2]}' removed." : $"No snapshot named '{parts[2]}'.";
             }
 
-            // Otherwise: parts[1] is a space name, parts[2] is the name to
-            // save this capture under.
+            // Otherwise parts[1] is a space and parts[2] the name to save under.
             if (parts.Length < 3) return "Usage: snapshot <space> <name>";
             IDebugMemorySpace space = FindSpace(target, parts[1]);
 
-            // Same HasSideEffects guard as SearchCommand, same reasoning
-            // - a full-space read-every-address capture of a live-
-            // hardware-routed space (SNES's CpuBus) could disturb real
-            // emulation state.
+            // The same HasSideEffects refusal as `search` - see §3.1a.
             if (space.HasSideEffects)
             {
                 return $"{space.Name} can have real side effects on read (live hardware registers) - refusing a bulk snapshot there. Try WRAM (or another plain-memory space) instead.";

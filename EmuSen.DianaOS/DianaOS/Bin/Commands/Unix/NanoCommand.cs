@@ -9,26 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // A small full-screen text editor, branded "nano" for the muscle
-    // memory (Ctrl+O save, Ctrl+X exit, arrow keys to move) - not a
-    // clone of GNU nano's full feature set (no search, no cut/paste
-    // ring, no syntax highlighting, no line-wrap toggle), just enough
-    // to create/edit a script file (see `source`) without leaving the
-    // shell for an external editor.
-    //
-    // Genuinely different from every other command here: everything
-    // else in this namespace is "take target/args/stdin, return a
-    // string" - one synchronous call. This one takes over the real
-    // console (raw key reads via Console.ReadKey, full-screen redraws
-    // via Console.SetCursorPosition/Console.Clear) for as long as the
-    // user is editing, the same way ConsoleLineReader already does for
-    // single-line editing, just for a whole buffer instead of one
-    // line. That means it only works against a REAL interactive
-    // terminal - Console.IsInputRedirected/IsOutputRedirected (a piped
-    // script, `source`, a headless test harness, or a GUI-hosted
-    // console like EmuSen.Mistress's that never had a real terminal
-    // to begin with) all get a clean "needs an interactive terminal"
-    // error instead of trying to draw anywhere.
+    // Takes over a real terminal, so it refuses a redirected one - see §3.17.
     public class NanoCommand : IDianaOSCommand
     {
         public string Name => "nano";
@@ -52,10 +33,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
             return new Editor(resolved, args[1]).Run();
         }
 
-        // Isolated from Execute() above so all the mutable cursor/
-        // scroll/buffer state for one editing session lives on its own
-        // short-lived instance instead of static fields or a pile of
-        // ref parameters threaded through a static method.
+        // One session's mutable state on a short-lived instance rather than static fields.
         private sealed class Editor
         {
             private readonly string _path;
@@ -257,11 +235,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
             private static string PadOrTruncate(string text, int width) =>
                 text.Length >= width ? text.Substring(0, width) : text.PadRight(width);
 
-            // Console.WindowWidth/Height can throw (or return a bogus 0)
-            // outside a real attached terminal - shouldn't be reachable
-            // given Execute()'s own IsInputRedirected/IsOutputRedirected
-            // guard, but a safe fallback costs nothing and avoids turning
-            // an edge-case environment quirk into a crash mid-edit.
+            // WindowWidth can throw outside a real terminal; a fallback beats a crash mid-edit.
             private static int SafeWindowWidth()
             {
                 try { return Math.Max(20, Console.WindowWidth); } catch { return 80; }

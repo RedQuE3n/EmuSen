@@ -9,12 +9,10 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // htop for the .NET VM this process runs on, not for emulated
-    // hardware - see `man vstop`.
+    // htop for the .NET VM, not for emulated hardware - see `man vstop`.
     public class VstopCommand : IDianaOSCommand
     {
-        // No IDebugTarget parameter, unlike CoretopCommand's - nothing here
-        // depends on a loaded core.
+        // No target parameter, unlike coretop's: nothing here depends on a loaded core.
         private readonly Action? _openWindow;
 
         public VstopCommand(Action? openWindow = null)
@@ -61,8 +59,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
                     Console.TreatControlCAsInput = true;
                     try { Console.CursorVisible = false; } catch { }
 
-                    // Primes the rate counters, so the first drawn frame
-                    // shows real numbers rather than a screen full of zeroes.
+                    // Primes the rate counters, so the first frame shows real numbers - see `man vstop`.
                     _sampler.Sample();
 
                     while (true)
@@ -161,8 +158,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
                 WriteLine($"Assemblies loaded: {s.AssemblyCount}");
             }
 
-            // GenerationInfo runs gen0/1/2 then LOH then POH; a runtime
-            // reporting fewer just drops the tail names.
+            // A runtime reporting fewer generations just drops the tail names.
             private static string GenerationName(int index) => index switch
             {
                 0 or 1 or 2 => $"gen{index}",

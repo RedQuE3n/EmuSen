@@ -10,8 +10,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         Decrease,
     }
 
-    // One write inside a cheat. A cheat is a list of these, so a single
-    // toggle can drive a whole "max every item" run - see `man cheat`.
+    // One write inside a cheat, so one toggle can drive a whole run - see `man cheat`.
     public readonly struct CheatWrite
     {
         // RamPoke only - which named memory space to write into.
@@ -58,8 +57,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public int EffectiveWidth => Width == 2 || Width == 4 ? Width : 1;
         public int EffectiveRepeatCount => RepeatCount < 1 ? 1 : RepeatCount;
 
-        // Highest address this write can touch, for the quick reject in
-        // CheatRegistry.TryPatchRom.
+        // Highest address this write touches, for TryPatchRom's quick reject.
         public int LastAddress
         {
             get

@@ -44,8 +44,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         }
     }
 
-    // Traffic across a coprocessor's register window, plus poll-run detection
-    // for handshakes that never complete - see `man copflow`.
+    // Register-window traffic and stuck-handshake detection - see `man copflow`.
     public class RegisterFlowRegistry
     {
         private const int DefaultCapacity = 4096;

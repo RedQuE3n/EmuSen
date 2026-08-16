@@ -7,18 +7,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `history` - lists previously executed command lines, numbered
-    // like bash's own builtin. Reads CommandHistory, which
-    // DianaOSInterpreter.Submit writes to on every completed (non-buffered)
-    // command line - see that class's own comment for why it's a separate
-    // shared object rather than a field directly on this command.
-    //
-    // `!N` and `!!` (bash's "re-run history entry N" / "re-run the last
-    // command") are handled by DianaOSInterpreter.Submit itself, before
-    // lexing/parsing ever happens - by the time any IDianaOSCommand sees a
-    // command line, a `!`-reference has already been expanded into the
-    // real command text it refers to, the same way a shell expands `!!`
-    // before the resulting line is parsed at all.
+    // Reads CommandHistory; `!N`/`!!` are expanded before any command sees a line - see §3.17.
     public class HistoryCommand : IDianaOSCommand
     {
         public string Name => "history";

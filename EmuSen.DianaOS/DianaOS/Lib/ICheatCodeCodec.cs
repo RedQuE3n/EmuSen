@@ -5,26 +5,14 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 namespace EmuSen.DianaOS.DianaOS.Lib
 {
-    // What kind of cheat a successfully decoded code becomes - RamPoke
-    // targets SpaceName at Address every frame, RomPatch is an
-    // unconditional ROM-read intercept (see IDebugTarget.Cheats /
-    // CheatKind for the registry-side counterpart these map onto).
+    // What a decoded code becomes, mapping onto CheatKind - see EmuSen_Cheats.md.
     public enum CheatCodeKind
     {
         RamPoke,
         RomPatch,
     }
 
-    // A single cheat-code format decoder ("Pro Action Replay/Game
-    // Wizard", "Game Genie", or any future format) a core plugs into
-    // CheatCommand at construction (see DianaOSInterpreter.CreateDefault's
-    // cheatCodec parameters). Exists so CheatCommand itself can stay
-    // compiled with zero references to any specific core's code-format
-    // decoders (see CheatCommand's own header comment) while still
-    // offering the same decode-on-demand `add`/`gg` commands - this is
-    // exactly the "future auto-detecting cheat add that tries each known
-    // codec in turn" ActionReplayCodec.CanDecode/GameGenieCodec.CanDecode
-    // were already written for.
+    // One format's decoder, injected so CheatCommand references no core - see §3.3b.
     public interface ICheatCodeCodec
     {
         // Human-readable name for `add`'s own "(detected X format)" message.
@@ -35,19 +23,12 @@ namespace EmuSen.DianaOS.DianaOS.Lib
 
         CheatCodeKind Kind { get; }
 
-        // The memory space a decoded RamPoke address targets (e.g.
-        // "CpuBus"). Unused (and may be null) when Kind is RomPatch.
+        // The space a RamPoke targets; unused and possibly null for a RomPatch.
         string? SpaceName { get; }
 
         (int Address, byte Value) Decode(string code);
 
-        // A format whose codes carry a compare byte returns it here; null is
-        // an unconditional patch. NES Game Genie's 8-letter codes are the
-        // reason this exists - the compare is what makes a code target one
-        // bank rather than every bank that maps to the same CPU address, so
-        // dropping it would not be a lesser cheat but a wrong one. Defaulted
-        // so a format without one (SNES Game Genie, Pro Action Replay) says
-        // nothing - see EmuSen_Cheats.md §2.
+        // Dropping a compare would make an NES code wrong, not lesser - see EmuSen_Cheats.md §2.
         byte? DecodeCompare(string code) => null;
     }
 }

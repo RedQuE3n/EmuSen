@@ -124,8 +124,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 
             if (hits == 0)
             {
-                // The whole point of the command, so say it in words rather
-                // than leaving a zero to be interpreted.
+                // The whole point of the command, so say it rather than leaving a zero to interpret.
                 lines.Add(newOnly ? "  Nothing new here since the mark." : "  Never reached.");
             }
             else

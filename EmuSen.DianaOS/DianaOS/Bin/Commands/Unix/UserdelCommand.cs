@@ -8,14 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // `userdel` - see `man userdel`. Root-gated, same reasoning as
-    // `useradd`. Refuses to remove 'root' itself (DianaOSUserRegistry.
-    // TryRemove already guards this at the registry level; this command
-    // just surfaces a clean message instead of a silent no-op) and
-    // refuses to remove an account that's currently in use by ANY live
-    // session (or by this shell itself, when no session manager is
-    // registered) - mirrors `kill`'s own "can't kill the only remaining
-    // session" style guard, just checked before mutating instead of after.
+    // Refuses root, and refuses an account any live session is using - see `man userdel`.
     public class UserdelCommand : IDianaOSCommand
     {
         private readonly Func<DianaOSInterpreter> _self;

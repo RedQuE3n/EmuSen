@@ -13,43 +13,14 @@ using EmuSen.Galaxia.Text;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // `cheat` sub-commands - every cheat mechanism this project supports,
-    // unified under one command since a player thinks of both as just
-    // "my cheats" (see CheatRegistry's own comment for the full
-    // explanation of each):
-    //   - RAM pokes (Pro Action Replay/Game Wizard style) - `poke`, or
-    //     `add` when it guesses that's the format (see
-    //     LooksLikeGameGenieFormat).
-    //   - ROM patches (Game Genie style) - `rompatch`, or `add`/`gg`
-    //     (see below).
-    //
-    // Genuinely core-agnostic now: `add`/`gg` decode through whichever
-    // ICheatCodeCodec instances the host passes in (see
-    // DianaOSInterpreter.CreateDefault's cheatAutoDetectCodec/
-    // cheatExplicitCodec parameters), rather than calling a specific
-    // core's code-format decoders directly - this is the "future
-    // auto-detecting cheat add that tries each known codec in turn" the
-    // codecs' own CanDecode methods were already written for. Without a
-    // codec registered (a future core with no equivalent format, or a
-    // standalone launch with no core at all), `add`/`gg` just report
-    // there's nothing to decode with - `poke`/`rompatch`/`list`/`enable`/
-    // `disable`/`remove`/`clear` keep working regardless, since they only
-    // ever touch the generic CheatRegistry (IDebugTarget.Cheats), never a
-    // codec.
+    // Every cheat mechanism under one command, because a player has only "my cheats" - see `man cheat`.
     public class CheatCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
-        // `add`'s guessed format (LooksLikeGameGenieFormat == false) and
-        // `poke`'s own raw path both land here; `_explicitCodec` backs
-        // both `gg` and `add`'s other guess. Named by role, not by any
-        // one core's format, since a future core supplies its own
-        // instances for both roles.
+        // Named by role, not by format, since a future core supplies its own - see EmuSen_Cheats.md.
         private readonly ICheatCodeCodec? _autoDetectCodec;
         private readonly ICheatCodeCodec? _explicitCodec;
 
-        // Which cheat-database folders this build's cores can use, for
-        // `cheat db prune`. Injected rather than known here, same as the
-        // codecs above - DianaOS has no idea which cores exist. Null means
-        // nobody told us, which prunes nothing. See §4.16.
+        // Injected, because DianaOS has no idea which cores exist - see EmuSen_Settings_Reference.md §4.16.
         private readonly Func<IReadOnlyCollection<string>>? _supportedCheatSystems;
 
         public CheatCommand(ICheatCodeCodec? autoDetectCodec = null, ICheatCodeCodec? explicitCodec = null,
@@ -60,8 +31,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             _supportedCheatSystems = supportedCheatSystems;
         }
 
-        // Appended to a finished download: the moment the 250MB actually
-        // lands is the moment to mention that most of it is unusable here.
+        // The moment 250MB lands is the moment to say most of it is unusable here.
         private string PruneOffer(CheatDatabase db)
         {
             CheatPrunePlan plan = CheatDatabasePruner.Plan(db, _supportedCheatSystems?.Invoke() ?? Array.Empty<string>());
@@ -122,9 +92,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             "  cheat db prune [--apply]           delete the systems no core in this build can use",
         });
 
-        // AppSettings when set, the sandbox's own Cheats folder otherwise -
-        // pointing this at an existing RetroArch cheats folder is the whole
-        // of "use the database you already have". See `man cheat`.
+        // AppSettings when set, the sandbox's Cheats folder otherwise - see `man cheat`.
         private static string CheatDatabaseDirectory
         {
             get
@@ -134,19 +102,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             }
         }
 
-        // `cheat add`'s format guess. Both codecs decode from the exact
-        // same 8 hex-digit character set - SNES Game Genie's own alphabet
-        // (see GameGenieCodec) is a scrambled ordering of 0-9A-F, not a
-        // distinct letter set the way NES Game Genie's is - so there is no
-        // way to tell the two formats apart from their characters alone.
-        // Falls back to how each device's codes are conventionally
-        // published instead: a separator right after the 4th character
-        // ("XXXX-XXXX") matches Game Genie's own convention; anything
-        // else (no separator at all, or one after the 6th character, e.g.
-        // "AAAAAA-VV"/"AAAAAA:VV") is treated as Pro Action Replay/Game
-        // Wizard's. Best-effort only, NOT a guarantee - `cheat gg`/`cheat
-        // poke` are the reliable fallback for a code formatted
-        // unconventionally (or copied without its original punctuation).
+        // Both SNES formats share one character set, so the guess is punctuation - see EmuSen_Cheats.md.
         public static bool LooksLikeGameGenieFormat(string code)
         {
             for (int i = 0; i < code.Length; i++)
@@ -156,15 +112,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             return false; // no separator at all - assume Pro Action Replay/Game Wizard
         }
 
-        // The punctuation guess above is a last resort, not a first move. Ask
-        // the codecs first: where exactly one of them claims the code, that is
-        // an answer rather than a guess. NES is the case that needs it - its
-        // Game Genie alphabet is letters the raw hex format cannot contain, so
-        // "SXIOPO" is unambiguous, while the two SNES formats share one
-        // character set and still fall through to the convention.
-        //
-        // Static and public because EmuSen.Mistress's Active Cheats window has
-        // to make the identical choice, and two copies of a guess drift.
+        // Ask the codecs first; the punctuation guess is the last resort - see EmuSen_Cheats.md.
         public static bool PrefersExplicitCodec(ICheatCodeCodec? explicitCodec, ICheatCodeCodec? autoDetectCodec, string code)
         {
             bool explicitClaims = explicitCodec?.CanDecode(code) == true;
@@ -178,9 +126,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         private bool PrefersExplicitCodec(string code) =>
             PrefersExplicitCodec(_explicitCodec, _autoDetectCodec, code);
 
-        // One header line per cheat, then one indented line per write when
-        // there is more than one - a cheat is one toggle however many
-        // addresses it drives, and the list has to show that.
+        // A cheat is one toggle however many addresses it drives, and the list must show that.
         private static string FormatCheat(CheatInfo c)
         {
             string state = c.Enabled ? "on " : "off";
@@ -347,8 +293,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     CheatFile? loaded = file.Load();
                     if (loaded is null) return $"cheat load: no readable cheat file at {file.Path}";
 
-                    // Added to whatever is already loaded, not replacing it -
-                    // `cheat clear` first if that's what you meant.
+                    // Added to what is loaded, not replacing it; `cheat clear` first if that was meant.
                     (int added, int skipped) = cheats.LoadFrom(loaded);
                     string skippedText = skipped > 0 ? $" ({skipped} unparseable entr{(skipped == 1 ? "y" : "ies")} skipped)" : "";
                     return $"Loaded {added} cheat(s) from {file.Path}{skippedText}";
@@ -356,8 +301,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 case "import":
                 {
                     if (parts.Length < 3) return "Usage: cheat import <path.cht>";
-                    // Joined, not parts[2]: a path is the last argument and
-                    // may well contain spaces.
+                    // Joined, not parts[2]: a path is the last argument and may contain spaces.
                     string importArg = string.Join(' ', parts.Skip(2));
                     if (!DianaOSSandbox.TryResolve(importArg, out string importPath)) return $"cheat import: '{importArg}' is outside the sandbox.";
                     if (!System.IO.File.Exists(importPath)) return $"cheat import: no file at {importPath}";
@@ -389,8 +333,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     }
                     catch (Exception ex) { return $"cheat export: {ex.Message}"; }
 
-                    // RetroArch's model has no ROM-read substitution, so
-                    // there is nothing honest to write for those.
+                    // RetroArch's model has no ROM-read substitution, so there is nothing honest to write.
                     string skippedText = romPatches > 0 ? $" ({romPatches} ROM patch(es) skipped - .cht has no equivalent)" : "";
                     return $"Exported {chtCheats.Count} cheat(s) to {exportPath}{skippedText}";
                 }
@@ -460,8 +403,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                             string header = $"Would delete {plan.Removing.Count} system(s), {plan.Files} file(s), {CheatPrunePlan.Human(plan.Bytes)}:";
                             string kept = $"Keeping: {string.Join(", ", plan.Keeping)}";
 
-                            // Deleting is irreversible and the only way back is
-                            // a 250MB download, so the flag is not optional.
+                            // Irreversible, and the way back is a 250MB download, so the flag is not optional.
                             if (!parts.Skip(3).Any(p => p.Equals("--apply", StringComparison.OrdinalIgnoreCase)))
                             {
                                 return string.Join('\n', new[] { header }.Concat(listing).Append(kept)

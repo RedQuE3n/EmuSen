@@ -7,12 +7,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Live control for DianaOSLogging.MasterEnabled - the single switch
-    // that silences every *Logging flag at once (see that class's own
-    // comment) without touching any of their individually-set values.
-    // Doesn't touch the IDebugTarget at all, same as TraceCommand - a
-    // global settings toggle, not something scoped to a particular core
-    // instance.
+    // Live control for the master switch, without touching individual flags - see §2.
     public class LogCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "log";

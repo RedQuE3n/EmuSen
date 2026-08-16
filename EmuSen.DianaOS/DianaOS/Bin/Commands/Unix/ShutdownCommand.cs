@@ -5,14 +5,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Terminates the whole process - promoted from a hand-rolled string
-    // match in both EmuSen.Hotaru's RunDebugPrompt and its own separate
-    // RunStandaloneShell bypass into one real, shared command via
-    // HostAction.Shutdown (see that type's own comment). 'quit' is
-    // recognized as an alias directly in DianaOSInterpreter.Dispatch
-    // (normalized to 'shutdown' before the registry lookup), not a
-    // second registry entry, so 'help' doesn't print the same line
-    // twice.
+    // Promoted from a hand-rolled string match; 'quit' is an alias, not an entry - see §3.17a.
     public class ShutdownCommand : IDianaOSCommand
     {
         public string Name => "shutdown";

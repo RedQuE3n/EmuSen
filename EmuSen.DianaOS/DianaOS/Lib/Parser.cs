@@ -10,44 +10,19 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Lib
 {
-    // Thrown for a genuine syntax error (unbalanced 'if'/'fi', a
-    // redirection with nothing after it, etc.) - distinct from
-    // LexResult.NeedsMoreInput, which means "not wrong, just not finished
-    // yet" and is handled entirely inside DianaOSInterpreter.Submit before
-    // the parser ever runs.
+    // A genuine syntax error, unlike NeedsMoreInput - see EmuSen_Debugging_Tools_Reference_v5.md §3.17b.
     public class ShellSyntaxException : Exception
     {
         public ShellSyntaxException(string message) : base(message) { }
     }
 
-    // Thrown instead of ShellSyntaxException specifically when the parser
-    // ran out of tokens (hit EOF) at a point where it needed more, rather
-    // than finding something actually wrong - "if true; then echo hi" with
-    // no 'fi' yet isn't broken, it's just not finished. DianaOSInterpreter
-    // catches this the same way it handles LexResult.NeedsMoreInput: hold
-    // the raw text and wait for another line.
+    // Ran out of tokens rather than found something wrong - see §3.17b.
     public class ShellIncompleteException : Exception
     {
         public ShellIncompleteException(string message) : base(message) { }
     }
 
-    // Hand-written recursive-descent parser, matching this codebase's own
-    // style everywhere else a dispatch table or interpreter loop is
-    // hand-built (Cpu.cs, Spc700.cs) rather than reaching for a parser-
-    // generator dependency for what's still a deliberately small grammar.
-    //
-    // Grammar (informal, EBNF-ish):
-    //   Script       := StatementList EOF
-    //   StatementList:= sep* (Statement (sep+ Statement)*)? sep*      -- sep = ';' | Newline
-    //   Statement    := IfStmt | ForStmt | WhileStmt | 'break' | 'continue' | AndOrList
-    //   AndOrList    := Pipeline (('&&'|'||') Pipeline)*
-    //   Pipeline     := ['!'] SimpleCommand ('|' SimpleCommand)*
-    //   SimpleCommand:= (Assignment | Word | Redirection)+            -- at least one of these
-    //   IfStmt       := 'if' StatementList 'then' StatementList
-    //                    ('elif' StatementList 'then' StatementList)*
-    //                    ('else' StatementList)? 'fi'
-    //   ForStmt      := 'for' NAME 'in' Word* sep 'do' StatementList 'done'
-    //   WhileStmt    := ('while'|'until') StatementList 'do' StatementList 'done'
+    // Hand-written recursive descent; the grammar is in §3.17b.
     public class Parser
     {
         private readonly List<Token> _tokens;
@@ -80,10 +55,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
             Advance();
         }
 
-        // Routes a parse failure to ShellIncompleteException when we ran
-        // out of tokens (the user just hasn't finished typing yet) or
-        // ShellSyntaxException otherwise (a token IS present, it's just
-        // wrong) - see ShellIncompleteException's own comment.
+        // Out of tokens means incomplete; a wrong token present means syntax - see §3.17b.
         private void Fail(string message)
         {
             if (AtEnd) throw new ShellIncompleteException(message);
@@ -92,10 +64,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
 
         private static string Describe(Token t) => t.Type == TokenType.Word ? $"'{WordLiteralText(t.Word!)}'" : t.Type.ToString();
 
-        // Only meaningful for a word made of one unquoted literal part -
-        // used purely for error messages and keyword/identifier checks,
-        // never for real expansion (that's DianaOSInterpreter.ExpandWord's
-        // job, at run time, with variables/substitutions resolved).
+        // For error messages and keyword checks only, never for real expansion.
         private static string? WordLiteralText(Word w)
         {
             if (w.Parts.Count != 1 || w.Parts[0].Kind != PartKind.Literal || w.Parts[0].Quoted) return null;
@@ -114,11 +83,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
 
         private void SkipSeparators() { while (IsSeparator()) Advance(); }
 
-        // Parses statements until EOF or a Word token matching one of
-        // `terminators` (a keyword like 'then'/'do'/'fi'/'done'/'elif'/
-        // 'else') - the terminator itself is left unconsumed, for the
-        // caller (IfStmt/ForStmt/WhileStmt) to Expect() explicitly, the
-        // same way real bash requires the exact right closing keyword.
+        // The terminator is left unconsumed for the caller to Expect() explicitly.
         private StatementList ParseStatementListUntil(params string[] terminators)
         {
             var list = new StatementList();
@@ -133,10 +98,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
                 SkipSeparators();
             }
 
-            // Reached EOF without ever finding a required terminator - the
-            // block (if/for/while body or condition) isn't closed yet.
-            // terminators.Length == 0 only happens for the top-level
-            // script list, where hitting EOF is just "done", not this.
+            // EOF with a required terminator missing means the block is not closed yet - see §3.17b.
             if (terminators.Length > 0 && !MatchesAny(terminators))
             {
                 throw new ShellIncompleteException($"Expected one of [{string.Join(", ", terminators)}] to close this block.");
@@ -297,9 +259,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
             return cmd;
         }
 
-        // NAME=value is only an assignment in *command position* and only
-        // when unquoted and NAME is a valid identifier - "FOO=bar" (quoted
-        // or with a non-identifier prefix) is just a literal argument.
+        // Only in command position, unquoted, with a valid identifier - see §3.17b.
         private static bool TryParseAssignment(Word w, out Assignment assignment)
         {
             assignment = null!;

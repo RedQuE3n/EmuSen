@@ -9,28 +9,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Decodes a grid of raw tilemap/nametable entries as text instead of
-    // pixels - complementary to `tile` (decodes ONE tile's actual pixel
-    // content). Built specifically so a menu cursor's position, or
-    // whether a HUD element changed, can be confirmed by comparing
-    // tilemap entries numerically, without ever rendering or eyeballing
-    // a screenshot.
-    //
-    // Core-agnostic on purpose, same split as `disasm`/`regs`: this
-    // command only walks a grid and formats whatever string each entry
-    // decodes to - it has no idea what a SNES BG screen word's bits mean.
-    // All of that lives in IDebugTarget.TilemapEntryStride/
-    // DecodeTilemapEntry (see that interface's own comment for why an
-    // NES core's nametable+attribute-table split couldn't share a single
-    // generic bit-layout here even if this command tried to parse one
-    // itself).
-    //
-    // Same convention as `tile`: the caller supplies the exact base
-    // address (from BG1SC/etc, via `regs`) rather than this command
-    // resolving BG-layer-to-tilemap-address mapping itself, which would
-    // need to duplicate exactly what Renderer.Backgrounds.cs already does
-    // for real rendering (per-mode/per-layer 32x32/64x32/32x64/64x64
-    // mirroring) - not worth it for a debug dump.
+    // Formats entries the core decoded; the caller supplies the base address - see §3.1a.
     public class TilemapCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "tilemap";

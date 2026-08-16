@@ -88,8 +88,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
                 char c = source[i];
                 if (char.IsWhiteSpace(c)) { i++; continue; }
 
-                // '%' is the binary prefix only in front of a binary digit;
-                // everywhere else it is modulo - see `man eval`.
+                // '%' is a binary prefix only before a binary digit; elsewhere it is modulo - see `man eval`.
                 bool binaryLiteral = c == '%' && i + 1 < source.Length && (source[i + 1] == '0' || source[i + 1] == '1');
                 if (c == '$' || binaryLiteral || char.IsDigit(c))
                 {
@@ -182,9 +181,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
             new[] { "*", "/", "%" },
         };
 
-        // <live> false means "parse these tokens but don't evaluate them" -
-        // how short-circuiting skips a branch without reading memory or
-        // dividing by zero, see `man eval`.
+        // live=false parses without evaluating, which is how short-circuiting skips a branch.
         private long ParseBinary(int level, bool live)
         {
             if (level >= Levels.Length) return ParseUnary(live);

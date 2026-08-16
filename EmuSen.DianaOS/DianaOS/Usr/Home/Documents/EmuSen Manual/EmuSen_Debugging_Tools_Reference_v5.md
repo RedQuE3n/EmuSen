@@ -234,6 +234,21 @@ One `lock` serialises every `Submit` this scheduler ever makes, by any path, bec
 
 **`Halted` is a separate escape hatch, not a fifth state of the queue.** While it is set, `SubmitFromAnyThread` stops doing the fast-path/pending split and simply forwards every line into `TakeHaltedLine`'s queue, so a host's F4-style prompt loop pulls them one at a time on whichever thread is actually blocked — typically the thread that owns the core, which frees the UI and reader threads to stay responsive (`EmuSen_Frontend_Driver.md` §2). `Halted` is **per-scheduler, not per-host**, which is what a session switch mid-halt has to account for (`man tmux`, and `EmuSen_Frontend_Driver.md` §3f).
 
+### 3.3b `HostAction` versus a constructor-injected delegate — which one a command needs
+
+*2026-08-16, from `HostAction.cs` and `IDianaOSCommand.cs`. The rule was written down only in those two files, and it is the question every new command that touches the host has to answer.*
+
+A command returns text. When it needs to do something to the *host* instead, there are exactly two mechanisms and they are not interchangeable:
+
+- **A constructor-injected `Action`/`Func<T>`** — for anything that is purely a **side effect**: pausing a thread, opening a window, editing a file. `PauseCommand`, `CoretopCommand`'s `-w` opener and `NanoCommand` all take a plain delegate. This keeps `EmuSen.DianaOS` — a core-agnostic library with no UI toolkit dependency at all — from needing to know that Avalonia, or any windowing toolkit, exists. The frontend supplies the capability; the command never learns what backs it.
+- **`HostAction`** — reserved strictly for changing the **caller's own control flow**: breaking out of a blocking prompt loop, or handing a value up several stack frames. `Resume`, `Step`, `Shutdown`, `LoadCore` and `SwitchSession`. A delegate cannot express these, because the thing that must change is the loop that called `Submit` in the first place.
+
+The test is simply *whose control flow changes*. If the answer is "nobody's, something just happens", it is a delegate. `DianaOSResult.Action` being optional rather than the general return path is the same statement from the other side.
+
+**A closed abstract record hierarchy, not an enum plus an object payload.** `LoadCore` carries two strings with real type safety at every consumption site instead of a cast, matching this codebase's existing preference for small explicit result shapes (`DebugLoadInfo`, `StaticReferenceKind`) over a stringly-typed grab bag. `LoadCore` carries the raw strings deliberately: validating them — unknown core name, missing file, wrong extension — is the *issuing* command's job, so by the time one reaches the driving loop both are already known-good (§3, `CoreCommand`).
+
+**`IsReadOnly` is a per-class property and cannot vary by argument**, which is why a command with a mixed sub-verb surface (`watch add` against `watch list`) must report `false`. The cost of that conservatism is one frame of latency for its read-only sub-verbs (§3.17); the cost of getting it wrong is a mutation racing `RunFrame`. Note also that `stdin` distinguishes `null` from `""`: null means this command is standalone or the first stage of a pipeline, empty means a previous stage genuinely produced no output.
+
 ### 3.4 What's deliberately *not* routed through this yet
 
 - **F2's sprite dump** still calls `renderer.DumpActiveOam` directly rather than the `sprites` command. That method has a second responsibility — it also returns rects consumed by the "O" key's overlay drawing — that `SnesDebugTarget.GetSprites()` intentionally doesn't take on, to keep the toolchain's data-producing role separate from the renderer's overlay-geometry role. The `sprites` command (via F4) is the generalized, going-forward equivalent of just F2's printed output.
@@ -746,7 +761,7 @@ Lives in `EmuSen.DianaOS` (not `EmuSen.Hotaru`, the only current caller) specifi
 
 **The welcome banner (`GetWelcomeBanner`, `DianaOS/DianaOSInterpreter.cs`).** Printed exactly once per shell launch - not on every command, not on every F4/console-reopen - a boxed header (`Welcome to DianaOS v0.1a`), a "Supported cores" list, a short "Features" bullet summary, and a closing line pointing at `help`/`man` (`Type "help" for a list of commands. Man is supported for each.`) rather than dumping the full command listing inline - an earlier version did that (via the private `Help()` method), but repeating the whole registry on every launch buried the actual orientation content above it. Version is `DianaOSInterpreter.Version` (`"0.1a"` today) - a public constant so a frontend could surface it elsewhere (a window title, an about box) without needing to know it's really just banner detail. `supportedCores` is a plain `IEnumerable<string>` parameter rather than anything hardcoded in this core-agnostic library - `EmuSen.Hotaru`'s `RunStandaloneShell` passes the distinct display names out of its own `_coreRegistry`, `EmuSen.Mistress`'s `DianaOSConsoleWindow` passes its own small `SupportedCores` array (mirroring `PreferencesWindow.AvailableCores`, a separate hardcoded copy that already existed for that window's own core-selection combo - not worth unifying for one display string). Box-drawn with plain ASCII (`+`/`-`/`|`), not Unicode box-drawing characters or ANSI color - has to render identically in a real terminal (`EmuSen.Hotaru`) and a plain Avalonia `TextBox` (`EmuSen.Mistress`'s console window), and the latter has no ANSI interpreter to strip escape codes with.
 
-**Not yet done, explicitly out of scope for this pass**: shell functions (`name() { ...; }` - the single biggest additional lift, deferred as a follow-up rather than attempted alongside everything else here), true per-command-ephemeral variable scoping, arithmetic expansion (`$((...))`  - a literal `$((` currently lexes as `$(` immediately followed by a mostly-inert nested `(...)`, which will not do what a bash user expects, since there's no numeric-expression evaluator behind it), and per-stage (rather than whole-pipeline) redirection.
+**Not yet done, explicitly out of scope for this pass**: shell functions (`name() { ...; }` - the single biggest additional lift, deferred as a follow-up rather than attempted alongside everything else here), true per-command-ephemeral variable scoping, arithmetic expansion (`$((...))`  - a literal `$((` currently lexes as `$(` immediately followed by a mostly-inert nested `(...)`, which will not do what a bash user expects, since there's no numeric-expression evaluator behind it), and per-stage (rather than whole-pipeline) redirection. **Also absent at the lexer level, each a deliberate omission rather than an oversight:** heredocs (`<<`), backtick command substitution (only the modern `$(...)` form is supported), brace expansion (`{a,b}`), tilde expansion, and background jobs — a bare unpaired `&` throws a clear "not supported" error rather than silently misbehaving. There is no filesystem-of-interest to expand a glob against either, so globbing is not implemented. Each of these is flagged once here rather than re-litigated at every call site that could theoretically want one.
 
 **Known limitation**: `ConsoleLineReader` anchors its redraw column to wherever the cursor was when it started (right after the `DianaOS #: ` prompt) and doesn't handle a line long enough to wrap past the terminal width, or the terminal scrolling mid-edit. An accepted gap for a "basic" implementation - not something normal debug-prompt usage is likely to hit.
 
@@ -763,6 +778,34 @@ Lives in `EmuSen.DianaOS` (not `EmuSen.Hotaru`, the only current caller) specifi
 **`_pendingHostAction` is a field, last-one-wins, read once at the end of `SubmitCore`.** A host action is delivered after a whole statement list finishes, not mid-list, and if several commands in one line produce one the last wins — the same rule `$?` already follows for exit codes. It is deliberately *not* threaded through the `(string, int)` return type of `ExecuteStatementList` and its five callers: that would be a signature change rippling through six methods to carry a signal only `SubmitCore`'s caller ever reads. It is reset immediately before each execution, so a stale value cannot leak from one `Submit` into the next.
 
 **An unquoted word that expands to nothing vanishes entirely, and a quoted one never does.** `ExpandWord` tracks which characters came from a quoted span, so `"pre$X post"` stays one argument even containing a space, while unquoted `$X` holding `a b` becomes two. An entirely-quoted word — including an explicit empty `""` — always yields exactly one argument even when empty; an entirely-unquoted word expanding to nothing yields **zero**. That is why `echo a $EMPTY b` prints `a b` rather than `a  b` with a phantom empty argument in the middle. `ExpandWordSingle` is the deliberate exception, used where bash itself suppresses word-splitting regardless of quoting: assignment right-hand sides and redirection targets.
+
+### 3.17b The grammar, and the lex/parse split
+
+*2026-08-16, from `Lexer.cs`, `Parser.cs` and `Ast.cs` (133 lines across 24 blocks). The grammar in particular was reference material sitting in a comment.*
+
+**Hand-written recursive descent**, matching this codebase's style everywhere else a dispatch table or interpreter loop is hand-built (`Cpu.cs`, `Spc700.cs`) rather than taking a parser-generator dependency for a deliberately small grammar:
+
+```
+Script        := StatementList EOF
+StatementList := sep* (Statement (sep+ Statement)*)? sep*     -- sep = ';' | Newline
+Statement     := IfStmt | ForStmt | WhileStmt | 'break' | 'continue' | AndOrList
+AndOrList     := Pipeline (('&&'|'||') Pipeline)*
+Pipeline      := ['!'] SimpleCommand ('|' SimpleCommand)*
+SimpleCommand := (Assignment | Word | Redirection)+           -- at least one
+IfStmt        := 'if' StatementList 'then' StatementList
+                 ('elif' StatementList 'then' StatementList)*
+                 ('else' StatementList)? 'fi'
+ForStmt       := 'for' NAME 'in' Word* sep 'do' StatementList 'done'
+WhileStmt     := ('while'|'until') StatementList 'do' StatementList 'done'
+```
+
+**"Not finished" and "wrong" are two different failures, and the split is load-bearing.** `ShellIncompleteException` is thrown when the parser runs out of tokens where it needed more — `if true; then echo hi` with no `fi` is not broken, it is unfinished — and `ShellSyntaxException` when a token *is* present and is simply wrong. `DianaOSInterpreter` handles the first exactly as it handles `LexResult.NeedsMoreInput`: hold the raw text, show the `> ` continuation prompt, wait for another line. Collapsing the two would make every half-typed block an error. A block parser reaching EOF with no terminator is the incomplete case; `terminators.Length == 0` happens only for the top-level script list, where EOF just means done.
+
+**The lexer never expands anything.** It tags. A bash word is rarely one uniform string before expansion — `pre$VARpost"lit $OTHER"end` is a *single* word made of five differently-sourced pieces — so `Ast.WordPart` records each piece with where it came from, and `DianaOSInterpreter.ExpandWord` (§3.17a) applies the quoting rules afterwards. That tagging is precisely what makes real bash semantics expressible instead of an all-or-nothing per-word quoted flag: single quotes produce a `Literal` part that is never expanded and never split; double quotes still produce `Variable`/`CommandSubstitution` parts, expanded but not split.
+
+A `CommandSubstitution` part holds the **raw, unparsed source text** between `$(` and its matching `)`, parsed and executed recursively at expansion time rather than at lex time — so a substitution's own contents, which may themselves contain quotes, pipes or further nesting, never have to be understood until the outer word actually needs a value. A bare `$` not followed by a valid name, `(`, `{` or `?` is a literal dollar sign, as in bash. An empty `''` still registers as real, empty word content, which is what makes it produce one argument rather than zero (§3.17a).
+
+**Redirection attaches to the pipeline, not the stage**, and an assignment is only an assignment in command position, unquoted, with a valid identifier — `cmd NAME=value` after the command name is a literal argument, matching bash. A statement of nothing but assignments is itself valid.
 
 ### 3.18 `EmuSen.WiseMan` — committed xUnit test project
 

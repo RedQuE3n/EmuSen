@@ -8,9 +8,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Arms a halt on the BreakpointRegistry and signals HostAction.Step so
-    // the caller's loop resumes far enough to reach it - see `man step`.
-    // 's' is aliased in DianaOSInterpreter.Dispatch, not registered twice.
+    // Arms the halt, then signals Step so the caller's loop reaches it - see `man step`.
     public class StepCommand : IDianaOSCommand
     {
         public string Name => "step";

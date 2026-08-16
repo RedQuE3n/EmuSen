@@ -5,22 +5,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 namespace EmuSen.DianaOS.DianaOS.Lib
 {
-    // A command's result: the text it produced, plus a bash-style exit
-    // code (0 = success, nonzero = failure) driving '&&'/'||'/'if'/'while'
-    // short-circuiting. Implicitly constructible from a plain string
-    // (exit code 0) specifically so every pre-existing debug command -
-    // which just does `return "some text";` - keeps compiling unchanged
-    // after switching from IDebugCommand's `string Execute(...)` to
-    // IDianaOSCommand's `DianaOSResult Execute(...)`: success is still the
-    // overwhelmingly common case, and only the handful of commands that
-    // actually need to signal failure without throwing (true/false/test)
-    // construct one explicitly.
-    //
-    // Action is a third, optional member for the same reason - null for
-    // every ordinary command, exactly like the two-arg constructor and
-    // implicit string conversion already produce. Only a command that
-    // genuinely needs to change the CALLER's control flow (see
-    // HostAction's own comment) ever sets it.
+    // Implicitly built from a string so ordinary commands stay unchanged; Action is for §3.3b.
     public readonly struct DianaOSResult
     {
         public readonly string Output;

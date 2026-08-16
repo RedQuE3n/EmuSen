@@ -17,14 +17,12 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public string Path { get; init; }
     }
 
-    // An index over a directory tree of .cht files - the user's own copy,
-    // never anything EmuSen ships. See `man cheat`.
+    // An index over the user's own .cht tree, never anything EmuSen ships - see `man cheat`.
     public sealed class CheatDatabase
     {
         public string Directory { get; }
 
-        // A real libretro tree is tens of thousands of files and every query
-        // here walks all of it, so one instance scans once - see `man cheat`.
+        // A real libretro tree is tens of thousands of files, so one instance scans once.
         private IReadOnlyList<CheatDatabaseEntry>? _all;
 
         public CheatDatabase(string directory)
@@ -66,9 +64,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
                  .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                  .ToList();
 
-        // Every game under one system folder, optionally narrowed by a
-        // substring - a system holds thousands, so the filter is not optional
-        // in practice. Already name-ordered by All().
+        // A system holds thousands, so the filter is not optional in practice.
         public IReadOnlyList<CheatDatabaseEntry> Games(string system, string? filter = null)
         {
             IEnumerable<CheatDatabaseEntry> games = All().Where(e => string.Equals(e.System, system, StringComparison.OrdinalIgnoreCase));
@@ -82,9 +78,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return games.ToList();
         }
 
-        // Best matches first. A ROM is usually loaded as "Game (USA).sfc"
-        // while its cheat file is "Game (USA).cht", so the extension is
-        // stripped before matching rather than expecting the caller to.
+        // The extension is stripped here, since a ROM is .sfc where its cheat file is .cht.
         public IReadOnlyList<CheatDatabaseEntry> Find(string text, int limit = 20)
         {
             string needle = Normalize(text);

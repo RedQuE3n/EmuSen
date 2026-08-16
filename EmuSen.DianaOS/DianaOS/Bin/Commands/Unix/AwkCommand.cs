@@ -12,33 +12,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // A small AWK subset - real AWK is a whole language (arithmetic,
-    // user functions, associative arrays, printf...), and this shell's
-    // own header comment already draws the line at "no arithmetic
-    // expansion" for itself; this command draws the same line rather
-    // than trying to embed a second, more capable expression language
-    // just for one command. What IS supported, because it covers the
-    // overwhelming majority of real `awk` one-liners people actually
-    // reach for on command output (`regs | awk '{print $1}'`,
-    // `mem dump | awk -F, 'NR>1{print $2}'`):
-    //   - patterns: empty (always), `/regex/`, `NR<op><int>`
-    //     (==, !=, <, <=, >, >=), and `BEGIN`/`END`.
-    //   - actions: `{ print expr[, expr...][; print ...] }`; a bare
-    //     pattern with no `{...}` defaults to `{print $0}`, matching
-    //     real awk. `{}` (an explicit, empty action) does nothing,
-    //     also matching real awk.
-    //   - expressions: `$0`, `$N`, `$NF`, `NR`, `NF`, `"string literal"`,
-    //     bare numeric literals. No concatenation, no arithmetic, no
-    //     variables beyond NR/NF.
-    // Field splitting: default is runs of whitespace (leading/trailing
-    // trimmed first, same as real awk's default FS); `-F sep` splits on
-    // a literal separator string instead (not a regex, unlike real
-    // awk's non-single-char `-F` - a documented simplification), with
-    // `\t`/`\n` unescaped in the -F argument itself since real awk does
-    // the same escape processing there. A trailing file path argument is
-    // walled to DianaOSSandbox.RootDirectory, same as every other real-file
-    // command in this shell (see that file's own comment) - piped stdin
-    // is unaffected either way, since that never touches the filesystem.
+    // A deliberately small AWK subset, not a clone - see EmuSen_Debugging_Tools_Reference_v5.md §3.17.
     public class AwkCommand : IDianaOSCommand
     {
         public string Name => "awk";
@@ -126,17 +100,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
             public List<List<Func<string, string[], int, string>>>? Statements; // null = no {...} was given at all -> default print $0
         }
 
-        // Rules are separated by ';'/newline like this shell's own
-        // top-level command sequencing, but - matching real awk - a
-        // rule's own closing '}' also ends it on its own, with no
-        // separator required before the next rule's pattern: the common
-        // `BEGIN{...} {...} END{...}` idiom (all on one line, space-
-        // separated only) has to parse as three rules, not one. So this
-        // scans forward looking for whichever comes first, a top-level
-        // '{' (this rule has an action - the closing brace ends the
-        // rule right there) or a top-level ';'/'\n' (this rule has no
-        // action - defaults to `print $0`, same as a bare pattern
-        // anywhere else).
+        // A rule's own '}' ends it, so BEGIN{}{}END{} on one line parses as three rules.
         private static List<AwkRule> ParseProgram(string program)
         {
             var rules = new List<AwkRule>();
@@ -282,11 +246,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
             throw new FormatException($"unsupported awk expression: '{text}'");
         }
 
-        // Splits on the given separator characters, but only at brace
-        // depth 0 and outside a double-quoted string - shared by rule
-        // splitting (on ';'/'\n'), statement splitting (on ';'), and
-        // print-argument splitting (on ',') since all three need the
-        // same "don't split inside {...} or "..."" behavior.
+        // Splits only at brace depth 0 and outside a quoted string; shared by all three splitters.
         private static List<string> SplitTopLevel(string text, char[] seps)
         {
             var parts = new List<string>();

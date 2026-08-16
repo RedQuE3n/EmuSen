@@ -10,30 +10,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // A basic `sed`-style substitution filter: `s/pattern/replacement/[gi]`.
-    // Real value is as a pipeline stage - `regs | sed s/PC=/pc=/`. Also
-    // callable standalone (`sed <expr> <text...>`) for scripting
-    // convenience when there's nothing worth piping from.
-    //
-    // Deliberately minimal, not a full sed clone: only the `s///` command
-    // (no line addressing, no `d`/`p`/hold-space/etc.), and the delimiter
-    // can be any character (matching real sed's "the character right after
-    // 's' is the delimiter for this invocation" rule - `s#/bin#/usr/bin#`
-    // works the same as `s/foo/bar/`), with `\<delim>` inside pattern or
-    // replacement meaning a literal delimiter character. Pattern is a
-    // .NET regex (close enough to POSIX ERE/sed's own extended-regex mode
-    // for anything this project's own tooling would realistically need).
-    // Replacement supports `&` (whole match) and `\1`-`\9` (capture
-    // groups) the way sed itself does, translated to .NET's `$&`/`$1`
-    // syntax under the hood - `\&`/`\\N`-escaped literal backslash-digit
-    // sequences aren't specially handled, another place this stays
-    // "basic" rather than a full clone.
-    //
-    // Applied per line, like real sed operating on a multi-line stream -
-    // without the `g` flag, only the first match on each line is replaced,
-    // not just the first match in the whole piped blob. Matters here
-    // because most command output this actually gets used on (`regs`,
-    // `snapshot list`, `channels`...) is multi-line.
+    // Only s///, applied per line as real sed does - see §3.17.
     public class SedCommand : IDianaOSCommand
     {
         public string Name => "sed";
@@ -49,9 +26,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
         {
             if (args.Length < 2) return Usage;
 
-            // Piped input (stdin != null, even if empty) always wins over
-            // any trailing literal-text arguments, matching real sed
-            // preferring stdin/a file over inline text.
+            // Piped input always wins over trailing literal text, as real sed prefers stdin.
             string? text = stdin ?? (args.Length >= 3 ? string.Join(' ', args, 2, args.Length - 2) : null);
             if (text == null)
             {
@@ -89,11 +64,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
             return string.Join('\n', lines);
         }
 
-        // Splits "pattern<delim>replacement<delim>flags" on the delimiter,
-        // honoring "\<delim>" as an escaped literal delimiter rather than a
-        // field boundary - without this, a pattern that needs to match the
-        // delimiter itself (e.g. `s/\//_/` to replace a literal slash)
-        // would be unparseable.
+        // Honours an escaped delimiter, or a pattern matching the delimiter is unparseable.
         private static string[] SplitOnDelimiter(string s, char delim)
         {
             var fields = new List<string>();
@@ -119,9 +90,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
             return fields.ToArray();
         }
 
-        // sed's replacement syntax (`&` = whole match, `\1`-`\9` = capture
-        // groups) isn't .NET Regex.Replace's own (`$&`, `$1`) - translated
-        // here rather than asking callers to already know .NET's dialect.
+        // sed's &/\1 syntax is not .NET's $&/$1, so it is translated rather than required.
         private static string TranslateReplacement(string replacement)
         {
             var result = new StringBuilder();
@@ -138,8 +107,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
                 }
                 else if (replacement[i] == '$')
                 {
-                    // Escape a literal '$' so .NET doesn't mistake it for
-                    // its own substitution syntax.
+                    // Escape a literal '$' so .NET does not read it as its own substitution syntax.
                     result.Append("$$");
                 }
                 else

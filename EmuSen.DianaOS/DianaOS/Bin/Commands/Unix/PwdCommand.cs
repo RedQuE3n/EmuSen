@@ -5,11 +5,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `pwd` - prints the process's current working directory, the
-    // same one `cd` changes and every relative path this shell touches
-    // (redirection, `dump`/`load`, `mv`, `ls`, `wc <path>`, ...) resolves
-    // against, since none of them track a shell-private cwd separate from
-    // Environment.CurrentDirectory.
+    // The process cwd, since nothing here tracks a shell-private one - see `man pwd`.
     public class PwdCommand : IDianaOSCommand
     {
         public string Name => "pwd";

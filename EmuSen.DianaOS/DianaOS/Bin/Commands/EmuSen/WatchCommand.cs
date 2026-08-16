@@ -79,8 +79,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 {
                     if (parts.Length < 3) return "Usage: watch summary <id>";
                     int id = ParseHex(parts[2]);
-                    // Whole-run site totals, not the event ring - grouping the
-                    // ring reported a truncated site list as the complete one.
+                    // Whole-run site totals, not the evicting ring - see §3.5.
                     var sites = watches.GetSiteHits(id);
                     if (sites.Count == 0) return $"No events recorded for watch #{id} (or it doesn't exist).";
 

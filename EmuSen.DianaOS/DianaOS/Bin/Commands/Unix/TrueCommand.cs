@@ -6,9 +6,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `true` - does nothing, always succeeds (exit code 0). Its only
-    // real use is in control flow: `while true; do ...; done`, or as a
-    // harmless placeholder branch.
+    // Always succeeds; its use is `while true` and placeholder branches.
     public class TrueCommand : IDianaOSCommand
     {
         public string Name => "true";

@@ -7,10 +7,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Reads back the coprocessor register history a target keeps behind
-    // IDebugTarget.CoprocessorRegisters - see HistoryProvider. `regs` shows
-    // the instant; this shows the run-up to it, which is what a "the chip
-    // rendered and then stopped" investigation actually needs.
+    // `regs` shows the instant; this shows the run-up to it - see §3.23a.
     public class CopHistCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "cophist";
@@ -43,8 +40,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 
             var shown = frames.Skip(Math.Max(0, frames.Count - count)).ToList();
 
-            // The refresh index the oldest shown entry corresponds to, so a
-            // row can be tied back to a real moment rather than just "16 ago".
+            // Ties a row back to a real moment rather than just "16 ago".
             long newest = provider.RefreshCount;
             long firstIndex = newest - shown.Count + 1;
 
@@ -72,9 +68,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         }
     }
 
-    // Implemented by a target that keeps coprocessor history. Kept separate
-    // from IDebugTarget so a core with no coprocessor - or no interest in
-    // retaining history - is not forced to carry a ring buffer it never uses.
+    // Separate from IDebugTarget so a core without history carries no ring buffer - see §3.1a.
     public interface IHistoricalCoprocessorTarget
     {
         HistoryProvider<IReadOnlyList<DebugRegisterValue>> CoprocessorHistory { get; }

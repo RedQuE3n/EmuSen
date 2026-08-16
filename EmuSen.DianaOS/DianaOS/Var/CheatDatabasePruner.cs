@@ -14,9 +14,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public long Bytes { get; init; }
     }
 
-    // What a prune would do, worked out before anything is touched. A plan
-    // that CanApply is false for is a refusal with a Reason, never a
-    // silently empty deletion - see `man cheat`.
+    // A plan that cannot apply is a refusal with a reason, never an empty deletion - see `man cheat`.
     public sealed class CheatPrunePlan
     {
         public required IReadOnlyList<PrunedSystem> Removing { get; init; }
@@ -36,27 +34,10 @@ namespace EmuSen.DianaOS.DianaOS.Var
         };
     }
 
-    // Drops the cheat-database folders no implemented core can use. The
-    // libretro database ships ~44 systems and a build with one core needs
-    // one of them, so this is the difference between a 250MB tree and a
-    // 16MB one - and every CheatDatabase scan walks all of it.
-    //
-    // Core-agnostic: it is handed the set of system names to KEEP and has no
-    // idea what a core is. Which names those are comes from the core
-    // registry - see CoreDescriptor.SupportedCheatSystems and
-    // EmuSen_Settings_Reference.md §4.16.
+    // Handed the names to keep, with no idea what a core is - see EmuSen_Settings_Reference.md §4.16.
     public static class CheatDatabasePruner
     {
-        // Works out what would go without touching anything. Refuses, rather
-        // than planning a deletion, in the two cases where an empty or
-        // unmatched keep-set would wipe the whole database:
-        //
-        // - Nothing to keep. A registry whose cores claim no cheat systems
-        //   is a build that has not filled CheatSystems in yet, not a build
-        //   that wants every cheat gone.
-        // - Nothing kept matches what is on disk. That is a wrong folder or
-        //   a wrong mapping, and the honest response is to say so - the one
-        //   case where "delete all 44 systems" is exactly what it looks like.
+        // Refuses the two cases where an empty or unmatched keep-set would wipe everything - see §4.16.
         public static CheatPrunePlan Plan(CheatDatabase database, IReadOnlyCollection<string> keep)
         {
             var keepSet = new HashSet<string>(keep, StringComparer.OrdinalIgnoreCase);
@@ -96,9 +77,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return new PrunedSystem { System = system, Path = path, Files = files, Bytes = bytes };
         }
 
-        // Deletes what <plan> listed. Returns how many folders actually went
-        // and anything that would not delete, which is reported rather than
-        // thrown - one locked folder must not abort the other forty.
+        // Failures are reported, not thrown: one locked folder must not abort the other forty.
         public static (int Removed, IReadOnlyList<string> Failed) Apply(CheatDatabase database, CheatPrunePlan plan)
         {
             if (!plan.CanApply) return (0, Array.Empty<string>());
@@ -108,8 +87,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
             foreach (PrunedSystem system in plan.Removing)
             {
-                // Never outside the tree it was planned against, whatever a
-                // folder name or a symlink claims.
+                // Never outside the tree it was planned against, whatever a name or symlink claims.
                 if (!IsInside(database.Directory, system.Path))
                 {
                     failed.Add($"{system.System} (outside {database.Directory})");
@@ -130,8 +108,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return (removed, failed);
         }
 
-        // Resolved on both sides, so neither a `..` segment nor a symlinked
-        // system folder can reach out of the cheat directory.
+        // Resolved on both sides, so neither .. nor a symlink reaches out of the tree.
         private static bool IsInside(string root, string candidate)
         {
             try

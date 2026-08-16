@@ -10,19 +10,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `grep` - filters lines by a regex pattern. The natural pipeline
-    // partner to every multi-line command this shell already has (`regs`,
-    // `watch log`, `sprites`, `history`...): `regs | grep PC`, `watch log 1
-    // | grep -v poll`. Pattern is a .NET regex, same choice `sed` already
-    // made - close enough to POSIX ERE for anything this project's own
-    // tooling would realistically need.
-    //
-    // Deliberately a small subset of real grep: no `-E`/`-F`/`-P` mode
-    // switches (pattern is always a regex), no `-A`/`-B`/`-C` context
-    // lines, no multi-file support (there's one input stream - stdin, or
-    // trailing literal text). `-q` is included specifically because it's
-    // what makes `grep` genuinely useful as an `if`/`while` condition here
-    // (`if regs | grep -q PC; then ...`), not just a text filter.
+    // A .NET regex, as `sed` chose; -q is what makes it usable as a condition - see §3.17.
     public class GrepCommand : IDianaOSCommand
     {
         public string Name => "grep";
@@ -68,8 +56,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
                 if (regex.IsMatch(lines[lineIdx]) != invert) matches.Add((lineIdx + 1, lines[lineIdx]));
             }
 
-            // Real grep: exit 0 if at least one match, 1 otherwise -
-            // that's what lets `grep -q` drive an if/while condition.
+            // Exit 0 on at least one match, which is what lets -q drive an if or while.
             int exitCode = matches.Count > 0 ? 0 : 1;
 
             if (quiet) return new DianaOSResult("", exitCode);

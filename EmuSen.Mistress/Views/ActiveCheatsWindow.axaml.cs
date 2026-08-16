@@ -66,9 +66,7 @@ namespace EmuSen.Mistress.Views
             Refresh();
         }
 
-        // Four columns matching the hand-laid Grid this replaced - see §4.14a. Kind and Detail
-        // are template columns because their muted/monospace styling is what made the list
-        // scannable, and a plain text column would take the theme's body style.
+        // Four columns matching the hand-laid Grid this replaced - see §4.14a.
         private void BuildCheatColumns()
         {
             CheatsList.Key = r => r.Id;

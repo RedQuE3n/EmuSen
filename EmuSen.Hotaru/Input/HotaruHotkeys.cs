@@ -3,7 +3,7 @@ using Avalonia.Input;
 
 namespace EmuSen.Hotaru.Input
 {
-    // What a non-gameplay key does, as data - see EmuSen_Frontend_Driver.md §4.5.
+    // What a non-gameplay key does, as data - see EmuSen_Frontend_Driver.md §3e.
     public enum HotaruHotkey
     {
         Summary,
@@ -22,9 +22,7 @@ namespace EmuSen.Hotaru.Input
         Rewind,
     }
 
-    // The table GameWindow's KeyDown dispatches through, and the one the help
-    // window lists. One source, so a key cannot do one thing and be described as
-    // another - see EmuSen_Frontend_Driver.md §4.5.
+    // One table for dispatch and for the help window - see EmuSen_Frontend_Driver.md §3e.
     public static class HotaruHotkeys
     {
         public sealed record Entry(HotaruHotkey Action, Key Key, string Name, string Held);

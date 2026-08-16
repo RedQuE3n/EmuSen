@@ -5,9 +5,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Hotaru.Views
 {
-    // What the keys do, for a frontend that has no menu to put them on - see
-    // EmuSen_Frontend_Driver.md §4.5. Built from HotaruHotkeys.All, so a key that
-    // changes there changes here rather than being described from memory.
+    // The keys, for a frontend with no menu to put them on - see §3e.
     public class HotkeyHelpWindow : ToolWindow
     {
         public HotkeyHelpWindow()

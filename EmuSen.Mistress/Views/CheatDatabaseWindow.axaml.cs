@@ -13,8 +13,7 @@ using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Mistress.Views
 {
-    // A named model for the systems list, so the count is a field rather than
-    // something parsed back out of a label - see §4.11a.
+    // A named model so the count is a field, not something parsed back out - §4.11a.
     public sealed record CheatSystemRow(string System, int Count);
 
     // The GUI for `cheat db` - see `man cheat`. EmuSen redistributes no

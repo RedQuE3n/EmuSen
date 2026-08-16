@@ -1,5 +1,11 @@
 # EmuSen.LunaP — Shared UI Toolkit Game Plan
 
+> **Retired 2026-08-16, on this document's own instruction (§7.3).** All seven phases are done and `EmuSen_LunaP.md` is the reference doc §7.3 said should replace it, so this file moved to `Man pages/Old/` and is kept for history. It is still cited by name from `EmuSen_LunaP.md` §17's list, `EmuSen_LunaP_Adoption_Gameplan.md`, `EmuSen_Frontend_Driver.md` §3e, `EmuSen_Settings_Reference.md` §4.14a and `EmuSen_Core_Naming_Scheme.md` — those citations point at a record deliberately, not at a stale current doc, which is the distinction the index's own warning about `Old/` is drawing.
+>
+> **§7.1's prediction, settled.** It named three files carrying the largest comment-rule violations and said migrating a file is the moment to move its prose. Two of them (`Hotaru/Views/CoretopWindow.axaml.cs`, `Mistress/Views/CoretopWindow.axaml.cs`) no longer exist — Phase 6 moved both into LunaP's `Dashboards/`. The third, `Hotaru/Views/DebugWindows.cs`, is down from 14 lines to one. The prediction held; the debt it named simply moved to files it had not yet seen, which `EmuSen_Frontend_Driver.md` §3f and `EmuSen_Settings_Reference.md` §4.21/§4.22 have since absorbed.
+>
+> **§7.2 landed**; `EmuSen_Core_Naming_Scheme.md` §10 records LunaP and its distinctness from `Luna`.
+
 *This revision (2026-08-04): **All seven phases are done.** The toolkit is built, both frontends are migrated onto it, it is themeable, and it has its widget set. This file is now a record of what was planned and what each phase taught rather than a plan of record; `EmuSen_LunaP.md` documents what exists. Previous revision (2026-08-04): phases 0-6 done, Phase 7 outstanding.*
 
 ---

@@ -76,106 +76,53 @@ namespace EmuSen.Mistress.Views
         private int _stateSlot = 1;
         private const int StateSlots = 8;
 
-        // Gamepad polling stays on the UI thread, on its own timer, separate
-        // from emulation - see EmuSen_Settings_Reference.md §4.10.
+        // Gamepad polling only, on the UI thread - see EmuSen_Settings_Reference.md §4.10.
         private DispatcherTimer? _timer;
 
-        // Runs RunFrame() + frame-buffer readout off the UI thread entirely -
-        // previously both lived inside the DispatcherTimer tick above, which
-        // meant emulation work (and the WriteableBitmap copy after it)
-        // blocked Avalonia's UI/input/paint pump every single frame. This is
-        // the actual fix for Testing Studio running much slower than the
-        // console build, which always ran its equivalent loop off of any UI
-        // event pump to begin with (it doesn't have one). See
-        // EmulationLoop()/StartEmulationThread()/StopEmulationThread() below.
+        // RunFrame off the UI thread entirely - see EmuSen_Settings_Reference.md §4.21.
         private Thread? _emuThread;
         private volatile bool _running;
 
-        // Pause/resume for the emulation thread, added so a shell command
-        // typed into _consoleWindow can safely read/write Cpu/Bus/Renderer
-        // state without racing RunFrame() on _emuThread - see
-        // EmulationControlCommands.cs's own comment for why this exists.
-        // Signaled (Set) = running, unsignaled (Reset) = paused; starts
-        // signaled so a freshly-started thread doesn't block before
-        // anyone's had a chance to pause it. EmulationLoop blocks on this
-        // at the top of every iteration rather than busy-polling a bool,
-        // and StopEmulationThread always Sets it before Join()ing so a
-        // paused thread can still wake up, notice _running is false, and
-        // exit - otherwise stopping while paused would deadlock forever.
+        // Signalled means running; a stop always Sets before Join - see `man pause` and §4.21.
         private readonly ManualResetEventSlim _pauseSignal = new(initialState: true);
 
         public bool IsPaused => !_pauseSignal.IsSet;
 
-        // Coalescing hand-off from _emuThread to the UI thread: the
-        // emulation thread can produce frames faster than Avalonia can
-        // present them, and posting one Dispatcher action per emulated frame
-        // would just queue them up and make the UI thread fall further and
-        // further behind. Instead, only ever have at most one Present
-        // dispatched at a time - _emuThread always overwrites _pendingFrame
-        // with the newest frame and only schedules a new Present if one
-        // isn't already in flight, so a slow UI thread simply drops
-        // intermediate frames rather than backing up a queue of them.
+        // Coalescing hand-off to the UI thread - see EmuSen_Serenity.md §4.
         private sealed class FrameData
         {
             public required byte[] Pixels;
             public required int Width;
             public required int Height;
         }
-        // "Newest wins, at most one UI-thread callback outstanding" is LunaP's Latest<T> now. This
-        // class, Hotaru's GameWindow and Serenity's FramePresenter each wrote it out identically,
-        // which is what argued it into the toolkit - and all three carried the same defect: the
-        // scheduled flag was cleared AFTER the hand-off, so a frame submitted while the UI thread
-        // was inside UpdateFrame could neither schedule a callback nor be picked up by the running
-        // one. It sat there until the next frame displaced it.
-        //
-        // Invisible at 60 fps, because the next frame arrives 16 ms later carrying the fix. Visible
-        // the moment the stream stops - pause, and the frame at risk is the last one drawn, which
-        // is the one somebody is about to sit and look at. LunaP.md §22.1.
+        // Was written out here, in Hotaru and in Serenity, all three with one defect - LunaP.md §22.1.
         private readonly Latest<FrameData> _frames;
 
-        // Rebuilt on every LoadRom() call (see LoadRom below) so a shell
-        // command run in _consoleWindow always sees whatever core is
-        // actually running now, never a Cpu/Bus/Renderer left over from a
-        // ROM that's since been swapped out. Null before the first ROM
-        // loads - the console window (and every shell command's own
-        // RequireTarget guard) already treats that as a normal condition.
+        // Rebuilt on every LoadRom, so the console never sees a swapped-out core - see §4.12.
         private IDebugTarget? _debugTarget;
 
-        // At most one console window at a time - Show()n non-modally (same
-        // pattern DebugSettingsWindow/InputSettingsWindow already use), and
-        // reused (brought to front) rather than duplicated if the menu item
-        // is clicked again while one's still open. Cleared on Closed so a
-        // later LoadRom() doesn't try to push a target update into a
-        // disposed window.
+        // At most one, reused and brought forward rather than duplicated; cleared on Closed.
         private readonly WindowSlot<DianaOSConsoleWindow> _consoleWindow = new();
 
-        // Same at-most-one/reuse/clear-on-Closed pattern as _consoleWindow
-        // above - opened from inside the console window itself (typing
-        // `coretop`, via CoretopWindowCommand), not from a menu item.
+        // Same rule, opened by typing `coretop` rather than from a menu item.
         private readonly WindowSlot<CoretopWindow> _coretopWindow = new();
 
-        // Same at-most-one/reuse/clear-on-Closed pattern, but with no
-        // target to update - see `man vstop`.
+        // Same rule, with no target to update - see `man vstop`.
         private readonly WindowSlot<VstopWindow> _vstopWindow = new();
 
-        // Same at-most-one/reuse/clear-on-Closed pattern, refreshed rather
-        // than re-targeted - see EmuSen_Settings_Reference.md §4.14.
+        // Same rule, refreshed rather than re-targeted - see EmuSen_Settings_Reference.md §4.14.
         private readonly WindowSlot<ActiveCheatsWindow> _activeCheatsWindow = new();
 
         // Same at-most-one/reuse/clear-on-Closed pattern, retained so a console switch can retarget it.
         private readonly WindowSlot<CheatDatabaseWindow> _cheatDatabaseWindow = new();
 
-        // Owned here, not by _debugTarget, so a cheat list outlives the core
-        // a Reset rebuilds - see §4.14.
+        // Owned here so a cheat list outlives the core a Reset rebuilds - see §4.14.
         private readonly CheatRegistry _cheats = new();
 
-        // Which ROM the loaded cheats were meant for; null while they belong
-        // to no game yet. Not _currentRomPath, which a close resets - see §4.14.
+        // Which ROM the cheats are for; not _currentRomPath, which a close resets - see §4.14.
         private string? _cheatsRomPath;
 
-        // Set by the Active Cheats window's Apply button, cleared by the
-        // emulation thread - cheats must be poked from the thread that owns
-        // the core, same rule DrainPendingFromEmulationThread follows. See §4.15.
+        // Cheats are poked from the thread that owns the core - see §4.15.
         private volatile bool _applyCheatsPending;
 
         private string? _currentRomPath;
@@ -185,34 +132,20 @@ namespace EmuSen.Mistress.Views
         private readonly GamepadBindings _gamepadBindings =
             GamepadBindings.Load(EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
 
-        // Which console's bindings are live. Follows the loaded ROM; the first
-        // console in catalog order stands in before one is loaded - see EmuSen_Input.md §5.1.
+        // Follows the loaded ROM; catalog order stands in before one loads - see EmuSen_Input.md §5.1.
         private string _activeConsole = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder[0].Console;
         private readonly HotkeyBindingMap _hotkeyBindings = HotkeyBindingMap.Load();
         private readonly AppSettings _appSettings = AppSettings.Load();
         private readonly GamepadManager _gamepad;
 
-        // Constructed once at startup and reused across every ROM load,
-        // same lifetime as _gamepad above (and for the same reason -
-        // Pump() below just no-ops via EmulatorSession's own null-session
-        // fallback when nothing's loaded, so there's no need to
-        // open/close the output device per load).
+        // Constructed once and reused across every load, same lifetime as _gamepad.
         private readonly AudioPlayer _audioPlayer;
 
-        // Captured once at startup, before anything ever redirects
-        // Console.Out - restoring this (rather than whatever
-        // _activeLogWriter happened to be at the time) is what lets logging
-        // be turned off again (or repointed) without leaving Console.Out
-        // pointed at a disposed writer.
+        // Captured before anything redirects - see EmuSen_Settings_Reference.md §4.22.
         private readonly TextWriter _originalConsoleOut = Console.Out;
         private CategorizedLogWriter? _activeLogWriter;
 
-        // Keyboard and gamepad are tracked separately and combined with OR
-        // logic - matches EmuSen.Hotaru's own GameWindow convention
-        // ("either device works at any time, no need to pick
-        // one"). Without this, a gamepad poll finding a button NOT pressed
-        // would incorrectly release a button still being held on the
-        // keyboard, and vice versa.
+        // Tracked separately and OR'd: either device works at any time.
         private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadButton>().Length];
         private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<PadButton>().Length];
 
@@ -236,8 +169,7 @@ namespace EmuSen.Mistress.Views
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
                 AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
-            // Attached to GameFrame rather than the window: "hidden over the video and
-            // visible over the toolbar" is not something a window-level flag can say.
+            // On GameFrame, not the window: a window-level flag cannot say that - see §4.20.
             _idleCursor = new IdleCursor(GameFrame);
             _fileDrop = new FileDrop(this, paths => _ = OpenDroppedRomAsync(paths[0]))
             {
@@ -351,11 +283,7 @@ namespace EmuSen.Mistress.Views
             LoadRom(file.Path, file.Name);
         }
 
-        // Offers the OS picker for anything this ROM needs that the firmware
-        // library doesn't have yet, and installs whatever comes back.
-        // Declining is a perfectly good answer - the core then loads with
-        // that chip absent, exactly as it does headless. Runs BEFORE LoadRom
-        // because afterwards is too late. See EmuSen_Firmware.md §3.
+        // Runs before LoadRom because afterwards is too late; declining is fine - see EmuSen_Firmware.md §3.
         private async Task PromptForMissingFirmwareAsync(string romPath)
         {
             foreach (FirmwareRequest request in EmulatorSession.MissingFirmwareFor(romPath))
@@ -379,18 +307,14 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        // The same sequence Open ROM... runs, so a dropped ROM cannot skip the
-        // firmware prompt - see EmuSen_Firmware.md §3.
+        // The same sequence Open ROM... runs, so a drop cannot skip the firmware prompt - see §4.20.
         private async Task OpenDroppedRomAsync(string path)
         {
             await PromptForMissingFirmwareAsync(path);
             LoadRom(path, System.IO.Path.GetFileName(path));
         }
 
-        // Alternative to the OS file picker above - lists .smc/.sfc files
-        // straight from AppSettings.RomDirectory, for anyone reloading
-        // different ROMs from the same test folder repeatedly. See
-        // RomBrowserWindow's own comment.
+        // Lists the ROM directory directly, as an alternative to the OS picker - see §4.11.
         private async Task BrowseRomsAsync()
         {
             string? selected = await new RomBrowserWindow(_appSettings.RomDirectory).ShowDialog<string?>(this);
@@ -411,9 +335,7 @@ namespace EmuSen.Mistress.Views
 
         private void ShowPreferences()
         {
-            // Non-modal, so the ROM directory can change while the library is
-            // on screen behind it - re-scan on close rather than leaving a
-            // stale list the user has to know to refresh.
+            // Non-modal, so re-scan on close rather than leaving a stale library behind it.
             var window = new PreferencesWindow(_appSettings);
             window.Closed += (_, _) => { if (LibraryView.IsVisible) RefreshLibrary(); };
             window.Show(this);
@@ -424,8 +346,7 @@ namespace EmuSen.Mistress.Views
             new DebugSettingsWindow().Show(this);
         }
 
-        // Never needs a ROM - it manages the cheat folder and the cheat list,
-        // neither of which is a session. See §4.14.
+        // Never needs a ROM: it manages a folder and a list, not a session. See §4.14.
         private void ShowCheatDatabase()
         {
             _cheatDatabaseWindow.Show(this, () => new CheatDatabaseWindow(_appSettings, () => _cheats,
@@ -438,9 +359,7 @@ namespace EmuSen.Mistress.Views
 
         
 
-        // Opens the one Active Cheats window, or brings it forward already
-        // refreshed - the menu item and the database window's own button are
-        // the same door. See §4.14.
+        // The menu item and the database window's button are the same door - see §4.14.
         private void ShowActiveCheats()
         {
             var codecs = ConsoleCodecs(SelectedConsole);
@@ -453,24 +372,19 @@ namespace EmuSen.Mistress.Views
                 refresh: w => w.Refresh());
         }
 
-        // Hands the poke to the emulation thread rather than doing it here -
-        // see _applyCheatsPending. False means there was no core to hand it to.
+        // Hands the poke to the emulation thread; false means there was no core - see §4.15.
         private bool RequestCheatApply()
         {
             if (_debugTarget is null) return false;
 
-            // Paused parks the emulation thread in _pauseSignal.Wait() rather
-            // than in the core, so nothing is racing and this can happen now -
-            // which is the whole point of the button while paused. See §4.15.
+            // Paused parks that thread outside the core, so this can happen now - see §4.15.
             if (IsPaused) _debugTarget.ApplyCheats();
             else _applyCheatsPending = true;
 
             return true;
         }
 
-        // The file name a ROM's cheat list is saved under and looked for at
-        // load. Sanitized rather than validated, unlike the name `cheat save`
-        // takes, because this one is derived rather than typed - see §4.15.
+        // Sanitized rather than validated, because this name is derived and not typed - see §4.15.
         private static string? CheatListName(string? romPath)
         {
             if (string.IsNullOrEmpty(romPath)) return null;
@@ -480,9 +394,7 @@ namespace EmuSen.Mistress.Views
             return CheatFile.IsValidName(name) ? name : null;
         }
 
-        // Whatever was saved for this ROM, brought back so a player doesn't
-        // reload it from the database every session - see §4.15. Returns how
-        // many arrived, for the caller to mention in its own status line.
+        // Whatever was saved for this ROM, brought back; returns how many - see §4.15.
         private int LoadSavedCheatsFor(string path)
         {
             if (CheatListName(path) is not string name) return 0;
@@ -501,11 +413,7 @@ namespace EmuSen.Mistress.Views
                 _session?.CheatAutoDetectCodec, _session?.CheatExplicitCodec, _session?.CpuTraceSwitch));
         }
 
-        // Built fresh per DianaOSConsoleWindow construction (not cached) -
-        // each PauseCommand/ResumeCommand instance only needs to close
-        // over `this`, so there's no real cost to re-creating them, and
-        // it avoids the two commands' delegates ever accidentally
-        // outliving a MainWindow instance.
+        // Built fresh per console window, so the delegates never outlive a MainWindow.
         private IEnumerable<IDianaOSCommand> MakeEmulationControlCommands() => new IDianaOSCommand[]
         {
             new PauseCommand(PauseEmulation, () => IsPaused),
@@ -516,18 +424,7 @@ namespace EmuSen.Mistress.Views
             new EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.StateCommand(SaveStateFromConsole, LoadStateFromConsole, () => CurrentStatePath ?? ""),
         };
 
-        // StateCommand's save/load delegates - can't just be
-        // `_session.SaveState`/`LoadState` method groups the way
-        // MakeEmulationControlCommands() reuses PauseEmulation/
-        // ResumeEmulation directly, since `_session` can still be null the
-        // first time this window's console is opened (before any ROM has
-        // ever loaded) - a method-group conversion would dereference it
-        // immediately, at command-construction time, not when the command
-        // actually runs. These defer that check to call time instead, and
-        // throw the same clean message CoretopWindowCommand's own
-        // RequireTarget-backed "No ROM loaded" case already establishes,
-        // rather than letting StateCommand's try/catch surface a bare
-        // NullReferenceException's own unhelpful message.
+        // Not method groups: _session can still be null at construction time - see `man state`.
         private void SaveStateFromConsole(string path)
         {
             if (_session is null) throw new InvalidOperationException("No ROM loaded.");
@@ -548,14 +445,10 @@ namespace EmuSen.Mistress.Views
         // No target to hand over or refresh, unlike OpenCoretopWindow above.
         private void OpenVstopWindow() => _vstopWindow.Show(this, () => new VstopWindow());
 
-        // Defaults to the same home/Saves/Save States/ tree the console
-        // build and DianaOS shell's `state save`/`state load` write to -
-        // overridable in Preferences (AppSettings.StateDirectory) for
-        // anyone who wants states somewhere else.
+        // The same tree `state save` writes to, overridable in Preferences.
         private string? CurrentStatePath => StatePathForSlot(_stateSlot);
 
-        // Slot 1 is the plain <rom>.state every other frontend already
-        // writes - see EmuSen_Settings_Reference.md §4.13.
+        // Slot 1 is the plain <rom>.state every other frontend writes - see §4.13.
         private string? StatePathForSlot(int slot) =>
             _currentRomPath is null
                 ? null
@@ -650,9 +543,7 @@ namespace EmuSen.Mistress.Views
             SyncMenuState();
         }
 
-        // The menu advertises the keys HotkeyBindingMap holds, and nothing else binds
-        // them - MenuBar.SetMenus draws a gesture without binding it, so a rebind moves
-        // the label and cannot leave a second binding behind. See §4.19.
+        // SetMenus draws a gesture without binding it, so a rebind moves the label only - see §4.19.
         private void ShowHotkeysOnTheMenu()
         {
             Gesture(_pause, HotkeyAction.TogglePause);
@@ -744,8 +635,7 @@ namespace EmuSen.Mistress.Views
             SyncMenuState();
         }
 
-        // Another game's addresses are meaningless here, so they go rather
-        // than quietly poking this one's RAM. A Reset keeps them - same ROM.
+        // Another game's addresses would quietly poke this one's RAM; a Reset keeps them.
         private int DropCheatsFromAnotherGame(string path)
         {
             bool sameGame = string.Equals(_cheatsRomPath, path, StringComparison.Ordinal);
@@ -757,8 +647,7 @@ namespace EmuSen.Mistress.Views
 
             _cheatsRomPath = path;
 
-            // Only when this game's list isn't already in hand: a Reset or a
-            // close-and-reopen must not overwrite edits made since - see §4.15.
+            // Not when the list is already in hand: a Reset must not overwrite edits since - see §4.15.
             return !sameGame && _cheats.GetCheats().Count == 0 ? LoadSavedCheatsFor(path) : 0;
         }
 
@@ -773,16 +662,13 @@ namespace EmuSen.Mistress.Views
             if (_session is { IsRomLoaded: true }) StatusText.Text = $"Reset: {displayName}";
         }
 
-        // Everything that has to happen to whatever is currently running
-        // before _session can be replaced or dropped.
+        // Everything that must happen before _session can be replaced or dropped.
         private void ShutDownCurrentSession()
         {
             _timer?.Stop();
             StopEmulationThread(); // must fully stop before _session changes - see that method's own comment
             _session?.SaveSram(); // flush whatever was previously running before switching
-            // Must happen on the OLD session: StartLogging()'s call to
-            // StopLogging() runs against whatever _session currently is,
-            // which would already be the new one.
+            // On the OLD session: StartLogging's own StopLogging would take the new one - see §4.22.
             _session?.FlushVerboseLogs();
         }
 
@@ -820,8 +706,7 @@ namespace EmuSen.Mistress.Views
                 _currentRomPath = path;
                 _currentDisplayName = displayName;
 
-                // Gamepad polling only - see _timer's own field comment for
-                // why this stays separate from emulation itself.
+                // Gamepad polling only; emulation is _emuThread's - see §4.21.
                 _timer = new DispatcherTimer { Interval = FrameInterval };
                 _timer.Tick += (_, _) => PollGamepad();
                 _timer.Start();
@@ -832,8 +717,7 @@ namespace EmuSen.Mistress.Views
             catch (Exception ex)
             {
                 _session = null;
-                // Back to the list rather than a black viewport with only a
-                // status line to explain it.
+                // Back to the list rather than a black viewport with only a status line.
                 ShowLibrary();
                 StatusText.Text = $"Failed to load {displayName}: {ex.Message}";
             }
@@ -859,8 +743,7 @@ namespace EmuSen.Mistress.Views
             StatusText.Text = $"Paused: {_currentDisplayName}";
         }
 
-        // The library is the no-game-running screen, so this is also the
-        // unload path - see EmuSen_Settings_Reference.md §4.11.
+        // The no-game-running screen, so this is also the unload path - see §4.11.
         private void ShowLibrary()
         {
             ShutDownCurrentSession();
@@ -984,8 +867,7 @@ namespace EmuSen.Mistress.Views
 
         private void OnLibraryItemActivated(object? sender, TappedEventArgs e) => LaunchSelectedLibraryEntry();
 
-        // Shared by the list and the search box, so Enter starts a title from either.
-        // Still wired from the list itself; the search box's own Enter arrives as FilterBar.Submitted instead.
+        // Wired from the list; the search box's Enter arrives as FilterBar.Submitted instead.
         private void OnLibraryKeyDown(object? sender, KeyEventArgs e)
         {
             if (e.Key != Key.Enter) return;
@@ -1001,13 +883,7 @@ namespace EmuSen.Mistress.Views
             LoadRom(entry.FullPath, entry.FileName);
         }
 
-        // Called from _consoleWindow's PauseCommand/ResumeCommand (both run
-        // on the UI thread, same as this method) - ManualResetEventSlim's
-        // Set/Reset are thread-safe regardless, so there's nothing else to
-        // guard here. StatusText is only ever touched from the UI thread
-        // in either case, so no Dispatcher.UIThread.Post is needed the way
-        // EmulationLoop needs one for its own cross-thread updates.
-        // Hotkey counterpart to the console's `pause`/`resume` pair.
+        // Hotkey counterpart to the console's pause/resume pair - see `man pause`.
         private void TogglePause()
         {
             if (_session is not { IsRomLoaded: true }) return;
@@ -1035,13 +911,7 @@ namespace EmuSen.Mistress.Views
             _emuThread.Start();
         }
 
-        // Signals the loop to stop and waits for it to actually exit before
-        // returning - callers (LoadRom, window Closing) need this to be
-        // synchronous since they go on to replace/dispose _session right
-        // after. Safe to call from the UI thread: EmulationLoop checks
-        // _running once per paced ~16ms frame interval at most, so Join()
-        // here never blocks for long, and it never blocks indefinitely since
-        // the loop has no other blocking wait.
+        // Synchronous by contract: callers replace _session right after - see §4.21.
         private void StopEmulationThread()
         {
             if (_emuThread is null) return;
@@ -1051,51 +921,17 @@ namespace EmuSen.Mistress.Views
             _emuThread = null;
         }
 
-        // Runs entirely off the UI thread: RunFrame() (the actual CPU/PPU/
-        // APU work) and the frame-buffer readout no longer compete with
-        // Avalonia's input/paint pump the way they did inside the old
-        // DispatcherTimer tick. Only the final present (PresentPendingFrame,
-        // dispatched below) needs the UI thread - GameFrame (GameFrameControl)
-        // is a regular Avalonia Control, and Control/Visual are UI-thread-
-        // affine the same way WriteableBitmap used to be.
-        //
-        // Input note: keyboard/gamepad button state is applied straight to
-        // _session.Bus.Input from the UI thread (SetButtonFromKey,
-        // PollGamepad's ApplyButtonState calls) while this thread
-        // concurrently calls RunFrame(), which reads that same state
-        // (Input.cs's LatchAutoJoypad/live-state fields). Deliberately left
-        // unsynchronized: each field involved is a single ushort/bool
-        // read-modify-write with exactly one writer (the UI thread), so the
-        // worst case is a button's state being observed one frame later
-        // than it otherwise would - not a torn read or a crash - which is
-        // an acceptable, already-inherent latency for a frame-latched input
-        // model like this one, not a new correctness risk introduced by
-        // moving emulation to its own thread.
+        // Runs off the UI thread, and the input race is accepted - see EmuSen_Settings_Reference.md §4.21.
         private void EmulationLoop()
         {
             Stopwatch clock = Stopwatch.StartNew();
             TimeSpan nextTick = clock.Elapsed;
 
-            // Measured emulated FPS (TotalFrames delta / real elapsed time),
-            // updated once a second - a diagnostic for telling "RunFrame()
-            // itself is running behind real time" apart from "presentation
-            // is just choppy but emulation is on schedule". Deliberately
-            // counts completed RunFrame() calls, not presented frames -
-            // SubmitFrame()/PresentPendingFrame's coalescing can legitimately
-            // drop presented frames without that meaning emulation itself
-            // is slow.
+            // Counts completed RunFrame calls, not presented frames - see §4.21.
             TimeSpan fpsWindowStart = clock.Elapsed;
             int framesInWindow = 0;
 
-            // Split timing: RunFrame() alone vs. the rest of this loop's own
-            // per-frame work (GetFrameBufferRgba's copy + SubmitFrame's
-            // hand-off). Boot/title screens hitting 60fps while gameplay
-            // drops below it could mean either RunFrame() itself getting
-            // more expensive under a heavier scene (shared core code -
-            // would cost the console build the same) or this loop's own
-            // wrapper overhead scaling up with scene complexity (frontend-
-            // specific, e.g. more per-frame allocation/GC pressure) -
-            // reporting both separately is how to tell which.
+            // RunFrame alone against the rest of this loop's per-frame work - see §4.21.
             TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
             var frameStopwatch = new Stopwatch();
 
@@ -1106,25 +942,13 @@ namespace EmuSen.Mistress.Views
 
             while (_running)
             {
-                // Blocks here, not inside the try below, while paused -
-                // see _pauseSignal's own field comment. StopEmulationThread
-                // always Sets this before Join()ing, so this can never
-                // block forever even if a console command pauses and the
-                // window is then closed without resuming first. Checked
-                // before waiting (rather than always calling Wait(), which
-                // would also be correct but always costs a syscall even
-                // when never paused) so the by-far-more-common unpaused
-                // case stays a plain volatile-ish read.
+                // Checked before waiting so the unpaused case stays a plain read - see §4.21.
                 if (!_pauseSignal.IsSet)
                 {
                     _pauseSignal.Wait();
                     if (!_running) break;
 
-                    // Otherwise nextTick would still be wherever it was
-                    // when the pause began, and the "fell behind" branch
-                    // at the bottom of this loop would attribute the
-                    // entire paused duration to a single artificially slow
-                    // frame in the fps window above.
+                    // Or the whole paused duration lands on one artificially slow frame - see §4.21.
                     nextTick = clock.Elapsed;
                 }
 
@@ -1157,41 +981,23 @@ namespace EmuSen.Mistress.Views
                     session.RunFrame();
                     runFrameTimeInWindow += frameStopwatch.Elapsed;
 
-                    // Publishes this frame's register/sprite/palette/audio/
-                    // hardware-load snapshots via IDebugTarget's provider
-                    // properties - see EmuSen.Cauldron.IRealtimeProvider's
-                    // own comment. Null-conditional since _debugTarget isn't
-                    // atomically tied to _session (a ROM swap in flight
-                    // could momentarily leave one set without the other).
+                    // Publishes this frame's snapshots; null-conditional because a swap can be in flight.
                     _debugTarget?.RefreshProviders();
 
-                    // Runs whatever _consoleWindow queued (a mutating
-                    // command typed while not fast-path-eligible - see
-                    // DianaOSConsoleWindow.Submit and
-                    // EmuSen.DianaOS.DianaOS.Bin.DianaOSInterpreterScheduler's own
-                    // comment) against the core we just finished a frame
-                    // on - null-conditional since the console window is
-                    // opened on demand and may not exist at all. Must run
-                    // on this (the emulation) thread, same reasoning as
-                    // RefreshProviders() just above.
+                    // Runs what the console queued, on the thread that owns the core - see `man pause`.
                     _consoleWindow.Current?.DrainPendingFromEmulationThread();
 
-                    // Same rule, same thread: the Apply Cheats button only
-                    // sets the flag - see _applyCheatsPending.
+                    // Same rule, same thread: the Apply Cheats button only sets the flag - see §4.15.
                     if (_applyCheatsPending)
                     {
                         _applyCheatsPending = false;
                         _debugTarget?.ApplyCheats();
                     }
 
-                    // Same call-site placement as PumpAudio() in
-                    // EmuSen.Hotaru/Program.cs - right after
-                    // RunFrame(), since that's what actually produces new
-                    // samples to drain. Safe here on _emuThread rather than
-                    // the UI thread - see AudioPlayer.Pump's own comment.
+                    // Right after RunFrame, which is what produces new samples to drain.
                     if (session.Core is not null) _rewind.OnFrameCompleted(session.Core);
 
-                    // Drained every frame either way, so a muted stretch can't back the core buffer up - see §2.3.
+                    // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);
                     if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, session.AudioSampleRate);
                     else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
@@ -1242,11 +1048,7 @@ namespace EmuSen.Mistress.Views
                 {
                     _running = false;
                     string message = ex.Message;
-                    // Stop rather than spamming the same exception every
-                    // tick - matches the console/Raylib build's behavior of
-                    // halting and printing on a core exception rather than
-                    // trying to recover. StatusText is a UI element, so the
-                    // update has to go through the UI thread.
+                    // Halt and print rather than recover; StatusText needs the UI thread.
                     Dispatcher.UIThread.Post(() => StatusText.Text = $"[CPU HALT] {message}");
                     break;
                 }
@@ -1258,28 +1060,13 @@ namespace EmuSen.Mistress.Views
                 }
                 else
                 {
-                    // Fell behind - resync to "now" instead of trying to
-                    // burst-catch-up, which would just run a pile of frames
-                    // back-to-back with no pacing at all.
+                    // Resync to now rather than burst-catching up with no pacing at all.
                     nextTick = clock.Elapsed;
                 }
             }
         }
 
-        // A hybrid Sleep-then-spin (sleep for most of the remaining time,
-        // busy-spin only the last ~2ms) turned out not to be enough here -
-        // measured CPU usage while stuck at ~56fps was only ~5%, meaning
-        // the process is nowhere near compute-bound; the shortfall is
-        // entirely from oversleeping, not slow work. That means
-        // Thread.Sleep's wakeup latency in this environment is bigger than
-        // the 2ms margin the hybrid approach budgeted for it - rather than
-        // guess at a bigger margin, spin-wait the ENTIRE remaining time
-        // instead of calling Thread.Sleep at all. With this much headroom
-        // (a handful of percent of one core, going by that measurement),
-        // pegging a single core for the ~14ms/frame this spins is a
-        // perfectly reasonable trade for hitting the 60fps target
-        // precisely - the same tradeoff real-time audio/emulation loops
-        // routinely make, at the cost of that one core's power draw.
+        // Spins the whole interval; the hybrid was measured and dropped - see §4.21.
         private static void SleepUntil(TimeSpan target, Stopwatch clock)
         {
             while (clock.Elapsed < target)
@@ -1288,23 +1075,13 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        // Called from the emulation thread. Publishes the newest frame and
-        // schedules a UI-thread Present only if one isn't already pending -
-        // see _pendingFrame's own field comment for why.
+        // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
         private void SubmitFrame(byte[] pixels, int width, int height)
         {
             _frames.Offer(new FrameData { Pixels = pixels, Width = width, Height = height });
         }
 
-        // Runs on the UI thread. Always presents whatever the newest frame
-        // is at the moment it actually runs, which may not be the same
-        // frame that triggered this dispatch if the emulation thread has
-        // since produced newer ones - that's the intended drop-stale-frames
-        // behavior, not a bug. GameFrameControl.UpdateFrame takes the raw
-        // buffer + dimensions directly (see EmuSen.Serenity), so pseudo-
-        // hi-res width changes (SETINI bit 3) just fall out for free -
-        // unlike the old WriteableBitmap this replaced, there's no fixed-
-        // size backing surface to resize.
+        // Presents whatever is newest when it runs; dropping stale frames is intended.
         private void PresentPendingFrame(FrameData frame)
         {
             GameFrame.UpdateFrame(frame.Pixels, frame.Width, frame.Height);
@@ -1315,38 +1092,7 @@ namespace EmuSen.Mistress.Views
             Close();
         }
 
-        // Reuses the console/Raylib build's own CategorizedLogWriter
-        // (Common/CategorizedLogWriter.cs) rather than building a second
-        // logging mechanism - it works by redirecting Console.Out, and
-        // the emulation core already writes every diagnostic message
-        // (Cartridge load info, DebugSettings-gated traces, etc.) via
-        // plain Console.WriteLine, so this frontend gets the exact same
-        // categorized cpu/ppu/apu/memory/debug/general log files the
-        // console build does, for free.
-        //
-        // Unconditional, same as the console/Raylib build
-        // (Hotaru/Program.cs) - several DebugSettings.*Logging
-        // flags default to true (Dma/CameraRam/RenderRead/AllScrollWrite/
-        // MathUnit/BgModeChange/MosaicWrite), so the core writes a steady
-        // stream of Console.WriteLine calls regardless of whether anyone
-        // asked for logging. Leaving Console.Out un-redirected in that
-        // case doesn't turn logging off - it just sends the same volume
-        // of lines to the raw, synchronous console writer one syscall at
-        // a time instead of CategorizedLogWriter's batched background
-        // thread, which is exactly the gap that made this frontend so
-        // much slower than the console build. Falling back to an
-        // AppSettings.LogDirectory default under %AppData% (rather than
-        // skipping the redirect) keeps the fast path always on; the user
-        // only needs to set LogDirectory in Preferences if they want the
-        // files somewhere specific.
-        //
-        // Called once per LoadRom() (not once at app startup) since,
-        // unlike the console build (one ROM per process), this frontend
-        // can load several ROMs across one running session - each gets
-        // its own timestamped directory, mirroring the console build's
-        // Logs/<CoreName>/console_<timestamp>/ convention but under the
-        // user-configured (or default) root and with a "gui_" prefix
-        // instead.
+        // Redirected per ROM, and unconditionally - see EmuSen_Settings_Reference.md §4.22.
         private void StartLogging(string coreName)
         {
             StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
@@ -1364,9 +1110,7 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
-                // Best-effort - an unwritable log directory shouldn't block
-                // loading the ROM itself, just leave logging off for this
-                // session and say why in the status bar.
+                // Best-effort: an unwritable directory must not block the load - see §4.22.
                 StatusText.Text = $"Logging disabled: {ex.Message}";
             }
         }
@@ -1375,8 +1119,7 @@ namespace EmuSen.Mistress.Views
         {
             if (_activeLogWriter is null) return;
 
-            // Must happen before Console.SetOut/Dispose below - see
-            // EmulatorSession.FlushVerboseLogs()'s own comment.
+            // Before Console.SetOut/Dispose - see EmuSen_Settings_Reference.md §4.22.
             _session?.FlushVerboseLogs();
 
             Console.SetOut(_originalConsoleOut);

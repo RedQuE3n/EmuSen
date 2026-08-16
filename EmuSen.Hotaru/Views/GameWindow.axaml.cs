@@ -31,92 +31,22 @@ using EmuSen.Audio;
 
 namespace EmuSen.Hotaru.Views
 {
-    // Hotaru's game window - owns the actual native Window (keyboard
-    // capture, Closing sequence) plus a GameFrameControl (from
-    // EmuSen.Serenity) as its content, and starts/stops the background
-    // emulation thread. Deliberately does NOT go through
-    // EmuSen.Serenity.FramePresenter, even though that class exists
-    // specifically to bundle a Window + GameFrameControl together -
-    // FramePresenter's whole point is "just the game, no chrome" for a
-    // consumer that needs nothing else from its window, but this window
-    // needs real keyboard capture, a Closing handler, and to host every
-    // hotkey/debug-prompt concern below, none of which FramePresenter's
-    // generic contract exposes. Mistress's own MainWindow makes the same
-    // choice (it inlines its own coalescing present logic against a
-    // WriteableBitmap rather than going through any shared presenter
-    // class) - this follows that same established precedent, just against
-    // GameFrameControl instead of a WriteableBitmap. FramePresenter stays
-    // available, untouched, for a future consumer that only needs "a
-    // window with the game in it" and nothing more (see its own header
-    // comment on why it exists at all).
-    //
-    // Threading model - see this project's own migration plan: the
-    // background emulation thread (EmulationLoop, started in this
-    // constructor) owns RunFrame(), audio, hotkey dispatch, and the
-    // blocking F4 DianaOS console prompt itself; the Avalonia UI thread
-    // (this class's event handlers) owns the window, keyboard capture,
-    // and gamepad polling. No pause/resume mechanism is needed for
-    // THOSE two threads - unlike EmuSen.Mistress's console window, F4
-    // and RunFrame() never run concurrently, because they share the one
-    // emulation thread by construction.
-    //
-    // A third thread joins this picture as of the "Diana always live"
-    // work: _consoleReaderThread (ConsoleReaderLoop below) is the sole
-    // owner of ConsoleLineReader.ReadLine for the whole life of the
-    // window, whether or not F4/a breakpoint is currently halted. While
-    // running normally, it hands each typed line to _scheduler
-    // (EmuSen.DianaOS.DianaOS.Bin.DianaOSInterpreterScheduler - see that class's own
-    // comment for the full mechanism, since "diana isn't drowning" work
-    // lifted it out of this file so EmuSen.Mistress could share it): a
-    // read-only line runs right there on the reader thread (never
-    // touching the emulation thread at all - the same "a read-only view
-    // of live core state, unsynchronized, is an accepted race" precedent
-    // CoretopWindow's own polling already relies on, though as of the
-    // real-time-provider work most of what a read-only line actually
-    // reads is a lock-free published snapshot, not truly unsynchronized
-    // live state); anything else is queued and drained once per frame by
-    // ProcessPendingConsoleCommands, alongside ProcessHotkeys. While
-    // halted (RunDebugPrompt, F4/breakpoint), the reader thread instead
-    // just forwards each line into the scheduler's halted-line queue and
-    // RunDebugPrompt blocks reading from THAT - still fully synchronous
-    // with RunFrame(), exactly as before this work, just fed by a
-    // different thread than the one running the prompt loop. The
-    // scheduler's own lock serializes the two things that can ever call
-    // _debugCmd.Submit (the reader thread's fast path, and whichever
-    // thread - emulation, via the frame-tick drain or RunDebugPrompt - is
-    // executing a line for real) so a single DianaOSInterpreter instance,
-    // which has real mutable state beyond core reads (variables, history,
-    // $?), is never entered from two threads at once. It's held only for
-    // the duration of one command's Execute, never across a blocking
-    // read, so it can't turn into "the emulation thread waits on the
-    // console" through the back door.
+    // Hotaru's game window and its three threads - see EmuSen_Frontend_Driver.md §1, §2 and §3f.
     public partial class GameWindow : Window, ILiveShell
     {
         private readonly ICore _core;
 
-        // The pointer gets out of the way over the game - see EmuSen_Frontend_Driver.md §4.4.
+        // The pointer gets out of the way over the game - see EmuSen_Frontend_Driver.md §3d.
         private IdleCursor? _idleCursor;
         private FileDrop? _fileDrop;
 
-        // Set on the UI thread by a drop, consumed on the emulation thread by
-        // ProcessHotkeys - SwapCore may only run there. See §4.4.
+        // Set by a drop on the UI thread, taken by ProcessHotkeys - SwapCore runs there. See §3d.
         private volatile string? _droppedRom;
 
         // The Venus-only hotkeys below need the real core; null for any other console.
         private VenusCore? Venus => _core as VenusCore;
 
-        // Not readonly, unlike every other field this window was
-        // originally handed - all three get rebuilt from scratch by
-        // RebuildDebugTargetAndCommands() after a `core <name> <path>`
-        // swap (HostAction.LoadCore, see SwapCore below), the same
-        // "fresh SnesDebugTarget per load" discipline
-        // EmuSen.Mistress/Views/MainWindow.axaml.cs's own LoadRom
-        // already established - VenusCore.LoadRom rebuilds Cpu/Bus/
-        // Renderer as brand-new objects in place, so anything still
-        // holding the OLD ones (this class's own _debugTarget, and
-        // DianaOSInterpreter, which captures its target at construction
-        // with no UpdateTarget of its own - unlike EmuSen.Mistress's
-        // console WINDOW) would otherwise go stale.
+        // Rebuilt per load, which is why it is not readonly - see EmuSen_Frontend_Driver.md §3f.
         private IDebugTarget _debugTarget = null!;
 
         // The rest of the loaded core's wiring - codecs, trace switch - see EmuSen_Multicore.md §4.
@@ -132,13 +62,7 @@ namespace EmuSen.Hotaru.Views
 
         private FrameRecorder _frameRecorder = null!;
 
-        // Reused, unchanged, across every RebuildDebugTargetAndCommands()
-        // call - none of these commands' own delegates depend on
-        // anything that changes across a swap (CoretopCommand/
-        // StateCommand close over _core/DebugWindows, both stable across
-        // reloads; CoreCommand's own registry is static data), only on
-        // whatever _debugTarget DianaOSInterpreter.CreateDefault is
-        // handed each time.
+        // Reused unchanged across every rebuild - see EmuSen_Frontend_Driver.md §3f.
         private readonly IEnumerable<IDianaOSCommand> _extraCommands;
 
         private readonly string _statePath;
@@ -151,9 +75,7 @@ namespace EmuSen.Hotaru.Views
             AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
         private readonly DispatcherTimer _gamepadTimer;
 
-        // Keyboard and gamepad are tracked separately and combined with OR
-        // logic - matches EmuSen.Mistress's own MainWindow convention
-        // ("either device works at any time, no need to pick one").
+        // Tracked separately and OR'd: either device works at any time.
         private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadButton>().Length];
         private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<PadButton>().Length];
         private bool _mirrorPlayer1ToPlayer2;
@@ -163,21 +85,10 @@ namespace EmuSen.Hotaru.Views
         private volatile bool _running = true;
         private readonly Thread _emuThread;
 
-        // See this file's own header comment on the "Diana always live"
-        // threading model. _consoleReaderThread is started once, in the
-        // constructor, and runs for the window's whole life - it isn't
-        // tied to F4 the way console reading used to be.
+        // Runs for the window's whole life, not just while halted - see EmuSen_Frontend_Driver.md §1.
         private readonly Thread _consoleReaderThread;
 
-        // Every non-gameplay hotkey (F1-F9, O, P) - edge-detected in
-        // OnKeyDown below (never on an OS key-repeat) and consumed once
-        // per RunFrame() iteration on the emulation thread, the same
-        // cadence the old Raylib polling loop's RunHotkeys ran at. Plain
-        // volatile bool, not Interlocked: exactly one writer (this
-        // window's UI-thread KeyDown handler) and one reader/clearer
-        // (EmulationLoop) per flag - the same single-writer/single-reader
-        // race EmuSen.Mistress's own ApplyButtonState already accepts for
-        // continuous button state.
+        // One writer (OnKeyDown), one reader/clearer (EmulationLoop) - see EmuSen_Frontend_Driver.md §2.
         private volatile bool _requestSummary;
         private volatile bool _requestDumpOam;
         private volatile bool _requestScreenshot;
@@ -198,32 +109,17 @@ namespace EmuSen.Hotaru.Views
 
         private readonly HashSet<Key> _heldPhysicalKeys = new();
 
-        // 'feed's own way back into the F4 prompt without needing this
-        // window focused - see ArmFeedWatch's own comment below (ported
-        // from the old Program.cs unchanged).
+        // 'feed's way back into the prompt without window focus - see `man feed`.
         private bool _feedWatchActive;
 
-        // Coalescing hand-off from the emulation thread to the UI thread -
-        // same pattern as EmuSen.Serenity.FramePresenter/
-        // EmuSen.Mistress's own MainWindow.SubmitFrame, just driven
-        // straight against GameFrame (this window's own GameFrameControl)
-        // instead of a separate presenter object - see this file's own
-        // header comment for why.
+        // Coalescing hand-off to the UI thread - see EmuSen_Serenity.md §4.
         private sealed class FrameData
         {
             public required byte[] Rgba;
             public required int Width;
             public required int Height;
         }
-        // "Newest wins, at most one UI-thread callback outstanding" is LunaP's Latest<T> now. This
-        // window, Mistress's MainWindow and Serenity's FramePresenter each wrote it out
-        // identically, which is what argued it into the toolkit - and all three carried the same
-        // defect: the scheduled flag was cleared AFTER the hand-off, so a frame submitted while the
-        // UI thread was inside UpdateFrame could neither schedule a callback nor be picked up by
-        // the running one, and sat there until the next frame displaced it.
-        //
-        // Invisible at 60 fps, and visible the moment the stream stops - pause, and the frame at
-        // risk is the last one drawn. LunaP.md §22.1.
+        // Was written out here, in Mistress and in Serenity, all three with one defect - LunaP.md §22.1.
         private readonly Latest<FrameData> _frames;
 
         public GameWindow(ICore core, IEnumerable<IDianaOSCommand> extraCommands, string statePath)
@@ -236,12 +132,7 @@ namespace EmuSen.Hotaru.Views
             _statePath = statePath;
 
             RebuildDebugTargetAndCommands();
-            // Power-on watch registration (Yoshi/coin investigation) -
-            // only on this very first load, not re-added by SwapCore on a
-            // later `core` swap - matches the same "shell-level state
-            // resets on reload" precedent RebuildDebugTargetAndCommands's
-            // own fresh SnesDebugTarget already establishes for watches/
-            // breakpoints/cheats in general.
+            // First load only; a swap deliberately does not re-add them - see EmuSen_Frontend_Driver.md §3f.
             _debugTarget.Watches.AddWatch("WRAM", 0x8000, 0x1800);
             _debugTarget.Watches.AddWatch("WRAM", 0x0D80, 0x0080);
 
@@ -278,19 +169,12 @@ namespace EmuSen.Hotaru.Views
             _consoleReaderThread.Start();
         }
 
-        // Sole owner of ConsoleLineReader.ReadLine for the whole life of
-        // this window - see this file's own header comment. Runs on its
-        // own dedicated thread so a blocking console read is never on the
-        // emulation thread's critical path while running normally.
+        // Sole owner of ConsoleLineReader.ReadLine - see EmuSen_Frontend_Driver.md §3f.
         private void ConsoleReaderLoop()
         {
             while (_running)
             {
-                // Captured once per line, never re-read mid-line - see
-                // this field's own comment on why (a `core` swap
-                // reassigning it partway through a line's own
-                // classify-then-execute sequence must not split that
-                // sequence across two different interpreter instances).
+                // Once per line, never re-read mid-line - see EmuSen_Frontend_Driver.md §3f.
                 DianaOSInterpreter shell = _debugCmd;
 
                 if (!_scheduler.Halted) Console.Write("DianaOS $ ");
@@ -301,20 +185,11 @@ namespace EmuSen.Hotaru.Views
                 try { line = ConsoleLineReader.ReadLine(historySnapshot); }
                 catch (Exception ex)
                 {
-                    // No real console to read from (e.g. stdin closed
-                    // out from under this thread during shutdown) - stop
-                    // quietly rather than spinning on a repeating error.
+                    // Stop rather than spin on a repeating error - see EmuSen_Frontend_Driver.md §3f.
                     Console.WriteLine($"[CONSOLE] Reader thread stopped: {ex.Message}");
                     return;
                 }
-                // EOF (stdin closed/redirected input exhausted) - nothing
-                // more will ever come from Console.ReadLine again, so
-                // stop rather than busy-looping on an instantly-null
-                // read. If this happens while halted, RunDebugPrompt's
-                // own _scheduler.TakeHaltedLine() below simply has nothing
-                // left to receive - bounded by Shutdown's own timeout on
-                // window close, same as any other "prompt never got an
-                // answer" case already was before this thread existed.
+                // EOF: nothing more will ever arrive - see EmuSen_Frontend_Driver.md §3f.
                 if (line is null) return;
 
                 var result = _scheduler.SubmitFromAnyThread(shell, line);
@@ -342,13 +217,7 @@ namespace EmuSen.Hotaru.Views
             else Console.WriteLine(output);
         }
 
-        // Drains lines the reader thread queued because they weren't
-        // fast-path-eligible (mutating, or not a single bare simple
-        // command) - called once per frame from EmulationLoop, alongside
-        // ProcessHotkeys, so a mutating command typed at the live
-        // terminal runs inline on the emulation thread's own next tick
-        // instead of needing F4. Returns true on HostAction.Shutdown,
-        // matching ProcessHotkeys' own return-true-means-close contract.
+        // Drains the reader thread's queue once per frame; true means close - see EmuSen_Frontend_Driver.md §1.
         private bool ProcessPendingConsoleCommands()
         {
             foreach (var (_, output, action) in _scheduler.DrainPending(_debugCmd))
@@ -358,11 +227,7 @@ namespace EmuSen.Hotaru.Views
                 if (action is HostAction.Shutdown) return true;
                 if (action is HostAction.LoadCore loadCore) { SwapCore(loadCore.RomPath); continue; }
                 if (action is HostAction.SwitchSession) SyncSchedulersToSessions();
-                // HostAction.Resume/Step with nothing halted: nothing to
-                // resume from (Resume is a no-op) / StepCommand already
-                // armed the single-step itself, which the next RunFrame()
-                // iteration's own IsHaltedAtBreakpoint check picks up the
-                // same way an F4-armed step already does.
+                // Resume with nothing halted is a no-op, and StepCommand already armed its own step.
             }
             return false;
         }
@@ -378,8 +243,7 @@ namespace EmuSen.Hotaru.Views
                 return;
             }
 
-            // Through the table rather than a switch on Key, so the help window and the
-            // dispatch cannot disagree about what a key does - see §3e.
+            // Through the table, so the help window and the dispatch cannot disagree - see §3e.
             if (!HotaruHotkeys.TryGetAction(e.Key, out HotaruHotkey action)) return;
 
             switch (action)
@@ -443,9 +307,7 @@ namespace EmuSen.Hotaru.Views
             }
         }
 
-        // Cycles None -> Scanlines -> Crt -> None - reuses
-        // FramePresenter's own static NextEffect, not FramePresenter
-        // itself (see this file's header comment).
+        // Reuses FramePresenter's static NextEffect, not FramePresenter itself - see EmuSen_Serenity.md §4.
         private void CycleShaderEffect()
         {
             ShaderEffect effect = FramePresenter.NextEffect(GameFrame.ActiveEffect);
@@ -453,8 +315,7 @@ namespace EmuSen.Hotaru.Views
             Console.WriteLine($"[SHADER] Active effect: {effect}");
         }
 
-        // Rebuilds _debugTarget/_frameRecorder and every session - see
-        // `man core`/`man tmux`.
+        // Rebuilds _debugTarget/_frameRecorder and every session - see `man core` and `man tmux`.
         private void RebuildDebugTargetAndCommands()
         {
             _bundle = CoreFactory.Bundle(_core);
@@ -493,19 +354,7 @@ namespace EmuSen.Hotaru.Views
             }
         }
 
-        // Reached from RunDebugPrompt's own dispatch loop when
-        // EmuSen.DianaOS.DianaOS.Bin.Commands.CoreCommand signals HostAction.LoadCore
-        // - the actual ROM swap this migration's whole point was to
-        // enable (Hotaru had NO way to change ROMs mid-session before
-        // this). coreName isn't needed here at all: Hotaru only has one
-        // ICore implementation today (VenusCore), so every registered
-        // core alias ('venus'/'snes') reloads the exact same way -
-        // CoreCommand already validated the name/file/extension before
-        // ever emitting this action. Deliberately this narrow (reload the
-        // one existing core in place, no real multi-core dispatch) rather
-        // than building toward a general ICoreSession abstraction ahead
-        // of a second core actually existing - see
-        // EmuSen_Launcher_Multicore_Gameplan.md's own guidance on that.
+        // Deliberately narrow: one core, reloaded in place - see EmuSen_Frontend_Driver.md §3f.
         private void SwapCore(string romPath)
         {
             if (_frameRecorder.IsRecording)
@@ -520,18 +369,12 @@ namespace EmuSen.Hotaru.Views
             _rewind.Clear(); // a discontinuous jump - see §1.4
             _audioPlayer.RateControl.Reset();
             RebuildDebugTargetAndCommands();
-            // Without this, an already-open `coretop -w` window would
-            // silently keep showing the OLD, now-discarded target forever
-            // - it has no timer of its own that would ever notice a swap
-            // happened, only a refresh timer that re-polls whatever
-            // target it was last told about. No-ops if coretop was never
-            // opened this session - see that method's own comment.
+            // An open dashboard has a refresh timer, not a swap notification - see EmuSen_Frontend_Driver.md §3f.
             DebugWindows.UpdateCoretopWindowTargetIfOpen(_debugTarget);
             Console.WriteLine($"[CORE] Loaded: {romPath}");
         }
 
-        // Runs entirely off the UI thread - see this file's own header
-        // comment on the threading model.
+        // Runs entirely off the UI thread - see EmuSen_Frontend_Driver.md §1.
         private void EmulationLoop()
         {
             Stopwatch clock = Stopwatch.StartNew();
@@ -564,21 +407,10 @@ namespace EmuSen.Hotaru.Views
 
                     _core.RunFrame();
 
-                    // Publishes this frame's register/sprite/palette/audio/
-                    // hardware-load snapshots for any thread to read
-                    // (Diana's console-reader fast path in particular) via
-                    // IDebugTarget's provider properties - see
-                    // EmuSen.Cauldron.IRealtimeProvider's own comment. Must
-                    // run here, on the emulation thread that just produced
-                    // this frame's state, not from the console-reader
-                    // thread or anywhere else.
+                    // Publishes this frame's snapshots, on the thread that produced them - see EmuSen_Cauldron.md.
                     _debugTarget.RefreshProviders();
 
-                    // A breakpoint (or an armed single-step) halted
-                    // RunFrame() before it finished this frame - skip
-                    // presenting/hotkeys this iteration and go straight to
-                    // the same prompt F4 already uses, same as the old
-                    // Raylib loop's own breakpoint handling.
+                    // A breakpoint or armed step stopped RunFrame mid-frame; go straight to the prompt.
                     if (_core.IsHaltedAtBreakpoint)
                     {
                         Console.WriteLine($"\n[BREAKPOINT] Halted at ${_core.HaltedAddress:X6}");
@@ -590,7 +422,7 @@ namespace EmuSen.Hotaru.Views
 
                     _rewind.OnFrameCompleted(_core);
 
-                    // Drained every frame either way, so a muted stretch can't back the core buffer up - see §2.3.
+                    // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = _core.DequeueAudioSamples(int.MaxValue);
                     if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, _core.AudioSampleRate);
                     else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
@@ -608,28 +440,20 @@ namespace EmuSen.Hotaru.Views
                     }
                     else
                     {
-                        // Fell behind - resync to "now" instead of trying to
-                        // burst-catch-up, which would just run a pile of
-                        // frames back-to-back with no pacing at all.
+                        // Resync to now rather than burst-catching up with no pacing at all.
                         nextTick = clock.Elapsed;
                     }
                 }
             }
             catch (Exception ex)
             {
-                // Matches the old console build's own behavior: halt and
-                // print rather than trying to recover. SaveSram() isn't
-                // called here either, same as before this migration - the
-                // core's own periodic autosave (inside RunFrame() itself)
-                // is what covers a crash, not this catch block.
+                // Halt and print rather than recover; the core's own autosave covers SRAM.
                 Console.WriteLine($"\n[CPU HALT] {ex.Message}");
                 RequestClose();
             }
         }
 
-        // Spin-waits rather than Thread.Sleep - see EmuSen.Mistress's own
-        // identical SleepUntil for the measured reasoning (Sleep's wakeup
-        // latency was bigger than the 60fps budget allows for).
+        // Spins rather than sleeps, for the reason measured in EmuSen_Settings_Reference.md §4.21.
         private static void SleepUntil(TimeSpan target, Stopwatch clock)
         {
             while (clock.Elapsed < target)
@@ -644,18 +468,10 @@ namespace EmuSen.Hotaru.Views
             Dispatcher.UIThread.Post(Close);
         }
 
-        // Runs once per RunFrame() iteration on the emulation thread -
-        // same cadence the old Raylib loop's RunHotkeys had, just
-        // consuming edge-triggered request flags set by OnKeyDown (UI
-        // thread) instead of polling Raylib.IsKeyPressed itself. Returns
-        // true if a shutdown was requested (F4's 'shutdown', or 'feed's
-        // own Ctrl+C reopening the prompt and getting 'shutdown' there).
+        // Consumes the request flags once per frame; true means close - see EmuSen_Frontend_Driver.md §2.
         private bool ProcessHotkeys()
         {
-            // 'feed's own way back into the prompt - see ArmFeedWatch's
-            // own comment. Guarded on IsInputRedirected the same way
-            // coretop's own dashboard is - KeyAvailable throws if there's
-            // no real console to poll.
+            // Guarded on IsInputRedirected: KeyAvailable throws with no real console - see `man feed`.
             if (_feedWatchActive && !Console.IsInputRedirected && Console.KeyAvailable)
             {
                 ConsoleKeyInfo key = Console.ReadKey(intercept: true);
@@ -768,18 +584,7 @@ namespace EmuSen.Hotaru.Views
             Console.WriteLine("[BG SCROLL] --- Starting 300-frame scroll trace ---");
         }
 
-        // Shared by the F4 hotkey and the emulation loop's own
-        // breakpoint-halt check - see the old Program.cs's own comment on
-        // why (both funnel through the exact same interactive command
-        // loop rather than keeping two copies in sync). Blocks THIS
-        // (emulation) thread on _scheduler.TakeHaltedLine() - never the UI
-        // thread - which is exactly what lets the window stay movable/
-        // resizable/closable while F4 is open, unlike the old Raylib
-        // build where the window and this prompt shared one thread.
-        // Doesn't read the console directly any more - see this file's
-        // own header comment on why _consoleReaderThread now owns that,
-        // and forwards lines here (instead of handling them itself)
-        // whenever _scheduler.Halted is set.
+        // Blocks the emulation thread, never the UI thread - see EmuSen_Frontend_Driver.md §2.
         private bool RunDebugPrompt()
         {
             DisarmFeedWatch();
@@ -795,11 +600,7 @@ namespace EmuSen.Hotaru.Views
 
                     if (!_debugCmd.IsAwaitingMoreInput)
                     {
-                        // Empty-line-means-resume stays pre-dispatch, same as
-                        // before - an empty line isn't really "a command," the
-                        // same way SubmitCore itself already treats one as a
-                        // no-op, so there's nothing gained by routing it
-                        // through ResumeCommand too.
+                        // An empty line is not really a command, so it stays pre-dispatch.
                         if (trimmed.Length == 0)
                         {
                             break;
@@ -818,36 +619,14 @@ namespace EmuSen.Hotaru.Views
                             break;
                         }
                     }
-                    // 'resume'/'continue'/'c', 'shutdown'/'quit', 'step'/'s',
-                    // and 'core <name> <path>' are all real DianaOS commands
-                    // now (EmuSen.DianaOS.DianaOS.Bin.Commands.ResumeCommand/
-                    // ShutdownCommand/StepCommand/CoreCommand) - Submit's own
-                    // HostAction is what lets them reach back out to this
-                    // loop's control flow, the same thing the old hand-rolled
-                    // string matches used to do directly. A successful swap
-                    // resumes gameplay immediately against the new ROM, same
-                    // as Resume/Step - SwapCore itself prints why if it
-                    // refuses (a recording in progress). Locked (see this
-                    // file's own header comment) so this can never overlap a
-                    // fast-path Submit from the reader thread - only
-                    // relevant for the brief window right as a halt begins.
-                    // Captured before the call, not read again after -
-                    // _scheduler is computed off _sessions.Current, which
-                    // a `tmux switch`/`tmux new` inside this very Submit
-                    // call changes, so the receiver has to be pinned to
-                    // whichever session was actually halted here.
+                    // Pinned before the call: a `tmux switch` inside this Submit moves _scheduler - see `man tmux`.
                     DianaOSInterpreterScheduler haltedScheduler = _scheduler;
                     (_, string output, HostAction? action) = haltedScheduler.SubmitLocked(_debugCmd, trimmed);
                     Console.WriteLine(output);
                     if (action is HostAction.Shutdown) return true;
                     if (action is HostAction.SwitchSession)
                     {
-                        // Halted is per-scheduler, not per-window - without
-                        // this, haltedScheduler (the OLD session) stays
-                        // stuck thinking it's still halted forever, since
-                        // this method's own finally block only ever clears
-                        // whatever _scheduler resolves to when IT runs, and
-                        // that's the NEW session by then.
+                        // Halted is per-scheduler, so the old session would stay stuck - see `man tmux`.
                         haltedScheduler.Halted = false;
                         SyncSchedulersToSessions();
                         _scheduler.Halted = true;
@@ -891,30 +670,10 @@ namespace EmuSen.Hotaru.Views
             _gamepadTimer.Stop();
             _running = false;
 
-            // Bounded, not indefinite: the emulation thread can be
-            // blocked inside RunDebugPrompt()'s _scheduler.TakeHaltedLine() if
-            // F4's prompt is open when the window is closed - unlike the
-            // old Raylib build, where the window and the console prompt
-            // shared one thread and this situation could never even be
-            // reached (see this file's own header comment on why F4
-            // lives on the emulation thread at all). Waiting forever here
-            // would freeze the UI thread until someone types something at
-            // the terminal; 500ms covers the overwhelmingly common case
-            // (the loop notices _running=false within one frame interval)
-            // without risking an indefinite hang for the rare
-            // "closed mid-prompt" case.
+            // Bounded: this thread may be blocked at a prompt - see EmuSen_Frontend_Driver.md §3f.
             _emuThread.Join(TimeSpan.FromMilliseconds(500));
 
-            // _consoleReaderThread is very likely blocked in
-            // ConsoleLineReader.ReadLine right now, with no cooperative
-            // way to cancel a blocking console read - same
-            // accept-it's-background-and-move-on treatment as _emuThread
-            // above, just with no Join at all (IsBackground = true
-            // already means process exit won't wait on it either way, and
-            // there's nothing further this thread needs to have finished
-            // before the window can close). _running is already false by
-            // this point (set above), so it'll notice and stop on its
-            // very next loop iteration if it isn't blocked on a read.
+            // The reader thread is not joined at all - see EmuSen_Frontend_Driver.md §3f.
 
             _core.SaveSram();
             _gamepad.Dispose();

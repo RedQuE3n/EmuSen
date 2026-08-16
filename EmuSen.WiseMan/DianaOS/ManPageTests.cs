@@ -1,6 +1,7 @@
 using System.Linq;
 using EmuSen.DianaOS;
 using EmuSen.DianaOS.DianaOS.Bin;
+using EmuSen.DianaOS.DianaOS.Bin.Commands;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
@@ -8,16 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.WiseMan.DianaOS
 {
-    // `man`/`help` (DianaOSInterpreter.Man/Help, backed by ManPages.cs) -
-    // two separate commands, not aliases of each other (see Dispatch's
-    // own comment): `help` always lists every command with a brief
-    // explanation, ignoring any arguments; `man [command]` is the detail
-    // lookup, falling back to that same listing only when given no
-    // argument. Every command DianaOSInterpreter.CreateDefault registers
-    // is expected to have a real ManPages entry, not just a fallback to
-    // its one-line Usage - this is the regression test that catches a
-    // newly-added command (or one that gets renamed) quietly falling
-    // through to that fallback and staying that way forever.
+    // Catches a command quietly falling through to its one-line Usage forever - see `man man`.
     public class ManPageTests
     {
         // Read from a live interpreter, not a hand list - see EmuSen_Debugging_Tools_Reference_v5.md §3.18.
@@ -45,6 +37,23 @@ namespace EmuSen.WiseMan.DianaOS
 
         public static System.Collections.Generic.IEnumerable<object[]> AllNames() =>
             RegisteredCommandNames.Concat(SpecialBuiltinNames).Distinct().Select(n => new object[] { n });
+
+        // A frontend's own extraCommands never reach CreateDefault(null) above - see EmuSen_Settings_Reference.md §4.21.
+        [Theory]
+        [InlineData("pause")]
+        [InlineData("feed")]
+        [InlineData("coretop")]
+        [InlineData("vstop")]
+        [InlineData("resume")]
+        [InlineData("state")]
+        public void Every_frontend_registered_command_has_a_real_man_page(string name)
+        {
+            string? page = ManPages.Lookup(name);
+
+            Assert.NotNull(page);
+            Assert.Contains("NAME", page);
+            Assert.Contains("DESCRIPTION", page);
+        }
 
         [Fact]
         public void Help_with_no_argument_still_lists_every_command()

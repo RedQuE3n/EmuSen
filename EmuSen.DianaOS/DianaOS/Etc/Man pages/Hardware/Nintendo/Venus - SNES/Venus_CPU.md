@@ -334,3 +334,20 @@ Raised as a follow-up to §9 and §10: would giving the interpreter some concept
 **What is worth doing in this family.** The SPC700 still has the shape the 65816 had before §9: `Spc700.Step()` loads `SpcInstruction inst = _instructions[opcode]` and makes two delegate calls per instruction. Converting it to a direct-call `switch` is mechanical and worth roughly what the 65816 conversion was (~2%, plus the dead per-instruction string compare and the per-instance delegate allocations). That is a cleanup with a known small payoff — not a branch-prediction strategy.
 
 **If this gets re-opened**, the decisive measurement is an actual mispredict rate (`perf stat -e branches,branch-misses,instructions,cycles`). `perf` is not installed on the dev machine; `perf_event_paranoid` is 2, so it needs installing but not root to run. Do that before writing any code.
+
+---
+
+## 12. `RunFrame` can return mid-frame, and that shapes several fields
+
+*2026-08-16, moved out of `VenusCore.cs`, which carried 189 lines across 32 blocks.*
+
+A breakpoint — or an armed single-step — halts `RunFrame` **partway through a scanline**, returns to the caller, and the next call has to pick up exactly where it left off rather than redoing that scanline's start-of-line work. That single fact explains a cluster of otherwise-odd choices in `VenusCore`:
+
+- **Mid-scanline resume state lives in fields, not locals.** `_lineCycles` and its neighbours are reset when a scanline's instruction loop actually *finishes*, not on every `RunFrame` entry, because entry is not the same thing as starting a fresh scanline any more.
+- **Per-frame phase-timing accumulators are fields for the same reason.** They keep accumulating across however many `RunFrame` calls one frame actually takes, resetting only when the frame genuinely completes. **Accepted distortion:** if a halt sits open while somebody inspects state at the prompt, that wall-clock gap is counted into whichever phase's `Stopwatch` span was running. That one frame's `LastFrame*Ms` numbers are wrong; this is a profiling readout, not anything gameplay-affecting, and correcting it would mean threading pause-awareness through the timing code for no benefit.
+- **One breakpoint check is skipped immediately after resuming.** Without it, `continue`ing past a breakpoint re-halts instantly on the same PC, forever — the instruction it is sitting on never executes. The skip is armed for exactly one instruction each time `RunFrame` is re-entered while halted.
+- **The fractional carry for the CPU-cycle → SPC700-cycle conversion is a field**, so a frame split across several calls does not lose or double-count the remainder at each boundary.
+
+`IsHaltedAtBreakpoint`, `HaltedAddress` and the coprocessor-halt flag stay on the **concrete type rather than `ICore`**, the same call `EmulatorSession` makes for its profiling properties: the only consumer is a frontend's own debug prompt, which already holds a concrete `VenusCore`. `ICore` stays the core-agnostic surface (`EmuSen_Multicore.md`).
+
+**`ScreenWidth` is not a constant.** Pseudo-hi-res (`SETINI` bit 3) makes a frame 512 pixels wide instead of 256, so it is read from the renderer, defaulting to 256 before a ROM is loaded and no renderer exists — see `Venus_PPU.md` and `Renderer.FrameWidth`.

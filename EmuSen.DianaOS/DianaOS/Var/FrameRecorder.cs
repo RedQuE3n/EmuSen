@@ -12,22 +12,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Var
 {
-    // Continuous version of the F3 screenshot utility: instead of one PNG
-    // + one companion .txt for a single instant, captures a run of frames
-    // into a session folder plus one ledger file mapping every captured
-    // frame back to exactly what the emulator was doing - same
-    // cross-reference purpose F3's companion .txt already served (so a
-    // frame can be matched against a console.log line without
-    // line-proximity guessing), just spread across a whole sequence
-    // instead of one moment.
-    //
-    // Core-agnostic on purpose, same as the rest of this toolchain: only
-    // touches IDebugTarget (CoreName/FrameCount), never anything console-
-    // specific. Actually grabbing a frame's pixels isn't something this
-    // shared class can do itself (that's Raylib today, on the console
-    // frontend - a different API on any future frontend), so it's
-    // supplied by the caller as a callback per capture instead. A future
-    // NES core/frontend combination reuses this unchanged.
+    // Continuous F3, core-agnostic, with pixel capture supplied by the caller - see EmuSen_Debugging_Tools_Reference_v5.md §3.8.
     public class FrameRecorder
     {
         private readonly IDebugTarget _target;
@@ -44,13 +29,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             _target = target;
         }
 
-        // frameStride: capture every Nth rendered frame instead of every
-        // single one. Default 1 (every frame) is fine for a short,
-        // targeted capture around a specific moment - the same use case
-        // F3 already covers one frame at a time - but a long session at
-        // 60fps/frame produces a lot of PNGs fast, so a caller chasing
-        // something slower (e.g. a multi-second animation) should pass a
-        // higher stride rather than thin the result out after the fact.
+        // Every Nth frame; a long capture wants a stride rather than thinning afterwards - see §3.8.
         public string Start(string baseDir, int frameStride = 1)
         {
             if (IsRecording) throw new InvalidOperationException("Already recording - call Stop() first.");
@@ -68,20 +47,10 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return _sessionDir;
         }
 
-        // Approximate SNES/NES-class refresh rate this project already
-        // treats as "close enough" elsewhere (see Program.cs's
-        // SaveEveryNFrames comment, "~5 seconds at 60fps") - real hardware
-        // is closer to 60.0988Hz, but this is a debug-tool convenience
-        // encode, not a timing-accurate export, so the same approximation
-        // already used throughout the codebase is fine here too.
+        // A convenience encode, not a timing-accurate export - see §3.8.
         private const double AssumedFps = 60.0;
 
-        // Blocks synchronously while ffmpeg encodes (if available) - for a
-        // long recording this means a visible freeze when stopping, same
-        // general tradeoff the F4 debug prompt already has (the execution
-        // loop can't pause mid-frame independent of this either way).
-        // Acceptable for a debug tool; would need to move off the main
-        // thread if this ever needs to not block real-time play.
+        // Stopping a long recording visibly freezes; acceptable for a debug tool - see §3.8.
         public void Stop()
         {
             _ledger?.Dispose();
@@ -94,45 +63,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             if (dirToEncode != null) TryEncodeVideo(dirToEncode, stride);
         }
 
-        // Muxes the just-captured PNG sequence into a single lossless
-        // video file via ffmpeg, if it's available on PATH - never
-        // required (the PNG sequence + frames.log ledger stand on their
-        // own either way, and are never deleted by this), just a
-        // convenience so a recording doesn't have to be reviewed as a
-        // folder of thousands of loose images.
-        //
-        // libx264 in RGB colorspace at CRF 0, not FFV1: both are
-        // mathematically lossless (bit-exact, not just "visually
-        // lossless") - the fidelity requirement this exists for (exact
-        // pixel-level rendering bugs, no compression-artifact risk) is
-        // identical either way. The difference is FFV1 is intra-frame-only
-        // (every frame is encoded independently, so a static stretch of
-        // gameplay - or the debug side panels, which barely change frame
-        // to frame - costs full data every single frame), while libx264
-        // still does inter-frame prediction even at CRF 0, so it can
-        // actually exploit that redundancy. First implementation used
-        // FFV1 without measuring against the alternative; switched after
-        // real recordings turned out far larger than expected for a
-        // one-minute capture. -c:v libx264rgb specifically (not plain
-        // libx264, which defaults to yuv420p chroma-subsampled color -
-        // NOT lossless despite CRF 0) keeps the encode in RGB the whole
-        // way, matching what Raylib's screenshots already are, with no
-        // colorspace conversion to introduce any rounding at all.
-        //
-        // HONESTY NOTE: the FFV1 version above was verified against a
-        // real run on the project's own dev machine (Fedora 44, ffmpeg
-        // 8.1.2) - see git history for that verification and the
-        // WorkingDirectory/pix_fmt bugs it caught. The libx264rgb
-        // replacement regressed on a real machine whose ffmpeg build
-        // doesn't include libx264 (see CodecAttempts below for the fix -
-        // automatic fallback to ffv1) - confirmed real, not hypothetical.
-        // libx264 is patent-encumbered and left out of some distros' default
-        // ffmpeg builds (e.g. plain Fedora repo, as opposed to RPM Fusion's)
-        // even though ffv1 (unencumbered, always built in) is present - a
-        // real regression caught this way: libx264rgb alone worked on the
-        // dev machine that verified it, but not on every machine. Try the
-        // smaller lossless codec first, fall back to the always-available
-        // one automatically rather than requiring per-machine setup.
+        // Lossless either way; libx264rgb first, ffv1 when the build lacks it - see §3.8.
         private static readonly string[][] CodecAttempts =
         {
             new[] { "-c:v", "libx264rgb", "-crf", "0", "-preset", "slow" }, // RGB colorspace, mathematically lossless
@@ -141,12 +72,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
         private void TryEncodeVideo(string sessionDir, int frameStride)
         {
-            // Output filename only, NOT sessionDir/recording.mkv - the
-            // process's WorkingDirectory below already puts ffmpeg inside
-            // sessionDir, so a full relative path here would resolve
-            // relative to that (a real bug caught on first real-world run:
-            // ffmpeg tried to open sessionDir/sessionDir/recording.mkv,
-            // which obviously doesn't exist, and failed outright).
+            // Bare filename: WorkingDirectory already puts ffmpeg inside sessionDir - see §3.8.
             const string outputFile = "recording.mkv";
             string outputPath = Path.Combine(sessionDir, outputFile);
             double fps = AssumedFps / Math.Max(1, frameStride);
@@ -195,26 +121,14 @@ namespace EmuSen.DianaOS.DianaOS.Var
                 }
                 catch (Win32Exception)
                 {
-                    // ffmpeg isn't on PATH at all - not an error condition
-                    // for this tool, just means the convenience encode step
-                    // is unavailable. No point trying the fallback codec if
-                    // ffmpeg itself can't even be started.
+                    // ffmpeg absent is not an error here, and the fallback codec cannot help.
                     Console.WriteLine($"[RECORD] ffmpeg not found on PATH - leaving the PNG sequence + frames.log as-is in {sessionDir}. Install ffmpeg for automatic video output.");
                     return;
                 }
             }
         }
 
-        // Only called after a confirmed-successful encode (ExitCode == 0)
-        // - at that point the loose PNGs are fully redundant (the encode
-        // is lossless, so recording.mkv already has everything they do), and
-        // a folder of potentially thousands of individual image files is
-        // exactly the "hot mess" this whole video-encode step exists to
-        // avoid. Zipped rather than deleted outright so the raw frames
-        // stay recoverable (just compressed) instead of gone - frames.log
-        // (the frame/timestamp ledger) is left alone either way, it's
-        // small and still useful for cross-referencing without needing to
-        // unzip anything.
+        // The PNGs are redundant after a lossless encode, so they are zipped rather than deleted - see §3.8.
         private static void ZipAndCleanupFrames(string sessionDir)
         {
             string[] pngFiles = Directory.GetFiles(sessionDir, "frame_*.png");
@@ -237,19 +151,12 @@ namespace EmuSen.DianaOS.DianaOS.Var
             }
             catch (Exception ex)
             {
-                // Non-critical: the video already succeeded, so this is
-                // purely tidiness. Leave the loose PNGs in place (don't
-                // delete anything a failed zip didn't actually capture)
-                // rather than risk losing data over a cleanup step.
+                // The video already succeeded, so a failed zip must not cost the frames.
                 Console.WriteLine($"[RECORD] Zipping frame PNGs failed ({ex.Message}); leaving them as loose files in {sessionDir}");
             }
         }
 
-        // Called once per rendered frame by whatever owns the frame loop,
-        // unconditionally - a cheap no-op when not recording, and the
-        // stride skip when recording, both happen internally so the
-        // caller doesn't need its own gating logic beyond "call this
-        // every frame."
+        // Called unconditionally every frame; the no-op and the stride skip are both internal.
         public void CaptureFrame(Action<string> captureImage)
         {
             if (!IsRecording) return;

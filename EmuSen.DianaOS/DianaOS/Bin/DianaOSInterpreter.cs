@@ -17,26 +17,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin
 {
-    // The general-purpose command shell this project's debug console has
-    // grown into - was DebugCommandProcessor (one line in, one line of
-    // text out, no state beyond per-command registries). Now a real,
-    // if deliberately scoped-down, bash-alike: quoting, variables,
-    // $(...) command substitution, pipes, '>' / '>>' / '<' redirection to
-    // real files, ';' / '&&' / '||' sequencing, and if/for/while control
-    // flow, all built on the same small hand-written Lexer/Parser this
-    // namespace also contains.
-    //
-    // What's deliberately NOT here, because it doesn't map onto "a
-    // command console embedded in a single-process emulator" the way it
-    // does onto a real multi-process OS shell: background jobs ('&' - see
-    // Lexer's own error message), heredocs, globbing (there's no
-    // filesystem-of-interest to expand a pattern against), arithmetic
-    // expansion, brace/tilde expansion, functions, arrays, and true
-    // per-command-ephemeral variable scoping (`FOO=bar cmd` sets FOO
-    // persistently here, not just for that one command - see Assignment's
-    // own comment). Each is a real, known simplification, not a silent
-    // gap - flagged here once rather than re-litigated at every call site
-    // that could theoretically want one of them.
+    // A scoped-down bash-alike, and what it deliberately leaves out - see EmuSen_Debugging_Tools_Reference_v5.md §3.17.
     public class DianaOSInterpreter
     {
         private static readonly TimeSpan MaxExecutionTime = TimeSpan.FromSeconds(10);
@@ -47,42 +28,17 @@ namespace EmuSen.DianaOS.DianaOS.Bin
         private readonly Dictionary<string, string> _variables;
         private readonly bool _isRoot;
 
-        // Shared by reference with any subshell created for a $(...)
-        // command substitution (see CreateSubshell) so a runaway loop
-        // nested inside a substitution still counts against the same
-        // wall-clock budget as the outer command line that contains it,
-        // rather than getting its own fresh allowance.
+        // Shared with any $(...) subshell, so a nested runaway cannot get a fresh budget - see §3.17.
         private Stopwatch? _stopwatch;
 
-        // Holds raw text across Submit() calls while a quote/"$(...)"/
-        // if-else-fi/for-do-done block is still open - see Submit's own
-        // comment for the full flow.
+        // Holds raw text across Submit() calls while a block is still open - see §3.17.
         private string _pendingInput = "";
 
-        // Guards RunScript (source/.) against a self-referential or
-        // mutually-recursive script (`a.txt` sourcing itself, or `a.txt`
-        // sourcing `b.txt` sourcing `a.txt`, ...) - each nested `source`
-        // call recurses through the C# call stack (SubmitCore ->
-        // ExecuteStatementList -> ... -> Dispatch -> RunScript ->
-        // SubmitCore -> ...), and unlike a runaway while/for loop
-        // (caught by CheckTimeout's wall-clock budget), that recursion
-        // has no other circuit breaker - left unchecked it would end in
-        // an uncatchable StackOverflowException that takes the whole
-        // process down instead of a clean error message.
+        // Recursion through the C# stack has no other circuit breaker - see §3.17.
         private int _sourceDepth;
         private const int MaxSourceDepth = 20;
 
-        // The last HostAction any command produced while executing the
-        // statement list currently being run by SubmitCore below - "last
-        // one wins" within a single Submit()/SubmitCore() call, same as
-        // $? already works for exit codes; a host action is delivered
-        // after the whole line finishes, not mid-statement-list (see
-        // ExecuteSimpleCommand's own comment for why nothing upstream of
-        // it - ExecuteStatementList/ExecuteIf/ExecuteFor/ExecuteWhile/
-        // ExecuteAndOrList/ExecutePipeline - needed touching for this).
-        // Reset immediately before each real execution in SubmitCore, so
-        // a stale value from an earlier call can never leak into a later
-        // one's returned tuple.
+        // Last one wins, read once at the end of SubmitCore - see §3.17a.
         private HostAction? _pendingHostAction;
 
         public CommandHistory History { get; }
@@ -90,69 +46,19 @@ namespace EmuSen.DianaOS.DianaOS.Bin
         // Every registered command's own Name - see EmuSen_Debugging_Tools_Reference_v5.md §3.18 on why this exists.
         public IReadOnlyList<string> CommandNames => _orderedCommands.Select(c => c.Name).ToList();
 
-        // The account this shell is currently "logged in" as (see `man
-        // whoami`/`man su`) - Unix-flavor identity, not real access
-        // control (see DianaOSUserRegistry's own header comment). Every
-        // interpreter starts as root; su/tmux new/a ROM-swap rebuild are
-        // the only things that ever change or propagate it (see
-        // CreateSubshell, TmuxCommand's "new" case, and
-        // DianaOSSessionManager.RebuildAll).
+        // Unix-flavour identity, not access control - see `man whoami` and `man su`.
         public string CurrentUser { get; set; } = "root";
 
-        // True between Submit() calls while a multi-line construct (an
-        // unterminated quote, "$(...)", or if/for/while block) is still
-        // being typed - an interactive frontend can check this to show a
-        // continuation prompt ("> ", bash-style) instead of the normal one.
+        // Lets a frontend show a bash-style continuation prompt - see §3.17.
         public bool IsAwaitingMoreInput => _pendingInput.Length > 0;
 
-        // `history` lets a caller building its own command list (see
-        // CreateDefault below) hand a HistoryCommand instance the exact
-        // same CommandHistory object this interpreter itself records
-        // into and exposes via the History property, rather than each
-        // silently getting its own - the same "neither side owns it"
-        // sharing CommandHistory's own comment describes.
+        // Both sides share one CommandHistory rather than each getting its own.
         public DianaOSInterpreter(IDebugTarget? target, IEnumerable<IDianaOSCommand> commands, CommandHistory? history = null)
             : this(target, new List<IDianaOSCommand>(commands), null, new Dictionary<string, string>(), history ?? new CommandHistory(), isRoot: true)
         {
         }
 
-        // Builds the standard, full command registry (every debug command
-        // under EmuSen.DianaOS.DianaOS.Bin.Commands plus this namespace's own shell
-        // builtins) - the one-stop constructor call every frontend
-        // (EmuSen.Hotaru, EmuSen.Pharaoh) actually wants,
-        // rather than each independently re-listing 30-odd command
-        // classes and risking them drifting out of sync with each other.
-        // `extraCommands` lets a specific frontend (e.g. Mistress's GUI
-        // console) register a handful of host-specific commands - things
-        // that need to reach outside IDebugTarget entirely (pausing the
-        // host's own emulation thread, say) and so can't live in
-        // EmuSen.DianaOS.DianaOS.Bin.Commands alongside the core-agnostic ones below -
-        // without that frontend having to hand-roll its own copy of this
-        // entire ~30-command registry just to add a couple more. An extra
-        // command whose Name matches one already in the standard list
-        // REPLACES it (case-insensitive), rather than erroring on a
-        // duplicate key - deliberately, for cases like `coretop`, whose
-        // default raw-terminal implementation flatly can't work inside a
-        // GUI-hosted console (EmuSen.Mistress's own console window is a
-        // TextBox, not a real terminal) and needs a host-specific
-        // replacement instead, not just an addition alongside it. Any
-        // other extra command name (one that doesn't collide) is just
-        // appended, same as before this override behavior existed.
-        // Extra commands colliding with EACH OTHER (not with the
-        // standard list) still isn't supported - that's a caller bug,
-        // not a use case, so it's left to throw from the Dictionary
-        // build below same as always.
-        //
-        // cheatAutoDetectCodec/cheatExplicitCodec back CheatCommand's
-        // `add`/`gg` decode roles (see that class's own header comment) -
-        // both default to null (no decoding available, `poke`/`rompatch`/
-        // etc. still work) so a core with no code-format decoder of its
-        // own, or a standalone launch with no core at all, doesn't need
-        // to pass anything. cpuTraceSwitch backs TraceCommand's `trace`
-        // command the same way - null means "not available for this
-        // target," not a missing feature.
-        //
-        // sessions backs TmuxCommand - see `man tmux`.
+        // The one-stop registry every frontend wants; an extra command REPLACES a same-named default - see §3.17.
         public static DianaOSInterpreter CreateDefault(
             IDebugTarget? target,
             IEnumerable<IDianaOSCommand>? extraCommands = null,
@@ -164,20 +70,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin
         {
             DianaOSSandbox.EnsureInitialWorkingDirectory();
 
-            // snapshot/diff share one SnapshotStore (see that file's own
-            // comment) - constructed once here, same lifetime as every
-            // other command's own state.
+            // snapshot/diff share one store, constructed here with every other command's state.
             var snapshotStore = new SnapshotStore();
             var history = new CommandHistory();
 
-            // whoami/su/useradd/userdel/passwd need to read/mutate THIS
-            // interpreter's own CurrentUser - something no IDianaOSCommand
-            // gets via its ordinary Execute(target, args, stdin) signature.
-            // `self` is assigned right after the interpreter it refers to
-            // is actually constructed, below - same "local mutable,
-            // captured by a closure, filled in once construction finishes"
-            // shape TmuxCommand's own buildInterpreter callback already
-            // uses for an unrelated reason (rebuilding a session).
+            // whoami/su/useradd need this interpreter's own CurrentUser, which Execute cannot reach.
             DianaOSInterpreter? self = null;
             Func<DianaOSInterpreter> selfAccessor = () => self!;
 
@@ -297,16 +194,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             if (!_variables.ContainsKey("?")) _variables["?"] = "0";
         }
 
-        // A fresh, isolated interpreter for one $(...) command substitution
-        // - real bash semantics: a command substitution runs in a
-        // subshell, so variable assignments made inside it do NOT leak
-        // back out (a genuinely surprising-if-you-don't-know-it bash
-        // behavior, reproduced deliberately here rather than by accident).
-        // Shares the same command registry/target (read-only, no reason to
-        // rebuild the dictionary or reconnect the same emulator session)
-        // and the same wall-clock safety-timeout Stopwatch, but gets its
-        // own variable-dictionary snapshot and its own throwaway history
-        // (a substitution isn't something the user "typed at the prompt").
+        // A $(...) substitution runs in a real subshell, so assignments do not leak out - see §3.17.
         private DianaOSInterpreter CreateSubshell()
         {
             var sub = new DianaOSInterpreter(_target, _orderedCommands, _commands, new Dictionary<string, string>(_variables), new CommandHistory(), isRoot: false);
@@ -315,54 +203,22 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return sub;
         }
 
-        // Internal, loop-only control-flow signals - never surface past
-        // ExecuteFor/ExecuteWhile. A tree-walking interpreter using
-        // exceptions for break/continue is a common, accepted pattern
-        // (the same shape a real interpreter for a language with these
-        // constructs almost always ends up using), not a "using
-        // exceptions for control flow" antipattern smell here - there's no
-        // other clean way to unwind an arbitrary number of nested
-        // StatementList/If frames back to the nearest enclosing loop.
+        // Exceptions are how a tree-walker unwinds to the nearest loop - see §3.17a.
         private class BreakSignal : Exception { }
         private class ContinueSignal : Exception { }
 
         public string Execute(string commandLine) => Submit(commandLine).Output;
 
-        // The core entry point. Buffers raw text across calls whenever the
-        // lexer or parser reports "not finished yet" (an open quote, an
-        // unbalanced "$(...)", or an if/for/while block missing its
-        // closing keyword) - both an interactive frontend feeding one line
-        // at a time and EmuSen.Pharaoh's `--commands` script reader
-        // (which also feeds one raw file line per call) get correct
-        // multi-line control-flow support for free from this, without
-        // either caller needing to know anything about the grammar.
+        // Buffers raw text across calls whenever the parser says "not finished yet" - see §3.17.
         public (bool NeedsMoreInput, string Output, HostAction? Action) Submit(string rawLine) => SubmitCore(rawLine, interactive: true);
 
-        // Answers "would running this line right now be safe off the
-        // caller's own primary thread, with no visible side effects
-        // beyond its own output?" - WITHOUT running it. A frontend with a
-        // live, always-on terminal (see EmuSen.Hotaru's GameWindow console
-        // reader thread) uses this to decide whether a typed line can
-        // answer immediately, or needs to be queued and run inline on the
-        // owning thread's own next tick instead.
-        //
-        // Deliberately narrow: only a single, complete, bare simple
-        // command (no pipes, no '&&'/'||', no assignment, no redirection,
-        // not a continuation of an open quote/if/for/while block, no '!'
-        // history reference) whose literal (non-expanded, non-substituted)
-        // command word resolves to a registered IDianaOSCommand reporting
-        // IsReadOnly. Anything else - including 'help'/'man'/'summary'/
-        // 'source'/'.', which aren't ordinary registry entries at all -
-        // falls through to false. That's always the safe direction: a
-        // false here just costs one frame of latency (see
-        // ProcessPendingConsoleCommands), never a wrong "yes."
+        // Answers whether a line is safe to run off the caller's thread, without running it - see §3.17.
         public bool TryGetReadOnlyFastPath(string rawLine, out string trimmed)
         {
             trimmed = (rawLine ?? "").Trim();
             if (trimmed.Length == 0) return false;
 
-            // Mid multi-line construct, or a '!N'/'!!' history reference -
-            // neither can be classified without actually running Submit.
+            // Neither can be classified without actually running Submit.
             if (_pendingInput.Length > 0) return false;
             if (trimmed.StartsWith('!')) return false;
 
@@ -388,10 +244,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             Word nameWord = simple.Words[0];
             if (nameWord.Parts.Count != 1 || nameWord.Parts[0].Kind != PartKind.Literal) return false;
 
-            // Same alias normalization Dispatch itself applies right
-            // before its own registry lookup (see that method's own
-            // comment) - 'c'/'quit'/'s'/'jobs'/'hexdump' aren't registered
-            // under those literal names.
+            // The same alias normalisation Dispatch applies before its own lookup - see §3.17a.
             string cmd = nameWord.Parts[0].Text.ToLowerInvariant();
             if (cmd == "c") cmd = "resume";
             else if (cmd == "quit") cmd = "shutdown";
@@ -402,24 +255,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return _commands.TryGetValue(cmd, out IDianaOSCommand? command) && command.IsReadOnly;
         }
 
-        // `source`/`.` (RunScript below) feeds a script file's lines
-        // through this same interpreter one at a time too, sharing this
-        // exact buffering/execution path (and, crucially, its variables -
-        // real bash `source` runs in the CURRENT shell's scope, not a
-        // subprocess) rather than duplicating it. `interactive: false`
-        // keeps a sourced script out of `history`/`!N` recall (real bash
-        // doesn't record a sourced script's own lines into the calling
-        // shell's history either) and disables `!`/`!!` expansion for it
-        // (a script referencing "the interactive session's last command"
-        // would be confusing at best, since a script wasn't typed
-        // interactively at all).
+        // A sourced script shares this scope but not history or `!` expansion - see §3.17.
         private (bool NeedsMoreInput, string Output, HostAction? Action) SubmitCore(string rawLine, bool interactive)
         {
             string line = rawLine ?? "";
 
-            // '!N'/'!!' history recall only makes sense as the START of a
-            // brand-new command, never mid-block - a continuation line
-            // inside an open "if" typed as "!!" is just a literal word.
+            // History recall only makes sense at the start of a new command, never mid-block.
             if (interactive && _pendingInput.Length == 0 && line.TrimStart().StartsWith('!'))
             {
                 try { line = ExpandHistoryReference(line.Trim()); }
@@ -477,21 +318,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             catch (BreakSignal) { /* bare 'break' outside any loop - bash silently no-ops this */ }
             catch (ContinueSignal)
             {
-                // A bare 'continue' (no enclosing loop) never reaches
-                // Dispatch at all - the parser recognizes it as a loop-
-                // control keyword and ExecuteStatementList throws this
-                // signal directly, unwinding straight past
-                // ExecuteSimpleCommand's own "set _pendingHostAction from
-                // the dispatched command's result" logic. ResumeCommand's
-                // own 'continue' alias (normalized in Dispatch) can
-                // therefore only ever be reached from INSIDE a loop, where
-                // ExecuteFor/ExecuteWhile already catch and handle this
-                // signal themselves - so this is the only place a bare,
-                // top-level 'continue' can ever actually signal Resume,
-                // matching this shell's own established convention (see
-                // ResumeCommand's own comment) that 'continue' typed at an
-                // interactive prompt means "resume gameplay," not real
-                // bash's plain no-op.
+                // Bare `continue` can only reach here from outside a loop, where it means resume - see §3.17a.
                 _pendingHostAction = new HostAction.Resume();
             }
             catch (Exception ex)
@@ -505,11 +332,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return (false, result, _pendingHostAction);
         }
 
-        // Bash-style history expansion: "!!" re-runs the last command,
-        // "!N" re-runs history entry N (1-based, matching `history`'s own
-        // display numbering). Expanded before this line is recorded into
-        // History, so (matching real bash) history shows what actually
-        // ran, not the literal "!N"/"!!" that was typed.
+        // Expanded before the line is recorded, so history shows what actually ran.
         private string ExpandHistoryReference(string trimmed)
         {
             if (trimmed == "!!")
@@ -680,15 +503,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
 
             DianaOSResult result = Dispatch(name, args.ToArray(), effectiveStdin);
 
-            // Last one wins if this statement list runs several commands
-            // (a pipeline, a sequenced line, a loop body) - see
-            // _pendingHostAction's own field comment. Deliberately not
-            // threaded through this method's own (string, int) return
-            // type or any of its callers (ExecutePipeline,
-            // ExecuteStatementList, ExecuteIf/For/While) - a field read
-            // once at the end of SubmitCore keeps this a one-line addition
-            // instead of a signature change rippling through six methods
-            // for a signal only SubmitCore's caller ever needs.
+            // A field rather than six changed signatures - see §3.17a.
             if (result.Action is not null) _pendingHostAction = result.Action;
 
             string visibleOutput = result.Output;
@@ -703,39 +518,18 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return (visibleOutput, result.ExitCode);
         }
 
-        // `help`/`summary`/`export`/`unset` stay special-cased here (not
-        // registered IDianaOSCommand instances) since each needs direct
-        // access to interpreter-internal state (`_orderedCommands`, the
-        // target's own GetSummaryText(), `_variables`) that IDianaOSCommand
-        // deliberately doesn't expose to ordinary commands - the same
-        // reasoning `VAR=value` assignment is a parser/interpreter
-        // concept, not a command, at all.
+        // These four need interpreter-internal state that IDianaOSCommand does not expose - see §3.17.
         private DianaOSResult Dispatch(string name, string[] args, string? stdin)
         {
             string cmd = name.ToLowerInvariant();
 
-            // `help` and `man` are two separate commands with two separate
-            // jobs, not one aliased to the other: `help` always lists
-            // every command with a brief explanation, full stop, ignoring
-            // any arguments - the quick "what's available" overview.
-            // `man [command]` is the detail lookup - with no argument it
-            // shows that same overview (there's nothing else useful to
-            // show), but `man <command>` prints that command's full
-            // manual page, which `help` deliberately does NOT do. See
-            // ManPages.cs for why the actual manual text lives in its own
-            // module rather than on IDianaOSCommand.
+            // Two separate jobs, not one aliased to the other - see §3.17.
             if (cmd == "help") return Help();
             if (cmd == "man") return Man(args);
 
             if (cmd == "summary") return _target?.GetSummaryText() ?? "No target attached.";
 
-            // `export NAME[=value]` - real bash exports a variable into
-            // child processes' environment; there's no such thing here
-            // (no subprocesses at all), so this is just a plain assignment
-            // (or a no-op declaration if no '=' is given and the name is
-            // already set) - kept purely so a script written with real
-            // bash habits ("export FOO=bar") still does something sane
-            // instead of erroring as an unknown command.
+            // There are no subprocesses to export to; kept so bash habits still do something sane - see §3.17.
             if (cmd == "export")
             {
                 foreach (string arg in args.Skip(1))
@@ -753,26 +547,10 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                 return "";
             }
 
-            // `source <path>` (alias `. <path>`) - runs a script file's
-            // lines in THIS interpreter's own scope (variables set by the
-            // script are still set afterward, same as real bash `source`,
-            // and unlike running a separate process would be) rather than
-            // an isolated one. See RunScript's own comment for why this
-            // needs to be special-cased here rather than an ordinary
-            // IDianaOSCommand.
+            // Runs in THIS interpreter's scope, which is why it cannot be an ordinary command - see §3.17.
             if (cmd == "source" || cmd == ".") return RunScript(args);
 
-            // Alias normalization for ResumeCommand/ShutdownCommand/
-            // StepCommand/PsCommand/XxdCommand - same "map the word, then
-            // fall through to the ordinary registry lookup" shape
-            // 'source'/'.' would use if it didn't ALSO need RunScript's own
-            // special access (these five don't - they're ordinary
-            // IDianaOSCommands). Keeps 'help' from printing the same Usage
-            // line two or three times, which one registry entry per alias
-            // would do. NOT 'continue' - that one's a real parser-level
-            // loop-control keyword that never reaches Dispatch at all when
-            // used bare; see SubmitCore's own ContinueSignal catch for how
-            // it signals Resume instead.
+            // Mapped then dropped through to the ordinary lookup; deliberately not `continue` - see §3.17a.
             if (cmd == "c") cmd = "resume";
             else if (cmd == "quit") cmd = "shutdown";
             else if (cmd == "s") cmd = "step";
@@ -791,22 +569,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             }
             catch (Exception ex)
             {
-                // A malformed command (bad address, out-of-range space,
-                // etc.) should produce a readable error and a nonzero
-                // exit status - never take down whatever's running this
-                // console, and never look like success to '&&'/'if'.
+                // A malformed command must read as failure to `&&`/`if`, never take the console down.
                 return DianaOSResult.Fail($"Error: {ex.Message}");
             }
         }
 
-        // Backs `source`/`.` (special-cased in Dispatch, not an ordinary
-        // IDianaOSCommand, because it needs to feed lines back through
-        // THIS interpreter's own SubmitCore - an IDianaOSCommand only
-        // ever gets a target/args/stdin, with no way to reach the
-        // interpreter driving it at all). Walled to DianaOSSandbox like
-        // every other real-file command here; each non-blank, non-comment
-        // (`#`) line runs exactly as if it had been typed at the prompt,
-        // in this same interpreter's own variable/history scope.
+        // Feeds lines back through this interpreter's own SubmitCore - see §3.17.
         private DianaOSResult RunScript(string[] args)
         {
             if (args.Length < 2) return DianaOSResult.Fail($"{args[0]}: usage: {args[0]} <path>");
@@ -844,16 +612,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                     if (needsMore) continue; // still buffering a multi-line if/for/while block
                     if (output.Length > 0) { sb.Append(output); sb.Append('\n'); }
 
-                    // A sourced script IS allowed to trigger a host action
-                    // (e.g. 'shutdown'), matching real bash - 'exit' inside
-                    // a sourced script exits the calling shell too. Stop
-                    // processing the rest of the script the moment one
-                    // appears, same as bash would never run the lines
-                    // after 'exit' - the action itself is returned below,
-                    // so ExecuteSimpleCommand's own caller (the outer
-                    // SubmitCore call that dispatched 'source' in the
-                    // first place) picks it up the same way it would from
-                    // any other command's DianaOSResult.
+                    // A sourced script may trigger a host action, as bash's `exit` does; stop the script there.
                     if (action is not null) { scriptAction = action; break; }
                 }
             }
@@ -862,11 +621,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
                 _sourceDepth--;
             }
 
-            // A script that ends mid-block (an "if" with no matching "fi",
-            // say) would otherwise leave _pendingInput populated for
-            // whatever's typed into the console NEXT, silently treating
-            // it as a continuation of the broken script - surface it as
-            // an error and reset instead.
+            // Or a script ending mid-block would silently swallow whatever is typed next - see §3.17.
             if (IsAwaitingMoreInput)
             {
                 _pendingInput = "";
@@ -878,17 +633,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return new DianaOSResult(result, 0, scriptAction);
         }
 
-        // `man [command]` - with no argument, falls back to the exact
-        // same listing `help` shows (kept as one Help() method, not
-        // duplicated, since there's nothing more useful to show with no
-        // target - this is the only overlap between the two commands).
-        // With a command name, looks up ManPages first; a command with
-        // no page there yet falls back to just its own Usage line rather
-        // than a hard failure, so a newly-added command isn't actually
-        // broken by 'man' before anyone's gotten around to writing its
-        // full page - see ManPages.cs's own comment. Only a genuinely
-        // unknown name (not registered as a command OR a special builtin
-        // like 'source'/'export') is a real error.
+        // Falls back to Usage for a command with no page yet - see §3.17.
         private DianaOSResult Man(string[] args)
         {
             if (args.Length < 2) return Help();
@@ -905,13 +650,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return DianaOSResult.Fail($"No manual entry for '{target}'. Type 'help' for a list of commands.");
         }
 
-        // `help` - always just this listing, ignoring any arguments.
-        // Deliberately does NOT forward to a per-command manual page the
-        // way it briefly did in an earlier revision - that made 'help'
-        // and 'man' the same command under two names, when they're
-        // better as two separate, single-purpose ones: 'help' is the
-        // one-shot "what's available" overview, 'man <command>' is the
-        // detail lookup (Man(), above).
+        // Always this listing, never a single command's page - see §3.17.
         private string Help()
         {
             var lines = new List<string>
@@ -936,31 +675,10 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return string.Join('\n', lines);
         }
 
-        // The version shown in GetWelcomeBanner(), below - bump this
-        // alongside any release-worthy milestone. Public so a frontend
-        // could show it elsewhere (a window title, an "about" dialog)
-        // without needing to know it's really just a banner detail.
+        // Bump alongside a release-worthy milestone.
         public const string Version = "0.1a";
 
-        // Printed once, at actual shell launch - EmuSen.Hotaru's
-        // RunStandaloneShell (now the very first thing any launch does,
-        // ROM arg or not) and EmuSen.Mistress's DianaOSConsoleWindow
-        // constructor (opening that window IS "launching" its shell) -
-        // NOT on every subsequent reopen of an already-running shell
-        // (EmuSen.Hotaru's F4/RunDebugPrompt keeps its own short
-        // contextual banner instead; printing this whole thing again on
-        // every F4 press would bury actual command output in noise).
-        //
-        // `supportedCores` is supplied by the caller rather than
-        // hardcoded here on purpose - EmuSen.DianaOS is deliberately
-        // core-agnostic (same reasoning IDebugTarget/ClassifyStaticReference
-        // exist for), and "which cores exist" is exactly the kind of
-        // frontend-owned fact that would violate that if it lived in this
-        // class instead (see EmuSen.Hotaru/Program.cs's own
-        // `_coreRegistry` comment). Points at `help`/`man` rather than
-        // dumping the full command listing inline (an earlier version did,
-        // via Help()) - the banner is meant to orient a first-time user,
-        // not repeat what `help` already shows on demand.
+        // Printed once per shell launch, not per command or per F4 - see §3.17.
         public string GetWelcomeBanner(IEnumerable<string> supportedCores)
         {
             const string border = "+------------------------------------------------------------------------+";
@@ -992,11 +710,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return string.Join('\n', lines);
         }
 
-        // Matches the border's own width in GetWelcomeBanner (72 columns
-        // of interior space between the '|'s) - a plain, static banner
-        // with fixed, known text, so a hand-computed constant width is
-        // simpler and more obviously correct than measuring the border
-        // string at runtime.
+        // Matches the border's own 72-column interior; fixed text, so a constant beats measuring.
         private static string CenterInBanner(string text)
         {
             const int innerWidth = 72;
@@ -1008,17 +722,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
 
         // --- Word expansion ---
 
-        // Full bash-style expansion: substitutes $VAR/${VAR}/$?/$(...),
-        // then - only for parts that were NOT inside quotes - splits the
-        // result on whitespace, tracking which characters came from a
-        // quoted span so "pre$X post" (X quoted) stays one argument even
-        // though it contains a space, while unquoted $X (X="a b") becomes
-        // two. An entirely-quoted word (including an explicit empty ""/'')
-        // always produces exactly one argument, even if empty; a word
-        // that's entirely unquoted and expands to nothing produces ZERO
-        // arguments (the word "vanishes"), matching a very commonly
-        // relied-upon bash behavior (`echo a $EMPTY b` -> "a b", not
-        // "a  b" with a phantom empty argument in the middle).
+        // Quoted spans survive word-splitting; an unquoted word expanding to nothing vanishes - see §3.17a.
         internal List<string> ExpandWord(Word w)
         {
             if (w.Parts.Count == 0) return new List<string> { "" };
@@ -1056,10 +760,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin
             return results;
         }
 
-        // Used where bash itself suppresses word-splitting regardless of
-        // quoting: assignment right-hand sides and redirection targets
-        // ("FOO=$X" and "> $X" both keep $X's expansion as one value, even
-        // unquoted and even if it contains whitespace).
+        // Where bash suppresses word-splitting regardless of quoting - see §3.17a.
         internal string ExpandWordSingle(Word w)
         {
             var sb = new StringBuilder();
@@ -1081,19 +782,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin
 
         internal bool UnsetVariable(string name) => _variables.Remove(name);
 
-        // Real bash semantics: $(...) runs in a subshell, so assignments
-        // made inside it don't leak back out - see CreateSubshell's own
-        // comment for why a fresh interpreter (with a cloned variable set)
-        // is used rather than just re-entering this same one.
+        // A subshell, so assignments inside do not leak out - see §3.17.
         private string RunCommandSubstitution(string source)
         {
             DianaOSInterpreter sub = CreateSubshell();
-            // A real bash subshell's 'exit' doesn't affect the parent
-            // shell - `sub` is a genuinely separate DianaOSInterpreter
-            // instance with its own _pendingHostAction field, so any host
-            // action produced inside $(...) is already isolated just by
-            // virtue of never being read back out here; the discard below
-            // is only about the tuple's arity, not extra logic.
+            // A subshell's own host action is isolated by construction; the discard is only arity.
             (bool needsMore, string output, _) = sub.Submit(source);
             if (needsMore)
             {

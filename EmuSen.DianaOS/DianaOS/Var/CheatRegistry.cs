@@ -10,9 +10,7 @@ using EmuSen.Galaxia.Models;
 
 namespace EmuSen.DianaOS.DianaOS.Var
 {
-    // Which mechanism a cheat uses - the two fundamentally different
-    // things era cheat devices actually did, see CheatRegistry's own
-    // comment for the full explanation of each.
+    // Two mechanisms era devices used, unified behind one registry - see EmuSen_Cheats.md.
     public enum CheatKind
     {
         RamPoke,
@@ -54,46 +52,21 @@ namespace EmuSen.DianaOS.DianaOS.Var
             Enabled = enabled;
         }
 
-        // The first write's fields, for the many callers that only ever
-        // deal in single-write cheats.
+        // The first write's fields, for callers that only deal in single-write cheats.
         public string SpaceName => Writes.Count > 0 ? Writes[0].Space : "";
         public int Address => Writes.Count > 0 ? Writes[0].Address : 0;
         public uint Value => Writes.Count > 0 ? Writes[0].Value : 0;
     }
 
-    // Two fundamentally different mechanisms era cheat devices used,
-    // unified behind one registry (one ID space, one list/enable/disable/
-    // remove UX) since a player thinks of both as just "my cheats":
-    //
-    // - RamPoke: the Pro Action Replay/Game Wizard mechanism. Rewrites an
-    //   address every frame, cheaply overpowering whatever the game itself
-    //   writes there. Applied via ApplyAll, called once per frame from
-    //   outside this class (see SnesDebugTarget.OnFrame).
-    // - RomPatch: the Game Genie mechanism. Substitutes the byte a
-    //   specific *cartridge* read returns, optionally gated on the real
-    //   byte matching a compare value. Consulted per-read via TryPatchRom
-    //   from MemoryBus's IRomReadPatcher hook - the underlying ROM byte is
-    //   never actually touched.
-    //
-    // Core-agnostic on purpose: nothing about either mechanism is
-    // SNES-specific, and this class never touches memory itself - it is
-    // handed read/write delegates. A future core wires this up the same
-    // way Venus's SnesDebugTarget does. See `man cheat` for the write
-    // model (widths, byte order, repeat runs, bit positions).
-    //
-    // Thread-safe by copy-on-write, because the reader is the emulation
-    // thread and the writer usually is not - see
-    // EmuSen_Settings_Reference.md §4.15.
+    // RamPoke rewrites every frame; RomPatch substitutes a read - see EmuSen_Cheats.md and `man cheat`.
     public class CheatRegistry
     {
-        // Copy-on-write: mutated only under _gate, read without any lock -
-        // see this class's threading note above.
+        // Copy-on-write: mutated under _gate, read without a lock - see EmuSen_Settings_Reference.md §4.15.
         private Cheat[] _cheats = Array.Empty<Cheat>();
         private readonly object _gate = new();
         private int _nextId = 1;
 
-        // TryPatchRom runs on every cartridge-routed read, so the common
-        // "no ROM patches active" case must not walk the list at all.
+        // On every cartridge read, so the no-patches case must not walk the list.
         private volatile int _enabledRomPatches;
 
         private volatile bool _masterEnabled = true;
@@ -112,8 +85,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             }
         }
 
-        // The snapshot a reader walks. One volatile read, then the array is
-        // its own for the rest of the call - see the threading note above.
+        // One volatile read, then the array is the reader's for the rest of the call.
         private Cheat[] Snapshot() => System.Threading.Volatile.Read(ref _cheats);
 
         // Publishes a new snapshot. Callers hold _gate.
@@ -126,22 +98,11 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public int AddRamPoke(string spaceName, int address, byte value, string description, bool enabled = true) =>
             AddCheat(CheatKind.RamPoke, new[] { CheatWrite.Poke(spaceName, address, value) }, null, description, enabled);
 
-        // compare = null means unconditional, matching a 6-character Game
-        // Genie code (or a hand-added patch with no compare byte).
+        // Null compare means unconditional, matching a 6-character Game Genie code.
         public int AddRomPatch(int address, byte value, byte? compare, string description, bool enabled = true) =>
             AddCheat(CheatKind.RomPatch, new[] { CheatWrite.Patch(address, value) }, compare, description, enabled);
 
-        // The general form. Throws on the two combinations that cannot be
-        // honestly implemented rather than silently doing something else:
-        //
-        // - A ROM patch cannot Increase/Decrease. There is nothing to
-        //   accumulate - the substitution happens at read time and the
-        //   real byte is never written, so "add 1 each frame" has no
-        //   meaning.
-        // - A compare byte only works on a single-byte patch. TryPatchRom
-        //   is handed one byte at a time, so it cannot check a compare
-        //   that spans several addresses; allowing it would produce a torn
-        //   patch where the first byte declines and the rest apply.
+        // Throws on the two combinations that cannot be honestly implemented - see EmuSen_Cheats.md.
         public int AddCheat(CheatKind kind, IEnumerable<CheatWrite> writes, byte? compare, string description, bool enabled = true)
         {
             var list = writes.ToList();
@@ -196,8 +157,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             {
                 Cheat? c = _cheats.FirstOrDefault(x => x.Id == id);
                 if (c is null) return false;
-                // In place, not a new snapshot: a reader mid-walk seeing the
-                // old or the new flag is equally correct, and both are torn-free.
+                // In place, not a new snapshot: either flag value is correct and both are torn-free.
                 c.Enabled = enabled;
                 RecountRomPatches();
                 return true;
@@ -247,9 +207,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return file;
         }
 
-        // Adds every well-formed entry and returns how many, plus how many were
-        // skipped as unparseable - a hand-edited file with one bad line still
-        // loads the rest, see EmuSen_Config_Reference.md §3.4.
+        // One bad line still loads the rest - see EmuSen_Config_Reference.md §3.4.
         public (int loaded, int skipped) LoadFrom(CheatFile file)
         {
             int loaded = 0, skipped = 0;
@@ -274,8 +232,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return (loaded, skipped);
         }
 
-        // Maps the on-disk carrier onto CheatWrite. Lives here rather than on
-        // CheatFileEntry because EmuSen.Galaxia cannot see this assembly.
+        // Here rather than on CheatFileEntry, which cannot see this assembly.
         private static bool TryReadEntry(CheatFileEntry entry, out List<CheatWrite> writes, out byte? compare)
         {
             writes = new List<CheatWrite>();
@@ -313,9 +270,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return Enum.TryParse(text.Trim(), ignoreCase: true, out type);
         }
 
-        // Called once per frame. Takes read as well as write because
-        // Increase/Decrease and BitPosition writes have to see what is
-        // already there - the registry still never touches memory itself.
+        // Takes read too: Increase/Decrease and bit writes must see what is already there.
         public void ApplyAll(Func<string, int, byte> read, Action<string, int, byte> write)
         {
             if (!_masterEnabled) return;
@@ -327,8 +282,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             }
         }
 
-        // Kept so an existing caller that only has a write delegate still
-        // compiles; Increase/Decrease and bit writes read back as 0.
+        // Kept so a write-only caller still compiles; those writes read back as 0.
         public void ApplyAll(Action<string, int, byte> write) => ApplyAll((_, _) => 0, write);
 
         private static void ApplyWrite(CheatWrite w, Func<string, int, byte> read, Action<string, int, byte> write)
@@ -372,14 +326,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return value;
         }
 
-        // Called for every cartridge-routed read - see IRomReadPatcher.
-        // First enabled, address-matching, compare-satisfying RomPatch
-        // wins (list order = add order); returns false if nothing matches
-        // so the caller falls back to the real cartridge byte unchanged.
-        //
-        // Must stay cheap: this is on the hot path of every ROM read, so
-        // the no-patches case exits on one int compare, and a repeat run
-        // resolves by division rather than by walking its repetitions.
+        // First match wins, and the no-patch case exits on one int compare - see EmuSen_Cheats.md.
         public bool TryPatchRom(uint address, byte originalValue, out byte patchedValue)
         {
             patchedValue = 0;
@@ -405,10 +352,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return false;
         }
 
-        // Which repetition of a repeat run covers <target>, and how far into
-        // that repetition's width it sits. Division for the ordinary forward
-        // stride; a bounded walk only for the zero/negative strides that
-        // cannot be indexed that way.
+        // Division for the ordinary forward stride; a bounded walk only for zero or negative.
         private static bool TryResolveRepetition(CheatWrite w, int target, out int repetition, out int offset)
         {
             int width = w.EffectiveWidth;

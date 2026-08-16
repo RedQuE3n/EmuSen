@@ -54,3 +54,13 @@ Moon's arrangement is the better one and is where Venus should end up; it was no
 - **`.cht` import cannot produce ROM patches.** `ChtFile.ReadCode` builds `CheatWrite.Poke` unconditionally, so a database file full of Game Genie codes decodes to RAM pokes at ROM addresses, which do nothing. RetroArch's own model has no ROM-patch concept, which is where the shape came from. For the NES this matters more than it did for the SNES, because NES cheats are overwhelmingly published as Game Genie codes — the auto-detect slot is the raw `AAAA:VV` format precisely so a mis-import is a visible failure rather than a silent wrong cheat.
 - **No Pro Action Rocky codec.** The NES equivalent of Action Replay is a real encrypted 8-hex-digit format (Mesen's `ConvertFromNesProActionRocky` has the key and shift table). There are only two codec slots and Game Genie earns the explicit one, so this needs the slots to become a list first.
 - **The cheat device ROMs themselves.** A real Game Genie was a passthrough cartridge with its own ROM and code-entry screen. Booting one and handing off to the game is a separate feature — see `Moon_Cheats.md` §5.
+
+
+## The two combinations `AddCheat` refuses
+
+Both throw rather than silently doing something adjacent, because there is no honest implementation of either:
+
+- **A ROM patch cannot `Increase`/`Decrease`.** There is nothing to accumulate. The substitution happens at read time and the real byte is never written, so "add one each frame" has no meaning — the same byte would be read, incremented, and thrown away every time.
+- **A compare byte only works on a single-byte patch.** `TryPatchRom` is handed one byte at a time by the cartridge read hook, so it cannot evaluate a compare spanning several addresses. Allowing it would produce a **torn patch**: the first byte declines to apply while the rest apply anyway, which is worse than either outcome on its own.
+
+`ApplyAll` takes a read delegate as well as a write one for the mirror-image reason — `Increase`/`Decrease` and bit-position writes have to see what is already there — while the registry itself still never touches memory. The write-only overload is kept so existing callers compile; those write kinds read back as zero there.

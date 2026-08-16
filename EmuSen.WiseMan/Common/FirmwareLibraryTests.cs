@@ -1,10 +1,13 @@
 using EmuSen.Common.Firmware;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Common
 {
     // The core-agnostic firmware store: discovery, size validation, and what
     // happens to a file the user picks. Nothing here knows what an SNES is.
     // See EmuSen_Firmware.md §2.
+    // Serial: FirmwareLibrary.Directory is a process global - §3.57.
+    [Collection(TestCollections.ProcessGlobals)]
     public class FirmwareLibraryTests : IDisposable
     {
         private readonly string _dir;

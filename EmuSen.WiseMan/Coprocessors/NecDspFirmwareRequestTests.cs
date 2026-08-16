@@ -9,6 +9,8 @@ namespace EmuSen.WiseMan.Coprocessors
     // What the SNES core reports it needs before anything is loaded - the
     // half of the firmware contract a frontend acts on. See
     // EmuSen_Firmware.md §1 and Venus_NecDSP.md §2.
+    // Serial: FirmwareLibrary.Directory is a process global - §3.57.
+    [Collection(TestCollections.ProcessGlobals)]
     public class NecDspFirmwareRequestTests : IDisposable
     {
         private readonly string _dir;

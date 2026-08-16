@@ -2255,6 +2255,37 @@ They are one collection and not four because `AudioLatencyDriftTests` drives SDL
 
 **Verification.** 2,598 tests pass — the 2,596 the suite actually had, plus §3.55's snapshot guard and this section's latch guard. Three consecutive full runs at 52.7s, 52.8s and 54.0s, no intermittent failures, with `user` time 2m20s against 54s wall confirming the work is genuinely spread across cores. Repeating the run matters here specifically because parallelism converts latent shared-state bugs into flakes, and a single green run establishes nothing about whether the collection is drawn correctly.
 
+### 3.57 The fifth kind of process global, found by a flake rather than by the audit
+
+§3.56 enumerated **four** kinds of shared state in `"Process globals"` — config, SDL, trace, Venus. There were five. `FirmwareLibrary.Directory` is a plain static, assigned in the constructors of `FirmwareLibraryTests` and `NecDspFirmwareRequestTests` and nulled by both in `Dispose`, and neither class was in the collection.
+
+**How it presented.** `FirmwareLibraryTests.The_canonical_name_wins_over_an_alternate` failed once, then passed on a re-run against *identical binaries* with no rebuild in between. That is the least useful shape a failure can have — it looks like noise, and the natural response is to run it again and move on, which is exactly what happened the first time it was seen.
+
+**The reproduction, because "it is a race" is a guess until it is a measurement.** Filter the run down to just the two classes that touch the static, so they are the only things scheduled and are therefore guaranteed to be concurrent:
+
+    dotnet test --filter "FullyQualifiedName~FirmwareLibraryTests|FullyQualifiedName~NecDspFirmwareRequestTests"
+
+Eight runs before the fix: **1 pass, 7 failures.** Eight runs after: **8 passes.** In the full suite the same race surfaces at roughly one run in ten, because the two classes are competing with 180 others for a scheduling slot rather than with each other.
+
+**Re-measured before the commit landed, and the first numbers above did not survive it.** Ten runs of the same filter with the attributes removed again: **ten failures, no passes** — the race is not one-in-eight under the filter, it is essentially certain. More usefully, the test that fails is not the one this section was written around. Every one of the ten failed `NecDspFirmwareRequestTests.Installing_the_dump_settles_the_request_and_builds_the_chip`, and two of the ten *also* failed `FirmwareLibraryTests.Installing_the_wrong_file_fails_without_writing_anything`. `The_canonical_name_wins_over_an_alternate` — the flake that started the investigation, and the test named in the paragraph above — did not fail once in ten targeted runs.
+
+That is worth stating plainly rather than quietly correcting, because it is a claim this document made and then failed to reproduce: **the test that reveals a shared-state race depends on the scheduling context, so the one you happened to see is not the one a reproduction will hand you.** The original observation stands as an observation — it was seen, in a full parallel run, and the re-measurement does not contradict it. What was wrong was the implied equivalence between "the flake I saw" and "what this command reproduces".
+
+**The mechanism**, corrected to the arm that actually reproduces. Each class makes its own temp directory per instance, which is what makes the fixture look airtight. Then it points the process-wide `FirmwareLibrary.Directory` at it. Interleave the two and one class writes through the static while the other has already moved it:
+
+- **The dominant arm, 10/10.** `Installing_the_dump_settles_the_request_and_builds_the_chip` calls `FirmwareLibrary.Install`, which writes `dsp1.rom` into whatever `Directory` names *at that moment*, then asserts `MissingFirmwareFor` is empty — a second read of the same static. Between the two, `FirmwareLibraryTests` repoints it, so the read looks in a directory the file was never written to and the request is still reported missing. It fails as `Assert.Empty() Failure: Collection was not empty`, listing the `dsp1.rom` request that was just satisfied.
+- **The arm this section was written around.** The same write-then-read shape against a `Dispose` that nulls the static rather than repointing it, so `TryLoad` returns null and `TryLoad(...)![0]` throws. It needs the null to land inside a narrower window, which is why it is the rarer of the two and why it showed up in the full suite rather than under the filter.
+
+Both are one bug and one fix. The distinction matters only for what a reproduction should be expected to print.
+
+**Why the audit missed it, which matters more than the fix.** §3.56 found its four kinds by auditing state the suite was *already known* to share — the SDL init state the original comment named, then the trace buffer and the Venus cores that enabling parallelism crashed on immediately. Firmware crashed nothing. It produced one intermittent failure in a class whose per-instance temp directory reads as careful isolation, and careful-looking isolation is what makes the shared static easy to read straight past.
+
+The reliable question is not "does this class share state", which needs judgement, but **"does this class assign a static"**, which `grep` answers. Running that question over every test class in `EmuSen.WiseMan` returns exactly two more sites, and both are already accounted for: `CoreOptions.BatteryRamDisabled = true` in `MercuryHardwareTestRomTests`, which is the same-value write §3.56 records as deliberately safe, and a false positive on a `switch` arm. **There is no sixth kind.** That sweep is written into `TestCollections.cs` beside the list, so the next person asking the question has the method rather than only the answer.
+
+**Cost and verification.** The serial collection goes from 45 classes to 47 and gains 25 tests taking ~45ms. Three consecutive full runs: **2,621 tests pass** at 55.8s, 56.2s and 53.4s, against §3.56's ~53s — so the whole fix costs about two seconds of wall clock, and repeated runs are what establishes that, per §3.56's own rule that one green run establishes nothing.
+
+Re-confirmed at commit time: full suite **2,621 passed, 0 failed, 53s**; the filtered pair **8 green runs out of 8** at 25 tests and ~45ms, against the ten-out-of-ten failures the same filter produces with the two attributes taken back off. The attributes were removed and restored from a copy to measure that, rather than reasoned about.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

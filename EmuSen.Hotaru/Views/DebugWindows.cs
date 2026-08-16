@@ -21,7 +21,7 @@ namespace EmuSen.Hotaru.Views
         public static void UpdateCoretopWindowTargetIfOpen(IDebugTarget target) =>
             Coretop.RefreshIfOpen(w => w.UpdateTarget(target));
 
-        // The only discoverability this frontend has: it owns no menu bar - see §4.5.
+        // The only discoverability this frontend has: it owns no menu bar - see §3e.
         public static void ShowHotkeyHelpWindow() => Hotkeys.Show(null, () => new HotkeyHelpWindow());
 
         public static void ShowFeedWindow(Func<(byte[] Rgba, int Width, int Height)> frameProvider) =>

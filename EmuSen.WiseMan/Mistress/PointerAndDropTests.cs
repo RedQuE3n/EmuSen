@@ -14,9 +14,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // IdleCursor and FileDrop in both frontends - see EmuSen_Settings_Reference.md §4.20.
-    // The risk worth a test is disposal: a cursor left hidden by an object nobody
-    // unsubscribed is an application whose pointer is gone for good.
+    // IdleCursor and FileDrop; disposal is the risk these exist for - §4.20.
     [Collection(TestCollections.ProcessGlobals)]
     public class PointerAndDropTests : IDisposable
     {
@@ -52,8 +50,7 @@ namespace EmuSen.WiseMan.Mistress
             var cursor = Field<IdleCursor>(window, "_idleCursor");
             Assert.NotNull(cursor);
 
-            // Attached to the frame, so the pointer stays over the menu bar - a
-            // window-level switch could not say that.
+            // On the frame, so the pointer stays over the menu bar - §4.20.
             cursor.Hide();
             Assert.True(cursor.IsHidden);
             cursor.Show();
@@ -62,8 +59,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The failure this exists for: close the window with the pointer hidden and,
-        // without disposal, it never comes back.
+        // Without disposal, a pointer hidden at close never comes back.
         [Fact]
         public Task Closing_the_main_window_gives_the_pointer_back() => Session.Dispatch(() =>
         {
@@ -79,8 +75,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(cursor.IsHidden);
         }, default);
 
-        // A drag carrying a whole folder of ROMs has no single answer, so it is refused
-        // before the indicator promises anything.
+        // A folder of ROMs has no single answer, so it is refused before the drop.
         [Fact]
         public Task The_main_window_accepts_one_dropped_file_and_refuses_several() => Session.Dispatch(() =>
         {

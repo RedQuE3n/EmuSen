@@ -379,7 +379,7 @@ namespace EmuSen.Hotaru.Views
             }
 
             // Through the table rather than a switch on Key, so the help window and the
-            // dispatch cannot disagree about what a key does - see §4.5.
+            // dispatch cannot disagree about what a key does - see §3e.
             if (!HotaruHotkeys.TryGetAction(e.Key, out HotaruHotkey action)) return;
 
             switch (action)

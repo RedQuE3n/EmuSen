@@ -6,10 +6,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.LunaP
 {
-    // The LunaList promises the frontends' lists were migrated onto, measured
-    // rather than read off the summaries - see EmuSen_Settings_Reference.md §4.11a.
-    // Every one of these is a silent behaviour change if it turns out otherwise,
-    // not a compile error, which is why they are pinned here.
+    // LunaList's measured contract - each a silent behaviour change if wrong. §4.11a.
     public class LunaListContractTests
     {
         private sealed record Row(string Id, string Text);
@@ -46,8 +43,7 @@ namespace EmuSen.WiseMan.LunaP
             window.Close();
         });
 
-        // Chose is SELECTION, not activation. A window that closes or launches on
-        // Chose does it on one click - which is not what a double-click list did.
+        // Chose is SELECTION, not activation - §4.11a.
         [Fact]
         public Task Chose_fires_on_a_selection_change() => UiTest.Run(() =>
         {
@@ -62,8 +58,7 @@ namespace EmuSen.WiseMan.LunaP
             window.Close();
         });
 
-        // Select() states what is true without pretending the user did it, which
-        // is the seam a default selection has to go through.
+        // The seam a default selection goes through, without claiming the user did it.
         [Fact]
         public Task Select_sets_the_selection_without_raising_Chose() => UiTest.Run(() =>
         {
@@ -79,8 +74,7 @@ namespace EmuSen.WiseMan.LunaP
             window.Close();
         });
 
-        // Refresh restores by Key across rebuilt objects, and stays quiet doing it,
-        // so a rescan cannot look like a click.
+        // Restores by Key across rebuilt objects, quietly, so a rescan is not a click.
         [Fact]
         public Task Refresh_restores_the_selection_by_key_and_stays_quiet() => UiTest.Run(() =>
         {

@@ -14,9 +14,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The quick alternative to the OS file picker - see EmuSen_Settings_Reference.md §4.11a.
-    // Written when the window was migrated onto LunaList and found to have had no
-    // coverage at all: nothing pinned that picking a row returns that row's path.
+    // The window had no coverage at all before the LunaList migration - §4.11a.
     [Collection(TestCollections.ProcessGlobals)]
     public class RomBrowserWindowTests : IDisposable
     {
@@ -82,8 +80,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(Path.Combine(_romDir, "Zelda.smc"), result.Result);
         }, default);
 
-        // Selecting is not choosing - LunaList.Chose fires on a selection change,
-        // so wiring the dialog's close to it would end it on one click.
+        // Selecting is not choosing: Chose would end the dialog on one click - §4.11a.
         [Fact]
         public Task Selecting_a_row_does_not_close_the_dialog() => Session.Dispatch(() =>
         {

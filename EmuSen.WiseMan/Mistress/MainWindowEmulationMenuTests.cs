@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
@@ -330,6 +331,33 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(pause.IsEnabled);
             Click(window, "CloseGameMenuItem");
             Assert.False(pause.IsEnabled);
+
+            window.Close();
+        }, default);
+
+        // The menu advertises the hotkeys, driven from HotkeyBindingMap - see §4.19.
+        [Fact]
+        public Task The_menu_shows_the_key_each_command_is_bound_to() => Session.Dispatch(() =>
+        {
+            var window = StartGame();
+
+            Assert.Equal(Key.F5, Item(window, "SaveStateMenuItem").Shortcut!.Key);
+            Assert.Equal(Key.F8, Item(window, "LoadStateMenuItem").Shortcut!.Key);
+            Assert.Equal(Key.P, Item(window, "PauseMenuItem").Shortcut!.Key);
+            Assert.Equal(Key.F11, Item(window, "FullscreenMenuItem").Shortcut!.Key);
+
+            window.Close();
+        }, default);
+
+        // Showing a gesture is not binding it. MenuBar.SetMenus draws the key and binds
+        // nothing, so HotkeyBindingMap stays the only thing that dispatches it - a second
+        // binding is how a menu ends up advertising a key a rebind has moved. See §4.19.
+        [Fact]
+        public Task Advertising_a_key_does_not_bind_a_second_handler_for_it() => Session.Dispatch(() =>
+        {
+            var window = StartGame();
+
+            Assert.Empty(window.KeyBindings);
 
             window.Close();
         }, default);

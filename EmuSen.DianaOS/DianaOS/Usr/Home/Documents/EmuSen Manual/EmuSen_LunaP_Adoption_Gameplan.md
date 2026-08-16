@@ -28,7 +28,7 @@ That outcome is the argument for the rest of this document: the migrations are w
 
 ## 2. Shape of the paths
 
-Four paths. **A, B and C are mutually independent** — any order, any subset, no shared files except that A and B both touch `ActiveCheatsWindow`. D depends on nothing but is the only one that is not a de-duplication. E is listed to be refused, not taken.
+Four paths, **all four now taken**. **A, B and C are mutually independent** — any order, any subset, no shared files except that A and B both touch `ActiveCheatsWindow`. D depends on nothing but is the only one that is not a de-duplication. E is listed to be refused, not taken.
 
 Each path states what deletion validates it, because a LunaP migration with nothing to delete is a rewrite wearing a migration's clothes.
 
@@ -102,7 +102,16 @@ Four sites hold a collection parallel to a `ListBox` of projected strings and re
 
 ---
 
-### Path C — Pointer and drop (`IdleCursor`, `FileDrop`)
+### Path C — Pointer and drop (`IdleCursor`, `FileDrop`) ✅ done
+
+*Taken 2026-08-16. `EmuSen_Settings_Reference.md` §4.20 and `EmuSen_Frontend_Driver.md` §3d. What it turned out to teach:*
+
+- ***The attach point carried the whole argument.*** *Mistress attaches `IdleCursor` to `GameFrame` so the pointer survives over the menu; Hotaru attaches it to the window, having no menu. That is the distinction the section below predicted a window-level flag could not make, and it held.*
+- ***`FileDrop` is not symmetric between the frontends.*** *Mistress loads inline through the same firmware prompt the picker uses. Hotaru cannot: `SwapCore` belongs to the emulation thread, so the drop sets a flag `ProcessHotkeys` drains — the shape every other non-gameplay key there already had.*
+- ***Disposal was the risk, and it is the test.*** *Removing `_idleCursor?.Dispose()` reddens exactly one test and nothing else notices.*
+
+<details>
+<summary>Original plan text</summary>
 
 **The smallest path, the only one that touches Hotaru, and the only one that adds a capability rather than removing a copy.**
 
@@ -118,9 +127,21 @@ Neither frontend accepts a dropped file — no `AllowDrop`, no `DragOver`, no `D
 
 **Hotaru's share stops here.** Its `GameWindow` is a bare `GameFrameControl` host driven by hotkeys (`GameWindow.axaml.cs:362-374`), and that is deliberate. Giving it a menu would change what it is, which is a product decision and not a migration. **This document does not propose it.**
 
+</details>
+
 ---
 
-### Path D — Hotkey discoverability
+### Path D — Hotkey discoverability ✅ done
+
+*Taken 2026-08-16. `EmuSen_Settings_Reference.md` §4.19 (corrected) and `EmuSen_Frontend_Driver.md` §3e. What it turned out to teach:*
+
+- ***The premise below was wrong, and cheaply checked.*** *`LunaAction.Shortcut` does not bind anything: `MenuBar.SetMenus` says so in its own documentation, and only `AppWindow` calls `Menus.BindShortcuts`. A menu item sets `InputGesture`, which draws a key and binds nothing. Mistress's half was therefore small — read `HotkeyBindingMap` in `SyncMenuState` — rather than the "separate piece of work" §4.19 had called it. A test asserts `window.KeyBindings` is empty, because that is the claim that actually matters.*
+- ***The prediction below held.*** *Hotaru was the larger half, as expected: the hardcoded `switch` became `HotaruHotkeys`, and a `HotkeyHelpWindow` on F12 lists it — with F12 in the table, so the list names the key that opens it.*
+- ***Discoverability is not configurability.*** *Hotaru's keys are still not rebindable, deliberately; that needs persistence, conflict detection and a config migration, all of which Mistress already has and none of which this justified.*
+- ***No LunaP feature was added.*** *A "hotkey overlay" control was considered and refused: two windows listing rows of text is not evidence of a missing control, and `ToolWindow` + `LunaTable` + `Ui.Stack` said it in existing vocabulary.*
+
+<details>
+<summary>Original plan text</summary>
 
 **The only path answering a question the first gameplan left open, and the one most likely to be deferred.**
 
@@ -133,6 +154,8 @@ Two things have changed since. `LunaAction.HelpText` exists and is described as 
 Hotaru's F1–F9 map is a hardcoded `switch` and would have to become data before it could be displayed at all. That is the larger half of this path and the reason to sequence it last.
 
 **Prediction, recorded so it can be wrong:** I expect the Mistress half to be small (a label formatter plus a refresh when the bindings window closes) and the Hotaru half to be most of the work. If that inverts, the sequencing below is wrong.
+
+</details>
 
 ---
 
@@ -151,9 +174,9 @@ The first gameplan already drew this line for the same window: *"`MainWindow` an
 ## 3. Sequencing
 
 1. ~~**Path A**, first~~ — **done**. The pattern repeated three times, not four.
-2. **Path C**, second, because it is small, independent, and the only one that touches Hotaru. Good to land while Path A's shape is still fresh.
+2. ~~**Path C**, second~~ — **done**.
 3. ~~**Path B**, third~~ — **done**, migration only. Sorting is still its own decision and has not been taken.
-4. **Path D**, last, and only if the Hotaru half is wanted — the Mistress half alone is worth little, since a menu that names its keys while the console frontend does not is half an answer to §6.
+4. ~~**Path D**, last~~ — **done**, both halves. `EmuSen_LunaP_Gameplan.md` §6's open question is answered.
 
 A, B and C are independent; nothing here forces this order except that it front-loads the strongest evidence.
 
@@ -175,5 +198,5 @@ From the first gameplan, and from the menu path that has already been taken:
 
 - ~~**Does the library list's selection reset matter?**~~ **Answered by the code, 2026-08-16**: it is load-bearing for the search-then-Enter flow, and was kept. Path A did not change it.
 - **Should the cheat table sort?** Still open. Path B made it possible (`TableKey` unset, no `Sort` on any column) and deliberately did not decide it.
-- **Should Hotaru's hotkeys become data?** Path D needs it; nothing else does. It is the largest single item in this document and the least certainly wanted.
-- **`ActionGroup.Checked` is read-only** despite LunaP 0.8.0's XML documentation describing a setter. Verified by reflection over the shipped assembly. This is an upstream doc bug and should be filed against the LunaP repository; nothing in this plan is blocked by it, because `member.IsChecked = true` does what the doc's setter claims.
+- ~~**Should Hotaru's hotkeys become data?**~~ **Done.** They are `HotaruHotkeys`. What is still open is whether they should become *rebindable*, which is a different question and needs persistence, conflict detection and a config migration.
+- ~~**`ActionGroup.Checked` is read-only**~~ **Fixed upstream 2026-08-16** (`LunaP.md` §78.1), along with two others this adoption surfaced: `Chose`'s summary (§78.2) and a `LunaTable` containing an unnamed `ListBox` (§78.4). **None of the three is in 0.8.0**, so EmuSen carries one marked bridge for the accessibility fix and nothing for the other two. They arrive on the next LunaP release.

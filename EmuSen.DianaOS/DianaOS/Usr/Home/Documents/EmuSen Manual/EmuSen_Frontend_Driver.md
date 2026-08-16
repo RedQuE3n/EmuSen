@@ -157,6 +157,30 @@ Two smaller pieces follow from the window not being a terminal: `clear` is overr
 
 The one thing headless cannot cover is `AppBuilder` itself. That was checked against the built binary instead: `--shell-window` with `DISPLAY`/`WAYLAND_DISPLAY` unset reaches `StartWithClassicDesktopLifetime` and fails in `AvaloniaX11Platform.Initialize` — proving the windowed branch runs end to end — while the same binary with no flags and no display prints the console banner and prompt as before.
 
+## 3d. The pointer, and a ROM dropped on the window
+
+*2026-08-16. `EmuSen_LunaP_Adoption_Gameplan.md` Path C; `EmuSen_Settings_Reference.md` §4.20 is the shared account, and this is Hotaru's half.*
+
+`IdleCursor` is attached to the **window**, not to a child control — Mistress attaches it to `GameFrame` so the pointer survives over its menu bar, and Hotaru has no menu bar to survive over. It is disposed from `Closing`, before `Shutdown`, because a cursor left hidden by an object nobody disposed is a pointer that never comes back.
+
+`FileDrop` cannot load the ROM itself. **`SwapCore` belongs to the emulation thread** — §2's whole argument — and it is reached from `ProcessPendingConsoleCommands` draining `HostAction.LoadCore`. A drop handler runs on the UI thread, so it sets a `volatile string?` and `ProcessHotkeys` takes it on the next tick, which is exactly the `_request*` shape every other non-gameplay key already uses. Loading it inline would race `RunFrame` the way §2 says a mutating console command would.
+
+A multi-file drag is refused before the indicator promises anything, because a folder of ROMs has no single answer.
+
+## 3e. The hotkeys are a table now, and F12 lists them
+
+*2026-08-16. `EmuSen_LunaP_Adoption_Gameplan.md` Path D. `EmuSen_LunaP_Gameplan.md` §6 listed "hotkey/keybinding help overlays — both frontends have hotkeys, neither has a UI for discovering them" as an open question; this is Hotaru's answer, and Mistress's is its menu (`EmuSen_Settings_Reference.md` §4.19).*
+
+`GameWindow.OnKeyDown` switched on `Key` directly, so the only way to find out what F7 did was to read that switch. `Input/HotaruHotkeys.cs` is now the one table — action, key, name, and whether it is held — and both the dispatch and the help window read it. That is the property worth having: **a key cannot do one thing and be described as another**, because there is one row.
+
+`HotkeyHelpWindow` is a LunaP `ToolWindow` holding a `LunaTable<Entry>` built straight from `HotaruHotkeys.All`. F12 opens it, through the same `WindowSlot` at-most-one rule `coretop -w` and `feed -w` use (§3a). **F12 is itself a row in the table**, so the list names the key that opens it — a help window findable only by already knowing its key is a help window for people who do not need it.
+
+**What this deliberately is not.** Hotaru's keys are still **not rebindable**: `HotaruKeyMap`'s own comment says there is no settings UI to drive one, and that has not changed. Making the table data was about discoverability, not configurability, and the two are separate pieces of work — a rebinding UI would need persistence, conflict detection and a migration for existing configs, all of which Mistress already has in `HotkeyBindingMap` (§`EmuSen_Settings_Reference.md` §4.3) and none of which is justified here yet. The table is, however, the shape that work would start from.
+
+Nothing was added to LunaP for this. The window is a `ToolWindow`, a `LunaTable` and `Ui.Stack` — existing vocabulary — and a "hotkey overlay" control was considered and not built, because two windows listing rows of text is not evidence of a missing control.
+
+**Test coverage.** `HotaruHotkeyTableTests`: that every action has exactly one key and every key one action, that every entry is named, that every enum member is in the table, that `IsHeld` and the table's own `Held` column agree, that the lookup agrees with the table, and that the help window lists every row **including its own** and actually lays out.
+
 ## 4. Audio output — core-agnostic drain, per-frontend sink
 
 The DSP mixing itself has been correct and complete since earlier work (`Venus_APU.md`) - `SDsp.GenerateSample` mixes all 8 voices plus echo/FIR and `AudioSettings.MasterVolume`, respecting `AudioSettings.AudioEnabled`/`Muted` (silence is still enqueued when either is off, not skipped - keeps buffer timing continuous), and enqueues interleaved 16-bit signed PCM stereo frames into `Spc700.Dsp.AudioBuffer` (a plain `Queue<short>`, capped at `AudioSettings.AudioBufferMaxSamples` - oldest samples drop once full) at `AudioSettings.SampleRate` (32kHz). What was missing for a long time was the connective piece: draining that queue into a real output device.

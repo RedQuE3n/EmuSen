@@ -58,6 +58,10 @@ namespace EmuSen.Mistress.Views
 
         private EmulatorSession? _session;
 
+        // Over the frame only, so the pointer stays visible on the menu - see §4.20.
+        private IdleCursor? _idleCursor;
+        private FileDrop? _fileDrop;
+
         // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
         private volatile bool _turboHeld;
         private volatile bool _rewindHeld;
@@ -232,8 +236,19 @@ namespace EmuSen.Mistress.Views
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
                 AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
+            // Attached to GameFrame rather than the window: "hidden over the video and
+            // visible over the toolbar" is not something a window-level flag can say.
+            _idleCursor = new IdleCursor(GameFrame);
+            _fileDrop = new FileDrop(this, paths => _ = OpenDroppedRomAsync(paths[0]))
+            {
+                Accept = paths => paths.Count == 1,
+            };
+
             Closing += (_, _) =>
             {
+                // Both hold handlers on controls that outlive this scope - see §4.20.
+                _idleCursor?.Dispose();
+                _fileDrop?.Dispose();
                 _timer?.Stop();
                 StopEmulationThread();
                 _session?.SaveSram();
@@ -364,6 +379,14 @@ namespace EmuSen.Mistress.Views
             }
         }
 
+        // The same sequence Open ROM... runs, so a dropped ROM cannot skip the
+        // firmware prompt - see EmuSen_Firmware.md §3.
+        private async Task OpenDroppedRomAsync(string path)
+        {
+            await PromptForMissingFirmwareAsync(path);
+            LoadRom(path, System.IO.Path.GetFileName(path));
+        }
+
         // Alternative to the OS file picker above - lists .smc/.sfc files
         // straight from AppSettings.RomDirectory, for anyone reloading
         // different ROMs from the same test folder repeatedly. See
@@ -379,8 +402,11 @@ namespace EmuSen.Mistress.Views
 
         private void ShowControllerBindings()
         {
-            new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings,
-                _session is null ? null : _activeConsole).Show(this);
+            var window = new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings,
+                _session is null ? null : _activeConsole);
+            // A rebind has to reach the menu, or it advertises the old key - see §4.19.
+            window.Closed += (_, _) => SyncMenuState();
+            window.Show(this);
         }
 
         private void ShowPreferences()
@@ -624,6 +650,24 @@ namespace EmuSen.Mistress.Views
             SyncMenuState();
         }
 
+        // The menu advertises the keys HotkeyBindingMap holds, and nothing else binds
+        // them - MenuBar.SetMenus draws a gesture without binding it, so a rebind moves
+        // the label and cannot leave a second binding behind. See §4.19.
+        private void ShowHotkeysOnTheMenu()
+        {
+            Gesture(_pause, HotkeyAction.TogglePause);
+            Gesture(_saveState, HotkeyAction.SaveState);
+            Gesture(_loadState, HotkeyAction.LoadState);
+            Gesture(_fullscreen, HotkeyAction.ToggleFullscreen);
+            Gesture(_closeGame, HotkeyAction.ExitToLibrary);
+        }
+
+        private void Gesture(LunaAction action, HotkeyAction bound)
+        {
+            action.Shortcut = _hotkeyBindings.ActionToKey.TryGetValue(bound, out Key key) ? new KeyGesture(key) : null;
+            action.HelpText = HotkeyBindingMap.DisplayName(bound);
+        }
+
         // Called wherever the state actually changes, not when a menu opens - see §4.12.
         private void SyncMenuState()
         {
@@ -644,6 +688,8 @@ namespace EmuSen.Mistress.Views
             _saveState.Text = $"Save _State (slot {_stateSlot})";
             _loadState.Text = $"_Load State (slot {_stateSlot})";
             _hardwareDashboard.IsEnabled = _debugTarget is not null;
+
+            ShowHotkeysOnTheMenu();
         }
 
         private int SpeedIndex(int percent)

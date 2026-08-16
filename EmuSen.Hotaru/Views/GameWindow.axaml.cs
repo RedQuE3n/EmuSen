@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Avalonia.Controls;
+using EmuSen.LunaP.Windowing;
 using Avalonia.Input;
 using Avalonia.Threading;
 using EmuSen.LunaP.Threading;
@@ -92,6 +93,14 @@ namespace EmuSen.Hotaru.Views
     public partial class GameWindow : Window, ILiveShell
     {
         private readonly ICore _core;
+
+        // The pointer gets out of the way over the game - see EmuSen_Frontend_Driver.md §4.4.
+        private IdleCursor? _idleCursor;
+        private FileDrop? _fileDrop;
+
+        // Set on the UI thread by a drop, consumed on the emulation thread by
+        // ProcessHotkeys - SwapCore may only run there. See §4.4.
+        private volatile string? _droppedRom;
 
         // The Venus-only hotkeys below need the real core; null for any other console.
         private VenusCore? Venus => _core as VenusCore;
@@ -248,7 +257,19 @@ namespace EmuSen.Hotaru.Views
 
             KeyDown += OnKeyDown;
             KeyUp += OnKeyUp;
-            Closing += (_, _) => Shutdown();
+
+            // The whole window, because the whole window is the game here.
+            _idleCursor = new IdleCursor(this);
+            // Queued rather than loaded: SwapCore belongs to the emulation thread.
+            _fileDrop = new FileDrop(this, paths => _droppedRom = paths[0]) { Accept = paths => paths.Count == 1 };
+
+            Closing += (_, _) =>
+            {
+                // A cursor left hidden by an object nobody disposed is a pointer gone for good.
+                _idleCursor?.Dispose();
+                _fileDrop?.Dispose();
+                Shutdown();
+            };
 
             _emuThread = new Thread(EmulationLoop) { IsBackground = true, Name = "EmuSen-Emulation" };
             _emuThread.Start();
@@ -357,21 +378,27 @@ namespace EmuSen.Hotaru.Views
                 return;
             }
 
-            switch (e.Key)
+            // Through the table rather than a switch on Key, so the help window and the
+            // dispatch cannot disagree about what a key does - see §4.5.
+            if (!HotaruHotkeys.TryGetAction(e.Key, out HotaruHotkey action)) return;
+
+            switch (action)
             {
-                case Key.F1: _requestSummary = true; break;
-                case Key.F2: _requestDumpOam = true; break;
-                case Key.F3: _requestScreenshot = true; break;
-                case Key.F4: _requestDebugPrompt = true; break;
-                case Key.F5: _requestSaveState = true; break;
-                case Key.F6: _requestToggleRecording = true; break;
-                case Key.F7: _requestMirrorToggle = true; break;
-                case Key.F8: CycleShaderEffect(); break; // pure UI-side (GameFrame.ActiveEffect) - no core state touched, safe to act on immediately
-                case Key.F9: _requestLoadState = true; break;
-                case Key.O: _requestDumpBackdrop = true; break;
-                case Key.P: _requestStartBgScrollTrace = true; break;
-                case Key.Tab: _turboHeld = true; e.Handled = true; break; // Handled or Avalonia steals Tab for focus traversal
-                case Key.Back: _rewindHeld = true; break;
+                case HotaruHotkey.Summary: _requestSummary = true; break;
+                case HotaruHotkey.DumpOam: _requestDumpOam = true; break;
+                case HotaruHotkey.Screenshot: _requestScreenshot = true; break;
+                case HotaruHotkey.DebugPrompt: _requestDebugPrompt = true; break;
+                case HotaruHotkey.SaveState: _requestSaveState = true; break;
+                case HotaruHotkey.ToggleRecording: _requestToggleRecording = true; break;
+                case HotaruHotkey.MirrorToggle: _requestMirrorToggle = true; break;
+                // Both are UI-side only, so they act here rather than being queued.
+                case HotaruHotkey.ShowHotkeys: DebugWindows.ShowHotkeyHelpWindow(); break;
+                case HotaruHotkey.CycleShader: CycleShaderEffect(); break; // pure UI-side (GameFrame.ActiveEffect) - no core state touched, safe to act on immediately
+                case HotaruHotkey.LoadState: _requestLoadState = true; break;
+                case HotaruHotkey.DumpBackdrop: _requestDumpBackdrop = true; break;
+                case HotaruHotkey.StartBgScrollTrace: _requestStartBgScrollTrace = true; break;
+                case HotaruHotkey.FastForward: _turboHeld = true; e.Handled = true; break; // Handled or Avalonia steals Tab for focus traversal
+                case HotaruHotkey.Rewind: _rewindHeld = true; break;
             }
         }
 
@@ -385,10 +412,12 @@ namespace EmuSen.Hotaru.Views
                 return;
             }
 
-            switch (e.Key)
+            if (!HotaruHotkeys.TryGetAction(e.Key, out HotaruHotkey action)) return;
+
+            switch (action)
             {
-                case Key.Tab: _turboHeld = false; break;
-                case Key.Back: _rewindHeld = false; break;
+                case HotaruHotkey.FastForward: _turboHeld = false; break;
+                case HotaruHotkey.Rewind: _rewindHeld = false; break;
             }
         }
 
@@ -635,6 +664,13 @@ namespace EmuSen.Hotaru.Views
                     Console.WriteLine();
                     if (RunDebugPrompt()) return true;
                 }
+            }
+
+            // A ROM dropped on the window, taken on this thread because SwapCore's is this one.
+            if (_droppedRom is { } dropped)
+            {
+                _droppedRom = null;
+                SwapCore(dropped);
             }
 
             // Every frame, cheap no-op when not recording.

@@ -2160,6 +2160,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    interpreter from scratch, the same 'shell-level state resets on reload'\n" +
                 "    convention 'core' already documents - it's not just the current session\n" +
                 "    that loses its variables/history on a ROM swap, all of them do.\n\n" +
+                "    Two things deliberately SURVIVE that rebuild: a session's name, and the\n" +
+                "    account it is running as (see 'su'). The account is carried forward\n" +
+                "    explicitly rather than left to reset, because a ROM swap dropping every\n" +
+                "    session back to root would be a silent privilege escalation the moment a\n" +
+                "    permission system actually enforces anything. For the same reason a new\n" +
+                "    session inherits whoever created it rather than starting as root, so\n" +
+                "    'tmux new' can never be a way back to an account you left.\n\n" +
                 "    Not available everywhere: a host needs to opt in by handing\n" +
                 "    DianaOSInterpreter.CreateDefault a DianaOSSessionManager. Where it IS\n" +
                 "    available, whether switching sessions is itself safe against a\n" +

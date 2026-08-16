@@ -4,8 +4,7 @@ using System.Linq;
 
 namespace EmuSen.DianaOS.DianaOS.Var
 {
-    // Per-address read/write/execute tallies for one space - see `man counters`.
-    // Core-agnostic: fed from the same observer seams WatchRegistry uses.
+    // Per-address tallies, fed from WatchRegistry's own seams - see `man counters`.
     public class AccessCounterRegistry
     {
         private string _space = string.Empty;

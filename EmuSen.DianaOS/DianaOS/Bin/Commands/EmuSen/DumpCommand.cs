@@ -8,13 +8,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Writes a raw byte-for-byte capture of an address range to disk -
-    // the "take this away and look at it in a hex editor / diff it
-    // against a known-good ROM's dump / feed it to some other tool"
-    // counterpart to `snapshot` (which keeps a capture in-memory for
-    // `diff` against a later state). Deliberately raw bytes, no header
-    // or metadata - a hex editor or `xxd` should be able to open the
-    // output directly.
+    // Raw bytes with no header, so a hex editor opens the output directly - see §3.11.
     public class DumpCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "dump";
@@ -33,10 +27,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             int len = ParseHex(parts[3]);
             string file = parts[4];
 
-            // Same HasSideEffects guard as snapshot/search - a bulk read
-            // over a live-hardware-routed space (SNES's CpuBus) could
-            // disturb real emulation state (RDNMI clearing the pending-
-            // NMI flag on read, etc.).
+            // The same HasSideEffects refusal as search and snapshot - see §3.1a.
             if (space.HasSideEffects)
             {
                 return $"{space.Name} can have real side effects on read (live hardware registers) - refusing a bulk dump there. Try WRAM (or another plain-memory space) instead.";

@@ -9,19 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `cd` - changes Environment.CurrentDirectory, the process-wide
-    // cwd `pwd` reads and every relative path elsewhere in this shell
-    // (redirection, `ls`, `mv`, `dump`/`load`, ...) resolves against.
-    // Process-wide rather than a per-DianaOSInterpreter field deliberately:
-    // this shell doesn't model real subshell process isolation anywhere
-    // else either (a `$(...)` subshell shares this same interpreter's
-    // notion of "the filesystem" with its parent), so there's no existing
-    // boundary a shell-private cwd would actually respect.
-    //
-    // Walled into DianaOSSandbox.RootDirectory (see that file's own
-    // comment) - can't cd above it no matter how many "cd .."s or an
-    // absolute path outside it are used. No-arg `cd` goes to the current
-    // account's own home directory - see `man cd`/`man hier`.
+    // Process-wide cwd, walled to the sandbox - see `man cd` and `man hier`.
     public class CdCommand : IDianaOSCommand
     {
         private readonly Func<DianaOSInterpreter> _self;

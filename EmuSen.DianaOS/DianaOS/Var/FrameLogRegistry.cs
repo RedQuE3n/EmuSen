@@ -9,8 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Var
 {
-    // One recorded per-frame sample - a frame number and whatever value a
-    // registered entry read at that frame's boundary.
+    // One per-frame sample: a frame number and what a registered entry read.
     public readonly struct FrameLogSample
     {
         public long FrameCount { get; }
@@ -33,28 +32,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public const int MaxStoredSamples = 3600; // ~60 seconds at 60fps - generous without being unbounded
     }
 
-    // Frame-scoped value logging: unlike WatchRegistry (which records
-    // whenever a matching memory access actually happens), this samples a
-    // fixed set of addresses once per frame regardless of whether they
-    // were touched - for tracking a value's evolution over time (a
-    // counter, a state machine variable, a position) even when it never
-    // triggers a read/write watch because the game just holds it steady
-    // between updates, or updates it through a code path this session's
-    // watches don't happen to cover.
-    //
-    // Deliberately does NOT print live the way WatchRegistry does - a
-    // watch fires on a comparatively rare event (a specific write/read),
-    // so printing every match keeps the existing "play, then grep the
-    // console log" workflow useful. A frame log fires 60 times a second by
-    // design; printing every sample would flood the console for no
-    // benefit. Samples are stored silently and pulled on demand via
-    // `framelog show`, the same query-on-demand half of the workflow
-    // WatchRegistry's GetEvents already provides.
-    //
-    // Core-agnostic on purpose, same as WatchRegistry - lives under
-    // Shell/, not Cores/Nintendo/Venus - SNES/. A future core's IDebugTarget would
-    // own its own instance and feed it from its own per-frame boundary,
-    // whatever that core's equivalent of MemoryBus.FrameObserver is.
+    // Sampled every frame regardless of access, and stored silently rather than printed - see §3.13.
     public class FrameLogRegistry
     {
         private readonly List<FrameLogEntry> _entries = new();
@@ -89,11 +67,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             _entries.FirstOrDefault(x => x.Id == id)?.Samples.Clear();
         }
 
-        // Called once per frame (see MemoryBus.FrameObserver / VenusCore.
-        // RunFrame) with a way to read a (space, address, width) value -
-        // a delegate rather than an IDebugTarget reference, so this class
-        // doesn't need to know that interface exists, matching
-        // WatchRegistry's own "generic contextFactory callback" approach.
+        // A delegate rather than an IDebugTarget, so this class need not know that interface.
         public void RecordFrame(long frameCount, Func<string, int, int, long> readValue)
         {
             foreach (var e in _entries)

@@ -23,40 +23,17 @@ namespace EmuSen.DianaOS.DianaOS.Lib
     {
         public List<Token> Tokens = new();
 
-        // True when the input ends mid-quote or mid-"$(...)" - the caller
-        // (DianaOSInterpreter.Submit) should hold the raw text and wait for
-        // another line rather than trying to parse an incomplete token
-        // stream, the same way bash's own interactive prompt shows a
-        // secondary "> " prompt until a quote/substitution actually closes.
+        // "Not wrong, just not finished" - the caller holds the text and waits - see §3.17b.
         public bool NeedsMoreInput;
     }
 
-    // Turns raw shell text into a token stream. Understands bash's own
-    // quoting rules (single quotes: fully literal; double quotes: still
-    // expand $VAR/$(...) but suppress word-splitting later; unquoted:
-    // expand AND word-split) well enough to tag every character correctly
-    // for DianaOSInterpreter.ExpandWord to act on afterward - the lexer
-    // itself never expands anything, it just records what's quoted and
-    // what's a variable/substitution reference versus literal text.
-    //
-    // Deliberately doesn't implement: heredocs (`<<`), backtick command
-    // substitution (only `$(...)`, the modern/preferred form), brace
-    // expansion (`{a,b}`), tilde expansion, arithmetic expansion
-    // (`$((...))` - a literal `$((` lexes as `$(` immediately followed by
-    // a nested, mostly-inert `(...)`, which will not do what a bash user
-    // expects), or background jobs (`&`) - a bare unpaired `&` throws a
-    // clear "not supported" error rather than silently misbehaving.
+    // Tags quoting and references; never expands anything itself - see EmuSen_Debugging_Tools_Reference_v5.md §3.17b.
     public class Lexer
     {
         private readonly string _src;
         private int _pos;
 
-        // Tracks whether we're inside "..." at the top level of quote
-        // nesting - single quotes and "$(...)" have their own fully
-        // self-contained scanning (see ReadSingleQuoted/ReadCommandSub)
-        // and don't need this, but "$VAR" inside "..." needs to know it's
-        // still "quoted" for word-splitting purposes even though `$` also
-        // triggers expansion.
+        // "$VAR" inside "..." is still quoted for word-splitting even though $ expands.
         private bool _inDoubleQuote;
 
         private readonly List<Token> _tokens = new();
@@ -237,9 +214,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
             return true;
         }
 
-        // Handles "$NAME", "${NAME}", "$?", and "$(...)" - `quoted` is
-        // whether this reference sits inside "..." (still expanded, just
-        // not later word-split).
+        // Handles $NAME, ${NAME}, $? and $(...); `quoted` means expanded but not split.
         private bool ReadDollar(bool quoted)
         {
             int dollarPos = _pos;
@@ -275,11 +250,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
                 }
                 string inner = _src.Substring(start, _pos - start);
                 _pos++; // closing )
-                // Flush whatever plain text was buffered so far (e.g. the
-                // "Y=" in "Y=$(echo x)") BEFORE appending this part
-                // directly - otherwise it would land in _currentWordParts
-                // ahead of text that's actually supposed to precede it,
-                // once EndWord() finally flushes the buffer afterward.
+                // Flush buffered plain text first, or it lands after the part that should follow it.
                 EnsureWordExists();
                 FlushLiteralBuf();
                 _currentWordParts!.Add(new WordPart { Kind = PartKind.CommandSubstitution, Text = inner, Quoted = quoted });
@@ -323,8 +294,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
                 return true;
             }
 
-            // Bare '$' not followed by a valid name/'('/'{'/'?' - bash
-            // treats it as a literal dollar sign.
+            // A bare '$' with no valid name/'('/'{'/'?' is a literal dollar sign, as in bash.
             AppendLiteralChar('$', quoted);
             return true;
         }
@@ -348,10 +318,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
             if (_literalBuf.Length > 0 && _literalBufQuoted != quoted) FlushLiteralBuf();
             _literalBufQuoted = quoted;
             _literalBuf.Append(text);
-            // An empty single-quoted string ('') must still register as
-            // real (if empty) word content - handled by EnsureWordExists
-            // above already having created _currentWordParts, so the word
-            // exists even though nothing gets appended to _literalBuf here.
+            // An empty '' is still real word content, which is what makes it one argument - see §3.17a.
         }
 
         private void FlushLiteralBuf()

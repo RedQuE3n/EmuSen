@@ -19,29 +19,19 @@ namespace EmuSen.DianaOS.DianaOS.Var
     {
         public IReadOnlyList<ChtCheat> Cheats { get; init; }
 
-        // Entries that were present but could not be turned into writes -
-        // an undecodable code, a cheat_type of 0, a malformed number.
+        // Entries present but unusable - an undecodable code, type 0, a malformed number.
         public int Skipped { get; init; }
     }
 
-    // RetroArch's .cht format - the one the libretro cheat database ships
-    // in. See `man cheat` for what maps onto what and what deliberately
-    // does not.
-    //
-    // Core-agnostic: the only core-specific part of the format is the
-    // `cheatN_code` string, whose layout differs per system, and that is
-    // decoded through the same ICheatCodeCodec seam `cheat add` already
-    // uses rather than being hardcoded here.
+    // RetroArch's format; only the code string is core-specific, decoded through a codec - see `man cheat`.
     public static class ChtFile
     {
-        // RetroArch's memory_search_size enum: 0-2 are sub-byte, 3-5 are
-        // 1, 2 and 4 bytes.
+        // RetroArch's memory_search_size: 0-2 are sub-byte, 3-5 are 1, 2 and 4 bytes.
         private const int SizeByte = 3;
         private const int SizeWord = 4;
         private const int SizeDword = 5;
 
-        // RetroArch's cheat_type enum. 0 means the entry exists but does
-        // nothing, which is not a cheat we can add.
+        // RetroArch's cheat_type; 0 means the entry exists but does nothing.
         private const int TypeDisabled = 0;
         private const int TypeSet = 1;
         private const int TypeIncrease = 2;
@@ -86,8 +76,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return true;
         }
 
-        // The "retro" handler's explicit fields. Every number here is
-        // DECIMAL in a .cht file, unlike the code string's hex.
+        // Every number in these fields is decimal, unlike the code string's hex.
         private static List<CheatWrite>? ReadExplicit(Dictionary<string, string> fields, string prefix, string spaceName)
         {
             int cheatType = Int(fields, prefix + "cheat_type", TypeSet);
@@ -154,9 +143,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return writes;
         }
 
-        // Writes the retro-handler form, which round-trips every field the
-        // model has. RomPatch cheats have no equivalent in RetroArch's
-        // model and are the caller's business to filter - see `man cheat`.
+        // RomPatch has no equivalent in RetroArch's model; filtering is the caller's - see `man cheat`.
         public static string Write(IReadOnlyList<ChtCheat> cheats)
         {
             var sb = new StringBuilder();
@@ -166,9 +153,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             {
                 ChtCheat cheat = cheats[i];
 
-                // One .cht entry holds one write, so a multi-write cheat's
-                // extra writes ride along in the code string the way
-                // RetroArch's own multi-code entries do.
+                // One entry holds one write, so extra writes ride the code string as RetroArch's do.
                 CheatWrite first = cheat.Writes.Count > 0 ? cheat.Writes[0] : default;
                 string prefix = $"cheat{i}_";
 
@@ -206,9 +191,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
         private static string Escape(string text) => text.Replace("\"", "'");
 
-        // key = value, one per line, values optionally quoted. Unknown keys
-        // are kept rather than rejected - a newer RetroArch field this build
-        // does not read must not make the whole file unparseable.
+        // Unknown keys are kept: a newer RetroArch field must not break the whole file.
         private static Dictionary<string, string> ReadFields(string text)
         {
             var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

@@ -11,8 +11,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public int Skipped { get; init; }
     }
 
-    // The one .cht-into-a-registry path, shared by `cheat import`, `cheat db
-    // load` and Mistress's Cheat Database window - see `man cheat`.
+    // The one .cht-into-a-registry path, shared by both commands and Mistress - see `man cheat`.
     public static class CheatImport
     {
         // Where a decoded RAM poke lands when a codec names no space of its own.

@@ -9,11 +9,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Compares a saved snapshot (see SnapshotCommand, which shares this
-    // command's SnapshotStore) against that same space's CURRENT
-    // contents and reports every address that's different now - doesn't
-    // touch or replace the saved snapshot, so the same baseline can be
-    // diffed again later against a further-along state.
+    // Never replaces the saved snapshot, so one baseline can be diffed again later - see §3.10.
     public class DiffCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "diff";

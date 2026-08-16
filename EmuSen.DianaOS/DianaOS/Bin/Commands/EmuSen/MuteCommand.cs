@@ -5,13 +5,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Solo/mute one audio channel for isolation testing - see
-    // IDebugTarget.SetChannelMuted's own comment on why muting doesn't
-    // pause that channel's own playback/envelope state, only excludes it
-    // from the final mix. Pairs with `channels` (this file's sibling) and
-    // `audiodump`/GetAudioSamples: mute every voice except one suspect,
-    // dump audio, and hear (or measure) exactly what that voice produces
-    // in isolation, without needing a separate solo-rendering pipeline.
+    // Muting excludes a voice from the mix without pausing its state - see §3.1a.
     public class MuteCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "mute";

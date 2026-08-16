@@ -7,22 +7,10 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Var
 {
-    // The shared state `history` reads and DianaOSInterpreter.Submit writes
-    // to - kept as its own tiny class (rather than a plain List<string>
-    // field directly on DianaOSInterpreter) specifically so a future
-    // interactive frontend (see ConsoleLineReader) can also read it
-    // directly for up/down-arrow recall, without needing a back-reference
-    // to the whole interpreter just to see what's been typed.
+    // Its own class so a frontend can read it without a back-reference to the interpreter.
     public class CommandHistory
     {
-        // Bash-like: every submitted, non-empty line is recorded verbatim
-        // (the fully-reassembled text of a multi-line block, once it's
-        // complete - not one entry per line typed while a block was still
-        // being buffered), including repeats and `history` itself - no
-        // dedup, matching plain readline's default behavior. Capped so a
-        // long headless `--commands` script (which can easily run
-        // thousands of lines) doesn't grow this without bound for the
-        // life of the process.
+        // Verbatim and undeduplicated as readline is, but capped against a long script.
         private const int MaxEntries = 500;
 
         private readonly List<string> _entries = new();

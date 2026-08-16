@@ -8,11 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // `useradd` - see `man useradd`. Root-gated - the one deliberate,
-    // narrow preview of real permissions this pass adds (account
-    // management itself, not a general per-command permission
-    // framework - see DianaOSUserRegistry's own header comment on what's
-    // still future work).
+    // Root-gated - the one narrow preview of real permissions - see `man useradd`.
     public class UseraddCommand : IDianaOSCommand
     {
         private readonly Func<DianaOSInterpreter> _self;

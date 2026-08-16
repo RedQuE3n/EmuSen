@@ -8,13 +8,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // The write-side counterpart to DumpCommand - takes a raw byte file
-    // (typically one `dump` just produced, hand-edited in a hex editor,
-    // or captured some other way) and pokes it back into a memory space
-    // starting at a given address. Useful for reproducing a state that's
-    // easier to describe as "this file's bytes at this address" than as
-    // a sequence of individual `write` commands, or for restoring a
-    // `dump`ped range after poking around with `write`.
+    // The write-side counterpart to `dump` - see §3.11.
     public class LoadCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "load";

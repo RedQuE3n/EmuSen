@@ -11,19 +11,10 @@ using EmuSen.Galaxia.Library;
 
 namespace EmuSen.DianaOS.DianaOS.Etc
 {
-    // Confines every real-filesystem-touching shell command (cd, ls, mv,
-    // awk's file argument, wc's file argument, redirection) to this
-    // project's own directory tree. Deliberately a "walled garden," not a
-    // general security boundary - nothing here defends against a hostile
-    // ROM or a deliberately adversarial shell script, and it isn't meant
-    // to; it exists so an ordinary `cd ../../..` or `mv foo ../../bar`
-    // can't wander this shell off the project entirely, since this shell
-    // was only ever meant to poke around this project's own files.
+    // A walled garden, not a security boundary - see `man hier`.
     public static class DianaOSSandbox
     {
-        // The three roots this shell can have, and how each is found: see `man hier`.
-        // Root discovery itself lives in EmuSen.Galaxia, which sits below this
-        // project - see EmuSen_Config_Reference.md §1.1 for why that direction.
+        // Root discovery lives in Galaxia, below this project - see EmuSen_Config_Reference.md §1.1.
         public const string PublishedRootDirName = ConfigRoot.PublishedRootDirName;
 
         // Written to a published tree's root by DianaOSPublishLayout.targets.

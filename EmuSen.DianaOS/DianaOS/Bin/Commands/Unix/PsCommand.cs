@@ -8,11 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // `ps`/`jobs` - see `man ps`. The read-only counterpart to `kill`: lists
-    // every breakpoint/watch/session as one unified table, using exactly
-    // the same "bp<N>"/"watch<N>"/<session name> ids `kill` itself parses -
-    // this command's whole reason to exist is producing ids `kill` can
-    // consume unchanged, copy-pasted straight off a line here.
+    // Exists to print ids `kill` can consume unchanged - see `man ps`.
     public class PsCommand : IDianaOSCommand
     {
         private readonly DianaOSSessionManager? _sessions;

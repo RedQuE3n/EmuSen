@@ -59,8 +59,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         public int HandleCount { get; init; }
         public int AssemblyCount { get; init; }
 
-        // GCMemoryInfo describes the LAST collection, so it is all zeroes
-        // until one happens - see `man vstop`.
+        // GCMemoryInfo describes the last collection, so it is zero until one happens - see `man vstop`.
         public bool HasGcData => Gen0Collections + Gen1Collections + Gen2Collections > 0;
 
         // Percent of the managed heap that is dead space the GC has not given back.
@@ -75,8 +74,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
             MaxWorkerThreads > 0 ? Math.Min(100.0, ThreadPoolThreads * 100.0 / MaxWorkerThreads) : 0;
     }
 
-    // Takes readings of the runtime; every counter that is a rate needs two
-    // of them, so this holds the previous one - see `man vstop`.
+    // A rate needs two readings, so the previous one is held here - see `man vstop`.
     public sealed class RuntimeSampler
     {
         private readonly Process _process = Process.GetCurrentProcess();
@@ -89,8 +87,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         private long _lastCompletedWorkItems;
         private int _lastTotalCollections;
 
-        // Nothing in here may throw: a dashboard that crashes the shell over
-        // an unreadable counter is worse than one showing a zero.
+        // Nothing here may throw: a dashboard that kills the shell is worse than a zero.
         public RuntimeSnapshot Sample()
         {
             TimeSpan elapsed = _clock.Elapsed;
@@ -122,8 +119,7 @@ namespace EmuSen.DianaOS.DianaOS.Lib
                 ProcessId = Get(() => Environment.ProcessId, 0),
                 Uptime = Get(() => DateTime.Now - _process.StartTime, TimeSpan.Zero),
 
-                // Divided by core count so 100% means "every core busy", the
-                // scale htop's own aggregate CPU meter uses.
+                // Divided by core count, so 100% means every core busy - htop's aggregate scale.
                 CpuPercent = _primed && seconds > 0
                     ? Math.Clamp((cpuTime - _lastCpuTime).TotalSeconds / seconds * 100.0 / Math.Max(1, Environment.ProcessorCount), 0, 100)
                     : 0,

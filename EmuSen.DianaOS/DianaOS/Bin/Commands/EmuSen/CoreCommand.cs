@@ -9,23 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Which console a ROM belongs to, and what file extensions it's
-    // expected to have - a display name plus an extension allowlist, both
-    // genuinely core-agnostic (same reasoning IDebugTarget itself stays
-    // agnostic) despite living alongside DianaOS's other, mostly SNES-
-    // touching commands. Trying to load, say, a `.nes` file against
-    // `venus` is a clear user error worth catching here rather than
-    // handing bytes that aren't really an SNES ROM to `Cartridge`, which
-    // has no format validation of its own at all.
-    // CheatSystems names the libretro cheat-database folders this core can
-    // actually use ("Nintendo - Super Nintendo Entertainment System"), which
-    // is what lets `cheat db prune` stay agnostic: it asks the registry what
-    // is supported and drops the rest, so a second core is one entry here
-    // rather than an edit to the pruner. Empty means "claims nothing", and a
-    // registry where every core claims nothing prunes nothing rather than
-    // everything - see EmuSen_Settings_Reference.md §4.16.
-    // ConsoleName/Manufacturer/ReleaseYear exist for grouping and ordering a
-    // per-console UI - see EmuSen_Input.md §5.1.
+    // A display name plus an extension allowlist, both core-agnostic - see §3.
     public sealed record CoreDescriptor(string DisplayName, string[] Extensions, string[]? CheatSystems = null,
         string? ConsoleName = null, string Manufacturer = "", int ReleaseYear = 0)
     {
@@ -37,8 +21,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 
         public IReadOnlyList<string> CheatSystemNames => CheatSystems ?? Array.Empty<string>();
 
-        // Every folder name any core in <registry> claims, deduplicated - one
-        // core registered under several aliases must not count twice.
+        // One core under several aliases must not count its folders twice.
         public static IReadOnlyCollection<string> SupportedCheatSystems(IEnumerable<CoreDescriptor> registry)
         {
             var systems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -50,26 +33,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         }
     }
 
-    // `core <corename> <path>` - swaps (or, on a frontend that has no
-    // other way to load one at all, loads) the running ROM. Validates
-    // exactly like EmuSen.Hotaru/Program.cs's own TryResolveCoreCommand,
-    // which backs RunStandaloneShell's pre-window `core` handling and
-    // deliberately stays a separate, untouched code path (see that
-    // method's own comment) - RunStandaloneShell runs before any
-    // VenusCore/window exists at all, so it has nothing to swap yet and
-    // needs to hand a validated path back up to Main instead of emitting
-    // a HostAction. This class is for the case that method can't cover:
-    // reloading an ALREADY-RUNNING session, which needs to reach back out
-    // through DianaOSResult's own HostAction.LoadCore escape hatch (see
-    // that type's own comment) since a command can't otherwise change
-    // its caller's control flow.
-    //
-    // The registry is constructor-injected (Mechanism A, same shape as
-    // CoretopCommand's own openWindow delegate) rather than owned here,
-    // since which concrete ICore to construct for a given ROM is exactly
-    // the kind of frontend-owned decision EmuSen.DianaOS itself stays
-    // agnostic about on purpose - this class only ever sees whatever
-    // registry its caller hands it.
+    // For reloading an already-running session, which needs HostAction.LoadCore - see §3.3b.
     public class CoreCommand : IDianaOSCommand
     {
         private readonly IReadOnlyDictionary<string, CoreDescriptor> _registry;

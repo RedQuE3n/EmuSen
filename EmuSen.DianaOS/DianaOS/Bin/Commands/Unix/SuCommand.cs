@@ -8,11 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // `su` - see `man su`. Switches THIS shell's own active account -
-    // real `su` semantics for the "no argument" case (become root), but
-    // deliberately NOT gated by DianaOSUserRegistry's stored password
-    // hash (see that type's own header comment on why - no enforcement
-    // exists anywhere yet, this is Unix flavor, not access control).
+    // Unix flavour, not access control: the stored hash gates nothing - see `man su`.
     public class SuCommand : IDianaOSCommand
     {
         private readonly Func<DianaOSInterpreter> _self;

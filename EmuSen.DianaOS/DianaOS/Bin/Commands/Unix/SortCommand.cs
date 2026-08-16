@@ -8,11 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `sort` - sorts input lines. Deliberately minimal: no `-u`
-    // (that's `uniq`'s job - pair them, `sort | uniq`, the same way real
-    // shell usage does before reaching for `sort -u` as a shortcut), no
-    // field/key selection (`-k`), no locale-aware collation - ordinal
-    // string comparison, or numeric with `-n`.
+    // No -u: that is `uniq`'s job, paired as real shell usage does - see §3.17.
     public class SortCommand : IDianaOSCommand
     {
         public string Name => "sort";

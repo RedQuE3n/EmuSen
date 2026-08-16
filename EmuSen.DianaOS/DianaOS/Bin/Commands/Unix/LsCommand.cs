@@ -10,16 +10,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `ls` - lists a real directory's entries. Deliberately scoped
-    // down from real ls: no multi-column terminal-width layout (one entry
-    // per line always, since output here is a text pane/pipe, not a live
-    // terminal that benefits from columns), and `-l` prints a simplified
-    // fixed set of fields (type, size, last-write time, name) rather than
-    // real ls's full permission-bits/owner/group/link-count listing -
-    // this project has no concept of file permissions or ownership to
-    // show (see this shell's own header comment on why permissions are
-    // out of scope entirely). Walled to DianaOSSandbox.RootDirectory - see
-    // that file's own comment.
+    // One entry per line, and no permissions to show - see §3.17.
     public class LsCommand : IDianaOSCommand
     {
         public string Name => "ls";
@@ -50,8 +41,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
                 return DianaOSResult.Fail($"ls: '{path}' is outside the project sandbox ({DianaOSSandbox.RootDirectory})");
             }
 
-            // A single file path (not a directory) is listed as itself,
-            // matching real `ls somefile`, rather than treated as an error.
+            // A single file path lists as itself, matching real `ls somefile`.
             if (File.Exists(resolved))
             {
                 return FormatEntry(Path.GetDirectoryName(resolved) is { Length: > 0 } dir ? dir : ".", Path.GetFileName(resolved), longFormat);

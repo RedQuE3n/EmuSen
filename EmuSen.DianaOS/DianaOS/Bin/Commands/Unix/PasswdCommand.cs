@@ -7,14 +7,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // `passwd` - see `man passwd`. Stores a hash for a future permission
-    // system to check against (see DianaOSUserRegistry's own header
-    // comment) - nothing reads it for gating yet, `su` in particular does
-    // NOT consult it. No masked/interactive prompt (no reliable blocking
-    // read exists across every host this shell runs under - a real
-    // terminal, a GUI TextBox-driven console, a headless test) - the new
-    // password is just a plain trailing argument, same "no interactive-
-    // only path required" shape `bp add`/`watch add` already use.
+    // Stores a hash nothing gates on yet, and takes it as a plain argument - see `man passwd`.
     public class PasswdCommand : IDianaOSCommand
     {
         private readonly Func<DianaOSInterpreter> _self;

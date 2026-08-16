@@ -9,16 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // `kill` - see `man kill`. One verb that removes a breakpoint, a watch,
-    // or a tmux session, dispatching on the shape of <id> exactly as `ps`
-    // prints it ("bp<N>"/"watch<N>"/a session name) - routes straight to
-    // whichever registry already owns that kind of thing (BreakpointRegistry/
-    // WatchRegistry/DianaOSSessionManager) rather than reimplementing any of
-    // their own removal logic (including DianaOSSessionManager's "can't kill
-    // the only remaining session" guard and its current-session hand-off).
-    // Doesn't replace `bp remove`/`watch remove`/`tmux kill` - those still
-    // work exactly as before - it's just a single memorable verb that
-    // doesn't require knowing which of the three sub-shells owns a given id.
+    // One verb that dispatches on the shape of the id `ps` printed - see `man kill`.
     public class KillCommand : IDianaOSCommand
     {
         private readonly DianaOSSessionManager? _sessions;

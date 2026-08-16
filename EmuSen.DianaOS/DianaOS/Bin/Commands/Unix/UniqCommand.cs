@@ -7,11 +7,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `uniq` - collapses ADJACENT duplicate lines only, same real
-    // semantic as bash's own uniq (it does not globally deduplicate) -
-    // pipe through `sort` first for that: `regs | sort | uniq`. `-c`
-    // prefixes each remaining line with how many consecutive times it
-    // repeated, matching real uniq's own column format.
+    // Adjacent duplicates only, as real uniq; sort first for a global dedup - see §3.17.
     public class UniqCommand : IDianaOSCommand
     {
         public string Name => "uniq";

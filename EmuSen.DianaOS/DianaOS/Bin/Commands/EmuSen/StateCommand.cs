@@ -7,21 +7,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Save/load emulator state - promoted from being a hand-rolled string
-    // match inside EmuSen.Hotaru's own RunDebugPrompt (and, before this,
-    // never reachable from EmuSen.Mistress's console at all, only its
-    // Save/Load State menu items) into a real, shared IDianaOSCommand, so
-    // DianaOS's own registry is genuinely "everything you can do" rather
-    // than "everything except this."
-    //
-    // Doesn't touch IDebugTarget at all - a save/load state operation acts
-    // on the concrete ICore a frontend is driving, not on the core-
-    // agnostic debug-inspection surface IDebugTarget models, so this takes
-    // save/load/defaultPath as constructor-injected delegates instead (the
-    // same Mechanism-A shape PauseCommand/CoretopCommand already use for
-    // "this needs to reach outside IDebugTarget entirely"). Each frontend
-    // wires its own ICore.SaveState/LoadState (or equivalent session
-    // wrapper) directly - no frontend-specific subclass needed.
+    // Acts on the concrete core, so it takes delegates rather than a target - see §3.3b.
     public class StateCommand : IDianaOSCommand
     {
         private readonly Action<string> _save;

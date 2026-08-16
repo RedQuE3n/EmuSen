@@ -9,10 +9,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Locates a byte *sequence* in a memory space - `search` only ever
-    // matches one 1/2/4-byte scalar, so tracking a block of bytes (a tile's
-    // 32 bytes, a decompressed buffer, a string) back to where it came from
-    // had no tool - see EmuSen_Debugging_Tools_Reference_v5.md §3.25.
+    // Finds a byte sequence, which `search`'s scalar match cannot - see §3.25.
     public class MemFindCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "memfind";
@@ -28,15 +25,13 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             if (parts.Length < 3) return "Usage: memfind <space> <bytes> [<max>]";
             IDebugMemorySpace space = FindSpace(target, parts[1]);
 
-            // Same refusal as `search`/`dump`: reading a live-hardware space
-            // byte by byte can change real emulation state.
+            // The same refusal as `search` and `dump` - see §3.1a.
             if (space.HasSideEffects)
             {
                 return $"{space.Name} can have real side effects on read (live hardware registers) - refusing a bulk scan there. Try WRAM (or another plain-memory space) instead.";
             }
 
-            // Everything between the space and an optional trailing count is
-            // pattern, so "memfind VRAM 00 FF 11" and "memfind VRAM 00FF11" both work.
+            // So "memfind VRAM 00 FF 11" and "memfind VRAM 00FF11" both work.
             int max = 20;
             var patternWords = new List<string>(parts.Skip(2));
             if (patternWords.Count >= 2 && int.TryParse(patternWords[^1], out int parsedMax) && parsedMax > 0)

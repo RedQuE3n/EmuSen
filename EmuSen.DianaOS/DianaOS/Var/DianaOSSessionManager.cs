@@ -73,20 +73,7 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return true;
         }
 
-        // Rebuilds every session's interpreter in place (same names, same
-        // which-one-is-current), discarding each one's own variables/
-        // history - for a host whose live target changed out from under
-        // every session at once (a ROM swap - see `man core`/`man tmux` on
-        // why a DianaOSInterpreter can't just be repointed instead).
-        // buildInterpreter is called once per existing session, in the
-        // same order Sessions reports them today.
-        //
-        // CurrentUser DOES survive this rebuild (unlike variables/
-        // history) - explicitly carried forward alongside each session's
-        // Name, same shape Name's own survival already uses. A ROM swap
-        // resetting every session back to root would be a silent
-        // privilege escalation once a future permission system actually
-        // enforces what a non-root account can do (see `man su`).
+        // Name and account survive the rebuild; variables and history do not - see `man tmux`.
         public void RebuildAll(Func<DianaOSInterpreter> buildInterpreter)
         {
             string? currentName = _current?.Name;

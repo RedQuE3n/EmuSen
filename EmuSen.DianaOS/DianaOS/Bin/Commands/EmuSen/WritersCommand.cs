@@ -7,23 +7,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // "Who writes this address" - scans a range of code for instructions
-    // statically storing to <addr>, the store-side counterpart to
-    // `callers`. Motivated directly by the Yoshi/coin/block investigation
-    // hitting a wall: watching $13C6/$1FFE live showed exactly one write
-    // apiece, both from the same one-time init PC, with no write path ever
-    // reached during the triggering event itself - which only tells us
-    // what the traced *run* did, not what code exists in the ROM that's
-    // capable of writing there. `writers` answers that regardless of
-    // whether the write path was ever actually reached.
-    //
-    // Fully core-agnostic: reuses IDebugTarget.Disassemble AND
-    // IDebugTarget.ClassifyStaticReference, so it has no idea what CPU or
-    // opcode encoding it's scanning, or which addressing modes have a
-    // statically-knowable target - see that method's own comment (and
-    // SnesDebugTarget's implementation, for the SNES-specific
-    // "absolute/absolute-long only, direct-page/indexed/indirect excluded"
-    // reasoning that used to live directly in this file).
+    // Finds write paths a live watch never saw executed - see §3.12.
     public class WritersCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "writers";

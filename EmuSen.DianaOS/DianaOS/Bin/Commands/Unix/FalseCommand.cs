@@ -6,9 +6,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `false` - does nothing, always fails (exit code 1). Real use is
-    // the same as `true`'s, just the other branch (`until false; do ...
-    // done` == an infinite loop, same as `while true`).
+    // Always fails, for the other branch of `true`'s control-flow use.
     public class FalseCommand : IDianaOSCommand
     {
         public string Name => "false";

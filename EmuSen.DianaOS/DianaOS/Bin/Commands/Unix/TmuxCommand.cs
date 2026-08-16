@@ -46,12 +46,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
                 case "new":
                 {
                     string? name = args.Length > 2 ? string.Join(' ', args.Skip(2)) : null;
-                    // Captured before CreateSession switches _sessions.Current
-                    // to the new session - a new session inherits whoever
-                    // created it (see `man su`) rather than always starting
-                    // as root, so a restricted account (once a future
-                    // permission system enforces what one can do) can't
-                    // regain root just by opening a new session.
+                    // A new session inherits its creator rather than starting as root - see `man tmux`.
                     string creatingUser = _sessions.Current?.Interpreter.CurrentUser ?? "root";
                     try
                     {

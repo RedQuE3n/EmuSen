@@ -9,14 +9,7 @@ using EmuSen.Galaxia.Text;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Frame-scoped value logging - see FrameLogRegistry's own comment for
-    // how this differs from `watch` (sampled once per frame regardless of
-    // access, rather than triggered by an actual read/write). Useful for
-    // "what does this value do over time" questions a write watch can't
-    // answer on its own, e.g. a counter that's only ever written once at
-    // level start and then left alone while other code reads it every
-    // frame - a write watch would show exactly one event; a frame log
-    // shows the value at every frame in between.
+    // Sampled once per frame regardless of access, unlike `watch` - see §3.13.
     public class FrameLogCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         public string Name => "framelog";

@@ -8,8 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin
 {
-    // Standalone entry point - see `man tmux` for the session model, and
-    // IDebugTarget's own header comment for why there's no `core` here.
+    // Standalone entry point - see `man tmux` for the session model.
     class Program
     {
         static void Main(string[] args)

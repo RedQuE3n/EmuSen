@@ -8,24 +8,7 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // Arms/disarms a core's own live CPU instruction trace from the F4
-    // prompt, instead of requiring a rebuild and a boot-time flag - the
-    // countdown is instruction-count-based and starts from whenever this
-    // command runs, not from power-on, so it can be aimed at a specific
-    // moment in a play session (e.g. "right before the thing I want to
-    // see happens") rather than burning its whole budget during the
-    // boot/reset routine. Doesn't touch the IDebugTarget at all - a
-    // global settings toggle, not something scoped to a particular core
-    // instance.
-    //
-    // Genuinely core-agnostic now: arms/disarms through whichever
-    // ICpuTraceSwitch instance the host passes in (see
-    // DianaOSInterpreter.CreateDefault's cpuTraceSwitch parameter),
-    // rather than reaching into one specific core's own settings class
-    // directly - same reasoning as CheatCommand's injected codecs.
-    // Without one registered (a future core with no equivalent trace
-    // mechanism, or a standalone launch with no core at all), this just
-    // reports there's nothing to arm.
+    // Arms a core's trace through an injected switch, counted from now - see §3.3b.
     public class TraceCommand : global::EmuSen.DianaOS.DianaOS.Lib.IDianaOSCommand
     {
         private readonly ICpuTraceSwitch? _traceSwitch;

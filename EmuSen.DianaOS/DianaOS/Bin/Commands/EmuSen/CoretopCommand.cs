@@ -12,48 +12,10 @@ using static EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
-    // An htop-style live dashboard for the loaded core's "hardware" -
-    // per-subsystem load bars, CPU registers, a sprite-capacity gauge,
-    // per-voice audio meters, a live CGRAM palette swatch, and a VRAM
-    // tile-sheet preview, all refreshing on a timer until Ctrl+C.
-    //
-    // Genuinely different from every other command here, same reasoning
-    // as `nano`: everything else is "take target/args/stdin, return a
-    // string," one synchronous call. This one takes over the real
-    // console for as long as it's running, redrawing on its own clock
-    // rather than in response to anything typed - needs a real
-    // interactive terminal for the same reason `nano` does, and
-    // Console.TreatControlCAsInput=true so Ctrl+C can be read as a key
-    // (and exit the dashboard cleanly) instead of raising a process-level
-    // signal the way it normally would.
-    //
-    // `-w` opens a separate window instead, if the frontend running this
-    // supports one (see the `_openWindow` constructor parameter below) -
-    // lets a console-build user keep playing (the raw-terminal path
-    // above necessarily blocks input/rendering on this same thread)
-    // while still watching live hardware state update in its own window.
-    //
-    // Fully core-agnostic: every number on screen comes from IDebugTarget
-    // (HardwareLoad/CpuRegisters/Sprites/MaxSprites/AudioChannels/
-    // Palettes/RenderTileSheet/TilemapEntryStride) - this command has no
-    // idea it's usually looking at an SNES. A future core that doesn't
-    // model one of these (an empty HardwareLoad snapshot,
-    // a MaxSprites of 0, no palettes) just makes that section shrink or
-    // disappear, the same graceful-degradation every other command here
-    // already gives a "not modeled yet" capability.
+    // A live hardware dashboard that takes over the terminal - see EmuSen_Debugging_Tools_Reference_v5.md §3.17 and `man coretop`.
     public class CoretopCommand : IDianaOSCommand
     {
-        // Optional - lets a frontend that CAN open a real window (the
-        // console build, via a small Avalonia-backed helper of its own;
-        // EmuSen.Mistress doesn't use this constructor parameter at all,
-        // since it replaces this whole command outright - see
-        // DianaOSInterpreter.CreateDefault's own comment on
-        // extraCommands overriding a same-named default) wire up `-w`
-        // without EmuSen.DianaOS (a core-agnostic library with no UI
-        // toolkit dependency of its own) needing to know Avalonia, or
-        // any other windowing toolkit, exists. A plain
-        // Action<IDebugTarget>, same shape EmuSen.Mistress's own
-        // Pause/ResumeCommand delegates already use for the same reason.
+        // Lets a frontend wire `-w` without DianaOS knowing any toolkit exists - see §3.3b.
         private readonly Action<IDebugTarget>? _openWindow;
 
         public CoretopCommand(Action<IDebugTarget>? openWindow = null)
@@ -109,13 +71,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 try
                 {
                     Console.TreatControlCAsInput = true;
-                    // Console.CursorVisible's GETTER is Windows-only (hence
-                    // no read-and-restore here, just set-and-reset to the
-                    // sane default) - hiding it at all is purely cosmetic
-                    // (a static dashboard redrawing 4x/second doesn't need
-                    // a blinking cursor sitting wherever it last was), so a
-                    // platform/terminal that doesn't support this at all is
-                    // fine to just silently no-op on.
+                    // The getter is Windows-only, so set-and-reset rather than read-and-restore; purely cosmetic.
                     try { Console.CursorVisible = false; } catch { }
 
                     while (true)
@@ -232,11 +188,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 }
             }
 
-            // Green under 60%, yellow 60-85%, red above - the same rough
-            // "getting busy" traffic-light convention htop's own CPU bars
-            // use, so a glance at color alone (not just the number) says
-            // whether a subsystem/channel is comfortably idle or close to
-            // its ceiling.
+            // htop's own traffic-light convention, so colour alone reads as busy or idle - see `man coretop`.
             private static string ColoredBar(double percent, int width)
             {
                 percent = Math.Clamp(percent, 0, 100);
@@ -265,19 +217,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                 Console.Write(sb.ToString());
             }
 
-            // Nearest-neighbor downsample of RenderTileSheet()'s RGBA
-            // buffer into a grid of solid-color terminal cells (one
-            // space per cell, ANSI 24-bit background color) - the
-            // simplest way to get a recognizable live thumbnail of
-            // VRAM's actual tile contents onto a text console without a
-            // real image surface. Not literally "tilemap contents" (this
-            // shell has no core-agnostic way to know a live tilemap's
-            // base address - see IDebugTarget.DecodeTilemapEntry's own
-            // comment on why that's caller-supplied everywhere else too),
-            // but the closest generically-available live view of what's
-            // sitting in the VRAM a core WITH tilemap support draws them
-            // from - gated on TilemapEntryStride > 0 as this dashboard's
-            // stand-in for "this core has a tilemap concept at all."
+            // Downsampled into ANSI cells; gated on TilemapEntryStride as "has a tilemap concept".
             private void DrawTileSheet(int startRow, int rowBudget, int width)
             {
                 if (rowBudget <= 0) return;

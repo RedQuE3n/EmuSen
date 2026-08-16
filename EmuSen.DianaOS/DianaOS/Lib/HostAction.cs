@@ -6,25 +6,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.DianaOS.DianaOS.Dev;
 namespace EmuSen.DianaOS.DianaOS.Lib
 {
-    // A signal a command needs to hand back to whatever's driving this
-    // interpreter's own loop (a frontend's RunDebugPrompt, or Main itself)
-    // rather than just producing text - the escape hatch DianaOSResult
-    // never had before this. Reserved strictly for cases where a command
-    // needs to change the CALLER's control flow (break a loop, hand a
-    // value back up several stack frames): resuming/shutting down/single-
-    // stepping/swapping the loaded core. Side-effect-only needs (pausing a
-    // thread, opening a window, editing a text file) stay on the already-
-    // proven Mechanism-A pattern instead (a constructor-injected
-    // Action/Func<T> delegate, same shape as PauseCommand/CoretopCommand)
-    // and never touch this type at all - see DianaOSResult's own comment
-    // on why this field is optional, not a replacement for that pattern.
-    //
-    // A closed abstract record hierarchy, not an enum+object payload -
-    // matches this codebase's existing taste for small, explicit,
-    // strongly-typed result shapes (DebugLoadInfo, StaticReferenceKind)
-    // rather than a stringly/object-typed grab bag, and gives LoadCore's
-    // two strings real type safety at every consumption site instead of
-    // a cast.
+    // For changing the caller's control flow; a side effect wants a delegate instead - see EmuSen_Debugging_Tools_Reference_v5.md §3.3b.
     public abstract record HostAction
     {
         private HostAction() { }
@@ -32,21 +14,13 @@ namespace EmuSen.DianaOS.DianaOS.Lib
         // 'shutdown'/'quit' - terminate the whole process.
         public sealed record Shutdown : HostAction;
 
-        // 'resume'/'continue'/'c' - stop blocking on the interactive
-        // prompt and let the emulation loop keep running.
+        // 'resume'/'continue'/'c' - stop blocking and let the emulation loop run.
         public sealed record Resume : HostAction;
 
-        // 'step'/'s' - single-step one instruction, then return to the
-        // same "keep going" state Resume produces (BreakpointRegistry's
-        // own ArmSingleStep already does the actual arming; this just
-        // carries the "now let RunFrame() run again" signal alongside it).
+        // 'step'/'s' - ArmSingleStep already armed it; this carries the "run again" half.
         public sealed record Step : HostAction;
 
-        // 'core <corename> <path>' - swap the loaded ROM in place. Two
-        // plain strings, not a resolved object, since resolving/validating
-        // them (unknown core name, missing file, wrong extension) is the
-        // issuing command's own job - by the time this reaches whatever's
-        // driving the loop, both are already known-good.
+        // Raw strings, because validating them was the issuing command's job - see §3.3b.
         public sealed record LoadCore(string CoreName, string RomPath) : HostAction;
 
         // 'tmux new/switch/kill' - see `man tmux`.

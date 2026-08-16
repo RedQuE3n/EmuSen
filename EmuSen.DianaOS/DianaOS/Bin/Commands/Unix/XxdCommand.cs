@@ -8,20 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // `xxd`/`hexdump` - see `man xxd`. The real-filesystem counterpart to
-    // `mem`'s live-memory-space hexdump: reads a real file's raw bytes
-    // (not decoded as text the way `cat`/`head`/`tail` do, which would
-    // corrupt anything that isn't valid UTF8) - specifically so a `dump`'d
-    // capture can be inspected without ever leaving the shell for an
-    // external hex editor. Piped stdin is UTF8-encoded first (matching
-    // `wc`'s own byte-count convention) since a pipeline stage's output is
-    // always already-decoded text here, never raw bytes - real xxd reading
-    // arbitrary binary off a Unix pipe has no equivalent in this shell's
-    // own text-only pipe model.
-    //
-    // Deliberately reuses MemCommand's own one-byte-per-column dump layout
-    // rather than real xxd's 2-byte-group format, so every hex dump this
-    // shell ever prints - live memory or a real file - looks the same.
+    // Raw bytes, in `mem`'s dump layout so every hexdump here looks alike - see `man xxd`.
     public class XxdCommand : IDianaOSCommand
     {
         public string Name => "xxd";

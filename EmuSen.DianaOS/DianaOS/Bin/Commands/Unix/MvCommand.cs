@@ -8,17 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands.Unix
 {
-    // Unix `mv` - renames/moves a real file or directory. No `-i`
-    // confirmation prompt (nothing here is interactive, and permissions/
-    // safety prompts are explicitly out of scope for this shell - it only
-    // ever runs against the local dotnet process's own filesystem access,
-    // never anything privilege-sensitive), so an existing destination
-    // FILE is silently overwritten, matching real `mv`'s own default
-    // (non-`-i`, non-`-n`) behavior. An existing destination DIRECTORY
-    // isn't overwritten, it's moved INTO - `mv foo.txt logs/` behaves
-    // like real `mv`, landing at `logs/foo.txt`, not replacing `logs`
-    // itself. Walled to DianaOSSandbox.RootDirectory - both src and dst
-    // must resolve inside it (see that file's own comment).
+    // An existing destination directory is moved into, not replaced - see `man mv`.
     public class MvCommand : IDianaOSCommand
     {
         public string Name => "mv";

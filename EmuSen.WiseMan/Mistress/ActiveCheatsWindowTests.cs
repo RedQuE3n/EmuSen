@@ -10,6 +10,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.WiseMan.LunaP;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
@@ -45,8 +46,15 @@ namespace EmuSen.WiseMan.Mistress
         private static TextBox DescriptionBox(ActiveCheatsWindow w) => OnSelectedTab<TextBox>(w, "DescriptionBox");
         private static Button AddButton(ActiveCheatsWindow w) => OnSelectedTab<Button>(w, "AddButton");
 
-        private static CheatRow[] Rows(ActiveCheatsWindow w) =>
-            w.GetControl<ListBox>("CheatsList").ItemsSource!.Cast<CheatRow>().ToArray();
+        private static LunaTable<CheatRow> Table(ActiveCheatsWindow w) =>
+            w.GetControl<LunaTable<CheatRow>>("CheatsList");
+
+        private static CheatRow[] Rows(ActiveCheatsWindow w) => Table(w).Models.ToArray();
+
+        // Through the table's own row list, so this is the selection a click makes -
+        // LunaTable.Select is deliberately silent and would not enable Remove. See §4.14a.
+        private static void SelectRow(ActiveCheatsWindow w, int index) =>
+            Table(w).FindPart<ListBox>()!.SelectedIndex = index;
 
         private static TextBlock Status(ActiveCheatsWindow w) => w.GetControl<TextBlock>("StatusText");
 
@@ -282,11 +290,9 @@ namespace EmuSen.WiseMan.Mistress
         {
             CheatRegistry registry = WithTwoCheats();
             var window = Open(registry);
-            var list = window.GetControl<ListBox>("CheatsList");
-
             Assert.False(window.GetControl<Button>("RemoveButton").IsEnabled);
 
-            list.SelectedIndex = 0;
+            SelectRow(window, 0);
             Assert.True(window.GetControl<Button>("RemoveButton").IsEnabled);
             window.GetControl<Button>("RemoveButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 

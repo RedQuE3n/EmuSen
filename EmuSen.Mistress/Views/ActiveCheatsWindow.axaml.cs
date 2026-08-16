@@ -66,12 +66,60 @@ namespace EmuSen.Mistress.Views
             Refresh();
         }
 
+        // Four columns matching the hand-laid Grid this replaced - see §4.14a. Kind and Detail
+        // are template columns because their muted/monospace styling is what made the list
+        // scannable, and a plain text column would take the theme's body style.
+        private void BuildCheatColumns()
+        {
+            CheatsList.Key = r => r.Id;
+            CheatsList.Chose += _ => UpdateRemoveButton();
+
+            // Until LunaP > 0.8.0 forwards it - LunaP.md §78.4, fixed there, unreleased here.
+            CheatsList.TemplateApplied += (_, e) =>
+            {
+                if (e.NameScope.Find<ListBox>("PART_Rows") is { } rows)
+                {
+                    Avalonia.Automation.AutomationProperties.SetName(rows, "Cheats for this console");
+                }
+            };
+
+            CheatsList.Column(new LunaColumn<CheatRow>("On", r => r.Enabled, (r, on) => r.Enabled = on, r => r.Description)
+            {
+                Width = "40",
+            });
+            CheatsList.Column(new LunaColumn<CheatRow>("Kind", r => Muted(r.Kind), r => r.Kind) { Width = "44" });
+            CheatsList.Column(new LunaColumn<CheatRow>("Cheat", r => r.Description) { Width = "*" });
+            CheatsList.Column(new LunaColumn<CheatRow>("Code", r => Mono(r.Detail), r => r.Detail) { Width = "Auto" });
+        }
+
+        private static Control Muted(string text) => new TextBlock
+        {
+            Text = text,
+            Foreground = Brush("LunaMuted"),
+            FontSize = 11,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+
+        private static Control Mono(string text) => new TextBlock
+        {
+            Text = text,
+            Foreground = Brush("LunaMuted"),
+            FontFamily = new Avalonia.Media.FontFamily("monospace"),
+            FontSize = 11,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+
+        // DynamicResource in code: the theme can change under a live window - see EmuSen_LunaP.md §12.3.
+        private static Avalonia.Media.IBrush? Brush(string key) =>
+            Avalonia.Application.Current?.FindResource(key) as Avalonia.Media.IBrush;
+
         public ActiveCheatsWindow() : this(new CheatRegistry()) { }
 
         public ActiveCheatsWindow(CheatRegistry registry, ICheatCodeCodec? pokeCodec = null, ICheatCodeCodec? patchCodec = null,
             Func<bool>? applyNow = null, Func<string?>? saveName = null, string? console = null)
         {
             InitializeComponent();
+            BuildCheatColumns();
             _registry = registry;
             _pokeCodec = pokeCodec;
             _patchCodec = patchCodec;
@@ -193,12 +241,9 @@ namespace EmuSen.Mistress.Views
         {
             IReadOnlyList<CheatInfo> cheats = _registry.GetCheats();
 
-            var selectedId = (CheatsList.SelectedItem as CheatRow)?.Id;
-            CheatsList.ItemsSource = cheats.Select(c => new CheatRow(_registry, c, Detail(c))).ToList();
-            if (selectedId is int id)
-            {
-                CheatsList.SelectedItem = CheatsList.ItemsSource.Cast<CheatRow>().FirstOrDefault(r => r.Id == id);
-            }
+            // Key is the cheat id, so Refresh puts the selection back itself - see §4.14a.
+            CheatsList.Refresh(cheats.Select(c => new CheatRow(_registry, c, Detail(c))));
+            UpdateRemoveButton();
 
             _syncing = true;
             MasterSwitch.IsChecked = _registry.MasterEnabled;
@@ -358,13 +403,11 @@ namespace EmuSen.Mistress.Views
             Refresh();
         }
 
-        private void OnCheatSelected(object? sender, SelectionChangedEventArgs e) => UpdateRemoveButton();
-
-        private void UpdateRemoveButton() => RemoveButton.IsEnabled = CheatsList.SelectedItem is CheatRow;
+        private void UpdateRemoveButton() => RemoveButton.IsEnabled = CheatsList.Selected is not null;
 
         private void OnRemoveClick(object? sender, RoutedEventArgs e)
         {
-            if (CheatsList.SelectedItem is not CheatRow row) return;
+            if (CheatsList.Selected is not CheatRow row) return;
 
             _registry.RemoveCheat(row.Id);
             Refresh();

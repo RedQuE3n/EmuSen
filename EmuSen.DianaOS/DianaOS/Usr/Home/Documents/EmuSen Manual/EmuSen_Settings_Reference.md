@@ -367,6 +367,26 @@ It is cleared when a **different** ROM loads, tracked by `_cheatsRomPath` rather
 
 **Test coverage.** `CheatMasterSwitchTests.cs` covers the switch at the registry level (that it stops pokes landing and patches substituting, that it leaves each cheat's own flag alone, that a cheat added while it is off stays inert) and through the shell. `CheatDatabaseGamesTests.cs` covers `Games()` and the shared `CheatImport` path, including replace-versus-merge and that everything arrives disabled whatever the file's own `enable` flag said. `CheatDatabaseWindowTests.cs` gained the system → games → load flow and the Active Cheats button (that it asks its owner, that it is off without one, and that both doors reach one window), and `ActiveCheatsWindowTests.cs` covers the list, the master switch, manual code entry for both formats, remove/clear, and the external `Refresh()`.
 
+### 4.14a The cheat list is a `LunaTable<CheatRow>`, and the last `INotifyPropertyChanged` is gone
+
+*2026-08-16. `EmuSen_LunaP_Adoption_Gameplan.md` Path B.*
+
+`ActiveCheatsWindow` showed its cheats in a `ListBox` whose `DataTemplate` laid out four columns by hand — a checkbox, a fixed-width kind label, an ellipsised description and a monospace detail. `CheatRow` implemented `INotifyPropertyChanged` for exactly one reason: so `IsChecked="{Binding Enabled, Mode=TwoWay}"` could write back.
+
+**That was the only `INotifyPropertyChanged` in either frontend**, and `EmuSen_LunaP_Gameplan.md` §5 says plainly that this codebase is *"deliberately code-behind with direct control manipulation… no `INotifyPropertyChanged` layer smuggled in under 'framework'."* `LunaTable`'s checkbox column takes a projection and a writer — `new LunaColumn<CheatRow>("On", r => r.Enabled, (r, on) => r.Enabled = on, r => r.Description)` — so there is no binding, no `DataTemplate`, and nothing on the model. `CheatRow` is now a plain class whose `Enabled` setter writes through to the registry, as it always did.
+
+**`Kind` and `Code` are template columns, not text columns.** Their muted colour, 11pt size and monospace face are what made the list scannable at a glance, and a plain text column takes the theme's body style. A template column takes a `Control` and — required, not optional — the sentence a screen reader hears in its place.
+
+**Selection needed rewiring, because a table is not a `ListBox`.** There is no `SelectionChanged` and no `SelectedItem`; there is `Chose` and `Selected`. The Remove button follows `Chose` for a user's selection and is synced explicitly at the end of `Refresh`, because — measured, exactly as in §4.11a — **`LunaTable.Select` is deliberately silent**. Anything that selects a row in code must update what depends on it.
+
+`Refresh` also replaced the hand-rolled selection-preservation: the window used to read the selected id, rebuild `ItemsSource`, and search the new rows for that id. `Key = r => r.Id` makes that the table's job.
+
+**One deliberate visual change: the list has column headings now.** A table has a header row and a list does not, and there is no way to adopt the one without the other. It is an improvement on balance — the four columns were previously unlabelled — but it is a change, and it is recorded here rather than left to be noticed, in the same spirit as Phase 7's "every settings toggle became a switch". **Sorting is deliberately *not* enabled**: `LunaTable` can sort, remember column widths and remember a sort order, and turning any of that on is a separate decision from replacing the list. `TableKey` is unset, so nothing is remembered yet.
+
+**Test coverage kept its bodies.** All 42 cheat-window tests survive with two lookups changed — `Rows(w)` reads `Models` instead of casting `ItemsSource`, and selecting a row goes through the table's own inner `ListBox` rather than `SelectedIndex`. That last one is not incidental: `Select` being silent means a test that used it would assert against a Remove button the window was never told to update, so the test drives the selection a click actually makes.
+
+**A LunaP defect this surfaced, fixed upstream and bridged here.** `AccessibilityTests` requires every `ListBox` in a window to have a name, and it went red immediately: the caller names the `LunaTable`, but the table's template puts an unnamed `ListBox` inside it, so a screen reader met an anonymous list within a named table. That is fixed in LunaP (`LunaP.md` §78.4 — the table now forwards its name, re-applying it on change because a window built in a constructor is named after its template is applied). **The fix is not in 0.8.0**, so `BuildCheatColumns` names `PART_Rows` itself on `TemplateApplied`, with a comment saying which version retires it. Delete that when the package moves.
+
 ### 4.15 Applying and saving cheats (Views/ActiveCheatsWindow.axaml, Var/CheatRegistry.cs)
 
 Reported after §4.14 shipped: ticking cheats on in the Active Cheats window did nothing in game. The symptom was real but the cause was not the one it looked like — the write-through in §4.14 works, and ticking a box does reach `CheatRegistry.SetEnabled`. What actually happened was earlier and worse.

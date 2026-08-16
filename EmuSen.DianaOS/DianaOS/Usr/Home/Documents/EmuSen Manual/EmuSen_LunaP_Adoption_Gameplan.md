@@ -74,7 +74,17 @@ Four sites hold a collection parallel to a `ListBox` of projected strings and re
 
 ---
 
-### Path B — The cheat table (`LunaTable<CheatRow>`)
+### Path B — The cheat table (`LunaTable<CheatRow>`) ✅ done
+
+*Taken 2026-08-16. `EmuSen_Settings_Reference.md` §4.14a is the record. What it turned out to teach:*
+
+- ***The deletion landed: `CheatRow` is a plain class.*** *The last `INotifyPropertyChanged` in either frontend is gone, and §5's rule about not smuggling one in is true again rather than nearly true.*
+- ***A table is not a `ListBox`,*** *so `SelectionChanged`/`SelectedItem` had to become `Chose`/`Selected`. `Select` is silent here as it is on `LunaList`, which means anything selecting in code must update what depends on the selection itself — the Remove button is wired to `Chose` and re-synced at the end of `Refresh`.*
+- ***Column headings are the one unavoidable visual change.*** *A table has a header row and a list does not. Recorded rather than slipped in; sorting and remembered widths stay off, per this section's own split.*
+- ***It found a LunaP accessibility defect within minutes.*** *A named `LunaTable` contained an anonymous `ListBox`, caught by the consumer's own `AccessibilityTests`. Fixed upstream in `LunaP.md` §78.4 and bridged here until a release carries it.*
+
+<details>
+<summary>Original plan text</summary>
 
 **The path with a project-level argument behind it, not just a deletion.**
 
@@ -87,6 +97,8 @@ Four sites hold a collection parallel to a `ListBox` of projected strings and re
 **What comes free and should be treated as a change, not a bonus:** sorting, resizable and remembered column widths (`TableKey`), and per-column alignment. These are visible behaviour changes to a window that currently has none of them. The first gameplan's Phase 1 rule was *"not a re-skin"* — that rule was about the theme, but the spirit applies: **land the migration behaviour-neutral first, then turn sorting on as its own decision.**
 
 **What this path does not cover:** the cheat *database* window's two lists (Path A) and the master switch, tabs and file buttons, which are already LunaP and already right.
+
+</details>
 
 ---
 
@@ -140,7 +152,7 @@ The first gameplan already drew this line for the same window: *"`MainWindow` an
 
 1. ~~**Path A**, first~~ — **done**. The pattern repeated three times, not four.
 2. **Path C**, second, because it is small, independent, and the only one that touches Hotaru. Good to land while Path A's shape is still fresh.
-3. **Path B**, third, and split in two: the migration behaviour-neutral, then sorting as its own decision.
+3. ~~**Path B**, third~~ — **done**, migration only. Sorting is still its own decision and has not been taken.
 4. **Path D**, last, and only if the Hotaru half is wanted — the Mistress half alone is worth little, since a menu that names its keys while the console frontend does not is half an answer to §6.
 
 A, B and C are independent; nothing here forces this order except that it front-loads the strongest evidence.
@@ -162,6 +174,6 @@ From the first gameplan, and from the menu path that has already been taken:
 ## 5. Open questions, not decided here
 
 - ~~**Does the library list's selection reset matter?**~~ **Answered by the code, 2026-08-16**: it is load-bearing for the search-then-Enter flow, and was kept. Path A did not change it.
-- **Should the cheat table sort?** Path B makes it possible and does not decide it.
+- **Should the cheat table sort?** Still open. Path B made it possible (`TableKey` unset, no `Sort` on any column) and deliberately did not decide it.
 - **Should Hotaru's hotkeys become data?** Path D needs it; nothing else does. It is the largest single item in this document and the least certainly wanted.
 - **`ActionGroup.Checked` is read-only** despite LunaP 0.8.0's XML documentation describing a setter. Verified by reflection over the shipped assembly. This is an upstream doc bug and should be filed against the LunaP repository; nothing in this plan is blocked by it, because `member.IsChecked = true` does what the doc's setter claims.

@@ -20,6 +20,7 @@ using EmuSen.Endymion;
 using EmuSen.Endymion.Input;
 using EmuSen.Serenity.Dashboards;
 using EmuSen.Mistress.Input;
+using EmuSen.LunaP.Commands;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Threading;
 using EmuSen.LunaP.Windowing;
@@ -37,10 +38,23 @@ using EmuSen.Audio;
 
 namespace EmuSen.Mistress.Views
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : ToolWindow
     {
         // Paced off the core's own rate, not a flat 60 - see Venus_CPU.md §8.5b.
         private TimeSpan FrameInterval => TimeSpan.FromSeconds(1.0 / (_session?.FrameRateHz ?? 60.0988));
+
+        // One object per command, carrying its own enabled and checked state - see EmuSen_Settings_Reference.md §4.12.
+        private readonly LunaAction _pause;
+        private readonly LunaAction _reset;
+        private readonly LunaAction _closeGame;
+        private readonly LunaAction _saveState;
+        private readonly LunaAction _loadState;
+        private readonly LunaAction _speedMenu;
+        private readonly LunaAction _slotMenu;
+        private readonly LunaAction _fullscreen;
+        private readonly LunaAction _hardwareDashboard;
+        private readonly ActionGroup _speeds = new();
+        private readonly ActionGroup _slots = new();
 
         private EmulatorSession? _session;
 
@@ -204,7 +218,19 @@ namespace EmuSen.Mistress.Views
         public MainWindow()
         {
             _frames = new Latest<FrameData>(PresentPendingFrame);
+            _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
+            _reset = new LunaAction("_Reset", ResetEmulation);
+            _closeGame = new LunaAction("_Close Game", ShowLibrary);
+            _saveState = new LunaAction("Save _State", SaveState);
+            _loadState = new LunaAction("_Load State", LoadState);
+            _speedMenu = new LunaAction("Spee_d", () => { });
+            _slotMenu = new LunaAction("State Sl_ot", () => { });
+            _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
+            _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             InitializeComponent();
+            BuildMenus();
+            // The tick follows the window, so a window-manager key cannot leave it lying - see §4.19.
+            FullScreenChanged += on => _fullscreen.IsChecked = on;
             _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole));
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
@@ -260,8 +286,8 @@ namespace EmuSen.Mistress.Views
             if (!pressed) return;
             switch (action)
             {
-                case HotkeyAction.SaveState: OnSaveStateClick(this, new RoutedEventArgs()); break;
-                case HotkeyAction.LoadState: OnLoadStateClick(this, new RoutedEventArgs()); break;
+                case HotkeyAction.SaveState: SaveState(); break;
+                case HotkeyAction.LoadState: LoadState(); break;
                 case HotkeyAction.ExitToLibrary: ToggleLibrary(); break;
                 // Nothing to pause while the library is up: it is already suspended - see §4.18.
                 case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
@@ -295,7 +321,7 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        private async void OnOpenRomClick(object? sender, RoutedEventArgs e)
+        private async Task OpenRomAsync()
         {
             // One entry per core in this build, so a new core needs no edit here.
             FilePickerFileType[] types = EmuSen.Cores.CoreCatalog.Cores
@@ -345,7 +371,7 @@ namespace EmuSen.Mistress.Views
         // straight from AppSettings.RomDirectory, for anyone reloading
         // different ROMs from the same test folder repeatedly. See
         // RomBrowserWindow's own comment.
-        private async void OnBrowseRomsClick(object? sender, RoutedEventArgs e)
+        private async Task BrowseRomsAsync()
         {
             string? selected = await new RomBrowserWindow(_appSettings.RomDirectory).ShowDialog<string?>(this);
             if (selected is null) return;
@@ -354,13 +380,13 @@ namespace EmuSen.Mistress.Views
             LoadRom(selected, Path.GetFileName(selected));
         }
 
-        private void OnControllerBindingsClick(object? sender, RoutedEventArgs e)
+        private void ShowControllerBindings()
         {
             new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings,
                 _session is null ? null : _activeConsole).Show(this);
         }
 
-        private void OnPreferencesClick(object? sender, RoutedEventArgs e)
+        private void ShowPreferences()
         {
             // Non-modal, so the ROM directory can change while the library is
             // on screen behind it - re-scan on close rather than leaving a
@@ -370,14 +396,14 @@ namespace EmuSen.Mistress.Views
             window.Show(this);
         }
 
-        private void OnDebugLoggingClick(object? sender, RoutedEventArgs e)
+        private void ShowDebugLogging()
         {
             new DebugSettingsWindow().Show(this);
         }
 
         // Never needs a ROM - it manages the cheat folder and the cheat list,
         // neither of which is a session. See §4.14.
-        private void OnCheatDatabaseClick(object? sender, RoutedEventArgs e)
+        private void ShowCheatDatabase()
         {
             _cheatDatabaseWindow.Show(this, () => new CheatDatabaseWindow(_appSettings, () => _cheats,
                 ConsoleCodecs(SelectedConsole).AutoDetect,
@@ -387,7 +413,7 @@ namespace EmuSen.Mistress.Views
                 SelectedConsole));
         }
 
-        private void OnActiveCheatsClick(object? sender, RoutedEventArgs e) => ShowActiveCheats();
+        
 
         // Opens the one Active Cheats window, or brings it forward already
         // refreshed - the menu item and the database window's own button are
@@ -446,7 +472,7 @@ namespace EmuSen.Mistress.Views
             return loaded;
         }
 
-        private void OnShellConsoleClick(object? sender, RoutedEventArgs e)
+        private void ShowShellConsole()
         {
             _consoleWindow.Show(this, () => new DianaOSConsoleWindow(_debugTarget, MakeEmulationControlCommands(),
                 _session?.CheatAutoDetectCodec, _session?.CheatExplicitCodec, _session?.CpuTraceSwitch));
@@ -512,7 +538,7 @@ namespace EmuSen.Mistress.Views
                 ? null
                 : SaveLibrary.StatePathFor(_currentRomPath, slot, _appSettings.StateDirectory);
 
-        private void OnSaveStateClick(object? sender, RoutedEventArgs e)
+        private void SaveState()
         {
             if (_session is not { IsRomLoaded: true } || CurrentStatePath is not string path)
             {
@@ -525,6 +551,7 @@ namespace EmuSen.Mistress.Views
                 System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
                 _session.SaveState(path);
                 StatusText.Text = $"State saved to slot {_stateSlot}: {System.IO.Path.GetFileName(path)}";
+                SyncMenuState(); // that slot has a timestamp now
             }
             catch (Exception ex)
             {
@@ -532,7 +559,7 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        private void OnLoadStateClick(object? sender, RoutedEventArgs e)
+        private void LoadState()
         {
             if (_session is not { IsRomLoaded: true } || CurrentStatePath is not string path)
             {
@@ -559,67 +586,106 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        // Every Emulation item needs a running game - see EmuSen_Settings_Reference.md §4.12.
-        private void OnEmulationMenuOpened(object? sender, RoutedEventArgs e)
+        // The four menus - shortcuts stay with HotkeyBindingMap, see EmuSen_Settings_Reference.md §4.19.
+        private void BuildMenus()
         {
-            bool running = _session is { IsRomLoaded: true };
-            PauseMenuItem.IsEnabled = running;
-            ResetMenuItem.IsEnabled = running;
-            CloseGameMenuItem.IsEnabled = running;
-            SpeedMenuItem.IsEnabled = running;
-            SaveStateMenuItem.IsEnabled = running;
-            LoadStateMenuItem.IsEnabled = running;
-            SaveSlotMenuItem.IsEnabled = running;
-            // Only synced here, never from Pause/ResumeEmulation - see §4.12.
-            PauseMenuItem.IsChecked = running && IsPaused;
+            _speedMenu.Submenu = new LunaMenu("Spee_d",
+                _speeds.Add(new LunaAction("_Normal", () => SetBaseSpeed(EmuSen.Common.SpeedController.NormalPercent))),
+                _speeds.Add(new LunaAction("_Fast Forward", () => SetBaseSpeed(_speed.TurboPercent))),
+                _speeds.Add(new LunaAction("_Slow Motion", () => SetBaseSpeed(_speed.SlowMotionPercent))),
+                _speeds.Add(new LunaAction("_Unthrottled", () => SetBaseSpeed(EmuSen.Common.SpeedController.UnthrottledPercent))));
 
-            SpeedNormalMenuItem.IsChecked = _baseSpeedPercent == EmuSen.Common.SpeedController.NormalPercent;
-            SpeedFastMenuItem.IsChecked = _baseSpeedPercent == _speed.TurboPercent;
-            SpeedSlowMenuItem.IsChecked = _baseSpeedPercent == _speed.SlowMotionPercent;
-            SpeedUnthrottledMenuItem.IsChecked = _baseSpeedPercent == EmuSen.Common.SpeedController.UnthrottledPercent;
+            BuildSaveSlotItems();
 
-            SaveStateMenuItem.Header = $"Save _State (slot {_stateSlot})";
-            LoadStateMenuItem.Header = $"_Load State (slot {_stateSlot})";
+            MenuStrip.SetMenus(
+                new LunaMenu("_File",
+                    new LunaAction("_Open ROM...", () => _ = OpenRomAsync()),
+                    new LunaAction("_Browse ROMs...", () => _ = BrowseRomsAsync()),
+                    LunaAction.Separator(),
+                    new LunaAction("Game _Library", ShowLibrary),
+                    LunaAction.Separator(),
+                    new LunaAction("E_xit", () => Close())),
+                new LunaMenu("_Emulation",
+                    _pause, _reset, _closeGame,
+                    LunaAction.Separator(),
+                    _speedMenu,
+                    LunaAction.Separator(),
+                    _saveState, _loadState, _slotMenu),
+                new LunaMenu("_View", _fullscreen),
+                new LunaMenu("_Settings",
+                    new LunaAction("_Controller Bindings...", ShowControllerBindings),
+                    new LunaAction("_Debug Logging...", () => new DebugSettingsWindow().Show(this)),
+                    new LunaAction("_Preferences...", ShowPreferences),
+                    new LunaAction("Chea_t Database...", ShowCheatDatabase),
+                    new LunaAction("_Active Cheats...", ShowActiveCheats),
+                    LunaAction.Separator(),
+                    _hardwareDashboard,
+                    // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.
+                    new LunaAction("_Runtime Dashboard...", OpenVstopWindow),
+                    new LunaAction("_DianaOS Console...", ShowShellConsole)));
+
+            SyncMenuState();
         }
 
-        private void OnSpeedNormalClick(object? sender, RoutedEventArgs e) => SetBaseSpeed(EmuSen.Common.SpeedController.NormalPercent);
+        // Called wherever the state actually changes, not when a menu opens - see §4.12.
+        private void SyncMenuState()
+        {
+            bool running = _session is { IsRomLoaded: true };
+            _pause.IsEnabled = running;
+            _reset.IsEnabled = running;
+            _closeGame.IsEnabled = running;
+            _speedMenu.IsEnabled = running;
+            _saveState.IsEnabled = running;
+            _loadState.IsEnabled = running;
+            _slotMenu.IsEnabled = running;
+            _pause.IsChecked = running && IsPaused;
 
-        private void OnSpeedFastClick(object? sender, RoutedEventArgs e) => SetBaseSpeed(_speed.TurboPercent);
+            // Checking a member unchecks its siblings and runs no handler; ActionGroup.Checked is read-only.
+            _speeds.Members[SpeedIndex(_baseSpeedPercent)].IsChecked = true;
+            BuildSaveSlotItems();
 
-        private void OnSpeedSlowClick(object? sender, RoutedEventArgs e) => SetBaseSpeed(_speed.SlowMotionPercent);
+            _saveState.Text = $"Save _State (slot {_stateSlot})";
+            _loadState.Text = $"_Load State (slot {_stateSlot})";
+            _hardwareDashboard.IsEnabled = _debugTarget is not null;
+        }
 
-        private void OnSpeedUnthrottledClick(object? sender, RoutedEventArgs e) => SetBaseSpeed(EmuSen.Common.SpeedController.UnthrottledPercent);
+        private int SpeedIndex(int percent)
+        {
+            if (percent == _speed.TurboPercent) return 1;
+            if (percent == _speed.SlowMotionPercent) return 2;
+            if (percent == EmuSen.Common.SpeedController.UnthrottledPercent) return 3;
+            return 0;
+        }
 
         private void SetBaseSpeed(int percent)
         {
             _baseSpeedPercent = percent;
             _audioPlayer.RateControl.Reset(); // the device's pacing target just moved - see EmuSen_Audio_Sync.md §3.2
             if (_session is { IsRomLoaded: true }) StatusText.Text = $"Speed: {DescribeSpeed(percent)}";
+            SyncMenuState();
         }
 
         private static string DescribeSpeed(int percent) =>
             percent == EmuSen.Common.SpeedController.UnthrottledPercent ? "unthrottled" : $"{percent}%";
 
-        // Rebuilt per open so a slot saved since last time shows its new stamp.
-        private void OnSaveSlotMenuOpened(object? sender, RoutedEventArgs e) => BuildSaveSlotItems();
-
-        // Also called at construction, or the item has no children yet and
-        // renders as a leaf with no submenu arrow.
+        // Rebuilt on every sync so a slot saved since last time shows its new stamp.
         private void BuildSaveSlotItems()
         {
-            var items = new List<MenuItem>();
+            if (_slots.Members.Count == 0)
+            {
+                for (int slot = 1; slot <= StateSlots; slot++)
+                {
+                    int captured = slot;
+                    _slots.Add(new LunaAction($"Slot {slot}", () => SelectStateSlot(captured)));
+                }
+                _slotMenu.Submenu = new LunaMenu("State Sl_ot", _slots.Members);
+            }
+
             for (int slot = 1; slot <= StateSlots; slot++)
             {
-                int captured = slot;
-                items.Add(new MenuItem
-                {
-                    Header = $"Slot {slot} - {DescribeSlot(slot)}",
-                    ToggleType = MenuItemToggleType.Radio,
-                    IsChecked = slot == _stateSlot,
-                    Command = new SelectSlotCommand(() => SelectStateSlot(captured)),
-                });
+                _slots.Members[slot - 1].Text = $"Slot {slot} - {DescribeSlot(slot)}";
             }
-            SaveSlotMenuItem.ItemsSource = items;
+            _slots.Members[_stateSlot - 1].IsChecked = true;
         }
 
         private string DescribeSlot(int slot)
@@ -632,38 +698,8 @@ namespace EmuSen.Mistress.Views
         {
             _stateSlot = slot;
             if (_session is { IsRomLoaded: true }) StatusText.Text = $"Save slot {slot} selected ({DescribeSlot(slot)})";
+            SyncMenuState();
         }
-
-        // A MenuItem built in code has no Click event wired from XAML.
-        private sealed class SelectSlotCommand : System.Windows.Input.ICommand
-        {
-            private readonly Action _run;
-            public SelectSlotCommand(Action run) => _run = run;
-            public event EventHandler? CanExecuteChanged { add { } remove { } }
-            public bool CanExecute(object? parameter) => true;
-            public void Execute(object? parameter) => _run();
-        }
-
-        private void OnViewMenuOpened(object? sender, RoutedEventArgs e) =>
-            FullscreenMenuItem.IsChecked = WindowState == WindowState.FullScreen;
-
-        private void OnFullscreenClick(object? sender, RoutedEventArgs e) =>
-            WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
-
-        private void OnSettingsMenuOpened(object? sender, RoutedEventArgs e) =>
-            HardwareDashboardMenuItem.IsEnabled = _debugTarget is not null;
-
-        // The same window `coretop` opens from the console - see EmuSen_Settings_Reference.md §4.13.
-        private void OnHardwareDashboardClick(object? sender, RoutedEventArgs e) => OpenCoretopWindow(_debugTarget);
-
-        // Never disabled by OnSettingsMenuOpened - see `man vstop`.
-        private void OnRuntimeDashboardClick(object? sender, RoutedEventArgs e) => OpenVstopWindow();
-
-        private void OnPauseClick(object? sender, RoutedEventArgs e) => TogglePause();
-
-        private void OnResetClick(object? sender, RoutedEventArgs e) => ResetEmulation();
-
-        private void OnCloseGameClick(object? sender, RoutedEventArgs e) => ShowLibrary();
 
         // Another game's addresses are meaningless here, so they go rather
         // than quietly poking this one's RAM. A Reset keeps them - same ROM.
@@ -748,6 +784,7 @@ namespace EmuSen.Mistress.Views
                 _timer.Start();
 
                 StartEmulationThread();
+                SyncMenuState();
             }
             catch (Exception ex)
             {
@@ -801,6 +838,7 @@ namespace EmuSen.Mistress.Views
 
             StatusText.Text = "No ROM loaded";
             FpsText.Text = "";
+            SyncMenuState();
         }
 
         // The one console context the library and both cheat windows share - see EmuSen_Multicore.md §10.
@@ -898,7 +936,7 @@ namespace EmuSen.Mistress.Views
         private string ExitToLibraryKeyName() =>
             _hotkeyBindings.ActionToKey.TryGetValue(HotkeyAction.ExitToLibrary, out Key key) ? key.ToString() : "Escape";
 
-        private void OnShowLibraryClick(object? sender, RoutedEventArgs e) => ShowLibrary();
+        
 
         private void OnLibraryItemActivated(object? sender, TappedEventArgs e) => LaunchSelectedLibraryEntry();
 
@@ -938,12 +976,14 @@ namespace EmuSen.Mistress.Views
         {
             _pauseSignal.Reset();
             if (_session is { IsRomLoaded: true }) StatusText.Text = "Paused";
+            SyncMenuState();
         }
 
         public void ResumeEmulation()
         {
             _pauseSignal.Set();
             if (_session is { IsRomLoaded: true }) StatusText.Text = $"Running: {_currentDisplayName}";
+            SyncMenuState();
         }
 
         private void StartEmulationThread()

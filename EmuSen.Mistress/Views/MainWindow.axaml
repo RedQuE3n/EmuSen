@@ -1,6 +1,7 @@
-<Window xmlns="https://github.com/avaloniaui"
+<luna:ToolWindow xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Windowing;assembly=EmuSen.LunaP"
+        xmlns:lunac="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         xmlns:serenity="clr-namespace:EmuSen.Serenity;assembly=EmuSen.Serenity"
         x:Class="EmuSen.Mistress.Views.MainWindow"
         Title="EmuSen Testing Studio"
@@ -9,55 +10,8 @@
 
     <DockPanel>
 
-        <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File">
-                <MenuItem Header="_Open ROM..." Click="OnOpenRomClick" />
-                <MenuItem Header="_Browse ROMs..." Click="OnBrowseRomsClick" />
-                <Separator />
-                <MenuItem Header="Game _Library" Click="OnShowLibraryClick" />
-                <Separator />
-                <MenuItem Header="E_xit" Click="OnExitClick" />
-            </MenuItem>
-
-            <!-- Every item needs a running game; enabled state is synced on
-                 open - see EmuSen_Settings_Reference.md §4.12. -->
-            <MenuItem x:Name="EmulationMenu" Header="_Emulation" SubmenuOpened="OnEmulationMenuOpened">
-                <MenuItem x:Name="PauseMenuItem" Header="_Pause" ToggleType="CheckBox" Click="OnPauseClick" />
-                <MenuItem x:Name="ResetMenuItem" Header="_Reset" Click="OnResetClick" />
-                <MenuItem x:Name="CloseGameMenuItem" Header="_Close Game" Click="OnCloseGameClick" />
-                <Separator />
-                <!-- The held Fast Forward hotkey layers over whichever of these
-                     is picked - see EmuSen_Settings_Reference.md §4.13. -->
-                <MenuItem x:Name="SpeedMenuItem" Header="Spee_d">
-                    <MenuItem x:Name="SpeedNormalMenuItem" Header="_Normal" ToggleType="Radio" Click="OnSpeedNormalClick" />
-                    <MenuItem x:Name="SpeedFastMenuItem" Header="_Fast Forward" ToggleType="Radio" Click="OnSpeedFastClick" />
-                    <MenuItem x:Name="SpeedSlowMenuItem" Header="_Slow Motion" ToggleType="Radio" Click="OnSpeedSlowClick" />
-                    <MenuItem x:Name="SpeedUnthrottledMenuItem" Header="_Unthrottled" ToggleType="Radio" Click="OnSpeedUnthrottledClick" />
-                </MenuItem>
-                <Separator />
-                <MenuItem x:Name="SaveStateMenuItem" Header="Save _State" Click="OnSaveStateClick" />
-                <MenuItem x:Name="LoadStateMenuItem" Header="_Load State" Click="OnLoadStateClick" />
-                <!-- Slots are rebuilt on open so their timestamps are current - see §4.13. -->
-                <MenuItem x:Name="SaveSlotMenuItem" Header="State Sl_ot" SubmenuOpened="OnSaveSlotMenuOpened" />
-            </MenuItem>
-
-            <MenuItem x:Name="ViewMenu" Header="_View" SubmenuOpened="OnViewMenuOpened">
-                <MenuItem x:Name="FullscreenMenuItem" Header="_Fullscreen" ToggleType="CheckBox" Click="OnFullscreenClick" />
-            </MenuItem>
-
-            <MenuItem x:Name="SettingsMenu" Header="_Settings" SubmenuOpened="OnSettingsMenuOpened">
-                <MenuItem Header="_Controller Bindings..." Click="OnControllerBindingsClick" />
-                <MenuItem Header="_Debug Logging..." Click="OnDebugLoggingClick" />
-                <MenuItem Header="_Preferences..." Click="OnPreferencesClick" />
-                <MenuItem Header="Chea_t Database..." Click="OnCheatDatabaseClick" />
-                <MenuItem Header="_Active Cheats..." Click="OnActiveCheatsClick" />
-                <Separator />
-                <MenuItem x:Name="HardwareDashboardMenuItem" Header="_Hardware Dashboard..." Click="OnHardwareDashboardClick" />
-                <!-- Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`. -->
-                <MenuItem x:Name="RuntimeDashboardMenuItem" Header="_Runtime Dashboard..." Click="OnRuntimeDashboardClick" />
-                <MenuItem Header="_DianaOS Console..." Click="OnShellConsoleClick" />
-            </MenuItem>
-        </Menu>
+        <!-- Built from LunaActions in BuildMenus() - see EmuSen_Settings_Reference.md §4.12. -->
+        <lunac:MenuBar x:Name="MenuStrip" DockPanel.Dock="Top" />
 
         <Border DockPanel.Dock="Bottom"
                 Padding="6,3"
@@ -90,12 +44,12 @@
         <Grid Background="{DynamicResource LunaVoid}">
             <DockPanel x:Name="LibraryView" Margin="12">
                 <!-- A full NES set is thousands of titles - see EmuSen_Multicore.md §10. -->
-                <luna:FilterBar DockPanel.Dock="Top"
-                                x:Name="LibraryFilter"
-                                ShowFacet="True"
-                                FacetLabel="Console:"
-                                Placeholder="Search titles"
-                                Margin="2,0,2,8" />
+                <lunac:FilterBar DockPanel.Dock="Top"
+                                 x:Name="LibraryFilter"
+                                 ShowFacet="True"
+                                 FacetLabel="Console:"
+                                 Placeholder="Search titles"
+                                 Margin="2,0,2,8" />
                 <TextBlock DockPanel.Dock="Top"
                            x:Name="LibraryHeaderText"
                            Foreground="{DynamicResource LunaMuted}"
@@ -116,4 +70,4 @@
 
     </DockPanel>
 
-</Window>
+</luna:ToolWindow>

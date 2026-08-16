@@ -142,18 +142,17 @@ namespace EmuSen.WiseMan.Mistress
             main.Show();
 
             // Unlike the hardware dashboard, this one never needs a ROM.
-            main.GetControl<MenuItem>("SettingsMenu").RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent));
-            Assert.True(main.GetControl<MenuItem>("RuntimeDashboardMenuItem").IsEnabled);
-            Assert.False(main.GetControl<MenuItem>("HardwareDashboardMenuItem").IsEnabled);
+            Assert.True(MainWindowMenu.Find(main, "_Settings", "_Runtime Dashboard...").IsEnabled);
+            Assert.False(MainWindowMenu.Find(main, "_Settings", "_Hardware Dashboard...").IsEnabled);
 
             // The at-most-one rule is WindowSlot's now, so this reaches through the slot rather than a nullable field.
             var slot = (WindowSlot<VstopWindow>)Field(main, "_vstopWindow")!;
 
-            Click(main, "RuntimeDashboardMenuItem");
+            Click(main, "_Runtime Dashboard...");
             Assert.True(slot.IsOpen);
             VstopWindow first = slot.Current!;
 
-            Click(main, "RuntimeDashboardMenuItem");
+            Click(main, "_Runtime Dashboard...");
             Assert.Same(first, slot.Current);
 
             first.Close();
@@ -163,8 +162,7 @@ namespace EmuSen.WiseMan.Mistress
             main.Close();
         }, default);
 
-        private static void Click(MainWindow w, string name) =>
-            w.GetControl<MenuItem>(name).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        private static void Click(MainWindow w, string label) => MainWindowMenu.Click(w, "_Settings", label);
 
         private static object? Field(MainWindow window, string name) =>
             typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);

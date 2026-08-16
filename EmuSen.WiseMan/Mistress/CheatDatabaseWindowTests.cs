@@ -183,14 +183,10 @@ namespace EmuSen.WiseMan.Mistress
             var main = new MainWindow();
             main.Show();
 
-            main.GetControl<MenuItem>("SettingsMenu").RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent));
-
-            MenuItem item = main.GetControl<MenuItem>("SettingsMenu").Items
-                .OfType<MenuItem>()
-                .Single(m => (string?)m.Header == "Chea_t Database...");
+            var item = MainWindowMenu.Find(main, "_Settings", "Chea_t Database...");
 
             Assert.True(item.IsEnabled);
-            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            item.Invoke();
 
             main.Close();
         }, default);

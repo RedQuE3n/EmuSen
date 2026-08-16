@@ -6,9 +6,12 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.LunaP.Commands;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
@@ -43,17 +46,15 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static MenuItem Item(MainWindow w, string name) => w.GetControl<MenuItem>(name);
+        // The action the menu item follows, under the MenuItem's old name - see §4.12.
+        private static LunaAction Item(MainWindow w, string name) => Actions(w)[name];
+
         private static TextBlock Status(MainWindow w) => w.GetControl<TextBlock>("StatusText");
         private static Control LibraryView(MainWindow w) => w.GetControl<DockPanel>("LibraryView");
         private static Control GameFrame(MainWindow w) => w.GetControl<Control>("GameFrame");
 
-        // The real XAML-wired handler, not the private method behind it.
-        private static void OpenEmulationMenu(MainWindow w) =>
-            Item(w, "EmulationMenu").RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent));
-
-        private static void Click(MainWindow w, string name) =>
-            Item(w, name).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        // Invoke is the whole click: a checkable action flips itself first.
+        private static void Click(MainWindow w, string name) => Item(w, name).Invoke();
 
         private static MainWindow StartGame()
         {
@@ -70,8 +71,6 @@ namespace EmuSen.WiseMan.Mistress
             var window = new MainWindow();
             window.Show();
 
-            OpenEmulationMenu(window);
-
             foreach (string name in new[] { "PauseMenuItem", "ResetMenuItem", "CloseGameMenuItem", "SaveStateMenuItem", "LoadStateMenuItem" })
             {
                 Assert.False(Item(window, name).IsEnabled, $"{name} should be disabled with no ROM loaded.");
@@ -82,8 +81,6 @@ namespace EmuSen.WiseMan.Mistress
         public Task Starting_a_game_enables_them() => Session.Dispatch(() =>
         {
             var window = StartGame();
-
-            OpenEmulationMenu(window);
 
             foreach (string name in new[] { "PauseMenuItem", "ResetMenuItem", "CloseGameMenuItem", "SaveStateMenuItem", "LoadStateMenuItem" })
             {
@@ -110,21 +107,18 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The check mark is only ever synced on open - see §4.12.
+        // No menu is opened here: the tick follows the state itself - see §4.12.
         [Fact]
         public Task The_pause_item_shows_checked_while_paused() => Session.Dispatch(() =>
         {
             var window = StartGame();
 
-            OpenEmulationMenu(window);
             Assert.False(Item(window, "PauseMenuItem").IsChecked);
 
             window.PauseEmulation();
-            OpenEmulationMenu(window);
             Assert.True(Item(window, "PauseMenuItem").IsChecked);
 
             window.ResumeEmulation();
-            OpenEmulationMenu(window);
             Assert.False(Item(window, "PauseMenuItem").IsChecked);
 
             window.Close();
@@ -176,7 +170,6 @@ namespace EmuSen.WiseMan.Mistress
             // Or an open console/dashboard keeps inspecting the core we dropped.
             Assert.Null(Field(window, "_debugTarget"));
 
-            OpenEmulationMenu(window);
             Assert.False(Item(window, "CloseGameMenuItem").IsEnabled);
 
             window.Close();
@@ -227,8 +220,6 @@ namespace EmuSen.WiseMan.Mistress
             var window = StartGame();
 
             Click(window, "SpeedSlowMenuItem");
-            OpenEmulationMenu(window);
-
             Assert.True(Item(window, "SpeedSlowMenuItem").IsChecked);
             Assert.False(Item(window, "SpeedNormalMenuItem").IsChecked);
             Assert.False(Item(window, "SpeedFastMenuItem").IsChecked);
@@ -293,8 +284,8 @@ namespace EmuSen.WiseMan.Mistress
 
             var slots = SlotItems(window);
             Assert.Equal(8, slots.Count);
-            Assert.Contains("empty", (string)slots[0].Header!);
-            Assert.DoesNotContain("empty", (string)slots[1].Header!);
+            Assert.Contains("empty", slots[0].Text);
+            Assert.DoesNotContain("empty", slots[1].Text);
             Assert.True(slots[1].IsChecked);
 
             window.Close();
@@ -309,11 +300,65 @@ namespace EmuSen.WiseMan.Mistress
 
             Click(window, "FullscreenMenuItem");
             Assert.Equal(WindowState.FullScreen, window.WindowState);
-            Item(window, "ViewMenu").RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent));
             Assert.True(Item(window, "FullscreenMenuItem").IsChecked);
 
             Click(window, "FullscreenMenuItem");
             Assert.Equal(WindowState.Normal, window.WindowState);
+
+            window.Close();
+        }, default);
+
+        // Every other test here would pass against a menu bar that drew nothing - see §4.12.
+        [Fact]
+        public Task The_menu_bar_really_builds_its_items() => Session.Dispatch(() =>
+        {
+            var window = StartGame();
+
+            var bar = window.GetControl<EmuSen.LunaP.Controls.MenuBar>("MenuStrip");
+            Assert.Equal(
+                new[] { "_File", "_Emulation", "_View", "_Settings" },
+                bar.Menus.Select(m => m.Title).ToArray());
+
+            // Submenu items are realised on open, so open it the way a pointer would.
+            MenuItem emulation = bar.GetVisualDescendants().OfType<MenuItem>()
+                .Single(i => (i.Header as string) == "_Emulation");
+            emulation.Open();
+
+            // Disabling the action disables the item somebody would click.
+            MenuItem pause = emulation.GetLogicalDescendants().OfType<MenuItem>()
+                .Single(i => (i.Header as string) == "_Pause");
+            Assert.True(pause.IsEnabled);
+            Click(window, "CloseGameMenuItem");
+            Assert.False(pause.IsEnabled);
+
+            window.Close();
+        }, default);
+
+        // Leaving full screen must put back the state it came from - see §4.19.
+        [Fact]
+        public Task Leaving_fullscreen_returns_a_maximized_window_to_maximized() => Session.Dispatch(() =>
+        {
+            var window = StartGame();
+            window.WindowState = WindowState.Maximized;
+
+            Click(window, "FullscreenMenuItem");
+            Assert.Equal(WindowState.FullScreen, window.WindowState);
+
+            Click(window, "FullscreenMenuItem");
+            Assert.Equal(WindowState.Maximized, window.WindowState);
+
+            window.Close();
+        }, default);
+
+        // The tick follows the window, not the last time a menu was opened - see §4.19.
+        [Fact]
+        public Task The_fullscreen_tick_follows_a_change_this_window_did_not_make() => Session.Dispatch(() =>
+        {
+            var window = StartGame();
+
+            window.WindowState = WindowState.FullScreen;
+
+            Assert.True(Item(window, "FullscreenMenuItem").IsChecked);
 
             window.Close();
         }, default);
@@ -324,26 +369,46 @@ namespace EmuSen.WiseMan.Mistress
             var window = new MainWindow();
             window.Show();
 
-            Item(window, "SettingsMenu").RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent));
             Assert.False(Item(window, "HardwareDashboardMenuItem").IsEnabled);
 
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             Invoke(window, "LaunchSelectedLibraryEntry");
-            Item(window, "SettingsMenu").RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent));
             Assert.True(Item(window, "HardwareDashboardMenuItem").IsEnabled);
 
             window.Close();
         }, default);
 
-        private static System.Collections.Generic.List<MenuItem> SlotItems(MainWindow w)
-        {
-            var slots = Item(w, "SaveSlotMenuItem");
-            slots.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent));
-            return ((System.Collections.Generic.IEnumerable<MenuItem>)slots.ItemsSource!).ToList();
-        }
+        private static System.Collections.Generic.List<LunaAction> SlotItems(MainWindow w) =>
+            Item(w, "SaveSlotMenuItem").Submenu!.Items.ToList();
 
-        private static void SelectSlot(MainWindow w, int slot) =>
-            SlotItems(w)[slot - 1].Command!.Execute(null);
+        private static void SelectSlot(MainWindow w, int slot) => SlotItems(w)[slot - 1].Invoke();
+
+        // Every action the window built, by the name its MenuItem used to carry.
+        private static System.Collections.Generic.Dictionary<string, LunaAction> Actions(MainWindow w)
+        {
+            var by = new System.Collections.Generic.Dictionary<string, LunaAction>();
+            foreach (var (field, name) in new[]
+            {
+                ("_pause", "PauseMenuItem"), ("_reset", "ResetMenuItem"), ("_closeGame", "CloseGameMenuItem"),
+                ("_saveState", "SaveStateMenuItem"), ("_loadState", "LoadStateMenuItem"),
+                ("_speedMenu", "SpeedMenuItem"), ("_slotMenu", "SaveSlotMenuItem"),
+                ("_fullscreen", "FullscreenMenuItem"), ("_hardwareDashboard", "HardwareDashboardMenuItem"),
+            })
+            {
+                by[name] = (LunaAction)Field(w, field)!;
+            }
+
+            var speeds = (ActionGroup)Field(w, "_speeds")!;
+            foreach (var (index, name) in new[]
+            {
+                (0, "SpeedNormalMenuItem"), (1, "SpeedFastMenuItem"), (2, "SpeedSlowMenuItem"), (3, "SpeedUnthrottledMenuItem"),
+            })
+            {
+                by[name] = speeds.Members[index];
+            }
+
+            return by;
+        }
 
         // Private by design - the emulation menu is internal to MainWindow, not API.
         private static void Invoke(MainWindow window, string method) =>

@@ -218,15 +218,16 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             Cheats(window).AddRamPoke("WRAM", 0x9C, 0x63, "infinite lives");
 
-            window.GetControl<MenuItem>("SettingsMenu").RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent));
-            foreach (string header in new[] { "Chea_t Database...", "_Active Cheats..." })
-            {
-                MenuItem item = System.Linq.Enumerable.Single(
-                    System.Linq.Enumerable.OfType<MenuItem>(window.GetControl<MenuItem>("SettingsMenu").Items),
-                    m => (string?)m.Header == header);
+            var settings = System.Linq.Enumerable.Single(
+                window.GetControl<EmuSen.LunaP.Controls.MenuBar>("MenuStrip").Menus, m => m.Title == "_Settings");
 
-                Assert.True(item.IsEnabled, $"{header} should not need a ROM.");
-                item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            foreach (string label in new[] { "Chea_t Database...", "_Active Cheats..." })
+            {
+                EmuSen.LunaP.Commands.LunaAction item =
+                    System.Linq.Enumerable.Single(settings.Items, a => a.Text == label);
+
+                Assert.True(item.IsEnabled, $"{label} should not need a ROM.");
+                item.Invoke();
             }
 
             Assert.Single(Cheats(window).GetCheats());

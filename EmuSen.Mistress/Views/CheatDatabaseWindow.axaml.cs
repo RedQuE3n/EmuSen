@@ -13,6 +13,10 @@ using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Mistress.Views
 {
+    // A named model for the systems list, so the count is a field rather than
+    // something parsed back out of a label - see §4.11a.
+    public sealed record CheatSystemRow(string System, int Count);
+
     // The GUI for `cheat db` - see `man cheat`. EmuSen redistributes no
     // cheat data: this either indexes a folder the user already has, or
     // downloads one to their machine on their explicit request.
@@ -72,6 +76,8 @@ namespace EmuSen.Mistress.Views
             Func<IReadOnlyCollection<string>>? supportedSystems = null, string? console = null)
         {
             InitializeComponent();
+            SystemsList.Label = r => $"{r.System}  ({r.Count})";
+            SystemsList.Key = r => r.System;
             _settings = settings;
             _activeCheats = activeCheats;
             _codec = codec;
@@ -114,7 +120,8 @@ namespace EmuSen.Mistress.Views
             IReadOnlyList<(string System, int Count)> systems = VisibleSystems();
             int total = systems.Sum(s => s.Count);
 
-            SystemsList.ItemsSource = systems.Select(s => $"{s.System}  ({s.Count})").ToList();
+            SystemsList.Refresh(systems.Select(s => new CheatSystemRow(s.System, s.Count)));
+            SystemsList.SelectedIndex = -1; // Refresh restores by Key; this window starts with none.
 
             string scope = ConsoleSystems is null ? "" : $" for {_console}";
             StatusText.Text = total > 0
@@ -125,14 +132,9 @@ namespace EmuSen.Mistress.Views
             ShowGames();
         }
 
-        // The list label carries its own count, so the name has to come back
-        // off it rather than out of the ListBox's own string.
         private void OnSystemSelected(object? sender, SelectionChangedEventArgs e)
         {
-            int index = SystemsList.SelectedIndex;
-            IReadOnlyList<(string System, int Count)> systems = VisibleSystems();
-
-            _selectedSystem = index >= 0 && index < systems.Count ? systems[index].System : null;
+            _selectedSystem = SystemsList.Selected?.System;
             ShowGames();
         }
 

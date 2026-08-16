@@ -275,6 +275,36 @@ Two deliberate limits: the scan is **not recursive** (it matches what `RomBrowse
 
 **The headless harness needed a theme first.** `TestAppBuilder` (§4.7) built a bare `Application` with no styles. Templated controls — `ListBox`, `ListBoxItem`, `Button`, `TextBox` — then have no control template and render as *nothing*, while untemplated `TextBlock`s still draw. A render assertion counting distinct colours therefore passed on the header and hint text alone, with the entire list invisible; the library screen looked correct to the test and blank in a captured frame. `TestAppBuilder` now adds `FluentTheme` and `ThemeVariant.Dark` to match `App.axaml`, and the library's render test asserts specifically that the *selected row's accent colour* is present, which only a real templated `ListBoxItem` can produce. Set `EMUSEN_UI_DUMP=/some/dir` to write the captured frames out and look at them — a directory, one `<name>.png` per capture. See `EmuSen_LunaP.md` §13.1.
 
+### 4.11a The lists are `LunaList<T>` now, and what measuring the contract changed
+
+*2026-08-16. `EmuSen_LunaP_Adoption_Gameplan.md` Path A.*
+
+Three lists kept a collection parallel to a `ListBox` of projected strings and recovered the model by indexing with `SelectedIndex`. `MainWindow`'s own comment named the shape — *"Parallel to `LibraryList`'s item strings, which are titles only"* — which is a comment explaining a hazard rather than a design. `LunaList<T>` keeps the model type, so `Selected` hands back a `RomEntry` and the parallel collection goes.
+
+Migrated: `MainWindow.LibraryList` (deleting `_libraryEntries`), `RomBrowserWindow.RomList` (deleting `_entries`), and `CheatDatabaseWindow.SystemsList` (deleting the re-derive-and-index in `OnSystemSelected`, whose comment explained that the system name *"has to come back off"* the label because the label carries a count).
+
+**Generics in XAML.** `x:TypeArguments` had no precedent in this repository. It works — `<luna:LunaList x:TypeArguments="lib:RomEntry" x:Name="LibraryList" />` — and it is worth preferring over building the list in code, because a control built in code is not in the XAML namescope and `GetControl<T>(name)` cannot find it. Every existing test lookup survived unchanged as a result.
+
+**Why the existing tests did not need rewriting.** `LunaList<T>` derives from `ListBox`, and `Refresh` sets `ItemsSource` to the *projected label strings* while keeping the models in `Models` alongside. So `GetControl<ListBox>("LibraryList")`, `SelectedIndex` and `ItemsSource.Cast<string>()` all still mean what they meant. The toolkit does the parallel-array bookkeeping — the point is that it does it once, correctly, instead of three times.
+
+**The contract was measured, and one of the measurements changed the code.** `LunaListContractTests` pins five facts, all of which are silent behaviour changes rather than compile errors if assumed wrongly:
+
+1. `Refresh` selects **nothing** — `SelectedIndex` is `-1` afterwards. A window wanting a default must say so.
+2. **`Chose` fires on a selection change, not on activation.** Setting `SelectedIndex` raises it.
+3. `Select(model)` sets the selection and raises **nothing** — the application stating what is true, the same distinction `LunaAction.IsChecked` draws in §4.12.
+4. `Refresh` restores the selection by `Key` across rebuilt objects, and stays quiet doing it, so a rescan cannot look like a click.
+5. `Refresh` drops the selection when the key is gone — the case a narrowing filter produces.
+
+Fact 2 is the one that mattered. `RomBrowserWindow` was first migrated with `RomList.Chose += entry => Close(entry.FullPath)`, which reads correctly and is wrong: the dialog would have closed on a single click, where it had always required a double-click or the Open button. The window is a modal returning a path, so this would have been immediately visible — and it had **no tests at all**, which is why it was not immediately visible. `RomBrowserWindowTests` exists now, and one of its tests asserts specifically that selecting a row does not complete the dialog.
+
+The general form is worth stating because the next list will meet it: **`Chose` is not `DoubleTapped`.** A list whose activation does something irreversible — launching a game, closing a dialog — must keep an activation gesture and use `Selected` for the value.
+
+**The library's selection reset is deliberate and was kept.** `ShowLibraryEntries` ended with `LibraryList.SelectedIndex = 0`, and `LunaList.Refresh` preserving selection would have quietly replaced that. It must not: `RefreshLibrary` wires `LibraryFilter.Submitted` to `LaunchSelectedLibraryEntry`, so typing a search and pressing Enter launches *the top match*. Preserving the previous selection instead — or dropping it, per fact 5, when the filter excludes it — would break that flow, and `Enter_in_the_search_box_starts_the_narrowed_selection` is the test that says so. The migration therefore calls `Select(shownEntries[0])` explicitly, which is behaviour-identical and now states the intent rather than implying it.
+
+**The one site that could not be migrated.** `CheatDatabaseWindow.GamesList` still holds `_games` and indexes it. `LunaList<T>` is declared `where T : class`, and `CheatDatabaseEntry` is a `readonly struct` in `EmuSen.DianaOS/DianaOS/Var/CheatDatabase.cs`. Making it a reference type would reach `CheatCommand`, `CheatDatabasePruner` and their tests — four call sites outside this frontend — and a struct-to-class change carries allocation and equality consequences that have nothing to do with a list widget. **The parallel array stays there on purpose**, and the constraint is recorded in the XAML beside it so the next person does not rediscover it by compiler error, as this was. The plan claimed four migratable sites; there were three.
+
+**Cost.** Measured against the *unmodified* tree on the same machine rather than against an earlier recorded number, which is what caught it: the suite reads 1m5s before the change and 1m5s after, with the thirteen new tests costing about 700ms in total. An earlier session had recorded ~53s for the same suite, and comparing against that number would have produced a twelve-second "regression" that does not exist.
+
 ### 4.12 The Emulation menu (`Views/MainWindow.axaml`)
 
 `Emulation` used to carry a `Pause` and a `Reset` item hardcoded to `IsEnabled="False"`, with a comment saying neither was implemented. Pause in fact *was* — `MainWindow` has had `PauseEmulation`/`ResumeEmulation` since the DianaOS console window needed them (a shell command reading `Cpu`/`Bus`/`Renderer` state races `RunFrame()` on the emulation thread unless that thread is actually stopped), reachable from the console as `pause`/`resume` and from the keyboard as `HotkeyAction.TogglePause`. The menu item was simply never wired to it. The menu now carries `Pause`, `Reset`, `Close Game`, and the two state items.

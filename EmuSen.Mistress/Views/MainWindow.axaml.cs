@@ -58,9 +58,6 @@ namespace EmuSen.Mistress.Views
 
         private EmulatorSession? _session;
 
-        // Parallel to LibraryList's item strings, which are titles only - see EmuSen_Settings_Reference.md §4.11.
-        private IReadOnlyList<RomEntry> _libraryEntries = Array.Empty<RomEntry>();
-
         // Held, not edge-triggered - see EmuSen_Rewind_And_FastForward.md §4.
         private volatile bool _turboHeld;
         private volatile bool _rewindHeld;
@@ -879,6 +876,7 @@ namespace EmuSen.Mistress.Views
             if (!_libraryFilterReady)
             {
                 _libraryFilterReady = true;
+                LibraryList.Key = e => e.FullPath;
                 LibraryFilter.SetFacets(EmuSen.Cores.CoreCatalog.FilterChoices,
                     EmuSen.Cores.CoreCatalog.FilterChoices.Contains(SelectedConsole)
                         ? SelectedConsole
@@ -897,32 +895,32 @@ namespace EmuSen.Mistress.Views
         {
             string search = LibraryFilter.SearchText;
 
-            _libraryEntries = string.IsNullOrWhiteSpace(search)
+            IReadOnlyList<RomEntry> shownEntries = string.IsNullOrWhiteSpace(search)
                 ? _libraryScan.Entries
                 : _libraryScan.Entries.Where(e => FilterBar.Matches(search, e.Title)).ToList();
 
             // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
             bool mixed = _libraryScan.Entries.Select(e => e.CoreDisplayName).Distinct().Count() > 1;
-            LibraryList.ItemsSource = _libraryEntries
-                .Select(e => mixed ? $"{e.Title}   —   {e.CoreDisplayName}" : e.Title)
-                .ToList();
+            LibraryList.Label = e => mixed ? $"{e.Title}   —   {e.CoreDisplayName}" : e.Title;
+            LibraryList.Refresh(shownEntries);
 
-            LibraryList.IsVisible = _libraryEntries.Count > 0;
+            LibraryList.IsVisible = shownEntries.Count > 0;
 
             // Otherwise a suspended game is unreachable from here - see EmuSen_Settings_Reference.md §4.18.
             bool suspended = _session is { IsRomLoaded: true };
-            LibraryHintText.IsVisible = _libraryEntries.Count > 0 || suspended;
+            LibraryHintText.IsVisible = shownEntries.Count > 0 || suspended;
             LibraryHintText.Text = suspended
                 ? $"Press {ExitToLibraryKeyName()} to return to {_currentDisplayName}."
                 : "Double-click a title, or press Enter, to start it.";
 
-            if (_libraryEntries.Count > 0)
+            if (shownEntries.Count > 0)
             {
-                string shown = _libraryEntries.Count == _libraryScan.Entries.Count
-                    ? $"{_libraryEntries.Count} game{(_libraryEntries.Count == 1 ? "" : "s")}"
-                    : $"{_libraryEntries.Count} of {_libraryScan.Entries.Count} games";
+                string shown = shownEntries.Count == _libraryScan.Entries.Count
+                    ? $"{shownEntries.Count} game{(shownEntries.Count == 1 ? "" : "s")}"
+                    : $"{shownEntries.Count} of {_libraryScan.Entries.Count} games";
                 LibraryHeaderText.Text = $"{shown} under {_libraryScan.Directory}";
-                LibraryList.SelectedIndex = 0;
+                // Deliberate: the top match is what FilterBar.Submitted launches - see §4.11a.
+                LibraryList.Select(shownEntries[0]);
             }
             else
             {
@@ -951,10 +949,8 @@ namespace EmuSen.Mistress.Views
 
         private async void LaunchSelectedLibraryEntry()
         {
-            int index = LibraryList.SelectedIndex;
-            if (index < 0 || index >= _libraryEntries.Count) return;
+            if (LibraryList.Selected is not RomEntry entry) return;
 
-            RomEntry entry = _libraryEntries[index];
             await PromptForMissingFirmwareAsync(entry.FullPath);
             LoadRom(entry.FullPath, entry.FileName);
         }

@@ -34,7 +34,18 @@ Each path states what deletion validates it, because a LunaP migration with noth
 
 ---
 
-### Path A — Typed lists (`LunaList<T>`)
+### Path A — Typed lists (`LunaList<T>`) ✅ done
+
+*Taken 2026-08-16. Three of the four sites below migrated; the fourth could not, for a reason this section had not checked. `EmuSen_Settings_Reference.md` §4.11a is the record. What it turned out to teach:*
+
+- ***`Chose` is a selection change, not an activation.*** *`RomBrowserWindow` was first wired `Chose += entry => Close(entry.FullPath)`, which would have closed a modal on one click where it had always taken a double-click. Caught by measuring the contract before trusting it, not by review.*
+- ***`LunaList<T>` is `where T : class`.*** *`CheatDatabaseWindow.GamesList` holds a `readonly struct` and is therefore not migratable without reshaping a DianaOS type used by four other call sites. The plan below claimed four sites; there were three.*
+- ***The library's `SelectedIndex = 0` was load-bearing***, *not incidental — `FilterBar.Submitted` launches the top match. §5's open question is answered by the code rather than by preference, and the behaviour was kept.*
+- ***`x:TypeArguments` works and is the right choice***, *because a list built in code is outside the XAML namescope and `GetControl` cannot find it. Every existing test lookup survived unchanged.*
+- ***Measure against the unmodified tree, not against a number in a document.*** *The suite reads 1m5s before and after; an earlier session had recorded ~53s, and comparing to that would have invented a twelve-second regression.*
+
+<details>
+<summary>Original plan text</summary>
 
 **The strongest evidence in the codebase, and the one I would take first.**
 
@@ -58,6 +69,8 @@ Four sites hold a collection parallel to a `ListBox` of projected strings and re
 **Defects to look for before fixing anything.** Following the menu path's example, write the test against the unmodified window first. The specific thing to probe: `MainWindow.ShowLibraryEntries` forces `SelectedIndex = 0` after a filter change, so a filter that narrows the list moves the selection to an unrelated game. Whether that is a defect or intended is a question for the project owner, and it should be *answered* before `Refresh` silently changes the behaviour by preserving selection instead.
 
 **What this path does not cover:** `ActiveCheatsWindow`'s `CheatsList` is deliberately excluded — it already uses `SelectedItem as CheatRow` rather than an index, so it has no parallel array to delete, and it is Path B's subject for a different reason.
+
+</details>
 
 ---
 
@@ -125,7 +138,7 @@ The first gameplan already drew this line for the same window: *"`MainWindow` an
 
 ## 3. Sequencing
 
-1. **Path A**, first, because the evidence is strongest and the pattern repeats four times — the fourth site will be faster than the first, and the shape will be settled before Path B needs it.
+1. ~~**Path A**, first~~ — **done**. The pattern repeated three times, not four.
 2. **Path C**, second, because it is small, independent, and the only one that touches Hotaru. Good to land while Path A's shape is still fresh.
 3. **Path B**, third, and split in two: the migration behaviour-neutral, then sorting as its own decision.
 4. **Path D**, last, and only if the Hotaru half is wanted — the Mistress half alone is worth little, since a menu that names its keys while the console frontend does not is half an answer to §6.
@@ -148,7 +161,7 @@ From the first gameplan, and from the menu path that has already been taken:
 
 ## 5. Open questions, not decided here
 
-- **Does the library list's selection reset matter?** Path A changes it as a side effect. Ask before landing, not after.
+- ~~**Does the library list's selection reset matter?**~~ **Answered by the code, 2026-08-16**: it is load-bearing for the search-then-Enter flow, and was kept. Path A did not change it.
 - **Should the cheat table sort?** Path B makes it possible and does not decide it.
 - **Should Hotaru's hotkeys become data?** Path D needs it; nothing else does. It is the largest single item in this document and the least certainly wanted.
 - **`ActionGroup.Checked` is read-only** despite LunaP 0.8.0's XML documentation describing a setter. Verified by reflection over the shipped assembly. This is an upstream doc bug and should be filed against the LunaP repository; nothing in this plan is blocked by it, because `member.IsChecked = true` does what the doc's setter claims.

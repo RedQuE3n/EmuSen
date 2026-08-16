@@ -21,8 +21,6 @@ namespace EmuSen.Mistress.Views
     // state beyond "what did the user pick, if anything."
     public partial class RomBrowserWindow : Window
     {
-        private IReadOnlyList<RomEntry> _entries = Array.Empty<RomEntry>();
-
         // Parameterless constructor exists only so Avalonia's XAML tooling
         // (previewer, generated InitializeComponent) is happy - always use
         // the full constructor in real code (see MainWindow's menu handler).
@@ -31,16 +29,18 @@ namespace EmuSen.Mistress.Views
         public RomBrowserWindow(string? romDirectory)
         {
             InitializeComponent();
+            RomList.Label = e => e.FileName;
+            RomList.Key = e => e.FullPath;
+            // Not Chose: that is a selection change, so one click would close the dialog.
             PopulateList(romDirectory);
         }
 
         private void PopulateList(string? romDirectory)
         {
             RomLibraryResult result = RomLibrary.Scan(romDirectory);
-            _entries = result.Entries;
 
-            DirectoryText.Text = _entries.Count > 0 ? result.Directory : RomLibrary.DescribeEmpty(result);
-            RomList.ItemsSource = _entries.Select(e => e.FileName).ToList();
+            DirectoryText.Text = result.Entries.Count > 0 ? result.Directory : RomLibrary.DescribeEmpty(result);
+            RomList.Refresh(result.Entries);
         }
 
         private void OnOpenClick(object? sender, RoutedEventArgs e) => TryReturnSelection();
@@ -51,9 +51,7 @@ namespace EmuSen.Mistress.Views
 
         private void TryReturnSelection()
         {
-            int index = RomList.SelectedIndex;
-            if (index < 0 || index >= _entries.Count) return;
-            Close(_entries[index].FullPath);
+            if (RomList.Selected is RomEntry entry) Close(entry.FullPath);
         }
     }
 }

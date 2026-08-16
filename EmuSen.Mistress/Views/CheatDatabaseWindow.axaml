@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
+        xmlns:views="clr-namespace:EmuSen.Mistress.Views"
         x:Class="EmuSen.Mistress.Views.CheatDatabaseWindow"
         Title="Cheat Database"
         Width="820" Height="620"
@@ -67,7 +68,10 @@
 
             <DockPanel Grid.Column="0">
                 <TextBlock DockPanel.Dock="Top" Text="Installed" FontWeight="Bold" Margin="0,0,0,4" />
-                <ListBox x:Name="SystemsList" AutomationProperties.Name="Systems with cheat files" SelectionChanged="OnSystemSelected" />
+                <luna:LunaList x:TypeArguments="views:CheatSystemRow"
+                               x:Name="SystemsList"
+                               AutomationProperties.Name="Systems with cheat files"
+                               SelectionChanged="OnSystemSelected" />
             </DockPanel>
 
             <DockPanel Grid.Column="2">
@@ -84,6 +88,8 @@
                         Margin="0,6,0,0"
                         IsEnabled="False"
                         Click="OnLoadGameClick" />
+                <!-- Still a ListBox: LunaList<T> is where T : class and
+                     CheatDatabaseEntry is a struct - see §4.11a. -->
                 <ListBox x:Name="GamesList"
                          AutomationProperties.Name="Games in the selected system"
                          SelectionChanged="OnGameSelected"

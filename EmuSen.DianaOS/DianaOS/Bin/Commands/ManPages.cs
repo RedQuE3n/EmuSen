@@ -7,33 +7,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.DianaOS.DianaOS.Bin.Commands
 {
-    // Long-form manual pages for `man <command>` (DianaOSInterpreter.Dispatch's
-    // own special case, alongside `help`/`export`/`unset`/`source` -
-    // see that method's own comment for why `man` isn't just another
-    // IDianaOSCommand). Deliberately a separate, centralized module
-    // rather than a `ManPage` member added to IDianaOSCommand itself:
-    // that would force all ~40 existing command classes (most of them
-    // one-liners) to carry a paragraph of documentation text alongside
-    // their actual logic, for a feature that's purely about the shell's
-    // own help system, not about how any individual command works. One
-    // file, one place to keep this in sync, no per-command interface
-    // churn - the same reasoning DebugCommandHelpers already uses for
-    // shared, stateless command-support code that doesn't belong wedged
-    // into any one command class. Lives directly under Commands/ rather
-    // than Commands/Unix or Commands/EmuSen - it documents commands from
-    // both, and isn't an IDianaOSCommand itself, so neither subfolder fits.
-    //
-    // Each page follows the same loose structure a real Unix man page
-    // does (NAME/SYNOPSIS/DESCRIPTION, EXAMPLES where an example
-    // actually clarifies something the synopsis alone doesn't) without
-    // being slavish about it - this is a debug console's help text, not
-    // a formal reference manual. `man <command>` with no matching entry
-    // here falls back to that command's own one-line `Usage` in
-    // DianaOSInterpreter.Dispatch, so a newly-added command still gets
-    // *something* useful before anyone gets around to writing its real
-    // page - `Lookup` returning null is an expected, handled case, not
-    // a bug to fix by adding a page for absolutely everything the
-    // instant a command is created.
+    // Every `man <command>` page, and how to write one - see EmuSen_Debugging_Tools_Reference_v5.md §3.17.
     public static class ManPages
     {
         public static string? Lookup(string name) =>

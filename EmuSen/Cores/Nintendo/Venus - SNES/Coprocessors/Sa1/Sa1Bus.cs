@@ -3,9 +3,7 @@ using EmuSen.Cores.Nintendo.Venus.Processor;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 {
-    // What the SA-1's 65816 sees. No WRAM, no PPU, no S-CPU registers - just
-    // ROM, BW-RAM, I-RAM and the shared register file, all at a flat two
-    // master clocks per access - see Venus_SA1.md §2.
+    // What the SA-1's 65816 sees - see Venus_SA1.md §2.
     public sealed class Sa1Bus : ICpuBus
     {
         [SkipInState] private readonly Sa1 _sa1;
@@ -21,8 +19,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 
         public int GetAccessSpeedCycles(uint address) => Sa1.MasterClocksPerCycle;
 
-        // The SA-1 has no equivalent of the S-CPU's DMA cycle stealing: its own
-        // DMA is modelled as instantaneous, so nothing is ever owed here.
+        // The SA-1 steals no cycles; its own DMA is modelled as instantaneous - see Venus_SA1.md §5.
         public int TakePendingDmaCycles() => 0;
     }
 }

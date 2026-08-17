@@ -3,14 +3,10 @@ using System.Linq;
 
 namespace EmuSen.Cores.Nintendo.Moon.Cheats
 {
-    // The plain "address:value" form NES cheats are shared in when they did
-    // not come off a Game Genie - four hex digits of CPU address, two of
-    // value, e.g. "007F:63". Mesen calls the same shape a custom code.
-    // No cipher: what you type is what gets poked - see Moon_Cheats.md §2.
+    // The plain "address:value" form NES cheats are shared in when they did not come off a Game Genie - see Moon_Cheats.md §2.
     public static class NesRawCodec
     {
-        // Exactly 6 hex digits once separators are stripped. Six rather than
-        // eight is what keeps this from colliding with the SNES form.
+        // Exactly 6 hex digits once separators are stripped.
         public static bool CanDecode(string code) => TryNormalize(code, out _);
 
         public static (int Address, byte Value) Decode(string code)

@@ -3,14 +3,10 @@ using EmuSen.Cores.Nintendo.Venus.Memory.Mappers;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Obc1
 {
-    // Seta OBC1: not a processor at all, just an address generator sitting in
-    // front of the cartridge's SRAM so a game can write one sprite's worth of
-    // OAM through a fixed four-byte port. Only Metal Combat uses it.
-    // See Venus_OBC1.md.
+    // Seta OBC1: not a processor at all, just an address generator sitting in front of the cartridge's.
     public sealed class Obc1
     {
-        // The chip holds no state of its own - everything it reads and writes,
-        // including its own control bytes, lives in the cartridge's SRAM.
+        // The chip holds no state of its own - everything it reads and writes, including its own control.
         [SkipInState] private readonly byte[] _sram;
         [SkipInState] private readonly int _mask;
 
@@ -50,8 +46,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Obc1
                     WriteRam(LowAddress + (offset - 0x1FF0), value);
                     return;
 
-                // The high table packs four sprites per byte, so a write has
-                // to merge into the right 2-bit field - see Venus_OBC1.md §2.
+                // The high table packs four sprites per byte, so a write has to merge into the right 2-bit field - see Venus_OBC1.md §2.
                 case 0x1FF4:
                 {
                     int shift = (ReadRam(0x1FF6) & 0x03) << 1;

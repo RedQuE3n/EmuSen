@@ -1,7 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 {
-    // SA-1 arithmetic unit ($2250-$2254 in, $2306-$230B out): signed multiply,
-    // signed/unsigned divide, and a 40-bit multiply-accumulate - see Venus_SA1.md §6.
+    // SA-1 arithmetic unit ($2250-$2254 in, $2306-$230B out): signed multiply, signed/unsigned divide - see Venus_SA1.md §6.
     public sealed class Sa1Math
     {
         private const int ModeMultiply = 0;
@@ -35,8 +34,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             _b = (ushort)((_b & 0x00FF) | (value << 8));
             Execute();
 
-            // Hardware clears the operand after a plain multiply or divide, but
-            // keeps it for accumulate so a running sum can reuse it.
+            // Cleared after a plain multiply or divide, kept for accumulate - see Venus_SA1.md §6.
             if (!Accumulate || Mode == ModeDivide) _b = 0;
         }
 
@@ -52,9 +50,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             long product = (short)_a * (long)(short)_b;
             if (Accumulate)
             {
-                // Kept as a full signed long so a running sum that dips negative
-                // keeps accumulating correctly; the register reads only ever
-                // expose the low 40 bits of it either way.
+                // A full signed long, so a running sum dipping negative keeps accumulating - see Venus_SA1.md §6.
                 Result += product;
                 Overflow = Result > 0x7FFFFFFFFFL || Result < -0x8000000000L;
                 return;
@@ -64,8 +60,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             Overflow = false;
         }
 
-        // Signed dividend, unsigned divisor; quotient lands in the low word and
-        // the remainder in the high word - see Venus_SA1.md §6.1.
+        // Signed dividend, unsigned divisor; quotient lands in the low word and the remainder in the high - see Venus_SA1.md §6.1.
         private void ExecuteDivide()
         {
             short dividend = (short)_a;
@@ -82,8 +77,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
                 quotient = dividend / divisor;
                 remainder = dividend % divisor;
 
-                // Hardware floors toward negative infinity rather than truncating,
-                // so a negative dividend keeps the remainder non-negative.
+                // Hardware floors toward negative infinity rather than truncating - see Venus_SA1.md §6.1.
                 if (remainder < 0)
                 {
                     quotient--;

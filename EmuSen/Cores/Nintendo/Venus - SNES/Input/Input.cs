@@ -2,26 +2,16 @@ using System;
 
 namespace EmuSen.Cores.Nintendo.Venus.Controllers
 {
-    // The 12 real SNES controller buttons. Deliberately excludes any concept of
-    // "which key on my keyboard" - that mapping belongs in the front end (Program.cs),
-    // not here.
+    // The 12 real SNES controller buttons.
     public enum SnesButton
     {
         B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R
     }
 
-    // SNES controller emulation at the register level: the $4218-$421B auto-joypad-read
-    // latches (what essentially every game, including SMW, actually uses) and the
-    // $4016/$4017 manual serial shift-register protocol (older-style polling, included
-    // for completeness). No dependency on Raylib or any other input library - the front
-    // end calls SetButton() based on whatever real input device it's reading, which
-    // keeps this class portable and easy to test in isolation.
+    // SNES controller emulation at the register level: the $4218-$421B auto-joypad-read latches (what.
     public class Input
     {
-        // Bit position within the 16-bit controller word for each button, matching
-        // real hardware's shift order (MSB first): B Y Select Start Up Down Left
-        // Right A X L R 0 0 0 0. This exact order is what $4218/$4219 (and the
-        // $4016 serial sequence) actually shift out on real hardware.
+        // Bit position within the 16-bit controller word for each button, matching real hardware's shift.
         private static readonly int[] ButtonBit =
         {
             15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4
@@ -31,9 +21,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Controllers
         private ushort _liveJoy1;
         private ushort _liveJoy2;
 
-        // Latched state as of the last auto-joypad-read - this is what $4218-$421B
-        // actually return. Real hardware re-latches automatically once per frame
-        // during vblank; call LatchAutoJoypad() at that point.
+        // Latched state as of the last auto-joypad-read - this is what $4218-$421B actually return.
         private ushort _latchedJoy1;
         private ushort _latchedJoy2;
 
@@ -42,8 +30,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Controllers
         private ushort _shiftJoy1;
         private ushort _shiftJoy2;
 
-        // Called by the front end whenever a real input device's button state
-        // changes. controller is 1 or 2.
+        // Called by the front end whenever a real input device's button state changes.
         public void SetButton(SnesButton button, bool pressed, int controller = 1)
         {
             int bit = ButtonBit[(int)button];
@@ -59,10 +46,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Controllers
             }
         }
 
-        // Mirrors real hardware's automatic joypad read, which happens once per
-        // frame at the start of vblank (gated on NMITIMEN bit 0 on real hardware;
-        // treated as always-on here since essentially every game that reads
-        // $4218 leaves it enabled for the whole time it's doing so).
+        // Mirrors real hardware's automatic joypad read, which happens once per frame at the start of vblank.
         public void LatchAutoJoypad()
         {
             _latchedJoy1 = _liveJoy1;
@@ -72,22 +56,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Controllers
             _shiftJoy2 = 0xFFFF;
         }
 
-        // $4016 write: bit 0 is the strobe line. While held high, the shift
-        // registers continuously re-latch the live state; the read sequence only
-        // advances once strobe goes low.
-        //
-        // Seeds from _liveJoy1/_liveJoy2, not _latchedJoy1/_latchedJoy2 - a
-        // real bug found investigating why SMAS's classic NES-style games
-        // (manual $4016/4017 polling) don't respond to input while SMW
-        // (auto-joypad) does: VenusCore.RunFrame() fires NMI before calling
-        // LatchAutoJoypad() for the frame (matches real hardware's own
-        // ordering), so a game that manually polls $4016 during its own NMI
-        // handler - the standard place to do it - would seed the shift
-        // register from LAST frame's auto-joypad latch, not this frame's
-        // live state, on every single frame consistently. ReadJoy1Serial()
-        // below already correctly reads _liveJoy1 while strobe is high (per
-        // this same comment's own description) - this just brings the
-        // strobe-high snapshot in line with that.
+        // $4016 write: bit 0 is the strobe line.
         public void WriteStrobe(byte data)
         {
             _strobe = (data & 0x01) != 0;
@@ -99,8 +68,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Controllers
         }
 
         // $4016 read, bit 0 of the return value is the next Joy1 bit (MSB first).
-        // Bits beyond the real 16 read back as 1, matching real hardware's
-        // "no more buttons" convention.
         public byte ReadJoy1Serial()
         {
             if (_strobe)

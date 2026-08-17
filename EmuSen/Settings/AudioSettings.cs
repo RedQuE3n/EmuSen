@@ -2,8 +2,7 @@ using System;
 
 namespace EmuSen.Audio
 {
-    // Central hub for audio-related settings - see
-    // EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Settings_Reference.md §2.
+    // Every audio-related setting in one place - see EmuSen_Settings_Reference.md §2.
     public static class AudioSettings
     {
         public static int SampleRate = 32000;
@@ -23,10 +22,7 @@ namespace EmuSen.Audio
 
         public static int OutputTargetFrames => OutputTargetLatencyMs * SampleRate / 1000;
 
-        // Applies etc/EmuSen/audio.json, seeding it on first run so there is
-        // something to hand-edit - see EmuSen_Config_Reference.md §3.2. Values
-        // are clamped because that file is meant to be edited by hand and a
-        // zero sample rate divides by zero in OutputTargetFrames.
+        // Applies etc/EmuSen/audio.json, seeding it on first run so there is something to hand-edit - see EmuSen_Config_Reference.md §3.2.
         public static void LoadFromDisk()
         {
             bool seed = !Galaxia.Models.AudioConfig.Exists;

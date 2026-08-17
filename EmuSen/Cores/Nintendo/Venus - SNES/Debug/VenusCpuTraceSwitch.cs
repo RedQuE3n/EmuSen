@@ -7,12 +7,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
-    // Adapts EmuSen.Debug.DebugSettings' own CpuVerboseLogging/
-    // CpuTraceCountdown flags to DianaOS's ICpuTraceSwitch contract, so
-    // TraceCommand can use them without EmuSen.DianaOS itself referencing
-    // this project (see TraceCommand's own header comment). The flags
-    // themselves stay in DebugSettings unchanged - this is purely the
-    // plug that lets a host wire them in.
+    // Adapts EmuSen.Debug.DebugSettings' own CpuVerboseLogging/ CpuTraceCountdown flags to DianaOS's.
     public sealed class VenusCpuTraceSwitch : ICpuTraceSwitch
     {
         public void Arm(int instructionCount)

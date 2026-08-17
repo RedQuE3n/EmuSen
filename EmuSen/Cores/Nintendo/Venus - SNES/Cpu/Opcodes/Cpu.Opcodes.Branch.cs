@@ -9,9 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // Every opcode that changes PC (and sometimes PB): unconditional jumps/
-    // calls (JMP/JML/JSR/JSL/RTS/RTL/BRA/BRL) and every conditional branch
-    // (BPL/BNE/BEQ/BVS/BVC/BCC/BCS/BMI).
+    // Every opcode that changes PC (and sometimes PB): unconditional jumps/ calls.
     public partial class Cpu
     {
         private void OpJSR(uint address)
@@ -70,8 +68,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private void OpBRL(uint address)
         {
-            // Same as BRA - unconditional, always taken - just reached via the wider
-            // 16-bit offset computed in AddrRelativeLong.
+            // Unconditional like BRA, just reached through the wider 16-bit offset.
             PC = (ushort)(address & 0xFFFF);
         }
 

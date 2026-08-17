@@ -1,9 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 {
-    // The plot hardware: PLOT/RPIX/COLOR/CMODE plus the 8-pixel cache that
-    // makes them practical. The framebuffer lives in Game Pak RAM already in
-    // SNES planar tile format, so the S-CPU can DMA it straight to VRAM - see
-    // Venus_SuperFX.md §6.
+    // The plot hardware: PLOT/RPIX/COLOR/CMODE plus the 8-pixel cache that makes them practical - see Venus_SuperFX.md §6.
     public sealed partial class SuperFx
     {
         // One tile row of pending pixels, index 0 leftmost.
@@ -11,9 +8,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         private int _pixelCacheAddress = -1;
         private byte _pixelCachePending;
 
-        // Answers "is this game plotting at all, and in which layout" without
-        // instrumentation - POR/SCMR sampled per frame cannot, since CMODE is
-        // set and cleared inside one - see Venus_SuperFX.md §8.
+        // Answers "is this game plotting at all, and in which layout" without instrumentation - POR/SCMR - see Venus_SuperFX.md §8.
         public long DebugPlotCount { get; private set; }
         public long DebugPlotObjCount { get; private set; }
         public byte DebugPlotScmr { get; private set; }
@@ -32,8 +27,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _pixelCachePending = 0;
         }
 
-        // SCMR bits 1-0 pick the colour depth; 8bpp is the only one that uses
-        // a whole byte per pixel.
+        // SCMR bits 1-0 pick the colour depth; 8bpp is the only one that uses a whole byte per pixel.
         private int ColorDepth => (_scmr & 0x03) switch
         {
             0 => 2,
@@ -55,10 +49,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _ => 16,  // OBJ mode - see Venus_SuperFX.md §6.2
         };
 
-        // Tiles are stored in vertical strips, which is why the mode register
-        // specifies a height: it is the column stride - see Venus_SuperFX.md §6.1.
-        // OBJ mode instead lays the buffer out the way the PPU wants sprite
-        // tiles, in 128x128 pages of 16x16 tiles - see Venus_SuperFX.md §6.2.
+        // Tiles are stored in vertical strips, which is why the mode register specifies a height: it is the - see Venus_SuperFX.md §6.1.
         private int TileRowAddress(int x, int y)
         {
             int bytesPerTile = 8 * ColorDepth;
@@ -99,8 +90,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         private void LoadColorFromRomBuffer() => _colr = ColorValue(_romBuffer);
 
-        // R1/R2 are full 16-bit registers, but the plot hardware only sees
-        // their low bytes - R1 runs past 255 mid-row - see Venus_SuperFX.md §6.
+        // R1/R2 are full 16-bit registers, but the plot hardware only sees their low bytes - R1 runs past 255 - see Venus_SuperFX.md §6.
         private int OpPlot()
         {
             Plot((byte)R[1], (byte)R[2]);
@@ -129,8 +119,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             };
         }
 
-        // What the chip was actually asked to draw, which per-frame register
-        // sampling cannot see - see Venus_SuperFX.md §8.
+        // What the chip was actually asked to draw, which per-frame register sampling cannot see - see Venus_SuperFX.md §8.
         private void RecordPlotForDebug(int x, int y)
         {
             DebugPlotCount++;
@@ -160,8 +149,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         {
             RecordPlotForDebug(x, y);
 
-            // Colour 0 is transparent unless POR bit 0 says otherwise, and the
-            // test reads COLR before dithering - see Venus_SuperFX.md §6.
+            // Colour 0 is transparent unless POR bit 0 says otherwise, and the test reads COLR before dithering - see Venus_SuperFX.md §6.
             if ((_por & 0x01) == 0 && IsTransparent()) return;
 
             byte color = _colr;
@@ -188,8 +176,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _pixelCachePending |= (byte)(1 << index);
         }
 
-        // Writes the pending pixels out as bitplanes, preserving whatever the
-        // untouched pixel positions already held.
+        // Writes the pending pixels out as bitplanes, preserving whatever the untouched pixel positions.
         private void FlushPixelCache()
         {
             if (_pixelCachePending == 0 || _pixelCacheAddress < 0) return;

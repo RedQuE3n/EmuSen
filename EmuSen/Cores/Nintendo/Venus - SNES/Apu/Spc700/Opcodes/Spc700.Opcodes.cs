@@ -110,9 +110,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         }
         private void OpCMP_dp_dp(ushort _)
         {
-            // 1. Fetch the source and destination direct page offsets directly from the PC stream
-            // (Ensure this matches your PC incrementing logic. If your fetch loop already 
-            // increments PC past the opcode, PC now points to the srcOffset).
+            // Source then destination offsets, both fetched straight from the PC stream.
             byte srcOffset = Read8(PC++);
             byte dstOffset = Read8(PC++);
         
@@ -239,17 +237,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private void OpDIV_YA_X(ushort address)
         {
-            // Real hardware does NOT compute a plain ya/X - the SPC700's
-            // DIV instruction emulates a specific bit-by-bit restoring
-            // division circuit, which only produces a plain quotient/
-            // remainder when Y < (X<<1); otherwise it overflows partway
-            // through and produces a different (still fully documented,
-            // deterministic) result. Ported from the widely-referenced
-            // algorithm (matches bsnes/higan's implementation) and
-            // verified against the TomHarte/ProcessorTests spc700 ground-
-            // truth vectors via the SpcValidation harness - a previous
-            // "just do ya/X always" version failed ~23% of DIV's own test
-            // vectors, exactly the fraction where Y >= (X<<1) doesn't hold.
+            // Real hardware does NOT compute a plain ya/X - the SPC700's DIV instruction emulates a specific.
             ushort ya = (ushort)((Y << 8) | A);
 
             SetFlag(SpcFlags.H, (Y & 0x0F) >= (X & 0x0F));
@@ -1181,9 +1169,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private void OpMOV_A_IndXInc(ushort address)
         {
-            // Mirrors OpMOV_IndXInc_A (0xAF, "MOV (X)+, A") - same AddrIndirectX
-            // addressing (current dp+X address, not yet incremented), just
-            // read-then-increment instead of write-then-increment.
+            // Mirrors OpMOV_IndXInc_A (0xAF, "MOV (X)+, A") - same AddrIndirectX addressing (current dp+X.
             A = Read8(address);
             X++;
             UpdateZN(A);
@@ -1192,15 +1178,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         // DAA/DAS - see Venus_APU.md §2.4.
         private void OpDAA_A(ushort address)
         {
-            // The high-byte check (">99 or C") tests A's value BEFORE the
-            // low-nibble adjustment above it, not after - real hardware's
-            // adjust logic evaluates both conditions off the original
-            // operand, it doesn't chain them sequentially. Confirmed via
-            // the TomHarte/ProcessorTests spc700 ground-truth suite: e.g.
-            // A=$9C, H=1, C=1 must add $66 total (both adjustments fire
-            // off the original $9C) to reach the correct $02, not the
-            // wrong $08 you get by adding $06 first and then re-checking
-            // the already-adjusted $A2 against the >$99 threshold.
+            // Both adjustments test A's original value, not the already-adjusted one - see Venus_APU.md §7.
             byte original = A;
             if ((A & 0x0F) > 9 || GetFlag(SpcFlags.H))
             {
@@ -1216,10 +1194,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private void OpDAS_A(ushort address)
         {
-            // See OpDAA_A's own comment - same bug, mirrored for
-            // subtraction: the high-byte check must test A's original
-            // value, not the value already decremented by the low-nibble
-            // adjustment just above it.
+            // See OpDAA_A's own comment - same bug, mirrored for subtraction: the high-byte check must test A's.
             byte original = A;
             if ((A & 0x0F) > 9 || !GetFlag(SpcFlags.H))
             {
@@ -1246,8 +1221,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             PC = (ushort)((high << 8) | low);
         }
 
-        // Shared by SLEEP (0xEF) and STOP (0xFF) - both just halt the CPU
-        // until Reset(); see _halted in Spc700.cs.
+        // Shared by SLEEP (0xEF) and STOP (0xFF) - both just halt the CPU until Reset(); see _halted in Spc700.cs.
         private void OpHalt(ushort address)
         {
             _halted = true;

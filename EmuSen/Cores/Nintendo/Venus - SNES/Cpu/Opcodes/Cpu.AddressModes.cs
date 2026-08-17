@@ -20,40 +20,17 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             // Fetch the 8-bit offset from the instruction
             byte offset = Fetch8();
             
-            // Stack Relative addressing always accesses Bank 0. 
-            // The effective address is the Stack Pointer + offset.
+            // Stack Relative addressing always accesses Bank 0.
             return (uint)((S + offset) & 0xFFFF);
         }
 
-        // (sr,S),Y: the 16-bit pointer lives on the stack (always Bank 0, same
-        // as plain stack-relative above), then gets combined with DB and
-        // indexed by Y - same combine-then-index pattern as (dp),Y
-        // (AddrDirectIndirectY below). Verified against the documented 65816
-        // opcode matrix (oxyron.de, cross-checked against softpixel's table)
-        // for the eight 0x_3 opcodes that use it: ORA/AND/EOR/ADC/STA/LDA/
-        // CMP/SBC (sr,S),Y.
-        // Real 65816 hardware: any direct-page addressing mode costs one
-        // extra cycle when D's low byte is nonzero (the CPU has to add the
-        // 8-bit offset to a non-page-aligned D and can't just concatenate
-        // bytes for free). Reported via _addrModeExtraCycles - see its
-        // field comment in Cpu.cs - rather than a per-opcode table entry,
-        // since it's a property of the addressing mode itself, not the
-        // opcode using it.
+        // (sr,S),Y: the 16-bit pointer lives on the stack (always Bank 0, same as plain stack-relative.
         private void ChargeDirectPagePenalty()
         {
             if ((D & 0xFF) != 0) _addrModeExtraCycles++;
         }
 
-        // Real 65816 hardware: indexed addressing that carries out of the
-        // low byte of the 16-bit offset (i.e. crosses a page) costs one
-        // extra cycle - the CPU speculatively reads the wrong page first,
-        // then re-reads once it notices the carry. Approximated here as
-        // applying unconditionally on a crossing regardless of 8-bit vs
-        // 16-bit index width or read-vs-write instruction (the real
-        // hardware rule is somewhat narrower - e.g. 16-bit index and pure
-        // stores don't always take it), which is a known, accepted
-        // simplification rather than threading opcode-level read/write and
-        // index-width flags through every addressing mode for it.
+        // Real 65816 hardware: indexed addressing that carries out of the low byte of the 16-bit offset (i.e.
         private void ChargePageCrossingPenalty(uint baseAddr, int index)
         {
             if ((baseAddr & 0xFF00) != ((baseAddr + index) & 0xFF00)) _addrModeExtraCycles++;
@@ -166,8 +143,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private uint AddrAbsoluteIndirect()
         {
-            // JMP (abs): 16-bit pointer lives in bank 0; the 16-bit target read from it
-            // is combined with the current program bank.
+            // JMP (abs): the pointer is in bank 0, and the target keeps the current program bank.
             ushort ptr = Fetch16();
             ushort target = (ushort)(_bus.Read8(ptr) | (_bus.Read8((uint)((ptr + 1) & 0xFFFF)) << 8));
             return ((uint)PB << 16) | target;
@@ -175,8 +151,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private uint AddrAbsoluteIndirectLong()
         {
-            // JML [abs]: 16-bit pointer lives in bank 0; a full 24-bit target
-            // (offset low, offset high, bank) is read from it.
+            // JML [abs]: the pointer is in bank 0, and the target carries its own bank byte.
             ushort ptr = Fetch16();
             uint low = _bus.Read8(ptr);
             uint high = _bus.Read8((uint)((ptr + 1) & 0xFFFF));
@@ -186,8 +161,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private uint AddrAbsoluteIndexedIndirect()
         {
-            // JMP/JSR (abs,X): pointer address is (abs + X) inside the CURRENT program
-            // bank, and the 16-bit target read from it also stays in the program bank.
+            // JMP/JSR (abs,X): pointer address is (abs + X) inside the CURRENT program bank, and the 16-bit.
             ushort offset = Fetch16();
             uint ptr = ((uint)PB << 16) | (uint)((offset + X) & 0xFFFF);
             uint ptrNext = ((uint)PB << 16) | (uint)((offset + X + 1) & 0xFFFF);
@@ -224,10 +198,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private uint AddrRelativeLong()
         {
-            // BRL's offset is 16-bit signed (not 8-bit like BRA/AddrRelative), which
-            // is exactly why it exists - to reach branch targets too far away for the
-            // short form. Cast through short so the sign extends correctly before
-            // adding to PC.
+            // BRL's offset is 16-bit signed (not 8-bit like BRA/AddrRelative), which is exactly why it exists.
             short offset = (short)Fetch16();
             return ((uint)PB << 16) | (ushort)(PC + offset);
         }

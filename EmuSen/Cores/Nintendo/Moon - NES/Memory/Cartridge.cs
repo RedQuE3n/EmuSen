@@ -63,9 +63,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
             return cart;
         }
 
-        // The header alone, with no board built. A catalogue has to be able to
-        // record an image whose mapper this program does not implement, and
-        // CreateMapper throws for exactly those - see EmuSen_Galaxia.md §7.
+        // The header alone, with no board built - see EmuSen_Galaxia.md §7.
         public static Cartridge Describe(byte[] image)
         {
             var cart = new Cartridge();

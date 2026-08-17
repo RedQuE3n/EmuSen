@@ -181,11 +181,30 @@ Missing that bank check meant a perfectly normal WRAM source address like `$7E21
 
 **Worth re-checking**: the still-open "Yoshi/coins don't render" note in `EmuSen_Games_Tested.md` also centers on a WRAM staging buffer (`$7E8000-$7E97FF`) feeding a VRAM DMA — the same general shape as this bug. Not confirmed to be the same root cause, but worth trying again now that this bank check is fixed.
 
+### 3.1b The WRAM/`$2180` bus conflict, and what `CopyDmaByte` returns
+
+*2026-08-16, from `Dma.cs`, which carried 110 lines across 9 blocks. Ported from Mesen2's `SnesDmaController::CopyDmaByte`, the reference this was compared against directly.*
+
+WRAM cannot simultaneously be the DMA's A-bus address **and** accept a write through its own `$2180` (WMDATA) port in the same cycle — they are two paths into one array (§1.3). Real hardware resolves that conflict asymmetrically, and the two directions fail differently:
+
+- **WRAM → `$2180`**: the write is silently **dropped**. Nothing happens at all.
+- **`$2180` → WRAM**: the write **does** happen, but with garbage — `$FF` — rather than whatever the DMA nominally read.
+
+This was previously unhandled entirely, so the emulator performed the WRAM→`$2180` write hardware drops. Worth stating plainly because of what it means for the still-open Yoshi/coin/block investigation (`EmuSen_Games_Tested.md`): if this path is ever actually reached, the old bug ran the **opposite** direction of that symptom — writing *more* than hardware would, not less. It was fixed as a real correctness gap on its own terms, not as a candidate explanation for that.
+
+Both this and §3.1a's arbitration restriction are applied by one shared helper called from **both** `ExecuteGeneralDma` and `ExecuteHdma`, mirroring Mesen calling `CopyDmaByte` from both `RunDma` and `RunHdmaTransfer`. HDMA can target `$2180` too, however rarely a real game does.
+
+`CopyDmaByte` returns the byte actually transferred, which is four different things depending on how the transfer resolved: the real value on a normal transfer; `$FF` on the `$2180`→WRAM garbage case; the current open-bus value when arbitration blocked the read side; and an unspecified `0` on the WRAM→`$2180` no-write case, where there is nothing meaningful to report. Callers that only care about the write — HDMA's window-register log, for instance — can still show a value.
+
 ### 3.2 HDMA
 
 Re-armed once per frame (`InitHdma`) and stepped once per scanline (`ExecuteHdma`) — this is how per-scanline effects (window wipes, palette changes, Mode 7 matrix updates) get their data without CPU intervention every line.
 
-**7-bit line counter**: bit 7 of the line-counter byte is a "repeat" flag, not part of the count — only the lower 7 bits actually count down. Getting this wrong (treating the whole byte as the counter) breaks any HDMA table using the repeat flag, which is most of them.
+**7-bit line counter**: bit 7 of the line-counter byte is a "repeat" flag, not part of the count — only the lower 7 bits carry the magnitude, and the transfer-this-line decision reads bit 7 (`LineCounter & 0x80`) while the block-exhausted check reads the low seven (`(LineCounter & 0x7F) == 0`).
+
+**Corrected 2026-08-16.** This paragraph used to end "Getting this wrong (treating the whole byte as the counter) breaks any HDMA table using the repeat flag, which is most of them" — which describes the actual implementation as the mistake, and is backwards about the **decrement** specifically. `ExecuteHdma` does a plain whole-byte `ch.LineCounter--`, and that is correct: real hardware decrements the repeat flag and the 7-bit count together as one unit, confirmed against Mesen2's `SnesDmaController.cpp`. The two claims only look contradictory because "what the counter *means*" and "what gets decremented" are different questions — bit 7 is not part of the magnitude, but it is part of the byte that decrements.
+
+It matters exactly when the 7-bit count is already 0 going in. A plain `byte--` borrows from bit 7 (`0x80` → `0x7F`), which correctly signals "fetch a new header this line". Decrementing the low seven bits *in isolation* while holding the repeat flag aside underflows to `0x7F` with bit 7 still set — producing `0xFF` instead of `0x7F` and missing that fetch for a further 127 lines. **Not a theoretical corner case:** it was found in *A Link to the Past*'s bridge/rain scene, where indirect-HDMA channels desynced from the scanline they were meant to affect and painted a wrong horizontal band of colour across part of the screen.
 
 **Indirect addressing** (`Control` bit 6): instead of reading transfer data directly from the table, each block's 2-byte indirect address is fetched from the table and *that* address is where the actual transfer data lives — lets one table entry cover an arbitrary-sized block instead of being limited by inline table bytes.
 

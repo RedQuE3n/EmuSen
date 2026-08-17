@@ -6,14 +6,7 @@ using Microsoft.Data.Sqlite;
 
 namespace EmuSen.Common.Catalogue
 {
-    // The catalogue's driver. Galaxia owns the contract and the schema; this owns
-    // nothing but the engine that runs them - see EmuSen_Galaxia.md §7.1.
-    //
-    // It lives here because every consumer that wants a catalogue already
-    // references EmuSen and nothing else is common to all of them. The one thing
-    // that does not follow is EmuSen.DianaOS, which this project references rather
-    // than the other way round: the shell takes an ICatalogue it is handed and
-    // cannot construct one.
+    // The catalogue's driver - see EmuSen_Galaxia.md §7.1.
     public sealed class SqliteCatalogue : ICatalogue, IDisposable
     {
         private readonly SqliteConnection _db;
@@ -79,8 +72,7 @@ namespace EmuSen.Common.Catalogue
 
         public void Put(RomEntry entry) => PutAll(new[] { entry });
 
-        // One transaction for the whole scan: a catalogue that is half written and
-        // looks complete is worse than one that is obviously absent.
+        // One transaction for the whole scan: a catalogue that is half written and looks complete is worse.
         public void PutAll(IEnumerable<RomEntry> entries)
         {
             using SqliteTransaction transaction = _db.BeginTransaction();

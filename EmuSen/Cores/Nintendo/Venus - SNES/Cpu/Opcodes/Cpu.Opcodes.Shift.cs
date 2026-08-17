@@ -9,8 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // Every shift/rotate opcode (ASL/LSR/ROL/ROR), each in its accumulator
-    // and memory-operand forms.
+    // Every shift/rotate opcode (ASL/LSR/ROL/ROR), each in its accumulator and memory-operand forms.
     public partial class Cpu
     {
         private void OpASL(uint address)

@@ -1,7 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 {
-    // Which NEC DSP a cartridge carries. All seven run the same instruction
-    // set; they differ only in firmware and in the sizes below - see Venus_NecDSP.md §1.
+    // Which NEC DSP a cartridge carries - see Venus_NecDSP.md §1.
     public enum NecDspVariant
     {
         Dsp1,
@@ -13,8 +12,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
         St011,
     }
 
-    // The per-variant constants that shape a chip: clock, memory sizes, and
-    // the address bit that picks SR over DR - see Venus_NecDSP.md §1/§3.
+    // The per-variant constants that shape a chip: clock, memory sizes, and the address bit that picks SR - see Venus_NecDSP.md §1.
     public readonly struct NecDspProfile
     {
         public readonly int ClockHz;

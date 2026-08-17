@@ -10,10 +10,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // Every opcode whose job is the P register or E (emulation-mode) flag
-    // itself: the plain clear/set-flag opcodes (CLC/SEC/CLI/SEI/CLV/CLD/
-    // SED), REP/SEP (clear/set an arbitrary mask of P bits), and XCE
-    // (exchange carry with E - the native/emulation mode switch).
+    // Every opcode whose job is the P register or E (emulation-mode) flag itself: the plain.
     public partial class Cpu
     {
         private void OpCLI(uint address) { SetFlag(CpuFlags.I, false); }

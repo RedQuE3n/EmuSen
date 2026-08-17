@@ -9,10 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // Bitwise operations against the accumulator (ORA/AND/EOR), the two
-    // "test/set bits without disturbing the operand's other bits" opcodes
-    // (TRB/TSB), and BIT (test bits, immediate vs. non-immediate is a real
-    // behavioral split - see Venus_CPU.md §6).
+    // Bitwise operations against the accumulator (ORA/AND/EOR), the two "test/set bits without disturbing - see Venus_CPU.md §6.
     public partial class Cpu
     {
         private void OpTRB(uint address)
@@ -60,8 +57,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private void OpBIT(uint address)
         {
-            // BIT (non-immediate): Z from A & mem; N and V copied from the top two
-            // bits of the memory operand (bits 7/6 in 8-bit mode, 15/14 in 16-bit).
+            // BIT (non-immediate): Z from A & mem; N and V copied from the top two bits of the memory operand.
             if (IsMemory8Bit)
             {
                 byte operand = _bus.Read8(address);

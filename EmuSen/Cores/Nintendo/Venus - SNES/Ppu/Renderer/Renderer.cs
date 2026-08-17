@@ -10,17 +10,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private const int SheetW = 256;  
         private const int SheetH = 512;  
 
-        // Pseudo-hi-res column interleave (Phase A) vs. true Mode 5/6
-        // hi-res (Phase B, not yet done) - see Venus_PPU.md §8.
+        // Pseudo-hi-res column interleave (Phase A) vs - see Venus_PPU.md §8.
         private const int MaxOutputW = 512;
         private int _frameWidth = ScreenW;
 
         // Current output frame's actual pixel width - see Venus_PPU.md §8.
         public int FrameWidth => _frameWidth;
 
-        // Layer IDs used to track which layer "won" each pixel while building a
-        // scanline, so the final color-math blend step (which is per-layer, not
-        // global) knows whether that specific pixel is eligible for blending.
+        // Layer IDs used to track which layer "won" each pixel while building a scanline, so the final.
         private const int LayerBackdrop = 0;
         private const int LayerBg1 = 1;
         private const int LayerBg2 = 2;
@@ -28,15 +25,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         private const int LayerBg4 = 4;
         private const int LayerObj = 5;
 
-        // Allocated at max width so a hi-res toggle never needs
-        // reallocation - see Venus_PPU.md §8.
+        // Allocated at max width so a hi-res toggle never needs reallocation - see Venus_PPU.md §8.
         private Rgba32[] _screenPixels = new Rgba32[MaxOutputW * ScreenH];
         private Rgba32[] _sheetPixels = new Rgba32[SheetW * SheetH];
 
-        // Per-scanline working buffers for the main and sub screens. Real hardware
-        // computes both independently, then blends them per CGADSUB - these hold one
-        // scanline's worth at a time rather than a full frame, since they're
-        // discarded once RenderScanline finishes blending into _screenPixels.
+        // Per-scanline working buffers for the main and sub screens.
         private Rgba32[] _mainLineBuf = new Rgba32[ScreenW];
         private Rgba32[] _subLineBuf = new Rgba32[ScreenW];
         private int[] _mainLineLayer = new int[ScreenW];
@@ -175,8 +168,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        // Combines a main-screen pixel with the corresponding sub-screen pixel per
-        // CGADSUB's add/subtract and half-color bits.
+        // Combines main and sub per CGADSUB's add/subtract and half flags - see Venus_PPU.md §6.
         private Rgba32 BlendColors(Rgba32 main, Rgba32 sub, bool subtract, bool half)
         {
             if (subtract)

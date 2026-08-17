@@ -17,8 +17,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         private byte[] _sram;
         public int SramSize => _sram.Length;
 
-        // All three are derived from the ROM file, which LoadRom re-reads
-        // before any state load, so none belong in a save state.
+        // All three are derived from the ROM file, which LoadRom re-reads before any state load, so none.
         [EmuSen.Common.SkipInState] private readonly ICartridgeMapper _mapper;
         [EmuSen.Common.SkipInState] private readonly bool _isHiRom;
         [EmuSen.Common.SkipInState] private readonly ConsoleRegion _region;
@@ -30,17 +29,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // The most Game Pak RAM a GSU can address - see Venus_SuperFX.md §1.
         private const int SuperFxRamSize = 0x20000;
 
-        // How much of _sram is battery-backed and belongs in the .srm. Equal to
-        // _sram.Length everywhere except SuperFX, where the RAM chip is larger
-        // than the saved window.
+        // How much of _sram is battery-backed and belongs in the .srm.
         [EmuSen.Common.SkipInState] private readonly int _batteryRamSize;
 
-        // Non-null only for an SA-1 cartridge - see Venus_SA1.md §1. Kept out
-        // of Cartridge's own state blob so a state version 1 file, which
-        // predates the SA-1 entirely, still has the layout it was written
-        // with; VenusCore appends this separately - see EmuSen_Save_States.md §3.
-        // MemoryBus routes cartridge writes straight here, so without this
-        // `watch` never saw SRAM or either SA-1 memory - see Venus_SA1.md §11.4.
+        // Non-null only for an SA-1 cartridge - see Venus_SA1.md §1.
         [EmuSen.Common.SkipInState] public IWriteObserver? WriteObserver;
 
         // Coprocessor register-window traffic, when a debugger is watching - see `man copflow`.
@@ -48,17 +40,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
 
         [EmuSen.Common.SkipInState] public Coprocessors.Sa1.Sa1? Sa1;
 
-        // Non-null only for a SuperFX cartridge - see Venus_SuperFX.md §1. Same
-        // save-state handling as Sa1 above.
+        // Non-null only for a SuperFX cartridge - see Venus_SuperFX.md §1.
         [EmuSen.Common.SkipInState] public Coprocessors.SuperFx.SuperFx? SuperFx;
 
-        // Non-null only for a DSP-1/2/3/4 or ST010/ST011 cartridge whose
-        // firmware was found - see Venus_NecDSP.md §2. Same save-state
-        // handling as Sa1 above.
+        // Non-null only for a DSP-1/2/3/4 or ST010/ST011 cartridge whose firmware was found - see Venus_NecDSP.md §2.
         [EmuSen.Common.SkipInState] public Coprocessors.NecDsp.NecDsp? NecDsp;
 
-        // Non-null only for an OBC1 cartridge - see Venus_OBC1.md §1. Holds no
-        // state of its own, so it never reaches a save state at all.
+        // Non-null only for an OBC1 cartridge - see Venus_OBC1.md §1.
         [EmuSen.Common.SkipInState] public Coprocessors.Obc1.Obc1? Obc1;
 
         public string MapperName => _mapper.Name;
@@ -69,12 +57,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // Saves/<rom-name>.srm - see Venus_Memory.md §2.4.
         public string SavePath { get; }
 
-        // Everything the header says that both the constructor and the
-        // no-load firmware query below need - see Venus_Memory.md §2.1a.
+        // Everything the header says that both the constructor and the no-load firmware query below need - see Venus_Memory.md §2.1a.
         private readonly record struct HeaderInfo(int Base, bool IsHiRom, byte MapMode, byte CartType, byte ChipType, string CartName);
 
-        // SNES ROM copiers often appended a 512-byte header to the file. A
-        // standard LoROM without one divides cleanly by 32KB.
+        // SNES ROM copiers often appended a 512-byte header to the file.
         private static byte[] StripCopierHeader(byte[] fileBytes, bool announce)
         {
             int headerSize = (fileBytes.Length % 32768 == 512) ? 512 : 0;
@@ -88,16 +74,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
 
         private static HeaderInfo ReadHeader(byte[] rom)
         {
-            // Which of the two header locations is real decides the whole
-            // memory map - see Venus_Memory.md §2.1a.
+            // Which of the two header locations is real decides the whole memory map - see Venus_Memory.md §2.1a.
             bool isHiRom = ScoreHeader(rom, HiRomHeader, hiRom: true) > ScoreHeader(rom, LoRomHeader, hiRom: false);
             int headerBase = isHiRom ? HiRomHeader : LoRomHeader;
 
             byte At(int offset) => rom.Length > headerBase + offset && headerBase + offset >= 0 ? rom[headerBase + offset] : (byte)0x00;
 
-            // The chip-subtype byte at header -$01 disambiguates the $Fx
-            // cartridge types, and the name picks between DSP revisions that
-            // share one type byte - see Venus_NecDSP.md §1.
+            // The chip-subtype byte at header -$01 disambiguates the $Fx cartridge types, and the name picks - see Venus_NecDSP.md §1.
             return new HeaderInfo(headerBase, isHiRom, At(0x15), At(0x16), At(-0x01), ReadCartName(rom, headerBase));
         }
 
@@ -112,7 +95,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             int headerBase = header.Base;
 
             // SRAM size from the ROM header (+$18) - see Venus_Memory.md §2.2.
-            // On an SA-1 cartridge this same chip is the SA-1's BW-RAM.
             int sramSize = 0;
             if (_rom.Length > headerBase + 0x18)
             {
@@ -129,9 +111,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             Coprocessors.NecDsp.NecDspVariant? dspVariant = Coprocessors.NecDsp.NecDspDetection.Detect(cartType, header.ChipType, header.CartName);
             bool isObc1 = (cartType & 0x0F) >= 0x03 && (cartType & 0xF0) == 0x20;
 
-            // A SuperFX cartridge declares no ordinary SRAM: its one RAM chip is
-            // the GSU's Game Pak RAM, sized by the expansion-RAM byte instead -
-            // see Venus_SuperFX.md §1.
+            // A SuperFX cartridge declares no ordinary SRAM: its one RAM chip is the GSU's Game Pak RAM, sized by - see Venus_SuperFX.md §1.
             bool isSuperFx = !_isHiRom && (cartType & 0xF0) == 0x10 && (cartType & 0x0F) >= 0x03;
             int batteryRamSize = sramSize;
             if (isSuperFx)
@@ -140,8 +120,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 sramSize = SuperFxRamSize;
             }
 
-            // An ST010/ST011 declares SRAM in the header, but the chip that
-            // holds it is the DSP - see Venus_NecDSP.md §6.
+            // An ST010/ST011 declares SRAM in the header, but the chip that holds it is the DSP - see Venus_NecDSP.md §6.
             if (dspVariant is { } st && Coprocessors.NecDsp.NecDspProfile.IsSt01x(st))
             {
                 sramSize = 0;
@@ -151,13 +130,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             _sram = new byte[sramSize];
             _batteryRamSize = System.Math.Min(batteryRamSize, sramSize);
 
-            // Both of these only claim a window; the cartridge keeps its
-            // ordinary map underneath - see Venus_NecDSP.md §3, Venus_OBC1.md §1.
+            // Both of these only claim a window; the cartridge keeps its ordinary map underneath - see Venus_NecDSP.md §3.
             if (dspVariant is { } variant) NecDsp = BuildNecDsp(variant);
             else if (isObc1 && _sram.Length > 0) Obc1 = new Coprocessors.Obc1.Obc1(_sram);
 
-            // Map mode $23 means the cartridge carries an SA-1, which takes
-            // over addressing entirely - see Venus_SA1.md §1.
+            // Map mode $23 means the cartridge carries an SA-1, which takes over addressing entirely - see Venus_SA1.md §1.
             if (!_isHiRom && mapMode == Sa1MapMode)
             {
                 Sa1 = new Coprocessors.Sa1.Sa1(_rom, _sram);
@@ -192,8 +169,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             Console.WriteLine("========================");
         }
 
-        // Tolerant of a save file that doesn't match the allocated SRAM
-        // size - see Venus_Memory.md §2.4.
+        // Tolerant of a save file that doesn't match the allocated SRAM size - see Venus_Memory.md §2.4.
         private void LoadSram()
         {
             try
@@ -215,9 +191,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
             catch (Exception ex)
             {
-                // A save that fails to load shouldn't prevent the game itself
-                // from booting - worst case the player starts without their
-                // save data, not with a crashed emulator.
+                // A save that fails to load shouldn't prevent the game itself from booting - worst case the player.
                 Console.WriteLine($"[Cartridge] Failed to load save ({SavePath}): {ex.Message}");
             }
         }
@@ -232,8 +206,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         // This cartridge's own copy, taken once at construction - see Venus_Memory.md §2.4a.
         private readonly bool _batteryRamDisabled;
 
-        // Called periodically + on shutdown, not on every write - see
-        // Venus_Memory.md §2.4.
+        // Called periodically + on shutdown, not on every write - see Venus_Memory.md §2.4.
         public void SaveSram()
         {
             try
@@ -263,8 +236,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                 case CartridgeRegion.Rom:
                     return mapped.Offset < _rom.Length ? _rom[mapped.Offset] : (byte)0x00;
 
-                // SRAM mirroring (modulo, not a hard range check) - see
-                // Venus_Memory.md §2.3 for why this matters beyond correctness.
+                // SRAM mirroring by modulo, not a hard range check - see Venus_Memory.md §2.3.
                 case CartridgeRegion.Sram:
                     return _sram.Length > 0 ? _sram[mapped.Offset % _sram.Length] : (byte)0x00;
 
@@ -300,8 +272,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
                     if (_sram.Length == 0) return;
                     int sramIndex = mapped.Offset % _sram.Length;
                     _sram[sramIndex] = data;
-                    // On an SA-1 cart this same array is BW-RAM, and that is
-                    // the space name it is published under - see Venus_SA1.md §11.2.
+                    // On an SA-1 cart this same array is BW-RAM, and that is the space name it is published under - see Venus_SA1.md §11.2.
                     WriteObserver?.OnWrite(Sa1 != null ? "BWRAM" : "SRAM", sramIndex, data);
                     return;
 
@@ -320,8 +291,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             }
         }
 
-        // Lets MemoryBus route a low-half address in a hardware bank here
-        // instead of returning open bus - see Venus_Memory.md §2.1a.
+        // Lets MemoryBus route a low-half address in a hardware bank here instead of returning open bus - see Venus_Memory.md §2.1a.
         public bool MapsAddress(uint address)
         {
             return _mapper.Resolve((byte)(address >> 16), (ushort)(address & 0xFFFF)).Region != CartridgeRegion.Unmapped;
@@ -342,10 +312,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             };
         }
 
-        // What this ROM will need before it can be fully emulated, decided
-        // from the header alone - no Cartridge is built and nothing is
-        // loaded. A ROM carrying its firmware appended needs nothing, so it
-        // reports nothing. See EmuSen_Firmware.md §1 and Venus_NecDSP.md §2.
+        // What this ROM will need before it can be fully emulated, decided from the header alone - no - see EmuSen_Firmware.md §1.
         public static IReadOnlyList<Common.Firmware.FirmwareRequest> FirmwareRequirements(string romPath)
         {
             byte[] rom;
@@ -378,16 +345,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
         {
             if (rom.Length < headerBase + 0x15) return string.Empty;
 
-            // Latin-1, not UTF-8: SD Gundam GX's title is half-width katakana
-            // in the SNES's own encoding, and only a byte-for-byte reading of
-            // it matches the name the DSP-3 is keyed on.
+            // Latin-1, not UTF-8: a half-width katakana title decodes to mojibake otherwise.
             return System.Text.Encoding.Latin1.GetString(rom, headerBase, 0x15).TrimEnd(' ', '\0');
         }
 
-        // Takes the firmware off the end of the ROM if it's there, otherwise
-        // out of home/Firmware. Returns null - leaving the cartridge on its
-        // plain map - if neither has it, since there is nothing useful to run
-        // without it. See Venus_NecDSP.md §2.
+        // Takes the firmware off the end of the ROM if it's there, otherwise out of home/Firmware - see Venus_NecDSP.md §2.
         private Coprocessors.NecDsp.NecDsp? BuildNecDsp(Coprocessors.NecDsp.NecDspVariant variant)
         {
             var profile = Coprocessors.NecDsp.NecDspProfile.For(variant);
@@ -406,9 +368,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             firmware ??= Coprocessors.NecDsp.NecDspFirmware.FromFirmwareDirectory(profile);
             if (firmware == null)
             {
-                // Names the exact path, because every frontend except the
-                // Avalonia one (which offers a picker) can only tell the user
-                // where to put it - see EmuSen_Firmware.md §3.
+                // Names the exact path, because every frontend except the Avalonia one (which offers a picker) can - see EmuSen_Firmware.md §3.
                 var request = Coprocessors.NecDsp.NecDspFirmware.RequestFor(variant);
                 Console.WriteLine($"[Cartridge] {variant} firmware not found - the chip will not be emulated.");
                 Console.WriteLine($"[Cartridge]   expected {request.Size:N0} bytes at {Common.Firmware.FirmwareLibrary.PathFor(request)}");

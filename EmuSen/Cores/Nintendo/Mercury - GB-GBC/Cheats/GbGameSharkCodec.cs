@@ -3,8 +3,7 @@ using System.Linq;
 
 namespace EmuSen.Cores.Nintendo.Mercury.Cheats
 {
-    // The Game Boy GameShark: eight hex digits, and a RAM poke rather than a
-    // ROM patch - see Mercury_Cheats.md §3.
+    // The Game Boy GameShark: eight hex digits, and a RAM poke rather than a ROM patch - see Mercury_Cheats.md §3.
     public static class GbGameSharkCodec
     {
         public static bool CanDecode(string code) => TryNormalize(code, out _);

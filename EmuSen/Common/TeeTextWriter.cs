@@ -4,11 +4,7 @@ using System.Text;
 
 namespace EmuSen.Common
 {
-    // Forwards everything written to it to two underlying writers - lets console
-    // output go to both the terminal (for live viewing) and a file (so nothing is
-    // lost if the process gets killed, and output can be reviewed or pasted
-    // afterward without scrolling back through terminal history). Console-agnostic:
-    // any console's frontend can reuse this as-is.
+    // Forwards to two writers, so output is live on the terminal and kept in a file.
     public class TeeTextWriter : TextWriter
     {
         private readonly TextWriter _console;

@@ -2,10 +2,7 @@ using EmuSen.DianaOS.DianaOS.Var;
 
 namespace EmuSen.Cores
 {
-    // Points the bus's cartridge-read intercept at a CheatRegistry. Both are
-    // already core-agnostic; this is only the wire between them, so a core
-    // that owns its own registry needs no debug target for Game Genie-style
-    // patches to work - see EmuSen_Cheats.md §3.
+    // Points the bus's cartridge-read intercept at a CheatRegistry - see EmuSen_Cheats.md §3.
     public sealed class CheatRomPatcher : IRomReadPatcher
     {
         private readonly CheatRegistry _cheats;

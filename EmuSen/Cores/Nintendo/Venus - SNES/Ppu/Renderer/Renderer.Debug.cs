@@ -70,15 +70,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int pal = 8 + ((attr & 0x0E) >> 1);
                 Console.WriteLine($"[OAM DUMP]  #{i}: x={signedX} y={y} tile=0x{tile:X3} attr=0x{attr:X2} large={useLarge} pal={pal} flipX={(attr & 0x40) != 0} flipY={(attr & 0x80) != 0}");
 
-                // Prints this sprite's actual 16-color CGRAM palette (32
-                // bytes: 16 colors x 2 bytes each, BGR555). Added to
-                // directly test whether a sprite with real, non-zero tile
-                // pixel data (confirmed via the tile dump below) is still
-                // invisible because its palette was never written with
-                // real color data, as opposed to a rendering-side bug -
-                // if every byte here is 0x00, that's the answer; if there
-                // are non-zero, non-identical values, the palette itself
-                // is fine and the bug is elsewhere.
+                // Prints this sprite's actual 16-color CGRAM palette (32 bytes: 16 colors x 2 bytes each, BGR555).
                 int palByteBase = (128 + (pal - 8) * 16) * 2;
                 var palSb = new System.Text.StringBuilder($"[OAM DUMP]    pal{pal} CGRAM @ byte 0x{palByteBase:X3}: ");
                 for (int c = 0; c < 16; c++)
@@ -109,19 +101,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             return rects;
         }
 
-        // Moved out of DrawFrame (now gone - see FramePresenter/DrawDebugPanels)
-        // since this is pure Console logging with no render-target dependency;
-        // it just needs to run once per O keypress like every other hotkey.
+        // Moved out of DrawFrame (now gone - see FramePresenter/DrawDebugPanels) since this is pure Console.
         public void DumpBackdropAndWindowDebugInfo(Ppu ppu, long frame)
         {
             Console.WriteLine($"[OAM DUMP] --- Frame {frame} ---");
             DumpActiveOam(ppu);
             DumpBlackBg1Tiles(ppu);
 
-            // Log the exact backdrop compositing math, since we now suspect the
-            // "black squares" are actually transparent BG1 pixels correctly
-            // revealing a WRONG backdrop, not bad tile/palette data (both of
-            // which just checked out fine).
+            // Log the exact backdrop compositing math, since we now suspect the "black squares" are actually.
             float brightness = (ppu.Inidisp & 0x0F) / 15f;
             Rgba32 mainBackdrop = SnesColor(ppu.Cgram[0], ppu.Cgram[1], brightness);
             Rgba32 subBackdrop = new Rgba32(
@@ -146,11 +133,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
         private void DumpBlackBg1Tiles(Ppu ppu)
         {
-            // Scan the just-rendered frame for pure black pixels and, for each
-            // distinct one, recompute exactly which BG1 tile/palette produced it -
-            // faster and more precise than inferring it from a screenshot. Sampled
-            // on a grid (every 4th pixel) to keep the output short rather than
-            // reporting the same handful of tiles hundreds of times.
+            // Scan the just-rendered frame for pure black pixels and, for each distinct one, recompute exactly.
             int mapBase = (ppu.BgSc[0] & 0xFC) << 9;
             int sizeBits = ppu.BgSc[0] & 0x03;
 
@@ -181,31 +164,18 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                         if (seen.Count == 1)
                         {
-                            // BG3 scroll sanity check: if BG3 is meant to move
-                            // together with BG1's cave walls, their scroll values
-                            // should be close/related. Wildly different values would
-                            // suggest we're reading BG3 from the wrong world position
-                            // entirely, not that its data is actually wrong.
+                            // BG3 scroll sanity check: if BG3 is meant to move together with BG1's cave walls, their scroll.
                             Console.WriteLine($"[BG3 CHECK] BG1 scroll X={ppu.BgScrollX[0]} Y={ppu.BgScrollY[0]}  |  BG3 scroll X={ppu.BgScrollX[2]} Y={ppu.BgScrollY[2]}");
                             int bg3ChrBase = (ppu.Bg34Nba & 0x0F) << 13;
                             Console.WriteLine($"[BG3 CHECK] BG3Sc(tilemap base+size)=0x{ppu.BgSc[2]:X2}  BG34NBA(chr base)=0x{ppu.Bg34Nba:X2}  ->  BG3 chrBase byte addr = 0x{bg3ChrBase:X4} (Mesen reference: 0x8000-0xBFF0)");
 
-                            // Dump the raw 16 bytes of BG3 tile 0x031 (the specific
-                            // one the diagnostic keeps flagging) so we can compare
-                            // against what Mesen shows for the same tile. 2bpp tile
-                            // = 16 bytes.
+                            // Dump the raw 16 bytes of BG3 tile 0x031 (the specific one the diagnostic keeps flagging) so we can.
                             int tile031Addr = (bg3ChrBase + 0x031 * 16) & 0xFFFF;
                             var sb31 = new System.Text.StringBuilder($"[BG3 CHECK] tile 0x031 @ 0x{tile031Addr:X4}: ");
                             for (int b = 0; b < 16; b++) sb31.Append($"{ppu.Vram[(tile031Addr + b) & 0xFFFF]:X2} ");
                             Console.WriteLine(sb31.ToString());
 
-                            // Decode those 16 bytes as a 2bpp 8x8 tile and print it as
-                            // an ASCII picture. 2bpp SNES tile layout: 8 rows, each
-                            // row = 2 bytes (low bitplane, high bitplane), giving a
-                            // per-pixel value of 0-3. If our shape doesn't match what
-                            // Mesen displays for this tile, we've got a decode bug;
-                            // if the shape matches but colors don't, it's a palette
-                            // question, not a tile-data question.
+                            // Decode those 16 bytes as a 2bpp 8x8 tile and print it as an ASCII picture.
                             Console.WriteLine("[BG3 CHECK] decoded tile 0x031 (0=transparent):");
                             for (int row = 0; row < 8; row++)
                             {
@@ -222,11 +192,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                                 Console.WriteLine(line.ToString());
                             }
 
-                            // Dump the CGRAM entries that pixel values 1, 2, 3 of BG3
-                            // palette 6 map to, so we can compare against Mesen's
-                            // reference values directly. In 2bpp, BG3 palettes are
-                            // 4 colors each. Palette 6 base = 6 * 4 = 24 = 0x18 in
-                            // CGRAM index space (byte offset 0x30).
+                            // Dump the CGRAM entries that pixel values 1, 2, 3 of BG3 palette 6 map to, so we can compare against.
                             Console.WriteLine("[BG3 CHECK] Our CGRAM at BG3 pal 6 (Mesen ref: $19=?, $1A=0x7AAB bright blue, $1B=?):");
                             for (int cIdx = 0x18; cIdx <= 0x1B; cIdx++)
                             {
@@ -238,22 +204,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                                 Console.WriteLine($"[BG3 CHECK]   CGRAM ${cIdx:X2} = 0x{val:X4} -> RGB ({r},{g},{b})  (ever written: {ppu.WasCgramTouched(byteOffset) || ppu.WasCgramTouched(byteOffset + 1)})");
                             }
 
-                            // Is BG3's tilemap entry itself fresh, intentional data
-                            // for this level, or stale leftover content (e.g. from
-                            // the title screen) that never got overwritten when the
-                            // level loaded? Since BG3 doesn't scroll, this is the
-                            // SAME entry address every time - if it was never
-                            // written, that's the real story, not a rendering bug.
+                            // Is BG3's tilemap entry itself fresh, intentional data for this level, or stale leftover content (e.g.
                             int mapBase3check = (ppu.BgSc[2] & 0xFC) << 9;
                             int sizeBits3check = ppu.BgSc[2] & 0x03;
                             int entryAddr3check = BgTilemapEntryAddress(mapBase3check, sizeBits3check, (px + ppu.BgScrollX[2]) >> 3, (py + ppu.BgScrollY[2]) >> 3);
                             bool tilemapEverWritten = ppu.WasVramTouched(entryAddr3check) || ppu.WasVramTouched(entryAddr3check + 1);
                             Console.WriteLine($"[BG3 CHECK] BG3 tilemap entry @ 0x{entryAddr3check:X4} ever written since power-on: {tilemapEverWritten}");
 
-                            // Sample BG3 at the tile immediately left/right/up/down of
-                            // this position - a coherent decorative pattern in its
-                            // neighbors vs random/garbled tile numbers tells us a lot
-                            // about whether we're reading from a sane VRAM region.
+                            // Sample BG3 at the tile immediately left/right/up/down of this position - a coherent decorative.
                             int mapBase3c = (ppu.BgSc[2] & 0xFC) << 9;
                             int sizeBits3c = ppu.BgSc[2] & 0x03;
                             int wy3c = (py + ppu.BgScrollY[2]) % ((sizeBits3c & 0x02) != 0 ? 512 : 256);
@@ -274,9 +232,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                         {
                             float brightness = (ppu.Inidisp & 0x0F) / 15f;
 
-                            // Faithfully replay BG1's exact per-pixel math (scroll,
-                            // flip, transparency) for this exact (px,py) - not just a
-                            // tile/palette lookup, the actual pixel index.
+                            // Faithfully replay BG1's exact per-pixel math (scroll, flip, transparency) for this exact (px,py).
                             int sizeBits1 = ppu.BgSc[0] & 0x03;
                             int wy1 = (py + ppu.BgScrollY[0]) % ((sizeBits1 & 0x02) != 0 ? 512 : 256);
                             int wx1 = (px + ppu.BgScrollX[0]) % ((sizeBits1 & 0x01) != 0 ? 512 : 256);
@@ -301,9 +257,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                             }
                             else
                             {
-                                // BG1 is genuinely transparent here - replay BG2's exact
-                                // per-pixel math the same way, since BG2 (sub-screen)
-                                // is what should be blended in for this pixel.
+                                // BG1 is genuinely transparent here - replay BG2's exact per-pixel math the same way, since BG2.
                                 int mapBase2 = (ppu.BgSc[1] & 0xFC) << 9;
                                 int sizeBits2 = ppu.BgSc[1] & 0x03;
                                 int wy2 = (py + ppu.BgScrollY[1]) % ((sizeBits2 & 0x02) != 0 ? 512 : 256);
@@ -346,10 +300,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                                 Console.WriteLine($"[BLACK TILE]    EXPECTED final color (backdropMath={backdropMathEnabled}): ({expected.R},{expected.G},{expected.B}) vs ACTUAL displayed ({c.R},{c.G},{c.B})");
                             }
 
-                            // BG3's Mode 1 forced-topmost pass runs LAST and draws
-                            // unconditionally over everything, including a correctly-
-                            // computed BG1 pixel - check whether BG3 has opaque,
-                            // priority-marked content sitting at this exact spot.
+                            // BG3's Mode 1 forced-topmost pass runs last and draws over everything - see Venus_PPU.md §4.
                             if ((ppu.Bgmode & 0x08) != 0 && (ppu.Tm & 0x04) != 0)
                             {
                                 int mapBase3 = (ppu.BgSc[2] & 0xFC) << 9;

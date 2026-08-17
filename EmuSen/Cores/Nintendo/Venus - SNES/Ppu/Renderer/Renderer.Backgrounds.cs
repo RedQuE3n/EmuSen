@@ -14,31 +14,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 {
     public partial class Renderer
     {
-        // Each BG layer's render method gets called twice per scanline per
-        // screen in every mode that splits it by tile priority (once with
-        // priorityOnly=false, once with =true - see RenderScanline's mode
-        // dispatch tables) - and both calls used to redo the ENTIRE
-        // per-pixel decode (tilemap lookup, VRAM reads, CGRAM color
-        // conversion) for all 256 pixels, discarding exactly half the work
-        // each time via the priority filter. That's real, measured cost:
-        // profiling during actual gameplay (not a title/intro screen, which
-        // has little on-screen to render) showed PPU rendering jumping
-        // from under 1ms/frame to ~13-14ms/frame, right at the 60fps
-        // budget.
-        //
-        // Since PPU register/VRAM/CGRAM state is guaranteed static for the
-        // whole duration of one RenderScanline() call (no CPU execution
-        // happens between these calls - see VenusCore.RunFrame()), the
-        // decode result for a given (layer, isMainScreen, py) is identical
-        // between the two priorityOnly calls. This cache computes it once,
-        // on whichever call reaches a given scanline first, and both calls
-        // just filter the cached per-pixel result by priority - same
-        // compositing order, same overwrite semantics, same window
-        // masking/mosaic/hi-res-pairing/direct-color logic, just not
-        // recomputed twice. Kept per (layer, isMainScreen) rather than one
-        // shared cache since window-enable (Tmw/Tsw) and hi-res tile
-        // pairing both depend on isMainScreen, so main and sub decode to
-        // genuinely different results for the same layer/scanline.
+        // Each BG layer's render method gets called twice per scanline per screen in every mode that splits.
         private sealed class BgLineCache
         {
             public int Py = -1;
@@ -195,25 +171,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int mapH = ((sizeBits & 0x02) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * ((hiRes || tile16) ? 2 : 1);
 
-                // Reactive VRAM-read caching: consecutive screen pixels very
-                // often land in the same 8x8 tile (a tile spans 8 WORLD
-                // pixels regardless of scroll/mosaic/offset-per-tile, so
-                // tx/ty - and therefore the tilemap entry and the sampled
-                // tile row - typically only change once every ~8 pixels).
-                // Reusing the last VRAM read when this pixel's address
-                // matches the previous one skips real, repeated VRAM
-                // traffic without assuming anything about tile alignment -
-                // every branch below (mosaic, offset-per-tile, flip,
-                // hi-res pairing, priority) is still computed exactly as
-                // before, for every pixel; only the two actual VRAM reads
-                // (tilemap entry, tile row bitplanes) are memoized.
+                // Reactive VRAM-read caching: consecutive screen pixels very often land in the same 8x8 tile (a tile.
                 int lastEntryAddr = -1;
                 int cachedEntry = 0;
                 int lastTileAddr = -1;
                 int lastRow = -1;
-                // BG1 alone can reach 8bpp (Direct Color, modes 3/4 - see
-                // GetBgBpp), so all 8 plane bytes need caching here, unlike
-                // BG2-4 which never exceed 4bpp.
+                // BG1 alone can reach 8bpp (Direct Color, modes 3/4 - see GetBgBpp), so all 8 plane bytes need.
                 byte cachedP0 = 0, cachedP1 = 0, cachedP2 = 0, cachedP3 = 0, cachedP4 = 0, cachedP5 = 0, cachedP6 = 0, cachedP7 = 0;
 
                 WindowMask window = WindowMask.For(ppu, layerId, isMainScreen);
@@ -359,8 +322,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * ((hiRes || tile16) ? 2 : 1);
 
                 // Reactive VRAM-read caching - see RenderBg1's own comment.
-                // BG2 never exceeds 4bpp (GetBgBpp), so only p0-p3 are
-                // needed here.
                 int lastEntryAddr = -1;
                 int cachedEntry = 0;
                 int lastTileAddr = -1;
@@ -433,8 +394,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                     cache.Opaque[px] = pixel != 0;
 
-                    // See RenderBg1's own comment on why this only runs for
-                    // opaque pixels.
+                    // See RenderBg1's own comment on why this only runs for opaque pixels.
                     if (pixel != 0)
                     {
                         cache.WindowMasked[px] = window.Active && window.Masked(px);
@@ -484,8 +444,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
 
                 // Reactive VRAM-read caching - see RenderBg1's own comment.
-                // BG3 never exceeds 2bpp, but the bpp>=4 guard is kept for
-                // structural consistency with the other RenderBg* methods.
                 int lastEntryAddr = -1;
                 int cachedEntry = 0;
                 int lastTileAddr = -1;
@@ -547,8 +505,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                     cache.Opaque[px] = pixel != 0;
 
-                    // See RenderBg1's own comment on why this only runs for
-                    // opaque pixels.
+                    // See RenderBg1's own comment on why this only runs for opaque pixels.
                     if (pixel != 0)
                     {
                         cache.WindowMasked[px] = window.Active && window.Masked(px);
@@ -598,8 +555,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 int mapW = ((sizeBits & 0x01) != 0 ? 512 : 256) * (tile16 ? 2 : 1);
 
                 // Reactive VRAM-read caching - see RenderBg1's own comment.
-                // BG4 never exceeds 2bpp, but the bpp>=4 guard is kept for
-                // structural consistency with the other RenderBg* methods.
                 int lastEntryAddr = -1;
                 int cachedEntry = 0;
                 int lastTileAddr = -1;
@@ -661,8 +616,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                     cache.Opaque[px] = pixel != 0;
 
-                    // See RenderBg1's own comment on why this only runs for
-                    // opaque pixels.
+                    // See RenderBg1's own comment on why this only runs for opaque pixels.
                     if (pixel != 0)
                     {
                         cache.WindowMasked[px] = window.Active && window.Masked(px);

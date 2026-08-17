@@ -1,8 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Memory.Mappers
 {
-    // Mode $21. Full 64KB ROM banks at $C0-$FF (mirrored into $40-$7D), the
-    // upper half of those same banks visible at $00-$3F/$80-$BF, and SRAM in
-    // a $6000-$7FFF window at $20-$3F/$A0-$BF. See Venus_Memory.md §2.1a.
+    // Mode $21. Full 64KB ROM banks at $C0-$FF (mirrored into $40-$7D), the upper half of those same - see Venus_Memory.md §2.1a.
     public sealed class HiRomMapper : ICartridgeMapper
     {
         public string Name => "HiROM";
@@ -15,8 +13,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory.Mappers
                 return CartridgeAddress.Sram(((bank & 0x1F) * 0x2000) + (offset - 0x6000));
             }
 
-            // One formula for both windows: the $00-$3F view of a bank is
-            // literally the top half of the $C0-$FF bank with the same low bits.
+            // One formula for both windows: the $00-$3F view of a bank is literally the top half of the $C0-$FF.
             bool fullBank = bank >= 0xC0 || (bank >= 0x40 && bank <= 0x7D);
             if (fullBank || offset >= 0x8000) return CartridgeAddress.Rom(((bank & 0x3F) << 16) | offset);
 

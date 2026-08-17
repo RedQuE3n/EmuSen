@@ -62,8 +62,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             _length += RecordBytes;
         }
 
-        // Stops recording rather than throwing; a silently short log would look
-        // exactly like the sound engine falling quiet.
+        // Stops recording rather than throwing; a silently short log would look exactly like the sound engine.
         private static bool Grow()
         {
             if (_buffer.Length >= MaxBytes) { Overflowed = true; Enabled = false; return false; }
@@ -78,10 +77,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
             file.Write(_buffer, 0, _length);
         }
 
-        // One $4000-$4017 write. Mapped onto ITraceStep so the differ's loop
-        // collapsing and resync work unchanged, which is worth more here than it
-        // looks: a sound engine rewrites the same registers every single frame,
-        // so an un-collapsed diff is nothing but repetition.
+        // One $4000-$4017 write.
         public readonly record struct Step(ushort Address, byte Value, uint Frame, ushort Pc) : ITraceStep<Step>
         {
             public uint Addr => Address;

@@ -2,9 +2,7 @@ using EmuSen.Common;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 {
-    // Variable-length bit stream reader ($2258-$225B in, $230C/D out). Pulls
-    // 1-16 bit fields out of ROM at arbitrary bit offsets, which is what the
-    // SA-1 decompressors are built on - see Venus_SA1.md §7.
+    // Variable-length bit stream reader ($2258-$225B in, $230C/D out) - see Venus_SA1.md §7.
     public sealed class Sa1BitStream
     {
         [SkipInState] private readonly byte[] _rom;

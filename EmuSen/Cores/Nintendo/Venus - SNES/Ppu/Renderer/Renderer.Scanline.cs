@@ -15,8 +15,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 {
     public partial class Renderer
     {
-        // Sub-phase breakdown within RenderScanline, accumulated per frame
-        // and reset at py==0 - see Venus_PPU.md §13.
+        // Sub-phase breakdown within RenderScanline, accumulated per frame and reset at py==0 - see Venus_PPU.md §13.
         private long _objEvalTicksAccum;
         private long _blendTicksAccum;
         private long _mainCompositeTicksAccum;
@@ -87,16 +86,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             bool subtractMode = (ppu.Cgadsub & 0x80) != 0;
             bool halfMode = (ppu.Cgadsub & 0x40) != 0;
 
-            // Extract Color Math Enable from CGWSEL bits 4-5
-            // 0 = Always, 1 = Math Window, 2 = Main Window, 3 = Never
+            // Extract Color Math Enable from CGWSEL bits 4-5 0 = Always, 1 = Math Window, 2 = Main Window, 3 =.
             int colorMathEnable = (ppu.Cgwsel >> 4) & 0x03;
             // Check CGWSEL Bit 1: Are we using the Sub Screen or forced Fixed Color?
             bool useSubScreen = (ppu.Cgwsel & 0x02) != 0;
 
-            // The blend below reads _subLine* only under all three of these; pseudo-hi-res
-            // reads _subLineBuf directly regardless. Otherwise the sub screen is composited
-            // and thrown away - a third of the frame cost in games that set TS=TM with color
-            // math off (Rocky Rodent). See Venus_PPU.md §5.1.
+            // The blend below reads _subLine* only under all three of these; pseudo-hi-res reads _subLineBuf - see Venus_PPU.md §5.1.
             bool subScreenUsed = _frameWidth == MaxOutputW
                 || (useSubScreen && colorMathEnable != 3 && (ppu.Cgadsub & 0x3F) != 0);
 

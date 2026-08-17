@@ -6,15 +6,12 @@ using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Common.Firmware
 {
-    // home/Firmware, as a core-agnostic store: what is installed, what is
-    // missing, and how a file the user picked gets put there. Knows nothing
-    // about any particular console. See EmuSen_Firmware.md §2.
+    // home/Firmware, as a core-agnostic store: what is installed, what is missing, and how a file the - see EmuSen_Firmware.md §2.
     public static class FirmwareLibrary
     {
         private static string? _directoryOverride;
 
-        // Settable so a test can point at a temp folder instead of the real
-        // one; null means the sandbox's own Firmware directory.
+        // Settable so a test can point at a temp folder instead of the real one; null means the sandbox's own.
         public static string Directory
         {
             get => _directoryOverride ?? DataStore.Firmware;
@@ -25,10 +22,7 @@ namespace EmuSen.Common.Firmware
 
         public static string PathFor(FirmwareRequest request) => Path.Combine(Directory, request.FileName);
 
-        // The image's bytes, or null if it isn't installed. A file of the
-        // wrong size is treated as absent rather than loaded: a truncated or
-        // mismatched dump runs as garbage and is far harder to diagnose than
-        // a missing one. See EmuSen_Firmware.md §2.1.
+        // The image's bytes, or null if it isn't installed - see EmuSen_Firmware.md §2.1.
         public static byte[]? TryLoad(FirmwareRequest request)
         {
             foreach (string name in new[] { request.FileName }.Concat(request.AlternateNames))
@@ -44,9 +38,7 @@ namespace EmuSen.Common.Firmware
         public static IReadOnlyList<FirmwareRequest> MissingFrom(IEnumerable<FirmwareRequest> requests) =>
             requests.Where(r => !IsInstalled(r)).ToArray();
 
-        // Copies a file the user picked into the library under its canonical
-        // name, so nothing has to ask again. Returns false - without copying
-        // anything - if it is not the right size.
+        // Copies a file the user picked into the library under its canonical name, so nothing has to ask again.
         public static bool Install(FirmwareRequest request, string sourcePath)
         {
             byte[]? bytes = TryReadExact(sourcePath, request.Size);

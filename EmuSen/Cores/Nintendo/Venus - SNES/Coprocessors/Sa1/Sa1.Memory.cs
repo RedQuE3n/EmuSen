@@ -2,8 +2,7 @@ using EmuSen.Cores.Nintendo.Venus.Memory.Mappers;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 {
-    // Address decode for both sides of the SA-1. The two CPUs see genuinely
-    // different maps off the same chip - see Venus_SA1.md §3.
+    // Address decode for both sides of the SA-1 - see Venus_SA1.md §3.
     public sealed partial class Sa1
     {
         private static bool IsLowBank(byte bank) => bank <= 0x3F || (bank >= 0x80 && bank <= 0xBF);
@@ -11,8 +10,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
         // Bit 7 clear means "use the power-on bank for this slot" - see Venus_SA1.md §3.1.
         private static int SuperBank(byte reg, int fallback) => (reg & 0x80) != 0 ? (reg & 0x07) : fallback;
 
-        // $00-$1F/$20-$3F/$80-$9F/$A0-$BF each project one 1MB super bank
-        // LoROM-style: 32 banks of the upper 32KB.
+        // $00-$1F/$20-$3F/$80-$9F/$A0-$BF each project one 1MB super bank LoROM-style: 32 banks of the upper 32KB.
         private int LoRomStyleOffset(byte bank, ushort offset)
         {
             int super = bank <= 0x1F ? SuperBank(_cxb, 0)
@@ -35,8 +33,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
         // The 8KB $6000-$7FFF window, one selectable block per side - see Venus_SA1.md §3.2.
         private static int BwRamWindowOffset(int block, ushort offset) => (block << 13) | (offset & 0x1FFF);
 
-        // S-CPU view. WRAM, PPU and CPU registers never reach here - MemoryBus
-        // decodes those first and only consults the cartridge for what's left.
+        // S-CPU view. WRAM, PPU and CPU registers never reach here - MemoryBus decodes those first and only.
         public CartridgeAddress ResolveScpu(byte bank, ushort offset)
         {
             if (IsLowBank(bank))
@@ -47,8 +44,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 
                 if (offset >= 0x8000)
                 {
-                    // The SA-1 can substitute its own NMI/IRQ vectors for the
-                    // S-CPU's, and does it by intercepting the fetch - see Venus_SA1.md §4.3.
+                    // The SA-1 can substitute its own NMI/IRQ vectors for the S-CPU's, and does it by intercepting the - see Venus_SA1.md §4.3.
                     if (bank == 0x00)
                     {
                         if ((_scnt & 0x20) != 0 && offset >= 0xFFEA && offset <= 0xFFEB) return CartridgeAddress.Sa1Vector(offset - 0xFFEA);
@@ -65,8 +61,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             return CartridgeAddress.Unmapped;
         }
 
-        // SA-1 view. No WRAM and no PPU at all; I-RAM is additionally mirrored
-        // low so the SA-1 can put its direct page and stack there.
+        // No WRAM and no PPU; I-RAM is mirrored low as well - see Venus_SA1.md §3.
         public CartridgeAddress ResolveSa1(byte bank, ushort offset)
         {
             if (IsLowBank(bank))
@@ -96,8 +91,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             return CartridgeAddress.Unmapped;
         }
 
-        // BMAP bit 7 turns the window into a virtual bitmap, where one byte is
-        // one 2bpp or 4bpp pixel - see Venus_SA1.md §3.3.
+        // BMAP bit 7 turns the window into a virtual bitmap, where one byte is one 2bpp or 4bpp pixel - see Venus_SA1.md §3.3.
         private CartridgeAddress ResolveSa1BwRamWindow(ushort offset)
         {
             if ((_bmap & 0x80) == 0) return CartridgeAddress.Sram(BwRamWindowOffset(_bmap & 0x1F, offset));
@@ -110,9 +104,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
                 : CartridgeAddress.Sram((block << 12) + (pixel >> 1));
         }
 
-        // Bitmap-mode reads/writes touch one sub-byte field of the resolved
-        // byte rather than the whole thing, so the window needs its own
-        // accessors on top of the plain BW-RAM indexing.
+        // Bitmap-mode reads/writes touch one sub-byte field of the resolved byte rather than the whole thing.
         private bool Sa1BitmapWindow(ushort offset, out int shift, out int mask)
         {
             if ((_bmap & 0x80) == 0) { shift = 0; mask = 0xFF; return false; }
@@ -196,8 +188,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             }
         }
 
-        // Flat, device-relative BW-RAM access for Sa1Dma, which addresses the
-        // chip directly rather than through either CPU's window.
+        // Flat, device-relative BW-RAM access for Sa1Dma, which addresses the chip directly rather than.
         internal byte ReadBwRamByte(int offset) => _bwRam.Length == 0 ? (byte)0x00 : _bwRam[offset % _bwRam.Length];
 
         internal void WriteBwRamByte(int offset, byte data)

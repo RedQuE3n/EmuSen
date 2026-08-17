@@ -9,12 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // Addressing modes, used only to drive operand length + formatting -
-    // NOT reused from Cpu's execution-side AddrMode delegates (Cpu.cs),
-    // which compute target addresses with real side effects (advancing PC,
-    // consuming cycles) and aren't safe or meaningful to invoke just to
-    // find out "how many bytes does this instruction take". This is a
-    // deliberately separate, read-only data table.
+    // Addressing modes, used only to drive operand length + formatting - NOT reused from Cpu's.
     internal enum Snes65816AddrMode
     {
         Implied, Accumulator, Immediate8, ImmediateA, ImmediateXY,
@@ -29,10 +24,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         BlockMove,
     }
 
-    // Standalone 65816 disassembler, deliberately separate from Cpu's
-    // execution opcode table - see Venus_CPU.md §1 and §7, and
-    // EmuSen_Debugging_Tools_Reference_v5.md §3.7 for the full verification
-    // status and caveats.
+    // Standalone 65816 disassembler, deliberately separate from Cpu's execution opcode table - see Venus_CPU.md §1.
     public static class Snes65816Disassembler
     {
         private static readonly (string Mnemonic, Snes65816AddrMode Mode)[] Table = new (string, Snes65816AddrMode)[256]
@@ -310,11 +302,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             /*FF*/ ("SBC", Snes65816AddrMode.AbsoluteLongX),
         };
 
-        // eFlag forces 8-bit M/X regardless of P (real hardware behavior);
-        // mFlagSet/xFlagSet seed the starting M/X when eFlag is false, then
-        // get tracked live as REP/SEP are decoded within this call. XCE
-        // mid-range is a known remaining gap. See
-        // EmuSen_Debugging_Tools_Reference_v5.md §3.7 for the full story.
+        // eFlag forces 8-bit M/X regardless of P, and the flag seeds are tracked forward - see EmuSen_Debugging_Tools_Reference_v5.md §3.7.
         public static List<DisassembledInstruction> Disassemble(Func<int, byte> readByte, int address, int count, bool eFlag, bool mFlagSet, bool xFlagSet)
         {
             var result = new List<DisassembledInstruction>(count);
@@ -335,11 +323,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
                 string operandText = FormatOperand(mode, bytes, addr);
                 result.Add(new DisassembledInstruction(addr, bytes, mnemonic, operandText));
 
-                // REP clears the P bits set in its operand (0 = 16-bit for
-                // M/X); SEP sets them (1 = 8-bit). Bit 0x20 is M, bit 0x10
-                // is X - standard 65816 status register layout. Both
-                // opcodes are fixed 1-byte-immediate regardless of M/X, so
-                // bytes[1] is always the mask here.
+                // REP clears the P bits set in its operand (0 = 16-bit for M/X); SEP sets them (1 = 8-bit).
                 if (!eFlag)
                 {
                     if (opcode == 0xC2) // REP
@@ -465,11 +449,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
                     return $"${target:X4}";
                 }
                 case Snes65816AddrMode.BlockMove:
-                    // MVN/MVP operand bytes are (destBank, srcBank) per the
-                    // 65816 convention - shown plainly as two bank bytes
-                    // rather than asserting src/dest labels, since that
-                    // ordering is exactly the kind of easy-to-get-backwards
-                    // detail this file's honesty note is warning about.
+                    // MVN/MVP operand bytes are (destBank, srcBank) per the 65816 convention - shown plainly as two bank.
                     return $"${bytes[1]:X2},${bytes[2]:X2}";
                 default:
                     return "";

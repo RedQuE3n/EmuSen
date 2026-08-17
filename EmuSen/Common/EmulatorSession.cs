@@ -8,18 +8,7 @@ using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Common
 {
-    // Thin, mostly core-agnostic wrapper around ICore for a non-Raylib
-    // frontend (the Avalonia EmuSen.Mistress project) to drive a core on
-    // its own schedule, independent of any particular windowing/UI
-    // toolkit - call LoadRom() once and RunFrame() whenever the UI's own
-    // render loop wants a new frame.
-    //
-    // This used to hold a full second copy of VenusCore's timing loop
-    // (CPU/PPU/APU stepping, HDMA, NMI - see git history if curious just
-    // how identical the two were). That's gone now; RunFrame()/SaveState()/
-    // LoadState()/GetFrameBufferRgba() all delegate straight to an ICore.
-    //
-    // Core-agnostic now - LoadRom picks a core from the ROM's extension - see EmuSen_Multicore.md §2.
+    // Thin, mostly core-agnostic wrapper around ICore for a non-Raylib frontend (the Avalonia - see EmuSen_Multicore.md §2.
     public class EmulatorSession
     {
         private ICore? _core;
@@ -48,15 +37,7 @@ namespace EmuSen.Common
         public ICheatCodeCodec? CheatExplicitCodec { get; private set; }
         public ICpuTraceSwitch? CpuTraceSwitch { get; private set; }
 
-        // Firmware <romPath> needs that isn't in the library yet. Answered
-        // without loading, so an interactive frontend can offer to go and
-        // find it BEFORE LoadRom - afterwards is too late, the core has
-        // already come up with the chip absent. A frontend that can't ask
-        // (Pharaoh) simply skips this and gets the missing-chip
-        // behaviour. See EmuSen_Firmware.md §3.
-        //
-        // Constructs a throwaway core for the same reason LoadRom below
-        // hardcodes one: there is exactly one core to construct today.
+        // Firmware <romPath> needs that isn't in the library yet - see EmuSen_Firmware.md §3.
         public static IReadOnlyList<FirmwareRequest> MissingFirmwareFor(string romPath) =>
             FirmwareLibrary.MissingFrom(CoreFactory.ForFirmwareProbe(romPath).GetFirmwareRequirements(romPath));
 
@@ -73,9 +54,7 @@ namespace EmuSen.Common
             CpuTraceSwitch = bundle.CpuTraceSwitch;
         }
 
-        // Periodic SRAM autosave is handled inside VenusCore.RunFrame()
-        // itself now, not scheduled here - this class used to own that
-        // timing separately before delegating to ICore.
+        // The periodic SRAM autosave lives inside RunFrame now, not scheduled here.
         public void RunFrame()
         {
             if (_core is null) throw new InvalidOperationException("RunFrame() called before LoadRom().");
@@ -84,10 +63,7 @@ namespace EmuSen.Common
 
         public void SaveSram() => _core?.SaveSram();
 
-        // Must be called before the caller's log writer is disposed, while
-        // CpuVerboseLogging/Spc700VerboseLogging might still be on - see
-        // DebugTools.RepeatCollapsingTrace<TKey>.Flush() for why a
-        // still-in-progress loop/tail would otherwise never reach the log.
+        // Before the caller's log writer is disposed, or a still-open trace loop never reaches the log.
         public void FlushVerboseLogs()
         {
             (_core as ITraceFlushable)?.FlushVerboseTrace();
@@ -121,21 +97,10 @@ namespace EmuSen.Common
             return _core.GetFrameBufferRgba();
         }
 
-        // AudioSampleRate falls back to the same AudioSettings default
-        // CoreName above falls back to "SNES" for - a caller opening its
-        // output device before any ROM is loaded yet (or between loads)
-        // still needs a sample rate to open it at.
+        // AudioSampleRate falls back to the same AudioSettings default CoreName above falls back to "SNES".
         public int AudioSampleRate => _core?.AudioSampleRate ?? EmuSen.Audio.AudioSettings.SampleRate;
 
-        // Straight pass-through to ICore.DequeueAudioSamples() - see that
-        // method's own comment. Returns an empty array rather than
-        // throwing when no ROM is loaded yet, unlike GetFrameBufferRgba()
-        // above - an audio pump callable every tick regardless of session
-        // state (the same "no ROM loaded is a normal condition, not an
-        // error" convention Shell/Commands/DebugCommandHelpers.
-        // RequireTarget's callers avoid on their own read paths) is
-        // simpler for a caller than needing its own IsRomLoaded guard
-        // around every single pump call.
+        // Straight pass-through to ICore.DequeueAudioSamples() - see that method's own comment.
         public short[] DequeueAudioSamples(int maxFrames) => _core?.DequeueAudioSamples(maxFrames) ?? Array.Empty<short>();
 
         // Falls back to NTSC until a ROM is loaded - see Venus_CPU.md §8.5b.

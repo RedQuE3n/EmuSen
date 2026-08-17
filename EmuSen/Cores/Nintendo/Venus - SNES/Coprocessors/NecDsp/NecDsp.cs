@@ -2,13 +2,10 @@ using EmuSen.Common;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 {
-    // NEC uPD7725 (DSP-1/1B/2/3/4) and uPD96050 (ST010/ST011): a Harvard-
-    // architecture 16-bit DSP with a masked-in program ROM, so unlike the SA-1
-    // or the GSU it runs firmware the cartridge never exposes - see Venus_NecDSP.md.
+    // A Harvard 16-bit DSP running masked-in firmware the cartridge never exposes - see Venus_NecDSP.md.
     public sealed partial class NecDsp
     {
-        // Program and data ROM come from the firmware dump, which LoadRom
-        // re-reads before any state load, so neither belongs in a save state.
+        // LoadRom re-reads the dump before any state load, so neither ROM belongs in a save state.
         [SkipInState] private readonly uint[] _program;
         [SkipInState] private readonly ushort[] _dataRom;
 
@@ -19,13 +16,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
         [SkipInState] private readonly int _stackMask;
         [SkipInState] private readonly int _clockHz;
 
-        // Which address bit selects SR over DR, set by the memory map the
-        // cartridge uses - see Venus_NecDSP.md §3.
+        // Which address bit selects SR over DR, set by the memory map the cartridge uses - see Venus_NecDSP.md §3.
         [SkipInState] private readonly ushort _registerMask;
         [SkipInState] private readonly bool _hiRomMap;
 
-        // Set by VenusCore from the cartridge's region, since the DSP has its
-        // own crystal and has to be converted from master clocks.
+        // Set from the cartridge's region, since the DSP's own crystal converts against master clocks.
         [SkipInState] public int MasterClockHz = 21477272;
 
         public ushort[] Ram;
@@ -54,8 +49,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
         private uint _opcode;
         private long _clockBudget;
 
-        // The DSP is spinning on RQM waiting for the host, so there is nothing
-        // to gain from stepping it until a DR access - see Venus_NecDSP.md §4.3.
+        // The DSP is spinning on RQM waiting for the host, so there is nothing to gain from stepping it until - see Venus_NecDSP.md §4.3.
         private bool _inRqmLoop;
 
         public NecDsp(NecDspVariant variant, NecDspFirmware firmware, bool hiRom)
@@ -90,8 +84,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
         // Only the uPD96050's 2KB of data RAM is battery-backed - see Venus_NecDSP.md §6.
         public bool HasBatteryRam => NecDspProfile.IsSt01x(_variant);
 
-        // Side-effect-free views for the debug target - the host's own DR/SR
-        // reads advance the transfer handshake, see Venus_NecDSP.md §3.2.
+        // Side-effect-free views for the debug target - the host's own DR/SR reads advance the transfer - see Venus_NecDSP.md §3.2.
         public ushort DebugPc => _pc;
         public ushort DebugSr => _sr;
         public ushort DebugDr => _dr;
@@ -142,9 +135,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             _inRqmLoop = false;
         }
 
-        // Advances the DSP by the master clocks the S-CPU just consumed. The
-        // chip has its own crystal, so the budget is kept in master clocks and
-        // spent ClockHz-at-a-time - see Venus_NecDSP.md §4.1.
+        // Advances the DSP by the master clocks the S-CPU just consumed - see Venus_NecDSP.md §4.1.
         public void Run(int masterClocks)
         {
             if (_inRqmLoop)
@@ -188,8 +179,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
                 default: Load((byte)(_opcode & 0x0F), (ushort)(_opcode >> 6)); break;
             }
 
-            // The multiplier is combinational: every instruction re-latches it
-            // from whatever K and L now hold - see Venus_NecDSP.md §4.2.
+            // The multiplier is combinational: every instruction re-latches it from whatever K and L now hold - see Venus_NecDSP.md §4.2.
             int product = (short)_k * (short)_l;
             _m = (ushort)(product >> 15);
             _n = (ushort)(product << 1);

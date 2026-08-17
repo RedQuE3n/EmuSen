@@ -5,41 +5,15 @@ using System.Reflection;
 
 namespace EmuSen.Common
 {
-    // Marks a field as NOT part of save-state data. Used for three kinds of
-    // fields that reflection would otherwise mishandle:
-    //   1. Dispatch tables holding delegates (Spc700._instructions, Ppu's
-    //      register table) - delegates aren't meaningfully serializable, and
-    //      these get rebuilt identically by BuildOpcodeTable()/
-    //      BuildRegisterTable() every time a fresh Spc700/Ppu is
-    //      constructed, so they're wiring, not data. (The 65816's own table
-    //      is no longer one of these - see Venus_CPU.md §9.)
-    //   2. Back-references to an already-owned object (Dma._bus pointing
-    //      back to its owning MemoryBus, MemoryBus's own references to the
-    //      Cartridge/Spc700 that EmulatorSession already owns and saves
-    //      directly) - these are correctly re-wired by the normal
-    //      constructors before a load ever happens, and serializing them
-    //      would either duplicate data or create a reference cycle.
-    //   3. Transient, non-game-state buffers (SDsp.AudioBuffer - pending
-    //      output samples, not something a save state needs to restore).
+    // Marks a field as NOT part of save-state data - see Venus_CPU.md §9.
     [AttributeUsage(AttributeTargets.Field)]
     public class SkipInStateAttribute : Attribute { }
 
-    // An alias of an array another field already serializes - written by the
-    // pre-v1 format, skipped since. See EmuSen_Save_States.md §2.
+    // An array alias another field already serializes, written by the pre-v1 format - see EmuSen_Save_States.md §2.
     [AttributeUsage(AttributeTargets.Field)]
     public class AliasOfSerializedFieldAttribute : Attribute { }
 
-    // Walks every instance field (public and private, excluding static/const
-    // and anything marked [SkipInState]) of an object graph, in a fixed
-    // alphabetical order so write and read always agree. Fields of an
-    // EXISTING array (byte[], DspVoice[], DmaChannel[], etc.) are filled in
-    // place rather than reallocated - every array in this project's state
-    // graph is already sized correctly by its owning class's constructor
-    // before a save or load ever happens.
-    //
-    // Still has no field-name tagging: adding, removing, or reordering a
-    // field breaks older files unless the version is bumped and a read path
-    // kept for the old layout - see EmuSen_Save_States.md §1/§3.
+    // Walks every instance field (public and private, excluding static/const and anything marked - see EmuSen_Save_States.md §1.
     public static class StateSerializer
     {
         public static void Write(BinaryWriter w, object obj)
@@ -92,18 +66,12 @@ namespace EmuSen.Common
 
             if (t.IsArray)
             {
-                // Array of a reference type (DspVoice[], DmaChannel[]) -
-                // every element is assumed non-null and pre-constructed by
-                // the owning class, matching how this project actually
-                // initializes these (e.g. Dma's constructor eagerly `new`s
-                // all 8 DmaChannel instances up front).
+                // Every element is assumed pre-constructed, which is how the owning classes initialise these.
                 foreach (object item in (Array)value!) Write(w, item);
                 return;
             }
 
-            // An interface-typed field (Cpu._bus, which is a MemoryBus for the
-            // S-CPU and an Sa1Bus for the SA-1) is walked exactly like a class:
-            // Write() below keys off the runtime type either way.
+            // An interface-typed field (Cpu._bus, which is a MemoryBus for the S-CPU and an Sa1Bus for the SA-1).
             if (t.IsClass || t.IsInterface)
             {
                 bool hasValue = value != null;

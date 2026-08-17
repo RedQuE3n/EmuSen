@@ -46,8 +46,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             /* 0xF_ */ 2, 5, 5, 7, 5, 4, 6, 6, 2, 4, 4, 2, 8, 4, 7, 5,
         };
 
-        // OpcodeCycles above counts an 8-bit operand. A 16-bit one costs the real
-        // chip an extra bus cycle per extra byte - see Venus_CPU.md §8.8.
+        // OpcodeCycles above counts an 8-bit operand - see Venus_CPU.md §8.8.
         public const byte WidthNone = 0, WidthM = 1, WidthX = 2, WidthMRmw = 3;
 
         private static readonly byte[] OpcodeWidth = BuildWidthTable();
@@ -99,16 +98,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             return w;
         }
 
-        // An internal cycle touches no bus, so it is always 6 master clocks whatever
-        // region the operand lives in - see Venus_CPU.md §8.8.
+        // An internal cycle touches no bus, so it is always 6 master clocks whatever region the operand lives - see Venus_CPU.md §8.8.
         public const int InternalCycleClocks = 6;
 
-        // Opcodes whose every non-fetch cycle is internal: register-only work and
-        // branches. Anything else spends its remainder on the operand's own bus.
+        // Opcodes whose every non-fetch cycle is internal: register-only work and branches.
         private static readonly bool[] OpcodeInternalRemainder = BuildInternalRemainder();
 
-        // A taken branch moves PC, so the usual "how far did PC advance" byte count
-        // is meaningless; these carry the real instruction length instead.
+        // A taken branch moves PC, so the usual "how far did PC advance" byte count is meaningless; these.
         private static readonly byte[] OpcodeFixedBytes = BuildFixedBytes();
 
         private static bool[] BuildInternalRemainder()

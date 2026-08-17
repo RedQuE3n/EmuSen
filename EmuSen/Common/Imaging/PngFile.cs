@@ -2,9 +2,7 @@ using SkiaSharp;
 
 namespace EmuSen.Common.Imaging
 {
-    // The one RGBA8888 -> real PNG encoder, shared by the window frontend's
-    // screenshot hotkey and the headless harness's `record` verb - see
-    // EmuSen_Debugging_Tools_Reference_v5.md §3.15b.
+    // The one RGBA8888-to-PNG encoder, shared by the screenshot hotkey and `record` - see EmuSen_Debugging_Tools_Reference_v5.md §3.15b.
     public static class PngFile
     {
         public static void Write(string path, byte[] rgba, int width, int height)

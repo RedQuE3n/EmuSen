@@ -29,10 +29,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
     {
         private ICpuBus _bus;
 
-        // Set to true for detailed per-instruction tracing. Leave false for normal runs -
-        // printing a console line for every single instruction (including ones inside
-        // polling loops that legitimately need many iterations, like the APU handshake)
-        // makes a working emulator look like it's hung.
+        // Per-instruction tracing; on for a normal run it makes a working emulator look hung.
 
         public ushort A;  
         public ushort X;  
@@ -44,8 +41,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         public byte PB;   
         public byte DB;   
 
-        // Snapshotted at instruction start, unlike the live PC/PB above -
-        // see Venus_CPU.md §2.
+        // Snapshotted at instruction start, unlike the live PC/PB above - see Venus_CPU.md §2.
         public ushort LastInstructionPC;
         public byte LastInstructionPB;
 
@@ -60,23 +56,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
         private bool _waitingForInterrupt;
         private bool _stopped;
 
-        // Side channel for the handful of addressing-mode-level cycle
-        // penalties real hardware charges that don't fit the static
-        // per-opcode OpcodeCycles model: a direct-page access with a
-        // nonzero D low byte, and an indexed access whose effective
-        // address crosses a page boundary. The addressing-mode methods in
-        // Cpu.AddressModes.cs increment this directly (they're instance
-        // methods with access to D/X/Y already); Step() reads and resets
-        // it once per instruction, in "CPU cycle units" (added to
-        // inst.Cycles before the master-clock conversion below).
+        // Addressing-mode penalties the static per-opcode table cannot express - see Venus_CPU.md §8.
         private int _addrModeExtraCycles;
 
-        // Equality key for one executed instruction, used only by
-        // _verboseTrace to detect repeating polling/delay loops - see
-        // DebugTools.RepeatCollapsingTrace<TKey> for why a struct key
-        // instead of comparing the rendered strings. Name isn't part of
-        // the key: it's a deterministic function of Opcode, looked up
-        // again in Render() only when a line is actually emitted.
+        // A struct key, so a locked loop costs a comparison and no allocation - see DebugTools.cs.
         private readonly struct StepKey : IEquatable<StepKey>
         {
             public readonly byte Pb;
@@ -100,19 +83,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             public override int GetHashCode() => HashCode.Combine(Pb, Pc, Opcode, TargetAddr);
         }
 
-        // Holds delegates (a Console.WriteLine reference plus two closures)
-        // internally - not serializable, same reasoning as Spc700's own
-        // dispatch table (case 1 in StateSerializer's doc comment), just not
-        // caught at the time this field was added. Surfaced by the
-        // headless debug harness's own --savestate/--loadstate smoke test:
-        // reflecting into a delegate hits its private method-pointer field
-        // (a raw IntPtr), which StateSerializer has no case for.
+        // Holds delegates, so it cannot be serialized - see StateSerializer's own contract.
         [EmuSen.Common.SkipInState] private readonly DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
-        // <name> tags trace output so the S-CPU and the SA-1's CPU are
-        // distinguishable; <logReset> is off for the SA-1, whose reset line the
-        // game drives directly and can toggle repeatedly - see Venus_SA1.md §4.1.
+        // <name> distinguishes the SA-1's CPU in trace output - see Venus_SA1.md §4.1.
         [EmuSen.Common.SkipInState] private readonly string _name;
         [EmuSen.Common.SkipInState] private readonly bool _logReset;
 
@@ -134,13 +109,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             Reset();
         }
 
-        // Step() already flushes automatically the moment it notices
-        // CpuVerboseLogging went from on to off (see _wasVerboseLogging),
-        // which covers `trace off` and the countdown running out - this is
-        // for the one case Step() can't see coming: the process exiting
-        // while logging is still on, where nothing calls Step() again to
-        // notice. Program.cs's shutdown path calls this before disposing
-        // the log writer.
+        // For the one case Step cannot see coming: the process exiting with logging on.
         public void FlushVerboseTrace() => _verboseTrace.Flush();
 
         // The extra bus cycles a 16-bit operand costs - see Venus_CPU.md §8.8.
@@ -199,18 +168,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         public int Step()
         {
-            // STP: halted until Reset(). WAI: halted until Nmi()/Irq() clears
-            // _waitingForInterrupt (see those methods below). Neither fetches
-            // or executes anything while active - just consumes idle cycles
-            // so the caller's per-scanline cycle budget still advances.
-            //
-            // DrainPendingDmaCycles() covers both early-return cases too,
-            // not just the normal instruction path below - a general-
-            // purpose DMA triggered by the instruction immediately before
-            // a WAI/STP would otherwise have its cost silently dropped
-            // (Dma.PendingCpuCycles accumulates the instant $420B is
-            // written, mid-instruction, so it can already be nonzero the
-            // moment this method is entered).
+            // WAI/STP consume idle cycles, and pending DMA cost must drain on those paths too.
             if (_stopped) return _bus.GetAccessSpeedCycles(((uint)PB << 16) | PC) * 3 + DrainPendingDmaCycles();
             if (_waitingForInterrupt) return _bus.GetAccessSpeedCycles(((uint)PB << 16) | PC) * 2 + DrainPendingDmaCycles();
 
@@ -246,38 +204,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             }
             else if (_wasVerboseLogging)
             {
-                // Verbose logging just turned off - by the countdown above,
-                // by `trace off`, or by anything else flipping the flag -
-                // flush whatever loop/tail _verboseTrace was still holding
-                // so it isn't stranded until the next time logging happens
-                // to turn back on (or lost entirely if it never does).
+                // Flush whatever the trace still holds, or it strands until logging returns.
                 _verboseTrace.Flush();
                 _wasVerboseLogging = false;
             }
 
-            // Convert this instruction's cycle count into real elapsed
-            // master clocks instead of returning its base count as an opaque
-            // "CPU cycle" unit. OpcodeCycles (plus _addrModeExtraCycles from
-            // the D-register/page-crossing penalties addressing-mode
-            // methods report directly) is still the total access count,
-            // but each access is now charged at the real region-dependent
-            // speed (6/8/12 master clocks - see MemoryBus.GetAccessSpeedCycles)
-            // instead of a single flat rate assumed for the whole machine.
-            //
-            // The opcode+operand-fetch portion (bytesFetched, i.e. however
-            // far PC actually advanced) is charged at the opcode's own
-            // region speed; any remaining cycles - the instruction's actual
-            // memory read/write plus internal/dummy cycles - are charged at
-            // the addressing target's region speed, since for most
-            // memory-accessing instructions that's a genuinely different
-            // address (e.g. a ROM-resident LDA reading WRAM). Implied/
-            // register-only opcodes and branches have no separate target
-            // (AddrImplied/AddrRelative* return 0 or a same-bank branch
-            // destination), so this slightly overcharges a handful of
-            // pure-register FastROM opcodes whose real dead-cycle re-reads
-            // the opcode bank rather than bank 0 - accepted as a known,
-            // narrow residual rather than threading a same-bank flag
-            // through every implied-addressing opcode for it.
+            // Each access charged at its own region speed, with one known residual - see Venus_CPU.md §8.
             int totalCycleUnits = OpcodeCycles[opcode] + _addrModeExtraCycles + WidthPenalty(opcode, wide16A, wide16X);
             int bytesFetched = OpcodeFixedBytes[opcode];
             if (bytesFetched == 0)
@@ -300,18 +232,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             return totalClocks;
         }
 
-        // See Dma.PendingCpuCycles's own comment for why this exists and
-        // its unit convention (1 unit = 8 master clocks, the SlowROM
-        // baseline it assumes uniformly) - converted to real master clocks
-        // here since Step() now returns master clocks directly rather than
-        // abstract "CPU cycle" units.
+        // Converted here, since Step returns master clocks now - see Venus_Memory.md §3.1.
         private int DrainPendingDmaCycles()
         {
             return _bus.TakePendingDmaCycles() * 8;
         }
 
-        // NMI entry sequence - see Venus_CPU.md §3. Triggered externally
-        // from the main loop on simulated vblank when NMITIMEN's enable bit is set.
+        // NMI entry sequence - see Venus_CPU.md §3.
         public void Nmi()
         {
             _waitingForInterrupt = false;
@@ -343,9 +270,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
             if (DebugSettings.CpuVerboseLogging)
             {
-                // Flush first so a loop the NMI interrupted (still pending
-                // in _verboseTrace, possibly mid-repeat) is written out
-                // before this line, keeping the file in execution order.
+                // Flush first, so an interrupted loop is written before this line, in execution order.
                 _verboseTrace.Flush();
                 Console.WriteLine($"[CPU] NMI -> PC = 0x00{PC:X4}");
             }

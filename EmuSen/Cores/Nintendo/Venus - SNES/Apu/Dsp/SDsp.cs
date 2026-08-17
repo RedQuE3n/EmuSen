@@ -4,8 +4,7 @@ using EmuSen.Audio;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
-    // The S-DSP: register file, the 8 voices (DspVoice.cs), and final stereo
-    // mixing - see Venus_APU.md §3.
+    // Register file, eight voices and final mixing - see Venus_APU.md §3.
     public class SDsp
     {
         private byte[] _registers = new byte[128];
@@ -19,10 +18,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private byte _pendingKon;
         private byte _prevKoff;
 
-        // Global (non-per-voice) register offsets - see Venus_APU.md §3 /
-        // anomie's DSP doc for the full register map. Named here purely
-        // for readability; the underlying storage is still the flat
-        // _registers[128] array everything else already uses.
+        // Named for readability; storage is still the flat _registers[128] array - see Venus_APU.md §3.
         private const int RegMasterVolLeft = 0x0C;
         private const int RegEchoFeedback = 0x0D;
         private const int RegMasterVolRight = 0x1C;
@@ -36,46 +32,21 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private const int RegEchoRingBufferAddr = 0x6D;
         private const int RegEchoDelay = 0x7D; // EDL - low nibble, buffer length = EDL*2KB
 
-        // Echo unit state - the one whole S-DSP subsystem that was
-        // entirely unimplemented before this (see the DspVoice rewrite's
-        // own comment on why it was deferred as separate work). An 8-tap
-        // FIR filter applied to a rolling window of samples read one at a
-        // time from a ring/delay buffer in SPC RAM, fed by whichever
-        // voices have their EON bit set, with feedback (EFB) mixing the
-        // filtered result back into what gets written to the ring buffer
-        // each sample - ported from Mesen2's Dsp.cpp Echo* methods,
-        // flattened into one pass per output sample the same way
-        // DspVoice's own rewrite flattened voice processing (the exact
-        // 32-step interleaved microcode schedule isn't replicated, just
-        // the logical read-before-write ordering that actually matters
-        // for correct output).
+        // The echo unit, ported from Mesen2's Dsp.cpp and flattened per sample - see Venus_APU.md §3.
         private readonly short[] _echoHistoryL = new short[8];
         private readonly short[] _echoHistoryR = new short[8];
         private int _echoHistoryPos;
         private int _echoOffset;
         private int _echoLength;
 
-        // Pending output samples, not game state - excluded from save states
-        // the same reasoning as Renderer's own pixel buffer. Explicit backing
-        // field (not an auto-property) specifically so [SkipInState], which
-        // only targets fields, can actually be applied to it.
+        // Pending output, not game state; an explicit field so [SkipInState] can apply.
         [EmuSen.Common.SkipInState]
         private Queue<short> _audioBuffer = new Queue<short>();
         public Queue<short> AudioBuffer => _audioBuffer;
 
         private int _dspCycles;
 
-        // Debug-only per-voice mute mask for the `mute`/`channels` commands
-        // (see GetVoiceDebugInfo/SetVoiceMuted below) - NOT real hardware
-        // state (there's no such SNES register), so excluded from save
-        // states the same way _sheetPixels/_audioBuffer are. A muted voice
-        // still runs GetNextSample() every tick (so its own envelope/
-        // playback position doesn't desync from "what really happened"),
-        // it's just excluded from the final mix and from feeding the echo
-        // buffer - letting a suspected-broken instrument be isolated
-        // (mute everything else, dump audio) or ruled out (mute just it,
-        // confirm the rest of the mix is unaffected) without needing a
-        // separate solo-rendering pipeline.
+        // Debug-only, not hardware state: a muted voice still steps, it just leaves the mix.
         [EmuSen.Common.SkipInState]
         private byte _debugMuteMask;
 
@@ -84,8 +55,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             for (int i = 0; i < 8; i++) _voices[i] = new DspVoice();
         }
 
-        // Called once by Spc700's constructor so voices can read BRR sample
-        // data and the sample directory table directly out of SPC RAM.
+        // Called by Spc700's constructor so voices can reach BRR data in SPC RAM.
         public void AttachMemory(byte[] ram)
         {
             _ram = ram;
@@ -96,17 +66,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             Array.Clear(_registers, 0, _registers.Length);
 
-            // Real hardware's FLG register always reads as 0xE0 right
-            // after power-on/reset (soft-reset + mute + echo-disable bits
-            // all set), regardless of what a plain register-clear would
-            // otherwise leave it as - see anomie's DSP doc. Without this,
-            // FLG's echo-disable bit (0x20) reads as clear (enabled) with
-            // ESA still at its cleared value of 0, so the newly-added echo
-            // unit would start writing into zero-page SPC RAM - where the
-            // sound driver's own variables and call stack live - before
-            // the game ever gets a chance to configure or disable it,
-            // corrupting the driver entirely (caught as "audio went
-            // completely silent" the first time echo was added).
+            // FLG reads 0xE0 after reset, or echo writes into zero-page RAM before a game configures it.
             _registers[RegFlags] = 0xE0;
 
             _registerAddress = 0;
@@ -122,17 +82,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             AudioBuffer.Clear();
         }
 
-        // Stores the RAW byte written, unmasked - only 7 bits are actually
-        // used to index the 128-entry register file (masked at each point
-        // of use below), but real hardware's address latch still holds
-        // and echoes back the full 8 bits on a subsequent read, including
-        // the otherwise-unused top bit. Previously masked at write time,
-        // which was unrecoverable on read - caught via the SpcValidation
-        // harness (an "OR A, dp" test reading this port back got the
-        // masked value XORed against the real one, differing by exactly
-        // bit 7). Almost certainly inaudible in any real game (nothing
-        // sane relies on this bit surviving a round trip), fixed anyway
-        // since it was cheap once found.
+        // The raw byte, unmasked: hardware echoes bit 7 back on a read - caught by SpcValidation.
         public void SetRegisterAddress(byte address)
         {
             _registerAddress = address;
@@ -159,11 +109,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             return _registers[index];
         }
 
-        // Non-mutating register peek for the debug toolchain
-        // (SnesDebugTarget.ApuRegisters) - unlike ReadRegister() above,
-        // this never touches _registerAddress, so a debugger inspecting
-        // DSP state can't disturb whatever multi-step address/data
-        // sequence the actual sound driver is mid-way through.
+        // Never touches _registerAddress, so inspecting cannot disturb a driver mid-sequence.
         public byte PeekRegister(int index)
         {
             index &= 0x7F;
@@ -229,10 +175,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
         }
 
-        // Diagnostic only (see DebugSettings.DspKeyOnLogging) - lets a
-        // KeyOn log line show how far apart consecutive triggers actually
-        // are, to distinguish a legitimate fast rhythmic pattern from a
-        // suspicious retrigger burst.
+        // Lets a KeyOn log distinguish a rhythmic pattern from a retrigger burst.
         private long _sampleCounter;
 
         private void GenerateSample()
@@ -253,10 +196,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 {
                     var voice = _voices[i];
                     short s = voice.GetNextSample();
-                    // Debug-only solo/mute (see _debugMuteMask's own
-                    // comment) - GetNextSample() above still ran, so this
-                    // voice's own playback/envelope state stays in sync;
-                    // it's just excluded from the mix and from feeding echo.
+                    // The voice already stepped, so only the mix and the echo feed skip it.
                     if ((_debugMuteMask & (1 << i)) != 0) continue;
                     int contribL = (s * (sbyte)voice.VolL) >> 7;
                     int contribR = (s * (sbyte)voice.VolR) >> 7;
@@ -284,11 +224,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 mixL = (int)(mixL * AudioSettings.MasterVolume);
                 mixR = (int)(mixR * AudioSettings.MasterVolume);
 
-                // FLG bit 6 (real hardware's own software mute) only
-                // silences the final DAC-bound output - voice/envelope
-                // stepping and the echo buffer's own read/write/feedback
-                // above still run every sample regardless, matching real
-                // hardware (muting doesn't pause the echo delay line).
+                // FLG bit 6 silences the DAC only; voices and the echo delay line still run.
                 bool hardwareMuted = (_registers[RegFlags] & 0x40) != 0;
                 if (!hardwareMuted)
                 {
@@ -305,9 +241,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             AudioBuffer.Enqueue(leftSample);
             AudioBuffer.Enqueue(rightSample);
 
-            // Safety valve for when nothing is draining at all - the frontend's
-            // rate control is what keeps this near empty. Pairs, never single
-            // samples, or L/R swap. See EmuSen_Audio_Sync.md §4.
+            // A safety valve when nothing drains; pairs only, or L/R swap - see EmuSen_Audio_Sync.md §4.
             while (AudioBuffer.Count > AudioSettings.AudioBufferMaxSamples && AudioBuffer.Count >= 2)
             {
                 AudioBuffer.Dequeue();
@@ -315,15 +249,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
         }
 
-        // The 8-tap FIR echo unit - ported from Mesen2's Dsp.cpp Echo*
-        // methods (see this file's own header comment on the fields
-        // involved). dryEchoInputL/R is the pre-computed sum of just the
-        // EON-enabled voices' output (separate from the full dry mix every
-        // voice contributes to regardless of EON) - this is what actually
-        // feeds the delay line, mixed with feedback from the existing
-        // (filtered) echo signal. Returns the FIR-filtered echo signal
-        // (before EVOL scaling), which is also what SDsp.GenerateSample
-        // combines with the dry mix for final output.
+        // The 8-tap FIR echo, fed by the EON-gated voice sum - see Venus_APU.md §3.
         private (int echoInL, int echoInR) ProcessEcho(int dryEchoInputL, int dryEchoInputR)
         {
             int esa = _registers[RegEchoRingBufferAddr] << 8;
@@ -346,17 +272,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             firL = Math.Clamp(firL, short.MinValue, short.MaxValue) & ~1;
             firR = Math.Clamp(firR, short.MinValue, short.MaxValue) & ~1;
 
-            // Feedback: mix the freshly-filtered echo signal (scaled by
-            // EFB) back into the dry, EON-gated voice sum - this combined
-            // value is what actually gets written to the delay line, so
-            // each repeat blends new input with a scaled copy of the
-            // previous repeat rather than just replaying the raw input.
+            // Feedback blends each repeat with a scaled copy of the previous one.
             sbyte efb = (sbyte)_registers[RegEchoFeedback];
             int echoOutL = Math.Clamp(dryEchoInputL + ((firL * efb) >> 7), short.MinValue, short.MaxValue) & ~1;
             int echoOutR = Math.Clamp(dryEchoInputR + ((firR * efb) >> 7), short.MinValue, short.MaxValue) & ~1;
 
-            // FLG bit 5 clear = echo buffer writes enabled ("ECEN" is
-            // active-low - see Venus_APU.md §3 / anomie's DSP doc).
+            // FLG bit 5 clear enables echo writes: ECEN is active-low - see Venus_APU.md §3.
             if ((_registers[RegFlags] & 0x20) == 0)
             {
                 _ram[pointer] = (byte)(echoOutL & 0xFF);
@@ -365,10 +286,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
                 _ram[(pointer + 3) & 0xFFFF] = (byte)((echoOutR >> 8) & 0xFF);
             }
 
-            // EDL (buffer length) is only re-read at the instant the
-            // offset wraps back to the start - a write to EDL takes
-            // effect on the NEXT lap of the delay line, not immediately,
-            // matching real hardware.
+            // EDL is re-read only on wrap, so a write takes effect next lap, as on hardware.
             if (_echoOffset == 0)
             {
                 _echoLength = (_registers[RegEchoDelay] & 0x0F) << 11;
@@ -404,12 +322,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             _prevKoff = koff;
         }
 
-        // Plain data snapshot of one voice's current debug-relevant state -
-        // backs SnesDebugTarget.AudioChannels (see IDebugTarget's own
-        // comment on why that's modeled as a generic "channel" concept
-        // rather than SNES-specific). Everything here already exists on
-        // DspVoice; this just gathers it into one struct instead of
-        // exposing 10 separate getters to the debug layer.
+        // Gathers one voice's state into a struct instead of ten getters for the debug layer.
         public readonly struct VoiceDebugInfo
         {
             public bool Active { get; }
@@ -460,10 +373,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             else _debugMuteMask &= (byte)~(1 << index);
         }
 
-        // Current sample-clock position, for VoiceDebugInfo.LastKeyOnSample
-        // to be interpreted against ("how many samples ago did this voice
-        // last trigger") without the debug layer needing its own copy of
-        // this counter.
+        // So LastKeyOnSample can be read as "how many samples ago" without a second counter.
         public long SampleCounter => _sampleCounter;
     }
 }

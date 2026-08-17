@@ -1,14 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
-    // The S-DSP's fixed Gaussian interpolation table and lookup function -
-    // ported from Mesen2's DspInterpolation.h (the table itself is a
-    // documented hardware constant, not an original design choice by any
-    // emulator author - every accurate S-DSP emulator uses the same 512
-    // values). Used by DspVoice to interpolate between decoded BRR samples
-    // at the voice's current fractional playback position, rather than
-    // jumping straight to the nearest raw sample - real hardware always
-    // interpolates, even at pitch=0x1000 (native speed), so skipping this
-    // isn't just "lower quality", it changes the actual samples produced.
+    // The S-DSP's fixed Gaussian interpolation table and lookup function - ported from Mesen2's.
     public static class DspInterpolation
     {
         private static readonly short[] Gauss =
@@ -47,12 +39,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
              1299,1300,1300,1301,1302,1302,1303,1303,1303,1304,1304,1304,1304,1304,1305,1305,
         };
 
-        // samples is a 12-entry circular buffer (see DspVoice), bufferPos
-        // the index of the START of the most-recently-decoded quad within
-        // it. interpolationPos is the voice's 15-bit fractional playback
-        // position - bits 12-13 select which of the 4 most recent samples
-        // to center the interpolation window on, bits 4-11 select the
-        // Gaussian weight for the fractional position between them.
+        // bufferPos indexes the newest quad; bits 12-13 pick the sample and 4-11 the Gaussian weight.
         public static short Gauss4Point(int interpolationPos, short[] samples, int bufferPos)
         {
             int pos = ((interpolationPos >> 12) + bufferPos) & 0xFF;

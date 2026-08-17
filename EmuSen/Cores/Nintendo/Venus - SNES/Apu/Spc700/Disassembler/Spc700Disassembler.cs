@@ -4,8 +4,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 
 namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
-    // Standalone SPC700 disassembler, separate from the interpreter's dispatch
-    // table for the same reason Snes65816Disassembler is - see Venus_APU.md §8.
+    // Standalone SPC700 disassembler, separate from the interpreter's dispatch table for the same reason - see Venus_APU.md §8.
     public static class Spc700Disassembler
     {
         // Operand text uses byte-indexed placeholders - see Venus_APU.md §8.1.

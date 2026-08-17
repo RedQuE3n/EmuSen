@@ -4,9 +4,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 {
-    // Standalone GSU disassembler, separate from SuperFx.Execute's dispatch
-    // table for the same reason Snes65816Disassembler is separate from Cpu -
-    // see Venus_SuperFX.md §8.1.
+    // Standalone GSU disassembler, separate from SuperFx.Execute's dispatch table for the same reason - see Venus_SuperFX.md §8.1.
     public static class GsuDisassembler
     {
         // How many operand bytes follow the opcode, before any prefix applies.
@@ -18,8 +16,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _ => 0,
         };
 
-        // A prefix survives into the next instruction; everything else clears
-        // it. Branches are the exception that §4.2 exists for.
+        // A prefix survives into the next instruction; everything else clears it - see §4.2.
         private static bool KeepsPrefix(byte opcode, bool with) => opcode switch
         {
             >= 0x05 and <= 0x0F => true,
@@ -30,9 +27,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _ => false,
         };
 
-        // Walks forward from <address> tracking ALT1/ALT2/WITH/TO/FROM, so each
-        // line is decoded under the prefix state its predecessors actually left
-        // - see Venus_SuperFX.md §8.1 for why a static table cannot.
+        // Walks forward from <address> tracking ALT1/ALT2/WITH/TO/FROM, so each line is decoded under the - see Venus_SuperFX.md §8.1.
         public static IReadOnlyList<DisassembledInstruction> Disassemble(
             Func<int, byte> read, int address, int count)
         {

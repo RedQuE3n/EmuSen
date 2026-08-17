@@ -9,10 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // Memory load/store (LDA/LDX/LDY/STA/STX/STY/STZ) and every register-to-
-    // register transfer (TXA/TAX/TYA/TAY/TXY/TYX/TCS/TSC/TCD/TDC/TXS/TSX),
-    // plus XBA (swap A's own two bytes) - the "move a value somewhere else,
-    // unchanged" family.
+    // Memory load/store (LDA/LDX/LDY/STA/STX/STY/STZ) and every register-to- register transfer.
     public partial class Cpu
     {
         private void OpSTZ(uint address)

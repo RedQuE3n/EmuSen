@@ -1,37 +1,9 @@
 namespace EmuSen.Debug
 {
-    // Central hub for every debug/diagnostic toggle across the emulator -
-    // see EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen Manual/EmuSen_Settings_Reference.md §1 for what each flag is
-    // for and the investigation history behind it.
+    // Central hub for every debug/diagnostic toggle across the emulator - see EmuSen_Settings_Reference.md §1.
     public static class DebugSettings
     {
-        // Single kill switch for every *Logging flag below, without
-        // touching any of their individually-set values - flip this off
-        // and every call site that already checks e.g.
-        // DebugSettings.CpuVerboseLogging silently stops logging (no code
-        // changes needed anywhere else, since the intersection happens in
-        // each property's getter below), flip it back on and whatever was
-        // individually enabled before comes right back. Feature toggles
-        // that aren't about logging output (HvIrqEnabled, WindowingEnabled)
-        // are deliberately NOT gated by this - this only silences trace
-        // output, it doesn't change emulation behavior.
-        //
-        // Defaults to off - several individual flags below default to true
-        // (leftover from the investigations that added them), which meant
-        // a stock build logged a steady stream of DMA/scroll/math-unit
-        // traces on every run whether anyone asked for it or not. This is
-        // the actual on/off switch for that; the individual flags keep
-        // whatever value they're set to underneath, so re-enabling this
-        // brings back exactly what was configured before, per this
-        // comment's own original design.
-        //
-        // Forwards to EmuSen.DianaOS.DianaOS.Etc.DianaOSLogging.MasterEnabled rather
-        // than holding its own field - DianaOS's own `log` command and
-        // WatchRegistry's live echo need to read/write this without
-        // depending on this (or any other core's) settings class, so the
-        // actual flag lives there; every caller here (VenusCore,
-        // Mistress's DebugSettingsWindow, Pharaoh) keeps working
-        // against this same property name unchanged.
+        // Single kill switch for every *Logging flag below, without touching any of their individually-set.
         public static bool MasterLoggingEnabled
         {
             get => EmuSen.DianaOS.DianaOS.Etc.DianaOSLogging.MasterEnabled;
@@ -48,24 +20,18 @@ namespace EmuSen.Debug
         public static int CpuTraceCountdown = 0;
         public static bool HvIrqEnabled = true;
 
-        // --- Coprocessors/SuperFx ---
         // Counts down one GSU instruction per line - see Venus_SuperFX.md §9.
         public static int SuperFxTraceCountdown = 0;
 
-        // Scales the GSU's cycle cost, to test whether a failure is a
-        // GSU/S-CPU synchronisation problem - see Venus_SuperFX.md §8.
+        // Scales the GSU's cycle cost, to test whether a failure is a GSU/S-CPU synchronisation problem - see Venus_SuperFX.md §8.
         public static int SuperFxSpeedDivisor = 1;
 
-        // Logs the plot stream itself, skipping the first N plots so a later
-        // drawing pass can be reached - see Venus_SuperFX.md §8.
+        // Logs the plot stream itself, skipping the first N plots so a later drawing pass can be reached - see Venus_SuperFX.md §8.
         public static int SuperFxPlotTraceSkip = 0;
         public static int SuperFxPlotTraceCountdown = 0;
         public static int SuperFxPlotTraceInstr = 0;
 
-        // Logs GSU-side Game Pak RAM writes to one address, with the GSU PC that
-        // made them - answers "did the chip write this, and from where"
-        // for output the chip builds with stores rather than PLOT.
-        // -1 is off - see Venus_SuperFX.md §8.
+        // Logs GSU-side Game Pak RAM writes to one address, with the GSU PC that made them - answers "did the - see Venus_SuperFX.md §8.
         public static int SuperFxRamWriteTraceAddr = -1;
         public static int SuperFxRamWriteTraceCountdown = 0;
 
@@ -89,15 +55,7 @@ namespace EmuSen.Debug
             set => _windowHdmaLogging = value;
         }
 
-        // --- Renderer.Scanline.cs ---
-        // Dumps the exact per-pixel main/sub compositing state (winning
-        // layer, raw colors, color-math participation, blend result) for
-        // one target scanline - added for the Zelda: A Link to the Past
-        // color-math investigation, where the aggregate symptom (a wrong
-        // blended color) gave no way to see which of the two blend
-        // operands was actually wrong without this. ColorMathBlendScanline
-        // defaults to -1 (never matches a real py) so this stays inert
-        // until both a scanline AND MasterLoggingEnabled are set.
+        // Dumps the exact per-pixel main/sub compositing state (winning layer, raw colors, color-math.
         private static bool _colorMathBlendLogging = false;
         public static bool ColorMathBlendLogging
         {
@@ -114,8 +72,7 @@ namespace EmuSen.Debug
             set => _spc700VerboseLogging = value;
         }
 
-        // Both directions of the $2140-$2143 / $00F4-$00F7 mailbox, logged
-        // on change only - see Venus_APU.md §1.2.
+        // Both directions of the $2140-$2143 / $00F4-$00F7 mailbox, logged on change only - see Venus_APU.md §1.2.
         private static bool _apuPortTrafficLogging = false;
         public static bool ApuPortTrafficLogging
         {
@@ -123,15 +80,7 @@ namespace EmuSen.Debug
             set => _apuPortTrafficLogging = value;
         }
 
-        // --- DspVoice.cs ---
-        // Logs every KeyOn (note trigger): SRCN, the resolved sample-
-        // directory entry, computed start/loop address, the BRR header
-        // byte actually found there, and the voice's pitch/volume - added
-        // for the "audio still sounds garbled after fixing SPC700 timing"
-        // investigation, to check whether the SPC700 sound driver is
-        // triggering voices with sane-looking sample pointers at all,
-        // independent of whatever BrrDecoder/DspVoice do with them
-        // afterward.
+        // Logs every KeyOn (note trigger): SRCN, the resolved sample- directory entry, computed start/loop.
         private static bool _dspKeyOnLogging = false;
         public static bool DspKeyOnLogging
         {

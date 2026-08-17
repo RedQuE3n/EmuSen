@@ -1,8 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 {
-    // The GSU instruction set. One byte per opcode, with four meanings per
-    // slot selected by the ALT1/ALT2 prefix flags, plus TO/WITH/FROM prefixes
-    // that redirect the source and destination registers - see Venus_SuperFX.md §4.
+    // The GSU instruction set - see Venus_SuperFX.md §4.
     public sealed partial class SuperFx
     {
         // Set by the prefix opcodes so the dispatcher leaves the prefix state alone.
@@ -25,8 +23,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _dreg = 0;
         }
 
-        // R15 is the program counter, so writing it is a jump; the already
-        // prefetched byte still executes as a delay slot - see Venus_SuperFX.md §4.1.
+        // R15 is the program counter, so writing it is a jump; the already prefetched byte still executes as - see Venus_SuperFX.md §4.1.
         private void WriteReg(int index, ushort value)
         {
             if (index == 15) { SetPc(value); return; }
@@ -39,16 +36,12 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         private void Dst(ushort value) => WriteReg(_dreg, value);
 
-        // R15 always names the byte sitting in the pipeline, so software that
-        // reads it - the `WITH R15 : TO R13` idiom that captures a loop start,
-        // or LINK - sees the next instruction's address rather than one past
-        // it. See Venus_SuperFX.md §4.1.
+        // R15 always names the byte sitting in the pipeline, so software that reads it - the `WITH R15 : TO - see Venus_SuperFX.md §4.1.
         private byte Pipe()
         {
             byte result = _pipeline;
 
-            // After a jump R15 already names the destination; the byte being
-            // consumed right now is the delay slot, so don't advance past it.
+            // After a jump R15 already names the destination; the byte being consumed right now is the delay.
             if (_jumpPending) _jumpPending = false;
             else R[15]++;
 
@@ -64,8 +57,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             _jumpPending = false;
         }
 
-        // Every write to R15 is a jump, and every jump runs one delay-slot
-        // instruction before it takes effect.
+        // Every write to R15 is a jump, and every jump runs one delay-slot instruction before it takes effect.
         private void SetPc(ushort target)
         {
             R[15] = target;
@@ -216,10 +208,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             }
         }
 
-        // Branches take their displacement from the instruction stream and are
-        // relative to the delay-slot instruction that follows - see Venus_SuperFX.md §4.1.
-        // A branch is the one non-prefix instruction that does NOT clear the prefix
-        // state, so TO/FROM/WITH/ALT ahead of it apply to the delay slot - see §4.2.
+        // Branches take their displacement from the instruction stream and are relative to the delay-slot - see Venus_SuperFX.md §4.1.
         private int Branch(bool take)
         {
             sbyte displacement = (sbyte)Pipe();
@@ -446,8 +435,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             return 1;
         }
 
-        // Builds a clipping test out of R7/R8's high bytes; every flag is a
-        // different threshold on the same value.
+        // Builds a clipping test out of R7/R8's high bytes; every flag is a different threshold on the same value.
         private int OpMerge()
         {
             ushort result = (ushort)((R[7] & 0xFF00) | (R[8] >> 8));
@@ -465,9 +453,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             return 1;
         }
 
-        // The long form additionally reloads the program bank, which moves the
-        // cache window and invalidates everything in it. Rn carries the bank
-        // and Sreg the address, not the other way round - see Venus_SuperFX.md §9.
+        // The long form additionally reloads the program bank, which moves the cache window and invalidates - see Venus_SuperFX.md §9.
         private int OpLjmp(int n)
         {
             _pbr = (byte)(R[n] & 0x7F);
@@ -515,8 +501,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             return 1;
         }
 
-        // $A0-$AF: an 8-bit immediate, or a short-address RAM load/store whose
-        // operand indexes words rather than bytes.
+        // $A0-$AF: an 8-bit immediate, or a short-address RAM load/store whose operand indexes words rather.
         private int OpImmediateByteOrShort(int n)
         {
             if (Alt1 && !Alt2)

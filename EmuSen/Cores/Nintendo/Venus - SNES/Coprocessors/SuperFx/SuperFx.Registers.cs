@@ -1,15 +1,12 @@
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 {
-    // $3000-$32FF as the S-CPU sees it: the GSU's own register file, its
-    // control registers, and the instruction cache - see Venus_SuperFX.md §3.
-    // The GSU itself reaches all of this directly, not through here.
+    // $3000-$32FF as the S-CPU sees it: the GSU's own register file, its control registers, and the - see Venus_SuperFX.md §3.
     public sealed partial class SuperFx
     {
         // GSU-2, the faster part Yoshi's Island uses.
         private const byte VersionCode = 0x04;
 
-        // The cache is 512 bytes at $3100, so the index is a subtraction, not a
-        // mask - $3100 & $1FF is $100, not 0.
+        // The cache is 512 bytes at $3100, so the index is a subtraction, not a mask - $3100 & $1FF is $100, not 0.
         private const ushort CacheWindowBase = 0x3100;
 
         public byte ReadRegister(ushort offset)

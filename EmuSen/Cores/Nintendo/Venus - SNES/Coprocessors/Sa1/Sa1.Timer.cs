@@ -1,7 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 {
-    // The SA-1's own programmable timer, independent of the S-CPU's H/V IRQ -
-    // see Venus_SA1.md §5.
+    // The SA-1's own programmable timer, independent of the S-CPU's H/V IRQ - see Venus_SA1.md §5.
     public sealed partial class Sa1
     {
         // $2210 TMC: bit 7 picks linear mode, bits 1/0 enable the V/H compare.

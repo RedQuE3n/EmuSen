@@ -2,11 +2,9 @@ using EmuSen.DianaOS.DianaOS.Lib;
 
 namespace EmuSen.Cores.Nintendo.Moon.Cheats
 {
-    // The plugs that let CheatCommand use the two decoders without DianaOS
-    // referencing this project - the Venus pair's counterpart.
+    // The plugs letting CheatCommand use both decoders without DianaOS referencing this project.
 
-    // "Game Genie", not "NES Game Genie", so `add`'s "(detected X format)"
-    // message reads the way it always has for the SNES device.
+    // "Game Genie", not "NES Game Genie", so the detected-format message reads as it always has.
     public sealed class NesGameGenieCheatCodec : ICheatCodeCodec
     {
         public string Name => "Game Genie";

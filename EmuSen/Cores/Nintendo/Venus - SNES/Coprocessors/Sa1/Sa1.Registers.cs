@@ -1,8 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 {
-    // The $2200-$23FF register file. Both CPUs see the whole thing at the
-    // same addresses; which side is expected to drive which register is a
-    // software convention, not a decode - see Venus_SA1.md §4.
+    // The $2200-$23FF register file - see Venus_SA1.md §4.
     public sealed partial class Sa1
     {
         // ReadRegister minus its two side effects - see Venus_SA1.md §11.1.

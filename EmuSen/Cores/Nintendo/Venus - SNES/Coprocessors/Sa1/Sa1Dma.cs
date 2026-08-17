@@ -2,9 +2,7 @@ using EmuSen.Common;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 {
-    // SA-1 DMA ($2230-$2239, $2240-$224F). Normal block copy is implemented;
-    // both character-conversion modes are decoded and reported but not yet
-    // converted - see Venus_SA1.md §8.
+    // SA-1 DMA ($2230-$2239, $2240-$224F) - see Venus_SA1.md §8.
     public sealed class Sa1Dma
     {
         private const int SourceRom = 0;
@@ -50,8 +48,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             _counter = (ushort)((_counter & ~(0xFF << shift)) | (value << shift));
         }
 
-        // Writing the byte that completes the destination address is the
-        // trigger, and which byte that is depends on the destination device.
+        // The write completing the destination address is the trigger - see Venus_SA1.md §5.
         public void WriteDestByte(int index, byte value)
         {
             int shift = index * 8;
@@ -98,10 +95,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             _sa1.RaiseDmaIrq();
         }
 
-        // Type 1 is driven by the S-CPU reading through the $6000-$7FFF window
-        // mid-transfer, type 2 by the BRF staging buffer. Neither is emulated
-        // yet; a game that needs one gets wrong tile data rather than a hang,
-        // so say so loudly instead of failing silently.
+        // Type 1 is driven by an S-CPU read mid-transfer, type 2 by the SA-1 itself - see Venus_SA1.md §5.
         private void ReportUnimplementedCharacterConversion(int type)
         {
             if (_reportedCharacterConversion) return;

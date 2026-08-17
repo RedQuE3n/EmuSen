@@ -1,8 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Memory.Mappers
 {
-    // Cartridge type $1x. Static arithmetic, unlike the SA-1's - the GSU has no
-    // bank registers that move the S-CPU's view - but it lives on the chip
-    // anyway so both sides share one decode. See Venus_SuperFX.md §3.
+    // Cartridge type $1x - see Venus_SuperFX.md §3.
     public sealed class SuperFxMapper : ICartridgeMapper
     {
         private readonly Coprocessors.SuperFx.SuperFx _gsu;

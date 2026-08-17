@@ -9,8 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory
 {
-    // The SNES's NMI / H-V-IRQ / vblank-status subsystem - see
-    // Venus_Memory.md §4 for why this is one class and not split further.
+    // NMI, H/V-IRQ and vblank status, kept as one subsystem - see Venus_Memory.md §4.
     public class InterruptController
     {
         public bool NmiEnabled;
@@ -57,8 +56,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Memory
             _vblankFlag = false;
         }
 
-        // Called by the main loop when the H/V-IRQ timer's trigger condition
-        // (scanline/dot position) has been reached, so $4211 correctly reflects it.
+        // Called by the main loop when the H/V-IRQ timer's trigger condition (scanline/dot position) has been.
         public void RaiseTimerIrq()
         {
             _irqFlag = true;

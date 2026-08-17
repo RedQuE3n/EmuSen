@@ -1,11 +1,6 @@
 namespace EmuSen.Common.Imaging
 {
-    // Minimal uncompressed 32bpp BMP reader/writer - no case for PNG's
-    // DEFLATE needed just to look at a frame. BMP rows are stored bottom-up
-    // and BGRA rather than RGBA, both handled by walking rgba backwards a
-    // row at a time and swapping R/B per pixel; everything else about the
-    // format is a fixed-size header. Moved out of EmuSen.Pharaoh's
-    // Program.cs - general-purpose, not specific to that one CLI tool.
+    // Minimal uncompressed 32bpp BMP reader/writer - no case for PNG's DEFLATE needed just to look at a frame.
     public static class BmpFile
     {
         public static void Write(string path, byte[] rgba, int width, int height)
@@ -46,10 +41,7 @@ namespace EmuSen.Common.Imaging
             }
         }
 
-        // Reads back exactly what Write writes - the fixed 54-byte header,
-        // bottom-up BGRA rows - since callers only ever need to read this
-        // toolkit's own screenshots/autoshots/contact sheets back, not
-        // arbitrary externally-authored BMPs.
+        // Reads back exactly what Write writes, since only this toolkit's own images come back here.
         public static (byte[] Rgba, int Width, int Height) Read(string path)
         {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);

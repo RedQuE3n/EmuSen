@@ -93,8 +93,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 
                 int widthTiles = spriteW / 8;
 
-                // Slivers consumed left-to-right on screen, matching the
-                // documented culling order - not the VRAM/flip order.
+                // Slivers consumed left-to-right on screen, matching the documented culling order - not the VRAM/flip order.
                 for (int screenTile = 0; screenTile < widthTiles; screenTile++)
                 {
                     if (sliversUsed >= 34)

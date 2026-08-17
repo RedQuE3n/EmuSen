@@ -59,17 +59,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             _justResumedFromBreakpoint = true;
         }
 
-        // Side channel for the "+2 cycles if a conditional branch is taken"
-        // penalty (BCC/BCS/BEQ/BNE/BMI/BPL/BVC/BVS, CBNE, DBNZ, BBS/BBC-style
-        // bit-branches) - real SPC700 timing, but not a fixed per-opcode
-        // cost since it only applies when the branch is actually taken.
-        // Opcode handlers in Spc700.Opcodes.cs set this instead of touching
-        // CycleBudget directly, so Step() can tick the DSP/timers for the
-        // real total (base + penalty) in one place - see §2.9's own bug
-        // writeup in Venus_APU.md for why this matters: DSP.Tick() has to
-        // see every elapsed SPC700 cycle to keep sample generation paced
-        // correctly, and a decrement that bypasses it is silently lost
-        // audio time, not just a bookkeeping quirk.
+        // Side channel for the "+2 cycles if a conditional branch is taken" penalty - see §2.9.
         private int _branchExtraCycles;
 
         public byte[] Ram = new byte[65536]; 
@@ -119,13 +109,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             0xF6, 0xDA, 0x00, 0xBA, 0xF4, 0xC4, 0xF4, 0xDD, 0x5D, 0xD0, 0xDB, 0x1F, 0x00, 0x00, 0xC0, 0xFF
         };
 
-        // Equality key for one executed instruction, used only by
-        // _verboseTrace to detect repeating polling/delay loops (the APU
-        // handshake being the canonical example - see the comment near
-        // Step()'s use of Spc700VerboseLogging). Same rationale as Cpu's
-        // own StepKey: compare a small struct instead of the rendered
-        // string, and only look Name up again in Render() for lines that
-        // actually get emitted.
+        // Equality key for one executed instruction, used only by _verboseTrace to detect repeating.
         private readonly struct StepKey : IEquatable<StepKey>
         {
             public readonly ushort Pc;
@@ -147,9 +131,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             public override int GetHashCode() => HashCode.Combine(Pc, Opcode, TargetAddr);
         }
 
-        // Holds delegates internally - not serializable. See Cpu.cs's
-        // identical _verboseTrace field for the full explanation; both
-        // were missing [SkipInState] for the same reason.
+        // Holds delegates internally - not serializable.
         [EmuSen.Common.SkipInState] private readonly EmuSen.DianaOS.DianaOS.Lib.DebugTools.RepeatCollapsingTrace<StepKey> _verboseTrace;
         private bool _wasVerboseLogging;
 
@@ -166,11 +148,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             Reset();
         }
 
-        // Step() already flushes automatically the moment it notices
-        // Spc700VerboseLogging went from on to off (see _wasVerboseLogging)
-        // - this is for the one case Step() can't see coming: the process
-        // exiting while logging is still on. Program.cs's shutdown path
-        // calls this before disposing the log writer.
+        // Step() already flushes automatically the moment it notices Spc700VerboseLogging went from on to off.
         public void FlushVerboseTrace() => _verboseTrace.Flush();
 
         public void Reset()
@@ -205,8 +183,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         // Debug visibility: what the CPU most recently wrote into each APU-side port.
         public byte GetInPort(int port) => _inPorts[port & 0x03];
 
-        // CONTROL ($00F1) bit 7. Computed, not a field, so save states keep
-        // their existing layout - see Venus_APU.md §1.1.
+        // CONTROL ($00F1) bit 7 - see Venus_APU.md §1.1.
         public bool IplRomEnabled
         {
             get => (_timerControl & 0x80) != 0;
@@ -235,15 +212,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
         }
 
-        // Public purely for testability - see SpcValidation harness (or
-        // wherever this ends up documented). A raw poke into Ram[] isn't
-        // equivalent to a real write for $00F2-$00F7 (DSP register access,
-        // APU communication ports) - those never touch Ram at all, they
-        // live only in Dsp's register file / _inPorts/_outPorts - so a
-        // test harness needs the real Read8/Write8 semantics to set up and
-        // verify state for any test touching that range. No effect on
-        // production callers, which already only ever called these from
-        // within this class.
+        // Public purely for testability - see SpcValidation harness (or wherever this ends up documented).
         public byte Read8(ushort address)
         {
             // Intercept APU Communication Ports
@@ -363,8 +332,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         // --- Execution Engine ---
         
-        // Base cost of the instruction at PC, without executing it or touching
-        // the read-sensitive $00F2-$00FF registers - see Venus_APU.md §1.6.
+        // Base cost of the instruction at PC, without executing it or touching the read-sensitive $00F2-$00FF - see Venus_APU.md §1.6.
         public int PeekStepCycles()
         {
             if (_halted) return 2;
@@ -376,13 +344,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             if (CycleBudget <= 0) return;
 
-            // SLEEP/STOP - see Venus_APU.md §1.4. Real hardware: STOP/SLEEP
-            // only halts the SPC700 CPU core - the DSP is a separate chip
-            // and keeps generating samples (and the timers keep ticking)
-            // regardless. Previously this branch just burned CycleBudget
-            // without calling Dsp.Tick/TickTimers at all, so any stretch of
-            // real time spent halted silently vanished from the audio
-            // output instead of continuing to produce samples.
+            // SLEEP/STOP - see Venus_APU.md §1.4.
             if (_halted)
             {
                 TickTimers(2);
@@ -434,20 +396,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             }
             else if (_wasVerboseLogging)
             {
-                // Verbose logging just turned off - flush whatever
-                // loop/tail _verboseTrace was still holding rather than
-                // stranding it. See Cpu.Step()'s identical pattern.
+                // Verbose logging just turned off - flush whatever loop/tail _verboseTrace was still holding rather.
                 _verboseTrace.Flush();
                 _wasVerboseLogging = false;
             }
 
 
-            // inst.Cycles is this opcode's fixed base cost; _branchExtraCycles
-            // is the dynamic "+2 if taken" penalty a branch/CBNE/DBNZ handler
-            // may have reported during Operate() above (see its own field
-            // comment) - both need to reach the DSP/timers, not just
-            // CycleBudget, or real elapsed SPC700 time silently doesn't
-            // advance the audio clock to match.
+            // inst.Cycles is this opcode's fixed base cost; _branchExtraCycles is the dynamic "+2 if taken".
             int totalCycles = inst.Cycles + _branchExtraCycles;
 
             TickTimers(totalCycles);

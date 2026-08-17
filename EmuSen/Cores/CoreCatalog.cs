@@ -5,20 +5,10 @@ using EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen;
 
 namespace EmuSen.Cores
 {
-    // Every core this build actually implements, in one place. Frontends
-    // used to each carry their own copy of this list; `cheat db prune` needs
-    // a third reader, and three copies of "which consoles exist" is how they
-    // drift apart. See EmuSen_Settings_Reference.md §4.16.
-    //
-    // Lives here rather than in EmuSen.DianaOS on purpose: DianaOS stays
-    // agnostic about which concrete cores exist (same reasoning as
-    // IDebugTarget and ICheatCodeCodec), and this assembly is the one that
-    // already knows VenusCore by name.
+    // Every core this build actually implements, in one place - see EmuSen_Settings_Reference.md §4.16.
     public static class CoreCatalog
     {
-        // The libretro cheat-database folder names for the SNES. Satellaview
-        // is its own folder there but the same 65816 cartridge hardware, so
-        // Venus claims both - see `man cheat`.
+        // The libretro cheat-database folder names for the SNES - `man cheat`.
         private static readonly string[] SnesCheatSystems =
         {
             "Nintendo - Super Nintendo Entertainment System",
@@ -47,8 +37,7 @@ namespace EmuSen.Cores
         private static readonly CoreDescriptor Mercury =
             new("Game Boy (Mercury)", new[] { ".gb", ".gbc" }, GameBoyCheatSystems, "GB", "Nintendo", 1989);
 
-        // Keyed by what a user would type - the internal codename and the
-        // console name both reach the same core.
+        // Keyed by what a user would type - the internal codename and the console name both reach the same core.
         public static IReadOnlyDictionary<string, CoreDescriptor> Registry { get; } =
             new Dictionary<string, CoreDescriptor>(StringComparer.OrdinalIgnoreCase)
             {
@@ -61,8 +50,7 @@ namespace EmuSen.Cores
                 ["gbc"] = Mercury,
             };
 
-        // What `cheat db prune` keeps. Deduplicated, since one core is
-        // registered under several aliases above.
+        // What `cheat db prune` keeps.
         public static IReadOnlyCollection<string> SupportedCheatSystems =>
             CoreDescriptor.SupportedCheatSystems(Registry.Values);
 

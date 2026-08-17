@@ -171,11 +171,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Video
         {
             if (!SpritesAre8x16) return SpritePatternBase;
 
-            // The slots past the end of the line's sprites are not idle: hardware
-            // fetches tile $FF through them, and $FF's low bit selects the high
-            // table. That is what keeps the MMC3 counter clocking on a line with
-            // nothing on it, and without it SMB3's title screen loses its floor
-            // entirely - see Moon_Memory.md §4.6b.
+            // The slots past the end of the line's sprites are not idle: hardware fetches tile $FF through them - see Moon_Memory.md §4.6b.
             if (_spriteCount < 8) return 0x1000;
 
             for (int s = 0; s < _spriteCount; s++)

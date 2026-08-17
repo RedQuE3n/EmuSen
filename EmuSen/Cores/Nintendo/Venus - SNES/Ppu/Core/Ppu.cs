@@ -58,8 +58,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         public byte[] BgSc = new byte[4];    // $2107-$210A - BG tilemap base + size
         public byte Bg12Nba;                 // $210B - BG1/BG2 character data base
         public byte Bg34Nba;                 // $210C - BG3/BG4 character data base
-        // Scroll values are genuinely 10-bit (0-1023) on real hardware, not 8-bit -
-        // needed once tilemaps are wider/taller than one 32x32 screen.
+        // Scroll values are genuinely 10-bit on hardware, not 8-bit - see Venus_PPU.md §2.
         public ushort[] BgScrollX = new ushort[4];
         public ushort[] BgScrollY = new ushort[4];
         public byte Tm;                      // $212C - main screen designation

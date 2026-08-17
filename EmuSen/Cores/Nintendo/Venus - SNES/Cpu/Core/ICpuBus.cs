@@ -1,7 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // The whole bus surface a 65816 needs, so one Cpu class can drive both
-    // the S-CPU (MemoryBus) and the SA-1's own CPU (Sa1Bus) - see Venus_SA1.md §2.1.
+    // The whole bus surface a 65816 needs, so one Cpu class can drive both the S-CPU (MemoryBus) and the - see Venus_SA1.md §2.1.
     public interface ICpuBus
     {
         byte Read8(uint address);

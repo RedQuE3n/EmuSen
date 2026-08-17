@@ -13,9 +13,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
 {
     public partial class Renderer
     {
-        // Mode 7 - BG1 as a single affine-transformed layer. See
-        // Venus_PPU.md §3 for the transform formula, VRAM layout, and what's
-        // not implemented.
+        // Mode 7 - BG1 as a single affine-transformed layer - see Venus_PPU.md §3.
         private void RenderMode7(Ppu ppu, int py, float brightness, Rgba32[] target, int[] targetLayer, int layerId, bool isMainScreen)
         {
             bool hFlip = (ppu.M7Sel & 0x01) != 0;
@@ -35,8 +33,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 byte colorIndex = (byte)raw;
                 if (colorIndex != 0 && !(window.Active && window.Masked(px)))
                 {
-                    // 8bpp indexes the full 256-color CGRAM directly - no
-                    // palette-group offset needed, unlike 2bpp/4bpp modes.
+                    // 8bpp indexes the full 256-color CGRAM directly - no palette-group offset needed, unlike 2bpp/4bpp modes.
                     int cgIdx = colorIndex * 2;
                     target[px] = PaletteColor(cgIdx);
                     targetLayer[px] = layerId;
@@ -74,19 +71,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             }
         }
 
-        // Shared by RenderMode7 (BG1) and RenderMode7Bg2Extbg - both sample
-        // the identical transformed texture; only the interpretation of the
-        // returned byte differs afterward. Returns -1 for "draw nothing at
-        // this pixel" (transparent, or out-of-range with screen-over wrap
-        // disabled and no character-0 fill), matching the same three cases
-        // the original single-layer version handled inline.
+        // Shared by RenderMode7 (BG1) and RenderMode7Bg2Extbg - both sample the identical transformed.
         private int SampleMode7Pixel(Ppu ppu, int px, int relY, bool hFlip, bool screenOverEnabled, bool fillWithChar0)
         {
             int sx = hFlip ? 255 - px : px;
             int relX = sx + ppu.M7HOfs - ppu.M7X;
 
-            // Matrix multiply in 8.8 fixed point, then back to whole
-            // pixels (>>8) and re-add the pivot point.
+            // Matrix multiply in 8.8 fixed point, then back to whole pixels (>>8) and re-add the pivot point.
             int texX = ((ppu.M7A * relX + ppu.M7B * relY) >> 8) + ppu.M7X;
             int texY = ((ppu.M7C * relX + ppu.M7D * relY) >> 8) + ppu.M7Y;
 
@@ -97,13 +88,11 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                 {
                     return -1; // transparent - nothing drawn at this pixel
                 }
-                // Character 0 fill: repeats tile 0's own 8x8 pattern
-                // using just the low 3 bits of each coordinate.
+                // Character 0 fill: repeats tile 0's own 8x8 pattern using just the low 3 bits of each coordinate.
                 return SampleMode7Tile(ppu, 0, texX & 7, texY & 7);
             }
 
-            // Wrap within the 1024x1024 playing field (also the behavior
-            // when screen-over is disabled entirely).
+            // Wrap within the 1024x1024 playing field (also the behavior when screen-over is disabled entirely).
             int wrappedX = texX & 1023;
             int wrappedY = texY & 1023;
             int tx = wrappedX >> 3;
@@ -116,10 +105,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         }
 
         // Reads one pixel's 8bpp color index from Mode 7 character data.
-        // Character data lives in the HIGH byte of VRAM words (interleaved
-        // with the tilemap's low bytes) - each 8x8 8bpp tile is 64
-        // consecutive words (one word's high byte per pixel), unlike every
-        // other mode's bitplane-interleaved storage.
         private byte SampleMode7Tile(Ppu ppu, int tileIndex, int col, int row)
         {
             int pixelWordAddr = tileIndex * 64 + row * 8 + col;

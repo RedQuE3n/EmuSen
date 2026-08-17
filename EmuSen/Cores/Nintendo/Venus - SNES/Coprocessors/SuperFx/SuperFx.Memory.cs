@@ -2,16 +2,12 @@ using EmuSen.Cores.Nintendo.Venus.Memory.Mappers;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 {
-    // Both sides see the same ROM and Game Pak RAM through the same decode -
-    // unlike the SA-1, the SuperFX has no separate map per side. What differs
-    // is which banks each one reaches it through. See Venus_SuperFX.md §3.
+    // Both sides see the same ROM and Game Pak RAM through the same decode - unlike the SA-1, the SuperFX - see Venus_SuperFX.md §3.
     public sealed partial class SuperFx
     {
         private static bool IsLowBank(byte bank) => bank <= 0x3F || (bank >= 0x80 && bank <= 0xBF);
 
-        // $00-$3F/$80-$BF are LoROM-style; $40-$5F/$C0-$DF are linear 64KB
-        // banks. Bit 15 of the address is ignored in the LoROM view, so
-        // $00:0000 and $00:8000 are the same ROM byte.
+        // $00-$3F/$80-$BF are LoROM-style; $40-$5F/$C0-$DF are linear 64KB banks.
         private static int RomOffset(byte bank, ushort offset)
         {
             if ((bank & 0x60) == 0x40) return ((bank & 0x1F) << 16) | offset;
@@ -20,15 +16,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         private static int RamOffsetLinear(byte bank, ushort offset) => ((bank & 0x1F) << 16) | offset;
 
-        // The S-CPU's 8KB window is packed one block per bank.
-        // The $6000-$7FFF window is the FIRST 8KB of Game Pak RAM mirrored into
-        // every low bank, not a bank-indexed slice - see Venus_SuperFX.md §5.1.
+        // The S-CPU's 8KB window is packed one block per bank - see Venus_SuperFX.md §5.1.
         private static int RamOffsetWindow(byte bank, ushort offset) => offset & 0x1FFF;
 
-        // S-CPU view. MemoryBus has already claimed WRAM, the PPU and the CPU
-        // registers before the cartridge is consulted.
-        // Bus arbitration is not enforced, so this counts the violations the
-        // hardware would have stalled - see Venus_SuperFX.md §2.1.
+        // S-CPU view. MemoryBus has already claimed WRAM, the PPU and the CPU registers before the cartridge - see Venus_SuperFX.md §2.1.
         public long DebugScpuRamWhileRunning { get; private set; }
 
         public CartridgeAddress ResolveScpu(byte bank, ushort offset)
@@ -55,8 +46,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             return index < _rom.Length ? _rom[index] : (byte)0x00;
         }
 
-        // Reported as GSURAM, not SRAM: the space name is what tells the two
-        // sides of the same chip apart - see Venus_SuperFX.md §8.4.
+        // Reported as GSURAM, not SRAM: the space name is what tells the two sides of the same chip apart - see Venus_SuperFX.md §8.4.
         public byte ReadRam(int offset)
         {
             if (_ram.Length == 0) return 0x00;
@@ -85,16 +75,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             WriteObserver?.OnCoprocessorWrite("GSURAM", index, data);
         }
 
-        // Program fetch. The GSU can run out of ROM ($00-$5F) or, for code the
-        // S-CPU has staged there, out of Game Pak RAM ($70-$71).
+        // The GSU fetches from ROM, or from Game Pak RAM where the S-CPU staged code - see Venus_SuperFX.md §2.
         private byte ReadProgramMemory(byte bank, ushort offset)
         {
             if (bank >= 0x60) return ReadRam(RamOffsetLinear(bank, offset));
             return ReadRom(bank, offset);
         }
 
-        // Instruction fetch goes through the 512-byte cache whenever the
-        // address falls inside its window - see Venus_SuperFX.md §4.3.
+        // Instruction fetch goes through the 512-byte cache whenever the address falls inside its window - see Venus_SuperFX.md §4.3.
         private byte FetchProgramByte(ushort address)
         {
             int inCache = (ushort)(address - _cbr);
@@ -121,8 +109,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // GSU data access to ROM, through ROMBR:R14 - see Venus_SuperFX.md §5.2.
         private byte ReadRomBuffer() => ReadRom(_rombr, R[14]);
 
-        // The GSU's own 24-bit program space, for the debugger. Deliberately
-        // skips the cache so a read never fills a line - see Venus_SuperFX.md §8.1.
+        // The GSU's own 24-bit program space, for the debugger - see Venus_SuperFX.md §8.1.
         public byte DebugReadProgram(int address) =>
             ReadProgramMemory((byte)(address >> 16), (ushort)address);
 

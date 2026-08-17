@@ -1,10 +1,6 @@
 namespace EmuSen.Audio
 {
-    // Minimal uncompressed PCM WAV writer, mirroring BmpFile's style - no
-    // external audio library needed just to inspect what the DSP's buffer
-    // currently holds. Samples are already interleaved L/R 16-bit PCM (see
-    // IDebugTarget.GetAudioSamples), so this is a fixed 44-byte header plus
-    // the raw sample bytes, nothing more.
+    // Minimal uncompressed PCM WAV writer, mirroring BmpFile's style - no external audio library needed.
     public static class WavFile
     {
         public static void Write(string path, short[] samples, int sampleRate)

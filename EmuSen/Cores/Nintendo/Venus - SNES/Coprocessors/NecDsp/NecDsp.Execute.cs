@@ -2,8 +2,7 @@ using System;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 {
-    // The four instruction forms - OP, RT (op then return), JP, and LD - and
-    // the ALU they share. See Venus_NecDSP.md §5.
+    // The four instruction forms - OP, RT (op then return), JP, and LD - and the ALU they share - see Venus_NecDSP.md §5.
     public sealed partial class NecDsp
     {
         // --- Instruction forms ---
@@ -33,8 +32,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 
         private void Jump()
         {
-            // The $2000 bit is inherited from PC, so a conditional branch stays
-            // in the 8KB half it started in - see Venus_NecDSP.md §5.4.
+            // The $2000 bit is inherited from PC, so a conditional branch stays in the 8KB half it started in - see Venus_NecDSP.md §5.4.
             ushort target = (ushort)((_pc & 0x2000u) | ((_opcode & 0x03) << 11) | ((_opcode >> 2) & 0x7FF));
             ushort jumpType = (ushort)((_opcode >> 13) & 0x1FF);
             bool taken = false;
@@ -103,8 +101,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 
             if (!taken) return;
 
-            // A one-instruction branch back onto itself testing RQM is the
-            // firmware idling on the host - see Venus_NecDSP.md §4.3.
+            // A one-instruction branch back onto itself testing RQM is the firmware idling on the host - see Venus_NecDSP.md §4.3.
             if (_pc - 1 == target && (jumpType == 0x0BC || jumpType == 0x0BE)) _inRqmLoop = true;
             _pc = target;
         }
@@ -117,8 +114,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             ushort acc = _acc[sel];
             bool otherCarry = _carry[sel ^ 1];
 
-            // The second operand: RAM, the instruction's own source, or either
-            // half of the multiplier's output.
+            // The second operand: RAM, the instruction's own source, or either half of the multiplier's output.
             ushort p = ((_opcode >> 20) & 0x03) switch
             {
                 0 => ReadRam(_dp),
@@ -183,8 +179,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
                 case 0x08:
                 case 0x09:
                 {
-                    // Odd operations are adds, even ones subtracts, which is
-                    // what picks the second term of the overflow expression.
+                    // Odd operations are adds, even ones subtracts, which is what picks the second term of the overflow.
                     ushort overflow = (ushort)((acc ^ result) & (p ^ ((aluOperation & 0x01) != 0 ? result : acc)));
                     overflow0 = (overflow & 0x8000) != 0;
                     if (overflow0 && overflow1) overflow1 = sign0 == sign1;
@@ -215,8 +210,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             _carry[sel] = carry;
         }
 
-        // DP's low nibble steps without carrying into the high nibble, and the
-        // high nibble is XOR-modified rather than assigned.
+        // DP's low nibble steps without carrying into the high nibble, and the high nibble is XOR-modified.
         private void UpdateDataPointer()
         {
             ushort dp = _dp;

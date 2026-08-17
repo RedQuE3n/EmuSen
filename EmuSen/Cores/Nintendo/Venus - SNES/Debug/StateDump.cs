@@ -5,18 +5,7 @@ using EmuSen.Cores.Nintendo.Venus.Video;
 
 namespace EmuSen.Cores.Nintendo.Venus.Debug
 {
-    // On-demand snapshot of CPU + PPU state, formatted to be directly
-    // comparable to MesenCE's own Status panel - deliberately laid out the
-    // same way (P as flag letters, PC as bank:address, PPU registers grouped
-    // by what they control) since that's exactly what got hand-transcribed
-    // from Mesen screenshots repeatedly during the scroll-jitter
-    // investigation. Call this instead of reaching for another round of
-    // screenshot comparison next time.
-    //
-    // Returns formatted strings rather than printing directly, same
-    // convention as everything else callable from behind a DebugSettings
-    // toggle or a keypress trigger - see Program.cs's F1 hotkey for the
-    // wired-up example.
+    // On-demand snapshot of CPU + PPU state, formatted to be directly comparable to MesenCE's own Status.
     public static class StateDump
     {
         public static string DumpCpuState(Cpu cpu)
@@ -30,10 +19,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Debug
             return sb.ToString();
         }
 
-        // P's bit meanings differ slightly between native (E=0) and
-        // emulation (E=1) mode - bit 4 is X (index register width) natively,
-        // but B (break flag, always shown set) in emulation mode. Mirrors
-        // that distinction rather than showing a misleading flag letter.
+        // P's bit meanings differ slightly between native (E=0) and emulation (E=1) mode - bit 4 is X (index.
         private static string DescribeFlags(byte p, bool emulation)
         {
             var sb = new StringBuilder();

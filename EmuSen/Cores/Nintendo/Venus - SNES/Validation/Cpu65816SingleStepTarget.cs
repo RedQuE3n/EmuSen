@@ -6,11 +6,7 @@ using EmuSen.Validation;
 
 namespace EmuSen.Cores.Nintendo.Venus.Validation
 {
-    // Flat 16MB RAM model matching SingleStepTests/65816's own stated
-    // methodology ("a full 16mb of RAM... single address space") - an
-    // ICpuBus in its own right rather than a MemoryBus subclass, so no
-    // SNES bank/register decoding exists to bypass - see Venus_CPU.md §10.1.
-    // Internal: only Cpu65816SingleStepTarget needs to construct one.
+    // Flat 16MB RAM model matching SingleStepTests/65816's own stated methodology ("a full 16mb of RAM - see Venus_CPU.md §10.1.
     internal sealed class FlatTestMemoryBus : ICpuBus
     {
         public readonly byte[] Flat = new byte[0x1000000];
@@ -23,11 +19,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Validation
         public int TakePendingDmaCycles() => 0;
     }
 
-    // ISingleStepTarget adapter for the 65816 CPU - see that interface's
-    // own comment for the general pattern. Wraps a real Cpu against
-    // FlatTestMemoryBus so every test runs against pure, uniform RAM with
-    // no SNES-specific address decoding getting in the way, matching the
-    // test suite's own model of the processor in isolation.
+    // ISingleStepTarget adapter for the 65816 CPU - see that interface's own comment for the general pattern.
     public class Cpu65816SingleStepTarget : ISingleStepTarget
     {
         private readonly FlatTestMemoryBus _bus;
@@ -43,16 +35,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Validation
         {
             Array.Clear(_bus.Flat, 0, _bus.Flat.Length);
 
-            // Clears _stopped/_waitingForInterrupt (private fields with no
-            // other reset hook) - without this, a WAI/STP test anywhere in
-            // a run leaves the CPU permanently halted for every test after
-            // it, since Step() early-returns without executing anything
-            // once either flag is set. Everything else Reset() touches
-            // (A/X/Y/S/D/PB/PC/P/E) gets overwritten by SetRegister calls
-            // immediately after anyway. Console output suppressed only
-            // for this call - Cpu.Reset() unconditionally prints two
-            // diagnostic lines meant for a single power-on, not for
-            // running once per test case.
+            // Clears _stopped/_waitingForInterrupt, which have no other reset hook.
             TextWriter realOut = Console.Out;
             Console.SetOut(TextWriter.Null);
             _cpu.Reset();
@@ -101,9 +84,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Validation
         public void Step() => _cpu.Step();
     }
 
-    // Loads SingleStepTests/65816's own JSON shape (pc/s/p/a/x/y/dbr/d/
-    // pbr/e + a "ram" list of [address,value] pairs) into the generic
-    // SingleStepTest shape the core-agnostic runner understands.
+    // Loads the SingleStepTests/65816 JSON shape - see EmuSen_Debugging_Tools_Reference_v5.md §3.16.
     public static class Cpu65816TestLoader
     {
         private class RegState

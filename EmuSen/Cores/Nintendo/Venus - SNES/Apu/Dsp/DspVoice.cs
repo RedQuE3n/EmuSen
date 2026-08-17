@@ -12,16 +12,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 {
     internal enum EnvelopeStage { Attack, Decay, Sustain, Release, Off }
 
-    // One S-DSP voice: BRR sample playback (with real Gaussian
-    // interpolation and the hardware's KeyOn startup delay - both ported
-    // from Mesen2's DspVoice.cpp after the first pass at this, which
-    // decoded a whole 16-sample block up front and picked the nearest raw
-    // sample with no interpolation at all, turned out to still sound
-    // garbled once the separate SPC700 clock-rate bug was fixed) and the
-    // ADSR/GAIN envelope that scales it. See Venus_APU.md §4 for what's
-    // still not implemented - echo/FIR is the big remaining gap, not
-    // attempted here; it's a genuinely separate subsystem, not something
-    // that would explain garbled *voice* output.
+    // BRR playback with Gaussian interpolation and the KeyOn delay - see Venus_APU.md §4.
     internal class DspVoice
     {
         // Rate/period table - see Venus_APU.md §4.4.
@@ -35,12 +26,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         // Spc700.Ram, attached in AttachMemory - see EmuSen_Save_States.md §2.
         [EmuSen.Common.AliasOfSerializedField] private byte[] _ram = null!;
 
-        // Circular buffer of the last 12 decoded (doubled-representation -
-        // see BrrDecoder.DecodeQuad) samples - holds more than just the
-        // current quad specifically so Gaussian interpolation has real
-        // lookback samples available right at a quad/block boundary,
-        // matching real hardware rather than starting each new block from
-        // a clean slate.
+        // Twelve samples, so interpolation has real lookback at a block boundary.
         private readonly short[] _sampleBuffer = new short[12];
         private int _bufferPos; // cycles 0, 4, 8 - see DecodeNextQuad's own comment
 
@@ -50,18 +36,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         private ushort _pendingStartAddr;
         private ushort _pendingLoopAddr;
 
-        // 15-bit fixed-point playback position within the current quad -
-        // bits 12-13 select which of the last 4 decoded samples to center
-        // interpolation on, bits 0-11 are the Gaussian fractional weight.
-        // Wraps by masking off bit 14 (not a full mod), matching hardware -
-        // see GetNextSample's own comment on the exact sequence this
-        // mirrors from Mesen's Step3c/Step4.
+        // 15-bit position: bits 12-13 pick the sample, 0-11 are the Gaussian weight.
         private int _interpolationPos;
 
-        // Real hardware delays a newly key-on'd voice by 5 samples before
-        // it outputs anything real (envelope pinned to 0 the whole time) -
-        // skipping this previously meant a note's very first samples came
-        // from a not-yet-properly-primed decode state.
+        // Hardware pins a newly keyed voice silent for five samples - see Venus_APU.md §4.
         private int _keyOnDelay;
 
         private bool _active;
@@ -76,13 +54,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         public bool Ended { get; private set; }
 
-        // Debug-only observability, added building out the DSP toolchain
-        // (see SDsp.GetVoiceDebugInfo/IDebugTarget.AudioChannels) -
-        // none of this affects real playback, it just surfaces state that
-        // was previously only visible via Console-printed KeyOn logging
-        // (DebugSettings.DspKeyOnLogging), which meant "has this voice
-        // ever actually triggered" required grepping console output
-        // instead of a structured query.
+        // Debug-only observability, so `channels` needs no console flag - see `man channels`.
         public bool IsActive => _active;
         public int EnvelopeLevel => _envelope;
         public string StageName => _stage.ToString();
@@ -115,18 +87,14 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
 
         private long _lastKeyOnSample = long.MinValue;
 
-        // dirTableAddr is the resolved Sample Directory base (DIR register * 0x100).
-        // Each entry is 4 bytes: 16-bit start address, 16-bit loop address.
+        // Four bytes per entry: 16-bit start address, then 16-bit loop address.
         public void KeyOn(int dirTableAddr, long sampleCounter = 0)
         {
             int entry = (dirTableAddr + Srcn * 4) & 0xFFFF;
             _pendingStartAddr = (ushort)(_ram[entry] | (_ram[(entry + 1) & 0xFFFF] << 8));
             _pendingLoopAddr = (ushort)(_ram[(entry + 2) & 0xFFFF] | (_ram[(entry + 3) & 0xFFFF] << 8));
 
-            // Tracked unconditionally (cheap - a few field writes), not
-            // just when DspKeyOnLogging is on, so KeyOnCount/LastKeyOnSample
-            // are always available to the `channels` debug command without
-            // needing that console-logging flag enabled first.
+            // Tracked unconditionally, so `channels` works without DspKeyOnLogging on.
             KeyOnCount++;
             long deltaSamples = _lastKeyOnSample == long.MinValue ? -1 : sampleCounter - _lastKeyOnSample;
             _lastKeyOnSample = sampleCounter;
@@ -162,14 +130,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             if (_active) _stage = EnvelopeStage.Release;
         }
 
-        // Decodes the next 4 samples (one nibble-pair) into the circular
-        // buffer and advances _brrOffset/_brrAddress to the following
-        // quad/block - ported from Mesen's DecodeBrrSample + the
-        // block-advance logic in its Step4. _bufferPos cycles 0/4/8
-        // (matching Mesen's own `if(_bufferPos<=4) _bufferPos+=4; else
-        // _bufferPos=0;`, not a plain modulo) so the buffer always keeps
-        // the 3 most recent quads (12 samples) available for interpolation
-        // lookback even right at a block boundary.
+        // _bufferPos cycles 0/4/8, keeping three quads of lookback across a block boundary.
         private void DecodeNextQuad()
         {
             byte b0 = _ram[(_brrAddress + _brrOffset) & 0xFFFF];
@@ -214,31 +175,19 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             if (!_active) return 0;
 
-            // Silent during the 5-sample KeyOn startup delay - real
-            // hardware pins envelope/pitch to 0 the whole time. The
-            // circular buffer is primed (zeroed at KeyOn) so interpolation
-            // right at the end of the delay has real, if silent, history
-            // to reference instead of stale data from a previous note.
+            // Silent through the startup delay, with the buffer primed rather than stale.
             if (_keyOnDelay > 0)
             {
                 _keyOnDelay--;
                 if (_keyOnDelay == 0)
                 {
-                    // Force an immediate decode on the very next call
-                    // instead of wasting one more sample on an empty
-                    // buffer - matches the observable effect of hardware
-                    // already having the sample pointer ready to go the
-                    // instant the delay elapses.
+                    // Decode on the next call rather than waste a sample on an empty buffer.
                     _interpolationPos = 0x4000;
                 }
                 return 0;
             }
 
-            // Interpolate using the CURRENT position (i.e. from wherever
-            // the previous call's advance left it) before touching
-            // anything else this call - matches the real chip evaluating
-            // output from the position it already has, then deciding
-            // whether a new quad is needed, then advancing for next time.
+            // Interpolate at the current position first, then decide about a new quad.
             short raw = DspInterpolation.Gauss4Point(_interpolationPos, _sampleBuffer, _bufferPos);
 
             if (_interpolationPos >= 0x4000)
@@ -262,28 +211,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             return (short)Math.Clamp(scaled, short.MinValue, short.MaxValue);
         }
 
-        // Gates envelope steps to the period table's rate - see Venus_APU.md §4.4.
-        //
-        // PeriodTable's values (2048, 1536, ..., 1) are the standard SNES
-        // DSP envelope rate table, already expressed directly in AUDIO
-        // SAMPLES per step (verbatim in essentially every reference S-DSP
-        // implementation - bsnes, snes9x, Mesen2 - always used as a
-        // sample-count period with no further conversion). This
-        // previously divided that by 32 on the mistaken assumption the
-        // table was in raw S-SMP clock cycles needing conversion to
-        // samples via SDsp.Tick's 32-cycles-per-sample constant - it
-        // isn't; that division made every envelope step (attack ramp,
-        // decay, sustain decay) fire up to 32x too fast, and for most
-        // rate indices (table value already under 32) the Math.Max(1,...)
-        // clamp made it fire every single sample regardless of the real
-        // rate. Confirmed via the `channels` debug command: a sustaining
-        // voice's envelope had already decayed to 0 within ~5900 samples
-        // (~0.18s) of KeyOn - real hardware would still be audible there.
-        // This is what made sustained notes/chords cut off to silence
-        // almost immediately while sharp one-shot percussion (no
-        // meaningful sustain/decay phase to speak of) still played
-        // normally - i.e. exactly a "some of the music is missing"
-        // symptom, not silence across the board.
+        // The period table is already in samples; dividing by 32 ran envelopes 32x fast - see Venus_APU.md §4.4.
         private bool RateDue(int periodIndex)
         {
             if (periodIndex == 0) return false;
@@ -369,8 +297,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
         {
             if ((Gain & 0x80) == 0)
             {
-                // Direct gain scaling - not independently cross-checked, see
-                // Venus_APU.md §4.5.
+                // Direct gain scaling, not independently cross-checked - see Venus_APU.md §4.5.
                 _envelope = (Gain & 0x7F) * 16;
                 return;
             }

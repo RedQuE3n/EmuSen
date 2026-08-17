@@ -10,10 +10,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // Increment/decrement (INC/DEC on A, memory, X, Y), comparisons (CMP/
-    // CPX/CPY), and addition/subtraction with carry (ADC/SBC) - every
-    // opcode that actually does arithmetic, as opposed to just moving or
-    // combining bits.
+    // Increment, decrement, compare and the BCD paths - see Venus_CPU.md §5.
     public partial class Cpu
     {
         private void OpINCA(uint address)
@@ -245,13 +242,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
                 if (decimalMode)
                 {
                     AdcDecimalByte((byte)(A & 0xFF), (byte)(operand & 0xFF), carry, out int lowResult, out bool lowCarry, out _);
-                    // The high byte's own v (from AdcDecimalByte, using its
-                    // pre-high-nibble-correction intermediate - see that
-                    // method's comment) IS the 16-bit result's V flag - a
-                    // separate first attempt at computing V here from the
-                    // FINAL corrected high byte instead gave the wrong
-                    // answer on every test where that byte's high-nibble
-                    // correction actually fired, caught via CpuValidation.
+                    // The high byte's own v (from AdcDecimalByte, using its pre-high-nibble-correction intermediate.
                     AdcDecimalByte((byte)(A >> 8), (byte)(operand >> 8), lowCarry ? 1 : 0, out int highResult, out bool c, out bool v);
                     ushort result16 = (ushort)((highResult << 8) | lowResult);
 
@@ -271,17 +262,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             }
         }
 
-        // One decimal-mode ADC byte-add: adds two BCD-encoded bytes plus a
-        // binary carry-in, correcting each nibble that exceeds 9 by adding
-        // 6 (the standard BCD adjustment), propagating a carry out of the
-        // low nibble into the high nibble the same way a real BCD adder
-        // does. result is the corrected byte (0-99 in BCD, i.e. 0x00-0x99);
-        // carryOut is true if the corrected sum exceeds 99 (0x99); v is the
-        // usual sign-overflow check but against this same fully-corrected
-        // result (an earlier attempt using the pre-high-nibble-correction
-        // intermediate matched N/Z/C but got V wrong on every test where
-        // the high-nibble correction actually fired - caught via the
-        // CpuValidation harness, not assumed from memory).
+        // One decimal-mode ADC byte-add: adds two BCD-encoded bytes plus a binary carry-in, correcting each.
         private static void AdcDecimalByte(byte a, byte b, int carryIn, out int result, out bool carryOut, out bool v)
         {
             int lo = (a & 0x0F) + (b & 0x0F) + carryIn;
@@ -309,15 +290,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
                 byte a8 = (byte)(A & 0xFF);
                 int binaryResult = a8 - operand - borrow;
 
-                // SBC's C/V always reflect the BINARY subtraction, even in
-                // decimal mode - a documented, real 65816 quirk (distinct
-                // from ADC, whose flags DO reflect the decimal result).
-                // N and Z are the exception: both reflect the decimal-
-                // corrected result, not the binary one - caught via the
-                // CpuValidation harness (a byte can be zero once decimal-
-                // corrected while the raw binary subtraction result isn't,
-                // e.g. 0x34-0xD3-1 = 0x60 binary but 0x00 once BCD-
-                // corrected), not assumed from memory.
+                // SBC's C/V always reflect the BINARY subtraction, even in decimal mode - a documented, real 65816.
                 SetFlag(CpuFlags.C, binaryResult >= 0);
                 SetFlag(CpuFlags.V, ((a8 ^ operand) & (a8 ^ binaryResult) & 0x80) != 0);
 
@@ -349,11 +322,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
             }
         }
 
-        // One decimal-mode SBC byte-subtract: subtracts BCD-encoded byte b
-        // (plus a binary borrow-in) from a, correcting each nibble that
-        // goes negative by subtracting 6, propagating the borrow out of
-        // the low nibble into the high nibble. Only the numeric result
-        // uses this - see OpSBC's own comment on why the flags never do.
+        // One decimal-mode SBC byte, with the binary borrow-in - see Venus_CPU.md §5.
         private static int SbcDecimalByte(byte a, byte b, int borrowIn) => SbcDecimalByte(a, b, borrowIn, out _);
 
         private static int SbcDecimalByte(byte a, byte b, int borrowIn, out bool borrowOut)

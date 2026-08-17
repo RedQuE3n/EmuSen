@@ -1,12 +1,6 @@
 namespace EmuSen.Common.Imaging
 {
-    // 64-bit FNV-1a over raw RGBA bytes - used by --autoshot to decide
-    // whether the current frame differs from the last one it saved, without
-    // needing a full pixel-by-pixel comparison. Not cryptographically
-    // anything; a frame-to-frame "did this change at all" check has no
-    // adversarial input to worry about, and FNV-1a's avalanche behavior is
-    // more than enough to make two visually different SNES frames collide
-    // by chance a non-concern in practice.
+    // 64-bit FNV-1a over raw RGBA bytes - used by --autoshot to decide whether the current frame differs.
     public static class FrameHash
     {
         public static ulong Compute(byte[] data)

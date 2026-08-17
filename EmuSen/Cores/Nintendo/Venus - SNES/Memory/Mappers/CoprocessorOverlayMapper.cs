@@ -2,10 +2,7 @@ using System;
 
 namespace EmuSen.Cores.Nintendo.Venus.Memory.Mappers
 {
-    // A chip that only claims a small window and leaves the rest of the
-    // cartridge on the ordinary LoROM/HiROM map - the NEC DSPs and the OBC1,
-    // unlike the SA-1 and the GSU, which replace the map outright.
-    // See Venus_NecDSP.md §3 and Venus_OBC1.md §1.
+    // A chip that only claims a small window and leaves the rest of the cartridge on the ordinary - see Venus_NecDSP.md §3.
     public sealed class CoprocessorOverlayMapper : ICartridgeMapper
     {
         private readonly ICartridgeMapper _baseMapper;

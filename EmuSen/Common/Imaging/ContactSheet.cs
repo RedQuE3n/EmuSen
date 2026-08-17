@@ -1,14 +1,9 @@
 namespace EmuSen.Common.Imaging
 {
-    // Downsamples and tiles frames into one grid image - for "is this
-    // actually moving" questions across a span of frames without reviewing
-    // N separate screenshots one at a time.
+    // Tiles frames into one grid, for "is this actually moving" across a span without N screenshots.
     public static class ContactSheet
     {
-        // Nearest-neighbor downsample - a debugging contact sheet needs
-        // "can I tell this changed shape/position," not photographic
-        // fidelity, so there's no reason to pull in a real resampling
-        // filter for this.
+        // Nearest-neighbor downsample - a debugging contact sheet needs "can I tell this changed.
         public static byte[] Downsample(byte[] src, int srcWidth, int srcHeight, int scale, out int dstWidth, out int dstHeight)
         {
             dstWidth = Math.Max(1, srcWidth / scale);
@@ -29,10 +24,7 @@ namespace EmuSen.Common.Imaging
             return dst;
         }
 
-        // Tiles a list of equally-sized RGBA thumbnails into one grid image,
-        // <cols> per row - empty trailing cells in the last row stay
-        // whatever `new byte[]`'s zero-fill default is (fully transparent
-        // black, harmless either way for a debugging aid).
+        // Tiles a list of equally-sized RGBA thumbnails into one grid image, <cols> per row - empty trailing.
         public static void WriteContactSheet(string path, List<byte[]> thumbs, int thumbWidth, int thumbHeight, int cols)
         {
             int count = thumbs.Count;

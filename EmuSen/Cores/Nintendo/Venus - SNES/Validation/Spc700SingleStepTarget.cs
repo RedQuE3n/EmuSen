@@ -7,18 +7,7 @@ using EmuSen.Validation;
 
 namespace EmuSen.Cores.Nintendo.Venus.Validation
 {
-    // ISingleStepTarget adapter for the SPC700 CPU - see that interface's
-    // own comment for the general pattern, and Cpu65816SingleStepTarget
-    // for the equivalent 65816 adapter this closely mirrors.
-    //
-    // Unlike the 65816 adapter, this doesn't need a flat-memory subclass:
-    // Spc700 already owns a plain 64KB Ram array with no bank switching,
-    // and its Read8/Write8 were made public (testability only, same
-    // reasoning as MemoryBus.Read8/Write8 becoming virtual) so setup and
-    // verification can route through the real memory-mapped-register
-    // semantics for $00F2-$00FF (DSP register access, APU communication
-    // ports) instead of raw array pokes, which would silently miss those
-    // addresses entirely (they never touch Ram at all).
+    // ISingleStepTarget adapter for the SPC700 CPU - see that interface's own comment for the general.
     public class Spc700SingleStepTarget : ISingleStepTarget
     {
         private readonly Spc700 _spc;
@@ -30,15 +19,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Validation
 
         public void Reset()
         {
-            // Reset() clears _halted (set by SLEEP/STOP) and other
-            // internal state that isn't part of a test's own declared
-            // registers - without this, one halted test poisons every
-            // test after it, the same class of bug the 65816 harness had
-            // with WAI/STP before it was fixed.
+            // Reset() clears _halted (set by SLEEP/STOP) and other internal state that isn't part of a test's own.
             _spc.Reset();
             Array.Clear(_spc.Ram, 0, _spc.Ram.Length);
-            // These vectors model a flat 64K RAM; the overlay Reset() turns
-            // on would shadow $FFC0-$FFFF - see Venus_APU.md §1.1.
+            // These vectors model a flat 64K RAM; the overlay Reset() turns on would shadow $FFC0-$FFFF - see Venus_APU.md §1.1.
             _spc.IplRomEnabled = false;
         }
 
@@ -70,21 +54,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Validation
             };
         }
 
-        // $00F4-$00F7 are a genuinely asymmetric read/write register pair
-        // on real hardware: a write there sets _outPorts (what the main
-        // CPU reads), while a read returns _inPorts (what the main CPU
-        // last wrote) - two different arrays, not a read-back-what-you-
-        // wrote register. The ground-truth vectors model a read-modify-
-        // write at these addresses as if it were ordinary memory (read
-        // old value, write new one back to "the same place"), so setup
-        // seeds BOTH arrays to the same starting value: WritePort so a
-        // Read8 during the test sees the right "old" value, and Write8 so
-        // that if the test never actually writes there, verification
-        // (which checks _outPorts, matching what a write DOES affect)
-        // still sees the right "unchanged" value instead of 0 from
-        // Reset(). Found the hard way via the SpcValidation harness this
-        // was ported from - see its own history for the failure pattern
-        // that gave this away (RAM[00F4-F7] mismatches "got 00 want X").
+        // $00F4-$00F7 are a genuinely asymmetric read/write register pair on real hardware: a write there.
         public void SetMemory(int address, byte value)
         {
             if (address >= 0xF4 && address <= 0xF7)
@@ -105,20 +75,13 @@ namespace EmuSen.Cores.Nintendo.Venus.Validation
 
         public void Step()
         {
-            // Step() early-returns without executing anything once
-            // CycleBudget <= 0, and Reset() doesn't touch it (it's driven
-            // externally, normally by however many cycles the main CPU
-            // just spent) - a fresh instance starts at 0, so this needs to
-            // be armed before every single-step call. 100 comfortably
-            // covers even the most expensive SPC700 instruction.
+            // Step early-returns once CycleBudget hits zero, and Reset does not touch it.
             _spc.CycleBudget = 100;
             _spc.Step();
         }
     }
 
-    // Loads TomHarte/ProcessorTests spc700 vectors' own JSON shape (pc/a/
-    // x/y/sp/psw + a "ram" list of [address,value] pairs) into the
-    // generic SingleStepTest shape the core-agnostic runner understands.
+    // Loads the TomHarte spc700 vectors' own JSON shape - see EmuSen_Debugging_Tools_Reference_v5.md §3.16.
     public static class Spc700TestLoader
     {
         private class RegState

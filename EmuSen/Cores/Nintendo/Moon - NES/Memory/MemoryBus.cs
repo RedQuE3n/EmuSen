@@ -123,10 +123,7 @@ namespace EmuSen.Cores.Nintendo.Moon.Memory
         {
             OpenBus = data;
 
-            // At the top of the funnel, where the reference's hook is: $4014 and
-            // $4016 are handled by their own branches below and would never reach
-            // an APU-branch hook, which is exactly how a first attempt logged zero
-            // writes to both while Mesen logged 1176 and 9430 - see §3.46.
+            // At the top of the funnel, where the reference's hook is: $4014 and $4016 are handled by their own - see §3.46.
             if (Debug.ApuWriteTrace.Enabled && address >= 0x4000 && address <= 0x4017)
             {
                 Debug.ApuWriteTrace.Record(ApuTraceFrame, Cpu?.PC ?? 0, address, data);

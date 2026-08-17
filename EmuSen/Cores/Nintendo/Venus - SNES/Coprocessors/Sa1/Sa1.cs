@@ -4,9 +4,7 @@ using EmuSen.Cores.Nintendo.Venus.Processor;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 {
-    // Nintendo SA-1: a second 65C816 at 10.74MHz plus 2KB I-RAM, a bank
-    // controller over ROM/BW-RAM, and four accelerators. Full register map,
-    // both memory maps, and the boot handshake: Venus_SA1.md.
+    // A second 65C816 at 10.74MHz with I-RAM and a bank controller - see Venus_SA1.md.
     public sealed partial class Sa1
     {
         public const int IRamSize = 0x800;
@@ -102,12 +100,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
         // Writes the SA-1 makes to its own RAM, so `watch` sees them - see Venus_SA1.md §11.4.
         [SkipInState] public IWriteObserver? WriteObserver;
 
-        // Same pull-hook shape as MemoryBus.BreakpointChecker, on the SA-1's
-        // own PC rather than the S-CPU's - see Venus_SA1.md §11.5.
+        // Same pull-hook shape as MemoryBus.BreakpointChecker, on the SA-1's own PC rather than the S-CPU's - see Venus_SA1.md §11.5.
         [SkipInState] public Func<int, bool>? BreakpointChecker;
 
-        // Set when BreakpointChecker halts Run() mid-budget; VenusCore polls
-        // it to unwind out of the frame - see Venus_SA1.md §11.5.
+        // Set when BreakpointChecker halts Run() mid-budget; VenusCore polls it to unwind out of the frame - see Venus_SA1.md §11.5.
         [SkipInState] public bool HaltedAtBreakpoint;
 
         [SkipInState] public int HaltedAddress;
@@ -126,8 +122,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
         public bool ScpuIrqPending =>
             ((_sa1IrqToScpu && (_sie & 0x80) != 0) || (_dmaIrqToScpu && (_sie & 0x20) != 0));
 
-        // Advances the SA-1 by however many master clocks the S-CPU just
-        // consumed, so both cores share one timebase - see Venus_SA1.md §2.2.
+        // Advances the SA-1 by however many master clocks the S-CPU just consumed, so both cores share one - see Venus_SA1.md §2.2.
         public void Run(int masterClocks)
         {
             OfferedMasterClocks += masterClocks;
@@ -136,8 +131,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
 
             if (Halted)
             {
-                // Still clock the timer while the CPU is parked: a game can arm
-                // the timer, halt the SA-1, and wait on the IRQ to restart it.
+                // Keep clocking the timer while parked: a game can arm it, halt the SA-1, and wait on the IRQ.
                 StepTimer(_clockBudget);
                 _clockBudget = 0;
                 return;
@@ -147,8 +141,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.Sa1
             {
                 ServiceInterrupts();
 
-                // Returns with _clockBudget intact, so resuming re-enters here
-                // rather than losing the unspent clocks - see Venus_SA1.md §11.5.
+                // Returns with _clockBudget intact, so resuming re-enters here rather than losing the unspent clocks - see Venus_SA1.md §11.5.
                 int pc24 = (Cpu.PB << 16) | Cpu.PC;
                 if (!_justResumedFromBreakpoint && BreakpointChecker != null && BreakpointChecker(pc24))
                 {

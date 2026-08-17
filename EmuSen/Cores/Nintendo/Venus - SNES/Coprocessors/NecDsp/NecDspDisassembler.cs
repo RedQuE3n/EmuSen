@@ -4,8 +4,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 {
-    // Standalone NEC DSP disassembler - see Venus_NecDSP.md §8. Instructions are
-    // a fixed 24 bits, so unlike the GSU this needs no prefix tracking.
+    // Standalone NEC DSP disassembler - see Venus_NecDSP.md §8.
     public static class NecDspDisassembler
     {
         private static readonly string[] AluOps =

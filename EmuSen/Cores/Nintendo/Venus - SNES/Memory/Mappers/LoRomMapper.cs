@@ -1,7 +1,6 @@
 namespace EmuSen.Cores.Nintendo.Venus.Memory.Mappers
 {
-    // Mode $20. ROM in the upper half of every bank, SRAM at $70-$7D/$F0-$FF.
-    // See Venus_Memory.md §2.1a.
+    // Mode $20. ROM in the upper half of every bank, SRAM at $70-$7D/$F0-$FF - see Venus_Memory.md §2.1a.
     public sealed class LoRomMapper : ICartridgeMapper
     {
         public string Name => "LoROM";

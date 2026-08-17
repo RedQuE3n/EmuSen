@@ -9,9 +9,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Cores.Nintendo.Venus.Processor
 {
-    // Every opcode whose whole job is pushing or pulling the stack: flags
-    // (PHP/PLP), A/X/Y (PHA/PLA/PHX/PLX/PHY/PLY), DB/PB/D (PHB/PLB/PHK/PHD/
-    // PLD), and the "push an effective address" family (PEA/PEI/PER).
+    // Every opcode whose whole job is pushing or pulling the stack: flags (PHP/PLP), A/X/Y.
     public partial class Cpu
     {
         private void OpPHP(uint address)
@@ -49,8 +47,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Processor
 
         private void OpPEA(uint address)
         {
-            // PEA (Push Effective Absolute): Fetches a 16-bit immediate value
-            // and pushes it directly to the stack.
+            // PEA (Push Effective Absolute): Fetches a 16-bit immediate value and pushes it directly to the stack.
             ushort data = Fetch16();
             Push16(data);
         }

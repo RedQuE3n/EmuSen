@@ -74,8 +74,7 @@ namespace EmuSen.Cores.Nintendo.Mercury.Video
             UpdateStatLine();
         }
 
-        // Four sources feed one line into the interrupt controller; a source going high while
-        // another already holds the line high requests nothing - see Mercury_Ppu.md §3.2.
+        // Four sources feed one line into the interrupt controller; a source going high while another already - see Mercury_Ppu.md §3.2.
         private void UpdateStatLine()
         {
             bool line =

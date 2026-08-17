@@ -8,11 +8,7 @@ using EmuSen.DianaOS.DianaOS.Dev;
 
 namespace EmuSen.Common.Imaging
 {
-    // Draws a rectangle outline (not filled - a filled box would hide the
-    // very sprite pixels you're trying to locate) directly into an RGBA
-    // buffer. Works from IDebugTarget.DebugSpriteInfo alone, so this has no
-    // idea what console produced it - same core-agnostic split as every
-    // other piece of this toolkit.
+    // Draws a rectangle outline (not filled - a filled box would hide the very sprite pixels you're.
     public static class SpriteOverlay
     {
         public static void DrawSpriteOutline(byte[] rgba, int width, int height, DebugSpriteInfo s)

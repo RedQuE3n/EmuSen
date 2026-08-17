@@ -245,9 +245,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             _instructions[0x67] = new SpcInstruction { Name = "CMP A, [dp+X]", AddrMode = AddrDirectPageIndexedXIndirect, Operate = OpCMP_A, Cycles = 6 };
             _instructions[0x77] = new SpcInstruction { Name = "CMP A, [dp]+Y", AddrMode = AddrDirectIndirectIndexedY, Operate = OpCMP_A, Cycles = 6 };
 
-            // --- Shift/rotate memory - remaining addressing modes (all reuse
-            // the existing generic Op*_dp handlers, which just Read8/Write8
-            // at whatever address the AddrMode resolves) ---
+            // --- Shift/rotate memory - remaining addressing modes (all reuse the existing generic Op*_dp.
             _instructions[0x1B] = new SpcInstruction { Name = "ASL dp+X", AddrMode = AddrDirectPageX, Operate = OpASL_dp, Cycles = 5 };
             _instructions[0x2C] = new SpcInstruction { Name = "ROL abs", AddrMode = AddrAbsolute, Operate = OpROL_dp, Cycles = 5 };
             _instructions[0x3B] = new SpcInstruction { Name = "ROL dp+X", AddrMode = AddrDirectPageX, Operate = OpROL_dp, Cycles = 5 };
@@ -255,8 +253,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Apu
             _instructions[0x5B] = new SpcInstruction { Name = "LSR dp+X", AddrMode = AddrDirectPageX, Operate = OpLSR_dp, Cycles = 5 };
             _instructions[0x7B] = new SpcInstruction { Name = "ROR dp+X", AddrMode = AddrDirectPageX, Operate = OpROR_dp, Cycles = 5 };
 
-            // --- dd,ds ALU family (source byte encoded first, destination
-            // second - see OpAND_dp_dp etc. in Spc700.Opcodes.cs) ---
+            // --- dd,ds ALU family (source byte encoded first, destination second - see OpAND_dp_dp etc.
             _instructions[0x29] = new SpcInstruction { Name = "AND dp(d), dp(s)", AddrMode = AddrDirectPage, Operate = OpAND_dp_dp, Cycles = 6 };
             _instructions[0x49] = new SpcInstruction { Name = "EOR dp(d), dp(s)", AddrMode = AddrDirectPage, Operate = OpEOR_dp_dp, Cycles = 6 };
             _instructions[0x89] = new SpcInstruction { Name = "ADC dp(d), dp(s)", AddrMode = AddrDirectPage, Operate = OpADC_dp_dp, Cycles = 6 };

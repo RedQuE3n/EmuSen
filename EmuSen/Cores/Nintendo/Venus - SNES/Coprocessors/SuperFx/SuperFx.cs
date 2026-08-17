@@ -2,10 +2,7 @@ using EmuSen.Common;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 {
-    // Nintendo SuperFX / GSU: a custom 16-bit RISC processor with 16 general
-    // registers, a 512-byte instruction cache, and dedicated pixel-plotting
-    // hardware that renders straight into Game Pak RAM. Unlike the SA-1 this
-    // is not a 65816, so it gets its own interpreter - see Venus_SuperFX.md.
+    // Nintendo SuperFX / GSU: a custom 16-bit RISC processor with 16 general registers, a 512-byte.
     public sealed partial class SuperFx
     {
         public const int CacheSize = 512;
@@ -13,8 +10,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         [SkipInState] private readonly byte[] _rom;
 
-        // Game Pak RAM: the GSU's work RAM, its framebuffer, and (on a game
-        // that saves) the battery-backed save data, all the same chip.
+        // Game Pak RAM: the GSU's work RAM, its framebuffer, and (on a game that saves) the battery-backed.
         [SkipInState] private readonly byte[] _ram;
 
         // R15 is the program counter; R0 is the default accumulator - see Venus_SuperFX.md §3.1.
@@ -46,12 +42,10 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         // Where _pipeline was fetched from; R15 already names the jump target while a delay slot executes - see §4.1a.
         [SkipInState] private ushort _pipelineAddress;
 
-        // A jump has retargeted R15 but its delay-slot byte is still in the
-        // pipeline and has to be consumed first.
+        // A jump has retargeted R15 but its delay-slot byte is still in the pipeline and has to be consumed first.
         private bool _jumpPending;
 
-        // Source and destination register selection, reset to R0 after every
-        // instruction unless a TO/WITH/FROM prefix set them - see Venus_SUperFX.md §4.2.
+        // Source and destination register selection, reset to R0 after every instruction unless a - see Venus_SUperFX.md §4.2.
         private int _sreg, _dreg;
 
         // R14 writes start a ROM fetch that later reads collect - see Venus_SuperFX.md §5.2.
@@ -93,9 +87,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         public bool Running => GetFlag(FlagGo);
 
-        // Side-effect-free views for the debug target - ReadRegister($3031)
-        // acknowledges the interrupt, so a debugger must not go through it.
-        // Work RAM, framebuffer and save data all at once - see §1.
+        // Side-effect-free views for the debug target - ReadRegister($3031) acknowledges the interrupt, so a - see §1.
         public byte[] DebugRam => _ram;
 
         public ushort DebugSfr => _sfr;
@@ -106,26 +98,22 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
         public byte DebugRombr => _rombr;
         public byte DebugRambr => _rambr;
 
-        // POR carries the OBJ-mode bit that picks the framebuffer layout, so it
-        // is as load-bearing as SCMR - see Venus_SuperFX.md §6.2.
+        // POR carries the OBJ-mode bit that picks the framebuffer layout, so it is as load-bearing as SCMR - see Venus_SuperFX.md §6.2.
         public byte DebugPor => _por;
         public byte DebugColr => _colr;
 
         // The GSU's IRQ line into the S-CPU, masked by CFGR bit 7 - see Venus_SuperFX.md §3.2.
         public bool ScpuIrqPending => GetFlag(FlagIrq) && (_cfgr & 0x80) == 0;
 
-        // Game Pak RAM the chip touches itself, which the S-CPU's bus never
-        // sees and `watch`/`counters` were therefore blind to - see Venus_SuperFX.md §8.4.
+        // Game Pak RAM the chip touches itself, which the S-CPU's bus never sees and `watch`/`counters` were - see Venus_SuperFX.md §8.4.
         [SkipInState] public Memory.IWriteObserver? WriteObserver;
         [SkipInState] public Memory.IReadObserver? ReadObserver;
 
-        // PBR:R15 as of the instruction currently executing, so an observed
-        // access can name the instruction that made it - see Venus_SuperFX.md §8.4.
+        // PBR:R15 as of the instruction currently executing, so an observed access can name the instruction - see Venus_SuperFX.md §8.4.
         [SkipInState] private int _debugInstructionAddress;
         public int DebugInstructionAddress => _debugInstructionAddress;
 
-        // Called with PBR:R15 before each instruction, when a debugger wants
-        // whole-run coverage of the chip - see Venus_SuperFX.md §8.2.
+        // Called with PBR:R15 before each instruction, when a debugger wants whole-run coverage of the chip - see Venus_SuperFX.md §8.2.
         [EmuSen.Common.SkipInState] public System.Action<int>? CoverageRecorder;
 
         // Same pull-hook shape as MemoryBus.BreakpointChecker, on PBR:R15 - see `man cpus`.
@@ -162,8 +150,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         private void InvalidateCache() => System.Array.Clear(_cacheValid);
 
-        // GSU-1 runs at half the master clock, GSU-2 at the full rate; CLSR
-        // bit 0 picks - see Venus_SuperFX.md §2.2.
+        // GSU-1 runs at half the master clock, GSU-2 at the full rate; CLSR bit 0 picks - see Venus_SuperFX.md §2.2.
         private int MasterClocksPerCycle => (_clsr & 0x01) != 0 ? 1 : 2;
 
         // Advances the GSU by the master clocks the S-CPU just consumed.
@@ -198,8 +185,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
             if (!Running) _clockBudget = 0;
         }
 
-        // Starting the GSU is a side effect of the S-CPU writing R15's high
-        // byte - see Venus_SuperFX.md §3.3.
+        // Starting the GSU is a side effect of the S-CPU writing R15's high byte - see Venus_SuperFX.md §3.3.
         private void Start()
         {
             SetFlag(FlagGo, true);
@@ -209,8 +195,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.SuperFx
 
         private void Stop()
         {
-            // Anything still in the pixel cache has to reach RAM before the
-            // S-CPU starts reading the framebuffer back.
+            // Anything still in the pixel cache has to reach RAM before the S-CPU starts reading the framebuffer back.
             FlushPixelCache();
             SetFlag(FlagGo, false);
             SetFlag(FlagIrq, true);

@@ -3,8 +3,7 @@ using System.Collections.Generic;
 
 namespace EmuSen.Validation
 {
-    // Result of running one file's worth of test cases (typically all the
-    // vectors for a single opcode) against a target.
+    // Result of running one file's worth of test cases (typically all the vectors for a single opcode).
     public class SingleStepFileResult
     {
         public string FileName = "";
@@ -12,25 +11,11 @@ namespace EmuSen.Validation
         public int Fail;
         public int Total => Pass + Fail;
 
-        // A handful of "<test name>: <field>: got <X> want <Y>" strings -
-        // capped (see SingleStepTestRunner.RunFile's maxExamples) since a
-        // systematically wrong opcode can fail all several thousand of
-        // its own tests and nobody needs to see all of them to diagnose
-        // it; the first few are almost always enough, as every real bug
-        // found this way so far (in both the 65816 and SPC700 CPUs) has
-        // shown.
+        // A handful of "<test name>: <field>: got <X> want <Y>" strings - capped (see.
         public List<string> Examples = new();
     }
 
-    // The shared engine behind "run these ground-truth vectors against
-    // this CPU and tell me exactly what's wrong" - core-agnostic, built
-    // once against ISingleStepTarget and reused for the 65816
-    // (SingleStepTests) and SPC700 (ProcessorTests) validation passes
-    // already done, and for any future core's own CPU-like component the
-    // same way. Deliberately checks registers before memory, and stops at
-    // the first mismatched field - a single wrong flag is just as
-    // diagnosable as reporting every difference at once, and keeping only
-    // the first keeps failure examples short and readable.
+    // The shared engine behind "run these ground-truth vectors against this CPU and tell me exactly.
     public static class SingleStepTestRunner
     {
         public static SingleStepFileResult RunFile(

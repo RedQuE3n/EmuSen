@@ -30,12 +30,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
             _oamAddrLatch = (ushort)((((uint)data & 0x01u) << 9) | ((uint)_oamAddrLatch & 0x01FFu));
             _oamAddr = _oamAddrLatch;
 
-            // Bit 7: OAM priority rotation - confirmed real via the SNESdev
-            // wiki's Sprites page ("OAMADD can adjust this with 'priority
-            // rotation'"). When enabled, sprite 0 is no longer necessarily
-            // topmost; instead the sprite at (OAMAddr & 0xFE) >> 1 becomes
-            // the first/topmost one, wrapping through all 128 from there.
-            // Previously not parsed at all - this bit was silently dropped.
+            // Bit 7: OAM priority rotation - confirmed real via the SNESdev wiki's Sprites page ("OAMADD can.
             PriorityRotationEnabled = (data & 0x80) != 0;
         }
 
@@ -80,8 +75,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
         {
             int bg = (offset - 0x210D) / 2;
 
-            // BGnHOFS = (new<<8) | (Prev1 & ~7) | (Prev2 & 7) - see
-            // Venus_PPU.md §2 for why Prev2 must be a separate latch.
+            // BGnHOFS = (new<<8) | (Prev1 & ~7) | (Prev2 & 7) - see Venus_PPU.md §2 for why Prev2 must be a - see Venus_PPU.md §2.
             BgScrollX[bg] = (ushort)(((data << 8) | (_bgOfsLatch & ~7) | (_bgHOfsLatch & 7)) & 0x3FF);
 
             if (DebugSettings.AllScrollWriteLogging) Console.WriteLine($"[SCROLL] BG{bg + 1} HOFS write: data=0x{data:X2} latchWas=0x{_bgOfsLatch:X2} -> BgScrollX[{bg}] now {BgScrollX[bg]}");
@@ -220,11 +214,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Video
                     $"enable(bg1-4)={data & 0x0F:X1} at scanline={CurrentScanline}" +
                     (CurrentScanline is >= 1 and <= 223 ? " [MID-FRAME - anchor overridden]" : " [vblank/frame-start - anchor stays 0]"));
             }
-            // See _mosaicStartScanline's declaration in Ppu.cs. A write
-            // landing during vblank (the common case) sets this to a
-            // scanline number that OnScanlineStart will immediately reset to
-            // 0 the moment the next frame's scanline 0 begins, so it only
-            // "sticks" for writes that happen during the active display.
+            // See _mosaicStartScanline's declaration in Ppu.cs.
             _mosaicStartScanline = CurrentScanline;
         }
 

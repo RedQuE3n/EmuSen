@@ -3,9 +3,7 @@ using System.IO;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 {
-    // The program and data ROMs masked into the DSP die. Nintendo never put
-    // them on the cartridge bus, so they can only come from a dump - either
-    // appended to the ROM file or dropped in home/Firmware. See Venus_NecDSP.md §2.
+    // The program and data ROMs masked into the DSP die - see Venus_NecDSP.md §2.
     public sealed class NecDspFirmware
     {
         public byte[] Program { get; }
@@ -17,8 +15,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             DataRom = dataRom;
         }
 
-        // How many bytes of firmware are appended to a ROM of this size, or 0
-        // if none are - see Venus_NecDSP.md §2.1.
+        // How many bytes of firmware are appended to a ROM of this size, or 0 if none are - see Venus_NecDSP.md §2.1.
         public static int EmbeddedSize(int romSize)
         {
             if ((romSize & 0x7FFF) == 0x2000) return 0x2000;
@@ -44,8 +41,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             return new NecDspFirmware(program, data);
         }
 
-        // What the core-agnostic firmware layer needs to find, validate and
-        // prompt for this chip's dump - see EmuSen_Firmware.md §1.
+        // What the core-agnostic firmware layer needs to find, validate and prompt for this chip's dump - see EmuSen_Firmware.md §1.
         public static Common.Firmware.FirmwareRequest RequestFor(NecDspVariant variant)
         {
             NecDspProfile profile = NecDspProfile.For(variant);
@@ -58,9 +54,6 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
         }
 
         // home/Firmware, as either one combined dump or the split pair.
-        // The combined form goes through FirmwareLibrary so it shares the
-        // whole engine's discovery and validation rules; the split pair is a
-        // NEC-DSP-specific convention and stays here.
         public static NecDspFirmware? FromFirmwareDirectory(NecDspProfile profile)
         {
             NecDspVariant variant = VariantFor(profile);
@@ -79,8 +72,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             return FromBlob(profile, blob);
         }
 
-        // A profile carries no back-reference, and the firmware name is
-        // unique across the seven, so this recovers the variant from it.
+        // The firmware name is unique across the seven profiles, so it is enough to key on.
         private static NecDspVariant VariantFor(NecDspProfile profile)
         {
             foreach (NecDspVariant candidate in Enum.GetValues<NecDspVariant>())

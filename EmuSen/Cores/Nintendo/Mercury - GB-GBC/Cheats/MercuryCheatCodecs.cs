@@ -2,8 +2,7 @@ using EmuSen.DianaOS.DianaOS.Lib;
 
 namespace EmuSen.Cores.Nintendo.Mercury.Cheats
 {
-    // The plugs that let CheatCommand use the two decoders without DianaOS
-    // referencing this project - the Venus and Moon pairs' counterpart.
+    // The plugs letting CheatCommand use both decoders without DianaOS referencing this project.
 
     // "Game Genie", not "Game Boy Game Genie", so `add`'s detected-format message reads as it always has.
     public sealed class GbGameGenieCheatCodec : ICheatCodeCodec

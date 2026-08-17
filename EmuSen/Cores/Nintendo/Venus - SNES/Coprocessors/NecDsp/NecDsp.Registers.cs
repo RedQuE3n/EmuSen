@@ -2,12 +2,10 @@ using EmuSen.Cores.Nintendo.Venus.Memory.Mappers;
 
 namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
 {
-    // The two-register window the S-CPU sees, and the banks it sees it in.
-    // See Venus_NecDSP.md §3.
+    // The two-register window the S-CPU sees, and the banks it sees it in - see Venus_NecDSP.md §3.
     public sealed partial class NecDsp
     {
-        // SR bits. Only RQM and DRS are load-bearing here; the rest exist
-        // because the firmware branches on them - see Venus_NecDSP.md §3.2.
+        // SR bits. Only RQM and DRS are load-bearing here; the rest exist because the firmware branches on - see Venus_NecDSP.md §3.2.
         private const ushort RequestForMaster = 0x8000;
         private const ushort DataRegStatus = 0x1000;
         private const ushort DataRegControl = 0x0400;
@@ -20,8 +18,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             return hiRom ? (ushort)0x1000 : (ushort)0x4000;
         }
 
-        // The full 24-bit address is kept in the offset, because the ST01x
-        // needs the bank to tell its RAM window from its registers.
+        // The full 24-bit address is kept in the offset, because the ST01x needs the bank to tell its RAM.
         public CartridgeAddress ResolveScpu(byte bank, ushort offset)
         {
             int address = (bank << 16) | offset;
@@ -30,8 +27,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             {
                 if (offset > 0x0FFF) return CartridgeAddress.Unmapped;
 
-                // $60/$E0 is the register pair; $68-$6F/$E8-$EF is the 4KB
-                // battery-backed RAM the same chip holds.
+                // $60/$E0 is the register pair; $68-$6F/$E8-$EF is the 4KB battery-backed RAM the same chip holds.
                 int mirrored = bank & 0x7F;
                 bool st01xBank = mirrored == 0x60 || (mirrored >= 0x68 && mirrored <= 0x6F);
                 return st01xBank ? CartridgeAddress.CoprocessorRegister(address) : CartridgeAddress.Unmapped;
@@ -45,8 +41,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
                 return CartridgeAddress.Unmapped;
             }
 
-            // LoROM: the upper half of $30-$3F/$B0-$BF, plus the lower half of
-            // $60-$6F/$E0-$EF that Super Bases Loaded 2 uses instead.
+            // LoROM: the upper half of $30-$3F/$B0-$BF, plus the lower half of $60-$6F/$E0-$EF that Super Bases.
             bool loRomBank = (bank >= 0x30 && bank <= 0x3F) || (bank >= 0xB0 && bank <= 0xBF);
             if (loRomBank && offset >= 0x8000) return CartridgeAddress.CoprocessorRegister(address);
 
@@ -75,8 +70,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
                 return (byte)_dr;
             }
 
-            // In 16-bit mode DRS tracks which half of DR the host is on, and
-            // only the second half clears RQM - see Venus_NecDSP.md §3.2.
+            // In 16-bit mode DRS tracks which half of DR the host is on, and only the second half clears RQM - see Venus_NecDSP.md §3.2.
             if ((_sr & DataRegStatus) != 0)
             {
                 _sr &= unchecked((ushort)~(RequestForMaster | DataRegStatus));
@@ -122,8 +116,7 @@ namespace EmuSen.Cores.Nintendo.Venus.Coprocessors.NecDsp
             _dr = (ushort)((_dr & 0xFF00) | value);
         }
 
-        // Banks $68-$6F/$E8-$EF on an ST010/ST011 are the DSP's data RAM
-        // rather than its register pair.
+        // Banks $68-$6F/$E8-$EF on an ST010/ST011 are the DSP's data RAM rather than its register pair.
         private bool IsSt01xRam(int address) => NecDspProfile.IsSt01x(_variant) && (address & 0x0F0000) >= 0x080000;
 
         // The .srm image of the uPD96050's data RAM, little-endian - see Venus_NecDSP.md §6.

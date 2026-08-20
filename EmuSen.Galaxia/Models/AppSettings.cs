@@ -21,6 +21,11 @@ namespace EmuSen.Galaxia.Models
 
         public string SelectedCore { get; set; } = AllConsoles;
 
+        // The search half of the filter bars SelectedCore is the facet half of - see EmuSen_Config_Reference.md §3.1.
+        public string LibrarySearch { get; set; } = "";
+
+        public string CheatSearch { get; set; } = "";
+
         // Off by default - forcing this on unconditionally would break any
         // real two-controller game by feeding Controller 2 the same input
         // as Controller 1 even when a genuine second pad is plugged in.

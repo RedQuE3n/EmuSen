@@ -123,6 +123,8 @@ None of the four original classes did this — they wrote in place with `File.Wr
 
 Moved here from `EmuSen.Mistress/Settings/`; it holds no frontend types, so there was no reason for it to be frontend-specific. Log/ROM/state directories, the selected core, and the three input preferences the settings UI writes (`MirrorPlayer1ToPlayer2`, `AnalogStickAsDpad`, `StickDeadzone` — see `EmuSen_Settings_Reference.md` §4.4).
 
+`LibrarySearch` and `CheatSearch` are the search halves of the two filter bars, and they live here rather than in a file of their own because `SelectedCore` is already the *facet* half of the library's. Splitting one filter bar's state across two files to keep a config file tidy is the wrong trade. Both are written on window close rather than on change, and both default to the empty string, so an older `appsettings.json` loads unchanged. See `EmuSen_Settings_Reference.md` §4.23 for why restoring them was not safe before LunaP 0.10.0.
+
 The class name and the file name are unchanged, so existing files load as-is.
 
 ### 3.2 `audio.json` — `AudioConfig`

@@ -187,6 +187,10 @@ namespace EmuSen.Mistress.Views
                 _gamepad.Dispose();
                 _audioPlayer.Dispose();
                 StopLogging();
+
+                // Here rather than on Changed, which fires per keystroke - see EmuSen_Settings_Reference.md §4.23.
+                _appSettings.LibrarySearch = LibraryFilter.SearchText;
+                _appSettings.Save();
             };
 
             _gamepad.AnalogStickAsDpad = _appSettings.AnalogStickAsDpad;
@@ -810,6 +814,9 @@ namespace EmuSen.Mistress.Views
                     EmuSen.Cores.CoreCatalog.FilterChoices.Contains(SelectedConsole)
                         ? SelectedConsole
                         : EmuSen.Cores.CoreCatalog.AllConsoles);
+
+                // Safe to set before wiring: FilterBar stopped raising Changed for a code-set SearchText in LunaP 0.10.0 - see EmuSen_LunaP.md §14.2.
+                LibraryFilter.SearchText = _appSettings.LibrarySearch;
 
                 LibraryFilter.Changed += OnLibraryFilterChanged;
                 LibraryFilter.Submitted += LaunchSelectedLibraryEntry;

@@ -576,3 +576,19 @@ Three details of that mechanism are load-bearing and none of them are obvious fr
 **Two orderings matter on the way out.** `StopLogging` calls `_session?.FlushVerboseLogs()` **before** `Console.SetOut`/`Dispose`, for the reason that method's own contract gives. And `ShutDownCurrentSession` flushes on the *old* session explicitly, because `StartLogging` begins by calling `StopLogging`, which would otherwise run against the session that has already been replaced.
 
 A failed setup is best-effort: an unwritable log directory leaves logging off for that session and says so in the status bar, rather than blocking the ROM load over it.
+
+### 4.23 Filters that outlive a session
+
+The library filter bar and the cheat database's game filter both start empty on every launch, and both drive real work — a ROM-directory scan and an on-disk cheat query. Their state is now persisted, in `AppSettings`, beside the `SelectedCore` that is already the *facet* half of the same library bar. A separate file was considered and rejected for exactly that reason: one filter bar's two halves living in two files is a worse arrangement than one field more in `appsettings.json`.
+
+Three fields, two of them new: `SelectedCore` (already there), `LibrarySearch`, `CheatSearch`. See `EmuSen_Config_Reference.md` §3.1.
+
+**This was not safe to write until LunaP 0.10.0**, and that is the whole reason it was not written earlier. `FilterBar` raised `Changed` when an application assigned `SearchText`, so restoring a saved filter on open would have run a library scan or a cheat-database query nobody asked for — the exact re-query LunaP's §80.1 describes, with these two windows named as the consumers that would have paid for it. The summary always said setting it did not raise `Changed`; the code did not do that until 0.10.0. `FilterPersistenceTests.Restoring_a_search_does_not_raise_Changed` pins the guarantee here rather than trusting the toolkit's own suite, because a LunaP upgrade that regressed it would break this feature silently and in a way that costs disk I/O rather than throwing.
+
+**Written on close, not on `Changed`.** No `SearchDelay` is set anywhere in this repository, so `Changed` fires per keystroke, and saving there would be a config write per character typed. `MainWindow` already had a `Closing` handler; `CheatDatabaseWindow` gained one.
+
+**The restore happens before the first query, not after.** In `MainWindow` it sits inside the one-time block in `RefreshLibrary`, ahead of the `ShowLibraryEntries()` that ends it, so the first list a user sees is already filtered. In `CheatDatabaseWindow` it is set before `Refresh()`; that window selects no system on open, so nothing is queried either way, but the ordering is the same on purpose rather than by accident.
+
+**`HotkeyHelpWindow`'s table remembers its columns.** Hotaru's hotkey list is the only `LunaTable<T>` in the tree and already carried `WindowKey = "hotkeys"`, so the window remembered where it was while its column widths and sort reset every time. It now carries `TableKey = "hotkeys"` to match. This too was gated on 0.10.0: LunaP §79.2 was a saved layout being applied to a table that had since gained a column, which for a three-column help table is a narrow risk, but the fix is what makes the key worth setting rather than a thing to remember about.
+
+**What is deliberately not persisted.** The cheat window's selected system, and the library's selection. Both are position within a result set rather than a description of one, and a window reopening with row 400 selected in a list that has since been rescanned is restoring a coincidence. The filter says what the user was looking *for*; the selection says where they had got to, which is not the same claim.

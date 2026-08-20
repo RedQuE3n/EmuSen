@@ -90,10 +90,20 @@ namespace EmuSen.Mistress.Views
             DirectoryPicker.PathPicked += OnDirectoryPicked;
             ActiveCheatsButton.IsEnabled = _openActiveCheats is not null;
             PruneButton.IsEnabled = _supportedSystems is not null;
+
+            // Before Refresh, so the first ShowGames already has it - see EmuSen_Settings_Reference.md §4.23.
+            GameFilter.SearchText = _settings.CheatSearch;
             Refresh();
 
             // FilterBar owns the "a Text set from code counts too" detail this used to spell out - see EmuSen_LunaP.md §14.2.
             GameFilter.Changed += ShowGames;
+
+            // Once, rather than the per-keystroke write saving on Changed would be.
+            Closing += (_, _) =>
+            {
+                _settings.CheatSearch = GameFilter.SearchText;
+                _settings.Save();
+            };
         }
 
         // AppSettings when set, the sandbox's own Cheats folder otherwise -

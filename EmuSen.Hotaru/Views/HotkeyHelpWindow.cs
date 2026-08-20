@@ -15,7 +15,8 @@ namespace EmuSen.Hotaru.Views
             Width = 460;
             Height = 420;
 
-            var table = new LunaTable<HotaruHotkeys.Entry> { Key = e => e.Action };
+            // Column widths and sort outlive the window, as its placement already does - see EmuSen_Settings_Reference.md §4.23.
+            var table = new LunaTable<HotaruHotkeys.Entry> { Key = e => e.Action, TableKey = "hotkeys" };
             table.Column(new LunaColumn<HotaruHotkeys.Entry>("Key", e => e.Key.ToString()) { Width = "90" });
             table.Column(new LunaColumn<HotaruHotkeys.Entry>("Does", e => e.Name) { Width = "*" });
             table.Column(new LunaColumn<HotaruHotkeys.Entry>("", e => e.Held) { Width = "50" });

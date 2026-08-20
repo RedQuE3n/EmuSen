@@ -67,7 +67,7 @@
     <!-- The shared theme (App.axaml's one StyleInclude), the Avalonia
          bootstrap sequence Program.cs used to spell out, and the controls/
          window scaffolding Views/ is migrating onto - see EmuSen_LunaP.md. -->
-    <PackageReference Include="EmuSen.LunaP" Version="0.8.0" />
+    <PackageReference Include="EmuSen.LunaP" Version="0.10.0" />
   </ItemGroup>
 
 

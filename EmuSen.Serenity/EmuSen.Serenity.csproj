@@ -37,7 +37,7 @@
          §16 and §19.3. Both are core-free: Cauldron is a dependency-free leaf
          and LunaP now references nothing but Avalonia, so this stays the
          core-agnostic layer it already was. -->
-    <PackageReference Include="EmuSen.LunaP" Version="0.8.0" />
+    <PackageReference Include="EmuSen.LunaP" Version="0.10.0" />
     <ProjectReference Include="..\EmuSen.Cauldron\EmuSen.Cauldron.csproj" />
   </ItemGroup>
 

@@ -1,6 +1,7 @@
-<Window xmlns="https://github.com/avaloniaui"
+<luna:ToolWindow xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Windowing;assembly=EmuSen.LunaP"
+        xmlns:lunac="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         xmlns:views="clr-namespace:EmuSen.Mistress.Views"
         x:Class="EmuSen.Mistress.Views.CheatDatabaseWindow"
         Title="Cheat Database"
@@ -15,7 +16,7 @@
                    Margin="0,0,0,12" />
 
         <TextBlock DockPanel.Dock="Top" Text="Cheat Folder" FontWeight="Bold" />
-        <!-- luna:PathPickerRow, NOT a read-only TextBox and a Browse button
+        <!-- lunac:PathPickerRow, NOT a read-only TextBox and a Browse button
              spelled out again. It was the second of those until the 0.5.0 bump
              made the difference visible: the toolkit control names its own parts
              and the copy named nothing, so the same row was accessible in
@@ -23,7 +24,7 @@
              have closed that gap and kept the thing that caused it - which is
              the argument EmuSen_LunaP.md §6.1 already made about three copies of
              a frame hand-off sharing one bug. §7.2. -->
-        <luna:PathPickerRow DockPanel.Dock="Top"
+        <lunac:PathPickerRow DockPanel.Dock="Top"
                             x:Name="DirectoryPicker"
                             Margin="0,4,0,12"
                             Placeholder="(default)"
@@ -40,14 +41,14 @@
                            AutomationProperties.LiveSetting="Polite"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
-                <luna:ButtonBar Grid.Column="1">
+                <lunac:ButtonBar Grid.Column="1">
                     <Button x:Name="ActiveCheatsButton" Content="Active Cheats..." Click="OnActiveCheatsClick" />
                     <!-- Two-stage on purpose: the first click only reports
                          what would go - see EmuSen_Settings_Reference.md §4.16. -->
                     <Button x:Name="PruneButton" Content="Prune Unsupported" Click="OnPruneClick" />
                     <Button x:Name="DownloadButton" Content="Download from libretro" Click="OnDownloadClick" />
                     <Button Content="Close" Click="OnCloseClick" />
-                </luna:ButtonBar>
+                </lunac:ButtonBar>
             </Grid>
         </Border>
 
@@ -59,7 +60,7 @@
                 Margin="0,12,0,0"
                 CornerRadius="4"
                 Background="{DynamicResource SystemChromeLowColor}">
-            <luna:HintText x:Name="AttributionText" />
+            <lunac:HintText x:Name="AttributionText" />
         </Border>
 
         <!-- Systems on the left, that system's games on the right - see
@@ -68,7 +69,7 @@
 
             <DockPanel Grid.Column="0">
                 <TextBlock DockPanel.Dock="Top" Text="Installed" FontWeight="Bold" Margin="0,0,0,4" />
-                <luna:LunaList x:TypeArguments="views:CheatSystemRow"
+                <lunac:LunaList x:TypeArguments="views:CheatSystemRow"
                                x:Name="SystemsList"
                                AutomationProperties.Name="Systems with cheat files"
                                SelectionChanged="OnSystemSelected" />
@@ -76,7 +77,7 @@
 
             <DockPanel Grid.Column="2">
                 <TextBlock DockPanel.Dock="Top" x:Name="GamesHeaderText" Text="Games" FontWeight="Bold" Margin="0,0,0,4" />
-                <luna:FilterBar DockPanel.Dock="Top"
+                <lunac:FilterBar DockPanel.Dock="Top"
                                 x:Name="GameFilter"
                                 Placeholder="Filter games..."
                                 Margin="0,0,0,6" />
@@ -100,4 +101,4 @@
 
     </DockPanel>
 
-</Window>
+</luna:ToolWindow>

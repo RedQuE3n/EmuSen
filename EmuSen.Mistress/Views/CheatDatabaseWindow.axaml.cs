@@ -19,7 +19,7 @@ namespace EmuSen.Mistress.Views
     // The GUI for `cheat db` - see `man cheat`. EmuSen redistributes no
     // cheat data: this either indexes a folder the user already has, or
     // downloads one to their machine on their explicit request.
-    public partial class CheatDatabaseWindow : Window
+    public partial class CheatDatabaseWindow : ToolWindow
     {
         private readonly AppSettings _settings;
 

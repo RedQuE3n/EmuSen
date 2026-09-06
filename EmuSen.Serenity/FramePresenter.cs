@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using EmuSen.Graphics;
 using EmuSen.LunaP.Threading;
+using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Serenity
 {
@@ -15,10 +16,10 @@ namespace EmuSen.Serenity
         Crt,
     }
 
-    // A Window + GameFrameControl bundle, coalescing frames from any thread - see EmuSen_Serenity.md §4.
+    // A ToolWindow + GameFrameControl bundle, coalescing frames from any thread - see EmuSen_Serenity.md §4.
     public sealed class FramePresenter : IDisposable
     {
-        private readonly Window _window;
+        private readonly ToolWindow _window;
         private readonly GameFrameControl _control;
         private volatile bool _isOpen = true;
 
@@ -66,7 +67,7 @@ namespace EmuSen.Serenity
         {
             _frames = new Latest<FrameData>(PresentPendingFrame);
             _control = new GameFrameControl();
-            _window = new Window
+            _window = new ToolWindow
             {
                 Title = GraphicsSettings.WindowTitle,
                 Width = GraphicsSettings.WindowWidth,

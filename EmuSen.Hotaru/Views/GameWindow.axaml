@@ -1,8 +1,9 @@
-<Window xmlns="https://github.com/avaloniaui"
+<luna:ToolWindow xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Windowing;assembly=EmuSen.LunaP"
         xmlns:serenity="clr-namespace:EmuSen.Serenity;assembly=EmuSen.Serenity"
         x:Class="EmuSen.Hotaru.Views.GameWindow"
         Title="EmuSen"
         Background="{DynamicResource LunaVoid}">
     <serenity:GameFrameControl x:Name="GameFrame" />
-</Window>
+</luna:ToolWindow>

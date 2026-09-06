@@ -18,7 +18,7 @@ namespace EmuSen.Mistress.Views
 {
     // The GUI half of `cheat list`/`enable`/`disable`/`remove`/`master` -
     // see `man cheat` and EmuSen_Settings_Reference.md §4.14.
-    public partial class ActiveCheatsWindow : Window
+    public partial class ActiveCheatsWindow : ToolWindow
     {
         private readonly CheatRegistry _registry;
         private ICheatCodeCodec? _pokeCodec;

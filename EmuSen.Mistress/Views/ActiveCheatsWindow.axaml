@@ -1,7 +1,8 @@
-<Window xmlns="https://github.com/avaloniaui"
+<luna:ToolWindow xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:EmuSen.Mistress.Views"
-        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Windowing;assembly=EmuSen.LunaP"
+        xmlns:lunac="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         x:Class="EmuSen.Mistress.Views.ActiveCheatsWindow"
         Title="Active Cheats"
         Width="720" Height="600"
@@ -11,22 +12,22 @@
 
         <!-- General first, then consoles oldest-first; console tabs are appended
              by BuildConsoleTabs so a new core needs no XAML - see §4.14. -->
-        <luna:Tabs DockPanel.Dock="Top" x:Name="Tabs" SelectionChanged="OnTabChanged" Margin="0,0,0,12">
+        <lunac:Tabs DockPanel.Dock="Top" x:Name="Tabs" SelectionChanged="OnTabChanged" Margin="0,0,0,12">
 
             <TabItem Header="General">
                 <StackPanel Spacing="10" Margin="0,8,0,0">
                     <!-- One switch over the whole list, independent of each cheat's own box - see §4.14. -->
                     <Border Padding="10" CornerRadius="4" Background="{DynamicResource SystemChromeLowColor}">
                         <StackPanel Spacing="4">
-                            <luna:LunaSwitch x:Name="MasterSwitch" Label="Enable cheats" />
-                            <luna:HintText x:Name="MasterHintText" />
+                            <lunac:LunaSwitch x:Name="MasterSwitch" Label="Enable cheats" />
+                            <lunac:HintText x:Name="MasterHintText" />
                         </StackPanel>
                     </Border>
 
                     <!-- Saving is per game, not per console - see §4.15. -->
                     <StackPanel Spacing="6">
                         <TextBlock Text="Saved cheat list" FontWeight="Bold" />
-                        <luna:HintText x:Name="SaveTargetText" />
+                        <lunac:HintText x:Name="SaveTargetText" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button x:Name="SaveButton" Content="Save" Click="OnSaveClick" />
                             <Button x:Name="LoadButton" Content="Load" Click="OnLoadClick" />
@@ -37,7 +38,7 @@
                 </StackPanel>
             </TabItem>
 
-        </luna:Tabs>
+        </lunac:Tabs>
 
         <TextBlock DockPanel.Dock="Top" x:Name="ListHeaderText" FontWeight="Bold" Margin="0,0,0,8" />
 
@@ -48,20 +49,20 @@
                            AutomationProperties.LiveSetting="Polite"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
-                <luna:ButtonBar Grid.Column="1">
+                <lunac:ButtonBar Grid.Column="1">
                     <Button x:Name="ApplyButton" Content="Apply Cheats" Click="OnApplyClick" />
                     <Button x:Name="RemoveButton" Content="Remove" IsEnabled="False" Click="OnRemoveClick" />
                     <Button x:Name="ClearButton" Content="Remove All" Click="OnClearClick" />
                     <Button Content="Close" Click="OnCloseClick" />
-                </luna:ButtonBar>
+                </lunac:ButtonBar>
             </Grid>
         </Border>
 
         <!-- Columns are declared in BuildCheatColumns() - see §4.14a. -->
-        <luna:LunaTable x:TypeArguments="views:CheatRow"
+        <lunac:LunaTable x:TypeArguments="views:CheatRow"
                         x:Name="CheatsList"
                         AutomationProperties.Name="Cheats for this console" />
 
     </DockPanel>
 
-</Window>
+</luna:ToolWindow>

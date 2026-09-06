@@ -162,3 +162,81 @@ It is a `[Theory]` over `null`, `NES` and `SNES` now, and the sabotage turns two
 `GameWindow` is not in the table. It is 888 lines that build a fullscreen surface with a menu, and it has no ordinary tab stops to count; what it needs is a pass of its own against how it behaves during play rather than at rest.
 
 `ToolTip` remains unused across the repository, and no control has an explicit `TabIndex` — tab order follows the visual tree and read correctly in every window measured, so there was nothing to reorder.
+
+---
+
+## 8. The windowing audit, 2026-09-06
+
+*Asked as a question — is EmuSen consuming LunaP for everything window-shaped? —
+and answered by enumerating rather than by reading around.* The method was three
+sweeps: every type in the Avalonia-facing assemblies that derives from `Window`,
+every site that constructs one, and every windowing service the toolkit publishes
+checked against whether anything here calls it.
+
+**Most of it was already consumed, and by name**: `LunaApp.Configure` is the whole
+bootstrap in both frontends, `LunaTheme.axaml` is the one `StyleInclude` in both
+`App.axaml` files, `Dialogs` is every file and folder picker in the tree,
+`WindowSlot<T>` is the at-most-one rule behind eight windows, `ConsolePane` is both
+DianaOS consoles, and `IdleCursor`, `FileDrop`, `PollingWindow` and the settings
+seam were already wired. Nothing in the sweep found a hand-rolled *replacement* for
+a LunaP service.
+
+**What it did find was six windows that never moved onto the base class.** Four in
+Mistress (`InputSettingsWindow`, `ActiveCheatsWindow`, `CheatDatabaseWindow`,
+`RomBrowserWindow`), Hotaru's `GameWindow`, and one that no type declaration can
+show: `FramePresenter` constructs a bare `new Window` in its constructor. All six
+already used LunaP *controls* and the LunaP theme, which is why nothing looked
+wrong from the outside — they were toolkit windows in everything except the type
+they inherited. All six are `ToolWindow` now.
+
+**The conversion is behaviour-preserving, and that rested on a measurement rather
+than on the documentation.** `ToolWindow`'s summary in the package says
+`ClosesOnEscape` is "True by default, which suits a tool window and not a main
+one". It is not: a fresh `ToolWindow` in 0.10.0 reports `False`, and a
+`PreferencesWindow` — a `ToolWindow` since the migration — does not close on
+Escape. Measured both ways before any window was converted, because the opposite
+answer would have made this a behavioural change to five windows at once, and
+`InputSettingsWindow` in particular treats Escape as "cancel this rebind"
+(`EmuSen_Settings_Reference.md` §4.2). Setting the property to `true` does close the
+window, so the feature works and only its default is misdescribed. That is LunaP's
+defect to carry; it is recorded here because a decision here was taken on it.
+
+**The guard is `EmuSen.WiseMan/LunaP/WindowingTests.cs`.** It walks the three
+assemblies' declared types and fails on any `Window` that is not a `ToolWindow`,
+naming the offender and its base class. Reverting `RomBrowserWindow` reddens it
+with `EmuSen.Mistress.RomBrowserWindow derives from Window`, which is the message
+somebody writing a sixth window will get.
+
+**Its blind spot is the case that motivated the second test.** Reflection sees
+declared types, so `new Window { … }` inside a method is invisible to it —
+precisely the shape `FramePresenter` had. `The_frame_presenter_opens_a_LunaP_window`
+covers that one site by reaching for the private field, and covers no other: a new
+construction site somewhere else would pass both tests. A source scan would close
+that, and was not written, so the gap is stated instead.
+
+### 8.1 What the audit deliberately did not change
+
+- **`AppWindow` is still refused**, on `EmuSen_LunaP_Adoption_Gameplan.md` Path E's
+  reasoning, which this audit did not disturb. `ToolWindow` is the thin base;
+  adopting it says nothing about the layout question Path E answered.
+- **No `WindowKey` was added.** Placement memory is opt-in and exactly one window
+  in the tree opts in (`HotkeyHelpWindow`). Turning it on for the rest is a
+  behavioural decision of its own, and `EmuSen_Settings_Reference.md` §4.19 already
+  records the same refusal for `MainWindow` — that a base-class move must not smuggle
+  in a feature is the point being kept here.
+- **`EmuSen.WiseMan` still runs its own copy of the test harness**, per §4.
+
+### 8.2 The one gap that is not a windowing gap
+
+`man theme` tells a user to drop a theme in `/etc/EmuSen/themes` and "pick it in
+Preferences; there is no registration step and no restart". `PreferencesWindow`
+offers three directories and a core, and no theme control. `LunaTheme.Apply` is
+called nowhere in this repository, and `LunaTheme.Available` is read nowhere;
+`LunaApp.Configure` calls `ApplySaved` on the way up, so a theme *is* loaded at
+startup — the name it loads can only be changed by hand-editing `luna.json`.
+
+The toolkit side is complete and the promise is written down; what is missing is a
+dropdown. It is left open here deliberately: this audit moved base classes and
+added no feature, and adding one to close a documentation promise is a separate
+decision with its own tests. Whoever takes it should make `man theme` true rather
+than make it quieter.

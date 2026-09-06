@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using EmuSen.Mistress.Library;
+using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
@@ -19,7 +20,7 @@ namespace EmuSen.Mistress.Views
     // afterward - the idiomatic Avalonia modal-dialog shape, and avoids
     // MainWindow needing to know anything about this window's internal
     // state beyond "what did the user pick, if anything."
-    public partial class RomBrowserWindow : Window
+    public partial class RomBrowserWindow : ToolWindow
     {
         // Parameterless constructor exists only so Avalonia's XAML tooling
         // (previewer, generated InitializeComponent) is happy - always use

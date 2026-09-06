@@ -16,10 +16,11 @@ using EmuSen.Mistress.Input;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Input;
+using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    public partial class InputSettingsWindow : Avalonia.Controls.Window
+    public partial class InputSettingsWindow : ToolWindow
     {
         private readonly ControllerKeyBindings _keyBindings;
         private readonly GamepadBindings _gamepadBindings;

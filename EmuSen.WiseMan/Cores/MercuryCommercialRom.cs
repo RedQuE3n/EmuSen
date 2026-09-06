@@ -4,7 +4,7 @@ using EmuSen.Cores.Nintendo.Mercury;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Shared by the six MercuryCommercialRom*Tests classes - see Mercury_RealCartridges.md and §3.56.
+    // Shared by the seven MercuryCommercialRom*Tests classes - see Mercury_RealCartridges.md and §3.56.
     public static class MercuryCommercialRom
     {
         // Long enough for every ROM tried so far to clear its logo and reach a title screen.

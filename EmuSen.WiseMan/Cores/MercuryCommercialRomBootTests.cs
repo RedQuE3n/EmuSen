@@ -4,7 +4,7 @@ using static EmuSen.WiseMan.Cores.MercuryCommercialRom;
 namespace EmuSen.WiseMan.Cores
 {
     // One theory per class, so xUnit can run the seven cartridges' worth of emulation
-    // in each of these concurrently with the other five - see §3.56.
+    // in each of these concurrently with the other six - see §3.56.
     public class MercuryCommercialRomBootTests
     {
         public static TheoryData<string> Cartridges => Roms;

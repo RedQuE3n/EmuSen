@@ -204,3 +204,51 @@ letter above `$7F`; the exact match is the reason this never became a bug.
   hundred frames past a tapped Start. Nothing has been played.
 - **No SGB.** Several of these images are SGB-enhanced and Mercury ignores that
   entirely.
+
+### 6.2 The scan is a test now
+
+*Added 2026-09-06, after a session that re-derived §6.1 from scratch.* The header
+scan above was run once, by hand, and written down. A written-down measurement
+answers the question it was taken for and nothing later; when "why is Zelda DX in
+black and white" was asked again, the answer was re-measured with a throwaway probe
+rather than read off a passing test. `MercuryCommercialRomColourTests` is that scan
+turned into a standing assertion, so the next person gets it from a test run.
+
+**What it claims** is narrow and in two halves. The mode follows the file's own
+`$0143` — `$80` or `$C0` gives `CoreName == "GBC"`, anything else gives `"GB"` —
+and the mode reaches the frame buffer: a monochrome cartridge draws no pixel whose
+channels differ, a colour one draws at least one that does.
+
+**It reads the byte out of the file itself** rather than asking `Cartridge.Cgb`.
+The claim under test is that the header decides, so taking the header from the
+thing being tested would make it agree with itself; a `Cartridge` that parsed the
+byte wrongly would satisfy a test written that way.
+
+**The colour half looks twice.** A colour cartridge can still be sitting on a
+monochrome logo at `BootFrames`, so the test runs on to `PlayFrames` before it will
+call a grey frame a failure. That is a tolerance, not a measurement: it exists so
+that adding some future colour ROM to `TestRoms` does not produce a failure that
+means only "its logo is white".
+
+**Negative controls.** Two mutations, each reverted:
+
+| Mutation | Result |
+|---|---|
+| `Cartridge.cs` maps `$80` to `CgbSupport.None` | Pokémon Yellow fails on `CoreName`, six monochrome images pass |
+| `WriteColorPixel` writes one channel to all three | Yellow fails with "drew only greys through 900 frames", six pass |
+
+The second is the one worth having. Mode selection is already pinned by
+`MercuryCgbTests` on synthetic ROMs; that a real colour game's palettes actually
+reach the screen was, until now, asserted nowhere — it was a sentence in §5.
+
+**What it still does not cover.** It cannot say the colours are *right*: any single
+non-grey pixel satisfies it, and comparing against hardware is §3's job. The
+monochrome half assumes the four neutral greys of `Mercury_Ppu.md` §6, so a panel
+tint option would have to be handled here rather than silently failing six
+cartridges. And `$C0` remains untested, for the reason §6 already gives — the
+library on this machine holds 1,915 Game Boy images and 17 of them are colour, none
+`$C0`-only.
+
+**Cost**: seven cartridges, up to 900 frames each, about 10 seconds, and it runs
+concurrently with the other six commercial-ROM classes. Nothing is required — the
+`TestRoms` directory is gitignored and an empty one still passes as one empty case.

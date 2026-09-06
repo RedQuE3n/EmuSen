@@ -1,6 +1,7 @@
-<Window xmlns="https://github.com/avaloniaui"
+<luna:ToolWindow xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:luna="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
+        xmlns:luna="clr-namespace:EmuSen.LunaP.Windowing;assembly=EmuSen.LunaP"
+        xmlns:lunac="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         x:Class="EmuSen.Mistress.Views.InputSettingsWindow"
         Title="Controller Settings"
         Width="820" Height="720"
@@ -22,21 +23,21 @@
                            Foreground="{DynamicResource LunaWarning}"
                            TextWrapping="Wrap"
                            VerticalAlignment="Center" />
-                <luna:ButtonBar Grid.Column="1">
+                <lunac:ButtonBar Grid.Column="1">
                     <Button Content="Reset to Defaults" Click="OnResetClick" />
                     <Button Content="Close" Click="OnCloseClick" IsCancel="False" />
-                </luna:ButtonBar>
+                </lunac:ButtonBar>
             </Grid>
         </Border>
 
-        <luna:Tabs x:Name="Tabs">
+        <lunac:Tabs x:Name="Tabs">
 
             <TabItem Header="General">
                 <ScrollViewer>
                     <StackPanel Spacing="4" Margin="0,8,0,0">
 
                         <TextBlock Text="Emulator Hotkeys" FontWeight="Bold" Margin="0,0,0,2" />
-                        <luna:HintText Text="Actions on the emulator itself, shared by every console. Fast Forward and Rewind apply while held; the rest fire once per press."
+                        <lunac:HintText Text="Actions on the emulator itself, shared by every console. Fast Forward and Rewind apply while held; the rest fire once per press."
                                        Margin="0,0,0,6" />
                         <Grid x:Name="HotkeyHeaderRow" Margin="0,0,0,2">
                             <TextBlock Grid.Column="0" Text="Action" FontWeight="SemiBold" />
@@ -48,10 +49,10 @@
 
                         <TextBlock Text="Gamepad" FontWeight="Bold" Margin="0,0,0,6" />
                         <TextBlock x:Name="ControllerStatusText" Margin="0,0,0,8" />
-                        <luna:LunaSwitch x:Name="AnalogStickAsDpadCheckBox"
+                        <lunac:LunaSwitch x:Name="AnalogStickAsDpadCheckBox"
                                   Label="Use the left stick as a d-pad"
                                   IsCheckedChanged="OnAnalogStickAsDpadChanged" />
-                        <luna:HintText Text="Neither of these consoles reads an analog axis, so the stick is only useful mapped onto the d-pad directions."
+                        <lunac:HintText Text="Neither of these consoles reads an analog axis, so the stick is only useful mapped onto the d-pad directions."
                                        Margin="24,2,0,8" />
                         <Grid ColumnDefinitions="Auto,240,Auto" Margin="24,0,0,0">
                             <TextBlock Grid.Column="0" Text="Stick deadzone" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -71,16 +72,16 @@
                                     ValueChanged="OnDeadzoneChanged" />
                             <TextBlock Grid.Column="2" x:Name="DeadzoneText" VerticalAlignment="Center" Margin="10,0,0,0" />
                         </Grid>
-                        <luna:HintText Text="How far the stick must travel before it counts as a direction. Raise it if your stick drifts."
+                        <lunac:HintText Text="How far the stick must travel before it counts as a direction. Raise it if your stick drifts."
                                        Margin="24,2,0,0" />
 
                         <Separator Margin="0,14,0,10" />
 
                         <TextBlock Text="Player 2" FontWeight="Bold" Margin="0,0,0,6" />
-                        <luna:LunaSwitch x:Name="MirrorPlayer1ToPlayer2CheckBox"
+                        <lunac:LunaSwitch x:Name="MirrorPlayer1ToPlayer2CheckBox"
                                   Label="Mirror Player 1 input to Player 2"
                                   IsCheckedChanged="OnMirrorPlayer1ToPlayer2Changed" />
-                        <luna:HintText Text="Compatibility option for games that read Controller 2 instead of Controller 1 (e.g. Super Mario All-Stars' classic Mario games). Leave off for real two-player sessions."
+                        <lunac:HintText Text="Compatibility option for games that read Controller 2 instead of Controller 1 (e.g. Super Mario All-Stars' classic Mario games). Leave off for real two-player sessions."
                                        Margin="24,2,0,0" />
 
                     </StackPanel>
@@ -89,8 +90,8 @@
 
             <!-- Console tabs are appended here by BuildConsoleTabs, so a new core needs no XAML. -->
 
-        </luna:Tabs>
+        </lunac:Tabs>
 
     </DockPanel>
 
-</Window>
+</luna:ToolWindow>

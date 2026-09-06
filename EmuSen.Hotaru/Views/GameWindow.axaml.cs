@@ -32,7 +32,7 @@ using EmuSen.Audio;
 namespace EmuSen.Hotaru.Views
 {
     // Hotaru's game window and its three threads - see EmuSen_Frontend_Driver.md §1, §2 and §3f.
-    public partial class GameWindow : Window, ILiveShell
+    public partial class GameWindow : ToolWindow, ILiveShell
     {
         private readonly ICore _core;
 

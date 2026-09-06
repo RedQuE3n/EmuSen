@@ -610,3 +610,63 @@ On the game screen that element is the menu bar, because it is the only focusabl
 **Regression coverage**: `MainWindowLibraryTests.Start_presses_the_pad_instead_of_opening_the_focused_menu` and `The_d_pad_does_not_walk_the_menu_strip`, which focus the real `_File` item the `MenuBar` built and then press pad keys. Both fail against the unmodified build — `Right` moved the strip's selection onto `_Emulation`, and `Right` then `Enter` left a submenu open — and both pass with the line added, with the other 179 Mistress tests unchanged.
 
 This retires half of a prediction §4.2 recorded. That section says the arrow-key half of its problem "does **not** reproduce headlessly, since headless has no real focus-navigation pass". True of the focus manager's directional navigation, and it is still not measured here. The menu strip's own key handling is not that pass — it is ordinary routed-event handling on a focused control — so the visible consequence of an unclaimed arrow key does reproduce headlessly, and is now measured.
+
+### 4.25 The theme picker, and the promise it closes
+
+*Added 2026-09-06, out of the windowing audit (`EmuSen_LunaP.md` §8).* `man theme`
+has told users to drop a theme in `/etc/EmuSen/themes` and "pick it in Preferences;
+there is no registration step and no restart" for as long as themes have existed.
+`PreferencesWindow` offered three directories and a core. `LunaTheme.Apply` was
+called nowhere in this repository and `LunaTheme.Available` was read nowhere, so the
+only way to change theme was to hand-edit `luna.json` — `LunaApp.Configure` calls
+`ApplySaved` on the way up, which is why the feature nevertheless *worked* for
+anyone who knew that.
+
+**What it is**: a `Dropdown` in a `FieldRow` labelled Theme, filled from
+`LunaTheme.Available()` — the built-in first, then each theme file by name without
+its extension — and selected on `LunaTheme.Current`. Choosing calls
+`LunaTheme.Apply`, which persists the choice itself; nothing here writes
+`luna.json`.
+
+**A theme that will not parse must not leave the row lying.** `Apply` returns false
+and leaves `Current` untouched, by design, so that a bad file cannot leave the
+application unstyled. The handler re-fills the row from `Current` on false, because
+a dropdown reading "broken" over a window still drawn in the old theme is a worse
+failure than the one it is reporting. The diagnostic itself goes to
+`ConfigDiagnostics` through the `LunaSettings.Diagnostics` seam `Program.cs`
+already sets (`EmuSen_LunaP.md` §3).
+
+**"No restart" is measured, not assumed.** `A_chosen_theme_reaches_a_window_that_was_already_open`
+opens a window, chooses a theme in another, and asserts the first window's
+`Background` moves from `#ff1e1e1e` to the new theme's `#ff101018`. The palette is
+bound with `DynamicResource` throughout, so this was expected to work; the man page
+makes the claim to users, which is the reason it is pinned rather than reasoned.
+
+**The core row became a `Dropdown` too, and that deleted something.** It was a bare
+`ComboBox` with an `_initializing` flag guarding against the spurious
+`SelectionChanged` that setting `ItemsSource` raises. `Dropdown.Fill` restores a
+selection *without* raising `Chose`, which is that flag's entire job done by the
+toolkit. The flag, the field and the `SelectionChanged` handler are gone; the
+control is still named `CoreComboBox` and `Dropdown` derives from `ComboBox`, so
+nothing looking for it by type or name had to change.
+
+**Test coverage** is `EmuSen.WiseMan/Mistress/PreferencesThemeTests.cs`, four tests,
+all four red against the build before this one. Removing only the re-fill on a
+failed apply reddens exactly `A_theme_that_will_not_load_leaves_the_applied_one_alone`
+and nothing else.
+
+**A finding about the harness, recorded because the first version of these tests was
+wrong.** `LunaSettings.Store` is process-global and documented "set it once at
+startup". Giving each test its own store — the reflex, and what every other window
+test here does with `ConfigStore.OverrideDirectory` — makes `LunaTheme.Saved` report
+the *first* store's value while `LunaTheme.Current` reports the new one, so a test
+that passed alone failed after a sibling. That is the toolkit's contract being kept,
+not broken: the remembered choice is read through the store LunaP first saw. The
+tests take one store for the class through an `IClassFixture` and clear the themes
+folder per test instead.
+
+**What is not covered.** No test asserts rendered *pixels* change, only the resolved
+brush. Only the `.css` theme form is exercised; the `.axaml` form is untested here
+and is LunaP's own to cover. And nothing offers to open the themes folder, so the
+first theme a user installs still requires knowing where it goes — which is what
+`man theme` is for.

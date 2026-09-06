@@ -9,6 +9,7 @@ using EmuSen.WiseMan.LunaP;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Models;
@@ -376,6 +377,61 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(LibraryView(window).IsVisible);
             Assert.False(GameFrame(window).IsVisible);
             Assert.Equal("No ROM loaded", window.GetControl<TextBlock>("StatusText").Text);
+        }, default);
+
+        private static MenuItem TopMenu(MainWindow w, string header) =>
+            w.GetControl<EmuSen.LunaP.Controls.MenuBar>("MenuStrip")
+                .GetVisualDescendants().OfType<MenuItem>().First(i => (i.Header as string) == header);
+
+        // The menu bar is the only focusable control on the game screen - see EmuSen_Settings_Reference.md §4.2.
+        [Fact]
+        public Task Start_presses_the_pad_instead_of_opening_the_focused_menu() => Session.Dispatch(() =>
+        {
+            WriteRom("Playable.smc");
+            ConfigureRomDirectory(_romDir);
+
+            var window = new MainWindow();
+            window.Show();
+            LibraryList(window).SelectedIndex = 0;
+            Invoke(window, "LaunchSelectedLibraryEntry");
+            MenuItem file = TopMenu(window, "_File");
+            file.Focus();
+
+            // The sequence anyone playing produces: d-pad along the strip, then Start.
+            Press(window, Key.Right, PhysicalKey.ArrowRight);
+            Press(window, Key.Enter, PhysicalKey.Enter);
+
+            Assert.True(KeyboardHeld(window)[(int)PadButton.Start]);
+            Assert.DoesNotContain(
+                window.GetControl<EmuSen.LunaP.Controls.MenuBar>("MenuStrip").GetVisualDescendants().OfType<MenuItem>(),
+                i => i.IsSubMenuOpen);
+
+            window.Close();
+        }, default);
+
+        // The same key on the same focus, one menu to the right - the d-pad must not walk the strip.
+        [Fact]
+        public Task The_d_pad_does_not_walk_the_menu_strip() => Session.Dispatch(() =>
+        {
+            WriteRom("Playable.smc");
+            ConfigureRomDirectory(_romDir);
+
+            var window = new MainWindow();
+            window.Show();
+            LibraryList(window).SelectedIndex = 0;
+            Invoke(window, "LaunchSelectedLibraryEntry");
+            MenuItem file = TopMenu(window, "_File");
+            file.Focus();
+
+            Press(window, Key.Right, PhysicalKey.ArrowRight);
+            Press(window, Key.Down, PhysicalKey.ArrowDown);
+
+            Assert.True(KeyboardHeld(window)[(int)PadButton.Right]);
+            Assert.True(KeyboardHeld(window)[(int)PadButton.Down]);
+            Assert.False(TopMenu(window, "_Emulation").IsSelected);
+            Assert.False(file.IsSubMenuOpen);
+
+            window.Close();
         }, default);
 
         private static TextBlock Hint(MainWindow w) => w.GetControl<TextBlock>("LibraryHintText");

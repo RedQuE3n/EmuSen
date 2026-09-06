@@ -236,7 +236,19 @@ called nowhere in this repository, and `LunaTheme.Available` is read nowhere;
 startup — the name it loads can only be changed by hand-editing `luna.json`.
 
 The toolkit side is complete and the promise is written down; what is missing is a
-dropdown. It is left open here deliberately: this audit moved base classes and
-added no feature, and adding one to close a documentation promise is a separate
-decision with its own tests. Whoever takes it should make `man theme` true rather
-than make it quieter.
+dropdown.
+
+*Closed the same day, on the instruction to make `man theme` true rather than make
+it quieter.* `PreferencesWindow` has a Theme row now, filled from
+`LunaTheme.Available()` and applying through `LunaTheme.Apply`, and the core row
+became a `Dropdown` in the same pass — `Fill` restoring a selection without raising
+`Chose` is what its hand-written `_initializing` flag existed to do.
+`EmuSen_Settings_Reference.md` §4.25 carries it, including the harness finding it
+produced: `LunaSettings.Store` is process-global by contract, and a test that gives
+each case its own store reads the *first* store's remembered choice back.
+
+The prediction this section made — that closing it was "a separate decision with its
+own tests" — was right about the tests and wrong about the separation. It cost four
+tests and a net deletion, which is what the audit's own §8.1 rule about not
+smuggling features would have refused as a rider and was correct to ask for
+separately.

@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Fluent;
+using EmuSen.LunaP.Theme;
 using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
@@ -16,8 +17,8 @@ namespace EmuSen.Mistress.Views
             EmuSen.Cores.CoreCatalog.Cores.Select(c => c.DisplayName).ToArray();
 
         private readonly AppSettings _settings;
-        private readonly ComboBox _core = new() { Name = "CoreComboBox", HorizontalAlignment = HorizontalAlignment.Stretch };
-        private bool _initializing;
+        private readonly Dropdown _core = new() { Name = "CoreComboBox", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly Dropdown _theme = new() { Name = "ThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public PreferencesWindow() : this(new AppSettings()) { }
@@ -66,13 +67,20 @@ namespace EmuSen.Mistress.Views
                     Hint = "Only one core exists today - this is scaffolding for when a second one does.",
                     Content = _core,
                 },
+                new FieldRow
+                {
+                    Label = "Theme",
+                    Hint = "Colours and fonts for every window. Drop a theme file in the themes folder and it appears here; a change applies without a restart.",
+                    Content = _theme,
+                },
                 Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0)).Margin(16);
 
-            _initializing = true;
-            _core.ItemsSource = AvailableCores;
-            _core.SelectedIndex = System.Math.Max(0, System.Array.IndexOf(AvailableCores, _settings.SelectedCore));
-            _core.SelectionChanged += OnCoreSelectionChanged;
-            _initializing = false;
+            // Fill restores a selection without reporting one, which is what the old spurious-event flag was for.
+            _core.Fill(AvailableCores, AvailableCores.Contains(_settings.SelectedCore) ? _settings.SelectedCore : AvailableCores[0]);
+            _core.Chose += ChoseCore;
+
+            _theme.Fill(LunaTheme.Available(), LunaTheme.Current);
+            _theme.Chose += ChoseTheme;
         }
 
         // Saves immediately on every change rather than needing a Save button - there is nothing here worth staging and discarding.
@@ -95,14 +103,19 @@ namespace EmuSen.Mistress.Views
             return picker;
         }
 
-        private void OnCoreSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        private void ChoseCore(object? chosen)
         {
-            // Fires once as a side effect of setting ItemsSource/SelectedIndex above; skip that spurious event.
-            if (_initializing) return;
-            if (_core.SelectedItem is not string selected) return;
+            if (chosen is not string selected) return;
 
             _settings.SelectedCore = selected;
             _settings.Save();
+        }
+
+        // A theme that will not load leaves the old one applied, so the row has to go back to it - see EmuSen_Settings_Reference.md §4.25.
+        private void ChoseTheme(object? chosen)
+        {
+            if (chosen is not string name) return;
+            if (!LunaTheme.Apply(name)) _theme.Fill(LunaTheme.Available(), LunaTheme.Current);
         }
     }
 }

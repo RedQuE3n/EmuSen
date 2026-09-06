@@ -217,6 +217,8 @@ namespace EmuSen.Mistress.Views
             {
                 _keyboardHeld[(int)button] = pressed;
                 ApplyButtonState(button);
+                // Or the menu bar, the only focusable control here, also gets the key - see EmuSen_Settings_Reference.md §4.24.
+                e.Handled = true;
                 return;
             }
 

@@ -27,8 +27,9 @@ One page per piece of hardware being abstracted, rather than the long inline `//
   - [`Moon_PPU.md`](Nintendo/Moon%20-%20NES/Moon_PPU.md) — 2C02: the loopy `v`/`t`/`x`/`w` registers, the `$2007` read buffer, palette holes, background and sprite composition, sprite 0 hit.
   - [`Moon_APU.md`](Nintendo/Moon%20-%20NES/Moon_APU.md) — the register surface, length counters and frame IRQ that are modelled, and the synthesis that is not.
   - [`Moon_Debug.md`](Nintendo/Moon%20-%20NES/Moon_Debug.md) — `IDebugTarget`'s second implementation: memory spaces, registers, tile/tilemap decoders, the disassembler, and what that second implementation proved.
-- `Mercury - GB-GBC/` — CPU, memory and cartridge documented; no PPU or APU yet.
-- `Jupiter - GBA/`, `Mars - N64/`, `Saturn - Virtual Boy/`, `Uranus - GameCube/`, `Neptune - Wii/`, `Pluto - Wii U/`, `Luna - DS/`, `Artemis - 3DS-New3DS/` — stubs, not started yet.
+- [`Mercury - GB-GBC/`](Nintendo/Mercury%20-%20GB-GBC/) — **complete** (CPU/PPU/APU/memory/colour/cartridge, plus the hardware-test and real-cartridge records). This line read "CPU, memory and cartridge documented; no PPU or APU yet" until 2026-09-15, which stopped being true on 2026-08-09; `Mercury_Gameplan.md` §1 is the current state and this index was simply not updated with it.
+- [`Mars - N64/`](Nintendo/Mars%20-%20N64/) — **planned, no code.** [`Mars_Gameplan.md`](Nintendo/Mars%20-%20N64/Mars_Gameplan.md) is the construction plan: the LLE-versus-HLE decision and its reopening condition, the oracle question answered before Phase A, seven phases with what proves each one done, and (§8) where the plan expects to be wrong. The only core whose plan predates its first line of code.
+- `Jupiter - GBA/`, `Saturn - Virtual Boy/`, `Uranus - GameCube/`, `Neptune - Wii/`, `Pluto - Wii U/`, `Luna - DS/`, `Artemis - 3DS-New3DS/` — stubs, not started yet.
 
 ## Sega
 

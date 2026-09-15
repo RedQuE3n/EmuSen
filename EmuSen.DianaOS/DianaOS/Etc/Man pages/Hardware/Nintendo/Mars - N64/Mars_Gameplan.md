@@ -125,7 +125,16 @@ The N64 has a richer answer and a harder one.
    emulator's running machine, which §2.1's own argument says is agreement rather
    than correctness. It is still worth having for bisecting a divergence to a frame.
 
-**The prerequisite this rests on, and it is unverified.** The Game Boy corpus was
+> **Resolved 2026-09-15, and the answer is yes.** The paragraph below was the
+> plan's largest unknown; it has been checked against the corpus's own source and
+> `Mars_TestOracle.md` replaces it. The text channel exists, the phase order stands,
+> and the cost of admission turned out to be four specific behaviours Mars must have
+> before the ROM will say anything — two of which fail *silently* if got wrong
+> (`Mars_TestOracle.md` §2.2, §2.3). The corpus also moved repository, and it grades
+> Phases A–C only: D and E get nothing from it, and §5 there records that the RDP has
+> no hardware-grounded oracle anywhere.
+
+**The prerequisite this rested on, and it was unverified.** The Game Boy corpus was
 readable headlessly because the hardware has a serial port and the ROMs write their
 verdict to it. The N64 has no equivalent *by default*: its test ROMs render results
 to the framebuffer, and the channel they also log through is the ISViewer debug
@@ -150,8 +159,10 @@ G are terminal.
 
 No emulation at all. What this phase produces is the ability to grade the next one.
 
-- Verify the §3 output-channel claim against a real `n64-systemtest` build, and
-  record the answer here whichever way it goes.
+- ~~Verify the §3 output-channel claim~~ — **done 2026-09-15**, before any other
+  Phase 0 work, and the answer is in `Mars_TestOracle.md`. What it leaves for this
+  phase is the ROM's discovery path and the four admission requirements in its §3,
+  which belong to Phase A's memory map rather than here.
 - ROM image handling: the three container formats (`.z64` big-endian, `.n64`
   byte-swapped words, `.v64` byte-swapped halfwords) normalised to one internal
   order at load, and the header parsed — entry point, the two CRCs, the region and
@@ -175,6 +186,11 @@ model, COP0 (`Count`/`Compare`, `Status`, `Cause`, `EPC`), and the 32-entry TLB.
 Alongside it the physical memory map: RDRAM, the RSP's DMEM and IMEM as plain
 memory, the MMIO register blocks stubbed to sane reads, and PI DMA from the
 cartridge.
+
+**Four behaviours are the cost of admission to being graded at all**, and belong to
+this phase's memory map: a *readable* ISViewer region, COP0 CO `funct` `0x20`–`0x3F`
+as no-ops, and three RDRAM/SP DMA edge cases the corpus's bootstrap depends on. Two
+of them fail silently. `Mars_TestOracle.md` §3.
 
 **Boot is HLE, deliberately.** The real sequence runs the PIF ROM, which performs a
 CIC challenge-response with the cartridge's security chip before IPL3 — copied from

@@ -62,6 +62,14 @@ rules turn out not to be recoverable to pixel-exactness from the available
 references, then an LLE RDP cannot be graded, and an ungradeable LLE RDP has lost
 its only advantage over an HLE one.
 
+**Supporting evidence arrived after this was decided**, and is recorded because it
+was not what the decision rested on: the two mature non-LLE cores each carry a
+per-title database of 1,587 and 3,292 entries, including per-game multipliers on
+how fast the CPU's counter advances. An emulator that models the machine does not
+need to be told about the game. `Mars_References.md` §5.1 has the counts, and the
+standing test is that a per-game timing knob appearing in Mars means a piece of the
+machine was never modelled.
+
 ### 2.2 Correctness first; speed is Phase G
 
 Mars will not run at full speed on the low-end laptop that
@@ -105,7 +113,10 @@ The N64 has a richer answer and a harder one.
    because the RDP's output is a framebuffer rather than a verdict. The reference
    the emulation community treats as ground truth is angrylion's software
    rasterizer. A per-primitive pixel diff against it is what "the RDP is correct"
-   has to mean.
+   has to mean. **The mechanism is now specific**: angrylion exposes a
+   command-stream dump — commands, main and hidden DRAM, VI registers, frame
+   boundaries — so the differential is the same stream into two rasterizers rather
+   than two emulators run side by side. `Mars_References.md` §4.
 3. **A full-system reference through the existing probe.** `Reference/probe-rs/`
    already has a libretro backend that drives any core, and its
    `system_from_rom` is a small extension table — adding the N64's three extensions
@@ -191,6 +202,11 @@ MIPS III floating point in both precisions, all four rounding modes, the FCSR fl
 and enable bits, and the VR4300's specific answers for the operations the
 architecture leaves to the implementation — denormal handling and the
 unimplemented-operation exception among them.
+
+**Started as a software implementation with explicit rounding, not as C# `double`
+with care taken.** Project64 began with host floating point and had to convert its
+interpreter to a soft-float library afterwards, having chased the divergences in
+between — `Mars_References.md` §5.2.
 
 Separate from A because it is separately gradeable and because its bugs are silent:
 an FPU that is wrong in the last bit produces a game that looks right and drifts,
@@ -285,7 +301,14 @@ one is not uniform.
 - **Timing that is not the CPU's.** DMA durations, VI half-line timing, and
   `Count`'s rate relative to the CPU clock. Games busy-wait on these.
 - **Save-type detection**, which has no header field and is conventionally a
-  per-title database — an honesty problem as much as a technical one.
+  per-title database — an honesty problem as much as a technical one. Confirmed
+  from primary sources: two independent emulators each ship one, and Project64's
+  own documentation states outright that 4 kbit and 16 kbit EEPROM cannot be told
+  apart by observation. `Mars_References.md` §5.1.
+- **`Count` bookkeeping spread across the opcodes.** A leak with twenty years of
+  evidence behind it in another project's commit log; whatever advances the counter
+  in Mars has to be something an opcode or an exception path cannot forget to call
+  — `Mars_References.md` §5.3.
 
 ## 6. Deferred, each with the condition that reopens it
 

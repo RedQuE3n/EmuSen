@@ -86,6 +86,10 @@ namespace EmuSen.Cores.Nintendo.Moon.Debug
         public FrameLogRegistry FrameLog => _core.FrameLog;
         public BreakpointRegistry Breakpoints => _core.Breakpoints;
         public CheatRegistry Cheats => _core.Cheats;
+
+        // The Apply button, which must not wait for a frame the pause is not running - see EmuSen_Cheats.md §6.
+        public void ApplyCheats() => _core.ApplyCheats();
+
         public CoverageRegistry? Coverage => _core.Coverage;
         public LabelRegistry? Labels => _core.Labels;
 

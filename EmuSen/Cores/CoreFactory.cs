@@ -50,6 +50,9 @@ namespace EmuSen.Cores
         public static CoreBundle Bundle(ICore core, CheatRegistry? cheats = null,
             Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null)
         {
+            // A core owning its registry takes the caller's, so both sides edit one object - see EmuSen_Cheats.md §6.
+            if (cheats is not null && core is ICheatRegistryHost host) host.Cheats = cheats;
+
             switch (core)
             {
                 case VenusCore venus:

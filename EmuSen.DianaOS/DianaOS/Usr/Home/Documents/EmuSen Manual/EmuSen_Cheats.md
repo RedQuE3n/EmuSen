@@ -42,12 +42,13 @@ RAM pokes are re-applied at every frame boundary — `CheatRegistry.ApplyAll` wi
 
 ROM patches are a **read intercept**, not a write: `IRomReadPatcher.TryPatch` is consulted on every cartridge-routed read and the underlying ROM byte is never touched. That is what the hardware did, and it is why disabling a patch restores the original byte with no bookkeeping.
 
-The two cores install that hook in different places, and the difference is deliberate:
+The cores install that hook in different places, and the difference is deliberate:
 
 - **Venus** installs it from `SnesDebugTarget`, which owns the registry. ROM patches therefore need a debug target to exist.
 - **Moon** installs it from `MoonCore` itself (`CheatRomPatcher`), because the core owns its own `CheatRegistry`. Cheats work with no debug layer attached at all.
+- **Mercury** follows Moon, for the same reason and in the same line of `LoadRom`.
 
-Moon's arrangement is the better one and is where Venus should end up; it was not changed at the same time because moving Venus's registry ownership is a larger edit than adding a second core's.
+Moon's arrangement is the better one and is where Venus should end up; it was not changed at the same time because moving Venus's registry ownership is a larger edit than adding a second core's. §6 is the bill for having two arrangements.
 
 ## 5. Not done
 
@@ -55,6 +56,22 @@ Moon's arrangement is the better one and is where Venus should end up; it was no
 - **No Pro Action Rocky codec.** The NES equivalent of Action Replay is a real encrypted 8-hex-digit format (Mesen's `ConvertFromNesProActionRocky` has the key and shift table). There are only two codec slots and Game Genie earns the explicit one, so this needs the slots to become a list first.
 - **The cheat device ROMs themselves.** A real Game Genie was a passthrough cartridge with its own ROM and code-entry screen. Booting one and handing off to the game is a separate feature — see `Moon_Cheats.md` §5.
 
+
+## 6. Fixed bug: the registry a frontend handed over was not the one the core read
+
+*2026-09-06, reported as "I was playing Super Mario Land 2 and none of the cheats I used worked".* Every cheat added in Mistress on a Game Boy or NES game went into an object the core never looked at. Both mechanisms were dead at once: ROM patches were never intercepted and RAM pokes were never applied, which is why the symptom was total rather than partial.
+
+**The seam had two owners and only one wire.** Mistress owns a `CheatRegistry`, because its cheat windows exist before any ROM does and its saved cheat lists are restored per game. It hands that registry to `EmulatorSession`, which passes it to `CoreFactory.Load`. `Bundle` gave it to `SnesDebugTarget`'s constructor — and dropped it on the floor for `MercuryCore` and `MoonCore`, each of which constructs its own registry and applies *that* one, both at the ROM read intercept and at the frame boundary. `EmulatorSession.Cheats` even carries the comment "set by the frontend before LoadRom so the debug target shares its registry". It was true of exactly one core.
+
+**Why the tests did not catch it, which is the more useful half.** Every piece was covered and every piece was correct. `MoonCheatTests` drives `_core.Cheats` directly and passes. The codecs have their own decode tests. `CheatRegistry` has its own. What nothing asserted was the **identity** of the registry across the seam — that the object handed in is the object read out — which is the one property a seam exists to provide. A test can cover both sides of a join and still not cover the join.
+
+**The fix is `ICheatRegistryHost`**: a core that owns its registry exposes it settable, plus the `ApplyCheats()` it already ran every frame. `Bundle` assigns the caller's registry to any core implementing it, so a third core wired the same way inherits the behaviour instead of the bug. The setter re-installs `CheatRomPatcher` when a bus already exists, because the patcher captures the registry during `LoadRom` and `Load` bundles afterwards; without that the pokes would have started working and the patches would not, which is a worse failure than either. Venus is untouched — its registry lives in the debug target, which always took the parameter.
+
+**A second, smaller hole in the same report.** `IDebugTarget.ApplyCheats` is a default interface method with an empty body. Venus overrode it; Mercury and Moon did not. Mistress's Apply button (`EmuSen_Settings_Reference.md` §4.15) calls it directly while paused, so even after the registries were shared, applying a cheat to a paused Game Boy game would have done nothing until the next unpause. Both targets now forward to the core method the frame boundary already called, so there is one implementation reached from two places rather than two implementations that can disagree.
+
+**Coverage**: `EmuSen.WiseMan/Cores/CoreFactoryCheatWiringTests.cs`, seven tests, built to the report's shape rather than the fix's. Against the unfixed build six fail and only the SNES control passes — a per-core split that is what "none of my cheats worked, and it is not the codec" looks like from the outside. The six include both paused-apply tests, which cannot separate the two holes on the old build: an unshared registry fails them before the missing forward is reached. Removing only Mercury's forward from the fixed build is what separates them, and it reddens exactly the Game Boy paused-apply test. *(An earlier draft of this paragraph named only three of the six; re-measured 2026-09-15.)*
+
+**What this does not reach.** The emulation thread is not driven by a test; coverage stops at `EmulatorSession`, one call below `MainWindow`. §5's list is unchanged — `.cht` import still cannot produce ROM patches, and a database of Game Genie codes still imports as pokes at ROM addresses, which is a *different* way for a Game Boy cheat to do nothing and the next thing to look at if one still does.
 
 ## The two combinations `AddCheat` refuses
 

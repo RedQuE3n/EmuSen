@@ -88,3 +88,13 @@ Eight hex digits, `TTVVAAAA`:
   registry to carry a per-code bank the interface has no field for.
 - **No Game Genie code validation beyond length.** A code with the wrong check
   digit decodes anyway (§2).
+
+## 5. Where the registry comes from
+
+`MercuryCore` owns its `CheatRegistry` and installs the ROM read intercept from
+`LoadRom`, following Moon rather than Venus (`EmuSen_Cheats.md` §4). Until
+2026-09-06 that registry was also *all* it would ever use: a frontend handing one
+to `CoreFactory` had it dropped, so cheats typed into Mistress never reached a
+Game Boy game at all. The core now takes the caller's registry through
+`ICheatRegistryHost`, and `EmuSen_Cheats.md` §6 carries the defect, the reason
+every individual piece of it tested green, and what is still not covered.

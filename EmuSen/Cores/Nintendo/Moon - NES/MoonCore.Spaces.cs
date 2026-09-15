@@ -93,6 +93,9 @@ namespace EmuSen.Cores.Nintendo.Moon
             return value;
         }
 
+        // Public so a paused frontend need not wait for a frame boundary - see EmuSen_Cheats.md §6.
+        public void ApplyCheats() => Cheats.ApplyAll(ReadForCheat, WriteForCheat);
+
         private byte ReadForCheat(string spaceName, int address) => ReadSpace(spaceName, address);
 
         private void WriteForCheat(string spaceName, int address, byte value) => WriteSpace(spaceName, address, value);

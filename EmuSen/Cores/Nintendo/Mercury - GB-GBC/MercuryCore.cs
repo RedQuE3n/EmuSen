@@ -10,7 +10,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.Mercury
 {
     // The Game Boy's ICore implementation; colour is an additive mode on this same core - see Mercury_Core.md §1.
-    public sealed partial class MercuryCore : global::EmuSen.Cores.ICore
+    public sealed partial class MercuryCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ICheatRegistryHost
     {
         public const int CpuClockHz = 4194304;
 
@@ -33,7 +33,18 @@ namespace EmuSen.Cores.Nintendo.Mercury
         public WatchRegistry Watches { get; } = new();
         public FrameLogRegistry FrameLog { get; } = new();
         public BreakpointRegistry Breakpoints { get; } = new();
-        public CheatRegistry Cheats { get; } = new();
+        private CheatRegistry _cheats = new();
+
+        // Settable so the registry a frontend already fills becomes this core's own - see EmuSen_Cheats.md §6.
+        public CheatRegistry Cheats
+        {
+            get => _cheats;
+            set
+            {
+                _cheats = value;
+                if (Bus is not null) Bus.RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(value);
+            }
+        }
         public CoverageRegistry Coverage { get; } = new();
         public LabelRegistry Labels { get; } = new();
 
@@ -160,10 +171,13 @@ namespace EmuSen.Cores.Nintendo.Mercury
             TotalFrames++;
 
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
-            Cheats.ApplyAll(ReadForCheat, WriteForCheat);
+            ApplyCheats();
 
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
         }
+
+        // Public so a paused frontend need not wait for a frame boundary - see EmuSen_Cheats.md §6.
+        public void ApplyCheats() => Cheats.ApplyAll(ReadForCheat, WriteForCheat);
 
         public byte[] GetFrameBufferRgba() => Bus?.Ppu.FrameRgba ?? _frame;
 

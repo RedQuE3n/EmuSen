@@ -14,7 +14,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.Moon
 {
     // The NES's ICore implementation; the hardware is public beyond the interface - see Moon_Core.md §1.
-    public partial class MoonCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.IFrameProfiler
+    public partial class MoonCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.IFrameProfiler, global::EmuSen.Cores.ICheatRegistryHost
     {
         public const int MasterClockHz = 21477272;
         public const int MasterClocksPerCpuCycle = 12;
@@ -39,7 +39,18 @@ namespace EmuSen.Cores.Nintendo.Moon
         public WatchRegistry Watches { get; } = new();
         public FrameLogRegistry FrameLog { get; } = new();
         public BreakpointRegistry Breakpoints { get; } = new();
-        public CheatRegistry Cheats { get; } = new();
+        private CheatRegistry _cheats = new();
+
+        // Settable so the registry a frontend already fills becomes this core's own - see EmuSen_Cheats.md §6.
+        public CheatRegistry Cheats
+        {
+            get => _cheats;
+            set
+            {
+                _cheats = value;
+                if (Bus is not null) Bus.RomPatcher = new CheatRomPatcher(value);
+            }
+        }
         public CoverageRegistry Coverage { get; } = new();
         public LabelRegistry Labels { get; } = new();
 

@@ -66,7 +66,7 @@ namespace EmuSen.Cores.Nintendo.Moon
             _ppuTicksAccum = 0;
 
             FrameLog.RecordFrame(TotalFrames, ReadForFrameLog);
-            Cheats.ApplyAll(ReadForCheat, WriteForCheat);
+            ApplyCheats();
 
             if (TotalFrames % SaveEveryNFrames == 0) Cart!.SaveSram();
 

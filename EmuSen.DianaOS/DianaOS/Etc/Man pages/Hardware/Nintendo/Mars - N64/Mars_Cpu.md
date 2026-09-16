@@ -75,10 +75,10 @@ belief.
 
 ### 4.1 Raised, and now delivered
 
-Vectoring landed in the slice after this one; §9 is what an exception does to the
+Vectoring landed in the slice after this one; §11 is what an exception does to the
 machine. `LastException` survives as a diagnostic rather than a control signal — it
 records the most recent raise and is never cleared, and execution continues into the
-handler rather than stopping, which is what let the round-trip test in §9.3 exist.
+handler rather than stopping, which is what let the round-trip test in §11.3 exist.
 
 ## 5. Cycles: documented numbers only
 
@@ -151,13 +151,13 @@ merging is pinned rather than incidental.
 ## 8. What is not implemented yet
 
 - ~~The TLB~~ — landed, `Mars_Tlb.md`. Three of five segments now translate, and the
-  refill-versus-invalid distinction §9.1 could not previously express is carried on
+  refill-versus-invalid distinction §11.1 could not previously express is carried on
   the exception itself.
 - **COP1**, which is Phase B.
 - **Software interrupts**, the two bits a program raises itself, are storage with
   nothing behind them.
 - **Every interrupt source except the counter and the peripheral interface.** The
-  aggregator has six inputs and two are wired (§10).
+  aggregator has six inputs and two are wired (§12).
 
 ## 9. Coprocessor zero, minimally
 
@@ -185,7 +185,7 @@ the instruction semantics rather than by adjusting the core, and they are record
 here because "the test was wrong" is the outcome this project's tests exist to make
 visible.
 
-## 9. What an exception does
+## 11. What an exception does
 
 In order: save the return address, record the cause, raise the exception level, and
 jump to a handler.
@@ -202,7 +202,7 @@ the delay slot — which means `Pc` is the wrong answer for "where did this faul
 happen". `CurrentPc` is the right one, and an exception that used `Pc` would return
 one instruction too far, every time, invisibly.
 
-### 9.1 Two doors
+### 11.1 Two doors
 
 A TLB refill arriving from ordinary execution gets its own vector; everything else,
 including a refill that happens *while already handling an exception*, uses the
@@ -215,13 +215,13 @@ what the machine uses before RAM is trustworthy. All three paths are tested.
 Mars has no TLB, so every mapped-segment access faults as a refill. That is the
 correct behaviour for a machine whose TLB is empty rather than a placeholder.
 
-### 9.2 A fault inside a handler keeps the first return address
+### 11.2 A fault inside a handler keeps the first return address
 
 The saved address and the delay-slot flag are written only when the exception level
 was clear. Overwriting them would destroy the outer handler's way home, which is the
 difference between a nested fault being survivable and being fatal.
 
-### 9.3 The round trip
+### 11.3 The round trip
 
 The return instruction restores the program counter from the saved address and drops
 the exception level, with no delay slot of its own. A test runs the whole circuit: a
@@ -229,7 +229,7 @@ system call faults, a handler at the vector records that it ran, steps the saved
 address past the faulting instruction, returns — and the instruction after the fault
 then executes normally.
 
-## 10. Interrupts
+## 12. Interrupts
 
 Two sources reach this core today. The RCP's aggregator drives one line and is
 **level-triggered** — read afresh every step, so clearing the device that raised it
@@ -245,9 +245,9 @@ was entered to service, forever.
 The check happens **before the instruction is fetched**, so the saved address is the
 instruction that has not run yet rather than one that half did. An interrupt arriving
 when the next instruction is a delay slot saves the branch, the same way a
-synchronous fault there does (§9).
+synchronous fault there does (§11).
 
-### 10.1 Hardware compares for equality; this clock cannot
+### 12.1 Hardware compares for equality; this clock cannot
 
 The real counter increments by one at a fixed rate and raises its line on the cycle
 where it **equals** the comparison value. Mars charges documented stall counts (§5),
@@ -270,3 +270,26 @@ The rebase on a write matters for the same reason. Writing either the count or t
 comparison value resets the interval's starting point, so a value that the counter has
 already passed does not fire immediately — it waits for the wrap, which is what
 hardware does.
+
+## 13. Two instructions that are already finished when they are issued
+
+`CACHE` and `SYNC` are accepted and do nothing. Both were added because the corpus
+executes them before it prints a word, and both are recorded here rather than in a
+code comment because "does nothing" is a claim about the machine, not about the code.
+
+**Neither is a stub.** `CACHE` operates on caches, and Mars models none, so every
+cache line is already in the state the instruction asks for. `SYNC` orders memory
+accesses against each other, and Mars executes strictly in order through a single bus
+with no write buffer and no reordering, so the ordering it demands is the only
+ordering available. In both cases the instruction's postcondition holds on entry.
+
+**What this does not cover.** The corpus's cache sections cannot pass against a core
+with no caches, and they should not — the failure is the accurate report. `CACHE`
+being a no-op is what lets the *rest* of the corpus run; it is not a claim that cache
+behaviour is emulated. If cache emulation is ever built, this section is the thing to
+delete rather than to amend.
+
+**Where they were found.** Not from a manual read in advance: the real ROM stopped on
+each in turn, four thousand instructions apart, and each stop was diagnosed from the
+faulting word. That is the pattern this phase has repeated — the corpus finds the
+omission, and the omission turns out to be a decision rather than an oversight.

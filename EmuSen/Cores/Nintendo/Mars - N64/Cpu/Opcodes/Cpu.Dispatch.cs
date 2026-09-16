@@ -33,6 +33,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x0F: Write32(Rt(instruction), (uint)(Immediate(instruction) << 16)); return;
 
                 case 0x10: ExecuteCop0(instruction); return;
+                case 0x11: ExecuteCop1(instruction); return;
+                case 0x12: ExecuteCop2(instruction); return;
 
                 case 0x14: BranchIf(Read(Rs(instruction)) == Read(Rt(instruction)), instruction, likely: true); return;
                 case 0x15: BranchIf(Read(Rs(instruction)) != Read(Rt(instruction)), instruction, likely: true); return;
@@ -53,8 +55,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x25: Load(instruction, 2, signed: false); return;
                 case 0x26: LoadWordRight(instruction); return;
                 case 0x27: Load(instruction, 4, signed: false); return;
-                // Nothing is cached, so every cache operation is already complete - see Mars_Cpu.md §11.
+                // Nothing is cached, so every cache operation is already complete - see Mars_Cpu.md §13.
                 case 0x2F: return;
+
+                case 0x31: LoadCop1(instruction, wide: false); return;
+                case 0x35: LoadCop1(instruction, wide: true); return;
+                case 0x39: StoreCop1(instruction, wide: false); return;
+                case 0x3D: StoreCop1(instruction, wide: true); return;
 
                 case 0x30: LoadLinked(instruction, 4); return;
                 case 0x34: LoadLinked(instruction, 8); return;
@@ -88,6 +95,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
                 case 0x08: JumpRegister(instruction, link: false); return;
                 case 0x09: JumpRegister(instruction, link: true); return;
+
+                // Nothing is reordered or buffered, so the ordering this asks for already holds - see §13.
+                case 0x0F: return;
 
                 case 0x0C: throw Raise(ExceptionCode.Syscall, CurrentPc);
                 case 0x0D: throw Raise(ExceptionCode.Breakpoint, CurrentPc);

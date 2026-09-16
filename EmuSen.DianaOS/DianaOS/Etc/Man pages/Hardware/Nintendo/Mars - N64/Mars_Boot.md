@@ -80,3 +80,10 @@ coprocessor-1 operation. The second inverts when Phase B lands, and is meant to.
 - **The bootcode is the cartridge's**, so a ROM carrying a different one gets a
   different boot. Nothing here is specific to the corpus except that the corpus is
   what has been run.
+
+> **Retired, 2026-09-16.** §4's "where it stops" is no longer where it stops. The
+> coprocessor-1 register file landed the following day and the ROM now runs past the
+> boot handoff into its own test suite, printing verdicts — `Mars_Fpu.md` §9. The
+> section stays because the prediction it made was right: the stop was a phase
+> boundary rather than a defect, and the phase that followed it was the one the plan
+> had already placed next.

@@ -51,7 +51,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             {
                 CurrentPc = Pc;
 
-                // Checked before the fetch, so the saved address is the instruction not yet run - see §10.
+                // Checked before the fetch, so the saved address is the instruction not yet run - see §12.
                 InDelaySlot = _branchPending;
                 CheckInterrupts();
 
@@ -110,12 +110,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         private uint ReadWord(ulong address) => _bus.Read32(Translate(address));
 
-        private CpuException Raise(ExceptionCode code, ulong address, bool refill = false)
+        private CpuException Raise(ExceptionCode code, ulong address, bool refill = false, int coprocessor = 0)
         {
             _exception.Code = code;
             _exception.Address = address;
             _exception.InDelaySlot = InDelaySlot;
             _exception.Refill = refill;
+            _exception.Coprocessor = coprocessor;
             return _exception;
         }
 

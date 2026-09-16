@@ -267,6 +267,15 @@ which is precisely the failure mode a test corpus exists to catch early.
 
 **Done when** the corpus's COP1 sections pass, including the exception cases.
 
+> **Progress, 2026-09-16.** The first slice landed — the register files and every path
+> into them, with no arithmetic (`Mars_Fpu.md`). The consequence was larger than the
+> slice: the corpus now runs 4.65 million instructions and prints verdicts, where
+> before it printed nothing. **521 tests started, 202 failed**, and that pair is now
+> asserted as a ratchet. The phase order's bet in §3 — that the oracle would be
+> available from Phase A onward — is confirmed in the strongest form available, by
+> the oracle actually reporting. Two defects it found in *Phase A* code are recorded
+> in `Mars_Fpu.md` §9.2 and are the next slice's subject.
+
 ### 4.3 Phase C — the RSP
 
 The scalar subset, the 8-element vector unit with its 48-bit accumulator, the

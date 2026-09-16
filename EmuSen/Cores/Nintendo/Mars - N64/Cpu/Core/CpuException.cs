@@ -29,6 +29,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public ulong Address;
         public bool InDelaySlot;
 
+        // A miss gets its own vector; an entry that exists and is unusable does not - see Mars_Tlb.md §3.
+        public bool Refill;
+
         // One instance per CPU, rethrown: the unwind is the cost, an allocation per fault need not be.
         public CpuException() : base("VR4300 exception") { }
     }

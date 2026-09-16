@@ -209,8 +209,8 @@ instruction set landed next (`Mars_Cpu.md`), with the fourth admission requireme
 the emulator-extension opcodes the corpus calls unconditionally — ignored rather than
 refused. The merging loads and stores followed
 (`Mars_Cpu.md` §7). Exception vectoring and interrupts followed
-(`Mars_Cpu.md` §9, §10). Still missing before the corpus can be run: the TLB and the
-boot handoff.
+(`Mars_Cpu.md` §9, §10). The TLB followed (`Mars_Tlb.md`). Still missing before the
+corpus can be run: the boot handoff.
 
 **Four behaviours are the cost of admission to being graded at all**, and belong to
 this phase's memory map: a *readable* ISViewer region, COP0 CO `funct` `0x20`–`0x3F`

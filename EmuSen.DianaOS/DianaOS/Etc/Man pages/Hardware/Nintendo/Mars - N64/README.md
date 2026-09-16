@@ -16,6 +16,8 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Cpu.md`](Mars_Cpu.md) is the VR4300's integer core: the dispatch shape, 64-bit registers, the two-program-counter delay-slot model, and the two decisions taken in advance — exceptions are thrown so that a faulting instruction cannot leave partial state (§4), and only cycle counts the vendor manual tabulates are charged (§5).
 
+[`Mars_Tlb.md`](Mars_Tlb.md) is address translation for the mapped segments: paired entries, the linear scan, and §3's three distinct failures — a miss, an entry that is invalid, and a store to a page that is not writable — which vectoring had previously been unable to tell apart.
+
 The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.

@@ -1,0 +1,129 @@
+using System;
+
+namespace EmuSen.Cores.Nintendo.Mars.Memory
+{
+    // The signal processor's registers and its DMA, with no processor behind them yet - see Mars_Memory.md §6.
+    public sealed class SpInterface
+    {
+        public const uint MemAddress = 0x00;
+        public const uint DramAddress = 0x04;
+        public const uint ReadLength = 0x08;
+        public const uint WriteLength = 0x0C;
+        public const uint Status = 0x10;
+        public const uint DmaFull = 0x14;
+        public const uint DmaBusy = 0x18;
+        public const uint Semaphore = 0x1C;
+
+        public const uint StatusHalt = 0x01;
+        public const uint StatusBroke = 0x02;
+
+        // Bit 12 of the memory address chooses which of the two banks a transfer touches.
+        private const uint ImemSelect = 0x1000;
+
+        private readonly MarsBus _bus;
+
+        private uint _memAddress;
+        private uint _dramAddress;
+        private uint _status = StatusHalt;
+        private bool _semaphore;
+
+        public SpInterface(MarsBus bus) => _bus = bus;
+
+        public uint Read32(uint offset)
+        {
+            switch (offset & 0x1C)
+            {
+                case MemAddress: return _memAddress;
+                case DramAddress: return _dramAddress;
+
+                // Both lengths read back as the last value written, which is how hardware reports them.
+                case ReadLength:
+                case WriteLength: return 0xFF8;
+
+                case Status: return _status;
+
+                // Instantaneous transfers are never queued and never in progress - see Mars_Memory.md §6.1.
+                case DmaFull:
+                case DmaBusy: return 0;
+
+                case Semaphore: return TakeSemaphore();
+                default: return 0;
+            }
+        }
+
+        public void Write32(uint offset, uint value)
+        {
+            switch (offset & 0x1C)
+            {
+                case MemAddress:
+                    _memAddress = value & 0x1FF8;
+                    break;
+
+                case DramAddress:
+                    _dramAddress = value & 0x00FF_FFF8;
+                    break;
+
+                case ReadLength:
+                    Transfer(value, toSignalProcessor: true);
+                    break;
+
+                case WriteLength:
+                    Transfer(value, toSignalProcessor: false);
+                    break;
+
+                case Status:
+                    WriteStatus(value);
+                    break;
+
+                case Semaphore:
+                    _semaphore = false;
+                    break;
+            }
+        }
+
+        // A read takes the semaphore and reports whether it was already held.
+        private uint TakeSemaphore()
+        {
+            uint held = _semaphore ? 1u : 0u;
+            _semaphore = true;
+            return held;
+        }
+
+        // Only the halt and break bits are modelled; the rest are a Phase C problem - see Mars_Memory.md §6.
+        private void WriteStatus(uint value)
+        {
+            if ((value & 0x01) != 0) _status &= ~StatusHalt;
+            if ((value & 0x02) != 0) _status |= StatusHalt;
+            if ((value & 0x04) != 0) _status &= ~StatusBroke;
+        }
+
+        // Length is encoded one short, and the row count and skip make it rectangular - see Mars_Memory.md §6.
+        private void Transfer(uint encoded, bool toSignalProcessor)
+        {
+            uint length = ((encoded & 0xFFF) | 7) + 1;
+            uint rows = ((encoded >> 12) & 0xFF) + 1;
+            uint skip = (encoded >> 20) & 0xFFF;
+
+            byte[] bank = (_memAddress & ImemSelect) != 0 ? _bus.SpImem : _bus.SpDmem;
+            uint bankOffset = _memAddress & 0xFF8;
+
+            for (uint row = 0; row < rows; row++)
+            {
+                for (uint i = 0; i < length; i++)
+                {
+                    // Wrapping inside the bank rather than running on into the next one - see Mars_Memory.md §6.2.
+                    uint spOffset = (bankOffset + i) % MemoryMap.SpMemSize;
+                    uint dramAddress = _dramAddress + i;
+
+                    if (toSignalProcessor) bank[spOffset] = _bus.Read8(dramAddress);
+                    else _bus.Write8(dramAddress, bank[spOffset]);
+                }
+
+                bankOffset = (bankOffset + length) % MemoryMap.SpMemSize;
+                _dramAddress += length + skip;
+            }
+
+            _memAddress = (_memAddress & ImemSelect) | bankOffset;
+        }
+    }
+}

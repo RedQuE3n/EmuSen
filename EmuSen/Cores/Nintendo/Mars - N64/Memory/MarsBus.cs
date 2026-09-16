@@ -17,6 +17,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public readonly IsViewer IsViewer = new();
 
+        public readonly SpInterface Sp;
+        public readonly PiInterface Pi;
+
         public RomImage? Cart;
 
         // One counter for the whole machine, so no instruction can forget to advance it - see §3.
@@ -30,6 +33,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public MarsBus(bool expansionPak = false)
         {
             Rdram = new byte[expansionPak ? RdramSizeExpanded : RdramSize];
+            Sp = new SpInterface(this);
+            Pi = new PiInterface(this);
 
             // Nonzero tells libdragon's IPL3 that RDRAM needs no initialising - see Mars_TestOracle.md §3.
             _registers[MemoryMap.RiSelect] = 1;
@@ -71,6 +76,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             if (physical >= MemoryMap.CartDomain1Address2) return ReadCart32(physical - MemoryMap.CartDomain1Address2);
 
+            if (InRange(physical, MemoryMap.SpRegistersBase, 0x20)) return Sp.Read32(physical - MemoryMap.SpRegistersBase);
+
+            if (InRange(physical, MemoryMap.PiBase, 0x34)) return Pi.Read32(physical - MemoryMap.PiBase);
+
             return _registers.TryGetValue(physical, out uint value) ? value : 0;
         }
 
@@ -110,6 +119,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             // The cartridge is read-only here; a write to it is dropped rather than refused - see §2.3.
             if (physical >= MemoryMap.CartDomain1Address2) return;
+
+            if (InRange(physical, MemoryMap.SpRegistersBase, 0x20))
+            {
+                Sp.Write32(physical - MemoryMap.SpRegistersBase, value);
+                return;
+            }
+
+            if (InRange(physical, MemoryMap.PiBase, 0x34))
+            {
+                Pi.Write32(physical - MemoryMap.PiBase, value);
+                return;
+            }
 
             _registers[physical] = value;
         }

@@ -108,10 +108,62 @@ caught this bug is cheaper than the day spent finding it.
 ## 5. What is not here
 
 - **No TLB**, so three of the five segments do not translate.
-- **No DMA engines.** The signal processor's and peripheral interface's transfers are
-  register writes into a dictionary today; the bootstrap needs them for real, and they
-  are the next slice of Phase A.
-- **No devices.** Nothing interrupts, nothing counts down, nothing draws.
+- **No devices beyond the two transfer engines** (§6, §7). Nothing interrupts,
+  nothing counts down, nothing draws.
 - **No caches.** Both direct-mapped segments reach memory identically, and
   `IsCached` reports the difference without anything acting on it.
 - **No access costs** (§3.2).
+
+## 6. The signal processor's transfers
+
+Its registers and its DMA exist; the processor behind them does not. A length write
+moves bytes between one of the two four-kilobyte banks and RDRAM, with bit 12 of the
+memory address choosing the bank, the length encoded one short, and a row count and
+skip making the transfer rectangular.
+
+This is here before the CPU because the corpus's bootstrap uses it: libdragon's IPL3
+moves itself with these registers long before any instruction of ours is involved
+(`Mars_TestOracle.md` §3).
+
+### 6.1 Never busy, because it has already finished
+
+Transfers complete inside the register write, so the busy and queue-full flags read
+zero always. That is a simplification with a real consequence — a program that
+watches the flags to overlap work with a transfer sees a machine that is never
+transferring — and it is invisible to anything that only waits for completion, which
+is what the bootstrap does. The honest position is that the timing of these
+transfers is unmodelled rather than instantaneous, and §3.2's reasoning applies: the
+durations are documented nowhere, so they wait for measurement.
+
+### 6.2 Past the end of a bank is that bank's beginning
+
+A transfer that runs off the end of the instruction bank continues at its start
+rather than spilling into the data bank. This is the third of the bootstrap's
+requirements, and the failure it guards against is a real one in emulators that
+address the two banks as one eight-kilobyte block.
+
+**The test for it is weaker than it looks, and that is worth stating.** Mars keeps
+the banks as two separate arrays, so spilling from one into the other is not
+something this design can do: removing the wrap makes the transfer crash rather than
+quietly corrupt the neighbour. The test pins the wrapping behaviour, but the bug
+class it was written for is structurally unreachable here. It is kept because the
+requirement is real and a future refactor to one backing array would reintroduce
+exactly that bug — at which point this test stops being insurance and starts being a
+catch.
+
+## 7. The peripheral interface
+
+The cartridge's transfer engine, same length encoding, moving bytes in either
+direction between the cartridge bus and RDRAM, raising a completion flag that a
+write clears.
+
+### 7.1 Idle is not cosmetic; it is what lets the corpus speak
+
+The status register reports neither kind of busy. That is not tidiness — the corpus
+polls this register in a spin loop between **every word it prints**, and its
+ISViewer path reads the I/O-busy bit before each store (verified in the corpus's own
+source). A status register that comes up busy, or that latches busy after a
+transfer, hangs the ROM before it emits a single character, and the symptom is
+indistinguishable from the silent-detection failure in §4.1.
+
+Two landmines with one symptom is the reason both have a test naming them.

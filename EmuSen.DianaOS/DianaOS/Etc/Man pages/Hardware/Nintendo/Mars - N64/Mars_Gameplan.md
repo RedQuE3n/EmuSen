@@ -209,8 +209,15 @@ instruction set landed next (`Mars_Cpu.md`), with the fourth admission requireme
 the emulator-extension opcodes the corpus calls unconditionally — ignored rather than
 refused. The merging loads and stores followed
 (`Mars_Cpu.md` §7). Exception vectoring and interrupts followed
-(`Mars_Cpu.md` §9, §10). The TLB followed (`Mars_Tlb.md`). Still missing before the
-corpus can be run: the boot handoff.
+(`Mars_Cpu.md` §9, §10). The TLB followed (`Mars_Tlb.md`), and then the boot
+handoff (`Mars_Boot.md`).
+
+**Phase A is done, in the sense its own paragraph asked for.** The corpus boots
+through its own bootcode and reaches its entry point, and stops there on a
+coprocessor-1 control move — which is Phase B's opening rather than a defect in this
+one. What A cannot yet claim is the rest of its "done when": the corpus's CPU, COP0,
+TLB and exception sections have not been *run*, because reaching them needs the
+floating-point unit the corpus configures in its first instruction.
 
 **Four behaviours are the cost of admission to being graded at all**, and belong to
 this phase's memory map: a *readable* ISViewer region, COP0 CO `funct` `0x20`–`0x3F`

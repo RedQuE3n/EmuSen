@@ -41,6 +41,23 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             }
         }
 
+        // The pair a lock is built from: the load arms it, the store only lands if nothing disarmed it.
+        private void LoadLinked(uint instruction, int size)
+        {
+            Load(instruction, size, signed: size == 4);
+
+            LinkedFlag = true;
+            Cop0[LinkedAddressRegister] = EffectiveAddress(instruction) >> 4;
+        }
+
+        private void StoreConditional(uint instruction, int size)
+        {
+            if (LinkedFlag) Store(instruction, size);
+
+            Write(Rt(instruction), LinkedFlag ? 1UL : 0UL);
+            LinkedFlag = false;
+        }
+
         private ulong EffectiveAddress(uint instruction) =>
             unchecked(Read(Rs(instruction)) + (ulong)SignedImmediate(instruction));
 

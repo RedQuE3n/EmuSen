@@ -10,6 +10,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public readonly Tlb Tlb = new();
 
+        // Armed by a linked load and broken by an exception, which is what makes the pair a lock.
+        public bool LinkedFlag;
+
         public ulong Hi;
         public ulong Lo;
 

@@ -18,6 +18,8 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Tlb.md`](Mars_Tlb.md) is address translation for the mapped segments: paired entries, the linear scan, and §3's three distinct failures — a miss, an entry that is invalid, and a store to a page that is not writable — which vectoring had previously been unable to tell apart.
 
+[`Mars_Boot.md`](Mars_Boot.md) is the handoff that replaces the PIF, and the record of what happened when a real ROM ran through it: the corpus boots through libdragon's bootcode into its own entry point, and stops at a coprocessor-1 move, which is where Phase B begins.
+
 The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.

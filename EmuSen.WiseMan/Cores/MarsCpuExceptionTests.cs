@@ -4,7 +4,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // What an exception does to the machine, now that it goes somewhere - see Mars_Cpu.md §9.
+    // What an exception does to the machine, now that it goes somewhere - see Mars_Cpu.md §11.
     public class MarsCpuExceptionTests
     {
         private const ulong GeneralVector = Cpu.VectorBase + Cpu.VectorOffsetGeneral;

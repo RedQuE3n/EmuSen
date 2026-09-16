@@ -29,13 +29,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public const ulong CauseBranchDelay = 1UL << 31;
 
+        // Which coprocessor a fault names, and zero for every fault that names none - see Mars_Fpu.md §3.1.
+        public const ulong CauseCoprocessor = 3UL << 28;
+
         // The two hardware lines that reach this core: the RCP's aggregate, and the counter's own.
         public const ulong CauseInterruptRcp = 1UL << 10;
         public const ulong CauseInterruptTimer = 1UL << 15;
 
         private const int InterruptShift = 8;
 
-        // Where a handler lives, and the separate door a TLB refill comes through - see Mars_Cpu.md §9.1.
+        // Where a handler lives, and the separate door a TLB refill comes through - see Mars_Cpu.md §11.1.
         public const ulong VectorBase = 0xFFFF_FFFF_8000_0000;
         public const ulong VectorBaseBootstrap = 0xFFFF_FFFF_BFC0_0200;
         public const ulong VectorOffsetTlbRefill = 0x000;
@@ -91,7 +94,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             Cop0[register] = value;
 
-            // Writing the comparison value is how a handler acknowledges the timer - see Mars_Cpu.md §10.1.
+            // Writing the comparison value is how a handler acknowledges the timer - see Mars_Cpu.md §12.1.
             if (register == CompareRegister)
             {
                 Cop0[CauseRegister] &= ~CauseInterruptTimer;
@@ -99,7 +102,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             }
         }
 
-        // Level-triggered from the aggregator, then edge-latched from the counter - see Mars_Cpu.md §10.
+        // Level-triggered from the aggregator, then edge-latched from the counter - see Mars_Cpu.md §12.
         private void CheckInterrupts()
         {
             if (_bus.Mi.Asserted) Cop0[CauseRegister] |= CauseInterruptRcp;
@@ -127,7 +130,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             if (previous == now) return false;
 
-            // The counter wraps, so "between" is two ranges rather than one - see Mars_Cpu.md §10.1.
+            // The counter wraps, so "between" is two ranges rather than one - see Mars_Cpu.md §12.1.
             return previous < now
                 ? target > previous && target <= now
                 : target > previous || target <= now;
@@ -139,7 +142,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 {
     public sealed partial class Cpu
     {
-        // Everything an exception does to the machine before the handler's first instruction - see Mars_Cpu.md §9.
+        // Everything an exception does to the machine before the handler's first instruction - see Mars_Cpu.md §11.
         private void EnterException(CpuException raised)
         {
             bool alreadyHandling = (Cop0[StatusRegister] & StatusExceptionLevel) != 0;
@@ -152,6 +155,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             }
 
             SetCauseCode(raised.Code);
+            SetCauseCoprocessor(raised.Coprocessor);
 
             if (IsAddressRelated(raised.Code)) Cop0[BadVirtualAddressRegister] = raised.Address;
 
@@ -182,7 +186,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             _branchPending = false;
         }
 
-        // A refill has its own vector only on the way in from ordinary execution - see Mars_Cpu.md §9.1.
+        // A refill has its own vector only on the way in from ordinary execution - see Mars_Cpu.md §11.1.
         private ulong VectorFor(bool refill, bool alreadyHandling)
         {
             ulong start = (Cop0[StatusRegister] & StatusBootstrapVectors) != 0 ? VectorBaseBootstrap : VectorBase;
@@ -192,6 +196,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         private void SetCauseCode(ExceptionCode code) =>
             Cop0[CauseRegister] = (Cop0[CauseRegister] & ~0x7CUL) | ((ulong)code << 2);
+
+        private void SetCauseCoprocessor(int coprocessor) =>
+            Cop0[CauseRegister] = (Cop0[CauseRegister] & ~CauseCoprocessor) | ((ulong)coprocessor << 28);
 
         private void SetCauseBranchDelay(bool inDelaySlot) =>
             Cop0[CauseRegister] = inDelaySlot

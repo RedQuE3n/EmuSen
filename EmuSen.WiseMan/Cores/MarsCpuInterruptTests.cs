@@ -4,7 +4,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The asynchronous half: a counter, an aggregator, and the two gates between them and the CPU - see Mars_Cpu.md §10.
+    // The asynchronous half: a counter, an aggregator, and the two gates between them and the CPU - see Mars_Cpu.md §12.
     public class MarsCpuInterruptTests
     {
         private const ulong TimerMask = 1UL << 15;

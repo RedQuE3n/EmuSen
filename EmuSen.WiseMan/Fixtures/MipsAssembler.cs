@@ -4,7 +4,7 @@ using EmuSen.Cores.Nintendo.Mars.Memory;
 
 namespace EmuSen.WiseMan.Fixtures
 {
-    // Emits MIPS III words so instruction tests read as assembly rather than hex - see Mars_Cpu.md §9.
+    // Emits MIPS III words so instruction tests read as assembly rather than hex - see Mars_Cpu.md §10.
     public sealed class MipsAssembler
     {
         // Where a test program is assembled, and the cached window the CPU fetches it through.
@@ -94,6 +94,22 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Mfc0(int rt, int rd) => Word((0x10u << 26) | (0u << 21) | ((uint)rt << 16) | ((uint)rd << 11));
         public MipsAssembler Mtc0(int rt, int rd) => Word((0x10u << 26) | (4u << 21) | ((uint)rt << 16) | ((uint)rd << 11));
 
+        public MipsAssembler Mfc1(int rt, int fs) => Cop1(0x00, rt, fs);
+        public MipsAssembler Dmfc1(int rt, int fs) => Cop1(0x01, rt, fs);
+        public MipsAssembler Cfc1(int rt, int fs) => Cop1(0x02, rt, fs);
+        public MipsAssembler Mtc1(int rt, int fs) => Cop1(0x04, rt, fs);
+        public MipsAssembler Dmtc1(int rt, int fs) => Cop1(0x05, rt, fs);
+        public MipsAssembler Ctc1(int rt, int fs) => Cop1(0x06, rt, fs);
+
+        public MipsAssembler Lwc1(int ft, int rs, short offset) => I(0x31, rs, ft, offset);
+        public MipsAssembler Ldc1(int ft, int rs, short offset) => I(0x35, rs, ft, offset);
+        public MipsAssembler Swc1(int ft, int rs, short offset) => I(0x39, rs, ft, offset);
+        public MipsAssembler Sdc1(int ft, int rs, short offset) => I(0x3D, rs, ft, offset);
+
+        // The sub-opcode field decides the whole of a coprocessor-1 move, reserved forms included.
+        public MipsAssembler Cop1(int rs, int rt, int fs) =>
+            Word((0x11u << 26) | ((uint)rs << 21) | ((uint)rt << 16) | ((uint)fs << 11));
+
         public MipsAssembler Tlbr() => Word((0x10u << 26) | (0x10u << 21) | 0x01);
         public MipsAssembler Tlbwi() => Word((0x10u << 26) | (0x10u << 21) | 0x02);
         public MipsAssembler Tlbwr() => Word((0x10u << 26) | (0x10u << 21) | 0x06);
@@ -115,10 +131,12 @@ namespace EmuSen.WiseMan.Fixtures
         }
 
         // A machine with this program in memory and the program counter already on it.
+        public Cpu Build(MarsBus? existing = null) =>
+            new(LoadInto(existing ?? new MarsBus())) { Pc = EntryPoint, NextPc = EntryPoint + 4 };
+
         public Cpu Run(int steps, MarsBus? existing = null)
         {
-            var bus = LoadInto(existing ?? new MarsBus());
-            var cpu = new Cpu(bus) { Pc = EntryPoint, NextPc = EntryPoint + 4 };
+            var cpu = Build(existing);
 
             cpu.Run(steps);
             return cpu;

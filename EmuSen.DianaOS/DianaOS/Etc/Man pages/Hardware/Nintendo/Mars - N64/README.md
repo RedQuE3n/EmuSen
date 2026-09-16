@@ -1,6 +1,6 @@
 # Mars (Nintendo 64)
 
-The core is not started. What exists is a plan: [`Mars_Gameplan.md`](Mars_Gameplan.md), pinned 2026-09-15, which is the "what should I work on next" doc for Mars in the same role `Mercury_Gameplan.md` plays for Mercury — with the difference that it was written before any code rather than during it, and says where it expects to be wrong.
+What exists is a plan: [`Mars_Gameplan.md`](Mars_Gameplan.md), pinned 2026-09-15, which is the "what should I work on next" doc for Mars in the same role `Mercury_Gameplan.md` plays for Mercury — with the difference that it was written before any code rather than during it, and says where it expects to be wrong.
 
 Two decisions are already taken and carry their reasoning there: the whole RCP is emulated at low level (§2.1), and correctness leads with performance as its own later phase (§2.2). §3 is the oracle question — what a Nintendo 64 core can be graded against — and it carries the one unverified assumption the phase order rests on.
 
@@ -19,6 +19,8 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 [`Mars_Tlb.md`](Mars_Tlb.md) is address translation for the mapped segments: paired entries, the linear scan, and §3's three distinct failures — a miss, an entry that is invalid, and a store to a page that is not writable — which vectoring had previously been unable to tell apart.
 
 [`Mars_Boot.md`](Mars_Boot.md) is the handoff that replaces the PIF, and the record of what happened when a real ROM ran through it: the corpus boots through libdragon's bootcode into its own entry point, and stops at a coprocessor-1 move, which is where Phase B begins.
+
+[`Mars_Fpu.md`](Mars_Fpu.md) is Phase B's first slice: the coprocessor register files and the paths into them, with no arithmetic at all. Read §9 first — with this in place the hardware corpus starts printing verdicts, and the tally it prints (521 tests started, 202 failed) is now a ratchet in the test suite. §9.2 is two integer defects the corpus found and this slice deliberately did not fix.
 
 The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 

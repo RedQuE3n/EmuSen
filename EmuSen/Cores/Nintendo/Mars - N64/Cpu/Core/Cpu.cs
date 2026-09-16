@@ -29,6 +29,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private readonly CpuException _exception = new();
 
         private bool _branchPending;
+        private uint _lastCount;
 
         public Cpu(MarsBus bus)
         {
@@ -45,9 +46,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             {
                 CurrentPc = Pc;
 
-                uint instruction = FetchInstruction();
-
+                // Checked before the fetch, so the saved address is the instruction not yet run - see §10.
                 InDelaySlot = _branchPending;
+                CheckInterrupts();
+
+                uint instruction = FetchInstruction();
                 _branchPending = false;
 
                 Pc = NextPc;
@@ -59,6 +62,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 _bus.Tick(1 + _extraCycles);
                 _extraCycles = 0;
                 Instructions++;
+
+                UpdateTimer();
             }
             catch (CpuException raised)
             {

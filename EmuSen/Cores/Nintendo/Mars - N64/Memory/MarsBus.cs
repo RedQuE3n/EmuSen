@@ -19,6 +19,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public readonly SpInterface Sp;
         public readonly PiInterface Pi;
+        public readonly MiInterface Mi = new();
 
         public RomImage? Cart;
 
@@ -80,6 +81,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             if (InRange(physical, MemoryMap.PiBase, 0x34)) return Pi.Read32(physical - MemoryMap.PiBase);
 
+            if (InRange(physical, MemoryMap.MiBase, 0x10)) return Mi.Read32(physical - MemoryMap.MiBase);
+
             return _registers.TryGetValue(physical, out uint value) ? value : 0;
         }
 
@@ -129,6 +132,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (InRange(physical, MemoryMap.PiBase, 0x34))
             {
                 Pi.Write32(physical - MemoryMap.PiBase, value);
+                return;
+            }
+
+            if (InRange(physical, MemoryMap.MiBase, 0x10))
+            {
+                Mi.Write32(physical - MemoryMap.MiBase, value);
                 return;
             }
 

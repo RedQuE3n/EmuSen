@@ -20,6 +20,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public const ulong CauseBranchDelay = 1UL << 31;
 
+        // The two hardware lines that reach this core: the RCP's aggregate, and the counter's own.
+        public const ulong CauseInterruptRcp = 1UL << 10;
+        public const ulong CauseInterruptTimer = 1UL << 15;
+
+        private const int InterruptShift = 8;
+
         // Where a handler lives, and the separate door a TLB refill comes through - see Mars_Cpu.md §9.1.
         public const ulong VectorBase = 0xFFFF_FFFF_8000_0000;
         public const ulong VectorBaseBootstrap = 0xFFFF_FFFF_BFC0_0200;
@@ -67,10 +73,52 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             if (register == CountRegister)
             {
                 _bus.SetCount((uint)value);
+                _lastCount = _bus.Count;
                 return;
             }
 
             Cop0[register] = value;
+
+            // Writing the comparison value is how a handler acknowledges the timer - see Mars_Cpu.md §10.1.
+            if (register == CompareRegister)
+            {
+                Cop0[CauseRegister] &= ~CauseInterruptTimer;
+                _lastCount = _bus.Count;
+            }
+        }
+
+        // Level-triggered from the aggregator, then edge-latched from the counter - see Mars_Cpu.md §10.
+        private void CheckInterrupts()
+        {
+            if (_bus.Mi.Asserted) Cop0[CauseRegister] |= CauseInterruptRcp;
+            else Cop0[CauseRegister] &= ~CauseInterruptRcp;
+
+            if ((Cop0[StatusRegister] & StatusInterruptEnable) == 0) return;
+            if ((Cop0[StatusRegister] & (StatusExceptionLevel | StatusErrorLevel)) != 0) return;
+
+            ulong pending = (Cop0[CauseRegister] >> InterruptShift) & (Cop0[StatusRegister] >> InterruptShift) & 0xFF;
+            if (pending != 0) throw Raise(ExceptionCode.Interrupt, CurrentPc);
+        }
+
+        // Hardware compares for equality; a clock that can step by more than one has to ask about the interval.
+        private void UpdateTimer()
+        {
+            uint now = _bus.Count;
+            uint compare = (uint)Cop0[CompareRegister];
+
+            if (Crossed(_lastCount, now, compare)) Cop0[CauseRegister] |= CauseInterruptTimer;
+
+            _lastCount = now;
+        }
+
+        private static bool Crossed(uint previous, uint now, uint target)
+        {
+            if (previous == now) return false;
+
+            // The counter wraps, so "between" is two ranges rather than one - see Mars_Cpu.md §10.1.
+            return previous < now
+                ? target > previous && target <= now
+                : target > previous || target <= now;
         }
     }
 }

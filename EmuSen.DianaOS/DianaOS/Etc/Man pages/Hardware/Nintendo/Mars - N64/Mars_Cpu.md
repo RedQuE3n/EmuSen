@@ -152,11 +152,10 @@ merging is pinned rather than incidental.
 
 - **The TLB**, so three of five segments fault — correctly, as a refill (§9.1).
 - **COP1**, which is Phase B.
-- **Interrupts.** Nothing asynchronous can reach the CPU yet: no timer comparison,
-  no interrupt lines, and the enable and mask bits in `Status` are stored but
-  consulted by nothing. That is the next slice, and it is where the coarse clock
-  (§5) will need an answer about what "the counter reached the comparison value"
-  means when a single instruction can advance it by more than one.
+- **Software interrupts**, the two bits a program raises itself, are storage with
+  nothing behind them.
+- **Every interrupt source except the counter and the peripheral interface.** The
+  aggregator has six inputs and two are wired (§10).
 
 ## 9. Coprocessor zero, minimally
 
@@ -227,3 +226,45 @@ the exception level, with no delay slot of its own. A test runs the whole circui
 system call faults, a handler at the vector records that it ran, steps the saved
 address past the faulting instruction, returns — and the instruction after the fault
 then executes normally.
+
+## 10. Interrupts
+
+Two sources reach this core today. The RCP's aggregator drives one line and is
+**level-triggered** — read afresh every step, so clearing the device that raised it
+lowers the CPU's line with no further action. The counter drives the other and is
+**latched** — once raised it stays raised until a handler writes the comparison
+value, which is how the hardware makes acknowledgement explicit.
+
+Three gates stand between a raised line and an exception: the global enable bit, the
+per-line mask, and the exception level. All three have a test, and the third is the
+one that matters most — without it a handler would be interrupted by the very line it
+was entered to service, forever.
+
+The check happens **before the instruction is fetched**, so the saved address is the
+instruction that has not run yet rather than one that half did. An interrupt arriving
+when the next instruction is a delay slot saves the branch, the same way a
+synchronous fault there does (§9).
+
+### 10.1 Hardware compares for equality; this clock cannot
+
+The real counter increments by one at a fixed rate and raises its line on the cycle
+where it **equals** the comparison value. Mars charges documented stall counts (§5),
+so a single instruction can advance the counter by more than one — a multiply moves it
+three at once — and an equality test would step straight over the comparison value and
+never fire.
+
+So the question asked here is *did the comparison value fall inside the interval this
+instruction covered*, with the wrap handled as two ranges rather than one. Replacing
+it with the equality test hardware performs reddens exactly the test written for it.
+
+**What this costs, stated rather than discovered:** the interrupt is raised at the end
+of the instruction that crossed the value, not at the cycle that reached it. A long
+instruction can therefore delay it — up to sixty-nine cycles for the worst divide —
+and nothing is checked mid-instruction. That is a real divergence from hardware and it
+is a consequence of the cycle model rather than of this mechanism; when §5's
+placeholder half is replaced by measured costs, this inherits the improvement.
+
+The rebase on a write matters for the same reason. Writing either the count or the
+comparison value resets the interval's starting point, so a value that the counter has
+already passed does not fire immediately — it waits for the wrap, which is what
+hardware does.

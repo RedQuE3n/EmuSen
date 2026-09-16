@@ -88,10 +88,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             {
                 case 0x00: Write32(Rd(instruction), (uint)Read(Rt(instruction)) << Sa(instruction)); return;
                 case 0x02: Write32(Rd(instruction), (uint)Read(Rt(instruction)) >> Sa(instruction)); return;
-                case 0x03: Write32(Rd(instruction), (uint)((int)(uint)Read(Rt(instruction)) >> Sa(instruction))); return;
+                case 0x03: ShiftRightArithmetic(instruction, Sa(instruction)); return;
                 case 0x04: Write32(Rd(instruction), (uint)Read(Rt(instruction)) << (int)(Read(Rs(instruction)) & 0x1F)); return;
                 case 0x06: Write32(Rd(instruction), (uint)Read(Rt(instruction)) >> (int)(Read(Rs(instruction)) & 0x1F)); return;
-                case 0x07: Write32(Rd(instruction), (uint)((int)(uint)Read(Rt(instruction)) >> (int)(Read(Rs(instruction)) & 0x1F))); return;
+                case 0x07: ShiftRightArithmetic(instruction, (int)(Read(Rs(instruction)) & 0x1F)); return;
 
                 case 0x08: JumpRegister(instruction, link: false); return;
                 case 0x09: JumpRegister(instruction, link: true); return;

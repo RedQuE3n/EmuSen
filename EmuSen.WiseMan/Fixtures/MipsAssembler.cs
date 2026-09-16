@@ -47,6 +47,7 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Sll(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x00);
         public MipsAssembler Srl(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x02);
         public MipsAssembler Sra(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x03);
+        public MipsAssembler Srav(int rd, int rt, int rs) => R(rs, rt, rd, 0, 0x07);
         public MipsAssembler Dsll(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x38);
         public MipsAssembler Dsll32(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x3C);
         public MipsAssembler Dsrl32(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x3E);

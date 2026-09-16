@@ -189,7 +189,7 @@ Running StartupTest...
 Test 'StartupTest' failed: a == b expected, but a=0x6e463 b=0x7006e463. Initial COP0 Config
 ```
 
-**521 tests started, 202 of them failed.** That is the first graded measurement of
+**521 tests started, 202 of them failed** — 174 after the slice that followed. That is the first graded measurement of
 this core against real silicon, and it costs 413 milliseconds, which is why it is a
 permanent test rather than an occasional exercise.
 
@@ -209,8 +209,8 @@ The failures group into four kinds:
 
 ### 9.1 The tally is a ratchet
 
-`MarsCorpusTests` asserts the exact pair — 521 started, 202 failed — rather than a
-floor. A floor was written first and **thrown away after it failed to catch two
+`MarsCorpusTests` asserts the exact pair — 521 started, and the failure count of the
+day — rather than a floor. A floor was written first and **thrown away after it failed to catch two
 deliberate mutations**: making `CTC1` a no-op, and giving the coprocessor-unusable
 fault the wrong coprocessor number. Neither halts the ROM, so a "did it get far
 enough" assertion sails past both; the failure count moved 202 → 203 and 202 → 206.
@@ -239,6 +239,11 @@ failure `Mars_Cpu.md` §7.1 already records — an implementation that satisfies
 evidence in front of it and is uniformly wrong. The next slice reads the corpus's
 arithmetic tests directly and settles the 64-bit operand question for all three
 together.
+
+> **Settled, 2026-09-16, in the slice that followed.** `Mars_Cpu.md` §14. The caution
+> was warranted: neither guess attempted here was right, and the actual rule —
+> `MULT` reads *thirty-five* bits of its second operand — is one no amount of fitting
+> to the reported pairs would have produced. The tally moved 202 → 174.
 
 ## 10. What this slice does not do
 

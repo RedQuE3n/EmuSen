@@ -5,6 +5,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
     // Arithmetic, and the four instructions that trap instead of wrapping - see Mars_Cpu.md §2.1.
     public sealed partial class Cpu
     {
+        // The whole register is shifted and the result truncated afterwards, not the other way round - see §14.
+        private void ShiftRightArithmetic(uint instruction, int amount) =>
+            Write32(Rd(instruction), (uint)((long)Read(Rt(instruction)) >> amount));
+
         private void AddImmediate(uint instruction, bool trapOnOverflow)
         {
             int left = (int)(uint)Read(Rs(instruction));

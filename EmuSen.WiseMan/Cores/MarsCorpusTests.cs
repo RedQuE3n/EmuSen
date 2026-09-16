@@ -1,5 +1,5 @@
 using System;
-using System.Text;
+using System.IO;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Cpu.Core;
 using EmuSen.Cores.Nintendo.Mars.Memory;
@@ -47,11 +47,13 @@ namespace EmuSen.WiseMan.Cores
             RunUntilMarsRunsOut(cpu!);
             string verdicts = bus!.IsViewer.Text;
 
+            string report = Report(verdicts);
+
             Assert.Contains("Running StartupTest...", verdicts);
             Assert.Contains("Running ADDIOpcodeTest...", verdicts);
 
             // A ratchet, not a description: this number goes down as Mars is fixed - see Mars_Fpu.md §9.1.
-            Assert.Equal("521 started, 202 failed", Tally(verdicts));
+            Assert.Equal($"521 started, 174 failed ({report})", $"{Tally(verdicts)} ({report})");
         }
 
         // Where the run ends today, and the marker is a scaffold rather than an emulated fault - see §6.
@@ -107,5 +109,21 @@ namespace EmuSen.WiseMan.Cores
 
         private static string Tally(string verdicts) =>
             $"{Occurrences(verdicts, "Running ")} started, {Occurrences(verdicts, "' failed:")} failed";
+
+        // The whole report beside the test assembly, because the tally alone cannot say what moved.
+        private static string Report(string verdicts)
+        {
+            string path = Path.Combine(AppContext.BaseDirectory, "mars-corpus-verdicts.txt");
+
+            try
+            {
+                File.WriteAllText(path, verdicts);
+                return path;
+            }
+            catch (IOException)
+            {
+                return "report not written";
+            }
+        }
     }
 }

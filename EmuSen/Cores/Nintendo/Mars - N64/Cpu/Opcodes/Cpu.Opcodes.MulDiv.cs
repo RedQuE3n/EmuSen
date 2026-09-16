@@ -10,16 +10,22 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public const int DivideStall = 37;
         public const int DivideDoubleStall = 69;
 
+        // How wide the multiplier reads its second operand, which is neither 32 nor 64 - see Mars_Cpu.md §14.
+        public const int MultiplyOperandBits = 35;
+
         private void Multiply(uint instruction, bool unsigned)
         {
             long result = unsigned
                 ? (long)((ulong)(uint)Read(Rs(instruction)) * (uint)Read(Rt(instruction)))
-                : (long)(int)(uint)Read(Rs(instruction)) * (int)(uint)Read(Rt(instruction));
+                : unchecked((long)Read(Rs(instruction)) * SignExtendOperand(Read(Rt(instruction))));
 
             Lo = (ulong)(long)(int)result;
             Hi = (ulong)(long)(int)(result >> 32);
             _extraCycles = MultiplyStall;
         }
+
+        private static long SignExtendOperand(ulong value) =>
+            (long)(value << (64 - MultiplyOperandBits)) >> (64 - MultiplyOperandBits);
 
         private void MultiplyDouble(uint instruction, bool unsigned)
         {

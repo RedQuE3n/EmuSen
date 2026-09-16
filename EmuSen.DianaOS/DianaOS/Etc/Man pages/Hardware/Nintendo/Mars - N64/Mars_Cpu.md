@@ -73,12 +73,12 @@ The cost is unwind overhead on a path the hardware corpus exercises deliberately
 hard. That is accepted for now and is a Phase G measurement rather than a Phase A
 belief.
 
-### 4.1 Raised, not yet delivered
+### 4.1 Raised, and now delivered
 
-There is no vectoring. The exception is recorded on the CPU and execution stops;
-`Cause`, `EPC`, `Status` and the exception vectors arrive with the rest of
-coprocessor zero in the next slice. What exists now is the raising, the codes, and
-the guarantee about state.
+Vectoring landed in the slice after this one; §9 is what an exception does to the
+machine. `LastException` survives as a diagnostic rather than a control signal — it
+records the most recent raise and is never cleared, and execution continues into the
+handler rather than stopping, which is what let the round-trip test in §9.3 exist.
 
 ## 5. Cycles: documented numbers only
 
@@ -150,9 +150,13 @@ merging is pinned rather than incidental.
 
 ## 8. What is not implemented yet
 
-- **The TLB**, so three of five segments fault.
+- **The TLB**, so three of five segments fault — correctly, as a refill (§9.1).
 - **COP1**, which is Phase B.
-- **Exception vectoring** (§4.1).
+- **Interrupts.** Nothing asynchronous can reach the CPU yet: no timer comparison,
+  no interrupt lines, and the enable and mask bits in `Status` are stored but
+  consulted by nothing. That is the next slice, and it is where the coarse clock
+  (§5) will need an answer about what "the counter reached the comparison value"
+  means when a single instruction can advance it by more than one.
 
 ## 9. Coprocessor zero, minimally
 
@@ -179,3 +183,47 @@ written value, which would mean the clock had stopped. Both were corrected again
 the instruction semantics rather than by adjusting the core, and they are recorded
 here because "the test was wrong" is the outcome this project's tests exist to make
 visible.
+
+## 9. What an exception does
+
+In order: save the return address, record the cause, raise the exception level, and
+jump to a handler.
+
+The return address is **the faulting instruction itself**, not the instruction after
+it — a handler that fixes the cause and returns must re-run what failed. A fault in a
+delay slot saves the *branch* instead and sets a flag saying so, because returning to
+a delay slot alone would execute it without the jump that gave it meaning. Both have
+tests.
+
+This is where `CurrentPc` earns its place. The step loop advances `Pc` past the
+instruction before executing it, so that branches can compute targets relative to
+the delay slot — which means `Pc` is the wrong answer for "where did this fault
+happen". `CurrentPc` is the right one, and an exception that used `Pc` would return
+one instruction too far, every time, invisibly.
+
+### 9.1 Two doors
+
+A TLB refill arriving from ordinary execution gets its own vector; everything else,
+including a refill that happens *while already handling an exception*, uses the
+general one. That distinction is the hardware's way of making the common case — a
+page that simply is not mapped yet — cheap, while keeping nested faults survivable.
+
+A second flag in `Status` moves both vectors into the boot address space, which is
+what the machine uses before RAM is trustworthy. All three paths are tested.
+
+Mars has no TLB, so every mapped-segment access faults as a refill. That is the
+correct behaviour for a machine whose TLB is empty rather than a placeholder.
+
+### 9.2 A fault inside a handler keeps the first return address
+
+The saved address and the delay-slot flag are written only when the exception level
+was clear. Overwriting them would destroy the outer handler's way home, which is the
+difference between a nested fault being survivable and being fatal.
+
+### 9.3 The round trip
+
+The return instruction restores the program counter from the saved address and drops
+the exception level, with no delay slot of its own. A test runs the whole circuit: a
+system call faults, a handler at the vector records that it ran, steps the saved
+address past the faulting instruction, returns — and the instruction after the fault
+then executes normally.

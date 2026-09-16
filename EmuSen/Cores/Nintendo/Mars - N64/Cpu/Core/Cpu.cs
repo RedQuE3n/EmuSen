@@ -14,6 +14,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public ulong Pc;
         public ulong NextPc;
 
+        // The address of the instruction being executed; Pc has already moved past it - see Mars_Cpu.md §3.
+        public ulong CurrentPc;
+
         // Set while the instruction being executed follows a taken branch - see Mars_Cpu.md §3.
         public bool InDelaySlot;
 
@@ -38,10 +41,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public void Step()
         {
-            LastException = null;
-
             try
             {
+                CurrentPc = Pc;
+
                 uint instruction = FetchInstruction();
 
                 InDelaySlot = _branchPending;
@@ -60,13 +63,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             catch (CpuException raised)
             {
                 LastException = raised;
+                EnterException(raised);
                 _bus.Tick(1);
             }
         }
 
         public void Run(int steps)
         {
-            for (int i = 0; i < steps && LastException is null; i++) Step();
+            for (int i = 0; i < steps; i++) Step();
         }
 
         private uint FetchInstruction()

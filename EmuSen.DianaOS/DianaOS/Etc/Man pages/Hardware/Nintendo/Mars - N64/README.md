@@ -20,7 +20,7 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Boot.md`](Mars_Boot.md) is the handoff that replaces the PIF, and the record of what happened when a real ROM ran through it: the corpus boots through libdragon's bootcode into its own entry point, and stops at a coprocessor-1 move, which is where Phase B begins.
 
-[`Mars_Fpu.md`](Mars_Fpu.md) is Phase B's first slice: the coprocessor register files and the paths into them, with no arithmetic at all. Read §9 first — with this in place the hardware corpus starts printing verdicts, and the tally it prints (521 tests started, 202 failed) is now a ratchet in the test suite. §9.2 is two integer defects the corpus found and this slice deliberately did not fix.
+[`Mars_Fpu.md`](Mars_Fpu.md) is Phase B's first slice: the coprocessor register files and the paths into them, with no arithmetic at all. Read §9 first — with this in place the hardware corpus starts printing verdicts, and the tally it prints is now a ratchet in the test suite. §9.2 is two integer defects the corpus found and that slice deliberately did not fix; `Mars_Cpu.md` §14 is where they were settled, and neither turned out to be what it looked like.
 
 The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 

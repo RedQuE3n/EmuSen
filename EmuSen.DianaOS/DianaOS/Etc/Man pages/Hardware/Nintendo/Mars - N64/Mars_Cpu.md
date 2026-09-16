@@ -293,3 +293,86 @@ delete rather than to amend.
 each in turn, four thousand instructions apart, and each stop was diagnosed from the
 faulting word. That is the pattern this phase has repeated — the corpus finds the
 omission, and the omission turns out to be a decision rather than an oversight.
+
+## 14. Two operations that do not read the operand width they appear to
+
+*Added 2026-09-16, after the hardware corpus began reporting (`Mars_Fpu.md` §9). Both
+of these were written from the instruction set's shape — "a 32-bit instruction reads
+32-bit operands" — and both are wrong. Neither would have been found by reading, and
+neither would ever have been found by a test this project wrote for itself, because
+the wrong answer is the one an implementer expects.*
+
+### 14.1 SRA and SRAV shift the whole register
+
+`SRA` shifts the **full 64-bit register** arithmetically, takes the low 32 bits of
+that result, and sign-extends those into the destination. It does not truncate first.
+
+For `SRA $rd, 0x0123456789ABCDEF, 4` hardware produces `0x00000000789ABCDE`. Truncating
+first gives `0xFFFFFFFFF89ABCDE` — a different value *and a different sign*, which is
+the kind of divergence a game accumulates rather than crashes on.
+
+`SRL` is unaffected and its tests passed throughout, so this is a property of the
+arithmetic shift and not a general rule about 32-bit shifts. `SRAV` behaves
+identically, with the count still taken from the low five bits of `rs`.
+
+**A note on what the four hardware vectors can and cannot settle.** For any shift
+amount in 0–31, the low 32 bits of a 64-bit shift are the same whether the shift is
+arithmetic or logical — the bits duplicated from the sign only ever land in the upper
+half. So the measurements pin *that the whole register is read* and say nothing about
+which 64-bit shift is performed. Mars uses the arithmetic one; if that is ever shown
+to matter, no test here would have caught the difference.
+
+### 14.2 MULT reads thirty-five bits of its second operand
+
+Not thirty-two, and not sixty-four. `MULT` takes `rs` as a full 64-bit signed value
+and `rt` as a **35-bit signed value** — bits 34 down to 0, with bit 34 as the sign —
+multiplies them into 64 bits, then splits that into `LO` (bits 31–0) and `HI` (bits
+63–32), sign-extending each half.
+
+**The consequence is that `MULT` is not commutative.** `MULT(0xEEFFFFFFFF, 0x10)` and
+`MULT(0x10, 0xEEFFFFFFFF)` give different answers on silicon, because only the second
+operand is narrowed. That is the observation that made the earlier guesses fail: any
+rule symmetric in its operands is refuted by a single swapped pair.
+
+Three vectors make the width unmistakable, all with `rs = 1`:
+
+| `rt` | `HI:LO` | why |
+|---|---|---|
+| `0x0000000200000000` | `2 : 0` | 2³³ fits in 35 bits, positive |
+| `0x0000000400000000` | `-4 : 0` | 2³⁴ **is** the sign bit, so it reads negative |
+| `0x0000000800000000` | `0 : 0` | 2³⁵ is outside the field and truncates to nothing |
+
+A 32-bit reading gives zero for all three; a 64-bit reading gives a positive result
+for all three. Only the 35-bit reading produces the middle row.
+
+`MULTU` is different again and was already right: it truncates **both** operands to 32
+bits unsigned. `DMULT` and `DMULTU` take both as full 64-bit values. The four
+instructions therefore use three different operand widths between them, which is why
+"the multiply family" is not a thing that can be implemented once.
+
+### 14.3 How they were found, and why the rule came from a comment
+
+Neither was found by inspection. The corpus began reporting verdicts in the slice
+before this one, and named both in its output with the expected and actual values
+beside each other.
+
+The `MULT` rule itself was **not** derived from those failures. Two candidate readings
+were fitted to the reported pairs and both survived several vectors before failing on
+a swapped one — the exact shape of a wrong answer that looks confirmed.
+`Mars_Fpu.md` §9.2 records the decision to stop guessing and go and read, and the rule
+turned out to be stated outright in a comment at the top of the corpus's own multiply
+test. It was then checked mechanically against all 63 multiply vectors in the corpus —
+`MULT`, `MULTU`, `DMULT`, `DMULTU` — with no mismatches, before any code was written.
+
+**What this cost, recorded because it is the point.** The evidence needed to *state*
+the rule had been sitting in the oracle's source the whole time; what was missing was
+the instrument to notice the rule was needed. Twenty-eight corpus failures cleared
+from two changes of a few lines each.
+
+### 14.4 What is still not verified
+
+The divide family's edge cases — division by zero and the single overflowing case —
+pass against the corpus and were written in advance from the architecture manual.
+Those are the only arithmetic behaviours here confirmed by measurement rather than
+merely unrefuted; everything else in §14 rests on the corpus's vectors, which is a
+stronger footing than the rest of this page enjoys.

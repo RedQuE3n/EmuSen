@@ -12,6 +12,8 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Rom.md`](Mars_Rom.md) is the first page describing code rather than plans: Phase 0's container handling and header parser, which emulate nothing. Read §1.1 before touching the loader — the container is decided by the magic word and never by the extension, and the reason is a documented disagreement between sources about what the extensions mean.
 
+[`Mars_Memory.md`](Mars_Memory.md) is Phase A's first slice: the address map, the debug port, and the single machine clock. §3.1 carries the decision that `Count` is derived rather than incremented, which is this project's answer to a failure mode another emulator's commit log documents over years.
+
 The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.

@@ -55,8 +55,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x25: Load(instruction, 2, signed: false); return;
                 case 0x26: LoadWordRight(instruction); return;
                 case 0x27: Load(instruction, 4, signed: false); return;
-                // Nothing is cached, so every cache operation is already complete - see Mars_Cpu.md §13.
-                case 0x2F: return;
+                // Nothing is cached, but the address is still checked before nothing happens - see Mars_Cpu.md §13.
+                case 0x2F: Cache(instruction); return;
 
                 case 0x31: LoadCop1(instruction, wide: false); return;
                 case 0x35: LoadCop1(instruction, wide: true); return;

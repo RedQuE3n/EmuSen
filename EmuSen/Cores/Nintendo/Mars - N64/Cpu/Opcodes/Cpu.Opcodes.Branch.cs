@@ -16,7 +16,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 return;
             }
 
-            if (likely) NullifyDelaySlot();
+            if (likely)
+            {
+                NullifyDelaySlot();
+                return;
+            }
+
+            // The slot behind an untaken ordinary branch is still a delay slot - see Mars_Cpu.md §3.2.
+            _branchPending = true;
         }
 
         private void Jump(uint instruction) => Branch(JumpTarget(instruction));

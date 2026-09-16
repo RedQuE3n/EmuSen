@@ -47,7 +47,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             Load(instruction, size, signed: size == 4);
 
             LinkedFlag = true;
-            Cop0[LinkedAddressRegister] = EffectiveAddress(instruction) >> 4;
+
+            // The physical line rather than the virtual address, and no store ever compares it - see Mars_Cop0.md §6.
+            Cop0[LinkedAddressRegister] = Translate(EffectiveAddress(instruction)) >> 4;
         }
 
         private void StoreConditional(uint instruction, int size)
@@ -56,6 +58,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             Write(Rt(instruction), LinkedFlag ? 1UL : 0UL);
             LinkedFlag = false;
+        }
+
+        // The operation is already complete; what remains of it is the address check - see Mars_Cpu.md §13.
+        private void Cache(uint instruction)
+        {
+            ulong address = EffectiveAddress(instruction);
+            RequireAlignment(address, 4, ExceptionCode.AddressErrorLoad);
+
+            Translate(address);
         }
 
         private ulong EffectiveAddress(uint instruction) =>

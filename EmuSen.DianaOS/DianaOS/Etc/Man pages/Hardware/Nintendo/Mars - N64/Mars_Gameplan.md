@@ -244,6 +244,24 @@ a defect in this one.
 **Done when** the corpus's CPU, COP0, TLB and exception sections pass, each failure
 being a numbered assertion rather than a suspicion.
 
+> **Met, 2026-09-16** — `Mars_Cop0.md` §1. Every CPU, COP0, TLB, exception, LL/SC and
+> address-error test the corpus runs passes; what still fails is caches, which are
+> deliberately unmodelled, and cartridge DMA, which is Phase E's.
+>
+> **It was met by a route this plan did not anticipate, and the order is the lesson.**
+> Phase A could not be finished as Phase A. The condition above is stated in terms of
+> the corpus's verdict, and the corpus could not deliver a verdict until enough of
+> *Phase B* existed for its first instruction to run (`Mars_Fpu.md` §9). Three slices
+> of Phase B and Phase A work then cleared 202 → 138 failures, almost all of them in
+> Phase A code that had been written, reviewed and unit-tested months of work earlier
+> and was wrong in ways no test written here would have suspected.
+>
+> The general form: **a phase whose completion is defined by an instrument cannot be
+> completed before the instrument runs.** §4's ordering treated the phases as
+> independently finishable and they are not. Nothing about the phase *contents* is
+> retired by this — the boundaries held — but "done when the corpus says so" should be
+> read as a claim about evidence, not about sequence.
+
 ### 4.2 Phase B — COP1, the floating-point unit
 
 MIPS III floating point in both precisions, all four rounding modes, the FCSR flag

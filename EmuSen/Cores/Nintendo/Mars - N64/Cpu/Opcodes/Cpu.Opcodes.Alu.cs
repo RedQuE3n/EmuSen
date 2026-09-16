@@ -11,7 +11,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             int right = (int)SignedImmediate(instruction);
             int result = unchecked(left + right);
 
-            if (trapOnOverflow && OverflowedAdd(left, right, result)) throw Raise(ExceptionCode.Overflow, Pc);
+            if (trapOnOverflow && OverflowedAdd(left, right, result)) throw Raise(ExceptionCode.Overflow, CurrentPc);
 
             Write32(Rt(instruction), (uint)result);
         }
@@ -22,7 +22,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             long right = SignedImmediate(instruction);
             long result = unchecked(left + right);
 
-            if (trapOnOverflow && OverflowedAdd(left, right, result)) throw Raise(ExceptionCode.Overflow, Pc);
+            if (trapOnOverflow && OverflowedAdd(left, right, result)) throw Raise(ExceptionCode.Overflow, CurrentPc);
 
             Write(Rt(instruction), (ulong)result);
         }
@@ -33,7 +33,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             int right = (int)(uint)Read(Rt(instruction));
             int result = unchecked(left + right);
 
-            if (trapOnOverflow && OverflowedAdd(left, right, result)) throw Raise(ExceptionCode.Overflow, Pc);
+            if (trapOnOverflow && OverflowedAdd(left, right, result)) throw Raise(ExceptionCode.Overflow, CurrentPc);
 
             Write32(Rd(instruction), (uint)result);
         }
@@ -44,7 +44,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             int right = (int)(uint)Read(Rt(instruction));
             int result = unchecked(left - right);
 
-            if (trapOnOverflow && OverflowedSubtract(left, right, result)) throw Raise(ExceptionCode.Overflow, Pc);
+            if (trapOnOverflow && OverflowedSubtract(left, right, result)) throw Raise(ExceptionCode.Overflow, CurrentPc);
 
             Write32(Rd(instruction), (uint)result);
         }
@@ -55,7 +55,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             long right = (long)Read(Rt(instruction));
             long result = unchecked(left + right);
 
-            if (trapOnOverflow && OverflowedAdd(left, right, result)) throw Raise(ExceptionCode.Overflow, Pc);
+            if (trapOnOverflow && OverflowedAdd(left, right, result)) throw Raise(ExceptionCode.Overflow, CurrentPc);
 
             Write(Rd(instruction), (ulong)result);
         }
@@ -66,7 +66,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             long right = (long)Read(Rt(instruction));
             long result = unchecked(left - right);
 
-            if (trapOnOverflow && OverflowedSubtract(left, right, result)) throw Raise(ExceptionCode.Overflow, Pc);
+            if (trapOnOverflow && OverflowedSubtract(left, right, result)) throw Raise(ExceptionCode.Overflow, CurrentPc);
 
             Write(Rd(instruction), (ulong)result);
         }

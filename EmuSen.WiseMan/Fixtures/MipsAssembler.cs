@@ -94,6 +94,8 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Mfc0(int rt, int rd) => Word((0x10u << 26) | (0u << 21) | ((uint)rt << 16) | ((uint)rd << 11));
         public MipsAssembler Mtc0(int rt, int rd) => Word((0x10u << 26) | (4u << 21) | ((uint)rt << 16) | ((uint)rd << 11));
 
+        public MipsAssembler Eret() => Word((0x10u << 26) | (0x10u << 21) | 0x18);
+
         public MipsAssembler Syscall() => R(0, 0, 0, 0, 0x0C);
         public MipsAssembler Break() => R(0, 0, 0, 0, 0x0D);
 

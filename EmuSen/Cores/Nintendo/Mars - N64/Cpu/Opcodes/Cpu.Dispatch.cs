@@ -64,7 +64,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x2E: StoreWordRight(instruction); return;
                 case 0x3F: Store(instruction, 8); return;
 
-                default: throw Raise(ExceptionCode.ReservedInstruction, Pc);
+                default: throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
             }
         }
 
@@ -82,8 +82,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x08: JumpRegister(instruction, link: false); return;
                 case 0x09: JumpRegister(instruction, link: true); return;
 
-                case 0x0C: throw Raise(ExceptionCode.Syscall, Pc);
-                case 0x0D: throw Raise(ExceptionCode.Breakpoint, Pc);
+                case 0x0C: throw Raise(ExceptionCode.Syscall, CurrentPc);
+                case 0x0D: throw Raise(ExceptionCode.Breakpoint, CurrentPc);
 
                 case 0x10: Write(Rd(instruction), Hi); return;
                 case 0x11: Hi = Read(Rs(instruction)); return;
@@ -127,7 +127,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x3E: Write(Rd(instruction), Read(Rt(instruction)) >> (Sa(instruction) + 32)); return;
                 case 0x3F: Write(Rd(instruction), (ulong)((long)Read(Rt(instruction)) >> (Sa(instruction) + 32))); return;
 
-                default: throw Raise(ExceptionCode.ReservedInstruction, Pc);
+                default: throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
             }
         }
 
@@ -147,7 +147,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x12: BranchIf(value < 0, instruction, likely: true, link: true); return;
                 case 0x13: BranchIf(value >= 0, instruction, likely: true, link: true); return;
 
-                default: throw Raise(ExceptionCode.ReservedInstruction, Pc);
+                default: throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
             }
         }
 

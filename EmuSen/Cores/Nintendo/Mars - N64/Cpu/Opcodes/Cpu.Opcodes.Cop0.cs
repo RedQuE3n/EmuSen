@@ -5,7 +5,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
     // Just enough of coprocessor zero to move values and to let the corpus start - see Mars_Cpu.md §8.
     public sealed partial class Cpu
     {
+        public const int IndexRegister = 0;
+        public const int RandomRegister = 1;
+        public const int EntryLo0Register = 2;
+        public const int EntryLo1Register = 3;
+        public const int ContextRegister = 4;
+        public const int PageMaskRegister = 5;
+        public const int WiredRegister = 6;
         public const int BadVirtualAddressRegister = 8;
+        public const int EntryHiRegister = 10;
         public const int CountRegister = 9;
         public const int CompareRegister = 11;
         public const int StatusRegister = 12;
@@ -45,10 +53,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 // The emulator extensions, which real hardware ignores and the corpus calls unconditionally.
                 if (funct >= 0x20) return;
 
-                if (funct == 0x18)
+                switch (funct)
                 {
-                    ReturnFromException();
-                    return;
+                    case 0x01: ReadTlbEntry(); return;
+                    case 0x02: WriteTlbEntry((int)(Cop0[IndexRegister] & 0x1F)); return;
+                    case 0x06: WriteTlbEntry(RandomIndex()); return;
+                    case 0x08: ProbeTlb(); return;
+                    case 0x18: ReturnFromException(); return;
                 }
 
                 throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
@@ -145,7 +156,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             Cop0[StatusRegister] |= StatusExceptionLevel;
 
-            Pc = VectorFor(raised.Code, alreadyHandling);
+            Pc = VectorFor(raised.Refill, alreadyHandling);
             NextPc = Pc + 4;
             _branchPending = false;
             InDelaySlot = false;
@@ -170,12 +181,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         }
 
         // A refill has its own vector only on the way in from ordinary execution - see Mars_Cpu.md §9.1.
-        private ulong VectorFor(ExceptionCode code, bool alreadyHandling)
+        private ulong VectorFor(bool refill, bool alreadyHandling)
         {
             ulong start = (Cop0[StatusRegister] & StatusBootstrapVectors) != 0 ? VectorBaseBootstrap : VectorBase;
-            bool refill = !alreadyHandling && code is ExceptionCode.TlbLoad or ExceptionCode.TlbStore;
 
-            return start + (refill ? VectorOffsetTlbRefill : VectorOffsetGeneral);
+            return start + (refill && !alreadyHandling ? VectorOffsetTlbRefill : VectorOffsetGeneral);
         }
 
         private void SetCauseCode(ExceptionCode code) =>
@@ -185,6 +195,51 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             Cop0[CauseRegister] = inDelaySlot
                 ? Cop0[CauseRegister] | CauseBranchDelay
                 : Cop0[CauseRegister] & ~CauseBranchDelay;
+
+        // Copies the indexed entry out into the registers a handler reads.
+        private void ReadTlbEntry()
+        {
+            ref TlbEntry entry = ref Tlb.Entries[Cop0[IndexRegister] & 0x1F];
+
+            Cop0[PageMaskRegister] = entry.PageMask;
+            Cop0[EntryHiRegister] = entry.EntryHi;
+            Cop0[EntryLo0Register] = entry.EntryLo0;
+            Cop0[EntryLo1Register] = entry.EntryLo1;
+        }
+
+        private void WriteTlbEntry(int index)
+        {
+            ref TlbEntry entry = ref Tlb.Entries[index & 0x1F];
+
+            entry.PageMask = Cop0[PageMaskRegister] & 0x01FF_E000;
+            entry.EntryHi = Cop0[EntryHiRegister];
+            entry.EntryLo0 = Cop0[EntryLo0Register];
+            entry.EntryLo1 = Cop0[EntryLo1Register];
+        }
+
+        // A failed probe sets the top bit rather than an index, which is how a handler tells them apart.
+        private void ProbeTlb()
+        {
+            int found = Tlb.Probe(Cop0[EntryHiRegister]);
+            Cop0[IndexRegister] = found < 0 ? 0x8000_0000UL : (ulong)found;
+        }
+
+        // The entry a random write lands on, kept above the wired entries a handler reserves for itself.
+        private int RandomIndex()
+        {
+            int wired = (int)(Cop0[WiredRegister] & 0x1F);
+            if (wired >= Tlb.EntryCount) return Tlb.EntryCount - 1;
+
+            int span = Tlb.EntryCount - wired;
+            return wired + (int)((ulong)Instructions % (ulong)span);
+        }
+
+        // What a refill handler reads instead of recomputing the address itself - see Mars_Tlb.md §4.
+        private void OnTlbFailure(ulong address)
+        {
+            Cop0[ContextRegister] = (Cop0[ContextRegister] & ~0x007F_FFF0UL) | ((address >> 9) & 0x007F_FFF0UL);
+            Cop0[EntryHiRegister] = (Cop0[EntryHiRegister] & 0xFF) | (address & 0xFFFF_E000UL);
+        }
 
         private static bool IsAddressRelated(ExceptionCode code) =>
             code is ExceptionCode.AddressErrorLoad or ExceptionCode.AddressErrorStore

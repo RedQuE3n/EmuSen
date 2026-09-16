@@ -53,7 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             ulong address = EffectiveAddress(instruction);
             int shift = (int)(address & 3) * 8;
-            uint physical = Translate(address & ~3UL);
+            uint physical = Translate(address & ~3UL, store: true);
 
             uint kept = _bus.Read32(physical) & ~(0xFFFF_FFFFu >> shift);
 
@@ -64,7 +64,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             ulong address = EffectiveAddress(instruction);
             int shift = (3 - (int)(address & 3)) * 8;
-            uint physical = Translate(address & ~3UL);
+            uint physical = Translate(address & ~3UL, store: true);
 
             uint kept = shift == 0 ? 0 : _bus.Read32(physical) & ((1u << shift) - 1);
 
@@ -75,7 +75,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             ulong address = EffectiveAddress(instruction);
             int shift = (int)(address & 7) * 8;
-            uint physical = Translate(address & ~7UL);
+            uint physical = Translate(address & ~7UL, store: true);
 
             ulong kept = _bus.Read64(physical) & ~(0xFFFF_FFFF_FFFF_FFFFUL >> shift);
 
@@ -86,7 +86,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             ulong address = EffectiveAddress(instruction);
             int shift = (7 - (int)(address & 7)) * 8;
-            uint physical = Translate(address & ~7UL);
+            uint physical = Translate(address & ~7UL, store: true);
 
             ulong kept = shift == 0 ? 0 : _bus.Read64(physical) & ((1UL << shift) - 1);
 

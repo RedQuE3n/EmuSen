@@ -150,7 +150,9 @@ merging is pinned rather than incidental.
 
 ## 8. What is not implemented yet
 
-- **The TLB**, so three of five segments fault — correctly, as a refill (§9.1).
+- ~~The TLB~~ — landed, `Mars_Tlb.md`. Three of five segments now translate, and the
+  refill-versus-invalid distinction §9.1 could not previously express is carried on
+  the exception itself.
 - **COP1**, which is Phase B.
 - **Software interrupts**, the two bits a program raises itself, are storage with
   nothing behind them.

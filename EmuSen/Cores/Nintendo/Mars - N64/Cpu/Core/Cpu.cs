@@ -8,6 +8,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
     {
         public readonly ulong[] Gpr = new ulong[32];
 
+        public readonly Tlb Tlb = new();
+
         public ulong Hi;
         public ulong Lo;
 
@@ -86,20 +88,31 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         }
 
         // Written once so the TLB and the caches cannot be bypassed later - see Mars_Cpu.md §6.
-        private uint Translate(ulong address)
+        private uint Translate(ulong address, bool store = false)
         {
             if (MemoryMap.TryTranslateDirect(address, out uint physical)) return physical;
 
-            throw Raise(ExceptionCode.TlbLoad, address);
+            TlbResult result = Tlb.TryTranslate(address, Cop0[EntryHiRegister], store, out uint mapped, out _);
+            if (result == TlbResult.Mapped) return mapped;
+
+            OnTlbFailure(address);
+
+            throw result switch
+            {
+                TlbResult.NotWritable => Raise(ExceptionCode.TlbModification, address),
+                TlbResult.Invalid => Raise(store ? ExceptionCode.TlbStore : ExceptionCode.TlbLoad, address),
+                _ => Raise(store ? ExceptionCode.TlbStore : ExceptionCode.TlbLoad, address, refill: true),
+            };
         }
 
         private uint ReadWord(ulong address) => _bus.Read32(Translate(address));
 
-        private CpuException Raise(ExceptionCode code, ulong address)
+        private CpuException Raise(ExceptionCode code, ulong address, bool refill = false)
         {
             _exception.Code = code;
             _exception.Address = address;
             _exception.InDelaySlot = InDelaySlot;
+            _exception.Refill = refill;
             return _exception;
         }
 

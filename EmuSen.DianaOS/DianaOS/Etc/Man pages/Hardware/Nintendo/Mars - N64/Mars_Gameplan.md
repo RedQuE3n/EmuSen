@@ -200,6 +200,11 @@ Alongside it the physical memory map: RDRAM, the RSP's DMEM and IMEM as plain
 memory, the MMIO register blocks stubbed to sane reads, and PI DMA from the
 cartridge.
 
+**Started 2026-09-15 with the memory map** — segments, the physical map, the debug
+port and the machine clock, with `Count` derived rather than incremented so that no
+opcode can forget it (`Mars_Memory.md` §3.1). The DMA engines the bootstrap needs are
+the next slice; the instruction set has not begun.
+
 **Four behaviours are the cost of admission to being graded at all**, and belong to
 this phase's memory map: a *readable* ISViewer region, COP0 CO `funct` `0x20`–`0x3F`
 as no-ops, and three RDRAM/SP DMA edge cases the corpus's bootstrap depends on. Two

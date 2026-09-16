@@ -14,6 +14,8 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Memory.md`](Mars_Memory.md) is Phase A's first slice: the address map, the debug port, and the single machine clock. §3.1 carries the decision that `Count` is derived rather than incremented, which is this project's answer to a failure mode another emulator's commit log documents over years.
 
+[`Mars_Cpu.md`](Mars_Cpu.md) is the VR4300's integer core: the dispatch shape, 64-bit registers, the two-program-counter delay-slot model, and the two decisions taken in advance — exceptions are thrown so that a faulting instruction cannot leave partial state (§4), and only cycle counts the vendor manual tabulates are charged (§5).
+
 The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.

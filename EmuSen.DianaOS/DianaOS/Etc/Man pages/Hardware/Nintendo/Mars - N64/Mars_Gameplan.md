@@ -207,8 +207,9 @@ corpus's bootstrap drives before any instruction of ours runs (§6, §7). **All 
 of the bootstrap's admission requirements now hold and are tested.** The integer
 instruction set landed next (`Mars_Cpu.md`), with the fourth admission requirement —
 the emulator-extension opcodes the corpus calls unconditionally — ignored rather than
-refused. Still missing before the corpus can be run: the unaligned load and store
-family, the TLB, exception vectoring, and the boot handoff.
+refused. The merging loads and stores followed
+(`Mars_Cpu.md` §7). Still missing before the corpus can be run: the TLB, exception
+vectoring, and the boot handoff.
 
 **Four behaviours are the cost of admission to being graded at all**, and belong to
 this phase's memory map: a *readable* ISViewer region, COP0 CO `funct` `0x20`–`0x3F`

@@ -77,6 +77,15 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Lw(int rt, int rs, short offset) => I(0x23, rs, rt, offset);
         public MipsAssembler Lwu(int rt, int rs, short offset) => I(0x27, rs, rt, offset);
         public MipsAssembler Ld(int rt, int rs, short offset) => I(0x37, rs, rt, offset);
+        public MipsAssembler Lwl(int rt, int rs, short offset) => I(0x22, rs, rt, offset);
+        public MipsAssembler Lwr(int rt, int rs, short offset) => I(0x26, rs, rt, offset);
+        public MipsAssembler Ldl(int rt, int rs, short offset) => I(0x1A, rs, rt, offset);
+        public MipsAssembler Ldr(int rt, int rs, short offset) => I(0x1B, rs, rt, offset);
+        public MipsAssembler Swl(int rt, int rs, short offset) => I(0x2A, rs, rt, offset);
+        public MipsAssembler Swr(int rt, int rs, short offset) => I(0x2E, rs, rt, offset);
+        public MipsAssembler Sdl(int rt, int rs, short offset) => I(0x2C, rs, rt, offset);
+        public MipsAssembler Sdr(int rt, int rs, short offset) => I(0x2D, rs, rt, offset);
+
         public MipsAssembler Sb(int rt, int rs, short offset) => I(0x28, rs, rt, offset);
         public MipsAssembler Sh(int rt, int rs, short offset) => I(0x29, rs, rt, offset);
         public MipsAssembler Sw(int rt, int rs, short offset) => I(0x2B, rs, rt, offset);

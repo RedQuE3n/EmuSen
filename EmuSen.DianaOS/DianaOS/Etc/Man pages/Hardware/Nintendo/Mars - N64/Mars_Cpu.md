@@ -103,17 +103,58 @@ everything else, which is the correct behaviour for a machine whose TLB is empty
 Alignment is checked before translation, and the check raises before any access
 happens (§4).
 
-## 7. What is not implemented yet
+## 7. The merging loads and stores
 
-- **The unaligned load and store family.** `LWL`/`LWR`/`LDL`/`LDR` and their stores
-  decode to nothing and raise a reserved-instruction exception. They are named in
-  `Mars_Gameplan.md` §5 as a classic source of subtly wrong values, and they want
-  their own slice rather than being folded into this one.
+`LWL`/`LWR`, `LDL`/`LDR` and their four store counterparts, added in their own slice
+because `Mars_Gameplan.md` §5 names them as a classic source of subtly wrong values
+— the kind that survive casual review because the common case looks right.
+
+Each accesses the *aligned* word or doubleword containing its address, and merges:
+a left load takes the addressed byte and everything above it into the high end of
+the register and keeps the register's remaining low bytes; a right load does the
+reverse. The stores do the same to memory. Used in pairs they read or write a value
+that straddles an alignment boundary, which is the idiom they exist for and which
+has its own test at both widths.
+
+**These addresses are legal.** An ordinary load at the same address faults (§6);
+these do not, and a test asserts it.
+
+### 7.1 A near-miss worth recording: the corpus's tables are reverse-endian
+
+The hardware corpus contains expected-value tables for exactly these instructions,
+which is precisely the oracle this project prefers to prose. They are in its
+**reverse-endian** test, where the byte roles are mirrored — its left-load table at
+offset zero shows a single byte loaded, which is the opposite of what the
+architecture specifies in normal mode.
+
+Lifting them would have produced an implementation that was confidently, uniformly
+wrong, and every test would have agreed with it. The expectations here are derived by
+hand from the architecture's definition instead, and the corpus's own normal-mode
+verdict is what will eventually confirm or refute them.
+
+The general form of this is worth keeping: **an oracle's answer is only an answer to
+the question it was asking.** The tables were real, hardware-derived and correct —
+for a mode we were not in.
+
+### 7.2 Two of these tests were wrong before they were right
+
+The first run failed one case, and the fault was the test: `LUI` sign-extends, so a
+register preloaded with it holds `0xFFFFFFFF` in its upper half rather than the
+pattern byte, and a right-double-load keeps exactly that half. The expectation had
+assumed a pattern that the setup never put there. Fixed by preloading the register
+through a real doubleword load, which is also a better test — the kept bytes are now
+visible as the pattern at both ends.
+
+Removing the merge from the left load reddens three of its four cases, so the
+merging is pinned rather than incidental.
+
+## 8. What is not implemented yet
+
 - **The TLB**, so three of five segments fault.
 - **COP1**, which is Phase B.
 - **Exception vectoring** (§4.1).
 
-## 8. Coprocessor zero, minimally
+## 9. Coprocessor zero, minimally
 
 Enough to move values in and out, with `Count` read from the machine clock rather
 than from storage — the register file is otherwise plain words. `Compare` is stored
@@ -126,7 +167,7 @@ in its first instructions, so refusing them traps before it can print anything
 (`Mars_TestOracle.md` §2.3). A test asserts both halves — that range ignored, and the
 range below it still refused, so this is not a blanket amnesty.
 
-## 9. Tests read as assembly
+## 10. Tests read as assembly
 
 `MipsAssembler` emits instruction words, so a test is a short program rather than a
 table of hex. A program is assembled, loaded, and run for a fixed number of steps.

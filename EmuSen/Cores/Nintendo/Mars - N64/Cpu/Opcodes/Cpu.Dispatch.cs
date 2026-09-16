@@ -42,17 +42,26 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x18: AddImmediate64(instruction, trapOnOverflow: true); return;
                 case 0x19: AddImmediate64(instruction, trapOnOverflow: false); return;
 
+                case 0x1A: LoadDoubleLeft(instruction); return;
+                case 0x1B: LoadDoubleRight(instruction); return;
+
                 case 0x20: Load(instruction, 1, signed: true); return;
                 case 0x21: Load(instruction, 2, signed: true); return;
+                case 0x22: LoadWordLeft(instruction); return;
                 case 0x23: Load(instruction, 4, signed: true); return;
                 case 0x24: Load(instruction, 1, signed: false); return;
                 case 0x25: Load(instruction, 2, signed: false); return;
+                case 0x26: LoadWordRight(instruction); return;
                 case 0x27: Load(instruction, 4, signed: false); return;
                 case 0x37: Load(instruction, 8, signed: false); return;
 
                 case 0x28: Store(instruction, 1); return;
                 case 0x29: Store(instruction, 2); return;
+                case 0x2A: StoreWordLeft(instruction); return;
                 case 0x2B: Store(instruction, 4); return;
+                case 0x2C: StoreDoubleLeft(instruction); return;
+                case 0x2D: StoreDoubleRight(instruction); return;
+                case 0x2E: StoreWordRight(instruction); return;
                 case 0x3F: Store(instruction, 8); return;
 
                 default: throw Raise(ExceptionCode.ReservedInstruction, Pc);

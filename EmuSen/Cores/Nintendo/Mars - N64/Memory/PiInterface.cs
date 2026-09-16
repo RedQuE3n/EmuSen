@@ -20,7 +20,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         private uint _dramAddress;
         private uint _cartAddress;
-        private bool _interrupt;
 
         public PiInterface(MarsBus bus) => _bus = bus;
 
@@ -32,7 +31,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 case CartAddress: return _cartAddress;
 
                 // Never busy, because every transfer has already finished - see Mars_Memory.md §7.1.
-                case Status: return _interrupt ? StatusInterrupt : 0;
+                case Status: return _bus.Mi.Pending.HasFlag(MiInterrupt.PeripheralInterface) ? StatusInterrupt : 0;
 
                 default: return 0;
             }
@@ -59,7 +58,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                     break;
 
                 case Status:
-                    if ((value & 0x02) != 0) _interrupt = false;
+                    if ((value & 0x02) != 0) _bus.Mi.Clear(MiInterrupt.PeripheralInterface);
                     break;
             }
         }
@@ -77,7 +76,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             _dramAddress += length;
             _cartAddress += length;
-            _interrupt = true;
+            _bus.Mi.Raise(MiInterrupt.PeripheralInterface);
         }
     }
 }

@@ -167,3 +167,25 @@ transfer, hangs the ROM before it emits a single character, and the symptom is
 indistinguishable from the silent-detection failure in §4.1.
 
 Two landmines with one symptom is the reason both have a test naming them.
+
+## 8. The interrupt aggregator
+
+Six devices, one line to the CPU. A device raises its bit; the line is asserted while
+any raised bit is also unmasked. It is level-triggered rather than latched: clearing
+the device's bit lowers the line, and nothing has to tell the CPU
+(`Mars_Cpu.md` §10).
+
+The peripheral interface is the first device wired to it. Its completion flag is no
+longer its own — the status register reports what the aggregator holds, and writing
+the acknowledge bit clears it there. One flag in one place, rather than two that can
+disagree, which is the same argument the cheat registry seam settled in
+`EmuSen_Cheats.md` §6.
+
+### 8.1 The mask takes two bits per device
+
+One to clear the mask and one to set it, so a program can change one device's mask
+without reading the register first or disturbing the other five. The write path
+implements the pairs; a test writes the set bit and then the clear bit for the same
+device and watches the mask follow.
+
+The other five devices exist as bits with nothing behind them yet.

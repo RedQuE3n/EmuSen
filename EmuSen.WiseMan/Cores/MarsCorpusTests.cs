@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("Running ADDIOpcodeTest...", verdicts);
 
             // A ratchet, not a description: this number goes down as Mars is fixed - see Mars_Fpu.md §9.1.
-            Assert.Equal($"521 started, 174 failed ({report})", $"{Tally(verdicts)} ({report})");
+            Assert.Equal($"521 started, 138 failed ({report})", $"{Tally(verdicts)} ({report})");
         }
 
         // Where the run ends today, and the marker is a scaffold rather than an emulated fault - see §6.

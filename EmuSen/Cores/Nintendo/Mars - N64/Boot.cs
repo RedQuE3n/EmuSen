@@ -30,8 +30,8 @@ namespace EmuSen.Cores.Nintendo.Mars
 
             cpu.Cop0[Cpu.Core.Cpu.StatusRegister] = 0x3400_0000;
             cpu.Cop0[Cpu.Core.Cpu.CompareRegister] = 0xFFFF_FFFF;
-            cpu.Cop0[15] = 0x0000_0B22;
-            cpu.Cop0[16] = 0x0006_E463;
+            cpu.Cop0[Cpu.Core.Cpu.ProcessorIdRegister] = Cpu.Core.Cpu.ProcessorId;
+            cpu.Cop0[Cpu.Core.Cpu.ConfigRegister] = Cpu.Core.Cpu.ConfigAtReset;
         }
     }
 }

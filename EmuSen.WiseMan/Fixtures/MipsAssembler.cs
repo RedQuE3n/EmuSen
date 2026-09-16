@@ -111,6 +111,13 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Cop1(int rs, int rt, int fs) =>
             Word((0x11u << 26) | ((uint)rs << 21) | ((uint)rt << 16) | ((uint)fs << 11));
 
+        public MipsAssembler Dmfc0(int rt, int rd) => Word((0x10u << 26) | (1u << 21) | ((uint)rt << 16) | ((uint)rd << 11));
+        public MipsAssembler Dmtc0(int rt, int rd) => Word((0x10u << 26) | (5u << 21) | ((uint)rt << 16) | ((uint)rd << 11));
+
+        public MipsAssembler Cache(int op, int rs, short offset) => I(0x2F, rs, op, offset);
+        public MipsAssembler Ll(int rt, int rs, short offset) => I(0x30, rs, rt, offset);
+        public MipsAssembler Sc(int rt, int rs, short offset) => I(0x38, rs, rt, offset);
+
         public MipsAssembler Tlbr() => Word((0x10u << 26) | (0x10u << 21) | 0x01);
         public MipsAssembler Tlbwi() => Word((0x10u << 26) | (0x10u << 21) | 0x02);
         public MipsAssembler Tlbwr() => Word((0x10u << 26) | (0x10u << 21) | 0x06);

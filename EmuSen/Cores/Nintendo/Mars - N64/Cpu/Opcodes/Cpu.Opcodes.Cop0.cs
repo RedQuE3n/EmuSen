@@ -27,6 +27,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public const ulong StatusErrorLevel = 1UL << 2;
         public const ulong StatusBootstrapVectors = 1UL << 22;
 
+        // Kernel-mode 64-bit addressing; user and supervisor modes are not modelled - see Mars_Cop0.md §8.
+        public const ulong StatusKernelExtendedAddressing = 1UL << 7;
+
         public const ulong CauseBranchDelay = 1UL << 31;
 
         // Which coprocessor a fault names, and zero for every fault that names none - see Mars_Fpu.md §3.1.
@@ -73,32 +76,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             {
                 case 0x00: Write32(Rt(instruction), (uint)ReadCop0(Rd(instruction))); return;
                 case 0x01: Write(Rt(instruction), ReadCop0(Rd(instruction))); return;
-                case 0x04: WriteCop0(Rd(instruction), (ulong)(long)(int)(uint)Read(Rt(instruction))); return;
+                case 0x04: WriteCop0(Rd(instruction), Read(Rt(instruction))); return;
                 case 0x05: WriteCop0(Rd(instruction), Read(Rt(instruction))); return;
                 default: throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
-            }
-        }
-
-        // Count comes off the machine clock rather than out of storage - see Mars_Memory.md §3.1.
-        private ulong ReadCop0(int register) =>
-            register == CountRegister ? _bus.Count : Cop0[register];
-
-        private void WriteCop0(int register, ulong value)
-        {
-            if (register == CountRegister)
-            {
-                _bus.SetCount((uint)value);
-                _lastCount = _bus.Count;
-                return;
-            }
-
-            Cop0[register] = value;
-
-            // Writing the comparison value is how a handler acknowledges the timer - see Mars_Cpu.md §12.1.
-            if (register == CompareRegister)
-            {
-                Cop0[CauseRegister] &= ~CauseInterruptTimer;
-                _lastCount = _bus.Count;
             }
         }
 
@@ -157,7 +137,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             SetCauseCode(raised.Code);
             SetCauseCoprocessor(raised.Coprocessor);
 
-            if (IsAddressRelated(raised.Code)) Cop0[BadVirtualAddressRegister] = raised.Address;
+            if (IsAddressRelated(raised.Code)) RecordFaultingAddress(raised.Address);
 
             Cop0[StatusRegister] |= StatusExceptionLevel;
             LinkedFlag = false;
@@ -180,6 +160,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 Pc = Cop0[ExceptionPcRegister];
                 Cop0[StatusRegister] &= ~StatusExceptionLevel;
             }
+
+            // Returning breaks the link but leaves the address a handler can still read - see Mars_Cop0.md §6.
+            LinkedFlag = false;
 
             // No delay slot of its own: the next instruction fetched is the one returned to.
             NextPc = Pc + 4;
@@ -244,10 +227,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         }
 
         // What a refill handler reads instead of recomputing the address itself - see Mars_Tlb.md §4.
-        private void OnTlbFailure(ulong address)
-        {
-            Cop0[ContextRegister] = (Cop0[ContextRegister] & ~0x007F_FFF0UL) | ((address >> 9) & 0x007F_FFF0UL);
+        private void OnTlbFailure(ulong address) =>
             Cop0[EntryHiRegister] = (Cop0[EntryHiRegister] & 0xFF) | (address & 0xFFFF_E000UL);
+
+        // The three registers a fault fills in for the handler, all from the one address - see Mars_Cop0.md §7.
+        private void RecordFaultingAddress(ulong address)
+        {
+            Cop0[BadVirtualAddressRegister] = address;
+
+            // A fault owns everything below the software field, so the low four bits are cleared too.
+            Cop0[ContextRegister] = (Cop0[ContextRegister] & ContextWritable) | ((address >> 9) & ContextBadVpn2);
+
+            Cop0[XContextRegister] = (Cop0[XContextRegister] & XContextWritable)
+                | ((address >> 9) & XContextBadVpn2)
+                | ((address >> 31) & XContextRegion);
         }
 
         private static bool IsAddressRelated(ExceptionCode code) =>

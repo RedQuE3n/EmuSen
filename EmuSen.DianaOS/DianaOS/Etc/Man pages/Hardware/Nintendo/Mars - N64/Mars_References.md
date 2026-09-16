@@ -26,6 +26,16 @@ gitignore entry, because there is nothing here to ignore.
 
 ## 2. The line, stated once
 
+> **Correction, 2026-09-15.** A fifth codebase matters to Phase D and is not in §1's
+> table: **angrylion, the RDP pixel reference, is under the MAME licence** — not GPL,
+> not permissive, and displayed as no licence at all by GitHub, which is how projects
+> come to treat it as permissive. It is non-commercial, and it asks in terms for
+> exactly the discipline this section already imposes: read it to understand the
+> hardware, then write your own. The practical consequence is a preference —
+> parallel-rdp is MIT and is itself validated bit-exact against angrylion, so grading
+> against parallel-rdp reaches the same standard through a permissively licensed
+> instrument. `Mars_Documentation.md` §7.
+
 **Every one of these is GPL. EmuSen is not.** Copying any of it — a function, a
 table, a struct layout transcribed field for field — would put this project under a
 licence it has not chosen, and the fact that a reader could not tell is exactly why

@@ -62,6 +62,17 @@ rules turn out not to be recoverable to pixel-exactness from the available
 references, then an LLE RDP cannot be graded, and an ungradeable LLE RDP has lost
 its only advantage over an HLE one.
 
+> **Tested 2026-09-15 against a documentation survey. The condition does not fire,
+> and the sentence it is written in was badly posed** — it conflated *derivable from
+> documents* with *gradeable*, and only the second decides anything. Coverage's
+> meaning, storage and consumption are documented; the video filters are documented
+> at algorithm level in the designers' own patents and corroborated by an oral
+> history; but **how the rasterizer generates the subpixel mask is documented
+> nowhere at all**, and that is where anti-aliasing lives. Grading against a
+> reference implementation does reach pixel-exactness, so LLE stands — at the price
+> that one tier of the RDP is established empirically rather than read, and must be
+> labelled as such wherever it is written down. `Mars_Documentation.md` §4.
+
 **Supporting evidence arrived after this was decided**, and is recorded because it
 was not what the decision rested on: the two mature non-LLE cores each carry a
 per-title database of 1,587 and 3,292 entries, including per-game multipliers on
@@ -222,7 +233,12 @@ unimplemented-operation exception among them.
 **Started as a software implementation with explicit rounding, not as C# `double`
 with care taken.** Project64 began with host floating point and had to convert its
 interpreter to a soft-float library afterwards, having chased the divergences in
-between — `Mars_References.md` §5.2.
+between — `Mars_References.md` §5.2. A second, independent reason arrived with the
+documentation survey: **the VR4300's quiet/signalling NaN bit patterns are the
+reverse of the modern IEEE convention**, so a host FPU gets NaN handling backwards
+silently. The exception scope is also split across two parts of the vendor manual
+that do not agree, and the rounding of underflow is disputed between sources —
+`Mars_Documentation.md` §2.1. All three are settled by the corpus, not by reading.
 
 Separate from A because it is separately gradeable and because its bugs are silent:
 an FPU that is wrong in the last bit produces a game that looks right and drifts,
@@ -314,8 +330,17 @@ one is not uniform.
   source of subtly wrong values that survive casual review.
 - **Exceptions in delay slots**, and the branch-likely instructions' nullification
   rules.
-- **Timing that is not the CPU's.** DMA durations, VI half-line timing, and
-  `Count`'s rate relative to the CPU clock. Games busy-wait on these.
+- **Timing that is not the CPU's, and is documented nowhere.** `Count`'s rate is
+  settled — half the CPU clock, stated by the vendor. Everything else in this entry
+  is not: RDRAM latency, DMA durations, bus arbitration between the six masters, and
+  cache miss cost in system cycles are absent from every source, and the community's
+  own task list says so in writing. Games busy-wait on these. It also reframes the
+  per-game timing knobs in §2.1's evidence — those emulators were working around
+  timing **nobody has written down**, which is not an excuse but is a location.
+  `Mars_Documentation.md` §5.
+- **The RDP's subpixel-mask rule, which no document states.** The one piece of the
+  rasterizer that has to be inferred from a reference rather than implemented from a
+  specification — `Mars_Documentation.md` §4.
 - **Save-type detection**, which has no header field and is conventionally a
   per-title database — an honesty problem as much as a technical one. Confirmed
   from primary sources: two independent emulators each ship one, and Project64's
@@ -351,9 +376,15 @@ with Mars included is wrong until Phase G has measurements.
 
 - **§3's verdict channel may not exist in the form assumed.** First task of Phase 0,
   and the fallback inverts the phase order.
-- **The hardware claims here are from general knowledge, not from citation.** Every
-  one of them should be checked against primary documentation as the phase that
-  needs it begins, and this document is not a substitute for that reading.
+- ~~**The hardware claims here are from general knowledge, not from citation.**~~
+  **Partly closed 2026-09-15.** `Mars_Documentation.md` is the assessed source list,
+  and it found the vendor manuals more complete than assumed for the CPU, adequate
+  for the RSP's structure, and silent on one tier of the RDP and on system timing
+  entirely. It also found the most authoritative document for one RSP instruction to
+  be **wrong** (§3.1), which is the standing argument against implementing from a
+  reading without a test. The individual claims in this plan still each want checking
+  as their phase opens; what has changed is that there is now a map of what to check
+  them against.
 - **The phase boundaries assume the subsystems separate cleanly.** A/B/C/D are drawn
   where the test corpus's own sections are drawn, which is a good sign but not a
   guarantee — the RSP's DMA touching RDRAM during a CPU write is exactly the kind of

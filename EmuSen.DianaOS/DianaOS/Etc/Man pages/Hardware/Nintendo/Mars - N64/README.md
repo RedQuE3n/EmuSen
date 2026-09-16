@@ -8,6 +8,8 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_TestOracle.md`](Mars_TestOracle.md) is what the plan's §3 was waiting on: the hardware test corpus can report a text verdict headlessly, so the phase order stands. It carries the protocol, the four things Mars must do before the ROM will say a word — two of which fail silently if got wrong — and the finding that the RDP has no hardware-grounded oracle anywhere, only a very good software one.
 
+[`Mars_Documentation.md`](Mars_Documentation.md) is the assessed source list — which documents are authoritative, where they contradict each other, where one of them is outright wrong, and what an implementer needs that no document anywhere answers. Two gaps there shape the work: the RDP's subpixel-mask rule, and system timing in its entirety. It also settles the plan's §2.1 condition by showing the condition was posed wrongly.
+
 Per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.

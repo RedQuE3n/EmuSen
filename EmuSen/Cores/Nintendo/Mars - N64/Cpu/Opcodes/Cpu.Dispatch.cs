@@ -53,6 +53,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x25: Load(instruction, 2, signed: false); return;
                 case 0x26: LoadWordRight(instruction); return;
                 case 0x27: Load(instruction, 4, signed: false); return;
+                // Nothing is cached, so every cache operation is already complete - see Mars_Cpu.md §11.
+                case 0x2F: return;
+
+                case 0x30: LoadLinked(instruction, 4); return;
+                case 0x34: LoadLinked(instruction, 8); return;
                 case 0x37: Load(instruction, 8, signed: false); return;
 
                 case 0x28: Store(instruction, 1); return;
@@ -62,6 +67,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x2C: StoreDoubleLeft(instruction); return;
                 case 0x2D: StoreDoubleRight(instruction); return;
                 case 0x2E: StoreWordRight(instruction); return;
+                case 0x38: StoreConditional(instruction, 4); return;
+                case 0x3C: StoreConditional(instruction, 8); return;
                 case 0x3F: Store(instruction, 8); return;
 
                 default: throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);

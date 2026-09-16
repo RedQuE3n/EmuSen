@@ -38,7 +38,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Pi = new PiInterface(this);
 
             // Nonzero tells libdragon's IPL3 that RDRAM needs no initialising - see Mars_TestOracle.md §3.
-            _registers[MemoryMap.RiSelect] = 1;
+            _registers[MemoryMap.RiSelect] = 0x14;
         }
 
         public void Tick(long cycles) => Cycles += cycles;

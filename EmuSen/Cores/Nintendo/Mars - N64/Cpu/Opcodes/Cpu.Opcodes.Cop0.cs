@@ -14,6 +14,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public const int WiredRegister = 6;
         public const int BadVirtualAddressRegister = 8;
         public const int EntryHiRegister = 10;
+        public const int LinkedAddressRegister = 17;
         public const int CountRegister = 9;
         public const int CompareRegister = 11;
         public const int StatusRegister = 12;
@@ -155,6 +156,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             if (IsAddressRelated(raised.Code)) Cop0[BadVirtualAddressRegister] = raised.Address;
 
             Cop0[StatusRegister] |= StatusExceptionLevel;
+            LinkedFlag = false;
 
             Pc = VectorFor(raised.Refill, alreadyHandling);
             NextPc = Pc + 4;

@@ -202,8 +202,10 @@ cartridge.
 
 **Started 2026-09-15 with the memory map** — segments, the physical map, the debug
 port and the machine clock, with `Count` derived rather than incremented so that no
-opcode can forget it (`Mars_Memory.md` §3.1). The DMA engines the bootstrap needs are
-the next slice; the instruction set has not begun.
+opcode can forget it (`Mars_Memory.md` §3.1) — and then the two transfer engines the
+corpus's bootstrap drives before any instruction of ours runs (§6, §7). **All three
+of the bootstrap's admission requirements now hold and are tested.** The instruction
+set has not begun.
 
 **Four behaviours are the cost of admission to being graded at all**, and belong to
 this phase's memory map: a *readable* ISViewer region, COP0 CO `funct` `0x20`–`0x3F`

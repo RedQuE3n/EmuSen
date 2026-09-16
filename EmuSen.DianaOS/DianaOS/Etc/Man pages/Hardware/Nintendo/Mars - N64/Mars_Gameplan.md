@@ -174,21 +174,23 @@ No emulation at all. What this phase produces is the ability to grade the next o
   Phase 0 work, and the answer is in `Mars_TestOracle.md`. What it leaves for this
   phase is the ROM's discovery path and the four admission requirements in its §3,
   which belong to Phase A's memory map rather than here.
-- ROM image handling: the three container formats (`.z64` big-endian, `.n64`
-  byte-swapped words, `.v64` byte-swapped halfwords) normalised to one internal
-  order at load, and the header parsed — entry point, the two CRCs, the region and
-  cartridge id.
-- A `SyntheticN64Rom` fixture in `EmuSen.WiseMan/Fixtures/`, following
-  `SyntheticGbRom` and `SyntheticNesRom`: a builder that produces a valid, minimal,
-  committed-to-nothing image with a caller-supplied payload, so the suite passes on
-  a machine with no ROMs at all. The repo rule that no commercial image is ever
-  committed applies unchanged.
-- The `TestRoms/` discovery path for the corpus, mirroring
-  `HardwareTestRomLibrary`, so an absent corpus skips rather than fails.
+- ~~ROM image handling~~ — **done 2026-09-15.** The three containers, decided by the
+  magic word rather than the extension, normalised to big-endian, with the header
+  read and truncated images refused rather than half-converted. `Mars_Rom.md`.
+- ~~A `SyntheticN64Rom` fixture~~ — **done**, alongside `N64TestRomLibrary` for the
+  corpus discovery path, which skips when the corpus is absent. The repo rule that no
+  commercial image is ever committed applies unchanged; the corpus ROM is MIT
+  homebrew built from source and lives in the gitignored `TestRoms/n64`.
 
-**Done when** a WiseMan test can load a synthetic image, assert its header, and — if
-§3's channel exists — run a corpus ROM to a captured text verdict, with the CPU
-still entirely unimplemented.
+**Done when** a WiseMan test can load a synthetic image and assert its header, with
+the CPU still entirely unimplemented. **That is now true**: 24 tests, including one
+against the real corpus ROM, verified by mutation rather than by a green run.
+
+**What is left in this phase: nothing.** The remaining Phase 0 item as originally
+written — running a corpus ROM to a captured verdict — belongs to Phase A, because
+capturing a verdict requires executing instructions. What Phase 0 owed that work was
+the oracle's protocol and its four admission requirements, and `Mars_TestOracle.md`
+carries both.
 
 ### 4.1 Phase A — the VR4300 integer core, the memory map, and boot
 

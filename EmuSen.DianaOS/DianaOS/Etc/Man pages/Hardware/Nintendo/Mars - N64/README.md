@@ -10,6 +10,8 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Documentation.md`](Mars_Documentation.md) is the assessed source list — which documents are authoritative, where they contradict each other, where one of them is outright wrong, and what an implementer needs that no document anywhere answers. Two gaps there shape the work: the RDP's subpixel-mask rule, and system timing in its entirety. It also settles the plan's §2.1 condition by showing the condition was posed wrongly.
 
-Per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
+[`Mars_Rom.md`](Mars_Rom.md) is the first page describing code rather than plans: Phase 0's container handling and header parser, which emulate nothing. Read §1.1 before touching the loader — the container is decided by the magic word and never by the extension, and the reason is a documented disagreement between sources about what the extensions mean.
+
+The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.

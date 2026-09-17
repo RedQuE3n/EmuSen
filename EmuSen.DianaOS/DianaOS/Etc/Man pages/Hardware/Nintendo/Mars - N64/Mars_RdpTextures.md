@@ -342,7 +342,8 @@ pointer that is not a multiple of eight, none of which it has.
   two slices later (`Mars_RdpLod.md`).
 - ~~**The two-cycle mode**, in which textured primitives still draw nothing.~~ Built four slices later
   (`Mars_RdpTwoCycle.md`), where the second cycle's texel, the swap and the conversion of one texel from
-  another are §2. **The copy mode** is still not here.
+  another are §2. ~~**The copy mode** is still not here.~~ Built in `Mars_RdpCopy.md`, where a copied texel is read from four
+  banks at once and cut to a byte rather than decoded to a colour.
 - **Untextured primitives that read a texel** (§6), and texture rectangles in the fill cycle — both follow
   from rules graded elsewhere, and neither has a case.
 - **Chroma key** and **noise**, as `Mars_RdpDepth.md` §7 left them.

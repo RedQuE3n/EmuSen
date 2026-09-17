@@ -316,6 +316,7 @@ namespace EmuSen.WiseMan.Cores
             cases.AddRange(FilterCases());
             cases.AddRange(LodCases());
             cases.AddRange(TwoCycleCases());
+            cases.AddRange(CopyCases());
             return cases.ToArray();
         }
 
@@ -1214,6 +1215,178 @@ namespace EmuSen.WiseMan.Cores
                 }
 
                 Draw($"random two-cycle case {n}", modes, CombineCycles(Cycle(combined: false), Cycle(combined: true)), setup, shapes.ToArray(), size: Pick(Bits16, Bits16, Bits32));
+            }
+
+            return cases;
+        }
+
+        // The copy mode: four texels a step written to the colour image as bytes, with no combiner or blender - see Mars_RdpCopy.md §5.
+        private static IEnumerable<Case> CopyCases()
+        {
+            var cases = new List<Case>();
+            ulong texel0 = Combine(subA: 8, subB: 8, mul: 16, add: 1, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1);
+
+            void Draw(string name, ulong modes, ulong[] setup, ulong[] shapes, int size = Bits16, string? dispute = null, bool crossChecked = true) =>
+                cases.Add(Textured(name, modes, texel0, setup, shapes, size, dispute, crossChecked));
+
+            ulong[] With(ulong[] first, params ulong[][] rest) => rest.Aggregate(first, (all, next) => all.Concat(next).ToArray());
+
+            ulong copy = Modes(cycle: 2);
+            const string Torn = "angrylion writes a right-major copy span backwards by bytes from the starting pixel's first byte, so each group lands half a pixel off and the span's end pixels are written in halves, where parallel-rdp writes whole pixels";
+            ulong[] Rect(uint left, uint top, uint right, uint bottom, short ds = 0x1000, short dt = 0x0400, bool flip = false, int tile = 0) =>
+                TextureRectangle(flip, tile, left, top, right, bottom, 0, 0, ds, dt);
+
+            ulong[] wide = Rect(12, 10, 100, 90);
+            var p = new Vertex(2.25, 1.5, 250, 20, 60, 255, 0x08000, S: 0, T: 0, W: 1.0);
+            var q = new Vertex(29.75, 6.75, 10, 240, 90, 20, 0x30000, S: 40, T: 6, W: 0.55);
+            var r = new Vertex(6.5, 29.25, 40, 70, 230, 140, 0x1C000, S: 5, T: 44, W: 0.8);
+
+            Draw("copy a sixteen-bit texture rectangle", copy, Loaded(0, 2), wide);
+            Draw("copy a rectangle whose span is not four pixels wide", copy, Loaded(0, 2), Rect(12, 10, 40, 60));
+            Draw("copy a flipped rectangle", copy, Loaded(0, 2), Rect(12, 10, 100, 90, 0x0400, 0x1000, flip: true));
+            Draw("copy a rectangle stepping four texels a pixel", copy, Loaded(0, 2), Rect(12, 10, 100, 90, 0x4000, 0x1000));
+            Draw("copy with alpha compare on the texel's alpha bit", Modes(cycle: 2, alphaCompare: true), Loaded(0, 2), wide);
+
+            Draw("copy into an eight-bit image", copy, Loaded(0, 1), wide, size: Bits8);
+            Draw("copy an eight-bit intensity-alpha texture into an eight-bit image", copy, Loaded(3, 1), wide, size: Bits8,
+                dispute: "angrylion doubles the high nibble of an eight-bit intensity-alpha texel where the copy mode makes a byte of it, and parallel-rdp takes the byte whole");
+            Draw("copy into an eight-bit image with alpha compare", Modes(cycle: 2, alphaCompare: true), Loaded(0, 1), wide, size: Bits8,
+                dispute: "angrylion tests a copied byte against the alpha threshold in an eight-bit image, and parallel-rdp tests alpha only in a sixteen-bit one");
+            Draw("copy into a four-bit image", copy, Loaded(0, 2), wide, size: Bits4, crossChecked: false);
+            Draw("copy into a thirty-two-bit image", copy, Loaded(0, 2), wide, size: Bits32, crossChecked: false);
+            Draw("copy a sixteen-bit texture into an eight-bit image", copy, Loaded(0, 2), wide, size: Bits8);
+            Draw("copy an eight-bit texture into a sixteen-bit image", copy, Loaded(0, 1), wide);
+
+            Draw("copy a four-bit colour-indexed texture", copy, Loaded(2, 0, palette: 5), wide, size: Bits8,
+                dispute: "angrylion puts the tile's palette number in the high nibble of a copied four-bit colour-indexed texel, and parallel-rdp doubles the index nibble");
+            Draw("copy a four-bit intensity-alpha texture", copy, Loaded(3, 0), wide, size: Bits8,
+                dispute: "angrylion folds a copied four-bit intensity-alpha texel into intensity and alpha bits, and parallel-rdp doubles the nibble as it does for intensity");
+            Draw("copy a four-bit intensity texture", copy, Loaded(4, 0), wide, size: Bits8);
+            Draw("copy a thirty-two-bit texture", copy, Loaded(0, 3), wide);
+            Draw("copy a YUV texture", copy, Loaded(1, 2), wide,
+                dispute: "angrylion reads a copied YUV tile's chroma a further step along in texture memory, where parallel-rdp's copy path has no YUV case");
+
+            ulong[] palette = new[] { TextureImageCommand(0, 2, 16, TextureImage + 0x800), TileCommand(7, 0, 0, 0, 0x100), LoadCommand(0x30, 7, 0, 0, 255 << 2, 0) };
+            Draw("copy through a palette", Modes(cycle: 2, palette: true), With(Loaded(2, 1), palette), wide);
+            Draw("copy a four-bit index through a palette", Modes(cycle: 2, palette: true), With(Loaded(2, 0, palette: 3), palette), wide);
+            Draw("copy through an intensity-alpha palette", Modes(cycle: 2, palette: true, paletteIa: true), With(Loaded(2, 1), palette), wide);
+            Draw("copy through a palette loaded from an odd address", Modes(cycle: 2, palette: true),
+                With(Loaded(2, 1), new[] { TextureImageCommand(0, 2, 16, TextureImage + 0x801), TileCommand(7, 0, 0, 0, 0x100),
+                    LoadCommand(0x30, 7, 0, 0, 255 << 2, 0) }), wide);
+            Draw("copy a YUV tile through a palette", Modes(cycle: 2, palette: true), With(Loaded(1, 2), palette), wide,
+                dispute: "angrylion reads a copied YUV tile's chroma a further step along in texture memory, where parallel-rdp's copy path has no YUV case");
+
+            Draw("copy a tile in the upper half of texture memory", copy, Loaded(0, 2, tile: 1, memory: 0x100), Rect(12, 10, 100, 90, tile: 1));
+            Draw("copy a masked and mirrored tile", copy, Loaded(0, 2, maskS: 3, maskT: 2, mirrorS: true), wide);
+            Draw("copy a shifted tile", copy, Loaded(0, 2, shiftS: 1, shiftT: 12), wide);
+            Draw("copy a tile with a size and a load offset", copy, Loaded(0, 2, column: 3, row: 2).Append(TileSizeCommand(0, 9, 13, 37, 29)).ToArray(), wide);
+
+            Draw("copy a textured triangle", copy, Loaded(0, 2), Shaded(0x0A, p, q, r));
+            Draw("copy a perspective triangle", Modes(cycle: 2, perspective: true), Loaded(0, 2), Shaded(0x0A, p, q, r));
+            Draw("copy a mipmapped triangle", Modes(cycle: 2, perspective: true, lod: true), Mipmaps(), Shaded(0x0A | (3 << 19), p, q, r));
+            Draw("copy a detail texture", Modes(cycle: 2, perspective: true, lod: true, detail: true), Mipmaps(), Shaded(0x0A | (3 << 19), p, q, r),
+                dispute: "angrylion picks the copy mode's tile by the level of detail, and parallel-rdp copies from the primitive's tile");
+            Draw("copy a mipmapped rectangle", Modes(cycle: 2, lod: true), Mipmaps(), wide);
+
+            var inside = new Vertex(4.0, 2.0, 250, 20, 60, 255, 0x08000, S: 0, T: 0, W: 1.0);
+            var insideB = new Vertex(26.0, 8.0, 10, 240, 90, 20, 0x30000, S: 40, T: 6, W: 1.0);
+            var insideC = new Vertex(8.0, 28.0, 40, 70, 230, 140, 0x1C000, S: 5, T: 44, W: 1.0);
+            Draw("copy a triangle inside the scissor", copy, Loaded(0, 2), Shaded(0x0A, inside, insideB, insideC));
+            Draw("copy a triangle clipped on the scissor's left", copy, Loaded(0, 2), Shaded(0x0A, inside with { X = -6.0 }, insideB, insideC));
+            Draw("copy a triangle clipped on the scissor's right", copy, Loaded(0, 2), Shaded(0x0A, inside, insideB with { X = 46.0 }, insideC));
+            Draw("copy a rectangle reaching past the scissor", copy, Loaded(0, 2), Rect(12, 10, 200, 90));
+            Draw("copy a rectangle whose step is not whole texels", copy, Loaded(0, 2), Rect(12, 10, 100, 90, 0x0A00));
+            Draw("copy a rectangle and a triangle in one primitive list", copy, Loaded(0, 2), With(Rect(12, 10, 60, 50), Shaded(0x0A, inside, insideB, insideC)));
+            Draw("copy a rectangle stepping backwards", copy, Loaded(0, 2), Rect(12, 10, 100, 90, unchecked((short)0xF800), unchecked((short)0xFC00)));
+            Draw("copy a flipped rectangle with an odd step", copy, Loaded(0, 2), Rect(12, 10, 100, 90, 0x0A00, 0x1000, flip: true));
+            Draw("copy a rectangle from a mipmap chain's third tile", copy, Mipmaps(), Rect(12, 10, 100, 90, tile: 2));
+            Draw("copy a triangle over a mipmap chain", copy, Mipmaps(), Shaded(0x0A, inside, insideB, insideC));
+            Draw("copy a perspective triangle whose w varies widely", Modes(cycle: 2, perspective: true), Loaded(0, 2),
+                Shaded(0x0A, inside with { W = 0.2 }, insideB with { W = 1.0 }, insideC with { W = 0.5 }));
+            Draw("copy a thirty-two-bit texture into an eight-bit image", copy, Loaded(0, 3), wide, size: Bits8);
+            Draw("copy a four-bit intensity texture into a sixteen-bit image", copy, Loaded(4, 0), wide);
+            Draw("copy a triangle with negative texture coordinates", copy, Loaded(0, 2),
+                Shaded(0x0A, inside with { S = -30, T = -12 }, insideB, insideC));
+            Draw("copy a tile masked past its size", copy, Loaded(0, 2, maskS: 2, maskT: 2), Rect(12, 10, 100, 90, 0x2000));
+            Draw("copy a triangle whose major edge is on the right", copy, Loaded(0, 2),
+                Shaded(0x0A, inside with { X = 26.0, Y = 2.0 }, insideB with { X = 4.0, Y = 8.0 }, insideC with { X = 22.0, Y = 28.0 }),
+                dispute: Torn);
+            Draw("copy a right-major triangle with no texture step", copy, Loaded(0, 2),
+                Shaded(0x0A, inside with { X = 26.0, Y = 2.0, S = 8, T = 4 }, insideB with { X = 4.0, Y = 8.0, S = 8, T = 4 },
+                    insideC with { X = 22.0, Y = 28.0, S = 8, T = 4 }),
+                dispute: Torn);
+            Draw("copy a left-major triangle with no texture step", copy, Loaded(0, 2),
+                Shaded(0x0A, inside with { S = 8, T = 4 }, insideB with { S = 8, T = 4 }, insideC with { S = 8, T = 4 }));
+            Draw("copy a clipped triangle whose major edge is on the right", copy, Loaded(0, 2),
+                Shaded(0x0A, inside with { X = 26.0, Y = 2.0 }, insideB with { X = -6.0, Y = 8.0 }, insideC with { X = 22.0, Y = 28.0 }),
+                dispute: Torn);
+
+            ulong[] Background(int size, bool tested = false) => new[] { ColorImage(Bits16, 32, Framebuffer), FillCycle, FillColor(0x1234_5678),
+                Rectangle(0, 0, 124, 124), ColorImage(size, 32, Framebuffer), Modes(cycle: 2, alphaCompare: tested) };
+
+            Draw("copy into a four-bit image over a filled background", copy, Loaded(0, 2), With(Background(Bits4), Rect(12, 10, 100, 90)), size: Bits4, crossChecked: false);
+            Draw("copy into a four-bit image with alpha compare", copy, Loaded(0, 2), With(Background(Bits4, tested: true), Rect(12, 10, 100, 90)), size: Bits4, crossChecked: false);
+            Draw("copy into an eight-bit image over a filled background", copy, Loaded(0, 1), With(Background(Bits8), Rect(12, 10, 100, 90)), size: Bits8);
+            Draw("copy a tile whose line and row pass nine bits", copy, Loaded(0, 2, width: 32, height: 64), Rect(12, 10, 100, 120, 0x1000, 0x1000));
+            Draw("copy an eight-bit texture from an odd column", copy, Loaded(0, 1), TextureRectangle(false, 0, 12, 10, 100, 90, 0x20, 0, 0x1000, 0x0400));
+            Draw("copy coordinates past the divider's clamp", Modes(cycle: 2, perspective: true), Loaded(0, 2),
+                Shaded(0x0A, inside with { S = 3000, W = 0.05 }, insideB with { S = -2400, W = 1.0 }, insideC with { T = 2600, W = 0.4 }));
+            Draw("copy from a tile at the top of texture memory", copy, Loaded(0, 2, tile: 3, memory: 0x1F0), Rect(12, 10, 100, 90, tile: 3));
+            Draw("copy a thirty-two-bit texture from texture memory's upper half", copy, Loaded(0, 3, tile: 1, memory: 0x100), Rect(12, 10, 100, 90, tile: 1));
+
+            // Random cases keep away from the disputed textures and images: no YUV, no four-bit palette or intensity-alpha tile, and alpha compare only in a sixteen-bit image.
+            var random = new Random(0x434F_5059);
+            for (int n = 0; n < 120; n++)
+            {
+                int Pick(params int[] choices) => choices[random.Next(choices.Length)];
+                bool Coin() => random.Next(2) == 1;
+
+                int format = Pick(0, 0, 2, 3, 4), size = format == 0 ? Pick(1, 2, 2, 3) : random.Next(3);
+                int image = Pick(Bits16, Bits16, Bits8);
+                bool tlut = format == 2 && Coin();
+
+                // An intensity-alpha or colour-indexed texel narrower than sixteen bits is one of §5.2's disputes, unless a palette reads it.
+                if (format == 3 && size != 2) size = 2;
+                if (format == 2 && size == 0 && !tlut) size = 1;
+                ulong[] setup = Mipmaps(0, random.Next(1, 5), (uint)Pick(8, 16, 32), format, size, Coin());
+                if (tlut)
+                {
+                    setup = setup.Concat(new[] { TextureImageCommand(0, 2, 16, TextureImage + 0x800), TileCommand(7, 0, 0, 0, 0x100),
+                        LoadCommand(0x30, 7, 0, 0, 255 << 2, 0) }).ToArray();
+                }
+
+                ulong modes = Modes(cycle: 2, alphaCompare: image == Bits16 && random.Next(3) == 0, palette: tlut, paletteIa: tlut && Coin(),
+                    perspective: Coin());
+
+                var shapes = new List<ulong>();
+                for (int t = 0, count = random.Next(1, 3); t < count; t++)
+                {
+                    if (random.Next(3) == 0)
+                    {
+                        uint left = (uint)random.Next(0, 100), top = (uint)random.Next(0, 100);
+                        shapes.AddRange(TextureRectangle(Coin(), random.Next(4), left, top, left + (uint)random.Next(4, 60), top + (uint)random.Next(4, 60),
+                            (short)random.Next(-0x400, 0x800), (short)random.Next(-0x400, 0x800), (short)random.Next(-0x2000, 0x6000), (short)random.Next(-0x1800, 0x1800)));
+                    }
+                    else
+                    {
+                        int reach = Pick(32, 128, 512);
+                        Vertex Point() => new(random.Next(-8, 136) / 4.0, random.Next(-8, 136) / 4.0, random.Next(256), random.Next(256), random.Next(256), random.Next(256),
+                            random.Next(0x40000), random.Next(-reach, reach), random.Next(-reach, reach), 0.2 + 0.8 * random.NextDouble());
+
+                        // A right-major span is §5.2's torn dispute, so a triangle that would walk right to left is mirrored.
+                        Vertex[] points = { Point(), Point(), Point() };
+                        Vertex[] byRow = points.OrderBy(v => v.Y).ToArray();
+                        double slope = byRow[2].Y > byRow[0].Y ? (byRow[2].X - byRow[0].X) / (byRow[2].Y - byRow[0].Y) : 0;
+                        if (byRow[1].X <= byRow[0].X + slope * (byRow[1].Y - byRow[0].Y))
+                        {
+                            for (int v = 0; v < 3; v++) points[v] = points[v] with { X = 32.0 - points[v].X };
+                        }
+
+                        shapes.AddRange(Shaded(Pick(0x0A, 0x0B, 0x0E, 0x0F) | (random.Next(4) << 19), points[0], points[1], points[2]));
+                    }
+                }
+
+                Draw($"random copy case {n}", modes, setup, shapes.ToArray(), size: image);
             }
 
             return cases;

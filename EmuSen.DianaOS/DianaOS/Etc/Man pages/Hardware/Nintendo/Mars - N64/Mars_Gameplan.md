@@ -492,6 +492,16 @@ rather than raw samples.
 > disputes, and the random cases are constrained never to select them rather than being dropped from the
 > cross-check. Twenty-nine of the thirty-nine named cases still agree with both references. The remaining list
 > is the copy mode.
+>
+> **Progress, 2026-09-17: the copy mode** (`Mars_RdpCopy.md`). Four texels fetched a group from texture
+> memory's four banks and written to the colour image as bytes, with no combiner, blender or depth: 176 cases
+> match angrylion, and **Phase D now has every cycle type**. The cross-check is at its narrowest here — seven
+> disputes, because angrylion copies eight bytes at a time where parallel-rdp computes each pixel — and the
+> lesson is about method rather than the mode: the random cases disagreed in numbers no rule explained, and
+> fifteen single-axis probes all *agreed* before one disagreement appeared, from a triangle whose major edge
+> the test helper had never put on the right. A case that cannot be built by the helper is a rule that cannot
+> be graded. What is left in Phase D is chroma key and noise, neither of which either reference models in a
+> way a case can grade.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

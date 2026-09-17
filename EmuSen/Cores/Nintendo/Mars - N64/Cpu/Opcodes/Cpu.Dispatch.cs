@@ -137,6 +137,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x2E: Subtract64(instruction, trapOnOverflow: true); return;
                 case 0x2F: Subtract64(instruction, trapOnOverflow: false); return;
 
+                case 0x30 or 0x31 or 0x32 or 0x33 or 0x34 or 0x36: ExecuteTrap(instruction); return;
+
                 case 0x38: Write(Rd(instruction), Read(Rt(instruction)) << Sa(instruction)); return;
                 case 0x3A: Write(Rd(instruction), Read(Rt(instruction)) >> Sa(instruction)); return;
                 case 0x3B: Write(Rd(instruction), (ulong)((long)Read(Rt(instruction)) >> Sa(instruction))); return;
@@ -158,6 +160,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x01: BranchIf(value >= 0, instruction, likely: false); return;
                 case 0x02: BranchIf(value < 0, instruction, likely: true); return;
                 case 0x03: BranchIf(value >= 0, instruction, likely: true); return;
+
+                case 0x08 or 0x09 or 0x0A or 0x0B or 0x0C or 0x0E: ExecuteTrapImmediate(instruction); return;
 
                 case 0x10: BranchIf(value < 0, instruction, likely: false, link: true); return;
                 case 0x11: BranchIf(value >= 0, instruction, likely: false, link: true); return;

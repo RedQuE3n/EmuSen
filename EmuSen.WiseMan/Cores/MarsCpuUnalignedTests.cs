@@ -1,3 +1,4 @@
+using System;
 using EmuSen.Cores.Nintendo.Mars.Cpu.Core;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.WiseMan.Fixtures;
@@ -27,8 +28,7 @@ namespace EmuSen.WiseMan.Cores
             return bus;
         }
 
-        // lui sign-extends, so a register preloaded with it has 0xFFFFFFFF on top rather than the pattern.
-        // A doubleword test needs the pattern in both halves to see which bytes an instruction keeps.
+        // A doubleword test needs the pattern in both halves, which lui cannot put there - see §7.2.
         private static MipsAssembler PreloadedWide(MarsBus bus)
         {
             bus.Write64(Data + 0x10, 0xAAAAAAAAAAAAAAAAUL);
@@ -57,6 +57,50 @@ namespace EmuSen.WiseMan.Cores
             var cpu = Preloaded().Lwr(2, 1, offset).Run(5, WithWord());
 
             Assert.Equal(expected, cpu.Gpr[2]);
+        }
+
+        // The rows above cannot tell preservation from sign extension; these corpus vectors can - see §7.3.
+        [Theory]
+        [InlineData(0, 0x0000_0000_0123_4567UL)]
+        [InlineData(1, 0x0000_0000_2345_6710UL)]
+        [InlineData(2, 0x0000_0000_4567_3210UL)]
+        [InlineData(3, 0x0000_0000_6754_3210UL)]
+        [InlineData(4, 0xFFFF_FFFF_89AB_CDEFUL)]
+        [InlineData(5, 0xFFFF_FFFF_ABCD_EF10UL)]
+        [InlineData(6, 0xFFFF_FFFF_CDEF_3210UL)]
+        [InlineData(7, 0xFFFF_FFFF_EF54_3210UL)]
+        public void A_left_load_sign_extends_however_little_of_the_word_it_took(short offset, ulong expected)
+        {
+            var cpu = Measured(a => a.Lwl(2, 1, offset), out _);
+
+            Assert.Equal(expected, cpu.Gpr[2]);
+        }
+
+        [Theory]
+        [InlineData(0, 0xFEDC_BA98_7654_3201UL)]
+        [InlineData(1, 0xFEDC_BA98_7654_0123UL)]
+        [InlineData(2, 0xFEDC_BA98_7601_2345UL)]
+        [InlineData(3, 0x0000_0000_0123_4567UL)]
+        [InlineData(4, 0xFEDC_BA98_7654_3289UL)]
+        [InlineData(5, 0xFEDC_BA98_7654_89ABUL)]
+        [InlineData(6, 0xFEDC_BA98_7689_ABCDUL)]
+        [InlineData(7, 0xFFFF_FFFF_89AB_CDEFUL)]
+        public void A_right_load_sign_extends_only_when_it_took_the_whole_word(short offset, ulong expected)
+        {
+            var cpu = Measured(a => a.Lwr(2, 1, offset), out _);
+
+            Assert.Equal(expected, cpu.Gpr[2]);
+        }
+
+        // A register whose upper half is neither zero nor all ones, which is what makes the pair separable.
+        private static Cpu Measured(Func<MipsAssembler, MipsAssembler> load, out MarsBus bus)
+        {
+            bus = new MarsBus();
+            bus.Write64(Data, 0x0123_4567_89AB_CDEFUL);
+            bus.Write64(Data + 0x10, 0xFEDC_BA98_7654_3210UL);
+
+            var program = new MipsAssembler().Lui(1, 0x8000).Ori(1, 1, (ushort)Data).Ld(2, 1, 0x10);
+            return load(program).Run(4, bus);
         }
 
         // The idiom the pair exists for: one unaligned word out of two aligned accesses.

@@ -7,6 +7,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Fpu
     {
         private const long WidestSource = 1L << 55;
 
+        // The 64-bit conversions stop at the double's mantissa, not at the long's range - see §6.3.
+        private const int WidestWholeExponent = 53;
+
         public static FloatResult Between(
             ulong bits, in FloatFormat from, in FloatFormat to, uint mode, bool flush)
         {
@@ -31,7 +34,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Fpu
             if (value.Class is FloatClass.Nan or FloatClass.Infinity) return FloatResult.Refused();
             if (value.Class == FloatClass.Zero) return FloatResult.Exact(0);
 
-            if (value.Exponent >= (wide ? 64 : 32)) return FloatResult.Refused();
+            if (value.Exponent >= (wide ? WidestWholeExponent : 32)) return FloatResult.Refused();
 
             UInt128 whole;
             bool roundBit;

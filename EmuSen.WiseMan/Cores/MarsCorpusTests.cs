@@ -8,14 +8,13 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // The hardware corpus, run for real - see Mars_TestOracle.md, Mars_Boot.md and Mars_Fpu.md §9.
+    // The hardware corpus, run for real - see Mars_Corpus.md, Mars_TestOracle.md and Mars_Boot.md.
     public class MarsCorpusTests
     {
         private const int InstructionBudget = 1_000_000;
 
-        // The whole run costs under half a second, so the oracle is affordable on every suite - see §9.
-        // Truncated deliberately: the run is still inside the 64-bit conversions here - see Mars_FpuMath.md §9.1.
-        private const int VerdictBudget = 60_000_000;
+        // Past where the run stops, so the tally is not a function of the budget - see Mars_Corpus.md §4.
+        private const int VerdictBudget = 190_000_000;
 
         // The handoff, the cartridge's own boot code, and the jump into the program it loaded.
         [Fact]
@@ -53,11 +52,11 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("Running StartupTest...", verdicts);
             Assert.Contains("Running ADDIOpcodeTest...", verdicts);
 
-            // A ratchet, not a description: this number goes down as Mars is fixed - see Mars_Fpu.md §9.1.
-            Assert.Equal($"561 started, 138 failed ({report})", $"{Tally(verdicts)} ({report})");
+            // A ratchet, not a description: both halves are asserted - see Mars_Corpus.md §5.
+            Assert.Equal($"720 started, 171 failed ({report})", $"{Tally(verdicts)} ({report})");
         }
 
-        // The inverse of what stood here for two slices: there is no scaffold left to reach - see §6.
+        // The inverse of what stood here for two slices: no scaffold left to reach - see Mars_Fpu.md §6.
         [Fact]
         public void The_corpus_no_longer_reaches_an_instruction_mars_has_not_built()
         {

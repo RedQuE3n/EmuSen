@@ -129,11 +129,28 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Tlbp() => Word((0x10u << 26) | (0x10u << 21) | 0x08);
         public MipsAssembler Eret() => Word((0x10u << 26) | (0x10u << 21) | 0x18);
 
+        public MipsAssembler Tge(int rs, int rt) => R(rs, rt, 0, 0, 0x30);
+        public MipsAssembler Tgeu(int rs, int rt) => R(rs, rt, 0, 0, 0x31);
+        public MipsAssembler Tlt(int rs, int rt) => R(rs, rt, 0, 0, 0x32);
+        public MipsAssembler Tltu(int rs, int rt) => R(rs, rt, 0, 0, 0x33);
+        public MipsAssembler Teq(int rs, int rt) => R(rs, rt, 0, 0, 0x34);
+        public MipsAssembler Tne(int rs, int rt) => R(rs, rt, 0, 0, 0x36);
+
+        public MipsAssembler Tgei(int rs, short immediate) => I(0x01, rs, 0x08, immediate);
+        public MipsAssembler Tgeiu(int rs, short immediate) => I(0x01, rs, 0x09, immediate);
+        public MipsAssembler Tlti(int rs, short immediate) => I(0x01, rs, 0x0A, immediate);
+        public MipsAssembler Tltiu(int rs, short immediate) => I(0x01, rs, 0x0B, immediate);
+        public MipsAssembler Teqi(int rs, short immediate) => I(0x01, rs, 0x0C, immediate);
+        public MipsAssembler Tnei(int rs, short immediate) => I(0x01, rs, 0x0E, immediate);
+
         public MipsAssembler Syscall() => R(0, 0, 0, 0, 0x0C);
         public MipsAssembler Break() => R(0, 0, 0, 0, 0x0D);
 
-        // The coprocessor-zero opcodes an emulator extension claims and real hardware ignores.
-        public MipsAssembler CoprocessorZeroExtension(uint funct) => Word((0x10u << 26) | (0x10u << 21) | funct);
+        // The CO=1 space, whose operand bits hardware ignores entirely - see Mars_Cop0.md §10.
+        public MipsAssembler Cop0Function(uint funct, uint operands = 0) =>
+            Word((0x10u << 26) | (0x10u << 21) | (operands << 6) | funct);
+
+        public MipsAssembler Cop0SubOpcode(int rs) => Word((0x10u << 26) | ((uint)rs << 21));
 
         public uint[] ToArray() => _words.ToArray();
 

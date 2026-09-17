@@ -66,7 +66,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     if (texel0 || texel1)
                     {
                         (int s, int t) = TextureCoordinates(values[AttributeS], values[AttributeT], values[AttributeW]);
-                        _texel0 = PointTexel(s, t, tile);
+                        _texel0 = Texel(s, t, tile);
                     }
 
                     if (texel1)
@@ -75,7 +75,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                         (int s, int t) = n == right - left && longSpan && nextRowDrawn
                             ? TextureCoordinates(_spanAttributes[next + AttributeS], _spanAttributes[next + AttributeT], _spanAttributes[next + AttributeW])
                             : TextureCoordinates(values[AttributeS] + steps[AttributeS], values[AttributeT] + steps[AttributeT], values[AttributeW] + steps[AttributeW]);
-                        _texel1 = PointTexel(s, t, tile);
+                        _texel1 = Texel(s, t, tile);
                     }
 
                     byte mask = _coverage[x];

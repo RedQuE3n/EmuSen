@@ -364,6 +364,48 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < rows.Length; i++) Assert.Equal(rows[i], (uint)((memory[(0x40 + i) * 2] << 8) | memory[(0x40 + i) * 2 + 1]));
         }
 
+        // angrylion's pixels and texture memory for a palette loaded from RDRAM and read through a filtered colour-indexed tile, recorded from the reference - see Mars_RdpFiltering.md §5.6.
+        [Fact]
+        public void A_palette_loaded_and_read_through_a_filtered_colour_indexed_tile_matches_the_reference()
+        {
+            var bus = new MarsBus();
+            for (uint i = 0; i < 16; i++) bus.Write16(0x0020_0000 + i * 2, (ushort)(((i * 0x1357 + 0x0F0F) & 0xFFFE) | (i & 1)));
+            for (uint y = 0; y < 8; y++)
+            {
+                for (uint x = 0; x < 8; x++) bus.Write8(0x0020_0100 + y * 8 + x, (byte)((x * 5 + y * 3) & 0x0F));
+            }
+
+            const uint list = 0x0030_0000;
+            uint end = WriteList(bus, list,
+                0x3F10001F_00100000UL, 0x2D000000_0007C07CUL, 0x2F300000_00000000UL, 0x37000000_7BDE7BDFUL, 0x3607C07C_00000000UL,
+                0x3D10000F_00200000UL, 0x35000100_07000000UL, 0x30000000_0703C000UL,
+                0x3D480007_00200100UL, 0x35480200_00000000UL, 0x34000000_0001C01CUL,
+                0x2F00ACF0_00000000UL, 0x3C887F10_88FCF279UL,
+                0x24078050_00008008UL, 0x0007000B_01550123UL,
+                SyncFull);
+
+            bus.Write32(Start, list);
+            bus.Write32(End, end);
+
+            (uint Y, uint X, uint Color)[] pixels =
+            {
+                (2, 2, 0x354D), (2, 5, 0x944D), (2, 10, 0x2A31), (3, 7, 0x6973), (9, 5, 0x7D0F), (9, 16, 0x2A2F),
+                (12, 11, 0x9211), (15, 3, 0x7C65), (15, 24, 0x312B), (19, 7, 0xBD61), (19, 20, 0x13B5), (19, 29, 0x3E35),
+            };
+
+            foreach (var (y, x, color) in pixels) Assert.Equal(color, (uint)bus.Read16(0x0010_0000 + (y * 32 + x) * 2));
+
+            // Palette entries 0 and 1, each in all four of its banks, and the index tile's odd second row with its halves swapped - see Mars_RdpFiltering.md §4.2.
+            (int Word, uint Value)[] words =
+            {
+                (0x400, 0x0F0E), (0x401, 0x0F0E), (0x402, 0x0F0E), (0x403, 0x0F0E), (0x404, 0x2267), (0x405, 0x2267), (0x406, 0x2267), (0x407, 0x2267),
+                (0x004, 0x070C), (0x005, 0x0106), (0x006, 0x0308), (0x007, 0x0D02),
+            };
+
+            byte[] memory = bus.Dp.Processor.TextureMemory;
+            foreach (var (word, value) in words) Assert.Equal(value, (uint)((memory[word * 2] << 8) | memory[word * 2 + 1]));
+        }
+
         [Fact]
         public void Writing_the_mode_register_clear_bit_lowers_the_display_processor_interrupt()
         {

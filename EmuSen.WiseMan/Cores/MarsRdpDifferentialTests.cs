@@ -313,6 +313,7 @@ namespace EmuSen.WiseMan.Cores
             cases.AddRange(OneCycleCases());
             cases.AddRange(ShadeAndDepthCases());
             cases.AddRange(TextureCases());
+            cases.AddRange(FilterCases());
             return cases.ToArray();
         }
 
@@ -420,14 +421,15 @@ namespace EmuSen.WiseMan.Cores
         private static ulong Modes(int rgbDither = 3, int alphaDither = 3, int m1a = 0, int m1b = 0, int m2a = 0, int m2b = 0, bool forceBlend = false,
             bool alphaCvgSelect = false, bool cvgTimesAlpha = false, int cvgDest = 0, bool colorOnCvg = false, bool imageRead = false, bool antialias = false,
             bool zSource = false, bool alphaCompare = false, int zMode = 0, bool zCompare = false, bool zUpdate = false,
-            bool perspective = false, bool biLerp0 = false, bool? biLerp1 = null)
+            bool perspective = false, bool biLerp0 = false, bool? biLerp1 = null, bool palette = false, bool paletteIa = false, bool sampleFour = false, bool midTexel = false)
         {
             ulong blender = (ulong)(uint)((m1a << 30) | (m1a << 28) | (m1b << 26) | (m1b << 24) | (m2a << 22) | (m2a << 20) | (m2b << 18) | (m2b << 16));
             return (0x2FUL << 56) | ((ulong)rgbDither << 38) | ((ulong)alphaDither << 36) | blender
                 | (forceBlend ? 1UL << 14 : 0) | (alphaCvgSelect ? 1UL << 13 : 0) | (cvgTimesAlpha ? 1UL << 12 : 0) | ((ulong)cvgDest << 8)
                 | (colorOnCvg ? 1UL << 7 : 0) | (imageRead ? 1UL << 6 : 0) | (antialias ? 1UL << 3 : 0) | (zSource ? 1UL << 2 : 0) | (alphaCompare ? 1UL : 0)
                 | ((ulong)zMode << 10) | (zCompare ? 1UL << 4 : 0) | (zUpdate ? 1UL << 5 : 0)
-                | (perspective ? 1UL << 51 : 0) | (biLerp0 ? 1UL << 43 : 0) | ((biLerp1 ?? biLerp0) ? 1UL << 42 : 0);
+                | (perspective ? 1UL << 51 : 0) | (biLerp0 ? 1UL << 43 : 0) | ((biLerp1 ?? biLerp0) ? 1UL << 42 : 0)
+                | (palette ? 1UL << 47 : 0) | (paletteIa ? 1UL << 46 : 0) | (sampleFour ? 1UL << 45 : 0) | (midTexel ? 1UL << 44 : 0);
         }
 
         // Both cycles given the same inputs, since the one-cycle mode reads the second.
@@ -546,47 +548,51 @@ namespace EmuSen.WiseMan.Cores
 
         private const uint TextureImage = 0x0020_0000;
 
+        private static byte[] TexturePattern => Pattern(0x5445_5831, 0x1000);
+
+        // A case that clears a colour and a depth image, runs its texture setup and modes, and draws - see Mars_RdpTextures.md §7.
+        private static Case Textured(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, int size = Bits16, string? dispute = null,
+            bool crossChecked = true, (uint, byte[])[]? uploads = null)
+        {
+            var commands = new List<ulong>
+            {
+                ColorImage(size, 32, Framebuffer), Scissor(0, 0, 124, 124), FillCycle, FillColor(0x7BDE_7BDF), Rectangle(0, 0, 124, 124),
+                ColorImage(Bits16, 32, DepthBuffer), FillColor(0xFFFC_FFFC), Rectangle(0, 0, 124, 124), ColorImage(size, 32, Framebuffer),
+                (0x3EUL << 56) | DepthBuffer, (0x2CUL << 56) | 0x0B89_1A3C_0156B3CUL & 0x00FF_FFFF_FFFF_FFFF,
+            };
+            commands.AddRange(setup);
+            commands.AddRange(new[] { modes, combine, Color(0x3A, 0xC864_2A9F, 0x5A), Color(0x3B, 0x3C90_D071), Color(0x39, 0x7755_AA80) });
+            commands.AddRange(shapes);
+            commands.Add(SyncFull);
+            return new Case(name, Framebuffer, size, 32, commands.ToArray(), Dispute: dispute, CrossChecked: crossChecked)
+            {
+                Uploads = new[] { (TextureImage, TexturePattern) }.Concat(uploads ?? Array.Empty<(uint, byte[])>()).ToArray(),
+            };
+        }
+
+        // A 4-bit tile loads from an 8-bit image unless told otherwise, since a 4-bit image stops the load in both references - see Mars_RdpTextures.md §7.
+        private static ulong[] Loaded(int format, int size, uint width = 16, uint height = 16, int tile = 0, int memory = 0, int shiftS = 0, int shiftT = 0,
+            int maskS = 0, int maskT = 0, bool mirrorS = false, bool mirrorT = false, bool clampS = false, bool clampT = false, uint offset = 0, int? imageSize = null,
+            int palette = 0, uint column = 0, uint row = 0)
+        {
+            int slots = format == 1 ? (int)(width + 1) / 2 : size switch { 0 => (int)(width + 3) / 4, 1 => (int)(width + 1) / 2, _ => (int)width };
+            int line = ((slots + 3) / 4) & 0x1FF;
+            return new[]
+            {
+                TextureImageCommand(format, imageSize ?? Math.Max(size, Bits8), (int)width, TextureImage + offset),
+                TileCommand(tile, format, size, line, memory, palette, clampS, mirrorS, maskS, shiftS, clampT, mirrorT, maskT, shiftT),
+                LoadCommand(0x34, tile, column << 2, row << 2, (column + width - 1) << 2, (row + height - 1) << 2),
+            };
+        }
+
         // Point-sampled textures in the one-cycle mode: every format, tile shift, mask, mirror and clamp, tile and block loads - see Mars_RdpTextures.md §7.
         private static IEnumerable<Case> TextureCases()
         {
             var cases = new List<Case>();
-            ulong inside = Scissor(0, 0, 124, 124);
             ulong texel0 = Combine(subA: 8, subB: 8, mul: 16, add: 1, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1);
-            byte[] image = Pattern(0x5445_5831, 0x1000);
 
             void Draw(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, int size = Bits16, string? dispute = null, bool crossChecked = true,
-                (uint, byte[])[]? uploads = null)
-            {
-                var commands = new List<ulong>
-                {
-                    ColorImage(size, 32, Framebuffer), inside, FillCycle, FillColor(0x7BDE_7BDF), Rectangle(0, 0, 124, 124),
-                    ColorImage(Bits16, 32, DepthBuffer), FillColor(0xFFFC_FFFC), Rectangle(0, 0, 124, 124), ColorImage(size, 32, Framebuffer),
-                    (0x3EUL << 56) | DepthBuffer, (0x2CUL << 56) | 0x0B89_1A3C_0156B3CUL & 0x00FF_FFFF_FFFF_FFFF,
-                };
-                commands.AddRange(setup);
-                commands.AddRange(new[] { modes, combine, Color(0x3A, 0xC864_2A9F, 0x5A), Color(0x3B, 0x3C90_D071), Color(0x39, 0x7755_AA80) });
-                commands.AddRange(shapes);
-                commands.Add(SyncFull);
-                cases.Add(new Case(name, Framebuffer, size, 32, commands.ToArray(), Dispute: dispute, CrossChecked: crossChecked)
-                {
-                    Uploads = new[] { (TextureImage, image) }.Concat(uploads ?? Array.Empty<(uint, byte[])>()).ToArray(),
-                });
-            }
-
-            // A 4-bit tile loads from an 8-bit image unless told otherwise, since a 4-bit image stops the load in both references - see Mars_RdpTextures.md §7.
-            ulong[] Loaded(int format, int size, uint width = 16, uint height = 16, int tile = 0, int memory = 0, int shiftS = 0, int shiftT = 0,
-                int maskS = 0, int maskT = 0, bool mirrorS = false, bool mirrorT = false, bool clampS = false, bool clampT = false, uint offset = 0, int? imageSize = null,
-                int palette = 0, uint column = 0, uint row = 0)
-            {
-                int slots = format == 1 ? (int)(width + 1) / 2 : size switch { 0 => (int)(width + 3) / 4, 1 => (int)(width + 1) / 2, _ => (int)width };
-                int line = ((slots + 3) / 4) & 0x1FF;
-                return new[]
-                {
-                    TextureImageCommand(format, imageSize ?? Math.Max(size, Bits8), (int)width, TextureImage + offset),
-                    TileCommand(tile, format, size, line, memory, palette, clampS, mirrorS, maskS, shiftS, clampT, mirrorT, maskT, shiftT),
-                    LoadCommand(0x34, tile, column << 2, row << 2, (column + width - 1) << 2, (row + height - 1) << 2),
-                };
-            }
+                (uint, byte[])[]? uploads = null) => cases.Add(Textured(name, modes, combine, setup, shapes, size, dispute, crossChecked, uploads));
 
             ulong[] rectangle = TextureRectangle(false, 0, 12, 10, 100, 90, 0, 0, 0x0400, 0x0400);
             ulong rectModes = Modes(biLerp0: true);
@@ -726,6 +732,171 @@ namespace EmuSen.WiseMan.Cores
                 }
 
                 Draw($"random texture case {n}", modes, combine, setup.ToArray(), shapes.ToArray(), size: Pick(Bits16, Bits16, Bits32));
+            }
+
+            return cases;
+        }
+
+        // Four-texel sampling in the one-cycle mode: the bilinear filter, the mid-texel, and palette lookup after a palette load - see Mars_RdpFiltering.md §5.
+        private static IEnumerable<Case> FilterCases()
+        {
+            var cases = new List<Case>();
+            ulong texel0 = Combine(subA: 8, subB: 8, mul: 16, add: 1, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1);
+            ulong bothTexels = Combine(subA: 1, subB: 2, mul: 3, add: 2, alphaSubA: 1, alphaSubB: 2, alphaMul: 3, alphaAdd: 2);
+
+            void Draw(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, int size = Bits16, string? dispute = null, bool crossChecked = true,
+                (uint, byte[])[]? uploads = null) => cases.Add(Textured(name, modes, combine, setup, shapes, size, dispute, crossChecked, uploads));
+
+            // A palette is loaded through a tile of its own, whose 4-bit size and memory 0x100 put entry n's four banks at word 0x400 + 4n - see Mars_RdpFiltering.md §4.2.
+            ulong[] Palette(int tile = 7, uint entries = 256, int imageSize = Bits16, uint offset = 0x800, int memory = 0x100, int tileSize = Bits4, uint rows = 1) => new[]
+            {
+                TextureImageCommand(0, imageSize, 16, TextureImage + offset),
+                TileCommand(tile, 0, tileSize, 0, memory),
+                LoadCommand(0x30, tile, 0, 0, (entries - 1) << 2, (rows - 1) << 2),
+            };
+
+            ulong[] With(ulong[] first, params ulong[][] rest) => rest.Aggregate(first, (all, next) => all.Concat(next).ToArray());
+
+            ulong[] stretched = TextureRectangle(false, 0, 12, 10, 100, 90, 0x07, 0x0B, 0x0155, 0x0123);
+            ulong[] centred = TextureRectangle(false, 0, 12, 10, 100, 90, 0x10, 0x10, 0x0400, 0x0400);
+            ulong filtered = Modes(biLerp0: true, sampleFour: true);
+
+            foreach (var (label, format, size) in new[]
+            {
+                ("RGBA16", 0, 2), ("RGBA32", 0, 3), ("RGBA4", 0, 0), ("RGBA8", 0, 1), ("YUV16", 1, 2), ("CI4", 2, 0), ("CI8", 2, 1), ("CI16", 2, 2),
+                ("IA4", 3, 0), ("IA8", 3, 1), ("IA16", 3, 2), ("I4", 4, 0), ("I8", 4, 1), ("I16", 4, 2),
+            })
+            {
+                Draw($"bilinear-filtered {label} texture rectangle", filtered, texel0, Loaded(format, size), stretched);
+            }
+
+            Draw("bilinear-filtered 4-bit YUV texture rectangle", filtered, texel0, Loaded(1, 0), stretched, crossChecked: false);
+            Draw("bilinear-filtered 8-bit YUV texture rectangle", filtered, texel0, Loaded(1, 1), stretched, crossChecked: false);
+            Draw("bilinear-filtered 32-bit YUV texture rectangle", filtered, texel0, Loaded(1, 3), stretched, crossChecked: false);
+            Draw("bilinear-filtered tile wrapping at its mask", filtered, texel0, Loaded(0, 2, maskS: 4, maskT: 4), TextureRectangle(false, 0, 8, 8, 120, 120, -0x0107, 0x0033, 0x0265, 0x01F3));
+            Draw("bilinear-filtered tile mirrored", filtered, texel0, Loaded(0, 2, maskS: 4, maskT: 4, mirrorS: true, mirrorT: true),
+                TextureRectangle(false, 0, 8, 8, 120, 120, -0x0107, 0x0033, 0x0265, 0x01F3));
+            Draw("bilinear-filtered YUV tile mirrored", filtered, texel0, Loaded(1, 2, maskS: 4, maskT: 4, mirrorS: true, mirrorT: true),
+                TextureRectangle(false, 0, 8, 8, 120, 120, -0x0107, 0x0033, 0x0265, 0x01F3));
+            Draw("bilinear-filtered tile clamped against its size", filtered, texel0,
+                Loaded(0, 2, clampS: true, clampT: true, maskS: 4, maskT: 4).Append(TileSizeCommand(0, 9, 13, 37, 29)).ToArray(),
+                TextureRectangle(false, 0, 4, 4, 120, 120, -0x0107, -0x0083, 0x0305, 0x0287));
+            Draw("mid-texel filter", Modes(biLerp0: true, sampleFour: true, midTexel: true), texel0, Loaded(0, 2), centred);
+            Draw("mid-texel filter of a YUV tile", Modes(biLerp0: true, sampleFour: true, midTexel: true), texel0, Loaded(1, 2), centred);
+            Draw("mid-texel mode away from the mid-texel", Modes(biLerp0: true, sampleFour: true, midTexel: true), texel0, Loaded(0, 2), stretched);
+            Draw("four texels converted without bilinear filtering", Modes(sampleFour: true), texel0, Loaded(1, 2), stretched);
+            Draw("four texels of an RGBA tile converted without bilinear filtering", Modes(sampleFour: true), texel0, Loaded(0, 2), stretched);
+            Draw("bilinear-filtered next pixel's texel", filtered, bothTexels, Loaded(0, 2), stretched);
+
+            var p = new Vertex(3.25, 2.5, 250, 20, 60, 255, 0x08000, S: 0, T: 0, W: 1.0);
+            var q = new Vertex(27.75, 9.75, 10, 240, 90, 128, 0x30000, S: 15, T: 2, W: 0.55);
+            var r = new Vertex(7.5, 28.25, 40, 70, 230, 12, 0x1C000, S: 4, T: 15, W: 0.8);
+            Draw("bilinear-filtered perspective triangle", Modes(perspective: true, biLerp0: true, sampleFour: true), texel0, Loaded(0, 2), Shaded(0x0A, p, q, r));
+            Draw("bilinear-filtered triangle with texel coordinates out of range", Modes(perspective: true, biLerp0: true, sampleFour: true), texel0,
+                Loaded(3, 2, maskS: 4, mirrorT: true, maskT: 3), Shaded(0x0B, p with { S = -20, T = 40 }, q with { S = 300, W = 0.1 }, r with { T = -500, W = 1.5 }));
+
+            Draw("palette load", Modes(), texel0, Palette(), Array.Empty<ulong>());
+            Draw("palette load of sixteen entries", Modes(), texel0, Palette(entries: 16), Array.Empty<ulong>());
+            Draw("palette load into the lower half of texture memory", Modes(), texel0, Palette(memory: 0x20), Array.Empty<ulong>());
+            Draw("palette load into an 8-bit tile", Modes(), texel0, Palette(tileSize: Bits8), Array.Empty<ulong>());
+            Draw("palette load from an 8-bit image", Modes(), texel0, Palette(imageSize: Bits8), Array.Empty<ulong>());
+            Draw("palette load from a 32-bit image", Modes(), texel0, Palette(imageSize: Bits32), Array.Empty<ulong>());
+            Draw("palette load from an odd address", Modes(), texel0, Palette(offset: 0x801), Array.Empty<ulong>());
+            Draw("palette load of two rows", Modes(), texel0, Palette(rows: 2), Array.Empty<ulong>(), crossChecked: false);
+
+            Draw("8-bit colour-indexed tile through an RGBA16 palette", Modes(biLerp0: true, palette: true), texel0, With(Loaded(2, 1), Palette()), stretched);
+            Draw("4-bit colour-indexed tile through an IA16 palette", Modes(biLerp0: true, palette: true, paletteIa: true), texel0, With(Loaded(2, 0, palette: 5), Palette()), stretched);
+            Draw("16-bit colour-indexed tile through a palette", Modes(biLerp0: true, palette: true), texel0, With(Loaded(2, 2), Palette()), stretched);
+            Draw("bilinear-filtered 8-bit colour-indexed tile through a palette", Modes(biLerp0: true, sampleFour: true, palette: true), texel0, With(Loaded(2, 1), Palette()), stretched);
+            Draw("bilinear-filtered 4-bit colour-indexed tile through a palette", Modes(biLerp0: true, sampleFour: true, palette: true, paletteIa: true), texel0,
+                With(Loaded(2, 0, palette: 9), Palette()), stretched);
+            Draw("bilinear-filtered 16-bit colour-indexed tile through a palette", Modes(biLerp0: true, sampleFour: true, palette: true), texel0, With(Loaded(2, 2), Palette()), stretched);
+            Draw("palette lookup without bilinear filtering", Modes(sampleFour: true, palette: true), texel0, With(Loaded(2, 1), Palette()), stretched);
+            Draw("palette lookup through a YUV tile", Modes(biLerp0: true, sampleFour: true, palette: true), texel0, With(Loaded(1, 2), Palette()), stretched,
+                dispute: "angrylion indexes a palette by a YUV tile's bytes, and parallel-rdp samples nothing through a palette from a YUV tile");
+            Draw("palette lookup through a mirrored tile", Modes(biLerp0: true, sampleFour: true, palette: true), texel0,
+                With(Loaded(2, 1, maskS: 4, maskT: 4, mirrorS: true, mirrorT: true), Palette()), TextureRectangle(false, 0, 8, 8, 120, 120, -0x0107, 0x0033, 0x0265, 0x01F3));
+
+            // Each case below exists because a breakage of the rule it names survived, or was caught only by a random case - see Mars_RdpFiltering.md §5.5.
+            Draw("bilinear filter at the mid-texel with the mid-texel bit clear", filtered, texel0, Loaded(0, 2), centred);
+            Draw("bilinear-filtered tile taller than 256 rows", filtered, texel0, Loaded(0, 2, width: 4, height: 512, maskS: 2, maskT: 9),
+                With(TextureRectangle(false, 0, 8, 8, 120, 48, 0x0005, (254 << 5) + 0x13, 0x0155, 0x0100),
+                    TextureRectangle(false, 0, 8, 64, 120, 112, 0x0005, (510 << 5) + 0x13, 0x0155, 0x0100)));
+            Draw("palette lookup through a 4-bit YUV tile", Modes(biLerp0: true, sampleFour: true, palette: true), texel0, With(Loaded(1, 0, palette: 6), Palette()), stretched,
+                crossChecked: false);
+            Draw("bilinear-filtered lookup through a palette loaded from an odd address", Modes(biLerp0: true, sampleFour: true, palette: true), texel0,
+                With(Loaded(2, 1), Palette(offset: 0x801)), stretched);
+            Draw("lookup of one texel through a palette loaded from an odd address", Modes(biLerp0: true, palette: true), texel0,
+                With(Loaded(2, 1), Palette(offset: 0x801)), stretched);
+            Draw("4-bit tile in the upper half read through a palette", Modes(biLerp0: true, sampleFour: true, palette: true), texel0,
+                With(Loaded(2, 0, memory: 0x180), Palette(entries: 16)), stretched);
+            Draw("16-bit tile in the upper half read through a palette", Modes(biLerp0: true, sampleFour: true, palette: true), texel0,
+                With(Loaded(2, 2, memory: 0x180), Palette(entries: 16)), stretched);
+            Draw("texel alpha through an RGBA16 palette as the multiplier", Modes(biLerp0: true, palette: true),
+                Combine(subA: 1, subB: 8, mul: 8, add: 7, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1), With(Loaded(2, 1), Palette()), stretched);
+            Draw("palette load through an all-zero tile", Modes(), texel0, Palette(tile: 5, entries: 16, offset: 0x200, memory: 0), Array.Empty<ulong>());
+            Draw("palette load through a 32-bit tile", Modes(), texel0, Palette(tileSize: Bits32), Array.Empty<ulong>(), crossChecked: false);
+
+            // Random cases keep to what both references model, as the point-sampled ones do, and read a palette only from a tile that is not YUV.
+            var random = new Random(0x4649_4C54);
+            for (int n = 0; n < 120; n++)
+            {
+                int Pick(params int[] choices) => choices[random.Next(choices.Length)];
+                bool Coin() => random.Next(2) == 1;
+
+                bool palette = random.Next(3) == 0;
+                int format = palette ? Pick(0, 2, 3, 4) : random.Next(5), tile = random.Next(7);
+                int size = format == 1 ? Bits16 : format == 0 ? random.Next(4) : random.Next(3);
+                uint width = (uint)random.Next(1, 48), height = (uint)random.Next(1, 48);
+                int memory = random.Next(0x200);
+                // A 32-bit tile keeps within half of texture memory, and a tile read through a palette keeps below the palette.
+                if (size == Bits32 || palette)
+                {
+                    uint slots = size switch { 0 => (width + 3) / 4, 1 => (width + 1) / 2, _ => width };
+                    uint line = (slots + 3) / 4;
+                    height = Math.Min(height, 0x100 / line);
+                    memory = random.Next((int)(0x100 - line * height) + 1);
+                }
+
+                var setup = new List<ulong>(Loaded(format, size, width, height, tile, memory, random.Next(16), random.Next(16), random.Next(16), random.Next(16),
+                    Coin(), Coin(), Coin(), Coin(), (uint)random.Next(0x100) * 4, palette: random.Next(16)));
+                if (Coin()) setup.Add(TileSizeCommand(tile, (uint)random.Next(0x100), (uint)random.Next(0x100), (uint)random.Next(0x400), (uint)random.Next(0x400)));
+                if (palette) setup.AddRange(Palette(entries: (uint)random.Next(1, 257), offset: 0x800 + (uint)random.Next(0x300) * 2));
+
+                bool midTexel = random.Next(3) == 0;
+                ulong modes = Modes(
+                    rgbDither: Pick(0, 1, 3), alphaDither: Pick(0, 1, 3), m1a: random.Next(4), m1b: random.Next(4), m2a: random.Next(4), m2b: random.Next(4),
+                    forceBlend: random.Next(4) == 0, cvgDest: random.Next(4), imageRead: Coin(), antialias: Coin(), alphaCompare: random.Next(4) == 0,
+                    zMode: random.Next(4), zCompare: Coin(), zUpdate: Coin(), perspective: Coin(), biLerp0: random.Next(4) != 0,
+                    palette: palette, paletteIa: Coin(), sampleFour: palette ? Coin() : random.Next(6) != 0, midTexel: midTexel);
+                ulong combine = Combine(
+                    subA: Pick(1, 2, 3, 4, 5, 6), subB: Pick(1, 2, 3, 4, 5, 7), mul: Pick(1, 2, 3, 4, 8, 9, 10, 11, 15, 20), add: Pick(1, 2, 3, 4, 5, 7),
+                    alphaSubA: Pick(1, 2, 3, 4, 7), alphaSubB: Pick(1, 2, 3, 4, 7), alphaMul: Pick(1, 2, 3, 4, 7), alphaAdd: Pick(1, 2, 3, 4, 7));
+
+                var shapes = new List<ulong>();
+                for (int t = 0, count = random.Next(1, 3); t < count; t++)
+                {
+                    uint left = (uint)random.Next(0, 100), top = (uint)random.Next(0, 100);
+                    if (midTexel && Coin())
+                    {
+                        short Centre() => (short)(random.Next(-64, 256) * 32 + 0x10);
+                        shapes.AddRange(TextureRectangle(Coin(), tile, left, top, left + (uint)random.Next(4, 60), top + (uint)random.Next(4, 60), Centre(), Centre(),
+                            (short)(Pick(1, 2, -1) * 0x400), (short)(Pick(1, 2, -1) * 0x400)));
+                    }
+                    else if (Coin())
+                    {
+                        shapes.AddRange(TextureRectangle(Coin(), tile, left, top, left + (uint)random.Next(4, 60), top + (uint)random.Next(4, 60),
+                            (short)random.Next(-0x400, 0x800), (short)random.Next(-0x400, 0x800), (short)random.Next(-0x800, 0x800), (short)random.Next(-0x800, 0x800)));
+                    }
+                    else
+                    {
+                        Vertex Point() => new(random.Next(-8, 136) / 4.0, random.Next(-8, 136) / 4.0, random.Next(256), random.Next(256), random.Next(256), random.Next(256),
+                            random.Next(0x40000), random.Next(-16, 64), random.Next(-16, 64), 0.25 + 0.75 * random.NextDouble());
+                        shapes.AddRange(Shaded(Pick(0x0A, 0x0B, 0x0E, 0x0F) | (tile << 16), Point(), Point(), Point()));
+                    }
+                }
+
+                Draw($"random filter case {n}", modes, combine, setup.ToArray(), shapes.ToArray(), size: Pick(Bits16, Bits16, Bits32));
             }
 
             return cases;

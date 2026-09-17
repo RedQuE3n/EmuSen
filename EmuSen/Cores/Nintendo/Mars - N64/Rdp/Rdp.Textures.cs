@@ -84,8 +84,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             };
         }
 
-        // Shifted, made relative to the tile's corner, clamped, masked and mirrored, fetched, and converted from YUV unless filtered - see §5.
-        private Color PointTexel(int s, int t, int tileIndex)
+        // Shifted and made relative to the tile's corner, then sampled at one texel, or at four when filtering or a palette asks - see §5 and Mars_RdpFiltering.md §1.
+        private Color Texel(int s, int t, int tileIndex)
         {
             ref TextureTile tile = ref _tiles[tileIndex];
 
@@ -96,25 +96,32 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             s -= tile.SL << 3;
             t -= tile.TL << 3;
 
+            return SampleFour || PaletteEnabled ? FourTexels(s, t, beyondS, beyondT, ref tile) : PointTexel(s, t, beyondS, beyondT, ref tile);
+        }
+
+        // Clamped, masked and mirrored, fetched, and converted from YUV unless filtered - see §5.
+        private Color PointTexel(int s, int t, bool beyondS, bool beyondT, ref TextureTile tile)
+        {
             s = Clamped(s, tile.ClampsS, beyondS, tile.ClampLimitS);
             t = Clamped(t, tile.ClampsT, beyondT, tile.ClampLimitT);
 
             if (tile.MaskS != 0) s = Masked(s, tile.MaskS, tile.MirrorS, tile.MirrorBitS);
             if (tile.MaskT != 0) t = Masked(t, tile.MaskT, tile.MirrorT, tile.MirrorBitT);
 
-            Color texel = FetchTexel(s, t, ref tile);
+            Color texel = FetchTexel(s, t & 0xFF, ref tile);
 
             // The reference also cuts red and green to nine bits here, which the combiner's sign extension makes invisible - see §5.3.
-            if (BilinearFirstCycle) return texel;
-
-            return new Color
-            {
-                R = (texel.B + ((_k0 * texel.G + 0x80) >> 8)) & 0x1FF,
-                G = (texel.B + ((_k1 * texel.R + _k2 * texel.G + 0x80) >> 8)) & 0x1FF,
-                B = (texel.B + ((_k3 * texel.R + 0x80) >> 8)) & 0x1FF,
-                A = texel.B & 0x1FF,
-            };
+            return BilinearFirstCycle ? texel : Converted(texel, texel.B);
         }
+
+        // The luma plus the chroma through the four conversion constants, the chroma and luma possibly from different texels - see §5.3.
+        private Color Converted(Color chroma, int luma) => new()
+        {
+            R = (luma + ((_k0 * chroma.G + 0x80) >> 8)) & 0x1FF,
+            G = (luma + ((_k1 * chroma.R + _k2 * chroma.G + 0x80) >> 8)) & 0x1FF,
+            B = (luma + ((_k3 * chroma.R + 0x80) >> 8)) & 0x1FF,
+            A = luma & 0x1FF,
+        };
 
         private static int Shifted(int coordinate, int shift) =>
             shift < 11 ? (short)coordinate >> shift : (short)(coordinate << (16 - shift));
@@ -132,11 +139,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             return coordinate & (0xFFFF >> (16 - mask)) & 0x3FF;
         }
 
-        // Each format and size read from its place in texture memory; formats past four read as intensity - see §5.1.
-        private Color FetchTexel(int s, int t, ref TextureTile tile)
+        // Each format and size read from its place in texture memory, the row already cut to eight bits or not; formats past four read as intensity - see §5.1.
+        private Color FetchTexel(int s, int row, ref TextureTile tile)
         {
-            int line = tile.Line * (t & 0xFF) + tile.Memory;
-            bool odd = (t & 1) != 0;
+            int line = tile.Line * row + tile.Memory;
+            bool odd = (row & 1) != 0;
             int byteSwap = odd ? 4 : 0, wordSwap = odd ? 2 : 0;
 
             int format = tile.Format < 5 ? tile.Format : 4;

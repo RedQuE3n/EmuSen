@@ -202,6 +202,20 @@ that page alone** — and once the comparison took an unwritten page from the up
 one matched (`Mars_RdpTextures.md` §7.5). The assumption was sound when it was made; the slice that
 invalidated it is the one that had to find it.
 
+### 4.9 State a case cannot set
+
+§2 says every case sets everything it depends on. **Texture memory and a tile's starting state are the
+exceptions**, and filtering was the slice that met both (`Mars_RdpFiltering.md` §5).
+
+- **Texture memory is compared whole, and no command clears it**, so a case inherits every earlier case's
+  loads. With the filtering slice removed, cases that load nothing still failed, because an earlier palette
+  load had gone missing. A failure in the tally with the slice removed is therefore evidence that *some*
+  case depends on the slice, not that the failing case does; the breakages run against each slice are the
+  per-rule evidence.
+- **A tile no command has set exists only for the dump's first case**, and the references start their tiles
+  differently. That disagreement was found in an isolated replay and is recorded on the filtering page rather
+  than carried as a case, since its answer would depend on the case's position in the dump.
+
 ## 5. What it does not grade
 
 - ~~**Hidden RDRAM.**~~ Compared since coverage landed, when Mars gained it (`Mars_RdpCoverage.md` §3.1).

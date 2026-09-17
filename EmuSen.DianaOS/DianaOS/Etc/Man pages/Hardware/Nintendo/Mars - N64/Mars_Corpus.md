@@ -12,7 +12,7 @@ it gets, what stops it, what its numbers mean and what they do not. The protocol
 **The run completes.** The corpus reaches its own teardown and prints its own verdict:
 
 ```
-Finished in 3.09s. Base: Failed 163 of 4637 tests (96% success rate)
+Finished in 3.09s. Base: Failed 159 of 4637 tests (96% success rate)
 ```
 
 That is 1,040 test groups and 4,637 assertions, every one of them attempted, **and no
@@ -39,6 +39,7 @@ line that reports those:
 | the RSP's scalar half, and a complete run | 1,040 | 395 of 4,637 assertions |
 | the seventeen CPU groups | 1,040 | 319 of 4,637 assertions |
 | the RSP's vector unit | 1,040 | 163 of 4,637 assertions |
+| the CPU's access to RSP memory | 1,040 | 159 of 4,637 assertions |
 
 The fourth row is the shape to want: forty tests that had never run before ran, and all
 forty passed.
@@ -83,8 +84,8 @@ in the corpus's test list has been attempted. Everything after it has not.
 
 ## 3. The census of what still fails
 
-The 87 distinct test groups that fail in the complete run, counted by name — a group that
-fails for thirty-three values is one row — against the corpus's own 163, which counts
+The 83 distinct test groups that fail in the complete run, counted by name — a group that
+fails for thirty-three values is one row — against the corpus's own 159, which counts
 assertions.
 
 | | groups | why |
@@ -93,15 +94,16 @@ assertions.
 | cartridge memory and writes | 19 | Phase E — the PI and cartridge DMA |
 | PIF RAM, MI, RDRAM registers | 13 | Phase E |
 | RDP status and registers | 6 | Phase D |
-| the main CPU's sub-word access to RSP memory | 4 | bus, not processor (`Mars_Rsp.md` §8) |
 
-**No group testing the RSP as a processor remains either.** Two rows still carry the RSP's
-name without being about it: the four `spmem` groups test how the main CPU's sub-word loads
-and stores reach the RSP's memories, and one of the six RDP groups is called *RSP STATUS* and
-tests the display processor freezing (`Mars_Rsp.md` §8). The 155 vector groups cleared in one
-slice, and the five rows here are the same groups, one for one, that the census before it
-listed (§10). Of what is left, only the `spmem` row is work inside a phase this plan has
-reached.
+**Every remaining row is a later phase or a decision.** One of the six RDP groups is called
+*RSP STATUS* and is the display processor's (`Mars_Rsp.md` §8). The four `spmem` groups that
+stood in the previous census cleared in the slice after it (§11), and the four rows here are
+the same groups, one for one, that it listed.
+
+> **Retired 2026-09-17: the census between the vector unit and the `spmem` groups.** It had
+> the five rows above plus *"the main CPU's sub-word access to RSP memory — 4 — bus, not
+> processor"*, and said of what was left that *"only the `spmem` row is work inside a phase
+> this plan has reached."*
 
 > **Retired 2026-09-17: the census that preceded this one**, which is kept for its first row
 > and for a count that was wrong. It opened *"The 259 distinct test groups that fail in the
@@ -231,6 +233,17 @@ either. It now asserts the
 load. A second, the aliasing test, was found while writing the man page not to distinguish
 a correct implementation from one that writes in place; it was rebuilt, and then checked by
 mutation: an in-place `VOR` fails it.
+
+## 11. The CPU's access to RSP memory
+
+*Landed 2026-09-17. `Mars_Memory.md` §2.4 has the rules.*
+
+**163 → 159, and 87 failing groups → 83**: the four `spmem` groups, which held one failure line
+each, and nothing else — every other failure line in the report is unchanged. The tests
+written first failed against the unmodified bus with the same values the corpus reported,
+which is some evidence the tests reproduce the corpus's cases rather than a reading of them.
+
+The prediction was stated before the run: exactly these four, and a tally of 159. It held.
 
 ## 4. The budget, and why it is now a safety net
 

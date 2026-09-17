@@ -69,15 +69,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             // Above the installed size reads zero rather than mirroring, which IPL3 depends on - see §2.1.
             if (physical < RdramSizeExpanded) return 0;
 
-            if (InRange(physical, MemoryMap.SpDmemBase, MemoryMap.SpMemSize))
-            {
-                return ReadArray32(SpDmem, physical - MemoryMap.SpDmemBase);
-            }
-
-            if (InRange(physical, MemoryMap.SpImemBase, MemoryMap.SpMemSize))
-            {
-                return ReadArray32(SpImem, physical - MemoryMap.SpImemBase);
-            }
+            if (SignalProcessorMemory(physical, out byte[] bank, out uint offset)) return ReadArray32(bank, offset);
 
             if (InRange(physical, MemoryMap.IsViewerBase, MemoryMap.IsViewerSize))
             {
@@ -111,15 +103,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             if (physical < RdramSizeExpanded) return;
 
-            if (InRange(physical, MemoryMap.SpDmemBase, MemoryMap.SpMemSize))
+            if (SignalProcessorMemory(physical, out byte[] bank, out uint offset))
             {
-                WriteArray32(SpDmem, physical - MemoryMap.SpDmemBase, value);
-                return;
-            }
-
-            if (InRange(physical, MemoryMap.SpImemBase, MemoryMap.SpMemSize))
-            {
-                WriteArray32(SpImem, physical - MemoryMap.SpImemBase, value);
+                WriteArray32(bank, offset, value);
                 return;
             }
 
@@ -195,6 +181,25 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public ulong Read64(uint physical) => ((ulong)Read32(physical) << 32) | Read32(physical + 4);
 
+        // The processor's own stores: signal processor memory latches whole words, whatever the size - see §2.4.
+        public void Store(uint physical, ulong value, int size)
+        {
+            if (SignalProcessorMemory(physical, out _, out _))
+            {
+                if (size == 8) Write32(physical, (uint)(value >> 32));
+                else Write32(physical & ~3u, (uint)(value << (8 * (4 - size - (int)(physical & 3)))));
+                return;
+            }
+
+            switch (size)
+            {
+                case 1: Write8(physical, (byte)value); return;
+                case 2: Write16(physical, (ushort)value); return;
+                case 4: Write32(physical, (uint)value); return;
+                default: Write64(physical, value); return;
+            }
+        }
+
         public void Write64(uint physical, ulong value)
         {
             Write32(physical, (uint)(value >> 32));
@@ -208,6 +213,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (rom is null || offset + 3 >= rom.Length) return 0;
 
             return ReadArray32(rom, offset);
+        }
+
+        private bool SignalProcessorMemory(uint physical, out byte[] bank, out uint offset)
+        {
+            uint local = physical - MemoryMap.SpDmemBase;
+
+            bank = local % (2 * MemoryMap.SpMemSize) < MemoryMap.SpMemSize ? SpDmem : SpImem;
+            offset = local % MemoryMap.SpMemSize;
+
+            return physical >= MemoryMap.SpDmemBase && local < MemoryMap.SpMemWindow;
         }
 
         private static bool InRange(uint address, uint start, uint length) =>

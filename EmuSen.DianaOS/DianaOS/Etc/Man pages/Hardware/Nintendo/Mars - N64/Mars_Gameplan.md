@@ -371,6 +371,11 @@ runs to the point of emitting a display list — which nothing can yet consume.
 > and the scalar slice. What remains of Phase C as written is the second condition — a
 > commercial game's boot microcode running to a display list — which no corpus test measures
 > and which has not been attempted.
+>
+> **Progress, 2026-09-17: the corpus half is met.** The four `spmem` groups were the main
+> CPU's sub-word stores into RSP memory, which latches whole words (`Mars_Memory.md` §2.4).
+> **247 of the 248 RSP and SP groups pass, and the one left is an RDP test** that shares the
+> RSP's register naming. What remains of this phase is the microcode condition.
 
 ### 4.4 Phase D — the RDP
 

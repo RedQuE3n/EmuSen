@@ -1,8 +1,9 @@
 using System;
+using EmuSen.Cores.Nintendo.Mars.Rsp;
 
 namespace EmuSen.Cores.Nintendo.Mars.Memory
 {
-    // The signal processor's registers and its DMA, with no processor behind them yet - see Mars_Memory.md §6.
+    // The signal processor's registers and its DMA, and the processor they drive - see Mars_Rsp.md §5.
     public sealed class SpInterface
     {
         public const uint MemAddress = 0x00;
@@ -16,6 +17,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public const uint StatusHalt = 0x01;
         public const uint StatusBroke = 0x02;
+        public const uint StatusSingleStep = 0x20;
+        public const uint StatusInterruptOnBreak = 0x40;
+
+        // Eight of them, each with its own clear and set bit in a write - see Mars_Rsp.md §5.1.
+        public const int SignalShift = 7;
+
+        public readonly Rsp.Rsp Processor;
 
         // Bit 12 of the memory address chooses which of the two banks a transfer touches.
         private const uint ImemSelect = 0x1000;
@@ -24,10 +32,24 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         private uint _memAddress;
         private uint _dramAddress;
-        private uint _status = StatusHalt;
         private bool _semaphore;
+        private bool _singleStep;
+        private bool _interruptOnBreak;
+        private uint _signals;
 
-        public SpInterface(MarsBus bus) => _bus = bus;
+        public SpInterface(MarsBus bus)
+        {
+            _bus = bus;
+            Processor = new Rsp.Rsp(bus);
+        }
+
+        // Assembled rather than stored: the processor owns the two bits everything else watches - see Mars_Rsp.md §5.
+        public uint StatusWord =>
+            (Processor.Halted ? StatusHalt : 0)
+            | (Processor.Broke ? StatusBroke : 0)
+            | (_singleStep ? StatusSingleStep : 0)
+            | (_interruptOnBreak ? StatusInterruptOnBreak : 0)
+            | (_signals << SignalShift);
 
         public uint Read32(uint offset)
         {
@@ -40,7 +62,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 case ReadLength:
                 case WriteLength: return 0xFF8;
 
-                case Status: return _status;
+                case Status: return StatusWord;
 
                 // Instantaneous transfers are never queued and never in progress - see Mars_Memory.md §6.1.
                 case DmaFull:
@@ -89,12 +111,62 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             return held;
         }
 
-        // Only the halt and break bits are modelled; the rest are a Phase C problem - see Mars_Memory.md §6.
+        // Every field is a clear bit and a set bit, and a write naming both leaves it alone - see Mars_Rsp.md §5.1.
         private void WriteStatus(uint value)
         {
-            if ((value & 0x01) != 0) _status &= ~StatusHalt;
-            if ((value & 0x02) != 0) _status |= StatusHalt;
-            if ((value & 0x04) != 0) _status &= ~StatusBroke;
+            if (Asks(value, 0, set: false)) Processor.Start(Pc);
+            if (Asks(value, 0, set: true)) Processor.Halted = true;
+            if ((value & 0x004) != 0) Processor.Broke = false;
+
+            if (Asks(value, 3, set: false)) _bus.Mi.Clear(MiInterrupt.SignalProcessor);
+            if (Asks(value, 3, set: true)) _bus.Mi.Raise(MiInterrupt.SignalProcessor);
+
+            if (Asks(value, 5, set: false)) _singleStep = false;
+            if (Asks(value, 5, set: true)) _singleStep = true;
+            if (Asks(value, 7, set: false)) _interruptOnBreak = false;
+            if (Asks(value, 7, set: true)) _interruptOnBreak = true;
+
+            for (int signal = 0; signal < 8; signal++)
+            {
+                if (Asks(value, 9 + signal * 2, set: false)) _signals &= ~(1u << signal);
+                if (Asks(value, 9 + signal * 2, set: true)) _signals |= 1u << signal;
+            }
+        }
+
+        // A pair of bits with both asserted is not a set and then a clear; it is no request at all.
+        private static bool Asks(uint value, int clearBit, bool set)
+        {
+            uint pair = (value >> clearBit) & 3;
+            return pair == (set ? 2u : 1u);
+        }
+
+        // The program counter is a register of its own, a page away from the rest - see Mars_Rsp.md §2.
+        public uint Pc
+        {
+            get => Processor.Pc;
+            set
+            {
+                Processor.Pc = value & Rsp.Rsp.PcMask;
+                Processor.NextPc = (Processor.Pc + 4) & Rsp.Rsp.PcMask;
+            }
+        }
+
+        // One instruction per tick, a placeholder for a clock ratio Phase G owns - see Mars_Rsp.md §7.
+        public void Step(long cycles)
+        {
+            for (long i = 0; i < cycles && !Processor.Halted; i++)
+            {
+                bool broke = Processor.Broke;
+
+                Processor.Step();
+
+                if (Processor.Broke && !broke && _interruptOnBreak)
+                {
+                    _bus.Mi.Raise(MiInterrupt.SignalProcessor);
+                }
+
+                if (_singleStep) Processor.Halted = true;
+            }
         }
 
         // Length is encoded one short, and the row count and skip make it rectangular - see Mars_Memory.md §6.

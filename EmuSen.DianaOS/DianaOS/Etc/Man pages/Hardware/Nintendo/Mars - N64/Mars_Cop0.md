@@ -93,6 +93,19 @@ whose reset value is wrong is invisible until software reads it before writing i
 and read-modify-write is the normal way to touch a configuration register. The masks
 in §2 have the same property.
 
+> **Refuted in part, 2026-09-17, and not yet fixed.** The corpus's own `Config` test,
+> which no run had reached until the first complete one, writes `0x8000` and reads back
+> `0x7006E460`. Mars reads back `0x0006E460`. So bits 30:28 are **not** writable: they
+> read as ones whatever is written, which means the `0x70000000` this section attributes
+> to a reset value is a constant, and belongs in the forced half rather than the writable
+> one.
+>
+> The reasoning above about read-modify-write was not wrong, and the reset-value fix did
+> make the startup test pass — but it passed for the wrong reason. A reset value that
+> carries those bits and a mask that forces them are indistinguishable to software that
+> only ever writes back what it read, which is exactly what the boot code does. The test
+> that tells them apart writes something else. `Mars_Corpus.md` §3.
+
 ## 5. Seven registers that are not registers
 
 Numbers **7, 21, 22, 23, 24, 25 and 31** do not exist. They are not zero, and they are

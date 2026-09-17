@@ -271,14 +271,18 @@ rdp)
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 "-DCMAKE_CXX_FLAGS=-include cstdint"
     "$CMAKE" --build "$WORK/validate-build" --target rdp-validate-dump -j"$(cpus)"
     cp "$WORK/validate-build/rdp-validate-dump" "$WORK/rdp-validate-dump"
+    # parallel-rdp's own video-interface conformance suite, which runs its VI against
+    # angrylion's over random memory - the cross-check map of Mars_Video.md §5.
+    "$CMAKE" --build "$WORK/validate-build" --target vi-conformance -j"$(cpus)"
+    cp "$WORK/validate-build/vi-conformance" "$WORK/vi-conformance"
     echo "== building rdp-reference"
     ANGRYLION_LIB_DIR="$WORK/validate-build" cargo build --release \
         --manifest-path "$HERE/probe-rs/Cargo.toml" --no-default-features --features angrylion \
         --bin rdp-reference --target-dir "$WORK/target"
     cp "$WORK/target/release/rdp-reference" "$WORK/rdp-reference"
     echo
-    echo "Built: $WORK/rdp-reference and $WORK/rdp-validate-dump"
-    echo "MarsRdpDifferentialTests finds both there."
+    echo "Built: $WORK/rdp-reference, $WORK/rdp-validate-dump and $WORK/vi-conformance"
+    echo "MarsRdpDifferentialTests finds them there."
     exit 0
     ;;
 libretro-core)

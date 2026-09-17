@@ -59,6 +59,16 @@ pub struct Dp {
     compat: u32,
 }
 
+// vdac.h's frame_buffer: a window onto angrylion's persistent prescale buffer.
+#[repr(C)]
+pub struct FrameBuffer {
+    pixels: *const u8,
+    width: u32,
+    height: u32,
+    height_out: u32,
+    pitch: u32,
+}
+
 #[repr(C)]
 pub struct Config {
     gfx: Gfx,
@@ -78,6 +88,7 @@ unsafe extern "C" {
 }
 
 static MESSAGES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static FRAMES: Mutex<Vec<(u32, u32, Vec<u8>)>> = Mutex::new(Vec::new());
 
 fn remember(kind: &str, format: *const c_char) {
     if format.is_null() {
@@ -88,12 +99,33 @@ fn remember(kind: &str, format: *const c_char) {
     MESSAGES.lock().unwrap().push(format!("{kind}: {}", text.trim_end()));
 }
 
-// The host half of angrylion's interface. Nothing is displayed: the RDRAM is the output.
+// The host half of angrylion's interface. Nothing is displayed: the RDRAM and the
+// scanned-out frames are the output.
 #[unsafe(no_mangle)]
 pub extern "C" fn vdac_init(_config: *mut Config) {}
 
+// Copied row by row, because the pointer is into a buffer angrylion keeps between frames.
 #[unsafe(no_mangle)]
-pub extern "C" fn vdac_write(_frame: *mut c_void) {}
+pub extern "C" fn vdac_write(frame: *mut c_void) {
+    if frame.is_null() {
+        return;
+    }
+    // SAFETY: angrylion passes a frame_buffer it owns, valid until this call returns.
+    let frame = unsafe { &*frame.cast::<FrameBuffer>() };
+    if frame.pixels.is_null() || frame.width == 0 || frame.height == 0 {
+        return;
+    }
+
+    let width = frame.width as usize;
+    let mut pixels = Vec::with_capacity(width * frame.height as usize * 4);
+    for row in 0..frame.height as usize {
+        // SAFETY: the row lies inside the prescale buffer the frame describes.
+        let start = unsafe { frame.pixels.add((row * frame.pitch as usize) * 4) };
+        pixels.extend_from_slice(unsafe { std::slice::from_raw_parts(start, width * 4) });
+    }
+
+    FRAMES.lock().unwrap().push((frame.width, frame.height, pixels));
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn vdac_sync(_invalid: bool) {}
@@ -336,6 +368,13 @@ fn snapshot(
         put(&4u32.to_le_bytes())?;
         put(&(message.len() as u32).to_le_bytes())?;
         put(message.as_bytes())?;
+    }
+
+    for (width, height, pixels) in FRAMES.lock().unwrap().drain(..) {
+        put(&6u32.to_le_bytes())?;
+        put(&width.to_le_bytes())?;
+        put(&height.to_le_bytes())?;
+        put(&pixels)?;
     }
 
     Ok(())

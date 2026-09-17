@@ -1,0 +1,241 @@
+# Mars — floating point in software, and what the part refuses to compute
+
+*Phase B's body, landed 2026-09-16. Arithmetic, square root, conversions, compares and
+the coprocessor branches, on a software float rather than the host's.
+`Cpu/Fpu/SoftFloat.cs`, `SoftFloatMath.cs`, `SoftFloatConvert.cs` and
+`Cpu.Opcodes.Cop1Math.cs`, with `MarsFpuArithmeticTests` and the corpus.*
+
+*The plan (`Mars_Gameplan.md` §4.2) required this start soft rather than on C#
+`double`, on two arguments neither of which had been measured. §1 reports the
+measurement. Both arguments hold, and the second is stronger than it was stated.*
+
+---
+
+## 1. The reversed NaN convention, confirmed and made precise
+
+`Mars_Documentation.md` §2.1 recorded, marked **[community]**, that the VR4300's
+quiet and signalling NaN patterns are the reverse of the modern convention. **It is
+correct, and it is now [read] rather than [community]** — the corpus asserts it.
+
+The confusing part, and the reason this needs stating carefully: the corpus's own
+constants use the *modern* names. `QUIET_NAN_START_32` is `0x7FC00000`, the mantissa's
+top bit set, exactly as IEEE 754-2008 defines a quiet NaN. What the corpus then
+asserts about that pattern is the opposite of what the name implies, and it says so in
+a comment of its own — *"which is the opposite of what their name implies"*.
+
+Measured behaviour, for an arithmetic operand:
+
+| Mantissa top bit | Modern name | What this part does |
+|---|---|---|
+| Set | quiet | **Raises Invalid Operation** and returns the default NaN |
+| Clear | signalling | **Raises Unimplemented Operation** — it will not compute at all |
+
+And the NaN it produces is **`0x7FBFFFFF`** (`0x7FF7FFFFFFFFFFFF` in double) — a
+pattern a present-day host FPU calls *signalling*. A C# `double` would have produced
+`0x7FF8000000000000` and been wrong in every NaN-returning operation, silently.
+
+**Mars therefore names these classes for what they do**, not for what IEEE calls them:
+`Nan` is the one that raises Invalid, `NanUnsupported` the one that is refused. Using
+the standard names here would have imported the confusion permanently.
+
+## 2. The representation
+
+A number is unpacked into a sign, an unbiased exponent, and a 64-bit significand with
+its leading one at bit 63. Every operation produces a 128-bit significand with the
+leading one at bit 127, plus a sticky flag, and **rounds exactly once** (§4). The two
+formats differ only in three constants.
+
+The 128-bit intermediate is what makes the arithmetic straightforward rather than
+clever: a double's 53×53 product is 106 bits and fits exactly, so multiplication never
+needs a sticky bit at all.
+
+## 3. What the part will not compute with
+
+Two operand shapes are refused outright, with the unmaskable unimplemented-operation
+exception, before any arithmetic happens:
+
+- **A denormal**, either operand, always.
+- **A NaN with its mantissa top bit clear** (§1).
+
+**The denormal rule is the one that makes this tractable.** The VR4300 does not
+compute with denormals; it declines. So the whole of gradual underflow — the part of
+IEEE arithmetic that costs the most to implement and is hardest to get right — is not
+needed. Mars's software float handles normals, zeros, infinities and NaNs, and
+nothing else.
+
+This is not a simplification Mars chose. It is what 32 separate corpus vectors assert
+for `ADD.S` alone.
+
+### 3.1 The result when there is no result
+
+Invalid Operation returns the format's default NaN (§1). This is one value, not a
+propagation of the operand's payload: an operand NaN's bits do not survive.
+
+## 4. Rounding happens once, in one place
+
+One function consults the rounding mode and one function checks the exponent range.
+Round-to-nearest ties to even; the three directed modes increment when the discarded
+part is non-zero and the sign agrees with the direction.
+
+**Overflow is not always infinity.** Round-to-nearest gives infinity, round-to-zero
+gives the largest finite value, and the directed modes give one or the other depending
+on the sign. Getting this wrong produces a value that is merely enormous rather than
+infinite, which no test of the common path would catch.
+
+### 4.1 Underflow, which settles a question the survey left open
+
+`Mars_Documentation.md` §2.1 recorded that rounding on underflow is **"disputed
+between sources"** and "should be settled by test rather than by reading". It is
+settled. With flush-to-zero set:
+
+| Mode | A tiny negative result becomes |
+|---|---|
+| Nearest | `-0` |
+| Zero | `-0` |
+| Toward +∞ | `-0` |
+| Toward −∞ | **`-1.1754944e-38`**, the smallest normal |
+
+So the directed modes are taken **literally** even below the smallest normal: rounding
+down a small negative number moves it away from zero, to the minimum normal. The
+survey's report, which it marked unresolved, was right.
+
+**And then there is this.** If either the underflow or the inexact exception is
+*enabled*, the same operation raises **unimplemented operation** instead of underflow.
+The corpus's own comment on the vectors reads *"works if exceptions are off, but
+unimplemented if they are enabled (wow)"*. Mars implements it because it is measured,
+not because it can be explained.
+
+With flush-to-zero clear, Mars refuses. That combination is not exercised by the
+corpus, which runs with flushing on, and the refusal is a guess.
+
+## 5. How a result reaches the control word
+
+The cause field is **replaced** by what this operation raised; the flag field
+**accumulates**. If a raised cause has its enable set, the exception fires and the
+destination register is not written.
+
+### 5.1 Three operations that look like bit twiddling and are not
+
+`ABS` and `NEG` clear or flip the sign bit — after classifying the operand exactly as
+arithmetic does. A denormal makes `ABS.S` raise unimplemented; a NaN makes it raise
+Invalid and return the default NaN rather than the operand with its sign cleared.
+Implementing them as the one-line bit operations they appear to be fails 64 corpus
+vectors.
+
+`MOV` is the opposite: it classifies nothing, raises nothing, and copies the **whole
+64-bit register** regardless of the format in its name.
+
+### 5.2 A computed 32-bit result clears the rest of its register
+
+`ADD.S` into a register leaves the upper 32 bits **zero**. `MTC1` and `LWC1` into the
+same register leave them **untouched** (`Mars_Fpu.md` §2). Same register file, same
+width, opposite rule, and nothing observes the difference until a program writes a
+single and reads a double.
+
+### 5.3 Half mode masks one index and not the others
+
+In half mode (`Mars_Fpu.md` §2), coprocessor-1 arithmetic **ignores the low bit of the
+first source index** and uses the low bit of the second source and of the destination
+normally. The corpus states both halves as separate assertions — *"Lowest bit of fs
+should be ignored"* and *"Lowest bit of ft should not be ignored"*.
+
+This is not the half-select rule the moves use. A single-precision operand is the low
+32 bits of the physical register named, not a half chosen by the index's low bit.
+
+## 6. Conversions
+
+Between the formats, and between floats and integers, through the same rounding
+function. `ROUND`, `TRUNC`, `CEIL` and `FLOOR` are the four rounding modes named
+explicitly rather than taken from the control word; `CVT` uses the control word.
+
+### 6.1 Float to integer refuses rather than saturates
+
+Infinity, either NaN, a denormal, or a value outside the destination's range all raise
+unimplemented operation. There is no saturation and no wrapping.
+
+### 6.2 Integer to float has a range too, and it is not the obvious one
+
+`CVT.S.L` and `CVT.D.L` refuse a source outside **[−2⁵⁵, 2⁵⁵)**. Not 2⁶³, which is
+what the source type would suggest, and not 2⁵³, which is what the single format's
+precision would suggest. 2⁵⁵ is measured; no reading predicted it.
+
+## 7. Compares follow different rules from arithmetic
+
+`Mars_Documentation.md` §2.1 recorded that the vendor manual's main text *excludes
+compare instructions* from the denormal and NaN rules. Confirmed, and the difference
+is total:
+
+- **A denormal is compared by value.** No exception, no refusal — the number is read
+  as the denormal it is. Mars's unpacking normalises subnormals for exactly this path
+  while arithmetic still refuses them (§3).
+- **The mantissa-top-bit-clear NaN raises nothing** in an unordered compare, where
+  arithmetic refuses it.
+- **The mantissa-top-bit-set NaN raises Invalid**, even for the conditions whose names
+  say they do not signal.
+- The conditions with bit 3 set raise Invalid for **either** NaN.
+
+The condition's low three bits select which of less-than, equal and unordered make it
+true, which is ordinary MIPS. Everything above it is not.
+
+### 7.1 The branches
+
+Four encodings — on the condition true or false, each with a likely form. The rest of
+the sub-opcode's space is reserved and raises unimplemented. They use the same
+delay-slot machinery as the integer branches, including `Mars_Cop0.md` §9's rule that
+an untaken ordinary branch still has a delay slot.
+
+## 8. Square root, and a bug worth recording
+
+Digit by digit on a 128-bit radicand, which gives an exact remainder and so an exact
+sticky bit. The exponent is forced even before the root is taken.
+
+**The first version was wrong and passed its first tests.** The digit trial value is
+`4R + 1`, not `2R + 1` — the new digit contributes `d(4R + d)` — and with `2R + 1` the
+square roots of exact powers of four come out **right**. `sqrt(16) = 4` and
+`sqrt(1) = 1` both passed while `sqrt(2)` returned 1.65. A test suite of tidy values
+would have shipped it.
+
+## 9. What the oracle says now
+
+**561 tests started, 138 failed**, and **every failure is a cache test or a cartridge
+DMA test** — the two groups Mars does not model and Phase E owns. Every COP1 test the
+run reaches passes: the register file, the moves, all four arithmetic operations in
+both precisions, square root, the conversions, all sixteen compares, and the branches.
+
+**The scaffold is gone.** `Mars_Fpu.md` §6 introduced a `NotImplementedException` to
+stop the machine loudly at an instruction Mars had not built, and a test asserting
+where that happened. There is nothing left for it to catch, and the test now asserts
+the inverse: that the corpus reaches no such instruction.
+
+### 9.1 Where the run is cut, and what is still wrong
+
+The run is truncated at its instruction budget **inside the 64-bit conversion tests**,
+and that is deliberate: with a budget six times larger the run reaches an exception
+storm in that same test and aborts, which means something in `CVT.L`/`ROUND.L`/
+`TRUNC.L`/`CEIL.L`/`FLOOR.L` is wrong in a way the corpus's handler cannot recover
+from. The ordinary cases are right — 4.5 → 4, 5.5 → 6, 4.4 → 5 rounding up — so it is
+an edge case rather than the mechanism.
+
+**The tally is therefore a measurement of a truncated run, not a whole one.** It is
+still a ratchet and still deterministic; it is simply not yet the full corpus, and the
+next slice's first job is to find that edge case and let the run finish.
+
+## 10. Two commercial cartridges
+
+Super Mario 64 and Wave Race 64 both run **twenty million instructions without a
+single fault**. Neither is playable and neither is meant to be: both finish booting and
+settle into a loop waiting for a video interrupt that no part of Mars can raise yet.
+Mario's loop tightens as it gives up on more of the machine — thirty-two instructions
+after two million, and two instructions (`BEQ $0, $0, -1` and its delay slot) by
+twenty million. Wave Race spins in an operating-system critical section, reading and
+writing `Status` around a message-queue wait.
+
+**What this is evidence of, and what it is not.** It is evidence that the integer
+core, COP0, the TLB, exceptions and the FPU execute real commercial code — hundreds of
+thousands of distinct instruction paths written by people who never saw this emulator
+— without hitting a defect that faults. It is **no** evidence about the RCP, about
+timing, or about anything either game draws, because neither has drawn anything.
+
+Two tests keep the position, skipping when the cartridges are absent: neither faults
+with anything but a timer interrupt, and Mario reaches a small wait loop. The
+cartridges are not in the repository and never will be.

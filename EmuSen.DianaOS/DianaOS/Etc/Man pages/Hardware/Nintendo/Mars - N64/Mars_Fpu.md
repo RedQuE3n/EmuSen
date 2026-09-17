@@ -106,10 +106,13 @@ arithmetic, and Mars implements it in that order: **the write lands first, and t
 control word keeps exactly what the program wrote.** It is not rewritten on the way
 out, which distinguishes it from the operation-raised case in §5.
 
-**Untested, and stated as such:** whether setting the *unimplemented* cause bit
-through `CTC1` also fires is not something the corpus exercises — it deliberately
-writes a zero into that bit position in the test that sweeps the mask. Mars does not
-fire on it. If that is wrong, this paragraph is where the correction goes.
+**~~Untested, and stated as such:~~ Corrected, 2026-09-16.** Whether setting the
+*unimplemented* cause bit through `CTC1` also fires was recorded here as untested,
+with Mars not firing on it, and the note said "if that is wrong, this paragraph is
+where the correction goes". **It was wrong.** The corpus has a test named *Fire
+unimplemented exception through CTC1*, which the run did not reach until the following
+slice; it fires. The unimplemented cause has no enable of its own, and setting it by
+any route — an operation or a hand-written control word — raises immediately.
 
 ## 5. Reserved here is a floating-point fault, not a reserved instruction
 

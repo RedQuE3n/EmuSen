@@ -285,6 +285,18 @@ which is precisely the failure mode a test corpus exists to catch early.
 
 **Done when** the corpus's COP1 sections pass, including the exception cases.
 
+> **Substantially met, 2026-09-16** — `Mars_FpuMath.md` §9. Every COP1 test the corpus
+> run reaches passes. It is not *fully* met: the run is truncated inside the 64-bit
+> conversion tests, where an edge case still storms (§9.1), so the COP1 sections have
+> not all been *reached*, let alone passed.
+>
+> **The phase's founding decision was right, and for a stronger reason than was
+> argued.** The case for starting soft rested on Project64's late conversion and on a
+> reported NaN quirk. The quirk is real and measured (§1) — but the decisive finding
+> was not anticipated at all: **this part refuses to compute with denormals**, which
+> removes gradual underflow from the problem entirely and makes a software float
+> *smaller* than the careful host-float wrapper the plan was arguing against.
+
 > **Progress, 2026-09-16.** The first slice landed — the register files and every path
 > into them, with no arithmetic (`Mars_Fpu.md`). The consequence was larger than the
 > slice: the corpus now runs 4.65 million instructions and prints verdicts, where

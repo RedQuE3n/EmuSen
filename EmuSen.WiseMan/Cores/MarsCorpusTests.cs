@@ -14,6 +14,7 @@ namespace EmuSen.WiseMan.Cores
         private const int InstructionBudget = 1_000_000;
 
         // The whole run costs under half a second, so the oracle is affordable on every suite - see §9.
+        // Truncated deliberately: the run is still inside the 64-bit conversions here - see Mars_FpuMath.md §9.1.
         private const int VerdictBudget = 60_000_000;
 
         // The handoff, the cartridge's own boot code, and the jump into the program it loaded.
@@ -53,18 +54,16 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("Running ADDIOpcodeTest...", verdicts);
 
             // A ratchet, not a description: this number goes down as Mars is fixed - see Mars_Fpu.md §9.1.
-            Assert.Equal($"521 started, 138 failed ({report})", $"{Tally(verdicts)} ({report})");
+            Assert.Equal($"561 started, 138 failed ({report})", $"{Tally(verdicts)} ({report})");
         }
 
-        // Where the run ends today, and the marker is a scaffold rather than an emulated fault - see §6.
+        // The inverse of what stood here for two slices: there is no scaffold left to reach - see §6.
         [Fact]
-        public void The_first_operation_the_corpus_reaches_that_mars_cannot_run_is_floating_point_arithmetic()
+        public void The_corpus_no_longer_reaches_an_instruction_mars_has_not_built()
         {
             if (!Installed(out _, out var cpu, out _)) return;
 
-            var stopped = Assert.Throws<NotImplementedException>(() => RunUntilMarsRunsOut(cpu!, rethrow: true));
-
-            Assert.Contains("coprocessor-1 arithmetic", stopped.Message);
+            RunUntilMarsRunsOut(cpu!, rethrow: true);
         }
 
         private static void RunUntilMarsRunsOut(Cpu cpu, bool rethrow = false)

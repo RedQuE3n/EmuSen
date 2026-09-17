@@ -282,3 +282,9 @@ timing, or about anything either game draws, because neither has drawn anything.
 Two tests keep the position, skipping when the cartridges are absent: neither faults
 with anything but a timer interrupt, and Mario reaches a small wait loop. The
 cartridges are not in the repository and never will be.
+
+> **Update 2026-09-17: the video interrupt is now measured, not inferred.** "Waiting for a
+> video interrupt" above was read off the shape of the loop. Raising that interrupt from the
+> test harness starts both games' audio microcode, and raising the serial interrupt as well
+> gets Wave Race to its first graphics task (`Mars_Microcode.md` §2). Both games had unmasked
+> the video interrupt and programmed its line before settling, so the inference was right.

@@ -114,8 +114,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var bus = new MarsBus();
 
-            // At the general vector: record that we arrived, step the saved address past the faulting
-            // instruction, and return.
+            // At the general vector: record the arrival, step the saved address past the fault, and return.
             var handler = new MipsAssembler()
                 .Addiu(5, 0, 0x77)
                 .Mfc0(6, Cpu.ExceptionPcRegister)

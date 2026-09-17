@@ -9,7 +9,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
-    // Commercial cartridges, run headless as far as a machine with no RCP can take them - see Mars_FpuMath.md §9.
+    // Commercial cartridges, run headless as far as a machine with no RCP can take them - see Mars_FpuMath.md §10.
     public class MarsCommercialRomTests
     {
         private const string Mario = "Super Mario 64 (Europe) (En,Fr,De).z64";
@@ -35,9 +35,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(4UL, (cpu.CurrentPc >> 29) & 7);
         }
 
-        // It finished booting and is waiting for a video interrupt no part of Mars can raise yet. The
-        // loop tightens as it gives up on more of the machine - thirty-two instructions here, two by
-        // twenty million - so what is asserted is that it is small, not what size it is.
+        // Booted and waiting for a video interrupt nothing raises; the loop keeps tightening, so only its size bound is asserted - see Mars_FpuMath.md §10.
         [Fact]
         public void Super_Mario_64_settles_into_a_wait_loop_for_hardware_that_does_not_exist()
         {

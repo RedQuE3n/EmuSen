@@ -376,6 +376,19 @@ runs to the point of emitting a display list — which nothing can yet consume.
 > CPU's sub-word stores into RSP memory, which latches whole words (`Mars_Memory.md` §2.4).
 > **247 of the 248 RSP and SP groups pass, and the one left is an RDP test** that shares the
 > RSP's register naming. What remains of this phase is the microcode condition.
+>
+> **Progress, 2026-09-17: the microcode condition is met, with two stand-ins named.** Wave
+> Race 64's first graphics task runs to a seventeen-command display list handed to the display
+> processor (`Mars_Microcode.md`). **It only does so when the test harness raises the video
+> and serial interrupts**, because a commercial game submits no microcode until those two
+> interfaces have spoken — and they are Phase E's. As built, neither game starts the RSP in
+> fifty million instructions.
+>
+> **So Phase C's "done when" is met in the only form this plan's order allows**, and the
+> dependency it hid is recorded as a finding rather than worked around: this phase's condition
+> named a commercial program, and a commercial program waits on every device it uses
+> (`Mars_Microcode.md` §5). The test's stand-ins are to be deleted when Phase E builds the two
+> devices, and the test is expected to pass without them.
 
 ### 4.4 Phase D — the RDP
 

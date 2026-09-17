@@ -32,6 +32,55 @@ namespace EmuSen.WiseMan.Cores
             };
         }
 
+        // A pair of 4K pages, whose halves are chosen by bit 12 and may name any two frames - see Mars_Tlb.md §1.1.
+        [Fact]
+        public void The_two_halves_of_a_pair_are_four_kilobytes_apart_and_independent()
+        {
+            var bus = new MarsBus();
+            bus.Write32(0x5000 + 0x20, 0x0DD0_0DD0);
+            bus.Write32(0x9000 + 0x20, 0xBADF00D5);
+
+            var cpu = Machine(bus);
+            MapPair(cpu, 0, MappedPage, even: 0x9000, odd: 0x5000);
+
+            new MipsAssembler().Lui(1, 0x0010).Lw(2, 1, 0x1020).LoadInto(bus);
+            cpu.Run(2);
+
+            Assert.Null(cpu.LastException);
+            Assert.Equal(0x0000_0000_0DD0_0DD0UL, cpu.Gpr[2]);
+        }
+
+        // Each pair owns eight kilobytes and no more, so the next pair up is a different entry.
+        [Fact]
+        public void A_pair_does_not_reach_into_the_pair_above_it()
+        {
+            var bus = new MarsBus();
+            bus.Write32(0x7000 + 0x20, 0xFEEDFACE);
+
+            var cpu = Machine(bus);
+            MapPair(cpu, 0, MappedPage, even: 0x3000, odd: 0x4000);
+            MapPair(cpu, 1, MappedPage + 0x2000, even: 0x7000, odd: 0x8000);
+
+            new MipsAssembler().Lui(1, 0x0010).Lw(2, 1, 0x2020).LoadInto(bus);
+            cpu.Run(2);
+
+            Assert.Null(cpu.LastException);
+            Assert.Equal(0xFFFF_FFFF_FEED_FACEUL, cpu.Gpr[2]);
+        }
+
+        private static void MapPair(Cpu cpu, int index, ulong page, uint even, uint odd)
+        {
+            const ulong Usable = Tlb.EntryLoValid | Tlb.EntryLoDirty | Tlb.EntryLoGlobal;
+
+            cpu.Tlb.Entries[index] = new TlbEntry
+            {
+                EntryHi = page,
+                PageMask = 0,
+                EntryLo0 = ((ulong)(even >> 12) << 6) | Usable,
+                EntryLo1 = ((ulong)(odd >> 12) << 6) | Usable,
+            };
+        }
+
         [Fact]
         public void A_mapped_page_translates_and_the_load_reaches_memory()
         {

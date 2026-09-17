@@ -194,9 +194,7 @@ trap was avoided rather than merely survived.
 - **Every interrupt source except the counter and the peripheral interface.** The
   aggregator has six inputs and two are wired (§12).
 - ~~**Supervisor and user mode.**~~ — landed, `Mars_Privilege.md`.
-- **Reverse-endian addressing.** `Status.RE` flips the byte order of user-mode
-  accesses, and seven corpus tests ask for it. The rule is worked out and written down
-  in `Mars_Privilege.md` §6; nothing implements it.
+- ~~**Reverse-endian addressing.**~~ — landed, `Mars_ReverseEndian.md`.
 
 **This list is not a census.** The conditional traps were missing for nine slices and
 are not in it (§15), because an omission nobody has noticed cannot appear on a list of

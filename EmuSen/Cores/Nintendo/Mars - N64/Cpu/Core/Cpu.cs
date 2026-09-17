@@ -87,35 +87,44 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             if ((Pc & 3) != 0) throw Raise(ExceptionCode.AddressErrorLoad, Pc);
 
-            return ReadWord(Pc);
+            return _bus.Read32(TranslateAccess(Mirrored(Pc, 4), Pc));
         }
 
         // Written once so the TLB and the caches cannot be bypassed later - see Mars_Cpu.md §6.
-        private uint Translate(ulong address, bool store = false)
+        private uint Translate(ulong address, bool store = false) => TranslateAccess(address, address, store);
+
+        // The access and the address a fault names are the same word until reverse-endian - see Mars_ReverseEndian.md §3.
+        private uint TranslateAccess(ulong access, ulong fault, bool store = false)
         {
-            Segment segment = Segments.Decode(address, Mode, WideAddressing);
+            Segment segment = Segments.Decode(access, Mode, WideAddressing);
 
             if (segment.Access == SegmentAccess.Illegal)
             {
-                throw Raise(store ? ExceptionCode.AddressErrorStore : ExceptionCode.AddressErrorLoad, address);
+                throw Raise(store ? ExceptionCode.AddressErrorStore : ExceptionCode.AddressErrorLoad, fault);
             }
 
             if (segment.Access == SegmentAccess.Direct) return segment.Physical;
 
-            TlbResult result = Tlb.TryTranslate(address, Cop0[EntryHiRegister], store, out uint mapped, out _);
+            TlbResult result = Tlb.TryTranslate(access, Cop0[EntryHiRegister], store, out uint mapped, out _);
             if (result == TlbResult.Mapped) return mapped;
 
-            OnTlbFailure(address);
+            OnTlbFailure(fault);
 
             throw result switch
             {
-                TlbResult.NotWritable => Raise(ExceptionCode.TlbModification, address),
-                TlbResult.Invalid => Raise(store ? ExceptionCode.TlbStore : ExceptionCode.TlbLoad, address),
-                _ => Raise(store ? ExceptionCode.TlbStore : ExceptionCode.TlbLoad, address, refill: true),
+                TlbResult.NotWritable => Raise(ExceptionCode.TlbModification, fault),
+                TlbResult.Invalid => Raise(store ? ExceptionCode.TlbStore : ExceptionCode.TlbLoad, fault),
+                _ => Raise(store ? ExceptionCode.TlbStore : ExceptionCode.TlbLoad, fault, refill: true),
             };
         }
 
-        private uint ReadWord(ulong address) => _bus.Read32(Translate(address));
+        // In user mode the bit mirrors every access inside its doubleword - see Mars_ReverseEndian.md §2.
+        public bool ReverseEndian =>
+            Mode == PrivilegeMode.User && (Cop0[StatusRegister] & StatusReverseEndian) != 0;
+
+        // One rule for every width: mirror the byte address, then let the access realign itself - see §2.
+        private ulong Mirrored(ulong address, int size) =>
+            ReverseEndian ? (address ^ 7) & ~(ulong)(size - 1) : address;
 
         private CpuException Raise(ExceptionCode code, ulong address, bool refill = false, int coprocessor = 0)
         {

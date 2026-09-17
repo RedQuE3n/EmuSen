@@ -140,15 +140,15 @@ address for exactly this reason.
 
 ## 6. What this slice does not do
 
-- **Reverse-endian is not implemented.** `Status.RE` reverses the byte order of accesses
-  in user mode, and seven corpus tests ask for it. The rule is already legible from the
-  corpus's own helpers and is recorded here so the next slice starts from it: the
-  effective address of a sub-doubleword access is XORed with `8 - size`, so a word
-  access flips bit 2, a halfword flips bits 2:1 and a byte flips bits 2:0, while a
-  doubleword access is unchanged. **Instruction fetch is affected too** — the corpus
-  pre-swaps its program words in pairs before writing them, which is what a 4-byte fetch
-  XORed with 4 requires. And `BadVAddr` records the address *before* the XOR, which is
-  the one thing about it that is not mechanical and is what one of the tests is for.
+- ~~**Reverse-endian is not implemented.**~~ — landed in the slice after this one,
+  `Mars_ReverseEndian.md`. The rule predicted here was half right and is worth keeping as
+  a retired prediction: it said the effective address is XORed with `8 - size`, which is
+  true of every aligned access and **false of the merging family**, which mirrors as a
+  byte whatever its width. The prediction was read off the corpus's helper function
+  rather than off its result tables, and the helper only describes the aligned cases the
+  caller uses it for. `Mars_ReverseEndian.md` §2. The two things this bullet got right —
+  that instruction fetch is affected, and that `BadVAddr` keeps the unmirrored address —
+  both held.
 - **The TLB still compares only the low 32 bits of a virtual address.** The 64-bit map
   now delivers full 64-bit addresses to it, so two addresses differing only above bit 31
   match the same entry. No test in the failing set covers it; the corpus's `tlb64` group

@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("Running ADDIOpcodeTest...", verdicts);
 
             // A ratchet, not a description: both halves are asserted - see Mars_Corpus.md §5.
-            Assert.Equal($"720 started, 167 failed ({report})", $"{Tally(verdicts)} ({report})");
+            Assert.Equal($"720 started, 160 failed ({report})", $"{Tally(verdicts)} ({report})");
         }
 
         // The inverse of what stood here for two slices: no scaffold left to reach - see Mars_Fpu.md §6.

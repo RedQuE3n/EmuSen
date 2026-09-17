@@ -11,7 +11,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             ulong address = EffectiveAddress(instruction);
             RequireAlignment(address, size, ExceptionCode.AddressErrorLoad);
 
-            uint physical = Translate(address);
+            uint physical = TranslateAccess(Mirrored(address, size), address);
 
             ulong value = size switch
             {
@@ -29,7 +29,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             ulong address = EffectiveAddress(instruction);
             RequireAlignment(address, size, ExceptionCode.AddressErrorStore);
 
-            uint physical = Translate(address, store: true);
+            uint physical = TranslateAccess(Mirrored(address, size), address, store: true);
             ulong value = Read(Rt(instruction));
 
             switch (size)

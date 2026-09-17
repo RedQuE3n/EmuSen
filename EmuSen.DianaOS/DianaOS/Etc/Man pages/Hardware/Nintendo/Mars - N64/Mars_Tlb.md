@@ -17,6 +17,30 @@ Pairing halves the comparisons a lookup needs, and it is why the register interf
 has two low-order registers rather than one — a detail that looks arbitrary until the
 pairing is the thing being described.
 
+### 1.1 The mask describes the pair, and a page is half of it
+
+`PageMask` is the mask of the **pair**, not of one page: zero means a 4K page and an 8K
+pair, so the page mask is `(PageMask | 0x1FFF) >> 1` and the bit choosing the half is one
+above that. Mars had the two the other way round — it used `PageMask | 0x1FFF` as the page
+mask and shifted *up* for the pair — which made every entry describe 8K pages in a 16K
+pair.
+
+**It survived four slices of TLB tests because the error is invisible to the common
+case.** A pair whose two halves point at consecutive frames translates identically under
+either reading: an 8K page at frame *n* and two 4K pages at frames *n* and *n+1* put the
+same physical byte under the same virtual one. Every test in `MarsTlbTests` mapped its
+pair that way, and so does most real software.
+
+Two things do see it. A pair whose halves name **unrelated** frames — which is what the
+corpus's reverse-endian harness builds, one cached page and one uncached — reads the wrong
+half. And an entry's inflated pair mask **swallows the entry above it**: with a 16K reach,
+a pair at `0x20000` matched addresses in the pair at `0x22000` and, being earlier in the
+scan, answered for it. That is how it presented — not as a wrong byte within a page, but
+as data accesses returning instruction bytes from a different mapping entirely.
+
+`MarsTlbTests` now maps a pair to two unrelated frames and places two pairs adjacently,
+which are the two shapes that can tell the readings apart.
+
 ## 2. The lookup is a linear scan
 
 Thirty-two entries in order, first match wins. That is what the hardware does
@@ -72,9 +96,12 @@ whether the approximation survives.
 
 ## 6. What is not modelled
 
-- **64-bit addressing.** Comparisons mask to 32 bits, so the extended address spaces
-  are not translated. The corpus has a separate section for those, and it will fail.
+- **64-bit addressing.** Comparisons mask to 32 bits, so two addresses differing only
+  above bit 31 match the same entry. The 64-bit segments themselves now decode
+  (`Mars_Privilege.md` §2.2) and deliver full addresses here; it is the comparison that
+  is still narrow. The corpus has a separate section for those, and it will fail.
 - **The wired register's effect on anything but the rotation.**
 - **Page sizes are honoured in the mask** but only 4K pairs are tested; the larger
-  sizes are implemented from the field layout rather than from evidence.
+  sizes are implemented from the field layout rather than from evidence. §1.1 is what
+  happened the first time that distinction mattered, and it mattered at 4K.
 - **No cache or micro-TLB**, so every access walks the array.

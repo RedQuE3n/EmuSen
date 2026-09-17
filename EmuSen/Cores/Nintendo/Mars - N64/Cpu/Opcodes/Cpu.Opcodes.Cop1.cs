@@ -36,7 +36,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             ulong address = EffectiveAddress(instruction);
             RequireAlignment(address, wide ? 8 : 4, ExceptionCode.AddressErrorLoad);
 
-            uint physical = Translate(address);
+            uint physical = TranslateAccess(Mirrored(address, wide ? 8 : 4), address);
 
             if (wide) WriteFpuWide(Rt(instruction), _bus.Read64(physical));
             else WriteFpuWord(Rt(instruction), _bus.Read32(physical));
@@ -49,7 +49,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             ulong address = EffectiveAddress(instruction);
             RequireAlignment(address, wide ? 8 : 4, ExceptionCode.AddressErrorStore);
 
-            uint physical = Translate(address, store: true);
+            uint physical = TranslateAccess(Mirrored(address, wide ? 8 : 4), address, store: true);
 
             if (wide) _bus.Write64(physical, ReadFpuWide(Rt(instruction)));
             else _bus.Write32(physical, ReadFpuWord(Rt(instruction)));

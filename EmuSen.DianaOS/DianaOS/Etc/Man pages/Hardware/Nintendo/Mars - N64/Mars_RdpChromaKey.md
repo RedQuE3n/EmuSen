@@ -69,6 +69,13 @@ large negative distance, so the alpha is zero.
 
 ## 3. What the differential says
 
+**An FPGA implementation was consulted on 2026-09-17 and could not settle §2** — see `Mars_RdpReferee.md`
+§6. The N64_MiSTer core decodes the key's two commands into exactly the fields §1 tabulates, reads the
+centre and the scale as combiner selector 6, gates the key behind the same alpha-from-coverage test, and
+then raises an error line where the key alpha should be, under the comment `todo: key alpha mode`. The
+slice's framing is corroborated by a second source; **its arithmetic is still graded against angrylion
+alone.**
+
 ### 3.1 One reference, and what a first run is worth here
 
 **Seventy-seven cases — seventeen named and sixty random — matched angrylion on the first run, and every

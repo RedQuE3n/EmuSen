@@ -511,6 +511,19 @@ rather than raw samples.
 > carefully, seventeen breakages each caught by a named case, and a tool-free test; it is not a second
 > opinion, and only hardware or an FPGA implementation could be one. Phase D's last named gap is noise,
 > which neither reference models in a way a case can grade.
+>
+> **Progress, 2026-09-17: the referee pass** (`Mars_RdpReferee.md`). Not a slice — no rule changed and no
+> case was added. Every dispute the differential has recorded, twenty-one of them, was carried to a third
+> implementation, the N64_MiSTer core's VHDL, and its answer written beside angrylion's and parallel-rdp's.
+> Five rules go to angrylion outright, two more lean that way, three go to parallel-rdp with one more
+> leaning, and ten are unmodelled there. Two results are worth the phase's attention. The first is that the
+> strongest confirmations — the combined input being the previous pixel's, and an 8-bit image taking green
+> on odd addresses — come from code that core's author wrote his own way, while the rules it contradicts are
+> the two blender skews of the two-cycle slice; **cross-pixel carries are where the three implementations
+> part company**, and they are what a console test should settle first. The second is that the FPGA option
+> raised for chroma keying does not pay out: that core decodes the key's commands into exactly the fields
+> Mars reads and then reports the key alpha as unimplemented, so the keying arithmetic is still graded
+> against angrylion alone.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

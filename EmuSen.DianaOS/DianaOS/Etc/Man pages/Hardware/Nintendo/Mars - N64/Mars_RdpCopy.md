@@ -135,6 +135,13 @@ levels in a random format and size, with random tiles, perspective, palettes and
 
 ### 5.2 Seven disputes, because the references model the mode differently
 
+**The referee confirms the mechanism and refuses the tearing.** `Mars_RdpReferee.md` §4 and §7: the
+N64_MiSTer core moves eight bytes a group from four texels read at once, strides at twice the texel's width,
+swaps eight bytes on an odd row and picks the tile by the level of detail — §2 and §4 of this page, from a
+source that had to build them for hardware. But it writes the group *forwards* from the pixel's address with
+shifted byte enables, so on a 16-bit image every write lands on whole pixels and **nothing can tear**. Its
+copy path is 16-bit only, so it says nothing about the four narrow-texel disputes.
+
 **angrylion copies eight bytes a group; parallel-rdp computes each pixel by itself** and writes whole pixels,
 sampling the texel its own x asks for. The two coincide for what content does with this mode, which is why
 most cases agree, and part ways in seven places. Each is carried by a named case, and Mars follows angrylion:

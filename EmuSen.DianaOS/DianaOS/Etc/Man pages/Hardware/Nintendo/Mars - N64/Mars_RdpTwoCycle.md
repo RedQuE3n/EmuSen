@@ -130,6 +130,14 @@ sharpen and detail, into 16- and 32-bit colour images.
 
 ### 5.2 The three disputes, and the constraint they put on the random cases
 
+**The referee splits them.** Read against the N64_MiSTer core on 2026-09-17 (`Mars_RdpReferee.md` §3.1, §4):
+the first cycle's combined input is confirmed — it is a register there, as it must be in hardware — while
+**both blender disputes go the other way.** That core pipelines the stored depth slope forward so the shifts
+are computed from the pixel's own value, and takes shade alpha from the pixel in the pipeline for both
+cycles. Mars still follows angrylion, and the named cases still hold those rules; but the claim that the
+skew is the hardware's now has an implementation arguing against it, and these are the first rules a console
+test should settle.
+
 **parallel-rdp disagreed with angrylion on four named cases and fifteen random ones.** Reading its shader
 explains all four: it runs a pixel's two cycles together, so none of §1's pipelining exists in it. Three
 disputes are recorded, and Mars follows angrylion:

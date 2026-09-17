@@ -167,6 +167,12 @@ is a different claim from either the wiki's or the textbook's.
 
 ## 6. What the references disagree on, and what the reference is not
 
+**A third implementation was read against §6.1 and §6.2 on 2026-09-17 and confirmed both** — see
+`Mars_RdpReferee.md` §3. Both confirmations come from code the N64_MiSTer core's author wrote his own way,
+which is the strongest support either rule has: the combined input is a register there too, and the 8-bit
+image's byte is chosen by address parity there too. The empty scissor of `Mars_RdpDifferential.md` §4.5 is
+confirmed as well, in code transliterated from angrylion, which is worth much less.
+
 ### 6.1 The combined input
 
 **parallel-rdp does not reproduce angrylion's one-cycle combined input.** On the first full run, every

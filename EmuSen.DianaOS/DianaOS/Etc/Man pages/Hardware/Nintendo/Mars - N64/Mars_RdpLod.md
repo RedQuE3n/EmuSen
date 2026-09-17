@@ -109,6 +109,11 @@ towards the fraction.
 
 ### 4.2 The dispute, and why it covers so much
 
+**The referee has nothing to say here.** `Mars_RdpReferee.md` row 11: the N64_MiSTer core measures the
+level of detail from a next-pixel sample taken in the first cycle and a next-row sample taken in the second,
+and in the one-cycle mode the second never runs, so its row term is a register left over from whatever ran
+last. It does not model this mode, and the dispute stands where §4.2 leaves it.
+
 **parallel-rdp disagreed on ten of the twenty named cases and 23 of the 120 random ones.** Its shader measures
 the level of detail with one function for both modes: from the pixel's own coordinates to its right-hand
 neighbour's and to the row below. That is angrylion's *two-cycle* measurement (§5). angrylion's one-cycle

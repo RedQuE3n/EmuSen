@@ -314,6 +314,7 @@ namespace EmuSen.WiseMan.Cores
             cases.AddRange(ShadeAndDepthCases());
             cases.AddRange(TextureCases());
             cases.AddRange(FilterCases());
+            cases.AddRange(LodCases());
             return cases.ToArray();
         }
 
@@ -421,7 +422,8 @@ namespace EmuSen.WiseMan.Cores
         private static ulong Modes(int rgbDither = 3, int alphaDither = 3, int m1a = 0, int m1b = 0, int m2a = 0, int m2b = 0, bool forceBlend = false,
             bool alphaCvgSelect = false, bool cvgTimesAlpha = false, int cvgDest = 0, bool colorOnCvg = false, bool imageRead = false, bool antialias = false,
             bool zSource = false, bool alphaCompare = false, int zMode = 0, bool zCompare = false, bool zUpdate = false,
-            bool perspective = false, bool biLerp0 = false, bool? biLerp1 = null, bool palette = false, bool paletteIa = false, bool sampleFour = false, bool midTexel = false)
+            bool perspective = false, bool biLerp0 = false, bool? biLerp1 = null, bool palette = false, bool paletteIa = false, bool sampleFour = false, bool midTexel = false,
+            bool lod = false, bool sharpen = false, bool detail = false)
         {
             ulong blender = (ulong)(uint)((m1a << 30) | (m1a << 28) | (m1b << 26) | (m1b << 24) | (m2a << 22) | (m2a << 20) | (m2b << 18) | (m2b << 16));
             return (0x2FUL << 56) | ((ulong)rgbDither << 38) | ((ulong)alphaDither << 36) | blender
@@ -429,7 +431,8 @@ namespace EmuSen.WiseMan.Cores
                 | (colorOnCvg ? 1UL << 7 : 0) | (imageRead ? 1UL << 6 : 0) | (antialias ? 1UL << 3 : 0) | (zSource ? 1UL << 2 : 0) | (alphaCompare ? 1UL : 0)
                 | ((ulong)zMode << 10) | (zCompare ? 1UL << 4 : 0) | (zUpdate ? 1UL << 5 : 0)
                 | (perspective ? 1UL << 51 : 0) | (biLerp0 ? 1UL << 43 : 0) | ((biLerp1 ?? biLerp0) ? 1UL << 42 : 0)
-                | (palette ? 1UL << 47 : 0) | (paletteIa ? 1UL << 46 : 0) | (sampleFour ? 1UL << 45 : 0) | (midTexel ? 1UL << 44 : 0);
+                | (palette ? 1UL << 47 : 0) | (paletteIa ? 1UL << 46 : 0) | (sampleFour ? 1UL << 45 : 0) | (midTexel ? 1UL << 44 : 0)
+                | (lod ? 1UL << 48 : 0) | (sharpen ? 1UL << 49 : 0) | (detail ? 1UL << 50 : 0);
         }
 
         // Both cycles given the same inputs, since the one-cycle mode reads the second.
@@ -552,7 +555,7 @@ namespace EmuSen.WiseMan.Cores
 
         // A case that clears a colour and a depth image, runs its texture setup and modes, and draws - see Mars_RdpTextures.md §7.
         private static Case Textured(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, int size = Bits16, string? dispute = null,
-            bool crossChecked = true, (uint, byte[])[]? uploads = null)
+            bool crossChecked = true, (uint, byte[])[]? uploads = null, uint primitive = 0x5A)
         {
             var commands = new List<ulong>
             {
@@ -561,7 +564,7 @@ namespace EmuSen.WiseMan.Cores
                 (0x3EUL << 56) | DepthBuffer, (0x2CUL << 56) | 0x0B89_1A3C_0156B3CUL & 0x00FF_FFFF_FFFF_FFFF,
             };
             commands.AddRange(setup);
-            commands.AddRange(new[] { modes, combine, Color(0x3A, 0xC864_2A9F, 0x5A), Color(0x3B, 0x3C90_D071), Color(0x39, 0x7755_AA80) });
+            commands.AddRange(new[] { modes, combine, Color(0x3A, 0xC864_2A9F, primitive), Color(0x3B, 0x3C90_D071), Color(0x39, 0x7755_AA80) });
             commands.AddRange(shapes);
             commands.Add(SyncFull);
             return new Case(name, Framebuffer, size, 32, commands.ToArray(), Dispute: dispute, CrossChecked: crossChecked)
@@ -902,6 +905,151 @@ namespace EmuSen.WiseMan.Cores
             return cases;
         }
 
+        // The level of detail in the one-cycle mode: the tile a pixel's texel movement picks, and the fraction the combiner reads - see Mars_RdpLod.md §4.
+        private static IEnumerable<Case> LodCases()
+        {
+            var cases = new List<Case>();
+            ulong texel0 = Combine(subA: 8, subB: 8, mul: 16, add: 1, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1);
+            ulong fraction = Combine(subA: 1, subB: 8, mul: 13, add: 3, alphaSubA: 1, alphaSubB: 7, alphaMul: 0, alphaAdd: 7);
+            ulong bothTexels = Combine(subA: 1, subB: 2, mul: 13, add: 2, alphaSubA: 1, alphaSubB: 2, alphaMul: 0, alphaAdd: 2);
+            const string Measured = "angrylion measures the one-cycle mode's level of detail along the span from the next pixel, and parallel-rdp from the pixel across x and down y, as in the two-cycle mode";
+
+            void Draw(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, string? dispute = null, bool crossChecked = true, int minLevel = 0,
+                int primitiveFraction = 0x5A) =>
+                cases.Add(Textured(name, modes, combine, setup, shapes, dispute: dispute, crossChecked: crossChecked, primitive: (uint)((minLevel << 8) | primitiveFraction)));
+
+            // A chain of RGBA16 tiles from tile `first`, each half the last and shifted one further, placed one after another in texture memory.
+            ulong[] Mipmaps(int first = 0, int levels = 4, uint width = 32, int format = 0, int size = Bits16, bool wrap = true)
+            {
+                var commands = new List<ulong>();
+                int memory = 0;
+                for (int level = 0; level < levels; level++)
+                {
+                    uint side = Math.Max(width >> level, 1);
+                    int mask = wrap ? System.Numerics.BitOperations.Log2(side) : 0;
+                    commands.AddRange(Loaded(format, size, side, side, (first + level) & 7, memory, shiftS: level, shiftT: level, maskS: mask, maskT: mask,
+                        offset: (uint)(level * 0x100)));
+                    uint slots = format == 1 ? (side + 1) / 2 : size switch { 0 => (side + 3) / 4, 1 => (side + 1) / 2, _ => side };
+                    memory += (int)((slots + 3) / 4 * side);
+                }
+
+                return commands.ToArray();
+            }
+
+            ulong[] With(ulong[] first, params ulong[][] rest) => rest.Aggregate(first, (all, next) => all.Concat(next).ToArray());
+
+            var p = new Vertex(2.25, 1.5, 250, 20, 60, 255, 0x08000, S: 0, T: 0, W: 1.0);
+            var q = new Vertex(29.75, 6.75, 10, 240, 90, 128, 0x30000, S: 180, T: 20, W: 0.35);
+            var r = new Vertex(6.5, 29.25, 40, 70, 230, 12, 0x1C000, S: 30, T: 260, W: 0.7);
+            ulong[] shrinking = Shaded(0x0A | (3 << 19), p, q, r);
+            ulong perspective = Modes(perspective: true, biLerp0: true, lod: true);
+
+            Draw("mipmapped perspective triangle", perspective, texel0, Mipmaps(), shrinking, dispute: Measured);
+            Draw("mipmapped affine triangle", Modes(biLerp0: true, lod: true), texel0, Mipmaps(), Shaded(0x0A | (3 << 19), p with { W = 1 }, q with { W = 1 }, r with { W = 1 }), dispute: Measured);
+            Draw("mipmapped triangle from tile 6", perspective, texel0, Mipmaps(first: 6), Shaded(0x0A | (6 << 16) | (3 << 19), p, q, r), dispute: Measured);
+            Draw("mipmapped triangle past its maximum level", perspective, texel0, Mipmaps(), Shaded(0x0A | (1 << 19), p, q, r));
+            Draw("mipmapped triangle with no maximum level", perspective, texel0, Mipmaps(), Shaded(0x0A, p, q, r));
+            Draw("level-of-detail fraction as the multiplier", Modes(perspective: true, biLerp0: true), fraction, Mipmaps(), shrinking, dispute: Measured);
+            Draw("level-of-detail fraction with the level bit set", perspective, fraction, Mipmaps(), shrinking, dispute: Measured);
+            Draw("level-of-detail fraction below the minimum level", perspective, fraction, Mipmaps(), Shaded(0x0A | (3 << 19), p, q with { S = 12 }, r with { T = 14 }),
+                minLevel: 20, dispute: Measured);
+            Draw("detail texture", Modes(perspective: true, biLerp0: true, lod: true, detail: true), fraction, Mipmaps(), shrinking, minLevel: 9, dispute: Measured);
+            Draw("sharpened texture", Modes(perspective: true, biLerp0: true, lod: true, sharpen: true), fraction, Mipmaps(), shrinking, minLevel: 9, dispute: Measured);
+            Draw("magnified detail texture", Modes(perspective: true, biLerp0: true, lod: true, detail: true), fraction, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p, q with { S = 12 }, r with { T = 14 }), minLevel: 9, dispute: Measured);
+            Draw("next pixel's texel from a mipmapped triangle", perspective, bothTexels, Mipmaps(), shrinking, dispute: Measured);
+            Draw("mipmapped triangle past the divider's range", perspective, fraction, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { S = -3000, T = 2500, W = 0.1 }, q with { S = 3000, T = -2000, W = 0.1 }, r with { S = 0, T = 0, W = 0.12 }));
+            Draw("mipmapped triangle moving past a quarter of the coordinate range", Modes(biLerp0: true, lod: true), fraction, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { S = -20000, W = 1 }, q with { S = 20000, T = 900, W = 1 }, r with { T = -9000, W = 1 }));
+            Draw("texture rectangle with the level bit set", Modes(biLerp0: true, lod: true), bothTexels, Mipmaps(), TextureRectangle(false, 0, 8, 8, 120, 120, 0, 0, 0x1C00, 0x0A00));
+
+            // Spans of six, seven and eight pixels and longer ones, whose last pixels measure against the pixel before or the next row - see Mars_RdpLod.md §2.
+            foreach (uint span in new uint[] { 6, 7, 8, 9 })
+            {
+                Draw($"level of detail at the end of a {span + 1}-pixel span", Modes(biLerp0: true, lod: true, sharpen: true), bothTexels, Mipmaps(),
+                    With(TextureRectangle(false, 0, 8, 8, 8 + (span + 1) * 4, 60, 0x0013, 0x0027, 0x0D33, 0x0A00),
+                        TextureRectangle(true, 0, 64, 64, 64 + (span + 1) * 4, 112, 0x0013, 0x0027, 0x0B11, 0x0C00)), dispute: Measured);
+            }
+
+            Draw("level of detail across a triangle's rows", perspective, bothTexels, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { X = 1.25 }, q with { X = 9.5, Y = 14.75 }, r with { X = 2.75 }));
+
+            // Movement along one axis at a time, fast enough to saturate the level and slow enough not to, is what separates the two references here - see Mars_RdpLod.md §4.2.
+            Draw("level of detail from fast movement along x alone", Modes(biLerp0: true, lod: true), fraction, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { S = p.X * 9, T = 5, W = 1 }, q with { S = q.X * 9, T = 5, W = 1 }, r with { S = r.X * 9, T = 5, W = 1 }));
+            Draw("level of detail from slow movement along x in spans of at most seven pixels", Modes(biLerp0: true, lod: true), fraction, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { X = 1, Y = 1, S = 1.5, T = 5, W = 1 }, q with { X = 7, Y = 1, S = 10.5, T = 5, W = 1 }, r with { X = 1, Y = 29, S = 1.5, T = 5, W = 1 }));
+            Draw("level of detail from slow movement along x at a long span's end", Modes(biLerp0: true, lod: true), fraction, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { S = p.X * 1.5, T = 5, W = 1 }, q with { S = q.X * 1.5, T = 5, W = 1 }, r with { S = r.X * 1.5, T = 5, W = 1 }), dispute: Measured);
+            Draw("level of detail from movement down the rows alone", Modes(biLerp0: true, lod: true), fraction, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { T = p.Y * 9, S = 5, W = 1 }, q with { T = q.Y * 9, S = 5, W = 1 }, r with { T = r.Y * 9, S = 5, W = 1 }), dispute: Measured);
+
+            // Each case below exists because a breakage of the rule it names survived, or was caught only by a random case - see Mars_RdpLod.md §4.4.
+            ulong shown = Combine(subA: 6, subB: 8, mul: 13, add: 7, alphaSubA: 6, alphaSubB: 7, alphaMul: 0, alphaAdd: 7);
+            ulong texel1 = Combine(subA: 8, subB: 8, mul: 16, add: 2, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 2);
+            Draw("level-of-detail fraction read without a texel", Modes(perspective: true, biLerp0: true), shown, Mipmaps(), shrinking, dispute: Measured);
+            Draw("magnified texture rectangle's fraction", Modes(biLerp0: true, lod: true), shown, Mipmaps(), TextureRectangle(false, 0, 8, 8, 120, 120, 0, 0, 0x0200, 0x0100));
+            Draw("magnified and sharpened texture rectangle's fraction", Modes(biLerp0: true, lod: true, sharpen: true), shown, Mipmaps(),
+                TextureRectangle(false, 0, 8, 8, 120, 120, 0, 0, 0x0200, 0x0100), minLevel: 5);
+            Draw("level-of-detail fraction as the alpha multiplier, through alpha compare", Modes(perspective: true, biLerp0: true, lod: true, alphaCompare: true), shown,
+                Mipmaps(), shrinking, dispute: Measured);
+            Draw("sharpened fraction at the ends of a rectangle's spans, last row included", Modes(biLerp0: true, lod: true, sharpen: true), shown, Mipmaps(),
+                TextureRectangle(false, 0, 8, 8, 120, 120, 0x0013, 0x0027, 0x0633, 0x0100), dispute: Measured);
+            Draw("texel 1's level at the end of spans of every length", Modes(perspective: true, biLerp0: true, lod: true), texel1, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { X = 2, Y = 2, S = 5, T = 3, W = 1 }, q with { X = 2, Y = 29, S = 5, T = 3, W = 1 }, r with { X = 29, Y = 29, S = 5 + 27 * 2.3, T = 3, W = 0.3 }),
+                dispute: Measured);
+            Draw("level of detail with s under the divider's range and not moving", Modes(perspective: true, biLerp0: true, lod: true), shown, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { S = -3000, T = 3, W = 0.1 }, q with { S = -3000, T = 3, W = 0.1 }, r with { S = -3000, T = 3, W = 0.1 }));
+            Draw("level of detail where the divider under- and overflows at some pixels", Modes(perspective: true, biLerp0: true, lod: true), shown, Mipmaps(),
+                Shaded(0x0A | (3 << 19), p with { S = -2500, T = 3, W = 0.15 }, q with { S = 40, T = 2600, W = 0.2 }, r with { S = 10, T = 10, W = 1 }));
+            Draw("movement with bit 13 set and a low level", Modes(biLerp0: true, lod: true), shown, Mipmaps(),
+                Shaded(0x0A | (7 << 19), p with { S = p.X * 264, T = 3, W = 1 }, q with { S = q.X * 264, T = 3, W = 1 }, r with { S = r.X * 264, T = 3, W = 1 }));
+
+            // Random cases are graded against angrylion alone, since nearly any that reads an unsaturated level meets the dispute - see Mars_RdpLod.md §4.2.
+            var random = new Random(0x4C4F_4431);
+            for (int n = 0; n < 120; n++)
+            {
+                int Pick(params int[] choices) => choices[random.Next(choices.Length)];
+                bool Coin() => random.Next(2) == 1;
+
+                int format = random.Next(5), size = format == 1 ? Bits16 : random.Next(3);
+                int first = random.Next(8), levels = random.Next(1, 5), maxLevel = random.Next(8);
+                ulong[] setup = Mipmaps(first, levels, (uint)Pick(8, 16, 32), format, size, Coin());
+
+                ulong modes = Modes(
+                    rgbDither: Pick(0, 1, 3), alphaDither: Pick(0, 1, 3), m1a: random.Next(4), m1b: random.Next(4), m2a: random.Next(4), m2b: random.Next(4),
+                    forceBlend: random.Next(4) == 0, cvgDest: random.Next(4), imageRead: Coin(), antialias: Coin(), alphaCompare: random.Next(4) == 0,
+                    zMode: random.Next(4), zCompare: Coin(), zUpdate: Coin(), perspective: Coin(), biLerp0: random.Next(4) != 0, sampleFour: Coin(),
+                    lod: random.Next(4) != 0, sharpen: random.Next(3) == 0, detail: random.Next(3) == 0);
+                ulong combine = Combine(
+                    subA: Pick(1, 2, 3, 4, 5), subB: Pick(1, 2, 3, 4, 7), mul: Pick(1, 2, 8, 9, 13, 13, 14, 15), add: Pick(1, 2, 3, 4, 7),
+                    alphaSubA: Pick(1, 2, 3, 7), alphaSubB: Pick(1, 2, 3, 7), alphaMul: Pick(0, 0, 1, 2, 6, 7), alphaAdd: Pick(1, 2, 3, 7));
+
+                var shapes = new List<ulong>();
+                for (int t = 0, count = random.Next(1, 3); t < count; t++)
+                {
+                    if (random.Next(3) == 0)
+                    {
+                        uint left = (uint)random.Next(0, 100), top = (uint)random.Next(0, 100);
+                        shapes.AddRange(TextureRectangle(Coin(), first, left, top, left + (uint)random.Next(4, 60), top + (uint)random.Next(4, 60),
+                            (short)random.Next(-0x400, 0x800), (short)random.Next(-0x400, 0x800), (short)random.Next(-0x7FFF, 0x7FFF), (short)random.Next(-0x7FFF, 0x7FFF)));
+                    }
+                    else
+                    {
+                        int reach = Pick(64, 256, 1024, 8000);
+                        Vertex Point() => new(random.Next(-8, 136) / 4.0, random.Next(-8, 136) / 4.0, random.Next(256), random.Next(256), random.Next(256), random.Next(256),
+                            random.Next(0x40000), random.Next(-reach, reach), random.Next(-reach, reach), 0.05 + 0.95 * random.NextDouble());
+                        shapes.AddRange(Shaded(Pick(0x0A, 0x0B, 0x0E, 0x0F) | (first << 16) | (maxLevel << 19), Point(), Point(), Point()));
+                    }
+                }
+
+                Draw($"random level-of-detail case {n}", modes, combine, setup, shapes.ToArray(), crossChecked: false, minLevel: random.Next(32), primitiveFraction: random.Next(256));
+            }
+
+            return cases;
+        }
+
         private static byte[] Pattern(int seed, int length)
         {
             var bytes = new byte[length];
@@ -933,7 +1081,7 @@ namespace EmuSen.WiseMan.Cores
         private static ulong[] Shaded(int id, Vertex v1, Vertex v2, Vertex v3)
         {
             ulong[] words = Vertices(v1.X, v1.Y, v2.X, v2.Y, v3.X, v3.Y, id & 0x3F);
-            words[0] |= (ulong)((id >> 16) & 7) << 48;
+            words[0] |= (ulong)((id >> 16) & 7) << 48 | (ulong)((id >> 19) & 7) << 51;
             var sorted = new[] { v1, v2, v3 }.OrderBy(v => v.Y).ToArray();
             Vertex top = sorted[0], bottom = sorted[2];
 

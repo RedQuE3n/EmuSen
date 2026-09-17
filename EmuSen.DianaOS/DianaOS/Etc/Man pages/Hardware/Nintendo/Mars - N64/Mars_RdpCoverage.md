@@ -233,7 +233,7 @@ covered edge and untouched background. It fails with the renderer off, and with 
   (`Mars_RdpDepth.md`), which also lets the shaded and depth-tested triangle forms draw in this mode, so
   §5's first bullet no longer holds for them.
 - ~~**Textures**, the level-of-detail fraction and texture memory.~~ Texture memory, loads and point-sampled
-  textures built (`Mars_RdpTextures.md`); the level-of-detail fraction is still not.
+  textures built (`Mars_RdpTextures.md`); the level-of-detail fraction since (`Mars_RdpLod.md`).
 - **The two-cycle and copy modes**, and ~~texture rectangles~~ (built with textures).
 - **Chroma key** — which parallel-rdp lists among its own missing features, so a dispute is expected.
 - **Noise**, deliberately (§6.3).

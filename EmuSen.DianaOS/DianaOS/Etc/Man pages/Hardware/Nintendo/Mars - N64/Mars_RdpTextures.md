@@ -219,8 +219,10 @@ column less its first, plus the columns clipped from its start, exceeds seven an
 primitive draws; then texel 1 is sampled at the next row's recorded starting values.
 
 The reference computes each pixel's texel 0 by keeping the previous pixel's texel 1. With the level of
-detail off those are the same fetch, so Mars fetches directly; **the level-of-detail slice must revisit
-this**, because there the two differ by the tile each is taken from.
+detail off those are the same fetch, so Mars fetches directly; ~~**the level-of-detail slice must revisit
+this**, because there the two differ by the tile each is taken from.~~ Revisited (`Mars_RdpLod.md` §2): the
+prediction was wrong, because texel 1's tile is measured for the next pixel and is the tile that pixel's
+texel 0 uses, so the fetches stay the same.
 
 **Texels are fetched only when the second cycle's selectors read them**: texel 0 or 1 as a colour input to
 any of the four, texel 0 or 1 alpha as the multiplier, or either as an alpha input. A primitive whose
@@ -336,7 +338,8 @@ pointer that is not a multiple of eight, none of which it has.
 - ~~**Palette lookup**, and the palette load (§3.3).~~ Both built in the next slice (`Mars_RdpFiltering.md`).
   The median was a wrong prediction: neither reference filters texels by a median — the only median in
   either is the video interface's divot filter — and the four-texel rule is the mid-texel average.
-- **The level of detail**: the fraction, mipmaps, detail and sharpen, and the tile choice they make.
+- ~~**The level of detail**: the fraction, mipmaps, detail and sharpen, and the tile choice they make.~~ Built
+  two slices later (`Mars_RdpLod.md`).
 - **The two-cycle and copy modes**, in which textured primitives still draw nothing.
 - **Untextured primitives that read a texel** (§6), and texture rectangles in the fill cycle — both follow
   from rules graded elsewhere, and neither has a case.

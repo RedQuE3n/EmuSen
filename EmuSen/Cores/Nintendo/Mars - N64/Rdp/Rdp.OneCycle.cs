@@ -25,7 +25,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int _blendShiftB;
 
         // Each row starts from its major edge's values, stepped to the first pixel drawn, and steps once per pixel - see Mars_RdpDepth.md §2.
-        private void DrawOneCycle((int First, int Last) rows, bool majorOnLeft, int tile)
+        private void DrawOneCycle((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             int deltaZ = PrimitiveDepth ? _primitiveDeltaZ : _depthSlope;
             int deltaZEncoded = DeltaZEncoding(deltaZ);
@@ -38,6 +38,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             for (int c = 0; c < 3; c++) steps[AttributeS + c] = direction * _textureStep[c];
 
             (bool texel0, bool texel1) = CombinerTexels();
+            bool lodFraction = CombineColorC == 13 || CombineAlphaC == 0;
+            bool lod = LodEnabled || lodFraction;
 
             int ditherColor = 7, ditherAlpha = 0;
             bool dither = ((RgbDither << 2) | AlphaDither) != 0xF;
@@ -57,25 +59,54 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 for (int c = 0; c < Attributes; c++) values[c] += steps[c] * clipped;
 
                 // The next pixel's texel of a long span's last pixel is the next row's first, when that row is drawn - see Mars_RdpTextures.md §6.
-                bool longSpan = right - left + clipped > 7;
+                int last = right - left, length = last + clipped;
+                bool longSpan = length > 7, midSpan = length == 7;
                 bool nextRowDrawn = y + 1 <= rows.Last && _spanDrawn[y + 1];
+                (int Tile, int Fraction) level = (tile, _lodFraction);
+                bool levelReady = false;
 
                 int x = majorOnLeft ? left : right;
-                for (int n = 0; n <= right - left; n++, x += direction)
+                for (int n = 0; n <= last; n++, x += direction)
                 {
+                    int ds = steps[AttributeS], dt = steps[AttributeT], dw = steps[AttributeW];
+
+                    // Each pixel's level is the one its predecessor measured for its texel 1, when there was one - see Mars_RdpLod.md §2.
+                    if (lod && (texel0 || texel1 || lodFraction) && !levelReady)
+                    {
+                        level = PixelLevelOfDetail(values[AttributeS], values[AttributeT], values[AttributeW], ds, dt, dw, y + 1, nextRowDrawn,
+                            n == last, n == last - 1, longSpan, midSpan, tile, maxLevel);
+                    }
+
+                    _lodFraction = level.Fraction;
+                    levelReady = false;
+
                     if (texel0 || texel1)
                     {
                         (int s, int t) = TextureCoordinates(values[AttributeS], values[AttributeT], values[AttributeW]);
-                        _texel0 = Texel(s, t, tile);
+                        _texel0 = Texel(s, t, level.Tile);
                     }
 
                     if (texel1)
                     {
                         int next = (y + 1) * Attributes;
-                        (int s, int t) = n == right - left && longSpan && nextRowDrawn
+                        (int s, int t) = n == last && longSpan && nextRowDrawn
                             ? TextureCoordinates(_spanAttributes[next + AttributeS], _spanAttributes[next + AttributeT], _spanAttributes[next + AttributeW])
-                            : TextureCoordinates(values[AttributeS] + steps[AttributeS], values[AttributeT] + steps[AttributeT], values[AttributeW] + steps[AttributeW]);
-                        _texel1 = Texel(s, t, tile);
+                            : TextureCoordinates(values[AttributeS] + ds, values[AttributeT] + dt, values[AttributeW] + dw);
+
+                        int nextTile = tile;
+                        if (lod && n < last)
+                        {
+                            level = PixelLevelOfDetail(values[AttributeS] + ds, values[AttributeT] + dt, values[AttributeW] + dw, ds, dt, dw, y + 1, nextRowDrawn,
+                                n + 1 == last, n + 1 == last - 1, longSpan, midSpan, tile, maxLevel);
+                            (nextTile, levelReady) = (level.Tile, true);
+                        }
+                        else if (lod)
+                        {
+                            nextTile = AfterSpanTile(values[AttributeS] + ds, values[AttributeT] + dt, values[AttributeW] + dw, ds, dt, dw, y + 1, nextRowDrawn,
+                                longSpan, midSpan, length == 6, tile, maxLevel);
+                        }
+
+                        _texel1 = Texel(s, t, nextTile);
                     }
 
                     byte mask = _coverage[x];
@@ -215,6 +246,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             10 => _primitiveColor.A,
             11 => _shade.A,
             12 => _environmentColor.A,
+            13 => _lodFraction,
             14 => _primitiveLodFraction,
             15 => _k5,
             _ => 0,
@@ -246,6 +278,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         private int AlphaC(int selector) => selector switch
         {
+            0 => _lodFraction,
             1 => _texel0.A,
             2 => _texel1.A,
             3 => _primitiveColor.A,

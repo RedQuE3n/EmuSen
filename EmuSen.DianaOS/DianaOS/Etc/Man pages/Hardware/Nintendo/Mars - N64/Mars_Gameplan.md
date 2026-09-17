@@ -475,6 +475,14 @@ rather than raw samples.
 > but a YUV tile read through a palette. **The disagreement the textures slice left open was not a rule**:
 > the two references start their tiles at different sizes, which only the first command to name a tile can
 > see. The remaining list is the level of detail, and the two-cycle and copy modes.
+>
+> **Progress, 2026-09-17: the level of detail** (`Mars_RdpLod.md`). The mipmap tile and the fraction, in the
+> one-cycle mode: 153 cases match angrylion. **For the first time the cross-check cannot follow a slice's
+> core**: parallel-rdp measures this mode's level of detail the two-cycle way, from the pixel across x and
+> down y, where angrylion measures along the span from the next pixel. The two agree only where those
+> coincide, so twenty named cases carry one dispute and the random cases are graded against angrylion alone.
+> What "diffs to zero" means for this slice is therefore narrower than for any before it. The remaining
+> list is the two-cycle and copy modes.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

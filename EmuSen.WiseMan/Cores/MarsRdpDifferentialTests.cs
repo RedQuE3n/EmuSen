@@ -315,6 +315,7 @@ namespace EmuSen.WiseMan.Cores
             cases.AddRange(TextureCases());
             cases.AddRange(FilterCases());
             cases.AddRange(LodCases());
+            cases.AddRange(TwoCycleCases());
             return cases.ToArray();
         }
 
@@ -423,16 +424,18 @@ namespace EmuSen.WiseMan.Cores
             bool alphaCvgSelect = false, bool cvgTimesAlpha = false, int cvgDest = 0, bool colorOnCvg = false, bool imageRead = false, bool antialias = false,
             bool zSource = false, bool alphaCompare = false, int zMode = 0, bool zCompare = false, bool zUpdate = false,
             bool perspective = false, bool biLerp0 = false, bool? biLerp1 = null, bool palette = false, bool paletteIa = false, bool sampleFour = false, bool midTexel = false,
-            bool lod = false, bool sharpen = false, bool detail = false)
+            bool lod = false, bool sharpen = false, bool detail = false, int cycle = 0, int? m1a1 = null, int? m1b1 = null, int? m2a1 = null, int? m2b1 = null,
+            bool convertOne = false)
         {
-            ulong blender = (ulong)(uint)((m1a << 30) | (m1a << 28) | (m1b << 26) | (m1b << 24) | (m2a << 22) | (m2a << 20) | (m2b << 18) | (m2b << 16));
+            ulong blender = (ulong)(uint)((m1a << 30) | ((m1a1 ?? m1a) << 28) | (m1b << 26) | ((m1b1 ?? m1b) << 24) | (m2a << 22) | ((m2a1 ?? m2a) << 20)
+                | (m2b << 18) | ((m2b1 ?? m2b) << 16));
             return (0x2FUL << 56) | ((ulong)rgbDither << 38) | ((ulong)alphaDither << 36) | blender
                 | (forceBlend ? 1UL << 14 : 0) | (alphaCvgSelect ? 1UL << 13 : 0) | (cvgTimesAlpha ? 1UL << 12 : 0) | ((ulong)cvgDest << 8)
                 | (colorOnCvg ? 1UL << 7 : 0) | (imageRead ? 1UL << 6 : 0) | (antialias ? 1UL << 3 : 0) | (zSource ? 1UL << 2 : 0) | (alphaCompare ? 1UL : 0)
                 | ((ulong)zMode << 10) | (zCompare ? 1UL << 4 : 0) | (zUpdate ? 1UL << 5 : 0)
                 | (perspective ? 1UL << 51 : 0) | (biLerp0 ? 1UL << 43 : 0) | ((biLerp1 ?? biLerp0) ? 1UL << 42 : 0)
                 | (palette ? 1UL << 47 : 0) | (paletteIa ? 1UL << 46 : 0) | (sampleFour ? 1UL << 45 : 0) | (midTexel ? 1UL << 44 : 0)
-                | (lod ? 1UL << 48 : 0) | (sharpen ? 1UL << 49 : 0) | (detail ? 1UL << 50 : 0);
+                | (lod ? 1UL << 48 : 0) | (sharpen ? 1UL << 49 : 0) | (detail ? 1UL << 50 : 0) | ((ulong)cycle << 52) | (convertOne ? 1UL << 41 : 0);
         }
 
         // Both cycles given the same inputs, since the one-cycle mode reads the second.
@@ -444,6 +447,19 @@ namespace EmuSen.WiseMan.Cores
 
             ulong high = (ulong)((subA << 20) | (mul << 15) | (alphaSubA << 12) | (alphaMul << 9) | (subA << 5) | mul);
             ulong low = (ulong)(uint)((subB << 28) | (subB << 24) | (alphaSubA << 21) | (alphaMul << 18) | (add << 15) | (alphaSubB << 12) | (alphaAdd << 9) | (add << 6) | (alphaSubB << 3) | alphaAdd);
+            return (0x3CUL << 56) | (high << 32) | low;
+        }
+
+        // Each cycle's colour A, B, C, D and alpha A, B, C, D, in that order.
+        private static ulong CombineCycles(int[] first, int[] second)
+        {
+            int[] widths = { 15, 15, 31, 7, 7, 7, 7, 7 };
+            if (first.Concat(second).Select((v, i) => v > widths[i % 8]).Any(tooWide => tooWide))
+                throw new ArgumentOutOfRangeException(nameof(first), "a combiner selector does not fit its field");
+
+            ulong high = (ulong)((first[0] << 20) | (first[2] << 15) | (first[4] << 12) | (first[6] << 9) | (second[0] << 5) | second[2]);
+            ulong low = (ulong)(uint)((first[1] << 28) | (second[1] << 24) | (second[4] << 21) | (second[6] << 18) | (first[3] << 15) | (first[5] << 12)
+                | (first[7] << 9) | (second[3] << 6) | (second[5] << 3) | second[7]);
             return (0x3CUL << 56) | (high << 32) | low;
         }
 
@@ -905,6 +921,24 @@ namespace EmuSen.WiseMan.Cores
             return cases;
         }
 
+        // A chain of tiles from tile `first`, each half the last and shifted one further, placed one after another in texture memory.
+        private static ulong[] Mipmaps(int first = 0, int levels = 4, uint width = 32, int format = 0, int size = Bits16, bool wrap = true)
+        {
+            var commands = new List<ulong>();
+            int memory = 0;
+            for (int level = 0; level < levels; level++)
+            {
+                uint side = Math.Max(width >> level, 1);
+                int mask = wrap ? System.Numerics.BitOperations.Log2(side) : 0;
+                commands.AddRange(Loaded(format, size, side, side, (first + level) & 7, memory, shiftS: level, shiftT: level, maskS: mask, maskT: mask,
+                    offset: (uint)(level * 0x100)));
+                uint slots = format == 1 ? (side + 1) / 2 : size switch { 0 => (side + 3) / 4, 1 => (side + 1) / 2, _ => side };
+                memory += (int)((slots + 3) / 4 * side);
+            }
+
+            return commands.ToArray();
+        }
+
         // The level of detail in the one-cycle mode: the tile a pixel's texel movement picks, and the fraction the combiner reads - see Mars_RdpLod.md §4.
         private static IEnumerable<Case> LodCases()
         {
@@ -917,24 +951,6 @@ namespace EmuSen.WiseMan.Cores
             void Draw(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, string? dispute = null, bool crossChecked = true, int minLevel = 0,
                 int primitiveFraction = 0x5A) =>
                 cases.Add(Textured(name, modes, combine, setup, shapes, dispute: dispute, crossChecked: crossChecked, primitive: (uint)((minLevel << 8) | primitiveFraction)));
-
-            // A chain of RGBA16 tiles from tile `first`, each half the last and shifted one further, placed one after another in texture memory.
-            ulong[] Mipmaps(int first = 0, int levels = 4, uint width = 32, int format = 0, int size = Bits16, bool wrap = true)
-            {
-                var commands = new List<ulong>();
-                int memory = 0;
-                for (int level = 0; level < levels; level++)
-                {
-                    uint side = Math.Max(width >> level, 1);
-                    int mask = wrap ? System.Numerics.BitOperations.Log2(side) : 0;
-                    commands.AddRange(Loaded(format, size, side, side, (first + level) & 7, memory, shiftS: level, shiftT: level, maskS: mask, maskT: mask,
-                        offset: (uint)(level * 0x100)));
-                    uint slots = format == 1 ? (side + 1) / 2 : size switch { 0 => (side + 3) / 4, 1 => (side + 1) / 2, _ => side };
-                    memory += (int)((slots + 3) / 4 * side);
-                }
-
-                return commands.ToArray();
-            }
 
             ulong[] With(ulong[] first, params ulong[][] rest) => rest.Aggregate(first, (all, next) => all.Concat(next).ToArray());
 
@@ -1045,6 +1061,159 @@ namespace EmuSen.WiseMan.Cores
                 }
 
                 Draw($"random level-of-detail case {n}", modes, combine, setup, shapes.ToArray(), crossChecked: false, minLevel: random.Next(32), primitiveFraction: random.Next(256));
+            }
+
+            return cases;
+        }
+
+        // The two-cycle mode: both combiner and blender cycles, the swapped texels, convert-one, two tiles, and the pipelining between pixels - see Mars_RdpTwoCycle.md §5.
+        private static IEnumerable<Case> TwoCycleCases()
+        {
+            var cases = new List<Case>();
+
+            void Draw(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, string? dispute = null, bool crossChecked = true, int size = Bits16) =>
+                cases.Add(Textured(name, modes, combine, setup, shapes, size, dispute, crossChecked));
+
+            int[] Pass(int colour, int alpha) => new[] { 8, 8, 16, colour, 7, 7, 7, alpha };
+            ulong[] With(ulong[] first, params ulong[][] rest) => rest.Aggregate(first, (all, next) => all.Concat(next).ToArray());
+
+            var p = new Vertex(2.25, 1.5, 250, 20, 60, 255, 0x08000, S: 0, T: 0, W: 1.0);
+            var q = new Vertex(29.75, 6.75, 10, 240, 90, 20, 0x30000, S: 40, T: 6, W: 0.55);
+            var r = new Vertex(6.5, 29.25, 40, 70, 230, 140, 0x1C000, S: 5, T: 44, W: 0.8);
+            ulong[] triangle = Shaded(0x0F, p, q, r);
+            ulong[] other = Shaded(0x0F, new Vertex(28.5, 1.25, 30, 200, 120, 90, 0x10000, S: 3, T: 9, W: 0.7), new Vertex(4.75, 17.5, 220, 40, 10, 250, 0x2C000, S: 35, T: 2, W: 1.0),
+                new Vertex(24.25, 29.75, 90, 90, 250, 30, 0x0C000, S: 12, T: 40, W: 0.6));
+            ulong[] twoTiles = With(Loaded(0, 2), Loaded(3, 1, tile: 1, memory: 0x80, offset: 0x300));
+            ulong twoCycle = Modes(cycle: 1, biLerp0: true);
+            const string Combined = "angrylion's first cycle reads the previous pixel's result as its combined input, and at a row's start the result for the pixel past the last row's end, where parallel-rdp reads zero";
+            const string PreviousSlope = "angrylion shifts the first blend's memory-alpha weights by the previous pixel's stored depth slope, and parallel-rdp by the pixel's own";
+
+            Draw("two-cycle shaded triangle passing shade through both cycles", twoCycle, CombineCycles(Pass(4, 4), Pass(0, 0)), Array.Empty<ulong>(), Shaded(0x0C, p, q, r));
+            Draw("two-cycle textured triangle, texel times shade then times primitive", twoCycle,
+                CombineCycles(new[] { 1, 8, 4, 7, 1, 7, 4, 7 }, new[] { 0, 8, 3, 7, 0, 7, 3, 7 }), Loaded(0, 2), triangle);
+            Draw("first cycle reading the combined input", twoCycle,
+                CombineCycles(new[] { 0, 4, 11, 1, 0, 4, 4, 1 }, new[] { 0, 8, 5, 3, 0, 7, 5, 7 }), Loaded(0, 2), triangle, dispute: Combined);
+            Draw("two tiles, the second read as texel 1", twoCycle,
+                CombineCycles(new[] { 2, 1, 10, 1, 2, 1, 3, 1 }, Pass(0, 0)), twoTiles, triangle);
+            Draw("second cycle reading its texels swapped", twoCycle,
+                CombineCycles(Pass(4, 4), new[] { 1, 2, 3, 2, 1, 2, 3, 2 }), twoTiles, triangle);
+            Draw("convert-one: the second texel converts the first", Modes(cycle: 1, biLerp0: true, biLerp1: false, convertOne: true),
+                CombineCycles(Pass(1, 1), Pass(1, 1)), With(Loaded(1, 2), Loaded(0, 2, tile: 1, memory: 0x80, offset: 0x300)), triangle);
+            Draw("convert-one with the second cycle filtering four texels", Modes(cycle: 1, biLerp0: true, biLerp1: true, convertOne: true, sampleFour: true),
+                CombineCycles(Pass(1, 1), Pass(1, 1)), With(Loaded(1, 2), Loaded(0, 2, tile: 1, memory: 0x80, offset: 0x300)), triangle);
+            Draw("convert-one with the second cycle point-sampled and filtered", Modes(cycle: 1, biLerp0: true, biLerp1: true, convertOne: true),
+                CombineCycles(Pass(1, 1), Pass(1, 1)), With(Loaded(1, 2), Loaded(0, 2, tile: 1, memory: 0x80, offset: 0x300)), triangle);
+            Draw("second texel converted without convert-one", Modes(cycle: 1, biLerp0: true, biLerp1: false),
+                CombineCycles(Pass(4, 4), Pass(1, 1)), With(Loaded(0, 2), Loaded(1, 2, tile: 1, memory: 0x80, offset: 0x300)), triangle);
+            Draw("convert-one converting a first texel already converted", Modes(cycle: 1, biLerp0: false, biLerp1: false, convertOne: true),
+                CombineCycles(Pass(1, 1), Pass(1, 1)), With(Loaded(1, 2), Loaded(0, 2, tile: 1, memory: 0x80, offset: 0x300)), triangle);
+            Draw("convert-one with the second cycle taking four texels unfiltered", Modes(cycle: 1, biLerp0: true, biLerp1: false, convertOne: true, sampleFour: true),
+                CombineCycles(Pass(1, 1), Pass(1, 1)), With(Loaded(1, 2), Loaded(0, 2, tile: 1, memory: 0x80, offset: 0x300)), triangle);
+            Draw("convert-one filtering four texels at their centres", Modes(cycle: 1, biLerp0: true, biLerp1: true, convertOne: true, sampleFour: true, midTexel: true),
+                CombineCycles(Pass(1, 1), Pass(1, 1)), With(Loaded(1, 2), Loaded(0, 2, tile: 1, memory: 0x80, offset: 0x300)),
+                TextureRectangle(false, 0, 12, 10, 100, 90, 0x10, 0x10, 0x0400, 0x0400));
+
+            ulong blendModes = Modes(cycle: 1, biLerp0: true, m1a: 0, m1b: 0, m2a: 1, m2b: 0, m1a1: 0, m1b1: 3, m2a1: 2, m2b1: 2, forceBlend: true);
+            ulong texelShade = CombineCycles(new[] { 1, 8, 4, 7, 1, 7, 4, 7 }, Pass(0, 0));
+            Draw("both blend cycles, forced", blendModes, texelShade, Loaded(0, 2), With(other, triangle));
+            Draw("both blend cycles, the second dividing", Modes(cycle: 1, biLerp0: true, m1a: 0, m1b: 0, m2a: 1, m2b: 0, m1a1: 0, m1b1: 0, m2a1: 3, m2b1: 0,
+                antialias: true, imageRead: true, zCompare: true, zUpdate: true), texelShade, Loaded(0, 2), With(other, triangle));
+            Draw("first blend undivided, its weights not summing to one", Modes(cycle: 1, biLerp0: true, m1a: 0, m1b: 0, m2a: 1, m2b: 3, m1a1: 0, m1b1: 0, m2a1: 3, m2b1: 0,
+                antialias: true, imageRead: true, zCompare: true, zUpdate: true), texelShade, Loaded(0, 2), With(other, triangle));
+            Draw("first blend weighed by memory alpha", Modes(cycle: 1, biLerp0: true, m1a: 0, m1b: 0, m2a: 1, m2b: 1, m1a1: 0, m1b1: 0, m2a1: 3, m2b1: 0,
+                antialias: true, imageRead: true, zCompare: true, zUpdate: true, forceBlend: true), texelShade, Loaded(0, 2), With(other, triangle), dispute: PreviousSlope);
+            Draw("first blend's previous slope after a primitive without depth test", Modes(cycle: 1, biLerp0: true, m1a: 0, m1b: 0, m2a: 1, m2b: 1, m1a1: 0, m1b1: 0, m2a1: 3,
+                m2b1: 0, antialias: true, imageRead: true, forceBlend: true), CombineCycles(Pass(1, 6), Pass(0, 0)), Loaded(0, 2), With(other, new[] { Modes(cycle: 1, biLerp0: true, m1a: 0, m1b: 0, m2a: 1,
+                m2b: 1, m1a1: 0, m1b1: 0, m2a1: 3, m2b1: 0, antialias: true, imageRead: true, zCompare: true, zUpdate: true, forceBlend: true) }, TextureRectangle(false, 0, 12, 10, 100, 90, 0, 0, 0x0400, 0x0400)), dispute: PreviousSlope);
+            Draw("second blend weighed by memory alpha", Modes(cycle: 1, biLerp0: true, m1a: 0, m1b: 0, m2a: 3, m2b: 0, m1a1: 0, m1b1: 0, m2a1: 1, m2b1: 1,
+                antialias: true, imageRead: true, zCompare: true, zUpdate: true, forceBlend: true), texelShade, Loaded(0, 2), With(other, triangle));
+            Draw("second blend reading shade alpha", Modes(cycle: 1, biLerp0: true, m1a: 0, m1b: 0, m2a: 2, m2b: 0, m1a1: 0, m1b1: 2, m2a1: 1, m2b1: 0, forceBlend: true),
+                texelShade, Loaded(0, 2), With(other, Shaded(0x0F, p with { A = 0 }, q with { A = 255 }, r with { A = 30 })),
+                dispute: "angrylion's second blend reads the next pixel's shade alpha, and parallel-rdp the pixel's own");
+            Draw("two-cycle alpha compare", Modes(cycle: 1, biLerp0: true, alphaCompare: true),
+                CombineCycles(new[] { 1, 8, 4, 7, 1, 7, 4, 7 }, new[] { 0, 8, 3, 7, 3, 7, 4, 7 }), Loaded(0, 2), triangle);
+            Draw("two-cycle alpha compare on alpha from coverage", Modes(cycle: 1, biLerp0: true, alphaCompare: true, alphaCvgSelect: true, antialias: true),
+                CombineCycles(Pass(4, 4), Pass(0, 0)), Array.Empty<ulong>(), Shaded(0x0C, p, q, r));
+            Draw("two-cycle alpha compare on coverage times alpha", Modes(cycle: 1, biLerp0: true, alphaCompare: true, alphaCvgSelect: true, cvgTimesAlpha: true, antialias: true),
+                CombineCycles(Pass(4, 4), Pass(0, 0)), Array.Empty<ulong>(), Shaded(0x0C, p, q, r));
+            Draw("two-cycle alpha compare, dithered", Modes(cycle: 1, biLerp0: true, alphaCompare: true, alphaDither: 0),
+                CombineCycles(Pass(4, 4), Pass(0, 0)), Array.Empty<ulong>(), Shaded(0x0C, p, q, r));
+            Draw("two-cycle coverage times alpha", Modes(cycle: 1, biLerp0: true, alphaCvgSelect: true, cvgTimesAlpha: true, antialias: true, imageRead: true, cvgDest: 0),
+                CombineCycles(Pass(4, 4), Pass(0, 0)), Array.Empty<ulong>(), With(other, Shaded(0x0C, p, q, r)));
+            Draw("two-cycle depth-tested, anti-aliased triangles", Modes(cycle: 1, biLerp0: true, antialias: true, imageRead: true, zCompare: true, zUpdate: true, zMode: 1,
+                m1a: 0, m1b: 0, m2a: 1, m2b: 0, m1a1: 0, m1b1: 0, m2a1: 1, m2b1: 0), texelShade, Loaded(0, 2), With(triangle, other));
+
+            ulong trilinear = CombineCycles(new[] { 2, 1, 13, 1, 2, 1, 0, 1 }, new[] { 0, 8, 4, 7, 0, 7, 4, 7 });
+            Draw("two-cycle mipmaps, trilinear", Modes(cycle: 1, perspective: true, lod: true, biLerp0: true), trilinear, Mipmaps(), Shaded(0x0F | (3 << 19), p, q, r));
+            Draw("two-cycle detail texture", Modes(cycle: 1, perspective: true, lod: true, detail: true, biLerp0: true), trilinear, Mipmaps(), Shaded(0x0F | (3 << 19), p, q, r));
+            Draw("two-cycle sharpened texture", Modes(cycle: 1, perspective: true, lod: true, sharpen: true, biLerp0: true), trilinear, Mipmaps(), Shaded(0x0F | (3 << 19), p, q, r));
+            Draw("two-cycle mipmapped texture rectangle", Modes(cycle: 1, lod: true, biLerp0: true), trilinear, Mipmaps(), TextureRectangle(false, 0, 8, 8, 120, 120, 0, 0, 0x0B00, 0x0900));
+            ulong[] slow = Shaded(0x0F | (3 << 19), p with { W = 1 }, q with { W = 1, S = 140 }, r with { W = 1, T = 90 });
+            Draw("second texel past a row's end, from the next row", Modes(cycle: 1, lod: true, biLerp0: true), CombineCycles(new[] { 2, 0, 3, 0, 2, 0, 3, 0 }, new[] { 2, 0, 10, 0, 2, 0, 3, 0 }),
+                Mipmaps(), slow, dispute: Combined);
+            Draw("past a row's end, alpha compare on the first cycle's texel 0", Modes(cycle: 1, lod: true, biLerp0: true, alphaCompare: true),
+                CombineCycles(new[] { 2, 0, 3, 0, 1, 0, 3, 6 }, Pass(0, 0)), Mipmaps(), slow, dispute: Combined);
+            Draw("past a row's end, alpha compare on the first cycle's texel 1", Modes(cycle: 1, lod: true, biLerp0: true, alphaCompare: true),
+                CombineCycles(new[] { 4, 0, 7, 0, 2, 0, 3, 0 }, Pass(0, 0)), Mipmaps(), slow, dispute: Combined);
+            Draw("past a row's end, alpha compare on the first cycle's fraction", Modes(cycle: 1, lod: true, biLerp0: true, alphaCompare: true),
+                CombineCycles(new[] { 2, 0, 3, 0, 4, 0, 0, 6 }, Pass(0, 0)), Mipmaps(), slow, dispute: Combined);
+            Draw("past a row's end without the enable bit", twoCycle, CombineCycles(new[] { 2, 0, 3, 0, 2, 0, 3, 0 }, new[] { 2, 0, 10, 0, 2, 0, 3, 0 }),
+                Mipmaps(), slow, dispute: Combined);
+            Draw("past a row's end, the fraction read without the enable bit", twoCycle, CombineCycles(new[] { 2, 0, 13, 0, 2, 0, 3, 0 }, new[] { 2, 0, 10, 0, 2, 0, 3, 0 }),
+                Mipmaps(), slow, dispute: Combined);
+            Draw("first cycle reading the fraction without the enable bit", Modes(cycle: 1, perspective: true, biLerp0: true),
+                CombineCycles(new[] { 6, 8, 13, 7, 7, 7, 7, 7 }, Pass(0, 0)), Mipmaps(), Shaded(0x0F | (3 << 19), p, q, r));
+            Draw("second tile without the enable bit, the fraction read", twoCycle, CombineCycles(Pass(4, 4), new[] { 8, 8, 16, 1, 7, 7, 0, 7 }), twoTiles, triangle);
+            Draw("two-cycle palette lookup", Modes(cycle: 1, biLerp0: true, sampleFour: true, palette: true), CombineCycles(new[] { 2, 1, 10, 1, 2, 1, 3, 1 }, Pass(0, 0)),
+                With(Loaded(2, 1), Loaded(2, 1, tile: 1, memory: 0x60, offset: 0x200), new[] { TextureImageCommand(0, 2, 16, TextureImage + 0x800), TileCommand(7, 0, 0, 0, 0x100),
+                    LoadCommand(0x30, 7, 0, 0, 255 << 2, 0) }), triangle);
+            Draw("fill rectangle in the two-cycle mode", Modes(cycle: 1, rgbDither: 0), CombineCycles(Pass(3, 3), new[] { 0, 5, 12, 5, 0, 5, 3, 7 }), Array.Empty<ulong>(),
+                new[] { Rectangle(8, 12, 100, 88) });
+
+            // Random cases draw from both cycles' selectors and every mode built so far, but never the three disputed inputs: combined in the first cycle, memory alpha in the first blend, shade alpha in the second.
+            var random = new Random(0x5457_4F43);
+            for (int n = 0; n < 120; n++)
+            {
+                int Pick(params int[] choices) => choices[random.Next(choices.Length)];
+                bool Coin() => random.Next(2) == 1;
+
+                int format = Pick(0, 0, 2, 3, 4), size = format == 0 ? Pick(1, 2, 2) : random.Next(3);
+                ulong[] setup = Mipmaps(0, random.Next(1, 5), (uint)Pick(8, 16, 32), format, size, Coin());
+
+                int[] Cycle(bool combined) => new[]
+                {
+                    Pick(combined ? 0 : 6, 1, 2, 3, 4, 5, 6, 8), Pick(combined ? 0 : 8, 1, 2, 3, 4, 5, 7, 8), Pick(combined ? 0 : 16, 1, 2, 3, 4, combined ? 7 : 16, 8, 9, 10, 11, 13, 14, 16),
+                    Pick(combined ? 0 : 6, 1, 2, 3, 4, 5, 6, 7), Pick(combined ? 0 : 7, 1, 2, 3, 4, 6, 7), Pick(combined ? 0 : 7, 1, 2, 3, 4, 7), Pick(0, 1, 2, 3, 4, 6, 7),
+                    Pick(combined ? 0 : 7, 1, 2, 3, 4, 6, 7),
+                };
+
+                ulong modes = Modes(
+                    cycle: 1, rgbDither: Pick(0, 1, 3), alphaDither: Pick(0, 1, 3), m1a: random.Next(4), m1b: random.Next(4), m2a: random.Next(4), m2b: Pick(0, 2, 3),
+                    m1a1: random.Next(4), m1b1: Pick(0, 1, 3), m2a1: random.Next(4), m2b1: random.Next(4), forceBlend: random.Next(3) == 0, alphaCvgSelect: random.Next(4) == 0,
+                    cvgTimesAlpha: random.Next(4) == 0, cvgDest: random.Next(4), colorOnCvg: random.Next(4) == 0, imageRead: Coin(), antialias: Coin(),
+                    alphaCompare: random.Next(4) == 0, zMode: random.Next(4), zCompare: Coin(), zUpdate: Coin(), perspective: Coin(), biLerp0: random.Next(4) != 0,
+                    biLerp1: random.Next(4) != 0, convertOne: random.Next(4) == 0, sampleFour: random.Next(3) == 0, lod: Coin(), sharpen: random.Next(4) == 0,
+                    detail: random.Next(4) == 0);
+
+                var shapes = new List<ulong>();
+                for (int t = 0, count = random.Next(1, 3); t < count; t++)
+                {
+                    if (random.Next(3) == 0)
+                    {
+                        uint left = (uint)random.Next(0, 100), top = (uint)random.Next(0, 100);
+                        shapes.AddRange(TextureRectangle(Coin(), 0, left, top, left + (uint)random.Next(4, 60), top + (uint)random.Next(4, 60),
+                            (short)random.Next(-0x400, 0x800), (short)random.Next(-0x400, 0x800), (short)random.Next(-0x1800, 0x1800), (short)random.Next(-0x1800, 0x1800)));
+                    }
+                    else
+                    {
+                        int reach = Pick(32, 128, 512);
+                        Vertex Point() => new(random.Next(-8, 136) / 4.0, random.Next(-8, 136) / 4.0, random.Next(256), random.Next(256), random.Next(256), random.Next(256),
+                            random.Next(0x40000), random.Next(-reach, reach), random.Next(-reach, reach), 0.2 + 0.8 * random.NextDouble());
+                        shapes.AddRange(Shaded(Pick(0x08, 0x09, 0x0C, 0x0D, 0x0A, 0x0B, 0x0E, 0x0F) | (random.Next(4) << 19), Point(), Point(), Point()));
+                    }
+                }
+
+                Draw($"random two-cycle case {n}", modes, CombineCycles(Cycle(combined: false), Cycle(combined: true)), setup, shapes.ToArray(), size: Pick(Bits16, Bits16, Bits32));
             }
 
             return cases;

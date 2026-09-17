@@ -6,7 +6,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
     public sealed partial class Rdp
     {
         // The fraction picks one of the square's two triangles; YUV's chroma is half as wide, so it may pick the other - see §2.
-        private Color FourTexels(int s, int t, bool beyondS, bool beyondT, ref TextureTile tile)
+        private Color FourTexels(int s, int t, bool beyondS, bool beyondT, ref TextureTile tile, bool bilinear, bool convert, Color previous)
         {
             int sFraction = tile.ClampsS && (beyondS || (s & 0x10000) != 0) ? 0 : s & 0x1F;
             int tFraction = tile.ClampsT && (beyondT || (t & 0x10000) != 0) ? 0 : t & 0x1F;
@@ -20,6 +20,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             int sFractionRg = tile.Format == 1 ? (sFraction >> 1) | ((s & 1) << 4) : sFraction;
             bool upperRg = ((sFractionRg + tFraction) & 0x20) != 0;
 
+            // Converting without filtering reads no texel at all.
+            if (convert && !bilinear) return Converted(SignedNine(previous), SignedNine(previous).B);
+
             Span<Color> texels = stackalloc Color[4];
             if (!SampleFour) NearestPaletteTexels(texels, s, t, ref tile, upperRg);
             else if (PaletteEnabled) PaletteTexels(texels, s, sStep, t, tStep, ref tile, upperRg);
@@ -32,10 +35,23 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 (texels[0].A, texels[3].A, texels[1].A, texels[2].A) = (texels[3].A, texels[0].A, texels[2].A, texels[1].A);
             }
 
-            if (!BilinearFirstCycle) return Converted(upperRg ? texels[3] : texels[0], (upper ? texels[3] : texels[0]).B);
+            if (!bilinear) return Converted(upperRg ? texels[3] : texels[0], (upper ? texels[3] : texels[0]).B);
 
             bool center = MidTexel && sFraction == 0x10 && tFraction == 0x10;
             bool centerRg = MidTexel && sFractionRg == 0x10 && tFraction == 0x10;
+
+            // Filtering while converting weights the corners' differences by the first cycle's texel instead of the fraction - see Mars_RdpTwoCycle.md §2.
+            if (convert)
+            {
+                Color p = SignedNine(previous);
+                return new Color
+                {
+                    R = ConvertedCorners(texels[0].R, texels[1].R, texels[2].R, texels[3].R, p, upperRg, centerRg),
+                    G = ConvertedCorners(texels[0].G, texels[1].G, texels[2].G, texels[3].G, p, upperRg, centerRg),
+                    B = ConvertedCorners(texels[0].B, texels[1].B, texels[2].B, texels[3].B, p, upper, center),
+                    A = ConvertedCorners(texels[0].A, texels[1].A, texels[2].A, texels[3].A, p, upper, center),
+                };
+            }
 
             return new Color
             {
@@ -44,6 +60,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 B = Interpolated(texels[0].B, texels[1].B, texels[2].B, texels[3].B, sFraction, tFraction, upper, center),
                 A = Interpolated(texels[0].A, texels[1].A, texels[2].A, texels[3].A, sFraction, tFraction, upper, center),
             };
+        }
+
+        private static int ConvertedCorners(int t0, int t1, int t2, int t3, Color p, bool upper, bool center)
+        {
+            if (center) return p.B + ((p.R * (t2 - t3) + p.G * (t1 - t3) + ((~t3 + t0) << 6) + 0xC0) >> 8);
+            if (upper) return p.B + ((p.R * (t2 - t3) + p.G * (t1 - t3) + 0x80) >> 8);
+            return p.B + ((p.R * (t1 - t0) + p.G * (t2 - t0) + 0x80) >> 8);
         }
 
         // Masked and mirrored as for one texel, and the step to the next: back to zero past the mask, or reversed and held at a mirror's turn - see §2.1.

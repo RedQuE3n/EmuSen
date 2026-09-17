@@ -99,6 +99,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int AlphaDither => (int)(_otherModes >> 36) & 3;
         private bool KeyEnabled => ((_otherModes >> 40) & 1) != 0;
 
+        private bool BilinearSecondCycle => ((_otherModes >> 42) & 1) != 0;
+        private bool ConvertOne => ((_otherModes >> 41) & 1) != 0;
+
+        // Which colour and alpha each blender cycle weighs; the one-cycle mode reads the first cycle's - see Mars_RdpTwoCycle.md §4.
+        private readonly record struct BlendSelectors(int FirstColor, int FirstAlpha, int SecondColor, int SecondAlpha);
+
+        private BlendSelectors FirstBlendCycle => new(BlendFirstColor, BlendFirstAlpha, BlendSecondColor, BlendSecondAlpha);
+        private BlendSelectors SecondBlendCycle => new((int)(_otherModes >> 28) & 3, (int)(_otherModes >> 24) & 3, (int)(_otherModes >> 20) & 3, (int)(_otherModes >> 16) & 3);
+
         // The one-cycle mode's blender reads the first cycle's selectors.
         private int BlendFirstColor => (int)(_otherModes >> 30) & 3;
         private int BlendFirstAlpha => (int)(_otherModes >> 26) & 3;
@@ -118,6 +127,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private bool PrimitiveDepth => ((_otherModes >> 2) & 1) != 0;
         private bool DitherAlpha => ((_otherModes >> 1) & 1) != 0;
         private bool AlphaCompare => (_otherModes & 1) != 0;
+
+        // Each combiner cycle's eight inputs; the one-cycle mode's combiner reads the second cycle's - see Mars_RdpTwoCycle.md §4.
+        private readonly record struct CombinerSelectors(int ColorA, int ColorB, int ColorC, int ColorD, int AlphaA, int AlphaB, int AlphaC, int AlphaD);
+
+        private CombinerSelectors FirstCombineCycle => new((int)(_combine >> 52) & 0xF, (int)(_combine >> 28) & 0xF, (int)(_combine >> 47) & 0x1F, (int)(_combine >> 15) & 7,
+            (int)(_combine >> 44) & 7, (int)(_combine >> 12) & 7, (int)(_combine >> 41) & 7, (int)(_combine >> 9) & 7);
+
+        private CombinerSelectors SecondCombineCycle => new(CombineColorA, CombineColorB, CombineColorC, CombineColorD, CombineAlphaA, CombineAlphaB, CombineAlphaC, CombineAlphaD);
 
         // (A - B) × C + D per channel; the one-cycle mode's combiner reads the second cycle's selectors.
         private int CombineColorA => (int)(_combine >> 37) & 0xF;

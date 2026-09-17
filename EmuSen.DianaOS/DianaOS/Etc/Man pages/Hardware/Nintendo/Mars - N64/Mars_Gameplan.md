@@ -483,6 +483,15 @@ rather than raw samples.
 > coincide, so twenty named cases carry one dispute and the random cases are graded against angrylion alone.
 > What "diffs to zero" means for this slice is therefore narrower than for any before it. The remaining
 > list is the two-cycle and copy modes.
+>
+> **Progress, 2026-09-17: the two-cycle mode** (`Mars_RdpTwoCycle.md`). Two combiner and two blender cycles
+> per pixel, the second cycle's texel and the four forms of converting one texel from another, the two tiles
+> its level of detail picks, and angrylion's pipelining of one pixel's work into the next's: 159 cases match
+> angrylion. **The cross-check narrows again, but for a reason the last slice did not have**: parallel-rdp
+> runs a pixel's two cycles together, so the three inputs angrylion feeds from a neighbouring pixel are
+> disputes, and the random cases are constrained never to select them rather than being dropped from the
+> cross-check. Twenty-nine of the thirty-nine named cases still agree with both references. The remaining list
+> is the copy mode.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

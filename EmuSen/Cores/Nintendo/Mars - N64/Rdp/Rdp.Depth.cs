@@ -46,15 +46,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             z &= 0x3FFFF;
             overflow = ((memoryCoverage + coverage) & 8) != 0;
 
+            // Shifts for memory alpha: this pixel's for the last blend, and the two-cycle mode's first blend from the previous pixel's slope - see Mars_RdpTwoCycle.md §4.
+            bool twoCycle = CycleType == TwoCycle;
+            bool shifts = (twoCycle ? SecondBlendCycle.SecondAlpha : BlendSecondAlpha) == 1;
+            bool pastShifts = twoCycle && BlendSecondAlpha == 1;
+
             if (!DepthCompare)
             {
                 blend = ForceBlend || (!overflow && Antialias);
-                if (BlendSecondAlpha == 1)
-                {
-                    _blendShiftA = 0;
-                    _blendShiftB = deltaZEncoded < 0xB ? 4 : 0xF - deltaZEncoded;
-                }
-
+                int far = deltaZEncoded < 0xB ? 4 : 0xF - deltaZEncoded;
+                if (shifts) (_blendShiftA, _blendShiftB) = (0, far);
+                if (pastShifts) (_pastShiftA, _pastShiftB) = (0, far);
+                _pastStoredEncoded = 0xF;
                 return true;
             }
 
@@ -67,11 +70,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             int storedEncoded = ((stored & 3) << 2) | storedHidden;
             int storedSlope = 1 << storedEncoded;
 
-            if (BlendSecondAlpha == 1)
+            if (shifts)
             {
                 _blendShiftA = Math.Clamp(deltaZEncoded - storedEncoded, 0, 4);
                 _blendShiftB = Math.Clamp(storedEncoded - deltaZEncoded, 0, 4);
             }
+
+            if (pastShifts)
+            {
+                _pastShiftA = Math.Clamp(deltaZEncoded - _pastStoredEncoded, 0, 4);
+                _pastShiftB = Math.Clamp(_pastStoredEncoded - deltaZEncoded, 0, 4);
+            }
+
+            _pastStoredEncoded = storedEncoded;
 
             // At low precision the stored slope widens; its largest value makes every margin exceed the depth range, which is all the reference's coplanar flag does - see §3.2.
             if (((stored >> 13) & 0xF) < 3)
@@ -85,24 +96,24 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             bool farther = z + margin >= old;
             blend = ForceBlend || (!overflow && Antialias && farther);
 
-            bool infront = z < old;
+            bool inFront = z < old;
             bool nearer = z - margin <= old;
             bool maximum = old == 0x3FFFF;
 
             switch (DepthMode)
             {
                 case 0:
-                    return maximum || (overflow ? infront : nearer);
+                    return maximum || (overflow ? inFront : nearer);
 
                 case 1:
-                    if (!infront || !farther || !overflow) return maximum || (overflow ? infront : nearer);
+                    if (!inFront || !farther || !overflow) return maximum || (overflow ? inFront : nearer);
 
                     int shift = DeltaZEncoding(slope & 0xFFFF);
                     coverage = ((((old >> shift) - (z >> shift)) & 0xF) * coverage >> 3) & 0xF;
                     return true;
 
                 case 2:
-                    return infront || maximum;
+                    return inFront || maximum;
 
                 default:
                     return farther && nearer && !maximum;

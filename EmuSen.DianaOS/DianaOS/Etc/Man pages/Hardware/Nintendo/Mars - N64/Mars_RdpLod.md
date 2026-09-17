@@ -204,7 +204,8 @@ texel 1's tile, which it does not read; the complement; or a distant pixel takin
 
 ## 5. What is not here
 
-- **The two-cycle mode's level of detail**, which angrylion measures from the pixel itself, across x and down
-  y, and which also chooses the second cycle's tile.
+- ~~**The two-cycle mode's level of detail**, which angrylion measures from the pixel itself, across x and down
+  y, and which also chooses the second cycle's tile.~~ Built in the next slice (`Mars_RdpTwoCycle.md` §3),
+  where both of those turned out to be as predicted here.
 - **The copy mode**, whose level of detail is another path.
-- **The two-cycle and copy modes** generally, and **chroma key** and **noise**, as earlier pages left them.
+- **The copy mode** generally, and **chroma key** and **noise**, as earlier pages left them.

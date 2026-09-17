@@ -80,7 +80,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             if (EnabledCause() != 0) throw Raise(ExceptionCode.FloatingPoint, CurrentPc);
         }
 
-        private uint EnabledCause() => (Fcsr >> FcsrCauseToEnableShift) & Fcsr & FcsrEnables;
+        // The unimplemented cause has no enable of its own: set by any route, it fires - see Mars_Fpu.md §4.4.
+        private uint EnabledCause() =>
+            ((Fcsr >> FcsrCauseToEnableShift) & Fcsr & FcsrEnables) | (Fcsr & FcsrCauseUnimplemented);
 
         // An operation that the part does not implement clears the maskable causes and fires regardless of them - see §5.
         private CpuException RaiseUnimplementedOperation()

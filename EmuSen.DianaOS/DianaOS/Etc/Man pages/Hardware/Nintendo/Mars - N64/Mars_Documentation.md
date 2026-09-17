@@ -62,6 +62,16 @@ remains is the bookkeeping discipline `Mars_References.md` §5.3 argued for.
 
 ### 2.1 Three CPU traps that will not announce themselves
 
+> **Settled, 2026-09-16.** All three of the traps below were checked against the
+> corpus when Phase B's arithmetic landed. The first is **confirmed** and its
+> provenance upgraded from [community] to [read]; the second is **confirmed**; the
+> third, which this page called unresolved and said should be settled by test, **is
+> now settled by test** — the directed rounding modes are taken literally on underflow
+> and a tiny value can round to the minimum normal. `Mars_FpuMath.md` §1, §7 and §4.1.
+>
+> A fourth trap, which no source here predicted, turned out to matter more than any of
+> them: **the part refuses to compute with denormal operands at all.**
+
 - **NaN encoding is reversed from modern IEEE.** The VR4300 follows the pre-2008
   convention, so the quiet/signalling bit patterns are the opposite of what a
   present-day host FPU produces. **[community]** An implementation that leans on C#'s

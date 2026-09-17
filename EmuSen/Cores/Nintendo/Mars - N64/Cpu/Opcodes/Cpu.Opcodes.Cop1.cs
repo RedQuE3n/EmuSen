@@ -18,8 +18,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x05: WriteFpuWide(Rd(instruction), Read(Rt(instruction))); return;
                 case 0x06: WriteFpuControl(Rd(instruction), (uint)Read(Rt(instruction))); return;
 
-                case 0x08: throw NotBuiltYet("the coprocessor-1 branches");
-                case 0x10: case 0x11: case 0x14: case 0x15: throw NotBuiltYet("coprocessor-1 arithmetic");
+                case 0x08: BranchOnCondition(instruction); return;
+                case 0x10: ExecuteCop1Format(instruction, wide: false); return;
+                case 0x11: ExecuteCop1Format(instruction, wide: true); return;
+                case 0x14: ExecuteCop1FromInteger(instruction, wide: false); return;
+                case 0x15: ExecuteCop1FromInteger(instruction, wide: true); return;
 
                 // Reserved here means the FPU decoded it and refused, not that the CPU failed to - see §5.
                 default: throw RaiseUnimplementedOperation();

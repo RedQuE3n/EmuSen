@@ -107,6 +107,11 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Swc1(int ft, int rs, short offset) => I(0x39, rs, ft, offset);
         public MipsAssembler Sdc1(int ft, int rs, short offset) => I(0x3D, rs, ft, offset);
 
+        // A coprocessor-1 arithmetic word: format, function, and the three register fields.
+        public MipsAssembler Cop1Format(int format, int funct, int fd, int fs, int ft) =>
+            Word((0x11u << 26) | ((uint)format << 21) | ((uint)ft << 16) | ((uint)fs << 11)
+                 | ((uint)fd << 6) | (uint)funct);
+
         // The sub-opcode field decides the whole of a coprocessor-1 move, reserved forms included.
         public MipsAssembler Cop1(int rs, int rt, int fs) =>
             Word((0x11u << 26) | ((uint)rs << 21) | ((uint)rt << 16) | ((uint)fs << 11));

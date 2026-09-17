@@ -19,6 +19,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public readonly SpInterface Sp;
         public readonly PiInterface Pi;
+        public readonly DpInterface Dp;
         public readonly MiInterface Mi = new();
 
         public RomImage? Cart;
@@ -36,6 +37,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Rdram = new byte[expansionPak ? RdramSizeExpanded : RdramSize];
             Sp = new SpInterface(this);
             Pi = new PiInterface(this);
+            Dp = new DpInterface(this);
 
             // Nonzero tells libdragon's IPL3 that RDRAM needs no initialising - see Mars_TestOracle.md §3.
             _registers[MemoryMap.RiSelect] = 0x14;
@@ -86,6 +88,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (InRange(physical, MemoryMap.SpRegistersBase, 0x20)) return Sp.Read32(physical - MemoryMap.SpRegistersBase);
             if (InRange(physical, MemoryMap.SpPcBase, 0x08)) return Sp.Pc;
 
+            if (InRange(physical, MemoryMap.DpCommandBase, 0x20)) return Dp.Read32(physical - MemoryMap.DpCommandBase);
+
             if (InRange(physical, MemoryMap.PiBase, 0x34)) return Pi.Read32(physical - MemoryMap.PiBase);
 
             if (InRange(physical, MemoryMap.MiBase, 0x10)) return Mi.Read32(physical - MemoryMap.MiBase);
@@ -133,6 +137,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (InRange(physical, MemoryMap.SpRegistersBase, 0x20))
             {
                 Sp.Write32(physical - MemoryMap.SpRegistersBase, value);
+                return;
+            }
+
+            if (InRange(physical, MemoryMap.DpCommandBase, 0x20))
+            {
+                Dp.Write32(physical - MemoryMap.DpCommandBase, value);
                 return;
             }
 

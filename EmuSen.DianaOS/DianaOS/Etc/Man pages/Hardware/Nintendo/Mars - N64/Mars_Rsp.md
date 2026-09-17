@@ -163,6 +163,9 @@ in fact about the display processor freezing, which is Phase D.
 corpus run got past the point where it had waited since Phase A — and ran straight into a
 defect in how Mars was *running the corpus*, which is `Mars_Corpus.md` §8.
 
+> **Update 2026-09-17, after the display processor's interface (`Mars_Rdp.md`): all 248 pass.**
+> The last one was the display processor's after all, and cleared with the rest of its module.
+>
 > **Update 2026-09-17, after the main CPU's access to RSP memory (`Mars_Memory.md` §2.4):
 > 247 of the 248 pass.** The last is *RSP STATUS: start-valid*, which lives in the corpus's
 > `rdp` module at its RDP level and fails on *"RDP was told to freeze, but it didn't"*. No test

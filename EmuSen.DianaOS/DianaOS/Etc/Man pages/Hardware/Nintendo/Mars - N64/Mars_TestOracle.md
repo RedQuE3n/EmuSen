@@ -159,6 +159,12 @@ Phase 0's job and this file is parked, not plumbed.
 This is the finding that most changes the plan's shape, and it is worse than §1's
 coverage gap suggests.
 
+> **Correction 2026-09-17: the corpus does grade part of Phase D.** Six groups test the display
+> processor's command registers and its stream at the corpus's `RDPBasic` level, not behind the
+> experimental flag §1 mentions, and they are graded against silicon (`Mars_Rdp.md` §0). What
+> this section says about rasterization is unchanged: those six read one pixel of a fill, and
+> nothing here grades an edge.
+
 **For the RDP, the differential infrastructure is excellent and its ground truth is
 not hardware.** `parallel-rdp` (MIT) defines an interchange format — `RDPDUMP2`: an
 eight-byte magic, RDRAM and hidden-RDRAM sizes, then tagged records for commands, DRAM

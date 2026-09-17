@@ -51,7 +51,8 @@ RDRAM interface's select register comes up nonzero, which is how libdragon's IPL
 told that memory needs no initialising.
 
 This is a stub and is meant to be replaced device by device as the phases reach
-them. It is recorded here so that a register appearing to "work" is never mistaken
+them. The display processor's command registers left it on 2026-09-17, and now read zero
+where nothing is modelled rather than echoing writes (`Mars_Rdp.md` §2.4). It is recorded here so that a register appearing to "work" is never mistaken
 for a device being modelled. The dictionary is also the wrong shape for a hot path;
 that is a Phase G problem and deliberately not solved now.
 
@@ -252,3 +253,15 @@ implements the pairs; a test writes the set bit and then the clear bit for the s
 device and watches the mask follow.
 
 The other five devices exist as bits with nothing behind them yet.
+
+> **Update 2026-09-17: the display processor raises its bit** at a full sync (`Mars_Rdp.md` §6).
+
+### 8.2 The display processor's interrupt is cleared through the mode register
+
+It has no clear bit of its own in any display processor register. Bit 11 (`0x800`) of the
+aggregator's mode register clears it, and that is the only bit of the mode register Mars
+models: a write without it does nothing. The evidence is a commercial handler rather than a
+document re-read for this slice — Wave Race's interrupt handler clears the bit 235 instructions
+after it is raised, and nothing else in Mars can. The mode register's other fields, and what it
+reads back, are not modelled; five MI groups in the corpus's census are about them
+(`Mars_Corpus.md` §3).

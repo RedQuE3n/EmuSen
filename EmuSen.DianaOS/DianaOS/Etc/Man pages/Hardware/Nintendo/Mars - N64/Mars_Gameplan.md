@@ -406,6 +406,22 @@ rather than raw samples.
 **Done when** a set of primitives covering each mode diffs to zero, in the sense
 `EmuSen_Core_Gameplan.md` means when it says the GSU diffs to zero against Mesen.
 
+> **Progress, 2026-09-17: the interface, the command stream, and the fill cycle.** The registers
+> that hand the display processor its list, a stream that gathers each command's words before
+> running it, and fills in whole pixels (`Mars_Rdp.md`). The corpus's six RDP groups pass —
+> 159 → 152 — and Wave Race's first list now clears its depth buffer.
+>
+> **This phase does have a hardware oracle, for its interface.** `Mars_TestOracle.md` §5 said
+> Phases D and E get nothing from the corpus. For the rasterizer that held; for the registers
+> and the stream it did not, and those six groups are graded against silicon, which the
+> reference this section names is not.
+>
+> **The slice was also where this section's grading instrument first became necessary.** Every
+> pixel rule past "the fill goes where the corpus looks" had to be taken from a reading of the
+> reference and labelled ungraded (`Mars_Rdp.md` §0, §5.2), and the edge rule is already one
+> column and one row visible in a commercial depth buffer. The differential is the next piece
+> of work this phase needs, before any further drawing is built on readings.
+
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 
 VI (including the filters the console genuinely applies — anti-aliasing, divot and

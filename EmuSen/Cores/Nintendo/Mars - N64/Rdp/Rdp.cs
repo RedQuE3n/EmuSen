@@ -13,6 +13,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         public const uint FillRectangle = 0x36;
         public const uint SetFillColor = 0x37;
         public const uint SetColorImage = 0x3F;
+        public const uint LoadPalette = 0x30;
         public const uint SetTileSize = 0x32;
         public const uint LoadBlock = 0x33;
         public const uint LoadTile = 0x34;
@@ -55,7 +56,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             _ => 1,
         };
 
-        // Commands that draw, load or set state act; the rest, the palette load among them, are taken whole and do nothing yet - see §4.
+        // Commands that draw, load or set state act; the rest are taken whole and do nothing yet - see §4.
         private bool Execute(uint id, ulong word)
         {
             switch (id)
@@ -65,8 +66,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case SetTextureImage: TextureImage(word); break;
                 case SetTile: Tile(word); break;
                 case SetTileSize: TileSize(word); break;
-                case LoadTile: Load(word, block: false); break;
-                case LoadBlock: Load(word, block: true); break;
+                case LoadTile: Load(word, LoadKind.Tile); break;
+                case LoadBlock: Load(word, LoadKind.Block); break;
+                case LoadPalette: Load(word, LoadKind.Palette); break;
                 case SyncFull: return true;
                 case SetScissor: Scissor(word); break;
                 case SetOtherModes: _otherModes = word; break;

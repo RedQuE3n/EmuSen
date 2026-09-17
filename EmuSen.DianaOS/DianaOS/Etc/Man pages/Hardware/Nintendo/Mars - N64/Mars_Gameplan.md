@@ -468,6 +468,13 @@ rather than raw samples.
 > texel is filtered, that content could — and parallel-rdp refuses several uploads outright, so five cases
 > are graded against angrylion alone. The remaining list is filtering, palette lookup, the level
 > of detail, and the two-cycle and copy modes.
+>
+> **Progress, 2026-09-17: filtering and palettes** (`Mars_RdpFiltering.md`). Four texels where filtering or
+> a palette asks for them, the three-point filter and its mid-texel average, palette lookup and the palette
+> load, in the one-cycle mode: 176 cases match angrylion, and parallel-rdp agrees with every one it accepts
+> but a YUV tile read through a palette. **The disagreement the textures slice left open was not a rule**:
+> the two references start their tiles at different sizes, which only the first command to name a tile can
+> see. The remaining list is the level of detail, and the two-cycle and copy modes.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

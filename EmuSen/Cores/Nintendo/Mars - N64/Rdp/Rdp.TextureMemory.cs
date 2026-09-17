@@ -62,10 +62,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             return ref tile;
         }
 
-        // A tile load walks rows of image texels four quarters apart; a block load walks one row whose t steps by a slope - see §3.1.
-        private void Load(ulong word, bool block)
+        private enum LoadKind { Tile, Block, Palette }
+
+        // A tile or palette load walks rows of image texels four quarters apart; a block load walks one row whose t steps by a slope - see §3.1.
+        private void Load(ulong word, LoadKind kind)
         {
             ref TextureTile tile = ref TileSize(word);
+            bool block = kind == LoadKind.Block;
 
             int top, bottom, first, last, right;
             if (block)
@@ -78,6 +81,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 (top, bottom, first, last, right) = (tile.TL, tile.TH | 3, tile.TL >> 2, tile.TH >> 2, tile.SH >> 2);
             }
 
+            // A palette load of more than one row loads nothing - see Mars_RdpFiltering.md §4.2.
+            if (kind == LoadKind.Palette && last > first) return;
+
             // A block's left column is a signed twelve-bit whole number, which moves the image pointer but not the texel coordinate - see §3.1.
             int left = block ? (tile.SL << 20) >> 20 : tile.SL >> 2;
             int sStep = (0x200 >> (block ? _textureImageSize + 2 : _textureImageSize)) << 16;
@@ -87,28 +93,33 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             {
                 bool valid = System.Math.Max(row << 2, top) < System.Math.Min((row << 2) + 4, bottom);
                 int t = ((tile.TL << 3) << 16) + (block ? 0 : (row - first) * (0x20 << 16));
-                LoadRow(ref tile, row, valid ? right : 0, left, (tile.SL << 3) << 16, t, sStep, tStep, block);
+                LoadRow(ref tile, row, valid ? right : 0, left, (tile.SL << 3) << 16, t, sStep, tStep, kind);
             }
         }
 
         // An eight-byte window of the image goes to four words of texture memory per step; a four-bit image loads nothing - see §3.2.
-        private void LoadRow(ref TextureTile tile, int row, int right, int left, int s, int t, int sStep, int tStep, bool block)
+        private void LoadRow(ref TextureTile tile, int row, int right, int left, int s, int t, int sStep, int tStep, LoadKind kind)
         {
-            (int imageAdvance, int texelAdvance) = _textureImageSize switch { 1 => (8, 8), 2 => (8, 4), 3 => (8, 2), _ => (0, 0) };
+            // A palette load from a sixteen-bit image steps one entry at a time - see Mars_RdpFiltering.md §4.2.
+            (int imageAdvance, int texelAdvance) = _textureImageSize switch { 1 => (8, 8), 2 => kind == LoadKind.Palette ? (2, 1) : (8, 4), 3 => (8, 2), _ => (0, 0) };
             if (texelAdvance == 0) return;
 
             int layout = tile.Format == 1 ? 0 : tile.Format == 0 && tile.Size == 3 ? 1 : 2;
             int pointer = (int)_textureImage + (((_textureImageWidth * row + left) << _textureImageSize) >> 1);
             int length = (right - left + 1) & 0xFFF;
+            int shift = kind == LoadKind.Tile ? 5 : 3;
 
             for (int n = 0; n < length; n += texelAdvance)
             {
                 int ts = (short)((s >> 16) & 0xFFFF) - (tile.SL << 3);
                 int tt = (short)((t >> 16) & 0xFFFF) - (tile.TL << 3);
-                ts >>= block ? 3 : 5;
-                tt >>= block ? 3 : 5;
+                ts >>= shift;
+                tt >>= shift;
 
+                // A palette load at an even address takes one sixteen-bit entry four times over.
                 ulong window = ImageWindow(pointer);
+                if (kind == LoadKind.Palette && (pointer & 1) == 0) window = (window >> 48) * 0x0001_0001_0001_0001UL;
+
                 StoreTexels(ref tile, ts, tt, window, layout);
 
                 s = (s + sStep) & ~0x1F;

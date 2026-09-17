@@ -112,9 +112,10 @@ Where the four words go:
 
 ### 3.3 Palette loads
 
-**The palette load is taken whole and does nothing.** It shares the pipeline, and the two references
+~~**The palette load is taken whole and does nothing.** It shares the pipeline, and the two references
 disagreed about one — in texture memory, on a palette loaded into a tile no command had set — which was
-not characterised. It is left to the slice that builds palette lookup, where what it loads can be seen.
+not characterised. It is left to the slice that builds palette lookup, where what it loads can be seen.~~
+Built in the next slice (`Mars_RdpFiltering.md` §4.2), where the disagreement is taken up again (§5.2 there).
 
 ## 4. Texture coordinates
 
@@ -331,8 +332,10 @@ pointer that is not a multiple of eight, none of which it has.
 
 ## 8. What is not here
 
-- **Filtering**: bilinear, the median, and the mid-texel rule.
-- **Palette lookup**, and the palette load (§3.3).
+- ~~**Filtering**: bilinear, the median, and the mid-texel rule.~~
+- ~~**Palette lookup**, and the palette load (§3.3).~~ Both built in the next slice (`Mars_RdpFiltering.md`).
+  The median was a wrong prediction: neither reference filters texels by a median — the only median in
+  either is the video interface's divot filter — and the four-texel rule is the mid-texel average.
 - **The level of detail**: the fraction, mipmaps, detail and sharpen, and the tile choice they make.
 - **The two-cycle and copy modes**, in which textured primitives still draw nothing.
 - **Untextured primitives that read a texel** (§6), and texture rectangles in the fill cycle — both follow

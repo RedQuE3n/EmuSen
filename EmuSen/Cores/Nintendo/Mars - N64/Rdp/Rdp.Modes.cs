@@ -84,6 +84,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         private int CycleType => (int)(_otherModes >> 52) & 3;
         private bool Perspective => ((_otherModes >> 51) & 1) != 0;
+        private bool PaletteEnabled => ((_otherModes >> 47) & 1) != 0;
+        private bool PaletteIntensityAlpha => ((_otherModes >> 46) & 1) != 0;
+        private bool SampleFour => ((_otherModes >> 45) & 1) != 0;
+        private bool MidTexel => ((_otherModes >> 44) & 1) != 0;
         private bool BilinearFirstCycle => ((_otherModes >> 43) & 1) != 0;
         private int RgbDither => (int)(_otherModes >> 38) & 3;
         private int AlphaDither => (int)(_otherModes >> 36) & 3;

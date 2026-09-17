@@ -44,6 +44,9 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Dadd(int rd, int rs, int rt) => R(rs, rt, rd, 0, 0x2C);
         public MipsAssembler Daddu(int rd, int rs, int rt) => R(rs, rt, rd, 0, 0x2D);
 
+        public MipsAssembler Dsub(int rd, int rs, int rt) => R(rs, rt, rd, 0, 0x2E);
+        public MipsAssembler Dsubu(int rd, int rs, int rt) => R(rs, rt, rd, 0, 0x2F);
+
         public MipsAssembler Sll(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x00);
         public MipsAssembler Srl(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x02);
         public MipsAssembler Sra(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x03);
@@ -52,8 +55,19 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Dsll32(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x3C);
         public MipsAssembler Dsrl32(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x3E);
 
+        public MipsAssembler Dsrl(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x3A);
+        public MipsAssembler Dsra(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x3B);
+        public MipsAssembler Dsra32(int rd, int rt, int sa) => R(0, rt, rd, sa, 0x3F);
+        public MipsAssembler Dsllv(int rd, int rt, int rs) => R(rs, rt, rd, 0, 0x14);
+        public MipsAssembler Dsrlv(int rd, int rt, int rs) => R(rs, rt, rd, 0, 0x16);
+        public MipsAssembler Dsrav(int rd, int rt, int rs) => R(rs, rt, rd, 0, 0x17);
+
         public MipsAssembler Mult(int rs, int rt) => R(rs, rt, 0, 0, 0x18);
         public MipsAssembler Multu(int rs, int rt) => R(rs, rt, 0, 0, 0x19);
+        public MipsAssembler Dmult(int rs, int rt) => R(rs, rt, 0, 0, 0x1C);
+        public MipsAssembler Dmultu(int rs, int rt) => R(rs, rt, 0, 0, 0x1D);
+        public MipsAssembler Ddiv(int rs, int rt) => R(rs, rt, 0, 0, 0x1E);
+        public MipsAssembler Ddivu(int rs, int rt) => R(rs, rt, 0, 0, 0x1F);
         public MipsAssembler Div(int rs, int rt) => R(rs, rt, 0, 0, 0x1A);
         public MipsAssembler Divu(int rs, int rt) => R(rs, rt, 0, 0, 0x1B);
         public MipsAssembler Mfhi(int rd) => R(0, 0, rd, 0, 0x10);
@@ -122,6 +136,9 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Cache(int op, int rs, short offset) => I(0x2F, rs, op, offset);
         public MipsAssembler Ll(int rt, int rs, short offset) => I(0x30, rs, rt, offset);
         public MipsAssembler Sc(int rt, int rs, short offset) => I(0x38, rs, rt, offset);
+        public MipsAssembler Lld(int rt, int rs, short offset) => I(0x34, rs, rt, offset);
+        public MipsAssembler Scd(int rt, int rs, short offset) => I(0x3C, rs, rt, offset);
+
 
         public MipsAssembler Tlbr() => Word((0x10u << 26) | (0x10u << 21) | 0x01);
         public MipsAssembler Tlbwi() => Word((0x10u << 26) | (0x10u << 21) | 0x02);

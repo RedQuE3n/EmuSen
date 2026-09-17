@@ -152,16 +152,29 @@ The check is gated on `Status` bit 7, kernel-mode extended addressing. User and
 supervisor modes have their own enables and **are not modelled** — Mars has no
 privilege level, so every access is kernel.
 
+> **Closed, 2026-09-16.** All three modes exist, each with its own addressing bit, and
+> the check is now one case of the address map rather than a test beside it.
+> `Mars_Privilege.md` §1 and §2.1.
+
 ### 8.1 What accepting the address does not mean
 
-With 64-bit addressing enabled the wide address is accepted, and then **Mars puts it
-in the wrong place**: segment decoding reads the low word only, so
-`0x00000000_80001234` is treated as `KSEG0` rather than as the 64-bit user segment it
-names. A test records this rather than asserting the behaviour is right.
+*Retired 2026-09-16 — the gap is closed. `Mars_Privilege.md` §2.2.*
 
-Nothing in the corpus grades it, because its address-error tests run in 32-bit mode.
-It is a real gap and it is written down here so that it is found deliberately rather
-than rediscovered.
+> With 64-bit addressing enabled the wide address is accepted, and then **Mars puts it
+> in the wrong place**: segment decoding reads the low word only, so
+> `0x00000000_80001234` is treated as `KSEG0` rather than as the 64-bit user segment it
+> names. A test records this rather than asserting the behaviour is right.
+>
+> Nothing in the corpus grades it, because its address-error tests run in 32-bit mode.
+> It is a real gap and it is written down here so that it is found deliberately rather
+> than rediscovered.
+
+The last paragraph was right about the corpus and wrong about the consequence. Nothing
+graded it **at the budget the run then reached**; the corpus's privilege tests grade it
+directly, and they sat 150 tests beyond where the run stopped. The gap was found
+deliberately, as intended — but by the census in `Mars_Corpus.md` §3 rather than by
+anyone remembering this paragraph, which is the more reliable of the two routes and the
+reason that census exists.
 
 ## 9. The delay slot behind a branch that was not taken
 

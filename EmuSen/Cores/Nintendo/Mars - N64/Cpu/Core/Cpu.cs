@@ -93,12 +93,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         // Written once so the TLB and the caches cannot be bypassed later - see Mars_Cpu.md §6.
         private uint Translate(ulong address, bool store = false)
         {
-            if (!IsAddressable(address))
+            Segment segment = Segments.Decode(address, Mode, WideAddressing);
+
+            if (segment.Access == SegmentAccess.Illegal)
             {
                 throw Raise(store ? ExceptionCode.AddressErrorStore : ExceptionCode.AddressErrorLoad, address);
             }
 
-            if (MemoryMap.TryTranslateDirect(address, out uint physical)) return physical;
+            if (segment.Access == SegmentAccess.Direct) return segment.Physical;
 
             TlbResult result = Tlb.TryTranslate(address, Cop0[EntryHiRegister], store, out uint mapped, out _);
             if (result == TlbResult.Mapped) return mapped;
@@ -114,11 +116,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         }
 
         private uint ReadWord(ulong address) => _bus.Read32(Translate(address));
-
-        // Outside 64-bit addressing an address must sign-extend its own bit 31 - see Mars_Cop0.md §8.
-        private bool IsAddressable(ulong address) =>
-            (Cop0[StatusRegister] & StatusKernelExtendedAddressing) != 0
-            || address == (ulong)(long)(int)(uint)address;
 
         private CpuException Raise(ExceptionCode code, ulong address, bool refill = false, int coprocessor = 0)
         {

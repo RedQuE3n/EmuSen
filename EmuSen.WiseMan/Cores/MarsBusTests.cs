@@ -8,30 +8,34 @@ namespace EmuSen.WiseMan.Cores
     public class MarsBusTests
     {
         [Theory]
-        [InlineData(0x8000_0000UL, 0x0000_0000u)]
-        [InlineData(0xA000_0000UL, 0x0000_0000u)]
-        [InlineData(0xA400_0000UL, 0x0400_0000u)]
-        [InlineData(0xB3FF_0014UL, 0x13FF_0014u)]
+        [InlineData(0xFFFF_FFFF_8000_0000UL, 0x0000_0000u)]
+        [InlineData(0xFFFF_FFFF_A000_0000UL, 0x0000_0000u)]
+        [InlineData(0xFFFF_FFFF_A400_0000UL, 0x0400_0000u)]
+        [InlineData(0xFFFF_FFFF_B3FF_0014UL, 0x13FF_0014u)]
         public void The_two_untranslated_segments_strip_the_top_bits(ulong virtualAddress, uint physical)
         {
-            Assert.True(MemoryMap.TryTranslateDirect(virtualAddress, out uint translated));
-            Assert.Equal(physical, translated);
+            var segment = Segments.Decode(virtualAddress, PrivilegeMode.Kernel, wide: false);
+
+            Assert.Equal(SegmentAccess.Direct, segment.Access);
+            Assert.Equal(physical, segment.Physical);
         }
 
         [Theory]
-        [InlineData(0x0000_0000UL)]
-        [InlineData(0xC000_0000UL)]
-        [InlineData(0xE000_0000UL)]
+        [InlineData(0x0000_0000_0000_0000UL)]
+        [InlineData(0xFFFF_FFFF_C000_0000UL)]
+        [InlineData(0xFFFF_FFFF_E000_0000UL)]
         public void Every_other_segment_needs_the_tlb(ulong virtualAddress)
         {
-            Assert.False(MemoryMap.TryTranslateDirect(virtualAddress, out _));
+            var segment = Segments.Decode(virtualAddress, PrivilegeMode.Kernel, wide: false);
+
+            Assert.Equal(SegmentAccess.Mapped, segment.Access);
         }
 
         [Fact]
         public void Only_the_uncached_segment_is_uncached()
         {
-            Assert.True(MemoryMap.IsCached(0x8000_0000UL));
-            Assert.False(MemoryMap.IsCached(0xA000_0000UL));
+            Assert.True(Segments.Decode(0xFFFF_FFFF_8000_0000UL, PrivilegeMode.Kernel, false).Cached);
+            Assert.False(Segments.Decode(0xFFFF_FFFF_A000_0000UL, PrivilegeMode.Kernel, false).Cached);
         }
 
         [Fact]

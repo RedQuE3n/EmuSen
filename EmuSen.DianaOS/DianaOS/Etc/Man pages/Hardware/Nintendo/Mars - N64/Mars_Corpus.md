@@ -9,7 +9,7 @@ it gets, what stops it, what its numbers mean and what they do not. The protocol
 
 ## 1. Where it stands
 
-**720 tests started, 171 failed.** The run executes about 177 million instructions and
+**720 tests started, 167 failed.** The run executes about 177 million instructions and
 emits about 88KB of verdicts before it stops, which it does inside the RSP tests,
 waiting for a signal from hardware Phase C has not built.
 
@@ -21,7 +21,8 @@ Every tally so far, each taken at the end of a slice:
 | arithmetic operand widths | 521 | 174 |
 | coprocessor zero | 521 | 138 |
 | software floating point | 561 | 138 |
-| this slice | 720 | 171 |
+| letting the run finish | 720 | 171 |
+| privilege modes | 720 | 167 |
 
 The fourth row is the shape to want: forty tests that had never run before ran, and all
 forty passed.
@@ -58,16 +59,16 @@ deliberate decision:
 | --- | --- | --- |
 | cartridge memory and writes | 92 | Phase E — the PI and cartridge DMA |
 | caches, all four families | 46 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
-| privilege and reverse-endian user mode | 11 | not built: supervisor and user modes |
+| reverse-endian user mode | 7 | not built: `Status.RE` (`Mars_Privilege.md` §6) |
 | PIF RAM, MI, RDRAM registers | 14 | Phase E |
 | RDP status and registers | 5 | Phase D |
 | RSP status and program counter | 3 | Phase C |
 
-**There is one group here that is neither a later phase nor a decision.** The eleven
-privilege tests are CPU work: the VR4300 has kernel, supervisor and user modes, with
-different legal address ranges and different rules about which instructions are
-available, and Mars runs everything as kernel. That is the next CPU-level thing the
-corpus is asking for, and it is a slice of its own rather than a tail-end fix.
+**There is one group here that is neither a later phase nor a decision.** The seven
+reverse-endian tests are CPU work: `Status.RE` flips the byte order of user-mode
+accesses, and Mars does not implement it. That is the next CPU-level thing the corpus is
+asking for. It was eleven before the privilege slice, which supplied the modes those
+tests run in without supplying the byte order they run under.
 
 ## 4. The budget, and why it is a number of instructions
 
@@ -120,3 +121,16 @@ Four defects, in descending order of what they cleared:
 cleared nothing by itself; what it bought was 159 additional tests reaching the
 instrument. Three of the four defects in this list were invisible until it landed, and
 two of them are in subsystems that had been declared finished.
+
+## 7. The slice after it: privilege modes
+
+Four tests, and a fifth thing that does not show in the tally. The VR4300's three modes
+landed (`Mars_Privilege.md`): the mode derivation, the forty-five row address map, the
+coprocessor-zero gate and the doubleword-instruction restriction. 171 → 167.
+
+**The number understates it.** The address map is the first part of Mars where the same
+address means different things to different code, and the four tests that moved are the
+corpus checking a table of forty-five rows that Mars now reproduces exactly. It also
+closed a gap `Mars_Cop0.md` §8.1 had recorded, in writing, as something to find
+deliberately later — and the route that found it was this page's §3 census, not anyone
+remembering the note.

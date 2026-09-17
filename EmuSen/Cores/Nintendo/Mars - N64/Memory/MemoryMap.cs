@@ -2,16 +2,6 @@ using System;
 
 namespace EmuSen.Cores.Nintendo.Mars.Memory
 {
-    // Which of the five virtual segments an address falls in - see Mars_Memory.md §1.
-    public enum AddressSegment
-    {
-        KUseg,
-        KSeg0,
-        KSeg1,
-        KSSeg,
-        KSeg3,
-    }
-
     // The physical address map, named once so no device repeats a literal - see Mars_Memory.md §2.
     public static class MemoryMap
     {
@@ -49,36 +39,5 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public const uint PifRamSize = 64;
 
         public const uint SpMemSize = 0x1000;
-
-        public static AddressSegment SegmentOf(ulong address)
-        {
-            uint top = (uint)(address >> 29) & 0x7;
-            return top switch
-            {
-                0 or 1 or 2 or 3 => AddressSegment.KUseg,
-                4 => AddressSegment.KSeg0,
-                5 => AddressSegment.KSeg1,
-                6 => AddressSegment.KSSeg,
-                _ => AddressSegment.KSeg3,
-            };
-        }
-
-        // The two segments that need no TLB: both strip the top bits, and differ only in cacheing.
-        public static bool TryTranslateDirect(ulong address, out uint physical)
-        {
-            switch (SegmentOf(address))
-            {
-                case AddressSegment.KSeg0:
-                case AddressSegment.KSeg1:
-                    physical = (uint)(address & 0x1FFF_FFFF);
-                    return true;
-
-                default:
-                    physical = 0;
-                    return false;
-            }
-        }
-
-        public static bool IsCached(ulong address) => SegmentOf(address) != AddressSegment.KSeg1;
     }
 }

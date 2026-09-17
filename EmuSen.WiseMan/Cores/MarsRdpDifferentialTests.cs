@@ -317,6 +317,7 @@ namespace EmuSen.WiseMan.Cores
             cases.AddRange(LodCases());
             cases.AddRange(TwoCycleCases());
             cases.AddRange(CopyCases());
+            cases.AddRange(ChromaKeyCases());
             return cases.ToArray();
         }
 
@@ -426,7 +427,7 @@ namespace EmuSen.WiseMan.Cores
             bool zSource = false, bool alphaCompare = false, int zMode = 0, bool zCompare = false, bool zUpdate = false,
             bool perspective = false, bool biLerp0 = false, bool? biLerp1 = null, bool palette = false, bool paletteIa = false, bool sampleFour = false, bool midTexel = false,
             bool lod = false, bool sharpen = false, bool detail = false, int cycle = 0, int? m1a1 = null, int? m1b1 = null, int? m2a1 = null, int? m2b1 = null,
-            bool convertOne = false)
+            bool convertOne = false, bool keyEnabled = false)
         {
             ulong blender = (ulong)(uint)((m1a << 30) | ((m1a1 ?? m1a) << 28) | (m1b << 26) | ((m1b1 ?? m1b) << 24) | (m2a << 22) | ((m2a1 ?? m2a) << 20)
                 | (m2b << 18) | ((m2b1 ?? m2b) << 16));
@@ -436,7 +437,7 @@ namespace EmuSen.WiseMan.Cores
                 | ((ulong)zMode << 10) | (zCompare ? 1UL << 4 : 0) | (zUpdate ? 1UL << 5 : 0)
                 | (perspective ? 1UL << 51 : 0) | (biLerp0 ? 1UL << 43 : 0) | ((biLerp1 ?? biLerp0) ? 1UL << 42 : 0)
                 | (palette ? 1UL << 47 : 0) | (paletteIa ? 1UL << 46 : 0) | (sampleFour ? 1UL << 45 : 0) | (midTexel ? 1UL << 44 : 0)
-                | (lod ? 1UL << 48 : 0) | (sharpen ? 1UL << 49 : 0) | (detail ? 1UL << 50 : 0) | ((ulong)cycle << 52) | (convertOne ? 1UL << 41 : 0);
+                | (lod ? 1UL << 48 : 0) | (sharpen ? 1UL << 49 : 0) | (detail ? 1UL << 50 : 0) | ((ulong)cycle << 52) | (convertOne ? 1UL << 41 : 0) | (keyEnabled ? 1UL << 40 : 0);
         }
 
         // Both cycles given the same inputs, since the one-cycle mode reads the second.
@@ -1388,6 +1389,105 @@ namespace EmuSen.WiseMan.Cores
 
                 Draw($"random copy case {n}", modes, setup, shapes.ToArray(), size: image);
             }
+
+            return cases;
+        }
+
+        private static ulong KeyRed(int width, int centre, int scale) =>
+            (0x2BUL << 56) | ((ulong)(uint)(width & 0xFFF) << 16) | ((ulong)(uint)(centre & 0xFF) << 8) | (uint)(scale & 0xFF);
+
+        private static ulong KeyGreenBlue(int widthG, int centreG, int scaleG, int widthB, int centreB, int scaleB) =>
+            (0x2AUL << 56) | ((ulong)(uint)(widthG & 0xFFF) << 44) | ((ulong)(uint)(widthB & 0xFFF) << 32)
+            | ((ulong)(uint)(centreG & 0xFF) << 24) | ((ulong)(uint)(scaleG & 0xFF) << 16) | ((ulong)(uint)(centreB & 0xFF) << 8) | (uint)(scaleB & 0xFF);
+
+        // Chroma key: the key alpha the last combiner cycle measures, and the first input it passes through - see Mars_RdpChromaKey.md §3.
+        private static IEnumerable<Case> ChromaKeyCases()
+        {
+            var cases = new List<Case>();
+            const string Missing = "parallel-rdp does not implement chroma keying at all, which its own README lists as a missing feature";
+
+            void Draw(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, int size = Bits16) =>
+                cases.Add(Textured(name, modes, combine, setup, shapes, size, dispute: null, crossChecked: false));
+
+            ulong[] With(ulong[] first, params ulong[][] rest) => rest.Aggregate(first, (all, next) => all.Concat(next).ToArray());
+
+            var p = new Vertex(2.25, 1.5, 250, 20, 60, 255, 0x08000, S: 0, T: 0, W: 1.0);
+            var q = new Vertex(29.75, 6.75, 10, 240, 90, 20, 0x30000, S: 40, T: 6, W: 0.55);
+            var r = new Vertex(6.5, 29.25, 40, 70, 230, 140, 0x1C000, S: 5, T: 44, W: 0.8);
+            ulong[] triangle = Shaded(0x0F, p, q, r);
+
+            // The key's distance is visible as a weight against the memory colour, and its bypass as the colour that weight is applied to.
+            ulong keyed = Modes(keyEnabled: true, biLerp0: true, m1a: 0, m1b: 0, m2a: 1, m2b: 0, forceBlend: true, imageRead: true);
+            ulong[] key = { KeyRed(0x60, 0x80, 0x40), KeyGreenBlue(0x80, 0x60, 0x30, 0x40, 0xA0, 0x50) };
+
+            // (texel - key centre) x key scale, which is what content keys with.
+            ulong distance = Combine(subA: 1, subB: 6, mul: 6, add: 7, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1);
+            ulong shadeDistance = Combine(subA: 4, subB: 6, mul: 6, add: 7, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 4);
+
+            Draw("chroma key on a texel's distance from the key", keyed, distance, With(key, Loaded(0, 2)), triangle);
+            Draw("chroma key on shade's distance from the key", keyed, shadeDistance, key, Shaded(0x0C, p, q, r));
+            Draw("chroma key passing its first input through", keyed, Combine(subA: 1, subB: 6, mul: 6, add: 3, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1),
+                With(key, Loaded(0, 2)), triangle);
+            Draw("chroma key with no width", keyed, distance, With(new[] { KeyRed(0, 0x80, 0x40), KeyGreenBlue(0, 0x60, 0x30, 0, 0xA0, 0x50) }, Loaded(0, 2)), triangle);
+            Draw("chroma key with every width at its widest", keyed, distance,
+                With(new[] { KeyRed(0xFFF, 0x80, 0x40), KeyGreenBlue(0xFFF, 0x60, 0x30, 0xFFF, 0xA0, 0x50) }, Loaded(0, 2)), triangle);
+            Draw("chroma key on one channel alone", keyed, distance,
+                With(new[] { KeyRed(0x40, 0x80, 0x40), KeyGreenBlue(0xFFF, 0x60, 0, 0xFFF, 0xA0, 0) }, Loaded(0, 2)), triangle);
+            Draw("chroma key with no scale, so every distance is the centre's", keyed, distance,
+                With(new[] { KeyRed(0x60, 0x80, 0), KeyGreenBlue(0x80, 0x60, 0, 0x40, 0xA0, 0) }, Loaded(0, 2)), triangle);
+            Draw("chroma key where a distance's low nibble is eight", keyed, distance,
+                With(new[] { KeyRed(0x58, 0x20, 8), KeyGreenBlue(0x58, 0x20, 8, 0x58, 0x20, 8) }, Loaded(0, 2)), triangle);
+            Draw("chroma key measuring the primitive colour", keyed, Combine(subA: 3, subB: 6, mul: 6, add: 7, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 3),
+                key, Shaded(0x08, p, q, r));
+
+            Draw("chroma key with alpha from coverage", Modes(keyEnabled: true, biLerp0: true, alphaCvgSelect: true, antialias: true, m1a: 0, m1b: 0, m2a: 1, m2b: 0,
+                forceBlend: true, imageRead: true), distance, With(key, Loaded(0, 2)), triangle);
+            Draw("chroma key with coverage times alpha", Modes(keyEnabled: true, biLerp0: true, cvgTimesAlpha: true, antialias: true, imageRead: true, cvgDest: 0,
+                m1a: 0, m1b: 0, m2a: 1, m2b: 0, forceBlend: true), distance, With(key, Loaded(0, 2)), triangle);
+            Draw("chroma key with a dithered alpha", Modes(keyEnabled: true, biLerp0: true, alphaDither: 0, m1a: 0, m1b: 0, m2a: 1, m2b: 0, forceBlend: true,
+                imageRead: true), distance, With(key, Loaded(0, 2)), triangle);
+            Draw("chroma key tested by alpha compare", Modes(keyEnabled: true, biLerp0: true, alphaCompare: true), distance, With(key, Loaded(0, 2)), triangle);
+
+            Draw("chroma key in the two-cycle mode", Modes(cycle: 1, keyEnabled: true, biLerp0: true, m1a: 0, m1b: 0, m2a: 1, m2b: 0, forceBlend: true, imageRead: true),
+                CombineCycles(new[] { 1, 8, 4, 7, 1, 7, 4, 7 }, new[] { 0, 6, 6, 7, 7, 7, 7, 0 }), With(key, Loaded(0, 2)), triangle);
+            Draw("chroma key on the two-cycle mode's first cycle alone", Modes(cycle: 1, keyEnabled: true, biLerp0: true, m1a: 0, m1b: 0, m2a: 1, m2b: 0,
+                forceBlend: true, imageRead: true), CombineCycles(new[] { 1, 6, 6, 7, 1, 7, 7, 7 }, new[] { 0, 8, 16, 0, 7, 7, 7, 0 }), With(key, Loaded(0, 2)), triangle);
+
+            var random = new Random(0x4B45_5901);
+            for (int n = 0; n < 60; n++)
+            {
+                int Pick(params int[] choices) => choices[random.Next(choices.Length)];
+                bool Coin() => random.Next(2) == 1;
+
+                ulong[] keys = { KeyRed(random.Next(0x1000), random.Next(256), random.Next(256)),
+                    KeyGreenBlue(random.Next(0x1000), random.Next(256), random.Next(256), random.Next(0x1000), random.Next(256), random.Next(256)) };
+
+                int[] Cycle() => new[]
+                {
+                    Pick(1, 2, 3, 4, 5, 6, 8), Pick(6, 6, 1, 2, 3, 4, 5, 8), Pick(6, 6, 1, 2, 3, 4, 10, 11, 16),
+                    Pick(7, 7, 0, 1, 2, 3, 4, 6), Pick(1, 2, 3, 4, 6, 7), Pick(1, 2, 3, 4, 7), Pick(0, 1, 2, 3, 4, 6, 7), Pick(1, 2, 3, 4, 6, 7),
+                };
+
+                int cycle = Coin() ? 1 : 0;
+                ulong modes = Modes(cycle: cycle, keyEnabled: true, biLerp0: true, rgbDither: Pick(0, 1, 3), alphaDither: Pick(0, 1, 3),
+                    m1a: 0, m1b: 0, m2a: Pick(1, 2, 3), m2b: 0, m1a1: 0, m1b1: 0, m2a1: Pick(1, 2, 3), m2b1: 0, forceBlend: true, imageRead: true,
+                    alphaCvgSelect: random.Next(4) == 0, cvgTimesAlpha: random.Next(4) == 0, antialias: Coin(), alphaCompare: random.Next(4) == 0,
+                    perspective: Coin(), sampleFour: random.Next(3) == 0);
+
+                var shapes = new List<ulong>();
+                for (int t = 0, count = random.Next(1, 3); t < count; t++)
+                {
+                    Vertex Point() => new(random.Next(-8, 136) / 4.0, random.Next(-8, 136) / 4.0, random.Next(256), random.Next(256), random.Next(256),
+                        random.Next(256), random.Next(0x40000), random.Next(-64, 64), random.Next(-64, 64), 0.3 + 0.7 * random.NextDouble());
+                    shapes.AddRange(Shaded(Pick(0x0A, 0x0C, 0x0E, 0x0F), Point(), Point(), Point()));
+                }
+
+                Draw($"random chroma key case {n}", modes, CombineCycles(Cycle(), Cycle()), With(keys, Loaded(Pick(0, 0, 3, 4), Pick(1, 2, 2))), shapes.ToArray());
+            }
+
+            Draw("chroma key in the fill cycle", Modes(keyEnabled: true), distance, With(key, Loaded(0, 2)), new[] { FillCycle, FillColor(0x3C64_A21F), Rectangle(8, 12, 100, 88) });
+            Draw("chroma key in the copy mode", Modes(cycle: 2, keyEnabled: true), distance, With(key, Loaded(0, 2)),
+                TextureRectangle(false, 0, 12, 10, 100, 90, 0, 0, 0x1000, 0x0400));
 
             return cases;
         }

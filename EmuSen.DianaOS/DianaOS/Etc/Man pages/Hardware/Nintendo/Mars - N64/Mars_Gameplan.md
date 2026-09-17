@@ -502,6 +502,15 @@ rather than raw samples.
 > the test helper had never put on the right. A case that cannot be built by the helper is a rule that cannot
 > be graded. What is left in Phase D is chroma key and noise, neither of which either reference models in a
 > way a case can grade.
+>
+> **Progress, 2026-09-17: chroma keying** (`Mars_RdpChromaKey.md`). The key a primitive measures its colour
+> against, which becomes the pixel's alpha while the cycle's first input becomes its colour: 78 cases match
+> angrylion. **This is the first slice with no cross-check at all** — parallel-rdp lists chroma keying among
+> its missing features — so what the differential can say here is narrower than anywhere else in the phase,
+> and the page says so before it says anything else. The evidence is the reference's arithmetic read
+> carefully, seventeen breakages each caught by a named case, and a tool-free test; it is not a second
+> opinion, and only hardware or an FPGA implementation could be one. Phase D's last named gap is noise,
+> which neither reference models in a way a case can grade.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

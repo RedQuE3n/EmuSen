@@ -236,6 +236,31 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // angrylion's own spans for this command, recorded from the differential so the walker is pinned where the reference is not built - see Mars_RdpTriangles.md §4.
+        [Fact]
+        public void A_triangle_in_the_fill_cycle_draws_the_spans_the_reference_draws()
+        {
+            int[,] spans =
+            {
+                { 4, 5 }, { 4, 7 }, { 4, 9 }, { 4, 11 }, { 4, 13 }, { 4, 15 }, { 4, 17 }, { 4, 19 }, { 4, 20 }, { 4, 19 }, { 4, 18 }, { 4, 17 },
+                { 4, 16 }, { 5, 15 }, { 5, 14 }, { 5, 13 }, { 5, 13 }, { 5, 12 }, { 5, 11 }, { 5, 10 }, { 5, 9 }, { 5, 8 }, { 5, 7 }, { 5, 6 },
+            };
+
+            var bus = new MarsBus();
+            RunList(bus, ColorImage(Bits16, 32, Framebuffer), Scissor(0, 0, 31, 31), FillCycle, FillColor(0xFFFF_FFFF),
+                0x08800068_00280008UL, 0x00140000_FFFF2000UL, 0x00040000_00001555UL, 0x00040000_00020000UL, SyncFull);
+
+            for (uint y = 0; y < 32; y++)
+            {
+                for (uint x = 0; x < 32; x++)
+                {
+                    int row = (int)y - 2;
+                    bool inside = row >= 0 && row < spans.GetLength(0) && x >= spans[row, 0] && x <= spans[row, 1];
+                    Assert.True((Pixel16(bus, 32, x, y) != 0) == inside, $"pixel ({x}, {y})");
+                }
+            }
+        }
+
         [Fact]
         public void Writing_the_mode_register_clear_bit_lowers_the_display_processor_interrupt()
         {

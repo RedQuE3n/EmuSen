@@ -85,8 +85,8 @@ namespace EmuSen.WiseMan.Cores
             string directory = Path.Combine(AppContext.BaseDirectory, "mars-rdp-differential");
             System.IO.Directory.CreateDirectory(directory);
 
-            string graded = Write(Path.Combine(directory, "fill.rdp"), Cases);
-            string agreed = Write(Path.Combine(directory, "fill-cross-checked.rdp"), Cases.Where(c => c.CrossChecked && c.Dispute is null));
+            string graded = Write(Path.Combine(directory, "cases.rdp"), Cases);
+            string agreed = Write(Path.Combine(directory, "cases-cross-checked.rdp"), Cases.Where(c => c.CrossChecked && c.Dispute is null));
 
             IReadOnlyList<RdpReferenceSync> reference = RdpReference.Replay(graded);
             (int exit, string log) = RdpReference.Agree(agreed);
@@ -94,7 +94,7 @@ namespace EmuSen.WiseMan.Cores
             var disputes = new Dictionary<string, int>();
             foreach ((Case c, int i) in Cases.Select((c, i) => (c, i)).Where(p => p.c.Dispute is not null))
             {
-                disputes[c.Name] = RdpReference.Agree(Write(Path.Combine(directory, $"fill-dispute-{i}.rdp"), new[] { c })).Exit;
+                disputes[c.Name] = RdpReference.Agree(Write(Path.Combine(directory, $"cases-dispute-{i}.rdp"), new[] { c })).Exit;
             }
 
             return new Replay(reference, ReplayMars(), exit, log, disputes);
@@ -234,6 +234,45 @@ namespace EmuSen.WiseMan.Cores
             Fill("scissor keeping even rows", Scissor(0, 0, 128, 128, field: true, keepOdd: false), Rectangle(8, 8, 40, 40));
             Fill("scissor keeping odd rows", Scissor(0, 0, 128, 128, field: true, keepOdd: true), Rectangle(8, 8, 40, 40));
 
+            // The image is 32 wide and the scissor stops at column 31, so no span reaches the reference's width clamp - see §4.3.
+            ulong inside = Scissor(0, 0, 124, 124);
+
+            void Triangle(string name, ulong scissor, ulong[] triangle, int size = Bits16, int width = 32, uint color = 0xF0F0_0F0F) =>
+                cases.Add(new Case(name, Framebuffer, size, width,
+                    new[] { ColorImage(size, width, Framebuffer), scissor, FillCycle, FillColor(color) }.Concat(triangle).Append(SyncFull).ToArray()));
+
+            Triangle("triangle with its major edge on the left", inside, Vertices(4, 2, 20, 10, 6, 26));
+            Triangle("triangle with its major edge on the right", inside, Vertices(24, 2, 8, 12, 22, 28));
+            Triangle("triangle with a flat top", inside, Vertices(4, 4, 26, 4, 14, 24));
+            Triangle("triangle with a flat bottom", inside, Vertices(14, 3, 4, 22, 27, 22));
+            Triangle("triangle with fractional vertices", inside, Vertices(3.25, 2.5, 21.75, 9.75, 7.5, 25.25));
+            Triangle("triangle thinner than a pixel", inside, Vertices(10, 1, 10.5, 15, 10.25, 29));
+            Triangle("triangle with a shallow edge", inside, Vertices(1, 10, 30, 12, 2, 14));
+            Triangle("triangle with a steep edge", inside, Vertices(15, 0, 16, 30, 17.5, 30.5));
+            Triangle("triangle starting above the image", inside, Vertices(12, -9, 28, 14, 4, 20));
+            Triangle("triangle starting left of the image", inside, Vertices(-10, 4, 18, 8, 6, 26));
+            Triangle("triangle cut by the scissor on every side", Scissor(24, 20, 96, 88), Vertices(1, 1, 30, 6, 12, 30));
+            Triangle("triangle under a fractional scissor", Scissor(25, 22, 97, 91), Vertices(1, 1, 30, 6, 12, 30));
+            Triangle("triangle under an interlaced scissor", Scissor(0, 0, 124, 124, field: true, keepOdd: true), Vertices(4, 2, 20, 10, 6, 26));
+            Triangle("triangle in a 32-bit image", inside, Vertices(4, 2, 20, 10, 6, 26), size: Bits32, color: 0x1234_5678);
+            Triangle("triangle in an 8-bit image", inside, Vertices(4, 2, 20, 10, 6, 26), size: Bits8, color: 0x1234_5678);
+            Triangle("triangle with its major-edge flag inverted", inside, Vertices(4, 2, 20, 10, 6, 26, invertMajor: true));
+            Triangle("triangle with its middle vertex above its top", inside, Vertices(4, 2, 20, 10, 6, 26, swapTopAndMiddle: true));
+            Triangle("shaded triangle in the fill cycle", inside, Vertices(4, 2, 20, 10, 6, 26, id: 0x0C));
+            Triangle("textured depth-tested triangle in the fill cycle", inside, Vertices(24, 2, 8, 12, 22, 28, id: 0x0B));
+            Triangle("shaded textured depth-tested triangle in the fill cycle", inside, Vertices(24, 2, 8, 12, 22, 28, id: 0x0F));
+            Triangle("triangle reaching past x 1024", inside, Vertices(4, 2, 1100, 10, 6, 26));
+            Triangle("edge whose step has its low bit set", inside,
+                Edges(majorOnLeft: false, yh: 0, ym: 0, yl: 64, xh: (9 << 16) - 82, dxhdy: 12, xm: 2 << 16, dxmdy: 0, xl: 2 << 16, dxldy: 0));
+
+            var random = new Random(0x4D41_5253);
+            for (int n = 0; n < 60; n++)
+            {
+                double Coordinate() => random.Next(-24, 150) / 4.0;
+                ulong scissor = n % 3 == 0 ? Scissor((uint)random.Next(0, 60), (uint)random.Next(0, 60), (uint)random.Next(64, 125), (uint)random.Next(64, 125)) : inside;
+                Triangle($"random triangle {n}", scissor, Vertices(Coordinate(), Coordinate(), Coordinate(), Coordinate(), Coordinate(), Coordinate()));
+            }
+
             return cases.ToArray();
         }
 
@@ -245,6 +284,50 @@ namespace EmuSen.WiseMan.Cores
             | (field ? 1UL << 25 : 0) | (keepOdd ? 1UL << 24 : 0);
 
         private static ulong FillColor(uint color) => (0x37UL << 56) | color;
+
+        // A plain triangle setup from three vertices; any well-formed words are a valid test, since both sides read the same ones.
+        private static ulong[] Vertices(double x1, double y1, double x2, double y2, double x3, double y3, int id = 0x08,
+            bool invertMajor = false, bool swapTopAndMiddle = false)
+        {
+            var sorted = new[] { (X: x1, Y: y1), (X: x2, Y: y2), (X: x3, Y: y3) }.OrderBy(v => v.Y).ToArray();
+            var (top, middle, bottom) = (sorted[0], sorted[1], sorted[2]);
+
+            double major = bottom.Y > top.Y ? (bottom.X - top.X) / (bottom.Y - top.Y) : 0;
+            double upper = middle.Y > top.Y ? (middle.X - top.X) / (middle.Y - top.Y) : 0;
+            double lower = bottom.Y > middle.Y ? (bottom.X - middle.X) / (bottom.Y - middle.Y) : 0;
+
+            int yh = (int)Math.Floor(top.Y * 4), ym = (int)Math.Floor(middle.Y * 4), yl = (int)Math.Floor(bottom.Y * 4);
+            double rowTop = Math.Floor(top.Y);
+
+            double xh = top.X + major * (rowTop - top.Y);
+            double xm = top.X + upper * (rowTop - top.Y);
+            double xl = middle.X + lower * (ym / 4.0 - middle.Y);
+
+            bool majorOnLeft = middle.X > top.X + major * (middle.Y - top.Y);
+            if (invertMajor) majorOnLeft = !majorOnLeft;
+            if (swapTopAndMiddle) (yh, ym) = (ym, yh);
+
+            var words = new ulong[EmuSen.Cores.Nintendo.Mars.Rdp.Rdp.Length((uint)id)];
+            words[0] = ((ulong)id << 56) | (majorOnLeft ? 1UL << 55 : 0)
+                | ((ulong)(uint)(yl & 0x3FFF) << 32) | ((ulong)(uint)(ym & 0x3FFF) << 16) | (uint)(yh & 0x3FFF);
+            words[1] = Edge(xl, lower);
+            words[2] = Edge(xh, major);
+            words[3] = Edge(xm, upper);
+
+            for (int i = 4; i < words.Length; i++) words[i] = 0x0123_4567_89AB_CDEFUL * (ulong)i;
+            return words;
+        }
+
+        private static ulong[] Edges(bool majorOnLeft, int yh, int ym, int yl, int xh, int dxhdy, int xm, int dxmdy, int xl, int dxldy) => new[]
+        {
+            (0x08UL << 56) | (majorOnLeft ? 1UL << 55 : 0) | ((ulong)(uint)(yl & 0x3FFF) << 32) | ((ulong)(uint)(ym & 0x3FFF) << 16) | (uint)(yh & 0x3FFF),
+            ((ulong)(uint)xl << 32) | (uint)dxldy,
+            ((ulong)(uint)xh << 32) | (uint)dxhdy,
+            ((ulong)(uint)xm << 32) | (uint)dxmdy,
+        };
+
+        private static ulong Edge(double x, double slope) =>
+            ((ulong)(uint)(int)Math.Round(x * 65536) << 32) | (uint)(int)Math.Round(Math.Clamp(slope, -8192, 8191) * 65536);
 
         private static ulong Rectangle(uint left, uint top, uint right, uint bottom) =>
             (0x36UL << 56) | ((ulong)right << 44) | ((ulong)bottom << 32) | ((ulong)left << 12) | top;

@@ -436,6 +436,14 @@ rather than raw samples.
 > to zero" has to mean *to zero apart from named artefacts*. And the two references disagree on at
 > least one case (§4.5 there), so for some primitives there is no agreed answer to diff against;
 > those are graded against angrylion and recorded as disputed, not as correct.
+>
+> **Progress, 2026-09-17: triangles, in the fill cycle** (`Mars_RdpTriangles.md`). The edge walker —
+> the part that decides which pixels any primitive covers — built from the reference's and graded:
+> eighty-two triangle cases, sixty of them random, match angrylion, parallel-rdp agrees on every one,
+> and fill rectangles now go through the same walker without losing a case. What it does not yet do
+> is the rest of this section's list — shading, texturing, depth, the combiner and blender, and
+> coverage — so the fill cycle remains the only mode that diffs to zero. Coverage is the next piece
+> that §2.1's bet depends on, and the walker is now in place to carry it.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

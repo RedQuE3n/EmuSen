@@ -53,17 +53,15 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(ExceptionCode.AddressErrorStore, cpu.LastException!.Code);
         }
 
-        // With 64-bit addressing enabled the same address is legal, which is what makes it a mode.
-        // The check is a mode, not a rule: with 64-bit addressing on the same address is accepted.
-        // Where it then goes is a separate gap - Mars decodes segments from the low word only, so it
-        // lands in KSEG0 rather than the 64-bit segment it names. See Mars_Cop0.md §8.1.
+        // The same address under 64-bit addressing is xkuseg, so it reaches the TLB - see Mars_Privilege.md §2.2.
         [Fact]
         public void The_width_check_is_a_mode_and_not_a_rule()
         {
             var cpu = Prepared(c => c.Cop0[Cpu.StatusRegister] = Cpu.StatusKernelExtendedAddressing,
                 4, a => a.Lui(1, 0x8000).Dsll32(1, 1, 0).Dsrl32(1, 1, 0).Lw(2, 1, 0));
 
-            Assert.Null(cpu.LastException);
+            Assert.Equal(ExceptionCode.TlbLoad, cpu.LastException!.Code);
+            Assert.Equal(0x0000_0000_8000_0000UL, cpu.Cop0[Cpu.BadVirtualAddressRegister]);
         }
 
         [Fact]

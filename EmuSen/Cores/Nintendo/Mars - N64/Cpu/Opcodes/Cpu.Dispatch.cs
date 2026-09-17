@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Cores.Nintendo.Mars.Memory;
 
 namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 {
@@ -10,6 +11,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void Execute(uint instruction)
         {
             uint op = instruction >> 26;
+
+            // Kernel mode never restricts, so nothing is classified in the common case - see Mars_Privilege.md §4.
+            if (Mode != PrivilegeMode.Kernel && !WideAddressing && IsDoubleword(op, instruction))
+            {
+                throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
+            }
 
             switch (op)
             {
@@ -171,6 +178,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 default: throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
             }
         }
+
+        // The doubleword instructions, which the other two modes may run only with their own addressing bit.
+        private static bool IsDoubleword(uint op, uint instruction) => op switch
+        {
+            0x00 => (instruction & 0x3F) is 0x14 or 0x16 or 0x17 or 0x1C or 0x1D or 0x1E or 0x1F
+                or 0x2C or 0x2D or 0x2E or 0x2F or 0x38 or 0x3A or 0x3B or 0x3C or 0x3E or 0x3F,
+            0x18 or 0x19 or 0x1A or 0x1B or 0x2C or 0x2D or 0x34 or 0x37 or 0x3C or 0x3F => true,
+            _ => false,
+        };
 
         private static int Rs(uint instruction) => (int)((instruction >> 21) & 0x1F);
 

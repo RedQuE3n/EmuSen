@@ -14,6 +14,11 @@ strip the top three bits and address physical memory directly. The other three g
 through the TLB, which Phase A has not built yet, so `TryTranslateDirect` answers
 false for them rather than guessing.
 
+> **Superseded, 2026-09-16.** Five segments is the kernel-mode, 32-bit map, which is
+> one of six. `TryTranslateDirect` is gone, and `Segments.Decode` answers the same
+> question as a function of the privilege mode doing the asking — `Mars_Privilege.md`
+> §2. The paragraph below still holds and is still why the debug port works early.
+
 That split is why the corpus's debug port is reachable before the TLB exists. Its
 addresses live in the uncached window, which is a subtraction rather than a lookup.
 

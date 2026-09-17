@@ -193,10 +193,10 @@ trap was avoided rather than merely survived.
   nothing behind them.
 - **Every interrupt source except the counter and the peripheral interface.** The
   aggregator has six inputs and two are wired (§12).
-- **Supervisor and user mode.** Everything runs as kernel: the legal address ranges,
-  the coprocessor-usable rules and the 64-bit instruction restrictions that the other
-  two modes impose are all absent. Eleven corpus tests ask for this and it is the next
-  CPU-level thing the oracle is waiting on (`Mars_Corpus.md` §3).
+- ~~**Supervisor and user mode.**~~ — landed, `Mars_Privilege.md`.
+- **Reverse-endian addressing.** `Status.RE` flips the byte order of user-mode
+  accesses, and seven corpus tests ask for it. The rule is worked out and written down
+  in `Mars_Privilege.md` §6; nothing implements it.
 
 **This list is not a census.** The conditional traps were missing for nine slices and
 are not in it (§15), because an omission nobody has noticed cannot appear on a list of

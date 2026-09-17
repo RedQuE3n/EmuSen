@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Cores.Nintendo.Mars.Memory;
 
 namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 {
@@ -27,8 +28,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public const ulong StatusErrorLevel = 1UL << 2;
         public const ulong StatusBootstrapVectors = 1UL << 22;
 
-        // Kernel-mode 64-bit addressing; user and supervisor modes are not modelled - see Mars_Cop0.md §8.
+        // One 64-bit addressing bit per mode, and the mode field that chooses between them - see Mars_Privilege.md §1.
+        public const ulong StatusUserExtendedAddressing = 1UL << 5;
+        public const ulong StatusSupervisorExtendedAddressing = 1UL << 6;
         public const ulong StatusKernelExtendedAddressing = 1UL << 7;
+
+        public const ulong StatusModeField = 3UL << 3;
+        public const ulong StatusCop0Usable = 1UL << 28;
+
+        private const int StatusModeShift = 3;
 
         public const ulong CauseBranchDelay = 1UL << 31;
 
@@ -49,8 +57,37 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public readonly ulong[] Cop0 = new ulong[32];
 
+        // Kernel whenever an exception is being handled, whatever the mode field says - see Mars_Privilege.md §1.
+        public PrivilegeMode Mode =>
+            (Cop0[StatusRegister] & (StatusExceptionLevel | StatusErrorLevel)) != 0
+                ? PrivilegeMode.Kernel
+                : ((Cop0[StatusRegister] & StatusModeField) >> StatusModeShift) switch
+                {
+                    1 => PrivilegeMode.Supervisor,
+                    2 => PrivilegeMode.User,
+                    _ => PrivilegeMode.Kernel,
+                };
+
+        public bool WideAddressing => (Cop0[StatusRegister] & Mode switch
+        {
+            PrivilegeMode.Supervisor => StatusSupervisorExtendedAddressing,
+            PrivilegeMode.User => StatusUserExtendedAddressing,
+            _ => StatusKernelExtendedAddressing,
+        }) != 0;
+
+        // Kernel mode reaches coprocessor zero without permission; the other two need it - see §3.
+        private void RequireCop0()
+        {
+            if (Mode == PrivilegeMode.Kernel) return;
+            if ((Cop0[StatusRegister] & StatusCop0Usable) != 0) return;
+
+            throw Raise(ExceptionCode.CoprocessorUnusable, CurrentPc);
+        }
+
         private void ExecuteCop0(uint instruction)
         {
+            RequireCop0();
+
             uint rs = (uint)Rs(instruction);
 
             // Nothing between the sub-opcode and the function field is decoded at all - see Mars_Cop0.md §10.

@@ -232,8 +232,9 @@ covered edge and untouched background. It fails with the renderer off, and with 
   coverage-based shade correction, and the depth buffer's compare and update.~~ Built in the next slice
   (`Mars_RdpDepth.md`), which also lets the shaded and depth-tested triangle forms draw in this mode, so
   §5's first bullet no longer holds for them.
-- **Textures**, the level-of-detail fraction and texture memory.
-- **The two-cycle and copy modes**, and texture rectangles.
+- ~~**Textures**, the level-of-detail fraction and texture memory.~~ Texture memory, loads and point-sampled
+  textures built (`Mars_RdpTextures.md`); the level-of-detail fraction is still not.
+- **The two-cycle and copy modes**, and ~~texture rectangles~~ (built with textures).
 - **Chroma key** — which parallel-rdp lists among its own missing features, so a dispute is expected.
 - **Noise**, deliberately (§6.3).
 - **The video interface**, which is where coverage becomes anti-aliasing on screen.

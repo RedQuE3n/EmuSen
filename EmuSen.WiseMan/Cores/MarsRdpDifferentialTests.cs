@@ -13,9 +13,13 @@ namespace EmuSen.WiseMan.Cores
         private const ulong SyncFull = 0x29UL << 56;
 
         // An artefact is a reference behaviour that is not a claim about hardware, a dispute is the two references differing - see §4.
-        private sealed record Case(string Name, uint Image, int Size, int Width, ulong[] Commands, string? Artefact = null, string? Dispute = null, bool CrossChecked = true);
+        private sealed record Case(string Name, uint Image, int Size, int Width, ulong[] Commands, string? Artefact = null, string? Dispute = null, bool CrossChecked = true)
+        {
+            public (uint Address, byte[] Bytes)[] Uploads { get; init; } = Array.Empty<(uint, byte[])>();
+        }
 
-        private sealed record Drawn(byte[] Rdram, byte[] Hidden);
+        // Uploaded holds the pages the upload cache restored, which the reference reports only if drawing changed them.
+        private sealed record Drawn(byte[] Rdram, byte[] Hidden, byte[] TextureMemory, IReadOnlyDictionary<uint, byte[]> Uploaded);
 
         private sealed record Replay(IReadOnlyList<RdpReferenceSync> Reference, IReadOnlyList<Drawn> Mars, int AgreementExit, string AgreementLog,
             IReadOnlyDictionary<string, int> DisputeExits);
@@ -107,6 +111,7 @@ namespace EmuSen.WiseMan.Cores
             var dump = new RdpDump();
             foreach (Case c in cases)
             {
+                foreach ((uint address, byte[] bytes) in c.Uploads) dump.Upload(address, bytes);
                 dump.Reset();
                 foreach (ulong[] command in Split(c.Commands)) dump.Command(command);
                 dump.Sync();
@@ -116,18 +121,31 @@ namespace EmuSen.WiseMan.Cores
             return path;
         }
 
-        // One display processor for every case, as in the references, with memory cleared where they flush.
+        // One display processor for every case, as in the references, with memory restored from the same upload cache where they flush.
         private static IReadOnlyList<Drawn> ReplayMars()
         {
             var bus = new MarsBus(expansionPak: true);
+            var cache = new byte[bus.Rdram.Length];
             var drawn = new List<Drawn>();
+            var uploaded = new Dictionary<uint, byte[]>();
 
             foreach (Case c in Cases)
             {
-                Array.Clear(bus.Rdram);
+                foreach ((uint address, byte[] bytes) in c.Uploads)
+                {
+                    bytes.CopyTo(cache, address);
+                    uploaded = new Dictionary<uint, byte[]>(uploaded);
+                    for (uint page = address & ~(uint)(RdpReference.PageSize - 1); page < address + bytes.Length; page += RdpReference.PageSize)
+                    {
+                        uploaded[page] = cache.AsSpan((int)page, RdpReference.PageSize).ToArray();
+                    }
+                }
+
+                cache.CopyTo(bus.Rdram, 0);
                 Array.Clear(bus.RdramHidden);
+
                 foreach (ulong word in c.Commands) bus.Dp.Processor.Accept(word);
-                drawn.Add(new Drawn((byte[])bus.Rdram.Clone(), (byte[])bus.RdramHidden.Clone()));
+                drawn.Add(new Drawn((byte[])bus.Rdram.Clone(), (byte[])bus.RdramHidden.Clone(), (byte[])bus.Dp.Processor.TextureMemory.Clone(), uploaded));
             }
 
             return drawn;
@@ -150,15 +168,24 @@ namespace EmuSen.WiseMan.Cores
             int count = 0;
             int bytes = Math.Max(1, (1 << c.Size) / 2);
 
-            Compare(reference.Pages, mars.Rdram, 1, "");
-            Compare(reference.HiddenPages, mars.Hidden, 2, "hidden ");
+            Compare(reference.Pages, mars.Uploaded, mars.Rdram, 1, "");
+            Compare(reference.HiddenPages, new Dictionary<uint, byte[]>(), mars.Hidden, 2, "hidden ");
+
+            for (int i = 0; i < 0x1000; i++)
+            {
+                if (reference.TextureMemory[i] != mars.TextureMemory[i] && count++ < 12)
+                {
+                    report.AppendLine($"  texture memory {i:X3}: Mars {mars.TextureMemory[i]:X2}, reference {reference.TextureMemory[i]:X2}");
+                }
+            }
 
             if (count > 12) report.AppendLine($"  ...{count} differing bytes in all");
             return report.ToString();
 
-            void Compare(IReadOnlyDictionary<uint, byte[]> expectedPages, byte[] actual, int scale, string label)
+            void Compare(IReadOnlyDictionary<uint, byte[]> expectedPages, IReadOnlyDictionary<uint, byte[]> unchangedPages, byte[] actual, int scale, string label)
             {
                 var pages = new SortedSet<uint>(expectedPages.Keys);
+                pages.UnionWith(unchangedPages.Keys);
                 for (uint page = 0; page < actual.Length; page += RdpReference.PageSize)
                 {
                     if (actual.AsSpan((int)page, RdpReference.PageSize).IndexOfAnyExcept((byte)0) >= 0) pages.Add(page);
@@ -166,7 +193,8 @@ namespace EmuSen.WiseMan.Cores
 
                 foreach (uint page in pages)
                 {
-                    byte[] expected = expectedPages.TryGetValue(page, out byte[]? p) ? p : new byte[RdpReference.PageSize];
+                    byte[] expected = expectedPages.TryGetValue(page, out byte[]? p) ? p
+                        : unchangedPages.TryGetValue(page, out byte[]? u) ? u : new byte[RdpReference.PageSize];
 
                     for (int i = 0; i < RdpReference.PageSize; i++)
                     {
@@ -284,6 +312,7 @@ namespace EmuSen.WiseMan.Cores
 
             cases.AddRange(OneCycleCases());
             cases.AddRange(ShadeAndDepthCases());
+            cases.AddRange(TextureCases());
             return cases.ToArray();
         }
 
@@ -390,18 +419,24 @@ namespace EmuSen.WiseMan.Cores
 
         private static ulong Modes(int rgbDither = 3, int alphaDither = 3, int m1a = 0, int m1b = 0, int m2a = 0, int m2b = 0, bool forceBlend = false,
             bool alphaCvgSelect = false, bool cvgTimesAlpha = false, int cvgDest = 0, bool colorOnCvg = false, bool imageRead = false, bool antialias = false,
-            bool zSource = false, bool alphaCompare = false, int zMode = 0, bool zCompare = false, bool zUpdate = false)
+            bool zSource = false, bool alphaCompare = false, int zMode = 0, bool zCompare = false, bool zUpdate = false,
+            bool perspective = false, bool biLerp0 = false, bool? biLerp1 = null)
         {
             ulong blender = (ulong)(uint)((m1a << 30) | (m1a << 28) | (m1b << 26) | (m1b << 24) | (m2a << 22) | (m2a << 20) | (m2b << 18) | (m2b << 16));
             return (0x2FUL << 56) | ((ulong)rgbDither << 38) | ((ulong)alphaDither << 36) | blender
                 | (forceBlend ? 1UL << 14 : 0) | (alphaCvgSelect ? 1UL << 13 : 0) | (cvgTimesAlpha ? 1UL << 12 : 0) | ((ulong)cvgDest << 8)
                 | (colorOnCvg ? 1UL << 7 : 0) | (imageRead ? 1UL << 6 : 0) | (antialias ? 1UL << 3 : 0) | (zSource ? 1UL << 2 : 0) | (alphaCompare ? 1UL : 0)
-                | ((ulong)zMode << 10) | (zCompare ? 1UL << 4 : 0) | (zUpdate ? 1UL << 5 : 0);
+                | ((ulong)zMode << 10) | (zCompare ? 1UL << 4 : 0) | (zUpdate ? 1UL << 5 : 0)
+                | (perspective ? 1UL << 51 : 0) | (biLerp0 ? 1UL << 43 : 0) | ((biLerp1 ?? biLerp0) ? 1UL << 42 : 0);
         }
 
         // Both cycles given the same inputs, since the one-cycle mode reads the second.
         private static ulong Combine(int subA, int subB, int mul, int add, int alphaSubA, int alphaSubB, int alphaMul, int alphaAdd)
         {
+            // A selector wider than its field would silently spill into its neighbour's.
+            if (subA > 15 || subB > 15 || mul > 31 || add > 7 || alphaSubA > 7 || alphaSubB > 7 || alphaMul > 7 || alphaAdd > 7)
+                throw new ArgumentOutOfRangeException(nameof(subA), "a combiner selector does not fit its field");
+
             ulong high = (ulong)((subA << 20) | (mul << 15) | (alphaSubA << 12) | (alphaMul << 9) | (subA << 5) | mul);
             ulong low = (ulong)(uint)((subB << 28) | (subB << 24) | (alphaSubA << 21) | (alphaMul << 18) | (add << 15) | (alphaSubB << 12) | (alphaAdd << 9) | (add << 6) | (alphaSubB << 3) | alphaAdd);
             return (0x3CUL << 56) | (high << 32) | low;
@@ -507,12 +542,227 @@ namespace EmuSen.WiseMan.Cores
             return cases;
         }
 
-        private readonly record struct Vertex(double X, double Y, double R, double G, double B, double A, double Z);
+        private readonly record struct Vertex(double X, double Y, double R, double G, double B, double A, double Z, double S = 0, double T = 0, double W = 1);
+
+        private const uint TextureImage = 0x0020_0000;
+
+        // Point-sampled textures in the one-cycle mode: every format, tile shift, mask, mirror and clamp, tile and block loads - see Mars_RdpTextures.md §7.
+        private static IEnumerable<Case> TextureCases()
+        {
+            var cases = new List<Case>();
+            ulong inside = Scissor(0, 0, 124, 124);
+            ulong texel0 = Combine(subA: 8, subB: 8, mul: 16, add: 1, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1);
+            byte[] image = Pattern(0x5445_5831, 0x1000);
+
+            void Draw(string name, ulong modes, ulong combine, ulong[] setup, ulong[] shapes, int size = Bits16, string? dispute = null, bool crossChecked = true,
+                (uint, byte[])[]? uploads = null)
+            {
+                var commands = new List<ulong>
+                {
+                    ColorImage(size, 32, Framebuffer), inside, FillCycle, FillColor(0x7BDE_7BDF), Rectangle(0, 0, 124, 124),
+                    ColorImage(Bits16, 32, DepthBuffer), FillColor(0xFFFC_FFFC), Rectangle(0, 0, 124, 124), ColorImage(size, 32, Framebuffer),
+                    (0x3EUL << 56) | DepthBuffer, (0x2CUL << 56) | 0x0B89_1A3C_0156B3CUL & 0x00FF_FFFF_FFFF_FFFF,
+                };
+                commands.AddRange(setup);
+                commands.AddRange(new[] { modes, combine, Color(0x3A, 0xC864_2A9F, 0x5A), Color(0x3B, 0x3C90_D071), Color(0x39, 0x7755_AA80) });
+                commands.AddRange(shapes);
+                commands.Add(SyncFull);
+                cases.Add(new Case(name, Framebuffer, size, 32, commands.ToArray(), Dispute: dispute, CrossChecked: crossChecked)
+                {
+                    Uploads = new[] { (TextureImage, image) }.Concat(uploads ?? Array.Empty<(uint, byte[])>()).ToArray(),
+                });
+            }
+
+            // A 4-bit tile loads from an 8-bit image unless told otherwise, since a 4-bit image stops the load in both references - see Mars_RdpTextures.md §7.
+            ulong[] Loaded(int format, int size, uint width = 16, uint height = 16, int tile = 0, int memory = 0, int shiftS = 0, int shiftT = 0,
+                int maskS = 0, int maskT = 0, bool mirrorS = false, bool mirrorT = false, bool clampS = false, bool clampT = false, uint offset = 0, int? imageSize = null,
+                int palette = 0, uint column = 0, uint row = 0)
+            {
+                int slots = format == 1 ? (int)(width + 1) / 2 : size switch { 0 => (int)(width + 3) / 4, 1 => (int)(width + 1) / 2, _ => (int)width };
+                int line = ((slots + 3) / 4) & 0x1FF;
+                return new[]
+                {
+                    TextureImageCommand(format, imageSize ?? Math.Max(size, Bits8), (int)width, TextureImage + offset),
+                    TileCommand(tile, format, size, line, memory, palette, clampS, mirrorS, maskS, shiftS, clampT, mirrorT, maskT, shiftT),
+                    LoadCommand(0x34, tile, column << 2, row << 2, (column + width - 1) << 2, (row + height - 1) << 2),
+                };
+            }
+
+            ulong[] rectangle = TextureRectangle(false, 0, 12, 10, 100, 90, 0, 0, 0x0400, 0x0400);
+            ulong rectModes = Modes(biLerp0: true);
+
+            foreach (var (label, format, size) in new[]
+            {
+                ("RGBA16", 0, 2), ("RGBA32", 0, 3), ("RGBA4", 0, 0), ("RGBA8", 0, 1), ("YUV16", 1, 2), ("CI4", 2, 0), ("CI8", 2, 1), ("CI16", 2, 2),
+                ("IA4", 3, 0), ("IA8", 3, 1), ("IA16", 3, 2), ("I4", 4, 0), ("I8", 4, 1), ("I16", 4, 2),
+            })
+            {
+                Draw($"point-sampled {label} texture rectangle", rectModes, texel0, Loaded(format, size), rectangle);
+            }
+
+            Draw("point-sampled 4-bit format 5 texture rectangle", rectModes, texel0, Loaded(5, 0), rectangle,
+                dispute: "parallel-rdp samples nothing from texture formats 5 to 7, which angrylion reads as intensity");
+            Draw("load from a 4-bit texture image", rectModes, texel0, Loaded(0, 0, imageSize: Bits4), Array.Empty<ulong>(), crossChecked: false);
+            Draw("8-bit YUV texture rectangle", rectModes, texel0, Loaded(1, 1), rectangle, crossChecked: false);
+            Draw("32-bit intensity-alpha texture rectangle", rectModes, texel0, Loaded(3, 3), rectangle, crossChecked: false);
+
+            Draw("flipped texture rectangle", rectModes, texel0, Loaded(0, 2), TextureRectangle(true, 0, 12, 10, 100, 90, 0x20, 0x40, 0x0300, 0x0500));
+            Draw("YUV converted without bilinear filtering", Modes(), texel0, Loaded(1, 2), rectangle);
+            Draw("tile shift, mask and mirror", rectModes, texel0, Loaded(0, 2, shiftS: 1, shiftT: 12, maskS: 3, maskT: 2, mirrorS: true), rectangle);
+            Draw("tile clamped against its size", rectModes, texel0,
+                Loaded(0, 2, clampS: true, clampT: true, maskS: 4, maskT: 4).Append(TileSizeCommand(0, 9, 13, 37, 29)).ToArray(),
+                TextureRectangle(false, 0, 4, 4, 120, 120, -0x0100, -0x0080, 0x0300, 0x0280));
+            Draw("block load", rectModes, texel0,
+                new[] { TextureImageCommand(0, 2, 16, TextureImage), TileCommand(0, 0, 2, 4, 0), (0x33UL << 56) | (0UL << 44) | (3UL << 32) | (15UL << 12) | 0x0400 }, rectangle);
+            Draw("tile larger than texture memory", rectModes, texel0, Loaded(0, 2, width: 64, height: 40, memory: 0x80), rectangle);
+            Draw("32-bit tile reaching the second half of texture memory", rectModes, texel0, Loaded(0, 3, width: 37, height: 38, memory: 0x38), rectangle,
+                dispute: "angrylion folds a 32-bit tile's rows past the first half of texture memory back into it, and parallel-rdp does not");
+            Draw("YUV tile reaching the second half of texture memory", rectModes, texel0, Loaded(1, 2, width: 40, height: 44, memory: 0xC0), rectangle);
+            Draw("second tile at an offset in texture memory", rectModes, texel0, Loaded(3, 1, tile: 3, memory: 0x40, offset: 0x200),
+                TextureRectangle(false, 3, 12, 10, 100, 90, 0, 0, 0x0400, 0x0400));
+            Draw("next pixel's texel", rectModes, Combine(subA: 1, subB: 2, mul: 3, add: 2, alphaSubA: 1, alphaSubB: 2, alphaMul: 3, alphaAdd: 2), Loaded(0, 2),
+                TextureRectangle(false, 0, 12, 10, 100, 90, 0x10, 0x30, 0x0200, 0x0300));
+            Draw("next pixel's texel with the second cycle unfiltered", Modes(biLerp0: true, biLerp1: false),
+                Combine(subA: 1, subB: 2, mul: 3, add: 2, alphaSubA: 1, alphaSubB: 2, alphaMul: 3, alphaAdd: 2), Loaded(0, 2),
+                TextureRectangle(false, 0, 12, 10, 100, 90, 0x10, 0x30, 0x0200, 0x0300),
+                dispute: "parallel-rdp filters the one-cycle mode's next-pixel texel by the second cycle's settings, and angrylion by the first's");
+            Draw("texture rectangle in a 32-bit image", rectModes, texel0, Loaded(0, 3), rectangle, size: Bits32);
+
+            var p = new Vertex(3.25, 2.5, 250, 20, 60, 255, 0x08000, S: 0, T: 0, W: 1.0);
+            var q = new Vertex(27.75, 9.75, 10, 240, 90, 128, 0x30000, S: 15, T: 2, W: 0.55);
+            var r = new Vertex(7.5, 28.25, 40, 70, 230, 12, 0x1C000, S: 4, T: 15, W: 0.8);
+            Draw("affine textured triangle", rectModes, texel0, Loaded(0, 2), Shaded(0x0A, p with { W = 1 }, q with { W = 1 }, r with { W = 1 }));
+            Draw("perspective textured triangle", Modes(perspective: true, biLerp0: true), texel0, Loaded(0, 2), Shaded(0x0A, p, q, r));
+            Draw("perspective textured, shaded, depth-tested triangle", Modes(perspective: true, biLerp0: true, zCompare: true, zUpdate: true, antialias: true, imageRead: true, m2a: 1),
+                Combine(subA: 1, subB: 8, mul: 4, add: 7, alphaSubA: 1, alphaSubB: 7, alphaMul: 4, alphaAdd: 7), Loaded(0, 2), Shaded(0x0F, p, q, r));
+            Draw("textured triangle with texel coordinates out of range", Modes(perspective: true, biLerp0: true), texel0, Loaded(3, 2, maskS: 4, mirrorT: true, maskT: 3),
+                Shaded(0x0B, p with { S = -20, T = 40 }, q with { S = 300, W = 0.1 }, r with { T = -500, W = 1.5 }));
+            Draw("next pixel's texel across a triangle's rows", Modes(perspective: true, biLerp0: true),
+                Combine(subA: 2, subB: 1, mul: 3, add: 1, alphaSubA: 2, alphaSubB: 1, alphaMul: 3, alphaAdd: 1), Loaded(0, 2), Shaded(0x0A, p, q, r));
+
+            // Each case below exists because a breakage of the rule it names survived every case above - see Mars_RdpTextures.md §7.5.
+            Draw("texel alpha of an RGBA16 tile as the multiplier", rectModes,
+                Combine(subA: 1, subB: 8, mul: 8, add: 7, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1), Loaded(0, 2), rectangle);
+            Draw("4-bit colour-indexed tile with a palette number", rectModes, texel0, Loaded(2, 0, palette: 11), rectangle);
+            Draw("4-bit YUV texture rectangle", rectModes, texel0, Loaded(1, 0), rectangle, crossChecked: false);
+            Draw("32-bit YUV texture rectangle", rectModes, Combine(subA: 1, subB: 8, mul: 8, add: 7, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 1),
+                Loaded(1, 3), rectangle, crossChecked: false);
+            Draw("tile clamped exactly at its corner", rectModes, texel0,
+                Loaded(0, 2, clampS: true, clampT: true, maskS: 4, maskT: 4).Append(TileSizeCommand(0, 11, 7, 36, 30)).ToArray(),
+                TextureRectangle(false, 0, 8, 8, 120, 120, 228, 180, 0x0080, 0x0080));
+            Draw("mirror at bit ten for a mask past ten", rectModes, texel0,
+                Loaded(0, 2, width: 64, height: 40, maskS: 12, maskT: 12, mirrorS: true, mirrorT: true).Append(TileSizeCommand(0, 0xFFC, 0xFFC, 0xFFF, 0xFFF)).ToArray(),
+                TextureRectangle(false, 0, 8, 8, 120, 120, unchecked((short)0xB500), unchecked((short)0xB500), 0x0400, 0x0400));
+            Draw("perspective triangle past the divider's range", Modes(perspective: true, biLerp0: true), texel0, Loaded(0, 2, maskS: 4, maskT: 4),
+                Shaded(0x0A, p with { S = -3000, T = 2500, W = 0.1 }, q with { S = 3000, T = -2000, W = 0.1 }, r with { S = 0, T = 0, W = 0.12 }));
+            Draw("perspective triangle with a w of one", Modes(perspective: true, biLerp0: true), texel0, Loaded(0, 2, maskS: 4, maskT: 4),
+                Shaded(0x0A, p with { S = -2000, T = 0, W = 1.0 / 0x7FFF }, q with { S = 2000, T = -2000, W = 1.0 / 0x7FFF }, r with { S = 0, T = 2000, W = 1.0 / 0x7FFF }));
+            Draw("perspective triangle with w in the seventh reciprocal segment", Modes(perspective: true, biLerp0: true), texel0, Loaded(0, 2, maskS: 4, maskT: 4),
+                Shaded(0x0A, p with { S = 0, T = 0, W = 17920.5 / 0x7FFF }, q with { S = 1000, T = 400, W = 17920.5 / 0x7FFF }, r with { S = 300, T = 1000, W = 17920.5 / 0x7FFF }));
+            Draw("next pixel's texel alpha as its only reader", rectModes,
+                Combine(subA: 1, subB: 8, mul: 9, add: 7, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 7), Loaded(0, 2),
+                TextureRectangle(false, 0, 12, 10, 100, 90, 0x10, 0x30, 0x0200, 0x0300));
+            Draw("textured triangle clipped far from its major edge", rectModes, texel0, Loaded(0, 2, maskS: 4, maskT: 4),
+                Shaded(0x0A, p with { X = -1900, Y = 2, S = 0, T = 0, W = 1 }, q with { X = 30, Y = 6, S = 1000, T = 37, W = 1 }, r with { X = 28, Y = 29, S = 971, T = 999, W = 1 }));
+            Draw("texture rectangle with fractional steps", rectModes, texel0, Loaded(0, 2), TextureRectangle(false, 0, 8, 8, 120, 120, 0x0013, 0x0027, 0x015F, 0x01E7));
+            Draw("tile loaded from an odd column and row", rectModes, texel0, Loaded(0, 2, memory: 0x60, column: 3, row: 1), TextureRectangle(false, 0, 8, 8, 120, 120, 3 << 5, 1 << 5, 0x0400, 0x0400));
+            Draw("32-bit tile loaded from an odd column", rectModes, texel0, Loaded(0, 3, memory: 0x20, column: 3, row: 1), TextureRectangle(false, 0, 8, 8, 120, 120, 3 << 5, 1 << 5, 0x0400, 0x0400));
+            Draw("tile load whose only row has no sub-row", rectModes, texel0,
+                new[] { TextureImageCommand(0, 2, 16, TextureImage + 0x40), TileCommand(0, 0, 2, 4, 0x1F0), LoadCommand(0x34, 0, 0, 3, 15 << 2, 3) }, rectangle,
+                dispute: "angrylion loads one step of a tile whose only row has no sub-row inside it, and parallel-rdp the whole row");
+            Draw("block load from a column past 2047", rectModes, texel0,
+                new[] { TextureImageCommand(0, 2, 16, TextureImage), TileCommand(0, 0, 2, 4, 0x1C0), LoadCommand(0x33, 0, 0x900, 120, 0x90F, 0x0400) }, rectangle,
+                dispute: "angrylion takes a block load's left column as signed when placing the image pointer, and parallel-rdp does not");
+            Draw("tile loaded past the end of RDRAM", rectModes, texel0, Loaded(0, 2, memory: 0x140, offset: 0x5F_FFF0), rectangle);
+            Draw("tile loaded across the end of addressable memory", rectModes, texel0, Loaded(0, 2, memory: 0x100, offset: 0xDF_FFF8), rectangle,
+                dispute: "angrylion wraps an image read past sixteen megabytes to address zero, and parallel-rdp reads zero",
+                uploads: new[] { (0x0000_0000u, Pattern(0x5445_5833, 0x40)) });
+
+            // Random cases keep to what both references model: formats 0 to 4, YUV only at 16 bits, 32 bits only as RGBA and within half of texture memory.
+            var random = new Random(0x5445_5832);
+            for (int n = 0; n < 150; n++)
+            {
+                int Pick(params int[] choices) => choices[random.Next(choices.Length)];
+                bool Coin() => random.Next(2) == 1;
+
+                int format = random.Next(5), tile = random.Next(8);
+                int size = format == 1 ? Bits16 : format == 0 ? random.Next(4) : random.Next(3);
+                uint width = (uint)random.Next(1, 48), height = (uint)random.Next(1, 48);
+                int memory = random.Next(0x200);
+                if (size == Bits32)
+                {
+                    uint line = (width + 3) / 4;
+                    height = Math.Min(height, 0x100 / line);
+                    memory = random.Next((int)(0x100 - line * height) + 1);
+                }
+
+                var setup = new List<ulong>(Loaded(format, size, width, height, tile, memory, random.Next(16), random.Next(16), random.Next(16), random.Next(16),
+                    Coin(), Coin(), Coin(), Coin(), (uint)random.Next(0x100) * 4));
+                if (Coin()) setup.Add(TileSizeCommand(tile, (uint)random.Next(0x100), (uint)random.Next(0x100), (uint)random.Next(0x400), (uint)random.Next(0x400)));
+
+                ulong modes = Modes(
+                    rgbDither: Pick(0, 1, 3), alphaDither: Pick(0, 1, 3), m1a: random.Next(4), m1b: random.Next(4), m2a: random.Next(4), m2b: random.Next(4),
+                    forceBlend: random.Next(4) == 0, cvgDest: random.Next(4), imageRead: Coin(), antialias: Coin(), alphaCompare: random.Next(4) == 0,
+                    zMode: random.Next(4), zCompare: Coin(), zUpdate: Coin(), perspective: Coin(), biLerp0: random.Next(4) != 0);
+                ulong combine = Combine(
+                    subA: Pick(1, 2, 3, 4, 5, 6), subB: Pick(1, 2, 3, 4, 5, 7), mul: Pick(1, 2, 3, 4, 8, 9, 10, 11, 15, 20), add: Pick(1, 2, 3, 4, 5, 7),
+                    alphaSubA: Pick(1, 2, 3, 4, 7), alphaSubB: Pick(1, 2, 3, 4, 7), alphaMul: Pick(1, 2, 3, 4, 7), alphaAdd: Pick(1, 2, 3, 4, 7));
+
+                var shapes = new List<ulong>();
+                for (int t = 0, count = random.Next(1, 3); t < count; t++)
+                {
+                    if (Coin())
+                    {
+                        uint left = (uint)random.Next(0, 100), top = (uint)random.Next(0, 100);
+                        shapes.AddRange(TextureRectangle(Coin(), tile, left, top, left + (uint)random.Next(4, 60), top + (uint)random.Next(4, 60),
+                            (short)random.Next(-0x400, 0x800), (short)random.Next(-0x400, 0x800), (short)random.Next(-0x800, 0x800), (short)random.Next(-0x800, 0x800)));
+                    }
+                    else
+                    {
+                        Vertex Point() => new(random.Next(-8, 136) / 4.0, random.Next(-8, 136) / 4.0, random.Next(256), random.Next(256), random.Next(256), random.Next(256),
+                            random.Next(0x40000), random.Next(-16, 64), random.Next(-16, 64), 0.25 + 0.75 * random.NextDouble());
+                        shapes.AddRange(Shaded(Pick(0x0A, 0x0B, 0x0E, 0x0F) | (tile << 16), Point(), Point(), Point()));
+                    }
+                }
+
+                Draw($"random texture case {n}", modes, combine, setup.ToArray(), shapes.ToArray(), size: Pick(Bits16, Bits16, Bits32));
+            }
+
+            return cases;
+        }
+
+        private static byte[] Pattern(int seed, int length)
+        {
+            var bytes = new byte[length];
+            new Random(seed).NextBytes(bytes);
+            return bytes;
+        }
+
+        private static ulong TextureImageCommand(int format, int size, int width, uint address) =>
+            (0x3DUL << 56) | ((ulong)format << 53) | ((ulong)size << 51) | ((ulong)(width - 1) << 32) | address;
+
+        private static ulong TileCommand(int tile, int format, int size, int line, int memory, int palette = 0, bool clampS = false, bool mirrorS = false,
+            int maskS = 0, int shiftS = 0, bool clampT = false, bool mirrorT = false, int maskT = 0, int shiftT = 0) =>
+            (0x35UL << 56) | ((ulong)(uint)format << 53) | ((ulong)(uint)size << 51) | ((ulong)(uint)line << 41) | ((ulong)(uint)memory << 32) | ((ulong)(uint)tile << 24)
+            | ((ulong)(uint)palette << 20) | (clampT ? 1UL << 19 : 0) | (mirrorT ? 1UL << 18 : 0) | ((ulong)(uint)maskT << 14) | ((ulong)(uint)shiftT << 10)
+            | (clampS ? 1UL << 9 : 0) | (mirrorS ? 1UL << 8 : 0) | ((ulong)(uint)maskS << 4) | (uint)shiftS;
+
+        private static ulong LoadCommand(ulong id, int tile, uint sl, uint tl, uint sh, uint th) =>
+            (id << 56) | ((ulong)sl << 44) | ((ulong)tl << 32) | ((ulong)tile << 24) | ((ulong)sh << 12) | th;
+
+        private static ulong TileSizeCommand(int tile, uint sl, uint tl, uint sh, uint th) => LoadCommand(0x32, tile, sl, tl, sh, th);
+
+        private static ulong[] TextureRectangle(bool flip, int tile, uint left, uint top, uint right, uint bottom, short s, short t, short dsdx, short dtdy) => new[]
+        {
+            ((flip ? 0x25UL : 0x24UL) << 56) | ((ulong)right << 44) | ((ulong)bottom << 32) | ((ulong)tile << 24) | ((ulong)left << 12) | top,
+            ((ulong)(ushort)s << 48) | ((ulong)(ushort)t << 32) | ((ulong)(ushort)dsdx << 16) | (ushort)dtdy,
+        };
 
         // Edges from Vertices, and each attribute as a plane through the three vertices, taken at the major edge's first row - see Mars_RdpDepth.md §1.
         private static ulong[] Shaded(int id, Vertex v1, Vertex v2, Vertex v3)
         {
-            ulong[] words = Vertices(v1.X, v1.Y, v2.X, v2.Y, v3.X, v3.Y, id);
+            ulong[] words = Vertices(v1.X, v1.Y, v2.X, v2.Y, v3.X, v3.Y, id & 0x3F);
+            words[0] |= (ulong)((id >> 16) & 7) << 48;
             var sorted = new[] { v1, v2, v3 }.OrderBy(v => v.Y).ToArray();
             Vertex top = sorted[0], bottom = sorted[2];
 
@@ -538,6 +788,22 @@ namespace EmuSen.WiseMan.Cores
             if ((id & 4) != 0)
             {
                 var channels = new[] { Plane(v => v.R, 65536), Plane(v => v.G, 65536), Plane(v => v.B, 65536), Plane(v => v.A, 65536) };
+                ulong Pack(Func<(int Value, int Dx, int De, int Dy), int> part, bool high) =>
+                    channels.Aggregate(0UL, (word, channel) => (word << 16) | (ushort)(high ? part(channel) >> 16 : part(channel)));
+
+                words[at++] = Pack(p => p.Value, true);
+                words[at++] = Pack(p => p.Dx, true);
+                words[at++] = Pack(p => p.Value, false);
+                words[at++] = Pack(p => p.Dx, false);
+                words[at++] = Pack(p => p.De, true);
+                words[at++] = Pack(p => p.Dy, true);
+                words[at++] = Pack(p => p.De, false);
+                words[at++] = Pack(p => p.Dy, false);
+            }
+
+            if ((id & 2) != 0)
+            {
+                var channels = new[] { Plane(v => v.S * v.W * 32, 65536), Plane(v => v.T * v.W * 32, 65536), Plane(v => v.W * 0x7FFF, 65536), (0, 0, 0, 0) };
                 ulong Pack(Func<(int Value, int Dx, int De, int Dy), int> part, bool high) =>
                     channels.Aggregate(0UL, (word, channel) => (word << 16) | (ushort)(high ? part(channel) >> 16 : part(channel)));
 

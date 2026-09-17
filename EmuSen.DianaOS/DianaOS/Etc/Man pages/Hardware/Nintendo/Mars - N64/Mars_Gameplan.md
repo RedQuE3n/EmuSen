@@ -459,6 +459,15 @@ rather than raw samples.
 > the level of detail and texture rectangles — **and the two-cycle and copy modes.** The slice's larger
 > lesson was about the instrument: two cases named for decal mode had never drawn a pixel, which only a
 > breakage that survived exposed, so a case's name is not evidence of what it exercises.
+>
+> **Progress, 2026-09-17: texture memory, loads and point sampling** (`Mars_RdpTextures.md`). Tile and block
+> loads into the display processor's texture memory, texture rectangles, perspective division and a
+> point-sampled texel in every format, in the one-cycle mode: 203 cases match angrylion, texture memory
+> byte for byte. **The oracle's plurality grew**: the references disagree on six texture behaviours — five at
+> formats or boundaries ordinary content is unlikely to reach, and one, how the one-cycle mode's next-pixel
+> texel is filtered, that content could — and parallel-rdp refuses several uploads outright, so five cases
+> are graded against angrylion alone. The remaining list is filtering, palette lookup, the level
+> of detail, and the two-cycle and copy modes.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

@@ -2438,6 +2438,8 @@ Re-confirmed at commit time: full suite **2,621 passed, 0 failed, 53s**; the fil
 
 **The WiseMan tests run these tools themselves**, unlike §3.55's dump tests, because a replay costs milliseconds rather than an emulator run; `Mars_RdpDifferential.md` §3 has the argument and its cost.
 
+**Since textures, `rdp-reference` also writes texture memory** at every sync, as a fifth record, through `get_tmem`, an accessor the angrylion library already exports; nothing in the checkout was changed to get it. The tool has to be rebuilt with `./build-probe.sh rdp` for the texture cases: an older binary writes no such record, the test then takes the reference's texture memory to be zeros, and the texture cases fail rather than pass (`Mars_RdpTextures.md` §7.1).
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

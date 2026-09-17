@@ -34,6 +34,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int _primitiveLodFraction;
         private int _k4;
         private int _k5;
+
+        // The YUV conversion's four constants, each nine-bit signed and taken as twice itself plus one - see Mars_RdpTextures.md §5.3.
+        private int _k0;
+        private int _k1;
+        private int _k2;
+        private int _k3;
         private int _primitiveDeltaZ;
         private int _primitiveZ;
 
@@ -50,6 +56,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case SetBlendColor: _blendColor = Color.FromWord(word); return true;
                 case SetFogColor: _fogColor = Color.FromWord(word); return true;
                 case SetConvert:
+                    _k0 = (SignExtend(word >> 45, 9) << 1) + 1;
+                    _k1 = (SignExtend(word >> 36, 9) << 1) + 1;
+                    _k2 = (SignExtend(word >> 27, 9) << 1) + 1;
+                    _k3 = (SignExtend(word >> 18, 9) << 1) + 1;
                     _k4 = (int)(word >> 9) & 0x1FF;
                     _k5 = (int)word & 0x1FF;
                     return true;
@@ -73,6 +83,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         }
 
         private int CycleType => (int)(_otherModes >> 52) & 3;
+        private bool Perspective => ((_otherModes >> 51) & 1) != 0;
+        private bool BilinearFirstCycle => ((_otherModes >> 43) & 1) != 0;
         private int RgbDither => (int)(_otherModes >> 38) & 3;
         private int AlphaDither => (int)(_otherModes >> 36) & 3;
         private bool KeyEnabled => ((_otherModes >> 40) & 1) != 0;

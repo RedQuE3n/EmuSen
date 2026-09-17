@@ -50,6 +50,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         private const ulong UncachedAttribute = 2;
 
+        // The kernel's mapped region stops two gigabytes short of the others - see Mars_Privilege.md §2.2.
+        private const ulong KernelSegmentEnd = 0xC000_00FF_8000_0000;
+
         public static Segment Decode(ulong address, PrivilegeMode mode, bool wide) =>
             wide && address < CompatibilityBase ? Wide(address, mode) : Narrow(address, mode);
 
@@ -80,7 +83,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             {
                 case 0: return addressable ? Segment.Mapped : Segment.Illegal;
                 case 1: return mode != PrivilegeMode.User && addressable ? Segment.Mapped : Segment.Illegal;
-                case 3: return mode == PrivilegeMode.Kernel && addressable ? Segment.Mapped : Segment.Illegal;
+                case 3:
+                    return mode == PrivilegeMode.Kernel && addressable && address < KernelSegmentEnd
+                        ? Segment.Mapped
+                        : Segment.Illegal;
             }
 
             // The eight physical windows, which only kernel mode can name at all - see §2.3.

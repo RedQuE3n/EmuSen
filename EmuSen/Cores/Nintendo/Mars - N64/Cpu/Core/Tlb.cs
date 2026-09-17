@@ -29,7 +29,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public const ulong EntryLoValid = 1UL << 1;
         public const ulong EntryLoDirty = 1UL << 2;
 
+        // Twenty frame bits and the cache, dirty and valid flags; global is kept once per entry - see Mars_Tlb.md §7.3.
+        public const ulong EntryLoKept = 0x03FF_FFFE;
+
+        // The region bits and a forty-bit page number are what a match compares - see Mars_Tlb.md §7.5.
+        public const ulong MatchedBits = 0xC000_00FF_FFFF_FFFF;
+
         public readonly TlbEntry[] Entries = new TlbEntry[EntryCount];
+
+        // Each pair of mask bits is decided by its higher bit alone - see Mars_Tlb.md §7.2.
+        public static ulong PairedPageMask(ulong raw)
+        {
+            ulong higher = raw & 0x0155_4000;
+            return higher | (higher >> 1);
+        }
 
         public TlbResult TryTranslate(ulong address, ulong asid, bool store, out uint physical, out int index)
         {
@@ -44,7 +57,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 ulong pairMask = entry.PageMask | 0x1FFF;
                 ulong pageMask = pairMask >> 1;
 
-                if (((address ^ entry.EntryHi) & ~pairMask & 0xFFFF_FFFFUL) != 0) continue;
+                if (((address ^ entry.EntryHi) & ~pairMask & MatchedBits) != 0) continue;
 
                 // A global pair ignores the address-space id, which is how a shared mapping stays shared.
                 bool global = (entry.EntryLo0 & entry.EntryLo1 & EntryLoGlobal) != 0;
@@ -73,7 +86,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 ref TlbEntry entry = ref Entries[i];
 
                 ulong pairMask = entry.PageMask | 0x1FFF;
-                if (((entryHi ^ entry.EntryHi) & ~pairMask & 0xFFFF_FFFFUL) != 0) continue;
+                if (((entryHi ^ entry.EntryHi) & ~pairMask & MatchedBits) != 0) continue;
 
                 bool global = (entry.EntryLo0 & entry.EntryLo1 & EntryLoGlobal) != 0;
                 if (!global && (entry.EntryHi & 0xFF) != (entryHi & 0xFF)) continue;

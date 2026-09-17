@@ -68,13 +68,16 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal((ulong)Cpu.ProcessorId, cpu.Cop0[Cpu.ProcessorIdRegister]);
         }
 
-        // Half constant and half writable, which is why a read-modify-write of it needs a reset value.
-        [Fact]
-        public void The_configuration_register_keeps_its_writable_half_and_forces_the_rest()
+        // The corpus's three vectors: all ones cannot say which half a bit is in, and 0x8000 can - see §4.
+        [Theory]
+        [InlineData(0x0000_8000UL, 0x7006_E460UL)]
+        [InlineData(0xF0FF_FFFFUL, 0x7006_E46FUL)]
+        [InlineData(0x7006_E463UL, 0x7006_E463UL)]
+        public void The_configuration_register_keeps_its_writable_half_and_forces_the_rest(ulong written, ulong expected)
         {
-            var cpu = Written(Cpu.ConfigRegister, 0xFFFF_FFFF);
+            var cpu = Written(Cpu.ConfigRegister, written);
 
-            Assert.Equal(Cpu.ConfigWritable | Cpu.ConfigConstant, cpu.Cop0[Cpu.ConfigRegister]);
+            Assert.Equal(expected, cpu.Cop0[Cpu.ConfigRegister]);
         }
 
         [Fact]

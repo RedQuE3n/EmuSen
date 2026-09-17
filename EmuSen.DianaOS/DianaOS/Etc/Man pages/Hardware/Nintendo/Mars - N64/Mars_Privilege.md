@@ -62,7 +62,13 @@ forty-bit ceiling is what the corpus's `_gap` rows test, one per region.
 | `0x0000…` + 40 bits | mapped | mapped | mapped |
 | `0x4000…` + 40 bits | mapped | mapped | illegal |
 | `0x8000…`–`0xBFFF…` | direct, eight windows | illegal | illegal |
-| `0xC000…` + 40 bits | mapped | illegal | illegal |
+| `0xC000…` up to `0xC00000FF_7FFFFFFF` | mapped | illegal | illegal |
+
+**The kernel's mapped region is two gigabytes shorter than the other two.** It stops at
+`0xC00000FF_7FFFFFFF`, not at the forty-bit ceiling: `0xC00000FF_7FFFFFFC` is a TLB miss and
+`0xC00000FF_80000000` an address error. This section first described all three as forty
+bits wide, which was the pattern and not the measurement; the corpus's 64-bit TLB table
+has the boundary row, and Mars had it wrong until that table was reached.
 
 Above `0xFFFFFFFF_80000000` the 64-bit map stops describing regions of its own and
 **repeats the 32-bit map exactly**, which is why `Segments.Decode` sends that window

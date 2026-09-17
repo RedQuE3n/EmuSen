@@ -39,5 +39,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public const uint PifRamSize = 64;
 
         public const uint SpMemSize = 0x1000;
+
+        // The two memories repeat every eight kilobytes from their base to the interface registers - see Mars_Memory.md §2.4.
+        public const uint SpMemWindow = SpRegistersBase - SpDmemBase;
     }
 }

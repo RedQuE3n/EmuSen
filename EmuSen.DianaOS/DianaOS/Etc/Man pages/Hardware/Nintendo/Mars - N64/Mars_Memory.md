@@ -62,6 +62,59 @@ has no concept of failing a write. Reads past the end of the image return zero;
 what hardware actually returns there is undocumented, and zero is a placeholder
 chosen for being obvious rather than for being right.
 
+### 2.4 The signal processor's memories repeat, and take only whole words from the CPU
+
+*Added 2026-09-17, from the corpus's four `spmem` groups. `MarsBus.Store` and
+`MarsBus.SignalProcessorMemory`; tests in `MarsSpMemoryTests`.*
+
+**The 8KB of DMEM and IMEM repeat to the end of their window.** From `0x04000000` up to the
+interface registers at `0x04040000`, every `0x2000` is another copy of the same two banks. A
+write at `0x0403E000` overwrites DMEM offset 0. Mars had mapped the banks once and let
+everything above them fall through to the register dictionary (§2.2), so that write landed
+in a dictionary entry of its own and DMEM offset 0 kept its old value.
+
+**A store from the main CPU always writes a whole word**, whatever size the instruction names:
+
+- **`SB` and `SH` write the word the byte or half falls in, with the register's whole value
+  shifted left so that the named bytes land in their lanes** — `word = register << (8 × (4 −
+  size − offset))`, truncated to 32 bits. Every byte below the named ones becomes zero, and
+  every byte above them takes the register's higher bits. So `SB` of `0x12345678` at offset
+  0 writes `0x78000000`, and at offset 3 it writes `0x12345678`: a byte store that replaces
+  the whole word with the whole register.
+- **`SD` writes the register's upper half into the one word at the address**; the lower half
+  goes nowhere, and the following word is untouched.
+- **`SW` is ordinary**, which is the same rule with nothing to shift.
+- **Loads are exact.** `LB` and `LH` read only the bytes they name. The quirk is in stores.
+
+Mars implements this in one place: aligned stores from the CPU now hand the bus the whole
+register and the size, and the bus applies the rule when the address is in the window and
+the ordinary byte-precise write everywhere else. Main memory keeps byte-precise stores, and
+a test pins that too, because the easy way to break this is to apply the rule everywhere.
+
+**The corpus's comment understates its own vectors.** It states
+the rule as observation — *"SH/SB are broken: They overwrite the whole 32 bit, filling
+everything that isn't written with zeroes"* — and its vectors show more than the comment
+says: the bytes *above* a byte store are not zero-filled but carry the register's upper
+bits, which is what `SB` at offset 15 writing `0x12345678` demonstrates.
+
+**A reading, not a measurement.** Those vectors are exactly what a bus that decodes only
+32-bit accesses would latch if the VR4300 drives a sub-word store as its register shifted
+into position on the full data bus. If that is the mechanism, it applies to every block of
+the RCP that is built the same way, not only to these memories. Mars applies it only where
+the corpus measures it, and the other RCP register blocks keep byte-precise stores until
+something measures them.
+
+**What this does not cover:**
+
+- **`LD` from these memories**, which the corpus's comment says crashes the console and does
+  not test. Mars reads two words.
+- **Access through the cached segment**, which the same comment says also crashes hardware.
+  Mars treats both direct-mapped segments alike (§5).
+- **`SDC1`, `SWL`, `SWR`, `SDL` and `SDR`** into these memories. None is tested; they keep
+  their existing writes rather than borrowing a rule measured on other instructions.
+- **The signal processor's own access** (`Mars_Rsp.md` §4) and the DMA transfers (§6), which
+  never go through the CPU's store path and are unaffected.
+
 ## 3. One counter for the whole machine
 
 `MarsBus.Cycles` is the only clock, and `Tick` is the only thing that advances it.

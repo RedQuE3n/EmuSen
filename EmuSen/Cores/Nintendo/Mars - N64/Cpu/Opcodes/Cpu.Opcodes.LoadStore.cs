@@ -30,15 +30,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             RequireAlignment(address, size, ExceptionCode.AddressErrorStore);
 
             uint physical = TranslateAccess(Mirrored(address, size), address, store: true);
-            ulong value = Read(Rt(instruction));
 
-            switch (size)
-            {
-                case 1: _bus.Write8(physical, (byte)value); return;
-                case 2: _bus.Write16(physical, (ushort)value); return;
-                case 4: _bus.Write32(physical, (uint)value); return;
-                default: _bus.Write64(physical, value); return;
-            }
+            // The whole register goes to the bus, because not every device takes only the bytes named - see Mars_Memory.md §2.4.
+            _bus.Store(physical, Read(Rt(instruction)), size);
         }
 
         // The pair a lock is built from: the load arms it, the store only lands if nothing disarmed it.

@@ -194,8 +194,8 @@ holds `0xFFFC`; (310,219), (311,219) and (312,218) still hold zero.
 - **Hidden RDRAM.** Mars has none. The references compare it between themselves; Mars's side of it
   is not compared, and the fixture only counts the reference's changed hidden pages.
 - **Texture memory**, which only the cross-check compares, and which no fill case touches.
-- **Anything but the fill cycle.** The cases are fill rectangles; every other command is unbuilt in
-  Mars (`Mars_Rdp.md` §9).
+- **Anything but the fill cycle.** The cases are fill rectangles and, since the walker, fill-cycle
+  triangles (`Mars_RdpTriangles.md` §4); every other mode is unbuilt in Mars (`Mars_Rdp.md` §9).
 - **The register interface**, which the cases bypass, and **timing**.
 - **Pipeline crashes.** angrylion's crash flag stops `n64video_process_list` and nothing else, and
   the replay never calls that function; what a crashed pipeline does next is not graded.

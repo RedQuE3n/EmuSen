@@ -1,5 +1,3 @@
-using System;
-
 namespace EmuSen.Cores.Nintendo.Mars.Rdp
 {
     // The colour image, the scissor and the fill cycle - see Mars_Rdp.md §5.
@@ -39,47 +37,54 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             _scissorKeepOdd = ((word >> 24) & 1) != 0;
         }
 
-        // Each row's span is the two edges clipped in eighth pixels; rows are chosen by quarter-pixel sub-scanlines - see §5.2.
+        // A rectangle is walked as a primitive with its major edge on the left and no slope - see Mars_RdpTriangles.md §3.
         private void Fill(ulong word)
         {
-            if (CycleType != FillCycle || _colorImageBytes == 0) return;
-
             int right = Quarters(word >> 44);
             int bottom = Quarters(word >> 32) | 3;
             int left = Quarters(word >> 12);
             int top = Quarters(word);
 
-            if (right < left) return;
+            int rightX = ((right >> 2) << 16) | ((right & 3) << 14);
+            int leftX = ((left >> 2) << 16) | ((left & 3) << 14);
 
-            (int first, bool firstUnder, bool firstOver) = Clip(left * 2);
-            (int last, bool lastUnder, bool lastOver) = Clip(right * 2);
-            if ((firstUnder && lastUnder) || (firstOver && lastOver)) return;
+            FillSpans(Walk(majorOnLeft: true, top, bottom, bottom, leftX, rightX, rightX, 0, 0, 0));
+        }
 
-            int upper = Math.Max(top, _scissorTop);
-            int lower = Math.Min(bottom, _scissorBottom);
-            if (upper >= lower) return;
+        // The first four words of every triangle command, whatever else it carries - see Mars_RdpTriangles.md §1.
+        private void Triangle()
+        {
+            ulong edges = _command[0];
+
+            FillSpans(Walk(
+                majorOnLeft: ((edges >> 55) & 1) != 0,
+                yh: SignExtend(edges, 14),
+                ym: SignExtend(edges >> 16, 14),
+                yl: SignExtend(edges >> 32, 14),
+                xh: SignExtend(_command[2] >> 32, 28),
+                xm: SignExtend(_command[3] >> 32, 28),
+                xl: SignExtend(_command[1] >> 32, 28),
+                dxhdy: SignExtend(_command[2], 30),
+                dxmdy: SignExtend(_command[3], 30),
+                dxldy: SignExtend(_command[1], 30)));
+        }
+
+        // Only the fill cycle draws yet, and a four-bit image has nothing to fill - see Mars_Rdp.md §5.3.
+        private void FillSpans((int First, int Last) rows)
+        {
+            if (CycleType != FillCycle || _colorImageBytes == 0) return;
 
             uint image = _colorImage & ~(uint)(_colorImageBytes - 1);
 
-            for (int y = upper >> 2; y << 2 < lower; y++)
+            for (int y = rows.First; y <= rows.Last; y++)
             {
-                if (_scissorField && ((y & 1) == 1) != _scissorKeepOdd) continue;
+                if (!_spanDrawn[y]) continue;
 
-                for (int x = first >> 3; x <= last >> 3; x++)
+                for (int x = _spanLeft[y]; x <= _spanRight[y]; x++)
                 {
                     FillPixel(image + (uint)((y * _colorImageWidth + x) * _colorImageBytes));
                 }
             }
-        }
-
-        // Moved onto the scissor's left edge if under it, then onto its right edge if at or past it, in that order - see §5.2.
-        private (int At, bool Under, bool Over) Clip(int eighths)
-        {
-            bool under = eighths < _scissorLeft * 2;
-            int at = under ? _scissorLeft * 2 : eighths;
-            bool over = at >= _scissorRight * 2;
-
-            return (over ? _scissorRight * 2 : at, under, over);
         }
 
         // Each byte takes the lane of the fill colour its address holds in a big-endian word - see §5.1.

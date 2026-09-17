@@ -154,6 +154,9 @@ reading about a model with no pipeline, not a claim about hardware. For the rest
 texture rectangles, colours, the combiner, textures, the depth image and the tile commands —
 doing nothing is simply unbuilt.
 
+> **Update 2026-09-17: the eight triangle commands act too**, in the fill cycle, through the edge
+> walker that fill rectangles now share (`Mars_RdpTriangles.md`).
+
 ## 5. The fill cycle
 
 ### 5.1 The colour is written as whole words

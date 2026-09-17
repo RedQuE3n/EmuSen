@@ -45,11 +45,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             _ => 1,
         };
 
-        // Six commands act; every other one is taken whole and does nothing yet - see §4.
+        // Six commands and the eight triangles act; every other one is taken whole and does nothing yet - see §4.
         private bool Execute(uint id, ulong word)
         {
             switch (id)
             {
+                case >= 0x08 and <= 0x0F: Triangle(); break;
                 case SyncFull: return true;
                 case SetScissor: Scissor(word); break;
                 case SetOtherModes: _otherModes = word; break;

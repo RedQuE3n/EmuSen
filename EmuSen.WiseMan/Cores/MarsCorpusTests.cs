@@ -68,7 +68,7 @@ namespace EmuSen.WiseMan.Cores
             RunUntilMarsRunsOut(cpu!, bus!, rethrow: true);
         }
 
-        private static void RunUntilMarsRunsOut(Cpu cpu, MarsBus bus, bool rethrow = false)
+        private static void RunUntilMarsRunsOut(Cpu cpu, MemoryBus bus, bool rethrow = false)
         {
             try
             {
@@ -95,7 +95,7 @@ namespace EmuSen.WiseMan.Cores
             return end < 0 ? "the run did not reach the end" : verdicts[(start + 6)..(end + 6)];
         }
 
-        private static bool Installed(out MarsBus? bus, out Cpu? cpu, out RomImage? rom)
+        private static bool Installed(out MemoryBus? bus, out Cpu? cpu, out RomImage? rom)
         {
             bus = null;
             cpu = null;
@@ -105,7 +105,7 @@ namespace EmuSen.WiseMan.Cores
             if (path is null) return false;
 
             rom = RomImage.Load(path);
-            bus = new MarsBus(expansionPak: true);
+            bus = new MemoryBus(expansionPak: true);
             cpu = new Cpu(bus);
             Boot.HandOff(bus, cpu, rom);
 

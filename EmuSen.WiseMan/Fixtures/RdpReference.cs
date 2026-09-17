@@ -15,6 +15,7 @@ namespace EmuSen.WiseMan.Fixtures
         private const uint UpdateScreenRecord = 4;
         private const uint SignalComplete = 5;
         private const uint EndOfFile = 6;
+        private const uint UpdateHiddenDram = 8;
         private const uint UpdateHiddenDramFlush = 9;
 
         private readonly MemoryStream _stream = new();
@@ -43,6 +44,15 @@ namespace EmuSen.WiseMan.Fixtures
                 _writer.Write(bytes[i + 1]);
                 _writer.Write(bytes[i]);
             }
+        }
+
+        // The two hidden bits beside each sixteen-bit word, one byte apiece, indexed by that word - see Mars_VideoFilter.md §1.
+        public void UploadHidden(uint index, byte[] bytes)
+        {
+            _writer.Write(UpdateHiddenDram);
+            _writer.Write(index);
+            _writer.Write(bytes.Length);
+            _writer.Write(bytes);
         }
 
         // A flush returns both memories to the upload cache: zero, apart from anything uploaded so far.

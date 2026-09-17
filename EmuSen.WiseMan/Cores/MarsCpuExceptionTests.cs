@@ -82,7 +82,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_fault_while_already_handling_one_uses_the_general_vector_and_keeps_the_first_address()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             // The handler at the general vector faults again on its first instruction.
             bus.Write32(0x180, new MipsAssembler().Syscall().ToArray()[0]);
@@ -112,7 +112,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_handler_can_return_to_where_the_fault_happened()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             // At the general vector: record the arrival, step the saved address past the fault, and return.
             var handler = new MipsAssembler()

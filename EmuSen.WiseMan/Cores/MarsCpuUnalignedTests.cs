@@ -14,22 +14,22 @@ namespace EmuSen.WiseMan.Cores
         private static MipsAssembler Preloaded() =>
             new MipsAssembler().Lui(1, 0x8000).Ori(1, 1, (ushort)Data).Lui(2, 0xAAAA).Ori(2, 2, 0xAAAA);
 
-        private static MarsBus WithWord()
+        private static MemoryBus WithWord()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Data, 0x01020304);
             return bus;
         }
 
-        private static MarsBus WithDoubleWord()
+        private static MemoryBus WithDoubleWord()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write64(Data, 0x0102030405060708UL);
             return bus;
         }
 
         // A doubleword test needs the pattern in both halves, which lui cannot put there - see §7.2.
-        private static MipsAssembler PreloadedWide(MarsBus bus)
+        private static MipsAssembler PreloadedWide(MemoryBus bus)
         {
             bus.Write64(Data + 0x10, 0xAAAAAAAAAAAAAAAAUL);
             return new MipsAssembler().Lui(1, 0x8000).Ori(1, 1, (ushort)Data).Ld(2, 1, 0x10);
@@ -93,9 +93,9 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // A register whose upper half is neither zero nor all ones, which is what makes the pair separable.
-        private static Cpu Measured(Func<MipsAssembler, MipsAssembler> load, out MarsBus bus)
+        private static Cpu Measured(Func<MipsAssembler, MipsAssembler> load, out MemoryBus bus)
         {
-            bus = new MarsBus();
+            bus = new MemoryBus();
             bus.Write64(Data, 0x0123_4567_89AB_CDEFUL);
             bus.Write64(Data + 0x10, 0xFEDC_BA98_7654_3210UL);
 
@@ -147,7 +147,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_left_store_writes_the_high_bytes_and_leaves_the_rest()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Data, 0x11223344);
 
             var cpu = new MipsAssembler()
@@ -163,7 +163,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_right_store_writes_the_low_bytes_and_leaves_the_rest()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Data, 0x11223344);
 
             var cpu = new MipsAssembler()
@@ -179,7 +179,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_store_pair_writes_a_word_across_the_boundary()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Data, 0x11223344);
             bus.Write32(Data + 4, 0x99AABBCC);
 
@@ -197,7 +197,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_double_store_merges_at_both_ends()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write64(Data, 0x1122334455667788UL);
 
             var cpu = new MipsAssembler()

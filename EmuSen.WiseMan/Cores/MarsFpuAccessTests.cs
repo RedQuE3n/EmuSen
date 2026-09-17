@@ -106,7 +106,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Two_word_stores_in_half_mode_write_one_register_to_two_addresses()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             MarsFpuRegisterFileTests.Prepared(HalfMode, 3, f => f[0] = 0x0000_1111_2222_3333, a => a
                 .Lui(1, 0x8000)
                 .Swc1(0, 1, (short)(Scratch + 4))
@@ -129,7 +129,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_wide_store_in_half_mode_ignores_the_low_bit_of_its_index()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             MarsFpuRegisterFileTests.Prepared(HalfMode, 2, f => f[0] = 0x0000_1111_2222_3333, a => a
                 .Lui(1, 0x8000)
                 .Sdc1(1, 1, (short)Scratch), bus);
@@ -156,7 +156,7 @@ namespace EmuSen.WiseMan.Cores
             System.Action<ulong[]> registers,
             System.Func<MipsAssembler, MipsAssembler> program)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write64(Scratch, memory);
 
             return MarsFpuRegisterFileTests.Prepared(status, steps, registers, program, bus);

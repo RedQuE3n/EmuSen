@@ -23,7 +23,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // A triangle carrying shade, texture and depth, which is the longest thing the stream holds.
         private const int LongestCommand = 22;
 
-        private readonly MarsBus _bus;
+        private readonly MemoryBus _bus;
         private readonly ulong[] _command = new ulong[LongestCommand];
         private int _taken;
 
@@ -32,7 +32,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // The display processor's own four kilobytes of texture memory, in console byte order - see Mars_RdpTextures.md §2.
         public byte[] TextureMemory { get; } = new byte[0x1000];
 
-        public Rdp(MarsBus bus) => _bus = bus;
+        public Rdp(MemoryBus bus) => _bus = bus;
 
         // True when the command this word completed was a full sync, which only the interface can answer - see §6.
         public bool Accept(ulong word)

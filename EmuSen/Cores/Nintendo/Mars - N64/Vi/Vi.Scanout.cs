@@ -162,6 +162,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             int width = (int)Register(Width) & 0xFFF;
             bool resample = AntiAlias != Replicate;
             bool wide = (Type & 1) != 0;
+            int bug = 0;
 
             for (int row = 0; row < picture.Rows; row++)
             {
@@ -171,20 +172,23 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                 int fractionY = (int)(down >> 5) & 0x1F;
                 int line = picture.Top * picture.Stride + picture.Left + (picture.Lower ? RasterWidth : 0) + picture.Stride * row;
 
+                // A row the next one reads again leaves the row after that fetching its own line twice - see Mars_VideoFilter.md §3.
+                bug = (down >> 10) == ((picture.StartY + (uint)(row + 1) * picture.StepY) >> 10) ? 2 : bug >> 1;
+
                 uint across = picture.StartX;
                 for (int column = 0; column < picture.Columns; column++, across += picture.StepX)
                 {
                     int step = (int)(across >> 10);
                     int fractionX = (int)(across >> 5) & 0x1F;
 
-                    var color = Fetch(origin, source + step, wide);
+                    Pixel color = Sample(origin, source + step, wide, width, 0);
 
                     if (resample)
                     {
-                        var next = Fetch(origin, source + step + 1, wide);
+                        Pixel next = Sample(origin, source + step + 1, wide, width, 0);
 
-                        color = Mix(color, Fetch(origin, below + step, wide), fractionY);
-                        next = Mix(next, Fetch(origin, below + step + 1, wide), fractionY);
+                        color = Mix(color, Sample(origin, below + step, wide, width, bug), fractionY);
+                        next = Mix(next, Sample(origin, below + step + 1, wide, width, bug), fractionY);
                         color = Mix(color, next, fractionX);
                     }
 
@@ -197,36 +201,56 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                     _raster[pixel + 2] = (byte)(shown ? color.Blue : 0);
 
                     // A darkened column keeps the coverage the raster already held, because only the colour is cleared - see §2.5.
-                    if (shown) _raster[pixel + 3] = 7;
+                    if (shown) _raster[pixel + 3] = (byte)color.Coverage;
                 }
             }
         }
 
+        // The pixel a step lands on, filtered against its neighbours where the mode reads coverage and the pixel is not whole - see Mars_VideoFilter.md §1.
+        private Pixel Sample(uint origin, int at, bool wide, int width, int bug)
+        {
+            Pixel pixel = Fetch(origin, at, wide);
+
+            if (AntiAlias > Covered) return pixel with { Coverage = 7 };
+
+            return pixel.Coverage == 7 ? pixel : Filter(origin, at, wide, width, bug, pixel);
+        }
+
         // Five bits a channel become eight by moving up, not by filling in; the three bits below are the anti-aliasing's to fill - see §2.6.
-        private (int Red, int Green, int Blue) Fetch(uint origin, int at, bool wide)
+        private Pixel Fetch(uint origin, int at, bool wide)
         {
             byte[] rdram = _bus.Rdram;
 
             if (wide)
             {
                 uint address = (origin & 0xFF_FFFC) + (uint)at * 4;
-                if (address + 3 >= rdram.Length) return (0, 0, 0);
+                if (address + 3 >= rdram.Length) return default;
 
-                return (rdram[address], rdram[address + 1], rdram[address + 2]);
+                return new Pixel(rdram[address], rdram[address + 1], rdram[address + 2], (rdram[address + 3] >> 5) & 7);
             }
 
             uint word = (origin & 0xFF_FFFE) + (uint)at * 2;
-            if (word + 1 >= rdram.Length) return (0, 0, 0);
+            if (word + 1 >= rdram.Length) return default;
 
             int pixel = (rdram[word] << 8) | rdram[word + 1];
-            return ((pixel >> 8) & 0xF8, (pixel & 0x7C0) >> 3, (pixel & 0x3E) << 2);
+
+            // The high bit of a coverage is the word's own, the two below it are the hidden bits beside it - see Mars_VideoFilter.md §1.
+            int coverage = ((pixel & 1) << 2) | _bus.RdramHidden[word >> 1];
+
+            return new Pixel((pixel >> 8) & 0xF8, (pixel & 0x7C0) >> 3, (pixel & 0x3E) << 2, coverage);
         }
 
-        private static (int Red, int Green, int Blue) Mix((int Red, int Green, int Blue) near, (int Red, int Green, int Blue) far, int fraction)
+        // Mixing moves the colour and leaves the coverage, so a mixed pixel still carries the one the step landed on - see Mars_VideoFilter.md §1.
+        private static Pixel Mix(Pixel near, Pixel far, int fraction)
         {
             if (fraction == 0) return near;
 
-            return (Between(near.Red, far.Red, fraction), Between(near.Green, far.Green, fraction), Between(near.Blue, far.Blue, fraction));
+            return near with
+            {
+                Red = Between(near.Red, far.Red, fraction),
+                Green = Between(near.Green, far.Green, fraction),
+                Blue = Between(near.Blue, far.Blue, fraction),
+            };
         }
 
         private static int Between(int near, int far, int fraction) => ((((far - near) * fraction + 16) >> 5) + near) & 0xFF;

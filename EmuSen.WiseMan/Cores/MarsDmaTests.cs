@@ -21,7 +21,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_transfer_moves_memory_into_the_data_bank()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x100, 0xCAFEBABE);
 
             bus.Write32(SpMem, 0);
@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_address_bit_that_chooses_the_instruction_bank_is_honoured()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x100, 0xCAFEBABE);
 
             bus.Write32(SpMem, 0x1000);
@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_transfer_runs_the_other_way_too()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(MemoryMap.SpDmemBase, 0x12345678);
 
             bus.Write32(SpMem, 0);
@@ -62,7 +62,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_transfer_off_the_end_of_the_instruction_bank_wraps_inside_it()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             for (uint i = 0; i < 0x20; i++) bus.Write8(0x300 + i, (byte)(0xA0 + i));
 
             bus.Write32(SpMem, 0x1000 | 0xFF8);
@@ -80,7 +80,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_rectangular_transfer_skips_between_rows()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             for (uint i = 0; i < 0x20; i++) bus.Write8(0x400 + i, (byte)(0xB0 + i));
 
             bus.Write32(SpMem, 0);
@@ -96,7 +96,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_transfer_engine_is_never_busy_because_it_has_already_finished()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Assert.Equal(0u, bus.Read32(MemoryMap.SpRegistersBase + SpInterface.DmaBusy));
             Assert.Equal(0u, bus.Read32(MemoryMap.SpRegistersBase + SpInterface.DmaFull));
@@ -105,7 +105,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_signal_processor_comes_up_halted()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Assert.Equal(SpInterface.StatusHalt, bus.Read32(SpStatus) & SpInterface.StatusHalt);
 
@@ -116,7 +116,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_semaphore_is_taken_by_reading_it_and_released_by_writing_it()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             uint semaphore = MemoryMap.SpRegistersBase + SpInterface.Semaphore;
 
             Assert.Equal(0u, bus.Read32(semaphore));
@@ -129,7 +129,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_cartridge_engine_copies_the_header_into_memory()
         {
-            var bus = new MarsBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
+            var bus = new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
 
             bus.Write32(PiDram, 0x1000);
             bus.Write32(PiCart, MemoryMap.CartDomain1Address2);
@@ -142,7 +142,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_cartridge_engine_reports_idle_so_a_polling_rom_makes_progress()
         {
-            var bus = new MarsBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
+            var bus = new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
 
             Assert.Equal(0u, bus.Read32(PiStatus) & PiInterface.StatusIoBusy);
             Assert.Equal(0u, bus.Read32(PiStatus) & PiInterface.StatusDmaBusy);
@@ -158,7 +158,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_finished_transfer_raises_an_interrupt_flag_that_a_write_clears()
         {
-            var bus = new MarsBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
+            var bus = new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
 
             bus.Write32(PiDram, 0x1000);
             bus.Write32(PiCart, MemoryMap.CartDomain1Address2);

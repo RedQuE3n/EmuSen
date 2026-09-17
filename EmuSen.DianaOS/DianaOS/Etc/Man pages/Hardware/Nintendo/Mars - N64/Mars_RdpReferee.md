@@ -35,6 +35,13 @@ give it:
   "not implemented" in its own voice is more useful than one that guesses, and ten of the twenty-one
   disputes get exactly that answer.
 
+**A later slice found a third case, and it is the strongest.** The video interface is not the display
+processor, and `rtl/VI_filter.vhd` and `rtl/VI_filter_pen.vhd` share nothing with angrylion — not an
+identifier, not a structure, not an algorithm: the anti-aliasing filter's two runners-up are found there by a
+sort network and a clamp where the reference uses a running leader and a rescan. Two constructions that
+agree over every input are the referee at its most useful, and `Mars_VideoFilter.md` §5 is what that looks
+like when it happens.
+
 **So the reading rule for this page is asymmetric.** Where the referee sides with angrylion *and* the code is
 the author's own, that is real support. Where it sides with angrylion in borrowed code, it is nearly no
 support. Where it sides with parallel-rdp, that is worth attention whatever the provenance, because it means

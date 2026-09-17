@@ -537,6 +537,14 @@ rather than raw samples.
 > left here is the anti-aliasing that reads coverage, the dither filter, divot and gamma, and then the
 > interrupt and the timing that would let a game drive any of it.
 
+> **Progress, 2026-09-17: the anti-aliasing filter** (`Mars_VideoFilter.md`). The two modes a game actually
+> uses: a pixel's coverage read back out of RDRAM's hidden ninth bits, the six neighbours it is weighed
+> against, and the pull towards the two of them that bracket it — one hundred and thirty cases match
+> angrylion, on the first run. The FPGA core implements the same filter from an independent construction and
+> confirms every rule in it but one; the one it contradicts is a fetch artefact both software references
+> model, and it is now the first thing in Phase E to test on a console. What is left here is the dither
+> filter, divot and gamma, and then the interrupt and the timing.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

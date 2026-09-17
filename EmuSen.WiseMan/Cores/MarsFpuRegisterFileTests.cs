@@ -183,7 +183,7 @@ namespace EmuSen.WiseMan.Cores
             int steps,
             Action<ulong[]> registers,
             Func<MipsAssembler, MipsAssembler> program,
-            MarsBus? bus = null)
+            MemoryBus? bus = null)
         {
             var cpu = program(new MipsAssembler()).Build(bus);
 

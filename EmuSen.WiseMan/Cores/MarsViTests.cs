@@ -11,13 +11,21 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Scanned_frames_match_the_reference()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             uint state = 0x2468_ACE0;
             for (uint i = 0; i < 0x3000; i++)
             {
                 state = state * 1103515245 + 12345;
                 bus.Write8(Framebuffer + i, (byte)(state >> 16));
+            }
+
+            // The coverage the display processor left beside each word, which only the anti-aliased scans read - see Mars_VideoFilter.md §1.
+            uint seed = 0x1B4E_81B4;
+            for (int i = 0; i < 0x1800; i++)
+            {
+                seed = seed * 1664525 + 1013904223;
+                bus.RdramHidden[Framebuffer / 2 + i] = (byte)(seed >> 30);
             }
 
             uint[] shorter = Registers(2, 3, 64, 0x400, 0x400, 108, 256, 34, 60, 0, 0);
@@ -48,6 +56,26 @@ namespace EmuSen.WiseMan.Cores
                 if (expected) frames.Add(bus.Vi.Frame.ToArray());
             }
 
+            // Six more scans read a coverage: both modes that do, both pixel formats, a line read twice, and a picture all whole then none - see Mars_VideoFilter.md §4.
+            (uint[] Registers, int Hidden)[] filtered =
+            {
+                (Registers(2, 1, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0), -1),
+                (Registers(3, 1, 32, 0x400, 0x400, 108, 128, 34, 100, 0, 0), -1),
+                (Registers(2, 0, 64, 0x2AB, 0x155, 108, 320, 34, 200, 0x80, 0x40), -1),
+                (Registers(2, 1, 64, 0x400, 0x200, 108, 256, 34, 110, 0, 0), -1),
+                (Registers(2, 1, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0), 3),
+                (Registers(2, 1, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0), 0),
+            };
+
+            foreach ((uint[] registers, int bits) in filtered)
+            {
+                if (bits >= 0) Array.Fill(bus.RdramHidden, (byte)bits, (int)Framebuffer / 2, 0x1800);
+
+                for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
+                Assert.True(bus.Vi.Scan());
+                frames.Add(bus.Vi.Frame.ToArray());
+            }
+
             (int Frame, int X, int Y, uint Color)[] pixels =
             {
                 (0, 20, 5, 0x80C88007), (0, 100, 30, 0xB848D807), (0, 180, 60, 0x38401807), (0, 250, 100, 0x00000000),
@@ -63,6 +91,14 @@ namespace EmuSen.WiseMan.Cores
                 (10, 20, 5, 0x80C88007), (10, 300, 200, 0x00000007), (10, 100, 280, 0x00000000),
                 (11, 20, 5, 0x80C88007), (11, 300, 40, 0x00000000),
                 (12, 20, 5, 0x80C88007), (12, 100, 100, 0x00000007), (12, 300, 40, 0x00000000),
+
+                (13, 20, 5, 0x80C88000), (13, 100, 30, 0xB848D805), (13, 180, 60, 0x38401802),
+                (13, 240, 100, 0x00000000), (13, 3, 5, 0x00000000), (13, 252, 5, 0x00000000),
+                (14, 20, 5, 0x08B02C03), (14, 100, 30, 0xDB584907), (14, 60, 44, 0xD2D70405),
+                (15, 60, 12, 0x8396BA05), (15, 140, 44, 0x7DC08502), (15, 220, 77, 0x62C28203), (15, 300, 150, 0x9CAEDE00),
+                (16, 20, 5, 0x8A728A04), (16, 100, 30, 0xF090F802), (16, 180, 60, 0x58F0E803), (16, 200, 100, 0xAFB5F800),
+                (17, 20, 5, 0x7CCCA003), (17, 100, 30, 0xB848D807), (17, 180, 60, 0x7C607003),
+                (18, 20, 5, 0x80C88000), (18, 100, 30, 0xB848D804), (18, 180, 60, 0x38401800),
             };
 
             foreach ((int frame, int x, int y, uint color) in pixels)

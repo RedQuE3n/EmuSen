@@ -10,7 +10,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_program_counter_keeps_only_the_bits_instruction_memory_has()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(MemoryMap.SpPcBase, 0xFFFF_FFFF);
 
@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_counter_wraps_at_the_end_of_instruction_memory()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Load(bus, 0xFF8, a => a.Nop().Nop());
             Load(bus, 0, a => a.Break());
@@ -101,7 +101,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0xFFE, 0x7E8F_BADDu)]
         public void An_unaligned_load_takes_its_bytes_in_order_and_wraps(short offset, uint expected)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(MemoryMap.SpDmemBase + 0x000, 0xBADD_ECAF);
             bus.Write32(MemoryMap.SpDmemBase + 0x004, 0x0123_4567);
@@ -120,7 +120,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x7FFC)]
         public void An_address_keeps_only_the_bits_data_memory_has(short offset)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(MemoryMap.SpDmemBase + 0xFFC, 0xFEED_FACE);
 
@@ -178,7 +178,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(7, 23)]
         public void A_write_naming_both_the_clear_and_the_set_bit_changes_nothing(int signal, int clearBit)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Write(bus, 1u << (clearBit + 1));
             Write(bus, (1u << clearBit) | (1u << (clearBit + 1)));
@@ -196,7 +196,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_rule_holds_for_the_interrupt_on_break_bit_as_well()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Write(bus, 0x100);
             Write(bus, 0x180);
@@ -228,7 +228,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x0Cu, bus.Read32(MemoryMap.SpDmemBase + 4));
         }
 
-        private static void Write(MarsBus bus, uint value) =>
+        private static void Write(MemoryBus bus, uint value) =>
             bus.Write32(MemoryMap.SpRegistersBase + SpInterface.Status, value);
 
         private static uint Jalr(int rd, int rs) =>
@@ -241,22 +241,22 @@ namespace EmuSen.WiseMan.Cores
 
         private static uint Mtc0(int rt, int rd) => (0x10u << 26) | (4u << 21) | ((uint)rt << 16) | ((uint)rd << 11);
 
-        private static MarsBus Loaded(Func<MipsAssembler, MipsAssembler> program)
+        private static MemoryBus Loaded(Func<MipsAssembler, MipsAssembler> program)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Load(bus, 0, program);
             return bus;
         }
 
-        private static void Load(MarsBus bus, uint offset, Func<MipsAssembler, MipsAssembler> program)
+        private static void Load(MemoryBus bus, uint offset, Func<MipsAssembler, MipsAssembler> program)
         {
             uint[] words = program(new MipsAssembler()).ToArray();
             for (int i = 0; i < words.Length; i++) bus.Write32(MemoryMap.SpImemBase + offset + (uint)(i * 4), words[i]);
         }
 
         // Start, then let the machine's own clock carry the program to its break.
-        private static void Run(MarsBus bus, uint pc = 0)
+        private static void Run(MemoryBus bus, uint pc = 0)
         {
             bus.Write32(MemoryMap.SpPcBase, pc);
             bus.Write32(MemoryMap.SpRegistersBase + SpInterface.Status, 0x01);

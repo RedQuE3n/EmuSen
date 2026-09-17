@@ -179,7 +179,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Loads_and_stores_reach_memory_and_sign_extend_as_asked()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x800, 0xFFFF_8001);
 
             var cpu = new MipsAssembler()
@@ -199,7 +199,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_store_round_trips_through_the_bus()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             var cpu = new MipsAssembler()
                 .Lui(1, 0x8000).Ori(1, 1, 0x0900)
@@ -275,11 +275,11 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_multiply_costs_what_the_manual_says_and_an_add_costs_one()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             new MipsAssembler().Addiu(1, 0, 3).Addiu(2, 0, 4).Run(2, bus);
             long afterTwoAdds = bus.Cycles;
 
-            var second = new MarsBus();
+            var second = new MemoryBus();
             new MipsAssembler().Addiu(1, 0, 3).Addiu(2, 0, 4).Mult(1, 2).Run(3, second);
 
             Assert.Equal(2, afterTwoAdds);

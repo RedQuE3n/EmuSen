@@ -172,17 +172,17 @@ namespace EmuSen.WiseMan.Fixtures
 
         public uint[] ToArray() => _words.ToArray();
 
-        public MarsBus LoadInto(MarsBus bus)
+        public MemoryBus LoadInto(MemoryBus bus)
         {
             for (int i = 0; i < _words.Count; i++) bus.Write32(LoadAddress + (uint)(i * 4), _words[i]);
             return bus;
         }
 
         // A machine with this program in memory and the program counter already on it.
-        public Cpu Build(MarsBus? existing = null) =>
-            new(LoadInto(existing ?? new MarsBus())) { Pc = EntryPoint, NextPc = EntryPoint + 4 };
+        public Cpu Build(MemoryBus? existing = null) =>
+            new(LoadInto(existing ?? new MemoryBus())) { Pc = EntryPoint, NextPc = EntryPoint + 4 };
 
-        public Cpu Run(int steps, MarsBus? existing = null)
+        public Cpu Run(int steps, MemoryBus? existing = null)
         {
             var cpu = Build(existing);
 

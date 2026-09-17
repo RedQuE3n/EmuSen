@@ -12,10 +12,10 @@ namespace EmuSen.WiseMan.Fixtures
         private const ulong ExtendedAddressing = (1UL << 5) | (1UL << 6) | (1UL << 7);
         private const int KsuShift = 3;
 
-        public static Cpu Load(int mode, bool wide, ulong address, MarsBus? bus = null) =>
+        public static Cpu Load(int mode, bool wide, ulong address, MemoryBus? bus = null) =>
             Run(mode, wide, address, a => a.Lw(2, 1, 0), bus);
 
-        public static Cpu Store(int mode, bool wide, ulong address, MarsBus? bus = null) =>
+        public static Cpu Store(int mode, bool wide, ulong address, MemoryBus? bus = null) =>
             Run(mode, wide, address, a => a.Sw(2, 1, 0), bus);
 
         // The three outcomes the corpus's table distinguishes, under the names it gives them.
@@ -29,9 +29,9 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static Cpu Run(
             int mode, bool wide, ulong address, System.Func<MipsAssembler, MipsAssembler> program,
-            MarsBus? bus = null, ulong status = 0, System.Action<Cpu>? before = null, int steps = 1)
+            MemoryBus? bus = null, ulong status = 0, System.Action<Cpu>? before = null, int steps = 1)
         {
-            var cpu = program(new MipsAssembler()).Build(bus ?? new MarsBus());
+            var cpu = program(new MipsAssembler()).Build(bus ?? new MemoryBus());
 
             MapProgramPage(cpu);
 

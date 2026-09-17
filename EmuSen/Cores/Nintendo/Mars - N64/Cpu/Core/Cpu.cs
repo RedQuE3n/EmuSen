@@ -30,20 +30,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public long Instructions;
 
-        private readonly MarsBus _bus;
+        private readonly MemoryBus _bus;
         private readonly CpuException _exception = new();
 
         private bool _branchPending;
         private uint _lastCount;
 
-        public Cpu(MarsBus bus)
+        public Cpu(MemoryBus bus)
         {
             _bus = bus;
             Pc = 0xFFFF_FFFF_A400_0040;
             NextPc = Pc + 4;
         }
 
-        public MarsBus Bus => _bus;
+        public MemoryBus Bus => _bus;
 
         public void Step()
         {

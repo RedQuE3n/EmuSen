@@ -12,7 +12,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_byte_store_writes_the_whole_word_with_the_register_shifted_into_place()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             new MipsAssembler()
                 .Lui(2, (ushort)Uncached)
@@ -29,7 +29,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_half_store_writes_the_whole_word_and_clears_what_it_did_not_name()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(MemoryMap.SpDmemBase + 0, 0xDEAD_BEEF);
             bus.Write32(MemoryMap.SpDmemBase + 4, 0xBADD_ECAF);
 
@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_doubleword_store_writes_only_its_upper_half_to_one_word()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             uint[] preset = { 0xDEAD_BEEF, 0xBADD_ECAF, 0xABAB_ABAB, 0xCDCD_CDCD, 0xDEDE_DEDE, 0xEFEF_EFEF };
             for (uint i = 0; i < preset.Length; i++) bus.Write32(MemoryMap.SpDmemBase + i * 4, preset[i]);
 
@@ -67,7 +67,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Signal_processor_memory_repeats_up_to_its_registers()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(MemoryMap.SpDmemBase + 0x0000, 0x0123_4567);
             bus.Write32(MemoryMap.SpDmemBase + 0x1000, 0x89AB_CDEF);
@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Byte_and_half_loads_from_signal_processor_memory_read_only_their_bytes()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(MemoryMap.SpDmemBase + 0, 0x0123_4567);
 
             var cpu = new MipsAssembler()
@@ -100,7 +100,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_byte_store_to_main_memory_still_touches_only_its_byte()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x900, 0xAABB_CCDD);
 
             new MipsAssembler()

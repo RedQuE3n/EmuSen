@@ -10,9 +10,9 @@ namespace EmuSen.WiseMan.Cores
         private const ulong MappedPage = 0x0000_0000_0010_0000;
         private const uint Frame = 0x2000;
 
-        private static Cpu Machine(MarsBus? bus = null)
+        private static Cpu Machine(MemoryBus? bus = null)
         {
-            var cpu = new MipsAssembler().Nop().Run(0, bus ?? new MarsBus());
+            var cpu = new MipsAssembler().Nop().Run(0, bus ?? new MemoryBus());
             cpu.Pc = MipsAssembler.EntryPoint;
             cpu.NextPc = cpu.Pc + 4;
             return cpu;
@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_two_halves_of_a_pair_are_four_kilobytes_apart_and_independent()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x5000 + 0x20, 0x0DD0_0DD0);
             bus.Write32(0x9000 + 0x20, 0xBADF00D5);
 
@@ -54,7 +54,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_pair_does_not_reach_into_the_pair_above_it()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x7000 + 0x20, 0xFEEDFACE);
 
             var cpu = Machine(bus);
@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_mapped_page_translates_and_the_load_reaches_memory()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Frame + 0x20, 0xCAFEBABE);
 
             var cpu = Machine(bus);
@@ -101,7 +101,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_second_half_of_the_pair_is_a_page_of_its_own()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Frame + 0x1000 + 0x20, 0x12345678);
 
             var cpu = Machine(bus);
@@ -156,7 +156,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_load_from_the_same_page_is_still_allowed()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Frame, 0x99);
 
             var cpu = Machine(bus);
@@ -185,7 +185,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_same_entry_matches_once_the_address_space_agrees()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Frame, 0x77);
 
             var cpu = Machine(bus);
@@ -214,7 +214,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_entry_written_by_a_program_is_the_one_the_lookup_uses()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(Frame, 0x4242);
 
             var cpu = Machine(bus);

@@ -233,6 +233,14 @@ exceptions**, and filtering was the slice that met both (`Mars_RdpFiltering.md` 
 
 ## 6. Keeping it honest
 
+**A referee, consulted once.** On 2026-09-17 every dispute recorded by this instrument — twenty-one distinct
+rules by then — was carried to a third implementation, the N64_MiSTer core's VHDL, and its answer written
+beside the two references'. `Mars_RdpReferee.md` is that pass. It changed no rule of Mars and added no case;
+its value is that five disputes now have a third implementation on angrylion's side, three on parallel-rdp's,
+and ten have nobody's, which is a different thing from being settled. Read its §0 before quoting a row: the
+referee's rasteriser and level-of-detail unit carry angrylion's own identifiers, so its agreement there is
+nearly worthless, and its *disagreements* are what the pass is actually for.
+
 The claims here are about the checkout's pinned commits — parallel-rdp `1cecd042`, angrylion-rdp-plus
 `31bdb1f`, Granite `cf71dee7` — and about no other version. §4.3's clamp is itself evidence that
 the reference changes. If the checkout is updated, the tools must be rebuilt and the artefact and

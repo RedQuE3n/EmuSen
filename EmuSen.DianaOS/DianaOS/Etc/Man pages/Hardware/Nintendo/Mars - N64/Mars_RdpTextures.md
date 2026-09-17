@@ -263,6 +263,15 @@ every cross-checked case.**
 
 ### 7.3 Six disputes
 
+**A third implementation was read against all six on 2026-09-17** (`Mars_RdpReferee.md` §2, rows 4–9) and
+settled none of them outright. It is silent on formats 5 to 7 (its texel register is simply left unwritten),
+on the sub-row load and on the sixteen-megabyte wrap, which it cannot reach because its address space is
+twenty-six bits. It leans towards angrylion on the 32-bit tile, because it reads the same word index in both
+halves of texture memory and so has no separate upper half for a row to run into; it leans towards
+parallel-rdp on the block load's left column, which it takes as non-negative. On the one-cycle texel1 it
+filters by the first cycle's bilerp bit, as angrylion does — while putting that texel a pixel **behind**
+rather than ahead, which is a disagreement with both references and is set out in `Mars_RdpReferee.md` §5.
+
 Mars follows angrylion in each, as the grader; none is known to be the hardware's answer. The first three
 were found in random cases; the last three in cases written to catch breakages that had survived (§7.5).
 

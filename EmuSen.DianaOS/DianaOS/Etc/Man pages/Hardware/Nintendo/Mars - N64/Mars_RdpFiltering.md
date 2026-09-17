@@ -211,6 +211,12 @@ through an all-zero tile* keeps the rest of the original — the tile number, th
 
 ### 5.3 One dispute
 
+**The referee leans towards angrylion here** (`Mars_RdpReferee.md` row 10): the N64_MiSTer core builds its
+palette index out of the fetched bytes with no test of the tile's format, so a YUV tile is indexed like any
+other — angrylion's answer, not parallel-rdp's. It is filed as a lean because that core's YUV conversion
+takes precedence over the palette under some mode combinations, so the two paths are not cleanly separable
+by reading alone.
+
 **A YUV tile read through a palette.** angrylion reads each index as a byte and steps two texels to the
 neighbour (§4.1); parallel-rdp's palette lookup has no YUV branch and samples nothing, and the pixels it draws
 are black. Mars follows angrylion. A palette-enabled YUV tile is an odd thing for content to ask for, and nothing

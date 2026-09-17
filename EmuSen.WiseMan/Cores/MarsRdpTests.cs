@@ -289,6 +289,42 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // angrylion's own colours and stored depths across two shaded triangles crossing in depth, recorded from the differential - see Mars_RdpDepth.md §6.
+        [Fact]
+        public void Two_shaded_triangles_crossing_in_depth_store_the_colours_and_depths_the_reference_stores()
+        {
+            var bus = new MarsBus();
+            const uint list = 0x0030_0000;
+            uint end = WriteList(bus, list,
+                0x3F10001F_00100000UL, 0x2D000000_0007C07CUL, 0x2F300000_00000000UL, 0x37000000_7BDE7BDFUL, 0x3607C07C_00000000UL,
+                0x3F10001F_00120000UL, 0x37000000_FFFCFFFCUL, 0x3607C07C_00000000UL, 0x3F10001F_00100000UL, 0x3E000000_00120000UL,
+                0x2F0000F0_00000030UL, 0x3C887F10_88FE793CUL, 0x3A00005A_C8642A9FUL, 0x3B000000_3C90D071UL, 0x39000000_7755AA80UL,
+                0x38000000_2266EE40UL, 0x2E000000_12340040UL,
+                0x0D800071_0027000AUL, 0x001BC000_FFFEE7C9UL, 0x00032AE0_00002A41UL, 0x00018F73_0003611AUL, 0x00FE0013_00380103UL,
+                0xFFF80008_FFFFFFFDUL, 0x13E20775_B2F4B7ECUL, 0x3D02D62A_3BC17C71UL, 0xFFF70001_0006FFF6UL, 0xFFF90000_0006FFF6UL,
+                0xD83CF116_9A199028UL, 0x202F7BB8_BA7DFA60UL, 0x0F392A41_02F31F10UL, 0x018DAB7F_011109C9UL,
+                0x0D000077_00460005UL, 0x0004C000_00019783UL, 0x001C898B_FFFFD9D3UL, 0x001CDD8A_FFFE89D9UL, 0x00C800C9_001E0058UL,
+                0x0005FFFC_FFF5FFFFUL, 0xB3A6AAAB_2CEA8D79UL, 0xD518CBBF_264D40E3UL, 0xFFFDFFF9_FFFF0005UL, 0xFFFEFFF8_FFFD0005UL,
+                0x31675555_4C5ACA1BUL, 0x100FDB04_AE22AD9BUL, 0x7ECA1AF3_035078E1UL, 0xFCD79436_FD561B02UL,
+                SyncFull);
+
+            bus.Write32(Start, list);
+            bus.Write32(End, end);
+
+            (uint X, uint Color, uint Depth)[] row14 =
+            {
+                (0, 0x7BDE, 0xFFFC), (6, 0x91A1, 0x1232), (9, 0x7A61, 0x169E), (12, 0x4D2D, 0x12AE), (15, 0x64E5, 0x17A6),
+                (18, 0x745D, 0x1C9E), (21, 0x8415, 0x232E), (24, 0x93CD, 0x2D22), (27, 0x7BDF, 0xFFFC),
+            };
+
+            foreach (var (x, color, depth) in row14)
+            {
+                uint pixel = 14 * 32 + x;
+                Assert.Equal(color, (uint)bus.Read16(0x0010_0000 + pixel * 2));
+                Assert.Equal(depth, (uint)bus.Read16(0x0012_0000 + pixel * 2));
+            }
+        }
+
         [Fact]
         public void Writing_the_mode_register_clear_bit_lowers_the_display_processor_interrupt()
         {

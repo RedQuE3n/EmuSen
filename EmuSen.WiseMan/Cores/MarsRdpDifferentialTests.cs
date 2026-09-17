@@ -283,6 +283,7 @@ namespace EmuSen.WiseMan.Cores
             }
 
             cases.AddRange(OneCycleCases());
+            cases.AddRange(ShadeAndDepthCases());
             return cases.ToArray();
         }
 
@@ -389,12 +390,13 @@ namespace EmuSen.WiseMan.Cores
 
         private static ulong Modes(int rgbDither = 3, int alphaDither = 3, int m1a = 0, int m1b = 0, int m2a = 0, int m2b = 0, bool forceBlend = false,
             bool alphaCvgSelect = false, bool cvgTimesAlpha = false, int cvgDest = 0, bool colorOnCvg = false, bool imageRead = false, bool antialias = false,
-            bool zSource = false, bool alphaCompare = false)
+            bool zSource = false, bool alphaCompare = false, int zMode = 0, bool zCompare = false, bool zUpdate = false)
         {
             ulong blender = (ulong)(uint)((m1a << 30) | (m1a << 28) | (m1b << 26) | (m1b << 24) | (m2a << 22) | (m2a << 20) | (m2b << 18) | (m2b << 16));
             return (0x2FUL << 56) | ((ulong)rgbDither << 38) | ((ulong)alphaDither << 36) | blender
                 | (forceBlend ? 1UL << 14 : 0) | (alphaCvgSelect ? 1UL << 13 : 0) | (cvgTimesAlpha ? 1UL << 12 : 0) | ((ulong)cvgDest << 8)
-                | (colorOnCvg ? 1UL << 7 : 0) | (imageRead ? 1UL << 6 : 0) | (antialias ? 1UL << 3 : 0) | (zSource ? 1UL << 2 : 0) | (alphaCompare ? 1UL : 0);
+                | (colorOnCvg ? 1UL << 7 : 0) | (imageRead ? 1UL << 6 : 0) | (antialias ? 1UL << 3 : 0) | (zSource ? 1UL << 2 : 0) | (alphaCompare ? 1UL : 0)
+                | ((ulong)zMode << 10) | (zCompare ? 1UL << 4 : 0) | (zUpdate ? 1UL << 5 : 0);
         }
 
         // Both cycles given the same inputs, since the one-cycle mode reads the second.
@@ -406,6 +408,160 @@ namespace EmuSen.WiseMan.Cores
         }
 
         private static ulong Color(uint id, uint rgba, uint extra = 0) => ((ulong)id << 56) | ((ulong)extra << 32) | rgba;
+
+        private const uint DepthBuffer = 0x0012_0000;
+
+        // Shaded and depth-tested primitives in the one-cycle mode, over a depth buffer the case clears itself - see Mars_RdpDepth.md §6.
+        private static IEnumerable<Case> ShadeAndDepthCases()
+        {
+            var cases = new List<Case>();
+            ulong inside = Scissor(0, 0, 124, 124);
+            ulong shade = Combine(subA: 8, subB: 8, mul: 16, add: 4, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 4);
+            ulong primitive = Combine(subA: 8, subB: 8, mul: 16, add: 3, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 3);
+
+            var a = new Vertex(3.25, 2.5, 250, 20, 60, 255, 0x08000);
+            var b = new Vertex(27.75, 9.75, 10, 240, 90, 128, 0x30000);
+            var c = new Vertex(7.5, 28.25, 40, 70, 230, 12, 0x1C000);
+            var d = new Vertex(28.5, 1.25, 200, 200, 30, 90, 0x3F000);
+            var e = new Vertex(4.75, 17.5, 30, 160, 250, 200, 0x02000);
+            var f = new Vertex(24.25, 29.75, 120, 10, 10, 255, 0x12000);
+
+            void Draw(string name, ulong modes, ulong combine, ulong[] shapes, uint depthClear = 0xFFFC_FFFC, uint background = 0x7BDE_7BDF,
+                int size = Bits16, uint deltaZ = 0x0040, uint primitiveZ = 0x1234)
+            {
+                var commands = new List<ulong>
+                {
+                    ColorImage(size, 32, Framebuffer), inside, FillCycle, FillColor(background), Rectangle(0, 0, 124, 124),
+                    ColorImage(Bits16, 32, DepthBuffer), FillColor(depthClear), Rectangle(0, 0, 124, 124), ColorImage(size, 32, Framebuffer),
+                    (0x3EUL << 56) | DepthBuffer,
+                    modes, combine, Color(0x3A, 0xC864_2A9F, 0x5A), Color(0x3B, 0x3C90_D071), Color(0x39, 0x7755_AA80), Color(0x38, 0x2266_EE40),
+                    (0x2EUL << 56) | ((ulong)primitiveZ << 16) | deltaZ,
+                };
+                commands.AddRange(shapes);
+                commands.Add(SyncFull);
+                cases.Add(new Case(name, Framebuffer, size, 32, commands.ToArray()));
+            }
+
+            Draw("Gouraud-shaded triangle", Modes(), shade, Shaded(0x0C, a, b, c));
+            Draw("anti-aliased shaded triangle, corrected at its edges", Modes(antialias: true, imageRead: true, m2a: 1), shade, Shaded(0x0C, a, b, c));
+            Draw("shade alpha as the blend weight", Modes(antialias: true, forceBlend: true, m1b: 2, m2a: 1, m2b: 0), shade, Shaded(0x0C, a, b, c));
+            Draw("depth-tested triangle over a cleared depth buffer", Modes(zCompare: true, zUpdate: true), shade, Shaded(0x0D, a, b, c));
+            Draw("two triangles crossing in depth", Modes(zCompare: true, zUpdate: true), shade, Shaded(0x0D, a, b, c).Concat(Shaded(0x0D, d, e, f)).ToArray());
+            Draw("two anti-aliased triangles crossing in depth", Modes(antialias: true, imageRead: true, m2a: 1, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a, b, c).Concat(Shaded(0x0D, d, e, f)).ToArray());
+            Draw("interpenetrating depth mode", Modes(antialias: true, imageRead: true, m2a: 1, zMode: 1, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a, b, c).Concat(Shaded(0x0D, d, e, f)).ToArray());
+            Draw("transparent depth mode", Modes(antialias: true, imageRead: true, m2a: 1, zMode: 2, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a, b, c).Concat(Shaded(0x0D, d, e, f)).ToArray());
+            // Decal mode passes nothing over a cleared buffer, so the surface under the decal is drawn opaque first.
+            ulong decal = Modes(antialias: true, imageRead: true, zMode: 3, zCompare: true, zUpdate: true);
+            Draw("decal depth mode over the same triangle", Modes(antialias: true, imageRead: true, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a, b, c).Append(decal).Concat(Shaded(0x0D, a with { R = 0, G = 0 }, b with { R = 0 }, c with { B = 0 })).ToArray());
+            Draw("depth-only triangle with flat colour", Modes(zCompare: true, zUpdate: true), primitive, Shaded(0x09, a, b, c).Concat(Shaded(0x09, d, e, f)).ToArray());
+            Draw("depth written without comparing", Modes(zUpdate: true), shade, Shaded(0x0D, a, b, c).Concat(Shaded(0x0D, d, e, f)).ToArray());
+            Draw("primitive depth for rectangles", Modes(zSource: true, zCompare: true, zUpdate: true), primitive,
+                new[] { Rectangle(8, 8, 90, 70), Color(0x2E, 0x0800_0100), Rectangle(40, 30, 120, 110) }, primitiveZ: 0x2000);
+            Draw("blend shifts from stored depth slopes", Modes(antialias: true, imageRead: true, m1a: 0, m1b: 0, m2a: 1, m2b: 1, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a, b, c).Concat(Shaded(0x0D, d, e, f)).ToArray());
+            Draw("depth buffer cleared to a low-exponent value", Modes(zCompare: true, zUpdate: true), shade, Shaded(0x0D, a with { Z = 0x0100 }, b with { Z = 0x0200 }, c with { Z = 0x0080 }),
+                depthClear: 0x0400_0400);
+            Draw("depth buffer holding the coplanar slope", Modes(antialias: true, imageRead: true, m2a: 1, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a with { Z = 0x0100 }, b with { Z = 0x0100 }, c with { Z = 0x0100 }), depthClear: 0x0103_0103);
+            Draw("shaded triangle in a 32-bit image", Modes(antialias: true, imageRead: true, m2a: 1), shade, Shaded(0x0C, a, b, c), size: Bits32, background: 0x1234_5678);
+            Draw("steep depth slope", Modes(zCompare: true, zUpdate: true), shade, Shaded(0x0D, a with { Z = 0 }, b with { Z = 0x3FFFF }, c with { Z = 0x100 }));
+            Draw("depth beyond its range", Modes(antialias: true, imageRead: true, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a with { Z = 0x48000 }, b with { Z = 0x70000 }, c with { Z = -0x1000 }));
+            Draw("depth beyond its range, transparent mode", Modes(antialias: true, imageRead: true, zMode: 2, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a with { Z = 0x48000 }, b with { Z = 0x70000 }, c with { Z = 0x50000 }));
+            Draw("decal behind the stored surface", Modes(antialias: true, imageRead: true, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a with { Z = 0x10000 }, b with { Z = 0x10000 }, c with { Z = 0x10000 }).Append(decal)
+                    .Concat(Shaded(0x0D, d with { Z = 0x10000 }, e with { Z = 0x18000 }, f with { Z = 0x10040 })).ToArray());
+            Draw("stored slope widened at low precision", Modes(zMode: 3, zCompare: true, zUpdate: true), shade,
+                Shaded(0x0D, a with { Z = 0x4030 }, b with { Z = 0x3FD0 }, c with { Z = 0x4010 }), depthClear: 0x0400_0400);
+
+            var random = new Random(0x5A44_4550);
+            for (int n = 0; n < 150; n++)
+            {
+                int Pick(params int[] choices) => choices[random.Next(choices.Length)];
+                bool Coin() => random.Next(2) == 1;
+                Vertex Point() => new(random.Next(-8, 136) / 4.0, random.Next(-8, 136) / 4.0, random.Next(256), random.Next(256), random.Next(256), random.Next(256),
+                    random.Next(0x40000));
+
+                int size = Pick(Bits16, Bits16, Bits16, Bits32);
+                ulong modes = Modes(
+                    rgbDither: Pick(0, 1, 3), alphaDither: Pick(0, 1, 3), m1a: random.Next(4), m1b: random.Next(4), m2a: random.Next(4), m2b: random.Next(4),
+                    forceBlend: Coin(), alphaCvgSelect: Coin(), cvgTimesAlpha: Coin(), cvgDest: random.Next(4), colorOnCvg: Coin(), imageRead: Coin(),
+                    antialias: Coin(), zSource: random.Next(4) == 0, alphaCompare: random.Next(4) == 0, zMode: random.Next(4), zCompare: Coin(), zUpdate: Coin());
+                ulong combine = Combine(
+                    subA: Pick(3, 4, 5, 6, 9), subB: Pick(3, 4, 5, 6, 7, 10), mul: Pick(3, 4, 5, 6, 10, 11, 12, 14, 15, 20), add: Pick(3, 4, 5, 6, 7),
+                    alphaSubA: Pick(3, 4, 5, 6, 7), alphaSubB: Pick(3, 4, 5, 6, 7), alphaMul: Pick(3, 4, 5, 6, 7), alphaAdd: Pick(3, 4, 5, 6, 7));
+
+                var shapes = new List<ulong>();
+                for (int t = 0, count = random.Next(1, 4); t < count; t++) shapes.AddRange(Shaded(Pick(0x08, 0x09, 0x0C, 0x0D), Point(), Point(), Point()));
+
+                Draw($"random shade and depth case {n}", modes, combine, shapes.ToArray(), size: size,
+                    depthClear: Coin() ? 0xFFFC_FFFC : (uint)random.Next(0x10000) * 0x10001, background: (uint)random.Next() * 2 + (uint)random.Next(2),
+                    deltaZ: (uint)random.Next(0x10000), primitiveZ: (uint)random.Next(0x8000));
+            }
+
+            return cases;
+        }
+
+        private readonly record struct Vertex(double X, double Y, double R, double G, double B, double A, double Z);
+
+        // Edges from Vertices, and each attribute as a plane through the three vertices, taken at the major edge's first row - see Mars_RdpDepth.md §1.
+        private static ulong[] Shaded(int id, Vertex v1, Vertex v2, Vertex v3)
+        {
+            ulong[] words = Vertices(v1.X, v1.Y, v2.X, v2.Y, v3.X, v3.Y, id);
+            var sorted = new[] { v1, v2, v3 }.OrderBy(v => v.Y).ToArray();
+            Vertex top = sorted[0], bottom = sorted[2];
+
+            double major = bottom.Y > top.Y ? (bottom.X - top.X) / (bottom.Y - top.Y) : 0;
+            double rowTop = Math.Floor(top.Y);
+            double xh = top.X + major * (rowTop - top.Y);
+            double area = (v2.X - v1.X) * (v3.Y - v1.Y) - (v3.X - v1.X) * (v2.Y - v1.Y);
+
+            (int Value, int Dx, int De, int Dy) Plane(Func<Vertex, double> attribute, double scale)
+            {
+                double dx = 0, dy = 0;
+                if (Math.Abs(area) > 1e-9)
+                {
+                    dx = ((attribute(v2) - attribute(v1)) * (v3.Y - v1.Y) - (attribute(v3) - attribute(v1)) * (v2.Y - v1.Y)) / area;
+                    dy = ((attribute(v3) - attribute(v1)) * (v2.X - v1.X) - (attribute(v2) - attribute(v1)) * (v3.X - v1.X)) / area;
+                }
+
+                double value = attribute(top) + dx * (xh - top.X) + dy * (rowTop - top.Y);
+                return (Fixed(value * scale), Fixed(dx * scale), Fixed((dy + dx * major) * scale), Fixed(dy * scale));
+            }
+
+            int at = 4;
+            if ((id & 4) != 0)
+            {
+                var channels = new[] { Plane(v => v.R, 65536), Plane(v => v.G, 65536), Plane(v => v.B, 65536), Plane(v => v.A, 65536) };
+                ulong Pack(Func<(int Value, int Dx, int De, int Dy), int> part, bool high) =>
+                    channels.Aggregate(0UL, (word, channel) => (word << 16) | (ushort)(high ? part(channel) >> 16 : part(channel)));
+
+                words[at++] = Pack(p => p.Value, true);
+                words[at++] = Pack(p => p.Dx, true);
+                words[at++] = Pack(p => p.Value, false);
+                words[at++] = Pack(p => p.Dx, false);
+                words[at++] = Pack(p => p.De, true);
+                words[at++] = Pack(p => p.Dy, true);
+                words[at++] = Pack(p => p.De, false);
+                words[at++] = Pack(p => p.Dy, false);
+            }
+
+            if ((id & 1) != 0)
+            {
+                var depth = Plane(v => v.Z, 8192);
+                words[^2] = ((ulong)(uint)depth.Value << 32) | (uint)depth.Dx;
+                words[^1] = ((ulong)(uint)depth.De << 32) | (uint)depth.Dy;
+            }
+
+            return words;
+        }
+
+        private static int Fixed(double value) => (int)Math.Clamp(Math.Round(value), int.MinValue, int.MaxValue);
 
         private static ulong Scissor(uint left, uint top, uint right, uint bottom, bool field = false, bool keepOdd = false) =>
             (0x2DUL << 56) | ((ulong)left << 44) | ((ulong)top << 32) | ((ulong)right << 12) | bottom

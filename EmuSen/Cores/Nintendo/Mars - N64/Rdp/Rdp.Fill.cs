@@ -1,3 +1,5 @@
+using System;
+
 namespace EmuSen.Cores.Nintendo.Mars.Rdp
 {
     // The colour image, the scissor and the fill cycle - see Mars_Rdp.md §5.
@@ -52,7 +54,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             int rightX = ((right >> 2) << 16) | ((right & 3) << 14);
             int leftX = ((left >> 2) << 16) | ((left & 3) << 14);
 
-            Draw(Walk(majorOnLeft: true, top, bottom, bottom, leftX, rightX, rightX, 0, 0, 0), majorOnLeft: true, flat: true);
+            ClearAttributes();
+            Draw(Walk(majorOnLeft: true, top, bottom, bottom, leftX, rightX, rightX, 0, 0, 0, majorSlopeNegative: false), majorOnLeft: true, textured: false);
         }
 
         // The first four words of every triangle command, whatever else it carries - see Mars_RdpTriangles.md §1.
@@ -60,6 +63,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         {
             ulong edges = _command[0];
             bool majorOnLeft = ((edges >> 55) & 1) != 0;
+            DecodeAttributes(id);
 
             Draw(Walk(
                 majorOnLeft,
@@ -71,14 +75,56 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 xl: SignExtend(_command[1] >> 32, 28),
                 dxhdy: SignExtend(_command[2], 30),
                 dxmdy: SignExtend(_command[3], 30),
-                dxldy: SignExtend(_command[1], 30)), majorOnLeft, flat: id == 0x08);
+                dxldy: SignExtend(_command[1], 30),
+                majorSlopeNegative: (int)_command[2] < 0), majorOnLeft, textured: (id & 2) != 0);
         }
 
-        // The fill cycle draws every primitive; the one-cycle mode draws only those with no shade, texture or depth yet - see Mars_RdpCoverage.md §5.
-        private void Draw((int First, int Last) rows, bool majorOnLeft, bool flat)
+        // Shade in the eight words after the edges, texture in the next eight, depth in the last two, each value an integer half and a fraction half - see Mars_RdpDepth.md §1.1.
+        private void DecodeAttributes(uint id)
+        {
+            ClearAttributes();
+            int at = 4;
+
+            if ((id & 4) != 0)
+            {
+                for (int c = 0; c < 4; c++)
+                {
+                    int shift = 48 - 16 * c;
+                    _attributeValue[c] = Joined(_command[at], _command[at + 2], shift);
+                    _attributeDx[c] = Joined(_command[at + 1], _command[at + 3], shift);
+                    _attributeDe[c] = Joined(_command[at + 4], _command[at + 6], shift);
+                    _attributeDy[c] = Joined(_command[at + 5], _command[at + 7], shift);
+                }
+
+                at += 8;
+            }
+
+            if ((id & 2) != 0) at += 8;
+
+            if ((id & 1) != 0)
+            {
+                _attributeValue[4] = (int)(_command[at] >> 32);
+                _attributeDx[4] = (int)_command[at];
+                _attributeDe[4] = (int)(_command[at + 1] >> 32);
+                _attributeDy[4] = (int)_command[at + 1];
+            }
+        }
+
+        private void ClearAttributes()
+        {
+            Array.Clear(_attributeValue);
+            Array.Clear(_attributeDx);
+            Array.Clear(_attributeDe);
+            Array.Clear(_attributeDy);
+        }
+
+        private static int Joined(ulong whole, ulong fraction, int shift) => (int)((((whole >> shift) & 0xFFFF) << 16) | ((fraction >> shift) & 0xFFFF));
+
+        // The fill cycle draws every primitive; the one-cycle mode draws those without texture - see Mars_RdpDepth.md §5.
+        private void Draw((int First, int Last) rows, bool majorOnLeft, bool textured)
         {
             if (CycleType == FillCycle) FillSpans(rows);
-            else if (CycleType == OneCycle && flat) DrawOneCycle(rows, majorOnLeft);
+            else if (CycleType == OneCycle && !textured) DrawOneCycle(rows, majorOnLeft);
         }
 
         // A four-bit image has nothing to fill - see Mars_Rdp.md §5.3.

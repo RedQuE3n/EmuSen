@@ -228,8 +228,10 @@ covered edge and untouched background. It fails with the renderer off, and with 
 
 ## 8. What is not here
 
-- **Shade and depth interpolation**, and with them the shaded triangle forms in this mode, the
-  coverage-based shade correction, and the depth buffer's compare and update.
+- ~~**Shade and depth interpolation**, and with them the shaded triangle forms in this mode, the
+  coverage-based shade correction, and the depth buffer's compare and update.~~ Built in the next slice
+  (`Mars_RdpDepth.md`), which also lets the shaded and depth-tested triangle forms draw in this mode, so
+  §5's first bullet no longer holds for them.
 - **Textures**, the level-of-detail fraction and texture memory.
 - **The two-cycle and copy modes**, and texture rectangles.
 - **Chroma key** — which parallel-rdp lists among its own missing features, so a dispute is expected.

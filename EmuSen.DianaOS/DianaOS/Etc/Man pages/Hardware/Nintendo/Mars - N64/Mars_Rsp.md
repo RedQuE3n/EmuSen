@@ -2,8 +2,9 @@
 
 *Phase C's first slice, landed 2026-09-17. The RSP as a processor: its program counter,
 the scalar instruction set, the interface registers it is driven through, and the clock
-it shares with the main CPU. No vector unit. `Rsp/Rsp.cs`, with the interface in
-`Memory/SpInterface.cs`. Tests in `MarsRspTests`.*
+it shares with the main CPU. `Rsp/Rsp.cs`, with the interface in `Memory/SpInterface.cs`.
+Tests in `MarsRspTests`. The vector unit, which landed the same day as the next slice, is
+`Mars_RspVector.md`.*
 
 ---
 
@@ -13,7 +14,7 @@ A second MIPS processor inside the RCP, with 4KB of instruction memory and 4KB o
 memory and nothing else. Its scalar half is MIPS I with most of the hard parts removed:
 **no exceptions, no alignment, no 64-bit words, no multiply or divide, no branch-likely,
 no TLB and no caches.** What it has instead is a vector coprocessor on coprocessor 2, which
-is the next slice and the reason the processor exists.
+is the reason the processor exists and has its own page (`Mars_RspVector.md`).
 
 The removals are what make this half small, and they are also where it differs from the
 main CPU in ways that are easy to carry over by accident. §3 and §4 are both of that kind.
@@ -110,17 +111,31 @@ from where it stopped.
 ## 6. An encoding this half does not own does nothing
 
 The RSP raises no exceptions, so there is nothing a reserved or unimplemented encoding
-could do except nothing. Mars makes every opcode outside the scalar set a no-op, **which
-includes the whole vector unit** — `COP2`, `LWC2` and `SWC2` currently execute as no-ops.
+could do except nothing. Every opcode outside the scalar set and the vector unit is a
+no-op.
 
-That is a deliberate choice against the alternative this project used for the FPU
-(`Mars_Fpu.md` §6), where an unbuilt instruction stopped the machine loudly. There, the
-scaffold was worth its cost because nothing past the first unbuilt instruction could run.
-Here the opposite holds: the vector tests are a self-contained block, the corpus's
-programs report results through data memory whether or not the vector instructions did
-anything, and a loud stop would have cut the run short at exactly the moment it first
-became able to reach the end. The vector tests fail, individually and honestly, and
-everything after them runs.
+> **Superseded 2026-09-17 by the vector unit (`Mars_RspVector.md`).** This section recorded
+> that `COP2`, `LWC2` and `SWC2` executed as no-ops while the unit was unbuilt, and why that
+> was chosen over stopping the machine. The reasoning is kept because it was borne out: it
+> read
+>
+> *That is a deliberate choice against the alternative this project used for the FPU
+> (`Mars_Fpu.md` §6), where an unbuilt instruction stopped the machine loudly. There, the
+> scaffold was worth its cost because nothing past the first unbuilt instruction could run.
+> Here the opposite holds: the vector tests are a self-contained block, the corpus's
+> programs report results through data memory whether or not the vector instructions did
+> anything, and a loud stop would have cut the run short at exactly the moment it first
+> became able to reach the end. The vector tests fail, individually and honestly, and
+> everything after them runs.*
+>
+> The complete runs that followed are what located the seventeen CPU groups
+> (`Mars_Corpus.md` §9), and the census they produced attributed exactly 155 groups to the
+> unit — which is the number the unit then cleared.
+>
+> **One consequence the section did not foresee:** the vector unit's first unit tests were
+> written against the no-op build to show they failed, and four cases passed anyway, because
+> a no-op load leaves a register at the zero a test expected (`Mars_Corpus.md` §10). A
+> silent no-op makes a test's failure depend on it not expecting the value nothing produces.
 
 ## 7. The clock
 
@@ -148,11 +163,13 @@ in fact about the display processor freezing, which is Phase D.
 corpus run got past the point where it had waited since Phase A — and ran straight into a
 defect in how Mars was *running the corpus*, which is `Mars_Corpus.md` §8.
 
+> **Update 2026-09-17, after the vector unit: 243 of the 248 pass.** The five that fail are
+> the four `spmem` groups and the `RSP STATUS` group named above. That also corrects this
+> section's arithmetic, which said *"all but six"* and then named five: 160 failing groups
+> less 155 in the vector unit is five, and five is what the run now shows.
+
 ## 9. What this slice does not do
 
-- **The vector unit.** Thirty-two 128-bit registers, the carry, compare and extension
-  flags, the eight-element multiply and accumulate families, and the reciprocal tables.
-  §6 is what happens to those instructions now.
 - **Single-step as more than a status bit.** It is stored and reported, and it halts the
   processor after each instruction; nothing is known about how hardware interacts it with
   a break or a delay slot.

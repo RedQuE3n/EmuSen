@@ -358,6 +358,20 @@ runs to the point of emitting a display list — which nothing can yet consume.
 > claimed against a truncated run; that claim is now known to have been premature, and it
 > is recorded where it was made (`Mars_Cop0.md` §1) rather than here.
 
+> **Progress, 2026-09-17: the vector unit.** Every vector instruction, load and store, the
+> flags, the 48-bit accumulator and the reciprocals with their hidden registers
+> (`Mars_RspVector.md`). All 155 vector groups pass and nothing else moved; the corpus's
+> tally went from 319 failed assertions to 163 (`Mars_Corpus.md` §10). **243 of the 248 RSP
+> and SP groups now pass.**
+>
+> **The first half of this phase's "done when" is therefore nearly met, and the half that is
+> left is not RSP work.** Of the five RSP and SP groups that fail, four are the main CPU's
+> sub-word access to RSP memory, which is a bus question, and one is an RDP freeze that
+> belongs to Phase D. The phase description's DMA and SP-register items were built in Phase A
+> and the scalar slice. What remains of Phase C as written is the second condition — a
+> commercial game's boot microcode running to a display list — which no corpus test measures
+> and which has not been attempted.
+
 ### 4.4 Phase D — the RDP
 
 The command stream, the primitive types, TMEM and texture loading, the combiner,

@@ -121,7 +121,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
                         for (int c = 0; c < Attributes; c++)
                         {
-                            int perHalfPixel = CycleType == 2 ? 0 : (_attributeDx[c] >> 8) & ~1;
+                            int perHalfPixel = CycleType == CopyCycle ? 0 : (_attributeDx[c] >> 8) & ~1;
                             _spanAttributes[row * Attributes + c] = ((running[c] & ~0x1FF) + offsets[c] - fraction * perHalfPixel) & ~0x3FF;
                         }
                     }

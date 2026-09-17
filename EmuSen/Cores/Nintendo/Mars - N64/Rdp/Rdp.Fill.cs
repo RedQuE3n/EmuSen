@@ -53,7 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private (int First, int Last) WalkRectangle(ulong word)
         {
             int right = Quarters(word >> 44);
-            int bottom = Quarters(word >> 32) | (CycleType >= 2 ? 3 : 0);
+            int bottom = Quarters(word >> 32) | (CycleType >= CopyCycle ? 3 : 0);
             int left = Quarters(word >> 12);
             int top = Quarters(word);
 
@@ -143,6 +143,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             if (CycleType == FillCycle) FillSpans(rows);
             else if (CycleType == OneCycle) DrawOneCycle(rows, majorOnLeft, tile, maxLevel);
             else if (CycleType == TwoCycle) DrawTwoCycle(rows, majorOnLeft, tile, maxLevel);
+            else DrawCopy(rows, majorOnLeft, tile, maxLevel);
         }
 
         // A four-bit image has nothing to fill - see Mars_Rdp.md §5.3.

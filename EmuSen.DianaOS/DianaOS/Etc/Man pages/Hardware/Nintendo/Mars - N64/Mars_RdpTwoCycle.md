@@ -222,7 +222,7 @@ mode settings do not reach, and the differential cases carry those.
 
 ## 6. What is not here
 
-- **The copy mode.**
+- ~~**The copy mode.**~~ Built in the next slice (`Mars_RdpCopy.md`), which is Phase D's last cycle type.
 - **Chroma key** and **noise**, in either cycle, as `Mars_RdpDepth.md` §7 left them. The random cases never
   select noise or turn the key on.
 - **A dithered alpha-compare threshold**, which reads noise.

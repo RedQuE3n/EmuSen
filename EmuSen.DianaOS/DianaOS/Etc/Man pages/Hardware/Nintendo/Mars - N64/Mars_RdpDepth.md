@@ -181,6 +181,6 @@ compression of exponents above four, which its depths never reach.
   fraction, filtering and palette lookup, which followed (`Mars_RdpFiltering.md`, `Mars_RdpLod.md`).
 - ~~**The two-cycle mode.**~~ Built four slices later (`Mars_RdpTwoCycle.md`), which is also where this
   page's depth encoding gained a second reader: the previous pixel's stored slope, which shifts that mode's
-  first blend. **The copy mode** is still not here.
+  first blend. ~~**The copy mode** is still not here.~~ Built in `Mars_RdpCopy.md`, which tests no depth at all.
 - **Chroma key** and **noise** (`Mars_RdpCoverage.md` §6.3).
 - **The reference's validation clamp**, still not copied (`Mars_RdpDifferential.md` §4.3).

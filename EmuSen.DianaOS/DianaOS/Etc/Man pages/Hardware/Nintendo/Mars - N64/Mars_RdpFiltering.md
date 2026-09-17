@@ -283,5 +283,6 @@ combine mode or colour image carries.
   choice they make — and with it the reference's texel 0, which `Mars_RdpTextures.md` §6 notes differs from
   the previous pixel's texel 1 only then.~~ Built in the next slice (`Mars_RdpLod.md`), where the texel 0
   concern turned out unfounded.
-- **The copy mode**, whose palette lookup is a different path.
+- ~~**The copy mode**, whose palette lookup is a different path.~~ Built in `Mars_RdpCopy.md` §2.4; the path
+  is indeed a different one, reading the entry at four times the index plus the texel's own place.
 - **Chroma key** and **noise**, as `Mars_RdpDepth.md` §7 left them.

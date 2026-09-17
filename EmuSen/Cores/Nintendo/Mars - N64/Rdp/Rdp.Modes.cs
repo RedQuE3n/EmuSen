@@ -67,12 +67,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     _k5 = (int)word & 0x1FF;
                     return true;
                 case SetKeyGreenBlue:
+                    _keyWidth.G = (int)(word >> 44) & 0xFFF;
+                    _keyWidth.B = (int)(word >> 32) & 0xFFF;
                     _keyCenter.G = (int)(word >> 24) & 0xFF;
                     _keyScale.G = (int)(word >> 16) & 0xFF;
                     _keyCenter.B = (int)(word >> 8) & 0xFF;
                     _keyScale.B = (int)word & 0xFF;
                     return true;
                 case SetKeyRed:
+                    _keyWidth.R = (int)(word >> 16) & 0xFFF;
                     _keyCenter.R = (int)(word >> 8) & 0xFF;
                     _keyScale.R = (int)word & 0xFF;
                     return true;

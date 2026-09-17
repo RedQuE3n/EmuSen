@@ -168,10 +168,22 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // The one-cycle mode's cycle and the two-cycle mode's last: the pixel's colour and alpha, then clamped to eight bits - see §4.1.
         private void CombineSecondCycle(int ditherAlpha, ref int coverage)
         {
-            (int red, int green, int blue, int alpha) = CombinerEquations(SecondCombineCycle);
+            CombinerSelectors last = SecondCombineCycle;
+            (int red, int green, int blue, int alpha) = CombinerEquations(last);
 
             _combined = new Color { R = red >> 8, G = green >> 8, B = blue >> 8, A = alpha };
-            _pixel = new Color { R = Clamp9(_combined.R), G = Clamp9(_combined.G), B = Clamp9(_combined.B) };
+
+            // Keying passes this cycle's first colour input through in place of its result - see Mars_RdpChromaKey.md §1.
+            int keyAlpha = 0;
+            if (KeyEnabled)
+            {
+                keyAlpha = ChromaKey(red, green, blue);
+                _pixel = new Color { R = Clamp9(ColorA(last.ColorA, 0)), G = Clamp9(ColorA(last.ColorA, 1)), B = Clamp9(ColorA(last.ColorA, 2)) };
+            }
+            else
+            {
+                _pixel = new Color { R = Clamp9(_combined.R), G = Clamp9(_combined.G), B = Clamp9(_combined.B) };
+            }
 
             int pixelAlpha = Clamp9(alpha);
             if (pixelAlpha == 0xFF) pixelAlpha = 0x100;
@@ -185,8 +197,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             if (!AlphaFromCoverage)
             {
-                pixelAlpha += ditherAlpha;
-                if ((pixelAlpha & 0x100) != 0) pixelAlpha = 0xFF;
+                if (KeyEnabled) pixelAlpha = keyAlpha;
+                else
+                {
+                    pixelAlpha += ditherAlpha;
+                    if ((pixelAlpha & 0x100) != 0) pixelAlpha = 0xFF;
+                }
             }
             else
             {

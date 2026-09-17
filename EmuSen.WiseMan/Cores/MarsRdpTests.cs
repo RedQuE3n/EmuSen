@@ -507,6 +507,39 @@ namespace EmuSen.WiseMan.Cores
             foreach (var (y, x, color) in pixels) Assert.Equal(color, (uint)bus.Read16(0x0010_0000 + (y * 32 + x) * 2));
         }
 
+        // angrylion's pixels for a keyed triangle, its alpha the distance from the key and its colour the cycle's first input - see Mars_RdpChromaKey.md §3.3.
+        [Fact]
+        public void A_chroma_keyed_triangle_matches_the_reference()
+        {
+            var bus = new MarsBus();
+            for (uint i = 0; i < 0x400; i++) bus.Write16(0x0020_0000 + i * 2, (ushort)(((i * 0x2B13 + 0x1357) & 0xFFFE) | (i & 1)));
+
+            const uint list = 0x0030_0000;
+            uint end = WriteList(bus, list,
+                0x3F10001F_00100000UL, 0x2D000000_0007C07CUL, 0x2F300000_00000000UL, 0x37000000_7BDE7BDFUL, 0x3607C07C_00000000UL,
+                0x3D10001F_00200000UL, 0x35101000_00014050UL, 0x34000000_0007C07CUL,
+                0x3D10000F_00200100UL, 0x35100900_01010441UL, 0x34000000_0103C03CUL,
+                0x3D100007_00200200UL, 0x35100540_0200C832UL, 0x34000000_0201C01CUL,
+                0x3D100003_00200300UL, 0x35100350_03008C23UL, 0x34000000_0300C00CUL,
+                0x2B000000_00888010UL, 0x2A090080_7012900EUL, 0x2F0009F0_00404040UL, 0x3C137E26_66FFF3F9UL,
+                0x3A00005A_C8642A9FUL, 0x39000000_7755AA80UL,
+                0x0A980075_001B0006UL, 0x001DC000_FFFEF777UL, 0x00022C65_00002735UL, 0xFFFFA186_00053CF4UL, 0xFFF3FF97_7FFF0000UL, 0x0046FFDF_FD270000UL,
+                0xE4531025_FFFF0000UL, 0xC1371E00_D82E0000UL, 0x001800D1_FE9D0000UL, 0x000D00D6_FF0D0000UL, 0x375ADFB6_C31D0000UL, 0x6141E8F4_480F0000UL,
+                SyncFull);
+
+            bus.Write32(Start, list);
+            bus.Write32(End, end);
+
+            (uint Y, uint X, uint Color)[] pixels =
+            {
+                (3, 4, 0xD2A3), (3, 9, 0xC095), (4, 13, 0x08FF), (5, 6, 0xE423), (5, 18, 0x7043), (6, 10, 0xA28B),
+                (7, 21, 0x7589), (8, 4, 0x8B29), (8, 16, 0x634B), (9, 7, 0x422F), (10, 12, 0x0BD3), (11, 19, 0x839D),
+                (12, 5, 0xE935), (13, 15, 0x3E6B), (15, 11, 0xA57F), (17, 8, 0x330B), (19, 13, 0x2265), (21, 9, 0xB48D),
+            };
+
+            foreach (var (y, x, color) in pixels) Assert.Equal(color, (uint)bus.Read16(0x0010_0000 + (y * 32 + x) * 2));
+        }
+
         [Fact]
         public void Writing_the_mode_register_clear_bit_lowers_the_display_processor_interrupt()
         {

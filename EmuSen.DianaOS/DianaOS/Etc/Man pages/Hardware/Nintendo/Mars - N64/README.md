@@ -36,8 +36,10 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Microcode.md`](Mars_Microcode.md) is Phase C's second condition — commercial microcode running to a display list — and the finding that closes the phase: Wave Race 64 gets there, but only once the harness stands in for the video and serial interrupts, because no game submits microcode before those Phase E devices have spoken. §3 says exactly what the stand-ins are and are not; §5 is what the plan missed.
 
+[`Mars_Rdp.md`](Mars_Rdp.md) is Phase D's first slice: the display processor's registers, the command stream they deliver, and the fill cycle in whole pixels. Read §0 first — it is the ledger of which rules the corpus measured, which came from community documentation, and which are readings of the reference rasterizer that nothing has graded yet. §5.2 is the pixel-edge rule in that last group, visible as one column and one row in a commercial depth buffer, and §8 is Wave Race's first list carried out.
+
 [`Mars_Corpus.md`](Mars_Corpus.md) is the hardware corpus as a running instrument rather than as a protocol. **The run now completes** and the corpus reports its own verdict — §1. Read §2 before quoting any "every X test passes" claim from another page here: a run that stops early reports on the part of the world it reached, two claims had to be qualified because of it, and one of them was this page's own. §3 is the census of the complete run, in which no group testing the CPU or the RSP as a processor still fails; §9 and §10 are the two slices that cleared them. §8 is why no earlier run could: the corpus needs an Expansion Pak, and the harness had been running it on a 4MB machine.
 
-The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
+The remaining per-component pages (the video, audio and serial interfaces, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.

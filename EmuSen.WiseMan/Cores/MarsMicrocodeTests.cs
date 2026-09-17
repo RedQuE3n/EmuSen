@@ -25,15 +25,83 @@ namespace EmuSen.WiseMan.Cores
 
         private const uint SyncFull = 0x29;
         private const uint FillRectangle = 0x36;
+        private const uint SetFillColor = 0x37;
+        private const uint SetDepthImage = 0x3E;
         private const uint SetColorImage = 0x3F;
 
         [Fact]
         public void Wave_Race_hands_its_first_display_list_to_the_display_processor()
         {
-            string path = Path.Combine(N64TestRomLibrary.Root, WaveRace);
-            if (!File.Exists(path)) return;
+            if (!RunToFirstGraphicsBreak(out MarsBus bus)) return;
 
-            var bus = new MarsBus();
+            uint start = bus.Read32(MemoryMap.DpCommandBase);
+            uint end = bus.Read32(MemoryMap.DpCommandBase + 4);
+            Assert.True(end > start, $"no commands were handed to the display processor ({start:X8}..{end:X8})");
+
+            uint last = 0;
+            bool colorImage = false, fill = false;
+
+            for (uint at = start; at < end; at += CommandLength(last))
+            {
+                last = (bus.Read32(at) >> 24) & 0x3F;
+                Assert.True(IsCommand(last), $"{bus.Read32(at):X8} at {at:X8} is not a display processor command");
+
+                colorImage |= last == SetColorImage;
+                fill |= last == FillRectangle;
+            }
+
+            Assert.True(colorImage && fill, "the list neither sets a framebuffer nor fills it");
+            Assert.Equal(SyncFull, last);
+        }
+
+        // The list's one fill is a depth clear, and every pixel a whole pixel inside its edges now holds it - see Mars_Rdp.md §8.
+        [Fact]
+        public void Wave_Race_first_display_list_clears_its_depth_buffer()
+        {
+            if (!RunToFirstGraphicsBreak(out MarsBus bus)) return;
+
+            uint start = bus.Read32(MemoryMap.DpCommandBase);
+            uint end = bus.Read32(MemoryMap.DpCommandBase + 4);
+            Assert.Equal(end, bus.Read32(MemoryMap.DpCommandBase + 8));
+
+            uint depthImage = 0, colorImage = 0, width = 0, color = 0, filledImage = 0, id = 0;
+            ulong rectangle = 0;
+
+            for (uint at = start; at < end; at += CommandLength(id))
+            {
+                ulong word = bus.Read64(at);
+                id = (uint)(word >> 56) & 0x3F;
+
+                if (id == SetDepthImage) depthImage = (uint)word & 0xFF_FFFF;
+                if (id == SetColorImage) (colorImage, width) = ((uint)word & 0xFF_FFFF, (uint)(word >> 32) & 0x3FF);
+                if (id == SetFillColor) color = (uint)word;
+                if (id == FillRectangle) (rectangle, filledImage) = (word, colorImage);
+            }
+
+            Assert.Equal(depthImage, filledImage);
+            Assert.Equal(color >> 16, color & 0xFFFF);
+
+            uint right = (uint)(rectangle >> 46) & 0x3FF, bottom = (uint)(rectangle >> 34) & 0x3FF;
+            uint left = (uint)(rectangle >> 14) & 0x3FF, top = (uint)(rectangle >> 2) & 0x3FF;
+
+            for (uint y = top + 1; y < bottom; y++)
+            {
+                for (uint x = left + 1; x < right; x++)
+                {
+                    Assert.Equal(color & 0xFFFF, bus.Read16(filledImage + (y * (width + 1) + x) * 2));
+                }
+            }
+
+            Assert.Equal(0u, bus.Read16(filledImage));
+        }
+
+        private static bool RunToFirstGraphicsBreak(out MarsBus bus)
+        {
+            bus = new MarsBus();
+
+            string path = Path.Combine(N64TestRomLibrary.Root, WaveRace);
+            if (!File.Exists(path)) return false;
+
             var cpu = new Cpu(bus);
             Boot.HandOff(bus, cpu, RomImage.Load(path));
 
@@ -54,24 +122,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(graphicsStarted, "no graphics task reached the RSP");
             Assert.True(bus.Sp.Processor.Broke, "the graphics task did not run to its break");
 
-            uint start = bus.Read32(MemoryMap.DpCommandBase);
-            uint end = bus.Read32(MemoryMap.DpCommandBase + 4);
-            Assert.True(end > start, $"no commands were handed to the display processor ({start:X8}..{end:X8})");
-
-            uint last = 0;
-            bool colorImage = false, fill = false;
-
-            for (uint at = start; at < end; at += CommandLength(last))
-            {
-                last = (bus.Read32(at) >> 24) & 0x3F;
-                Assert.True(IsCommand(last), $"{bus.Read32(at):X8} at {at:X8} is not a display processor command");
-
-                colorImage |= last == SetColorImage;
-                fill |= last == FillRectangle;
-            }
-
-            Assert.True(colorImage && fill, "the list neither sets a framebuffer nor fills it");
-            Assert.Equal(SyncFull, last);
+            return true;
         }
 
         private static void Pulse(MarsBus bus, long instruction)

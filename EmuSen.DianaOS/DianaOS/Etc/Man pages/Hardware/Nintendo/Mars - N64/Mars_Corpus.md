@@ -12,11 +12,12 @@ it gets, what stops it, what its numbers mean and what they do not. The protocol
 **The run completes.** The corpus reaches its own teardown and prints its own verdict:
 
 ```
-Finished in 3.09s. Base: Failed 159 of 4637 tests (96% success rate)
+Finished in 3.09s. Base: Failed 152 of 4637 tests (96% success rate)
 ```
 
 That is 1,040 test groups and 4,637 assertions, every one of them attempted, **and no
-failing group left that tests the CPU, or the RSP as a processor** (§3). It is the
+failing group left that tests the CPU, the RSP as a processor, or the display processor's
+interface** (§3). It is the
 first complete run of the corpus this project has made, and the ratchet now asserts that
 line (§5). It took two changes in the slice that produced it: the RSP learned to halt
 (`Mars_Rsp.md`), which let the run past the wait it had sat in since Phase A, and the
@@ -40,6 +41,7 @@ line that reports those:
 | the seventeen CPU groups | 1,040 | 319 of 4,637 assertions |
 | the RSP's vector unit | 1,040 | 163 of 4,637 assertions |
 | the CPU's access to RSP memory | 1,040 | 159 of 4,637 assertions |
+| the display processor's interface | 1,040 | 152 of 4,637 assertions |
 
 The fourth row is the shape to want: forty tests that had never run before ran, and all
 forty passed.
@@ -84,21 +86,23 @@ in the corpus's test list has been attempted. Everything after it has not.
 
 ## 3. The census of what still fails
 
-The 83 distinct test groups that fail in the complete run, counted by name — a group that
-fails for thirty-three values is one row — against the corpus's own 159, which counts
+The 77 distinct test groups that fail in the complete run, counted by name — a group that
+fails for thirty-three values is one row — against the corpus's own 152, which counts
 assertions.
 
 | | groups | why |
 | --- | --- | --- |
 | caches, all four families | 45 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
 | cartridge memory and writes | 19 | Phase E — the PI and cartridge DMA |
-| PIF RAM, MI, RDRAM registers | 13 | Phase E |
-| RDP status and registers | 6 | Phase D |
+| PIF RAM, MI, RDRAM registers | 13 | Phase E — five MI, six PIF RAM, two RDRAM register groups |
 
-**Every remaining row is a later phase or a decision.** One of the six RDP groups is called
-*RSP STATUS* and is the display processor's (`Mars_Rsp.md` §8). The four `spmem` groups that
-stood in the previous census cleared in the slice after it (§11), and the four rows here are
-the same groups, one for one, that it listed.
+**Every remaining row is Phase E or a decision.** The six RDP groups that stood in the previous
+census cleared in the slice after it (§12), and the three rows here have the counts it gave them.
+
+> **Retired 2026-09-17: the census between RSP memory access and the display processor.** It
+> counted 83 groups against 159 assertions, with the three rows above and a fourth — *"RDP status
+> and registers — 6 — Phase D"* — and said *"Every remaining row is a later phase or a
+> decision. One of the six RDP groups is called RSP STATUS and is the display processor's."*
 
 > **Retired 2026-09-17: the census between the vector unit and the `spmem` groups.** It had
 > the five rows above plus *"the main CPU's sub-word access to RSP memory — 4 — bus, not
@@ -244,6 +248,25 @@ written first failed against the unmodified bus with the same values the corpus 
 which is some evidence the tests reproduce the corpus's cases rather than a reading of them.
 
 The prediction was stated before the run: exactly these four, and a tally of 159. It held.
+
+## 12. The display processor's interface
+
+*Landed 2026-09-17. `Mars_Rdp.md` has the rules and says which of them the corpus grades.*
+
+**159 → 152, and 83 failing groups → 77**: the six RDP groups, which held seven failure lines
+between them — *RSP STATUS: start-valid* fails for two values — and nothing else. The prediction
+was stated before the run, as seven lines, six groups and 152, and it held.
+
+The previous report was overwritten by the run, so the claim that nothing else moved rests on
+counts rather than a diff: the 77 names that remain contain no RDP group and fall into the
+census's three other rows as 45, 19 and 13, the counts §3 gave them before. A group that
+disappeared from one row and appeared in the same row would pass that check; one moving between
+rows would not.
+
+**What the six groups grade is the interface, not the rasterizer.** Four of them read a single
+pixel of a fill, and none of them can tell a correct edge rule from an incorrect one
+(`Mars_Rdp.md` §5.2). The corpus's triangle tests exist, behind a feature flag the ROM here was
+not built with, so this instrument says nothing yet about drawing.
 
 ## 4. The budget, and why it is now a safety net
 

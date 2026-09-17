@@ -23,6 +23,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public const uint Interrupt = 0x08;
         public const uint InterruptMask = 0x0C;
 
+        // The mode register's one bit that is modelled: the display processor's interrupt has no clear of its own - see Mars_Rdp.md §6.
+        public const uint ModeClearDisplayProcessor = 0x800;
+
         public MiInterrupt Pending;
         public MiInterrupt Mask;
 
@@ -45,6 +48,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public void Write32(uint offset, uint value)
         {
+            if ((offset & 0x0C) == Mode && (value & ModeClearDisplayProcessor) != 0) Clear(MiInterrupt.DisplayProcessor);
+
             if ((offset & 0x0C) != InterruptMask) return;
 
             // Two bits per device, one to clear the mask and one to set it - see Mars_Memory.md §8.1.

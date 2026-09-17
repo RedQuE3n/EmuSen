@@ -94,6 +94,10 @@ happens to contain neither.
 produced different but valid commands would pass it. Nothing consumes the list — that is
 Phase D — so nothing yet can say whether these seventeen commands are the ones hardware emits.
 
+> **Update 2026-09-17: the list is now carried out** (`Mars_Rdp.md` §8). Its one fill is a depth
+> clear, and the depth buffer holds it afterwards. That grades the display processor's handling
+> of these commands, not the microcode's choice of them; the paragraph above stands.
+
 ## 5. What the plan did not say
 
 `Mars_Gameplan.md` §4.3 set this condition for the RSP phase, and set the video and serial
@@ -117,9 +121,15 @@ it had to stand in for, and becomes an ordinary test once they exist.
 - **Why Mario never submits a graphics task.** Its audio tasks run; its graphics never
   starts. Plausible causes include a controller or EEPROM exchange that zeros do not satisfy,
   and a wait on the display processor's interrupt. None was tested.
-- **Why Wave Race submits only one.** The list ends in a full sync, and a game would normally
-  wait for the display processor to report it done before the next frame. Nothing raises that
-  interrupt; this is a reading, not a measurement.
+- **Why Wave Race submits only one.**
+
+  > **Retired 2026-09-17, by measurement: the reading this bullet gave.** It said *"The list ends
+  > in a full sync, and a game would normally wait for the display processor to report it done
+  > before the next frame. Nothing raises that interrupt; this is a reading, not a measurement."*
+  > The interrupt is now raised by the full sync and acknowledged by the game's handler, and over
+  > 200 million instructions the game submits one graphics task and 122 audio tasks — the same
+  > counts as on the bus without it (`Mars_Rdp.md` §8). Whatever the game waits for, that
+  > interrupt is not all of it. Why only one graphics task is submitted remains open.
 - **That the audio tasks are right.** They run to a break and signal completion. Their output
   goes to a buffer nothing plays.
 - **Anything about timing.** The RSP still runs one instruction per CPU tick

@@ -11,6 +11,8 @@ namespace EmuSen.WiseMan.Fixtures
         private const uint UpdateDram = 1;
         private const uint UpdateDramFlush = 7;
         private const uint RdpCommand = 2;
+        private const uint SetViRegister = 3;
+        private const uint UpdateScreenRecord = 4;
         private const uint SignalComplete = 5;
         private const uint EndOfFile = 6;
         private const uint UpdateHiddenDramFlush = 9;
@@ -63,6 +65,19 @@ namespace EmuSen.WiseMan.Fixtures
             }
         }
 
+        // The fourteen video interface registers, in the order the reference holds them - see Mars_Video.md §1.
+        public void ViRegister(int index, uint value)
+        {
+            if (index is < 0 or > 13) throw new ArgumentOutOfRangeException(nameof(index));
+
+            _writer.Write(SetViRegister);
+            _writer.Write((uint)index);
+            _writer.Write(value);
+        }
+
+        // Scans a frame out of memory through the registers set so far; the frame reaches the sync that follows.
+        public void UpdateScreen() => _writer.Write(UpdateScreenRecord);
+
         public void Sync() => _writer.Write(SignalComplete);
 
         public byte[] Finish()
@@ -74,10 +89,16 @@ namespace EmuSen.WiseMan.Fixtures
     }
 
     // What angrylion drew by one sync: changed RDRAM pages in console byte order, changed hidden pages, and what it printed - see Mars_RdpDifferential.md §2.
+    // One frame the video interface scanned out, four bytes a pixel in red, green, blue, alpha order - see Mars_Video.md §2.
+    public sealed record RdpReferenceFrame(int Width, int Height, byte[] Pixels);
+
     public sealed record RdpReferenceSync(IReadOnlyDictionary<uint, byte[]> Pages, IReadOnlyDictionary<uint, byte[]> HiddenPages, IReadOnlyList<string> Messages)
     {
         // Texture memory in console order: the reference keeps it as host-order words, so each byte is found at its index with the low two bits flipped.
         public byte[] TextureMemory { get; init; } = new byte[0x1000];
+
+        // Every frame scanned out since the sync before, in the order they were scanned.
+        public IReadOnlyList<RdpReferenceFrame> Frames { get; init; } = Array.Empty<RdpReferenceFrame>();
     }
 
     // The two instruments build-probe.sh rdp leaves in the cache, absent on a machine that never built them - see Mars_RdpDifferential.md §3.
@@ -114,6 +135,7 @@ namespace EmuSen.WiseMan.Fixtures
             Dictionary<uint, byte[]>? pages = null;
             Dictionary<uint, byte[]>? hidden = null;
             List<string>? messages = null;
+            List<RdpReferenceFrame>? frames = null;
             byte[] texture = new byte[0x1000];
             int at = 8;
 
@@ -122,7 +144,7 @@ namespace EmuSen.WiseMan.Fixtures
                 uint tag = BitConverter.ToUInt32(data, at);
                 at += 4;
 
-                if (tag is 0 or 1 && pages is not null) syncs.Add(new RdpReferenceSync(pages, hidden!, messages!) { TextureMemory = texture });
+                if (tag is 0 or 1 && pages is not null) syncs.Add(new RdpReferenceSync(pages, hidden!, messages!) { TextureMemory = texture, Frames = frames! });
                 if (tag == 0) return syncs;
 
                 switch (tag)
@@ -132,6 +154,7 @@ namespace EmuSen.WiseMan.Fixtures
                         pages = new Dictionary<uint, byte[]>();
                         hidden = new Dictionary<uint, byte[]>();
                         messages = new List<string>();
+                        frames = new List<RdpReferenceFrame>();
                         texture = new byte[0x1000];
                         break;
 
@@ -152,6 +175,13 @@ namespace EmuSen.WiseMan.Fixtures
                         int length = BitConverter.ToInt32(data, at);
                         messages!.Add(System.Text.Encoding.UTF8.GetString(data, at + 4, length));
                         at += 4 + length;
+                        break;
+
+                    case 6:
+                        int width = BitConverter.ToInt32(data, at);
+                        int height = BitConverter.ToInt32(data, at + 4);
+                        frames!.Add(new RdpReferenceFrame(width, height, data.AsSpan(at + 8, width * height * 4).ToArray()));
+                        at += 8 + width * height * 4;
                         break;
 
                     default:

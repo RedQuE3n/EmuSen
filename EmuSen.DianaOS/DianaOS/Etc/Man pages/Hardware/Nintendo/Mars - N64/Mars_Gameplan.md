@@ -527,6 +527,16 @@ rather than raw samples.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 
+> **Progress, 2026-09-17: the video interface's registers and scan** (`Mars_Video.md`). The fourteen
+> registers, the geometry they imply, the raster a frame is placed in with its borders and its two frames of
+> grace, and the walk for the two anti-alias modes that need no coverage, in both pixel formats: ninety cases
+> match angrylion. The harness had to grow first — the probe now captures the frames angrylion scans out,
+> the dump writer can set video registers and ask for a screen update, and `build-probe.sh` builds
+> parallel-rdp's `vi-conformance`. That last tool reports **all twenty-four of its suites passing**, so the
+> two references agree about this entire device; Phase D had twenty-one rules where they did not. What is
+> left here is the anti-aliasing that reads coverage, the dither filter, divot and gamma, and then the
+> interrupt and the timing that would let a game drive any of it.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

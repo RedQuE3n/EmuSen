@@ -10,6 +10,9 @@ the second case in `MarsMicrocodeTests`.*
 *`Mars_Documentation.md` §4.1 asked that the RDP's page say which of its rules came from where.
 §0 is that ledger, and every rule below carries its tier.*
 
+*Updated the same day: the fill cycle's pixel rules are now graded against the reference
+rasterizer (`Mars_RdpDifferential.md`), and one of them did not survive (§5.2).*
+
 ---
 
 ## 0. Where each rule came from
@@ -20,10 +23,14 @@ the second case in `MarsMicrocodeTests`.*
 | **community** | the n64brew command reference, as already cited in `Mars_Microcode.md` §4 | command numbers and lengths (§3) |
 | **reference reading** | angrylion in the parallel-n64 checkout at `39819865`, read for mechanism under `Mars_References.md` §2 and never run | how a fill writes its colour, the width field, the address width, which rectangle edges a fill includes (§5) |
 | **commercial program** | Wave Race 64's first display list and its interrupt handler, measured | supporting evidence for §5.1 and §6, and the observations in §8 |
+| **reference, graded** | `MarsRdpDifferentialTests`: angrylion, cross-checked by parallel-rdp (`Mars_RdpDifferential.md`) | which pixels a fill covers, and how its colour lands at every pixel size (§5) |
 
-**Nothing on this page is graded against the reference yet.** A rule of the third tier is a
-reading of another implementation's source; `Mars_TestOracle.md` §5 says what running that
-implementation would certify, and reading it certifies less.
+A rule of the third tier is a reading of another implementation's source; a rule of the fifth has
+been run against it. `Mars_TestOracle.md` §5 says what running it certifies — agreement with the
+community's model, not with the hardware — and reading it certifies less.
+
+> **Retired 2026-09-17: "Nothing on this page is graded against the reference yet."** True when
+> written, and the differential that followed within the day changed a rule it had covered (§5.2).
 
 ## 1. What the slice is
 
@@ -173,41 +180,63 @@ CPU, is noted and not used as an argument; the two are different parts on differ
 **Hidden bits are not written.** The reference also sets RDRAM's hidden per-pixel bits from the
 colour's low bit. Mars has no hidden RDRAM yet.
 
+> **Update 2026-09-17: graded.** The differential's 32-bit, 8-bit-at-an-odd-address,
+> 16-bit-at-an-odd-address and odd-width cases match angrylion, and parallel-rdp agrees with it on
+> each (`Mars_RdpDifferential.md` §4). The rule is now **[reference, graded]**; the evidence above
+> is kept as what it rested on before.
+
 The colour image's **width is stored one short**: the reference adds one to a ten-bit field, the
 corpus writes eight-wide buffers as `7`, and Wave Race's 320-wide image is `0x13F`. Its
 **address keeps twenty-four bits**, per the reference, which matches the register mask the
 corpus measures in §2.1.
 
-### 5.2 Which pixels a fill covers: a whole-pixel rule, ungraded
+### 5.2 Which pixels a fill covers
 
-**The rule in Mars:** coordinates are taken as whole pixels (their two fraction bits dropped); a
-fill covers its rectangle's left through right columns and top through bottom rows inclusively;
-and the scissor clips with its left and top edges inside and its right and bottom edges
-outside.
+**Graded, and the rule Mars now implements is `Mars_RdpDifferential.md` §4.2's**: the rectangle's
+edges clipped into the scissor in eighths of a pixel, rows chosen by quarter-pixel sub-scanlines,
+and the scissor's interlace bits honoured. It matches angrylion on every fill case the differential
+grades, apart from one recorded artefact of the reference itself. Of the
+ungraded rule below, **the scissor's right edge was wrong** — its column is drawn — and so was the
+statement that fractional coordinates are wrong here: for a fill rectangle the reference's sub-pixel
+walk lands on the same pixels truncation does. Its bottom-row and scissor-bottom claims held for
+whole pixels.
 
-**This rule is not graded, and the corpus cannot grade it**: its fills and scissors coincide, on
-8×8 buffers, and it reads pixel 0. What there is:
-
-- **The bottom row is inside for a reason the reference shows.** In the fill and copy cycles it
-  forces the rectangle's lowest sub-scanlines in before walking it. **[reference reading]**
-- **The scissor's bottom edge is outside, on a reading of the reference's row limit.**
-  **[reference reading]**
-- **The right edges were not traced.** The reference decides them through sub-pixel spans with a
-  sticky bit, and reading that code closely enough to be sure is precisely the work §4.1 of
-  `Mars_Documentation.md` says must be done by comparison instead. The column rule mirrors the
-  row rule by assumption.
-- **Wave Race cannot discriminate.** Its scissor and its fill rectangle have the same corners,
-  (8,20)–(311,219). Under Mars's rule the clear stops one column and one row short of the
-  rectangle; under a scissor that includes its far edges it would not. §8 records the pixels.
-
-**Fractional coordinates are simply wrong here.** The reference places sub-pixel edges; Mars
-truncates. Every list this slice has run — the corpus's and Wave Race's — uses whole pixels. The
-scissor's interlace bits, which restrict drawing to odd or even rows, are ignored.
+> **Retired 2026-09-17, by the differential's first run: the ungraded rule and its evidence.** Kept
+> because it stated which parts were readings and which an assumption, and the assumption is the
+> part that failed.
+>
+> **The rule in Mars:** coordinates are taken as whole pixels (their two fraction bits dropped); a
+> fill covers its rectangle's left through right columns and top through bottom rows inclusively;
+> and the scissor clips with its left and top edges inside and its right and bottom edges
+> outside.
+>
+> **This rule is not graded, and the corpus cannot grade it**: its fills and scissors coincide, on
+> 8×8 buffers, and it reads pixel 0. What there is:
+>
+> - **The bottom row is inside for a reason the reference shows.** In the fill and copy cycles it
+>   forces the rectangle's lowest sub-scanlines in before walking it. **[reference reading]**
+> - **The scissor's bottom edge is outside, on a reading of the reference's row limit.**
+>   **[reference reading]**
+> - **The right edges were not traced.** The reference decides them through sub-pixel spans with a
+>   sticky bit, and reading that code closely enough to be sure is precisely the work §4.1 of
+>   `Mars_Documentation.md` says must be done by comparison instead. The column rule mirrors the
+>   row rule by assumption.
+> - **Wave Race cannot discriminate.** Its scissor and its fill rectangle have the same corners,
+>   (8,20)–(311,219). Under Mars's rule the clear stops one column and one row short of the
+>   rectangle; under a scissor that includes its far edges it would not. §8 records the pixels.
+>
+> **Fractional coordinates are simply wrong here.** The reference places sub-pixel edges; Mars
+> truncates. Every list this slice has run — the corpus's and Wave Race's — uses whole pixels. The
+> scissor's interlace bits, which restrict drawing to odd or even rows, are ignored.
 
 ### 5.3 What the fill cycle does not do
 
 - **A 4-bit colour image draws nothing.** The reference records the pipeline as crashed. What
-  hardware does is not established.
+  hardware does is not established. parallel-rdp aborts on it, so that one case is graded against
+  angrylion alone (`Mars_RdpDifferential.md` §4.4).
+- **Past the colour image's right side**, Mars writes on into the next row by address, and the
+  reference stops at the last column through a validation workaround that is not a hardware claim
+  (`Mars_RdpDifferential.md` §4.3). Neither is measured against hardware.
 - **A fill under some combinations of image read and depth settings** also crashes the pipeline in
   the reference. Mars draws it.
 - **A fill rectangle outside the fill cycle draws nothing, and that is known to be wrong**: in every
@@ -247,6 +276,12 @@ is today's placeholder, and §5.3 says it is wrong.
 The depth-clear case in `MarsMicrocodeTests` was checked the same way: with the fill writing
 nothing, it fails at the pixel loop, expecting `0xFFFC` and finding zero.
 
+> **Update 2026-09-17.** One of those caught mutations, "the exclusive scissor", guarded a rule the
+> differential then refuted. A mutation check shows that a test pins a behaviour, not that the
+> behaviour is right. The unit test now pins the graded rule — the scissor's right column drawn, its
+> bottom row not — and the fill rule's own eleven mutations are recorded in
+> `Mars_RdpDifferential.md` §4.6.
+
 ## 8. Wave Race's first list, carried out
 
 The commands `Mars_Microcode.md` §4 tabled can now be read as what they do. **The list's one fill
@@ -262,7 +297,13 @@ After the task, measured:
 | (8,20), (100,100), (310,218) | `FFFC` |
 | (311,218), (310,219), (311,219) | `0000` |
 
-The last row is §5.2's ungraded rule, visible. The test asserts only what that rule cannot reach:
+The last row is §5.2's ungraded rule, visible.
+
+> **Update 2026-09-17, under the graded rule:** (311,218) now holds `FFFC`; (310,219), (311,219)
+> and (312,218) still hold `0000`. The scissor's right column is cleared and its bottom row is not
+> (`Mars_RdpDifferential.md` §4.7).
+
+The test asserts only what the old rule could not reach, and still does:
 every pixel at least one pixel inside the rectangle's edges holds the colour, with the rectangle,
 colour and image read from the list rather than written into the test, and pixel (0,0) is
 untouched.
@@ -283,7 +324,5 @@ unmodified bus; that difference was not investigated.
 - **Hidden RDRAM**, which the reference tracks and grades against (`Mars_References.md` §4).
 - **The span registers** at `0x0420_0000`.
 - **Any timing** (§3).
-- **The reference differential**, which is the instrument `Mars_Gameplan.md` §4.4 grades this
-  phase with, and which every **[reference reading]** on this page is waiting for. The MIT
-  parallel-rdp is in the parallel-n64 checkout without its conformance tooling; the standalone
-  repository carries that, and it needs a Vulkan device, which the development machine has.
+- ~~**The reference differential**~~ — built the same day (`Mars_RdpDifferential.md`). It grades
+  the fill cycle; every other drawing path above has nothing to grade yet.

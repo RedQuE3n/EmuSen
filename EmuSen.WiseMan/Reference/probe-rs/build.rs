@@ -17,6 +17,36 @@ fn main() {
 
     #[cfg(feature = "libretro")]
     generate_libretro_bindings();
+
+    #[cfg(feature = "angrylion")]
+    link_angrylion();
+}
+
+// rdp-reference links the libalp-core.a that rdp-validate-dump's own build made, so
+// the grader and the cross-check run one angrylion rather than two builds of it.
+// Scoped to that binary: the probe has no use for a rasterizer. See
+// Mars_RdpDifferential.md.
+#[cfg(feature = "angrylion")]
+fn link_angrylion() {
+    println!("cargo:rerun-if-env-changed=ANGRYLION_LIB_DIR");
+
+    let dir = std::env::var("ANGRYLION_LIB_DIR").expect(
+        "ANGRYLION_LIB_DIR is not set. Build rdp-reference through \
+         ./build-probe.sh rdp <checkout>, which builds libalp-core.a first.",
+    );
+    let library = Path::new(&dir).join("libalp-core.a");
+    assert!(
+        library.is_file(),
+        "{} does not exist - run ./build-probe.sh rdp <checkout> to build it",
+        library.display()
+    );
+    println!("cargo:rerun-if-changed={}", library.display());
+
+    // CMake builds the archive without -fPIC, so this one binary links as a fixed-address executable.
+    println!("cargo:rustc-link-arg-bin=rdp-reference=-no-pie");
+    println!("cargo:rustc-link-arg-bin=rdp-reference={}", library.display());
+    println!("cargo:rustc-link-arg-bin=rdp-reference=-lstdc++");
+    println!("cargo:rustc-link-arg-bin=rdp-reference=-lpthread");
 }
 
 #[cfg(feature = "libretro")]

@@ -421,6 +421,21 @@ rather than raw samples.
 > reference and labelled ungraded (`Mars_Rdp.md` §0, §5.2), and the edge rule is already one
 > column and one row visible in a commercial depth buffer. The differential is the next piece
 > of work this phase needs, before any further drawing is built on readings.
+>
+> **Progress, 2026-09-17: the differential exists, and this section's "done when" can now be
+> measured** (`Mars_RdpDifferential.md`). Mars's display processor and angrylion replay one
+> command stream and their memory is compared; parallel-rdp replays it too, as a check on angrylion.
+> Its first run of fill cases refuted the scissor edge rule the previous note describes as
+> ungraded, and the rebuilt rule now matches angrylion on every fill case the differential carries —
+> so the fill cycle is the first mode for which the "diffs to zero" condition holds on the cases
+> written so far, apart from one where the reference carries a validation workaround rather than a
+> hardware claim.
+>
+> **Two findings about the instrument change how this section's condition should be read.** The
+> reference contains at least one deliberate departure from what it models (§4.3 there), so "diffs
+> to zero" has to mean *to zero apart from named artefacts*. And the two references disagree on at
+> least one case (§4.5 there), so for some primitives there is no agreed answer to diff against;
+> those are graded against angrylion and recorded as disputed, not as correct.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

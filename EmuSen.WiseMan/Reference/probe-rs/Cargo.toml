@@ -8,6 +8,13 @@ publish = false
 name = "probe"
 path = "src/main.rs"
 
+# Not a backend: the display processor's reference rasterizer, replaying a command
+# stream rather than stepping a machine. See Mars_RdpDifferential.md.
+[[bin]]
+name = "rdp-reference"
+path = "src/rdp_reference/main.rs"
+required-features = ["angrylion"]
+
 # Which backends are compiled in is a build-time choice, exactly as the C++
 # probe's -DPROBE_BACKEND_* was: linking one is not free, so one binary per
 # backend and one policy layer for all. See EmuSen_Debugging_Tools_Reference_v5.md §3.49.
@@ -15,6 +22,7 @@ path = "src/main.rs"
 default = ["libretro"]
 libretro = ["dep:libloading", "dep:bindgen"]
 mesen = []
+angrylion = []
 
 [dependencies]
 crc32fast = "1.5"

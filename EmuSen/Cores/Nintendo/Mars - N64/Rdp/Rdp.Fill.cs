@@ -2,7 +2,7 @@ using System;
 
 namespace EmuSen.Cores.Nintendo.Mars.Rdp
 {
-    // The colour image, the scissor and the fill cycle, in whole pixels - see Mars_Rdp.md §5.
+    // The colour image, the scissor and the fill cycle - see Mars_Rdp.md §5.
     public sealed partial class Rdp
     {
         private const int FillCycle = 3;
@@ -13,10 +13,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int _colorImageWidth;
         private int _colorImageBytes;
 
+        // Quarter pixels, as the command carries them.
         private int _scissorLeft;
         private int _scissorTop;
         private int _scissorRight;
         private int _scissorBottom;
+        private bool _scissorField;
+        private bool _scissorKeepOdd;
 
         // The width is stored one short, and a four-bit image has no bytes to fill - see §5.
         private void ColorImage(ulong word)
@@ -28,31 +31,55 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         private void Scissor(ulong word)
         {
-            _scissorLeft = WholePixel(word >> 44);
-            _scissorTop = WholePixel(word >> 32);
-            _scissorRight = WholePixel(word >> 12);
-            _scissorBottom = WholePixel(word);
+            _scissorLeft = Quarters(word >> 44);
+            _scissorTop = Quarters(word >> 32);
+            _scissorRight = Quarters(word >> 12);
+            _scissorBottom = Quarters(word);
+            _scissorField = ((word >> 25) & 1) != 0;
+            _scissorKeepOdd = ((word >> 24) & 1) != 0;
         }
 
-        // The rectangle's far edges are inside it and the scissor's are not; the fractional rule is unbuilt - see §5.2.
+        // Each row's span is the two edges clipped in eighth pixels; rows are chosen by quarter-pixel sub-scanlines - see §5.2.
         private void Fill(ulong word)
         {
             if (CycleType != FillCycle || _colorImageBytes == 0) return;
 
-            int right = Math.Min(WholePixel(word >> 44) + 1, _scissorRight);
-            int bottom = Math.Min(WholePixel(word >> 32) + 1, _scissorBottom);
-            int left = Math.Max(WholePixel(word >> 12), _scissorLeft);
-            int top = Math.Max(WholePixel(word), _scissorTop);
+            int right = Quarters(word >> 44);
+            int bottom = Quarters(word >> 32) | 3;
+            int left = Quarters(word >> 12);
+            int top = Quarters(word);
+
+            if (right < left) return;
+
+            (int first, bool firstUnder, bool firstOver) = Clip(left * 2);
+            (int last, bool lastUnder, bool lastOver) = Clip(right * 2);
+            if ((firstUnder && lastUnder) || (firstOver && lastOver)) return;
+
+            int upper = Math.Max(top, _scissorTop);
+            int lower = Math.Min(bottom, _scissorBottom);
+            if (upper >= lower) return;
 
             uint image = _colorImage & ~(uint)(_colorImageBytes - 1);
 
-            for (int y = top; y < bottom; y++)
+            for (int y = upper >> 2; y << 2 < lower; y++)
             {
-                for (int x = left; x < right; x++)
+                if (_scissorField && ((y & 1) == 1) != _scissorKeepOdd) continue;
+
+                for (int x = first >> 3; x <= last >> 3; x++)
                 {
                     FillPixel(image + (uint)((y * _colorImageWidth + x) * _colorImageBytes));
                 }
             }
+        }
+
+        // Moved onto the scissor's left edge if under it, then onto its right edge if at or past it, in that order - see §5.2.
+        private (int At, bool Under, bool Over) Clip(int eighths)
+        {
+            bool under = eighths < _scissorLeft * 2;
+            int at = under ? _scissorLeft * 2 : eighths;
+            bool over = at >= _scissorRight * 2;
+
+            return (over ? _scissorRight * 2 : at, under, over);
         }
 
         // Each byte takes the lane of the fill colour its address holds in a big-endian word - see §5.1.
@@ -67,6 +94,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             }
         }
 
-        private static int WholePixel(ulong field) => (int)(field & 0xFFF) >> 2;
+        private static int Quarters(ulong field) => (int)(field & 0xFFF);
     }
 }

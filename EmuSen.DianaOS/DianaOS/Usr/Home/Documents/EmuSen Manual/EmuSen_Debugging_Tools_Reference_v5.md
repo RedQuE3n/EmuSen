@@ -2428,6 +2428,16 @@ The reliable question is not "does this class share state", which needs judgemen
 
 Re-confirmed at commit time: full suite **2,621 passed, 0 failed, 53s**; the filtered pair **8 green runs out of 8** at 25 tests and ~45ms, against the ten-out-of-ten failures the same filter produces with the two attributes taken back off. The attributes were removed and restored from a copy to measure that, rather than reasoned about.
 
+### 3.58 A fourth `build-probe.sh` target, which builds instruments rather than a backend
+
+`./build-probe.sh rdp <checkout>` builds the N64 display processor's two reference instruments from a parallel-rdp checkout: `rdp-validate-dump`, unmodified, and `rdp-reference`, a second binary in `probe-rs` that links the angrylion library the first one's build produced. Everything about what they grade is `Mars_RdpDifferential.md`; this section records only what they changed here.
+
+**The host table gained a column rather than a host check.** The first version of the target refused non-Linux hosts with `[ "$HOST" = linux ]`, which is exactly the shape §3.54 rebuilt the script to avoid. It is now an `RDP` capability declared beside `MESEN`, `yes` on Linux only, and the refusal says why: the tool links angrylion as a fixed-address executable and reads its memory as little-endian words, and neither has been tried off Linux.
+
+**CMake is borrowed like everything else**, from RPMs into the work directory, with `--arch` pinned — `dnf download` without it fetched both architectures and the unpack order decided which binary survived. Whether the existing `fetch_rpms`, which passes no `--arch`, is exposed the same way was not checked, and it was left alone.
+
+**The WiseMan tests run these tools themselves**, unlike §3.55's dump tests, because a replay costs milliseconds rather than an emulator run; `Mars_RdpDifferential.md` §3 has the argument and its cost.
+
 ---
 
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders

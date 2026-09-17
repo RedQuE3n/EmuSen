@@ -20,6 +20,14 @@ under a citation. Full history, because §5 needs the commit log.
 | `~/Projects/retroarch-reference` | `libretro/RetroArch` | GPL v3 | `ce5544fdb0`, 2026-07-24 |
 | `~/Projects/mupen64plus-core-reference` | `mupen64plus/mupen64plus-core` | GPL v2 | `6dca4c15`, 2026-07-06 |
 | `~/Projects/parallel-n64-reference` | `libretro/parallel-n64` | GPL v2 | `39819865`, 2026-07-24 |
+| `~/Projects/parallel-rdp-reference` | `Themaister/parallel-rdp` | MIT; its `angrylion-rdp-plus` submodule MAME | `1cecd042`, 2024-11-09; angrylion-rdp-plus `31bdb1f`; Granite `cf71dee7` |
+
+> **Added 2026-09-17, and held differently.** The fifth checkout is the display processor's
+> differential (`Mars_RdpDifferential.md`), cloned with its submodules on the day the instrument was
+> built. **It is a local clone, not a fork** — the project owner's decision when asked — so the
+> commits above are what pins it, and an upstream rewrite would move a fresh clone but not this one.
+> It is the only checkout here that is compiled and run rather than read, and nothing of it is in
+> this repository either.
 
 Nothing about them is in this repository — no submodule, no vendored file, no
 gitignore entry, because there is nothing here to ignore.
@@ -35,6 +43,12 @@ gitignore entry, because there is nothing here to ignore.
 > parallel-rdp is MIT and is itself validated bit-exact against angrylion, so grading
 > against parallel-rdp reaches the same standard through a permissively licensed
 > instrument. `Mars_Documentation.md` §7.
+>
+> **Update 2026-09-17: both are now run, and angrylion is the grader** (`Mars_RdpDifferential.md`
+> §1). The preference is retired in `Mars_Documentation.md` §7. Running an implementation is a
+> different use from reading it: nothing is copied, and the §2 rule still governs the source.
+> Mars's fill rule was read from angrylion's edge walker for mechanism and written in its own terms,
+> and then graded by running angrylion — the rule's authority is the grading, not the reading.
 
 **Every one of these is GPL. EmuSen is not.** Copying any of it — a function, a
 table, a struct layout transcribed field for field — would put this project under a

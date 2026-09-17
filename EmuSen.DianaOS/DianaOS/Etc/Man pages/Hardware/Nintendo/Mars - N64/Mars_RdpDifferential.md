@@ -191,11 +191,12 @@ holds `0xFFFC`; (310,219), (311,219) and (312,218) still hold zero.
 
 ## 5. What it does not grade
 
-- **Hidden RDRAM.** Mars has none. The references compare it between themselves; Mars's side of it
-  is not compared, and the fixture only counts the reference's changed hidden pages.
+- ~~**Hidden RDRAM.**~~ Compared since coverage landed, when Mars gained it (`Mars_RdpCoverage.md` §3.1).
 - **Texture memory**, which only the cross-check compares, and which no fill case touches.
 - **Anything but the fill cycle.** The cases are fill rectangles and, since the walker, fill-cycle
   triangles (`Mars_RdpTriangles.md` §4); every other mode is unbuilt in Mars (`Mars_Rdp.md` §9).
+  **Update:** flat primitives in the one-cycle mode are now graded too (`Mars_RdpCoverage.md` §7), and
+  the differential carries two further disputes and a second reference artefact (§6 there).
 - **The register interface**, which the cases bypass, and **timing**.
 - **Pipeline crashes.** angrylion's crash flag stops `n64video_process_list` and nothing else, and
   the replay never calls that function; what a crashed pipeline does next is not graded.

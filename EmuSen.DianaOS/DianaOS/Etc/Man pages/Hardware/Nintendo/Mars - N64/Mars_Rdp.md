@@ -183,6 +183,8 @@ CPU, is noted and not used as an argument; the two are different parts on differ
 **Hidden bits are not written.** The reference also sets RDRAM's hidden per-pixel bits from the
 colour's low bit. Mars has no hidden RDRAM yet.
 
+> **Update 2026-09-17: they are now**, and the differential compares them (`Mars_RdpCoverage.md` §3.1).
+
 > **Update 2026-09-17: graded.** The differential's 32-bit, 8-bit-at-an-odd-address,
 > 16-bit-at-an-odd-address and odd-width cases match angrylion, and parallel-rdp agrees with it on
 > each (`Mars_RdpDifferential.md` §4). The rule is now **[reference, graded]**; the evidence above
@@ -324,7 +326,7 @@ unmodified bus; that difference was not investigated.
   spans — which is where the undocumented sub-pixel rule lives — texture rectangles and the copy
   cycle, the combiner, the blender, depth testing and update, coverage and anti-aliasing, dither,
   textures and texture memory.
-- **Hidden RDRAM**, which the reference tracks and grades against (`Mars_References.md` §4).
+- ~~**Hidden RDRAM**~~ — built with coverage (`Mars_RdpCoverage.md` §3.1).
 - **The span registers** at `0x0420_0000`.
 - **Any timing** (§3).
 - ~~**The reference differential**~~ — built the same day (`Mars_RdpDifferential.md`). It grades

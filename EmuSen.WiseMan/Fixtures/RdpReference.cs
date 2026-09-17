@@ -55,8 +55,8 @@ namespace EmuSen.WiseMan.Fixtures
         }
     }
 
-    // What angrylion drew by one sync: changed pages in console byte order, and what it printed - see Mars_RdpDifferential.md §3.
-    public sealed record RdpReferenceSync(IReadOnlyDictionary<uint, byte[]> Pages, int HiddenPages, IReadOnlyList<string> Messages);
+    // What angrylion drew by one sync: changed RDRAM pages in console byte order, changed hidden pages, and what it printed - see Mars_RdpDifferential.md §2.
+    public sealed record RdpReferenceSync(IReadOnlyDictionary<uint, byte[]> Pages, IReadOnlyDictionary<uint, byte[]> HiddenPages, IReadOnlyList<string> Messages);
 
     // The two instruments build-probe.sh rdp leaves in the cache, absent on a machine that never built them - see Mars_RdpDifferential.md §3.
     public static class RdpReference
@@ -90,8 +90,8 @@ namespace EmuSen.WiseMan.Fixtures
 
             var syncs = new List<RdpReferenceSync>();
             Dictionary<uint, byte[]>? pages = null;
+            Dictionary<uint, byte[]>? hidden = null;
             List<string>? messages = null;
-            int hidden = 0;
             int at = 8;
 
             while (true)
@@ -99,7 +99,7 @@ namespace EmuSen.WiseMan.Fixtures
                 uint tag = BitConverter.ToUInt32(data, at);
                 at += 4;
 
-                if (tag is 0 or 1 && pages is not null) syncs.Add(new RdpReferenceSync(pages, hidden, messages!));
+                if (tag is 0 or 1 && pages is not null) syncs.Add(new RdpReferenceSync(pages, hidden!, messages!));
                 if (tag == 0) return syncs;
 
                 switch (tag)
@@ -107,15 +107,15 @@ namespace EmuSen.WiseMan.Fixtures
                     case 1:
                         at += 4;
                         pages = new Dictionary<uint, byte[]>();
+                        hidden = new Dictionary<uint, byte[]>();
                         messages = new List<string>();
-                        hidden = 0;
                         break;
 
                     case 2:
                     case 3:
                         uint offset = BitConverter.ToUInt32(data, at);
                         if (tag == 2) pages![offset] = ConsoleOrder(data.AsSpan(at + 4, PageSize));
-                        else hidden++;
+                        else hidden![offset] = data.AsSpan(at + 4, PageSize).ToArray();
                         at += 4 + PageSize;
                         break;
 

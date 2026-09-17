@@ -11,9 +11,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private readonly int[] _spanLeft = new int[SpanRows];
         private readonly int[] _spanRight = new int[SpanRows];
 
+        // Each sub-scanline's clipped edges in eighth pixels, indexed by sub-scanline, which coverage reads - see Mars_RdpCoverage.md §2.
+        private readonly int[] _edgeLeft = new int[SpanRows * 4];
+        private readonly int[] _edgeRight = new int[SpanRows * 4];
+        private readonly bool[] _edgeInvalid = new bool[SpanRows * 4];
+
         // The rows it returns are the only ones whose spans it wrote, and so the only ones to draw.
         private (int First, int Last) Walk(bool majorOnLeft, int yh, int ym, int yl, int xh, int xm, int xl, int dxhdy, int dxmdy, int dxldy)
         {
+            _combined = default;
+
             int upper = UpperLimit(yh);
             int lower = LowerLimit(yl);
             int first = upper >> 2, last = lower >> 2;
@@ -58,6 +65,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
                     bool invalid = k < upper || k >= lower || QuarterPixel(rightEdge) < QuarterPixel(leftEdge);
                     outside &= invalid;
+
+                    _edgeLeft[k] = leftAt & 0x1FFF;
+                    _edgeRight[k] = rightAt & 0x1FFF;
+                    _edgeInvalid[k] = invalid;
 
                     if (!invalid)
                     {

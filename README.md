@@ -51,7 +51,7 @@ The extra cores are the point of the architecture rather than a bonus: `IDebugTa
 
 ## Status
 
-**Honest summary: the SNES core runs real commercial games, and several boot correctly and play, but very few have been verified end to end. The NES core is complete enough to run and make sound, and has had far less play-testing. The Game Boy core is feature-complete and the best instrumented of the three, but its timing claims are argued rather than demonstrated until the hardware test corpus is actually run against it.**
+The SNES core runs real commercial games, and several boot correctly and play, but very few have been verified end to end. The NES core is complete enough to run and make sound, and has had far less play-testing. The Game Boy core is feature-complete and the best instrumented of the three, but its timing claims are argued rather than demonstrated until the hardware test corpus is actually run against it.**
 
 The rows down to *Timing accuracy* describe the SNES core; the other cores follow.
 

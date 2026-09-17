@@ -12,11 +12,11 @@ it gets, what stops it, what its numbers mean and what they do not. The protocol
 **The run completes.** The corpus reaches its own teardown and prints its own verdict:
 
 ```
-Finished in 2.07s. Base: Failed 319 of 4637 tests (93% success rate)
+Finished in 3.09s. Base: Failed 163 of 4637 tests (96% success rate)
 ```
 
 That is 1,040 test groups and 4,637 assertions, every one of them attempted, **and no
-failing group left anywhere in the CPU** (§3). It is the
+failing group left that tests the CPU, or the RSP as a processor** (§3). It is the
 first complete run of the corpus this project has made, and the ratchet now asserts that
 line (§5). It took two changes in the slice that produced it: the RSP learned to halt
 (`Mars_Rsp.md`), which let the run past the wait it had sat in since Phase A, and the
@@ -38,6 +38,7 @@ line that reports those:
 | reverse-endian | 720 | 160 |
 | the RSP's scalar half, and a complete run | 1,040 | 395 of 4,637 assertions |
 | the seventeen CPU groups | 1,040 | 319 of 4,637 assertions |
+| the RSP's vector unit | 1,040 | 163 of 4,637 assertions |
 
 The fourth row is the shape to want: forty tests that had never run before ran, and all
 forty passed.
@@ -82,19 +83,40 @@ in the corpus's test list has been attempted. Everything after it has not.
 
 ## 3. The census of what still fails
 
-The 259 distinct test groups that fail in the complete run. **The unit changed here**:
-every earlier table on this page counted failure *lines*, one per failing value, because
-that was what the truncated runs could count. A group that fails for thirty-three values is
-one row below, and the corpus's own 395 counts something else again — assertions.
+The 87 distinct test groups that fail in the complete run, counted by name — a group that
+fails for thirty-three values is one row — against the corpus's own 163, which counts
+assertions.
 
 | | groups | why |
 | --- | --- | --- |
-| the RSP's vector unit | 155 | Phase C, next slice (`Mars_Rsp.md` §6) |
 | caches, all four families | 45 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
 | cartridge memory and writes | 19 | Phase E — the PI and cartridge DMA |
 | PIF RAM, MI, RDRAM registers | 13 | Phase E |
 | RDP status and registers | 6 | Phase D |
 | the main CPU's sub-word access to RSP memory | 4 | bus, not processor (`Mars_Rsp.md` §8) |
+
+**No group testing the RSP as a processor remains either.** Two rows still carry the RSP's
+name without being about it: the four `spmem` groups test how the main CPU's sub-word loads
+and stores reach the RSP's memories, and one of the six RDP groups is called *RSP STATUS* and
+tests the display processor freezing (`Mars_Rsp.md` §8). The 155 vector groups cleared in one
+slice, and the five rows here are the same groups, one for one, that the census before it
+listed (§10). Of what is left, only the `spmem` row is work inside a phase this plan has
+reached.
+
+> **Retired 2026-09-17: the census that preceded this one**, which is kept for its first row
+> and for a count that was wrong. It opened *"The 259 distinct test groups that fail in the
+> complete run"* and tabled 242. The 259 was the count before the seventeen CPU groups were
+> cleared; the table was brought up to date and the sentence above it was not. The unit
+> change it announced still holds — groups by name, not failure lines — and it read:
+>
+> | | groups | why |
+> | --- | --- | --- |
+> | the RSP's vector unit | 155 | Phase C, next slice (`Mars_Rsp.md` §6) |
+> | caches, all four families | 45 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
+> | cartridge memory and writes | 19 | Phase E — the PI and cartridge DMA |
+> | PIF RAM, MI, RDRAM registers | 13 | Phase E |
+> | RDP status and registers | 6 | Phase D |
+> | the main CPU's sub-word access to RSP memory | 4 | bus, not processor (`Mars_Rsp.md` §8) |
 
 **No CPU group remains, and this time the run is complete**, so the statement §2 had to
 retract can be made about the run it describes. It is still a claim about what this corpus
@@ -171,6 +193,45 @@ and say why.
 > left anywhere in the run."* It was accurate about the run it described, and §2 records
 > why that was not enough.
 
+## 10. The vector unit
+
+*Landed 2026-09-17. `Mars_RspVector.md` has the rules; this section is what the run said.*
+
+**319 → 163, and 242 failing groups → 87.** The 156 assertions that moved are exactly the 156
+failure lines the 155 vector groups held; a diff of the failing group names before and after
+is 155 removals and **no additions**; and every other failure line in the report is
+unchanged to the character, values included. Every one of the 155 passed in the first complete run after the unit was built. There
+was no second round.
+
+That is the opposite of §9, where the census's diagnosis named one cause for a group that
+had three, and the difference is worth stating precisely rather than as luck. §9's groups
+were diagnosed from the failure messages; these were implemented from the test source,
+which for most of the unit carries a model of the part rather than a list of values
+(`Mars_RspVector.md` §0). A model covers every row of its group; four lines of a message
+do not.
+
+**One suspected disagreement was an arithmetic error, and it was the author's.** Before the
+run, a hand check of the `VRNDP` accumulator-overflow table appeared to put one element
+`0x8000_0000` away from the model, and the slice was begun expecting that group to fail and
+to need recording as an unexplained residual. It passed. Simulating the model
+instead of multiplying by hand gives the corpus's values exactly: the hand calculation had
+carried wrongly in `0x7FFF_0000 × 32769`. It is recorded because the prediction was stated
+before the measurement and the measurement refuted it.
+
+**The run is longer, and still ends itself.** Three of the vector tests run an RSP program
+65,536 times each. A complete run now takes about thirty seconds of wall time under the
+harness — the time before this slice was not measured, so no ratio is given — and it still
+reaches the corpus's summary line, which it could not do had the 400-million instruction
+budget (§4) run out first.
+
+**The unit's tests were checked for bite.** Of the twenty-nine cases written before the unit
+existed, four passed against the unbuilt unit — all four from one theory, a zero-result test
+that passed because the load that should have made the register non-zero did not happen
+either. It now asserts the
+load. A second, the aliasing test, was found while writing the man page not to distinguish
+a correct implementation from one that writes in place; it was rebuilt, and then checked by
+mutation: an in-place `VOR` fails it.
+
 ## 4. The budget, and why it is now a safety net
 
 The harness runs until the corpus prints its summary, checking every million
@@ -195,7 +256,8 @@ clock would make the ratchet flap.
 
 ## 5. The ratchet
 
-`MarsCorpusTests` asserts **the corpus's own summary line**: `Failed 395 of 4637 tests`.
+`MarsCorpusTests` asserts **the corpus's own summary line**, `Failed N of 4637 tests`, with
+the `N` of the latest row of §1's table.
 That replaced a started-and-failed pair derived by counting markers in the verdict text,
 and it is a stronger assertion in two ways. It counts what the corpus counts, which is
 assertions rather than groups. And it cannot be satisfied by a run that did not finish —

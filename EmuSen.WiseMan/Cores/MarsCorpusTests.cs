@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("Running ADDIOpcodeTest...", verdicts);
 
             // The corpus's own summary, which it only prints if it reached the end - see Mars_Corpus.md §5.
-            Assert.Equal($"Failed 319 of 4637 tests ({report})", $"{Summary(verdicts)} ({report})");
+            Assert.Equal($"Failed 163 of 4637 tests ({report})", $"{Summary(verdicts)} ({report})");
         }
 
         // The inverse of what stood here for two slices: no scaffold left to reach - see Mars_Fpu.md §6.

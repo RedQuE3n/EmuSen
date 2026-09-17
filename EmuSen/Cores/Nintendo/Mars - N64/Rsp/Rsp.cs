@@ -3,7 +3,7 @@ using EmuSen.Cores.Nintendo.Mars.Memory;
 namespace EmuSen.Cores.Nintendo.Mars.Rsp
 {
     // The signal processor's scalar half: MIPS without exceptions, alignment or a second word - see Mars_Rsp.md.
-    public sealed class Rsp
+    public sealed partial class Rsp
     {
         // Every program counter is an offset into instruction memory, and wraps inside it - see §2.
         public const uint PcMask = 0xFFC;
@@ -71,6 +71,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
                 case 0x0F: Write(Rt(instruction), instruction << 16); return;
 
                 case 0x10: ExecuteCop0(instruction); return;
+                case 0x12: ExecuteCop2(instruction); return;
 
                 case 0x20: Write(Rt(instruction), (uint)(int)(sbyte)ReadData(Address(instruction), 1)); return;
                 case 0x21: Write(Rt(instruction), (uint)(int)(short)ReadData(Address(instruction), 2)); return;
@@ -83,7 +84,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
                 case 0x29: WriteData(Address(instruction), Read(Rt(instruction)), 2); return;
                 case 0x2B: WriteData(Address(instruction), Read(Rt(instruction)), 4); return;
 
-                // Nothing here faults, so an encoding this half does not own simply does nothing - see §6.
+                case 0x32: ExecuteVectorLoad(instruction); return;
+                case 0x3A: ExecuteVectorStore(instruction); return;
+
+                // Nothing here faults, so an encoding the processor does not own simply does nothing - see §6.
                 default: return;
             }
         }

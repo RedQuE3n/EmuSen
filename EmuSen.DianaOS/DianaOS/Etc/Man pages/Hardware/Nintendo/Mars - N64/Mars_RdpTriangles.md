@@ -141,7 +141,8 @@ Fifteen breakages of the walker were run. Ten were caught at once, one of them b
 in the dump, rectangles included. Of the five survivors:
 
 - **The sticky bit** and **the extra row below a cut scissor** are invisible to a fill (§2.3, §2.4).
-  The first is kept for coverage; the second was removed.
+  The first is kept for coverage; the second was removed. **Update:** with coverage built, removing the
+  sticky bit fails 142 RDP tests (`Mars_RdpCoverage.md` §2.1).
 - **Clearing stale spans** is a guard the walk never needs (§2.4), and is kept.
 - **The over test for x past 1,024 pixels** and **the cleared low bit of a step** had no case that
   could see them. One case each was added, and both breakages are now caught.
@@ -162,3 +163,7 @@ recorded run — so the walker is pinned everywhere. It fails with triangle comm
 - **The copy cycle**, and texture rectangles.
 - **Pipeline crashes** on fills with image reads or depth settings (`Mars_Rdp.md` §5.3).
 - **Commercial evidence.** No list has reached a triangle yet (§0).
+
+> **Update 2026-09-17:** coverage and the one-cycle mode now exist for the plain triangle command, and
+> the walker keeps its per-sub-scanline edges for them (`Mars_RdpCoverage.md`). The two bullets above on
+> shading and coverage still hold for every triangle form that carries shade, texture or depth.

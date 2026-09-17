@@ -261,6 +261,34 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // angrylion's own pixels and hidden bits for this anti-aliased one-cycle triangle, recorded from the differential - see Mars_RdpCoverage.md §7.
+        [Fact]
+        public void An_anti_aliased_one_cycle_triangle_stores_the_coverage_the_reference_stores()
+        {
+            var bus = new MarsBus();
+            const uint list = 0x0030_0000;
+            uint end = WriteList(bus, list,
+                0x3F10001F_00100000UL, 0x2D000000_0007C07CUL, 0x2F300000_00000000UL, 0x37000000_7BDE7BDFUL, 0x3607C07C_00000000UL,
+                0x2F0000F0_00000048UL, 0x3C887F10_88FDF6FBUL, 0x3A00005A_C8642A9FUL, 0x3B000000_3C90D071UL, 0x39000000_7755AA80UL,
+                0x38000000_2266EE40UL, 0x2C000000_00156B3CUL, 0x2E000000_12340040UL,
+                0x08800071_0027000AUL, 0x001BC000_FFFEE7C9UL, 0x00032AE0_00002A41UL, 0x00018F73_0003611AUL, SyncFull);
+
+            bus.Write32(Start, list);
+            bus.Write32(End, end);
+
+            (uint X, uint Color, byte Hidden)[] row12 =
+            {
+                (4, 0x7BDE, 0), (5, 0xCB0B, 3), (15, 0xCB0B, 3), (24, 0xCB0B, 3), (25, 0xCB0A, 0), (26, 0x7BDE, 0), (27, 0x7BDF, 3),
+            };
+
+            foreach (var (x, color, hidden) in row12)
+            {
+                uint index = 0x0010_0000 / 2 + 12 * 32 + x;
+                Assert.Equal(color, (uint)bus.Read16(index * 2));
+                Assert.Equal(hidden, bus.RdramHidden[index]);
+            }
+        }
+
         [Fact]
         public void Writing_the_mode_register_clear_bit_lowers_the_display_processor_interrupt()
         {

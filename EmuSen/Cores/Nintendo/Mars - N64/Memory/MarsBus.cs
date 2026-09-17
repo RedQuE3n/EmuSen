@@ -11,6 +11,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public const int RdramSizeExpanded = 0x0080_0000;
 
         public byte[] Rdram;
+
+        // The display processor's extra bits beside each sixteen-bit word, which the CPU cannot see - see Mars_RdpCoverage.md §3.1.
+        public byte[] RdramHidden;
         public readonly byte[] SpDmem = new byte[MemoryMap.SpMemSize];
         public readonly byte[] SpImem = new byte[MemoryMap.SpMemSize];
         public readonly byte[] PifRam = new byte[MemoryMap.PifRamSize];
@@ -35,6 +38,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public MarsBus(bool expansionPak = false)
         {
             Rdram = new byte[expansionPak ? RdramSizeExpanded : RdramSize];
+            RdramHidden = new byte[Rdram.Length / 2];
             Sp = new SpInterface(this);
             Pi = new PiInterface(this);
             Dp = new DpInterface(this);

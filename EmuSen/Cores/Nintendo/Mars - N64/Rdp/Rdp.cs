@@ -50,18 +50,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         {
             switch (id)
             {
-                case >= 0x08 and <= 0x0F: Triangle(); break;
+                case >= 0x08 and <= 0x0F: Triangle(id); break;
                 case SyncFull: return true;
                 case SetScissor: Scissor(word); break;
                 case SetOtherModes: _otherModes = word; break;
                 case FillRectangle: Fill(word); break;
                 case SetFillColor: _fillColor = (uint)word; break;
                 case SetColorImage: ColorImage(word); break;
+                default: SetRegister(id, word); break;
             }
 
             return false;
         }
-
-        private int CycleType => (int)(_otherModes >> 52) & 3;
     }
 }

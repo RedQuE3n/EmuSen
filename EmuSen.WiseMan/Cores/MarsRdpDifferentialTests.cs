@@ -15,7 +15,9 @@ namespace EmuSen.WiseMan.Cores
         // An artefact is a reference behaviour that is not a claim about hardware, a dispute is the two references differing - see §4.
         private sealed record Case(string Name, uint Image, int Size, int Width, ulong[] Commands, string? Artefact = null, string? Dispute = null, bool CrossChecked = true);
 
-        private sealed record Replay(IReadOnlyList<RdpReferenceSync> Reference, IReadOnlyList<byte[]> Mars, int AgreementExit, string AgreementLog,
+        private sealed record Drawn(byte[] Rdram, byte[] Hidden);
+
+        private sealed record Replay(IReadOnlyList<RdpReferenceSync> Reference, IReadOnlyList<Drawn> Mars, int AgreementExit, string AgreementLog,
             IReadOnlyDictionary<string, int> DisputeExits);
 
         private static readonly Case[] Cases = BuildCases();
@@ -115,16 +117,17 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // One display processor for every case, as in the references, with memory cleared where they flush.
-        private static IReadOnlyList<byte[]> ReplayMars()
+        private static IReadOnlyList<Drawn> ReplayMars()
         {
             var bus = new MarsBus(expansionPak: true);
-            var drawn = new List<byte[]>();
+            var drawn = new List<Drawn>();
 
             foreach (Case c in Cases)
             {
                 Array.Clear(bus.Rdram);
+                Array.Clear(bus.RdramHidden);
                 foreach (ulong word in c.Commands) bus.Dp.Processor.Accept(word);
-                drawn.Add((byte[])bus.Rdram.Clone());
+                drawn.Add(new Drawn((byte[])bus.Rdram.Clone(), (byte[])bus.RdramHidden.Clone()));
             }
 
             return drawn;
@@ -140,38 +143,44 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // Every page either side touched, byte for byte, reported as pixels of the case's colour image.
-        private static string Differences(Case c, RdpReferenceSync reference, byte[] mars)
+        // Every page either side touched, RDRAM and then hidden RDRAM, byte for byte, reported as pixels of the case's colour image.
+        private static string Differences(Case c, RdpReferenceSync reference, Drawn mars)
         {
-            var pages = new SortedSet<uint>(reference.Pages.Keys);
-            for (uint page = 0; page < mars.Length; page += RdpReference.PageSize)
-            {
-                if (mars.AsSpan((int)page, RdpReference.PageSize).IndexOfAnyExcept((byte)0) >= 0) pages.Add(page);
-            }
-
             var report = new StringBuilder();
             int count = 0;
             int bytes = Math.Max(1, (1 << c.Size) / 2);
 
-            foreach (uint page in pages)
-            {
-                byte[] expected = reference.Pages.TryGetValue(page, out byte[]? p) ? p : new byte[RdpReference.PageSize];
-
-                for (int i = 0; i < RdpReference.PageSize; i++)
-                {
-                    if (expected[i] == mars[page + i]) continue;
-
-                    if (count++ < 12)
-                    {
-                        long pixel = ((long)page + i - (c.Image & ~(uint)(bytes - 1))) / bytes;
-                        long x = ((pixel % c.Width) + c.Width) % c.Width, y = (long)Math.Floor((double)pixel / c.Width);
-                        report.AppendLine($"  {page + i:X6} pixel ({x}, {y}): Mars {mars[page + i]:X2}, reference {expected[i]:X2}");
-                    }
-                }
-            }
+            Compare(reference.Pages, mars.Rdram, 1, "");
+            Compare(reference.HiddenPages, mars.Hidden, 2, "hidden ");
 
             if (count > 12) report.AppendLine($"  ...{count} differing bytes in all");
             return report.ToString();
+
+            void Compare(IReadOnlyDictionary<uint, byte[]> expectedPages, byte[] actual, int scale, string label)
+            {
+                var pages = new SortedSet<uint>(expectedPages.Keys);
+                for (uint page = 0; page < actual.Length; page += RdpReference.PageSize)
+                {
+                    if (actual.AsSpan((int)page, RdpReference.PageSize).IndexOfAnyExcept((byte)0) >= 0) pages.Add(page);
+                }
+
+                foreach (uint page in pages)
+                {
+                    byte[] expected = expectedPages.TryGetValue(page, out byte[]? p) ? p : new byte[RdpReference.PageSize];
+
+                    for (int i = 0; i < RdpReference.PageSize; i++)
+                    {
+                        if (expected[i] == actual[page + i]) continue;
+
+                        if (count++ < 12)
+                        {
+                            long pixel = ((long)(page + i) * scale - (c.Image & ~(uint)(bytes - 1))) / bytes;
+                            long x = ((pixel % c.Width) + c.Width) % c.Width, y = (long)Math.Floor((double)pixel / c.Width);
+                            report.AppendLine($"  {label}{page + i:X6} pixel ({x}, {y}): Mars {actual[page + i]:X2}, reference {expected[i]:X2}");
+                        }
+                    }
+                }
+            }
         }
 
         private static string Messages(RdpReferenceSync reference) =>
@@ -273,11 +282,130 @@ namespace EmuSen.WiseMan.Cores
                 Triangle($"random triangle {n}", scissor, Vertices(Coordinate(), Coordinate(), Coordinate(), Coordinate(), Coordinate(), Coordinate()));
             }
 
+            cases.AddRange(OneCycleCases());
             return cases.ToArray();
         }
 
-        private static ulong ColorImage(int size, int width, uint address) =>
-            (0x3FUL << 56) | ((ulong)size << 51) | ((ulong)(width - 1) << 32) | address;
+        private static ulong ColorImage(int size, int width, uint address, int format = 0) =>
+            (0x3FUL << 56) | ((ulong)format << 53) | ((ulong)size << 51) | ((ulong)(width - 1) << 32) | address;
+
+        // Flat primitives drawn in the one-cycle mode, with every mode that needs neither texture, depth, chroma key nor noise - see Mars_RdpCoverage.md §6.
+        private static IEnumerable<Case> OneCycleCases()
+        {
+            var cases = new List<Case>();
+            ulong inside = Scissor(0, 0, 124, 124);
+            ulong primitive = Combine(subA: 8, subB: 8, mul: 16, add: 3, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 3);
+            ulong blend = Combine(subA: 3, subB: 5, mul: 10, add: 5, alphaSubA: 3, alphaSubB: 5, alphaMul: 3, alphaAdd: 5);
+            ulong[] triangle = Vertices(3.25, 2.5, 27.75, 9.75, 7.5, 28.25);
+            ulong[] other = Vertices(28.5, 1.25, 4.75, 17.5, 24.25, 29.75);
+
+            void Draw(string name, ulong modes, ulong combine, ulong[] shapes, int size = Bits16, int format = 0, uint background = 0, bool fill = true,
+                string? dispute = null, uint k4 = 0x0B5, uint k5 = 0x13C, uint blendColor = 0x7755_AA80, uint deltaZ = 0x0040)
+            {
+                var commands = new List<ulong> { ColorImage(size, 32, Framebuffer, format), inside };
+                if (fill) commands.AddRange(new[] { FillCycle, FillColor(background), Rectangle(0, 0, 124, 124) });
+                commands.AddRange(new[]
+                {
+                    modes, combine, Color(0x3A, 0xC864_2A9F, 0x5A), Color(0x3B, 0x3C90_D071), Color(0x39, blendColor), Color(0x38, 0x2266_EE40),
+                    (0x2CUL << 56) | (0xA00UL << 9) | ((ulong)k4 << 9) | k5, (0x2EUL << 56) | (0x1234UL << 16) | deltaZ,
+                });
+                commands.AddRange(shapes);
+                commands.Add(SyncFull);
+                cases.Add(new Case(name, Framebuffer, size, 32, commands.ToArray(), Dispute: dispute));
+            }
+
+            Draw("one-cycle rectangle in the primitive colour", Modes(), primitive, new[] { Rectangle(9, 14, 99, 77) });
+            Draw("one-cycle triangle in the primitive colour", Modes(), primitive, triangle);
+            Draw("anti-aliased triangle keeping its coverage", Modes(antialias: true, imageRead: true), primitive, triangle, background: 0x7BDE_7BDF);
+            Draw("anti-aliased triangle blended over memory", Modes(antialias: true, imageRead: true, m1a: 0, m1b: 0, m2a: 1, m2b: 0), blend, triangle, background: 0x7BDE_7BDF);
+            Draw("blend against memory alpha", Modes(antialias: true, imageRead: true, m1a: 0, m1b: 0, m2a: 1, m2b: 1), blend, triangle, background: 0x7BDF_7BDF);
+            Draw("blend against memory alpha with a primitive depth", Modes(antialias: true, imageRead: true, m1a: 0, m1b: 0, m2a: 1, m2b: 1, zSource: true), blend, triangle, background: 0x7BDF_7BDF);
+            Draw("two anti-aliased triangles wrapping coverage", Modes(antialias: true, imageRead: true, cvgDest: 1, m2a: 1), blend, triangle.Concat(other).ToArray());
+            Draw("two anti-aliased triangles clamping coverage", Modes(antialias: true, imageRead: true, cvgDest: 0, m2a: 1), blend, triangle.Concat(other).ToArray());
+            Draw("coverage zapped", Modes(antialias: true, imageRead: true, cvgDest: 2), primitive, triangle.Concat(other).ToArray());
+            Draw("coverage saved", Modes(antialias: true, imageRead: true, cvgDest: 3), primitive, triangle.Concat(other).ToArray(), background: 0x0001_0000);
+            Draw("colour only where coverage wrapped", Modes(antialias: true, imageRead: true, colorOnCvg: true, m2a: 1), blend, triangle.Concat(other).ToArray());
+            Draw("force blend", Modes(forceBlend: true, m1a: 2, m1b: 1, m2a: 3, m2b: 2), blend, triangle);
+            Draw("alpha compared against the blend alpha", Modes(alphaCompare: true), blend, triangle);
+            Draw("coverage times alpha", Modes(antialias: true, cvgTimesAlpha: true), blend, triangle);
+            Draw("alpha taken from coverage", Modes(antialias: true, alphaCvgSelect: true, m1b: 0, m2a: 1), blend, triangle);
+            Draw("magic square dither", Modes(rgbDither: 0, alphaDither: 0), blend, triangle);
+            Draw("bayer dither with inverted alpha dither", Modes(rgbDither: 1, alphaDither: 1), blend, triangle);
+            Draw("the previous pixel's combined colour", Modes(), Combine(subA: 0, subB: 3, mul: 15, add: 3, alphaSubA: 0, alphaSubB: 3, alphaMul: 6, alphaAdd: 3), triangle,
+                dispute: "angrylion's one-cycle combined input is the previous pixel's result, which parallel-rdp does not reproduce");
+            Draw("key centre, key scale and convert constants", Modes(), Combine(subA: 5, subB: 6, mul: 6, add: 7, alphaSubA: 6, alphaSubB: 3, alphaMul: 5, alphaAdd: 4), triangle);
+            Draw("negative convert constants", Modes(), Combine(subA: 3, subB: 7, mul: 15, add: 5, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 3), triangle,
+                k4: 0x1C5, k5: 0x1F0);
+            Draw("alpha dither without colour dither, at the compare threshold", Modes(rgbDither: 3, alphaDither: 0, alphaCompare: true),
+                Combine(subA: 3, subB: 8, mul: 16, add: 3, alphaSubA: 7, alphaSubB: 7, alphaMul: 7, alphaAdd: 5), triangle, blendColor: 0x7755_AA74);
+            Draw("forced blend against memory alpha with a steep primitive depth", Modes(antialias: true, imageRead: true, forceBlend: true, m1a: 0, m1b: 0, m2a: 1, m2b: 1, zSource: true),
+                blend, triangle, background: 0x7BDF_7BDF, deltaZ: 0x8000);
+            Draw("one-cycle 32-bit image", Modes(antialias: true, imageRead: true, m2a: 1), blend, triangle, size: Bits32, background: 0x1234_5678);
+            Draw("one-cycle 8-bit image", Modes(antialias: true, imageRead: true, m2a: 1), blend, triangle, size: Bits8, background: 0x1234_5678);
+            // Recorded from the run that found it; the dispute depends on pixel values as well as on these modes - see Mars_RdpCoverage.md §6.
+            Draw("8-bit image forcing a blend against memory colour", 0x2F0000C0_F050620CUL, 0x3C35666A_33CDE8F4UL,
+                new[]
+                {
+                    0x08000084_00310013UL, 0x000F0000_000046F1UL, 0x0016CD98_FFFFEDE0UL, 0x00178666_FFFEF777UL,
+                    0x08800065_00440000UL, 0x00200000_FFFC26CAUL, 0x001DC000_FFFED4E9UL, 0x001DC000_000021E2UL,
+                },
+                size: Bits8, fill: false, dispute: "in an 8-bit image, a forced blend with memory colour as exactly one input differs in green bytes");
+            Draw("one-cycle 16-bit intensity image", Modes(antialias: true, imageRead: true, m2a: 1), blend, triangle, format: 4, background: 0x1234_5678);
+            Draw("one-cycle 4-bit image", Modes(antialias: true), primitive, triangle, size: Bits4, fill: false);
+
+            var random = new Random(0x434F_5652);
+            for (int n = 0; n < 150; n++)
+            {
+                double Coordinate() => random.Next(-8, 136) / 4.0;
+                int Pick(params int[] choices) => choices[random.Next(choices.Length)];
+                bool Coin() => random.Next(2) == 1;
+
+                int size = Pick(Bits16, Bits16, Bits16, Bits32, Bits8);
+                int m1a = random.Next(4), m2a = random.Next(4);
+                bool forceBlend = Coin();
+
+                // The other disputed combination, which has its one named case above.
+                if (size == Bits8 && (m1a == 1) != (m2a == 1)) forceBlend = false;
+
+                ulong modes = Modes(
+                    rgbDither: Pick(0, 1, 3), alphaDither: Pick(0, 1, 3), m1a: m1a, m1b: random.Next(4), m2a: m2a, m2b: random.Next(4),
+                    forceBlend: forceBlend, alphaCvgSelect: Coin(), cvgTimesAlpha: Coin(), cvgDest: random.Next(4), colorOnCvg: Coin(), imageRead: Coin(),
+                    antialias: Coin(), zSource: Coin(), alphaCompare: random.Next(4) == 0);
+                // No combined input: the references disagree about it in this mode, so it has its one named case - see Mars_RdpCoverage.md §6.
+                ulong combine = Combine(
+                    subA: Pick(3, 4, 5, 6, 9), subB: Pick(3, 4, 5, 6, 7, 10), mul: Pick(3, 4, 5, 6, 10, 11, 12, 14, 15, 20), add: Pick(3, 4, 5, 6, 7),
+                    alphaSubA: Pick(3, 4, 5, 6, 7), alphaSubB: Pick(3, 4, 5, 6, 7), alphaMul: Pick(3, 4, 5, 6, 7), alphaAdd: Pick(3, 4, 5, 6, 7));
+
+                var shapes = new List<ulong>(Vertices(Coordinate(), Coordinate(), Coordinate(), Coordinate(), Coordinate(), Coordinate()));
+                if (Coin()) shapes.AddRange(Vertices(Coordinate(), Coordinate(), Coordinate(), Coordinate(), Coordinate(), Coordinate()));
+                if (random.Next(4) == 0) shapes.Add(Rectangle((uint)random.Next(0, 60), (uint)random.Next(0, 60), (uint)random.Next(60, 124), (uint)random.Next(60, 124)));
+
+                Draw($"random one-cycle case {n}", modes, combine, shapes.ToArray(), size: size, format: size == Bits16 && random.Next(4) == 0 ? 4 : 0,
+                    background: (uint)random.Next() * 2 + (uint)random.Next(2), fill: random.Next(5) != 0);
+            }
+
+            return cases;
+        }
+
+        private static ulong Modes(int rgbDither = 3, int alphaDither = 3, int m1a = 0, int m1b = 0, int m2a = 0, int m2b = 0, bool forceBlend = false,
+            bool alphaCvgSelect = false, bool cvgTimesAlpha = false, int cvgDest = 0, bool colorOnCvg = false, bool imageRead = false, bool antialias = false,
+            bool zSource = false, bool alphaCompare = false)
+        {
+            ulong blender = (ulong)(uint)((m1a << 30) | (m1a << 28) | (m1b << 26) | (m1b << 24) | (m2a << 22) | (m2a << 20) | (m2b << 18) | (m2b << 16));
+            return (0x2FUL << 56) | ((ulong)rgbDither << 38) | ((ulong)alphaDither << 36) | blender
+                | (forceBlend ? 1UL << 14 : 0) | (alphaCvgSelect ? 1UL << 13 : 0) | (cvgTimesAlpha ? 1UL << 12 : 0) | ((ulong)cvgDest << 8)
+                | (colorOnCvg ? 1UL << 7 : 0) | (imageRead ? 1UL << 6 : 0) | (antialias ? 1UL << 3 : 0) | (zSource ? 1UL << 2 : 0) | (alphaCompare ? 1UL : 0);
+        }
+
+        // Both cycles given the same inputs, since the one-cycle mode reads the second.
+        private static ulong Combine(int subA, int subB, int mul, int add, int alphaSubA, int alphaSubB, int alphaMul, int alphaAdd)
+        {
+            ulong high = (ulong)((subA << 20) | (mul << 15) | (alphaSubA << 12) | (alphaMul << 9) | (subA << 5) | mul);
+            ulong low = (ulong)(uint)((subB << 28) | (subB << 24) | (alphaSubA << 21) | (alphaMul << 18) | (add << 15) | (alphaSubB << 12) | (alphaAdd << 9) | (add << 6) | (alphaSubB << 3) | alphaAdd);
+            return (0x3CUL << 56) | (high << 32) | low;
+        }
+
+        private static ulong Color(uint id, uint rgba, uint extra = 0) => ((ulong)id << 56) | ((ulong)extra << 32) | rgba;
 
         private static ulong Scissor(uint left, uint top, uint right, uint bottom, bool field = false, bool keepOdd = false) =>
             (0x2DUL << 56) | ((ulong)left << 44) | ((ulong)top << 32) | ((ulong)right << 12) | bottom

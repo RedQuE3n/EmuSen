@@ -444,6 +444,14 @@ rather than raw samples.
 > is the rest of this section's list — shading, texturing, depth, the combiner and blender, and
 > coverage — so the fill cycle remains the only mode that diffs to zero. Coverage is the next piece
 > that §2.1's bet depends on, and the walker is now in place to carry it.
+>
+> **Progress, 2026-09-17: coverage, and the one-cycle mode for flat primitives**
+> (`Mars_RdpCoverage.md`). Coverage from the walker's sub-scanlines, the combiner, the blender with its
+> hardware divider, dither, and the framebuffer with hidden RDRAM — 177 one-cycle cases match angrylion.
+> **§2.1's condition was about whether coverage could be graded, and it can**: for the primitives built,
+> it diffs to zero. What the slice adds to the reading of "done when" is that the oracle is now plural in
+> practice — the references disagree on two one-cycle behaviours, and the reference's noise is a
+> validation construct rather than a model — so "diffs to zero" is against angrylion, with those named.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

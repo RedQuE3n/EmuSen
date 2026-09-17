@@ -4,6 +4,11 @@
 will be able to reach, plus the clock it will advance.
 `EmuSen/Cores/Nintendo/Mars - N64/Memory/`, tested by `MarsBusTests`.*
 
+*The bus was ~~`MarsBus`~~ until 2026-09-17, when it became `MemoryBus` to match Venus, Moon and Mercury,
+each of which calls its own `Memory/MemoryBus.cs`. The namespace already carried the codename, so the prefix
+was saying it twice. The test class keeps its `Mars` prefix, because `EmuSen.WiseMan` names every test file
+after the core it grades.*
+
 ---
 
 ## 1. Virtual segments
@@ -65,8 +70,8 @@ chosen for being obvious rather than for being right.
 
 ### 2.4 The signal processor's memories repeat, and take only whole words from the CPU
 
-*Added 2026-09-17, from the corpus's four `spmem` groups. `MarsBus.Store` and
-`MarsBus.SignalProcessorMemory`; tests in `MarsSpMemoryTests`.*
+*Added 2026-09-17, from the corpus's four `spmem` groups. `MemoryBus.Store` and
+`MemoryBus.SignalProcessorMemory`; tests in `MarsSpMemoryTests`.*
 
 **The 8KB of DMEM and IMEM repeat to the end of their window.** From `0x04000000` up to the
 interface registers at `0x04040000`, every `0x2000` is another copy of the same two banks. A
@@ -118,7 +123,7 @@ something measures them.
 
 ## 3. One counter for the whole machine
 
-`MarsBus.Cycles` is the only clock, and `Tick` is the only thing that advances it.
+`MemoryBus.Cycles` is the only clock, and `Tick` is the only thing that advances it.
 
 ### 3.1 `Count` is derived, not incremented
 

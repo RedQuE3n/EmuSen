@@ -19,9 +19,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         public bool Halted = true;
         public bool Broke;
 
-        private readonly MarsBus _bus;
+        private readonly MemoryBus _bus;
 
-        public Rsp(MarsBus bus) => _bus = bus;
+        public Rsp(MemoryBus bus) => _bus = bus;
 
         public void Start(uint pc)
         {

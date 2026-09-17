@@ -5,7 +5,7 @@ using EmuSen.Cores.Nintendo.Mars.Rom;
 namespace EmuSen.Cores.Nintendo.Mars.Memory
 {
     // Everything the VR4300 can reach, and the clock that advances when it does - see Mars_Memory.md §2.
-    public sealed class MarsBus
+    public sealed class MemoryBus
     {
         public const int RdramSize = 0x0040_0000;
         public const int RdramSizeExpanded = 0x0080_0000;
@@ -36,7 +36,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // Stubs until each device exists; a register nobody models still has to read back - see §2.2.
         private readonly Dictionary<uint, uint> _registers = new();
 
-        public MarsBus(bool expansionPak = false)
+        public MemoryBus(bool expansionPak = false)
         {
             Rdram = new byte[expansionPak ? RdramSizeExpanded : RdramSize];
             RdramHidden = new byte[Rdram.Length / 2];

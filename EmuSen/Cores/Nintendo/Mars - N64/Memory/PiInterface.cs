@@ -16,12 +16,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public const uint StatusError = 0x04;
         public const uint StatusInterrupt = 0x08;
 
-        private readonly MarsBus _bus;
+        private readonly MemoryBus _bus;
 
         private uint _dramAddress;
         private uint _cartAddress;
 
-        public PiInterface(MarsBus bus) => _bus = bus;
+        public PiInterface(MemoryBus bus) => _bus = bus;
 
         public uint Read32(uint offset)
         {

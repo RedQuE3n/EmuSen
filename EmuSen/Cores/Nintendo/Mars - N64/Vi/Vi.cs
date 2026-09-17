@@ -30,7 +30,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         private const int PalHeight = 576;
         private const int NtscSyncLines = 525;
 
-        private readonly MarsBus _bus;
+        private readonly MemoryBus _bus;
         private readonly uint[] _registers = new uint[Registers];
 
         // Four bytes a pixel, red first; kept between frames, because a line nothing rewrites stays on the screen - see §2.4.
@@ -39,7 +39,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
         private bool _wasBlank;
 
-        public Vi(MarsBus bus) => _bus = bus;
+        public Vi(MemoryBus bus) => _bus = bus;
 
         public uint Read32(uint offset) => offset < Registers * 4 ? _registers[offset >> 2] : 0;
 

@@ -122,7 +122,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_conditional_store_after_a_return_from_exception_fails()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x100, 0xDEAD_BEEF);
 
             var cpu = Prepared(c => c.Cop0[Cpu.ExceptionPcRegister] = Kseg0 + 0x40,
@@ -136,7 +136,7 @@ namespace EmuSen.WiseMan.Cores
             Prepared(_ => { }, steps, program);
 
         private static Cpu Prepared(
-            Action<Cpu> before, int steps, Func<MipsAssembler, MipsAssembler> program, MarsBus? bus = null)
+            Action<Cpu> before, int steps, Func<MipsAssembler, MipsAssembler> program, MemoryBus? bus = null)
         {
             var cpu = program(new MipsAssembler()).Build(bus);
 

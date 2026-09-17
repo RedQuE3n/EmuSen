@@ -13,7 +13,7 @@ namespace EmuSen.WiseMan.Cores
         private const int CurrentLine = 4;
 
         private const int Blank = 0, Rgba5551 = 2, Rgba8888 = 3;
-        private const int ResampleOnly = 2, Replicate = 3;
+        private const int FetchAlways = 0, FetchAsNeeded = 1, ResampleOnly = 2, Replicate = 3;
 
         private const uint NtscSync = 525, PalSync = 625;
         private const uint NtscLeft = 108, NtscTop = 34, PalLeft = 128, PalTop = 44;
@@ -22,6 +22,9 @@ namespace EmuSen.WiseMan.Cores
         private sealed record Case(string Name, uint[][] Scans)
         {
             public (uint Address, byte[] Bytes)[] Uploads { get; init; } = Array.Empty<(uint, byte[])>();
+
+            // The hidden bits are indexed by sixteen-bit word rather than by byte, on both sides - see Mars_VideoFilter.md §1.
+            public (uint Index, byte[] Bytes)[] Hidden { get; init; } = Array.Empty<(uint, byte[])>();
         }
 
         private sealed record Replay(IReadOnlyList<RdpReferenceSync> Reference, IReadOnlyList<IReadOnlyList<byte[]>> Mars);
@@ -59,9 +62,24 @@ namespace EmuSen.WiseMan.Cores
 
             string path = Path.Combine(directory, "cases.rdp");
             var dump = new RdpDump();
+            (uint, byte[])[]? uploaded = null;
+            (uint, byte[])[]? hidden = null;
+
             foreach (Case c in Cases)
             {
-                foreach ((uint address, byte[] bytes) in c.Uploads) dump.Upload(address, bytes);
+                // Both caches persist across cases, so a case that carries the memory before it need not send it again.
+                if (!ReferenceEquals(c.Uploads, uploaded))
+                {
+                    foreach ((uint address, byte[] bytes) in c.Uploads) dump.Upload(address, bytes);
+                    uploaded = c.Uploads;
+                }
+
+                if (!ReferenceEquals(c.Hidden, hidden))
+                {
+                    foreach ((uint index, byte[] bytes) in c.Hidden) dump.UploadHidden(index, bytes);
+                    hidden = c.Hidden;
+                }
+
                 dump.Reset();
                 foreach (uint[] registers in c.Scans)
                 {
@@ -80,14 +98,17 @@ namespace EmuSen.WiseMan.Cores
         // One interface for every case, as in the reference, with memory restored from the same upload cache where the dump flushes.
         private static IReadOnlyList<IReadOnlyList<byte[]>> ReplayMars()
         {
-            var bus = new MarsBus(expansionPak: true);
+            var bus = new MemoryBus(expansionPak: true);
             var cache = new byte[bus.Rdram.Length];
+            var hidden = new byte[bus.RdramHidden.Length];
             var scanned = new List<IReadOnlyList<byte[]>>();
 
             foreach (Case c in Cases)
             {
                 foreach ((uint address, byte[] bytes) in c.Uploads) bytes.CopyTo(cache, address);
+                foreach ((uint index, byte[] bytes) in c.Hidden) bytes.CopyTo(hidden, index);
                 cache.CopyTo(bus.Rdram, 0);
+                hidden.CopyTo(bus.RdramHidden, 0);
 
                 var frames = new List<byte[]>();
                 foreach (uint[] registers in c.Scans)
@@ -172,8 +193,9 @@ namespace EmuSen.WiseMan.Cores
         {
             var cases = new List<Case>();
             (uint, byte[])[] uploads = { (Framebuffer, Picture()) };
+            (uint, byte[])[] mixed = { (Framebuffer / 2, Hidden(-1)) };
 
-            void Scan(string name, params uint[][] scans) => cases.Add(new Case(name, scans) { Uploads = uploads });
+            void Scan(string name, params uint[][] scans) => cases.Add(new Case(name, scans) { Uploads = uploads, Hidden = mixed });
 
             Scan("a sixteen-bit picture replicated", Ntsc(Rgba5551, Replicate));
             Scan("a sixteen-bit picture resampled", Ntsc(Rgba5551, ResampleOnly));
@@ -240,11 +262,13 @@ namespace EmuSen.WiseMan.Cores
             Scan("a shorter picture after a taller one", shown, With(shown, VerticalStart, Start(NtscTop, NtscTop + 100 * 2)), shown);
             Scan("a narrower picture after a wider one", shown, With(shown, HorizontalStart, Start(NtscLeft + 40, NtscLeft + 40 + 400)), shown);
 
+            AntiAliased(cases, uploads, mixed);
+
             var random = new Random(0x5649_4449);
-            for (int n = 0; n < 60; n++)
+            for (int n = 0; n < 80; n++)
             {
                 int type = (n & 1) == 0 ? Rgba5551 : Rgba8888;
-                int antialias = (n & 2) == 0 ? Replicate : ResampleOnly;
+                int antialias = (n >> 1) & 3;
                 uint left = (uint)random.Next(60, 200);
                 uint top = (uint)random.Next(10, 80);
                 uint[] registers = Ntsc(type, antialias,
@@ -257,14 +281,62 @@ namespace EmuSen.WiseMan.Cores
                 registers[ScaleX] = Scale(registers[ScaleX] & 0xFFF, (uint)random.Next(0, 0x400));
                 registers[ScaleY] = Scale(registers[ScaleY] & 0xFFF, (uint)random.Next(0, 0x400));
 
-                cases.Add(new Case($"random {n}", new[] { registers }) { Uploads = uploads });
+                cases.Add(new Case($"random {n}", new[] { registers }) { Uploads = uploads, Hidden = mixed });
             }
 
             return cases.ToArray();
         }
 
+        // Every case that needs a coverage: the filter itself, the neighbourhoods it can see, and the fetch bug - see Mars_VideoFilter.md §4.
+        private static void AntiAliased(List<Case> cases, (uint, byte[])[] uploads, (uint, byte[])[] mixed)
+        {
+            void Scan(string name, params uint[][] scans) => cases.Add(new Case(name, scans) { Uploads = uploads, Hidden = mixed });
+
+            Scan("a sixteen-bit picture anti-aliased", Ntsc(Rgba5551, FetchAsNeeded));
+            Scan("a thirty-two-bit picture anti-aliased", Ntsc(Rgba8888, FetchAsNeeded));
+            Scan("a sixteen-bit picture in the other anti-alias mode", Ntsc(Rgba5551, FetchAlways));
+            Scan("a thirty-two-bit picture in the other anti-alias mode", Ntsc(Rgba8888, FetchAlways));
+
+            // A step short of a whole line makes the row after the repeat fetch its own line for the one below - see §3.
+            Scan("a row read twice under anti-aliasing", With(Ntsc(Rgba5551, FetchAsNeeded), ScaleY, Scale(0x200, 0)));
+            Scan("every row read again under anti-aliasing", With(Ntsc(Rgba5551, FetchAsNeeded), ScaleY, Scale(0, 0)));
+            Scan("a row read twice, thirty-two bit", With(Ntsc(Rgba8888, FetchAsNeeded), ScaleY, Scale(0x200, 0)));
+            Scan("a step of three quarters of a line", With(Ntsc(Rgba5551, FetchAsNeeded), ScaleY, Scale(0x300, 0)));
+
+            Scan("a narrow frame buffer anti-aliased", With(Ntsc(Rgba5551, FetchAsNeeded), Width, 64));
+            Scan("a wide frame buffer anti-aliased", With(Ntsc(Rgba5551, FetchAsNeeded), Width, 640));
+            Scan("an anti-aliased picture at the start of memory", With(Ntsc(Rgba5551, FetchAsNeeded), Origin, 0x100));
+            Scan("an anti-aliased picture pulled in at the left", With(Ntsc(Rgba5551, FetchAsNeeded), HorizontalStart, Start(40, 40 + 640)));
+            Scan("an anti-aliased picture cut at the right", With(Ntsc(Rgba5551, FetchAsNeeded), HorizontalStart, Start(NtscLeft + 200, NtscLeft + 200 + 640)));
+            Scan("an interlaced picture anti-aliased", With(Ntsc(Rgba5551, FetchAsNeeded, serrate: true), CurrentLine, 1));
+
+            // The raster keeps each pixel's coverage, which only a frame that darkens over it can show - see §2.3.
+            uint[] shown = Ntsc(Rgba5551, FetchAsNeeded);
+            Scan("an anti-aliased picture, then nothing", shown, With(shown, HorizontalStart, Start(NtscLeft, NtscLeft)));
+
+            void Bits(string name, int coverage, params uint[][] scans) =>
+                cases.Add(new Case(name, scans)
+                {
+                    Uploads = new[] { (Framebuffer, Picture(coverage)) },
+                    Hidden = new[] { (Framebuffer / 2, Hidden(coverage * 3)) },
+                });
+
+            // With no whole pixel anywhere the filter has only the centre to work from, and must leave it alone - see §2.2.
+            Bits("no pixel whole", 0, Ntsc(Rgba5551, FetchAsNeeded));
+            Bits("no pixel whole, thirty-two bit", 0, Ntsc(Rgba8888, FetchAsNeeded));
+            Bits("every pixel whole", 1, Ntsc(Rgba5551, FetchAsNeeded));
+            Bits("every pixel whole, thirty-two bit", 1, Ntsc(Rgba8888, FetchAsNeeded));
+
+            // Only the hidden bits are held down, so a pixel is whole exactly where the word's own bit says so - see §1.
+            cases.Add(new Case("whole pixels scattered through a picture", new[] { Ntsc(Rgba5551, FetchAsNeeded) })
+            {
+                Uploads = uploads,
+                Hidden = new[] { (Framebuffer / 2, Hidden(3)) },
+            });
+        }
+
         // A frame buffer with no two neighbouring pixels alike, so a step in either direction shows.
-        private static byte[] Picture()
+        private static byte[] Picture(int coverage = -1)
         {
             var bytes = new byte[640 * 480 * 4];
             uint state = 0x1357_9BDF;
@@ -272,6 +344,26 @@ namespace EmuSen.WiseMan.Cores
             {
                 state = state * 1664525 + 1013904223;
                 bytes[i] = (byte)(state >> 24);
+            }
+
+            if (coverage < 0) return bytes;
+
+            // The coverage a pixel carries itself: one bit of a sixteen-bit word, three of a thirty-two-bit one - see Mars_VideoFilter.md §1.
+            for (int i = 1; i < bytes.Length; i += 2) bytes[i] = (byte)((bytes[i] & ~1) | coverage);
+            for (int i = 3; i < bytes.Length; i += 4) bytes[i] = (byte)((bytes[i] & ~0xE0) | (coverage * 0xE0));
+
+            return bytes;
+        }
+
+        // One byte a sixteen-bit word, carrying two coverage bits the processor cannot reach - see Mars_VideoFilter.md §1.
+        private static byte[] Hidden(int value)
+        {
+            var bytes = new byte[640 * 480 * 2];
+            uint state = 0x2468_ACE0;
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                state = state * 1664525 + 1013904223;
+                bytes[i] = value < 0 ? (byte)(state >> 30) : (byte)value;
             }
 
             return bytes;

@@ -20,7 +20,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public readonly Rdp.Rdp Processor;
 
-        private readonly MarsBus _bus;
+        private readonly MemoryBus _bus;
 
         private uint _start;
         private uint _end;
@@ -30,7 +30,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private bool _freeze;
         private bool _running;
 
-        public DpInterface(MarsBus bus)
+        public DpInterface(MemoryBus bus)
         {
             _bus = bus;
             Processor = new Rdp.Rdp(bus);

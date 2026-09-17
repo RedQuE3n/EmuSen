@@ -11,9 +11,9 @@ namespace EmuSen.WiseMan.Cores
         private const ulong RcpMask = 1UL << 10;
         private const ulong GeneralVector = Cpu.VectorBase + Cpu.VectorOffsetGeneral;
 
-        private static Cpu Machine(MarsBus? bus = null)
+        private static Cpu Machine(MemoryBus? bus = null)
         {
-            var cpu = new MipsAssembler().Nop().Run(0, bus ?? new MarsBus());
+            var cpu = new MipsAssembler().Nop().Run(0, bus ?? new MemoryBus());
             cpu.Pc = MipsAssembler.EntryPoint;
             cpu.NextPc = cpu.Pc + 4;
             return cpu;
@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_counter_that_jumps_over_the_comparison_value_still_raises_it()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             var cpu = new MipsAssembler()
                 .Addiu(1, 0, 7).Addiu(2, 0, 3)
                 .Mult(1, 2)
@@ -138,7 +138,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_device_reaches_the_cpu_through_the_aggregator()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Mi.Mask = MiInterrupt.PeripheralInterface;
             bus.Mi.Raise(MiInterrupt.PeripheralInterface);
 
@@ -153,7 +153,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_unmasked_device_never_reaches_the_line_at_all()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Mi.Raise(MiInterrupt.PeripheralInterface);
 
             var cpu = Machine(bus);
@@ -168,7 +168,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Clearing_the_device_lowers_the_line_again()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Mi.Mask = MiInterrupt.PeripheralInterface;
             bus.Mi.Raise(MiInterrupt.PeripheralInterface);
 
@@ -185,7 +185,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_finished_cartridge_transfer_is_one_of_those_devices()
         {
-            var bus = new MarsBus { Cart = Rom() };
+            var bus = new MemoryBus { Cart = Rom() };
             bus.Mi.Mask = MiInterrupt.PeripheralInterface;
 
             bus.Write32(MemoryMap.PiBase + PiInterface.DramAddress, 0x1000);
@@ -202,7 +202,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_mask_register_takes_a_pair_of_bits_for_each_device()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(MemoryMap.MiBase + MiInterface.InterruptMask, 1u << 9);
             Assert.Equal(MiInterrupt.PeripheralInterface, bus.Mi.Mask);

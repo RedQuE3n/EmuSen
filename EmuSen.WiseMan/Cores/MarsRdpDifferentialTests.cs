@@ -124,7 +124,7 @@ namespace EmuSen.WiseMan.Cores
         // One display processor for every case, as in the references, with memory restored from the same upload cache where they flush.
         private static IReadOnlyList<Drawn> ReplayMars()
         {
-            var bus = new MarsBus(expansionPak: true);
+            var bus = new MemoryBus(expansionPak: true);
             var cache = new byte[bus.Rdram.Length];
             var drawn = new List<Drawn>();
             var uploaded = new Dictionary<uint, byte[]>();

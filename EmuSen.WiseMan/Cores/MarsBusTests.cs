@@ -41,7 +41,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Rdram_round_trips_at_every_width()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(0x10, 0x11223344);
             Assert.Equal(0x11223344u, bus.Read32(0x10));
@@ -64,25 +64,25 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Rdram_above_the_installed_size_reads_zero_rather_than_mirroring()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x10, 0x11223344);
 
-            Assert.Equal(0u, bus.Read32(MarsBus.RdramSize + 0x10));
+            Assert.Equal(0u, bus.Read32(MemoryBus.RdramSize + 0x10));
         }
 
         [Fact]
         public void An_expansion_pak_makes_the_upper_half_real_memory()
         {
-            var bus = new MarsBus(expansionPak: true);
+            var bus = new MemoryBus(expansionPak: true);
 
-            bus.Write32(MarsBus.RdramSize + 0x10, 0x11223344);
-            Assert.Equal(0x11223344u, bus.Read32(MarsBus.RdramSize + 0x10));
+            bus.Write32(MemoryBus.RdramSize + 0x10, 0x11223344);
+            Assert.Equal(0x11223344u, bus.Read32(MemoryBus.RdramSize + 0x10));
         }
 
         [Fact]
         public void The_two_signal_processor_memories_are_separate()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(MemoryMap.SpDmemBase, 0xAAAAAAAA);
             bus.Write32(MemoryMap.SpImemBase, 0xBBBBBBBB);
@@ -95,7 +95,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_debug_port_reads_back_what_was_written_to_it()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(MemoryMap.IsViewerBase + IsViewer.BufferOffset, 0x12345678);
 
@@ -105,7 +105,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_length_write_emits_that_many_bytes_of_the_debug_buffer()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             uint buffer = MemoryMap.IsViewerBase + IsViewer.BufferOffset;
 
             bus.Write32(buffer, 0x50617373);
@@ -118,7 +118,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Nothing_is_emitted_until_the_length_register_is_written()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write32(MemoryMap.IsViewerBase + IsViewer.BufferOffset, 0x50617373);
 
@@ -129,7 +129,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_select_register_comes_up_nonzero()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Assert.NotEqual(0u, bus.Read32(MemoryMap.RiSelect));
         }
@@ -137,7 +137,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_cartridge_is_readable_at_its_domain_and_ignores_writes()
         {
-            var bus = new MarsBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
+            var bus = new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
 
             Assert.Equal(RomImage.Magic, bus.Read32(MemoryMap.CartDomain1Address2));
 
@@ -148,7 +148,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Reading_past_the_end_of_the_cartridge_is_zero()
         {
-            var bus = new MarsBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
+            var bus = new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
 
             Assert.Equal(0u, bus.Read32(MemoryMap.CartDomain1Address2 + RomImage.MinimumLength));
         }
@@ -157,7 +157,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_count_register_is_derived_from_the_machine_clock_at_half_rate()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Assert.Equal(0u, bus.Count);
 
@@ -171,7 +171,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Writing_the_count_register_rebases_it_without_stopping_the_clock()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Tick(100);
 
             bus.SetCount(0);

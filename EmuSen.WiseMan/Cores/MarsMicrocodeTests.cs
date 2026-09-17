@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Wave_Race_hands_its_first_display_list_to_the_display_processor()
         {
-            if (!RunToFirstGraphicsBreak(out MarsBus bus)) return;
+            if (!RunToFirstGraphicsBreak(out MemoryBus bus)) return;
 
             uint start = bus.Read32(MemoryMap.DpCommandBase);
             uint end = bus.Read32(MemoryMap.DpCommandBase + 4);
@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Wave_Race_first_display_list_clears_its_depth_buffer()
         {
-            if (!RunToFirstGraphicsBreak(out MarsBus bus)) return;
+            if (!RunToFirstGraphicsBreak(out MemoryBus bus)) return;
 
             uint start = bus.Read32(MemoryMap.DpCommandBase);
             uint end = bus.Read32(MemoryMap.DpCommandBase + 4);
@@ -95,9 +95,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0u, bus.Read16(filledImage));
         }
 
-        private static bool RunToFirstGraphicsBreak(out MarsBus bus)
+        private static bool RunToFirstGraphicsBreak(out MemoryBus bus)
         {
-            bus = new MarsBus();
+            bus = new MemoryBus();
 
             string path = Path.Combine(N64TestRomLibrary.Root, WaveRace);
             if (!File.Exists(path)) return false;
@@ -125,7 +125,7 @@ namespace EmuSen.WiseMan.Cores
             return true;
         }
 
-        private static void Pulse(MarsBus bus, long instruction)
+        private static void Pulse(MemoryBus bus, long instruction)
         {
             long phase = instruction % PulsePeriod;
 

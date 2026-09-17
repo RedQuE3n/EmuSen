@@ -73,7 +73,8 @@ and what a case holds.
 
 **Bits 8 and 9 are the anti-alias mode.** This slice implements the two that need no coverage: **resample
 only** (2), which interpolates between neighbouring pixels, and **replicate** (3), which does not. Modes 0
-and 1 read coverage out of the hidden bits and filter by it; §4 says where they went.
+and 1 read coverage out of the hidden bits and filter by it, and landed in the slice after this one —
+`Mars_VideoFilter.md`.
 
 **Bit 6 is serrate**, the interlaced signal, which this slice carries through the geometry and the raster
 even though nothing here interlaces the output.
@@ -155,16 +156,18 @@ signal — unless the picture was pulled in at that edge, in which case that end
 is the referee's word on this, because it looks exactly like a software convenience and is not.
 
 **A dark column clears the colour and keeps the coverage** the raster already held, because the reference
-writes three bytes there and not the fourth. A scanned column writes a coverage of seven with its colour.
+writes three bytes there and not the fourth. A scanned column writes a coverage with its colour: seven in
+the modes this slice implements, and ~~always seven~~ the pixel's own from `Mars_VideoFilter.md` §1 on.
 
 ### 2.6 The fetch
 
 **A sixteen-bit pixel is 5-5-5-1 and becomes eight bits a channel by moving up, not by filling in**: the low
-three bits of each channel are left at zero. They are not lost — the anti-aliasing of §4 is what fills them —
-so a picture scanned in this slice is measurably darker than the same picture through a console's filter, and
-that is correct rather than a defect.
+three bits of each channel are left at zero. They are not lost — the anti-aliasing of `Mars_VideoFilter.md`
+is what fills them — so a picture scanned in this slice is measurably darker than the same picture through a
+console's filter, and that is correct rather than a defect.
 
-**A thirty-two-bit pixel takes its first three bytes** and ignores the fourth, which is coverage.
+**A thirty-two-bit pixel takes its first three bytes** and ignores the fourth, which is coverage — until
+`Mars_VideoFilter.md` §1, where three of its bits are read.
 
 **A read past the end of memory gives zero** rather than wrapping.
 
@@ -263,8 +266,8 @@ the guarantee that survives without the reference tools built.
 
 ## 4. What is not here
 
-- **Anti-alias modes 0 and 1**, which read a pixel's coverage out of the hidden bits and filter by it. They
-  are the modes a game actually uses, and they are the next slice.
+- ~~**Anti-alias modes 0 and 1**, which read a pixel's coverage out of the hidden bits and filter by it.~~
+  **Landed the same day, in `Mars_VideoFilter.md`.** They are the modes a game actually uses.
 - **The dither filter, divot and gamma**, each a further pass over a fetched pixel.
 - **The per-scanline registers** parallel-rdp models and angrylion does not reach through this dump format.
 - **The interrupt and the timing.** The interface's interrupt fires when the current half line reaches the

@@ -36,7 +36,9 @@ stream, the interchange format parallel-rdp's tools read. Each case is:
 
 1. a flush of RDRAM and hidden RDRAM from an upload cache, which returns both memories to zero
    apart from anything a case has uploaded — since textures, a texture image, which stays in the
-   cache for every later case;
+   cache for every later case, and since `Mars_VideoFilter.md`, hidden bytes as well: that upload
+   is the one record in the format that is neither byte-swapped nor addressed by byte, because the
+   hidden array holds one byte per sixteen-bit word and is indexed by that word;
 2. the case's commands, each as its 32-bit halves;
 3. a `SignalComplete` record, which is the comparison point for both tools.
 

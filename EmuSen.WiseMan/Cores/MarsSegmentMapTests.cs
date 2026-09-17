@@ -91,7 +91,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0xB800_0000_0000_1000UL)]
         public void Every_direct_segment_strips_to_the_same_physical_address(ulong address)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write32(0x1000, 0xC0FFEE00);
 
             var cpu = PrivilegeFixture.Load(Kernel, wide: true, address, bus);

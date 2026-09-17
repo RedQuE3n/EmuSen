@@ -175,7 +175,7 @@ namespace EmuSen.WiseMan.Cores
         private static Cpu Run(
             ulong left, ulong right, Func<MipsAssembler, MipsAssembler> trap, int steps = 4)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             bus.Write64(0x100, left);
             bus.Write64(0x108, right);
 

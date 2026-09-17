@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.InRange(visited.Count, 1, 64);
         }
 
-        private static bool Installed(string name, out MarsBus? bus, out Cpu? cpu)
+        private static bool Installed(string name, out MemoryBus? bus, out Cpu? cpu)
         {
             bus = null;
             cpu = null;
@@ -61,7 +61,7 @@ namespace EmuSen.WiseMan.Cores
             string path = Path.Combine(N64TestRomLibrary.Root, name);
             if (!File.Exists(path)) return false;
 
-            bus = new MarsBus();
+            bus = new MemoryBus();
             cpu = new Cpu(bus);
             Boot.HandOff(bus, cpu, RomImage.Load(path));
 

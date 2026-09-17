@@ -14,7 +14,7 @@ namespace EmuSen.Cores.Nintendo.Mars
         public const ulong EntryPoint = 0xFFFF_FFFF_A400_0040;
         public const ulong StackPointer = 0xFFFF_FFFF_A400_1FF0;
 
-        public static void HandOff(MarsBus bus, Cpu.Core.Cpu cpu, RomImage rom)
+        public static void HandOff(MemoryBus bus, Cpu.Core.Cpu cpu, RomImage rom)
         {
             bus.Cart = rom;
 

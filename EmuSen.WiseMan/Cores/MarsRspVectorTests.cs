@@ -59,7 +59,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_transfer_into_the_last_byte_stops_at_the_end_but_a_transfer_out_wraps()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0xAABB, 0xCCDD, 0xEEFF, 0xABBA, 0xBCCB, 0xCDDC, 0xEFFE, 0xACCA);
 
             Load(bus, a => Li(a.Word(Lqv(5, 0, 0, 0)).Word(Lqv(6, 0, 0, 0)), 1, 0x1234_5678)
@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_load_stops_at_the_end_of_the_register_but_a_store_wraps_inside_it()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Counting(bus);
             Filled(bus, 0x200, 0xEE);
 
@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_quad_load_from_a_misaligned_address_reads_to_the_end_of_its_region()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Counting(bus);
             Filled(bus, 0x200, 0xEE);
 
@@ -126,7 +126,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_transposed_load_spreads_one_element_across_each_register_of_the_group()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Counting(bus);
             Filled(bus, 0x200, 0xEE);
 
@@ -151,7 +151,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_selected_source_is_read_whole_before_the_destination_it_shares_is_written()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 1, 2, 3, 4, 5, 6, 7, 8);
             Elements(bus, 0x010, 0x10, 0, 0, 0, 0x20, 0, 0, 0);
 
@@ -172,7 +172,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_fractional_multiply_rounds_into_the_accumulator_and_clamps_only_its_one_overflow()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0x0000, 0x0000, 0x0000, 0xE000, 0x8001, 0x8000, 0x7FFF, 0x8000);
             Elements(bus, 0x010, 0x0000, 0x0001, 0xFFFF, 0xFFFF, 0x8000, 0x7FFF, 0x7FFF, 0x8000);
 
@@ -195,7 +195,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_accumulating_multiply_wraps_at_forty_eight_bits_and_clamps_what_it_wrapped_to()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0x7FFF, 0, 0, 0, 0, 0, 0, 0);
 
             Load(bus, a =>
@@ -219,7 +219,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Addition_consumes_the_carry_and_keeps_the_unclamped_sum_in_the_accumulator()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0x7FFF, 0x8000, 0x0001, 0xFFFF, 0, 0, 0, 0);
             Elements(bus, 0x010, 0x7FFF, 0x8000, 0x0001, 0x0001, 0, 0, 0, 0);
 
@@ -244,7 +244,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_high_clip_sets_every_flag_from_the_signs_and_the_sum()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0x0000, 0x0001, 0x7FFE, 0x7FFF, 0x8000, 0xFFFE, 0xFFFF, 0x0000);
             Elements(bus, 0x010, 0x8000, 0xFFFE, 0xFFFF, 0x0000, 0x0000, 0x0001, 0x7FFE, 0x7FFF);
 
@@ -272,7 +272,7 @@ namespace EmuSen.WiseMan.Cores
         public void Rounding_adds_vt_shifted_by_the_parity_of_vs_only_to_a_non_negative_accumulator(
             int vs, ushort[] result, ushort[] top, ushort[] middle, ushort[] bottom)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0x0000, 0x0001, 0x0001, 0x7FFF, 0xFFFF, 0x7FFF, 0x3FFF, 0x8000);
             Elements(bus, 0x010, 0x0000, 0x0001, 0xFFFF, 0xFFFF, 0xFFFF, 0x7FFF, 0x7FFF, 0x7FFF);
             Elements(bus, 0x020, 0x0000, 0x0001, 0x0002, 0x7FFF, 0xFFFF, 0x8000, 0x8001, 0x8002);
@@ -305,7 +305,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(Vrsqh, Vrcpl, 0xFFFA, 0x9E1B)]
         public void A_high_half_loads_an_input_that_one_low_half_consumes(int high, int low, int loaded, int cleared)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0xE834, 0xE834, 0xE834, 0xE834, 0xE834, 0xE834, 0xE834, 0xE834);
 
             Load(bus, a => a
@@ -329,7 +329,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(Vrsq, 0xFE5B)]
         public void A_high_half_reads_the_upper_word_of_the_last_reciprocal(int reciprocal, int expected)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0xE834, 0xE834, 0xE834, 0xE834, 0xE834, 0xE834, 0xE834, 0xE834);
 
             Load(bus, a => a
@@ -355,7 +355,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(15)]
         public void Reading_the_accumulator_with_any_other_selector_reads_zero(int selector)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF);
 
             Load(bus, a => a
@@ -377,7 +377,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_undocumented_function_zeroes_its_destination_and_sums_into_the_accumulator()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0, 1, 0x0010, 0xFFFF, 0x7FFF, 0x7FFF, 0x7FFF, 0xFFFF);
             Elements(bus, 0x010, 0, 2, 0x7FFF, 0x7FFF, 0x0000, 0xFFFF, 0xFFFE, 0xFFFF);
             Elements(bus, 0x020, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE);
@@ -400,7 +400,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_vector_no_operation_changes_neither_its_destination_nor_the_accumulator()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             Elements(bus, 0x000, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF, 0x7FFF);
             Elements(bus, 0x020, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE, 0xEEEE);
 
@@ -443,7 +443,7 @@ namespace EmuSen.WiseMan.Cores
         private static MipsAssembler Li(MipsAssembler a, int rt, uint value) =>
             a.Lui(rt, (ushort)(value >> 16)).Ori(rt, rt, (ushort)value);
 
-        private static void Elements(MarsBus bus, uint at, params ushort[] elements)
+        private static void Elements(MemoryBus bus, uint at, params ushort[] elements)
         {
             for (int i = 0; i < elements.Length; i++)
             {
@@ -452,7 +452,7 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        private static ushort[] ReadElements(MarsBus bus, uint at)
+        private static ushort[] ReadElements(MemoryBus bus, uint at)
         {
             var elements = new ushort[8];
             for (int i = 0; i < 8; i++) elements[i] = (ushort)((bus.SpDmem[at + i * 2] << 8) | bus.SpDmem[at + i * 2 + 1]);
@@ -460,31 +460,31 @@ namespace EmuSen.WiseMan.Cores
             return elements;
         }
 
-        private static byte[] Bytes(MarsBus bus, uint at, int count) => bus.SpDmem.AsSpan((int)at, count).ToArray();
+        private static byte[] Bytes(MemoryBus bus, uint at, int count) => bus.SpDmem.AsSpan((int)at, count).ToArray();
 
         // Each of the first 256 bytes holds its own offset, the corpus's pattern for telling bytes apart.
-        private static void Counting(MarsBus bus)
+        private static void Counting(MemoryBus bus)
         {
             for (int i = 0; i < 0x100; i++) bus.SpDmem[i] = (byte)i;
         }
 
-        private static void Filled(MarsBus bus, uint at, byte value) => bus.SpDmem.AsSpan((int)at, 16).Fill(value);
+        private static void Filled(MemoryBus bus, uint at, byte value) => bus.SpDmem.AsSpan((int)at, 16).Fill(value);
 
-        private static void Load(MarsBus bus, Func<MipsAssembler, MipsAssembler> program)
+        private static void Load(MemoryBus bus, Func<MipsAssembler, MipsAssembler> program)
         {
             uint[] words = program(new MipsAssembler()).ToArray();
             for (int i = 0; i < words.Length; i++) bus.Write32(MemoryMap.SpImemBase + (uint)(i * 4), words[i]);
         }
 
-        private static MarsBus Loaded(Func<MipsAssembler, MipsAssembler> program)
+        private static MemoryBus Loaded(Func<MipsAssembler, MipsAssembler> program)
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             Load(bus, program);
             return bus;
         }
 
-        private static void Run(MarsBus bus)
+        private static void Run(MemoryBus bus)
         {
             bus.Write32(MemoryMap.SpPcBase, 0);
             bus.Write32(MemoryMap.SpRegistersBase + SpInterface.Status, 0x01);

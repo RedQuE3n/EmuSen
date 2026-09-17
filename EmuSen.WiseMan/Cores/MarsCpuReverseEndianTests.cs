@@ -175,7 +175,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_instruction_fetch_is_mirrored_like_any_other_word()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
             var cpu = PrivilegeFixture.Run(User, wide: false, 0,
                 a => a.Addiu(2, 0, 0x1111).Addiu(2, 0, 0x2222), bus, ReverseEndian);
 
@@ -209,9 +209,9 @@ namespace EmuSen.WiseMan.Cores
 
         private const uint StoreFrame = PrivilegeFixture.DataFrame + 0x100;
 
-        private static MarsBus Cleared()
+        private static MemoryBus Cleared()
         {
-            var bus = new MarsBus();
+            var bus = new MemoryBus();
 
             bus.Write64(StoreFrame, 0xAAAA_AAAA_AAAA_AAAA);
             bus.Write64(StoreFrame + 8, 0xAAAA_AAAA_AAAA_AAAA);
@@ -221,9 +221,9 @@ namespace EmuSen.WiseMan.Cores
         // The instruction is written into both halves of the fetch pair, so the mirror finds it either way.
         private static Cpu Access(
             int mode, ulong status, System.Func<MipsAssembler, MipsAssembler> program,
-            MarsBus? bus = null, System.Action<Cpu>? before = null, ulong address = 0)
+            MemoryBus? bus = null, System.Action<Cpu>? before = null, ulong address = 0)
         {
-            bus ??= new MarsBus();
+            bus ??= new MemoryBus();
             for (int i = 0; i < Fixture.Length; i++) bus.Write8(PrivilegeFixture.DataFrame + (uint)i, Fixture[i]);
 
             return PrivilegeFixture.Run(

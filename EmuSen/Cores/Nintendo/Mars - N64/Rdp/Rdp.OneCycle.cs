@@ -1,3 +1,5 @@
+using System;
+
 namespace EmuSen.Cores.Nintendo.Mars.Rdp
 {
     // The one-cycle mode for flat primitives: combiner, blender, dither and the framebuffer they read and write - see Mars_RdpCoverage.md.
@@ -15,17 +17,26 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private Color _combined;
         private Color _pixel;
         private Color _memory;
+        private Color _shade;
         private int _blenderShadeAlpha;
         private int _blendShiftA;
         private int _blendShiftB;
 
-        // Every coefficient past a flat primitive's edges is zero, so its shade is zero and its depth slope is one - see §5.
+        // Each row starts from its major edge's values, stepped to the first pixel drawn, and steps once per pixel - see Mars_RdpDepth.md §2.
         private void DrawOneCycle((int First, int Last) rows, bool majorOnLeft)
         {
-            int deltaZ = DeltaZEncoding(PrimitiveDepth ? _primitiveDeltaZ : 1);
+            int deltaZ = PrimitiveDepth ? _primitiveDeltaZ : _depthSlope;
+            int deltaZEncoded = DeltaZEncoding(deltaZ);
+            if (PrimitiveDepth) _depthCorrectDx = _depthCorrectDy = 0;
+
+            int direction = majorOnLeft ? 1 : -1;
+            Span<int> steps = stackalloc int[5];
+            for (int c = 0; c < 4; c++) steps[c] = direction * _shadeStep[c];
+            steps[4] = PrimitiveDepth ? 0 : direction * _depthStep;
+
             int ditherColor = 7, ditherAlpha = 0;
             bool dither = ((RgbDither << 2) | AlphaDither) != 0xF;
-            int step = majorOnLeft ? 1 : -1;
+            Span<int> values = stackalloc int[5];
 
             for (int y = rows.First; y <= rows.Last; y++)
             {
@@ -34,31 +45,44 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 int left = _spanLeft[y], right = _spanRight[y];
                 RowCoverage(y, left, right);
 
+                for (int c = 0; c < 5; c++) values[c] = _spanAttributes[y * 5 + c];
+                if (PrimitiveDepth) values[4] = _primitiveZ;
+
+                int clipped = (majorOnLeft ? left - _spanMajorX[y] : _spanMajorX[y] - right) & 0xFFF;
+                for (int c = 0; c < 5; c++) values[c] += steps[c] * clipped;
+
                 int x = majorOnLeft ? left : right;
-                for (int n = 0; n <= right - left; n++, x += step)
+                for (int n = 0; n <= right - left; n++, x += direction)
                 {
-                    int coverage = CoverageCount(_coverage[x]);
-                    bool coverageBit = CoverageBit(_coverage[x]);
+                    byte mask = _coverage[x];
+                    int coverage = CoverageCount(mask);
+                    bool coverageBit = CoverageBit(mask);
+                    (byte X, byte Y) offset = CoverageOffsets[mask];
+
+                    _shade = new Color
+                    {
+                        R = CorrectShade(values[0] >> 14, _shadeCorrectDx[0], _shadeCorrectDy[0], offset, coverage),
+                        G = CorrectShade(values[1] >> 14, _shadeCorrectDx[1], _shadeCorrectDy[1], offset, coverage),
+                        B = CorrectShade(values[2] >> 14, _shadeCorrectDx[2], _shadeCorrectDy[2], offset, coverage),
+                        A = CorrectShade(values[3] >> 14, _shadeCorrectDx[3], _shadeCorrectDy[3], offset, coverage),
+                    };
+                    int z = CorrectDepth((values[4] >> 10) & 0x3FFFFF, offset, coverage);
 
                     if (dither) Dither(x, y, ref ditherColor, ref ditherAlpha);
                     CombineOneCycle(ditherAlpha, ref coverage);
 
                     int pixel = y * _colorImageWidth + x;
                     int memoryCoverage = ReadMemory(pixel);
+                    uint depthIndex = (_depthImage >> 1) + (uint)pixel;
 
-                    bool overflow = ((memoryCoverage + coverage) & 8) != 0;
-                    bool blend = ForceBlend || (!overflow && Antialias);
-
-                    if (BlendSecondAlpha == 1)
-                    {
-                        _blendShiftA = 0;
-                        _blendShiftB = deltaZ < 0xB ? 4 : 0xF - deltaZ;
-                    }
-
-                    if (BlendOneCycle(ditherColor, blend, overflow, coverage, coverageBit, out int r, out int g, out int b))
+                    if (CompareDepth(depthIndex, z, deltaZ, deltaZEncoded, memoryCoverage, ref coverage, out bool blend, out bool overflow)
+                        && BlendOneCycle(ditherColor, blend, overflow, coverage, coverageBit, out int r, out int g, out int b))
                     {
                         WriteMemory(pixel, r, g, b, blend, coverage, memoryCoverage);
+                        if (DepthUpdate) StoreDepth(depthIndex, z, deltaZEncoded);
                     }
+
+                    for (int c = 0; c < 5; c++) values[c] += steps[c];
                 }
             }
         }
@@ -112,13 +136,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             }
 
             _pixel.A = pixelAlpha;
-            _blenderShadeAlpha = (ditherAlpha & 0x100) != 0 ? 0xFF : ditherAlpha;
+
+            _blenderShadeAlpha = _shade.A + ditherAlpha;
+            if ((_blenderShadeAlpha & 0x100) != 0) _blenderShadeAlpha = 0xFF;
         }
 
         private int ColorA(int selector, int channel) => selector switch
         {
             0 => Channel(_combined, channel),
             3 => Channel(_primitiveColor, channel),
+            4 => Channel(_shade, channel),
             5 => Channel(_environmentColor, channel),
             6 => 0x100,
             _ => 0,
@@ -128,6 +155,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         {
             0 => Channel(_combined, channel),
             3 => Channel(_primitiveColor, channel),
+            4 => Channel(_shade, channel),
             5 => Channel(_environmentColor, channel),
             6 => Channel(_keyCenter, channel),
             7 => _k4,
@@ -138,10 +166,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         {
             0 => Channel(_combined, channel),
             3 => Channel(_primitiveColor, channel),
+            4 => Channel(_shade, channel),
             5 => Channel(_environmentColor, channel),
             6 => Channel(_keyScale, channel),
             7 => _combined.A,
             10 => _primitiveColor.A,
+            11 => _shade.A,
             12 => _environmentColor.A,
             14 => _primitiveLodFraction,
             15 => _k5,
@@ -152,6 +182,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         {
             0 => Channel(_combined, channel),
             3 => Channel(_primitiveColor, channel),
+            4 => Channel(_shade, channel),
             5 => Channel(_environmentColor, channel),
             6 => 0x100,
             _ => 0,
@@ -161,6 +192,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         {
             0 => _combined.A,
             3 => _primitiveColor.A,
+            4 => _shade.A,
             5 => _environmentColor.A,
             6 => 0x100,
             _ => 0,
@@ -169,6 +201,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int AlphaC(int selector) => selector switch
         {
             3 => _primitiveColor.A,
+            4 => _shade.A,
             5 => _environmentColor.A,
             6 => _primitiveLodFraction,
             _ => 0,
@@ -293,9 +326,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             return table;
         }
-
-        private static int DeltaZEncoding(int value) =>
-            ((value & 0xFF00) != 0 ? 8 : 0) | ((value & 0xF0F0) != 0 ? 4 : 0) | ((value & 0xCCCC) != 0 ? 2 : 0) | ((value & 0xAAAA) != 0 ? 1 : 0);
 
         // Reads memory colour and, with image reads on, the coverage stored beside it - see §3.
         private int ReadMemory(int pixel)

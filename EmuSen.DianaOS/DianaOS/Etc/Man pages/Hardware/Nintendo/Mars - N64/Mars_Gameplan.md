@@ -452,6 +452,13 @@ rather than raw samples.
 > it diffs to zero. What the slice adds to the reading of "done when" is that the oracle is now plural in
 > practice — the references disagree on two one-cycle behaviours, and the reference's noise is a
 > validation construct rather than a model — so "diffs to zero" is against angrylion, with those named.
+>
+> **Progress, 2026-09-17: shade, depth and the depth buffer** (`Mars_RdpDepth.md`). Gouraud shading
+> and depth-tested triangles in the one-cycle mode: 171 cases match angrylion, and parallel-rdp agrees on
+> all of them. **The remaining list for this phase is textures** — texture memory, sampling and filtering,
+> the level of detail and texture rectangles — **and the two-cycle and copy modes.** The slice's larger
+> lesson was about the instrument: two cases named for decal mode had never drawn a pixel, which only a
+> breakage that survived exposed, so a case's name is not evidence of what it exercises.
 
 ### 4.5 Phase E — the peripherals, and the first frame anyone can see
 

@@ -12,6 +12,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         public const uint SetPrimitiveColor = 0x3A;
         public const uint SetEnvironmentColor = 0x3B;
         public const uint SetCombine = 0x3C;
+        public const uint SetMaskImage = 0x3E;
 
         private struct Color
         {
@@ -34,6 +35,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int _k4;
         private int _k5;
         private int _primitiveDeltaZ;
+        private int _primitiveZ;
 
         private bool SetRegister(uint id, ulong word)
         {
@@ -61,7 +63,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     _keyCenter.R = (int)(word >> 8) & 0xFF;
                     _keyScale.R = (int)word & 0xFF;
                     return true;
-                case SetPrimitiveDepth: _primitiveDeltaZ = (int)word & 0xFFFF; return true;
+                case SetPrimitiveDepth:
+                    _primitiveDeltaZ = (int)word & 0xFFFF;
+                    _primitiveZ = (int)((uint)word & (0x7FFFu << 16));
+                    return true;
+                case SetMaskImage: _depthImage = (uint)word & 0x00FF_FFFF; return true;
                 default: return false;
             }
         }
@@ -80,6 +86,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private bool ForceBlend => ((_otherModes >> 14) & 1) != 0;
         private bool AlphaFromCoverage => ((_otherModes >> 13) & 1) != 0;
         private bool CoverageTimesAlpha => ((_otherModes >> 12) & 1) != 0;
+        private int DepthMode => (int)(_otherModes >> 10) & 3;
         private int CoverageDestination => (int)(_otherModes >> 8) & 3;
         private bool ColorOnCoverage => ((_otherModes >> 7) & 1) != 0;
         private bool ImageRead => ((_otherModes >> 6) & 1) != 0;

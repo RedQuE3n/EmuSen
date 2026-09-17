@@ -325,6 +325,45 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // angrylion's pixels and texture memory for an RGBA16 tile loaded from RDRAM and drawn through a texture rectangle, recorded from the reference - see Mars_RdpTextures.md §7.5.
+        [Fact]
+        public void A_tile_loaded_and_drawn_through_a_texture_rectangle_matches_the_reference()
+        {
+            var bus = new MarsBus();
+            for (uint y = 0; y < 8; y++)
+            {
+                for (uint x = 0; x < 8; x++) bus.Write16(0x0020_0000 + (y * 8 + x) * 2, (ushort)(((x * 0x0843 + y * 0x2109) & 0xFFFE) | ((x ^ y) & 1)));
+            }
+
+            const uint list = 0x0030_0000;
+            uint end = WriteList(bus, list,
+                0x3F10001F_00100000UL, 0x2D000000_0007C07CUL, 0x2F300000_00000000UL, 0x37000000_7BDE7BDFUL, 0x3607C07C_00000000UL,
+                0x3D100007_00200000UL, 0x35100410_00000000UL, 0x34000000_0001C01CUL, 0x2F000800_00000000UL, 0x3C887F10_88FCF279UL,
+                0x24048048_00008008UL, 0x00000000_02000400UL,
+                SyncFull);
+
+            bus.Write32(Start, list);
+            bus.Write32(End, end);
+
+            (uint Y, uint X, uint Color)[] pixels =
+            {
+                (3, 2, 0x2109), (3, 3, 0x294B), (3, 4, 0x294D), (3, 5, 0x294D), (3, 10, 0x4215), (3, 17, 0x6321),
+                (17, 2, 0xEF7F), (17, 3, 0xEF7F), (17, 4, 0xF7C3), (17, 5, 0xF7C3), (17, 10, 0x084B), (17, 17, 0x2115),
+            };
+
+            foreach (var (y, x, color) in pixels) Assert.Equal(color, (uint)bus.Read16(0x0010_0000 + (y * 32 + x) * 2));
+
+            // The tile's second row is odd, so each of its groups is stored with its two halves swapped - see Mars_RdpTextures.md §2.1.
+            uint[] rows =
+            {
+                0x0000, 0x0843, 0x1086, 0x18C9, 0x210C, 0x294F, 0x3192, 0x39D5,
+                0x318F, 0x39D2, 0x2109, 0x294C, 0x529B, 0x5ADE, 0x4215, 0x4A58,
+            };
+
+            byte[] memory = bus.Dp.Processor.TextureMemory;
+            for (int i = 0; i < rows.Length; i++) Assert.Equal(rows[i], (uint)((memory[(0x40 + i) * 2] << 8) | memory[(0x40 + i) * 2 + 1]));
+        }
+
         [Fact]
         public void Writing_the_mode_register_clear_bit_lowers_the_display_processor_interrupt()
         {

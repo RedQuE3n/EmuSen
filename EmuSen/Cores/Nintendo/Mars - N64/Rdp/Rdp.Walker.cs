@@ -16,14 +16,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private readonly int[] _edgeRight = new int[SpanRows * 4];
         private readonly bool[] _edgeInvalid = new bool[SpanRows * 4];
 
-        // Red, green, blue, alpha and depth: a command's values at its first row, and their steps across x, along the major edge and down y - see Mars_RdpDepth.md §1.
-        private readonly int[] _attributeValue = new int[5];
-        private readonly int[] _attributeDx = new int[5];
-        private readonly int[] _attributeDe = new int[5];
-        private readonly int[] _attributeDy = new int[5];
+        // Red, green, blue, alpha, depth and the texture's s, t and w: a command's values at its first row, and their steps across x, along the major edge and down y - see Mars_RdpDepth.md §1.
+        private const int Attributes = 8;
+        private const int AttributeZ = 4, AttributeS = 5, AttributeT = 6, AttributeW = 7;
+
+        private readonly int[] _attributeValue = new int[Attributes];
+        private readonly int[] _attributeDx = new int[Attributes];
+        private readonly int[] _attributeDe = new int[Attributes];
+        private readonly int[] _attributeDy = new int[Attributes];
 
         // Each row's attributes where its major edge crosses it, and that edge's unclipped column - see Mars_RdpDepth.md §1.2.
-        private readonly int[] _spanAttributes = new int[SpanRows * 5];
+        private readonly int[] _spanAttributes = new int[SpanRows * Attributes];
         private readonly int[] _spanMajorX = new int[SpanRows];
 
         // Per-pixel steps and the coarser steps partial-coverage correction uses - see Mars_RdpDepth.md §1.3.
@@ -34,6 +37,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int _depthCorrectDx;
         private int _depthCorrectDy;
         private int _depthSlope;
+        private readonly int[] _textureStep = new int[3];
 
         // The rows it returns are the only ones whose spans it wrote, and so the only ones to draw.
         private (int First, int Last) Walk(bool majorOnLeft, int yh, int ym, int yl, int xh, int xm, int xl, int dxhdy, int dxmdy, int dxldy, bool majorSlopeNegative)
@@ -44,10 +48,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             // Rows start from the major edge's value on the first sub-scanline or the last, by which way that edge leans - see Mars_RdpDepth.md §1.2.
             bool leanOffset = majorSlopeNegative == majorOnLeft;
             int sampleSub = leanOffset ? 3 : 0;
-            Span<int> offsets = stackalloc int[5];
-            Span<int> running = stackalloc int[5];
+            Span<int> offsets = stackalloc int[Attributes];
+            Span<int> running = stackalloc int[Attributes];
 
-            for (int c = 0; c < 5; c++)
+            for (int c = 0; c < Attributes; c++)
             {
                 int alongEdge = _attributeDe[c] & ~0x1FF, down = _attributeDy[c] & ~0x1FF;
                 offsets[c] = leanOffset ? alongEdge - (alongEdge >> 2) - down + (down >> 2) : 0;
@@ -115,10 +119,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                         _spanMajorX[row] = SignExtend((ulong)(major >> 16), 12);
                         int fraction = (major >> 8) & 0xFF;
 
-                        for (int c = 0; c < 5; c++)
+                        for (int c = 0; c < Attributes; c++)
                         {
                             int perHalfPixel = CycleType == 2 ? 0 : (_attributeDx[c] >> 8) & ~1;
-                            _spanAttributes[row * 5 + c] = ((running[c] & ~0x1FF) + offsets[c] - fraction * perHalfPixel) & ~0x3FF;
+                            _spanAttributes[row * Attributes + c] = ((running[c] & ~0x1FF) + offsets[c] - fraction * perHalfPixel) & ~0x3FF;
                         }
                     }
 
@@ -133,7 +137,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
                 if ((k & 3) == 3)
                 {
-                    for (int c = 0; c < 5; c++) running[c] += _attributeDe[c];
+                    for (int c = 0; c < Attributes; c++) running[c] += _attributeDe[c];
                 }
 
                 major += majorStep;
@@ -178,11 +182,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 _shadeCorrectDy[c] = SignExtend((ulong)(_attributeDy[c] >> 14), 13);
             }
 
-            _depthStep = _attributeDx[4];
+            _depthStep = _attributeDx[AttributeZ];
             _depthCorrectDx = SignExtend((ulong)(_depthStep >> 10), 22);
-            _depthCorrectDy = SignExtend((ulong)(_attributeDy[4] >> 10), 22);
+            _depthCorrectDy = SignExtend((ulong)(_attributeDy[AttributeZ] >> 10), 22);
 
-            int down = (_attributeDy[4] >> 16) & 0xFFFF, across = (_attributeDx[4] >> 16) & 0xFFFF;
+            for (int c = 0; c < 3; c++) _textureStep[c] = _attributeDx[AttributeS + c] & ~0x1F;
+
+            int down = (_attributeDy[AttributeZ] >> 16) & 0xFFFF, across = (_attributeDx[AttributeZ] >> 16) & 0xFFFF;
             int magnitude = ((down & 0x8000) != 0 ? ~down & 0x7FFF : down) + ((across & 0x8000) != 0 ? ~across & 0x7FFF : across);
             _depthSlope = NormalizeDeltaZ(magnitude & 0xFFFF) & 0xFFFF;
         }

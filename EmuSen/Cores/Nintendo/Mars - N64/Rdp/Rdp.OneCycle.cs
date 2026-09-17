@@ -2,7 +2,7 @@ using System;
 
 namespace EmuSen.Cores.Nintendo.Mars.Rdp
 {
-    // The one-cycle mode for flat primitives: combiner, blender, dither and the framebuffer they read and write - see Mars_RdpCoverage.md.
+    // The one-cycle mode: combiner, blender, dither and the framebuffer they read and write - see Mars_RdpCoverage.md.
     public sealed partial class Rdp
     {
         private const int OneCycle = 0;
@@ -18,25 +18,30 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private Color _pixel;
         private Color _memory;
         private Color _shade;
+        private Color _texel0;
+        private Color _texel1;
         private int _blenderShadeAlpha;
         private int _blendShiftA;
         private int _blendShiftB;
 
         // Each row starts from its major edge's values, stepped to the first pixel drawn, and steps once per pixel - see Mars_RdpDepth.md §2.
-        private void DrawOneCycle((int First, int Last) rows, bool majorOnLeft)
+        private void DrawOneCycle((int First, int Last) rows, bool majorOnLeft, int tile)
         {
             int deltaZ = PrimitiveDepth ? _primitiveDeltaZ : _depthSlope;
             int deltaZEncoded = DeltaZEncoding(deltaZ);
             if (PrimitiveDepth) _depthCorrectDx = _depthCorrectDy = 0;
 
             int direction = majorOnLeft ? 1 : -1;
-            Span<int> steps = stackalloc int[5];
+            Span<int> steps = stackalloc int[Attributes];
             for (int c = 0; c < 4; c++) steps[c] = direction * _shadeStep[c];
-            steps[4] = PrimitiveDepth ? 0 : direction * _depthStep;
+            steps[AttributeZ] = PrimitiveDepth ? 0 : direction * _depthStep;
+            for (int c = 0; c < 3; c++) steps[AttributeS + c] = direction * _textureStep[c];
+
+            (bool texel0, bool texel1) = CombinerTexels();
 
             int ditherColor = 7, ditherAlpha = 0;
             bool dither = ((RgbDither << 2) | AlphaDither) != 0xF;
-            Span<int> values = stackalloc int[5];
+            Span<int> values = stackalloc int[Attributes];
 
             for (int y = rows.First; y <= rows.Last; y++)
             {
@@ -45,15 +50,34 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 int left = _spanLeft[y], right = _spanRight[y];
                 RowCoverage(y, left, right);
 
-                for (int c = 0; c < 5; c++) values[c] = _spanAttributes[y * 5 + c];
-                if (PrimitiveDepth) values[4] = _primitiveZ;
+                for (int c = 0; c < Attributes; c++) values[c] = _spanAttributes[y * Attributes + c];
+                if (PrimitiveDepth) values[AttributeZ] = _primitiveZ;
 
                 int clipped = (majorOnLeft ? left - _spanMajorX[y] : _spanMajorX[y] - right) & 0xFFF;
-                for (int c = 0; c < 5; c++) values[c] += steps[c] * clipped;
+                for (int c = 0; c < Attributes; c++) values[c] += steps[c] * clipped;
+
+                // The next pixel's texel of a long span's last pixel is the next row's first, when that row is drawn - see Mars_RdpTextures.md §6.
+                bool longSpan = right - left + clipped > 7;
+                bool nextRowDrawn = y + 1 <= rows.Last && _spanDrawn[y + 1];
 
                 int x = majorOnLeft ? left : right;
                 for (int n = 0; n <= right - left; n++, x += direction)
                 {
+                    if (texel0 || texel1)
+                    {
+                        (int s, int t) = TextureCoordinates(values[AttributeS], values[AttributeT], values[AttributeW]);
+                        _texel0 = PointTexel(s, t, tile);
+                    }
+
+                    if (texel1)
+                    {
+                        int next = (y + 1) * Attributes;
+                        (int s, int t) = n == right - left && longSpan && nextRowDrawn
+                            ? TextureCoordinates(_spanAttributes[next + AttributeS], _spanAttributes[next + AttributeT], _spanAttributes[next + AttributeW])
+                            : TextureCoordinates(values[AttributeS] + steps[AttributeS], values[AttributeT] + steps[AttributeT], values[AttributeW] + steps[AttributeW]);
+                        _texel1 = PointTexel(s, t, tile);
+                    }
+
                     byte mask = _coverage[x];
                     int coverage = CoverageCount(mask);
                     bool coverageBit = CoverageBit(mask);
@@ -66,7 +90,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                         B = CorrectShade(values[2] >> 14, _shadeCorrectDx[2], _shadeCorrectDy[2], offset, coverage),
                         A = CorrectShade(values[3] >> 14, _shadeCorrectDx[3], _shadeCorrectDy[3], offset, coverage),
                     };
-                    int z = CorrectDepth((values[4] >> 10) & 0x3FFFFF, offset, coverage);
+                    int z = CorrectDepth((values[AttributeZ] >> 10) & 0x3FFFFF, offset, coverage);
 
                     if (dither) Dither(x, y, ref ditherColor, ref ditherAlpha);
                     CombineOneCycle(ditherAlpha, ref coverage);
@@ -82,7 +106,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                         if (DepthUpdate) StoreDepth(depthIndex, z, deltaZEncoded);
                     }
 
-                    for (int c = 0; c < 5; c++) values[c] += steps[c];
+                    for (int c = 0; c < Attributes; c++) values[c] += steps[c];
                 }
             }
         }
@@ -141,9 +165,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             if ((_blenderShadeAlpha & 0x100) != 0) _blenderShadeAlpha = 0xFF;
         }
 
+        // Which texels the second cycle's selectors read, so a primitive that reads neither fetches none - see Mars_RdpTextures.md §6.
+        private (bool Texel0, bool Texel1) CombinerTexels()
+        {
+            bool Reads(int texel) =>
+                CombineColorA == texel || CombineColorB == texel || CombineColorD == texel || CombineColorC == texel || CombineColorC == texel + 7
+                || CombineAlphaA == texel || CombineAlphaB == texel || CombineAlphaC == texel || CombineAlphaD == texel;
+
+            return (Reads(1), Reads(2));
+        }
+
         private int ColorA(int selector, int channel) => selector switch
         {
             0 => Channel(_combined, channel),
+            1 => Channel(_texel0, channel),
+            2 => Channel(_texel1, channel),
             3 => Channel(_primitiveColor, channel),
             4 => Channel(_shade, channel),
             5 => Channel(_environmentColor, channel),
@@ -154,6 +190,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int ColorB(int selector, int channel) => selector switch
         {
             0 => Channel(_combined, channel),
+            1 => Channel(_texel0, channel),
+            2 => Channel(_texel1, channel),
             3 => Channel(_primitiveColor, channel),
             4 => Channel(_shade, channel),
             5 => Channel(_environmentColor, channel),
@@ -165,11 +203,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int ColorC(int selector, int channel) => selector switch
         {
             0 => Channel(_combined, channel),
+            1 => Channel(_texel0, channel),
+            2 => Channel(_texel1, channel),
             3 => Channel(_primitiveColor, channel),
             4 => Channel(_shade, channel),
             5 => Channel(_environmentColor, channel),
             6 => Channel(_keyScale, channel),
             7 => _combined.A,
+            8 => _texel0.A,
+            9 => _texel1.A,
             10 => _primitiveColor.A,
             11 => _shade.A,
             12 => _environmentColor.A,
@@ -181,6 +223,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int ColorD(int selector, int channel) => selector switch
         {
             0 => Channel(_combined, channel),
+            1 => Channel(_texel0, channel),
+            2 => Channel(_texel1, channel),
             3 => Channel(_primitiveColor, channel),
             4 => Channel(_shade, channel),
             5 => Channel(_environmentColor, channel),
@@ -191,6 +235,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int AlphaABD(int selector) => selector switch
         {
             0 => _combined.A,
+            1 => _texel0.A,
+            2 => _texel1.A,
             3 => _primitiveColor.A,
             4 => _shade.A,
             5 => _environmentColor.A,
@@ -200,6 +246,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         private int AlphaC(int selector) => selector switch
         {
+            1 => _texel0.A,
+            2 => _texel1.A,
             3 => _primitiveColor.A,
             4 => _shade.A,
             5 => _environmentColor.A,

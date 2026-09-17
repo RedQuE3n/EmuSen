@@ -90,7 +90,10 @@ on every one, and, with the scissor's field bit set, if its parity is not the on
 **Two things the reference does that Mars does not, because no fill can observe them.** The reference
 walks one row further when the primitive continues below a scissor, and records that row as not
 drawn; that bookkeeping matters to texture level of detail, which reads the row after a span, and is
-to be restored when textures are. And Mars clears the drawn flags of the rows it is about to walk
+to be restored when textures are. **Update 2026-09-17:** textures read the row after a span for the
+one-cycle mode's texel 1 (`Mars_RdpTextures.md` §6). Mars did not restore the extra row; the renderer
+instead reads the next row only when it is one of the primitive's own, which gives the reference's answer
+because the reference's extra row is never drawn. And Mars clears the drawn flags of the rows it is about to walk
 before walking them: a guard, since every row returned is written, which a mutation confirms by
 changing nothing.
 

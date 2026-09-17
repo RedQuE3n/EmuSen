@@ -8,6 +8,7 @@ namespace EmuSen.WiseMan.Fixtures
         public const int RdramSize = 0x80_0000;
         public const int HiddenSize = 0x40_0000;
 
+        private const uint UpdateDram = 1;
         private const uint UpdateDramFlush = 7;
         private const uint RdpCommand = 2;
         private const uint SignalComplete = 5;
@@ -25,7 +26,24 @@ namespace EmuSen.WiseMan.Fixtures
             _writer.Write(HiddenSize);
         }
 
-        // Nothing is ever uploaded, so a flush returns both memories to zero.
+        // Uploads persist in the dump's cache, so every later flush carries them too; bytes are given in console order.
+        public void Upload(uint address, byte[] bytes)
+        {
+            if ((address & 3) != 0 || (bytes.Length & 3) != 0) throw new ArgumentException("uploads are whole 32-bit words");
+
+            _writer.Write(UpdateDram);
+            _writer.Write(address);
+            _writer.Write(bytes.Length);
+            for (int i = 0; i < bytes.Length; i += 4)
+            {
+                _writer.Write(bytes[i + 3]);
+                _writer.Write(bytes[i + 2]);
+                _writer.Write(bytes[i + 1]);
+                _writer.Write(bytes[i]);
+            }
+        }
+
+        // A flush returns both memories to the upload cache: zero, apart from anything uploaded so far.
         public void Reset()
         {
             _writer.Write(UpdateDramFlush);
@@ -56,7 +74,11 @@ namespace EmuSen.WiseMan.Fixtures
     }
 
     // What angrylion drew by one sync: changed RDRAM pages in console byte order, changed hidden pages, and what it printed - see Mars_RdpDifferential.md §2.
-    public sealed record RdpReferenceSync(IReadOnlyDictionary<uint, byte[]> Pages, IReadOnlyDictionary<uint, byte[]> HiddenPages, IReadOnlyList<string> Messages);
+    public sealed record RdpReferenceSync(IReadOnlyDictionary<uint, byte[]> Pages, IReadOnlyDictionary<uint, byte[]> HiddenPages, IReadOnlyList<string> Messages)
+    {
+        // Texture memory in console order: the reference keeps it as host-order words, so each byte is found at its index with the low two bits flipped.
+        public byte[] TextureMemory { get; init; } = new byte[0x1000];
+    }
 
     // The two instruments build-probe.sh rdp leaves in the cache, absent on a machine that never built them - see Mars_RdpDifferential.md §3.
     public static class RdpReference
@@ -92,6 +114,7 @@ namespace EmuSen.WiseMan.Fixtures
             Dictionary<uint, byte[]>? pages = null;
             Dictionary<uint, byte[]>? hidden = null;
             List<string>? messages = null;
+            byte[] texture = new byte[0x1000];
             int at = 8;
 
             while (true)
@@ -99,7 +122,7 @@ namespace EmuSen.WiseMan.Fixtures
                 uint tag = BitConverter.ToUInt32(data, at);
                 at += 4;
 
-                if (tag is 0 or 1 && pages is not null) syncs.Add(new RdpReferenceSync(pages, hidden!, messages!));
+                if (tag is 0 or 1 && pages is not null) syncs.Add(new RdpReferenceSync(pages, hidden!, messages!) { TextureMemory = texture });
                 if (tag == 0) return syncs;
 
                 switch (tag)
@@ -109,6 +132,12 @@ namespace EmuSen.WiseMan.Fixtures
                         pages = new Dictionary<uint, byte[]>();
                         hidden = new Dictionary<uint, byte[]>();
                         messages = new List<string>();
+                        texture = new byte[0x1000];
+                        break;
+
+                    case 5:
+                        for (int i = 0; i < 0x1000; i++) texture[i] = data[at + (i ^ 3)];
+                        at += 0x1000;
                         break;
 
                     case 2:

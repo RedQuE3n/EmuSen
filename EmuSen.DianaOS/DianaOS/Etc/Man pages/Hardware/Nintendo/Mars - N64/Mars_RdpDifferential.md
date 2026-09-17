@@ -34,8 +34,9 @@ hardware**, which neither reference is.
 **One dump, two replays, one comparison.** The test writes every case into a single `RDPDUMP2`
 stream, the interchange format parallel-rdp's tools read. Each case is:
 
-1. a flush of RDRAM and hidden RDRAM from an upload cache that is never written, which returns
-   both memories to zero;
+1. a flush of RDRAM and hidden RDRAM from an upload cache, which returns both memories to zero
+   apart from anything a case has uploaded — since textures, a texture image, which stays in the
+   cache for every later case;
 2. the case's commands, each as its 32-bit halves;
 3. a `SignalComplete` record, which is the comparison point for both tools.
 
@@ -44,8 +45,8 @@ so every case sets everything it depends on.
 
 **`rdp-reference`** replays the dump through angrylion exactly as parallel-rdp's angrylion driver
 does — each command's words to `rdp_cmd` — and at each sync writes every 4 KiB page of RDRAM and
-hidden RDRAM that differs from the last flush, plus anything angrylion printed. Its output format,
-`RDPREF01`, is described at the top of its source.
+hidden RDRAM that differs from the last flush, all four kilobytes of texture memory, and anything
+angrylion printed. Its output format, `RDPREF01`, is described at the top of its source.
 
 **`rdp-validate-dump --sync-only`** replays the same stream through both references at once and
 compares RDRAM, hidden RDRAM and texture memory at every sync, stopping at the first difference.
@@ -53,8 +54,10 @@ It is run unmodified.
 
 **Mars** replays the cases through one display processor, feeding its command words directly —
 the register interface in front of it is graded by the corpus instead (`Mars_Rdp.md` §2) — and
-clears RDRAM where the references flush. The test then compares, page by page, every page either
-side touched, and reports a difference as pixels of the case's colour image.
+restores RDRAM from the same upload cache where the references flush. The test then compares, page
+by page, every page either side touched, and reports a difference as pixels of the case's colour
+image. A page the reference did not write is compared against the upload cache, not against zero —
+§4.8 is why that sentence exists. Texture memory is compared whole.
 
 **The references' memory is in host byte order, not the console's.** angrylion keeps RDRAM as
 32-bit words in the host's order, so a 16-bit pixel `0x1111` beside `0x2222` reads `22 22 11 11` on
@@ -189,10 +192,21 @@ Its scissor and rectangle share the corners (8,20)–(311,219). Under the rule `
 measured, column 311 and row 219 were left uncleared. Under the graded rule, pixel (311,218) now
 holds `0xFFFC`; (310,219), (311,219) and (312,218) still hold zero.
 
+### 4.8 Pages the reference does not write
+
+Until textures, no case uploaded anything, so a page the reference left out of its output was a page
+of zeros, and the test treated it as one. Uploads, added for texture images, broke that assumption: an
+image's page is unchanged by drawing, so the reference did not write it, and the test compared Mars's
+copy of the image against zeros. **On the first run with textures built, every texture case failed on
+that page alone** — and once the comparison took an unwritten page from the upload cache instead, every
+one matched (`Mars_RdpTextures.md` §7.5). The assumption was sound when it was made; the slice that
+invalidated it is the one that had to find it.
+
 ## 5. What it does not grade
 
 - ~~**Hidden RDRAM.**~~ Compared since coverage landed, when Mars gained it (`Mars_RdpCoverage.md` §3.1).
-- **Texture memory**, which only the cross-check compares, and which no fill case touches.
+- ~~**Texture memory**, which only the cross-check compares, and which no fill case touches.~~ Compared
+  since textures landed (`Mars_RdpTextures.md` §7.1).
 - **Anything but the fill cycle.** The cases are fill rectangles and, since the walker, fill-cycle
   triangles (`Mars_RdpTriangles.md` §4); every other mode is unbuilt in Mars (`Mars_Rdp.md` §9).
   **Update:** flat primitives in the one-cycle mode are now graded too (`Mars_RdpCoverage.md` §7), and

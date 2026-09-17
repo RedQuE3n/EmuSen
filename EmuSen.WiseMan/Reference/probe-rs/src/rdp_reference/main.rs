@@ -13,8 +13,9 @@
 //
 // <out> is RDPREF01, little-endian: the eight-byte magic, then for each sync a
 // record (tag 1, index from 1), every 4 KiB page of RDRAM (tag 2) or hidden RDRAM
-// (tag 3) that differs from what the last flush uploaded as offset and bytes, and
-// every message angrylion printed since the sync before (tag 4, length and bytes).
+// (tag 3) that differs from what the last flush uploaded as offset and bytes, the
+// RDP's 4 KiB of texture memory as angrylion stores it (tag 5, bytes), and every
+// message angrylion printed since the sync before (tag 4, length and bytes).
 // A tag of 0 ends the file.
 use std::ffi::{CStr, c_char, c_void};
 use std::fs::File;
@@ -72,6 +73,7 @@ unsafe extern "C" {
     fn n64video_update_screen();
     fn n64video_close();
     fn rdp_cmd(wid: u32, args: *const u32);
+    fn get_tmem() -> *mut u8;
     static mut rdram_hidden: [u8; HIDDEN_SIZE];
 }
 
@@ -324,6 +326,11 @@ fn snapshot(
             put(now)?;
         }
     }
+
+    // SAFETY: angrylion's own 4 KiB texture memory, read between commands.
+    let texture_memory: &[u8] = unsafe { std::slice::from_raw_parts(get_tmem(), 0x1000) };
+    put(&5u32.to_le_bytes())?;
+    put(texture_memory)?;
 
     for message in MESSAGES.lock().unwrap().drain(..) {
         put(&4u32.to_le_bytes())?;

@@ -5,12 +5,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
     // The display processor: a command is gathered a word at a time and runs once it is whole - see Mars_Rdp.md §3.
     public sealed partial class Rdp
     {
+        public const uint TextureRectangle = 0x24;
+        public const uint TextureRectangleFlipped = 0x25;
         public const uint SyncFull = 0x29;
         public const uint SetScissor = 0x2D;
         public const uint SetOtherModes = 0x2F;
         public const uint FillRectangle = 0x36;
         public const uint SetFillColor = 0x37;
         public const uint SetColorImage = 0x3F;
+        public const uint SetTileSize = 0x32;
+        public const uint LoadBlock = 0x33;
+        public const uint LoadTile = 0x34;
+        public const uint SetTile = 0x35;
+        public const uint SetTextureImage = 0x3D;
 
         // A triangle carrying shade, texture and depth, which is the longest thing the stream holds.
         private const int LongestCommand = 22;
@@ -20,6 +27,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private int _taken;
 
         private ulong _otherModes;
+
+        // The display processor's own four kilobytes of texture memory, in console byte order - see Mars_RdpTextures.md §2.
+        public byte[] TextureMemory { get; } = new byte[0x1000];
 
         public Rdp(MarsBus bus) => _bus = bus;
 
@@ -45,12 +55,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             _ => 1,
         };
 
-        // Six commands and the eight triangles act; every other one is taken whole and does nothing yet - see §4.
+        // Commands that draw, load or set state act; the rest, the palette load among them, are taken whole and do nothing yet - see §4.
         private bool Execute(uint id, ulong word)
         {
             switch (id)
             {
                 case >= 0x08 and <= 0x0F: Triangle(id); break;
+                case TextureRectangle or TextureRectangleFlipped: TexturedRectangle(id == TextureRectangleFlipped); break;
+                case SetTextureImage: TextureImage(word); break;
+                case SetTile: Tile(word); break;
+                case SetTileSize: TileSize(word); break;
+                case LoadTile: Load(word, block: false); break;
+                case LoadBlock: Load(word, block: true); break;
                 case SyncFull: return true;
                 case SetScissor: Scissor(word); break;
                 case SetOtherModes: _otherModes = word; break;

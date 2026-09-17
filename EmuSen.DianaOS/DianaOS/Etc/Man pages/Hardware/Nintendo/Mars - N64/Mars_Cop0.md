@@ -24,6 +24,13 @@ two phases later than planned and by a route the plan did not anticipate: not by
 writing more of Phase A, but by building enough of Phase B that the oracle could
 speak at all.
 
+> **Qualified, 2026-09-16.** The sentence in bold above says *the corpus runs*, and
+> that was doing more work than it looked like: the run stopped a third of the way
+> through the test list. When it was made to finish, forty-four further COP0 tests
+> appeared and all of them failed (§10). The claim was not false, but it was a
+> statement about an instrument's output rather than about the hardware, and it read
+> as the second. `Mars_Corpus.md` §2 is where that distinction now lives.
+
 ## 2. The write masks
 
 | Register | What a write keeps |
@@ -172,3 +179,81 @@ test, and the untaken-ordinary case is the one that was wrong.
 word at the saved address and found the wrong opcode. Nothing about the failure said
 "delay slot"; the route from that message to this cause was reading the test's own
 assembly and noticing that its branch compares a register with itself.
+
+## 10. The decode boundary: where coprocessor zero refuses and where it ignores
+
+Coprocessor zero's instruction space has two halves, and they answer a reserved
+encoding differently.
+
+**With the `CO` bit set** — opcode `0x10`, `rs = 0b10000`, the low six bits selecting a
+TLB or exception operation — exactly five function codes are defined: `TLBR` (1),
+`TLBWI` (2), `TLBWR` (6), `TLBP` (8) and `ERET` (24). **Every other code in `0x00`–`0x3F`
+is a silent no-op.** It raises nothing, writes nothing, and the instruction after it
+runs normally.
+
+**Without it**, the `rs` field selects a coprocessor transfer, and a reserved value
+there *does* raise Reserved Instruction. `0x03`, `0x07` and `0x09`–`0x0F` all refuse.
+
+So the same word shape refuses in one half of the space and is ignored in the other.
+Mars previously refused in both, except for function codes `0x20` and above, which were
+allowed through for an unrelated reason — see §10.3.
+
+### 10.1 One reserved function code out of fifty-nine still traps
+
+Function code `0x10` is the R3000's `RFE`, which the R4000 dropped in favour of `ERET`.
+It is the only reserved code in the `CO` space that raises Reserved Instruction. There
+is no principle available here that predicts which one it would be; it is a measurement,
+and it is implemented as a measurement — a single named case beside the five defined
+ones, rather than a range.
+
+Nothing between the sub-opcode and the function field is decoded at all. The twenty
+bits in between can hold anything: a reserved code stays a no-op, `0x10` still traps,
+and `TLBP` still executes.
+
+### 10.2 Three sub-opcodes that are decoded and idle
+
+`CFC0` (`rs = 2`), `CTC0` (`rs = 6`) and `BC0` (`rs = 8`) raise nothing. The two control
+moves are the generic coprocessor form, and coprocessor zero has no control registers
+for them to move; `BC0` is a coprocessor-condition branch whose condition never holds.
+All three are inert.
+
+They matter because they are what makes the boundary in §10's second paragraph precise.
+Without them the rule would read "reserved `rs` traps"; with them it reads "these three
+are recognised, and the values around them are not" — which is the difference between a
+range check and a decode.
+
+**What is not established here.** `BC0` is a branch, and whether the instruction behind
+it occupies a delay slot is not answered by any evidence Mars has. The corpus's test
+places a `nop` there and asserts only that no exception is raised. Mars treats `BC0` as
+inert with no delay slot, which is the minimum the evidence supports and is recorded
+here as the assumption it is.
+
+### 10.3 A right answer that had been reached for the wrong reason
+
+Function codes `0x20` and above were already ignored, because the corpus calls one of
+them unconditionally at startup as an emulator-detection hook and Mars had to get past
+it (`Mars_Cpu.md` §9). The behaviour was right and the justification was narrow: it was
+"this particular range is an emulator extension", not "the reserved `CO` space is
+inert". The corpus's sweep now establishes the general rule, and the special case for
+the extension range is gone.
+
+A test asserting the opposite for `0x1F` — that a reserved function *below* that range
+still refuses — had stood since that slice and was **retired here**, because it was
+false. It is worth naming rather than quietly deleting: it was a claim derived from
+where a boundary had been drawn for a different purpose, and it passed for nine slices
+because nothing had yet asked hardware.
+
+### 10.4 What this was worth
+
+Forty-four corpus failures, from a change of about ten lines. The three tests behind
+them — the sweep of the whole `CO` space, the sweep of the reserved `rs` values, and the
+operand-bit sweep — are among the most thorough in the corpus, and the section of its
+source that defines them reads as a specification of the boundary rather than as a list
+of cases. `MarsCop0DecodeTests` mirrors it: the reserved-function sweep is generated
+from the same five defined codes and one exception, so it cannot drift out of step with
+the rule it is asserting.
+
+**None of this was reachable before.** `Mars_Cop0.md` §1 claimed that every COP0 test the
+corpus ran passed. That was true of the run, and the run stopped before these tests —
+which is the difference between a statement about an instrument's output and a statement
+about the hardware. See `Mars_Corpus.md` §2.

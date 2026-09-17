@@ -306,6 +306,26 @@ which is precisely the failure mode a test corpus exists to catch early.
 > the oracle actually reporting. Two defects it found in *Phase A* code are recorded
 > in `Mars_Fpu.md` §9.2 and are the next slice's subject.
 
+> **Phase B complete, 2026-09-16.** The software float landed (`Mars_FpuMath.md`), and
+> then a slice whose job was to let the corpus run to the end of what Mars can attempt
+> (`Mars_Corpus.md`). It now starts **720 tests and fails 171**, stopping inside the RSP
+> tests — which is to say Phase B has no remaining corpus failure of its own, and the
+> instrument is now asking for Phase C.
+>
+> **What the plan did not anticipate, in its own terms.** §8 predicts the ways this plan
+> is likely to be wrong and none of them is this one: the thing that had been silently
+> capping every measurement since the oracle started speaking was **twelve conditional
+> trap instructions that no phase description mentions** (`Mars_Cpu.md` §15). They are
+> not exotic and not late-added; they are ordinary MIPS III, and the plan's Phase A
+> description of "the integer core" simply did not enumerate them. Implementing them
+> cleared no test directly and made 159 further tests reachable, three of which turned
+> out to be defects in subsystems this plan had already recorded as finished.
+>
+> The transferable form: **a phase is finished when the instrument says so, and the
+> instrument cannot say so about tests it never reaches.** §3 bet correctly that the
+> oracle would be available early; what it did not say is that an oracle's silence
+> about a subsystem is not evidence about that subsystem.
+
 ### 4.3 Phase C — the RSP
 
 The scalar subset, the 8-element vector unit with its 48-bit accumulator, the

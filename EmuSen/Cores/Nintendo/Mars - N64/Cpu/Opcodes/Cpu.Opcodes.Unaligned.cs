@@ -22,9 +22,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             int shift = (3 - (int)(address & 3)) * 8;
 
             uint word = _bus.Read32(Translate(address & ~3UL));
-            uint kept = (uint)Read(Rt(instruction)) & ~(0xFFFF_FFFFu >> shift);
+            ulong previous = Read(Rt(instruction));
+            uint merged = (word >> shift) | ((uint)previous & ~(0xFFFF_FFFFu >> shift));
 
-            Write32(Rt(instruction), (word >> shift) | kept);
+            // Unlike its partner, a partial merge keeps the register's upper half - see Mars_Cpu.md §7.3.
+            if (shift == 0) Write32(Rt(instruction), merged);
+            else Write(Rt(instruction), (previous & 0xFFFF_FFFF_0000_0000UL) | merged);
         }
 
         private void LoadDoubleLeft(uint instruction)

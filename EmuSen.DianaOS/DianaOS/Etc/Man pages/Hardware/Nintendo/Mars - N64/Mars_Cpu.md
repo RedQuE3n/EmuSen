@@ -148,16 +148,60 @@ visible as the pattern at both ends.
 Removing the merge from the left load reddens three of its four cases, so the
 merging is pinned rather than incidental.
 
+### 7.3 The corpus's normal-mode verdict, and the rule the tables could not see
+
+§7.1 ends by saying the hand-derived expectations would eventually be confirmed or
+refuted by the corpus's own normal-mode tests. Those tests now run, and they refute one:
+
+**`LWR` does not sign-extend a partial merge; `LWL` always does.** Both instructions
+produce a 32-bit value and write it to a 64-bit register, and the obvious reading — the
+one Mars implemented — is that the same rule governs both, because everything else that
+computes a 32-bit result on this part sign-extends bit 31 into the upper half. It does
+not. Where `LWR` takes fewer than four bytes, the register's upper 32 bits are left
+exactly as they were; only a `LWR` that happens to take a whole word sign-extends.
+`LWL` sign-extends in all four cases, including the three that merge.
+
+The corpus's vectors start from `0xFEDCBA98_76543210` and read a doubleword of
+`0x0123456789ABCDEF`, so the two behaviours are separable:
+
+| offset | `LWL` gives | `LWR` gives |
+| --- | --- | --- |
+| 0 | `0x00000000_01234567` | `0xFEDCBA98_76543201` |
+| 1 | `0x00000000_23456710` | `0xFEDCBA98_76540123` |
+| 2 | `0x00000000_45673210` | `0xFEDCBA98_76012345` |
+| 3 | `0x00000000_67543210` | `0x00000000_01234567` |
+
+**Why the existing tests could not have caught it.** §7.2's fix preloads the register
+through `LUI`, which sign-extends, so the register's upper half was already `0xFFFFFFFF`
+— indistinguishable from the sign extension of every merged value the test produced.
+The tests were not wrong; they were *blind*, in a way that only a register whose upper
+half is neither zero nor all ones can expose. The corpus's vectors are chosen to have
+exactly that property, which is the difference between a table that exercises an
+instruction and one that discriminates between two implementations of it.
+
+Both tables are now in `MarsCpuUnalignedTests`, and the four hand-derived rows from §7.1
+stay beside them: they were right, and keeping them records that the reverse-endian
+trap was avoided rather than merely survived.
+
 ## 8. What is not implemented yet
 
 - ~~The TLB~~ — landed, `Mars_Tlb.md`. Three of five segments now translate, and the
   refill-versus-invalid distinction §11.1 could not previously express is carried on
   the exception itself.
-- **COP1**, which is Phase B.
+- ~~**COP1**, which is Phase B.~~ — landed, `Mars_Fpu.md` and `Mars_FpuMath.md`.
 - **Software interrupts**, the two bits a program raises itself, are storage with
   nothing behind them.
 - **Every interrupt source except the counter and the peripheral interface.** The
   aggregator has six inputs and two are wired (§12).
+- **Supervisor and user mode.** Everything runs as kernel: the legal address ranges,
+  the coprocessor-usable rules and the 64-bit instruction restrictions that the other
+  two modes impose are all absent. Eleven corpus tests ask for this and it is the next
+  CPU-level thing the oracle is waiting on (`Mars_Corpus.md` §3).
+
+**This list is not a census.** The conditional traps were missing for nine slices and
+are not in it (§15), because an omission nobody has noticed cannot appear on a list of
+noticed omissions. What the corpus reaches is the census; this is the part of it
+written down in advance.
 
 ## 9. Coprocessor zero, minimally
 
@@ -376,3 +420,55 @@ pass against the corpus and were written in advance from the architecture manual
 Those are the only arithmetic behaviours here confirmed by measurement rather than
 merely unrefuted; everything else in §14 rests on the corpus's vectors, which is a
 stronger footing than the rest of this page enjoys.
+
+## 15. The conditional traps, and the instruction that was never missed
+
+Twelve instructions: `TGE`, `TGEU`, `TLT`, `TLTU`, `TEQ` and `TNE` in the `SPECIAL`
+space, and `TGEI`, `TGEIU`, `TLTI`, `TLTIU`, `TEQI` and `TNEI` in `REGIMM`. Each
+compares two 64-bit values and raises a Trap exception if the comparison holds; if it
+does not hold the instruction costs nothing and execution continues. They are in
+`Cpu.Opcodes.Trap.cs`, and the whole family is thirty lines.
+
+**They had been missing since the dispatch table was written**, and nothing noticed for
+nine slices. The gameplan does not list them, the documentation survey did not flag
+them, and no test asked for them. `Mars_Cpu.md` §8 listed what was not implemented yet
+and did not mention them either — an omission is invisible to a list of known
+omissions.
+
+### 15.1 The immediate sign-extends even where the comparison does not
+
+`TLTIU` and `TGEIU` sign-extend their 16-bit immediate to 64 bits and *then* compare
+unsigned. The two halves of that sentence pull in opposite directions and it would be
+easy to write either half alone: an immediate of `-2` becomes
+`0xFFFFFFFF_FFFFFFFE`, so `TLTIU $2, -2` traps for almost every value including zero,
+and does not trap for `0xFFFFFFFF_FFFFFFFF`. The corpus's table pins all of it.
+
+The register forms have the matching property in the other direction: the comparison is
+over all 64 bits, so a pair like `0x00000095_00000096` and `0x00000096_00000095`
+orders the opposite way from how their low words order. Mars's `SLT` already read the
+whole register, so this was never in doubt — but it is the property that makes the
+corpus's vectors worth keeping verbatim rather than paraphrasing.
+
+### 15.2 How the gap was found, and why it presented as something else
+
+It was found as an **exception storm inside the floating-point conversion tests**, and
+`Mars_FpuMath.md` §9.1 predicted, in writing, that the cause was an edge case in
+`CVT.L`/`ROUND.L`/`TRUNC.L`/`CEIL.L`/`FLOOR.L`. That prediction was wrong, and the way
+it was wrong is worth keeping.
+
+The corpus is written in Rust, and rustc emits a `TEQ` after every integer division as
+its divide-by-zero guard. The word Mars refused was `0x03E001F4` — `TEQ $ra, $zero` —
+sitting immediately after a `DIVU`, in the corpus's own code for formatting a 64-bit
+integer into a failure message. The conversions are the first test in the run whose
+failures print a value large enough to take that path. So the storm appeared exactly
+where the conversions were, was caused by the conversions failing, and had nothing to
+do with how they failed: Mars raised Reserved Instruction, the corpus's handler could
+not attribute it, and the recovery path divided again, and again.
+
+**The diagnostic that settled it took one measurement.** Rather than reading the
+conversion code, the run was instrumented to record the program counter and exception
+code of every fault and to print the instruction word at any site raising Reserved
+Instruction. One site, one word, one decode. The lesson is not that the prediction was
+careless — it was the only reading the evidence then supported — but that *where* a
+fault surfaces in a test corpus is evidence about the corpus's control flow, not about
+the subject under test.

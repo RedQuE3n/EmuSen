@@ -159,6 +159,29 @@ unimplemented operation. There is no saturation and no wrapping.
 what the source type would suggest, and not 2⁵³, which is what the single format's
 precision would suggest. 2⁵⁵ is measured; no reading predicted it.
 
+### 6.3 The 64-bit conversions stop at the double's mantissa
+
+`CVT.L`, `ROUND.L`, `TRUNC.L`, `CEIL.L` and `FLOOR.L` refuse any source whose magnitude
+is **2⁵³ or greater**, and raise unimplemented operation instead. Not 2⁶³, which is the
+destination's range; not the source's range either. 9007199254740991 converts, and
+9007199254740992 does not.
+
+**The limit belongs to the unit, not to the format.** It is the same 2⁵³ from a single
+source as from a double — `S → L` refuses at the same boundary, even though a single
+carries only 24 bits of mantissa and reached that magnitude by scaling. So it is not
+"the source cannot represent integers beyond here"; it is a fixed ceiling the conversion
+hardware applies regardless of where the value came from. That makes it the third
+distinct range rule in this section, and none of the three is the one the type
+signatures suggest.
+
+The 32-bit family keeps its own, smaller limit, which *is* the destination's range
+(§6.1), and applies it after rounding — a source of 2147483647.6 converts under one
+rounding mode and refuses under another, because rounding is what carries it across.
+Whether the 2⁵³ ceiling is likewise applied after rounding is **not** established: every
+source at that magnitude is already an exact integer, so no vector in the corpus can
+separate the two. Mars applies it to the source exponent, before rounding, and that
+choice is untested rather than measured.
+
 ## 7. Compares follow different rules from arithmetic
 
 `Mars_Documentation.md` §2.1 recorded that the vendor manual's main text *excludes
@@ -195,11 +218,11 @@ square roots of exact powers of four come out **right**. `sqrt(16) = 4` and
 `sqrt(1) = 1` both passed while `sqrt(2)` returned 1.65. A test suite of tidy values
 would have shipped it.
 
-## 9. What the oracle says now
+## 9. What the oracle said when this slice landed
 
-**561 tests started, 138 failed**, and **every failure is a cache test or a cartridge
-DMA test** — the two groups Mars does not model and Phase E owns. Every COP1 test the
-run reaches passes: the register file, the moves, all four arithmetic operations in
+**561 tests started, 138 failed**, and every failure was a cache test or a cartridge
+DMA test — the two groups Mars does not model and Phase E owns. Every COP1 test the
+run reached passed: the register file, the moves, all four arithmetic operations in
 both precisions, square root, the conversions, all sixteen compares, and the branches.
 
 **The scaffold is gone.** `Mars_Fpu.md` §6 introduced a `NotImplementedException` to
@@ -207,18 +230,38 @@ stop the machine loudly at an instruction Mars had not built, and a test asserti
 where that happened. There is nothing left for it to catch, and the test now asserts
 the inverse: that the corpus reaches no such instruction.
 
-### 9.1 Where the run is cut, and what is still wrong
+The current state of the run is no longer an FPU topic and lives in `Mars_Corpus.md`.
 
-The run is truncated at its instruction budget **inside the 64-bit conversion tests**,
-and that is deliberate: with a budget six times larger the run reaches an exception
-storm in that same test and aborts, which means something in `CVT.L`/`ROUND.L`/
-`TRUNC.L`/`CEIL.L`/`FLOOR.L` is wrong in a way the corpus's handler cannot recover
-from. The ordinary cases are right — 4.5 → 4, 5.5 → 6, 4.4 → 5 rounding up — so it is
-an edge case rather than the mechanism.
+### 9.1 Where the run was cut, and a prediction that was wrong
 
-**The tally is therefore a measurement of a truncated run, not a whole one.** It is
-still a ratchet and still deterministic; it is simply not yet the full corpus, and the
-next slice's first job is to find that edge case and let the run finish.
+*Retired 2026-09-16. Kept because the reasoning was sound and the conclusion was not.*
+
+This section read, in full:
+
+> The run is truncated at its instruction budget **inside the 64-bit conversion tests**,
+> and that is deliberate: with a budget six times larger the run reaches an exception
+> storm in that same test and aborts, which means something in `CVT.L`/`ROUND.L`/
+> `TRUNC.L`/`CEIL.L`/`FLOOR.L` is wrong in a way the corpus's handler cannot recover
+> from. The ordinary cases are right — 4.5 → 4, 5.5 → 6, 4.4 → 5 rounding up — so it is
+> an edge case rather than the mechanism.
+
+Every observation in it was correct. The inference — that the storm was *caused by* a
+defect in those five instructions — was not. The storm was `TEQ`, which Mars had never
+implemented, reached through the corpus's own divide-by-zero guard while it formatted
+the conversion failures into messages (`Mars_Cpu.md` §15.2).
+
+There *was* a conversion defect, and the corpus states it outright: the 2⁵³ ceiling in
+§6.3. It accounts for seven of the failures and none of the storm. Finding it required
+reading the corpus's expectation tables, which is what should have happened first;
+predicting its shape from where the run stopped produced a plausible sentence and no
+progress.
+
+**The general form, since this is the second time on this page.** §8 records a square
+root bug that every tidy test value passed. This records a diagnosis that every
+available observation supported. Both have the same cause: a small, self-consistent
+body of evidence will confirm a wrong answer as readily as a right one, and the way out
+is a measurement that could distinguish them — here, one instrumented run that printed
+the offending instruction word.
 
 ## 10. Two commercial cartridges
 

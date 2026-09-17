@@ -26,6 +26,8 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Fpu.md`](Mars_Fpu.md) is Phase B's first slice: the coprocessor register files and the paths into them, with no arithmetic at all. Read §9 first — with this in place the hardware corpus starts printing verdicts, and the tally it prints is now a ratchet in the test suite. §9.2 is two integer defects the corpus found and that slice deliberately did not fix; `Mars_Cpu.md` §14 is where they were settled, and neither turned out to be what it looked like.
 
+[`Mars_Corpus.md`](Mars_Corpus.md) is the hardware corpus as a running instrument rather than as a protocol: how far the run gets, what stops it, and what its tally is and is not a measurement of. Read §2 before quoting any "every X test passes" claim from another page here — a run that stops early reports on the part of the world it reached, and one of those claims had to be qualified because of it. §3 is the census of all 171 remaining failures, of which one group of eleven is neither a later phase nor a decision.
+
 The remaining per-component pages (`Mars_CPU.md`, `Mars_RSP.md`, `Mars_RDP.md`, and the rest) get added here as the phases that build those subsystems land, the same way `Venus - SNES/`'s and `Mercury - GB-GBC/`'s were.
 
 See `Man pages/EmuSen_Core_Naming_Scheme.md` for the full core naming scheme, and `Man pages/Hardware/README.md` for how this documentation set is organized.

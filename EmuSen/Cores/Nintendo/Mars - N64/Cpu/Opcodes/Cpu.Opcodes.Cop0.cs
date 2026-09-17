@@ -53,23 +53,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             uint rs = (uint)Rs(instruction);
 
+            // Nothing between the sub-opcode and the function field is decoded at all - see Mars_Cop0.md §10.
             if ((rs & 0x10) != 0)
             {
-                uint funct = instruction & 0x3F;
-
-                // The emulator extensions, which real hardware ignores and the corpus calls unconditionally.
-                if (funct >= 0x20) return;
-
-                switch (funct)
+                switch (instruction & 0x3F)
                 {
                     case 0x01: ReadTlbEntry(); return;
                     case 0x02: WriteTlbEntry((int)(Cop0[IndexRegister] & 0x1F)); return;
                     case 0x06: WriteTlbEntry(RandomIndex()); return;
                     case 0x08: ProbeTlb(); return;
                     case 0x18: ReturnFromException(); return;
-                }
 
-                throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
+                    // The R3000's return-from-exception slot is the one reserved code that traps - see §10.1.
+                    case 0x10: throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
+                    default: return;
+                }
             }
 
             switch (rs)
@@ -78,6 +76,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 case 0x01: Write(Rt(instruction), ReadCop0(Rd(instruction))); return;
                 case 0x04: WriteCop0(Rd(instruction), Read(Rt(instruction))); return;
                 case 0x05: WriteCop0(Rd(instruction), Read(Rt(instruction))); return;
+
+                // Decoded and idle: no control registers to move, and a condition that never holds - see §10.2.
+                case 0x02 or 0x06 or 0x08: return;
                 default: throw Raise(ExceptionCode.ReservedInstruction, CurrentPc);
             }
         }

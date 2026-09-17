@@ -238,20 +238,12 @@ namespace EmuSen.WiseMan.Cores
         public void The_emulator_extension_opcodes_are_ignored_rather_than_refused()
         {
             var cpu = new MipsAssembler()
-                .CoprocessorZeroExtension(0x2C)
+                .Cop0Function(0x2C)
                 .Addiu(1, 0, 7)
                 .Run(2);
 
             Assert.Null(cpu.LastException);
             Assert.Equal(7UL, cpu.Gpr[1]);
-        }
-
-        [Fact]
-        public void A_coprocessor_operation_below_that_range_still_refuses()
-        {
-            var cpu = new MipsAssembler().CoprocessorZeroExtension(0x1F).Run(1);
-
-            Assert.Equal(ExceptionCode.ReservedInstruction, cpu.LastException!.Code);
         }
 
         // The clock design end to end: nothing increments Count, and it still advances.

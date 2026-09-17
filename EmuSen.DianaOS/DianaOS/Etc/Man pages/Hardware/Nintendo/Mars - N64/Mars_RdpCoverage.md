@@ -162,7 +162,8 @@ is a different claim from either the wiki's or the textbook's.
   compare and update are ignored. No graded case selects any of them, so none of this is claimed.
 - **A fill rectangle's bottom takes its whole last row only in the fill and copy cycles.** In the
   one-cycle mode it does not, which fifteen cases showed when the old unconditional rule was restored.
-- **The two-cycle and copy modes** draw nothing.
+- **The two-cycle and copy modes** draw nothing. ~~Both~~ The two-cycle mode draws since
+  `Mars_RdpTwoCycle.md`; the copy mode still does not.
 
 ## 6. What the references disagree on, and what the reference is not
 
@@ -234,7 +235,8 @@ covered edge and untouched background. It fails with the renderer off, and with 
   §5's first bullet no longer holds for them.
 - ~~**Textures**, the level-of-detail fraction and texture memory.~~ Texture memory, loads and point-sampled
   textures built (`Mars_RdpTextures.md`); the level-of-detail fraction since (`Mars_RdpLod.md`).
-- **The two-cycle and copy modes**, and ~~texture rectangles~~ (built with textures).
+- ~~**The two-cycle**~~ (built in `Mars_RdpTwoCycle.md`) **and copy modes**, and ~~texture rectangles~~
+  (built with textures).
 - **Chroma key** — which parallel-rdp lists among its own missing features, so a dispute is expected.
 - **Noise**, deliberately (§6.3).
 - **The video interface**, which is where coverage becomes anti-aliasing on screen.

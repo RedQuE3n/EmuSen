@@ -340,7 +340,9 @@ pointer that is not a multiple of eight, none of which it has.
   either is the video interface's divot filter — and the four-texel rule is the mid-texel average.
 - ~~**The level of detail**: the fraction, mipmaps, detail and sharpen, and the tile choice they make.~~ Built
   two slices later (`Mars_RdpLod.md`).
-- **The two-cycle and copy modes**, in which textured primitives still draw nothing.
+- ~~**The two-cycle mode**, in which textured primitives still draw nothing.~~ Built four slices later
+  (`Mars_RdpTwoCycle.md`), where the second cycle's texel, the swap and the conversion of one texel from
+  another are §2. **The copy mode** is still not here.
 - **Untextured primitives that read a texel** (§6), and texture rectangles in the fill cycle — both follow
   from rules graded elsewhere, and neither has a case.
 - **Chroma key** and **noise**, as `Mars_RdpDepth.md` §7 left them.

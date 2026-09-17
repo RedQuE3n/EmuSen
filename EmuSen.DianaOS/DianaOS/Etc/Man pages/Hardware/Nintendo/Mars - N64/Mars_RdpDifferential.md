@@ -224,7 +224,9 @@ exceptions**, and filtering was the slice that met both (`Mars_RdpFiltering.md` 
 - **Anything but the fill cycle.** The cases are fill rectangles and, since the walker, fill-cycle
   triangles (`Mars_RdpTriangles.md` §4); every other mode is unbuilt in Mars (`Mars_Rdp.md` §9).
   **Update:** flat primitives in the one-cycle mode are now graded too (`Mars_RdpCoverage.md` §7), and
-  the differential carries two further disputes and a second reference artefact (§6 there).
+  the differential carries two further disputes and a second reference artefact (§6 there). The one-cycle
+  mode has since been graded whole — shade, depth, textures, filtering, palettes and the level of detail —
+  and the two-cycle mode with it (`Mars_RdpTwoCycle.md` §5). Only the copy cycle is left ungraded.
 - **The register interface**, which the cases bypass, and **timing**.
 - **Pipeline crashes.** angrylion's crash flag stops `n64video_process_list` and nothing else, and
   the replay never calls that function; what a crashed pipeline does next is not graded.

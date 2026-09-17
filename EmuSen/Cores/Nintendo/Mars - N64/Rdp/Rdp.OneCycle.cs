@@ -124,7 +124,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     int z = CorrectDepth((values[AttributeZ] >> 10) & 0x3FFFFF, offset, coverage);
 
                     if (dither) Dither(x, y, ref ditherColor, ref ditherAlpha);
-                    CombineOneCycle(ditherAlpha, ref coverage);
+                    CombineSecondCycle(ditherAlpha, ref coverage);
 
                     int pixel = y * _colorImageWidth + x;
                     int memoryCoverage = ReadMemory(pixel);
@@ -158,13 +158,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             alpha = AlphaDither switch { 0 => pattern, 1 => ~pattern & 7, _ => 0 };
         }
 
-        // (A - B) × C + D in nine-bit signed arithmetic, then clamped to eight - see §4.1.
-        private void CombineOneCycle(int ditherAlpha, ref int coverage)
+        // (A - B) × C + D in nine-bit signed arithmetic for one cycle's selectors: colour before its shift to nine bits, alpha after - see §4.1.
+        private (int R, int G, int B, int A) CombinerEquations(CombinerSelectors c) => (
+            ColorEquation(ColorA(c.ColorA, 0), ColorB(c.ColorB, 0), ColorC(c.ColorC, 0), ColorD(c.ColorD, 0)),
+            ColorEquation(ColorA(c.ColorA, 1), ColorB(c.ColorB, 1), ColorC(c.ColorC, 1), ColorD(c.ColorD, 1)),
+            ColorEquation(ColorA(c.ColorA, 2), ColorB(c.ColorB, 2), ColorC(c.ColorC, 2), ColorD(c.ColorD, 2)),
+            AlphaEquation(AlphaABD(c.AlphaA), AlphaABD(c.AlphaB), AlphaC(c.AlphaC), AlphaABD(c.AlphaD)));
+
+        // The one-cycle mode's cycle and the two-cycle mode's last: the pixel's colour and alpha, then clamped to eight bits - see §4.1.
+        private void CombineSecondCycle(int ditherAlpha, ref int coverage)
         {
-            int red = ColorEquation(ColorA(CombineColorA, 0), ColorB(CombineColorB, 0), ColorC(CombineColorC, 0), ColorD(CombineColorD, 0));
-            int green = ColorEquation(ColorA(CombineColorA, 1), ColorB(CombineColorB, 1), ColorC(CombineColorC, 1), ColorD(CombineColorD, 1));
-            int blue = ColorEquation(ColorA(CombineColorA, 2), ColorB(CombineColorB, 2), ColorC(CombineColorC, 2), ColorD(CombineColorD, 2));
-            int alpha = AlphaEquation(AlphaABD(CombineAlphaA), AlphaABD(CombineAlphaB), AlphaC(CombineAlphaC), AlphaABD(CombineAlphaD));
+            (int red, int green, int blue, int alpha) = CombinerEquations(SecondCombineCycle);
 
             _combined = new Color { R = red >> 8, G = green >> 8, B = blue >> 8, A = alpha };
             _pixel = new Color { R = Clamp9(_combined.R), G = Clamp9(_combined.G), B = Clamp9(_combined.B) };
@@ -304,23 +308,32 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private static int Clamp9(int value) => ((value >> 7) & 3) switch { 2 => 0xFF, 3 => 0, _ => value & 0xFF };
 
         // Alpha compare, the coverage test, and then blend, pass through or the second input; noise thresholds are not built - see §4.2.
-        private bool BlendOneCycle(int ditherColor, bool blend, bool prewrap, int coverage, bool coverageBit, out int r, out int g, out int b)
+        private bool BlendOneCycle(int ditherColor, bool blend, bool overflow, int coverage, bool coverageBit, out int r, out int g, out int b)
         {
             r = g = b = 0;
 
-            if (AlphaCompare && _pixel.A < (DitherAlpha ? 0 : _blendColor.A)) return false;
+            if (AlphaCompare && _pixel.A < AlphaThreshold) return false;
             if (Antialias ? coverage == 0 : !coverageBit) return false;
 
-            if (!ColorOnCoverage || prewrap)
-            {
-                bool opaque = BlendFirstAlpha == 0 && BlendSecondAlpha == 0 && _pixel.A >= 0xFF;
+            Blend(FirstBlendCycle, _pixel, ditherColor, blend, overflow, _blendShiftA, _blendShiftB, out r, out g, out b);
+            return true;
+        }
 
-                if (!blend || opaque) (r, g, b) = BlendInput(BlendFirstColor);
-                else BlendEquation(out r, out g, out b);
+        private int AlphaThreshold => DitherAlpha ? 0 : _blendColor.A;
+
+        // Blend, pass the first input through, or take the second, then dither; source is what input 0 reads - see §4.2.
+        private void Blend(BlendSelectors selectors, Color source, int ditherColor, bool blend, bool overflow, int shiftA, int shiftB, out int r, out int g, out int b)
+        {
+            if (!ColorOnCoverage || overflow)
+            {
+                bool opaque = selectors.FirstAlpha == 0 && selectors.SecondAlpha == 0 && _pixel.A >= 0xFF;
+
+                if (!blend || opaque) (r, g, b) = BlendInput(selectors.FirstColor, source);
+                else BlendEquation(selectors, source, !ForceBlend, shiftA, shiftB, out r, out g, out b);
             }
             else
             {
-                (r, g, b) = BlendInput(BlendSecondColor);
+                (r, g, b) = BlendInput(selectors.SecondColor, source);
             }
 
             if (RgbDither != 3)
@@ -329,39 +342,37 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 g = Dithered(g, RgbDither == 2 ? (ditherColor >> 3) & 7 : ditherColor);
                 b = Dithered(b, RgbDither == 2 ? (ditherColor >> 6) & 7 : ditherColor);
             }
-
-            return true;
         }
 
-        private (int R, int G, int B) BlendInput(int selector) => selector switch
+        private (int R, int G, int B) BlendInput(int selector, Color source) => selector switch
         {
-            0 => (_pixel.R, _pixel.G, _pixel.B),
+            0 => (source.R, source.G, source.B),
             1 => (_memory.R, _memory.G, _memory.B),
             2 => (_blendColor.R, _blendColor.G, _blendColor.B),
             _ => (_fogColor.R, _fogColor.G, _fogColor.B),
         };
 
-        // Weighted by the two alphas in eighths, then divided by their sum unless the blend is forced - see §4.2.
-        private void BlendEquation(out int r, out int g, out int b)
+        // Weighted by the two alphas in eighths, then divided by their sum unless told not to - see §4.2.
+        private void BlendEquation(BlendSelectors selectors, Color source, bool divide, int shiftA, int shiftB, out int r, out int g, out int b)
         {
-            int firstAlpha = BlendFirstAlpha switch { 0 => _pixel.A, 1 => _fogColor.A, 2 => _blenderShadeAlpha, _ => 0 };
-            int secondAlpha = BlendSecondAlpha switch { 0 => ~firstAlpha & 0xFF, 1 => _memory.A, 2 => 0xFF, _ => 0 };
+            int firstAlpha = selectors.FirstAlpha switch { 0 => _pixel.A, 1 => _fogColor.A, 2 => _blenderShadeAlpha, _ => 0 };
+            int secondAlpha = selectors.SecondAlpha switch { 0 => ~firstAlpha & 0xFF, 1 => _memory.A, 2 => 0xFF, _ => 0 };
 
             int first = firstAlpha >> 3, second = secondAlpha >> 3;
-            if (BlendSecondAlpha == 1)
+            if (selectors.SecondAlpha == 1)
             {
-                first = (first >> _blendShiftA) & 0x3C;
-                second = (second >> _blendShiftB) | 3;
+                first = (first >> shiftA) & 0x3C;
+                second = (second >> shiftB) | 3;
             }
 
-            (int R, int G, int B) one = BlendInput(BlendFirstColor), two = BlendInput(BlendSecondColor);
+            (int R, int G, int B) one = BlendInput(selectors.FirstColor, source), two = BlendInput(selectors.SecondColor, source);
             int weight = second + 1;
 
             int sumR = one.R * first + two.R * weight;
             int sumG = one.G * first + two.G * weight;
             int sumB = one.B * first + two.B * weight;
 
-            if (ForceBlend)
+            if (!divide)
             {
                 (r, g, b) = ((sumR >> 5) & 0xFF, (sumG >> 5) & 0xFF, (sumB >> 5) & 0xFF);
                 return;

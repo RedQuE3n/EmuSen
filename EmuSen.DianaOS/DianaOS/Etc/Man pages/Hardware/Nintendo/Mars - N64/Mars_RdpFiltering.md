@@ -276,8 +276,9 @@ combine mode or colour image carries.
 
 ## 6. What is not here
 
-- **The two-cycle mode**, including its conversion of the first cycle's result (the convert-one bit) and
-  the second cycle's own bilinear bit.
+- ~~**The two-cycle mode**, including its conversion of the first cycle's result (the convert-one bit) and
+  the second cycle's own bilinear bit.~~ Built two slices later (`Mars_RdpTwoCycle.md` §2), where the
+  conversion turned out to have four forms, one of which reads no texel at all.
 - ~~**The level of detail**: the fraction the combiner reads, mipmaps, detail and sharpen, and the tile
   choice they make — and with it the reference's texel 0, which `Mars_RdpTextures.md` §6 notes differs from
   the previous pixel's texel 1 only then.~~ Built in the next slice (`Mars_RdpLod.md`), where the texel 0

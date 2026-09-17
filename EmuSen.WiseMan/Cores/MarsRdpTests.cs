@@ -437,6 +437,41 @@ namespace EmuSen.WiseMan.Cores
             foreach (var (y, x, color) in pixels) Assert.Equal(color, (uint)bus.Read16(0x0010_0000 + (y * 32 + x) * 2));
         }
 
+        // angrylion's pixels for one perspective triangle drawn twice in the two-cycle mode, the second pass under the level of detail, convert-one and alpha compare - see Mars_RdpTwoCycle.md §5.5.
+        [Fact]
+        public void A_two_cycle_triangle_through_both_combiner_and_blender_cycles_matches_the_reference()
+        {
+            var bus = new MarsBus();
+            for (uint i = 0; i < 0x400; i++) bus.Write16(0x0020_0000 + i * 2, (ushort)(((i * 0x2B13 + 0x1357) & 0xFFFE) | (i & 1)));
+
+            const uint list = 0x0030_0000;
+            uint end = WriteList(bus, list,
+                0x3F10001F_00100000UL, 0x2D000000_0007C07CUL, 0x2F300000_00000000UL, 0x37000000_7BDE7BDFUL, 0x3607C07C_00000000UL,
+                0x3D10001F_00200000UL, 0x35101000_00014050UL, 0x34000000_0007C07CUL,
+                0x3D10000F_00200100UL, 0x35100900_01010441UL, 0x34000000_0103C03CUL,
+                0x3D100007_00200200UL, 0x35100540_0200C832UL, 0x34000000_0201C01CUL,
+                0x3D100003_00200300UL, 0x35100350_03008C23UL, 0x34000000_0300C00CUL,
+                0x2F180CF0_00604000UL, 0x3C25260A_110C927FUL, 0x3A00005A_C8642A9FUL, 0x39000000_7755AA80UL,
+                0x0A980075_001B0006UL, 0x001DC000_FFFEF777UL, 0x00022C65_00002735UL, 0xFFFFA186_00053CF4UL, 0xFFF3FF97_7FFF0000UL, 0x0046FFDF_FD270000UL,
+                0xE4531025_FFFF0000UL, 0xC1371E00_D82E0000UL, 0x001800D1_FE9D0000UL, 0x000D00D6_FF0D0000UL, 0x375ADFB6_C31D0000UL, 0x6141E8F4_480F0000UL,
+                0x2F190AC0_00604001UL, 0x3C26FE0B_110CF27FUL,
+                0x0A980075_001B0006UL, 0x001DC000_FFFEF777UL, 0x00022C65_00002735UL, 0xFFFFA186_00053CF4UL, 0xFFF3FF97_7FFF0000UL, 0x0046FFDF_FD270000UL,
+                0xE4531025_FFFF0000UL, 0xC1371E00_D82E0000UL, 0x001800D1_FE9D0000UL, 0x000D00D6_FF0D0000UL, 0x375ADFB6_C31D0000UL, 0x6141E8F4_480F0000UL,
+                SyncFull);
+
+            bus.Write32(Start, list);
+            bus.Write32(End, end);
+
+            (uint Y, uint X, uint Color)[] pixels =
+            {
+                (3, 5, 0x4999), (4, 15, 0x8BE9), (5, 20, 0x82E5), (6, 25, 0x82E5), (7, 4, 0x4999), (8, 4, 0x9C6B),
+                (8, 28, 0x6AE3), (9, 25, 0x946D), (10, 26, 0x49DB), (11, 16, 0x49E5), (12, 21, 0x6A5F), (15, 11, 0x835D),
+                (17, 5, 0x6A5D), (19, 9, 0x942D), (22, 12, 0x72AB), (24, 6, 0x9A9F), (26, 9, 0x72E7), (27, 7, 0x7323),
+            };
+
+            foreach (var (y, x, color) in pixels) Assert.Equal(color, (uint)bus.Read16(0x0010_0000 + (y * 32 + x) * 2));
+        }
+
         [Fact]
         public void Writing_the_mode_register_clear_bit_lowers_the_display_processor_interrupt()
         {

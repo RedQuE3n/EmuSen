@@ -91,7 +91,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         }
 
         // Shifted and made relative to the tile's corner, then sampled at one texel, or at four when filtering or a palette asks - see §5 and Mars_RdpFiltering.md §1.
-        private Color Texel(int s, int t, int tileIndex)
+        private Color Texel(int s, int t, int tileIndex) => Texel(s, t, tileIndex, BilinearFirstCycle, convert: false, default);
+
+        // The second cycle's texel may filter or convert differently, and convert the first cycle's texel instead of its own - see Mars_RdpTwoCycle.md §2.
+        private Color Texel(int s, int t, int tileIndex, bool bilinear, bool convert, Color previous)
         {
             ref TextureTile tile = ref _tiles[tileIndex];
 
@@ -102,12 +105,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             s -= tile.SL << 3;
             t -= tile.TL << 3;
 
-            return SampleFour || PaletteEnabled ? FourTexels(s, t, beyondS, beyondT, ref tile) : PointTexel(s, t, beyondS, beyondT, ref tile);
+            return SampleFour || PaletteEnabled
+                ? FourTexels(s, t, beyondS, beyondT, ref tile, bilinear, convert, previous)
+                : PointTexel(s, t, beyondS, beyondT, ref tile, bilinear, convert, previous);
         }
 
         // Clamped, masked and mirrored, fetched, and converted from YUV unless filtered - see §5.
-        private Color PointTexel(int s, int t, bool beyondS, bool beyondT, ref TextureTile tile)
+        private Color PointTexel(int s, int t, bool beyondS, bool beyondT, ref TextureTile tile, bool bilinear, bool convert, Color previous)
         {
+            // Converting passes the first cycle's texel through, or its blue as all four channels when filtering - see Mars_RdpTwoCycle.md §2.
+            if (convert) return bilinear ? new Color { R = previous.B, G = previous.B, B = previous.B, A = previous.B } : Converted(SignedNine(previous), SignedNine(previous).B);
+
             s = Clamped(s, tile.ClampsS, beyondS, tile.ClampLimitS);
             t = Clamped(t, tile.ClampsT, beyondT, tile.ClampLimitT);
 
@@ -117,8 +125,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             Color texel = FetchTexel(s, t & 0xFF, ref tile);
 
             // The reference also cuts red and green to nine bits here, which the combiner's sign extension makes invisible - see §5.3.
-            return BilinearFirstCycle ? texel : Converted(texel, texel.B);
+            return bilinear ? texel : Converted(texel, texel.B);
         }
+
+        private static Color SignedNine(Color color) => new() { R = (color.R << 23) >> 23, G = (color.G << 23) >> 23, B = (color.B << 23) >> 23, A = color.A };
 
         // The luma plus the chroma through the four conversion constants, the chroma and luma possibly from different texels - see §5.3.
         private Color Converted(Color chroma, int luma) => new()

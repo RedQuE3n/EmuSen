@@ -41,7 +41,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             _registers[MemoryMap.RiSelect] = 0x14;
         }
 
-        public void Tick(long cycles) => Cycles += cycles;
+        public void Tick(long cycles)
+        {
+            Cycles += cycles;
+            Sp.Step(cycles);
+        }
+
+        // The eight interface registers and the eight the display processor owns - see Mars_Rsp.md §5.
+        public uint ReadRspControl(int register) =>
+            register < 8 ? Sp.Read32((uint)register << 2) : Read32(MemoryMap.DpCommandBase + ((uint)(register - 8) << 2));
+
+        public void WriteRspControl(int register, uint value)
+        {
+            if (register < 8) Sp.Write32((uint)register << 2, value);
+            else Write32(MemoryMap.DpCommandBase + ((uint)(register - 8) << 2), value);
+        }
 
         // Derived rather than incremented: half the CPU clock, off the one counter - see §3.1.
         public uint Count => unchecked((uint)((Cycles >> 1) + _countBias));
@@ -78,6 +92,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (physical >= MemoryMap.CartDomain1Address2) return ReadCart32(physical - MemoryMap.CartDomain1Address2);
 
             if (InRange(physical, MemoryMap.SpRegistersBase, 0x20)) return Sp.Read32(physical - MemoryMap.SpRegistersBase);
+            if (InRange(physical, MemoryMap.SpPcBase, 0x08)) return Sp.Pc;
 
             if (InRange(physical, MemoryMap.PiBase, 0x34)) return Pi.Read32(physical - MemoryMap.PiBase);
 
@@ -122,6 +137,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             // The cartridge is read-only here; a write to it is dropped rather than refused - see §2.3.
             if (physical >= MemoryMap.CartDomain1Address2) return;
+
+            if (InRange(physical, MemoryMap.SpPcBase, 0x08))
+            {
+                Sp.Pc = value;
+                return;
+            }
 
             if (InRange(physical, MemoryMap.SpRegistersBase, 0x20))
             {

@@ -340,6 +340,24 @@ is least trustworthy.
 **Done when** the corpus's RSP sections pass and a commercial game's boot microcode
 runs to the point of emitting a display list — which nothing can yet consume.
 
+> **Progress, 2026-09-17: the scalar half.** The RSP runs, halts and breaks, with every
+> scalar instruction, the interface registers from both sides, and the program counter
+> (`Mars_Rsp.md`). Eighty-eight of the corpus's 248 RSP and SP groups pass; all but six of
+> the rest are the vector unit, which is this phase's next slice.
+>
+> **The phase's larger effect was on the instrument.** The RSP learning to halt let the
+> corpus run past the wait it had sat in since Phase A, and the run that followed was the
+> first to reach the corpus's own summary line — after a detour through a harness that had
+> been running the corpus on a 4MB machine when it assumes 8MB (`Mars_Corpus.md` §8). So
+> the "done when" condition above is now checkable in the form it was written, against a
+> complete run, for the first time.
+>
+> The complete run also moved work *backwards* into phases this plan had recorded as
+> finished: seventeen CPU test groups, in TLB register masking, 64-bit TLB matching, the
+> extended refill vector, and `Config` (`Mars_Corpus.md` §3). Phase A's completion was
+> claimed against a truncated run; that claim is now known to have been premature, and it
+> is recorded where it was made (`Mars_Cop0.md` §1) rather than here.
+
 ### 4.4 Phase D — the RDP
 
 The command stream, the primitive types, TMEM and texture loading, the combiner,

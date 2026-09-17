@@ -38,6 +38,11 @@ obvious alternative of mirroring is what a young emulator does by accident when 
 masks an address instead of bounds-checking it. With an Expansion Pak the upper half
 is real memory and the same addresses work.
 
+> **The corpus itself needs the Expansion Pak**, which this section did not say and which
+> went unnoticed for nine slices: its heap ends at a fixed seven megabytes, so on the 4MB
+> default a test writing there has its writes dropped by exactly the behaviour described
+> above, and reads back zeros. `Mars_Corpus.md` §8.
+
 ### 2.2 Registers nobody models still read back
 
 Every hardware register that has no device behind it yet is a word in a dictionary:

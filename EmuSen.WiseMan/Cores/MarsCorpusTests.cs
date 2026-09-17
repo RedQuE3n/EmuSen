@@ -13,8 +13,11 @@ namespace EmuSen.WiseMan.Cores
     {
         private const int InstructionBudget = 1_000_000;
 
-        // Past where the run stops, so the tally is not a function of the budget - see Mars_Corpus.md §4.
-        private const int VerdictBudget = 190_000_000;
+        // A safety net rather than a stopping point: the run now ends itself - see Mars_Corpus.md §4.
+        private const int VerdictBudget = 400_000_000;
+
+        // The corpus's own last words, which are what the run being finished looks like.
+        private const string Finished = "Base: Failed ";
 
         // The handoff, the cartridge's own boot code, and the jump into the program it loaded.
         [Fact]
@@ -44,7 +47,7 @@ namespace EmuSen.WiseMan.Cores
         {
             if (!Installed(out var bus, out var cpu, out _)) return;
 
-            RunUntilMarsRunsOut(cpu!);
+            RunUntilMarsRunsOut(cpu!, bus!);
             string verdicts = bus!.IsViewer.Text;
 
             string report = Report(verdicts);
@@ -52,28 +55,44 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("Running StartupTest...", verdicts);
             Assert.Contains("Running ADDIOpcodeTest...", verdicts);
 
-            // A ratchet, not a description: both halves are asserted - see Mars_Corpus.md §5.
-            Assert.Equal($"720 started, 160 failed ({report})", $"{Tally(verdicts)} ({report})");
+            // The corpus's own summary, which it only prints if it reached the end - see Mars_Corpus.md §5.
+            Assert.Equal($"Failed 395 of 4637 tests ({report})", $"{Summary(verdicts)} ({report})");
         }
 
         // The inverse of what stood here for two slices: no scaffold left to reach - see Mars_Fpu.md §6.
         [Fact]
         public void The_corpus_no_longer_reaches_an_instruction_mars_has_not_built()
         {
-            if (!Installed(out _, out var cpu, out _)) return;
+            if (!Installed(out var bus, out var cpu, out _)) return;
 
-            RunUntilMarsRunsOut(cpu!, rethrow: true);
+            RunUntilMarsRunsOut(cpu!, bus!, rethrow: true);
         }
 
-        private static void RunUntilMarsRunsOut(Cpu cpu, bool rethrow = false)
+        private static void RunUntilMarsRunsOut(Cpu cpu, MarsBus bus, bool rethrow = false)
         {
             try
             {
-                for (int steps = 0; steps < VerdictBudget; steps++) cpu.Step();
+                for (int steps = 0; steps < VerdictBudget; steps++)
+                {
+                    cpu.Step();
+
+                    // Stopping when the corpus says it is done costs less than any budget would - see §4.
+                    if ((steps & 0xFFFFF) == 0 && bus.IsViewer.Text.Contains(Finished, StringComparison.Ordinal)) return;
+                }
             }
             catch (NotImplementedException) when (!rethrow)
             {
             }
+        }
+
+        // The corpus counts its own assertions, and there are far more of them than there are tests.
+        private static string Summary(string verdicts)
+        {
+            int start = verdicts.IndexOf(Finished, StringComparison.Ordinal);
+            if (start < 0) return "the run did not reach the end";
+
+            int end = verdicts.IndexOf(" tests", start, StringComparison.Ordinal);
+            return end < 0 ? "the run did not reach the end" : verdicts[(start + 6)..(end + 6)];
         }
 
         private static bool Installed(out MarsBus? bus, out Cpu? cpu, out RomImage? rom)
@@ -86,27 +105,12 @@ namespace EmuSen.WiseMan.Cores
             if (path is null) return false;
 
             rom = RomImage.Load(path);
-            bus = new MarsBus();
+            bus = new MarsBus(expansionPak: true);
             cpu = new Cpu(bus);
             Boot.HandOff(bus, cpu, rom);
 
             return true;
         }
-
-        private static int Occurrences(string text, string marker)
-        {
-            int count = 0;
-            for (int i = text.IndexOf(marker, StringComparison.Ordinal); i >= 0;
-                 i = text.IndexOf(marker, i + 1, StringComparison.Ordinal))
-            {
-                count++;
-            }
-
-            return count;
-        }
-
-        private static string Tally(string verdicts) =>
-            $"{Occurrences(verdicts, "Running ")} started, {Occurrences(verdicts, "' failed:")} failed";
 
         // The whole report beside the test assembly, because the tally alone cannot say what moved.
         private static string Report(string verdicts)

@@ -178,7 +178,7 @@ compression of exponents above four, which its depths never reach.
 
 - ~~**Textures**, and everything that follows from them: texture memory, the level-of-detail fraction and texel
   inputs, texture rectangles.~~ Built in the next slice (`Mars_RdpTextures.md`), except the level-of-detail
-  fraction, filtering and palette lookup.
+  fraction, filtering and palette lookup, which followed (`Mars_RdpFiltering.md`, `Mars_RdpLod.md`).
 - **The two-cycle and copy modes.**
 - **Chroma key** and **noise** (`Mars_RdpCoverage.md` §6.3).
 - **The reference's validation clamp**, still not copied (`Mars_RdpDifferential.md` §4.3).

@@ -31,23 +31,29 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 _attributeDe[AttributeT] = _attributeDy[AttributeT] = dtdy;
             }
 
-            Draw(WalkRectangle(word), majorOnLeft: true, tile: (int)(word >> 24) & 7);
+            Draw(WalkRectangle(word), majorOnLeft: true, tile: (int)(word >> 24) & 7, maxLevel: 0);
         }
 
-        // s and t over w, or s and t alone, to seventeen bits and two overflow flags, then clamped to sixteen - see §4.2.
         private (int S, int T) TextureCoordinates(int s, int t, int w)
+        {
+            (s, t) = DividedCoordinates(s, t, w);
+            return (ClampCoordinate(s), ClampCoordinate(t));
+        }
+
+        // s and t over w, or s and t alone, to seventeen bits and two overflow flags, before the clamp to sixteen - see §4.2.
+        private (int S, int T) DividedCoordinates(int s, int t, int w)
         {
             s >>= 16;
             t >>= 16;
             w >>= 16;
 
-            if (!Perspective) return (ClampCoordinate((short)s & 0x1FFFF), ClampCoordinate((short)t & 0x1FFFF));
+            if (!Perspective) return ((short)s & 0x1FFFF, (short)t & 0x1FFFF);
 
             int flags = (short)w <= 0 ? 2 << 17 : 0;
             int entry = DivideTable[w & 0x7FFF];
             int reciprocal = entry >> 4, shift = entry & 0xF;
 
-            return (ClampCoordinate(Divided((short)s * reciprocal, shift) | flags), ClampCoordinate(Divided((short)t * reciprocal, shift) | flags));
+            return (Divided((short)s * reciprocal, shift) | flags, Divided((short)t * reciprocal, shift) | flags);
         }
 
         // The product scaled by the reciprocal's shift, and flagged over or under when bits beyond the range differ - see §4.2.

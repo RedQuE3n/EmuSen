@@ -278,8 +278,9 @@ combine mode or colour image carries.
 
 - **The two-cycle mode**, including its conversion of the first cycle's result (the convert-one bit) and
   the second cycle's own bilinear bit.
-- **The level of detail**: the fraction the combiner reads, mipmaps, detail and sharpen, and the tile
+- ~~**The level of detail**: the fraction the combiner reads, mipmaps, detail and sharpen, and the tile
   choice they make — and with it the reference's texel 0, which `Mars_RdpTextures.md` §6 notes differs from
-  the previous pixel's texel 1 only then.
+  the previous pixel's texel 1 only then.~~ Built in the next slice (`Mars_RdpLod.md`), where the texel 0
+  concern turned out unfounded.
 - **The copy mode**, whose palette lookup is a different path.
 - **Chroma key** and **noise**, as `Mars_RdpDepth.md` §7 left them.

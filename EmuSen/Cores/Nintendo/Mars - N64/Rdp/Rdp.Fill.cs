@@ -46,7 +46,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void Fill(ulong word)
         {
             ClearAttributes();
-            Draw(WalkRectangle(word), majorOnLeft: true, tile: 0);
+            Draw(WalkRectangle(word), majorOnLeft: true, tile: 0, maxLevel: 0);
         }
 
         // A rectangle is walked as a primitive with its major edge on the left and no slope - see Mars_RdpTriangles.md §3.
@@ -81,7 +81,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 dxhdy: SignExtend(_command[2], 30),
                 dxmdy: SignExtend(_command[3], 30),
                 dxldy: SignExtend(_command[1], 30),
-                majorSlopeNegative: (int)_command[2] < 0), majorOnLeft, tile: (int)(edges >> 48) & 7);
+                majorSlopeNegative: (int)_command[2] < 0), majorOnLeft, tile: (int)(edges >> 48) & 7, maxLevel: (int)(edges >> 51) & 7);
         }
 
         // Shade in the eight words after the edges, texture in the next eight, depth in the last two, each value an integer half and a fraction half - see Mars_RdpDepth.md §1.1.
@@ -138,10 +138,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private static int Joined(ulong whole, ulong fraction, int shift) => (int)((((whole >> shift) & 0xFFFF) << 16) | ((fraction >> shift) & 0xFFFF));
 
         // The fill cycle and the one-cycle mode draw every primitive, textured or not; the two-cycle and copy modes draw nothing yet - see Mars_RdpTextures.md §6.
-        private void Draw((int First, int Last) rows, bool majorOnLeft, int tile)
+        private void Draw((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             if (CycleType == FillCycle) FillSpans(rows);
-            else if (CycleType == OneCycle) DrawOneCycle(rows, majorOnLeft, tile);
+            else if (CycleType == OneCycle) DrawOneCycle(rows, majorOnLeft, tile, maxLevel);
         }
 
         // A four-bit image has nothing to fill - see Mars_Rdp.md §5.3.

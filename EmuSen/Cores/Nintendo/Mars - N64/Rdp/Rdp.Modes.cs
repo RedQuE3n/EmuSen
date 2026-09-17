@@ -32,6 +32,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private Color _keyScale;
 
         private int _primitiveLodFraction;
+        private int _minLevel;
+        private int _lodFraction;
         private int _k4;
         private int _k5;
 
@@ -51,6 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case SetPrimitiveColor:
                     _primitiveColor = Color.FromWord(word);
                     _primitiveLodFraction = (int)(word >> 32) & 0xFF;
+                    _minLevel = (int)(word >> 40) & 0x1F;
                     return true;
                 case SetEnvironmentColor: _environmentColor = Color.FromWord(word); return true;
                 case SetBlendColor: _blendColor = Color.FromWord(word); return true;
@@ -84,6 +87,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         private int CycleType => (int)(_otherModes >> 52) & 3;
         private bool Perspective => ((_otherModes >> 51) & 1) != 0;
+        private bool DetailEnabled => ((_otherModes >> 50) & 1) != 0;
+        private bool SharpenEnabled => ((_otherModes >> 49) & 1) != 0;
+        private bool LodEnabled => ((_otherModes >> 48) & 1) != 0;
         private bool PaletteEnabled => ((_otherModes >> 47) & 1) != 0;
         private bool PaletteIntensityAlpha => ((_otherModes >> 46) & 1) != 0;
         private bool SampleFour => ((_otherModes >> 45) & 1) != 0;

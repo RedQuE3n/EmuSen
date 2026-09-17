@@ -13,6 +13,11 @@
 #             toolchain, borrowed per host by deps_mesen_toolchain.
 #             Linux and macOS only - see §3.54 for why Windows cannot, and use
 #             WSL there if you need it.
+#   rdp       <checkout> is a parallel-rdp checkout with its submodules. Builds the
+#             display processor's two reference instruments, which are not
+#             backends: rdp-validate-dump, unmodified, and rdp-reference from
+#             probe-rs, which links the angrylion library that build made. Linux
+#             only for now. See Mars_RdpDifferential.md.
 #   libretro  No checkout: the core is chosen at *run* time with --core, and the
 #             only build input is libretro.h, taken from a real distribution
 #             rather than vendored so it cannot drift from the real ABI. Cores
@@ -42,13 +47,14 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   CORE_EXT  what a libretro core is called here
 #   EXE       what cargo calls the binary it just built
 #   MESEN     whether the Mesen backend can be built at all
+#   RDP       whether the display processor's reference instruments can be built
 case "$(uname -s)" in
 Linux)
-    HOST=linux;   DEPS=distro;   CORE_EXT=so;    EXE=;     MESEN=yes; BUILDBOT_DIR= ;;
+    HOST=linux;   DEPS=distro;   CORE_EXT=so;    EXE=;     MESEN=yes; RDP=yes; BUILDBOT_DIR= ;;
 Darwin)
-    HOST=macos;   DEPS=upstream; CORE_EXT=dylib; EXE=;     MESEN=yes; BUILDBOT_DIR="apple/osx/$(uname -m)" ;;
+    HOST=macos;   DEPS=upstream; CORE_EXT=dylib; EXE=;     MESEN=yes; RDP=no;  BUILDBOT_DIR="apple/osx/$(uname -m)" ;;
 MINGW*|MSYS*|CYGWIN*)
-    HOST=windows; DEPS=upstream; CORE_EXT=dll;   EXE=.exe; MESEN=no;  BUILDBOT_DIR="windows/$(uname -m)" ;;
+    HOST=windows; DEPS=upstream; CORE_EXT=dll;   EXE=.exe; MESEN=no;  RDP=no;  BUILDBOT_DIR="windows/$(uname -m)" ;;
 *)
     echo "build-probe.sh knows Linux, macOS and Windows, not $(uname -s)" >&2; exit 1 ;;
 esac
@@ -175,6 +181,32 @@ EOF
     esac
 }
 
+# CMake from PATH, or borrowed from the distribution like every other dependency.
+deps_cmake() {
+    if command -v cmake >/dev/null; then
+        CMAKE=cmake
+        return 0
+    fi
+    case "$DEPS" in
+    distro)
+        if [ ! -x "$WORK/deps/usr/bin/cmake" ]; then
+            need dnf rpm2cpio cpio
+            echo "== fetching cmake into $WORK/deps"
+            mkdir -p "$WORK/deps"
+            # --arch, because otherwise dnf also fetches i686 and unpack order decides which binary survives.
+            ( cd "$WORK/deps" && dnf download --arch "$(uname -m)" --arch noarch cmake cmake-data rhash
+              for f in *.rpm; do rpm2cpio "$f" | cpio -idmu --quiet; done )
+        fi
+        export LD_LIBRARY_PATH="$WORK/deps/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        CMAKE="$WORK/deps/usr/bin/cmake"
+        ;;
+    upstream)
+        echo "The rdp backend needs cmake on PATH on $HOST" >&2
+        exit 1
+        ;;
+    esac
+}
+
 # Mach-O records a dylib's own install name, not the path it was linked against,
 # so the checkout-relative load that -l: gives the ELF probe is written in after
 # the fact. Read rather than assumed, because Mesen sets no -install_name.
@@ -216,6 +248,39 @@ libretro)
     echo "  '$WORK/probe$EXE' --core <core>_libretro.$CORE_EXT <rom> <outDir> <start> <end> [stride]"
     exit 0
     ;;
+rdp)
+    [ "$RDP" = yes ] || {
+        echo "The rdp backend cannot be built on $HOST yet - see Mars_RdpDifferential.md §3. rdp-reference" >&2
+        echo "links angrylion as a fixed-address executable and reads its output as little-endian words," >&2
+        echo "and neither has been tried off Linux." >&2
+        exit 1
+    }
+    [ -n "$CHECKOUT" ] || { echo "The rdp backend needs a parallel-rdp checkout" >&2; exit 1; }
+    [ -f "$CHECKOUT/rdp_validate_dump.cpp" ] || { echo "Not a parallel-rdp checkout: $CHECKOUT" >&2; exit 1; }
+    [ -f "$CHECKOUT/angrylion-rdp-plus/src/core/n64video.c" ] && [ -f "$CHECKOUT/Granite/CMakeLists.txt" ] || {
+        echo "$CHECKOUT has no submodules: git -C '$CHECKOUT' submodule update --init --recursive" >&2
+        exit 1
+    }
+    need cargo
+    deps_cmake
+    mkdir -p "$WORK"
+    echo "== building rdp-validate-dump and angrylion (several minutes the first time)"
+    # CMake 4 refuses Granite's third-party trees without the policy floor, and GCC 16
+    # no longer reaches <cstdint> transitively, which Granite's headers relied on.
+    "$CMAKE" -S "$CHECKOUT" -B "$WORK/validate-build" -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 "-DCMAKE_CXX_FLAGS=-include cstdint"
+    "$CMAKE" --build "$WORK/validate-build" --target rdp-validate-dump -j"$(cpus)"
+    cp "$WORK/validate-build/rdp-validate-dump" "$WORK/rdp-validate-dump"
+    echo "== building rdp-reference"
+    ANGRYLION_LIB_DIR="$WORK/validate-build" cargo build --release \
+        --manifest-path "$HERE/probe-rs/Cargo.toml" --no-default-features --features angrylion \
+        --bin rdp-reference --target-dir "$WORK/target"
+    cp "$WORK/target/release/rdp-reference" "$WORK/rdp-reference"
+    echo
+    echo "Built: $WORK/rdp-reference and $WORK/rdp-validate-dump"
+    echo "MarsRdpDifferentialTests finds both there."
+    exit 0
+    ;;
 libretro-core)
     # Fetches a core into the libretro backend's work dir and says where it
     # landed. Nothing is installed system-wide.
@@ -227,7 +292,7 @@ libretro-core)
     exit 0
     ;;
 *)
-    echo "Unknown backend '$BACKEND' (known: mesen, libretro, libretro-core)" >&2
+    echo "Unknown backend '$BACKEND' (known: mesen, libretro, libretro-core, rdp)" >&2
     exit 1
     ;;
 esac

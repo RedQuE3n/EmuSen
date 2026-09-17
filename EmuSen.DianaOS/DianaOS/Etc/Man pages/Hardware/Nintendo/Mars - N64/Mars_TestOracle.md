@@ -164,6 +164,12 @@ coverage gap suggests.
 > experimental flag §1 mentions, and they are graded against silicon (`Mars_Rdp.md` §0). What
 > this section says about rasterization is unchanged: those six read one pixel of a fill, and
 > nothing here grades an edge.
+>
+> **Update 2026-09-17: the differential this section describes now runs** against angrylion, with
+> parallel-rdp as a cross-check, on dumps written by the test itself rather than by an emulator
+> (`Mars_RdpDifferential.md`). This section's distinction survives its first use intact, and
+> sharpened: agreement with angrylion turned out to include agreement with a validation workaround
+> in its fork, and the two references disagreed on a case.
 
 **For the RDP, the differential infrastructure is excellent and its ground truth is
 not hardware.** `parallel-rdp` (MIT) defines an interchange format — `RDPDUMP2`: an

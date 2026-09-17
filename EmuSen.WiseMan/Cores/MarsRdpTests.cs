@@ -218,19 +218,19 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x0022_3344u, bus.Read32(Framebuffer + 0x100));
         }
 
-        // The rectangle's far edges are drawn and the scissor's are not; a whole-pixel rule, not yet graded - see §5.2.
+        // The scissor's right column is drawn and its bottom row is not; graded against the reference rasterizer - see §5.2.
         [Fact]
-        public void A_fill_covers_its_rectangle_inclusively_and_stops_short_of_the_scissor_edge()
+        public void A_fill_reaches_the_scissor_right_column_but_not_its_bottom_row()
         {
             var bus = new MarsBus();
-            RunList(bus, ColorImage(Bits16, 8, Framebuffer), Scissor(0, 0, 4, 8), FillCycle, FillColor(0xFFFF_FFFF),
-                FillRectangle(1, 1, 5, 3), SyncFull);
+            RunList(bus, ColorImage(Bits16, 8, Framebuffer), Scissor(0, 0, 4, 3), FillCycle, FillColor(0xFFFF_FFFF),
+                FillRectangle(1, 1, 5, 5), SyncFull);
 
-            for (uint y = 0; y < 5; y++)
+            for (uint y = 0; y < 6; y++)
             {
-                for (uint x = 0; x < 6; x++)
+                for (uint x = 0; x < 7; x++)
                 {
-                    bool inside = x >= 1 && x <= 3 && y >= 1 && y <= 3;
+                    bool inside = x >= 1 && x <= 4 && y >= 1 && y <= 2;
                     Assert.True((Pixel16(bus, 8, x, y) != 0) == inside, $"pixel ({x}, {y})");
                 }
             }

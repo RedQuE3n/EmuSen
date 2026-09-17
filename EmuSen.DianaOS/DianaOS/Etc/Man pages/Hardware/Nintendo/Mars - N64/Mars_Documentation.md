@@ -248,6 +248,20 @@ parallel-rdp reaches the same standard through a permissively licensed instrumen
 Where angrylion is read, it is read under exactly the terms §2 already imposes on
 everything else — which is, as it happens, precisely what the MAME licence asks for.
 
+> **Retired 2026-09-17: the preference above.** Asked which reference to grade against when the
+> differential was built, the project owner chose both: **angrylion grades Mars, and parallel-rdp
+> checks angrylion** (`Mars_RdpDifferential.md` §1). The licence argument does not decide the
+> question it was brought to. The MAME licence restricts redistribution and commercial use, and an
+> instrument run locally, with none of its code in the repository, is neither; grading against
+> angrylion directly removes the layer of agreement that grading through parallel-rdp would add.
+>
+> **The premise was also measured, and held less well than it read.** "Validated bit-exact against
+> angrylion" is true of parallel-rdp's own conformance suite. On this project's first fill cases it
+> agreed on all but two: it aborts on a fill into a 4-bit image, and it disagrees with angrylion
+> about an empty scissor (`Mars_RdpDifferential.md` §4.4, §4.5). Both are edge cases a conformance
+> suite built for real content has little reason to include, which is the point: a reference's
+> validation covers what its author tested.
+
 ## 8. What this does not settle
 
 - Everything marked **[reported]** is the survey's reading, not a second reading by

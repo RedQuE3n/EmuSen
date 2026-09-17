@@ -54,6 +54,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public const ulong VectorBase = 0xFFFF_FFFF_8000_0000;
         public const ulong VectorBaseBootstrap = 0xFFFF_FFFF_BFC0_0200;
         public const ulong VectorOffsetTlbRefill = 0x000;
+        public const ulong VectorOffsetExtendedTlbRefill = 0x080;
         public const ulong VectorOffsetGeneral = 0x180;
 
         public readonly ulong[] Cop0 = new ulong[32];
@@ -166,6 +167,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             bool alreadyHandling = (Cop0[StatusRegister] & StatusExceptionLevel) != 0;
 
+            // Read before the fault raises the exception level, which would make every mode kernel - see Mars_Tlb.md §7.5.
+            bool extended = WideAddressing;
+
             // A fault inside a handler keeps the original return address, which is what makes nesting survivable.
             if (!alreadyHandling)
             {
@@ -181,7 +185,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             Cop0[StatusRegister] |= StatusExceptionLevel;
             LinkedFlag = false;
 
-            Pc = VectorFor(raised.Refill, alreadyHandling);
+            Pc = VectorFor(raised.Refill, alreadyHandling, extended);
             NextPc = Pc + 4;
             _branchPending = false;
             InDelaySlot = false;
@@ -209,11 +213,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         }
 
         // A refill has its own vector only on the way in from ordinary execution - see Mars_Cpu.md §11.1.
-        private ulong VectorFor(bool refill, bool alreadyHandling)
+        private ulong VectorFor(bool refill, bool alreadyHandling, bool extended)
         {
             ulong start = (Cop0[StatusRegister] & StatusBootstrapVectors) != 0 ? VectorBaseBootstrap : VectorBase;
 
-            return start + (refill && !alreadyHandling ? VectorOffsetTlbRefill : VectorOffsetGeneral);
+            if (!refill || alreadyHandling) return start + VectorOffsetGeneral;
+
+            return start + (extended ? VectorOffsetExtendedTlbRefill : VectorOffsetTlbRefill);
         }
 
         private void SetCauseCode(ExceptionCode code) =>
@@ -238,14 +244,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             Cop0[EntryLo1Register] = entry.EntryLo1;
         }
 
+        // An entry keeps less than the registers hold, and one global flag for both halves - see Mars_Tlb.md §7.2.
         private void WriteTlbEntry(int index)
         {
             ref TlbEntry entry = ref Tlb.Entries[index & 0x1F];
 
-            entry.PageMask = Cop0[PageMaskRegister] & 0x01FF_E000;
-            entry.EntryHi = Cop0[EntryHiRegister];
-            entry.EntryLo0 = Cop0[EntryLo0Register];
-            entry.EntryLo1 = Cop0[EntryLo1Register];
+            ulong pageMask = Tlb.PairedPageMask(Cop0[PageMaskRegister]);
+            ulong global = Cop0[EntryLo0Register] & Cop0[EntryLo1Register] & Tlb.EntryLoGlobal;
+
+            entry.PageMask = pageMask;
+            entry.EntryHi = Cop0[EntryHiRegister] & EntryHiWritable & ~pageMask;
+            entry.EntryLo0 = (Cop0[EntryLo0Register] & Tlb.EntryLoKept) | global;
+            entry.EntryLo1 = (Cop0[EntryLo1Register] & Tlb.EntryLoKept) | global;
         }
 
         // A failed probe sets the top bit rather than an index, which is how a handler tells them apart.
@@ -255,24 +265,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             Cop0[IndexRegister] = found < 0 ? 0x8000_0000UL : (ulong)found;
         }
 
-        // The entry a random write lands on, kept above the wired entries a handler reserves for itself.
-        private int RandomIndex()
-        {
-            int wired = (int)(Cop0[WiredRegister] & 0x1F);
-            if (wired >= Tlb.EntryCount) return Tlb.EntryCount - 1;
+        // The entry a random write lands on is whatever Random reads, which is what makes Wired work - see §7.4.
+        private int RandomIndex() => (int)ReadRandom();
 
-            int span = Tlb.EntryCount - wired;
-            return wired + (int)((ulong)Instructions % (ulong)span);
-        }
-
-        // What a refill handler reads instead of recomputing the address itself - see Mars_Tlb.md §4.
-        private void OnTlbFailure(ulong address) =>
-            Cop0[EntryHiRegister] = (Cop0[EntryHiRegister] & 0xFF) | (address & 0xFFFF_E000UL);
-
-        // The three registers a fault fills in for the handler, all from the one address - see Mars_Cop0.md §7.
+        // The four registers a fault fills in for the handler, all from the one address - see Mars_Cop0.md §7.
         private void RecordFaultingAddress(ulong address)
         {
             Cop0[BadVirtualAddressRegister] = address;
+
+            // An address error writes the page number too, not only a miss - see Mars_Tlb.md §7.6.
+            Cop0[EntryHiRegister] = (Cop0[EntryHiRegister] & 0xFF) | (address & EntryHiWritable & ~0xFFUL);
 
             // A fault owns everything below the software field, so the low four bits are cleared too.
             Cop0[ContextRegister] = (Cop0[ContextRegister] & ContextWritable) | ((address >> 9) & ContextBadVpn2);

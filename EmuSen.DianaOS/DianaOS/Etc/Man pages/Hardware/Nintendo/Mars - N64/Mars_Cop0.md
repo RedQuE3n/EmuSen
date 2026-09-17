@@ -75,7 +75,9 @@ is ever found that behaves differently on the two, this is the line to revisit.
 
 ## 4. Config is half constant, and the constant half is why the corpus's first test failed
 
-`Config` keeps `0x7F00800F` of what is written and forces `0x00066460` into the rest.
+`Config` keeps `0x0F00800F` of what is written and forces `0x70066460` into the rest.
+(Until 2026-09-17 this read `0x7F00800F` and `0x00066460`; the note at the end of this
+section is why.)
 
 The corpus's very first assertion — the one printed at the top of every report since
 the oracle started talking — was `Initial COP0 Config: a=0x6E463 b=0x7006E463`. The
@@ -93,7 +95,8 @@ whose reset value is wrong is invisible until software reads it before writing i
 and read-modify-write is the normal way to touch a configuration register. The masks
 in §2 have the same property.
 
-> **Refuted in part, 2026-09-17, and not yet fixed.** The corpus's own `Config` test,
+> **Refuted in part, 2026-09-17, and fixed the same day** — `Config` now keeps
+> `0x0F00800F` and forces `0x70066460`. The corpus's own `Config` test,
 > which no run had reached until the first complete one, writes `0x8000` and reads back
 > `0x7006E460`. Mars reads back `0x0006E460`. So bits 30:28 are **not** writable: they
 > read as ones whatever is written, which means the `0x70000000` this section attributes
@@ -136,11 +139,15 @@ Two findings, both counter to how the pair reads:
 fails and stores nothing while the address stays readable. Mars cleared the link on
 exception entry already; clearing it on exception *exit* was missing.
 
-## 7. Three registers a fault fills in, from one address
+## 7. Four registers a fault fills in, from one address
 
 `BadVAddr`, `Context` and `XContext` are all written from the faulting address, on
 **every** address-related exception — address errors included, not only TLB failures,
 which is all Mars did before.
+
+> **Four, not three — 2026-09-17.** `EntryHi` follows the same rule, and Mars had applied
+> this section's finding to the three registers named here and not to the one written
+> elsewhere. `Mars_Tlb.md` §7.6.
 
 - `Context` bits 22–4 take address bits 31–13; bits 3–0 are cleared; bits 63–23 are
   left to software.

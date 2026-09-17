@@ -12,10 +12,11 @@ it gets, what stops it, what its numbers mean and what they do not. The protocol
 **The run completes.** The corpus reaches its own teardown and prints its own verdict:
 
 ```
-Finished in 2.50s. Base: Failed 395 of 4637 tests (91% success rate)
+Finished in 2.07s. Base: Failed 319 of 4637 tests (93% success rate)
 ```
 
-That is 1,040 test groups and 4,637 assertions, every one of them attempted. It is the
+That is 1,040 test groups and 4,637 assertions, every one of them attempted, **and no
+failing group left anywhere in the CPU** (§3). It is the
 first complete run of the corpus this project has made, and the ratchet now asserts that
 line (§5). It took two changes in the slice that produced it: the RSP learned to halt
 (`Mars_Rsp.md`), which let the run past the wait it had sat in since Phase A, and the
@@ -36,6 +37,7 @@ line that reports those:
 | privilege modes | 720 | 167 |
 | reverse-endian | 720 | 160 |
 | the RSP's scalar half, and a complete run | 1,040 | 395 of 4,637 assertions |
+| the seventeen CPU groups | 1,040 | 319 of 4,637 assertions |
 
 The fourth row is the shape to want: forty tests that had never run before ran, and all
 forty passed.
@@ -90,32 +92,79 @@ one row below, and the corpus's own 395 counts something else again — assertio
 | the RSP's vector unit | 155 | Phase C, next slice (`Mars_Rsp.md` §6) |
 | caches, all four families | 45 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
 | cartridge memory and writes | 19 | Phase E — the PI and cartridge DMA |
-| **TLB and COP0 registers** | 13 | **CPU** — see below |
 | PIF RAM, MI, RDRAM registers | 13 | Phase E |
 | RDP status and registers | 6 | Phase D |
 | the main CPU's sub-word access to RSP memory | 4 | bus, not processor (`Mars_Rsp.md` §8) |
-| **64-bit addressing** | 4 | **CPU** — see below |
 
-**Seventeen CPU groups, and what the failures already say about them:**
+**No CPU group remains, and this time the run is complete**, so the statement §2 had to
+retract can be made about the run it describes. It is still a claim about what this corpus
+asks rather than about the CPU in general; `Mars_Tlb.md` §7.4 and §7.5 name two rules Mars
+implements on the architecture's word rather than on a measurement, and those are the
+places a different corpus would look first.
 
-- **The extended TLB refill vector.** With 64-bit addressing on, a refill vectors to
-  `0x80000080`, not `0x80000000`. Mars always uses the 32-bit one. That single defect is the
-  whole of *LW TLB Miss or Address Exception (64 bit addressing mode)* — thirty-three
-  failure lines from one cause — and both *address not sign extended (64 bit)* groups.
-- **The region bits in a TLB match.** *Expect TLB miss on R mismatch* fails for
-  twenty-eight values: bits 63:62 of an address must participate in matching an entry, and
-  Mars's comparison masks them away with everything above bit 31 (`Mars_Tlb.md` §6).
-- **Write masks on the TLB's own registers.** `EntryLo0` and `EntryLo1` keep thirty bits,
-  not thirty-two; `PageMask` keeps only valid mask bits; `EntryHi` has its own mask; and
-  `Random` ignores writes. The same kind of work as `Mars_Cop0.md` §2, on registers that
-  slice did not reach.
-- **`Config`'s clock-ratio bits.** Written with `0x8000`, hardware reads back `0x7006E460`
-  and Mars reads `0x0006E460`: bits 30:28 are read-only ones, and `Mars_Cop0.md` §4 lists
-  them as writable. That is a claim on a page which described itself as settled, refuted by
-  a test the run had never reached — the same shape as the §2 note above, one level down.
+> **Retired 2026-09-17, the same day it was written: the list of CPU groups.** It is kept
+> because each bullet diagnosed its group from the failure messages alone, before any code
+> was read, and all four diagnoses held — but they were incomplete, and the incompleteness
+> is worth seeing. Fixing them cleared sixteen of the seventeen groups; the seventeenth
+> still failed on fourteen of its thirty-three rows, for a reason none of the bullets
+> named (§9).
+>
+> **Seventeen CPU groups, and what the failures already say about them:**
 
-These are the next CPU-level work the instrument asks for. Each is small; together they are
-most of what stands between Mars's CPU and a corpus section with no failures in it.
+> - **The extended TLB refill vector.** With 64-bit addressing on, a refill vectors to
+>   `0x80000080`, not `0x80000000`. Mars always uses the 32-bit one. That single defect is
+>   the whole of *LW TLB Miss or Address Exception (64 bit addressing mode)* — thirty-three
+>   failure lines from one cause — and both *address not sign extended (64 bit)* groups.
+> - **The region bits in a TLB match.** *Expect TLB miss on R mismatch* fails for
+>   twenty-eight values: bits 63:62 of an address must participate in matching an entry,
+>   and Mars's comparison masks them away with everything above bit 31.
+> - **Write masks on the TLB's own registers.** `EntryLo0` and `EntryLo1` keep thirty bits,
+>   not thirty-two; `PageMask` keeps only valid mask bits; `EntryHi` has its own mask; and
+>   `Random` ignores writes.
+> - **`Config`'s clock-ratio bits.** Bits 30:28 are read-only ones, and `Mars_Cop0.md` §4
+>   listed them as writable.
+>
+> The first bullet's "that single defect is the whole of" was the claim that did not hold.
+
+## 9. The seventeen CPU groups
+
+*Landed 2026-09-17. `Mars_Tlb.md` §7 has the rules; this section is how the slice went.*
+
+**395 → 319**, and the seventy-six assertions that moved are exactly the seventy-six failure
+lines the seventeen groups held — so nothing else moved in either direction. Every group was
+written as a failing test in the corpus's own vectors before any code changed, and the
+changes were, in order of what they cleared: the extended refill vector and a sixty-four bit
+TLB match; what an entry keeps of the registers written to it, which is less than the
+registers keep and normalised differently; the registers' own masks; `Random` as a real
+counter; `Config`; and the end of the kernel's mapped region, which is two gigabytes short of
+the pattern the other regions follow.
+
+**The one diagnosis that was wrong** was the confident one. The census said a single defect,
+the refill vector, was *the whole* of the largest group. The first round of fixes cleared
+nineteen of that group's thirty-three rows. The other fourteen were address errors, not
+misses — the group's name says *TLB Miss or Address Exception* — and they failed on
+`EntryHi`, which an address error fills in just as a miss does and which Mars wrote only
+beside the TLB lookup (`Mars_Tlb.md` §7.6).
+
+**Those fourteen failures were in the verdicts the census was written from.** So was the
+end of the kernel's mapped region: four of the rows said *"Expected exception AdEL but got
+Ok(TLBL)"* at addresses from `0xC00000FF_80000000` up. The diagnosis was drawn from the first
+four failure lines of a thirty-three-line group, all of which happened to be miss rows, and
+the remaining twenty-nine were not read. The census therefore named one cause for a group
+that had three.
+
+The narrower lesson is not about §2's truncated runs at all, because this run was complete:
+a group's name is a summary of its rows, and a diagnosis of the group is only as good as the
+fraction of its rows that were read. An earlier draft of this section said the address-error
+rows had only become visible once the vector was fixed. That was wrong, and was checked and
+corrected before it was committed — it was the same mistake a second time, drawing a
+conclusion about the rows from the ones in front of it.
+
+**Two of the tests written for this slice were wrong before they were right, both in the same
+way.** They used page zero to provoke a TLB miss, and an empty TLB entry matches page zero
+— as an *invalid* entry, which takes the general vector rather than a refill. The corpus
+avoids this by clearing its TLB with distinct page numbers; Mars's tests now avoid page zero
+and say why.
 
 > **Retired 2026-09-17: the census that preceded this one.** It listed 160 failures and
 > said *"Every group is now a later phase or a decision. There is no CPU-level failure

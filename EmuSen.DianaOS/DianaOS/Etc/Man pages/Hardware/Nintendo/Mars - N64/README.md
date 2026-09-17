@@ -16,7 +16,7 @@ Two decisions are already taken and carry their reasoning there: the whole RCP i
 
 [`Mars_Cpu.md`](Mars_Cpu.md) is the VR4300's integer core: the dispatch shape, 64-bit registers, the two-program-counter delay-slot model, and the two decisions taken in advance — exceptions are thrown so that a faulting instruction cannot leave partial state (§4), and only cycle counts the vendor manual tabulates are charged (§5).
 
-[`Mars_Tlb.md`](Mars_Tlb.md) is address translation for the mapped segments: paired entries, the linear scan, and §3's three distinct failures — a miss, an entry that is invalid, and a store to a page that is not writable — which vectoring had previously been unable to tell apart.
+[`Mars_Tlb.md`](Mars_Tlb.md) is address translation for the mapped segments: paired entries, the linear scan, and §3's three distinct failures — a miss, an entry that is invalid, and a store to a page that is not writable — which vectoring had previously been unable to tell apart. §1.1 is a page-size bug that was invisible to every test that built pairs the ordinary way, and §7 is what an entry actually keeps of the registers written to it, which is less than they hold and normalised in ways the field layout does not predict.
 
 [`Mars_Boot.md`](Mars_Boot.md) is the handoff that replaces the PIF, and the record of what happened when a real ROM ran through it: the corpus boots through libdragon's bootcode into its own entry point, and stops at a coprocessor-1 move, which is where Phase B begins.
 

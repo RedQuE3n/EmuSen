@@ -108,8 +108,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             TlbResult result = Tlb.TryTranslate(access, Cop0[EntryHiRegister], store, out uint mapped, out _);
             if (result == TlbResult.Mapped) return mapped;
 
-            OnTlbFailure(fault);
-
             throw result switch
             {
                 TlbResult.NotWritable => Raise(ExceptionCode.TlbModification, fault),

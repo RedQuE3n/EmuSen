@@ -29,7 +29,7 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static Cpu Run(
             int mode, bool wide, ulong address, System.Func<MipsAssembler, MipsAssembler> program,
-            MarsBus? bus = null, ulong status = 0)
+            MarsBus? bus = null, ulong status = 0, System.Action<Cpu>? before = null, int steps = 1)
         {
             var cpu = program(new MipsAssembler()).Build(bus ?? new MarsBus());
 
@@ -39,10 +39,16 @@ namespace EmuSen.WiseMan.Fixtures
             cpu.Cop0[Cpu.StatusRegister] = status | ((ulong)mode << KsuShift) | (wide ? ExtendedAddressing : 0);
             cpu.Pc = ProgramPage;
             cpu.NextPc = ProgramPage + 4;
-            cpu.Run(1);
+            before?.Invoke(cpu);
+            cpu.Run(steps);
 
             return cpu;
         }
+
+        // The odd half of the program's own pair, which is data every mode may reach - see Mars_Privilege.md §5.
+        public const ulong DataPage = ProgramPage + 0x1000;
+
+        public const uint DataFrame = 0x1000;
 
         // One pair, deliberately not the pair containing the addresses under test - see Mars_Privilege.md §5.
         private static void MapProgramPage(Cpu cpu)

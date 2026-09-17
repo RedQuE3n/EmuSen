@@ -33,6 +33,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public const ulong StatusSupervisorExtendedAddressing = 1UL << 6;
         public const ulong StatusKernelExtendedAddressing = 1UL << 7;
 
+        public const ulong StatusReverseEndian = 1UL << 25;
         public const ulong StatusModeField = 3UL << 3;
         public const ulong StatusCop0Usable = 1UL << 28;
 

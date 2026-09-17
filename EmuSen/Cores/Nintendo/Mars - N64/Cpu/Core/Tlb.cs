@@ -40,8 +40,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             {
                 ref TlbEntry entry = ref Entries[i];
 
-                ulong pageMask = entry.PageMask | 0x1FFF;
-                ulong pairMask = (pageMask << 1) | 1;
+                // The mask covers the pair; one page is half of it, and the bit above chooses which - see Mars_Tlb.md §1.1.
+                ulong pairMask = entry.PageMask | 0x1FFF;
+                ulong pageMask = pairMask >> 1;
 
                 if (((address ^ entry.EntryHi) & ~pairMask & 0xFFFF_FFFFUL) != 0) continue;
 
@@ -71,7 +72,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             {
                 ref TlbEntry entry = ref Entries[i];
 
-                ulong pairMask = ((entry.PageMask | 0x1FFF) << 1) | 1;
+                ulong pairMask = entry.PageMask | 0x1FFF;
                 if (((entryHi ^ entry.EntryHi) & ~pairMask & 0xFFFF_FFFFUL) != 0) continue;
 
                 bool global = (entry.EntryLo0 & entry.EntryLo1 & EntryLoGlobal) != 0;

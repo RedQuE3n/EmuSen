@@ -89,6 +89,7 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Lb(int rt, int rs, short offset) => I(0x20, rs, rt, offset);
         public MipsAssembler Lbu(int rt, int rs, short offset) => I(0x24, rs, rt, offset);
         public MipsAssembler Lh(int rt, int rs, short offset) => I(0x21, rs, rt, offset);
+        public MipsAssembler Lhu(int rt, int rs, short offset) => I(0x25, rs, rt, offset);
         public MipsAssembler Lw(int rt, int rs, short offset) => I(0x23, rs, rt, offset);
         public MipsAssembler Lwu(int rt, int rs, short offset) => I(0x27, rs, rt, offset);
         public MipsAssembler Ld(int rt, int rs, short offset) => I(0x37, rs, rt, offset);

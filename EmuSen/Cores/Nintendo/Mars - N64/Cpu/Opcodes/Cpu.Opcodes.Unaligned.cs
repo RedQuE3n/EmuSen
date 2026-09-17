@@ -8,9 +8,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void LoadWordLeft(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
-            int shift = (int)(address & 3) * 8;
+            ulong access = Mirrored(address, 1);
+            int shift = (int)(access & 3) * 8;
 
-            uint word = _bus.Read32(Translate(address & ~3UL));
+            uint word = _bus.Read32(TranslateAccess(access & ~3UL, address));
             uint kept = shift == 0 ? 0 : (uint)Read(Rt(instruction)) & ((1u << shift) - 1);
 
             Write32(Rt(instruction), (word << shift) | kept);
@@ -19,9 +20,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void LoadWordRight(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
-            int shift = (3 - (int)(address & 3)) * 8;
+            ulong access = Mirrored(address, 1);
+            int shift = (3 - (int)(access & 3)) * 8;
 
-            uint word = _bus.Read32(Translate(address & ~3UL));
+            uint word = _bus.Read32(TranslateAccess(access & ~3UL, address));
             ulong previous = Read(Rt(instruction));
             uint merged = (word >> shift) | ((uint)previous & ~(0xFFFF_FFFFu >> shift));
 
@@ -33,9 +35,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void LoadDoubleLeft(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
-            int shift = (int)(address & 7) * 8;
+            ulong access = Mirrored(address, 1);
+            int shift = (int)(access & 7) * 8;
 
-            ulong value = _bus.Read64(Translate(address & ~7UL));
+            ulong value = _bus.Read64(TranslateAccess(access & ~7UL, address));
             ulong kept = shift == 0 ? 0 : Read(Rt(instruction)) & ((1UL << shift) - 1);
 
             Write(Rt(instruction), (value << shift) | kept);
@@ -44,9 +47,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void LoadDoubleRight(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
-            int shift = (7 - (int)(address & 7)) * 8;
+            ulong access = Mirrored(address, 1);
+            int shift = (7 - (int)(access & 7)) * 8;
 
-            ulong value = _bus.Read64(Translate(address & ~7UL));
+            ulong value = _bus.Read64(TranslateAccess(access & ~7UL, address));
             ulong kept = Read(Rt(instruction)) & ~(0xFFFF_FFFF_FFFF_FFFFUL >> shift);
 
             Write(Rt(instruction), (value >> shift) | kept);
@@ -55,8 +59,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void StoreWordLeft(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
-            int shift = (int)(address & 3) * 8;
-            uint physical = Translate(address & ~3UL, store: true);
+            ulong access = Mirrored(address, 1);
+            int shift = (int)(access & 3) * 8;
+            uint physical = TranslateAccess(access & ~3UL, address, store: true);
 
             uint kept = _bus.Read32(physical) & ~(0xFFFF_FFFFu >> shift);
 
@@ -66,8 +71,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void StoreWordRight(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
-            int shift = (3 - (int)(address & 3)) * 8;
-            uint physical = Translate(address & ~3UL, store: true);
+            ulong access = Mirrored(address, 1);
+            int shift = (3 - (int)(access & 3)) * 8;
+            uint physical = TranslateAccess(access & ~3UL, address, store: true);
 
             uint kept = shift == 0 ? 0 : _bus.Read32(physical) & ((1u << shift) - 1);
 
@@ -77,8 +83,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void StoreDoubleLeft(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
-            int shift = (int)(address & 7) * 8;
-            uint physical = Translate(address & ~7UL, store: true);
+            ulong access = Mirrored(address, 1);
+            int shift = (int)(access & 7) * 8;
+            uint physical = TranslateAccess(access & ~7UL, address, store: true);
 
             ulong kept = _bus.Read64(physical) & ~(0xFFFF_FFFF_FFFF_FFFFUL >> shift);
 
@@ -88,8 +95,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void StoreDoubleRight(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
-            int shift = (7 - (int)(address & 7)) * 8;
-            uint physical = Translate(address & ~7UL, store: true);
+            ulong access = Mirrored(address, 1);
+            int shift = (7 - (int)(access & 7)) * 8;
+            uint physical = TranslateAccess(access & ~7UL, address, store: true);
 
             ulong kept = shift == 0 ? 0 : _bus.Read64(physical) & ((1UL << shift) - 1);
 

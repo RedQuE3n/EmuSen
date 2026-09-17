@@ -9,7 +9,7 @@ it gets, what stops it, what its numbers mean and what they do not. The protocol
 
 ## 1. Where it stands
 
-**720 tests started, 167 failed.** The run executes about 177 million instructions and
+**720 tests started, 160 failed.** The run executes about 177 million instructions and
 emits about 88KB of verdicts before it stops, which it does inside the RSP tests,
 waiting for a signal from hardware Phase C has not built.
 
@@ -23,6 +23,7 @@ Every tally so far, each taken at the end of a slice:
 | software floating point | 561 | 138 |
 | letting the run finish | 720 | 171 |
 | privilege modes | 720 | 167 |
+| reverse-endian | 720 | 160 |
 
 The fourth row is the shape to want: forty tests that had never run before ran, and all
 forty passed.
@@ -59,16 +60,22 @@ deliberate decision:
 | --- | --- | --- |
 | cartridge memory and writes | 92 | Phase E — the PI and cartridge DMA |
 | caches, all four families | 46 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
-| reverse-endian user mode | 7 | not built: `Status.RE` (`Mars_Privilege.md` §6) |
 | PIF RAM, MI, RDRAM registers | 14 | Phase E |
 | RDP status and registers | 5 | Phase D |
 | RSP status and program counter | 3 | Phase C |
 
-**There is one group here that is neither a later phase nor a decision.** The seven
-reverse-endian tests are CPU work: `Status.RE` flips the byte order of user-mode
-accesses, and Mars does not implement it. That is the next CPU-level thing the corpus is
-asking for. It was eleven before the privilege slice, which supplied the modes those
-tests run in without supplying the byte order they run under.
+**Every group is now a later phase or a decision.** There is no CPU-level failure left
+anywhere in the run — no group here is waiting on the VR4300. That was not true of any
+earlier tally on this page, and it is the condition worth stating plainly rather than
+inferring from the number going down: the number could go down while a CPU group
+remained, and for four slices it did.
+
+What it is **not** is a claim that the CPU is finished. It is a claim about what this
+corpus asks and Mars answers, and the corpus's coverage is its own subject
+(`Mars_TestOracle.md`). Two known gaps have no test in the failing set and are written
+down where they live: the TLB still compares only the low 32 bits of a virtual address
+(`Mars_Tlb.md` §6), and the doubleword coprocessor-1 moves are not privilege-restricted
+(`Mars_Privilege.md` §4).
 
 ## 4. The budget, and why it is a number of instructions
 
@@ -122,7 +129,7 @@ cleared nothing by itself; what it bought was 159 additional tests reaching the
 instrument. Three of the four defects in this list were invisible until it landed, and
 two of them are in subsystems that had been declared finished.
 
-## 7. The slice after it: privilege modes
+## 7. The two slices after it
 
 Four tests, and a fifth thing that does not show in the tally. The VR4300's three modes
 landed (`Mars_Privilege.md`): the mode derivation, the forty-five row address map, the
@@ -134,3 +141,14 @@ corpus checking a table of forty-five rows that Mars now reproduces exactly. It 
 closed a gap `Mars_Cop0.md` §8.1 had recorded, in writing, as something to find
 deliberately later — and the route that found it was this page's §3 census, not anyone
 remembering the note.
+
+**Then reverse-endian**, seven tests, 167 → 160 (`Mars_ReverseEndian.md`). Two of the
+seven fell to the feature itself; the other five fell to a defect in the **TLB** that the
+feature's test harness exposed — a page-size error that had survived four slices because
+it is invisible unless a pair's two halves name unrelated frames, or two pairs sit next to
+each other (`Mars_Tlb.md` §1.1).
+
+That is the second time in three slices that the useful thing was not the feature but what
+building it made reachable. The trap family bought 159 tests; reverse-endian bought a TLB
+bug that nothing else in the corpus had caught and that every operating system would
+have.

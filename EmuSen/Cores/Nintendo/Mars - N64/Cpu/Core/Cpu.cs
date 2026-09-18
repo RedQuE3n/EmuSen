@@ -98,9 +98,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             for (int i = 0; i < steps; i++) Step();
         }
 
+        // KSEG0 and KSEG1 as a sign-extended range: nearly every fetch and most data land here - see Mars_Performance.md §4.
+        private const ulong KernelDirectBase = 0xFFFF_FFFF_8000_0000;
+        private const ulong KernelDirectSize = 0x4000_0000;
+
         private uint FetchInstruction()
         {
             if ((Pc & 3) != 0) throw Raise(ExceptionCode.AddressErrorLoad, Pc);
+
+            // Kernel mode never mirrors, so the direct range skips straight to the map's own answer - see Mars_Performance.md §4.
+            if (Pc - KernelDirectBase < KernelDirectSize && Mode == PrivilegeMode.Kernel) return _bus.Read32((uint)Pc & 0x1FFF_FFFF);
 
             return _bus.Read32(TranslateAccess(Mirrored(Pc, 4), Pc));
         }
@@ -111,6 +118,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         // The access and the address a fault names are the same word until reverse-endian - see Mars_ReverseEndian.md §3.
         private uint TranslateAccess(ulong access, ulong fault, bool store = false)
         {
+            // The segment map's answer for kernel KSEG0 and KSEG1 whatever the addressing width - see Mars_Performance.md §4.
+            if (access - KernelDirectBase < KernelDirectSize && Mode == PrivilegeMode.Kernel) return (uint)access & 0x1FFF_FFFF;
+
             Segment segment = Segments.Decode(access, Mode, WideAddressing);
 
             if (segment.Access == SegmentAccess.Illegal)

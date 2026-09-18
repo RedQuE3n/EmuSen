@@ -14,7 +14,7 @@ namespace EmuSen.WiseMan.Cores
 
         private const int Budget = 80_000_000;
 
-        // A stand-in for the devices Phase E builds, not a model of their timing - see Mars_Microcode.md §3.
+        // What is left of the stand-in: the serial interface, whose device Phase E has not built - see Mars_Microcode.md §3.
         private const int PulsePeriod = 1_500_000;
         private const int PulseLength = 5_000;
         private const int SerialOffset = 700_000;
@@ -129,8 +129,7 @@ namespace EmuSen.WiseMan.Cores
         {
             long phase = instruction % PulsePeriod;
 
-            if (phase == 0 && instruction > 0) bus.Mi.Raise(MiInterrupt.VideoInterface);
-            if (phase == PulseLength) bus.Mi.Clear(MiInterrupt.VideoInterface);
+            // The video interrupt's stand-in was deleted when the interface grew a clock - see Mars_VideoTiming.md §3.
             if (phase == SerialOffset) bus.Mi.Raise(MiInterrupt.SerialInterface);
             if (phase == SerialOffset + PulseLength) bus.Mi.Clear(MiInterrupt.SerialInterface);
         }

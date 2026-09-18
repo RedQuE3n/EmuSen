@@ -54,6 +54,16 @@ when a controller read completes, or of anything Phase E will model. The serial 
 answers no exchange at all: PIF RAM is plain storage in Mars, so a controller read gets back
 exactly what the game wrote to ask for it.
 
+> **Half of this was settled on 2026-09-17, and the prediction below held.** `Mars_VideoTiming.md` built
+> the video interface's clock and interrupt, the video pulse was deleted from this test, and both of its
+> assertions still pass — a commercial game's microcode still reaches its display list, now driven by a
+> device rather than by an arbitrary period. Two things came out of the experiment that the prediction did
+> not anticipate. With the stand-in *and* the real interface both raising the interrupt the test **fails**,
+> because the stand-in's clear five thousand instructions later also clears the genuine interrupt; that
+> failure is what shows the device is carrying the game rather than sitting beside something that was. And
+> the serial pulse remains, because the serial interface has no device yet, so the sentence below is only
+> half tested and the remaining half is not a pass.
+
 They live in the test, not in the core. The core still cannot raise either interrupt, and a
 frontend running Mars would still see nothing happen. The purpose is narrower: to show that
 the RSP half of the machine does its part of a real game's frame once the rest of the machine

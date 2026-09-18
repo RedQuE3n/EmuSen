@@ -271,10 +271,9 @@ the guarantee that survives without the reference tools built.
 - ~~**The dither filter, divot and gamma**, each a further pass over a fetched pixel.~~ **Landed in
   `Mars_VideoPasses.md`**, where the gamma dither turned out not to be gradable at all.
 - **The per-scanline registers** parallel-rdp models and angrylion does not reach through this dump format.
-- **The interrupt and the timing.** The interface's interrupt fires when the current half line reaches the
-  interrupt register, and nothing here advances a half line: `Vi.Scan` is called by a test, not by a clock.
-  Until that lands, no game drives this device — which is why `Mars_Microcode.md` §3's stand-in for the video
-  interrupt is still needed.
+- ~~**The interrupt and the timing.** The interface's interrupt fires when the current half line reaches the
+  interrupt register, and nothing here advances a half line.~~ **Landed in `Mars_VideoTiming.md`**, which
+  deleted `Mars_Microcode.md` §3's stand-in for the video interrupt and kept its test passing.
 - **The frame anyone can see.** `GetFrameBufferRgba` is not wired to this raster yet; `ICore` is still
   unsatisfied, as `Mars_Gameplan.md` §4.5 has it.
 

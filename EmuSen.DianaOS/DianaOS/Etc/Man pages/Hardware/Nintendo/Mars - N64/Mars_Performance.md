@@ -822,3 +822,24 @@ was understood, and stays: it pins the property, which a different implementatio
 **What is left in a scan.** The filters' arithmetic once a source pixel, the folded duplicates of a line where the
 fetch bug applies, and the walk's own per-output-pixel work: the lookups, the mixes, gamma and four stores.
 
+## 22. Where the phase stands after the scan-out
+
+| | at the profile (§2) | now | |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50 fps) | 7.3 fps | 30.5 fps | 4.2×, 61% of the console |
+| Super Mario 64 (PAL, 50 fps) | 9.6 fps | 36.2 fps | 3.8×, 72% of the console |
+| Wave Race 64 (NTSC, 60 fps) | 14.7 fps | 36.1 fps | 2.5×, 60% of the console |
+
+The profile of this build, §2's method:
+
+| share of the emulation thread | CPU and bus | RDP | VI | RSP | the core's loop |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 56.8% | 16.6% | 12.6% | 10.9% | 3.0% |
+| Wave Race 64 | 54.6% | 18.9% | 12.2% | 12.0% | 2.2% |
+| Ocarina of Time | 43.5% | 25.8% | 21.2% | 7.0% | 2.3% |
+
+**The processor is the largest share in every game again**, and the display processor is second in all three for the
+first time — a quarter of Ocarina of Time, whose two-cycle pipeline, texel fetches and combiner are the exclusive
+entries under it. The video interface's walk and dither filter are what §21 left. `SpInterface.Step` shows 5 to 11
+per cent, which §15 found to be mostly the sampler's lean.
+

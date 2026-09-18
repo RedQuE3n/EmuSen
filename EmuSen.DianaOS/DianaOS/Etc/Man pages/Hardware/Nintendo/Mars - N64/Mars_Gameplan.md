@@ -569,6 +569,21 @@ rather than raw samples.
 > `Mars_Microcode.md` §3's prediction is complete — both stand-in interrupts are deleted and the test passes
 > with no stand-ins at all. What is left in Phase E is AI, and PI with the save types.
 
+> **Progress, 2026-09-17: the cartridge's transfer engine** (`Mars_Memory.md` §7.2–§7.6). A transfer
+> from the cartridge now runs the way the corpus says silicon runs it: in blocks of up to 128 bytes that
+> stop at the end of a 2KB row, the first of which pays for a misaligned RDRAM address twice — once in
+> what it reads and again in what it stores — so a short transfer to a misaligned address can store
+> nothing at all. All seventy-five cases in the corpus's four cartridge-transfer families pass, 146
+> failing to 72 over two commits, each predicted from the failure lines before the change. The walk came
+> from the FPGA core, and Project64 has the same walk under the same names and a commit that says it was
+> fitted to this corpus, so neither is an independent witness. The corpus's source settled what they
+> could not: it writes its expectations as formulas, which agree with the walk at every size from 1 to 599
+> but one per misalignment, and that size is now a named, unmeasured dispute. Breaking each rule in turn
+> moved the corpus for sixteen of twenty-two breakages, and missed three rules entirely — the row's size, what "near its end"
+> means, and that a shortened block ends with its transfer — which Mars carries on the FPGA's word, each
+> with a named case that says so. What is left in Phase E is the cartridge bus's write latch and its
+> decay, sub-word cartridge reads, AI, and the save types.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

@@ -170,6 +170,16 @@ coverage gap suggests.
 > (`Mars_RdpDifferential.md`). This section's distinction survives its first use intact, and
 > sharpened: agreement with angrylion turned out to include agreement with a validation workaround
 > in its fork, and the two references disagreed on a case.
+>
+> **Correction 2026-09-17: the corpus grades part of Phase E as well.** §1's *"Phases D and E do not
+> get one from here"* was true of VI, AI and SI, and not of the peripheral interface or PIF RAM —
+> which §1's own coverage list names in the sentence before. Six PIF RAM groups
+> (`Mars_Serial.md` §1) and the seventy-five cases of its four cartridge-transfer families
+> (`Mars_Memory.md` §7.2–§7.3) are graded against silicon and now pass, and fifteen groups about the cartridge
+> bus are still open (`Mars_Corpus.md` §3). The corpus's source is also in reach, at
+> `~/Projects/nemu64-test-reference`; reading it is how `Mars_Memory.md` §7.4 found that the
+> corpus writes its expectations as formulas, which can be compared with an implementation at
+> sizes it never runs.
 
 **For the RDP, the differential infrastructure is excellent and its ground truth is
 not hardware.** `parallel-rdp` (MIT) defines an interchange format — `RDPDUMP2`: an

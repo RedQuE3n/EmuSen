@@ -228,19 +228,39 @@ The cartridge's transfer engine, same length encoding, moving bytes in either
 direction between the cartridge bus and RDRAM, raising a completion flag that a
 write clears.
 
+### 7.1 Idle is not cosmetic; it is what lets the corpus speak
+
+The status register reports neither kind of busy. That is not tidiness — the corpus
+polls this register in a spin loop between **every word it prints**, and its
+ISViewer path reads the I/O-busy bit before each store (verified in the corpus's own
+source). A status register that comes up busy, or that latches busy after a
+transfer, hangs the ROM before it emits a single character, and the symptom is
+indistinguishable from the silent-detection failure in §4.1.
+
+Two landmines with one symptom is the reason both have a test naming them.
+
 ### 7.2 Each side of a transfer advances by its own bus width
 
-*Added 2026-09-17, from nine of the corpus's `cart_memory` assertions. The rest of that
-group is still open, and the end of this section says what is known about it.*
+*Added 2026-09-17, from nine of the corpus's `cart_memory` assertions. ~~The rest of that
+group is still open, and the end of this section says what is known about it.~~ The rest of
+that group was closed the same day by §7.3, which retires two things below.*
 
 **The cartridge's bus is sixteen bits wide and RDRAM's is sixty-four, and a transfer leaves
 each address on a multiple of its own width**, whatever length was asked for:
 
 - **The cartridge address advances by the length rounded up to two.** A one-byte transfer
   moves it by two, a seven-byte transfer by eight.
-- **The RDRAM address advances past the length and then up to the next multiple of eight** —
-  `(address + length + 7) & ~7`. A two-byte transfer starting at an aligned address moves it
-  by eight; a nine-byte transfer starting six bytes into a block leaves it two blocks on.
+- **The RDRAM address advances ~~past the length~~ past the last byte the transfer stored,
+  and then up to the next multiple of eight** — ~~`(address + length + 7) & ~7`~~. A two-byte
+  transfer starting at an aligned address moves it by eight; a nine-byte transfer starting six
+  bytes into a block leaves it two blocks on.
+
+> **Retired 2026-09-17, by §7.3: "past the length".** The closed form holds for every aligned
+> transfer and not for a misaligned one, which stores fewer bytes than it was asked for; the
+> address follows what was stored. Seven bytes sent to an address six bytes into a word store one,
+> and leave the address one word on rather than two. The rule was stated for every transfer and
+> only checked against aligned ones. The corpus's misaligned cases do assert the increment, but
+> each stops at its first failure, and until §7.3 that was always a byte.
 
 The FPGA core states the second rule in two lines — `PI_DRAM_ADDR <= PI_DRAM_ADDR + 7;
 PI_DRAM_ADDR(2 downto 0) <= "000"` (`rtl/PI.vhd` §711–712) — and both address registers
@@ -250,7 +270,7 @@ already dropped their low bit on a write, which Mars did too.
 assertions to the cartridge address and four to the RDRAM address; the count went from 146
 to 137, which is nine.
 
-**What is still open, and one thing it is not.** Sixty-five assertions in the same group are
+**What was still open, and one thing it is not** — closed by §7.3, and kept as it stood. Sixty-five assertions in the same group are
 about *which bytes land*, under four headings the corpus names itself: small sizes,
 misaligned, misaligned crossing a page, and misaligned at the end of a page. Two things are
 known:
@@ -264,20 +284,181 @@ known:
   measurement.** The cartridge *address* does advance by the rounded length, so carrying the
   extra byte through to RDRAM looked like the same rule seen twice. It is not: making the
   transfer copy `(length + 1) & ~1` bytes cleared four assertions about a byte at the end of
-  a long transfer and broke five about bytes past the end of a short one — 137 to 138. The
-  extra byte is read from the cartridge and does not reach memory, and where exactly it is
-  dropped is part of the open rule above rather than a separate one.
+  a long transfer and broke five about bytes past the end of a short one — 137 to 138.
+  ~~The extra byte is read from the cartridge and does not reach memory~~, and where exactly it
+  is dropped is part of the open rule above rather than a separate one.
 
-### 7.1 Idle is not cosmetic; it is what lets the corpus speak
+  > **Retired 2026-09-17, by §7.3.** The refutation stands; the conclusion drawn from it does
+  > not. The extra byte does reach memory in any block after the first, and in a first block one
+  > byte short of full — and the four cases the experiment cleared were exactly those. It is
+  > dropped only at the end of a shorter first block. The conclusion generalised from the only
+  > case the experiment happened to break.
 
-The status register reports neither kind of busy. That is not tidiness — the corpus
-polls this register in a spin loop between **every word it prints**, and its
-ISViewer path reads the I/O-busy bit before each store (verified in the corpus's own
-source). A status register that comes up busy, or that latches busy after a
-transfer, hangs the ROM before it emits a single character, and the symptom is
-indistinguishable from the silent-detection failure in §4.1.
+### 7.3 Which bytes a transfer from the cartridge stores
 
-Two landmines with one symptom is the reason both have a test naming them.
+*Added 2026-09-17, from the sixty-five `cart_memory` cases §7.2 left open. Each failure line
+was worked through the rule below by hand before any code changed. The count then went from
+137 to 72, and a diff of the two verdict files shows those sixty-five lines gone and no line
+anywhere else added or removed. `PiInterface.FromCartridge`, tested by `MarsDmaTests`.*
+
+**A transfer from the cartridge into RDRAM runs in blocks, and the first block pays for the
+RDRAM address's misalignment twice** — once in how many bytes it reads, and again in how many
+of those it stores. Write `m` for the address's position inside its eight-byte word. It is always
+even, because the register drops bit 0 on a write. Each block:
+
+1. **Reads** `min(largest − m, the distance to the end of the 2KB row, what remains)` bytes,
+   where `largest` starts at 128. The cartridge address and the remaining count both move by
+   that number rounded up to a pair.
+2. **Stores** the first `block − m` of them, from the RDRAM address on. When that is zero or
+   less, the block stores nothing at all.
+3. **Ends an odd store count on a lone byte** if it is the first block, unless that block is
+   exactly `127 − m` — one short of a full first block. In that case, and in every block after
+   the first, the last pair is stored whole.
+4. **Rounds the RDRAM address up** to the next word, so every block after the first starts
+   aligned and has `m = 0`.
+5. **Shortens the next block** to `largest = 128 − m` if this one began within eight bytes of
+   the end of its row. `largest` goes back to 128 when the next transfer starts.
+
+The corpus's `(6, 128)` — 128 bytes to an address six bytes into a word — walks like this. The
+first block reads 122 and stores 116, at offsets 0–115. The address rounds up to offset 122, and
+the second block reads the last six and stores them there, from cartridge offsets 122–127.
+Offsets 116–121 keep what they held. That is the corpus's expectation: its failure line for the
+case was *"Byte at offset 116"*, expected untouched.
+
+### 7.4 The grader, and the corpus's own model
+
+**The grader is the corpus**, which asserts against silicon (`Mars_TestOracle.md` §1), and its
+source is in reach at `~/Projects/nemu64-test-reference` (`src/tests/cart_memory/dma.rs`,
+`9a8b9f7`). Reading it settled two things that had only been inferred from the failure lines:
+
+- **Each of the sixty-five is a whole case, not one byte.** A case checks the sixteen bytes
+  before the destination, every byte it expects, the sixteen after, both address increments and
+  the status, and stops at its first failure. So the address increments of the misaligned cases
+  were being asserted all along, hidden behind the byte failures. They now pass as well, which
+  means **the RDRAM address after a misaligned transfer is measured, not taken from the FPGA**
+  — see the retirement in §7.2.
+- **The three placements are fixed.** A buffer aligned to 2048 bytes, and a destination at
+  offset 16 plus `m`, at 64 bytes before the end of the row, or in the row's last eight bytes. The
+  corpus names its page size in a constant, `RDRAM_PAGE_SIZE = 2048`.
+
+**The corpus states its expectations as formulas over the size, not as tables**, so they can be
+compared with the walk at sizes the corpus never runs. A script did that for every size from 1
+to 599 in every family, at every misalignment the formulas accept. First, it reproduces all
+seventy-five of the corpus's cases, bytes and both increments, independently of the C#. Second,
+**the corpus's model and the walk agree at every size except one per misalignment**: 61, 59 and
+57 for `m` = 2, 4 and 6, in the cross-page family. That is an odd size one byte short of the
+distance to the row's end, which caps the first block. The corpus's formula stores the last
+pair whole there, as it would for a block one short of 128. The walk ends on a lone byte,
+because step 3 compares against `127 − m` and not against the row.
+
+**That is a dispute, and it is unmeasured**: the corpus's list of sizes for the cross-page family
+skips it. Every implementation in reach sides with the walk — the FPGA (`rtl/PI.vhd` §809), Project64
+(`PI_DMA_WRITE`, `BlockLen == BlockSize - 1`), and mupen64plus (`dma_pi_write`, which does not
+model rows at all and gets there by its `0x7f` threshold alone) — but they are not independent
+voices; see below. Mars follows the walk because it implements the walk, not because the walk
+is likelier to be right at that size. **One transfer settles it on a console: 57 bytes, six
+bytes into a word, 58 bytes before the end of a row.** `MarsDmaTests` names the case, so the
+answer has somewhere to go.
+
+### 7.5 Where the walk comes from, and why its sources do not add up
+
+No software reference in Phase D's ladder models the peripheral interface. The walk was written
+from the FPGA core, `rtl/PI.vhd` §585–597 (the block), §784–830 (the store mask, a pair at a time)
+and §708–722 (the block's end). Three implementations were read afterwards, and **they are one
+lineage more than they are three witnesses**:
+
+- **The FPGA's clone is shallow** — one commit, `adbf9b5`, 2026-08-15 — so it cannot say where its
+  conditions came from.
+- **Project64 has the same walk under the same names** — `MaxBlockSize`, `EndOfRow < 8 ? 128 −
+  align : 128`, and the same read-back rule for the length register. Its history is complete, and
+  it says where the walk came from: `9e53b161a` (2024-10-03) is titled *"Update … PI_DMA_WRITE to
+  handle misaligned, end of page test"* — fitted to this corpus, by name.
+- **mupen64plus** has a two-line approximation with no rows and no second block, citing n64brew's
+  *Unaligned DMA transfer* section.
+
+So the implementations agreeing with the corpus is **circular wherever the corpus pins the rule**,
+and it is **no evidence at all where it does not**. The table below says which is which.
+
+### 7.6 Which rules the corpus pins
+
+Each rule was broken in turn, and the corpus and the named cases were run again:
+
+| rule broken | step | corpus | named cases that catch it |
+| --- | --- | --- | --- |
+| the bytes a block skips are read from the cartridge | 1 | 142 (+70) | four |
+| the misalignment comes off what is stored as well | 2 | 133 (+61) | six |
+| the remaining count moves past the bytes a block skips | 1 | 133 (+61) | six |
+| each block starts on a word | 4 | 103 (+31) | three |
+| a block stops at the end of a row | 1 | 101 (+29) | two |
+| a row is 2KB, not 4KB | 1 | 101 (+29) | two |
+| a block is 128 bytes, not 256 | 1 | 88 (+16) | four |
+| only the first block ends on a lone byte | 3 | 85 (+13) | two |
+| a short first block ends on a lone byte | 3 | 82 (+10) | one |
+| a lone byte is the first of its pair | 3 | 82 (+10) | one |
+| a block near the end of a row shortens the next | 5 | 81 (+9) | one |
+| the next block loses the misalignment, not the distance | 5 | 79 (+7) | one |
+| the first block is short by its misalignment | 1 | 74 (+2) | one |
+| a first block one byte short of full stores its pair whole | 3 | 74 (+2) | one |
+| "near" is under eight bytes, not under six | 5 | 74 (+2) | one |
+| only a block near the end of a row shortens the next | 5 | 74 (+2) | two |
+| **a row is 2KB, not 1KB** | 1 | 72 | none — one added |
+| **"near" is under eight bytes, not under sixteen** | 5 | 72 | none — one added |
+| **the shortening ends with its transfer** | 5 | 72 | none — one added |
+| **the disputed size (§7.4), as the corpus's formula has it** | 3 | 72 | one, added with the dispute |
+| the address after a lone byte, `+1` for `+2` | — | 72 | none, by proof |
+| the threshold `126 − m` for `127 − m` | — | 72 | none, by proof |
+
+**Sixteen of the twenty-two breakages move the corpus, and not equally.** Five carry most of the
+weight — the double misalignment, the cartridge and the count both moving past what a block skips,
+the rounding to a word, and the row — and breaking any one of them costs between twenty-nine and
+seventy cases. Breaking the skipped bytes' cartridge reads costs seventy, more than the sixty-five
+§7.3 cleared, because every case in the four families asserts the cartridge increment, including
+the ones that passed before. At the other end, **four are caught by two cases each**: the first
+block's own shortening, the exception for a first block one short of full, and two of the three
+things step 5 says about a block near a row's end. Two cases are enough to rule the alternative out,
+and not enough to call the rule well measured.
+
+**Three rules are not pinned by the corpus at all, and Mars carries them on the FPGA's word
+alone.** A row is 2KB rather than 1KB: every row end the corpus uses is both. "Near the end of a
+row" means under eight bytes: the corpus puts a first block at 2, 4, 6 and 58 bytes from a row's
+end, so any threshold from 8 to 58 passes it. The shortening ends with its transfer: the only
+transfers that leave it set are short ones in a row's last eight bytes, and no case after one of
+them is long enough to feel it. Each now has a named case that says it is unmeasured, and each
+case was checked by putting the alternative back. The corpus's `RDRAM_PAGE_SIZE = 2048` does not
+change the first of these: it is the corpus's author agreeing with the FPGA, not silicon.
+
+**Two proofs, which took a rule out of Mars and pinned a digit only as far as it can be pinned.**
+
+- **The address after a lone byte.** The FPGA advances by one after a lone byte, and Mars
+  advances by two. Nothing is stored between a lone byte and step 4's rounding, and for an even
+  `x`, `(x + 1 + 7) & ~7` and `(x + 2 + 7) & ~7` differ only if `x + 9` is a multiple of eight —
+  that is, only if `x` is odd. So the FPGA's `+1` cannot be observed, and Mars does not carry it.
+  Putting it back moves nothing (the table's second-to-last row).
+- **The digit in `127 − m`.** `m` is even and every later block is aligned, so a first block is
+  odd only when it is the whole of what remains. The two odd lengths at the top of a first block
+  are `125 − m` and `127 − m`, and thresholds of `126 − m` and `127 − m` sort them identically;
+  no experiment can tell them apart. The sources say as much without meaning to: **the corpus's
+  own formulas write 126** (`requested >= 126 - m`), and the FPGA and Project64 write 127. Mars
+  keeps 127 so it can be read beside the FPGA, and the last digit is a convention, not a finding.
+
+**§7.2 drew two conclusions this rule contradicts, and both are retired there** rather than
+quietly edited: that an odd length's extra byte never reaches memory, and that the RDRAM address
+advances past the *length*. The first generalised from the only case the experiment broke. The
+second was stated for every transfer and only ever checked against aligned ones.
+
+**What this is not evidence for.**
+
+- **The other direction.** RDRAM to cartridge is still the plain copy. The FPGA's walk that way
+  (`DMA_READRDRAM`, §868 on) has no misalignment rule and only writes save memory, the corpus has
+  no case in that direction that fails, and a write into ROM is dropped anyway (§2.3).
+- **Time.** The transfer finishes before the register write returns, as §7.1 requires. The
+  FPGA totals the domain's latency and pulse widths into `rom_slow_sum` and holds the busy flag
+  until they elapse; Mars models none of that.
+- **The write-length register read back after a transfer.** The FPGA and Project64 return `0x7F`,
+  or `127 − m` when the last block (the FPGA, §353, §718–722) or the whole transfer (Project64)
+  was eight bytes or fewer. Mars reads zero, and no corpus case reads it.
+- **Any placement outside the corpus's three**, which this page lists above. Every other address
+  follows from the same five steps and has not been measured.
 
 ## 8. The interrupt aggregator
 

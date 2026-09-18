@@ -484,6 +484,11 @@ namespace EmuSen.DianaOS.DianaOS.Var
             return false;
         }
 
+        // False only when ShouldBreak would return false and change nothing, so a hot loop may skip it - see §3.26.
+        public bool CouldBreak =>
+            _singleStepArmed || _stepDepthTarget != int.MinValue || _depthGuard >= 0 ||
+            _dataBreakPending || _eventBreakPending || _breakpoints.Count > 0;
+
         // Called once per instruction, BEFORE it executes, from a core's own step loop - see `man bp`.
         public bool ShouldBreak(int address)
         {

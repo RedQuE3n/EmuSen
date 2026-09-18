@@ -1200,6 +1200,16 @@ Two details worth knowing:
 
 The data breakpoint also exposed a real gap in the halt path, now fixed: `regs`/`sprites`/`pal` read `IRealtimeProvider` snapshots refreshed once per *completed* frame, so at a mid-frame halt they reported the previous frame's end state — a breakpoint reporting stale registers is worse than no breakpoint. `FrameRunner.OnHalted` now refreshes the providers before the `[BREAK]` line is printed.
 
+> **Added 2026-09-18: `CouldBreak`, so a core can skip the call.** `ShouldBreak` is called before every instruction,
+> and even with nothing armed it costs a method call and a walk of an empty list. On Mars that was the whole of the
+> debug hooks' overhead — 300 frames of Super Mario 64 went from about 28.5 to about 31 seconds, and removing only
+> that call brought them back (`Mars_Debug.md` §7). `CouldBreak` is false exactly when `ShouldBreak` would return
+> false and change nothing: it reads the same six fields `ShouldBreak` tests before its address scan, so it cannot fall
+> out of date the way a maintained flag could. `BreakpointCouldBreakTests` holds that promise two ways — every way to
+> arm the registry makes it true, and across 400 random histories, whenever it is false, `ShouldBreak` agrees and
+> leaves `LastBreakReason` alone; dropping any one of the six conditions fails the tests. Mars is the only core that
+> uses it; the others still call `ShouldBreak` unconditionally, which is correct and costs what it always did.
+
 ### 3.27 `eval` and conditional breakpoints (`DianaOS/Lib/ExpressionEvaluator.cs`, `DebugTargetExpressionContext.cs`, `Cores/.../Debug/SnesExpressionContext.cs`)
 
 Added after a gap-analysis pass against Mesen's debugger (`Core/Debugger/`, cloned to `/home/red/Projects/mesen-reference` as a read-only reference) — see §3.33 for the full comparison and what was deliberately left out.

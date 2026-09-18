@@ -2,47 +2,45 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using EmuSen.Cauldron;
+using EmuSen.Cores.Nintendo.Mars.Cpu.Disassembler;
+using EmuSen.Cores.Nintendo.Mars.Memory;
+using EmuSen.Cores.Nintendo.Mars.Rsp;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
 using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 
 namespace EmuSen.Cores.Nintendo.Mars.Debug
 {
-    // One of the machine's own arrays, byte for byte as the bus stores it, read live so a reload is followed.
+    // One of the machine's memories by name, read live so a reload is followed - see Mars_Debug.md §4.
     internal sealed class MarsDebugMemorySpace : IDebugMemorySpace
     {
-        private readonly Func<byte[]?> _bytes;
+        private readonly MarsCore _core;
+        private readonly Func<int> _size;
 
         public string Name { get; }
         public bool IsWritable { get; }
         public bool HasSideEffects => false;
 
-        public MarsDebugMemorySpace(string name, Func<byte[]?> bytes, bool isWritable)
+        public MarsDebugMemorySpace(MarsCore core, string name, Func<int> size, bool isWritable)
         {
+            _core = core;
             Name = name;
-            _bytes = bytes;
+            _size = size;
             IsWritable = isWritable;
         }
 
-        public int Size => _bytes()?.Length ?? 0;
+        public int Size => _size();
 
-        public byte Read(int address)
-        {
-            byte[]? bytes = _bytes();
-            return bytes is null || bytes.Length == 0 ? (byte)0 : bytes[Wrap(address, bytes.Length)];
-        }
+        public byte Read(int address) => MarsDebugSpaces.Read(_core, Name, address);
 
         public void Write(int address, byte value)
         {
-            byte[]? bytes = _bytes();
-            if (IsWritable && bytes is { Length: > 0 }) bytes[Wrap(address, bytes.Length)] = value;
+            if (IsWritable) MarsDebugSpaces.Write(_core, Name, address, value);
         }
-
-        private static int Wrap(int address, int size) => ((address % size) + size) % size;
     }
 
-    // The least IDebugTarget CoreFactory needs to hand Mars out; most of the surface is empty on purpose - see Mars_Core.md §8.
-    public sealed class MarsDebugTarget : IDebugTarget
+    // The debugger's view of Mars: its memories, both processors, and the core's registries - see Mars_Debug.md.
+    public sealed class MarsDebugTarget : IDebugTarget, IWriteObserver
     {
         // The o32 names, so `regs` reads the way a MIPS listing does.
         private static readonly string[] RegisterNames =
@@ -68,7 +66,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegisters;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _videoRegisters;
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _apuRegisters = new(() => Array.Empty<DebugRegisterValue>(), Array.Empty<DebugRegisterValue>());
-        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _coprocessorRegisters = new(() => Array.Empty<DebugRegisterValue>(), Array.Empty<DebugRegisterValue>());
+        private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _coprocessorRegisters;
         private readonly PollingProvider<IReadOnlyList<DebugSpriteInfo>> _sprites = new(() => Array.Empty<DebugSpriteInfo>(), Array.Empty<DebugSpriteInfo>());
         private readonly PollingProvider<IReadOnlyList<DebugPaletteInfo>> _palettes = new(() => Array.Empty<DebugPaletteInfo>(), Array.Empty<DebugPaletteInfo>());
         private readonly PollingProvider<IReadOnlyList<DebugAudioChannelInfo>> _audioChannels = new(() => Array.Empty<DebugAudioChannelInfo>(), Array.Empty<DebugAudioChannelInfo>());
@@ -79,14 +77,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
             _core = core;
             Cheats = cheats ?? new CheatRegistry();
 
-            _spaces.Add(new MarsDebugMemorySpace("RDRAM", () => _core.Bus?.Rdram, true));
-            _spaces.Add(new MarsDebugMemorySpace("DMEM", () => _core.Bus?.SpDmem, true));
-            _spaces.Add(new MarsDebugMemorySpace("IMEM", () => _core.Bus?.SpImem, true));
-            _spaces.Add(new MarsDebugMemorySpace("PIFRAM", () => _core.Bus?.PifRam, true));
-            _spaces.Add(new MarsDebugMemorySpace("ROM", () => _core.Rom?.Rom, false));
+            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Rdram, () => _core.Bus?.Rdram.Length ?? 0, true));
+            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Dmem, () => _core.Bus?.SpDmem.Length ?? 0, true));
+            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Imem, () => _core.Bus?.SpImem.Length ?? 0, true));
+            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.PifRam, () => _core.Bus?.PifRam.Length ?? 0, true));
+            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Rom, () => _core.Rom?.Rom.Length ?? 0, false));
+
+            // Every 32-bit virtual address, so the size is the largest an int can say - see Mars_Debug.md §4.
+            _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Cpu, () => int.MaxValue, true));
 
             _cpuRegisters = new(ReadCpuRegistersLive, ReadCpuRegistersLive());
             _videoRegisters = new(ReadVideoRegistersLive, ReadVideoRegistersLive());
+            _coprocessorRegisters = new(ReadRspRegistersLive, ReadRspRegistersLive());
+
+            _core.WriteObserver = this;
         }
 
         public string CoreName => _core.CoreName;
@@ -96,10 +100,49 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
         // No sprite hardware; the RDP draws triangles into RDRAM.
         public int MaxSprites => 0;
 
-        // Held so the commands that expect them work, and fed by nothing yet - see Mars_Core.md §8.
-        public WatchRegistry Watches { get; } = new();
-        public FrameLogRegistry FrameLog { get; } = new();
-        public BreakpointRegistry Breakpoints { get; } = new();
+        public WatchRegistry Watches => _core.Watches;
+        public FrameLogRegistry FrameLog => _core.FrameLog;
+        public BreakpointRegistry Breakpoints => _core.Breakpoints;
+        public CoverageRegistry? Coverage => _core.Coverage;
+        public CoverageRegistry? CoprocessorCoverage => _core.RspCoverage;
+        public CallStackRegistry? CallStack => _core.CallStack;
+        public LabelRegistry? Labels => _core.Labels;
+
+        // The RSP runs inside the bus's clock and cannot stop mid-tick, so it has no breakpoints of its own - see Mars_Debug.md §5.
+        private readonly BreakpointRegistry _rspBreakpoints = new();
+
+        public IReadOnlyList<DebugCpu> DebugCpus => new[]
+        {
+            new DebugCpu(global::EmuSen.DianaOS.DianaOS.Var.DebugCpus.MainName, "VR4300", _core.Breakpoints)
+            {
+                Coverage = _core.Coverage,
+                CallStack = _core.CallStack,
+                CodeSpace = MarsDebugSpaces.Cpu,
+                Registers = _cpuRegisters,
+                ProgramCounter = () => (int)(uint)(_core.Cpu?.Pc ?? 0),
+            },
+            new DebugCpu("rsp", "RSP", _rspBreakpoints)
+            {
+                Coverage = _core.RspCoverage,
+                CodeSpace = MarsDebugSpaces.Imem,
+                Registers = _coprocessorRegisters,
+                ProgramCounter = () => (int)(_core.Bus?.Sp.Processor.Pc ?? 0),
+                CanHalt = false,
+            },
+        };
+
+        // A processor store, reported in the space it landed in - see Mars_Debug.md §3.
+        public void OnWrite(string spaceName, int address, byte value)
+        {
+            Watches.RecordWrite(spaceName, address, value, DescribeWriteSite);
+            Breakpoints.NoteWrite(spaceName, address, value);
+        }
+
+        private string DescribeWriteSite() => _core.Cpu is null ? "" : $"PC={(uint)_core.Cpu.CurrentPc:X8}";
+
+        // The processor's view of an address, or null where the TLB has no entry for it - see `man addr`.
+        public PhysicalAddress? ResolvePhysical(int cpuAddress) =>
+            MarsDebugSpaces.TryPhysical(_core, (uint)cpuAddress, out uint physical) ? MarsDebugSpaces.Resolve(_core, physical) : null;
 
         public CheatRegistry Cheats { get; }
 
@@ -119,6 +162,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
         {
             _cpuRegisters.Refresh();
             _videoRegisters.Refresh();
+            _coprocessorRegisters.Refresh();
         }
 
         public IReadOnlyList<IDebugMemorySpace> GetMemorySpaces() => _spaces;
@@ -137,6 +181,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
             return values;
         }
 
+        // The RSP's program counter, whether it is running, and its 32 scalar registers.
+        private IReadOnlyList<DebugRegisterValue> ReadRspRegistersLive()
+        {
+            var rsp = _core.Bus?.Sp.Processor;
+            if (rsp is null) return Array.Empty<DebugRegisterValue>();
+
+            var values = new List<DebugRegisterValue>(RegisterNames.Length + 2)
+            {
+                new("PC", rsp.Pc, 16),
+                new("Halted", rsp.Halted ? 1UL : 0UL, 1),
+            };
+            for (int i = 0; i < RegisterNames.Length; i++) values.Add(new DebugRegisterValue(RegisterNames[i], rsp.Gpr[i], 32));
+            return values;
+        }
+
         private IReadOnlyList<DebugRegisterValue> ReadVideoRegistersLive()
         {
             var vi = _core.Bus?.Vi;
@@ -151,11 +210,59 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
             return values;
         }
 
-        // There is no VR4300 disassembler yet, and `disasm` says so when handed nothing - see Mars_Core.md §8.
-        public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count) =>
-            Array.Empty<DisassembledInstruction>();
+        // The space last disassembled, whose processor and address base a reference is classified by.
+        private string _lastSpace = MarsDebugSpaces.Cpu;
 
-        public (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(DisassembledInstruction instr) => null;
+        // Words read big-endian from the space, decoded by the processor that runs code there - see Mars_Debug.md §6.
+        public IReadOnlyList<DisassembledInstruction> Disassemble(string spaceName, int address, int count)
+        {
+            _lastSpace = Canonical(spaceName);
+            var listing = new List<DisassembledInstruction>(Math.Max(count, 0));
+
+            for (int i = 0, at = address & ~3; i < count; i++, at += 4)
+            {
+                var bytes = new byte[4];
+                for (int b = 0; b < 4; b++) bytes[b] = MarsDebugSpaces.Read(_core, _lastSpace, at + b);
+
+                MarsInstruction decoded = Decode(_lastSpace, bytes, at);
+                listing.Add(new DisassembledInstruction(at, bytes, decoded.Mnemonic, decoded.Operands));
+            }
+
+            return listing;
+        }
+
+        public (StaticReferenceKind Kind, int Target)? ClassifyStaticReference(DisassembledInstruction instr)
+        {
+            if (instr.Length != 4) return null;
+
+            MarsInstruction decoded = Decode(_lastSpace, instr.Bytes, instr.Address);
+            return decoded.Kind is { } kind ? (kind, (int)decoded.Target) : null;
+        }
+
+        // The RSP runs its own memories; every other space holds the VR4300's code, seen at its virtual address - see Mars_Debug.md §6.
+        private static MarsInstruction Decode(string space, IReadOnlyList<byte> bytes, int at)
+        {
+            uint word = (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]);
+
+            return space switch
+            {
+                MarsDebugSpaces.Imem or MarsDebugSpaces.Dmem => RspDisassembler.Decode(word, (uint)at & 0xFFC),
+                MarsDebugSpaces.Rdram => Vr4300Disassembler.Decode(word, 0x8000_0000u | (uint)at),
+                MarsDebugSpaces.Rom => Vr4300Disassembler.Decode(word, 0xB000_0000u + (uint)at),
+                MarsDebugSpaces.PifRam => Vr4300Disassembler.Decode(word, 0xBFC0_07C0u + (uint)at),
+                _ => Vr4300Disassembler.Decode(word, (uint)at),
+            };
+        }
+
+        private string Canonical(string spaceName)
+        {
+            foreach (var space in _spaces)
+            {
+                if (string.Equals(space.Name, spaceName, StringComparison.OrdinalIgnoreCase)) return space.Name;
+            }
+
+            return MarsDebugSpaces.Cpu;
+        }
 
         public string DecodeTilemapEntry(IDebugMemorySpace space, int address) =>
             throw new NotSupportedException("The Nintendo 64 has no tilemap; the RDP draws into RDRAM.");

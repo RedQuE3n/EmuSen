@@ -33,6 +33,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
         [EmuSen.Common.SkipInState] private readonly CpuException _exception = new();
 
+        // The call stack's seams, null unless a debugger is attached; a return lands after its delay slot - see Mars_Debug.md §2.
+        [EmuSen.Common.SkipInState] public Action<ulong, ulong>? CallObserver;
+        [EmuSen.Common.SkipInState] public Action? ReturnObserver;
+
+        // Told when an interrupt is taken, which `runto irq` waits for - see Mars_Debug.md §2.
+        [EmuSen.Common.SkipInState] public Action? InterruptObserver;
+        [EmuSen.Common.SkipInState] private bool _returnAfterSlot;
+
         private bool _branchPending;
         private uint _lastCount;
 
@@ -67,6 +75,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 _bus.Tick(1 + _extraCycles);
                 _extraCycles = 0;
                 Instructions++;
+
+                // The return a jr through ra began is done once its delay slot has run - see Mars_Debug.md §2.
+                if (_returnAfterSlot && InDelaySlot)
+                {
+                    _returnAfterSlot = false;
+                    ReturnObserver?.Invoke();
+                }
 
                 UpdateTimer();
             }

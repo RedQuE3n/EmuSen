@@ -536,7 +536,7 @@ namespace EmuSen.WiseMan.Cores
 
             target.RefreshProviders();
             Assert.Contains(target.CpuRegisters.Current, r => r.Name == "PC" && r.Value == core.Cpu!.Pc);
-            Assert.Empty(target.Disassemble("RDRAM", 0, 4));
+            Assert.Equal(4, target.Disassemble("RDRAM", 0, 4).Count);
             Assert.Contains("N64 (Mars)", target.GetSummaryText());
         }
 

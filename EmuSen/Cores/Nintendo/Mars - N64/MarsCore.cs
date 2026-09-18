@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EmuSen.Common;
+using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Memory;
+using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Cores.Nintendo.Mars.Rom;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
@@ -57,7 +59,37 @@ namespace EmuSen.Cores.Nintendo.Mars
         {
             ExpansionPak = expansionPak;
             _batteryRamDisabled = batteryRamDisabled;
+
+            // The seams `bt`, `step over`/`out` and `cov` read, as the other cores wire them - see Mars_Debug.md §2.
+            Breakpoints.CallStack = CallStack;
+            CallStack.FrameNumberProvider = () => TotalFrames;
+            CallStack.EntryPointObserver = Coverage.RecordEntryPoint;
         }
+
+        // Owned here rather than by the debug target, so a breakpoint or a label outlives any one prompt - see Mars_Debug.md §1.
+        public WatchRegistry Watches { get; } = new();
+        public FrameLogRegistry FrameLog { get; } = new();
+        public BreakpointRegistry Breakpoints { get; } = new();
+        public CoverageRegistry Coverage { get; } = new();
+        public CoverageRegistry RspCoverage { get; } = new();
+        public CallStackRegistry CallStack { get; } = new();
+        public LabelRegistry Labels { get; } = new();
+
+        // Handed to every bus a load builds, so a watch survives a reload - see Mars_Debug.md §3.
+        public IWriteObserver? WriteObserver
+        {
+            get => _writeObserver;
+            set
+            {
+                _writeObserver = value;
+                if (Bus != null) Bus.WriteObserver = value;
+            }
+        }
+
+        private IWriteObserver? _writeObserver;
+
+        public bool IsHaltedAtBreakpoint { get; private set; }
+        public int HaltedAddress { get; private set; }
 
         // Null defers to --nobattery; a test passes its own so no other test's switch can reach it - see Mars_Save.md §7.
         private readonly bool? _batteryRamDisabled;
@@ -106,6 +138,14 @@ namespace EmuSen.Cores.Nintendo.Mars
             var cpu = new Cpu.Core.Cpu(bus);
             Boot.HandOff(bus, cpu, rom);
             LoadSaves(bus, rom, path);
+
+            cpu.CallObserver = (source, target) => CallStack.NotePush((int)(uint)source, (int)(uint)target, CallFrameKind.Call);
+            cpu.ReturnObserver = CallStack.NotePop;
+            cpu.InterruptObserver = () => Breakpoints.NoteInterrupt(CallFrameKind.Irq);
+            bus.Sp.Processor.Coverage = RspCoverage;
+            bus.WriteObserver = _writeObserver;
+            CallStack.Reset();
+            IsHaltedAtBreakpoint = false;
 
             Rom = rom;
             Bus = bus;
@@ -176,14 +216,38 @@ namespace EmuSen.Cores.Nintendo.Mars
                 throw new InvalidOperationException("RunFrame() called before LoadRom().");
             }
 
+            // The instruction a halt stopped in front of runs before anything is checked again - see Mars_Debug.md §2.
+            bool resuming = IsHaltedAtBreakpoint;
+            IsHaltedAtBreakpoint = false;
+
             long start = Bus.Cycles;
             long fields = Bus.Vi.Fields;
 
             // The VI's field is the frame; the cap only ends one a VI nobody has programmed never will - see Mars_Core.md §3.
-            while (Bus.Vi.Fields == fields && Bus.Cycles - start < CycleCap) Cpu.Step();
+            while (Bus.Vi.Fields == fields && Bus.Cycles - start < CycleCap)
+            {
+                int pc = (int)(uint)Cpu.Pc;
+
+                // Before the instruction, so a breakpoint stops in front of what it names - see Mars_Debug.md §2.
+                if (!resuming && Breakpoints.CouldBreak && Breakpoints.ShouldBreak(pc))
+                {
+                    IsHaltedAtBreakpoint = true;
+                    HaltedAddress = pc;
+                    return;
+                }
+
+                resuming = false;
+                if (Coverage.IsArmed) Coverage.Record(pc);
+                if (CallStack.IsProfiling) CallStack.NoteInstruction();
+
+                Cpu.Step();
+            }
 
             _lastFrameCycles = Bus.Cycles - start;
             TotalFrames++;
+
+            FrameLog.RecordFrame(TotalFrames, (space, address, width) => MarsDebugSpaces.ReadWidth(this, space, address, width));
+            Breakpoints.NoteFrame(TotalFrames);
 
             if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
 

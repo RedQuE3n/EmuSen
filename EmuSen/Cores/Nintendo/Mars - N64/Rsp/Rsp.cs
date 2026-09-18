@@ -30,9 +30,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             Halted = false;
         }
 
+        // Fed only while `cov` is armed on the RSP - see Mars_Debug.md §5.
+        [EmuSen.Common.SkipInState] public EmuSen.DianaOS.DianaOS.Var.CoverageRegistry? Coverage;
+
         public void Step()
         {
             if (Halted) return;
+            if (Coverage is { IsArmed: true }) Coverage.Record((int)Pc);
 
             uint instruction = ReadInstruction(Pc);
 

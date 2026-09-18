@@ -12,7 +12,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             if (taken)
             {
-                Branch(unchecked(Pc + (ulong)(SignedImmediate(instruction) << 2)));
+                ulong target = unchecked(Pc + (ulong)(SignedImmediate(instruction) << 2));
+                if (link) CallObserver?.Invoke(CurrentPc, target);
+                Branch(target);
                 return;
             }
 
@@ -31,13 +33,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void JumpAndLink(uint instruction)
         {
             Write(31, NextPc);
+            CallObserver?.Invoke(CurrentPc, JumpTarget(instruction));
             Branch(JumpTarget(instruction));
         }
 
+        // A jalr is a call and a jr through ra a return, the conventions `bt` reads - see Mars_Debug.md §2.
         private void JumpRegister(uint instruction, bool link)
         {
             ulong target = Read(Rs(instruction));
             if (link) Write(Rd(instruction), NextPc);
+
+            if (link) CallObserver?.Invoke(CurrentPc, target);
+            else if (Rs(instruction) == 31 && ReturnObserver != null) _returnAfterSlot = true;
 
             Branch(target);
         }

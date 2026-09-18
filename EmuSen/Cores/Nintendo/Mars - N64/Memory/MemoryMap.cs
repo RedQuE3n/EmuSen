@@ -7,6 +7,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
     {
         public const uint RdramBase = 0x0000_0000;
         public const uint RdramRegistersBase = 0x03F0_0000;
+        public const uint RdramRegistersSize = 0x0010_0000;
 
         public const uint SpDmemBase = 0x0400_0000;
         public const uint SpImemBase = 0x0400_1000;

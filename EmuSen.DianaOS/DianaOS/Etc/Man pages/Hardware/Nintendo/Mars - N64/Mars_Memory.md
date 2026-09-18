@@ -57,7 +57,8 @@ told that memory needs no initialising.
 
 This is a stub and is meant to be replaced device by device as the phases reach
 them. The display processor's command registers left it on 2026-09-17, and now read zero
-where nothing is modelled rather than echoing writes (`Mars_Rdp.md` §2.4). It is recorded here so that a register appearing to "work" is never mistaken
+where nothing is modelled rather than echoing writes (`Mars_Rdp.md` §2.4). RDRAM's own registers
+left it on 2026-09-18 and read what the corpus measured instead (§8.5). It is recorded here so that a register appearing to "work" is never mistaken
 for a device being modelled. The dictionary is also the wrong shape for a hot path;
 that is a Phase G problem and deliberately not solved now.
 
@@ -639,9 +640,164 @@ The other five devices exist as bits with nothing behind them yet.
 ### 8.2 The display processor's interrupt is cleared through the mode register
 
 It has no clear bit of its own in any display processor register. Bit 11 (`0x800`) of the
-aggregator's mode register clears it, and that is the only bit of the mode register Mars
-models: a write without it does nothing. The evidence is a commercial handler rather than a
+aggregator's mode register clears it, ~~and that is the only bit of the mode register Mars
+models: a write without it does nothing~~. The evidence is a commercial handler rather than a
 document re-read for this slice — Wave Race's interrupt handler clears the bit 235 instructions
-after it is raised, and nothing else in Mars can. The mode register's other fields, and what it
+after it is raised, and nothing else in Mars can. ~~The mode register's other fields, and what it
 reads back, are not modelled; five MI groups in the corpus's census are about them
-(`Mars_Corpus.md` §3).
+(`Mars_Corpus.md` §3).~~
+
+> **Update 2026-09-18: the rest of the mode register is modelled** (§8.3), and the five MI groups
+> the struck sentence pointed at cleared with it (§8.4). Bit 11 still does what this section says, and
+> a named case keeps it doing so now that it shares a write path with six other bits.
+
+### 8.3 The mode register, and the version beside it
+
+A write always sets the low seven bits — a length, used by §8.4 — and then treats the bits above as
+pairs, one to clear a flag and one to set it, as the mask does (§8.1): bits 7 and 8 for the repeat,
+9 and 10 for a flag the FPGA core calls *ebus*, 12 and 13 for one it calls *upper*, with bit 11 the
+unpaired clear of §8.2. A read returns the length in bits 6:0 and the three flags in bits 7, 8 and 9,
+so each flag reads back one bit lower than the bit that sets it. When a write carries both bits of a
+pair, the set wins.
+
+The three references agree on all of it — the FPGA core's `MI.vhd` (the write at lines 105–112 and
+the read at 84–87), mupen64plus's `update_mi_init_mode`, and Project64's `MIPSInterfaceHandler.cpp`
+— including the order that makes a set win, which in each is simply that the set is tested second.
+Agreement between three implementations of a register layout is agreement about a published layout,
+and is worth exactly that: none of the three is a measurement, and the corpus's MI groups exercise
+the repeat, not the read-back. What the ebus and upper flags *do* is not modelled. The first
+concerns RDRAM's ninth bits and the second how RDRAM's registers are addressed during
+initialisation, and nothing Mars runs initialises RDRAM (§8.5), so they are stored, read back, and
+otherwise inert — which is a statement about Mars, not about the console.
+
+The version register beside it reads `0x0202_0102`, the value all three give. No corpus group reads it.
+
+### 8.4 The repeat writes one store across up to 128 bytes
+
+With the repeat flag set, the processor's next store to RDRAM is not a store of its own size. It is
+written across the next *length + 1* bytes, counted from the start of the doubleword that holds the
+store's address, and then the flag clears itself. Four details make it more than a loop:
+
+- **The length counts from the doubleword, the writing from the store.** The bytes between the
+  doubleword's start and the store's address use up the length and are not written. A byte store at
+  offset 1 with a length of one writes nothing at all.
+- **Every byte takes its own lane of what was on the bus**, not the value the instruction named. A
+  word store puts its word on both halves of the doubleword; a doubleword store puts its eight bytes;
+  a halfword or byte store puts the register shifted to its lane, which is §2.4's whole word and
+  carries the register's neighbouring bytes with it. A byte store of `0x9ABC_DEF1` at offset 1 fills
+  memory with `DE F1 00 00` repeating, not with `F1`.
+- **It wraps inside its 2KB RDRAM row**, the row §7.3's walk also stops at. A 128-byte repeat that
+  starts eight bytes before a row's end writes those eight and then the row's first 120.
+- **One store spends it**, whether or not that store wrote anything. A store to RDRAM's registers
+  spends it too, without repeating; a store anywhere else leaves it armed; a transfer into RDRAM by
+  any interface neither repeats nor spends it, because the flag lives on the processor's path.
+
+The first three are the corpus's. Its five MI groups store at every start its step allows up to 16,
+for every length from 1 to 128, into memory filled with `0xFF`, and state what they expect as a
+formula over start and length rather than as a table (`~/Projects/nemu64-test-reference/src/tests/mi/repeat.rs`).
+All five pass, which is every combination they write down: 46 failing cases from 54, eight cleared,
+eight predicted before the change was made. The fourth is the FPGA core's (`memorymux.vhd`'s
+`clearRepeat`, raised for a processor write to RDRAM or its registers and nowhere else); the corpus
+never stores anywhere but RDRAM while the flag is set, and never starts a transfer, so it cannot see
+those three clauses.
+
+Neither emulator performs the repeat. mupen64plus and Project64 both store the flag and read it back,
+and neither consults it when memory is written — so the FPGA core is the only reference that
+implements the behaviour at all, and its `REPEATWRITE` state is the same rule as the corpus's
+formula: a count that starts at *length + 1*, a skip that is the store's offset in its doubleword, a
+byte mask per beat, and an address incremented in its low eleven bits only. The corpus came first
+and is the measurement; the FPGA core is confirmation from an implementation built to pass the same
+corpus, which is how §7.5 weighed the same pairing, and weighs no more here.
+
+**What is not measured**, and Mars carries on the FPGA core's word or on none:
+
+- the unaligned stores `SWL`, `SWR`, `SDL` and `SDR` with the repeat set — the corpus's own source
+  lists them as a to-do. Mars sends them through the same path, with whatever whole word §2.4 gives
+  them;
+- a store above the installed RDRAM with the repeat set, which spends the flag and writes nothing,
+  as §2.1 drops the store;
+- the three clauses of the fourth bullet.
+
+Nothing Mars runs uses the repeat. It exists for initialising RDRAM, which IPL3 does and Mars skips
+(§8.5), and no commercial game is known to set it; the five groups are its whole audience.
+
+### 8.5 The RDRAM registers read what IPL3 left in them
+
+The window at `0x03F0_0000` reads sixteen words that repeat every 64 bytes: `0xB419_0010` at 0x00,
+`0x2B3B_1A0B` at 0x08, `0x101C_0A04` at 0x18, and zero in the other thirteen. Writes are dropped.
+
+These are not a model of the RDRAM chips. They are what the corpus's author read from a console after
+its boot code had initialised RDRAM, over the window's first 512 bytes, and the corpus says in a comment
+that they are the same with and without the Expansion Pak (`src/tests/rdram/rdram_regs.rs`). Mars's boot
+does not initialise RDRAM — the RDRAM interface's select register comes up nonzero, which tells the
+corpus's IPL3 that memory is already running (§2.2, `Mars_TestOracle.md` §3) — so there is no
+initialisation for a register model to have recorded, and the table stands in for its result. That is
+the whole argument, and it limits the table to the one boot code the corpus measured.
+
+The commercial boot code asks the same question first. Super Mario 64's and Wave Race 64's IPL3 read
+the select register at offset 0x54 and branch past every RDRAM register access to 0x410 when it is
+nonzero (`bne t1, zero`), and Ocarina of Time's does the same at 0xCC; this was read from the three
+images' first four kilobytes, not traced. So nothing Mars runs initialises RDRAM, and the claim rests
+on that one branch.
+
+**Both references disagree with the measurement in the same two ways.** The FPGA core's
+`RDRAMRegs.vhd` and Project64's `RDRAMRegistersHandler.cpp` keep each write and read it back, reading
+the fourth register through an exclusive-or with `0xC0C0_C0C0`; and both decode only a device's first
+ten or eleven registers, so at 0x40 the FPGA core reads zero where the console reads `0xB419_0010` again.
+mupen64plus keeps writes too and powers on with `0xB519_0010` in the first register and `0x230B_0223`
+in the third — a value from before initialisation, so not a contradiction of the corpus so much as a
+different moment. A register file that keeps writes would reproduce the corpus only if IPL3 had written
+exactly these values, and it would still have to explain why the fourth register reads zero after an
+initialisation that must have written it. Mars does not attempt that explanation. It drops writes,
+because nothing measured says a write is kept, and names that as unmeasured.
+
+**Past the first 512 bytes is an extrapolation.** The corpus reads 0x000 to 0x1FF; Mars repeats the
+same sixteen words across the whole megabyte to `0x0400_0000`, including the addresses both references
+decode as other devices (bits 14:13) and the broadcast half above `0x03F8_0000`. On a console with four
+chips, a read of the second chip's registers would plausibly differ. Nothing Mars runs reads there.
+
+### 8.6 Which of these rules the corpus pins
+
+Each rule of §8.3–§8.5 was broken in turn, with the corpus and the named cases in `MarsMiTests` run again:
+
+| rule broken | corpus | named cases that catch it |
+| --- | --- | --- |
+| a store to RDRAM is repeated at all | 51 (+5) | nine |
+| the length counts from the doubleword | 49 (+3) | three |
+| a doubleword repeats all eight bytes | 47 (+1) | one |
+| a halfword or byte repeats its whole bus word | 48 (+2) | one |
+| each byte takes its own lane of the doubleword | 47 (+1) | one |
+| the repeat wraps in a 2KB row, not 4KB | 47 (+1) | one |
+| the repeat wraps in a 2KB row, not 1KB | 47 (+1) | one |
+| the repeat wraps at all | 47 (+1) | one |
+| **one store spends the repeat** | did not finish | three |
+| the length is the count plus one | 51 (+5) | eight |
+| bit 8 sets the repeat | 51 (+5) | eleven |
+| **a store to the RDRAM registers spends it** | 46 | one |
+| **a store elsewhere does not** | 46 | one |
+| **the count is seven bits** | 46 | one |
+| **the count reads back** | 46 | two |
+| **each flag reads back one bit below its set** (three breakages) | 46 | two each |
+| **a set wins over its clear** | 46 | one |
+| **bit 11 still clears the display processor's interrupt** | 46 | one |
+| **the version register** | 46 | one |
+| the device type is `0xB419_0010`, not mupen64plus's `0xB519_0010` | 49 (+3) | three |
+| the third register is `0x2B3B_1A0B`, not mupen64plus's `0x230B_0223` | 47 (+1) | one |
+| the seventh register is `0x101C_0A04` | 47 (+1) | one |
+| the fourth register reads zero, not the references' exclusive-or | 47 (+1) | one |
+| the registers repeat every 64 bytes, where both references read zero past them | 47 (+1) | one |
+| the RDRAM registers are read at all | 49 (+3) | three |
+
+**Everything the repeat writes is pinned, and nothing it reads back is.** The corpus moves for every rule
+about which bytes a repeated store lands in, because its formulas cover every start and length it can
+express. It cannot see the three clauses of §8.4's fourth bullet, which came from the FPGA core, nor any of
+§8.3: its groups arm the repeat with `0x100` and a length below 128, so they never set bit 7, never read the
+register back, and never touch the other flags. Those rules rest on the three references' agreement and on
+named cases alone, each written with literal values rather than Mars's own constants, so that changing a
+constant cannot move the test with it.
+
+**One breakage stopped the corpus rather than moving it.** A repeat that is never spent turns every later
+store to RDRAM into a 128-byte fill, and the corpus overwrote itself before it could print a summary — the
+only rule in the slice whose failure is a crash rather than a count. The RDRAM table is pinned value by value:
+each of its three non-zero words moves one case or three, and so does the rule that it repeats past 0x3F,
+which is the rule both references get wrong.

@@ -12,12 +12,11 @@ it gets, what stops it, what its numbers mean and what they do not. The protocol
 **The run completes.** The corpus reaches its own teardown and prints its own verdict:
 
 ```
-Finished in 3.10s. Base: Failed 54 of 4637 tests (98% success rate)
+Finished in 3.34s. Base: Failed 46 of 4637 tests (99% success rate)
 ```
 
 That is 1,040 test groups and 4,637 assertions, every one of them attempted, **and no
-failing group left that tests the CPU, the RSP as a processor, or the display processor's
-interface** (§3). It is the
+failing group left that is not about the caches** (§3), which Mars does not model. It is the
 first complete run of the corpus this project has made, and the ratchet now asserts that
 line (§5). It took two changes in the slice that produced it: the RSP learned to halt
 (`Mars_Rsp.md`), which let the run past the wait it had sat in since Phase A, and the
@@ -46,6 +45,7 @@ line that reports those:
 | the cartridge transfer's addresses | 1,040 | 137 of 4,637 assertions |
 | the cartridge transfer's bytes | 1,040 | 72 of 4,637 assertions |
 | the cartridge bus's store latch | 1,040 | 54 of 4,637 assertions |
+| the MI's repeat and the RDRAM registers | 1,040 | 46 of 4,637 assertions |
 
 **The two rows before the last were added late.** The slices that produced them moved the
 ratchet without extending this table or the verdict line above it, so for those two slices §5's
@@ -95,8 +95,8 @@ in the corpus's test list has been attempted. Everything after it has not.
 
 ## 3. The census of what still fails
 
-The 52 distinct test groups that fail in the complete run, counted by name — a group that
-fails for thirty-three values is one row — against the corpus's own 54.
+The 45 distinct test groups that fail in the complete run, counted by name — a group that
+fails for thirty-three values is one row — against the corpus's own 46.
 
 **What the corpus counts is a case, not an assertion.** A case is one group run for one of its
 values, and it stops at its first failed assertion; reading the corpus's source showed that
@@ -106,12 +106,26 @@ left where it stands, but every count of that kind on it is a count of cases.
 | | groups | why |
 | --- | --- | --- |
 | caches, all four families | 45 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
-| MI and RDRAM registers | 7 | Phase E — five MI, two RDRAM register groups |
 
-**Every remaining row is Phase E or a decision.** The six RDP groups that stood in an earlier
-census cleared in the slice after it (§12), and the six PIF RAM groups cleared in
-`Mars_Serial.md` §1 — they wanted the whole-word store rule `Mars_Memory.md` §2.4 had already
-built for the signal processor's memories, applied to a second window.
+**The one remaining row is a decision, not a phase.** Nothing the plan's peripheral phase
+owns is left in the corpus: the last seven groups — five on the MI's repeat and two on the
+RDRAM registers — cleared in `Mars_Memory.md` §8.4 and §8.5, eight cases where eight were
+predicted. Forty-five groups account for forty-six cases because one cache group fails for
+two of its values. What the corpus does not reach is not on this page: it has no audio,
+video-timing, save-device or boot-chip group, so the rest of Phase E is graded by other means
+(`Mars_Audio.md`, `Mars_VideoTiming.md`).
+
+> **Retired 2026-09-18: the census that stood before the MI's repeat.** It counted 52 groups
+> against 54, with a second row of *"MI and RDRAM registers — 7 — Phase E — five MI, two RDRAM
+> register groups"*, and said *"Every remaining row is Phase E or a decision."* Its count for the
+> row was right in groups and one short in cases: the RDRAM `Read 0x00` group fails for both of its
+> values, so seven groups were eight cases, and the prediction made for the slice that cleared them
+> used cases, having been wrong the last time for using groups.
+>
+> The paragraph under that table also said *"The six RDP groups that stood in an earlier census
+> cleared in the slice after it (§12), and the six PIF RAM groups cleared in `Mars_Serial.md` §1 —
+> they wanted the whole-word store rule `Mars_Memory.md` §2.4 had already built for the signal
+> processor's memories, applied to a second window."* Both still hold.
 
 > **Retired 2026-09-18: the census that stood before the cartridge bus's store latch.** It counted
 > 67 groups against 72, with a row of *"cartridge reads and writes — 15 — Phase E — the cartridge bus's

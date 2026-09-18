@@ -389,3 +389,42 @@ reference recorded from the stepped build can grade the bytes, and that is what 
 equivalent rows are recorded so that they are not mistaken for gaps: an exception sets EXL, which blocks every line
 until a return or a Status write, both of which recheck; and a hit scheduled from the count before it fires once more
 on the next instruction, setting a bit that is already set.
+
+## 11. Where the phase stands after event timing
+
+| | at the profile (§2) | §8 | now | |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50 fps) | 7.3 fps | 17.4 fps | 19.7 fps | 2.7×, 39% of the console |
+| Super Mario 64 (PAL, 50 fps) | 9.6 fps | 21.0 fps | 24.6 fps | 2.6×, 49% of the console |
+| Wave Race 64 (NTSC, 60 fps) | 14.7 fps | 24.5 fps | 28.2 fps | 1.9×, 47% of the console |
+
+Every frame of all three games has matched the baseline after every change, and since §9 the baseline includes the
+whole save state. The profile, taken again the same way (§2):
+
+| share of the emulation thread | CPU and bus | VI | RDP | RSP | the core's loop |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 57.3% | 18.5% | 9.1% | 7.9% | 7.1% |
+| Wave Race 64 | 59.1% | 9.4% | 13.1% | 11.9% | 6.5% |
+| Ocarina of Time | 46.6% | 27.7% | 15.0% | 4.9% | 5.7% |
+
+**The shares barely moved, and that is not evidence that nothing changed.** §9 and §10 cut 15 to 17 per cent of the
+time, but part of what they removed was billed to the VI and AI — their per-tick steps were theirs — and the sampler's
+lean towards call sites (§6) moves with every call removed. A share is not a measure of what one change bought; the
+probe is.
+
+**What event timing leaves.** Nothing that can be scheduled exactly is still stepped: the VI, the AI, the timer and
+the interrupt check all act only when due. The RSP is stepped every tick while it runs, and must be, since anything
+coarser changes what it and the processor see of each other. What remains around each instruction is the
+interpreter's own work — `Cpu.Step` alone is 38 to 48 per cent of the thread's exclusive time, against 4 to 5 for
+executing the instruction — and the loop's debugger gate, which §6 put at about four per cent.
+
+**The levers now.** Two sizes, as before:
+
+- *Small and exact:* a loop with no debugger gate, taken when no breakpoint, coverage or profiler is armed — about
+  four per cent, if §6's measurement holds, and only if nothing can arm one mid-frame.
+- *Large:* a cached interpreter or a recompiler for the step's body. §8's reasons for caution stand: decoding is still
+  not the cost, and a recompiler is a project, not a change.
+
+**What none of this is evidence for** is unchanged from §8: speed in 3D gameplay, where the RSP's and the RDP's shares
+would grow.
+

@@ -80,6 +80,14 @@ that only a 6105 title would meet: `Boot.HandOff` leaves the seed `0x3F`, the 61
 `0x91` (`Mars_Boot.md` §2 already calls those values a suspect), and Mars's PIF answers no CIC challenge,
 which `Mars_Serial.md` deferred to the save devices. Those are suspects, not a diagnosis.
 
+> **Diagnosed and fixed, 2026-09-18 — `Mars_Boot.md` §8.** Neither suspect was the first failure. The game
+> stopped at its boot code's *third* instruction, which reads a register (`t3`) that IPL2 leaves and
+> `Boot.HandOff` did not; the physical address above was only how far the processor had slid through empty
+> memory after the resulting fault. The seed was the third thing it would have met, and necessary. The CIC
+> challenge was not needed at all: the game never asks for it in 42.86 seconds of running. With the handoff
+> fixed, the probe finds it at its title screen — 891 graphics tasks and 564 framebuffers in 25.19 seconds
+> of console time, in a Release build (`Mars_Boot.md` §8.3 has all three games' numbers).
+
 **Mars runs at about a twelfth of the console's speed**, 5–8 million instructions a second against
 93.75 million cycles. The games that run do so at that pace, with signal-processor and display work
 inside it.

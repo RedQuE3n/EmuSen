@@ -59,6 +59,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rom
         // A convention over the destination code rather than a field of its own - see Mars_Rom.md §2.2.
         public bool IsPal;
 
+        // Read off the boot code rather than the header, which does not name it - see Mars_Boot.md §6.1.
+        public CicChip CicChip;
+
         public bool HasEd64Header;
         public N64SaveType SaveType;
         public bool HasRealTimeClock;
@@ -97,6 +100,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rom
             image.Version = rom[0x3F];
 
             image.IsPal = IsPalDestination(image.DestinationCode);
+            image.CicChip = Cic.Identify(rom);
             image.ReadEd64Fields();
             return image;
         }

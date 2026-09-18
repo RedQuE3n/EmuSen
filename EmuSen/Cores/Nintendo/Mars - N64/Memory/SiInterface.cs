@@ -1,3 +1,5 @@
+using EmuSen.Cores.Nintendo.Mars.Rom;
+
 namespace EmuSen.Cores.Nintendo.Mars.Memory
 {
     // The serial interface: sixty-four bytes each way between memory and PIF RAM - see Mars_Serial.md §2.
@@ -12,6 +14,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public const uint StatusIoBusy = 0x0002;
         public const uint StatusDmaError = 0x0008;
         public const uint StatusInterrupt = 0x1000;
+
+        // The bit in PIF RAM's last byte that asks the cartridge's CIC to answer a challenge - see Mars_Boot.md §7.
+        public const byte ChallengeRequest = 0x02;
+        public const int ChallengeAt = 0x30;
+        public const int ChallengeLength = 15;
 
         // Four ports, of which the first holds a controller until a frontend says otherwise - see §3.1.
         public readonly Controller[] Controllers = { new() { Present = true }, new(), new(), new() };
@@ -62,6 +69,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             byte[] ram = _bus.PifRam;
 
+            // Answered as the block goes out rather than as it comes in, which is when the referee answers - see Mars_Boot.md §7.2.
+            if (!toPif && (ram[^1] & ChallengeRequest) != 0) AnswerChallenge(ram);
+
             for (uint i = 0; i < MemoryMap.PifRamSize; i++)
             {
                 uint address = _dramAddress + i;
@@ -74,6 +84,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (toPif && (ram[^1] & 1) != 0) Joybus.Run(ram, Controllers, _bus.Save);
 
             _bus.Mi.Raise(MiInterrupt.SerialInterface);
+        }
+
+        // Only a 6105 answers; for any other chip the request is dropped and the challenge left where it was - see Mars_Boot.md §7.2.
+        private void AnswerChallenge(byte[] ram)
+        {
+            if (_bus.Cart?.CicChip == CicChip.Nus6105)
+            {
+                ram[ChallengeAt - 2] = 0;
+                ram[ChallengeAt - 1] = 0;
+                Cic.Respond(ram.AsSpan(ChallengeAt, ChallengeLength), ram.AsSpan(ChallengeAt, ChallengeLength));
+            }
+
+            ram[^1] &= unchecked((byte)~ChallengeRequest);
         }
     }
 }

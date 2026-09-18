@@ -175,6 +175,13 @@ real hardware, and every rule in §3 is one of theirs:
   the six-bit length.
 - **Clearing the byte that started it** is §777–781, guarded by not being in read mode, which is why §2 runs
   the block on the way in only.
+
+  > **Queried, 2026-09-18, not acted on.** Reading `PIF.vhd` for the CIC challenge (`Mars_Boot.md` §7.2) found
+  > that the walk is entered from one place only, `EVALREAD` (§664), which runs when a *serial read* begins and
+  > with `pifreadmode` set. On that reading the guard at §777–781 is unreachable, and the referee runs the block
+  > on the way **out** — the opposite of §2's rule. For a game that writes its block and reads it back, both rules
+  > give the same bytes unless the input changes in between, and nothing measured here tells them apart; the
+  > direction was left as it is, and this note records only that the citation does not support it.
 - **The controller's replies** are `Gamepad.vhd` §348–398: `05`, `00`, and then `01` for a pak or `02`
   without one; and §478–485 with §529–535 for the two button bytes, bit for bit in the order §3.1 lists.
 - **Which commands a controller knows** is `Gamepad.vhd` §321–338: info, state, the two pak commands, and a
@@ -193,8 +200,11 @@ what a synthesisable implementation of the PIF does"*, not as a measurement — 
 - ~~**The Controller Pak**, the EEPROM and the real-time clock — the channels above the fourth and the two pak
   commands. These are save devices and belong with the peripheral interface's.~~ **The pak and the EEPROM are built
   since 2026-09-18** (`Mars_Save.md`); the real-time clock is still not, and `Mars_Save.md` §9 says why.
-- **The CIC challenge**, the boot handshake the PIF answers with its own six-byte reply. Mars boots through
-  `Mars_Boot.md`'s handoff rather than through the PIF, so nothing asks.
+- ~~**The CIC challenge**, the boot handshake the PIF answers with its own six-byte reply. Mars boots through
+  `Mars_Boot.md`'s handoff rather than through the PIF, so nothing asks.~~ **The CIC challenge is answered since
+  2026-09-18** (`Mars_Boot.md` §7), and both halves of the struck sentence were wrong: it is not a boot handshake
+  but a request a 6105 game sends after boot, and the answer is fifteen bytes, not six. Being HLE-booted therefore
+  never meant nothing would ask.
 - **Timing** (§4).
 - ~~**Anything a player can reach.** `ICore.SetButton` is unwired, so the buttons in §3.1 are only ever the
   zeroes a test leaves there.~~ ~~**Nine buttons are reachable since 2026-09-18** (`Mars_Core.md` §5); Z, the C

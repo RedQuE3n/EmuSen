@@ -59,8 +59,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 channel++;
             }
 
-            // The PIF clears the byte it was started by, so a block runs once - see §2.
-            ram[^1] = 0;
         }
 
         private static void Answer(byte[] ram, Controller[] ports, SaveChip? cartridge, int channel, int command, int send, int receive, int lengthAt)

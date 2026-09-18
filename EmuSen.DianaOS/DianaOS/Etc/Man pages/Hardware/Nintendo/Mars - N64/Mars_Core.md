@@ -38,7 +38,7 @@ pictures through this interface (§9); ~~neither can be steered, heard or saved~
 > **Update 2026-09-18: the table's first three struck rows were stale for a slice each.** The audio and input slices
 > rewrote §4 and §5 and left this table saying *"nothing"* and *"no analog stick"*; the save slice found them while
 > retiring the third. Both games can now be heard, steered and saved (`Mars_Audio.md`, `EmuSen_Input.md` §7,
-> `Mars_Save.md`), and Super Mario 64 answers a pressed Start (`Mars_GameProbe.md` §6). Playable is still not the
+> `Mars_Save.md`), and Super Mario 64 answers a pressed Start (`Mars_GameProbe.md` §5). Playable is still not the
 > claim: at several times slower than the console, a game can be reached but not played.
 
 ## 1. What `MarsCore` is

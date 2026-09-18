@@ -492,8 +492,10 @@ namespace EmuSen.WiseMan.Cores
 
             bus.Write32(MemoryMap.SiBase + SiInterface.DramAddress, Dram);
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressWrite, 0);
+            bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
 
-            return bus.PifRam.AsSpan(3, length).ToArray();
+            // What the game reads back, since the PIF answers as its RAM goes out - see Mars_Serial.md §2.
+            return bus.Rdram.AsSpan((int)Dram + 3, length).ToArray();
         }
     }
 }

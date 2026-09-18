@@ -9,6 +9,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Cores
 {
     // The save chip and the Controller Pak through MarsCore and onto disk - see Mars_Save.md §7.
+    // Passes the battery switch per core, since other tests arm --nobattery for the whole process - see §7.
     [Collection(TestCollections.ProcessGlobals)]
     public class MarsSaveFileTests : IDisposable
     {
@@ -31,14 +32,14 @@ namespace EmuSen.WiseMan.Cores
         {
             string rom = WriteRom("Eeprom");
 
-            var first = new MarsCore();
+            var first = new MarsCore(batteryRamDisabled: false);
             first.LoadRom(rom);
             WriteEepromBlock(first.Bus!, 2, 0x5A);
             first.SaveSram();
 
             Assert.Equal(Eeprom.Size, new FileInfo(SaveLibrary.SramPathFor(rom)).Length);
 
-            var second = new MarsCore();
+            var second = new MarsCore(batteryRamDisabled: false);
             second.LoadRom(rom);
 
             Assert.Equal(N64SaveType.Eeprom4k, second.Bus!.Save.Type);
@@ -50,7 +51,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string rom = WriteRom("Untouched");
 
-            var core = new MarsCore();
+            var core = new MarsCore(batteryRamDisabled: false);
             core.LoadRom(rom);
             core.SaveSram();
 
@@ -63,13 +64,13 @@ namespace EmuSen.WiseMan.Cores
         {
             string rom = WriteRom("Pak");
 
-            var first = new MarsCore();
+            var first = new MarsCore(batteryRamDisabled: false);
             first.LoadRom(rom);
             ControllerPak pak = first.Bus!.Si.Controllers[0].Pak!;
             pak.Write(0x0400, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 });
             first.SaveSram();
 
-            var second = new MarsCore();
+            var second = new MarsCore(batteryRamDisabled: false);
             second.LoadRom(rom);
 
             Assert.Equal(ControllerPak.Size, new FileInfo(Path.ChangeExtension(SaveLibrary.SramPathFor(rom), MarsCore.PakExtension)).Length);
@@ -83,7 +84,7 @@ namespace EmuSen.WiseMan.Cores
             string rom = WriteRom("Twice");
             string save = SaveLibrary.SramPathFor(rom);
 
-            var core = new MarsCore();
+            var core = new MarsCore(batteryRamDisabled: false);
             core.LoadRom(rom);
             WriteEepromBlock(core.Bus!, 0, 0x11);
             core.SaveSram();
@@ -104,7 +105,7 @@ namespace EmuSen.WiseMan.Cores
             string rom = WriteRom("Autosave");
             string save = SaveLibrary.SramPathFor(rom);
 
-            var core = new MarsCore();
+            var core = new MarsCore(batteryRamDisabled: false);
             core.LoadRom(rom);
             core.Bus!.Write32(MemoryMap.ViBase + EmuSen.Cores.Nintendo.Mars.Vi.Vi.VerticalSync, 0x20);
             core.Bus.Write32(MemoryMap.ViBase + EmuSen.Cores.Nintendo.Mars.Vi.Vi.HorizontalSync, 0x40);

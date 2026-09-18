@@ -45,6 +45,9 @@ interface landed, `<name>.wav` of everything the game played, drained as the run
   read back what the game last wrote, so a nonzero line means the game is feeding audio to nothing.~~ **audio**
   (since 2026-09-18) — the stereo samples the audio interface played, the rate the game set, how many that is a
   second of console time, and the status register (`Mars_Audio.md`).
+- **save chip** (since 2026-09-18) — the chip the game's own first move named, whether it was written, and whether the
+  pak in the first port was (`Mars_Save.md` §1, §8). The probe runs the machine a frontend gets: no earlier save, and
+  a freshly formatted pak.
 - **picture** — the frame `Vi.Scan()` produces, saved as a PNG. **The raster's fourth byte is the
   pixel's coverage, not an opacity**, so the probe sets it to 255 before saving; without that, every
   frame looks bleached, because viewers composite a coverage of 7 as nearly transparent. The picture is
@@ -96,9 +99,47 @@ inside it.
 
 - **That the frames are right.** Recognisable is not correct. Every rule that draws them is graded by
   its own slice; this page only shows that the rules compose into a picture a person would recognise.
-- **Anything about input or saves, or what audio sounds like.** No button is pressed, the WAV is what the interface played rather than a comparison with a console, and nothing
-  is saved.
+- ~~**Anything about input or saves, or what audio sounds like.** No button is pressed, the WAV is what the interface played rather than a comparison with a console, and nothing
+  is saved.~~ **What audio sounds like, or whether a save is what a console would write.** Input and saves are in
+  the report since 2026-09-18 (§2, §5), but the WAV is what the interface played rather than a comparison with a
+  console, and a save is only ever read back by Mars.
 - **Any game not in the folder, or any length of play past 150 seconds** — here, about ten seconds of
   the console's time.
 - **Speed on another machine.** The numbers are this workstation's, in a Debug build, under the test
   host.
+
+## 5. The controller check
+
+`MarsControllerProbeTests`, opt-in by the same variable, is the last of the three things `Mars_Gameplan.md` §4.5 asks
+of Phase E — *"a controller able to reach the game"*. It runs a game twice through `MarsCore`, the interface a frontend
+drives, and presses Start in the second run only, through `SetButton`:
+
+| | Start held | from frame | compared at | frame before the press | compared frame |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 (Europe) | ten frames | 700 | 800 | identical | different, in 886,224 of its bytes |
+| Wave Race 64 (USA) | ten frames | 300 | 400 | identical | different, in 304,880 of its bytes |
+
+**The frame before the press is the control.** Identical there, the two runs can only differ afterwards because of the
+press. What each game shows for it: Super Mario 64 leaves Mario's head for a menu screen — the sound and language
+select, which may be what the European version shows on a first boot with a blank EEPROM, and was not checked against
+a console — and Wave Race 64 leaves its attract race for its title screen, *"Press START to begin"*.
+
+**The check failed twice before it passed, and each failure was worth more than the pass.**
+
+1. **The control failed.** The first version ran both boots in one save folder. Super Mario 64 writes its EEPROM at
+   frame 61, the core's every-300-frames write saved it, and the second run booted with that save — different from
+   the first run before any button was pressed. Mars itself was deterministic; the check was not. Each run now has its
+   own folder (`Mars_Save.md` §8).
+2. **The press changed nothing, and that was a Mars bug.** With the control fixed, Start held at frame 400 left frame
+   520 identical. The reply in PIF RAM read `00 00` while Start was held: the serial slice ran the controller's block
+   when it was written to PIF RAM, and a game that writes it once and reads it every frame got the buttons from that
+   one write forever. The referee runs the block when PIF RAM is read out; Mars now does too (`Mars_Serial.md` §2).
+3. **The press reached the game, and the game was not yet listening.** With the reply reading `10 00`, the Start bit
+   reached the game's own pad state — the byte `0x80309262`, which reads as its player-one button-pressed edge, held
+   `0x10` for one game frame — and Super Mario 64 still did nothing at frame 400. Pressed at frame 700 it answers within
+   six frames. Where between the two it starts listening was not located; the head is on screen by frame 350, so the
+   screen being visible is not the same as its input being read.
+
+**What this is evidence for** is that a button pressed through `ICore` reaches a commercial game's logic and changes
+what it does, in two games. **What it is not evidence for** is the timing of input: which frame a press is first seen
+on, and whether a game polling faster than the joybus replies would see a stale one, are untested.

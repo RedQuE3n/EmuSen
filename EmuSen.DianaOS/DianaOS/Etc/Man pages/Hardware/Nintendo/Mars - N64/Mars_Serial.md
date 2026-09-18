@@ -42,16 +42,39 @@ easy way to break this rule is to apply it everywhere, and the test that pins ma
 ## 2. The interface
 
 **Sixty-four bytes each way between RDRAM and PIF RAM, and nothing else.** Writing the read register carries
-PIF RAM out to the address in the DRAM register; writing the write register carries memory in, and then the
-PIF runs whatever block arrived (§3). Either way the serial interrupt is raised when it is done.
+PIF RAM out to the address in the DRAM register; writing the write register carries memory in~~, and then the
+PIF runs whatever block arrived (§3)~~. Either way the serial interrupt is raised when it is done.
 
 **Only a write to the status register clears that interrupt**, as with the peripheral interface, and the
 status register reports nothing else: no transfer is ever busy, because every transfer has already finished
 by the time the instruction that started it retires.
 
-**The block runs on the way in only.** A game writes its command block to memory, DMAs it to PIF RAM — which
+~~**The block runs on the way in only.** A game writes its command block to memory, DMAs it to PIF RAM — which
 is what makes the PIF read it — and then DMAs PIF RAM back to see the replies. Running the block on the way
-out as well would answer questions nobody asked.
+out as well would answer questions nobody asked.~~
+
+**Retired 2026-09-18: the block runs on the way out, every time, and the rule above had it backwards.** When a
+read begins, the PIF answers the 6105's challenge if bit 1 of its last byte asks for one (`Mars_Boot.md` §7.2),
+and otherwise walks whatever block is in its RAM (§3) before the sixty-four bytes go to memory. A write only
+carries the block in. The last byte is left as it is: the walk does not clear it, and bit 0 does not gate it.
+
+- **The referee says so.** The FPGA core enters its walk from one place, `EVALREAD` (`PIF.vhd` 651–667), which runs
+  when a serial read begins, and never from the write side, whose `EVALWRITE` handles only bits 2 to 6 of the last
+  byte. The query recorded in §5 found this while reading for the CIC challenge.
+- **mupen64plus agrees on when**, and differs on one detail: `dma_si_read` runs every channel before the copy
+  (`si_controller.c` 95, `update_pif_ram`), but only channels a write with bit 0 set has already laid out
+  (`process_pif_ram`, `setup_channels_format`). The referee walks the block as it stands; Mars does too.
+- **What the old rule cost was the controller.** Super Mario 64 held Start for five frames and the reply in PIF
+  RAM read `00 00` throughout (`Mars_GameProbe.md` §5); with the walk on the way out it reads `10 00`. Under the old
+  rule that can only happen if the game reads PIF RAM without first writing a block that asks to be run — which is
+  what libultra is recalled to do, writing the controller's block once and reading it every frame, though no
+  libultra source is here to confirm it. The block ran at that one write and never again. `Each_read_runs_the_block_again_with_the_buttons_as_they_are_now` fails on the old rule with
+  exactly those two bytes, and passes on this one.
+- **Why nothing caught it for a slice.** The slice's tests wrote a block and looked at PIF RAM straight after,
+  which is the old rule's own description of itself; `A_block_does_not_run_on_the_way_out` asserted the reversed
+  direction outright, and is now `A_block_runs_on_the_way_out`. No corpus group reads PIF RAM twice without writing
+  it, and the games reached their pictures without ever needing a button. `The_pif_clears_the_byte_it_was_started_by`
+  is retired with the rule it pinned, as `The_pif_leaves_the_byte_it_was_started_by`.
 
 ## 3. The joybus
 
@@ -182,6 +205,10 @@ real hardware, and every rule in §3 is one of theirs:
   > on the way **out** — the opposite of §2's rule. For a game that writes its block and reads it back, both rules
   > give the same bytes unless the input changes in between, and nothing measured here tells them apart; the
   > direction was left as it is, and this note records only that the citation does not support it.
+  >
+  > **Answered the same day** (§2): something measured did tell them apart. A game that writes its block once and
+  > reads it every frame is exactly the case where "the input changes in between", and it is the ordinary case, not
+  > an edge.
 - **The controller's replies** are `Gamepad.vhd` §348–398: `05`, `00`, and then `01` for a pak or `02`
   without one; and §478–485 with §529–535 for the two button bytes, bit for bit in the order §3.1 lists.
 - **Which commands a controller knows** is `Gamepad.vhd` §321–338: info, state, the two pak commands, and a

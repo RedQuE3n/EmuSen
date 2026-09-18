@@ -48,7 +48,14 @@ namespace EmuSen.Cores.Nintendo.Mars
         private long _lastFrameCycles = CycleCap;
 
         // A stock console by default, because the plan defers the Pak as a default - see Mars_Core.md §7.
-        public MarsCore(bool expansionPak = false) => ExpansionPak = expansionPak;
+        public MarsCore(bool expansionPak = false, bool? batteryRamDisabled = null)
+        {
+            ExpansionPak = expansionPak;
+            _batteryRamDisabled = batteryRamDisabled;
+        }
+
+        // Null defers to --nobattery; a test passes its own so no other test's switch can reach it - see Mars_Save.md §7.
+        private readonly bool? _batteryRamDisabled;
 
         public bool ExpansionPak { get; }
 
@@ -206,7 +213,7 @@ namespace EmuSen.Cores.Nintendo.Mars
         private void LoadSaves(MemoryBus bus, RomImage rom, string romPath)
         {
             // Latched here, as a cartridge does, so --nobattery holds for the whole run - see Mars_Save.md §7.
-            bool enabled = !CoreOptions.BatteryRamDisabled;
+            bool enabled = !(_batteryRamDisabled ?? CoreOptions.BatteryRamDisabled);
             _savePath = enabled ? SaveLibrary.SramPathFor(romPath) : null;
             _pakPath = enabled ? Path.ChangeExtension(_savePath!, PakExtension) : null;
 

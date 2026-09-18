@@ -21,7 +21,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
 
         [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
 
-        public Rsp(MemoryBus bus) => _bus = bus;
+        // The bus's instruction memory, which is never replaced, only written into - see Mars_Performance.md §15.
+        [EmuSen.Common.SkipInState] private readonly byte[] _imem;
+
+        public Rsp(MemoryBus bus)
+        {
+            _bus = bus;
+            _imem = bus.SpImem;
+        }
 
         public void Start(uint pc)
         {
@@ -155,8 +162,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             }
         }
 
+        // The interrupt is raised here, the one place the break bit rises, and only if it was down - see Mars_Performance.md §15.
         private void Break()
         {
+            if (!Broke && _bus.Sp.InterruptOnBreak) _bus.Mi.Raise(MiInterrupt.SignalProcessor);
             Halted = true;
             Broke = true;
         }
@@ -196,12 +205,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             }
         }
 
-        private uint ReadInstruction(uint pc)
-        {
-            uint offset = pc & PcMask;
-            return ((uint)_bus.SpImem[offset] << 24) | ((uint)_bus.SpImem[offset + 1] << 16)
-                | ((uint)_bus.SpImem[offset + 2] << 8) | _bus.SpImem[offset + 3];
-        }
+        // One big-endian word read rather than four byte reads, the same four bytes - see Mars_Performance.md §15.
+        private uint ReadInstruction(uint pc) =>
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(_imem.AsSpan((int)(pc & PcMask)));
 
         private uint Address(uint instruction) => (Read(Rs(instruction)) + Immediate(instruction)) & DataMask;
 

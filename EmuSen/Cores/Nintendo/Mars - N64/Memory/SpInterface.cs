@@ -154,20 +154,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // One instruction per tick, a placeholder for a clock ratio Phase G owns - see Mars_Rsp.md §7.
         public void Step(long cycles)
         {
-            for (long i = 0; i < cycles && !Processor.Halted; i++)
+            Rsp.Rsp processor = Processor;
+            for (long i = 0; i < cycles && !processor.Halted; i++)
             {
-                bool broke = Processor.Broke;
-
-                Processor.Step();
-
-                if (Processor.Broke && !broke && _interruptOnBreak)
-                {
-                    _bus.Mi.Raise(MiInterrupt.SignalProcessor);
-                }
-
-                if (_singleStep) Processor.Halted = true;
+                processor.Step();
+                if (_singleStep) processor.Halted = true;
             }
         }
+
+        // Read by the break itself, which raises the interrupt when it lands - see Mars_Performance.md §15.
+        public bool InterruptOnBreak => _interruptOnBreak;
 
         // Length is encoded one short, and the row count and skip make it rectangular - see Mars_Memory.md §6.
         private void Transfer(uint encoded, bool toSignalProcessor)

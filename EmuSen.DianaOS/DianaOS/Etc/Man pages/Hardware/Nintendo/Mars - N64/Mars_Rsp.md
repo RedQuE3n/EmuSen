@@ -83,6 +83,12 @@ hardware, and Mars routes them through the bus rather than duplicating the regis
 Status is assembled on read rather than stored: the processor owns halt and break, and
 the interface owns single-step, interrupt-on-break and the eight signals.
 
+Since Phase G the break instruction raises the SP interrupt itself, when interrupt-on-break
+is set and the break bit was down (`Mars_Performance.md` §15). That second condition, and
+Mars's halting after each instruction in single-step, are both disputed by the FPGA core,
+Project64 and mupen64plus, which raise on every break and ignore single-step; §15 there
+records the evidence, and neither rule is pinned by a test until it is decided.
+
 ### 5.1 A write names a request per field, and naming both halves is no request
 
 Status is written as pairs of bits — clear halt and set halt, clear interrupt and set

@@ -224,6 +224,9 @@ namespace EmuSen.Cores.Nintendo.Mars
             long start = Bus.Cycles;
             long fields = Bus.Vi.Fields;
 
+            // Nothing armed can halt or record anything this frame, so the loop is the processor alone - see Mars_Performance.md §13.
+            if (Breakpoints.IsQuiet && !Coverage.IsArmed && !CallStack.IsProfiling) RunQuietly(Bus, Cpu, start, fields);
+
             // The VI's field is the frame; the cap only ends one a VI nobody has programmed never will - see Mars_Core.md §3.
             while (Bus.Vi.Fields == fields && Bus.Cycles - start < CycleCap)
             {
@@ -254,6 +257,12 @@ namespace EmuSen.Cores.Nintendo.Mars
             if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
 
             if (!SkipRendering) Present(Bus.Vi);
+        }
+
+        // The same frame end as RunFrame's own loop, with no debugger between the instructions - see Mars_Performance.md §13.
+        private static void RunQuietly(MemoryBus bus, global::EmuSen.Cores.Nintendo.Mars.Cpu.Core.Cpu cpu, long start, long fields)
+        {
+            while (bus.Vi.Fields == fields && bus.Cycles - start < CycleCap) cpu.Step();
         }
 
         public byte[] GetFrameBufferRgba() => _frame;

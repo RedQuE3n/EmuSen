@@ -36,7 +36,9 @@ and the times agreed within one per cent:
 | Wave Race 64 (USA) | 14.71 fps, 68.0 ms | 14.68 fps, 68.1 ms | 16.7 ms (NTSC) |
 
 That is 15, 19 and 25 per cent of the console's speed, in a Release build on this workstation, from a cold boot
-through each game's title or attract mode.
+through each game's title or attract mode. **Its timings are not the grade of a small change**: runs an hour apart
+drift by about six per cent on identical code, so from §12 on a speed claim comes from interleaved builds and the probe
+grades exactness alone.
 
 ## 2. The profile
 
@@ -399,7 +401,8 @@ on the next instruction, setting a bit that is already set.
 | Wave Race 64 (NTSC, 60 fps) | 14.7 fps | 24.5 fps | 28.2 fps | 1.9×, 47% of the console |
 
 Every frame of all three games has matched the baseline after every change, and since §9 the baseline includes the
-whole save state. The profile, taken again the same way (§2):
+whole save state. ~~The profile, taken again the same way (§2):~~ **Retracted the same day: this profile measured §8's
+build, not this one** (§12). The table is kept as it was recorded; §14 has the profile of the build it claimed to be.
 
 | share of the emulation thread | CPU and bus | VI | RDP | RSP | the core's loop |
 | --- | --- | --- | --- | --- | --- |
@@ -407,16 +410,19 @@ whole save state. The profile, taken again the same way (§2):
 | Wave Race 64 | 59.1% | 9.4% | 13.1% | 11.9% | 6.5% |
 | Ocarina of Time | 46.6% | 27.7% | 15.0% | 4.9% | 5.7% |
 
-**The shares barely moved, and that is not evidence that nothing changed.** §9 and §10 cut 15 to 17 per cent of the
+~~**The shares barely moved, and that is not evidence that nothing changed.** §9 and §10 cut 15 to 17 per cent of the
 time, but part of what they removed was billed to the VI and AI — their per-tick steps were theirs — and the sampler's
 lean towards call sites (§6) moves with every call removed. A share is not a measure of what one change bought; the
-probe is.
+probe is.~~ They barely moved because the build had not changed: the harness linked a copy of the core taken before
+§9. The paragraph above was an explanation written to fit a wrong measurement, which is the failure this page exists
+to prevent; §12 says how it was found and what now stops it.
 
 **What event timing leaves.** Nothing that can be scheduled exactly is still stepped: the VI, the AI, the timer and
 the interrupt check all act only when due. The RSP is stepped every tick while it runs, and must be, since anything
 coarser changes what it and the processor see of each other. What remains around each instruction is the
-interpreter's own work — `Cpu.Step` alone is 38 to 48 per cent of the thread's exclusive time, against 4 to 5 for
-executing the instruction — and the loop's debugger gate, which §6 put at about four per cent.
+interpreter's own work — ~~`Cpu.Step` alone is 38 to 48 per cent of the thread's exclusive time, against 4 to 5 for
+executing the instruction~~ (the stale profile's figures; §14 has 27 to 28 against 6 to 7) — and the loop's debugger
+gate, which §6 put at about four per cent.
 
 **The levers now.** Two sizes, as before:
 
@@ -427,4 +433,84 @@ executing the instruction — and the loop's debugger gate, which §6 put at abo
 
 **What none of this is evidence for** is unchanged from §8: speed in 3D gameplay, where the RSP's and the RDP's shares
 would grow.
+
+## 12. Timing by interleaving, and the profile that measured the wrong build
+
+**What went wrong twice in one afternoon.** §13's change measured four per cent *slower* on the probe, in all three
+games, twice. The committed build, run again minutes later, measured five to six per cent *faster* than the same code
+had an hour before. Identical code had drifted by more than the effects this phase now chases, so the probe's timings,
+taken one run after another, cannot decide a change of this size — whatever the machine is doing between runs is in
+them. Setting up the comparison properly then exposed the second fault: the two harness builds came out byte for byte
+identical. The harness linked copies of the core placed in its own folder at 09:27 for §4's diagnostic build, not the
+project, and §11's profile ran against those — §8's build.
+
+**The method now.** Each variant is built as its own harness — a git worktree per commit, the harness referencing the
+worktree's project, never a copied DLL — and the builds are run alternately: 600 frames of each game, three rounds,
+the order rotated each round. Within such a run one build's three times differ by at most 0.6 fps. The probe still
+grades exactness; it no longer grades speed.
+
+**§9 and §10, measured again that way**, median of three (fps):
+
+| | before §9 (`2745f74`) | §9 (`81bc070`) | §10 (`a434c9c`) | §13 |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time | 17.5 | 19.2 (+10%) | 19.9 (+4%) | 21.3 (+7%) |
+| Super Mario 64 | 20.5 | 23.8 (+16%) | 25.5 (+7%) | 27.3 (+7%) |
+| Wave Race 64 | 24.2 | 28.2 (+17%) | 30.1 (+7%) | 31.9 (+6%) |
+
+Both stand, a little larger than recorded. **What this does not cover**: §3 to §5's and §7's figures are sequential
+probe runs too. Their effects, 1.2 to 1.8 times, are far larger than the drift, so they stand as effects; their exact
+percentages carry a few per cent of it.
+
+## 13. A frame loop with no debugger in it
+
+**What it did every instruction.** `RunFrame` asked three questions before each instruction: could a breakpoint fire
+(`CouldBreak`), is coverage armed, is the profiler. §6 measured the three at about four per cent and left them, because
+an armed break can appear in the middle of a frame — a data breakpoint's write, a run-to's interrupt — so the answer
+for one instruction is not the answer for the next.
+
+**The change.** `BreakpointRegistry.IsQuiet` makes a stronger promise than `CouldBreak`: true only when nothing is
+armed that anything a running frame does could set off — no breakpoint, step, depth guard, data breakpoint,
+uninitialised-read check, run-to of any kind, or hardware condition (`EmuSen_Debugging_Tools_Reference_v5.md` §3.26).
+Coverage and the profiler are armed only by commands. So Mars asks all three once, at the start of a frame, and when
+none is armed runs the frame in `RunQuietly`: the same frame-end test, the processor's step, nothing else. The watched
+loop then finds its own condition already false.
+
+**Why it is exact.** In a quiet frame the watched loop's three tests are false on every instruction and nothing the
+frame does can make them true, so the two loops run the same instructions and end on the same one. All 1,800 probe
+frames match, state and all. **What it changes**: a frontend that arms a breakpoint from another thread while a quiet
+frame runs gets it from the next frame, not the next instruction. The headless runner arms between frames, and is
+unaffected.
+
+**What it bought** (§12's table): +7, +7 and +6 per cent. **What catches a mistake in it**: dropping any one of
+`IsQuiet`'s seven conditions fails two registry tests — one arming each thing directly, one running 400 random
+histories of commands and, whenever the registry says quiet, eight kinds of thing a frame does, none of which may halt
+it. Asking the loop's gate without the registry fails seven Mars debugger tests, and without coverage one; without the
+profiler it failed nothing, and `The_profiler_counts_what_the_processor_ran_only_while_armed` now holds it.
+
+## 14. Where the phase stands
+
+| | at the profile (§2) | now, §12's method | |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50 fps) | 7.3 fps | 21.3 fps | 2.9×, 43% of the console |
+| Super Mario 64 (PAL, 50 fps) | 9.6 fps | 27.3 fps | 2.8×, 55% of the console |
+| Wave Race 64 (NTSC, 60 fps) | 14.7 fps | 31.9 fps | 2.2×, 53% of the console |
+
+The first column is the morning's probe, run sequentially, so the multiples carry a few per cent of §12's drift. The
+profile of this build, taken with the harness that now references the project:
+
+| share of the emulation thread | CPU and bus | VI | RDP | RSP | the core's loop |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 51.3% | 23.6% | 12.1% | 9.0% | 3.8% |
+| Wave Race 64 | 54.7% | 12.8% | 17.1% | 11.9% | 3.4% |
+| Ocarina of Time | 40.0% | 33.7% | 17.7% | 5.2% | 3.4% |
+
+`Cpu.Step` is 27 to 28 per cent of the thread's exclusive time and executing the instruction 6 to 7. Two things stand
+out that the stale profile hid. **The RSP's step loop** — `SpInterface.Step`, which runs the signal processor a tick at
+a time and reads its break state twice around each instruction — is 4 to 11 per cent on its own, billed to the
+processor's share because the processor's tick calls it; with the RSP's own 5 to 12, the signal processor is 9 to 23
+per cent of the thread. **The VI's scan-out** is back to a third of Ocarina of Time's time, `Vi.Walk` alone a quarter.
+
+**The levers now**: the RSP's step loop, which can change without changing what either processor sees; the scan-out's
+walk again, for Ocarina of Time; and, for the processor's step, a cached interpreter or a recompiler, which remain
+decisions about the core's design.
 

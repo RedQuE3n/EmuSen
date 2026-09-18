@@ -774,6 +774,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    directly if the guess is wrong). 'poke'/'rompatch' add a cheat directly\n" +
                 "    without code decoding, e.g. for an address already found with 'search'.\n" +
                 "    'enable'/'disable' toggle a cheat without removing it.\n\n" +
+                "    Some consoles' codes are wider than a byte or longer than a line - the\n" +
+                "    N64 GameShark's 16-bit writes, tests and repeaters. 'add' takes such a\n" +
+                "    code whole and makes ONE cheat of all its lines. The shell splits on\n" +
+                "    spaces, so join the lines with '+' and leave the space out of each:\n" +
+                "    'cheat add D00002000005+810001001234 lives'. A line the console's\n" +
+                "    format will not apply is refused with the reason, not stored.\n\n" +
                 "THE MASTER SWITCH\n" +
                 "    'cheat master off' silences every cheat at once; 'cheat master on'\n" +
                 "    brings them back. It is a SECOND AXIS, not a bulk edit: it does not\n" +
@@ -810,6 +816,10 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "        type          set, increase or decrease. Increase/decrease read what\n" +
                 "                      is there and adjust it, so they accumulate every frame\n" +
                 "                      - 'increase by 1' climbs, it does not hold at 1.\n" +
+                "                      Or a TEST - if-equal / if-not-equal - which writes\n" +
+                "                      nothing: the next write in the cheat that is not a\n" +
+                "                      test happens only if it passes, and a run of tests\n" +
+                "                      must all pass. 'cheat list' prints one as 'if ... =='.\n" +
                 "        bit position  makes the write touch a single bit instead of whole\n" +
                 "                      bytes, leaving the other seven alone. For flag bytes\n" +
                 "                      where poking the whole byte would clobber unrelated\n" +
@@ -847,7 +857,9 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    'cheat export <path.cht>' writes RAM pokes back out in RetroArch's\n" +
                 "    handler form, which round-trips every field above. ROM patches are\n" +
                 "    skipped and counted: RetroArch's model has no ROM-read substitution, so\n" +
-                "    there is nothing honest to write for them.\n\n" +
+                "    there is nothing honest to write for them. A cheat containing a test\n" +
+                "    is skipped and counted too: one handler entry holds one write, and a\n" +
+                "    test with the write it guards dropped would be a different cheat.\n\n" +
                 "THE CHEAT DATABASE\n" +
                 "    'cheat db' works over a DIRECTORY TREE of .cht files - one file per\n" +
                 "    game, in per-system folders, which is exactly how RetroArch stores its\n" +

@@ -5,6 +5,7 @@ using System.Linq;
 using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.Mars.Cheats;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.Mars.Rom;
@@ -73,7 +74,7 @@ namespace EmuSen.WiseMan.Cores
             CoreBundle bundle = CoreFactory.Load(path);
             Assert.IsType<MarsCore>(bundle.Core);
             Assert.IsType<MarsDebugTarget>(bundle.DebugTarget);
-            Assert.Null(bundle.CheatAutoDetectCodec);
+            Assert.IsType<N64GameSharkCheatCodec>(bundle.CheatAutoDetectCodec);
             Assert.Null(bundle.CheatExplicitCodec);
             Assert.True(bundle.Core.IsRomLoaded);
         }
@@ -101,7 +102,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(MarsCore.PadButtons, CoreCatalog.ButtonsFor("N64"));
 
             var codecs = CoreFactory.CheatCodecsFor("N64");
-            Assert.Null(codecs.AutoDetect);
+            Assert.IsType<N64GameSharkCheatCodec>(codecs.AutoDetect);
             Assert.Null(codecs.Explicit);
         }
 

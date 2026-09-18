@@ -8,6 +8,10 @@ namespace EmuSen.DianaOS.DianaOS.Var
         Set,
         Increase,
         Decrease,
+
+        // A test, not a write: the next write that is not a test happens only if it passes - see EmuSen_Cheats.md §7.
+        IfEqual,
+        IfNotEqual,
     }
 
     // One write inside a cheat, so one toggle can drive a whole run - see `man cheat`.
@@ -56,6 +60,8 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
         public int EffectiveWidth => Width == 2 || Width == 4 ? Width : 1;
         public int EffectiveRepeatCount => RepeatCount < 1 ? 1 : RepeatCount;
+
+        public bool IsTest => Type is CheatWriteType.IfEqual or CheatWriteType.IfNotEqual;
 
         // Highest address this write touches, for TryPatchRom's quick reject.
         public int LastAddress

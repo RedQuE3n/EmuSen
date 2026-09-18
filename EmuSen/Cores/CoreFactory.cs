@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.Mars.Cheats;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Cheats;
@@ -84,9 +85,9 @@ namespace EmuSen.Cores
                         new GbGameGenieCheatCodec(),
                         null);
 
-                // No codec: a code typed for a console that applies none should be refused, not stored - see Mars_Core.md §8.
+                // The GameShark pokes; no N64 format patches ROM, so the explicit slot stays empty - see Mars_Cheats.md §1.
                 case MarsCore mars:
-                    return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), null, null, null);
+                    return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), new N64GameSharkCheatCodec(), null, null);
 
                 default:
                     throw new NotSupportedException($"No debug target is registered for {core.GetType().Name}.");
@@ -112,6 +113,7 @@ namespace EmuSen.Cores
             if (core.SupportsExtension(".sfc")) return (new ActionReplayCheatCodec(), new GameGenieCheatCodec());
             if (core.SupportsExtension(".nes")) return (new NesRawCheatCodec(), new NesGameGenieCheatCodec());
             if (core.SupportsExtension(".gb")) return (new GbGameSharkCheatCodec(), new GbGameGenieCheatCodec());
+            if (core.SupportsExtension(".z64")) return (new N64GameSharkCheatCodec(), null);
 
             return (null, null);
         }

@@ -2,7 +2,7 @@
 
 How a typed cheat code becomes a running cheat, and what a core has to supply to take part. The mechanism itself — write widths, byte order, repeat runs, bit positions, the master switch — is `man cheat` and `CheatRegistry`'s own header; this document is only about the **seam between a core and the cheat engine**, which is what a second core exercised for the first time.
 
-Per-console behaviour: `Hardware/Nintendo/Moon - NES/Moon_Cheats.md` for the NES, `Venus_Memory.md` §6 for the SNES.
+Per-console behaviour: `Hardware/Nintendo/Moon - NES/Moon_Cheats.md` for the NES, `Venus_Memory.md` §6 for the SNES, `Hardware/Nintendo/Mars - N64/Mars_Cheats.md` for the N64.
 
 ---
 
@@ -47,6 +47,7 @@ The cores install that hook in different places, and the difference is deliberat
 - **Venus** installs it from `SnesDebugTarget`, which owns the registry. ROM patches therefore need a debug target to exist.
 - **Moon** installs it from `MoonCore` itself (`CheatRomPatcher`), because the core owns its own `CheatRegistry`. Cheats work with no debug layer attached at all.
 - **Mercury** follows Moon, for the same reason and in the same line of `LoadRom`.
+- **Mars** follows Moon too *(2026-09-18)*, with the hook in `MemoryBus.ReadCart32`, the one place a cartridge byte enters the machine — processor loads and the PI's transfers both reach it. A patch is asked for by ROM offset, and because an N64 game copies its code out of the cartridge, it takes effect at the next transfer rather than at once (`Mars_Cheats.md` §6).
 
 Moon's arrangement is the better one and is where Venus should end up; it was not changed at the same time because moving Venus's registry ownership is a larger edit than adding a second core's. §6 is the bill for having two arrangements.
 
@@ -72,6 +73,20 @@ Moon's arrangement is the better one and is where Venus should end up; it was no
 **Coverage**: `EmuSen.WiseMan/Cores/CoreFactoryCheatWiringTests.cs`, seven tests, built to the report's shape rather than the fix's. Against the unfixed build six fail and only the SNES control passes — a per-core split that is what "none of my cheats worked, and it is not the codec" looks like from the outside. The six include both paused-apply tests, which cannot separate the two holes on the old build: an unshared registry fails them before the missing forward is reached. Removing only Mercury's forward from the fixed build is what separates them, and it reddens exactly the Game Boy paused-apply test. *(An earlier draft of this paragraph named only three of the six; re-measured 2026-09-15.)*
 
 **What this does not reach, and how that step was closed anyway.** The emulation thread is not driven by a test; coverage stops at `EmulatorSession`, one call below `MainWindow`. That last call is confirmed by hand rather than by the harness: *2026-09-15, Super Mario Land 2 in Mistress from a source build, cheats applied and took effect* — the same report that opened §6, re-run against the fix. It is worth naming as a hand measurement, because it is the one step that will silently stop being covered if `MainWindow`'s cheat path is ever rewritten. §5's list is unchanged — `.cht` import still cannot produce ROM patches, and a database of Game Genie codes still imports as pokes at ROM addresses, which is a *different* way for a Game Boy cheat to do nothing and the next thing to look at if one still does.
+
+## 7. Tests, and codes wider than a byte
+
+*2026-09-18, with the N64's GameShark (`Mars_Cheats.md`).* Every format before it decoded one code to one byte, and the seam said so: `ICheatCodeCodec.Decode` returns an address and a byte. A GameShark code is lines — 16-bit writes, a line that tests memory and guards the next, a line that repeats the next — so two things were added, and nothing that existed changed meaning.
+
+**A write can be a test.** `CheatWriteType` gained `IfEqual` and `IfNotEqual`: a write of that type compares its width in its byte order against its value (masked to its width, as a write's value is) and writes nothing. In `ApplyAll`, a failed test holds until the next write in the same cheat that is not a test, which it skips; so a run of tests is their AND, and one passing after one failing does not undo it. That is both N64 references' rule (`Mars_Cheats.md` §2.2). It is **not** RetroArch's: its handler form has the same two comparisons as `cheat_type` 4 and 5 ("run next if …"), but there a failure skips the next *entry*, whatever it is, so a second test after a failed first is skipped rather than evaluated, and what it guards runs. The names were kept apart from RetroArch's for that reason. `AddCheat` refuses a test that carries a repeat run or a bit position, and a ROM patch can hold no test (it already refused every type but `Set`). A test round-trips through the cheat file as its type's name, so a build older than this one skips such an entry rather than misreading it.
+
+**A codec can decode a whole code.** `ICheatCodeCodec.DecodeWrites` is a default interface method returning null, like `DecodeCompare`, so no existing codec changed. When it answers, the three places a typed or imported code becomes a cheat add its writes as one cheat instead of asking `Decode` for a byte: `cheat add`, the Active Cheats window's Add button, and `ChtFile`'s code-string path — which hands such a codec the *whole* string before splitting on `+`, because a repeater spans a `+`. `cheat list` prints a test as `if <space> <address> == <value>`.
+
+**`PrefersExplicitCodec` no longer picks an empty slot.** The N64 is the first console with one codec rather than two, and §2's tie-break sent a code that neither slot claimed to the punctuation guess — so a mistyped N64 code with a separator after its fourth digit (`8033-B21E`) went to the missing Game Genie slot and was answered "no Game Genie-style codec is registered", which is true and useless. With one slot empty the other is the answer, and its own error says what is wrong with the code. Consoles with both slots are unaffected; `A_malformed_n64_code_is_answered_by_the_gameshark` failed before the change and passes after it.
+
+**`cheat export` skips a cheat containing a test**, and counts it beside the ROM patches it already skipped. The handler form holds one write per entry; a test written alone would lose what it guards, and written as `cheat_type` 4 it would round-trip into the defect below.
+
+**A defect this surfaced and did not fix: RetroArch's comparison entries import as writes.** `ChtFile.ReadExplicit` maps `cheat_type` 1, 2 and 3 and sends everything else to `Set`, so an entry of type 4–7 ("run next if equal", "not equal", "less", "greater") imports as a write of its *compare value* to its address. Demonstrated on 2026-09-18 with a two-entry handler-form file — `cheat_type = 4` at address 16 with value 3, then a `Set` of 9 at 32 — which parsed to two `Set` writes, the first writing 3; the file came back with nothing skipped. It predates the test type and is untouched here, because fixing it well means turning RetroArch's cross-entry "next" into one cheat of several writes, which is an import feature rather than a repair. Until then such an entry does something neither RetroArch nor its author meant.
 
 ## The two combinations `AddCheat` refuses
 

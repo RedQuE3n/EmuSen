@@ -447,10 +447,18 @@ namespace EmuSen.Mistress.Views
 
             try
             {
-                (int address, byte value) = codec.Decode(code);
-                // Dropping the compare would not be a lesser cheat but a wrong one - see EmuSen_Cheats.md §2.
-                if (gameGenie) _registry.AddRomPatch(address, value, codec.DecodeCompare(code), description);
-                else _registry.AddRamPoke(codec.SpaceName ?? CheatImport.DefaultSpaceName, address, value, description);
+                // Same whole-code path `cheat add` takes for a format wider than a byte - see EmuSen_Cheats.md §7.
+                if (!gameGenie && codec.DecodeWrites(code) is { } writes)
+                {
+                    _registry.AddCheat(CheatKind.RamPoke, writes, null, description);
+                }
+                else
+                {
+                    (int address, byte value) = codec.Decode(code);
+                    // Dropping the compare would not be a lesser cheat but a wrong one - see EmuSen_Cheats.md §2.
+                    if (gameGenie) _registry.AddRomPatch(address, value, codec.DecodeCompare(code), description);
+                    else _registry.AddRamPoke(codec.SpaceName ?? CheatImport.DefaultSpaceName, address, value, description);
+                }
             }
             catch (Exception ex)
             {

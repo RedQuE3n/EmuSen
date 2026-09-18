@@ -120,6 +120,11 @@ namespace EmuSen.DianaOS.DianaOS.Var
                 }
             }
 
+            if (list.Any(w => w.IsTest && (w.BitPosition.HasValue || w.EffectiveRepeatCount > 1)))
+            {
+                throw new ArgumentException("A test compares one value at one address - a bit position or a repeat run on it has no meaning.");
+            }
+
             lock (_gate)
             {
                 var cheat = new Cheat
@@ -278,8 +283,35 @@ namespace EmuSen.DianaOS.DianaOS.Var
             foreach (Cheat c in Snapshot())
             {
                 if (c.Kind != CheatKind.RamPoke || !c.Enabled) continue;
-                foreach (CheatWrite w in c.Writes) ApplyWrite(w, read, write);
+
+                // A failed test holds until the next write that is not a test, so a run of tests is their AND - see EmuSen_Cheats.md §7.
+                bool skip = false;
+                foreach (CheatWrite w in c.Writes)
+                {
+                    if (w.IsTest)
+                    {
+                        if (!skip && !Passes(w, read)) skip = true;
+                        continue;
+                    }
+
+                    if (skip)
+                    {
+                        skip = false;
+                        continue;
+                    }
+
+                    ApplyWrite(w, read, write);
+                }
             }
+        }
+
+        // Compares as many bytes as the test is wide, so a value wider than that is not a test that can never pass.
+        private static bool Passes(CheatWrite w, Func<string, int, byte> read)
+        {
+            int width = w.EffectiveWidth;
+            uint mask = width == 4 ? uint.MaxValue : (1u << (8 * width)) - 1;
+            bool equal = ReadWide(read, w, w.Address, width) == (w.Value & mask);
+            return w.Type == CheatWriteType.IfEqual ? equal : !equal;
         }
 
         // Kept so a write-only caller still compiles; those writes read back as 0.

@@ -36,6 +36,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // Told of every processor store to a memory, for `watch` and data breakpoints - see Mars_Debug.md §3.
         [EmuSen.Common.SkipInState] public IWriteObserver? WriteObserver;
 
+        // Consulted on every cartridge ROM read, by ROM offset, and never written back - see Mars_Cheats.md §6.
+        [EmuSen.Common.SkipInState] public IRomReadPatcher? RomPatcher;
+
         // The cartridge's save chip on the second domain and the joybus's fifth channel - see Mars_Save.md §1.
         [EmuSen.Common.SkipInState] public SaveChip Save = new(N64SaveType.Unknown);
 
@@ -443,7 +446,23 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             byte[]? rom = Cart?.Rom;
             if (rom is null || offset + 3 >= rom.Length) return 0;
 
-            return ReadArray32(rom, offset);
+            uint word = ReadArray32(rom, offset);
+            return RomPatcher is null ? word : Patched(RomPatcher, word, offset);
+        }
+
+        // Each byte asked for by its own offset, so a patch lands whichever lane or transfer reaches it - see Mars_Cheats.md §6.
+        private static uint Patched(IRomReadPatcher patcher, uint word, uint offset)
+        {
+            for (int lane = 0; lane < 4; lane++)
+            {
+                int shift = 24 - 8 * lane;
+                if (patcher.TryPatch(offset + (uint)lane, (byte)(word >> shift), out byte patched))
+                {
+                    word = (word & ~(0xFFu << shift)) | ((uint)patched << shift);
+                }
+            }
+
+            return word;
         }
 
         private bool SignalProcessorMemory(uint physical, out byte[] bank, out uint offset)

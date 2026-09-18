@@ -13,7 +13,7 @@ using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 namespace EmuSen.Cores.Nintendo.Mars
 {
     // The Nintendo 64's ICore; what the machine cannot provide yet is stubbed on purpose - see Mars_Core.md.
-    public sealed class MarsCore : global::EmuSen.Cores.ICore
+    public sealed partial class MarsCore : global::EmuSen.Cores.ICore
     {
         // The VR4300's pipeline clock, which is what MemoryBus.Cycles counts - see Mars_Memory.md §3.
         public const long ProcessorClockHz = 93_750_000;
@@ -135,6 +135,7 @@ namespace EmuSen.Cores.Nintendo.Mars
         {
             var rom = RomImage.Load(path);
             var bus = new MemoryBus(ExpansionPak);
+            bus.RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats);
             var cpu = new Cpu.Core.Cpu(bus);
             Boot.HandOff(bus, cpu, rom);
             LoadSaves(bus, rom, path);
@@ -245,6 +246,7 @@ namespace EmuSen.Cores.Nintendo.Mars
 
             _lastFrameCycles = Bus.Cycles - start;
             TotalFrames++;
+            ApplyCheatsAtFrameEnd();
 
             FrameLog.RecordFrame(TotalFrames, (space, address, width) => MarsDebugSpaces.ReadWidth(this, space, address, width));
             Breakpoints.NoteFrame(TotalFrames);

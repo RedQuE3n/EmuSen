@@ -30,7 +30,7 @@ not, below, so that nobody has to find them by using them.
 | battery saves | ~~**nothing** — there are no save devices (§6)~~ the cartridge's chip in `<rom>.srm` and a Controller Pak in `<rom>.mpk` (§6, `Mars_Save.md`) | ~~progress is lost when the ROM is closed~~ progress kept between runs |
 | save states and rewind | ~~explicit saves refused, rewind given no history (§6)~~ the whole machine, 6.4MB a state (`Mars_SaveStates.md`) | ~~"Save State failed", and holding rewind freezes the picture~~ saving, loading and rewinding |
 | a debug target | ~~memory spaces, register readouts, a summary; nothing that halts (§8)~~ both processors, a virtual CPU space, breakpoints, stepping, watches, coverage, both disassemblers (`Mars_Debug.md`) | ~~`watch`, `bp` and `framelog` accept arguments and never fire~~ the debugger's commands, working |
-| cheats | the database folder is kept; no codec applies anything (§8) | the N64 cheat tab says it takes no format |
+| cheats | ~~the database folder is kept; no codec applies anything (§8)~~ the GameShark, applied at each frame's end once the game is running, and ROM patches at the cartridge (§8, `Mars_Cheats.md`) | ~~the N64 cheat tab says it takes no format~~ the N64 tab takes GameShark codes |
 
 **What none of this is evidence for is that any game is playable.** Two commercial games reach their title
 pictures through this interface (§9); ~~neither can be steered, heard or saved~~.
@@ -293,10 +293,19 @@ no disassembler", and `coretop` leaves out its tile sheet because `TilemapEntryS
 commands that use them do not fail, and nothing feeds them: `watch`, `framelog` and `bp` accept their arguments
 and never fire. They become real with the rest of Phase F (`Mars_Gameplan.md` §4.6).~~
 
-**No cheat codec is bundled**, so the Active Cheats window's N64 tab says the console has no cheat-code format and
+~~**No cheat codec is bundled**, so the Active Cheats window's N64 tab says the console has no cheat-code format and
 disables its Add button (`ActiveCheatsWindow.axaml.cs` 199, 267). A `.cht` loaded from the database still
-lands in the registry as raw pokes, and nothing applies them. **The libretro folder `Nintendo - Nintendo 64` is
+lands in the registry as raw pokes, and nothing applies them.~~ **The libretro folder `Nintendo - Nintendo 64` is
 claimed anyway**, so that `cheat db prune` keeps data a later build will use instead of deleting it.
+
+> **Retired 2026-09-18 by the cheat work** (`Mars_Cheats.md`). The struck paragraph was accurate when written and is
+> kept as the record of the stub. `CoreFactory` now bundles an N64 GameShark codec in the RAM-poke slot and none in the
+> ROM-patch slot, so the N64 tab accepts a typed code and a database `.cht` decodes its code strings whole instead of
+> being skipped. `MarsCore` implements `ICheatRegistryHost`: the registry a frontend hands over is the one applied, at
+> the end of each `RunFrame` while the game has interrupts enabled (`Mars_Cheats.md` §5.1 is why the condition), and by
+> `MarsDebugTarget.ApplyCheats` for a paused Apply. The debug target no longer holds a registry of its own; it reads the
+> core's. ROM patches are read through the cartridge (`Mars_Cheats.md` §6). The folder's claim was the right call: it is
+> now read.
 
 **The descriptor is `Nintendo 64 (Mars)`**, console `N64`, Nintendo, 1996, claiming `.z64`, `.n64` and `.v64`. All
 three are claimed because the container is decided by the magic word and not by the extension

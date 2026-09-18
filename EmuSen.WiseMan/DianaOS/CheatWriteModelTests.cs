@@ -368,6 +368,123 @@ namespace EmuSen.WiseMan.DianaOS
             Assert.Equal((byte?)0x1F, patch.Compare);
         }
 
+        // --- Tests: a write that compares instead, guarding the next one (EmuSen_Cheats.md §7) ---
+
+        private static CheatWrite Test(CheatWriteType type, int address, uint value, int width = 1, bool bigEndian = false) =>
+            new() { Space = "WRAM", Address = address, Value = value, Width = width, BigEndian = bigEndian, Type = type, RepeatCount = 1 };
+
+        private static FakeSpace ApplyTo(FakeSpace space, CheatRegistry registry)
+        {
+            registry.ApplyAll(space.Read, space.Write);
+            return space;
+        }
+
+        [Fact]
+        public void A_failed_test_skips_the_next_write_and_no_other()
+        {
+            var registry = new CheatRegistry();
+            registry.AddCheat(CheatKind.RamPoke, new[]
+            {
+                Test(CheatWriteType.IfEqual, 0x10, 0x05),
+                CheatWrite.Poke("WRAM", 0x20, 0x01),
+                CheatWrite.Poke("WRAM", 0x21, 0x02),
+            }, null, "guarded");
+
+            var space = new FakeSpace();
+            space.Set(0x10, 0x06);
+            ApplyTo(space, registry);
+
+            Assert.Equal(0x00, space[0x20]);
+            Assert.Equal(0x02, space[0x21]);
+            Assert.Equal(0x06, space[0x10]);
+        }
+
+        [Fact]
+        public void A_passed_test_lets_the_next_write_through()
+        {
+            var registry = new CheatRegistry();
+            registry.AddCheat(CheatKind.RamPoke, new[]
+            {
+                Test(CheatWriteType.IfNotEqual, 0x10, 0x06),
+                CheatWrite.Poke("WRAM", 0x20, 0x01),
+            }, null, "guarded");
+
+            var space = new FakeSpace();
+            space.Set(0x10, 0x05);
+
+            Assert.Equal(0x01, ApplyTo(space, registry)[0x20]);
+        }
+
+        // A later passing test must not undo an earlier failed one, or the order of a code's lines would change its meaning.
+        [Fact]
+        public void A_run_of_tests_is_their_and()
+        {
+            var registry = new CheatRegistry();
+            registry.AddCheat(CheatKind.RamPoke, new[]
+            {
+                Test(CheatWriteType.IfEqual, 0x10, 0x05),
+                Test(CheatWriteType.IfEqual, 0x11, 0x07),
+                CheatWrite.Poke("WRAM", 0x20, 0x01),
+            }, null, "both");
+
+            var space = new FakeSpace();
+            space.Set(0x10, 0x04);
+            space.Set(0x11, 0x07);
+
+            Assert.Equal(0x00, ApplyTo(space, registry)[0x20]);
+        }
+
+        [Fact]
+        public void A_wide_test_reads_in_its_own_byte_order_and_only_its_width()
+        {
+            var registry = new CheatRegistry();
+            registry.AddCheat(CheatKind.RamPoke, new[]
+            {
+                Test(CheatWriteType.IfEqual, 0x10, 0xFF12_34, width: 2, bigEndian: true),
+                CheatWrite.Poke("WRAM", 0x20, 0x01),
+            }, null, "big-endian");
+
+            var space = new FakeSpace();
+            space.Set(0x10, 0x12);
+            space.Set(0x11, 0x34);
+
+            Assert.Equal(0x01, ApplyTo(space, registry)[0x20]);
+        }
+
+        [Fact]
+        public void A_test_cannot_carry_a_repeat_or_a_bit()
+        {
+            var registry = new CheatRegistry();
+
+            Assert.Throws<ArgumentException>(() => registry.AddCheat(CheatKind.RamPoke,
+                new[] { Test(CheatWriteType.IfEqual, 0x10, 1) with { RepeatCount = 2, RepeatAddAddress = 1 }, CheatWrite.Poke("WRAM", 0x20, 1) }, null, "run"));
+            Assert.Throws<ArgumentException>(() => registry.AddCheat(CheatKind.RamPoke,
+                new[] { Test(CheatWriteType.IfEqual, 0x10, 1) with { BitPosition = 3 }, CheatWrite.Poke("WRAM", 0x20, 1) }, null, "bit"));
+            Assert.Throws<ArgumentException>(() => registry.AddCheat(CheatKind.RomPatch,
+                new[] { Test(CheatWriteType.IfEqual, 0x10, 1), CheatWrite.Patch(0x20, 1) }, null, "rom"));
+        }
+
+        [Fact]
+        public void A_test_survives_a_save_and_load()
+        {
+            var saved = new CheatRegistry();
+            saved.AddCheat(CheatKind.RamPoke, new[]
+            {
+                Test(CheatWriteType.IfNotEqual, 0x10, 0x1234, width: 2, bigEndian: true),
+                CheatWrite.Poke("WRAM", 0x20, 0x01),
+            }, null, "guarded");
+
+            var reloaded = new CheatRegistry();
+            (int loaded, int skipped) = reloaded.LoadFrom(saved.ToCheatFile());
+
+            Assert.Equal((1, 0), (loaded, skipped));
+            CheatWrite test = reloaded.GetCheats().Single().Writes[0];
+            Assert.Equal(CheatWriteType.IfNotEqual, test.Type);
+            Assert.Equal(0x1234u, test.Value);
+            Assert.Equal(2, test.EffectiveWidth);
+            Assert.True(test.BigEndian);
+        }
+
         [Fact]
         public void One_broken_entry_does_not_stop_the_rest_loading()
         {

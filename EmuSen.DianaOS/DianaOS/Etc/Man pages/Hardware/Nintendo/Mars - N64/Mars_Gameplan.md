@@ -584,6 +584,17 @@ rather than raw samples.
 > with a named case that says so. What is left in Phase E is the cartridge bus's write latch and its
 > decay, sub-word cartridge reads, AI, and the save types.
 
+> **Progress, 2026-09-18: the cartridge bus as the processor sees it** (`Mars_Memory.md` §7.7–§7.8). A
+> processor store anywhere in the cartridge's ROM window is kept by the PI and handed back to the next
+> processor read, once, until it decays, and the status register reports it as I/O-busy while it lasts. A
+> halfword or byte read takes its lane from a word that starts at the halfword named, so every other halfword
+> is out of reach. All fifteen of the corpus's cartridge read and write groups pass, 72 failing cases to 54,
+> and nothing else moved. One decision was about the instrument rather than the console: the ISViewer the
+> corpus prints through is kept outside the latch, as Project64 does, because inside it the corpus's own
+> printing held the latch its tests measure. The corpus pins the decay to between 34 and 333 of Mars's
+> cycles, and the FPGA core's constant sits inside that. What is left in Phase E is the MI's mode register
+> and the RDRAM registers (seven groups), AI, and the save types.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

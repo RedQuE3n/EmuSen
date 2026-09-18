@@ -13,12 +13,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             uint physical = TranslateAccess(Mirrored(address, size), address);
 
-            ulong value = size switch
+            ulong raw = _bus.Load(physical, size);
+            ulong value = !signed ? raw : size switch
             {
-                1 => signed ? (ulong)(long)(sbyte)_bus.Read8(physical) : _bus.Read8(physical),
-                2 => signed ? (ulong)(long)(short)_bus.Read16(physical) : _bus.Read16(physical),
-                4 => signed ? (ulong)(long)(int)_bus.Read32(physical) : _bus.Read32(physical),
-                _ => _bus.Read64(physical),
+                1 => (ulong)(long)(sbyte)raw,
+                2 => (ulong)(long)(short)raw,
+                4 => (ulong)(long)(int)raw,
+                _ => raw,
             };
 
             Write(Rt(instruction), value);

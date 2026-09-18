@@ -180,6 +180,11 @@ coverage gap suggests.
 > `~/Projects/nemu64-test-reference`; reading it is how `Mars_Memory.md` §7.4 found that the
 > corpus writes its expectations as formulas, which can be compared with an implementation at
 > sizes it never runs.
+>
+> **Update 2026-09-18:** those fifteen cartridge-bus groups pass as well (`Mars_Memory.md` §7.7–§7.8).
+> Passing them needed one decision about the instrument rather than the console — the ISViewer the
+> corpus prints through is kept outside the PI's store latch, or the corpus's own printing holds the
+> latch its tests measure — and §7.7 records it.
 
 **For the RDP, the differential infrastructure is excellent and its ground truth is
 not hardware.** `parallel-rdp` (MIT) defines an interchange format — `RDPDUMP2`: an

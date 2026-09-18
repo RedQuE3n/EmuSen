@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Debug;
@@ -351,6 +352,36 @@ namespace EmuSen.WiseMan.Cores
             Assert.Same(core.Breakpoints, bundle.DebugTarget.Breakpoints);
             Assert.Same(core.Coverage, bundle.DebugTarget.Coverage);
             Assert.Same(core.Watches, bundle.DebugTarget.Watches);
+        }
+
+        // The two frontends' own routes to a core, with the commands the plan names run on each - see Mars_Gameplan.md §4.6.
+        [Fact]
+        public void Both_frontends_routes_open_a_z64_and_disassemble_save_and_load_it()
+        {
+            string rom = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build(patches: (0, CountForever)));
+            _roms.Add(rom);
+            string state = Path.Combine(Path.GetTempPath(), $"wiseman_{Guid.NewGuid():N}.state");
+            _roms.Add(state);
+
+            // Hotaru: Create with a window, LoadRom, Bundle, and its state command on the core's own save and load.
+            ICore hotaru = CoreFactory.Create(rom, headless: false);
+            hotaru.LoadRom(rom);
+            IDebugTarget target = CoreFactory.Bundle(hotaru).DebugTarget;
+            var stateCommand = new StateCommand(hotaru.SaveState, hotaru.LoadState, () => state);
+
+            Assert.Contains("lui", new DisasmCommand().Execute(target, new[] { "disasm", "cpu" }, null).Output);
+            Assert.Equal(0, stateCommand.Execute(target, new[] { "state", "save" }, null).ExitCode);
+            hotaru.RunFrame();
+            Assert.Equal(0, stateCommand.Execute(target, new[] { "state", "load" }, null).ExitCode);
+            Assert.Equal(0, target.FrameCount);
+
+            // Mistress: the session a window drives.
+            var session = new EmulatorSession();
+            session.LoadRom(rom);
+            session.RunFrame();
+
+            Assert.IsType<MarsCore>(session.Core);
+            Assert.Contains("lui", new DisasmCommand().Execute(session.DebugTarget, new[] { "disasm", "cpu", "A4000040" }, null).Output);
         }
 
         private static (string Space, int Offset, bool Addressable) Resolved(MarsDebugTarget target, uint address)

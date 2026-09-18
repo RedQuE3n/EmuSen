@@ -561,6 +561,14 @@ rather than raw samples.
 > seventeen applicable breakages are caught. What is left
 > here is AI, SI/PIF and PI.
 
+> **Progress, 2026-09-17: the serial interface and the joybus** (`Mars_Serial.md`). Sixty-four bytes each way
+> between memory and PIF RAM, and the PIF walking the block a game leaves there to say what is plugged into
+> each port and which buttons are held. PIF RAM also turned out to latch whole words like the signal
+> processor's memories, which the corpus had been saying for three slices: widening that one predicate cleared
+> exactly the six groups the census had attributed to it, 152 failing assertions to 146. With this,
+> `Mars_Microcode.md` §3's prediction is complete — both stand-in interrupts are deleted and the test passes
+> with no stand-ins at all. What is left in Phase E is AI, and PI with the save types.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

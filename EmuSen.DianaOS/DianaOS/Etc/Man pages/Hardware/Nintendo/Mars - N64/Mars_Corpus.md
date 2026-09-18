@@ -86,18 +86,26 @@ in the corpus's test list has been attempted. Everything after it has not.
 
 ## 3. The census of what still fails
 
-The 77 distinct test groups that fail in the complete run, counted by name — a group that
-fails for thirty-three values is one row — against the corpus's own 152, which counts
+The 71 distinct test groups that fail in the complete run, counted by name — a group that
+fails for thirty-three values is one row — against the corpus's own 146, which counts
 assertions.
 
 | | groups | why |
 | --- | --- | --- |
 | caches, all four families | 45 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
 | cartridge memory and writes | 19 | Phase E — the PI and cartridge DMA |
-| PIF RAM, MI, RDRAM registers | 13 | Phase E — five MI, six PIF RAM, two RDRAM register groups |
+| MI and RDRAM registers | 7 | Phase E — five MI, two RDRAM register groups |
 
-**Every remaining row is Phase E or a decision.** The six RDP groups that stood in the previous
-census cleared in the slice after it (§12), and the three rows here have the counts it gave them.
+**Every remaining row is Phase E or a decision.** The six RDP groups that stood in an earlier
+census cleared in the slice after it (§12), and the six PIF RAM groups cleared in
+`Mars_Serial.md` §1 — they wanted the whole-word store rule `Mars_Memory.md` §2.4 had already
+built for the signal processor's memories, applied to a second window.
+
+> **Retired 2026-09-17: the census that stood before the serial interface.** It counted 77
+> groups against 152 assertions and its third row read *"PIF RAM, MI, RDRAM registers — 13 —
+> Phase E — five MI, six PIF RAM, two RDRAM register groups"*. The count it gave PIF RAM was
+> exactly right, which is how the slice that cleared them knew it had cleared all of them and
+> nothing else.
 
 > **Retired 2026-09-17: the census between RSP memory access and the display processor.** It
 > counted 83 groups against 159 assertions, with the three rows above and a fourth — *"RDP status

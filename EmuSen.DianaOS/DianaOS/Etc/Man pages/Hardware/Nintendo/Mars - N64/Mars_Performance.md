@@ -708,3 +708,45 @@ something else exact. The rest is the interpreter: the fetch's checks, the dispa
 file's bounds checks, the tick. The lever for that remains a cached interpreter or a recompiler, and remains a
 decision.
 
+## 20. A cached interpreter, measured before it was built
+
+**The question.** §19 left the interpreter itself as the wall in two games, and `Mars_Cpu.md` §1 had deferred a
+predecoded cache to this phase. Before building one — and its invalidation, which every path that writes RDRAM would
+have to serve — its ceiling was measured on §17's two loops, in a switch build never committed (its source is kept
+with the speed tooling outside the repository). Five shapes, medians of five, ns an instruction:
+
+| | ALU loop | memory loop |
+| --- | --- | --- |
+| the interpreter as it is | 5.43 | 6.51 |
+| a decode memo, validated by the fetched word, one flat switch on a predecoded kind | 6.01 | 6.98 |
+| the same memo, a delegate an entry | 5.86 | 6.47 |
+| the cache trusted — no fetch, no validation — one flat switch | 4.84 | 6.10 |
+| the cache trusted, a delegate an entry | 4.86 | 5.73 |
+| the floor: each instruction known by its address, no lookup, no decode | 4.02 | 5.06 |
+
+**What the rows say.**
+
+- *Decoding costs about 1.4 to 1.5 ns an instruction*, a quarter of the step: that is the floor's distance from the
+  interpreter, with the fetch still paid in both.
+- *A memo that keeps the fetch and validates against it is slower than decoding.* The table load, the compare and one
+  flat switch, or one delegate call, cost more than the two jump tables the JIT builds from the raw word. This is the
+  shape that would have needed no invalidation, and it is ruled out by measurement.
+- *Trusting the cache — the block cache's best case, with nothing charged for keeping it right — saves 0.4 to 0.8 ns*,
+  6 to 12 per cent of the step. The lookup and its dispatch keep more than half of what decoding costs; a C# switch on a
+  compact kind, or a delegate, is not much cheaper than a switch on the word.
+
+**What it would be worth in a game.** The processor is 34 to 53 per cent of the thread (§19); 6 to 12 per cent of its
+step is 2 to 6 per cent of a frame — before the cache's own costs: a test on every store to RDRAM, an invalidation on
+every DMA and on the display processor's writes, the cheat patcher and a loaded state, and the memory the entries take.
+§6's rule asks for a few per cent in more than one game, twice; the ceiling clears it barely and the floor of what
+invalidation would cost is unmeasured. **Not built.** The decision stands on this measurement and can be reopened by a
+better one: a block walked sequentially would save the per-instruction index (a fraction of a nanosecond), and no
+shape here was tried on a loop with a branch mispredicted.
+
+**What the floor is evidence of.** The 1.4 ns between the interpreter and knowing the instruction by its address is
+recoverable only by code that *is* the instruction — a recompiled block — and the per-instruction bookkeeping the
+step still carries (about 2 ns: the try region, the two program counters, the MI compare, the tick, the timer's
+compare, the count) is recoverable only by executing several instructions between checks, which a block can do
+exactly if it is cut where the next event falls. Both are the recompiler's shape, whether or not it emits machine code,
+and that remains the decision it was in §8.
+

@@ -749,6 +749,11 @@ of them.
 > every Status write and checked on every step in Debug. Together +9 to +14 per cent: 24.1, 30.4 and 35.3 fps, 48 to
 > 61 per cent of the console, every frame and state still matching the baseline.
 
+> **Measured, 2026-09-18: a cached interpreter's ceiling** (`Mars_Performance.md` §20). Five shapes in a switch build:
+> a memo validated by the fetched word is slower than decoding; a cache trusted outright saves 6 to 12 per cent of the
+> step, 2 to 6 per cent of a frame, before invalidation is paid for. Not built. The floor — each instruction known by
+> its address — is 1.4 ns under the interpreter, and that is the recompiler's shape.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

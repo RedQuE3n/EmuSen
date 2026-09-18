@@ -113,14 +113,24 @@ namespace EmuSen.Cores.Nintendo.Venus
         public long TotalFrames { get; private set; }
 
         // All twelve; PadButton's names were chosen to match SnesButton - see EmuSen_Input.md §3.
-        public static readonly PadButton[] PadButtons = (PadButton[])Enum.GetValues(typeof(PadButton));
+        // The twelve an SNES pad has, which are PadButton's first twelve in SnesButton's own order - see EmuSen_Input.md §3.
+        public static readonly PadButton[] PadButtons =
+        {
+            PadButton.B, PadButton.Y, PadButton.Select, PadButton.Start,
+            PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right,
+            PadButton.A, PadButton.X, PadButton.L, PadButton.R,
+        };
 
         // Static, so the rebind window can list this console's pad without a ROM - see EmuSen_Input.md §5.1.
         public IReadOnlyList<PadButton> SupportedButtons => PadButtons;
 
         // Venus's own ports are 1-based, so the generic 0-based port shifts here.
-        public void SetButton(int port, PadButton button, bool pressed) =>
+        // A button past R has no SnesButton to cast to, so it is dropped before the cast rather than landing out of range.
+        public void SetButton(int port, PadButton button, bool pressed)
+        {
+            if (button > PadButton.R) return;
             Bus?.Input.SetButton((Controllers.SnesButton)button, pressed, port + 1);
+        }
 
         // Drops the per-scanline pixel pass only - see EmuSen_Rewind_And_FastForward.md §2.2.
         public bool SkipRendering { get; set; }

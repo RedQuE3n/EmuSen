@@ -27,6 +27,10 @@ namespace EmuSen.Common
         // Routed to whichever core is loaded - see EmuSen_Input.md §2.
         public void SetButton(int port, PadButton button, bool pressed) => _core?.SetButton(port, button, pressed);
 
+        public void SetAxis(int port, PadAxis axis, double value) => _core?.SetAxis(port, axis, value);
+
+        public IReadOnlyList<PadAxis> SupportedAxes => _core?.SupportedAxes ?? Array.Empty<PadAxis>();
+
         public IReadOnlyList<PadButton> SupportedButtons =>
             _core?.SupportedButtons ?? Array.Empty<PadButton>();
 

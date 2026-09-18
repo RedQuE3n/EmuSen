@@ -29,10 +29,10 @@ namespace EmuSen.Mistress.Views
         private readonly AppSettings _appSettings;
 
         // Key and pad listeners are separate - an event vs a poll. Both carry the
-        // console, since the same PadButton means a different binding per tab.
-        private (string Console, PadButton Button)? _listeningForKey;
+        // console, since the same control means a different binding per tab.
+        private (string Console, PadControl Button)? _listeningForKey;
         private HotkeyAction? _listeningForHotkey;
-        private (string Console, PadButton Button)? _listeningForPad;
+        private (string Console, PadControl Button)? _listeningForPad;
         private DispatcherTimer? _padPollTimer;
         private DispatcherTimer? _statusPollTimer;
 
@@ -45,10 +45,10 @@ namespace EmuSen.Mistress.Views
         private const string ListeningPadText = "Press a button...";
         private const string Unbound = "(unbound)";
 
-        private readonly Dictionary<(string, PadButton), TextBlock> _keyLabels = new();
-        private readonly Dictionary<(string, PadButton), TextBlock> _padLabels = new();
-        private readonly Dictionary<(string, PadButton), Button> _rebindKeyButtons = new();
-        private readonly Dictionary<(string, PadButton), Button> _rebindPadButtons = new();
+        private readonly Dictionary<(string, PadControl), TextBlock> _keyLabels = new();
+        private readonly Dictionary<(string, PadControl), TextBlock> _padLabels = new();
+        private readonly Dictionary<(string, PadControl), Button> _rebindKeyButtons = new();
+        private readonly Dictionary<(string, PadControl), Button> _rebindPadButtons = new();
         private readonly Dictionary<HotkeyAction, TextBlock> _hotkeyLabels = new();
         private readonly Dictionary<HotkeyAction, Button> _rebindHotkeyButtons = new();
 
@@ -140,16 +140,16 @@ namespace EmuSen.Mistress.Views
                 .Name("ButtonHeaderRow").Margin(0, 0, 0, 2));
 
             var rows = new StackPanel { Name = "BindingsPanel", Spacing = 6 };
-            foreach (PadButton button in CoreCatalog.ButtonsFor(console.Console))
+            foreach (PadControl control in CoreCatalog.ControlsFor(console.Console))
             {
-                rows.Children.Add(BuildButtonRow(console.Console, button));
+                rows.Children.Add(BuildButtonRow(console.Console, control));
             }
             panel.Children.Add(rows);
 
             return panel;
         }
 
-        private Control BuildButtonRow(string console, PadButton button)
+        private Control BuildButtonRow(string console, PadControl button)
         {
             var key = (console, button);
 
@@ -166,7 +166,7 @@ namespace EmuSen.Mistress.Views
             // somebody saying "click rebind key" needs those words to be the name. This is the same
             // trade LunaP made for PathPickerRow's Browse buttons - LunaP.md §24.2.
             Button rebindKey = Ui.Button(RebindKeyText, () => StartListeningForKey(console, button))
-                .HelpText($"Keyboard key for {console} {button}");
+                .HelpText($"Keyboard key for {console} {FullName(button)}");
             _rebindKeyButtons[key] = rebindKey;
 
             Button clearKey = Ui.Button("Clear", () =>
@@ -174,25 +174,30 @@ namespace EmuSen.Mistress.Views
                 _keyBindings.For(console).Unbind(button);
                 _keyBindings.Save();
                 RefreshKeyLabels();
-            }).Margin(4, 0, 12, 0).HelpText($"Clear the keyboard key for {console} {button}");
+            }).Margin(4, 0, 12, 0).HelpText($"Clear the keyboard key for {console} {FullName(button)}");
 
             TextBlock padText = NewValueLabel(CurrentPadLabel(console, button));
             _padLabels[key] = padText;
 
+            // A stick direction comes from the pad's own stick, so it has no pad button to bind - see EmuSen_Input.md §7.3.
+            bool isButton = PadControls.IsButton(button, out PadButton padButton);
+
             Button rebindPad = Ui.Button(RebindPadText, () => StartListeningForPad(console, button))
-                .HelpText($"Gamepad button for {console} {button}");
+                .HelpText($"Gamepad button for {console} {FullName(button)}");
+            rebindPad.IsEnabled = isButton;
             _rebindPadButtons[key] = rebindPad;
 
             Button clearPad = Ui.Button("Clear Pad", () =>
             {
-                _gamepadBindings.For(console).Unbind(button);
+                _gamepadBindings.For(console).Unbind(padButton);
                 _gamepadBindings.Save();
                 RefreshPadLabels();
-            }).Margin(4, 0, 0, 0).HelpText($"Clear the gamepad button for {console} {button}");
+            }).Margin(4, 0, 0, 0).HelpText($"Clear the gamepad button for {console} {FullName(button)}");
+            clearPad.IsEnabled = isButton;
 
             // Columns are assigned by position, which is exactly the order the row reads in.
             return Ui.Cols(ButtonRowColumns,
-                Ui.Text(button.ToString()).Center(),
+                Ui.Text(ShortName(button)).Center(),
                 keyText, rebindKey, clearKey, padText, rebindPad, clearPad);
         }
 
@@ -251,11 +256,34 @@ namespace EmuSen.Mistress.Views
 
         private static TextBlock ColumnHeader(string text) => new() { Text = text, FontWeight = FontWeight.SemiBold };
 
-        private string CurrentKeyLabel(string console, PadButton button) =>
+        private string CurrentKeyLabel(string console, PadControl button) =>
             _keyBindings.For(console).ButtonToKey.TryGetValue(button, out Key k) ? k.ToString() : Unbound;
 
-        private string CurrentPadLabel(string console, PadButton button) =>
-            _gamepadBindings.For(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : Unbound;
+        private string CurrentPadLabel(string console, PadControl control)
+        {
+            if (!PadControls.IsButton(control, out PadButton button)) return control <= PadControl.LeftStickRight ? "Left stick" : "Right stick";
+            return _gamepadBindings.For(console).ButtonToPad.TryGetValue(button, out SDL.GamepadButton p) ? PadName(p) : Unbound;
+        }
+
+        // Short enough for the button column; the help text carries the whole name.
+        private static string ShortName(PadControl control) => control switch
+        {
+            PadControl.LeftStickUp => "LS Up",
+            PadControl.LeftStickDown => "LS Down",
+            PadControl.LeftStickLeft => "LS Left",
+            PadControl.LeftStickRight => "LS Right",
+            PadControl.RightStickUp => "RS Up",
+            PadControl.RightStickDown => "RS Down",
+            PadControl.RightStickLeft => "RS Left",
+            PadControl.RightStickRight => "RS Right",
+            _ => control.ToString(),
+        };
+
+        private static string FullName(PadControl control) => control switch
+        {
+            >= PadControl.LeftStickUp => System.Text.RegularExpressions.Regex.Replace(control.ToString(), "(?<=[a-z])(?=[A-Z])", " ").ToLowerInvariant(),
+            _ => control.ToString(),
+        };
 
         // The connected pad's printed label where SDL3 knows it, else the
         // button's position - see EmuSen_Settings_Reference.md §4.6.
@@ -266,7 +294,7 @@ namespace EmuSen.Mistress.Views
 
         // --- Keyboard capture (game buttons and hotkeys share one listener) ---
 
-        private void StartListeningForKey(string console, PadButton button)
+        private void StartListeningForKey(string console, PadControl button)
         {
             ClearKeyListening();
             _listeningForKey = (console, button);
@@ -300,7 +328,7 @@ namespace EmuSen.Mistress.Views
             {
                 if (_listeningForKey is { } target)
                 {
-                    (string console, PadButton button) = target;
+                    (string console, PadControl button) = target;
 
                     // A hotkey is global, so it still cannot share a key with any console's button.
                     if (_hotkeyBindings.TryGetAction(e.Key, out HotkeyAction clash))
@@ -315,7 +343,7 @@ namespace EmuSen.Mistress.Views
                 {
                     foreach (var kv in _keyBindings.ByConsole)
                     {
-                        if (kv.Value.TryGetButton(e.Key, out PadButton clash)) kv.Value.Unbind(clash);
+                        if (kv.Value.TryGetControl(e.Key, out PadControl clash)) kv.Value.Unbind(clash);
                     }
                     _keyBindings.Save();
                     _hotkeyBindings.Rebind(action, e.Key);
@@ -336,7 +364,7 @@ namespace EmuSen.Mistress.Views
         {
             foreach (var kv in _keyLabels)
             {
-                (string console, PadButton button) = kv.Key;
+                (string console, PadControl button) = kv.Key;
                 kv.Value.Text = CurrentKeyLabel(console, button);
                 _rebindKeyButtons[kv.Key].Content = RebindKeyText;
             }
@@ -357,13 +385,13 @@ namespace EmuSen.Mistress.Views
         private void RefreshConflicts()
         {
             var messages = new List<string>();
-            var conflicting = new HashSet<(string, PadButton)>();
+            var conflicting = new HashSet<(string, PadControl)>();
             var conflictingHotkeys = new HashSet<HotkeyAction>();
 
             foreach (CoreDescriptor console in _consoles)
             {
                 string name = console.Console;
-                var buttons = CoreCatalog.ButtonsFor(name).ToHashSet();
+                var buttons = CoreCatalog.ControlsFor(name).ToHashSet();
                 var seen = new Dictionary<Key, List<string>>();
 
                 // Displayed buttons only - a button this console lacks is unreachable, so it cannot clash.
@@ -382,7 +410,7 @@ namespace EmuSen.Mistress.Views
                 {
                     messages.Add($"{name}: {kv.Key} is bound to {string.Join(" and ", kv.Value)}");
 
-                    foreach (PadButton button in buttons)
+                    foreach (PadControl button in buttons)
                     {
                         if (_keyBindings.For(name).ButtonToKey.TryGetValue(button, out Key k) && k == kv.Key)
                         {
@@ -411,7 +439,7 @@ namespace EmuSen.Mistress.Views
 
         // --- Gamepad rebind: polled, since Avalonia has no pad-press event ---
 
-        private void StartListeningForPad(string console, PadButton button)
+        private void StartListeningForPad(string console, PadControl button)
         {
             if (_gamepad is null) return; // parameterless-ctor / previewer case
 
@@ -435,7 +463,8 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            (string console, PadButton button) = target;
+            (string console, PadControl control) = target;
+            if (!PadControls.IsButton(control, out PadButton button)) return;
 
             SDL.GamepadButton? pressed = _gamepad.GetAnyPressedButton();
             if (pressed is not SDL.GamepadButton padButton) return;
@@ -452,7 +481,7 @@ namespace EmuSen.Mistress.Views
         {
             foreach (var kv in _padLabels)
             {
-                (string console, PadButton button) = kv.Key;
+                (string console, PadControl button) = kv.Key;
                 kv.Value.Text = CurrentPadLabel(console, button);
                 _rebindPadButtons[kv.Key].Content = RebindPadText;
             }

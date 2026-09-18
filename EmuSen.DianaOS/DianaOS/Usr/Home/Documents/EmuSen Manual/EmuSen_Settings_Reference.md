@@ -128,8 +128,20 @@ The two maps police **each other** on rebind, not just themselves: one key doing
 ### 4.4 Gamepad options (`Input/GamepadManager.cs`, `EmuSen.Galaxia/Models/AppSettings.cs`)
 
 - **`AnalogStickAsDpad`** (default on) — the left stick reports as the d-pad directions. No SNES game reads an analog axis, so an unmapped stick is simply dead input, which reads as a broken controller.
+  **Not for a console that reads the stick as a stick** (since 2026-09-18): when the loaded ROM's core lists `LeftX`
+  among its axes, `GamepadManager.LeftStickIsAnalog` is set and the left stick goes to the core as an axis instead,
+  since on the N64 the stick and the d-pad are different things (`EmuSen_Input.md` §7.3). The option still governs
+  every digital console.
+- **`AnalogDeadzone`** (0.1, not yet exposed) — the share of an axis's travel that reads zero, so a pad at rest does not
+  drift the stick a console reads. Separate from `StickDeadzone`, which is a threshold for turning a stick into
+  presses, not a dead zone for an analog value.
 - **`StickDeadzone`** (default 0.5, clamped 0.05-0.95) — fraction of full deflection before a direction registers. Exposed because worn sticks drift, and a drifting stick mapped onto the d-pad walks the player into walls.
 - **`ControllerName`/`IsConnected`** — surfaced in the window so "no controller detected" can be told apart from "connected but bound wrong". The window re-polls once a second, so hot-plugging is visible without reopening it.
+
+- **The rebind window lists a console's stick directions as rows** (`LS Up` … `RS Right`, short enough for the button
+  column; the help text carries the full name). Each has a keyboard binding like any button. Its gamepad column names
+  the stick it comes from and its pad buttons are disabled, because the direction comes from the pad's own stick and
+  there is no pad button to bind it to (`EmuSen_Input.md` §7.3).
 
 ### 4.5 Conflict reporting
 

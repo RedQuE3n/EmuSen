@@ -1,6 +1,6 @@
 namespace EmuSen.Galaxia.Input
 {
-    // The union of this project's console buttons; lives here because it keys two config files - see EmuSen_Input.md §3.
+    // The generic pad's buttons, in libretro's RetroPad order; add only at the end - see EmuSen_Input.md §3 and §7.
     public enum PadButton
     {
         B,
@@ -15,5 +15,9 @@ namespace EmuSen.Galaxia.Input
         X,
         L,
         R,
+        L2,
+        R2,
+        L3,
+        R3,
     }
 }

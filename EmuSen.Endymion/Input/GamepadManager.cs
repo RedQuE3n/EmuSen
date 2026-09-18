@@ -92,15 +92,43 @@ namespace EmuSen.Endymion.Input
             return label == SDL.GamepadButtonLabel.Unknown ? null : label.ToString();
         }
 
+        // Set when the loaded console reads the left stick as a stick, so it stops standing in for the d-pad - see EmuSen_Input.md §7.3.
+        public bool LeftStickIsAnalog { get; set; }
+
+        // Below this share of its travel an axis reads zero, so a pad at rest does not drift - see EmuSen_Input.md §7.3.
+        public double AnalogDeadzone { get; set; } = 0.1;
+
         public bool IsPressed(PadButton button)
         {
             if (!IsConnected) return false;
 
-            if (AnalogStickAsDpad && StickDirectionPressed(button)) return true;
+            if (AnalogStickAsDpad && !LeftStickIsAnalog && StickDirectionPressed(button)) return true;
+
+            // A trigger is an axis to SDL, so L2 and R2 are its press past half its travel.
+            if (button is PadButton.L2 or PadButton.R2 && Axis(button == PadButton.L2 ? PadAxis.LeftTrigger : PadAxis.RightTrigger) >= 0.5) return true;
 
             if (!Bindings.ButtonToPad.TryGetValue(button, out SDL.GamepadButton sdlButton)) return false;
 
             return SDL.GetGamepadButton(_gamepad, sdlButton);
+        }
+
+        // Sticks -1 to 1 with right and down positive, as SDL and the RetroPad have them, and triggers 0 to 1 - see EmuSen_Input.md §7.
+        public double Axis(PadAxis axis)
+        {
+            if (!IsConnected) return 0;
+
+            SDL.GamepadAxis source = axis switch
+            {
+                PadAxis.LeftX => SDL.GamepadAxis.LeftX,
+                PadAxis.LeftY => SDL.GamepadAxis.LeftY,
+                PadAxis.RightX => SDL.GamepadAxis.RightX,
+                PadAxis.RightY => SDL.GamepadAxis.RightY,
+                PadAxis.LeftTrigger => SDL.GamepadAxis.LeftTrigger,
+                _ => SDL.GamepadAxis.RightTrigger,
+            };
+
+            double value = Math.Clamp(SDL.GetGamepadAxis(_gamepad, source) / (double)short.MaxValue, -1.0, 1.0);
+            return Math.Abs(value) < AnalogDeadzone ? 0 : value;
         }
 
         // Axis range is -32768..32767; the deadzone is a fraction of it.

@@ -432,8 +432,37 @@ namespace EmuSen.WiseMan.Cores
             Assert.All(rgba.Where((_, i) => i % 4 == 3), a => Assert.Equal(0xFF, a));
         }
 
+        // L2 is Z, the left stick is the stick with its Y turned over, and the right stick is the C buttons - see Mars_Core.md §5.
+        [Fact]
+        public void The_generic_pad_reaches_every_input_the_n64_controller_has()
+        {
+            MarsCore core = Load();
+
+            core.SetButton(0, PadButton.L2, true);
+            core.SetAxis(0, PadAxis.LeftX, 1.0);
+            core.SetAxis(0, PadAxis.LeftY, 1.0);
+            core.SetAxis(0, PadAxis.RightY, -0.6);
+            core.SetAxis(0, PadAxis.RightX, -0.6);
+
+            Assert.Equal(new byte[] { 0x20, 0x0A, 0x7F, 0x81 }, StateReply(core.Bus!, 4));
+
+            core.SetAxis(0, PadAxis.LeftX, 0.5);
+            core.SetAxis(0, PadAxis.LeftY, 0);
+            core.SetAxis(0, PadAxis.RightY, -0.4);
+            core.SetAxis(0, PadAxis.RightX, 0.6);
+
+            Assert.Equal(new byte[] { 0x20, 0x01, 0x40, 0x00 }, StateReply(core.Bus!, 4));
+        }
+
+        [Fact]
+        public void The_n64_reads_both_sticks_and_neither_trigger()
+        {
+            Assert.Equal(new[] { PadAxis.LeftX, PadAxis.LeftY, PadAxis.RightX, PadAxis.RightY }, MarsCore.PadAxes);
+            Assert.Contains(PadButton.L2, MarsCore.PadButtons);
+        }
+
         // A state command for the first port, run through the serial interface the way a game runs it - see Mars_Serial.md §2.
-        private static byte[] StateReply(MemoryBus bus)
+        private static byte[] StateReply(MemoryBus bus, int length = 2)
         {
             const uint Dram = 0x0010_0000;
             byte[] block = { 0x01, 0x04, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE };
@@ -444,7 +473,7 @@ namespace EmuSen.WiseMan.Cores
             bus.Write32(MemoryMap.SiBase + SiInterface.DramAddress, Dram);
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressWrite, 0);
 
-            return new[] { bus.PifRam[3], bus.PifRam[4] };
+            return bus.PifRam.AsSpan(3, length).ToArray();
         }
     }
 }

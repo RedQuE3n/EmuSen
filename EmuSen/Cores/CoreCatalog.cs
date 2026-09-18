@@ -90,6 +90,20 @@ namespace EmuSen.Cores
         public static IReadOnlyList<Galaxia.Input.PadButton> ButtonsFor(string console) =>
             ButtonsByConsole.TryGetValue(console, out var buttons) ? buttons : Enum.GetValues<Galaxia.Input.PadButton>();
 
+        // Only a console with a stick is listed; every other one reads no axis - see EmuSen_Input.md §7.
+        private static readonly Dictionary<string, IReadOnlyList<Galaxia.Input.PadAxis>> AxesByConsole =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                [Mars.Console] = Nintendo.Mars.MarsCore.PadAxes,
+            };
+
+        public static IReadOnlyList<Galaxia.Input.PadAxis> AxesFor(string console) =>
+            AxesByConsole.TryGetValue(console, out var axes) ? axes : Array.Empty<Galaxia.Input.PadAxis>();
+
+        // What the rebind window lists for a console: its buttons, then each direction of each stick it reads.
+        public static IReadOnlyList<Galaxia.Input.PadControl> ControlsFor(string console) =>
+            Galaxia.Input.PadControls.For(ButtonsFor(console), AxesFor(console));
+
         // Every extension any core in this build claims - see EmuSen_Multicore.md §3.
         public static IReadOnlyList<string> RomExtensions { get; } =
             Cores.SelectMany(c => c.Extensions).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();

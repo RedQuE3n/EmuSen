@@ -122,7 +122,7 @@ namespace EmuSen.WiseMan.Mistress
             ClickAsUser(RebindButtonFor(h.Window, "Up", "Rebind Key"));
             Press(h.Window, key);
 
-            Assert.Equal(key, h.Keys.ButtonToKey[PadButton.Up]);
+            Assert.Equal(key, h.Keys.ButtonToKey[PadControl.Up]);
             Assert.Equal(key.ToString(), LabelTextFor(h.Window, "Up", 1));
         }, default);
 
@@ -130,13 +130,13 @@ namespace EmuSen.WiseMan.Mistress
         public Task Escape_cancels_a_rebind_and_restores_the_prompt() => Session.Dispatch(() =>
         {
             var h = NewWindow();
-            Key before = h.Keys.ButtonToKey[PadButton.A];
+            Key before = h.Keys.ButtonToKey[PadControl.A];
 
             Button rebind = RebindButtonFor(h.Window, "A", "Rebind Key");
             ClickAsUser(rebind);
             Press(h.Window, Key.Escape);
 
-            Assert.Equal(before, h.Keys.ButtonToKey[PadButton.A]);
+            Assert.Equal(before, h.Keys.ButtonToKey[PadControl.A]);
             Assert.Equal("Rebind Key", rebind.Content as string);
         }, default);
 
@@ -151,7 +151,7 @@ namespace EmuSen.WiseMan.Mistress
             Press(h.Window, Key.Space);
 
             Assert.Equal("Rebind Key", rebind.Content as string);
-            Assert.Equal(Key.Space, h.Keys.ButtonToKey[PadButton.Start]);
+            Assert.Equal(Key.Space, h.Keys.ButtonToKey[PadControl.Start]);
         }, default);
 
         // Two SNES buttons must never share one key.
@@ -163,8 +163,8 @@ namespace EmuSen.WiseMan.Mistress
             ClickAsUser(RebindButtonFor(h.Window, "A", "Rebind Key"));
             Press(h.Window, Key.Z); // Z was B's default
 
-            Assert.Equal(Key.Z, h.Keys.ButtonToKey[PadButton.A]);
-            Assert.False(h.Keys.ButtonToKey.ContainsKey(PadButton.B));
+            Assert.Equal(Key.Z, h.Keys.ButtonToKey[PadControl.A]);
+            Assert.False(h.Keys.ButtonToKey.ContainsKey(PadControl.B));
             Assert.Equal("(unbound)", LabelTextFor(h.Window, "B", 1));
         }, default);
 
@@ -175,7 +175,7 @@ namespace EmuSen.WiseMan.Mistress
 
             ClickAsUser(RebindButtonFor(h.Window, "Select", "Clear"));
 
-            Assert.False(h.Keys.ButtonToKey.ContainsKey(PadButton.Select));
+            Assert.False(h.Keys.ButtonToKey.ContainsKey(PadControl.Select));
             Assert.Equal("(unbound)", LabelTextFor(h.Window, "Select", 1));
         }, default);
 
@@ -203,8 +203,8 @@ namespace EmuSen.WiseMan.Mistress
             Press(h.Window, Key.X); // X was A's default on both consoles
 
             Assert.Equal(Key.X, h.Hotkeys.ActionToKey[HotkeyAction.Rewind]);
-            Assert.False(h.Bindings.For("SNES").ButtonToKey.ContainsKey(PadButton.A));
-            Assert.False(h.Bindings.For("NES").ButtonToKey.ContainsKey(PadButton.A));
+            Assert.False(h.Bindings.For("SNES").ButtonToKey.ContainsKey(PadControl.A));
+            Assert.False(h.Bindings.For("NES").ButtonToKey.ContainsKey(PadControl.A));
         }, default);
 
         // A file written before an action existed leaves it unbound - see EmuSen_Settings_Reference.md §4.18.
@@ -246,7 +246,7 @@ namespace EmuSen.WiseMan.Mistress
             var keys = new ControllerKeyBindings(Consoles);
             var hotkeys = new HotkeyBindingMap();
             // Straight into the dictionary, bypassing Rebind's guard.
-            keys.For("SNES").ButtonToKey[PadButton.A] = keys.For("SNES").ButtonToKey[PadButton.B];
+            keys.For("SNES").ButtonToKey[PadControl.A] = keys.For("SNES").ButtonToKey[PadControl.B];
 
             var window = new InputSettingsWindow(keys, new GamepadBindings(Consoles), null!, new AppSettings(), hotkeys, "SNES");
             window.Show();
@@ -297,13 +297,13 @@ namespace EmuSen.WiseMan.Mistress
         public Task Rebinding_on_one_console_leaves_the_other_alone() => Session.Dispatch(() =>
         {
             var h = NewWindow("NES");
-            Key snesBefore = h.Bindings.For("SNES").ButtonToKey[PadButton.A];
+            Key snesBefore = h.Bindings.For("SNES").ButtonToKey[PadControl.A];
 
             ClickAsUser(RebindButtonFor(h.Window, "A", "Rebind Key"));
             Press(h.Window, Key.K);
 
-            Assert.Equal(Key.K, h.Bindings.For("NES").ButtonToKey[PadButton.A]);
-            Assert.Equal(snesBefore, h.Bindings.For("SNES").ButtonToKey[PadButton.A]);
+            Assert.Equal(Key.K, h.Bindings.For("NES").ButtonToKey[PadControl.A]);
+            Assert.Equal(snesBefore, h.Bindings.For("SNES").ButtonToKey[PadControl.A]);
         }, default);
 
         // Two consoles may share a key, so a clash on one must not paint the other.
@@ -350,13 +350,31 @@ namespace EmuSen.WiseMan.Mistress
 
             ClickAsUser(RebindButtonFor(h.Window, "Up", "Rebind Key"));
             Press(h.Window, Key.K);
-            Assert.Equal(Key.K, h.Keys.ButtonToKey[PadButton.Up]);
+            Assert.Equal(Key.K, h.Keys.ButtonToKey[PadControl.Up]);
 
             ClickAsUser(ButtonByContent(h.Window, "Reset to Defaults"));
 
-            Assert.Equal(Key.Up, h.Keys.ButtonToKey[PadButton.Up]);
+            Assert.Equal(Key.Up, h.Keys.ButtonToKey[PadControl.Up]);
             Assert.Equal("Up", LabelTextFor(h.Window, "Up", 1));
             Assert.Equal(Key.Tab, h.Hotkeys.ActionToKey[HotkeyAction.FastForward]);
         }, default);
-    }
+    
+        // A stick direction is bound to a key, and comes from the pad's own stick - see EmuSen_Input.md §7.3.
+        [Fact]
+        public Task The_n64_tab_lists_each_stick_direction_with_no_pad_button_to_bind() => Session.Dispatch(() =>
+        {
+            var h = NewWindow("N64");
+
+            Assert.False(RebindButtonFor(h.Window, "LS Up", "Rebind Pad").IsEnabled);
+            Assert.False(RebindButtonFor(h.Window, "RS Right", "Clear Pad").IsEnabled);
+            Assert.Equal("Left stick", LabelTextFor(h.Window, "LS Up", 4));
+            Assert.Equal("Right stick", LabelTextFor(h.Window, "RS Right", 4));
+
+            ClickAsUser(RebindButtonFor(h.Window, "LS Up", "Rebind Key"));
+            Press(h.Window, Key.U);
+
+            Assert.Equal(Key.U, h.Keys.ButtonToKey[PadControl.LeftStickUp]);
+            Assert.Equal("U", LabelTextFor(h.Window, "LS Up", 1));
+        }, default);
+}
 }

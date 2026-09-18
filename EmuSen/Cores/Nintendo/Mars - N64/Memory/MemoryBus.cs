@@ -30,6 +30,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public RomImage? Cart;
 
+        // What the RDRAM registers read once IPL3 has set RDRAM up, as the corpus measured them, every 64 bytes - see Mars_Memory.md §8.5.
+        private static readonly uint[] RdramRegisters =
+        {
+            0xB419_0010, 0, 0x2B3B_1A0B, 0, 0, 0, 0x101C_0A04, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+        };
+
+        // The MI's repeat stays inside one 2KB RDRAM row - see Mars_Memory.md §8.4.
+        private const uint RepeatRowMask = 0x7FF;
+
         // One counter for the whole machine, so no instruction can forget to advance it - see §3.
         public long Cycles;
 
@@ -83,6 +93,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             // Above the installed size reads zero rather than mirroring, which IPL3 depends on - see §2.1.
             if (physical < RdramSizeExpanded) return 0;
 
+            if (InRange(physical, MemoryMap.RdramRegistersBase, MemoryMap.RdramRegistersSize)) return RdramRegisters[(physical >> 2) & 0xF];
+
             if (SignalProcessorMemory(physical, out byte[] bank, out uint offset)) return ReadArray32(bank, offset);
 
             if (InRange(physical, MemoryMap.IsViewerBase, MemoryMap.IsViewerSize))
@@ -122,6 +134,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
 
             if (physical < RdramSizeExpanded) return;
+
+            // Nothing measured says a write is kept, and nothing Mars runs initialises RDRAM - see Mars_Memory.md §8.5.
+            if (InRange(physical, MemoryMap.RdramRegistersBase, MemoryMap.RdramRegistersSize)) return;
 
             if (SignalProcessorMemory(physical, out byte[] bank, out uint offset))
             {
@@ -234,6 +249,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             if (CartridgeRom(physical)) Pi.CartridgeStore(WholeWord(physical, value, size));
 
+            // Any store to RDRAM or its registers spends the MI's repeat; only the first kind repeats - see §8.4.
+            if (physical < MemoryMap.RdramRegistersBase + MemoryMap.RdramRegistersSize && Mi.Repeating)
+            {
+                Mi.Repeating = false;
+
+                if (physical < MemoryMap.RdramRegistersBase)
+                {
+                    Repeat(physical, size == 8 ? value : Doubled(WholeWord(physical, value, size)));
+                    return;
+                }
+            }
+
             if (LatchesWholeWords(physical))
             {
                 Write32(size == 8 ? physical : physical & ~3u, WholeWord(physical, value, size));
@@ -272,6 +299,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             uint word = Read32(aligned);
             return size < 4 && (physical & 2) != 0 ? (word << 16) | (Read32(aligned + 4) >> 16) : word;
         }
+
+        // The length counts from the store's doubleword, and each byte takes its own lane of what was on the bus - see §8.4.
+        private void Repeat(uint physical, ulong pattern)
+        {
+            uint doubleword = physical & ~7u;
+
+            for (uint at = physical & 7; at < Mi.RepeatLength; at++)
+            {
+                uint address = (doubleword & ~RepeatRowMask) | ((doubleword + at) & RepeatRowMask);
+                Write8(address, (byte)(pattern >> (int)(8 * (7 - (address & 7)))));
+            }
+        }
+
+        private static ulong Doubled(uint word) => ((ulong)word << 32) | word;
 
         private static ulong Lane(uint word, uint physical, int size) => size switch
         {

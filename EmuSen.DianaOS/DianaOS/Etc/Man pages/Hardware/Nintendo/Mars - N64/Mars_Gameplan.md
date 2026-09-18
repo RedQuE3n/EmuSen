@@ -603,6 +603,15 @@ rather than raw samples.
 > generic controller template (`EmuSen_Input.md` §7) made every N64 input reachable. What is left in Phase E is the MI's
 > mode register and the RDRAM registers (seven groups) and the save types.
 
+> **Progress, 2026-09-18: the MI's mode register and the RDRAM registers** (`Mars_Memory.md` §8.3–§8.6). The mode
+> register reads back, and its repeat writes one processor store across up to 128 bytes of its RDRAM row — a behaviour
+> neither emulator implements and the FPGA core does, by the same rule the corpus's formulas state. The RDRAM registers
+> read a table the corpus measured on a console, because Mars's boot, like every commercial boot code it runs, never
+> initialises RDRAM for a register model to record; both references disagree with the measurement past the first
+> sixty-four bytes. 54 failing cases to 46, eight predicted, and **every one of the 45 groups left is about the caches**,
+> which Mars does not model: nothing the corpus asks of Phase E remains. All twenty-seven breakages were caught, twelve
+> of them by named cases alone. What is left in Phase E is the save types, and the done-when's controller.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

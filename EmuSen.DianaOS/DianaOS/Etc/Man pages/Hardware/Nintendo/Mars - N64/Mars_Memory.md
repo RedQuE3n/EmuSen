@@ -64,7 +64,11 @@ that is a Phase G problem and deliberately not solved now.
 ### 2.3 The cartridge is read-only, and its end is not modelled
 
 Writes into cartridge space are dropped rather than refused, because the real bus
-has no concept of failing a write. Reads past the end of the image return zero;
+has no concept of failing a write.
+
+> **Update 2026-09-18: a processor store is no longer only dropped.** The PI keeps it, and the next
+> processor read of the cartridge returns it instead of the ROM (§7.7). The ROM itself still never
+> changes, so the sentence above holds for the cartridge and not for the bus in front of it. Reads past the end of the image return zero;
 what hardware actually returns there is undocumented, and zero is a placeholder
 chosen for being obvious rather than for being right.
 
@@ -111,6 +115,12 @@ into position on the full data bus. If that is the mechanism, it applies to ever
 the RCP that is built the same way, not only to these memories. Mars applies it only where
 the corpus measures it, and the other RCP register blocks keep byte-precise stores until
 something measures them.
+
+> **Update 2026-09-18: a third block measures the same rule.** The PI's store latch keeps `SB` of
+> `0x123456BA` at offset 1 as `0x56BA0000` (§7.7), which is this reading's prediction in a block that
+> shares nothing with these memories but the bus. And the cartridge's read quirk (§7.8) is what the
+> same mechanism looks like from the load side. That is corroboration, not proof. The reading is still
+> a reading, and Mars still applies the rule only where something measures it.
 
 **What this does not cover:**
 
@@ -238,6 +248,13 @@ transfer, hangs the ROM before it emits a single character, and the symptom is
 indistinguishable from the silent-detection failure in §4.1.
 
 Two landmines with one symptom is the reason both have a test naming them.
+
+> **Update 2026-09-18: the I/O-busy bit is no longer always clear.** It reports a processor store to
+> the cartridge for as long as the PI keeps it — 225 cycles at most, or until a read (§7.7). That is
+> safe for the reason this section gives: the word decays with the clock, so a spin loop on the bit
+> always ends. The debug port is kept outside the window as well (§7.7), so none of the corpus's own
+> printing is what its printing waits for. The DMA-busy bit still never shows. The warning itself is
+> still not tested by a run; §7.9 records the breakage that was expected to test it and did not.
 
 ### 7.2 Each side of a transfer advances by its own bus width
 
@@ -459,6 +476,141 @@ second was stated for every transfer and only ever checked against aligned ones.
   was eight bytes or fewer. Mars reads zero, and no corpus case reads it.
 - **Any placement outside the corpus's three**, which this page lists above. Every other address
   follows from the same five steps and has not been measured.
+
+### 7.7 The processor's stores to the cartridge are kept once, and decay
+
+*Added 2026-09-18, from the corpus's thirteen `cart-writing` groups — sixteen cases, since its
+decay group runs four store sizes. `PiInterface.CartridgeStore`, `TakeStored` and `IoBusy`, and
+`MemoryBus.Store` and `Load`; tests in `MarsCartridgeTests`.*
+
+**A processor store anywhere in the cartridge's ROM window is kept by the PI, and the next
+processor read of the window returns it instead of the ROM** — once, and whatever address either
+of them names. Every rule below comes from the corpus's source (`src/tests/cart_memory/write.rs`),
+which states them in its comments as observations and then asserts them:
+
+- **The window runs from `0x10000000` to the last word before the PIF's ROM at `0x1FC00000`.** A
+  store at `0x1FBFFFFC`, far past the end of any image, is kept; one at `0x1FC00000` is not.
+- **Only the first store is kept.** A second store while the first is held is lost.
+- **The word kept is the register shifted to its lane** — §2.4's rule, now measured in a third
+  block: `SB` of `0x123456BA` at offset 1 keeps `0x56BA0000`. `SD` keeps its upper half, which is
+  what two word stores would give if the second were lost.
+- **A read takes it back once and frees the bus.** A narrower read takes its lane from the kept
+  word. The corpus reads only the first lane — `0xBA` and `0xBADC` from `0xBADC0FFE` — and the
+  other lanes follow the FPGA core, which hands the kept word back whole for the processor to pick
+  from (`rtl/PI.vhd` §486–489).
+- **It decays, and the status register's I/O-busy bit reports it while it lasts.** Mars holds it
+  for 225 of the processor's cycles, which is the FPGA core's 150 at 62.5MHz (§508–514). The corpus
+  pins it only to a window, 34 to 333 of those cycles (§7.9).
+
+**Mars reads busy off the one clock**, `Cycles < storedUntil`, the way `Count` is derived (§3.1).
+Nothing counts down, so a device nobody steps cannot be left busy.
+
+**Where the rules come from.** The corpus is both their source and their grader, and it is
+graded against silicon. Two implementations were read beside it: the FPGA core's `writtenData`
+and `writtenTime`, and Project64's `RomMemoryHandler`, whose decay is a timer of `0x5E` and whose
+history dates it to `9b16d2979` (2022-08-22), *"Core: Add rom write decay"*. Neither constant is
+derived from anything its source says. Mars takes the FPGA core's and records the window the
+corpus allows around it.
+
+**The debug port is outside the window, and that is a decision about the instrument, not a claim
+about the console.** The corpus prints through the ISViewer, which sits inside the ROM window at
+`0x13FF0000`, and its printing ends each test's name by writing the chunk length and going straight
+into the test. With the port inside the window, the corpus went from 72 failing cases to **69 rather
+than 54**. Thirteen of the eighteen cases this section clears still failed, and two that had passed
+before broke — `cart: Read32` among them. Each read back the length the corpus had just written,
+`0x4` for *"...\n"*, or a lane of it, because the test's own first store arrived while that one was
+still held and was lost. A console with a real ISViewer would do the same, since the latch is in the PI and nothing
+on a cartridge can get around it; the corpus's expectations can only have been measured with its text
+going out some other way. Both implementations that pass these cases do so because the text never
+reaches the latch: Project64 gives the ISViewer its own handler, and the FPGA core has no ISViewer, so
+under it the corpus's detection fails and its text goes nowhere. Mars does what Project64 does. The
+harness's verdict channel is the one place this project models something that is not on the console,
+and this is the price of it, stated where it is paid.
+
+The same run also showed `DMA CART -> DMEM` failing on the status it reads *before* its transfer.
+That test first writes the PI's reset bit, which raised the question of whether a reset frees the
+bus. The FPGA core's reset clears the DMA-busy and error bits and not I/O-busy (§384–391), and with the
+debug port outside the window the case passes again, so Mars leaves the reset alone.
+
+**What this is not evidence for.**
+
+- **The cartridge's other windows** — SRAM, FlashRAM, the 64DD. The FPGA core keeps any PI bus
+  store; Mars keeps only those in the ROM window, because nothing behind the others is built.
+- **Reads of the window past the end of the image.** The FPGA core returns its open-bus pattern
+  there and leaves the kept word alone; Mars gives it back. No corpus case reads past the image.
+- **`LD`, `LWL`, `LWR`, `LDC1`, and every store but the aligned five.** None goes through
+  `Store` or `Load`. The corpus's comment says `LD` crashes the console, and its `LWL` case only
+  prints.
+- **The cached segment**, which the same comment says crashes the console.
+- **Whether a store that arrives while the bus is busy reaches the cartridge.** The corpus can see
+  only that it is not kept.
+- **The domain's timing registers**, which on the console presumably set how long a bus write takes
+  and so how long the word is kept. Mars does not model them, and neither constant above depends on
+  them.
+
+### 7.8 A halfword or byte read cannot reach every other halfword
+
+*Added 2026-09-18, from the corpus's `cart: Read16` and `cart: Read8`. `MemoryBus.CartridgeWord`;
+the corpus's two tables are in `MarsCartridgeTests`.*
+
+**A processor read of a halfword or a byte from the cartridge takes its lane from a word that
+starts at the *halfword* the address names, not the word.** An address with bit 1 set therefore
+lands two bytes further on, and the halfword two bytes into each word cannot be reached at all.
+The corpus says it as *"LH/LB are broken: Every other 16-bit word is not reachable"*, and gives a
+table for each. Word reads are unaffected, and so are transfers, which never use this path.
+
+It is §2.4's reading seen from the other side. If the processor always asks for a whole word and
+picks its lane, and the PI starts that word at the halfword it was given — its bus is sixteen bits
+wide (§7.2) — this is what the processor sees. The FPGA core does the same thing in its own terms
+(`rtl/PI.vhd` §494–499, on `bus_cart_addr(1)`), and Project64 reads from `(Address + 2) & ~3`. That
+is the mechanism the three descriptions share, not a measurement of it.
+
+### 7.9 Which of these rules the corpus pins
+
+Each rule of §7.7 and §7.8 was broken in turn, with the corpus and the named cases run again:
+
+| rule broken | corpus | named cases that catch it |
+| --- | --- | --- |
+| a store is kept at all | 70 (+16) | eight |
+| a load takes the kept word | 70 (+16) | eight |
+| the debug port is outside the window | 69 (+15) | one |
+| a read frees the bus | 66 (+12) | three |
+| only the first store is kept | 64 (+10) | three |
+| the word decays at all | 58 (+4) | two |
+| a narrower store is shifted to its lane | 58 (+4) | one |
+| a halfword or byte read starts at the halfword named | 56 (+2) | two |
+| a doubleword keeps its upper half | 55 (+1) | one |
+| the window stops before the PIF's ROM | 55 (+1) | one |
+| the status register reports the bus busy | 55 (+1) | two |
+| **a narrower read of the kept word takes its lane, not its top** | 54 | one, marked unmeasured |
+| **a transfer neither sees nor frees the kept word** | 54 | one, marked unmeasured |
+| the decay is 8, 16, 24 or 32 cycles | 58 (+4) | one, added after the round |
+| the decay is 340, 350, 360 or 400 cycles | 58 (+4) | one, added after the round |
+
+**Eleven rules are pinned, and two are not.** The two the corpus cannot see are the lanes past the
+first — where the corpus's own comment, *"the upper bits are returned"*, and the FPGA core's lane
+reading agree at the only lane it reads — and whether a transfer disturbs the kept word, since no case
+starts one while a store is held. Mars takes both from the FPGA core, and each has a named case that
+says so.
+
+**The decay is pinned to a window, and the constant is not.** Breaking the decay in either direction
+moves exactly the four decay cases, and bisection puts the window's edges at **34 and 333** of
+Mars's cycles. In Mars's accounting the corpus's two reads come 33 and 333 cycles after its store —
+three hundred apart, a hundred turns at three cycles each — so a word kept for fewer than 34 is gone
+at the first, and one kept for more than 333 is still there at the second. The FPGA core's 225
+sits well inside, at about seventy-four turns of that loop in Mars's accounting of three cycles a
+turn — close to the *"around 70"* the corpus's comment gives for the console. That comment is not an
+assertion, and three cycles a turn is Mars's accounting rather than a measurement, so the closeness
+is a coincidence worth noting and nothing more. The named decay case said nothing about any of this
+during the round, because it used the constant rather than a number; `The_decay_falls_inside_the_window_the_corpus_allows`
+now pins the window itself.
+
+**One prediction was wrong.** Before the round, a word that never decays was expected to hang the
+corpus, as §7.1 warns a busy flag that never clears would. ~~"The corpus will not finish."~~ It
+finished, at 58. Every store the corpus makes is followed by a read in the same case, and a read frees
+the bus, so a word that never decays is only ever seen by the four cases that wait for it. §7.1's
+warning is not tested by this round, and still stands on the corpus's source rather than on a run.
+
 
 ## 8. The interrupt aggregator
 

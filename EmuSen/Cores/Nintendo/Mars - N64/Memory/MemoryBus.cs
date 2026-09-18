@@ -219,13 +219,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private bool LatchesWholeWords(uint physical) =>
             SignalProcessorMemory(physical, out _, out _) || InRange(physical, MemoryMap.PifRamBase, MemoryMap.PifRamSize);
 
-        // The processor's own stores: those two windows latch whole words, whatever the size - see §2.4.
+        // The processor's own stores: those two windows latch whole words, and so does the cartridge bus - see §2.4 and §7.7.
         public void Store(uint physical, ulong value, int size)
         {
+            if (CartridgeRom(physical)) Pi.CartridgeStore(WholeWord(physical, value, size));
+
             if (LatchesWholeWords(physical))
             {
-                if (size == 8) Write32(physical, (uint)(value >> 32));
-                else Write32(physical & ~3u, (uint)(value << (8 * (4 - size - (int)(physical & 3)))));
+                Write32(size == 8 ? physical : physical & ~3u, WholeWord(physical, value, size));
                 return;
             }
 
@@ -237,6 +238,46 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 default: Write64(physical, value); return;
             }
         }
+
+        // The processor's own loads, the only reads that see what a store left on the cartridge bus - see §7.7.
+        public ulong Load(uint physical, int size)
+        {
+            if (CartridgeRom(physical) && size < 8) return Lane(CartridgeWord(physical, size), physical, size);
+
+            return size switch
+            {
+                1 => Read8(physical),
+                2 => Read16(physical),
+                4 => Read32(physical),
+                _ => Read64(physical),
+            };
+        }
+
+        // A stored word comes back once; otherwise the word starts at the halfword named, which skips every other one - see §7.8.
+        private uint CartridgeWord(uint physical, int size)
+        {
+            if (Pi.TakeStored(out uint stored)) return stored;
+
+            uint aligned = physical & ~3u;
+            uint word = Read32(aligned);
+            return size < 4 && (physical & 2) != 0 ? (word << 16) | (Read32(aligned + 4) >> 16) : word;
+        }
+
+        private static ulong Lane(uint word, uint physical, int size) => size switch
+        {
+            1 => (byte)(word >> (int)((3 - (physical & 3)) * 8)),
+            2 => (ushort)(word >> (int)((2 - (physical & 2)) * 8)),
+            _ => word,
+        };
+
+        // What the processor puts on the bus for a store of any size: the register shifted to its lane, or a doubleword's upper half - see §2.4.
+        private static uint WholeWord(uint physical, ulong value, int size) =>
+            size == 8 ? (uint)(value >> 32) : (uint)(value << (8 * (4 - size - (int)(physical & 3))));
+
+        // The debug port is a device beside the bus here, or the corpus's own printing would hold the latch it tests - see §7.7.
+        private static bool CartridgeRom(uint physical) =>
+            physical >= MemoryMap.CartDomain1Address2 && physical < MemoryMap.PifRomBase &&
+            !InRange(physical, MemoryMap.IsViewerBase, MemoryMap.IsViewerSize);
 
         public void Write64(uint physical, ulong value)
         {

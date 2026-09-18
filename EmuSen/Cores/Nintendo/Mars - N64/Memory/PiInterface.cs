@@ -16,6 +16,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public const uint StatusError = 0x04;
         public const uint StatusInterrupt = 0x08;
 
+        // The FPGA core's 150 cycles at 62.5MHz, counted in the processor's - see Mars_Memory.md §7.7.
+        public const long StoreDecayCycles = 225;
+
         private const uint BlockSize = 128;
         private const uint RowSize = 0x800;
 
@@ -24,7 +27,32 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private uint _dramAddress;
         private uint _cartAddress;
 
+        private uint _stored;
+        private long _storedUntil;
+
         public PiInterface(MemoryBus bus) => _bus = bus;
+
+        // Busy while a processor store is still on the cartridge bus, read off the one clock - see Mars_Memory.md §7.7.
+        public bool IoBusy => _bus.Cycles < _storedUntil;
+
+        // Only the first store is kept; one that arrives while the bus is busy is lost - see §7.7.
+        public void CartridgeStore(uint word)
+        {
+            if (IoBusy) return;
+
+            _stored = word;
+            _storedUntil = _bus.Cycles + StoreDecayCycles;
+        }
+
+        // A read takes the stored word back once, and frees the bus - see §7.7.
+        public bool TakeStored(out uint word)
+        {
+            word = _stored;
+            if (!IoBusy) return false;
+
+            _storedUntil = 0;
+            return true;
+        }
 
         public uint Read32(uint offset)
         {
@@ -33,8 +61,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 case DramAddress: return _dramAddress;
                 case CartAddress: return _cartAddress;
 
-                // Never busy, because every transfer has already finished - see Mars_Memory.md §7.1.
-                case Status: return _bus.Mi.Pending.HasFlag(MiInterrupt.PeripheralInterface) ? StatusInterrupt : 0;
+                // A transfer is never busy because it has already finished; a store is, until it decays - see §7.1 and §7.7.
+                case Status:
+                    return (IoBusy ? StatusIoBusy : 0) | (_bus.Mi.Pending.HasFlag(MiInterrupt.PeripheralInterface) ? StatusInterrupt : 0);
 
                 default: return 0;
             }

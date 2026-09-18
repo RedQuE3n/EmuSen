@@ -61,6 +61,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             _mi = bus.Mi;
             Pc = 0xFFFF_FFFF_A400_0040;
             NextPc = Pc + 4;
+            RefreshMode();
             ScheduleTimer();
         }
 
@@ -71,6 +72,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             try
             {
                 CurrentPc = Pc;
+                VerifyMode();
 
                 // Checked before the fetch, so the saved address is the instruction not yet run - see §12.
                 InDelaySlot = _branchPending;

@@ -28,6 +28,10 @@ which is a choice and not a measurement.
 (bit 7). The bit that applies is the one belonging to the mode in force, so the same
 `Status` word describes three different address maps depending on `KSU`.
 
+*Since Phase G the mode is a field of the processor, refreshed after every write of Status and checked against
+Status on every step in Debug builds; anything that writes Status from outside an instruction calls
+`Cpu.Cop0Written` (`Mars_Performance.md` §18).*
+
 ## 2. The address map
 
 The corpus carries this as a forty-five row table across three modes and both addressing

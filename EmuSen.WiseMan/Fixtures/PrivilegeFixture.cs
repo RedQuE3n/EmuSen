@@ -40,6 +40,9 @@ namespace EmuSen.WiseMan.Fixtures
             cpu.Pc = ProgramPage;
             cpu.NextPc = ProgramPage + 4;
             before?.Invoke(cpu);
+
+            // Status was written from outside any instruction, so the processor is told - see Mars_Performance.md §10 and §18.
+            cpu.Cop0Written();
             cpu.Run(steps);
 
             return cpu;

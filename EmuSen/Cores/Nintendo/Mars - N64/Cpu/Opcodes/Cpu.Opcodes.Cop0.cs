@@ -59,8 +59,22 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public readonly ulong[] Cop0 = new ulong[32];
 
+        // Read many times an instruction and changed only by a Status write, so it is kept, not recomputed - see Mars_Performance.md §18.
+        public PrivilegeMode Mode => _mode;
+
+        [EmuSen.Common.SkipInState] private PrivilegeMode _mode;
+
+        // After every Status write; Debug builds check on every step that none was missed - see Mars_Performance.md §18.
+        private void RefreshMode() => _mode = ComputeMode();
+
+        [System.Diagnostics.Conditional("DEBUG")]
+        private void VerifyMode()
+        {
+            if (_mode != ComputeMode()) throw new InvalidOperationException("Status was written outside an instruction without Cop0Written(); the privilege mode is stale.");
+        }
+
         // Kernel whenever an exception is being handled, whatever the mode field says - see Mars_Privilege.md §1.
-        public PrivilegeMode Mode =>
+        private PrivilegeMode ComputeMode() =>
             (Cop0[StatusRegister] & (StatusExceptionLevel | StatusErrorLevel)) != 0
                 ? PrivilegeMode.Kernel
                 : ((Cop0[StatusRegister] & StatusModeField) >> StatusModeShift) switch
@@ -162,6 +176,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public void Cop0Written()
         {
             _recheck = true;
+            RefreshMode();
             ScheduleTimer();
         }
 
@@ -219,6 +234,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             if (IsAddressRelated(raised.Code)) RecordFaultingAddress(raised.Address);
 
             Cop0[StatusRegister] |= StatusExceptionLevel;
+            RefreshMode();
             LinkedFlag = false;
             _recheck = true;
 
@@ -243,6 +259,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             // Returning breaks the link but leaves the address a handler can still read - see Mars_Cop0.md §6.
             LinkedFlag = false;
+            RefreshMode();
             _recheck = true;
 
             // No delay slot of its own: the next instruction fetched is the one returned to.

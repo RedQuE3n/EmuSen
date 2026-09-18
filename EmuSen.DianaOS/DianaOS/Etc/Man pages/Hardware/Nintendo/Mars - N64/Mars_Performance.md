@@ -633,3 +633,36 @@ fail from six to forty-six tests. A fetch, load or store bound widened past the 
 nothing accessed the unpopulated half of a stock console through the processor — and
 `The_processor_reads_zero_and_drops_stores_above_a_stock_consoles_rdram` now does.
 
+## 18. The privilege mode kept, not recomputed
+
+**What it cost.** `Cpu.Mode` was a property over the Status register — the exception and error levels, then the mode
+field — and each instruction asked it at least twice: the fetch's direct-range test and the dispatch's
+reserved-instruction prefix, with the loads' and stores' translation and reverse-endian test asking again. §17's
+switch build put not asking at 0.7 to 0.8 ns an instruction, about the same as the fetch.
+
+**The change.** The mode is a field, refreshed after every write of Status: a COP0 move, an exception's raising of
+EXL, a return's clearing of EXL or ERL, and `Cop0Written` for anything that writes COP0 from outside an instruction
+(the boot, a loaded state, a test). `Mode` reads the field. Its addressing-width companion is not cached; in kernel
+mode nothing on the instruction's path asks for it.
+
+**What stands behind "exact".** This is the cache that §6 warned of, kept right only while every writer remembers
+— so Debug builds recompute the mode from Status on every step and throw if the field disagrees, and every Mars test
+runs in Debug. The first run named 176 tests: all of them writing Status directly and running, most through
+`PrivilegeFixture`, which now calls `Cop0Written` as §10's rule already asked. A direct write that leaves the mode as
+it was — the TLB tests' addressing bit — is not a stale mode and passes. All 1,800 probe frames match, state and all.
+
+**What catches a mistake in it.** Each of the five refresh sites removed, with the verifier on and with it off:
+
+| refresh removed at | verifier on | verifier off |
+| --- | --- | --- |
+| a COP0 write | the corpus, by the verifier | **nothing** — the corpus enters user mode through `eret`, which refreshes anyway; `Writing_status_enters_the_named_mode_before_the_next_instruction` now holds it |
+| an exception | the corpus | the corpus's verdicts |
+| a return | the corpus | the corpus's verdicts |
+| `Cop0Written` | 176 tests, all by the verifier | 124 tests, by their own assertions |
+| the constructor | nothing, correctly | nothing, correctly |
+
+The constructor's refresh is an equivalent mutant — the field's default is kernel and so is a zero Status — kept so
+that the field's meaning is stated where it is born. The write-site row is the reason the verifier is not the only
+net: every Mars test runs in Debug, but a Release build has only the tests' own assertions, and one of the five sites
+had none until this round.
+

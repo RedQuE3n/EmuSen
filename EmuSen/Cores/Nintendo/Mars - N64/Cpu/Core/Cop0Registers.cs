@@ -87,6 +87,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             }
 
             Cop0[register] = MaskCop0Write(register, value);
+            if (register == StatusRegister) RefreshMode();
 
             if (register == WiredRegister) _randomStart = Instructions;
 

@@ -595,6 +595,14 @@ rather than raw samples.
 > cycles, and the FPGA core's constant sits inside that. What is left in Phase E is the MI's mode register
 > and the RDRAM registers (seven groups), AI, and the save types.
 
+> **Progress, 2026-09-18: the audio interface** (`Mars_Audio.md`). Two buffers of samples read from RDRAM and played at
+> the DAC's rate off the video clock, the interrupt as each begins, and the late 8KB carry between them; `MarsCore` hands a
+> frontend what the game played at the rate it set. The corpus has no audio group, so the FPGA core is the source and
+> two emulators were read beside it, with the two points they disagree on recorded. Super Mario 64 and Wave Race 64 both
+> keep running and play 32kHz stereo, and the recordings were checked against the other byte order. The same day, the
+> generic controller template (`EmuSen_Input.md` §7) made every N64 input reachable. What is left in Phase E is the MI's
+> mode register and the RDRAM registers (seven groups) and the save types.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

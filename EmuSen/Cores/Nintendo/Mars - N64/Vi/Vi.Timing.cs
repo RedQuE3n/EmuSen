@@ -10,6 +10,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         private const long NtscClock = 48_681_818;
         private const long PalClock = 49_656_530;
 
+        // The console's video clock, which the audio interface's DAC divides as well - see Mars_Audio.md §2.
+        public long VideoClock => IsPal ? PalClock : NtscClock;
+
         private long _debt;
         private int _halfLine;
         private bool _field;
@@ -24,7 +27,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             long line = (long)(Register(HorizontalSync) & 0xFFF) * ProcessorClock;
             if (sync <= 0 || line <= 0) return;
 
-            long clock = IsPal ? PalClock : NtscClock;
+            long clock = VideoClock;
             _debt += cycles * clock * 2;
 
             while (_debt >= line)

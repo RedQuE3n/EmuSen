@@ -24,6 +24,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public readonly PiInterface Pi;
         public readonly DpInterface Dp;
         public readonly SiInterface Si;
+        public readonly AiInterface Ai;
         public readonly Vi.Vi Vi;
         public readonly MiInterface Mi = new();
 
@@ -45,6 +46,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Pi = new PiInterface(this);
             Dp = new DpInterface(this);
             Si = new SiInterface(this);
+            Ai = new AiInterface(this);
             Vi = new Vi.Vi(this);
 
             // Nonzero tells libdragon's IPL3 that RDRAM needs no initialising - see Mars_TestOracle.md §3.
@@ -56,6 +58,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Cycles += cycles;
             Sp.Step(cycles);
             Vi.Step(cycles);
+            Ai.Step(cycles);
         }
 
         // The eight interface registers and the eight the display processor owns - see Mars_Rsp.md §5.
@@ -105,6 +108,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             if (InRange(physical, MemoryMap.ViBase, 0x38)) return Vi.Read32(physical - MemoryMap.ViBase);
             if (InRange(physical, MemoryMap.SiBase, 0x1C)) return Si.Read32(physical - MemoryMap.SiBase);
+            if (InRange(physical, MemoryMap.AiBase, 0x18)) return Ai.Read32(physical - MemoryMap.AiBase);
 
             return _registers.TryGetValue(physical, out uint value) ? value : 0;
         }
@@ -179,6 +183,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (InRange(physical, MemoryMap.SiBase, 0x1C))
             {
                 Si.Write32(physical - MemoryMap.SiBase, value);
+                return;
+            }
+
+            if (InRange(physical, MemoryMap.AiBase, 0x18))
+            {
+                Ai.Write32(physical - MemoryMap.AiBase, value);
                 return;
             }
 

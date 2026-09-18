@@ -331,13 +331,33 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public void Nothing_is_ever_queued_for_the_speaker()
+        public void A_game_that_never_starts_the_audio_interface_queues_nothing_at_the_default_rate()
         {
             MarsCore core = Load();
             core.RunFrame();
 
-            Assert.Equal(44100, core.AudioSampleRate);
+            Assert.Equal(AiInterface.DefaultSampleRate, core.AudioSampleRate);
             Assert.Empty(core.DequeueAudioSamples(int.MaxValue));
+        }
+
+        // What the audio interface plays reaches a frontend through ICore, at the rate the game set - see Mars_Core.md §4.
+        [Fact]
+        public void What_the_audio_interface_plays_reaches_the_speaker_at_the_games_rate()
+        {
+            MarsCore core = Load();
+            MemoryBus bus = core.Bus!;
+            bus.Write32(0x0010_0000, 0x1234_5678);
+            bus.Write32(MemoryMap.AiBase + AiInterface.DacRate, 1520);
+            bus.Write32(MemoryMap.AiBase + AiInterface.Control, 1);
+            bus.Write32(MemoryMap.AiBase + AiInterface.DramAddress, 0x0010_0000);
+            bus.Write32(MemoryMap.AiBase + AiInterface.Length, 0x1000);
+
+            core.RunFrame();
+            short[] samples = core.DequeueAudioSamples(int.MaxValue);
+
+            Assert.Equal((int)System.Math.Round(bus.Vi.VideoClock / 1521.0), core.AudioSampleRate);
+            Assert.NotEmpty(samples);
+            Assert.Equal(new short[] { 0x1234, 0x5678 }, samples[..2]);
         }
 
         // No save device exists, so flushing one writes no file beside the ROM - see Mars_Core.md §6.

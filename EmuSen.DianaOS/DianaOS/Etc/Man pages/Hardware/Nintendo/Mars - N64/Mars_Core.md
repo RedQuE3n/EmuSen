@@ -142,32 +142,33 @@ boundary is instruction-granular, and the measured field lengths move by one cyc
 **None of this establishes a console's rate.** 59.959 Hz is what `Mars_VideoTiming.md` §1.1 derives from three
 published clock frequencies, and that page says in its §0 that nothing has measured it against hardware.
 
-## 4. Audio: nothing, at 44100 Hz
+## 4. Audio: what the game plays, at the rate it asked for
 
-**There is no audio interface**, so `DequeueAudioSamples` returns an empty array and `AudioSampleRate` answers
-44100. **The question was whether an empty queue stalls or breaks pacing, and it does neither**:
+*Rewritten 2026-09-18, when the audio interface landed (`Mars_Audio.md`). The version it replaces is kept below.*
 
-- **Both frontends pace on a wall clock, not on the audio device.** The next tick is
-  `SpeedController.FrameInterval(FrameRateHz)` (`MainWindow.axaml.cs` 969, `GameWindow.axaml.cs` 388), and
-  audio-clock-mastered pacing is listed as not done (`EmuSen_Audio_Sync.md` §6).
-- **The sink returns before queueing anything when handed nothing**, after reconciling the device's rate with
-  the core's (`AudioPlayer.cs` 92–99, `EmuSen_Audio_Sync.md` §7.2). An SDL stream with nothing queued plays
-  silence.
-- **`ICore` allows it in so many words**: a core with no audio modelled "can return an empty array
-  unconditionally" (`ICore.cs` 90–91), and Moon ran that way, answering 44100 while its APU synthesized
-  nothing (`EmuSen_Audio_Sync.md` §7.2).
+`DequeueAudioSamples` drains the audio interface's queue — interleaved left and right, whole pairs, destructively — and
+`AudioSampleRate` is the rate the game set the DAC to, rounded to the hertz (`Mars_Audio.md` §4). Before a game sets a
+rate it is 44,100, which only opens a device.
 
-**Silence was the alternative, and it is the wrong one here.** A queue of zeros would be samples the machine did
-not produce, and `audiosum` and `audiodump` would then report a number of samples measured from something that
-does not exist. Nothing downstream needs the device kept warm.
+**The version below saw a fork coming and named it**: when the interface landed it *"will have to resample to a fixed
+rate or the contract will have to change"*. **The contract gave.** `AudioPlayer.Submit` already compares the rate it is
+handed with the open device's and reopens on a mismatch (`EmuSen_Audio_Sync.md` §7.2), so a Nintendo 64 whose game sets
+a rate at boot costs one reopen before any sample arrives, and a game that changes rate later costs another. A
+resampler inside Mars would have stood in front of the one the sink already runs for drift. `ICore`'s comment on the rate
+now says a core may change it when its machine does.
 
-**Why 44100 is provisional.** `ICore` fixes the rate for the session (`ICore.cs` 68–74), and a Nintendo 64 has no
-session rate: `AI_DACRATE` is whatever the game writes, and games write different values. When the audio
-interface lands it will have to resample to a fixed rate or the contract will have to change; 44100 is the rate
-Moon and Mercury already open the device at, so loading Mars after either does not reopen it. **What an absent
-audio interface does to a game is not established here** — a game that waits on the audio interrupt may stall,
-and Wave Race's unchanging lit-pixel count from its eighty-third frame onwards (§9) has not been traced to see
-whether that is why.
+**What that version said about silence still holds.** The interface produces nothing while nothing plays, rather than
+zeros the machine never made, so `audiosum` and `audiodump` count only what a game played.
+
+**Wave Race's unchanging lit-pixel count from its eighty-third frame (§9) is still not traced.** The game probe shows it
+handing the video interface new frames across five seconds of console time with the audio interface present
+(`Mars_Audio.md` §5), which says the game runs; it does not say what that count was measuring.
+
+> **Retired 2026-09-18: "Audio: nothing, at 44100 Hz".** It returned no samples and a provisional 44,100, argued from
+> the frontends' wall-clock pacing, the sink's early return on an empty payload and `ICore`'s own permission that an empty
+> queue stalls nothing, and rejected a queue of zeros as samples the machine never produced. It ended: *"What an absent
+> audio interface does to a game is not established here — a game that waits on the audio interrupt may stall."* With
+> the interface present both games that ran before still run, which settles it for those two and not in general.
 
 ## 5. Input: every input the controller has
 

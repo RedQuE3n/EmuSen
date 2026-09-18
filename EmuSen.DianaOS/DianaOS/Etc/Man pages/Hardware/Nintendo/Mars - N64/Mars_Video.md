@@ -274,8 +274,9 @@ the guarantee that survives without the reference tools built.
 - ~~**The interrupt and the timing.** The interface's interrupt fires when the current half line reaches the
   interrupt register, and nothing here advances a half line.~~ **Landed in `Mars_VideoTiming.md`**, which
   deleted `Mars_Microcode.md` §3's stand-in for the video interrupt and kept its test passing.
-- **The frame anyone can see.** `GetFrameBufferRgba` is not wired to this raster yet; `ICore` is still
-  unsatisfied, as `Mars_Gameplan.md` §4.5 has it.
+- ~~**The frame anyone can see.** `GetFrameBufferRgba` is not wired to this raster yet; `ICore` is still
+  unsatisfied, as `Mars_Gameplan.md` §4.5 has it.~~ **Wired 2026-09-18 in `Mars_Core.md` §2**, which copies
+  this raster, line-doubles a progressive field, and replaces the coverage byte with an opaque alpha.
 
 ## 5. The referee
 

@@ -86,8 +86,9 @@ stick as two signed bytes:
 **The first port holds a controller and the other three do not, until something says otherwise.** That is a
 decision rather than a measurement: a console with nothing plugged in is the more neutral default, but every
 game this slice is tested against needs a controller in the first port, and a test that has to plug one in
-before it can ask anything is a test about the harness. `ICore.SetButton` will set these when Phase F wires
-the frontend; nothing does yet.
+before it can ask anything is a test about the harness. ~~`ICore.SetButton` will set these when Phase F wires
+the frontend; nothing does yet.~~ `ICore.SetButton` sets nine of the buttons since 2026-09-18 (`Mars_Core.md` §5); Z,
+the four C buttons and the stick have no `PadButton` to arrive by.
 
 ### 3.2 What a controller answers
 
@@ -187,5 +188,6 @@ what a synthesisable implementation of the PIF does"*, not as a measurement — 
 - **The CIC challenge**, the boot handshake the PIF answers with its own six-byte reply. Mars boots through
   `Mars_Boot.md`'s handoff rather than through the PIF, so nothing asks.
 - **Timing** (§4).
-- **Anything a player can reach.** `ICore.SetButton` is unwired, so the buttons in §3.1 are only ever the
-  zeroes a test leaves there.
+- ~~**Anything a player can reach.** `ICore.SetButton` is unwired, so the buttons in §3.1 are only ever the
+  zeroes a test leaves there.~~ **Nine buttons are reachable since 2026-09-18** (`Mars_Core.md` §5); Z, the C
+  buttons and the stick still are not.

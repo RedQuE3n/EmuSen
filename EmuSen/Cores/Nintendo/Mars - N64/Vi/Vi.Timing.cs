@@ -14,6 +14,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         private int _halfLine;
         private bool _field;
 
+        // Fields completed since power-on, counted where the half line wraps, so a frame can end on one - see Mars_Core.md §3.
+        public long Fields { get; private set; }
+
         // Called from the bus's one counter, so the signal advances whether or not anything is scanning it - see §1.1.
         public void Step(long cycles)
         {
@@ -40,6 +43,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             {
                 _halfLine = 0;
                 if (Serrate) _field = !_field;
+                Fields++;
             }
 
             _registers[CurrentLine >> 2] = (uint)((_halfLine & ~1) | (_field ? 1 : 0));

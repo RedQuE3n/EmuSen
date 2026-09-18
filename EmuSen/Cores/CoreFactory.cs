@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Cheats;
 using EmuSen.Cores.Nintendo.Mercury.Debug;
@@ -33,6 +35,7 @@ namespace EmuSen.Cores
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => new MoonCore(),
             ".gb" or ".gbc" => new MercuryCore(),
+            ".z64" or ".n64" or ".v64" => new MarsCore(),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };
@@ -80,6 +83,10 @@ namespace EmuSen.Cores
                         new GbGameSharkCheatCodec(),
                         new GbGameGenieCheatCodec(),
                         null);
+
+                // No codec: a code typed for a console that applies none should be refused, not stored - see Mars_Core.md §8.
+                case MarsCore mars:
+                    return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), null, null, null);
 
                 default:
                     throw new NotSupportedException($"No debug target is registered for {core.GetType().Name}.");

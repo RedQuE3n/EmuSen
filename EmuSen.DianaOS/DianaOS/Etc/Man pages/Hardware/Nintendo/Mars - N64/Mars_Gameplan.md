@@ -714,6 +714,14 @@ of them.
 > third to a half of the time, not for the whole. The phase works under one rule: output stays bit for bit identical,
 > checked frame by frame against a recorded baseline of all three games, which reproduced exactly on a second run.
 
+> **Progress, 2026-09-18: 2.2 to 2.4 times as fast, output unchanged** (`Mars_Performance.md` §3–§8). The VI's samples
+> cached a row, then a source line a scan, and never made when a zero fraction would discard them; the processor's
+> kernel addresses translated directly. Ocarina of Time 7.3 → 17.4 fps, Super Mario 64 9.6 → 21.0, Wave Race 14.7 →
+> 24.5 — 35 to 42 per cent of the console — with every frame of all three matching the baseline after every change.
+> Two ideas were measured and rejected. The interpreter is now the wall, and what remains in it is the work around each
+> instruction rather than decoding; the levers left (a cached interpreter, a recompiler, event-driven timing) are
+> decisions about the core's design, and §8 of that page sets them out.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

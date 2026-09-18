@@ -33,6 +33,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         [EmuSen.Common.SkipInState] public RomImage? Cart;
 
+        // Told of every processor store to a memory, for `watch` and data breakpoints - see Mars_Debug.md §3.
+        [EmuSen.Common.SkipInState] public IWriteObserver? WriteObserver;
+
         // The cartridge's save chip on the second domain and the joybus's fifth channel - see Mars_Save.md §1.
         [EmuSen.Common.SkipInState] public SaveChip Save = new(N64SaveType.Unknown);
 
@@ -306,6 +309,27 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         // The processor's own stores: those windows latch whole words, and the cartridge bus keeps one - see §2.4, §7.7 and Mars_Save.md §3.
         public void Store(uint physical, ulong value, int size)
+        {
+            StoreThrough(physical, value, size);
+            if (WriteObserver != null) Report(physical, size);
+        }
+
+        // What a store left behind, byte by byte in the space it landed in - see Mars_Debug.md §3.
+        private void Report(uint physical, int size)
+        {
+            bool whole = LatchesWholeWords(physical);
+            uint first = whole && size < 8 ? physical & ~3u : physical;
+            int count = whole && size < 8 ? 4 : size;
+
+            for (uint at = first; at < first + count; at++)
+            {
+                if (at < Rdram.Length) WriteObserver!.OnWrite("RDRAM", (int)at, Rdram[at]);
+                else if (SignalProcessorMemory(at, out byte[] bank, out uint offset)) WriteObserver!.OnWrite(bank == SpDmem ? "DMEM" : "IMEM", (int)offset, bank[offset]);
+                else if (InRange(at, MemoryMap.PifRamBase, MemoryMap.PifRamSize)) WriteObserver!.OnWrite("PIFRAM", (int)(at - MemoryMap.PifRamBase), PifRam[at - MemoryMap.PifRamBase]);
+            }
+        }
+
+        private void StoreThrough(uint physical, ulong value, int size)
         {
             if (CartridgeBus(physical)) Pi.CartridgeStore(WholeWord(physical, value, size));
 

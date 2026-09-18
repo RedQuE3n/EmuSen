@@ -165,6 +165,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         // Everything an exception does to the machine before the handler's first instruction - see Mars_Cpu.md §11.
         private void EnterException(CpuException raised)
         {
+            if (raised.Code == ExceptionCode.Interrupt) InterruptObserver?.Invoke();
+
             bool alreadyHandling = (Cop0[StatusRegister] & StatusExceptionLevel) != 0;
 
             // Read before the fault raises the exception level, which would make every mode kernel - see Mars_Tlb.md §7.5.

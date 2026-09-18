@@ -29,7 +29,7 @@ not, below, so that nobody has to find them by using them.
 | input | ~~nine of the pad's fourteen buttons, and not its stick (§5)~~ every button, the stick, and the C buttons on the right stick (§5) | ~~no analog stick, no Z, no C buttons~~ the whole controller |
 | battery saves | ~~**nothing** — there are no save devices (§6)~~ the cartridge's chip in `<rom>.srm` and a Controller Pak in `<rom>.mpk` (§6, `Mars_Save.md`) | ~~progress is lost when the ROM is closed~~ progress kept between runs |
 | save states and rewind | ~~explicit saves refused, rewind given no history (§6)~~ the whole machine, 6.4MB a state (`Mars_SaveStates.md`) | ~~"Save State failed", and holding rewind freezes the picture~~ saving, loading and rewinding |
-| a debug target | memory spaces, register readouts, a summary; nothing that halts (§8) | `watch`, `bp` and `framelog` accept arguments and never fire |
+| a debug target | ~~memory spaces, register readouts, a summary; nothing that halts (§8)~~ both processors, a virtual CPU space, breakpoints, stepping, watches, coverage, both disassemblers (`Mars_Debug.md`) | ~~`watch`, `bp` and `framelog` accept arguments and never fire~~ the debugger's commands, working |
 | cheats | the database folder is kept; no codec applies anything (§8) | the N64 cheat tab says it takes no format |
 
 **What none of this is evidence for is that any game is playable.** Two commercial games reach their title
@@ -285,9 +285,13 @@ program counter, 32 registers under their o32 names, `HI`, `LO` and the cycle co
 and a summary. Everything else is empty, and the commands built on it say so: `disasm` reports "N64 target has
 no disassembler", and `coretop` leaves out its tile sheet because `TilemapEntryStride` is 0.
 
-**The stub most likely to mislead is the three registries.** `Watches`, `FrameLog` and `Breakpoints` exist so the
+> **Retired 2026-09-18 by Phase F's debugger slices** (`Mars_Debug.md`, `Mars_Disassembler.md`). The target is no
+> longer the least that satisfies the interface: the registries are the core's and are fed, `disasm` decodes both
+> processors, and the paragraph above and the struck one below describe what stood until then.
+
+~~**The stub most likely to mislead is the three registries.** `Watches`, `FrameLog` and `Breakpoints` exist so the
 commands that use them do not fail, and nothing feeds them: `watch`, `framelog` and `bp` accept their arguments
-and never fire. They become real with the rest of Phase F (`Mars_Gameplan.md` §4.6).
+and never fire. They become real with the rest of Phase F (`Mars_Gameplan.md` §4.6).~~
 
 **No cheat codec is bundled**, so the Active Cheats window's N64 tab says the console has no cheat-code format and
 disables its Add button (`ActiveCheatsWindow.axaml.cs` 199, 267). A `.cht` loaded from the database still

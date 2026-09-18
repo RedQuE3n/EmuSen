@@ -673,6 +673,13 @@ other three cores.
 > arrays read back into boxes that were never stored — turned out to have been losing Venus's decoded palette on every
 > load. Left for this phase: the disassemblers, cheats, and the debug hooks behind `bp`, `watch`, `step` and coverage.
 
+> **Progress, 2026-09-18: the disassemblers and the debugger** (`Mars_Disassembler.md`, `Mars_Debug.md`). Both
+> processors decode — the VR4300's graded against capstone over 400,000 encodings, the RSP's against five sources —
+> and `disasm cpu` lists the code the processor is about to run, which is half of this section's done-when. Behind it
+> are breakpoints, stepping over and out of MIPS calls, watches, data breakpoints, coverage and the frame log, at a
+> cost that was 7–10% until the shared breakpoint registry learned to say when nothing could break. Left for this
+> phase: cheats.
+
 > **Progress, 2026-09-18: registered ahead of this phase** (`Mars_Core.md`). `.z64`, `.n64` and `.v64` now
 > reach Mars from every frontend, behind a debug target with memory spaces, register readouts and nothing else.
 > The argument above is met only for the seams `MarsCoreTests` covers; the disassemblers, save states, cheats and

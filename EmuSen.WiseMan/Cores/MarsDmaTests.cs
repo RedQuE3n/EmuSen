@@ -192,17 +192,163 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x0010_0000 + dram, bus.Read32(MemoryMap.PiBase + PiInterface.DramAddress));
         }
 
-        // A transfer that starts part way into an eight-byte block still leaves the address on one - see §7.2.
-        [Fact]
-        public void A_misaligned_cartridge_transfer_still_lands_on_a_block()
+        // A misaligned transfer leaves the address on the block after the last byte it stored, not after its length - see §7.3.
+        [Theory]
+        [InlineData(10u, 0x10u)]
+        [InlineData(9u, 0x10u)]
+        [InlineData(7u, 0x08u)]
+        [InlineData(1u, 0x08u)]
+        public void A_misaligned_cartridge_transfer_still_lands_on_a_block(uint length, uint dram)
         {
             var bus = new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
 
             bus.Write32(MemoryMap.PiBase + PiInterface.DramAddress, 0x0010_0006);
             bus.Write32(MemoryMap.PiBase + PiInterface.CartAddress, 0x1000_0000);
-            bus.Write32(MemoryMap.PiBase + PiInterface.WriteLength, 9);
+            bus.Write32(MemoryMap.PiBase + PiInterface.WriteLength, length - 1);
 
-            Assert.Equal(0x0010_0010u, bus.Read32(MemoryMap.PiBase + PiInterface.DramAddress));
+            Assert.Equal(0x0010_0000 + dram, bus.Read32(MemoryMap.PiBase + PiInterface.DramAddress));
+        }
+
+        // The corpus's short transfers six bytes into a block: the misalignment comes off what is stored, down to nothing - see §7.3.
+        [Theory]
+        [InlineData(1, 0)]
+        [InlineData(2, 0)]
+        [InlineData(6, 0)]
+        [InlineData(7, 1)]
+        [InlineData(8, 2)]
+        [InlineData(16, 10)]
+        [InlineData(119, 113)]
+        [InlineData(120, 114)]
+        public void A_short_misaligned_transfer_stores_its_misalignment_fewer_bytes(int length, int stored)
+        {
+            Assert.Equal(Expect((0, 0, stored)), Land(Block + 6, length));
+        }
+
+        // Only a first block one byte short of full stores its last pair whole - see §7.3.
+        [Theory]
+        [InlineData(0, 127, 128)]
+        [InlineData(6, 121, 116)]
+        public void A_first_block_one_byte_short_of_full_stores_its_last_pair_whole(int misaligned, int length, int stored)
+        {
+            Assert.Equal(Expect((0, 0, stored)), Land(Block + (uint)misaligned, length));
+        }
+
+        // The first block is short by its misalignment twice over, and what it skips is read and dropped - see §7.3.
+        [Theory]
+        [InlineData(122)]
+        [InlineData(128)]
+        [InlineData(284)]
+        public void The_first_misaligned_block_leaves_a_gap_before_the_next(int length)
+        {
+            Assert.Equal(Expect((0, 0, 116), (122, 122, length - 122)), Land(Block + 6, length));
+        }
+
+        // Only the first block ends on a lone byte; a later one rounds an odd remainder up to a pair - see §7.3.
+        [Theory]
+        [InlineData(129, 130)]
+        [InlineData(131, 132)]
+        [InlineData(133, 134)]
+        public void A_later_block_rounds_an_odd_remainder_up_to_a_pair(int length, int stored)
+        {
+            Assert.Equal(Expect((0, 0, stored)), Land(Block, length));
+        }
+
+        // A block stops at the end of a 2KB row, and the next one starts on the row - see §7.3.
+        [Theory]
+        [InlineData(50, 44, 0)]
+        [InlineData(66, 52, 8)]
+        [InlineData(284, 52, 226)]
+        public void A_block_stops_at_the_end_of_a_row(int length, int first, int rest)
+        {
+            Assert.Equal(Expect((0, 0, first), (58, 58, rest)), Land(RowEnd - 58, length));
+        }
+
+        // A block that begins within eight bytes of a row's end makes the next short by its misalignment - see §7.3.
+        [Fact]
+        public void A_block_at_the_end_of_a_row_shortens_the_one_after_it()
+        {
+            Assert.Equal(Expect((0, 0, 4), (6, 6, 2)), Land(RowEnd - 6, 7));
+            Assert.Equal(Expect((4, 4, 2)), Land(RowEnd - 4, 6));
+            Assert.Equal(Expect((2, 2, 2)), Land(RowEnd - 2, 4));
+
+            Assert.Equal(Expect((0, 0, 4), (6, 6, 126), (134, 132, 92)), Land(RowEnd - 6, 224));
+            Assert.Equal(Expect((2, 2, 122), (130, 124, 100)), Land(RowEnd - 2, 224));
+        }
+
+        // Not measured: every row end the corpus uses is also a 1KB boundary, and this one is only that - see §7.6.
+        [Fact]
+        public void A_row_is_two_kilobytes_so_a_one_kilobyte_boundary_does_not_stop_a_block()
+        {
+            Assert.Equal(Expect((0, 0, 60)), Land(Block + 0x400 - 58, 66));
+        }
+
+        // Not measured: the corpus places nothing between eight and fifty-eight bytes from a row's end - see §7.6.
+        [Fact]
+        public void A_block_eight_or_more_bytes_from_the_end_of_a_row_leaves_the_next_one_whole()
+        {
+            Assert.Equal(Expect((0, 0, 12), (14, 14, 210)), Land(RowEnd - 14, 224));
+        }
+
+        // Not measured: a shortened block is the walk's own state, and the next transfer starts whole - see §7.6.
+        [Fact]
+        public void A_shortened_block_does_not_outlive_its_transfer()
+        {
+            var bus = CountingCartridge();
+            Land(bus, RowEnd - 6, 6);
+
+            Assert.Equal(Expect((0, 0, 128)), Land(bus, Block, 128));
+        }
+
+        // A dispute: the corpus's own formula stores 52 here, and no case it runs is this size - see §7.4.
+        [Fact]
+        public void A_first_block_one_byte_short_of_a_row_ends_on_a_lone_byte()
+        {
+            Assert.Equal(Expect((0, 0, 51)), Land(RowEnd - 58, 57));
+        }
+
+        private const uint Block = 0x0010_0000;
+        private const uint RowEnd = 0x0010_0800;
+        private const byte Paint = 0xAA;
+        private const int Span = 0x180;
+
+        // The corpus's arrangement: memory painted, the cartridge counting up, never through the paint value.
+        private static byte Counting(int offset) => (byte)(offset % Paint);
+
+        private static MemoryBus CountingCartridge()
+        {
+            var counting = new byte[0x400];
+            for (int i = 0; i < counting.Length; i++) counting[i] = Counting(i);
+
+            return new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build(patches: (0, counting))) };
+        }
+
+        private static byte[] Land(uint dram, int length) => Land(CountingCartridge(), dram, length);
+
+        private static byte[] Land(MemoryBus bus, uint dram, int length)
+        {
+            for (uint i = 0; i < Span; i++) bus.Write8(dram + i, Paint);
+
+            bus.Write32(PiDram, dram);
+            bus.Write32(PiCart, MemoryMap.CartDomain1Address2 + RomImage.HeaderLength);
+            bus.Write32(PiWrite, (uint)length - 1);
+
+            var landed = new byte[Span];
+            for (uint i = 0; i < Span; i++) landed[i] = bus.Read8(dram + i);
+            return landed;
+        }
+
+        // Runs of destination offset, cartridge offset and count; everything else is still paint.
+        private static byte[] Expect(params (int At, int From, int Count)[] runs)
+        {
+            var expected = new byte[Span];
+            System.Array.Fill(expected, Paint);
+
+            foreach (var (at, from, count) in runs)
+            {
+                for (int i = 0; i < count; i++) expected[at + i] = Counting(from + i);
+            }
+
+            return expected;
         }
 
     }

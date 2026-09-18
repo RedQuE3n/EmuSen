@@ -12,7 +12,7 @@ it gets, what stops it, what its numbers mean and what they do not. The protocol
 **The run completes.** The corpus reaches its own teardown and prints its own verdict:
 
 ```
-Finished in 3.09s. Base: Failed 152 of 4637 tests (96% success rate)
+Finished in 3.09s. Base: Failed 72 of 4637 tests (98% success rate)
 ```
 
 That is 1,040 test groups and 4,637 assertions, every one of them attempted, **and no
@@ -42,6 +42,14 @@ line that reports those:
 | the RSP's vector unit | 1,040 | 163 of 4,637 assertions |
 | the CPU's access to RSP memory | 1,040 | 159 of 4,637 assertions |
 | the display processor's interface | 1,040 | 152 of 4,637 assertions |
+| the serial interface's PIF RAM | 1,040 | 146 of 4,637 assertions |
+| the cartridge transfer's addresses | 1,040 | 137 of 4,637 assertions |
+| the cartridge transfer's bytes | 1,040 | 72 of 4,637 assertions |
+
+**The two rows before the last were added late.** The slices that produced them moved the
+ratchet without extending this table or the verdict line above it, so for those two slices §5's
+account of what the ratchet asserts — *"the `N` of the latest row of §1's table"* — was not true
+of this page.
 
 The fourth row is the shape to want: forty tests that had never run before ran, and all
 forty passed.
@@ -86,22 +94,31 @@ in the corpus's test list has been attempted. Everything after it has not.
 
 ## 3. The census of what still fails
 
-The 71 distinct test groups that fail in the complete run, counted by name — a group that
-fails for thirty-three values is one row — against the corpus's own 137, which counts
-assertions. The cartridge row's count is now assertions it still fails rather than all of
-them: `Mars_Memory.md` §7.2 cleared nine of its ninety-two, and says what the remaining
-sixty-five are about.
+The 67 distinct test groups that fail in the complete run, counted by name — a group that
+fails for thirty-three values is one row — against the corpus's own 72.
+
+**What the corpus counts is a case, not an assertion.** A case is one group run for one of its
+values, and it stops at its first failed assertion; reading the corpus's source showed that
+(`Mars_Memory.md` §7.4). This page has called its unit an assertion throughout, and the word is
+left where it stands, but every count of that kind on it is a count of cases.
 
 | | groups | why |
 | --- | --- | --- |
 | caches, all four families | 45 | Mars models no caches; these cannot pass (`Mars_Cpu.md` §13) |
-| cartridge memory and writes | 19 | Phase E — the PI and cartridge DMA |
+| cartridge reads and writes | 15 | Phase E — the cartridge bus's write latch and its decay (13), sub-word reads (2) |
 | MI and RDRAM registers | 7 | Phase E — five MI, two RDRAM register groups |
 
 **Every remaining row is Phase E or a decision.** The six RDP groups that stood in an earlier
 census cleared in the slice after it (§12), and the six PIF RAM groups cleared in
 `Mars_Serial.md` §1 — they wanted the whole-word store rule `Mars_Memory.md` §2.4 had already
 built for the signal processor's memories, applied to a second window.
+
+> **Retired 2026-09-17: the census that stood before the cartridge transfer's bytes.** It counted
+> 71 groups against 137, with a cartridge row of *"cartridge memory and writes — 19 — Phase E — the
+> PI and cartridge DMA"*, and said above the table that *"the cartridge row's count is now
+> assertions it still fails rather than all of them"*. That sentence was wrong: the column counts
+> groups, and the row's nineteen had not moved. The four `cart_memory` groups in it cleared in
+> `Mars_Memory.md` §7.3, all sixty-five of their failing cases at once.
 
 > **Retired 2026-09-17: the census that stood before the serial interface.** It counted 77
 > groups against 152 assertions and its third row read *"PIF RAM, MI, RDRAM registers — 13 —

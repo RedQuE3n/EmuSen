@@ -75,6 +75,16 @@ A rewound state is exactly as accurate as a save state, because it *is* one — 
 
 Verified end-to-end against SMW: dumping `regs` + `mem WRAM 0 100` + `mem APURAM 200 40` at frame 700, running 200 more frames, then `rewind back 50`, produces a **byte-identical** dump — 65816 registers, PPU registers, SPC700 registers, WRAM and APU RAM all restored exactly.
 
+### 1.7 A core with no state format
+
+**An empty snapshot is not history, and `CaptureNow` now treats it as none: it clears the chain and stores nothing.** The case arrived with Mars (`Hardware/Nintendo/Mars - N64/Mars_Core.md` §6), whose stream overloads write zero bytes because it has no state format yet and because throwing from them would stop both frontends' emulation loops, which call `OnFrameCompleted` inside the `try` their `catch` ends the session from.
+
+**What the chain did with zero bytes before, measured rather than inferred.** Two empty states are the same length, so the shape check in `CaptureNow` passed, and `XorDeltaCodec` encodes two identical buffers to nothing (§1.3) — so every capture appended an empty delta that cost no bytes and was therefore never trimmed by the budget (§1.5). 600 frames of Wave Race 64 left a depth of 149 at 0 bytes; 400 of Super Mario 64 left 99. `Rewind()` then answered true once per delta while `LoadState` restored nothing, and Pharaoh's `rewind back` counted steps that were never taken. `MarsCoreTests.Mars_leaves_the_rewind_buffer_with_no_history` failed with a depth of 4 after five captures before the guard went in, and passes after it.
+
+**What a user sees did not change.** A frontend runs no frame while rewind is held, so the picture holds whether `Rewind()` answers true or false; the difference is the memory, and the harness's report. The growth it prevented was small — a list node per capture, about one a second at Mars's present speed — which is why this is recorded as a reporting defect rather than a leak that mattered.
+
+**Why the guard does not generalise into a rule about cores.** Every other core writes at least a magic word and a version (`EmuSen_Save_States.md` §3), so for them a zero-length state cannot occur and the guard never fires. It is a statement about one sentinel, not a capability check; a core that someday cannot snapshot *some* of the time would need a real way to say so, and this is not it.
+
 ---
 
 ## 2. Fast forward

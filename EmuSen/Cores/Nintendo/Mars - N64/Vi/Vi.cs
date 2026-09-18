@@ -59,7 +59,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
         private int Type => (int)Register(Control) & 3;
 
-        private bool Serrate => (Register(Control) & (1 << 6)) != 0;
+        public bool Serrate => (Register(Control) & (1 << 6)) != 0;
 
         private int AntiAlias => (int)(Register(Control) >> 8) & 3;
 

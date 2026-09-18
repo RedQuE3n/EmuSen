@@ -1,0 +1,450 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using EmuSen.Common;
+using EmuSen.Cores;
+using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.Mars.Debug;
+using EmuSen.Cores.Nintendo.Mars.Memory;
+using EmuSen.Cores.Nintendo.Mars.Rom;
+using EmuSen.DianaOS.DianaOS.Var;
+using EmuSen.Galaxia.Input;
+using EmuSen.WiseMan.Fixtures;
+using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
+
+namespace EmuSen.WiseMan.Cores
+{
+    // Mars behind ICore: the frame boundary, the size contract and the stubs - see Mars_Core.md §9.
+    public class MarsCoreTests : IDisposable
+    {
+        // beq zero, zero, -1 and its empty delay slot: the first instruction the handoff runs, forever.
+        private static readonly byte[] SpinForever = { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 };
+
+        private const uint NtscSync = 525, NtscLine = 3093, PalSync = 625, PalLine = 3177;
+
+        private const uint Framebuffer = 0x0020_0000;
+
+        private const string WaveRace = "Wave Race 64 (USA) (Rev A).z64";
+
+        private readonly List<string> _temporaryFiles = new();
+
+        public void Dispose()
+        {
+            foreach (string path in _temporaryFiles)
+            {
+                try { File.Delete(path); } catch { }
+            }
+        }
+
+        private string WriteRom(byte[] image, string extension = ".z64")
+        {
+            string path = SyntheticN64Rom.WriteTemp(image, extension);
+            _temporaryFiles.Add(path);
+            return path;
+        }
+
+        private MarsCore Load()
+        {
+            var core = new MarsCore();
+            core.LoadRom(WriteRom(SyntheticN64Rom.Build(patches: (0, SpinForever))));
+            return core;
+        }
+
+        // What a game's boot does to the VI, done from outside so the ROM itself can stay a two-instruction loop.
+        private static void ProgramVi(MemoryBus bus, uint sync, uint line, bool serrate = false)
+        {
+            bus.Write32(MemoryMap.ViBase + VideoInterface.Control, serrate ? 1u << 6 : 0);
+            bus.Write32(MemoryMap.ViBase + VideoInterface.VerticalSync, sync);
+            bus.Write32(MemoryMap.ViBase + VideoInterface.HorizontalSync, line);
+        }
+
+        [Theory]
+        [InlineData(".z64")]
+        [InlineData(".n64")]
+        [InlineData(".v64")]
+        public void The_factory_routes_every_n64_extension_to_mars(string extension)
+        {
+            string path = WriteRom(SyntheticN64Rom.Build(), extension);
+
+            Assert.True(CoreFactory.IsSupported(path));
+            Assert.Equal("N64", CoreCatalog.ConsoleForRom(path));
+
+            CoreBundle bundle = CoreFactory.Load(path);
+            Assert.IsType<MarsCore>(bundle.Core);
+            Assert.IsType<MarsDebugTarget>(bundle.DebugTarget);
+            Assert.Null(bundle.CheatAutoDetectCodec);
+            Assert.Null(bundle.CheatExplicitCodec);
+            Assert.True(bundle.Core.IsRomLoaded);
+        }
+
+        // The magic word decides the container, so a dump named for the wrong order still loads - see Mars_Rom.md §1.1.
+        [Fact]
+        public void The_extension_does_not_decide_the_byte_order()
+        {
+            byte[] bigEndian = SyntheticN64Rom.Build();
+            string path = WriteRom(SyntheticN64Rom.ToLittleEndian(bigEndian), ".v64");
+
+            var core = (MarsCore)CoreFactory.Load(path).Core;
+
+            Assert.Equal(RomByteOrder.LittleEndian, core.Rom!.SourceByteOrder);
+            Assert.Equal("WISEMAN", core.Rom.Title);
+        }
+
+        [Fact]
+        public void The_catalog_reaches_mars_by_console_name_and_codename()
+        {
+            Assert.Same(CoreCatalog.Registry["n64"], CoreCatalog.Registry["mars"]);
+            Assert.Equal("N64", CoreCatalog.Registry["mars"].Console);
+            Assert.Equal(new MarsCore().CoreName, CoreCatalog.Registry["mars"].Console);
+            Assert.Contains("Nintendo - Nintendo 64", CoreCatalog.SupportedCheatSystems);
+            Assert.Equal(MarsCore.PadButtons, CoreCatalog.ButtonsFor("N64"));
+
+            var codecs = CoreFactory.CheatCodecsFor("N64");
+            Assert.Null(codecs.AutoDetect);
+            Assert.Null(codecs.Explicit);
+        }
+
+        // A game that never programs the VI still has to give the frame back - see Mars_Core.md §3.
+        [Fact]
+        public void A_frame_ends_on_the_cycle_cap_when_the_vi_is_never_programmed()
+        {
+            MarsCore core = Load();
+            long before = core.Bus!.Cycles;
+
+            core.RunFrame();
+
+            long spent = core.Bus.Cycles - before;
+            Assert.InRange(spent, MarsCore.CycleCap, MarsCore.CycleCap + 8);
+            Assert.Equal(0, core.Bus.Vi.Fields);
+            Assert.Equal(1, core.TotalFrames);
+            Assert.Equal(MarsCore.ProcessorClockHz / (double)spent, core.FrameRateHz);
+        }
+
+        // Once the VI counts, a frame is exactly one of its fields - see Mars_Core.md §3.
+        [Fact]
+        public void A_frame_ends_on_the_vis_own_field_once_it_counts()
+        {
+            MarsCore core = Load();
+            MemoryBus bus = core.Bus!;
+            ProgramVi(bus, NtscSync, NtscLine);
+
+            core.RunFrame();
+            Assert.Equal(1, bus.Vi.Fields);
+
+            long before = bus.Cycles;
+            core.RunFrame();
+            long spent = bus.Cycles - before;
+
+            // 525 half lines of 3093 interface clocks at 48.681818 MHz, in 93.75 MHz processor cycles.
+            double field = NtscSync * NtscLine * 93_750_000.0 / (2 * 48_681_818.0);
+
+            Assert.Equal(2, bus.Vi.Fields);
+            Assert.InRange(spent, (long)field - 2, (long)field + 2);
+            Assert.InRange(core.FrameRateHz, 59.95, 59.97);
+        }
+
+        // The longest field the registers can describe still ends on the VI, not the cap - see Mars_Core.md §3.
+        [Fact]
+        public void The_cap_never_ends_a_frame_the_vi_would_have_ended()
+        {
+            MarsCore core = Load();
+            MemoryBus bus = core.Bus!;
+            ProgramVi(bus, 0x3FF, 0xFFF);
+
+            long before = bus.Cycles;
+            core.RunFrame();
+
+            Assert.Equal(1, bus.Vi.Fields);
+            Assert.True(bus.Cycles - before < MarsCore.CycleCap,
+                $"a {bus.Cycles - before}-cycle field reached the {MarsCore.CycleCap}-cycle cap");
+        }
+
+        // Length and dimensions are set together, whatever the signal - see Mars_Core.md §2.
+        [Fact]
+        public void The_frame_buffer_is_always_as_long_as_the_screen_it_claims()
+        {
+            var core = new MarsCore();
+            AssertConsistent(core, 480);
+
+            core.LoadRom(WriteRom(SyntheticN64Rom.Build(patches: (0, SpinForever))));
+            AssertConsistent(core, 480);
+
+            core.RunFrame();
+            AssertConsistent(core, 480);
+
+            ProgramVi(core.Bus!, PalSync, PalLine);
+            core.RunFrame();
+            AssertConsistent(core, 576);
+
+            ProgramVi(core.Bus!, NtscSync - 1, NtscLine, serrate: true);
+            core.RunFrame();
+            AssertConsistent(core, 480);
+
+            static void AssertConsistent(MarsCore core, int height)
+            {
+                Assert.Equal(640, core.ScreenWidth);
+                Assert.Equal(height, core.ScreenHeight);
+                Assert.Equal(core.ScreenWidth * core.ScreenHeight * 4, core.GetFrameBufferRgba().Length);
+            }
+        }
+
+        // The raster's fourth byte is coverage; a frontend drawing it as alpha shows a near-transparent picture - see Mars_Core.md §2.1.
+        [Fact]
+        public void Every_pixel_is_opaque_whatever_coverage_the_raster_carries()
+        {
+            MarsCore core = Load();
+            MemoryBus bus = core.Bus!;
+
+            for (uint i = 0; i < 256 * 120 * 2; i += 2) bus.Write16(Framebuffer + i, (ushort)(0x1235 + i * 0x0421));
+
+            ProgramVi(bus, NtscSync, NtscLine);
+            bus.Write32(MemoryMap.ViBase + VideoInterface.Control, 2 | (3 << 8));
+            bus.Write32(MemoryMap.ViBase + VideoInterface.Origin, Framebuffer);
+            bus.Write32(MemoryMap.ViBase + VideoInterface.Width, 256);
+            bus.Write32(MemoryMap.ViBase + VideoInterface.HorizontalStart, (108 << 16) | (108 + 256));
+            bus.Write32(MemoryMap.ViBase + VideoInterface.VerticalStart, (34 << 16) | (34 + 240));
+            bus.Write32(MemoryMap.ViBase + VideoInterface.ScaleX, 0x400);
+            bus.Write32(MemoryMap.ViBase + VideoInterface.ScaleY, 0x400);
+
+            core.RunFrame();
+
+            byte[] raster = bus.Vi.Frame.ToArray();
+            byte[] frame = core.GetFrameBufferRgba();
+
+            // The test is only worth something if the raster really carries a coverage, and here it is 7.
+            Assert.Contains(raster.Where((_, i) => i % 4 == 3), a => a == 7);
+            Assert.Contains(raster.Where((_, i) => i % 4 != 3), c => c != 0);
+
+            // A progressive field is every other line, so each raster row lands twice, its colour untouched and its alpha whole.
+            int rowBytes = 640 * 4;
+            var expected = new byte[raster.Length * 2];
+            for (int row = 0; row < bus.Vi.FrameHeight; row++)
+            {
+                for (int copy = 0; copy < 2; copy++)
+                {
+                    int at = (row * 2 + copy) * rowBytes;
+                    Array.Copy(raster, row * rowBytes, expected, at, rowBytes);
+                    for (int alpha = at + 3; alpha < at + rowBytes; alpha += 4) expected[alpha] = 0xFF;
+                }
+            }
+
+            Assert.Equal(expected, frame);
+        }
+
+        [Fact]
+        public void A_skipped_frame_leaves_the_last_picture_alone()
+        {
+            MarsCore core = Load();
+            byte[] before = core.GetFrameBufferRgba();
+
+            core.SkipRendering = true;
+            core.RunFrame();
+
+            Assert.Same(before, core.GetFrameBufferRgba());
+            Assert.Equal(1, core.TotalFrames);
+        }
+
+        // The joybus answers a state command with what SetButton left - see Mars_Serial.md §3.1.
+        [Fact]
+        public void A_pressed_button_reaches_the_state_the_joybus_reports()
+        {
+            MarsCore core = Load();
+
+            core.SetButton(0, PadButton.A, true);
+            core.SetButton(0, PadButton.Start, true);
+            core.SetButton(0, PadButton.Right, true);
+            core.SetButton(0, PadButton.L, true);
+            core.SetButton(0, PadButton.R, true);
+
+            Assert.Equal(new byte[] { 0x91, 0x30 }, StateReply(core.Bus!));
+
+            core.SetButton(0, PadButton.A, false);
+            core.SetButton(0, PadButton.Up, true);
+            core.SetButton(0, PadButton.B, true);
+
+            Assert.Equal(new byte[] { 0x59, 0x30 }, StateReply(core.Bus!));
+        }
+
+        // X, Y and Select have no N64 twin, and are dropped rather than moved onto Z or a C button - see Mars_Core.md §5.
+        [Fact]
+        public void A_button_the_pad_lacks_changes_nothing()
+        {
+            MarsCore core = Load();
+
+            foreach (PadButton button in new[] { PadButton.X, PadButton.Y, PadButton.Select })
+            {
+                core.SetButton(0, button, true);
+            }
+
+            core.SetButton(7, PadButton.A, true);
+            core.SetButton(-1, PadButton.A, true);
+
+            Assert.All(core.Bus!.Si.Controllers, c => Assert.Equal(0, c.Buttons));
+            Assert.Equal(new byte[] { 0x00, 0x00 }, StateReply(core.Bus!));
+            Assert.DoesNotContain(PadButton.Select, core.SupportedButtons);
+        }
+
+        // An explicit save fails loudly, and before any file exists - see Mars_Core.md §6.
+        [Fact]
+        public void An_explicit_save_state_is_refused_and_writes_nothing()
+        {
+            MarsCore core = Load();
+            string path = Path.Combine(Path.GetTempPath(), $"wiseman_{Guid.NewGuid():N}.state");
+            _temporaryFiles.Add(path);
+
+            Assert.Throws<NotSupportedException>(() => core.SaveState(path));
+            Assert.False(File.Exists(path));
+
+            File.WriteAllBytes(path, new byte[] { 1, 2, 3, 4 });
+            Assert.Throws<NotSupportedException>(() => core.LoadState(path));
+        }
+
+        // The stream overloads record nothing, so a caller that snapshots every few frames keeps running - see Mars_Core.md §6.
+        [Fact]
+        public void The_stream_overloads_record_nothing_and_consume_nothing()
+        {
+            MarsCore core = Load();
+
+            using var stream = new MemoryStream();
+            core.SaveState(stream);
+            Assert.Equal(0, stream.Length);
+
+            stream.Write(new byte[] { 9, 9 });
+            stream.Position = 0;
+            core.LoadState(stream);
+            Assert.Equal(0, stream.Position);
+        }
+
+        // An empty snapshot is no history, so holding rewind reports nothing to step back to - see EmuSen_Rewind_And_FastForward.md §1.7.
+        [Fact]
+        public void Mars_leaves_the_rewind_buffer_with_no_history()
+        {
+            MarsCore core = Load();
+            var rewind = new RewindBuffer { Enabled = true, IntervalFrames = 1 };
+
+            for (int i = 0; i < 5; i++) rewind.CaptureNow(core);
+
+            Assert.Equal(0, rewind.Depth);
+            Assert.Equal(0, rewind.BufferedBytes);
+            Assert.False(rewind.Rewind(core));
+        }
+
+        [Fact]
+        public void Nothing_is_ever_queued_for_the_speaker()
+        {
+            MarsCore core = Load();
+            core.RunFrame();
+
+            Assert.Equal(44100, core.AudioSampleRate);
+            Assert.Empty(core.DequeueAudioSamples(int.MaxValue));
+        }
+
+        // No save device exists, so flushing one writes no file beside the ROM - see Mars_Core.md §6.
+        [Fact]
+        public void Flushing_save_data_writes_nothing()
+        {
+            var core = new MarsCore();
+            string path = WriteRom(SyntheticN64Rom.Build(patches: (0, SpinForever)));
+            core.LoadRom(path);
+
+            string directory = Path.GetDirectoryName(path)!;
+            string stem = Path.GetFileNameWithoutExtension(path);
+            core.SaveSram();
+
+            Assert.Equal(new[] { path }, Directory.GetFiles(directory, stem + "*"));
+        }
+
+        [Fact]
+        public void The_default_machine_is_a_stock_console()
+        {
+            MarsCore stock = Load();
+            Assert.Equal(MemoryBus.RdramSize, stock.Bus!.Rdram.Length);
+
+            var expanded = new MarsCore(expansionPak: true);
+            expanded.LoadRom(WriteRom(SyntheticN64Rom.Build()));
+            Assert.Equal(MemoryBus.RdramSizeExpanded, expanded.Bus!.Rdram.Length);
+        }
+
+        [Fact]
+        public void Every_member_that_needs_a_rom_says_so_before_one_is_loaded()
+        {
+            var core = new MarsCore();
+
+            Assert.Throws<InvalidOperationException>(() => core.RunFrame());
+            Assert.Throws<InvalidOperationException>(() => core.SaveState(new MemoryStream()));
+            Assert.Throws<InvalidOperationException>(() => core.LoadState(new MemoryStream()));
+            Assert.Throws<InvalidOperationException>(() => core.SaveState("never.state"));
+
+            core.SetButton(0, PadButton.A, true);
+            core.SaveSram();
+            Assert.False(core.IsRomLoaded);
+        }
+
+        // The debug target is what lets CoreFactory hand Mars out; its memory spaces are the machine's own arrays - see Mars_Core.md §8.
+        [Fact]
+        public void The_debug_target_reads_the_machine_it_was_built_on()
+        {
+            var cheats = new CheatRegistry();
+            CoreBundle bundle = CoreFactory.Load(WriteRom(SyntheticN64Rom.Build(patches: (0, SpinForever))), cheats: cheats);
+            var core = (MarsCore)bundle.Core;
+            var target = bundle.DebugTarget;
+
+            Assert.Same(cheats, target.Cheats);
+            Assert.Equal("N64", target.CoreName);
+
+            var rom = target.GetMemorySpaces().Single(s => s.Name == "ROM");
+            Assert.False(rom.IsWritable);
+            Assert.Equal(0x10, rom.Read(RomImage.HeaderLength));
+
+            var rdram = target.GetMemorySpaces().Single(s => s.Name == "RDRAM");
+            rdram.Write(0x100, 0xAB);
+            Assert.Equal(0xAB, core.Bus!.Rdram[0x100]);
+
+            target.RefreshProviders();
+            Assert.Contains(target.CpuRegisters.Current, r => r.Name == "PC" && r.Value == core.Cpu!.Pc);
+            Assert.Empty(target.Disassemble("RDRAM", 0, 4));
+            Assert.Contains("N64 (Mars)", target.GetSummaryText());
+        }
+
+        // A commercial game through ICore alone: fields at the NTSC rate and a picture a frontend can draw - see Mars_Core.md §9.
+        [Fact]
+        public void Wave_Race_reaches_a_picture_through_the_interface_alone()
+        {
+            string path = Path.Combine(N64TestRomLibrary.Root, WaveRace);
+            if (!File.Exists(path)) return;
+
+            ICore core = CoreFactory.Load(path).Core;
+
+            int frames = 0;
+            byte[] rgba = core.GetFrameBufferRgba();
+            while (frames < 60 && !rgba.Where((_, i) => i % 4 != 3).Any(c => c != 0))
+            {
+                core.RunFrame();
+                frames++;
+                rgba = core.GetFrameBufferRgba();
+                Assert.Equal(core.ScreenWidth * core.ScreenHeight * 4, rgba.Length);
+            }
+
+            Assert.True(frames < 60, "no frame of the first sixty carried a lit pixel");
+            Assert.Equal(480, core.ScreenHeight);
+            Assert.InRange(core.FrameRateHz, 59.95, 59.97);
+            Assert.All(rgba.Where((_, i) => i % 4 == 3), a => Assert.Equal(0xFF, a));
+        }
+
+        // A state command for the first port, run through the serial interface the way a game runs it - see Mars_Serial.md §2.
+        private static byte[] StateReply(MemoryBus bus)
+        {
+            const uint Dram = 0x0010_0000;
+            byte[] block = { 0x01, 0x04, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE };
+
+            for (uint i = 0; i < 64; i++) bus.Rdram[Dram + i] = i < block.Length ? block[i] : (byte)0;
+            bus.Rdram[Dram + 63] = 1;
+
+            bus.Write32(MemoryMap.SiBase + SiInterface.DramAddress, Dram);
+            bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressWrite, 0);
+
+            return new[] { bus.PifRam[3], bus.PifRam[4] };
+        }
+    }
+}

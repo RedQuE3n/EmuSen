@@ -376,7 +376,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // Every console in the catalog gets a tab, and each names the formats it takes - see §4.14.
+        // Every console in the catalog gets a tab, and each names the formats it takes or says it has none - see §4.14.
         [Fact]
         public Task Each_console_tab_offers_its_own_formats() => Session.Dispatch(() =>
         {
@@ -385,17 +385,25 @@ namespace EmuSen.WiseMan.Mistress
 
             var tabs = window.GetControl<TabControl>("Tabs");
             var headers = tabs.Items.OfType<TabItem>().Select(t => (string)t.Header!).ToArray();
-            Assert.Equal(new[] { "General", "NES", "GB", "SNES" }, headers);
+            Assert.Equal(new[] { "General", "NES", "GB", "SNES", "N64" }, headers);
 
             foreach (TabItem item in tabs.Items.OfType<TabItem>().Skip(1))
             {
                 tabs.SelectedItem = item;
                 string console = (string)item.Header!;
-                Assert.True(AddButton(window).IsEnabled, $"{console} should accept a typed code.");
+                string[] texts = ((Control)item.Content!).GetLogicalDescendants().OfType<TextBlock>()
+                    .Select(t => t.Text ?? "").ToArray();
 
-                string formats = ((Control)item.Content!).GetLogicalDescendants().OfType<TextBlock>()
-                    .Select(t => t.Text ?? "").First(t => t.StartsWith("Accepts:"));
-                Assert.Contains("Game Genie", formats);
+                // Mars applies no cheats yet, so its tab says so rather than offering a dead box - see Mars_Core.md §8.
+                if (console == "N64")
+                {
+                    Assert.False(AddButton(window).IsEnabled, "N64 has no cheat-code format to accept a code with.");
+                    Assert.Contains(texts, t => t.Contains("no cheat-code format"));
+                    continue;
+                }
+
+                Assert.True(AddButton(window).IsEnabled, $"{console} should accept a typed code.");
+                Assert.Contains("Game Genie", texts.First(t => t.StartsWith("Accepts:")));
             }
 
             window.Close();

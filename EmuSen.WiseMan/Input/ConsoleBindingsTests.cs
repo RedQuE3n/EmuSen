@@ -174,6 +174,7 @@ namespace EmuSen.WiseMan.Input
 
             Assert.Contains(new EmuSen.Cores.Nintendo.Moon.MoonCore().CoreName, catalogNames);
             Assert.Contains(new EmuSen.Cores.Nintendo.Venus.VenusCore().CoreName, catalogNames);
+            Assert.Contains(new EmuSen.Cores.Nintendo.Mars.MarsCore().CoreName, catalogNames);
         }
 
         [Fact]
@@ -181,7 +182,7 @@ namespace EmuSen.WiseMan.Input
         {
             string[] order = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToArray();
 
-            Assert.Equal(new[] { "NES", "GB", "SNES" }, order);
+            Assert.Equal(new[] { "NES", "GB", "SNES", "N64" }, order);
         }
 
         // The rebind window lists a console's pad with no ROM loaded, so this must
@@ -192,6 +193,7 @@ namespace EmuSen.WiseMan.Input
             Assert.Equal(new EmuSen.Cores.Nintendo.Moon.MoonCore().SupportedButtons, CoreCatalog.ButtonsFor("NES"));
             Assert.Equal(new EmuSen.Cores.Nintendo.Venus.VenusCore().SupportedButtons, CoreCatalog.ButtonsFor("SNES"));
             Assert.Equal(new EmuSen.Cores.Nintendo.Mercury.MercuryCore().SupportedButtons, CoreCatalog.ButtonsFor("GB"));
+            Assert.Equal(new EmuSen.Cores.Nintendo.Mars.MarsCore().SupportedButtons, CoreCatalog.ButtonsFor("N64"));
         }
 
         [Fact]

@@ -624,6 +624,13 @@ a core whose seams get tested by the user.
 Mars in DianaOS, and the cheat-wiring tests cover Mars the way they now cover the
 other three cores.
 
+> **Progress, 2026-09-18: registered ahead of this phase** (`Mars_Core.md`). `.z64`, `.n64` and `.v64` now
+> reach Mars from every frontend, behind a debug target with memory spaces, register readouts and nothing else.
+> The argument above is met only for the seams `MarsCoreTests` covers; the disassemblers, save states, cheats and
+> breakpoints this section names are stubs, and `Mars_Core.md` §0 lists them so that they are not found by using
+> them. The done-when is not met: `disasm cpu` reports no disassembler, and the cheat-wiring tests do not cover
+> Mars, because Mars applies no cheats.
+
 ### 4.7 Phase G — performance
 
 Opens with a profile, not a plan. The question it must answer first is which of the

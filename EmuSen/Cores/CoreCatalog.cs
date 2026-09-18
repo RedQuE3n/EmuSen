@@ -37,6 +37,16 @@ namespace EmuSen.Cores
         private static readonly CoreDescriptor Mercury =
             new("Game Boy (Mercury)", new[] { ".gb", ".gbc" }, GameBoyCheatSystems, "GB", "Nintendo", 1989);
 
+        // Claimed so `cheat db prune` keeps it, though Mars applies no cheats yet - see Mars_Core.md §8.
+        private static readonly string[] N64CheatSystems =
+        {
+            "Nintendo - Nintendo 64",
+        };
+
+        // All three container orders, because the magic word decides and the extension does not - see Mars_Rom.md §1.1.
+        private static readonly CoreDescriptor Mars =
+            new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996);
+
         // Keyed by what a user would type - the internal codename and the console name both reach the same core.
         public static IReadOnlyDictionary<string, CoreDescriptor> Registry { get; } =
             new Dictionary<string, CoreDescriptor>(StringComparer.OrdinalIgnoreCase)
@@ -48,6 +58,8 @@ namespace EmuSen.Cores
                 ["mercury"] = Mercury,
                 ["gb"] = Mercury,
                 ["gbc"] = Mercury,
+                ["mars"] = Mars,
+                ["n64"] = Mars,
             };
 
         // What `cheat db prune` keeps.
@@ -55,7 +67,7 @@ namespace EmuSen.Cores
             CoreDescriptor.SupportedCheatSystems(Registry.Values);
 
         // One entry per real core, not per alias - what a "which console?" list shows.
-        public static IReadOnlyList<CoreDescriptor> Cores { get; } = new[] { Venus, Moon, Mercury };
+        public static IReadOnlyList<CoreDescriptor> Cores { get; } = new[] { Venus, Moon, Mercury, Mars };
 
         // Cores sorted for display: grouped by manufacturer, oldest console first - see EmuSen_Input.md §5.1.
         public static IReadOnlyList<CoreDescriptor> ConsolesInReleaseOrder { get; } =
@@ -71,6 +83,7 @@ namespace EmuSen.Cores
                 [Venus.Console] = Nintendo.Venus.VenusCore.PadButtons,
                 [Moon.Console] = Nintendo.Moon.MoonCore.PadButtons,
                 [Mercury.Console] = Nintendo.Mercury.MercuryCore.PadButtons,
+                [Mars.Console] = Nintendo.Mars.MarsCore.PadButtons,
             };
 
         // The console's pad with no ROM loaded, or every button for a console this build does not know.

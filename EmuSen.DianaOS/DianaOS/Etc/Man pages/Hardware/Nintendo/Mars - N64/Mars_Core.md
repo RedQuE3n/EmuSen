@@ -1,0 +1,318 @@
+# Mars — the core behind `ICore`, and what it stands in for
+
+*Landed 2026-09-18. Not a Phase E slice: the wrapper that lets a frontend load a Nintendo 64 ROM at all. The
+code is `MarsCore.cs` and `Debug/MarsDebugTarget.cs`, a route in `CoreFactory` and a descriptor in
+`CoreCatalog`, one counter added to `Vi/Vi.Timing.cs`, one property made public in `Vi/Vi.cs`, and one guard in
+`EmuSen/Common/RewindBuffer.cs`; the grading is `MarsCoreTests`, a mutation round, and two commercial games
+measured through the interface.*
+
+***§0 is the part to read first.** Mars is registered here ahead of the condition its own plan set for
+registration, and most of what `ICore` asks for is a deliberate stub. §0 says which, and what each one means for
+somebody who opens a `.z64`.*
+
+---
+
+## 0. What this is, and what it departs from
+
+**This registers Mars before Phase F.** `Mars_Gameplan.md` §4.6 put the `CoreCatalog` descriptor last, after a
+debug target with disassemblers, save states and cheats, on the argument that *"a core reachable from the
+frontends before its seams are tested is a core whose seams get tested by the user."* `Mars_Rom.md` §4 said the
+same thing from the other end. Registration has been brought forward ahead of those seams, so this page does the
+next best thing to meeting the condition: it tests the seams that do exist (§9), and it lists the ones that do
+not, below, so that nobody has to find them by using them.
+
+| `ICore` asks for | What Mars gives | What a user sees |
+| --- | --- | --- |
+| a picture | the VI's raster, copied, line-doubled when progressive, alpha set to 255 (§2) | the game's picture, several times slower than real time (§9) |
+| a frame boundary and a rate | one VI field per frame, a cycle cap when the VI is idle (§3) | nothing; pacing follows the console's own clock |
+| audio | **nothing** — there is no audio interface (§4) | silence |
+| input | nine of the pad's fourteen buttons, and not its stick (§5) | no analog stick, no Z, no C buttons |
+| battery saves | **nothing** — there are no save devices (§6) | progress is lost when the ROM is closed |
+| save states and rewind | explicit saves refused, rewind given no history (§6) | "Save State failed", and holding rewind freezes the picture |
+| a debug target | memory spaces, register readouts, a summary; nothing that halts (§8) | `watch`, `bp` and `framelog` accept arguments and never fire |
+| cheats | the database folder is kept; no codec applies anything (§8) | the N64 cheat tab says it takes no format |
+
+**What none of this is evidence for is that any game is playable.** Two commercial games reach their title
+pictures through this interface (§9); neither can be steered, heard or saved.
+
+## 1. What `MarsCore` is
+
+**`LoadRom` is the handoff every Mars test already uses**: `RomImage.Load`, a new `MemoryBus`, a new `Cpu`, and
+`Boot.HandOff` (`Mars_Boot.md`), so no firmware image is asked for and `GetFirmwareRequirements` keeps its
+default of none. `Rom`, `Bus` and `Cpu` are public properties beyond the interface, the same escape hatch
+`Moon_Core.md` §1 describes, and the debug target is built on them.
+
+**`CoreName` is `"N64"`**, which is also the descriptor's console name. The two must be the same string —
+Mistress assigns one to the other (`EmuSen_Input.md` §5.1) — and `MarsCoreTests` and `ConsoleBindingsTests`
+both pin it.
+
+## 2. The picture, and the size contract
+
+**What every consumer assumes is that `GetFrameBufferRgba().Length == ScreenWidth × ScreenHeight × 4`, read
+back to back after `RunFrame`.** `ICore.cs` says so in its comment on the method, and the consumers depend on
+it rather than check it: Mistress reads the buffer and then the two properties (`MainWindow.axaml.cs`
+1026–1027), Hotaru reads all three in one call (`GameWindow.axaml.cs` 431), `BmpFile.Write` indexes the buffer
+to `width × height × 4` without a bound (`BmpFile.cs` 30–40), and Serenity hands the array to
+`SKImage.FromPixelCopy` under an info built from the two dimensions (`GameFrameControl.cs` 128–129). **What
+they do not assume is that the size is fixed**: every one takes the dimensions per frame, because Venus's width
+already changes between 256 and 512 (`Venus_PPU.md` §8), and Venus keeps the contract by allocating a buffer of
+exactly `FrameWidth × 224 × 4` on every call (`Renderer.cs` 49).
+
+**So the answer is a variable height that is set together with the buffer it describes.** `ScreenWidth` is 640,
+the VI's raster width. `ScreenHeight` is **480 for an NTSC signal and 576 for a PAL one**, and both it and the
+buffer are replaced in the same method at the end of `RunFrame`, so no caller on the emulation thread can read
+one without the other. Before a ROM is loaded, and after one is loaded but before its first frame, the
+buffer is 640×480 of opaque black, which is what the VI describes before a game programs it.
+
+**A progressive field is line-doubled; an interlaced one is copied as it is.** The VI's own frame is 240 or 288
+rows for a progressive signal (`Vi.FrameHeight`), and every consumer presents a buffer at its own pixel aspect —
+`ComputeLetterboxRect` scales width and height by the same factor (`GameFrameControl.cs` 39–51) — so a 640×240
+buffer would be drawn at 8:3, squashed to half its height. Each raster row is therefore written twice. An
+interlaced signal already holds both fields in its raster (`Mars_Video.md` §2.4), so it is copied row for row.
+
+**Two consequences, one intended and one not.** The intended one is that the height does not change when a game
+moves between an interlaced menu and progressive play; it changes at most between 480 and 576, which in
+practice happens once, when a PAL game first programs `VI_V_SYNC` (§9 measures Super Mario 64 doing exactly
+that between its first and second frames). The unintended one is that **a PAL picture is drawn 20% too tall**:
+640×576 at square pixels is 10:9, where a PAL set shows 4:3. `ICore` has no channel for a pixel aspect, and
+Venus has the same class of error (256×224 drawn at 8:7), so this is recorded rather than worked around.
+
+### 2.1 The fourth byte is coverage, not opacity
+
+**The VI's raster keeps each pixel's coverage — zero to seven — where an RGBA buffer keeps alpha**
+(`Vi.Scanout.cs` 211, `Mars_VideoFilter.md` §1). Everything downstream reads that byte as alpha: Serenity and
+`PngFile` both build their images as `Rgba8888` with `Unpremul` alpha (`GameFrameControl.cs` 128,
+`PngFile.cs` 10), and `BmpFile` writes it straight out. Passed through unchanged, a correct picture is drawn at
+seven parts in 255 of opacity. That was measured before this page existed, on Super Mario 64 and Wave Race 64
+frames: sky `(45,99,179)`, water `(0,74,246)`, alpha 7.
+
+**Mars copies the raster and writes 255 into every fourth byte.** The raster itself is left alone, because it is
+what `MarsViDifferentialTests` grades and its coverage is real data there.
+`Every_pixel_is_opaque_whatever_coverage_the_raster_carries` pins both halves: the raster it scans really does
+carry a coverage of 7, and the buffer handed out carries 255 over exactly the colours the raster holds.
+
+### 2.2 When the raster is scanned
+
+**Once a frame, at the boundary that ended it.** `RunFrame` calls `Vi.Scan()` after its loop, which is the
+moment the half-line count wraps, or the moment the cap ran out if the VI is not counting. A console scans continuously down the field, and nothing here says the origin
+register a game has written by the wrap is the one hardware would have latched for that field; a game that
+swaps its frame buffer mid-field would show the difference, and no test here has one.
+
+**`SkipRendering` skips the scan and the copy, and nothing else.** The display processor still draws, because
+what it writes to RDRAM a game can read. What goes stale is the VI's held-line bookkeeping
+(`Mars_Video.md` §2.4), which no game can read either — the kind of render-derived state
+`EmuSen_Rewind_And_FastForward.md` §2.2 allows fast-forward to leave behind.
+
+## 3. The frame boundary
+
+**A frame is one of the VI's fields.** `Vi.Timing.cs` already advanced the half line off the bus clock and wrapped
+it at `VI_V_SYNC` (`Mars_VideoTiming.md` §1); this page adds `Fields`, a count incremented where it wraps, and
+`RunFrame` steps the processor until that count changes. **That counter is the only change to what the VI
+computes, and it changes nothing the VI does.** The other change inside Mars, making `Vi.Serrate` public for §2's
+doubling, alters no behaviour either.
+
+**A cycle cap ends a frame the VI never will.** Before a game programs `VI_V_SYNC` and `VI_H_SYNC`, the VI does not
+count at all (`Mars_VideoTiming.md` §4), so a frame ending only on a field would never end. `RunFrame` also
+stops after `CycleCap` = 4,100,000 processor cycles.
+
+**The cap is set by the longest field the registers can describe, not by a nominal frame rate.** `VI_V_SYNC` has
+ten bits and `VI_H_SYNC` twelve. Above 550 half lines the VI takes the PAL clock, so the longest field is 1023
+half lines of 4095 interface clocks at 49.65653 MHz — **3,954,526 processor cycles**. At or below 550 half lines
+it takes the NTSC clock, and the longest is 2,168,658. Four million one hundred thousand is above both, so **the
+cap can only end a frame the VI would not have ended**. `The_cap_never_ends_a_frame_the_vi_would_have_ended`
+programs the 1023-by-4095 case and checks the frame still ends on the field.
+
+**The first design considered was wrong in a way worth recording.** A cap of one nominal NTSC frame, 1,562,500
+cycles, was it, and it would have cut every PAL field short: a
+PAL field is 1,874,400 cycles (§9), so the frame boundary would have fallen mid-field every frame, and §2.2's
+scan with it. A cap chosen from the region in the ROM header is no better, because the header is not evidence of
+the signal (`Mars_Rom.md` §2.2).
+
+**What the cap costs is a slow boot.** A frame the cap ends is 43.7 ms of console time, so while a game has not
+yet programmed its VI the core reports 22.87 Hz. Both commercial games measured spend exactly one frame that way.
+
+**`FrameRateHz` is the rate of the frames `RunFrame` actually produced**: the processor clock over the cycles
+the last frame took. It is 22.87 Hz before the first frame and during a capped one, and afterwards whatever the
+VI's registers make it — 59.959 Hz for NTSC's 525 by 3093, 50.016 Hz for PAL's 625 by 3177. The first field
+after a game programs its VI is a partial one (Wave Race's is 3,842,644 cycles, 24.4 Hz). **That is correct
+rather than noise**: both frontends read the rate afresh before every frame (`MainWindow.axaml.cs` 969,
+`GameWindow.axaml.cs` 388), so each wait is exactly as long as the console time the last frame emulated. The
+boundary is instruction-granular, and the measured field lengths move by one cycle between frames.
+
+**None of this establishes a console's rate.** 59.959 Hz is what `Mars_VideoTiming.md` §1.1 derives from three
+published clock frequencies, and that page says in its §0 that nothing has measured it against hardware.
+
+## 4. Audio: nothing, at 44100 Hz
+
+**There is no audio interface**, so `DequeueAudioSamples` returns an empty array and `AudioSampleRate` answers
+44100. **The question was whether an empty queue stalls or breaks pacing, and it does neither**:
+
+- **Both frontends pace on a wall clock, not on the audio device.** The next tick is
+  `SpeedController.FrameInterval(FrameRateHz)` (`MainWindow.axaml.cs` 969, `GameWindow.axaml.cs` 388), and
+  audio-clock-mastered pacing is listed as not done (`EmuSen_Audio_Sync.md` §6).
+- **The sink returns before queueing anything when handed nothing**, after reconciling the device's rate with
+  the core's (`AudioPlayer.cs` 92–99, `EmuSen_Audio_Sync.md` §7.2). An SDL stream with nothing queued plays
+  silence.
+- **`ICore` allows it in so many words**: a core with no audio modelled "can return an empty array
+  unconditionally" (`ICore.cs` 90–91), and Moon ran that way, answering 44100 while its APU synthesized
+  nothing (`EmuSen_Audio_Sync.md` §7.2).
+
+**Silence was the alternative, and it is the wrong one here.** A queue of zeros would be samples the machine did
+not produce, and `audiosum` and `audiodump` would then report a number of samples measured from something that
+does not exist. Nothing downstream needs the device kept warm.
+
+**Why 44100 is provisional.** `ICore` fixes the rate for the session (`ICore.cs` 68–74), and a Nintendo 64 has no
+session rate: `AI_DACRATE` is whatever the game writes, and games write different values. When the audio
+interface lands it will have to resample to a fixed rate or the contract will have to change; 44100 is the rate
+Moon and Mercury already open the device at, so loading Mars after either does not reopen it. **What an absent
+audio interface does to a game is not established here** — a game that waits on the audio interrupt may stall,
+and Wave Race's unchanging lit-pixel count from its eighty-third frame onwards (§9) has not been traced to see
+whether that is why.
+
+## 5. Input: nine of fourteen
+
+| `PadButton` | Joybus bit (`Mars_Serial.md` §3.1) |
+| --- | --- |
+| A | `0x8000` |
+| B | `0x4000` |
+| Start | `0x1000` |
+| Up, Down, Left, Right | `0x0800`, `0x0400`, `0x0200`, `0x0100` (the D-pad) |
+| L, R | `0x0020`, `0x0010` |
+
+**X, Y and Select are dropped**, not moved onto another button — the rule `EmuSen_Input.md` §2 set for Moon.
+**Z, the four C buttons and the analog stick cannot be reached at all**, because `PadButton` has no member for
+them, and `EmuSen_Input.md` §6 says an analog console needs a real addition to the contract rather than a fudge
+through the D-pad. That is left for whoever makes the addition. The consequence is severe and should be stated
+plainly: **a game that moves its character with the stick cannot be played**, which includes Super Mario 64.
+
+**`port` indexes `Si.Controllers` directly.** Only the first port holds a controller (`Mars_Serial.md` §3.1), so a
+press on port 1 is stored in a controller no game can see. A port outside 0–3 is ignored. The state lives on the
+bus, so it resets when a ROM is loaded.
+
+## 6. Saves: none of either kind
+
+**`SaveSram` does nothing**, because there is no save device to flush — no EEPROM, SRAM, FlashRAM or Controller
+Pak (`Mars_Serial.md` §6). It writes no file beside the ROM, which `Flushing_save_data_writes_nothing` pins. A
+game that saves loses it when the ROM is closed.
+
+**Save states are refused two different ways, because their callers fail two different ways.**
+
+- **The path overloads throw `NotSupportedException` before touching the filesystem.** They are what an explicit
+  save reaches, and both frontends catch and report the failure — Mistress's status bar says "Save State failed"
+  (`MainWindow.axaml.cs` 478–480), Hotaru prints "[STATE] Save failed" (`GameWindow.axaml.cs` 539–541). Refusing
+  before `File.Create` matters: a zero-byte `.state` that loaded as nothing would be a save that silently kept
+  no progress.
+- **The stream overloads write nothing and read nothing.** Their only routine caller is `RewindBuffer`, which
+  both frontends enable by default (`MainWindow.axaml.cs` 70, `GameWindow.axaml.cs` 108) and feed from inside
+  the emulation loop's `try` (`MainWindow.axaml.cs` 1007, `GameWindow.axaml.cs` 423). The `catch` stops the loop
+  in Mistress (1056–1058) and closes the window in Hotaru (448–451). **A throwing stream overload would end every
+  Mars session on its fourth frame.**
+
+**This departs from `ICore`'s own comment**, which says the stream overloads write "the same bytes as the path
+overloads" (`ICore.cs` 97–98). The departure is chosen rather than overlooked: an explicit save should fail
+loudly and a routine snapshot must not fail at all, and one behaviour cannot be both.
+
+**Recording nothing exposed a defect in `RewindBuffer`**, fixed here and described in
+`EmuSen_Rewind_And_FastForward.md` §1.7: an empty snapshot was stored as history. Before the fix, 600 frames of
+Wave Race left 149 empty deltas and 400 of Super Mario 64 left 99, and `Rewind()` answered true for each while
+restoring nothing. **What a user sees is the same before and after** — holding rewind runs no frames, so the
+picture holds — and what changed is the memory and the harness's `rewind` report, which no longer counts steps
+that were never taken.
+
+## 7. The Expansion Pak: off
+
+**`CoreFactory` builds a 4 MB machine.** `Mars_Gameplan.md` §6 defers "the Expansion Pak as a default" until
+something concrete needs it, and the commercial-game tests (`MarsCommercialRomTests`, `MarsMicrocodeTests`) all
+run on 4 MB. The corpus harness does use the Pak, but because the corpus needs it (`Mars_Corpus.md` §8), which is
+a fact about the corpus and not about the games a frontend opens. `new MarsCore(expansionPak: true)` exists for a
+caller that wants 8 MB; nothing in the frontends passes it.
+
+**What this does not settle is what a game that needs the Pak does.** A stock console shows such a game's own
+"Expansion Pak required" screen; whether Mars gets that far, and whether a game's boot code detects 8 MB when
+the Pak is on, has not been run.
+
+## 8. The debug target and the catalogue
+
+**A debug target is not optional**, although Phase F is where the plan put one. `CoreFactory.Bundle` throws for a core without one (`CoreFactory.cs` 91–92), `CoreBundle.DebugTarget` is not
+nullable, and every frontend loads through it — Mistress by `EmulatorSession.LoadRom` (`EmulatorSession.cs` 49),
+Hotaru (`GameWindow.axaml.cs` 321), Pharaoh (`Program.cs` 233). A route to `MarsCore` with no target would have
+made every frontend throw on every `.z64`.
+
+**`MarsDebugTarget` is the least that satisfies the interface.** It has five memory spaces — `RDRAM`, `DMEM`,
+`IMEM`, `PIFRAM` and a read-only `ROM`, each the machine's own array with no side effects — the processor's
+program counter, 32 registers under their o32 names, `HI`, `LO` and the cycle count, the fourteen VI registers,
+and a summary. Everything else is empty, and the commands built on it say so: `disasm` reports "N64 target has
+no disassembler", and `coretop` leaves out its tile sheet because `TilemapEntryStride` is 0.
+
+**The stub most likely to mislead is the three registries.** `Watches`, `FrameLog` and `Breakpoints` exist so the
+commands that use them do not fail, and nothing feeds them: `watch`, `framelog` and `bp` accept their arguments
+and never fire. They become real with the rest of Phase F (`Mars_Gameplan.md` §4.6).
+
+**No cheat codec is bundled**, so the Active Cheats window's N64 tab says the console has no cheat-code format and
+disables its Add button (`ActiveCheatsWindow.axaml.cs` 199, 267). A `.cht` loaded from the database still
+lands in the registry as raw pokes, and nothing applies them. **The libretro folder `Nintendo - Nintendo 64` is
+claimed anyway**, so that `cheat db prune` keeps data a later build will use instead of deleting it.
+
+**The descriptor is `Nintendo 64 (Mars)`**, console `N64`, Nintendo, 1996, claiming `.z64`, `.n64` and `.v64`. All
+three are claimed because the container is decided by the magic word and not by the extension
+(`Mars_Rom.md` §1.1), which `The_extension_does_not_decide_the_byte_order` pins with a little-endian image named
+`.v64`. **Registering changed five things at once**, as `EmuSen_Multicore.md` §3 warns: N64 ROMs now appear in
+Mistress's library and file picker, the input and cheat windows grow an N64 tab (and the three tests that
+listed the consoles now list four), DianaOS accepts `core mars` and `core n64`, and logs go to an `N64` folder.
+
+## 9. What the tests say, and what they do not
+
+**Twenty-two tests in `MarsCoreTests`**, all on synthetic images except one. They cover the route for all three
+extensions, the catalogue entry, a frame ended by the cap, a frame ended by a field and its rate, the cap against
+the longest describable field, the size contract from no ROM through progressive NTSC, PAL and interlaced
+signals, the opacity of every pixel against a
+raster carrying coverage 7, a skipped frame, the joybus reporting what `SetButton` set, the buttons that are
+dropped, both kinds of refused save state, the rewind buffer left without history, the empty audio queue, the
+unwritten save file, the stock RDRAM size, the members that need a ROM, and the debug target's memory spaces.
+
+**The rewind test failed before the fix it describes**, with a depth of 4 after five captures; that failure is the
+evidence for §6's defect, not a reconstruction of it.
+
+**Six mutations, each caught.** Keeping the raster's alpha failed the opacity test; dropping the line doubling
+failed it and the size contract; ending frames on the cap alone failed both field tests. The last three — a cap
+of one nominal PAL frame, a throwing stream save, and B wired to Z's bit — were applied together and failed four
+tests, each of which only one of the three could reach: the longest-field test, the two save-state tests that
+read the stream, and the joybus test.
+
+**Two commercial games were measured through `CoreFactory.Load` outside the suite**, with the corpus read in place:
+
+| | Wave Race 64 (USA) | Super Mario 64 (Europe) |
+| --- | --- | --- |
+| frame 0 | cap, 4,100,000 cycles, 640×480 | cap, 4,100,000 cycles, 640×480 |
+| frame 1 | first field, 3,842,644 cycles | first field, 3,649,626 cycles, now 640×576 |
+| every frame after | 1,563,557 cycles, 59.959 Hz | 1,874,399 or 1,874,400 cycles, 50.016 Hz |
+| frames run | 600, 10.06 s of console time | 400, 8.04 s of console time |
+| wall clock, Release build | 40.2 s, four times slower than the console | 43.3 s, about five and a half times slower |
+| first frame with a lit pixel | 3 | 61; Mario's head on the title screen by 353 |
+| changes of height | none | one, 480 to 576, at frame 1 |
+| frames with a length mismatch, or an alpha other than 255 | none | none |
+| samples dequeued | 0 | 0 |
+| rewind depth at the end | 149 before §6's fix, 0 after | 99 before, 0 after |
+
+Both games were run twice, before and after the rewind fix. The cycle counts, rates, heights and first lit
+frames were identical between the two runs and the wall clocks within 3%; the whole-run checks for length and
+alpha were made on the second run only.
+
+**`Wave_Race_reaches_a_picture_through_the_interface_alone`** is the one test on a real game: it runs until the
+first lit frame and checks the size contract on every frame, 480 lines, 59.95–59.97 Hz, and opacity. It passes
+against the corpus in two seconds, and **it returns early where the corpus is absent** — in a checkout without
+`TestRoms/n64` it is vacuous, and so are the two `MarsMicrocodeTests` that share its corpus. All three were run
+against the corpus after the `Fields` counter went in, through a runner outside the repository that points
+`N64TestRomLibrary.Root` at the corpus without copying it, and pass.
+
+**What none of this establishes:**
+
+- **That the picture is what a console shows at that frame.** This page copies the raster; the raster is graded
+  in `Mars_Video.md`, and §2.2's moment of scanning is not graded anywhere.
+- **The rate of a console** (§3).
+- **That interlaced presentation is right for a game.** The size contract is tested with an interlaced signal;
+  no interlaced game has been run.
+- **That anything is playable** (§0).
+- **Whether Wave Race's picture holds still after frame 83.** Its lit-pixel count reaches 245,622 there and is
+  the same in every frame sampled up to 600, which suggests a still picture without showing one. If it is still,
+  the missing audio interface is one candidate and the attract sequence another; neither has been looked at.

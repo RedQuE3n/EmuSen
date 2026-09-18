@@ -61,6 +61,13 @@ namespace EmuSen.Common
             core.SaveState(_scratch);
             byte[] state = _scratch.ToArray();
 
+            // A core with no state format writes nothing, and nothing is not history - see §1.7.
+            if (state.Length == 0)
+            {
+                Clear();
+                return;
+            }
+
             // First snapshot, or the state's shape changed under us - restart.
             if (_newest == null || _newest.Length != state.Length)
             {

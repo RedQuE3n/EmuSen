@@ -88,9 +88,10 @@ gap is the database that will eventually stand beside it, and Phase E owns that.
 
 ## 4. What Phase 0 deliberately does not do
 
-- **No `CoreCatalog` entry.** Nothing reaches this code from a frontend; `.z64` still
+- ~~**No `CoreCatalog` entry.** Nothing reaches this code from a frontend; `.z64` still
   fails `CoreFactory.IsSupported`. Registration is Phase F, for the reason
-  `Mars_Gameplan.md` §4.6 gives.
+  `Mars_Gameplan.md` §4.6 gives.~~ **Registered 2026-09-18, ahead of Phase F**, in
+  `Mars_Core.md`, whose §0 says what that departs from and which seams are still stubs.
 - **No cartridge object, no memory map, no PI.** This reads a file; it does not model
   hardware. The boot handoff that copies the first `0x1000` bytes into SP DMEM is
   Phase A's, and it will consume `RomImage` rather than re-reading the file.

@@ -183,6 +183,42 @@ namespace EmuSen.WiseMan.DianaOS
             }
         }
 
+        // WatchesWrites is the same kind of promise about NoteWrite: false only when it would do nothing.
+        [Fact]
+        public void Writes_are_watched_exactly_while_a_data_breakpoint_or_the_uninitialised_read_check_is_armed()
+        {
+            var registry = new BreakpointRegistry();
+            Assert.False(registry.WatchesWrites);
+
+            int id = registry.AddDataBreakpoint("RAM", 0x10);
+            Assert.True(registry.WatchesWrites);
+            registry.RemoveBreakpoint(id);
+            Assert.False(registry.WatchesWrites);
+
+            registry.ArmUninitializedReadBreak("RAM", 0x100);
+            Assert.True(registry.WatchesWrites);
+            registry.DisarmUninitializedReadBreak();
+            Assert.False(registry.WatchesWrites);
+
+            // A code breakpoint or a step never reads a write, so neither ends it.
+            registry.AddBreakpoint(0x100);
+            registry.ArmStep(1);
+            Assert.False(registry.WatchesWrites);
+        }
+
+        [Fact]
+        public void A_watch_registry_has_watches_exactly_while_one_exists()
+        {
+            var watches = new WatchRegistry();
+            Assert.False(watches.HasWatches);
+
+            int id = watches.AddWatch("RAM", 0x10, 4);
+            Assert.True(watches.HasWatches);
+
+            watches.RemoveWatch(id);
+            Assert.False(watches.HasWatches);
+        }
+
         private static bool Quiet(Action<BreakpointRegistry> arm)
         {
             var registry = new BreakpointRegistry { CallStack = new CallStackRegistry() };

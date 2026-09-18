@@ -132,6 +132,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
         };
 
         // A processor store, reported in the space it landed in - see Mars_Debug.md §3.
+        public bool Listening => Watches.HasWatches || Breakpoints.WatchesWrites;
+
         public void OnWrite(string spaceName, int address, byte value)
         {
             Watches.RecordWrite(spaceName, address, value, DescribeWriteSite);

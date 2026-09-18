@@ -345,8 +345,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public void Store(uint physical, ulong value, int size)
         {
             StoreThrough(physical, value, size);
-            if (WriteObserver != null) Report(physical, size);
+            if (StoresWatched) Report(physical, size);
         }
+
+        // Reporting a store costs about as much as the instruction, so it is done only while something listens - see Mars_Performance.md §16.
+        public bool StoresWatched => WriteObserver is { Listening: true };
 
         // What a store left behind, byte by byte in the space it landed in - see Mars_Debug.md §3.
         private void Report(uint physical, int size)

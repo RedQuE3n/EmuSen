@@ -105,6 +105,11 @@ exactly when `ShouldBreak` would return false and change nothing (`EmuSen_Debugg
 with the check behind it the difference is inside the noise of these runs. The store report and the call seams cost
 nothing measurable: the same build with and without a debug target attached ran in the same time.
 
+~~The store report and the call seams cost nothing measurable~~ **Corrected in Phase G** (`Mars_Performance.md` §16):
+the store report cost about 27 nanoseconds a store once a target was attached, hidden here behind the breakpoint
+check's larger cost. The bus now asks the observer's `Listening` first, and reports only while a watch, a data
+breakpoint or the uninitialised-read check exists.
+
 **Since Phase G a frame with nothing armed skips the check entirely** (`Mars_Performance.md` §13): Mars asks the
 registry's `IsQuiet`, and whether coverage or the profiler is armed, once at the start of each frame. The consequence:
 a breakpoint armed from another thread while such a frame runs takes effect from the next frame.

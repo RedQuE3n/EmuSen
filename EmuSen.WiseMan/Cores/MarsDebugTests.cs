@@ -246,6 +246,52 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("PC=A400004C", events[0].Context);
         }
 
+        // The report costs about what the store does, so the bus asks the observer first - see Mars_Performance.md §16.
+        [Fact]
+        public void A_store_is_reported_only_while_the_observer_listens()
+        {
+            var bus = new MemoryBus();
+            var observer = new CountingObserver();
+            bus.WriteObserver = observer;
+
+            bus.Store(0x1000, 0x1122_3344, 4);
+            Assert.Equal(0, observer.Bytes);
+
+            observer.Listening = true;
+            bus.Store(0x1000, 0x1122_3344, 4);
+            Assert.Equal(4, observer.Bytes);
+        }
+
+        // Nothing watched, no data breakpoint, no uninitialised-read check: the target says so, and says otherwise as soon as one exists.
+        [Fact]
+        public void The_target_listens_exactly_while_a_watch_or_a_data_breakpoint_exists()
+        {
+            var (_, target) = Load(CountForever);
+            Assert.False(target.Listening);
+
+            int watch = target.Watches.AddWatch("RDRAM", 0x0010_0000, 4);
+            Assert.True(target.Listening);
+            target.Watches.RemoveWatch(watch);
+            Assert.False(target.Listening);
+
+            int breakpoint = target.Breakpoints.AddDataBreakpoint("RDRAM", 0x0010_0000);
+            Assert.True(target.Listening);
+            target.Breakpoints.RemoveBreakpoint(breakpoint);
+            Assert.False(target.Listening);
+
+            target.Breakpoints.ArmUninitializedReadBreak("RDRAM", 0x100);
+            Assert.True(target.Listening);
+            target.Breakpoints.DisarmUninitializedReadBreak();
+            Assert.False(target.Listening);
+        }
+
+        private sealed class CountingObserver : IWriteObserver
+        {
+            public int Bytes;
+            public bool Listening { get; set; }
+            public void OnWrite(string spaceName, int address, byte value) => Bytes++;
+        }
+
         [Fact]
         public void A_data_breakpoint_halts_after_the_store_that_wrote_it()
         {

@@ -1,4 +1,5 @@
 using EmuSen.Cores.Nintendo.Mars.Memory;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -227,6 +228,22 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.Equal(0xB419_0010u, bus.Read32(MemoryMap.RdramRegistersBase));
             Assert.Equal(0u, bus.Read32(MemoryMap.RdramRegistersBase + 4));
+        }
+
+        // The processor's own store, which takes RDRAM directly unless the repeat is armed - see Mars_Performance.md §17.
+        [Fact]
+        public void A_store_from_the_processor_is_repeated_too()
+        {
+            var bus = Filled(out _);
+            Arm(bus, 12);
+
+            var cpu = new MipsAssembler().Lui(1, 0x8000).Ori(1, 1, 0x100).Lui(2, 0x9ABC).Ori(2, 2, 0xDEF1).Sw(2, 1, 0).Build(bus);
+            cpu.Run(5);
+
+            Assert.Equal(0x9ABC_DEF1u, bus.Read32(0x100));
+            Assert.Equal(0x9ABC_DEF1u, bus.Read32(0x108));
+            Assert.Equal(0xFFFF_FFFFu, bus.Read32(0x10C));
+            Assert.False(bus.Mi.Repeating);
         }
 
         private static void Arm(MemoryBus bus, int length) => bus.Write32(Mode, 0x100 | (uint)(length - 1));

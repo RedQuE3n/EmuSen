@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 
 namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
@@ -123,7 +124,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             if ((Pc & 3) != 0) throw Raise(ExceptionCode.AddressErrorLoad, Pc);
 
             // Kernel mode never mirrors, so the direct range skips straight to the map's own answer - see Mars_Performance.md §4.
-            if (Pc - KernelDirectBase < KernelDirectSize && Mode == PrivilegeMode.Kernel) return _bus.Read32((uint)Pc & 0x1FFF_FFFF);
+            if (Pc - KernelDirectBase < KernelDirectSize && Mode == PrivilegeMode.Kernel)
+            {
+                uint physical = (uint)Pc & 0x1FFF_FFFF;
+
+                // RDRAM is what the bus would read for this address, taken here without the call - see Mars_Performance.md §17.
+                byte[] rdram = _bus.Rdram;
+                if (physical < (uint)rdram.Length) return BinaryPrimitives.ReadUInt32BigEndian(rdram.AsSpan((int)physical));
+
+                return _bus.Read32(physical);
+            }
 
             return _bus.Read32(TranslateAccess(Mirrored(Pc, 4), Pc));
         }

@@ -103,6 +103,12 @@ everything else, which is the correct behaviour for a machine whose TLB is empty
 Alignment is checked before translation, and the check raises before any access
 happens (§4).
 
+Since Phase G the read half of the pair takes RDRAM directly for a translated address
+below the array's length, and the store half too unless the MI's repeat is armed or a
+watcher wants the store reported (`Mars_Performance.md` §17). The translation, and the
+alignment check before it, are unchanged: the one way in is still the way in, and only
+the last step — the bytes themselves — is taken without the bus's call.
+
 ## 7. The merging loads and stores
 
 `LWL`/`LWR`, `LDL`/`LDR` and their four store counterparts, added in their own slice

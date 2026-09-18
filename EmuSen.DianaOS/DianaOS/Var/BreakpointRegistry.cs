@@ -489,6 +489,11 @@ namespace EmuSen.DianaOS.DianaOS.Var
             _singleStepArmed || _stepDepthTarget != int.MinValue || _depthGuard >= 0 ||
             _dataBreakPending || _eventBreakPending || _breakpoints.Count > 0;
 
+        // True when nothing armed can make ShouldBreak true before a command changes the registry, so a core may ask once a frame - see §3.26.
+        public bool IsQuiet =>
+            !CouldBreak && _dataBreakpoints.Count == 0 && _uninitWritten == null && !AnyConditionArmed &&
+            _runToInterrupt == null && _runToScanline < 0 && _runToFrame < 0;
+
         // Called once per instruction, BEFORE it executes, from a core's own step loop - see `man bp`.
         public bool ShouldBreak(int address)
         {

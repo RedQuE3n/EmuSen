@@ -105,6 +105,10 @@ exactly when `ShouldBreak` would return false and change nothing (`EmuSen_Debugg
 with the check behind it the difference is inside the noise of these runs. The store report and the call seams cost
 nothing measurable: the same build with and without a debug target attached ran in the same time.
 
+**Since Phase G a frame with nothing armed skips the check entirely** (`Mars_Performance.md` §13): Mars asks the
+registry's `IsQuiet`, and whether coverage or the profiler is armed, once at the start of each frame. The consequence:
+a breakpoint armed from another thread while such a frame runs takes effect from the next frame.
+
 ## 8. The breakage round
 
 Twenty-one rules broken in turn, against `MarsDebugTests` and `BreakpointCouldBreakTests`. **Sixteen were caught on

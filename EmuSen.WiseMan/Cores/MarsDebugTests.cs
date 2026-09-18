@@ -200,6 +200,22 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(core.Coverage.WasExecuted(Entry + 24));
         }
 
+        // Every instruction the frame ran is charged once the profiler is armed, and none before - see Mars_Performance.md §13.
+        [Fact]
+        public void The_profiler_counts_what_the_processor_ran_only_while_armed()
+        {
+            var (core, _) = Load(CountForever);
+            core.RunFrame();
+            Assert.Equal(0, core.CallStack.ProfiledInstructions);
+
+            core.CallStack.ArmProfiler();
+            long start = core.Cpu!.Instructions;
+            core.RunFrame();
+
+            Assert.True(core.CallStack.ProfiledInstructions > 0);
+            Assert.Equal(core.Cpu.Instructions - start, core.CallStack.ProfiledInstructions);
+        }
+
         [Fact]
         public void The_rsp_records_its_own_coverage()
         {

@@ -1210,6 +1210,16 @@ The data breakpoint also exposed a real gap in the halt path, now fixed: `regs`/
 > leaves `LastBreakReason` alone; dropping any one of the six conditions fails the tests. Mars is the only core that
 > uses it; the others still call `ShouldBreak` unconditionally, which is correct and costs what it always did.
 
+> **Added 2026-09-18: `IsQuiet`, so a core can ask once a frame.** `CouldBreak` answers for the next instruction only:
+> a running frame can arm a halt itself — a data breakpoint's write, a run-to's interrupt or scanline, a hardware
+> condition. `IsQuiet` is the stronger promise, true only when nothing is armed that anything a frame does could set
+> off. `BreakpointCouldBreakTests` holds it as it holds `CouldBreak`: every way to arm the registry ends the quiet,
+> disarming everything restores it, and across 400 random histories of commands, whenever it says quiet, eight kinds
+> of thing a frame does — writes, reads, frames, scanlines, interrupts, conditions, calls, returns — neither halt it nor
+> end the quiet. Dropping any one of its seven conditions fails both tests. Mars runs a quiet frame with no check
+> between instructions (`Mars_Performance.md` §13), so a halt armed from another thread during one takes effect from
+> the next frame.
+
 ### 3.27 `eval` and conditional breakpoints (`DianaOS/Lib/ExpressionEvaluator.cs`, `DebugTargetExpressionContext.cs`, `Cores/.../Debug/SnesExpressionContext.cs`)
 
 Added after a gap-analysis pass against Mesen's debugger (`Core/Debugger/`, cloned to `/home/red/Projects/mesen-reference` as a read-only reference) — see §3.33 for the full comparison and what was deliberately left out.

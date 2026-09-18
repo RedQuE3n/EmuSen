@@ -730,6 +730,13 @@ of them.
 > Time 19.7, Super Mario 64 24.6, Wave Race 28.2 — 2.6 to 2.7 times the profile's speed in the two PAL games, and 39
 > to 49 per cent of the console.
 
+> **Progress, 2026-09-18: the debugger out of a quiet frame, and a correction** (`Mars_Performance.md` §11–§14). A frame
+> with nothing armed now runs with no debugger check between instructions (+6 to +7 per cent). Sequential probe timings
+> turned out to drift by about six per cent within an hour, so speed is now measured by interleaved builds; measured
+> that way, §9 and §10 stand. The profile recorded after them had measured an older build and was retracted. Now 21.3,
+> 27.3 and 31.9 fps — 43 to 55 per cent of the console — with the RSP's step loop and the VI's scan-out newly visible
+> beside the processor's step.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

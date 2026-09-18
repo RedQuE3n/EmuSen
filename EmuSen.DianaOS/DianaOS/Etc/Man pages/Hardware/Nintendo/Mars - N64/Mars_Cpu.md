@@ -21,6 +21,11 @@ wrong one at this stage: the N64 moves code into RDRAM and into the signal
 processor's banks by DMA constantly, so a decoded cache needs invalidation, and
 speed is Phase G's business (`Mars_Gameplan.md` §2.2).
 
+**Measured in Phase G, and not built** (`Mars_Performance.md` §20): decoding is a
+quarter of the step, but a cache trusted outright recovers under half of that, because
+its lookup and dispatch cost most of what the two switches do; the shape needing no
+invalidation was slower than decoding. What recovers the rest is a recompiled block.
+
 ## 2. Registers are 64-bit, always
 
 Thirty-two general registers of 64 bits, with 32-bit operations sign-extending their

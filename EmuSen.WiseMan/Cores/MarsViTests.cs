@@ -125,6 +125,52 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // The window of fetched lines is sized by the frame buffer's width, so a narrower buffer after a wider one must not read the old rows - see Mars_Performance.md §21.
+        [Fact]
+        public void A_narrower_frame_buffer_after_a_wider_one_scans_as_it_would_alone()
+        {
+            MemoryBus twice = Noisy(), once = Noisy();
+            uint[] wide = Registers(2, 0, 128, 0x400, 0x400, 108, 256, 34, 120, 0, 0, control: DitherFilter | DivotOn);
+            uint[] narrow = Registers(2, 0, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0, control: DitherFilter | DivotOn);
+
+            Program(twice, wide);
+            Assert.True(twice.Vi.Scan());
+            Program(twice, narrow);
+            Assert.True(twice.Vi.Scan());
+
+            Program(once, narrow);
+            Assert.True(once.Vi.Scan());
+
+            Assert.Equal(once.Vi.Frame.ToArray(), twice.Vi.Frame.ToArray());
+        }
+
+        private static void Program(MemoryBus bus, uint[] registers)
+        {
+            for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
+        }
+
+        // The reference test's frame buffer and coverage, so every mode has something to filter.
+        private static MemoryBus Noisy()
+        {
+            var bus = new MemoryBus();
+
+            uint state = 0x2468_ACE0;
+            for (uint i = 0; i < 0x3000; i++)
+            {
+                state = state * 1103515245 + 12345;
+                bus.Write8(Framebuffer + i, (byte)(state >> 16));
+            }
+
+            uint seed = 0x1B4E_81B4;
+            for (int i = 0; i < 0x1800; i++)
+            {
+                seed = seed * 1664525 + 1013904223;
+                bus.RdramHidden[Framebuffer / 2 + i] = (byte)(seed >> 30);
+            }
+
+            return bus;
+        }
+
         private static uint[] Registers(int type, int antialias, uint width, uint stepX, uint stepY,
             uint left, uint columns, uint top, uint rows, uint biasX, uint biasY,
             bool serrate = false, uint currentLine = 0, uint sync = 525, uint origin = Framebuffer, uint control = 0)

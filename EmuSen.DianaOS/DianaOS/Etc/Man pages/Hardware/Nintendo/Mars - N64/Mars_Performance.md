@@ -750,3 +750,75 @@ compare, the count) is recoverable only by executing several instructions betwee
 exactly if it is cut where the next event falls. Both are the recompiler's shape, whether or not it emits machine code,
 and that remains the decision it was in §8.
 
+## 21. The scan-out's fetches, once a line
+
+**What the three games ask of the scan-out.** A survey of the registers over each game's probe run — all three run
+the same picture: 16-bit, anti-aliasing mode 0 with resampling, the dither filter on, a 320-pixel frame buffer
+stepped across at a half so the raster's 640 columns each mix two source pixels. Ocarina of Time steps down at 0.83
+(PAL, `VI_Y_SCALE` 0x354), so every output pixel mixes four samples; the other two step down at exactly one, so a
+row's fraction is zero and only the pair across is mixed. Ocarina of Time and Super Mario 64 turn divot on; Wave Race
+does not. A scan of the frame the probe reaches, timed alone on a bench that scans it two hundred times:
+
+| | a scan, before | of the frame at §19's speed |
+| --- | --- | --- |
+| Ocarina of Time | 16.2 ms | 39% |
+| Super Mario 64 | 11.1 ms | 34% |
+| Wave Race 64 | 4.2 ms | 15% |
+
+**Where a scan's time went.** §3 and §7 remembered each source pixel's *sample* once a row and once a line, and §5
+stopped asking for samples a zero fraction would discard. What they left was underneath: a sample is the pixel and its
+eight neighbours through the dither filter, or its six through the anti-aliasing filter, each neighbour fetched from
+RDRAM and decoded afresh — so a source pixel was fetched about nine times a scan as somebody's neighbour, and with
+divot on, `Across` sampled each pixel three times over, as the centre and as each neighbour's neighbour: twenty-seven
+fetches and three filters a source pixel.
+
+**Two changes, both memos of pure functions.**
+
+- *The window.* The filters address the frame buffer by one linear index, a line's number times the width plus the
+  column, and reach at most two lines up and two down from the pair a row reads, one line further where a neighbour
+  wraps at a row's end. So a scan keeps a window of whole lines, fetched once each into one array contiguous in that
+  index, sliding down as the walk does (thirty-two lines deep; a slide copies what it keeps). A neighbour is one
+  subtraction and one load, and an index outside the window is fetched directly, which is what makes the window's
+  extent a matter of speed alone. It is emptied at every scan, because RDRAM has changed.
+- *The pre-divot memo.* `Remembered` keeps each row's samples after divot; a second array beside it keeps them before,
+  under the same stamp, so the three samples a divot needs are made once each and shared with the neighbours'
+  divots.
+
+A first attempt memoised the fetch itself by its index, tagged and stamped: Ocarina of Time and Super Mario 64 gained,
+Wave Race lost 17 per cent, because a memo's lookup costs what a sixteen-bit fetch does and only pays where a fetch is
+repeated many more times than nine. Replaced by the window before it was measured in a game.
+
+**What it bought, on the bench:**
+
+| | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 16.2 ms | 7.0 ms | 2.3× |
+| Super Mario 64 | 11.1 ms | 4.9 ms | 2.3× |
+| Wave Race 64 | 4.2 ms | 3.7 ms | 1.1× |
+
+**And in the games**, §12's method, three rounds, medians (fps):
+
+| | before (`c953491`) | after | | of the console |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time | 24.0 | 30.5 | +27% | 61% |
+| Super Mario 64 | 30.4 | 36.2 | +19% | 72% |
+| Wave Race 64 | 35.3 | 36.1 | +2% | 60% |
+
+Every round of the two PAL games is above every round before it; Wave Race, whose scan was a seventh of its frame and
+gained a tenth on the bench, is within its spread. Against the phase's opening profile that is 4.2×, 3.8× and 2.5×.
+
+**Why it is exact.** The window holds `Fetch` of the same index over the same RDRAM and origin, which a scan does not
+change; the lookup and the fill use one stored width, so the window is a contiguous range of indices whatever the
+walk's width, and a stale width could only move the range. The pre-divot memo is stamped by the slot's line as
+`Remembered` is. All 1,800 probe frames match, state and all.
+
+**What catches a mistake in it.** Eight breakages: the window not emptied between scans, a slide misaligning what it
+keeps, the lookup's index or the fill's index off by one, the pre-divot memo stamped wrongly or unbounded — each fails
+the VI's reference cases, from 22 to 152 of them. Two survive, both equivalent: a window too narrow, since the fallback
+fetches; and a window not resized for a narrower buffer, since the stored width governs both the fill and the lookup.
+`A_narrower_frame_buffer_after_a_wider_one_scans_as_it_would_alone` was written for the second before its equivalence
+was understood, and stays: it pins the property, which a different implementation could break.
+
+**What is left in a scan.** The filters' arithmetic once a source pixel, the folded duplicates of a line where the
+fetch bug applies, and the walk's own per-output-pixel work: the lookups, the mixes, gamma and four stores.
+

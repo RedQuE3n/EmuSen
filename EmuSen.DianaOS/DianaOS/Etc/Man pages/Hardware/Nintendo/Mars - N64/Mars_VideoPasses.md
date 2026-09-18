@@ -66,7 +66,9 @@ failing that, is the right one? If neither, the middle keeps its own value. The 
 
 **Divot runs on source pixels, before the interpolation**, so each of the four pixels a resampled output
 mixes is divoted against *its own* neighbours in the frame buffer. That is four medians and twelve fetched
-pixels for one output pixel, on top of what the filter already reads.
+pixels for one output pixel, on top of what the filter already reads. (Since Phase G the three samples a
+divot needs are remembered a row at a time, so a neighbour's sample is made once and shared —
+`Mars_Performance.md` §21.)
 
 ## 3. Gamma
 

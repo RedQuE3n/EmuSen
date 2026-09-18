@@ -86,6 +86,10 @@ nothing and is the only way an image can state its own answer.
 **A commercial image returning `Unknown` is the correct behaviour, not a gap.** The
 gap is the database that will eventually stand beside it, and Phase E owns that.
 
+> **Update 2026-09-18: the database stands beside it, and is small on purpose** (`Mars_Save.md` §1, §6). `Unknown`
+> still means the image says nothing. A table of fifty-four 16 Kbit EEPROMs answers for the one chip a game's
+> behaviour cannot reveal, and the rest are named by what the game does first.
+
 ## 4. What Phase 0 deliberately does not do
 
 - ~~**No `CoreCatalog` entry.** Nothing reaches this code from a frontend; `.z64` still

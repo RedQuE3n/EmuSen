@@ -108,7 +108,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         private void ToCartridge(uint length)
         {
-            for (uint i = 0; i < length; i++) _bus.Write8(_cartAddress + i, _bus.Read8(_dramAddress + i));
+            for (uint i = 0; i < length; i++) _bus.CartridgeDmaWrite8(_cartAddress + i, _bus.Read8(_dramAddress + i));
 
             // The cartridge's bus is sixteen bits wide and RDRAM's sixty-four, so each address advances to its own multiple - see §7.2.
             _cartAddress += (length + 1) & ~1u;
@@ -135,10 +135,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 for (int at = 0; at < stored; at += 2)
                 {
                     uint from = _cartAddress + (uint)at;
-                    _bus.Write8(_dramAddress, _bus.Read8(from));
+                    _bus.Write8(_dramAddress, _bus.CartridgeDmaRead8(from));
 
                     // A trimmed block ends on the first byte of its last pair; the address rounds to the same word either way - see §7.6.
-                    if (!trimmed || at + 1 < stored) _bus.Write8(_dramAddress + 1, _bus.Read8(from + 1));
+                    if (!trimmed || at + 1 < stored) _bus.Write8(_dramAddress + 1, _bus.CartridgeDmaRead8(from + 1));
                     _dramAddress += 2;
                 }
 

@@ -71,7 +71,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 else _bus.Rdram[address] = ram[i];
             }
 
-            if (toPif && (ram[^1] & 1) != 0) Joybus.Run(ram, Controllers);
+            if (toPif && (ram[^1] & 1) != 0) Joybus.Run(ram, Controllers, _bus.Save);
 
             _bus.Mi.Raise(MiInterrupt.SerialInterface);
         }

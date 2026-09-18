@@ -12,7 +12,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public sbyte StickY;
 
-        // A Controller Pak in the slot changes the third byte of the info reply and nothing else here - see §3.2.
-        public bool Pak;
+        // A Controller Pak in the slot, or none - see Mars_Save.md §5.
+        public ControllerPak? Pak;
     }
 }

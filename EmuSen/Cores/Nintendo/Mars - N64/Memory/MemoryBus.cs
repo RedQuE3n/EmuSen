@@ -30,6 +30,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public RomImage? Cart;
 
+        // The cartridge's save chip on the second domain and the joybus's fifth channel - see Mars_Save.md §1.
+        public SaveChip Save = new(N64SaveType.Unknown);
+
         // What the RDRAM registers read once IPL3 has set RDRAM up, as the corpus measured them, every 64 bytes - see Mars_Memory.md §8.5.
         private static readonly uint[] RdramRegisters =
         {
@@ -109,6 +112,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             if (physical >= MemoryMap.CartDomain1Address2) return ReadCart32(physical - MemoryMap.CartDomain1Address2);
 
+            if (SaveWindow(physical)) return Save.Read32(physical - MemoryMap.CartDomain2Address2);
+
             if (InRange(physical, MemoryMap.SpRegistersBase, 0x20)) return Sp.Read32(physical - MemoryMap.SpRegistersBase);
             if (InRange(physical, MemoryMap.SpPcBase, 0x08)) return Sp.Pc;
 
@@ -158,6 +163,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             // The cartridge is read-only here; a write to it is dropped rather than refused - see §2.3.
             if (physical >= MemoryMap.CartDomain1Address2) return;
+
+            if (SaveWindow(physical))
+            {
+                Save.Write32(physical - MemoryMap.CartDomain2Address2, value);
+                return;
+            }
 
             if (InRange(physical, MemoryMap.SpPcBase, 0x08))
             {
@@ -240,14 +251,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public ulong Read64(uint physical) => ((ulong)Read32(physical) << 32) | Read32(physical + 4);
 
-        // Two windows latch a whole word from the processor whatever size it names: the signal processor's memories and PIF RAM - see §2.4.
+        // Three windows take a whole word from the processor whatever size it names: the signal processor's memories, PIF RAM and the save chip - see §2.4.
         private bool LatchesWholeWords(uint physical) =>
-            SignalProcessorMemory(physical, out _, out _) || InRange(physical, MemoryMap.PifRamBase, MemoryMap.PifRamSize);
+            SignalProcessorMemory(physical, out _, out _) || InRange(physical, MemoryMap.PifRamBase, MemoryMap.PifRamSize) || SaveWindow(physical);
 
-        // The processor's own stores: those two windows latch whole words, and so does the cartridge bus - see §2.4 and §7.7.
+        // The processor's own stores: those windows latch whole words, and the cartridge bus keeps one - see §2.4, §7.7 and Mars_Save.md §3.
         public void Store(uint physical, ulong value, int size)
         {
-            if (CartridgeRom(physical)) Pi.CartridgeStore(WholeWord(physical, value, size));
+            if (CartridgeBus(physical)) Pi.CartridgeStore(WholeWord(physical, value, size));
 
             // Any store to RDRAM or its registers spends the MI's repeat; only the first kind repeats - see §8.4.
             if (physical < MemoryMap.RdramRegistersBase + MemoryMap.RdramRegistersSize && Mi.Repeating)
@@ -327,8 +338,25 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         // The debug port is a device beside the bus here, or the corpus's own printing would hold the latch it tests - see §7.7.
         private static bool CartridgeRom(uint physical) =>
-            physical >= MemoryMap.CartDomain1Address2 && physical < MemoryMap.PifRomBase &&
+            physical >= MemoryMap.CartDomain1Address2 && CartridgeBus(physical);
+
+        // Every store on the cartridge's bus is kept, though only the ROM window hands it back - see Mars_Save.md §3.
+        private static bool CartridgeBus(uint physical) =>
+            physical >= MemoryMap.CartDomain2Address1 && physical < MemoryMap.PifRomBase &&
             !InRange(physical, MemoryMap.IsViewerBase, MemoryMap.IsViewerSize);
+
+        private static bool SaveWindow(uint physical) =>
+            physical >= MemoryMap.CartDomain2Address2 && physical < MemoryMap.CartDomain1Address2;
+
+        // A transfer reaches the save chip by a path of its own, which FlashRAM answers differently - see Mars_Save.md §4.
+        public byte CartridgeDmaRead8(uint physical) =>
+            SaveWindow(physical) ? Save.DmaRead8(physical - MemoryMap.CartDomain2Address2) : Read8(physical);
+
+        public void CartridgeDmaWrite8(uint physical, byte value)
+        {
+            if (SaveWindow(physical)) Save.DmaWrite8(physical - MemoryMap.CartDomain2Address2, value);
+            else Write8(physical, value);
+        }
 
         public void Write64(uint physical, ulong value)
         {

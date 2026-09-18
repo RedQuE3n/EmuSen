@@ -609,8 +609,16 @@ rather than raw samples.
 > read a table the corpus measured on a console, because Mars's boot, like every commercial boot code it runs, never
 > initialises RDRAM for a register model to record; both references disagree with the measurement past the first
 > sixty-four bytes. 54 failing cases to 46, eight predicted, and **every one of the 45 groups left is about the caches**,
-> which Mars does not model: nothing the corpus asks of Phase E remains. All twenty-seven breakages were caught, twelve
+> which Mars does not model: nothing the corpus asks of Phase E remains. All twenty-seven breakages were caught, ten
 > of them by named cases alone. What is left in Phase E is the save types, and the done-when's controller.
+
+> **Progress, 2026-09-18: the save chips** (`Mars_Save.md`). EEPROM in both sizes on the joybus, SRAM and FlashRAM on the
+> cartridge's second domain, and a Controller Pak in the first port, each written to the data store's `Saves` folder
+> when it changes. The chip is named per title the way this section asked — as a heuristic, said to be one: the image's
+> own header, then a table of the fifty-four 16 Kbit EEPROMs two emulators' databases agree on, then the length of the
+> last save, then whatever the game does first. Super Mario 64 and Wave Race 64 name a 4 Kbit EEPROM by use, as both
+> databases do. No corpus group covers any of it; the FPGA core is the source, and all fifty-one breakages are caught,
+> four of them by cases the round showed were missing.
 
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI

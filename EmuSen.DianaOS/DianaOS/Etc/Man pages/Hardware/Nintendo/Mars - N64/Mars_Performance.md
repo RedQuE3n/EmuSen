@@ -188,3 +188,43 @@ non-inlinable and read exclusive time per method. .NET's sampler stops a thread 
 cluster at calls and loop back-edges, so a method made mostly of calls — the bus's `Tick`, the step itself — collects
 more samples than it costs. Its component shares are sturdier than its method shares, and neither decides a change:
 the probe does.
+
+- **Ranking the processor's per-instruction costs by removing them.** Builds with the timer update, the interrupt
+  check or a device's step deleted ran Super Mario 64 in 7.5, 5.6 and 7.5 seconds against 12.7, which measures
+  nothing: without interrupts, or without the RSP, the game does different work — it idles in a cheap loop and
+  never feeds the display processor — so the time saved is the game's, not the check's. The one removal that leaves
+  the game's behaviour alone, the debugger's per-instruction gate (the breakpoint check, coverage and the profiler's
+  count), is worth about four per cent (12.2 against 12.7 seconds, twice), which is recorded as a known cost and not
+  acted on.
+
+## 8. Where the phase stands
+
+| | at the profile | now | |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50 fps) | 7.3 fps | 17.4 fps | 2.4×, 35% of the console |
+| Super Mario 64 (PAL, 50 fps) | 9.6 fps | 21.0 fps | 2.2×, 42% of the console |
+| Wave Race 64 (NTSC, 60 fps) | 14.7 fps | 24.5 fps | 1.7×, 41% of the console |
+
+Every frame of all three games has matched the §1 baseline after every change. The profile now:
+
+| share of the emulation thread | CPU and bus | VI | RDP | RSP | the core's loop |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 56.9% | 18.0% | 9.4% | 8.7% | 7.0% |
+| Wave Race 64 | 60.8% | 9.7% | 12.7% | 10.8% | 6.0% |
+| Ocarina of Time | 46.2% | 27.8% | 14.9% | 5.0% | 6.0% |
+
+**The interpreter is now the wall** in all three games, which is where the plan expected to start. What is left in it is
+not decoding — executing the instruction was 1.5 per cent in §4's split — but the work around each instruction:
+the interrupt check, the timer, three device steps and the loop's own checks, each small and none removable without
+changing what a game does. The levers that remain are of a different size from the ones this page has used:
+
+- **A cached or threaded interpreter**, decoding blocks once. §4 says decoding is not where the time goes, and
+  `Venus_PPU.md` §13 records threaded dispatch measured and rejected on the SNES core.
+- **A recompiler**, which removes the per-instruction work by compiling blocks — the plan's §2.2 names it as a choice
+  that "makes some class of divergence unobservable", and it is a project, not a change.
+- **Timing restructured around events** — the devices told when their next event falls, instead of stepped every
+  instruction — which can be exactly equivalent, and is the largest of the three in what it touches.
+
+Each is a decision about the core's design rather than a change to it, and is left for one. **What none of this is
+evidence for**: speed in 3D gameplay. The probe runs boots, title screens and an attract race; a scene with more
+geometry moves work towards the RSP and the display processor, whose shares here are the smallest.

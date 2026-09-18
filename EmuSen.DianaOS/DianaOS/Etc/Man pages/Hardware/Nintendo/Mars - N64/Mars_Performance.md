@@ -100,3 +100,29 @@ The cache is presentation scratch, marked out of the save state, which keeps the
 The processor is now the largest share in every game. What remains of the VI is mostly the walk's own per-pixel work —
 three mixes, gamma, four stores — and the samples of a source row that two output rows share, which this change
 still makes twice, once for each row.
+
+## 4. The processor's own addresses, taken directly
+
+**Where the processor's time went.** A diagnostic build that kept the step's callees from being inlined, profiled on
+Wave Race, split the processor's share for the first time: **the instruction fetch was 28.6 per cent of the whole
+thread** — `FetchInstruction` and `TranslateAccess` — against 1.5 for executing the instruction, 16.5 for stepping
+the devices every instruction, and 20.4 for the step's own body. The interpreter was not slow at interpreting; it
+was slow at finding the instruction. Every fetch computed the privilege mode three times — once to decide
+reverse-endian mirroring, twice more for the segment map and its addressing width — and ran the general segment
+decoder, which handles six maps and 64-bit windows.
+
+**The change.** Nearly every fetch, and most data, is kernel code in KSEG0 or KSEG1, where the segment map's answer is
+the address's low 29 bits. `TranslateAccess` now answers that range directly when the processor is in kernel mode,
+and the fetch checks it before mirroring. The answer is the same as the decoder's for every address in the range:
+64-bit addressing hands anything at or above `0xFFFF_FFFF_8000_0000` to the 32-bit map, where kernel mode's KSEG0
+and KSEG1 are direct; mirroring never applies in kernel mode; and supervisor and user code still take the general
+path and fault as they did. The CPU, TLB, segment and FPU suites and the corpus, which exercises every mode and both
+addressing widths, all pass unchanged (the corpus at 46).
+
+**What it bought**, every frame identical to the baseline:
+
+| | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 13.32 fps | 15.40 fps | 1.16× |
+| Super Mario 64 | 15.48 fps | 18.43 fps | 1.19× |
+| Wave Race 64 | 19.30 fps | 22.89 fps | 1.19× |

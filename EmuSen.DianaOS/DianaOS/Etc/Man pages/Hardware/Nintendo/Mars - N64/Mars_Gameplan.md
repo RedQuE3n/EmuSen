@@ -667,6 +667,13 @@ a core whose seams get tested by the user.
 Mars in DianaOS, and the cheat-wiring tests cover Mars the way they now cover the
 other three cores.
 
+> **Met, 2026-09-18.** `.z64` opens through both frontends' own routes — Hotaru's `Create`, `LoadRom` and `Bundle`
+> with its state command, and Mistress's `EmulatorSession` — and `disasm cpu`, `state save` and `state load` run on
+> each (`Both_frontends_routes_open_a_z64_and_disassemble_save_and_load_it`). That is a test of the routes, not a
+> window opened by hand: no test in this project builds Hotaru's `GameWindow`, and the claim stops where the routes
+> do. The debugger's commands work against Mars (`Mars_Debug.md`), and the cheat-wiring tests cover it with the five
+> cases the other cores have (`Mars_Cheats.md`).
+
 > **Progress, 2026-09-18: save states** (`Mars_SaveStates.md`). The whole machine, graded by replay: each of the three
 > games saved, loaded into a fresh core, and run a hundred frames beside the core that saved it, identical in picture,
 > RDRAM, program counter and cycles. The shared serializer needed four new cases, and one of them — struct and wide
@@ -679,6 +686,13 @@ other three cores.
 > are breakpoints, stepping over and out of MIPS calls, watches, data breakpoints, coverage and the frame log, at a
 > cost that was 7–10% until the shared breakpoint registry learned to say when nothing could break. Left for this
 > phase: cheats.
+
+> **Progress, 2026-09-18: cheats, and Phase F is finished** (`Mars_Cheats.md`). The GameShark codes both references
+> apply, the ones they do not refused by name, and ROM patches at the cartridge. The codes wait for the game to enable
+> interrupts before they apply, because Mars's first frame ends inside the boot code's checksum and a stock
+> infinite-lives code hung Super Mario 64 there. Everything this section listed exists: named memory spaces, both
+> disassemblers, save states, cheats, coverage and breakpoints. Phase G, performance, is next; Mars runs at about a
+> fifth of the console's speed in a Release build.
 
 > **Progress, 2026-09-18: registered ahead of this phase** (`Mars_Core.md`). `.z64`, `.n64` and `.v64` now
 > reach Mars from every frontend, behind a debug target with memory spaces, register readouts and nothing else.

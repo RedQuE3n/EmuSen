@@ -42,6 +42,9 @@ namespace EmuSen.WiseMan.Cores
             var cpu = Machine();
             cpu.Cop0[Cpu.CompareRegister] = 3;
 
+            // Written from outside any instruction, so the processor is told, as a loaded state tells it - see Mars_Performance.md §10.
+            cpu.Cop0Written();
+
             RunNops(cpu, 10);
 
             Assert.Equal(Cpu.CauseInterruptTimer, cpu.Cop0[Cpu.CauseRegister] & Cpu.CauseInterruptTimer);
@@ -62,6 +65,7 @@ namespace EmuSen.WiseMan.Cores
 
             // Two adds put the counter at 1; the multiply charges six cycles and lands it at 4.
             cpu.Cop0[Cpu.CompareRegister] = 2;
+            cpu.Cop0Written();
             cpu.Run(3);
 
             Assert.Equal(4u, bus.Count);
@@ -74,6 +78,7 @@ namespace EmuSen.WiseMan.Cores
             var cpu = Machine();
             cpu.Cop0[Cpu.CompareRegister] = 3;
             cpu.Cop0[Cpu.StatusRegister] = Cpu.StatusInterruptEnable;
+            cpu.Cop0Written();
 
             RunNops(cpu, 10);
 
@@ -87,6 +92,7 @@ namespace EmuSen.WiseMan.Cores
             var cpu = Machine();
             cpu.Cop0[Cpu.CompareRegister] = 3;
             cpu.Cop0[Cpu.StatusRegister] = Cpu.StatusInterruptEnable | TimerMask;
+            cpu.Cop0Written();
 
             Assert.True(StepUntilInterrupted(cpu, 10));
             Assert.Equal(ExceptionCode.Interrupt, cpu.LastException!.Code);
@@ -99,6 +105,7 @@ namespace EmuSen.WiseMan.Cores
             var cpu = Machine();
             cpu.Cop0[Cpu.CompareRegister] = 3;
             cpu.Cop0[Cpu.StatusRegister] = TimerMask;
+            cpu.Cop0Written();
 
             RunNops(cpu, 10);
 
@@ -112,6 +119,7 @@ namespace EmuSen.WiseMan.Cores
             var cpu = Machine();
             cpu.Cop0[Cpu.CompareRegister] = 3;
             cpu.Cop0[Cpu.StatusRegister] = Cpu.StatusInterruptEnable | TimerMask | Cpu.StatusExceptionLevel;
+            cpu.Cop0Written();
 
             RunNops(cpu, 10);
 
@@ -123,6 +131,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var cpu = Machine();
             cpu.Cop0[Cpu.CompareRegister] = 3;
+            cpu.Cop0Written();
             RunNops(cpu, 10);
 
             var program = new MipsAssembler().Addiu(1, 0, 0x7000).Mtc0(1, Cpu.CompareRegister);
@@ -130,9 +139,61 @@ namespace EmuSen.WiseMan.Cores
             cpu.Pc = MipsAssembler.EntryPoint;
             cpu.NextPc = cpu.Pc + 4;
             cpu.Cop0[Cpu.StatusRegister] = 0;
+            cpu.Cop0Written();
             cpu.Run(2);
 
             Assert.Equal(0UL, cpu.Cop0[Cpu.CauseRegister] & Cpu.CauseInterruptTimer);
+        }
+
+        // One cycle an instruction and a write on an odd cycle: the count turns 3 on cycle 6, so the sixth instruction raises it - see Mars_Performance.md §10.
+        [Fact]
+        public void The_line_rises_at_the_end_of_the_instruction_whose_cycles_reach_the_value()
+        {
+            var cpu = new MipsAssembler().Addiu(1, 0, 3).Mtc0(1, Cpu.CompareRegister).Nop().Nop().Nop().Nop().Build();
+
+            cpu.Run(5);
+            Assert.Equal(0UL, cpu.Cop0[Cpu.CauseRegister] & Cpu.CauseInterruptTimer);
+
+            cpu.Run(1);
+            Assert.Equal(Cpu.CauseInterruptTimer, cpu.Cop0[Cpu.CauseRegister] & Cpu.CauseInterruptTimer);
+        }
+
+        // Written while the count already stands on it, the value is behind the counter and waits for the wrap - see Mars_Cpu.md §12.1.
+        [Fact]
+        public void A_comparison_value_equal_to_the_count_waits_a_whole_wrap()
+        {
+            var program = new MipsAssembler();
+            for (int i = 0; i < 9; i++) program.Nop();
+            var cpu = program.Addiu(1, 0, 5).Mtc0(1, Cpu.CompareRegister).Build();
+
+            cpu.Run(11);
+            Assert.Equal(5u, cpu.Bus.Count);
+
+            cpu.Run(200);
+            Assert.Equal(0UL, cpu.Cop0[Cpu.CauseRegister] & Cpu.CauseInterruptTimer);
+        }
+
+        // Nothing acknowledged the line, so the instruction returned to is interrupted again before it runs - see Mars_Performance.md §10.
+        [Fact]
+        public void Returning_with_the_line_still_raised_takes_the_interrupt_again_at_once()
+        {
+            var bus = new MemoryBus();
+            var cpu = new MipsAssembler().Nop().Nop().Build(bus);
+            bus.Write32((uint)(GeneralVector & 0x1FFF_FFFF), 0x4200_0018);
+
+            cpu.Cop0[Cpu.StatusRegister] = Cpu.StatusInterruptEnable | RcpMask;
+            cpu.Cop0Written();
+            bus.Mi.Mask = MiInterrupt.VideoInterface;
+            bus.Mi.Raise(MiInterrupt.VideoInterface);
+
+            cpu.Step();
+            Assert.Equal(GeneralVector, cpu.Pc);
+
+            cpu.Step();
+            Assert.Equal(MipsAssembler.EntryPoint, cpu.Pc);
+
+            cpu.Step();
+            Assert.Equal(GeneralVector, cpu.Pc);
         }
 
         [Fact]

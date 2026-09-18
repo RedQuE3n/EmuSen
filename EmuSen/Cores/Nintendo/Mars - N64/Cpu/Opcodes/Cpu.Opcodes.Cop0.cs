@@ -122,10 +122,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             }
         }
 
-        // Level-triggered from the aggregator, then edge-latched from the counter - see Mars_Cpu.md §12.
-        private void CheckInterrupts()
+        // Level-triggered from the aggregator, then edge-latched from the counter; run only when an input changed - see Mars_Performance.md §10.
+        private void CheckInterrupts(bool asserted)
         {
-            if (_bus.Mi.Asserted) Cop0[CauseRegister] |= CauseInterruptRcp;
+            _recheck = false;
+            _assertedSeen = asserted;
+
+            if (asserted) Cop0[CauseRegister] |= CauseInterruptRcp;
             else Cop0[CauseRegister] &= ~CauseInterruptRcp;
 
             if ((Cop0[StatusRegister] & StatusInterruptEnable) == 0) return;
@@ -135,25 +138,56 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             if (pending != 0) throw Raise(ExceptionCode.Interrupt, CurrentPc);
         }
 
-        // Hardware compares for equality; a clock that can step by more than one has to ask about the interval.
-        private void UpdateTimer()
+        // Debug builds prove each skipped check would have done nothing, so a write that bypassed Cop0Written fails loudly - see Mars_Performance.md §10.
+        [System.Diagnostics.Conditional("DEBUG")]
+        private void VerifySkippedCheck(bool asserted)
+        {
+            ulong status = Cop0[StatusRegister];
+            ulong cause = Cop0[CauseRegister];
+            bool enabled = (status & StatusInterruptEnable) != 0 && (status & (StatusExceptionLevel | StatusErrorLevel)) == 0;
+            bool pending = ((cause >> InterruptShift) & (status >> InterruptShift) & 0xFF) != 0;
+
+            if (((cause & CauseInterruptRcp) != 0) != asserted || (enabled && pending))
+            {
+                throw new InvalidOperationException("Status or Cause was written outside an instruction without Cop0Written(); the interrupt check would have acted.");
+            }
+
+            if ((uint)Cop0[CompareRegister] != _scheduledCompare || unchecked(_bus.Count - (uint)(_bus.Cycles >> 1)) != _scheduledBias)
+            {
+                throw new InvalidOperationException("Compare or Count was written outside an instruction without Cop0Written(); the timer is due at the wrong cycle.");
+            }
+        }
+
+        // For a caller that wrote COP0 or loaded the processor outside an instruction - see Mars_Performance.md §10.
+        public void Cop0Written()
+        {
+            _recheck = true;
+            ScheduleTimer();
+        }
+
+        // The first cycle the counter reaches Compare, counted from the count the timer last settled at - see Mars_Performance.md §10.
+        private void ScheduleTimer()
         {
             uint now = _bus.Count;
             uint compare = (uint)Cop0[CompareRegister];
 
-            if (Crossed(_lastCount, now, compare)) Cop0[CauseRegister] |= CauseInterruptTimer;
+            // A value equal to the settled count is a whole wrap away, as the interval test found it - see Mars_Cpu.md §12.1.
+            uint toCompare = unchecked(compare - _lastCount);
+            long owed = toCompare == 0 ? 1L << 32 : toCompare;
+            long remaining = owed - unchecked(now - _lastCount);
 
-            _lastCount = now;
+            _timerDue = remaining <= 0 ? _bus.Cycles : 2 * ((_bus.Cycles >> 1) + remaining);
+            _scheduledCompare = compare;
+            _scheduledBias = unchecked(now - (uint)(_bus.Cycles >> 1));
         }
 
-        private static bool Crossed(uint previous, uint now, uint target)
+        // Hardware compares for equality on every count; this is the first successful step to end on or past it - see Mars_Cpu.md §12.1.
+        private void TimerReached()
         {
-            if (previous == now) return false;
-
-            // The counter wraps, so "between" is two ranges rather than one - see Mars_Cpu.md §12.1.
-            return previous < now
-                ? target > previous && target <= now
-                : target > previous || target <= now;
+            Cop0[CauseRegister] |= CauseInterruptTimer;
+            _recheck = true;
+            _lastCount = _bus.Count;
+            ScheduleTimer();
         }
     }
 }
@@ -186,6 +220,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             Cop0[StatusRegister] |= StatusExceptionLevel;
             LinkedFlag = false;
+            _recheck = true;
 
             Pc = VectorFor(raised.Refill, alreadyHandling, extended);
             NextPc = Pc + 4;
@@ -208,6 +243,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             // Returning breaks the link but leaves the address a handler can still read - see Mars_Cop0.md §6.
             LinkedFlag = false;
+            _recheck = true;
 
             // No delay slot of its own: the next instruction fetched is the one returned to.
             NextPc = Pc + 4;

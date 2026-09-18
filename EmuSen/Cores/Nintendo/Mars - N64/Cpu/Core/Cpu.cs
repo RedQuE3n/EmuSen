@@ -44,11 +44,23 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private bool _branchPending;
         private uint _lastCount;
 
+        // What the interrupt check last saw; anything that may change its inputs sets _recheck - see Mars_Performance.md §10.
+        [EmuSen.Common.SkipInState] private bool _recheck = true;
+        [EmuSen.Common.SkipInState] private bool _assertedSeen;
+        [EmuSen.Common.SkipInState] private readonly MiInterface _mi;
+
+        // The first cycle the counter reaches Compare, and the two inputs it came from, which Debug builds check - see Mars_Performance.md §10.
+        [EmuSen.Common.SkipInState] private long _timerDue;
+        [EmuSen.Common.SkipInState] private uint _scheduledCompare;
+        [EmuSen.Common.SkipInState] private uint _scheduledBias;
+
         public Cpu(MemoryBus bus)
         {
             _bus = bus;
+            _mi = bus.Mi;
             Pc = 0xFFFF_FFFF_A400_0040;
             NextPc = Pc + 4;
+            ScheduleTimer();
         }
 
         public MemoryBus Bus => _bus;
@@ -61,7 +73,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
                 // Checked before the fetch, so the saved address is the instruction not yet run - see §12.
                 InDelaySlot = _branchPending;
-                CheckInterrupts();
+                bool asserted = _mi.Asserted;
+                if (_recheck || asserted != _assertedSeen) CheckInterrupts(asserted);
+                else VerifySkippedCheck(asserted);
 
                 uint instruction = FetchInstruction();
                 _branchPending = false;
@@ -83,7 +97,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                     ReturnObserver?.Invoke();
                 }
 
-                UpdateTimer();
+                // Due is where a stepped interval test would first have found Compare; the count is what it would have kept - see Mars_Performance.md §10.
+                if (_bus.Cycles >= _timerDue) TimerReached();
+                _lastCount = _bus.Count;
             }
             catch (CpuException raised)
             {

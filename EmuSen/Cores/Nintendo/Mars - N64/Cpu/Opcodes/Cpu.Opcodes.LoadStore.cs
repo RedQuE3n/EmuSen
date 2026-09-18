@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 
 namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
@@ -13,7 +14,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             uint physical = TranslateAccess(Mirrored(address, size), address);
 
-            ulong raw = _bus.Load(physical, size);
+            // An aligned RDRAM load is the bytes at the address, which the bus would also hand back - see Mars_Performance.md §17.
+            byte[] rdram = _bus.Rdram;
+            ulong raw = physical < (uint)rdram.Length ? ReadRdram(rdram, (int)physical, size) : _bus.Load(physical, size);
             ulong value = !signed ? raw : size switch
             {
                 1 => (ulong)(long)(sbyte)raw,
@@ -32,8 +35,35 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             uint physical = TranslateAccess(Mirrored(address, size), address, store: true);
 
+            // An aligned RDRAM store is the bytes named, unless the MI repeats it or a watcher wants it reported - see Mars_Performance.md §17.
+            byte[] rdram = _bus.Rdram;
+            if (physical < (uint)rdram.Length && !_bus.Mi.Repeating && !_bus.StoresWatched)
+            {
+                WriteRdram(rdram, (int)physical, Read(Rt(instruction)), size);
+                return;
+            }
+
             // The whole register goes to the bus, because not every device takes only the bytes named - see Mars_Memory.md §2.4.
             _bus.Store(physical, Read(Rt(instruction)), size);
+        }
+
+        private static ulong ReadRdram(byte[] rdram, int at, int size) => size switch
+        {
+            1 => rdram[at],
+            2 => BinaryPrimitives.ReadUInt16BigEndian(rdram.AsSpan(at)),
+            4 => BinaryPrimitives.ReadUInt32BigEndian(rdram.AsSpan(at)),
+            _ => BinaryPrimitives.ReadUInt64BigEndian(rdram.AsSpan(at)),
+        };
+
+        private static void WriteRdram(byte[] rdram, int at, ulong value, int size)
+        {
+            switch (size)
+            {
+                case 1: rdram[at] = (byte)value; return;
+                case 2: BinaryPrimitives.WriteUInt16BigEndian(rdram.AsSpan(at), (ushort)value); return;
+                case 4: BinaryPrimitives.WriteUInt32BigEndian(rdram.AsSpan(at), (uint)value); return;
+                default: BinaryPrimitives.WriteUInt64BigEndian(rdram.AsSpan(at), value); return;
+            }
         }
 
         // The pair a lock is built from: the load arms it, the store only lands if nothing disarmed it.

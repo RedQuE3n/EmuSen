@@ -591,3 +591,45 @@ list and `NoteWrite` returns at its first two tests, so the skipped report chang
 match, state and all. **What catches a mistake**: six breakages — the bus not asking, the bus never reporting, the
 target or the registry missing any one of its three terms — each fail one to four named tests, three of them new.
 
+## 17. RDRAM taken directly by the fetch, the loads and the stores
+
+**What the step's cost is made of**, from a switch build of §9's loop and a second loop with a load and a store in
+five instructions, medians of five, ns an instruction (the memory loop's spread is under 0.1; the ALU loop's is
+wider):
+
+| removed, or changed | ALU loop, of 7.65 | memory loop, of 9.99 |
+| --- | --- | --- |
+| RDRAM read and written as whole words | −0.36 | −0.39 |
+| and the fetch straight from RDRAM | −0.68 | −1.02 |
+| and the loads and stores straight from RDRAM | — | −1.79 |
+| the privilege mode not recomputed each use (measure only) | −0.78 | −0.71 |
+| the MI line not compared (measure only) | −0.31 | −0.33 |
+| the count not kept each step (measure only) | −0.23 | −0.19 |
+| the instruction count and the return hook (measure only) | −0.16 | −0.16 |
+
+The first three rows are this section; the fourth is §18. The rest are stated so that they are not measured again:
+the MI compare is what makes §10 exact, and the count is in the state's bytes.
+
+**The change.** The bus's `ReadArray32` and `WriteArray32` read and write one big-endian word over the same four bytes
+(`BinaryPrimitives`), for every caller. And the processor takes RDRAM without calling the bus: a kernel-direct fetch
+whose physical address is below the array's length reads the word there; an aligned load below it reads the bytes
+named, a byte, a halfword, a word or a doubleword; an aligned store below it writes the bytes named — unless the MI's
+repeat is armed or a watcher wants the store reported, when it goes to the bus as before.
+
+**Why it is exact.** For a physical address below RDRAM's length the bus's `Read32` is `ReadArray32(Rdram, …)` and its
+`Load` reaches the same word through `Read8`, `Read16`, `Read32` or `Read64`, each of which is the bytes named for an
+aligned access; the loads are aligned, since `RequireAlignment` runs first. Its `Store` for that range passes the
+cartridge test, then the repeat, then the whole-word windows, and writes byte-precisely; the two conditions that would
+make it do otherwise are the two the fast path steps aside for. Above the array's length the bus reads zero and drops
+stores, and the fast paths stop at the array. The FPU's `LWC1`/`LDC1`/`SWC1`/`SDC1` were already calling the bus's
+`Read32`/`Write32` directly, bypassing `Load` and `Store` — the cartridge latch, the repeat, the whole-word windows and
+the report — which this change neither adds to nor fixes; it is recorded as a pre-existing gap. All 1,800 probe
+frames match, state and all.
+
+**What catches a mistake in it.** Seven breakages: a store not stepping aside for the repeat fails the new
+`A_store_from_the_processor_is_repeated_too` and the corpus; not stepping aside for a watcher fails the three watch
+and data-breakpoint tests; a halfword read little-endian, a doubleword read as a word, a byte store writing two, each
+fail from six to forty-six tests. A fetch, load or store bound widened past the installed RDRAM failed nothing —
+nothing accessed the unpopulated half of a stock console through the processor — and
+`The_processor_reads_zero_and_drops_stores_above_a_stock_consoles_rdram` now does.
+

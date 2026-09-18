@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -512,15 +513,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private static bool InRange(uint address, uint start, uint length) =>
             address >= start && address < start + length;
 
+        // One big-endian word rather than four byte accesses, over the same bytes - see Mars_Performance.md §17.
         private static uint ReadArray32(byte[] memory, uint offset) =>
-            (uint)((memory[offset] << 24) | (memory[offset + 1] << 16) | (memory[offset + 2] << 8) | memory[offset + 3]);
+            BinaryPrimitives.ReadUInt32BigEndian(memory.AsSpan((int)offset));
 
-        private static void WriteArray32(byte[] memory, uint offset, uint value)
-        {
-            memory[offset] = (byte)(value >> 24);
-            memory[offset + 1] = (byte)(value >> 16);
-            memory[offset + 2] = (byte)(value >> 8);
-            memory[offset + 3] = (byte)value;
-        }
+        private static void WriteArray32(byte[] memory, uint offset, uint value) =>
+            BinaryPrimitives.WriteUInt32BigEndian(memory.AsSpan((int)offset), value);
     }
 }

@@ -285,5 +285,31 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(2, afterTwoAdds);
             Assert.Equal(2 + 1 + Cpu.MultiplyStall, second.Cycles);
         }
-    }
+            // Above the installed size the bus reads zero and drops stores; the processor's direct RDRAM paths must stop where the array does - see Mars_Performance.md §17.
+        [Fact]
+        public void The_processor_reads_zero_and_drops_stores_above_a_stock_consoles_rdram()
+        {
+            var bus = new MemoryBus();
+            Assert.Equal(MemoryBus.RdramSize, bus.Rdram.Length);
+
+            var cpu = new MipsAssembler()
+                .Lui(1, 0x8040).Ori(2, 0, 0x1234)
+                .Sw(2, 1, 0).Lw(3, 1, 0).Lb(4, 1, 5).Ld(5, 1, 8)
+                .Build(bus);
+            cpu.Gpr[3] = cpu.Gpr[4] = cpu.Gpr[5] = 0xFFFF_FFFF_FFFF_FFFF;
+            cpu.Run(6);
+
+            Assert.Equal(0UL, cpu.Gpr[3]);
+            Assert.Equal(0UL, cpu.Gpr[4]);
+            Assert.Equal(0UL, cpu.Gpr[5]);
+            Assert.Null(cpu.LastException);
+
+            // A fetch there reads zero too, which is a nop, and the processor simply moves on.
+            cpu.Pc = 0xFFFF_FFFF_8040_0000;
+            cpu.NextPc = cpu.Pc + 4;
+            cpu.Step();
+            Assert.Equal(0xFFFF_FFFF_8040_0004UL, cpu.Pc);
+            Assert.Null(cpu.LastException);
+        }
+}
 }

@@ -268,7 +268,8 @@ the guarantee that survives without the reference tools built.
 
 - ~~**Anti-alias modes 0 and 1**, which read a pixel's coverage out of the hidden bits and filter by it.~~
   **Landed the same day, in `Mars_VideoFilter.md`.** They are the modes a game actually uses.
-- **The dither filter, divot and gamma**, each a further pass over a fetched pixel.
+- ~~**The dither filter, divot and gamma**, each a further pass over a fetched pixel.~~ **Landed in
+  `Mars_VideoPasses.md`**, where the gamma dither turned out not to be gradable at all.
 - **The per-scanline registers** parallel-rdp models and angrylion does not reach through this dump format.
 - **The interrupt and the timing.** The interface's interrupt fires when the current half line reaches the
   interrupt register, and nothing here advances a half line: `Vi.Scan` is called by a test, not by a clock.

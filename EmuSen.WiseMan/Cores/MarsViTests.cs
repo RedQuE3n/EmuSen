@@ -7,6 +7,8 @@ namespace EmuSen.WiseMan.Cores
     {
         private const uint Framebuffer = 0x0020_0000;
 
+        private const uint GammaOn = 1 << 3, DivotOn = 1 << 4, DitherFilter = 1 << 16;
+
         // angrylion's pixels for sixteen scans of one frame buffer, three of which scan no frame at all - see Mars_Video.md §3.4.
         [Fact]
         public void Scanned_frames_match_the_reference()
@@ -65,6 +67,13 @@ namespace EmuSen.WiseMan.Cores
                 (Registers(2, 1, 64, 0x400, 0x200, 108, 256, 34, 110, 0, 0), -1),
                 (Registers(2, 1, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0), 3),
                 (Registers(2, 1, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0), 0),
+
+                // The three passes past the filter: undoing dither, divot, gamma, and all of them together - see Mars_VideoPasses.md §4.
+                (Registers(2, 3, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0, control: DitherFilter), -1),
+                (Registers(3, 3, 32, 0x400, 0x400, 108, 128, 34, 100, 0, 0, control: DitherFilter), -1),
+                (Registers(2, 1, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0, control: DivotOn), 3),
+                (Registers(2, 3, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0, control: GammaOn), -1),
+                (Registers(2, 1, 64, 0x2AB, 0x155, 108, 256, 34, 120, 0x80, 0x40, control: DitherFilter | DivotOn | GammaOn), -1),
             };
 
             foreach ((uint[] registers, int bits) in filtered)
@@ -99,6 +108,12 @@ namespace EmuSen.WiseMan.Cores
                 (16, 20, 5, 0x8A728A04), (16, 100, 30, 0xF090F802), (16, 180, 60, 0x58F0E803), (16, 200, 100, 0xAFB5F800),
                 (17, 20, 5, 0x7CCCA003), (17, 100, 30, 0xB848D807), (17, 180, 60, 0x7C607003),
                 (18, 20, 5, 0x80C88000), (18, 100, 30, 0xB848D804), (18, 180, 60, 0x38401800),
+
+                (19, 20, 5, 0x7CC48207), (19, 100, 30, 0xB350D007), (19, 180, 60, 0x3C412007), (19, 9, 1, 0x26866607),
+                (20, 20, 5, 0x0EAC3207), (20, 100, 30, 0xD5544D07), (20, 60, 44, 0xCCD10C07),
+                (21, 20, 5, 0x7C605803), (21, 100, 30, 0x80B09807), (21, 180, 60, 0x7C8C7003),
+                (22, 20, 5, 0xB4E2B407), (22, 100, 30, 0xD886EA07), (22, 180, 60, 0x76804E07), (22, 250, 100, 0x00000000),
+                (23, 20, 5, 0xC8C8A207), (23, 100, 30, 0xCC9CBA07), (23, 180, 60, 0x8EC8E207),
             };
 
             foreach ((int frame, int x, int y, uint color) in pixels)
@@ -112,10 +127,10 @@ namespace EmuSen.WiseMan.Cores
 
         private static uint[] Registers(int type, int antialias, uint width, uint stepX, uint stepY,
             uint left, uint columns, uint top, uint rows, uint biasX, uint biasY,
-            bool serrate = false, uint currentLine = 0, uint sync = 525, uint origin = Framebuffer)
+            bool serrate = false, uint currentLine = 0, uint sync = 525, uint origin = Framebuffer, uint control = 0)
         {
             var registers = new uint[14];
-            registers[0] = (uint)(type & 3) | ((uint)(antialias & 3) << 8) | (serrate ? 1u << 6 : 0);
+            registers[0] = (uint)(type & 3) | ((uint)(antialias & 3) << 8) | (serrate ? 1u << 6 : 0) | control;
             registers[1] = origin;
             registers[2] = width;
             registers[4] = currentLine;

@@ -4,6 +4,7 @@ using System.IO;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.Mars.Rom;
 using EmuSen.Galaxia.Input;
+using EmuSen.Galaxia.Library;
 using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 
 namespace EmuSen.Cores.Nintendo.Mars
@@ -34,7 +35,15 @@ namespace EmuSen.Cores.Nintendo.Mars
         // The right stick stands in for the four C buttons, pressed past half its travel - see Mars_Core.md §5.
         public const double CButtonThreshold = 0.5;
 
+        // How often a changed save is written without being asked, as the other cores do - see Mars_Save.md §7.
+        public const int SaveEveryNFrames = 300;
+
+        // The Controller Pak's own file beside the cartridge's - see Mars_Save.md §7.
+        public const string PakExtension = ".mpk";
+
         private byte[] _frame = Blank(DefaultScreenHeight);
+        private string? _savePath;
+        private string? _pakPath;
         private int _screenHeight = DefaultScreenHeight;
         private long _lastFrameCycles = CycleCap;
 
@@ -84,6 +93,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             var bus = new MemoryBus(ExpansionPak);
             var cpu = new Cpu.Core.Cpu(bus);
             Boot.HandOff(bus, cpu, rom);
+            LoadSaves(bus, rom, path);
 
             Rom = rom;
             Bus = bus;
@@ -163,6 +173,8 @@ namespace EmuSen.Cores.Nintendo.Mars
             _lastFrameCycles = Bus.Cycles - start;
             TotalFrames++;
 
+            if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
+
             if (!SkipRendering) Present(Bus.Vi);
         }
 
@@ -170,8 +182,43 @@ namespace EmuSen.Cores.Nintendo.Mars
 
         public short[] DequeueAudioSamples(int maxFrames) => Bus?.Ai.Drain(maxFrames) ?? Array.Empty<short>();
 
-        // No save device is modelled, so there is nothing to flush - see Mars_Core.md §6.
-        public void SaveSram() { }
+        // Whatever the game changed since the last write, and nothing it did not - see Mars_Save.md §7.
+        public void SaveSram()
+        {
+            if (Bus is null) return;
+
+            SaveChip chip = Bus.Save;
+            if (_savePath != null && chip.Dirty && chip.Contents is { } contents)
+            {
+                AtomicFile.Write(_savePath, contents);
+                chip.Saved();
+            }
+
+            ControllerPak? pak = Bus.Si.Controllers[0].Pak;
+            if (_pakPath != null && pak is { Dirty: true })
+            {
+                AtomicFile.Write(_pakPath, pak.Data);
+                pak.Dirty = false;
+            }
+        }
+
+        // The image's word, the table, the last save's length, and otherwise the game's first move - see Mars_Save.md §1.
+        private void LoadSaves(MemoryBus bus, RomImage rom, string romPath)
+        {
+            // Latched here, as a cartridge does, so --nobattery holds for the whole run - see Mars_Save.md §7.
+            bool enabled = !CoreOptions.BatteryRamDisabled;
+            _savePath = enabled ? SaveLibrary.SramPathFor(romPath) : null;
+            _pakPath = enabled ? Path.ChangeExtension(_savePath!, PakExtension) : null;
+
+            byte[]? saved = Read(_savePath);
+            N64SaveType type = SaveTypes.Declared(rom);
+            if (type == N64SaveType.Unknown && saved != null) type = SaveChip.FromSaveLength(saved.Length);
+
+            bus.Save = new SaveChip(type, saved);
+            bus.Si.Controllers[0].Pak = new ControllerPak(Read(_pakPath));
+        }
+
+        private static byte[]? Read(string? path) => path is null ? null : AtomicFile.TryRead(path);
 
         // An explicit save refuses before any file exists, so no empty state is left behind - see Mars_Core.md §6.
         public void SaveState(string path) => throw NoSaveStates(nameof(SaveState));

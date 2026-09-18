@@ -58,7 +58,9 @@ told that memory needs no initialising.
 This is a stub and is meant to be replaced device by device as the phases reach
 them. The display processor's command registers left it on 2026-09-17, and now read zero
 where nothing is modelled rather than echoing writes (`Mars_Rdp.md` §2.4). RDRAM's own registers
-left it on 2026-09-18 and read what the corpus measured instead (§8.5). It is recorded here so that a register appearing to "work" is never mistaken
+left it on 2026-09-18 and read what the corpus measured instead (§8.5), and the cartridge's second domain
+left it the same day for the save chip (`Mars_Save.md` §3). Until then an SRAM transfer had been landing in
+the dictionary and reading back, which is the failure this section warned of: a device appearing to work. It is recorded here so that a register appearing to "work" is never mistaken
 for a device being modelled. The dictionary is also the wrong shape for a hot path;
 that is a Phase G problem and deliberately not solved now.
 
@@ -505,6 +507,12 @@ which states them in its comments as observations and then asserts them:
 
 **Mars reads busy off the one clock**, `Cycles < storedUntil`, the way `Count` is derived (§3.1).
 Nothing counts down, so a device nobody steps cannot be left busy.
+
+> **Update 2026-09-18: the store is kept from the whole cartridge bus**, not only the ROM window
+> (`Mars_Save.md` §3). The FPGA core starts the same latch for a processor store to the second domain,
+> where the save chips live, and to the 64DD's windows below it (`PI.vhd` 508–516). Only the ROM window
+> hands the word back: a read of the second domain returns the chip and leaves the bus held. The corpus
+> never stores below the ROM window, and its tally did not move.
 
 **Where the rules come from.** The corpus is both their source and their grader, and it is
 graded against silicon. Two implementations were read beside it: the FPGA core's `writtenData`

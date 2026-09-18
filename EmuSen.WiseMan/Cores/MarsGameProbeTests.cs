@@ -42,6 +42,9 @@ namespace EmuSen.WiseMan.Cores
             var cpu = new Cpu(bus);
             Boot.HandOff(bus, cpu, RomImage.Load(rom));
 
+            // The machine a frontend gets: no earlier save, and a fresh pak in the first port - see Mars_Save.md §7.
+            bus.Si.Controllers[0].Pak = new ControllerPak(null);
+
             var clock = Stopwatch.StartNew();
             var tasks = new int[3];
             var switches = new List<string>();
@@ -118,6 +121,7 @@ namespace EmuSen.WiseMan.Cores
                 $"distinct addresses over the next two million instructions: {pcs.Count}{tail}; now at {cpu.CurrentPc:X16}",
                 $"audio: {bus.Ai.SamplesPlayed:N0} stereo samples played at {bus.Ai.SampleRate} Hz ({bus.Ai.SamplesPlayed / Math.Max(bus.Cycles / ProcessorHz, 1e-9):F0} a second of console time); status {bus.Read32(MemoryMap.AiBase + AiInterface.Status):X8}",
                 $"picture: {(scanned ? $"{VideoInterface.RasterWidth}x{bus.Vi.FrameHeight}, saved" : "the video interface is not scanning out")}",
+                $"save chip: {bus.Save.Type}, {(bus.Save.Dirty ? "written" : "not written")}; controller pak {(bus.Si.Controllers[0].Pak!.Dirty ? "written" : "not written")}",
             });
         }
     }

@@ -360,7 +360,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(new short[] { 0x1234, 0x5678 }, samples[..2]);
         }
 
-        // No save device exists, so flushing one writes no file beside the ROM - see Mars_Core.md §6.
+        // Nothing changed, so flushing writes nothing, beside the ROM or anywhere - see Mars_Save.md §7.
         [Fact]
         public void Flushing_save_data_writes_nothing()
         {

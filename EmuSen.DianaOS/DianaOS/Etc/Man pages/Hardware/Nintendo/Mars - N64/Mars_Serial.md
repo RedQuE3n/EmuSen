@@ -100,9 +100,14 @@ since the generic controller template the same day: Z on L2, the C buttons on th
   `02` for a controller with an empty slot or `01` for one with a Controller Pak. Mars models the pak's
   presence as a flag and nothing more.
 - **State** (`0x01`) replies with the two button bytes and the two stick bytes.
-- **The Controller Pak's own commands** (`0x02` read, `0x03` write) are **not answered**, which reads to a
+- ~~**The Controller Pak's own commands** (`0x02` read, `0x03` write) are **not answered**, which reads to a
   game as a controller that has no pak fitted rather than as an error. The pak is a save device and belongs
-  with the others.
+  with the others.~~
+
+> **Update 2026-09-18: the pak is built** (`Mars_Save.md` §5), and the info reply's third byte now says whether a pak
+> is in the slot rather than reading a flag. With one there, its two commands are answered; with the slot empty they
+> are still not, which is what the FPGA core does and what `A_controller_pak_read_is_not_answered` still pins. The
+> joybus's fifth channel and beyond reach the cartridge's EEPROM (`Mars_Save.md` §2).
 
 ### 3.3 What the length byte says afterwards
 
@@ -185,8 +190,9 @@ what a synthesisable implementation of the PIF does"*, not as a measurement — 
 
 ## 6. What is not here
 
-- **The Controller Pak**, the EEPROM and the real-time clock — the channels above the fourth and the two pak
-  commands. These are save devices and belong with the peripheral interface's.
+- ~~**The Controller Pak**, the EEPROM and the real-time clock — the channels above the fourth and the two pak
+  commands. These are save devices and belong with the peripheral interface's.~~ **The pak and the EEPROM are built
+  since 2026-09-18** (`Mars_Save.md`); the real-time clock is still not, and `Mars_Save.md` §9 says why.
 - **The CIC challenge**, the boot handshake the PIF answers with its own six-byte reply. Mars boots through
   `Mars_Boot.md`'s handoff rather than through the PIF, so nothing asks.
 - **Timing** (§4).

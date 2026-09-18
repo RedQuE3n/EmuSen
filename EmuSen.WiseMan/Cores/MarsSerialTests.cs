@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_controller_pak_shows_in_the_info_reply()
         {
             MemoryBus bus = WithBlock(0x01, 0x03, 0x00, 0xFF, 0xFF, 0xFF, 0xFE);
-            bus.Si.Controllers[0].Pak = true;
+            bus.Si.Controllers[0].Pak = new ControllerPak(null);
 
             Run(bus);
 

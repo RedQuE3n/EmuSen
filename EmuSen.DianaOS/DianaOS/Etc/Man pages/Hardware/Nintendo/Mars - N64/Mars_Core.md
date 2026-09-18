@@ -25,15 +25,21 @@ not, below, so that nobody has to find them by using them.
 | --- | --- | --- |
 | a picture | the VI's raster, copied, line-doubled when progressive, alpha set to 255 (§2) | the game's picture, several times slower than real time (§9) |
 | a frame boundary and a rate | one VI field per frame, a cycle cap when the VI is idle (§3) | nothing; pacing follows the console's own clock |
-| audio | **nothing** — there is no audio interface (§4) | silence |
-| input | nine of the pad's fourteen buttons, and not its stick (§5) | no analog stick, no Z, no C buttons |
-| battery saves | **nothing** — there are no save devices (§6) | progress is lost when the ROM is closed |
+| audio | ~~**nothing** — there is no audio interface (§4)~~ what the game plays, at the rate it set (§4) | ~~silence~~ the game's sound |
+| input | ~~nine of the pad's fourteen buttons, and not its stick (§5)~~ every button, the stick, and the C buttons on the right stick (§5) | ~~no analog stick, no Z, no C buttons~~ the whole controller |
+| battery saves | ~~**nothing** — there are no save devices (§6)~~ the cartridge's chip in `<rom>.srm` and a Controller Pak in `<rom>.mpk` (§6, `Mars_Save.md`) | ~~progress is lost when the ROM is closed~~ progress kept between runs |
 | save states and rewind | explicit saves refused, rewind given no history (§6) | "Save State failed", and holding rewind freezes the picture |
 | a debug target | memory spaces, register readouts, a summary; nothing that halts (§8) | `watch`, `bp` and `framelog` accept arguments and never fire |
 | cheats | the database folder is kept; no codec applies anything (§8) | the N64 cheat tab says it takes no format |
 
 **What none of this is evidence for is that any game is playable.** Two commercial games reach their title
-pictures through this interface (§9); neither can be steered, heard or saved.
+pictures through this interface (§9); ~~neither can be steered, heard or saved~~.
+
+> **Update 2026-09-18: the table's first three struck rows were stale for a slice each.** The audio and input slices
+> rewrote §4 and §5 and left this table saying *"nothing"* and *"no analog stick"*; the save slice found them while
+> retiring the third. Both games can now be heard, steered and saved (`Mars_Audio.md`, `EmuSen_Input.md` §7,
+> `Mars_Save.md`), and Super Mario 64 answers a pressed Start (`Mars_GameProbe.md` §6). Playable is still not the
+> claim: at several times slower than the console, a game can be reached but not played.
 
 ## 1. What `MarsCore` is
 
@@ -214,11 +220,16 @@ bus, so it resets when a ROM is loaded.
 > named the fix — *"a real addition to the contract rather than a fudge through the D-pad"* — which is the one
 > `EmuSen_Input.md` §7 made.
 
-## 6. Saves: none of either kind
+## 6. Saves: ~~none of either kind~~ the battery kind, and not the state kind
 
-**`SaveSram` does nothing**, because there is no save device to flush — no EEPROM, SRAM, FlashRAM or Controller
+~~**`SaveSram` does nothing**, because there is no save device to flush — no EEPROM, SRAM, FlashRAM or Controller
 Pak (`Mars_Serial.md` §6). It writes no file beside the ROM, which `Flushing_save_data_writes_nothing` pins. A
-game that saves loses it when the ROM is closed.
+game that saves loses it when the ROM is closed.~~
+
+> **Retired 2026-09-18 by the save slice** (`Mars_Save.md`). `SaveSram` writes whatever the game changed — the
+> cartridge's chip to `<rom>.srm` and the Controller Pak to `<rom>.mpk`, both in the data store's `Saves` folder
+> rather than beside the ROM — and `MarsCore` does the same every 300 frames. `Flushing_save_data_writes_nothing`
+> still passes, and now pins the narrower thing its name can still say: nothing changed, nothing written.
 
 **Save states are refused two different ways, because their callers fail two different ways.**
 

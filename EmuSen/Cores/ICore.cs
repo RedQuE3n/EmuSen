@@ -28,6 +28,12 @@ namespace EmuSen.Cores
         // <port> is 0-based. A core with no input modelled can leave this alone.
         void SetButton(int port, PadButton button, bool pressed) { }
 
+        // The analog axes this console reads; a digital pad leaves this empty - see EmuSen_Input.md §7.
+        IReadOnlyList<PadAxis> SupportedAxes => Array.Empty<PadAxis>();
+
+        // Sticks run -1 to 1, right and down positive, and triggers 0 to 1; an axis the console lacks is ignored.
+        void SetAxis(int port, PadAxis axis, double value) { }
+
         void LoadRom(string path);
 
         // Answered without loading, so a caller can resolve it first - see EmuSen_Firmware.md §1.

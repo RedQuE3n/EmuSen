@@ -47,26 +47,26 @@ namespace EmuSen.WiseMan.Input
         public void Each_console_keeps_its_own_keys_through_a_save_and_load()
         {
             var bindings = new ControllerKeyBindings(Consoles);
-            bindings.For("NES").Rebind(PadButton.A, Key.N);
-            bindings.For("SNES").Rebind(PadButton.A, Key.S);
+            bindings.For("NES").Rebind(PadControl.A, Key.N);
+            bindings.For("SNES").Rebind(PadControl.A, Key.S);
             bindings.Save();
 
             ControllerKeyBindings loaded = ControllerKeyBindings.Load(Consoles);
 
-            Assert.Equal(Key.N, loaded.For("NES").ButtonToKey[PadButton.A]);
-            Assert.Equal(Key.S, loaded.For("SNES").ButtonToKey[PadButton.A]);
+            Assert.Equal(Key.N, loaded.For("NES").ButtonToKey[PadControl.A]);
+            Assert.Equal(Key.S, loaded.For("SNES").ButtonToKey[PadControl.A]);
         }
 
         [Fact]
         public void Rebinding_one_console_does_not_disturb_the_other()
         {
             var bindings = new ControllerKeyBindings(Consoles);
-            Key before = bindings.For("SNES").ButtonToKey[PadButton.B];
+            Key before = bindings.For("SNES").ButtonToKey[PadControl.B];
 
-            bindings.For("NES").Rebind(PadButton.B, Key.J);
+            bindings.For("NES").Rebind(PadControl.B, Key.J);
 
-            Assert.Equal(Key.J, bindings.For("NES").ButtonToKey[PadButton.B]);
-            Assert.Equal(before, bindings.For("SNES").ButtonToKey[PadButton.B]);
+            Assert.Equal(Key.J, bindings.For("NES").ButtonToKey[PadControl.B]);
+            Assert.Equal(before, bindings.For("SNES").ButtonToKey[PadControl.B]);
         }
 
         // The two consoles are free to share a key, which one map could never express.
@@ -75,11 +75,11 @@ namespace EmuSen.WiseMan.Input
         {
             var bindings = new ControllerKeyBindings(Consoles);
 
-            bindings.For("NES").Rebind(PadButton.A, Key.K);
-            bindings.For("SNES").Rebind(PadButton.Start, Key.K);
+            bindings.For("NES").Rebind(PadControl.A, Key.K);
+            bindings.For("SNES").Rebind(PadControl.Start, Key.K);
 
-            Assert.Equal(Key.K, bindings.For("NES").ButtonToKey[PadButton.A]);
-            Assert.Equal(Key.K, bindings.For("SNES").ButtonToKey[PadButton.Start]);
+            Assert.Equal(Key.K, bindings.For("NES").ButtonToKey[PadControl.A]);
+            Assert.Equal(Key.K, bindings.For("SNES").ButtonToKey[PadControl.Start]);
         }
 
         // The flat file used to mean "these keys, on whatever is loaded".
@@ -92,8 +92,8 @@ namespace EmuSen.WiseMan.Input
 
             foreach (string console in Consoles)
             {
-                Assert.Equal(Key.K, loaded.For(console).ButtonToKey[PadButton.A]);
-                Assert.Equal(Key.L, loaded.For(console).ButtonToKey[PadButton.B]);
+                Assert.Equal(Key.K, loaded.For(console).ButtonToKey[PadControl.A]);
+                Assert.Equal(Key.L, loaded.For(console).ButtonToKey[PadControl.B]);
             }
         }
 
@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Input
             string json = Read("keybindings.json");
             Assert.Contains("\"NES\"", json);
             Assert.Contains("\"SNES\"", json);
-            Assert.Equal(Key.K, ControllerKeyBindings.Load(Consoles).For("NES").ButtonToKey[PadButton.A]);
+            Assert.Equal(Key.K, ControllerKeyBindings.Load(Consoles).For("NES").ButtonToKey[PadControl.A]);
         }
 
         // Migration must copy, not alias - editing one console afterwards must not move the other.
@@ -117,10 +117,10 @@ namespace EmuSen.WiseMan.Input
             Write("keybindings.json", """{"A":"K"}""");
 
             ControllerKeyBindings loaded = ControllerKeyBindings.Load(Consoles);
-            loaded.For("NES").Rebind(PadButton.A, Key.Z);
+            loaded.For("NES").Rebind(PadControl.A, Key.Z);
 
-            Assert.Equal(Key.Z, loaded.For("NES").ButtonToKey[PadButton.A]);
-            Assert.Equal(Key.K, loaded.For("SNES").ButtonToKey[PadButton.A]);
+            Assert.Equal(Key.Z, loaded.For("NES").ButtonToKey[PadControl.A]);
+            Assert.Equal(Key.K, loaded.For("SNES").ButtonToKey[PadControl.A]);
         }
 
         [Fact]
@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.Input
 
             ControllerKeyBindings loaded = ControllerKeyBindings.Load(Consoles);
 
-            Assert.Equal(Key.K, loaded.For("SNES").ButtonToKey[PadButton.A]);
+            Assert.Equal(Key.K, loaded.For("SNES").ButtonToKey[PadControl.A]);
             Assert.Equal(new ControllerKeyMap().ButtonToKey, loaded.For("NES").ButtonToKey);
         }
 
@@ -201,5 +201,46 @@ namespace EmuSen.WiseMan.Input
         {
             Assert.Equal(Enum.GetValues<PadButton>(), CoreCatalog.ButtonsFor("Dreamcast"));
         }
-    }
+    
+        // --- The generic pad's newer controls, against files written before them - see EmuSen_Input.md §7.4 ---
+
+        [Fact]
+        public void A_file_from_before_the_generic_pad_gains_its_new_controls_on_their_default_keys()
+        {
+            Write("keybindings.json", """{"SNES":{"A":"X","B":"Z"}}""");
+
+            ControllerKeyMap map = ControllerKeyBindings.Load(Consoles).For("SNES");
+
+            Assert.Equal(Key.X, map.ButtonToKey[PadControl.A]);
+            Assert.Equal(Key.E, map.ButtonToKey[PadControl.L2]);
+            Assert.Equal(Key.I, map.ButtonToKey[PadControl.LeftStickUp]);
+            Assert.Equal(Key.H, map.ButtonToKey[PadControl.RightStickRight]);
+        }
+
+        // A key the user already gave to something else is theirs; the new control waits to be bound.
+        [Fact]
+        public void A_new_control_whose_default_key_is_taken_stays_unbound()
+        {
+            Write("keybindings.json", """{"SNES":{"Select":"E","Start":"I"}}""");
+
+            ControllerKeyMap map = ControllerKeyBindings.Load(Consoles).For("SNES");
+
+            Assert.Equal(Key.E, map.ButtonToKey[PadControl.Select]);
+            Assert.Equal(Key.I, map.ButtonToKey[PadControl.Start]);
+            Assert.False(map.ButtonToKey.ContainsKey(PadControl.L2));
+            Assert.False(map.ButtonToKey.ContainsKey(PadControl.LeftStickUp));
+        }
+
+        [Fact]
+        public void A_gamepad_file_from_before_the_generic_pad_gains_the_stick_clicks()
+        {
+            Write("gamepadbindings.json", """{"SNES":{"A":"East","B":"LeftStick"}}""");
+
+            GamepadBindingMap map = GamepadBindings.Load(Consoles).For("SNES");
+
+            Assert.Equal(SDL.GamepadButton.LeftStick, map.ButtonToPad[PadButton.B]);
+            Assert.False(map.ButtonToPad.ContainsKey(PadButton.L3));
+            Assert.Equal(SDL.GamepadButton.RightStick, map.ButtonToPad[PadButton.R3]);
+        }
+}
 }

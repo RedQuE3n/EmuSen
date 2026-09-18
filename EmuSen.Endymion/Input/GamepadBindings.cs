@@ -65,6 +65,7 @@ namespace EmuSen.Endymion.Input
                     foreach (GamepadBindingMap map in bindings._byConsole.Values)
                     {
                         map.Replace(new Dictionary<PadButton, SDL.GamepadButton>(shared));
+                        map.AddDefaultsForNewButtons();
                     }
                 }
                 return bindings;
@@ -74,7 +75,10 @@ namespace EmuSen.Endymion.Input
 
             foreach (var kv in loaded)
             {
-                if (kv.Value is { Count: > 0 }) bindings.For(kv.Key).Replace(kv.Value);
+                if (kv.Value is not { Count: > 0 }) continue;
+                GamepadBindingMap map = bindings.For(kv.Key);
+                map.Replace(kv.Value);
+                map.AddDefaultsForNewButtons();
             }
             return bindings;
         }

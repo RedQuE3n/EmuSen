@@ -68,6 +68,11 @@ Bus?.Input.SetButton((Controllers.SnesButton)button, pressed, port + 1);
 
 That cast is only correct while the two enums agree **ordinally**, which is a stronger condition than agreeing by name — reordering `PadButton` alone would silently send Start where Select was meant, with no compiler complaint and no exception, just wrong input. It is therefore pinned by a test rather than by this paragraph: `EmuSen.WiseMan/Cores/PadButtonTests.cs` asserts member-for-member that the two enums have the same names in the same positions and the same count. **If you add a button to `PadButton`, add it to the end, or that test will tell you what you broke.**
 
+> **Update 2026-09-18:** four were added at the end (§7.1), and the test changed from "the two enums are equal" to
+> what the cast actually needs: SNES's twelve are `PadButton`'s *first* twelve, in order. Venus now lists its twelve
+> explicitly and drops anything past `R` before the cast — without that, a press of L2 indexed past Venus's bit table
+> and threw, which `PadButtonTests.Venus_drops_a_button_past_its_twelve` demonstrates when the guard is removed.
+
 ### Where the type lives
 
 **`EmuSen.Galaxia`, not the core.** Galaxia is the config layer and a true leaf — no project references at all — and `PadButton` is the key type of two config files, so Galaxia already owned its persisted form. Putting the type itself there costs **no new assembly edges**: `EmuSen`, `EmuSen.Nehellania`, `EmuSen.Hotaru` and `EmuSen.Mistress` all referenced Galaxia already.
@@ -146,6 +151,104 @@ Consequences worth knowing:
 ## 6. What this does not cover yet
 
 - **Multitap, and ports beyond two.** `SetButton`'s `port` is an `int` rather than a two-valued enum specifically so this can grow, but no core models more than two controllers and no frontend offers to configure one.
-- **Analog axes.** `GamepadManager` converts a stick to a d-pad (`AnalogStickAsDpad`, with a deadzone) and there is no analog value anywhere in the contract. A console with a genuinely analog stick needs a real addition here, not a fudge through `PadButton`.
+- ~~**Analog axes.** `GamepadManager` converts a stick to a d-pad (`AnalogStickAsDpad`, with a deadzone) and there is no analog value anywhere in the contract. A console with a genuinely analog stick needs a real addition here, not a fudge through `PadButton`.~~ **Closed 2026-09-18 by §7**, which made that real addition — `PadAxis` and `ICore.SetAxis` — and kept the stick out of `PadButton`, as this bullet asked.
 - **Non-pad peripherals.** Light guns, mice, the SNES multitap's own protocol. All are console-specific hardware that would attach to the core, not to this interface.
 - **Per-core default bindings.** Defaults are one table shared by every core. An NES ROM gets the SNES-shaped defaults for the eight buttons it has, which happens to be right (Z/X = B/A), and is luck rather than design.
+
+---
+
+## 7. The generic controller template
+
+*Added 2026-09-18, when Mars (N64) became the first core with an analog stick, with dual-stick cores planned after it.*
+
+**The pad every core is written against is a modern dual-analog controller**: the twelve SNES buttons, two more
+shoulder pairs' worth of buttons, two sticks and two triggers. A core takes what its console has from that template
+and ignores the rest — the rule §2 already set for buttons, now extended to axes.
+
+### 7.1 It is libretro's RetroPad, which `PadButton` already half was
+
+`PadButton`'s twelve members turned out to be in exactly the order of libretro's RetroPad — `B, Y, Select, Start, Up,
+Down, Left, Right, A, X, L, R` are its joypad ids 0 to 11 — because both inherited the SNES pad. The RetroPad goes on
+with **`L2, R2, L3, R3`** (12 to 15) and a left and a right analog stick (`libretro-common/include/libretro.h`,
+`RETRO_DEVICE_ID_JOYPAD_*` and `RETRO_DEVICE_INDEX_ANALOG_LEFT/RIGHT`, read in the local RetroArch checkout). It is the
+template every libretro core maps its console onto, dual-stick consoles included. So finishing it was a smaller and
+better-anchored decision than designing a template: the four buttons are appended in RetroPad's order, and nothing
+before them moves (§3).
+
+| layer | type | what it holds |
+| --- | --- | --- |
+| buttons | `PadButton` | the RetroPad's sixteen: the SNES twelve, then `L2 R2 L3 R3` |
+| analog | `PadAxis` | `LeftX LeftY RightX RightY LeftTrigger RightTrigger` — SDL3's six gamepad axes |
+| bindable | `PadControl` | every button under its own name and number, then the eight stick directions |
+
+**Axis values are normalised and console-free**: a stick runs −1 to 1 with **right and down positive**, a trigger 0 to
+1 — the RetroPad's own convention (*"the Y axis being positive towards the bottom"*, `libretro.h`) and SDL's, so a value
+passes from the pad to the core without a sign anyone has to remember. A console whose stick reports up as positive,
+like the N64, turns it over in its own `SetAxis`.
+
+> ~~"a stick runs −1 to 1 with right and **up** positive … Up is positive because that is what a console's stick
+> reports."~~ **Retired the same day, before it shipped.** It generalised from the N64, whose stick does report up as
+> positive, to consoles in general; the PlayStation's DualShock reports the other way. With no convention among
+> consoles to follow, the template follows the RetroPad it is, and the core that disagrees does the flip.
+
+### 7.2 The contract, and why the stick is not a button
+
+`ICore` gains two members, both defaulted, so a digital-pad core implements nothing:
+
+```csharp
+IReadOnlyList<PadAxis> SupportedAxes => Array.Empty<PadAxis>();
+void SetAxis(int port, PadAxis axis, double value) { }
+```
+
+§6 asked for exactly this — a real analog path, not a stick smuggled through `PadButton` — and the template keeps to
+it: **a core only ever sees real buttons and real axes.** A keyboard still has to be able to push a stick, so the
+*binding* layer, and only it, has a wider type. `PadControl` is `PadButton`'s sixteen under the same names and the same
+numbers, followed by the eight stick directions (`LeftStickUp` … `RightStickRight`). A key bound to a direction pushes
+that axis all the way; the two directions of one axis cancel and leave the stick's own reading; a key or pad button
+holding L2 or R2 counts as that trigger pulled all the way. That rule is `PadControls.Resolve`, in Galaxia, so both
+frontends share one copy and the tests reach it without a window.
+
+The alternative — stick directions as `PadButton` members — would have made every core receive, and have to ignore,
+"buttons" that are not buttons, which is the fudge §6 warned against, moved rather than avoided.
+
+### 7.3 What the frontends do each frame
+
+Both Mistress and Hotaru keep their keyboard state per `PadControl` and their gamepad state per `PadButton`. A button
+goes to `SetButton` as before. **Every axis the loaded console reads is resolved and sent on every gamepad poll**, not
+only on a change, because a stick moves continuously without crossing anything a change could be detected against; a
+key press or release re-sends them as well.
+
+- **The gamepad's sticks and triggers are fixed sources**: left stick → `LeftX/LeftY`, right stick → `RightX/RightY`,
+  triggers → the trigger axes. A trigger past half its travel also counts as the L2 or R2 button, since SDL has no
+  button for it. Stick clicks are ordinary bindable buttons, L3 and R3.
+- **A console that reads the left stick as a stick stops getting it as a d-pad.** `AnalogStickAsDpad` still turns the
+  left stick into d-pad presses for a digital console; `GamepadManager.LeftStickIsAnalog`, set whenever a ROM loads,
+  switches that off for a console like the N64, where the stick and the d-pad are different things.
+- **A small dead zone**, a tenth of the travel, keeps a pad at rest from drifting. It is separate from the d-pad
+  threshold `StickDeadzone`, which answers a different question.
+- **In the rebind window, a stick direction is a row** with a keyboard column like any button, and a gamepad column
+  that names the stick and cannot be rebound — there is no pad *button* to bind it to (`EmuSen_Settings_Reference.md` §4).
+
+### 7.4 Default keys, and files written before the template
+
+The twelve new controls default to keys no existing default and no hotkey in either frontend holds: **E and R** for L2
+and R2 (completing Q-W-E-R along the shoulders), **C and V** for L3 and R3, **I-J-K-L** for the left stick and
+**T-F-G-H** for the right. A test pins that every control has a key and none collides with a hotkey.
+
+**A binding file written before the template cannot mention the new controls**, and on load each console's map is
+*replaced* by what the file holds — so without help, everyone who had ever saved their bindings would have no keys for
+any of them. The absence cannot mean "unbound on purpose", because the file predates them. So a control from `L2` on
+that the file does not mention **takes its default key, unless something in that map already uses the key** — a key
+the user gave to something else stays theirs, and the new control waits to be bound. The gamepad file gets the same
+rule for the new stick-click defaults. The one case this cannot tell apart is a file written *after* this change in
+which a user deliberately cleared a new control; it gets its default back on the next load. That is the price of not
+changing the file format, and it is recorded rather than engineered away.
+
+### 7.5 What this does not cover
+
+- **Per-console defaults.** Still one table for every console (§6). The N64 gets the stick on I-J-K-L and its C buttons
+  on the right-stick keys, which is usable and not what a dedicated N64 layout would choose.
+- **Analog input in scripts.** `FrameRunner`'s `hold`/`tap` verbs take `PadButton` names; a headless script cannot yet
+  push an axis. Tests reach `SetAxis` directly.
+- **Rebinding a gamepad axis.** Sticks and triggers come from their fixed sources; only buttons are rebindable on a pad.
+- **Pressure-sensitive buttons**, rumble, and a second analog pair beyond what SDL calls a gamepad.

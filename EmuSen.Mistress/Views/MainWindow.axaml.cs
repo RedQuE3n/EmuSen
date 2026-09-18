@@ -146,7 +146,7 @@ namespace EmuSen.Mistress.Views
         private CategorizedLogWriter? _activeLogWriter;
 
         // Tracked separately and OR'd: either device works at any time.
-        private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadButton>().Length];
+        private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadControl>().Length];
         private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<PadButton>().Length];
 
         public MainWindow()
@@ -213,10 +213,11 @@ namespace EmuSen.Mistress.Views
             if (TypingIntoATextField(e)) return;
 
             // A suspended game must not collect the keys used to browse the library - see EmuSen_Settings_Reference.md §4.18.
-            if (!LibraryView.IsVisible && _keyBindings.For(_activeConsole).TryGetButton(key, out var button))
+            if (!LibraryView.IsVisible && _keyBindings.For(_activeConsole).TryGetControl(key, out PadControl control))
             {
-                _keyboardHeld[(int)button] = pressed;
-                ApplyButtonState(button);
+                _keyboardHeld[(int)control] = pressed;
+                if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
+                ApplyAxes();
                 // Or the menu bar, the only focusable control here, also gets the key - see EmuSen_Settings_Reference.md §4.24.
                 e.Handled = true;
                 return;
@@ -252,10 +253,26 @@ namespace EmuSen.Mistress.Views
         private void ApplyButtonState(PadButton button)
         {
             if (_session is not { IsRomLoaded: true }) return;
-            bool held = _keyboardHeld[(int)button] || _gamepadHeld[(int)button];
+            bool held = _keyboardHeld[(int)PadControls.From(button)] || _gamepadHeld[(int)button];
             _session.SetButton(0, button, held);
             if (_appSettings.MirrorPlayer1ToPlayer2) _session.SetButton(1, button, held);
         }
+
+        // Every axis the console reads, from the pad's own axes and the keys standing in for them - see EmuSen_Input.md §7.3.
+        private void ApplyAxes()
+        {
+            if (_session is not { IsRomLoaded: true }) return;
+
+            foreach (PadAxis axis in _session.SupportedAxes)
+            {
+                double value = PadControls.Resolve(axis, _gamepad.Axis(axis), Held);
+                _session.SetAxis(0, axis, value);
+                if (_appSettings.MirrorPlayer1ToPlayer2) _session.SetAxis(1, axis, value);
+            }
+        }
+
+        private bool Held(PadControl control) =>
+            _keyboardHeld[(int)control] || (PadControls.IsButton(control, out PadButton button) && _gamepadHeld[(int)button]);
 
         private void PollGamepad()
         {
@@ -269,6 +286,9 @@ namespace EmuSen.Mistress.Views
                     ApplyButtonState(button);
                 }
             }
+
+            // A stick moves without crossing any threshold, so its axes are sent every poll rather than on change.
+            ApplyAxes();
         }
 
         private async Task OpenRomAsync()
@@ -693,6 +713,7 @@ namespace EmuSen.Mistress.Views
                 // The pad this ROM's console reads, not whatever the last one used.
                 _activeConsole = _session.CoreName;
                 _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
+                _gamepad.LeftStickIsAnalog = _session.SupportedAxes.Contains(PadAxis.LeftX);
 
                 _rewind.Clear(); // a discontinuous jump - see §1.4
                 _audioPlayer.RateControl.Reset();

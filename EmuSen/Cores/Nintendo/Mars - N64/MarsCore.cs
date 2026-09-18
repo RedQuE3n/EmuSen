@@ -23,9 +23,16 @@ namespace EmuSen.Cores.Nintendo.Mars
         public const int DefaultScreenHeight = 480;
 
         // Where each PadButton lands in the joybus's sixteen button bits - see Mars_Serial.md §3.1.
-        private const ushort ButtonA = 0x8000, ButtonB = 0x4000, ButtonStart = 0x1000;
+        private const ushort ButtonA = 0x8000, ButtonB = 0x4000, ButtonZ = 0x2000, ButtonStart = 0x1000;
         private const ushort DpadUp = 0x0800, DpadDown = 0x0400, DpadLeft = 0x0200, DpadRight = 0x0100;
         private const ushort ButtonL = 0x0020, ButtonR = 0x0010;
+        private const ushort CUp = 0x0008, CDown = 0x0004, CLeft = 0x0002, CRight = 0x0001;
+
+        // A stick all the way over reads the signed byte's full reach, as Project64's input plugin scales it - see Mars_Core.md §5.
+        public const int StickReach = 127;
+
+        // The right stick stands in for the four C buttons, pressed past half its travel - see Mars_Core.md §5.
+        public const double CButtonThreshold = 0.5;
 
         private byte[] _frame = Blank(DefaultScreenHeight);
         private int _screenHeight = DefaultScreenHeight;
@@ -58,14 +65,18 @@ namespace EmuSen.Cores.Nintendo.Mars
         // There is no audio interface yet, so nothing is ever queued at this rate - see Mars_Core.md §4.
         public int AudioSampleRate => 44100;
 
-        // The nine a PadButton can name; Z, the C buttons and the stick have none - see Mars_Core.md §5.
+        // The pad's buttons on the generic template, with L2 as Z; the C buttons arrive on the right stick - see Mars_Core.md §5.
         public static IReadOnlyList<PadButton> PadButtons { get; } = new[]
         {
             PadButton.Up, PadButton.Down, PadButton.Left, PadButton.Right,
-            PadButton.A, PadButton.B, PadButton.Start, PadButton.L, PadButton.R,
+            PadButton.A, PadButton.B, PadButton.Start, PadButton.L, PadButton.R, PadButton.L2,
         };
 
         public IReadOnlyList<PadButton> SupportedButtons => PadButtons;
+
+        public static IReadOnlyList<PadAxis> PadAxes { get; } = new[] { PadAxis.LeftX, PadAxis.LeftY, PadAxis.RightX, PadAxis.RightY };
+
+        public IReadOnlyList<PadAxis> SupportedAxes => PadAxes;
 
         public void LoadRom(string path)
         {
@@ -101,14 +112,40 @@ namespace EmuSen.Cores.Nintendo.Mars
                 PadButton.Right => DpadRight,
                 PadButton.L => ButtonL,
                 PadButton.R => ButtonR,
+                PadButton.L2 => ButtonZ,
                 _ => 0,
             };
 
             if (mask == 0) return;
+            Press(ports[port], mask, pressed);
+        }
+
+        // The left stick is the stick, turned over because the N64's up is positive; the right stick is the C buttons - see Mars_Core.md §5.
+        public void SetAxis(int port, PadAxis axis, double value)
+        {
+            Controller[]? ports = Bus?.Si.Controllers;
+            if (ports is null || port < 0 || port >= ports.Length) return;
 
             Controller controller = ports[port];
-            controller.Buttons = pressed ? (ushort)(controller.Buttons | mask) : (ushort)(controller.Buttons & ~mask);
+            value = Math.Clamp(value, -1.0, 1.0);
+
+            switch (axis)
+            {
+                case PadAxis.LeftX: controller.StickX = (sbyte)Math.Round(value * StickReach); break;
+                case PadAxis.LeftY: controller.StickY = (sbyte)Math.Round(-value * StickReach); break;
+                case PadAxis.RightX:
+                    Press(controller, CLeft, value <= -CButtonThreshold);
+                    Press(controller, CRight, value >= CButtonThreshold);
+                    break;
+                case PadAxis.RightY:
+                    Press(controller, CUp, value <= -CButtonThreshold);
+                    Press(controller, CDown, value >= CButtonThreshold);
+                    break;
+            }
         }
+
+        private static void Press(Controller controller, ushort mask, bool pressed) =>
+            controller.Buttons = pressed ? (ushort)(controller.Buttons | mask) : (ushort)(controller.Buttons & ~mask);
 
         public void RunFrame()
         {

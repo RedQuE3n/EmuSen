@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using EmuSen.Cores;
 using EmuSen.Endymion.Input;
@@ -59,7 +60,11 @@ namespace EmuSen.WiseMan.Input
             var reloaded = JsonSerializer.Deserialize<Dictionary<PadButton, SDL.GamepadButton>>(json);
 
             Assert.Equal(defaults, reloaded);
-            Assert.Equal(JsonSerializer.Deserialize<Dictionary<PadButton, SDL.GamepadButton>>(LegacyJson), reloaded);
+
+            // An old file's twelve are still today's defaults; the generic pad only added the stick clicks - see EmuSen_Input.md §7.4.
+            var legacy = JsonSerializer.Deserialize<Dictionary<PadButton, SDL.GamepadButton>>(LegacyJson)!;
+            foreach (var kv in legacy) Assert.Equal(kv.Value, reloaded![kv.Key]);
+            Assert.Equal(new[] { PadButton.L3, PadButton.R3 }, reloaded!.Keys.Except(legacy.Keys).OrderBy(b => b));
         }
     }
 }

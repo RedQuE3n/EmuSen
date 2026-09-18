@@ -28,13 +28,13 @@ namespace EmuSen.WiseMan.Input
         [InlineData(PadButton.Select, Key.RightShift)]
         public void Default_binding_matches_the_console_builds_old_scheme(PadButton button, Key expectedKey)
         {
-            Assert.Equal(expectedKey, HotaruKeyMap.ButtonToKey[button]);
+            Assert.Equal(expectedKey, HotaruKeyMap.ButtonToKey[PadControls.From(button)]);
         }
 
         [Fact]
-        public void Every_snes_button_has_exactly_one_binding()
+        public void Every_control_has_exactly_one_binding()
         {
-            Assert.Equal(System.Enum.GetValues<PadButton>().Length, HotaruKeyMap.ButtonToKey.Count);
+            Assert.Equal(System.Enum.GetValues<PadControl>().Length, HotaruKeyMap.ButtonToKey.Count);
         }
 
         [Theory]
@@ -43,14 +43,14 @@ namespace EmuSen.WiseMan.Input
         [InlineData(Key.Enter, PadButton.Start)]
         public void Reverse_lookup_resolves_back_to_the_same_button(Key key, PadButton expectedButton)
         {
-            Assert.True(HotaruKeyMap.TryGetButton(key, out PadButton button));
-            Assert.Equal(expectedButton, button);
+            Assert.True(HotaruKeyMap.TryGetControl(key, out PadControl control));
+            Assert.Equal(PadControls.From(expectedButton), control);
         }
 
         [Fact]
         public void Unbound_key_fails_reverse_lookup()
         {
-            Assert.False(HotaruKeyMap.TryGetButton(Key.F12, out _));
+            Assert.False(HotaruKeyMap.TryGetControl(Key.F12, out _));
         }
     }
 }

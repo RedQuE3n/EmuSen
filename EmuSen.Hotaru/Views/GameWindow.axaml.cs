@@ -76,7 +76,7 @@ namespace EmuSen.Hotaru.Views
         private readonly DispatcherTimer _gamepadTimer;
 
         // Tracked separately and OR'd: either device works at any time.
-        private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadButton>().Length];
+        private readonly bool[] _keyboardHeld = new bool[Enum.GetValues<PadControl>().Length];
         private readonly bool[] _gamepadHeld = new bool[Enum.GetValues<PadButton>().Length];
         private bool _mirrorPlayer1ToPlayer2;
 
@@ -141,7 +141,10 @@ namespace EmuSen.Hotaru.Views
             Height = GraphicsSettings.WindowHeight;
             CanResize = GraphicsSettings.WindowResizable;
 
-            _gamepad = new GamepadManager(_gamepadBindings.For(core.CoreName));
+            _gamepad = new GamepadManager(_gamepadBindings.For(core.CoreName))
+            {
+                LeftStickIsAnalog = core.SupportedAxes.Contains(PadAxis.LeftX),
+            };
             _gamepadTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.0 / 60.0) };
             _gamepadTimer.Tick += (_, _) => PollGamepad();
             _gamepadTimer.Start();
@@ -236,10 +239,11 @@ namespace EmuSen.Hotaru.Views
         {
             if (!_heldPhysicalKeys.Add(e.Key)) return; // OS key-repeat, not a fresh press
 
-            if (HotaruKeyMap.TryGetButton(e.Key, out PadButton button))
+            if (HotaruKeyMap.TryGetControl(e.Key, out PadControl control))
             {
-                _keyboardHeld[(int)button] = true;
-                ApplyButtonState(button);
+                _keyboardHeld[(int)control] = true;
+                if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
+                ApplyAxes();
                 return;
             }
 
@@ -269,10 +273,11 @@ namespace EmuSen.Hotaru.Views
         private void OnKeyUp(object? sender, KeyEventArgs e)
         {
             _heldPhysicalKeys.Remove(e.Key);
-            if (HotaruKeyMap.TryGetButton(e.Key, out PadButton button))
+            if (HotaruKeyMap.TryGetControl(e.Key, out PadControl control))
             {
-                _keyboardHeld[(int)button] = false;
-                ApplyButtonState(button);
+                _keyboardHeld[(int)control] = false;
+                if (PadControls.IsButton(control, out PadButton button)) ApplyButtonState(button);
+                ApplyAxes();
                 return;
             }
 
@@ -288,10 +293,24 @@ namespace EmuSen.Hotaru.Views
         // Through ICore, not the bus - which console's pad this reaches is the core's business.
         private void ApplyButtonState(PadButton button)
         {
-            bool held = _keyboardHeld[(int)button] || _gamepadHeld[(int)button];
+            bool held = _keyboardHeld[(int)PadControls.From(button)] || _gamepadHeld[(int)button];
             _core.SetButton(0, button, held);
             if (_mirrorPlayer1ToPlayer2) _core.SetButton(1, button, held);
         }
+
+        // Every axis the console reads, from the pad's own axes and the keys standing in for them - see EmuSen_Input.md §7.3.
+        private void ApplyAxes()
+        {
+            foreach (PadAxis axis in _core.SupportedAxes)
+            {
+                double value = PadControls.Resolve(axis, _gamepad.Axis(axis), Held);
+                _core.SetAxis(0, axis, value);
+                if (_mirrorPlayer1ToPlayer2) _core.SetAxis(1, axis, value);
+            }
+        }
+
+        private bool Held(PadControl control) =>
+            _keyboardHeld[(int)control] || (PadControls.IsButton(control, out PadButton button) && _gamepadHeld[(int)button]);
 
         private void PollGamepad()
         {
@@ -305,6 +324,9 @@ namespace EmuSen.Hotaru.Views
                     ApplyButtonState(button);
                 }
             }
+
+            // A stick moves without crossing any threshold, so its axes are sent every poll rather than on change.
+            ApplyAxes();
         }
 
         // Reuses FramePresenter's static NextEffect, not FramePresenter itself - see EmuSen_Serenity.md §4.
@@ -366,6 +388,7 @@ namespace EmuSen.Hotaru.Views
             _core.LoadRom(romPath);
             // The new console's pad, not the outgoing one's - see EmuSen_Input.md §5.1.
             _gamepad.Bindings = _gamepadBindings.For(_core.CoreName);
+            _gamepad.LeftStickIsAnalog = _core.SupportedAxes.Contains(PadAxis.LeftX);
             _rewind.Clear(); // a discontinuous jump - see §1.4
             _audioPlayer.RateControl.Reset();
             RebuildDebugTargetAndCommands();

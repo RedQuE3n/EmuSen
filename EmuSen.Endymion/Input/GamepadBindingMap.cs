@@ -33,6 +33,8 @@ namespace EmuSen.Endymion.Input
             [PadButton.R] = SDL.GamepadButton.RightShoulder,
             [PadButton.Start] = SDL.GamepadButton.Start,
             [PadButton.Select] = SDL.GamepadButton.Back,
+            [PadButton.L3] = SDL.GamepadButton.LeftStick,
+            [PadButton.R3] = SDL.GamepadButton.RightStick,
         };
 
         private void RebuildReverseLookup()
@@ -77,6 +79,18 @@ namespace EmuSen.Endymion.Input
         {
             ButtonToPad = bindings;
             RebuildReverseLookup();
+        }
+
+        // A file written before a button existed cannot mention it, so it takes its default if that pad button is free - see EmuSen_Input.md §7.4.
+        public void AddDefaultsForNewButtons()
+        {
+            foreach (KeyValuePair<PadButton, SDL.GamepadButton> binding in DefaultBindings())
+            {
+                if (binding.Key < PadButton.L2 || ButtonToPad.ContainsKey(binding.Key) || _padToButton.ContainsKey(binding.Value)) continue;
+
+                ButtonToPad[binding.Key] = binding.Value;
+                RebuildReverseLookup();
+            }
         }
     }
 }

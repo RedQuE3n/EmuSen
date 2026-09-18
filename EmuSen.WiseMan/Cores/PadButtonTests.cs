@@ -15,7 +15,9 @@ namespace EmuSen.WiseMan.Cores
             string[] pad = Enum.GetNames<PadButton>();
             string[] snes = Enum.GetNames<SnesButton>();
 
-            Assert.Equal(snes, pad);
+            // Venus's cast needs SNES's twelve to be the first twelve; what follows is RetroPad's own order - see EmuSen_Input.md §7.1.
+            Assert.Equal(snes, pad.Take(snes.Length));
+            Assert.Equal(new[] { "L2", "R2", "L3", "R3" }, pad.Skip(snes.Length));
         }
 
         // A rename or a reorder breaks the cast silently; a mismatched value catches it here.
@@ -64,7 +66,19 @@ namespace EmuSen.WiseMan.Cores
         {
             var venus = new EmuSen.Cores.Nintendo.Venus.VenusCore(headless: true);
 
-            Assert.Equal(Enum.GetValues<PadButton>(), venus.SupportedButtons.ToArray());
+            Assert.Equal(Enum.GetValues<PadButton>().Take(12), venus.SupportedButtons.ToArray());
+        }
+
+        // Past R there is no SnesButton, so the cast would index past Venus's bit table; the press is dropped before it.
+        [Fact]
+        public void Venus_drops_a_button_past_its_twelve()
+        {
+            var venus = Fixtures.SyntheticRom.LoadCore(Fixtures.SyntheticRom.BuildBlank());
+
+            foreach (PadButton button in new[] { PadButton.L2, PadButton.R2, PadButton.L3, PadButton.R3 }) venus.SetButton(0, button, pressed: true);
+            venus.Bus!.Input.LatchAutoJoypad();
+
+            Assert.Equal(0, venus.Bus.Input.ReadJoy1Low() | venus.Bus.Input.ReadJoy1High());
         }
 
         // A button the console lacks is dropped, never folded onto one it has.

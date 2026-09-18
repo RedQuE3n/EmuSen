@@ -216,6 +216,13 @@ The key is `CoreDescriptor.Console`, the same string as `ICore.CoreName` (`EmuSe
 
 Telling the two shapes apart takes some care, because a wrong guess is worse than either. The load path first reads the file as `Dictionary<string, JsonElement>` purely to ask whether the values are objects (new) or scalars (old). `JsonElement` accepts *any* value, so that probe never fails on a bad enum — which matters, because the whole point of §6.2's converter is that `"DPadUpp"` gets named and corrected rather than swallowed. The probe decides the shape; the typed load that follows is what reads the values and reports. A bad enum is therefore still reported exactly once, and still falls back to defaults.
 
+**Since 2026-09-18 the keyboard file's keys are `PadControl` names** (`EmuSen_Input.md` §7.2): every `PadButton` name
+as before, plus `L2`, `R2`, `L3`, `R3` and the eight stick directions (`LeftStickUp` … `RightStickRight`). The gamepad
+file's keys stay `PadButton` names and gain `L3` and `R3`. No existing file needed rewriting — each name it holds still
+parses — and nothing about the shape changed. What a file written before that date cannot hold is the new controls, so
+on load **each console's map gives a control it does not mention its default key, unless that map already uses the
+key** (`EmuSen_Input.md` §7.4). A user's own choice of a key always wins over a new default.
+
 ---
 
 ## 4. Wiring

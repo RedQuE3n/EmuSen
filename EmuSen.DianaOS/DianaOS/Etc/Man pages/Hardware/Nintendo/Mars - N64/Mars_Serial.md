@@ -87,8 +87,10 @@ stick as two signed bytes:
 decision rather than a measurement: a console with nothing plugged in is the more neutral default, but every
 game this slice is tested against needs a controller in the first port, and a test that has to plug one in
 before it can ask anything is a test about the harness. ~~`ICore.SetButton` will set these when Phase F wires
-the frontend; nothing does yet.~~ `ICore.SetButton` sets nine of the buttons since 2026-09-18 (`Mars_Core.md` §5); Z,
-the four C buttons and the stick have no `PadButton` to arrive by.
+the frontend; nothing does yet.~~ ~~`ICore.SetButton` sets nine of the buttons since 2026-09-18 (`Mars_Core.md` §5); Z,
+the four C buttons and the stick have no `PadButton` to arrive by.~~ Every input the controller has is reachable
+since the generic controller template the same day: Z on L2, the C buttons on the right stick, and the stick through
+`ICore.SetAxis` (`Mars_Core.md` §5, `EmuSen_Input.md` §7).
 
 ### 3.2 What a controller answers
 
@@ -189,5 +191,6 @@ what a synthesisable implementation of the PIF does"*, not as a measurement — 
   `Mars_Boot.md`'s handoff rather than through the PIF, so nothing asks.
 - **Timing** (§4).
 - ~~**Anything a player can reach.** `ICore.SetButton` is unwired, so the buttons in §3.1 are only ever the
-  zeroes a test leaves there.~~ **Nine buttons are reachable since 2026-09-18** (`Mars_Core.md` §5); Z, the C
-  buttons and the stick still are not.
+  zeroes a test leaves there.~~ ~~**Nine buttons are reachable since 2026-09-18** (`Mars_Core.md` §5); Z, the C
+  buttons and the stick still are not.~~ **Every input is reachable since the same day's generic controller template**
+  (`Mars_Core.md` §5).

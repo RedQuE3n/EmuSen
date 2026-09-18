@@ -169,25 +169,49 @@ audio interface does to a game is not established here** — a game that waits o
 and Wave Race's unchanging lit-pixel count from its eighty-third frame onwards (§9) has not been traced to see
 whether that is why.
 
-## 5. Input: nine of fourteen
+## 5. Input: every input the controller has
 
-| `PadButton` | Joybus bit (`Mars_Serial.md` §3.1) |
-| --- | --- |
-| A | `0x8000` |
-| B | `0x4000` |
-| Start | `0x1000` |
-| Up, Down, Left, Right | `0x0800`, `0x0400`, `0x0200`, `0x0100` (the D-pad) |
-| L, R | `0x0020`, `0x0010` |
+*Rewritten 2026-09-18, when the generic controller template gave the contract an analog path (`EmuSen_Input.md` §7).
+The version it replaces is kept at the end of this section.*
 
-**X, Y and Select are dropped**, not moved onto another button — the rule `EmuSen_Input.md` §2 set for Moon.
-**Z, the four C buttons and the analog stick cannot be reached at all**, because `PadButton` has no member for
-them, and `EmuSen_Input.md` §6 says an analog console needs a real addition to the contract rather than a fudge
-through the D-pad. That is left for whoever makes the addition. The consequence is severe and should be stated
-plainly: **a game that moves its character with the stick cannot be played**, which includes Super Mario 64.
+Mars takes the N64 controller off the generic template — the RetroPad's buttons and its two sticks:
+
+| template | N64 controller | joybus (`Mars_Serial.md` §3.1) |
+| --- | --- | --- |
+| A, B, Start | A, B, Start | `0x8000`, `0x4000`, `0x1000` |
+| Up, Down, Left, Right | the D-pad | `0x0800`, `0x0400`, `0x0200`, `0x0100` |
+| L, R | L, R | `0x0020`, `0x0010` |
+| **L2** | **Z** | `0x2000` |
+| **left stick** | the stick | the two signed bytes, ±127 at full tilt |
+| **right stick** | the four C buttons | `0x0008` up, `0x0004` down, `0x0002` left, `0x0001` right, each past half its travel |
+
+The choices, and what each rests on:
+
+- **Z on L2.** Z sits under the left index finger on the N64's own controller, which is where a modern pad's left
+  trigger is. A user can bind anything else to L2.
+- **The C buttons on the right stick.** They are four digital buttons in a cross on the controller's right. In Super
+  Mario 64 they turn the camera, which is the right stick's job on a dual-stick pad; other games give them other jobs —
+  Ocarina of Time puts items on them — and the mapping serves those equally, since it is only four directions standing
+  for four buttons. Each is pressed once the stick is past **half** its travel on that axis; nothing measures that
+  threshold, it is a choice, and it is a named constant so the choice is visible.
+- **The stick reaches ±127.** The joybus carries it as a signed byte, and full tilt maps to the byte's full reach, as
+  Project64's SDL input backend does (`MAX_AXIS_VALUE` 32767 over `N64DIVIDER` 258, `Project64-input/SdlInputBackend`)
+  and as N-Rage's `N64_ANALOG_MAX 127` declares. A stock controller's stick is widely said to travel less than that;
+  nothing in reach measures it, so Mars takes what the implementations in reach do and says so.
+- **Up is positive on the N64**, and the template's stick is down-positive like the RetroPad's, so Mars turns the Y axis
+  over on the way in.
+- **X, Y, Select, R2, L3, R3 and both triggers' analog travel are dropped**, never moved onto another input — the rule
+  `EmuSen_Input.md` §2 set for Moon.
 
 **`port` indexes `Si.Controllers` directly.** Only the first port holds a controller (`Mars_Serial.md` §3.1), so a
 press on port 1 is stored in a controller no game can see. A port outside 0–3 is ignored. The state lives on the
 bus, so it resets when a ROM is loaded.
+
+> **Retired 2026-09-18: "Input: nine of fourteen".** It mapped A, B, Start, the D-pad, L and R, and said that Z, the
+> four C buttons and the stick *"cannot be reached at all, because `PadButton` has no member for them"*, so that *"a
+> game that moves its character with the stick cannot be played"*, which included Super Mario 64. It was right, and it
+> named the fix — *"a real addition to the contract rather than a fudge through the D-pad"* — which is the one
+> `EmuSen_Input.md` §7 made.
 
 ## 6. Saves: none of either kind
 

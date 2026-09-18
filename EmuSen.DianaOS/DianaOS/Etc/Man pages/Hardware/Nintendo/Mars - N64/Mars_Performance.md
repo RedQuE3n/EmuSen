@@ -66,3 +66,37 @@ rasterizer and microcode HLE — the levers `Mars_Gameplan.md` §2.1 deferred �
 move work towards the RSP and the RDP, and nothing here says how far. 100 Hz sampling over about a minute a game
 resolves shares of a per cent or so, not below. And "CPU and bus" includes whatever the JIT inlined into `Cpu.Step` —
 device ticks, bus reads, the timer — so its exclusive share is not the interpreter's dispatch alone.
+
+## 3. The VI's samples, once a row
+
+**What was slow.** With resampling on, every output pixel mixes four samples — the pixel a step lands on, the next one,
+and the two below — and every sample is the source pixel fetched and filtered: the dither filter reads eight
+neighbours, the anti-aliasing filter six, and divot, when on, samples each neighbour across the row as well. The
+picture is 640 columns wide and most frame buffers are 320, so each step lands on a source pixel twice, and each
+source pixel was filtered about eight times a row — once for each output pixel that reached it, from either side.
+
+**The change.** `Vi.Remembered` keeps each row's samples by their offset from the row's first step, for the row being
+read and the row below it, and a stamp per row retires them without clearing anything. The first request makes the
+sample; later ones in the same row take it. A sample is a function of RDRAM, its hidden bits, the video registers and
+its own arguments, and a scan changes none of them — it writes only the raster — so the first answer is the answer.
+The cache is presentation scratch, marked out of the save state, which keeps the state's layout as it was.
+
+**What it bought**, from the probe, with every frame of all three games identical to the baseline:
+
+| | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 7.33 fps | 13.32 fps | 1.82× |
+| Super Mario 64 | 9.57 fps | 15.48 fps | 1.62× |
+| Wave Race 64 | 14.68 fps | 19.30 fps | 1.31× |
+
+**And what the profile says now:**
+
+| share of the emulation thread | VI | CPU and bus | RDP | RSP |
+| --- | --- | --- | --- | --- |
+| Super Mario 64 | 23.4% (was 53.0%) | 58.1% | 6.7% | 5.5% |
+| Wave Race 64 | 13.3% (was 33.6%) | 62.4% | 10.0% | 8.2% |
+| Ocarina of Time | 31.5% (was 61.6%) | 49.3% | 11.2% | 3.6% |
+
+The processor is now the largest share in every game. What remains of the VI is mostly the walk's own per-pixel work —
+three mixes, gamma, four stores — and the samples of a source row that two output rows share, which this change
+still makes twice, once for each row.

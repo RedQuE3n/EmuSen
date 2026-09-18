@@ -19,7 +19,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
             foreach (int neighbour in around)
             {
-                Pixel pixel = Fetch(origin, neighbour, wide);
+                Pixel pixel = Fetched(origin, neighbour, wide);
 
                 red += Step(centre.Red, pixel.Red);
                 green += Step(centre.Green, pixel.Green);

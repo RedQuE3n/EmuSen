@@ -171,6 +171,10 @@ console's filter, and that is correct rather than a defect.
 
 **A read past the end of memory gives zero** rather than wrapping.
 
+Since Phase G a scan fetches each source line once, into a window contiguous in the index the walk and the
+filters share, and the filters read their neighbours from it (`Mars_Performance.md` §21); an index outside the
+window is fetched as described here.
+
 **Interpolation, when the mode asks for it and either fraction is nonzero**, mixes down the column first and
 across the row second: the pixel and the one below it, the pixel to the right and the one below that, then
 those two. Each mix is `near + ((far − near) × fraction + 16) >> 5`, with the fraction five bits.

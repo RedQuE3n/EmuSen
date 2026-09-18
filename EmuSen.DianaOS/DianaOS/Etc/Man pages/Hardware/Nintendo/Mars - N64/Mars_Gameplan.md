@@ -754,6 +754,12 @@ of them.
 > step, 2 to 6 per cent of a frame, before invalidation is paid for. Not built. The floor — each instruction known by
 > its address — is 1.4 ns under the interpreter, and that is the recompiler's shape.
 
+> **Progress, 2026-09-18: the scan-out's fetches once a line** (`Mars_Performance.md` §21). A source pixel was fetched
+> about nine times a scan as a neighbour, twenty-seven with divot on; a window of whole lines fetched once, and the
+> pre-divot samples remembered a row at a time, cut a scan by 2.3× in the two PAL games. Ocarina of Time 24.0 → 30.5
+> fps, Super Mario 64 30.4 → 36.2, Wave Race 35.3 → 36.1: 60 to 72 per cent of the console, 2.5 to 4.2 times the
+> profile that opened the phase, every frame and state matching the baseline.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

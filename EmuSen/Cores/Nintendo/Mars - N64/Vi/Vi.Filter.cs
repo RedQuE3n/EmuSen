@@ -30,7 +30,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
             foreach (int neighbour in around)
             {
-                Pixel pixel = Fetch(origin, neighbour, wide);
+                Pixel pixel = Fetched(origin, neighbour, wide);
                 if (pixel.Coverage != 7) continue;
 
                 red[full] = pixel.Red;

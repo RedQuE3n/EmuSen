@@ -169,5 +169,41 @@ namespace EmuSen.WiseMan.Cores
             bus.Write32(PiStatus, 0x02);
             Assert.Equal(0u, bus.Read32(PiStatus) & PiInterface.StatusInterrupt);
         }
+
+        // Each side of a cartridge transfer advances by a multiple of its own bus width - see Mars_Memory.md §7.2.
+        [Theory]
+        [InlineData(1u, 2u, 8u)]
+        [InlineData(2u, 2u, 8u)]
+        [InlineData(3u, 4u, 8u)]
+        [InlineData(7u, 8u, 8u)]
+        [InlineData(8u, 8u, 8u)]
+        [InlineData(9u, 10u, 16u)]
+        [InlineData(0x7Cu, 0x7Cu, 0x80u)]
+        [InlineData(0x7Du, 0x7Eu, 0x80u)]
+        public void A_cartridge_transfer_advances_each_address_to_its_own_multiple(uint length, uint cart, uint dram)
+        {
+            var bus = new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
+
+            bus.Write32(MemoryMap.PiBase + PiInterface.DramAddress, 0x0010_0000);
+            bus.Write32(MemoryMap.PiBase + PiInterface.CartAddress, 0x1000_0000);
+            bus.Write32(MemoryMap.PiBase + PiInterface.WriteLength, length - 1);
+
+            Assert.Equal(0x1000_0000 + cart, bus.Read32(MemoryMap.PiBase + PiInterface.CartAddress));
+            Assert.Equal(0x0010_0000 + dram, bus.Read32(MemoryMap.PiBase + PiInterface.DramAddress));
+        }
+
+        // A transfer that starts part way into an eight-byte block still leaves the address on one - see §7.2.
+        [Fact]
+        public void A_misaligned_cartridge_transfer_still_lands_on_a_block()
+        {
+            var bus = new MemoryBus { Cart = RomImage.FromImage(SyntheticN64Rom.Build()) };
+
+            bus.Write32(MemoryMap.PiBase + PiInterface.DramAddress, 0x0010_0006);
+            bus.Write32(MemoryMap.PiBase + PiInterface.CartAddress, 0x1000_0000);
+            bus.Write32(MemoryMap.PiBase + PiInterface.WriteLength, 9);
+
+            Assert.Equal(0x0010_0010u, bus.Read32(MemoryMap.PiBase + PiInterface.DramAddress));
+        }
+
     }
 }

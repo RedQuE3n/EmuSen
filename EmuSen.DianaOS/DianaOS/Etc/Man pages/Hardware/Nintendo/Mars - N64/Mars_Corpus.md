@@ -87,8 +87,10 @@ in the corpus's test list has been attempted. Everything after it has not.
 ## 3. The census of what still fails
 
 The 71 distinct test groups that fail in the complete run, counted by name — a group that
-fails for thirty-three values is one row — against the corpus's own 146, which counts
-assertions.
+fails for thirty-three values is one row — against the corpus's own 137, which counts
+assertions. The cartridge row's count is now assertions it still fails rather than all of
+them: `Mars_Memory.md` §7.2 cleared nine of its ninety-two, and says what the remaining
+sixty-five are about.
 
 | | groups | why |
 | --- | --- | --- |

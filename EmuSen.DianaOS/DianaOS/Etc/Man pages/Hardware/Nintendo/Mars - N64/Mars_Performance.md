@@ -514,3 +514,53 @@ per cent of the thread. **The VI's scan-out** is back to a third of Ocarina of T
 walk again, for Ocarina of Time; and, for the processor's step, a cached interpreter or a recompiler, which remain
 decisions about the core's design.
 
+## 15. The RSP's step loop
+
+**What the profile said.** §14 put `SpInterface.Step` — the loop that runs the signal processor a tick at a time — at
+4 to 11 per cent of the thread's exclusive time. It read the processor's break bit before and after every
+instruction, to notice the one instruction that set it, and the processor fetched each instruction as four separate
+byte reads.
+
+**The change.** The break interrupt is raised by the BREAK instruction itself, the only place the bit rises, under the
+condition the loop used — interrupt-on-break set and the bit down before — so the loop reads nothing around each
+instruction. And the fetch reads the word whole, `BinaryPrimitives.ReadUInt32BigEndian` over the same four bytes of
+instruction memory, through a reference the processor now keeps (the bus never replaces the array, only writes into
+it). One consequence outside the loop: a caller that steps the processor directly — a test, a debugger — now gets the
+interrupt a break raises, where before only the interface's loop raised it.
+
+**Measured.** A microbenchmark — the RSP running a four-instruction scalar loop beside the processor's three-instruction
+one, median of seven runs — went from 11.76 to 11.46 ns per pair of instructions without the break bookkeeping, and to
+10.65 with the whole-word fetch: 9 per cent, with the RSP busy every cycle. The games, six interleaved rounds (§12):
+
+| | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 21.3 fps | 21.4 fps | within the spread |
+| Super Mario 64 | 27.45 fps | 27.7 fps | +1%, five rounds of six |
+| Wave Race 64 | 32.0 fps | 32.6 fps | +2%, every round above every round |
+
+All 1,800 probe frames are identical, state and all.
+
+**What that says about §14's profile.** The microbenchmark and the games agree with each other and not with the
+profile: about a nanosecond saved per RSP instruction, with the RSP running something like a third of Wave Race's
+cycles, is two per cent, not the ten the loop's exclusive share implied. The sampler's lean towards loops and call
+sites (§6) put samples there that the loop did not cost. The loop was never a large lever. It is kept because the
+effect is measurable, the change exact, and the loop simpler than the one it replaced — and it is measurable only
+because of §12: §6's rule of a few per cent in more than one game was set by the probe's noise, and interleaved builds
+resolve one to two.
+
+**What the breakage round found.** Removing the raise fails the new
+`A_break_raises_the_interrupt_only_when_interrupt_on_break_is_set` and two Wave Race boot tests; raising whether or not
+interrupt-on-break is set failed nothing until that test; letting the loop run past a halt is equivalent, since the
+processor's own step checks it. **Two rules survive on purpose, because the references dispute them:**
+
+- **"Only if the bit was down."** The FPGA core (`RSP.vhd`'s break handler), Project64 (`Special_BREAK`) and
+  mupen64plus all raise the interrupt on every break with interrupt-on-break set, whatever the break bit held. Mars's
+  condition came from how the old loop noticed a break — by the bit rising — not from evidence, and the corpus tests the
+  register bit, not the interrupt. The two differ only when the RSP is restarted without its break bit cleared and
+  breaks again.
+- **Single-step.** Mars halts the processor after every instruction while the bit is set; all three references store
+  the bit and ignore it, and the corpus does not test it.
+
+This change keeps both, because it changes no output. Whether to follow the references is a decision about behaviour,
+left for one; until it is made, neither rule is pinned by a test.
+

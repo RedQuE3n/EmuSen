@@ -737,6 +737,12 @@ of them.
 > 27.3 and 31.9 fps — 43 to 55 per cent of the console — with the RSP's step loop and the VI's scan-out newly visible
 > beside the processor's step.
 
+> **Progress, 2026-09-18: the RSP's step loop** (`Mars_Performance.md` §15). The break interrupt moved into the break
+> instruction and the RSP's fetch reads whole words: +2 per cent in Wave Race, +1 in Super Mario 64, nothing measurable
+> in Ocarina of Time — the profile had overstated the loop. The breakage round surfaced two rules Mars holds that the
+> FPGA core, Project64 and mupen64plus do not (a break's interrupt only on the bit's rise; single-step executed), kept
+> unchanged and left for a decision.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

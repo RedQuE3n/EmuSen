@@ -209,6 +209,21 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0u, bus.Sp.StatusWord & SpInterface.StatusInterruptOnBreak);
         }
 
+        // What the FPGA core, Project64 and mupen64plus all do: the break raises the interrupt only when asked to - see Mars_Performance.md §15.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void A_break_raises_the_interrupt_only_when_interrupt_on_break_is_set(bool asked)
+        {
+            var bus = Loaded(a => a.Nop().Break());
+            if (asked) Write(bus, 0x100);
+
+            Run(bus);
+
+            Assert.Equal(SpInterface.StatusBroke, bus.Sp.StatusWord & SpInterface.StatusBroke);
+            Assert.Equal(asked, bus.Mi.Pending.HasFlag(MiInterrupt.SignalProcessor));
+        }
+
         // A jump-and-link whose link register is its own target must read the target first - see §2.1.
         [Fact]
         public void A_jump_and_link_register_reads_its_target_before_it_writes_the_link()

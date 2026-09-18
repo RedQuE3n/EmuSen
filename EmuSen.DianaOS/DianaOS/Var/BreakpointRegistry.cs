@@ -489,6 +489,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
             _singleStepArmed || _stepDepthTarget != int.MinValue || _depthGuard >= 0 ||
             _dataBreakPending || _eventBreakPending || _breakpoints.Count > 0;
 
+        // False exactly when NoteWrite would do nothing, so a core may skip reporting its stores - see §3.26.
+        public bool WatchesWrites => _dataBreakpoints.Count > 0 || _uninitWritten != null;
+
         // True when nothing armed can make ShouldBreak true before a command changes the registry, so a core may ask once a frame - see §3.26.
         public bool IsQuiet =>
             !CouldBreak && _dataBreakpoints.Count == 0 && _uninitWritten == null && !AnyConditionArmed &&

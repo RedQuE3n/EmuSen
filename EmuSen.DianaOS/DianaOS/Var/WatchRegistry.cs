@@ -56,6 +56,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
     public class WatchRegistry
     {
         private readonly List<Watch> _watches = new();
+
+        // False exactly when RecordWrite and RecordRead would do nothing, so a core may skip reporting - see §3.5.
+        public bool HasWatches => _watches.Count > 0;
         private int _nextId = 1;
         private long _nextSequence = 1;
 

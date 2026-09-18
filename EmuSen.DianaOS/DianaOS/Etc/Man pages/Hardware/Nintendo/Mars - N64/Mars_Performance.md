@@ -564,3 +564,30 @@ processor's own step checks it. **Two rules survive on purpose, because the refe
 This change keeps both, because it changes no output. Whether to follow the references is a decision about behaviour,
 left for one; until it is made, neither rule is pinned by a test.
 
+## 16. A store reported only while something listens
+
+**What the microbenchmark could not see.** §9's and §15's loops ran a bare bus. A frontend attaches a debug target,
+which installs itself as the bus's write observer when it is built (`Mars_Debug.md` §3), and the bus then reported
+every processor store: a test of the three whole-word windows, then one interface call per byte into the watch
+registry and the breakpoint registry, each of which walked its empty list and returned. `Mars_Debug.md` §7 had
+measured the hooks as costing nothing; it measured them without a target attached and with one, on a build whose
+breakpoint check dwarfed everything else. The loop of §9 with a load and a store in five instructions, run with an
+observer doing exactly what the target's does and nothing watched:
+
+| | ns an instruction |
+| --- | --- |
+| no observer | 9.97 |
+| the target's observer, nothing watched | 15.45 |
+
+About 27 nanoseconds a store — as much again as the store itself — in every frontend and in every probe run so far.
+
+**The change.** `IWriteObserver.Listening`, false exactly when `OnWrite` would do nothing: the target answers with the
+watch registry's `HasWatches` and the breakpoint registry's `WatchesWrites` (a data breakpoint or the
+uninitialised-read check). The bus asks before it reports. A watch armed while a frame runs is seen by the very next
+store, as before; the only cost left is the question, an interface call a store.
+
+**Why it is exact.** With no watch, no data breakpoint and no uninitialised-read check, `RecordWrite` walks an empty
+list and `NoteWrite` returns at its first two tests, so the skipped report changed nothing. All 1,800 probe frames
+match, state and all. **What catches a mistake**: six breakages — the bus not asking, the bus never reporting, the
+target or the registry missing any one of its three terms — each fail one to four named tests, three of them new.
+

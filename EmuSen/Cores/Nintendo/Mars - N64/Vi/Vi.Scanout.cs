@@ -196,15 +196,25 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
                     Pixel color = Remembered(0, step - first, origin, source + step, wide, width, 0, divot);
 
-                    if (resample)
+                    // A mix by a zero fraction is the near pixel, so the far one is never asked for - see Mars_Performance.md §5.
+                    if (resample && fractionX != 0)
                     {
                         Pixel next = Remembered(0, step + 1 - first, origin, source + step + 1, wide, width, 0, divot);
-                        Pixel under = Remembered(1, step - first, origin, below + step, wide, width, bug, divot);
-                        Pixel underNext = Remembered(1, step + 1 - first, origin, below + step + 1, wide, width, bug, divot);
 
-                        color = Mix(color, under, fractionY);
-                        next = Mix(next, underNext, fractionY);
+                        if (fractionY != 0)
+                        {
+                            Pixel under = Remembered(1, step - first, origin, below + step, wide, width, bug, divot);
+                            Pixel underNext = Remembered(1, step + 1 - first, origin, below + step + 1, wide, width, bug, divot);
+
+                            color = Mix(color, under, fractionY);
+                            next = Mix(next, underNext, fractionY);
+                        }
+
                         color = Mix(color, next, fractionX);
+                    }
+                    else if (resample && fractionY != 0)
+                    {
+                        color = Mix(color, Remembered(1, step - first, origin, below + step, wide, width, bug, divot), fractionY);
                     }
 
                     int pixel = (line + column) * 4;

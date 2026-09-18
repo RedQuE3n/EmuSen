@@ -23,6 +23,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public readonly SpInterface Sp;
         public readonly PiInterface Pi;
         public readonly DpInterface Dp;
+        public readonly SiInterface Si;
         public readonly Vi.Vi Vi;
         public readonly MiInterface Mi = new();
 
@@ -43,6 +44,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Sp = new SpInterface(this);
             Pi = new PiInterface(this);
             Dp = new DpInterface(this);
+            Si = new SiInterface(this);
             Vi = new Vi.Vi(this);
 
             // Nonzero tells libdragon's IPL3 that RDRAM needs no initialising - see Mars_TestOracle.md §3.
@@ -102,6 +104,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (InRange(physical, MemoryMap.MiBase, 0x10)) return Mi.Read32(physical - MemoryMap.MiBase);
 
             if (InRange(physical, MemoryMap.ViBase, 0x38)) return Vi.Read32(physical - MemoryMap.ViBase);
+            if (InRange(physical, MemoryMap.SiBase, 0x1C)) return Si.Read32(physical - MemoryMap.SiBase);
 
             return _registers.TryGetValue(physical, out uint value) ? value : 0;
         }
@@ -173,6 +176,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 return;
             }
 
+            if (InRange(physical, MemoryMap.SiBase, 0x1C))
+            {
+                Si.Write32(physical - MemoryMap.SiBase, value);
+                return;
+            }
+
             _registers[physical] = value;
         }
 
@@ -206,10 +215,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public ulong Read64(uint physical) => ((ulong)Read32(physical) << 32) | Read32(physical + 4);
 
-        // The processor's own stores: signal processor memory latches whole words, whatever the size - see §2.4.
+        // Two windows latch a whole word from the processor whatever size it names: the signal processor's memories and PIF RAM - see §2.4.
+        private bool LatchesWholeWords(uint physical) =>
+            SignalProcessorMemory(physical, out _, out _) || InRange(physical, MemoryMap.PifRamBase, MemoryMap.PifRamSize);
+
+        // The processor's own stores: those two windows latch whole words, whatever the size - see §2.4.
         public void Store(uint physical, ulong value, int size)
         {
-            if (SignalProcessorMemory(physical, out _, out _))
+            if (LatchesWholeWords(physical))
             {
                 if (size == 8) Write32(physical, (uint)(value >> 32));
                 else Write32(physical & ~3u, (uint)(value << (8 * (4 - size - (int)(physical & 3)))));

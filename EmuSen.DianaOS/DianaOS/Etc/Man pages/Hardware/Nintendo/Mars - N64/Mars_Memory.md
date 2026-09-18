@@ -94,7 +94,9 @@ in a dictionary entry of its own and DMEM offset 0 kept its old value.
 
 Mars implements this in one place: aligned stores from the CPU now hand the bus the whole
 register and the size, and the bus applies the rule when the address is in the window and
-the ordinary byte-precise write everywhere else. Main memory keeps byte-precise stores, and
+the ordinary byte-precise write everywhere else. **Since 2026-09-17 that window is two**, PIF
+RAM having turned out to latch words the same way (`Mars_Serial.md` §1); one predicate names
+both. Main memory keeps byte-precise stores, and
 a test pins that too, because the easy way to break this is to apply the rule everywhere.
 
 **The corpus's comment understates its own vectors.** It states

@@ -14,11 +14,6 @@ namespace EmuSen.WiseMan.Cores
 
         private const int Budget = 80_000_000;
 
-        // What is left of the stand-in: the serial interface, whose device Phase E has not built - see Mars_Microcode.md §3.
-        private const int PulsePeriod = 1_500_000;
-        private const int PulseLength = 5_000;
-        private const int SerialOffset = 700_000;
-
         // Where the operating system leaves the task it gave the RSP, and the one word of it read here.
         private const uint TaskInDmem = MemoryMap.SpDmemBase + 0xFC0;
         private const uint GraphicsTask = 1;
@@ -111,7 +106,6 @@ namespace EmuSen.WiseMan.Cores
             for (long i = 0; i < Budget; i++)
             {
                 cpu.Step();
-                Pulse(bus, i);
 
                 bool halted = bus.Sp.Processor.Halted;
                 if (wasHalted && !halted && bus.Read32(TaskInDmem) == GraphicsTask) graphicsStarted = true;
@@ -123,15 +117,6 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(bus.Sp.Processor.Broke, "the graphics task did not run to its break");
 
             return true;
-        }
-
-        private static void Pulse(MemoryBus bus, long instruction)
-        {
-            long phase = instruction % PulsePeriod;
-
-            // The video interrupt's stand-in was deleted when the interface grew a clock - see Mars_VideoTiming.md §3.
-            if (phase == SerialOffset) bus.Mi.Raise(MiInterrupt.SerialInterface);
-            if (phase == SerialOffset + PulseLength) bus.Mi.Clear(MiInterrupt.SerialInterface);
         }
 
         // The documented command numbers: no-op, eight triangle forms, and 0x24 up, less the unused 0x31 - see §4.

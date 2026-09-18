@@ -316,3 +316,76 @@ early finds nothing owed and asks again later.
 DAC whose phase resets once a tick passes idle is how Mars models the AI (`Mars_Audio.md` §3), and this change keeps
 the model rather than measuring the hardware. Nor does it reverse §6's rejection of a cache of the VI's timing: that
 cache kept the per-instruction step and made it cheaper, by an amount the probe could not see; this removes the step.
+
+## 10. The interrupt check and the timer, asked only when their answer can change
+
+**What they did every instruction.** Before each fetch the processor copied the MI's line into Cause, read Status
+twice and worked out the pending set; after each successful instruction it read the count and Compare and asked
+whether Compare fell inside the interval the instruction had covered (`Mars_Cpu.md` §12). Both answers are functions of
+a handful of inputs — the MI's line, Status and Cause, Compare and the count's bias — which change a few times a frame,
+against a million and more instructions.
+
+**The change.**
+
+- *The interrupt check* runs when the MI's line differs from the value it last saw — compared every instruction, so a
+  device that raises or clears anything reaches it on the step it always did — or when `_recheck` is set: by any COP0
+  write, entering an exception, returning from one, the timer's hit, and `Cpu.Cop0Written`, which anything that writes
+  COP0 from outside an instruction must call (the boot, a loaded state, a test).
+- *The timer* asks its interval question once, when Compare or Count is written or the timer fires, and the answer is a
+  cycle: the first at which the count, advancing every second cycle, reaches Compare from the count it was settled at —
+  a whole wrap away if the two are equal. Each successful instruction compares its end against that cycle. The count
+  each successful instruction ends on is still kept, as before, so a state's bytes are unchanged.
+
+**Why it is exact.** The check is a pure function of its inputs; between changes it gives the answer it gave last
+time, which — since it did not raise then — is to do nothing. The timer fires on the first successful instruction to
+end at or past its cycle, which is the instruction whose interval first contained Compare. An exception's step never
+asked about the timer and still does not, so a crossing inside one is found by the next successful instruction, as
+before.
+
+**What stands behind "exact" in Debug builds.** A cache that is right only while every writer remembers to invalidate
+it is the failure `Mars_Memory.md` §3.1 designed the counter against, so this one is checked. In Debug builds every
+instruction whose check is skipped verifies that the full check would have done nothing, and that Compare and the
+count's bias are what the timer's cycle was worked out from, and throws if not. Every Mars test runs in Debug — the
+corpus included, whose interrupt and timer cases run a great many instructions through the verifier. Its first run
+found seven tests that set Compare directly and expected the timer to notice; each now calls `Cop0Written`, which is
+the rule the verifier enforces. In Release the check is compiled out.
+
+**What it bought**, two runs, against §9's:
+
+| | §9 | this change | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 18.84 fps | 19.81, 19.64 fps | +5% |
+| Super Mario 64 | 23.38 fps | 24.68, 24.53 fps | +5% |
+| Wave Race 64 | 26.92 fps | 28.20, 28.21 fps | +5% |
+
+That clears the few per cent §6 asks for in all three games, twice, and by not much more; it is the smaller of the two
+halves, as §9's microbenchmark said it would be.
+
+**What catches a mistake in it.** Fourteen breakages (`mutate_events_cpu.py`), every Mars test in Debug, and the probe
+for what those passed:
+
+| breakage | every Mars test, in Debug | the probe | now |
+| --- | --- | --- | --- |
+| a COP0 write not rechecking | five (the corpus, Wave Race's boot) | — | unchanged |
+| the timer's hit not rechecking | three | — | unchanged |
+| the MI's line not compared by value | five | — | unchanged |
+| a Compare write not rescheduling | eleven | — | unchanged |
+| a Count write not rescheduling | the corpus's two | — | unchanged |
+| the boot not calling `Cop0Written` | thirty-two, all by the verifier | — | unchanged |
+| a return not rechecking | nothing | two games of three (frames 2, 103) | one test |
+| the timer skipping its own due cycle | nothing | all three (frames 22–36) | one test |
+| the cycle counted from an odd one as if even | nothing | two games (frames 22, 36) | the same test |
+| an equal value firing at once, not after a wrap | nothing | one game (frame 0) | one test |
+| a load not calling `Cop0Written` | nothing | nothing — the probe never loads | one test |
+| each step not keeping the count it ended on | nothing | all three, frame 0, by the state hash alone | — |
+| entering an exception not rechecking | nothing | nothing | equivalent |
+| a hit scheduling from the count before it | nothing | nothing | equivalent |
+
+Four breakages had only the probe to stop them and one had nothing; four new tests hold all five. The row with no
+test is kept by the probe alone, and on purpose: without the per-step count the machine behaves identically, but a
+state's bytes stop being the stepped machine's, and a state saved more than 2³² counts (about 92 seconds) after the
+last timer write would load with its timer a wrap out — the elapsed count is taken modulo the counter's width. Only a
+reference recorded from the stepped build can grade the bytes, and that is what the probe's baseline is. The two
+equivalent rows are recorded so that they are not mistaken for gaps: an exception sets EXL, which blocks every line
+until a return or a Status write, both of which recheck; and a hit scheduled from the count before it fires once more
+on the next instruction, setting a bit that is already set.

@@ -351,6 +351,9 @@ namespace EmuSen.Cores.Nintendo.Mars
             StateSerializer.Read(r, Cpu!);
             Bus.ReadState(r);
 
+            // The timer's due cycle and the interrupt check are derived from what was just read - see Mars_Performance.md §10.
+            Cpu.Cop0Written();
+
             if (!SkipRendering) Present(Bus.Vi);
         }
 

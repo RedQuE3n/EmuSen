@@ -334,6 +334,54 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(saver.Bus!.Read32(0x0010_0000) > 1000);
         }
 
+        // The same count, with the timer set first to a value it reaches between the save and the end - see Mars_Performance.md §10.
+        private static readonly byte[] CountWithTimer =
+        {
+            0x24, 0x09, 0x70, 0x00, // addiu t1, zero, 0x7000
+            0x40, 0x89, 0x58, 0x00, // mtc0  t1, Compare
+            0x3C, 0x04, 0xA0, 0x10, // lui   a0, 0xA010
+            0x8C, 0x88, 0x00, 0x00, // lw    t0, 0(a0)
+            0x25, 0x08, 0x00, 0x01, // addiu t0, t0, 1
+            0xAC, 0x88, 0x00, 0x00, // sw    t0, 0(a0)
+            0x10, 0x00, 0xFF, 0xFC, // b     the lw
+            0x00, 0x00, 0x00, 0x00, // nop
+        };
+
+        // A fresh core's timer was scheduled against the Compare its own boot set; the state's is another - see Mars_Performance.md §10.
+        [Fact]
+        public void A_fresh_core_loaded_from_a_state_raises_the_timer_where_the_saver_did()
+        {
+            MarsCore Timed()
+            {
+                var core = new MarsCore(batteryRamDisabled: true);
+                core.LoadRom(WriteRom(SyntheticN64Rom.Build(patches: (0, CountWithTimer))));
+                ProgramVi(core.Bus!, 0x20, 0x40);
+                return core;
+            }
+
+            static ulong TimerLine(MarsCore core) => core.Cpu!.Cop0[EmuSen.Cores.Nintendo.Mars.Cpu.Core.Cpu.CauseRegister] & EmuSen.Cores.Nintendo.Mars.Cpu.Core.Cpu.CauseInterruptTimer;
+
+            MarsCore saver = Timed();
+            for (int i = 0; i < 20; i++) saver.RunFrame();
+            Assert.Equal(0UL, TimerLine(saver));
+
+            using var state = new MemoryStream();
+            saver.SaveState(state);
+            state.Position = 0;
+
+            MarsCore loader = Timed();
+            loader.LoadState(state);
+
+            for (int i = 0; i < 20; i++)
+            {
+                saver.RunFrame();
+                loader.RunFrame();
+                Assert.Equal(TimerLine(saver), TimerLine(loader));
+            }
+
+            Assert.Equal(EmuSen.Cores.Nintendo.Mars.Cpu.Core.Cpu.CauseInterruptTimer, TimerLine(saver));
+        }
+
         // A file that begins "MARS", and a load that puts back what came after - see Mars_SaveStates.md §1.
         [Fact]
         public void A_state_file_round_trips_the_machine()

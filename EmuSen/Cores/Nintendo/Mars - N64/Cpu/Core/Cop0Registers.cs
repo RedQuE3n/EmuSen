@@ -75,10 +75,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             if (IsUnusedCop0Register(register)) return;
 
+            // Status and Cause feed the interrupt check, and the others cost nothing to recheck - see Mars_Performance.md §10.
+            _recheck = true;
+
             if (register == CountRegister)
             {
                 _bus.SetCount((uint)value);
                 _lastCount = _bus.Count;
+                ScheduleTimer();
                 return;
             }
 
@@ -91,6 +95,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             {
                 Cop0[CauseRegister] &= ~CauseInterruptTimer;
                 _lastCount = _bus.Count;
+                ScheduleTimer();
             }
         }
 

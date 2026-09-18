@@ -275,7 +275,8 @@ then executes normally.
 
 Two sources reach this core today. The RCP's aggregator drives one line and is
 **level-triggered** — read afresh every step, so clearing the device that raised it
-lowers the CPU's line with no further action. The counter drives the other and is
+lowers the CPU's line with no further action. (Since Phase G the rest of the check runs
+only on a step where that reading, or COP0, has changed — `Mars_Performance.md` §10.) The counter drives the other and is
 **latched** — once raised it stays raised until a handler writes the comparison
 value, which is how the hardware makes acknowledgement explicit.
 
@@ -300,6 +301,14 @@ never fire.
 So the question asked here is *did the comparison value fall inside the interval this
 instruction covered*, with the wrap handled as two ranges rather than one. Replacing
 it with the equality test hardware performs reddens exactly the test written for it.
+
+**Since Phase G the question is asked once, not every instruction** (`Mars_Performance.md`
+§10). Its answer is a cycle — the first at which the count reaches the comparison value
+from where it was last settled — worked out when either register is written or the line
+rises, and each successful instruction compares its end against it. When the line rises
+is unchanged; how often the interval is recomputed is not. Anything that writes COP0 from
+outside an instruction — the boot, a loaded state, a test — calls `Cpu.Cop0Written`, and
+Debug builds throw at the first instruction after one that did not.
 
 **What this costs, stated rather than discovered:** the interrupt is raised at the end
 of the instruction that crossed the value, not at the cycle that reached it. A long

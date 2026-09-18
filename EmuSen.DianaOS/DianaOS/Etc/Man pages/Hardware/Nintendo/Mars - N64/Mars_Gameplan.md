@@ -725,7 +725,10 @@ of them.
 > **Progress, 2026-09-18: event-driven timing chosen, and the devices scheduled** (`Mars_Performance.md` §9). The VI
 > and the AI settle their debts lazily and act only when due, instead of being stepped every instruction; the RSP stays
 > in step with the processor. Ocarina of Time 17.1 → 18.8 fps, Super Mario 64 20.7 → 23.4, Wave Race 24.1 → 26.9, with
-> every frame matching a baseline that now hashes the whole save state as well.
+> every frame matching a baseline that now hashes the whole save state as well. Then the processor's interrupt check
+> and timer, asked only when an input changes (§10), checked in Debug builds on every instruction they skip: Ocarina of
+> Time 19.7, Super Mario 64 24.6, Wave Race 28.2 — 2.6 to 2.7 times the profile's speed in the two PAL games, and 39
+> to 49 per cent of the console.
 
 ## 5. Where this will actually hurt
 

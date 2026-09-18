@@ -52,6 +52,8 @@ costs per step is what changed, not the whole.
   earliest event. They are derived: a save settles both debts first, so the state holds what a device stepped every
   tick would, and a load rebases and reschedules from the state (`Mars_Performance.md` §9). Leaving them out is what
   kept the format at version 1.
+- **The processor's timer cycle and what its interrupt check last saw**, likewise derived: a load calls
+  `Cpu.Cop0Written`, which works both out again from the state (`Mars_Performance.md` §10).
 
 ## 3. What reflection cannot walk
 

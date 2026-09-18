@@ -126,6 +126,16 @@ namespace EmuSen.DianaOS.DianaOS.Var
         {
             if (string.IsNullOrWhiteSpace(code) || codeDecoder is null) return null;
 
+            // Handed the whole string, because one of such a codec's codes can span a '+' - see EmuSen_Cheats.md §7.
+            try
+            {
+                if (codeDecoder.DecodeWrites(code) is { } whole) return whole.ToList();
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+
             var writes = new List<CheatWrite>();
             foreach (string token in code.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {

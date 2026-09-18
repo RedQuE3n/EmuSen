@@ -256,6 +256,65 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // A GameShark code is lines, a test and the write it guards, so the window adds it whole - see EmuSen_Cheats.md §7.
+        private static ActiveCheatsWindow OpenN64(CheatRegistry registry)
+        {
+            var window = new ActiveCheatsWindow(registry,
+                new EmuSen.Cores.Nintendo.Mars.Cheats.N64GameSharkCheatCodec(), null, console: "N64");
+            window.Show();
+            return window;
+        }
+
+        [Fact]
+        public Task An_n64_code_of_several_lines_is_added_as_one_cheat() => Session.Dispatch(() =>
+        {
+            var registry = new CheatRegistry();
+            var window = OpenN64(registry);
+
+            CodeBox(window).Text = "D0000200 0005+81000100 1234";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            var added = registry.GetCheats().Single();
+            Assert.Equal(CheatKind.RamPoke, added.Kind);
+            Assert.Equal(new[] { CheatWriteType.IfEqual, CheatWriteType.Set }, added.Writes.Select(w => w.Type));
+            Assert.Equal(0x1234u, added.Writes[1].Value);
+            Assert.Equal("RDRAM", added.Writes[1].Space);
+            Assert.Contains("as GameShark", Status(window).Text!);
+
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task An_n64_code_mars_refuses_says_why_and_adds_nothing() => Session.Dispatch(() =>
+        {
+            var registry = new CheatRegistry();
+            var window = OpenN64(registry);
+
+            CodeBox(window).Text = "F1000318 0040";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Assert.Empty(registry.GetCheats());
+            Assert.Contains("boot-time write", Status(window).Text!);
+
+            window.Close();
+        }, default);
+
+        // With no ROM-patch codec to guess, a mistyped code reaches the GameShark, whose error says what is wrong - see EmuSen_Cheats.md §7.
+        [Fact]
+        public Task A_malformed_n64_code_is_answered_by_the_gameshark() => Session.Dispatch(() =>
+        {
+            var registry = new CheatRegistry();
+            var window = OpenN64(registry);
+
+            CodeBox(window).Text = "8033-B21E";
+            AddButton(window).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Assert.Empty(registry.GetCheats());
+            Assert.Contains("isn't an N64 GameShark code", Status(window).Text!);
+
+            window.Close();
+        }, default);
+
         [Fact]
         public Task An_undecodable_code_reports_it_and_adds_nothing() => Session.Dispatch(() =>
         {
@@ -394,11 +453,11 @@ namespace EmuSen.WiseMan.Mistress
                 string[] texts = ((Control)item.Content!).GetLogicalDescendants().OfType<TextBlock>()
                     .Select(t => t.Text ?? "").ToArray();
 
-                // Mars applies no cheats yet, so its tab says so rather than offering a dead box - see Mars_Core.md §8.
+                // No N64 format patches ROM, so its tab takes the GameShark alone - see Mars_Cheats.md §1.
                 if (console == "N64")
                 {
-                    Assert.False(AddButton(window).IsEnabled, "N64 has no cheat-code format to accept a code with.");
-                    Assert.Contains(texts, t => t.Contains("no cheat-code format"));
+                    Assert.True(AddButton(window).IsEnabled, "N64 should accept a typed GameShark code.");
+                    Assert.Equal("Accepts: GameShark.", texts.First(t => t.StartsWith("Accepts:")));
                     continue;
                 }
 

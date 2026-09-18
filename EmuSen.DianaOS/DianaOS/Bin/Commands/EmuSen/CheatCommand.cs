@@ -115,6 +115,9 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
         // Ask the codecs first; the punctuation guess is the last resort - see EmuSen_Cheats.md.
         public static bool PrefersExplicitCodec(ICheatCodeCodec? explicitCodec, ICheatCodeCodec? autoDetectCodec, string code)
         {
+            // A slot with no codec cannot be the answer, so a malformed code reaches the one that can say why - see EmuSen_Cheats.md §7.
+            if (explicitCodec is null || autoDetectCodec is null) return explicitCodec is not null;
+
             bool explicitClaims = explicitCodec?.CanDecode(code) == true;
             bool autoClaims = autoDetectCodec?.CanDecode(code) == true;
 
@@ -150,8 +153,11 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
             {
                 CheatWriteType.Increase => "+=",
                 CheatWriteType.Decrease => "-=",
+                CheatWriteType.IfEqual => "==",
+                CheatWriteType.IfNotEqual => "!=",
                 _ => "=",
             };
+            if (w.IsTest) where = "if " + where;
 
             if (w.BitPosition is int bit) return $"{where} bit{bit} {op} {w.Value & 1}";
 
@@ -189,6 +195,15 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     }
 
                     if (_autoDetectCodec is null) return "No cheat codec is registered for this target.";
+
+                    // A format whose codes are wider than a byte or longer than a line adds them whole - see EmuSen_Cheats.md §7.
+                    if (_autoDetectCodec.DecodeWrites(code) is { } writes)
+                    {
+                        int wholeId = cheats.AddCheat(CheatKind.RamPoke, writes, null, description);
+                        string what = writes.Count == 1 ? FormatWrite(writes[0], CheatKind.RamPoke) : $"{writes.Count} writes";
+                        return $"Cheat #{wholeId} added (detected {_autoDetectCodec.Name} format): {what} ({description})";
+                    }
+
                     (int address, byte value) = _autoDetectCodec.Decode(code);
                     string space = _autoDetectCodec.SpaceName ?? "CpuBus";
                     int id = cheats.AddRamPoke(space, address, value, description);
@@ -319,8 +334,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
                     string exportArg = string.Join(' ', parts.Skip(2));
                     if (!DianaOSSandbox.TryResolve(exportArg, out string exportPath)) return $"cheat export: '{exportArg}' is outside the sandbox.";
 
-                    var exportable = cheats.GetCheats().Where(c => c.Kind == CheatKind.RamPoke).ToList();
-                    int romPatches = cheats.GetCheats().Count - exportable.Count;
+                    var all = cheats.GetCheats();
+                    int romPatches = all.Count(c => c.Kind != CheatKind.RamPoke);
+
+                    // One handler entry per cheat cannot hold a test and the write it guards - see EmuSen_Cheats.md §7.
+                    int conditional = all.Count(c => c.Kind == CheatKind.RamPoke && c.Writes.Any(w => w.IsTest));
+                    var exportable = all.Where(c => c.Kind == CheatKind.RamPoke && !c.Writes.Any(w => w.IsTest)).ToList();
 
                     var chtCheats = exportable
                         .Select(c => new ChtCheat { Description = c.Description, Enabled = c.Enabled, Writes = c.Writes })
@@ -335,6 +354,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 
                     // RetroArch's model has no ROM-read substitution, so there is nothing honest to write.
                     string skippedText = romPatches > 0 ? $" ({romPatches} ROM patch(es) skipped - .cht has no equivalent)" : "";
+                    if (conditional > 0) skippedText += $" ({conditional} conditional cheat(s) skipped - one .cht entry cannot hold a test and the write it guards)";
                     return $"Exported {chtCheats.Count} cheat(s) to {exportPath}{skippedText}";
                 }
                 case "db":

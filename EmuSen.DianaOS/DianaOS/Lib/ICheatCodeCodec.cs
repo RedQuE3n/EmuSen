@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using EmuSen.DianaOS.DianaOS.Bin;
 using EmuSen.DianaOS.DianaOS.Etc;
 using EmuSen.DianaOS.DianaOS.Lib;
@@ -30,5 +31,8 @@ namespace EmuSen.DianaOS.DianaOS.Lib
 
         // Dropping a compare would make an NES code wrong, not lesser - see EmuSen_Cheats.md §2.
         byte? DecodeCompare(string code) => null;
+
+        // A code wider than a byte or longer than a line, decoded whole; null leaves Decode's one byte as the answer - see EmuSen_Cheats.md §7.
+        IReadOnlyList<CheatWrite>? DecodeWrites(string code) => null;
     }
 }

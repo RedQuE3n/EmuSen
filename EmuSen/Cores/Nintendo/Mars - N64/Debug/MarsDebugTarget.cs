@@ -75,7 +75,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
         public MarsDebugTarget(MarsCore core, CheatRegistry? cheats = null)
         {
             _core = core;
-            Cheats = cheats ?? new CheatRegistry();
+            if (cheats is not null) _core.Cheats = cheats;
 
             _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Rdram, () => _core.Bus?.Rdram.Length ?? 0, true));
             _spaces.Add(new MarsDebugMemorySpace(core, MarsDebugSpaces.Dmem, () => _core.Bus?.SpDmem.Length ?? 0, true));
@@ -144,7 +144,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
         public PhysicalAddress? ResolvePhysical(int cpuAddress) =>
             MarsDebugSpaces.TryPhysical(_core, (uint)cpuAddress, out uint physical) ? MarsDebugSpaces.Resolve(_core, physical) : null;
 
-        public CheatRegistry Cheats { get; }
+        // The core's own registry, so the frame boundary and a paused Apply reach one object - see EmuSen_Cheats.md §6.
+        public CheatRegistry Cheats => _core.Cheats;
+
+        public void ApplyCheats() => _core.ApplyCheats();
 
         // Zero is how coretop is told there is no tilemap concept at all.
         public int TilemapEntryStride => 0;

@@ -666,3 +666,45 @@ that the field's meaning is stated where it is born. The write-site row is the r
 net: every Mars test runs in Debug, but a Release build has only the tests' own assertions, and one of the five sites
 had none until this round.
 
+## 19. Where the phase stands after the processor's own step
+
+Three changes to the step, each exact, timed by §12's method (three rounds, medians, fps):
+
+| | before (`faedf85`) | store report gated (§16) | RDRAM direct (§17) | mode kept (§18) | together |
+| --- | --- | --- | --- | --- | --- |
+| Ocarina of Time | 21.2 | 22.5 | 23.2 | 24.1 | +14% |
+| Super Mario 64 | 27.7 | 28.4 | 28.9 | 30.4 | +10% |
+| Wave Race 64 | 32.5 | 33.2 | 34.0 | 35.3 | +9% |
+
+Each stage is above the one before it in every round of every game. **The store report bought less in the games than
+§16's loop promised** — 2 to 6 per cent against a loop where it was a third of the time — because these scenes store
+less often than one instruction in five, and because the processor is only 40 to 55 per cent of the thread. On the
+microbenchmark the three together take §17's ALU loop from 7.65 to 5.44 ns an instruction and the memory loop from
+9.99 to 6.51; with the target's observer attached the memory loop runs at 6.65, where it ran at 15.45 — the interface
+call a store now costs what §16 said it would, about a seventh of a nanosecond an instruction on that loop.
+
+| | at the profile (§2) | now | |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50 fps) | 7.3 fps | 24.1 fps | 3.3×, 48% of the console |
+| Super Mario 64 (PAL, 50 fps) | 9.6 fps | 30.4 fps | 3.2×, 61% of the console |
+| Wave Race 64 (NTSC, 60 fps) | 14.7 fps | 35.3 fps | 2.4×, 59% of the console |
+
+The profile of this build, §2's method:
+
+| share of the emulation thread | CPU and bus | VI | RDP | RSP | the core's loop |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 46.9% | 27.6% | 13.8% | 9.5% | 2.1% |
+| Wave Race 64 | 53.0% | 13.8% | 18.2% | 12.7% | 2.2% |
+| Ocarina of Time | 34.0% | 38.1% | 20.2% | 5.8% | 1.7% |
+
+`Cpu.Step` is 19 to 24 per cent of the thread's exclusive time and `Execute` 6 to 8. **In Ocarina of Time the video
+interface is the largest share again** — `Vi.Walk` alone 28.5 per cent — as each processor change makes the scan-out
+a larger fraction of what is left; the RDP is a fifth. The processor's step is no longer the wall in that game, and is
+half the thread in the other two.
+
+**What is left in the step**, from §17's table: the MI line's compare, the count kept each step, the instruction
+count and the return hook — together about 0.7 ns of a step that is now 5.4 on the ALU loop, and each of them is what makes
+something else exact. The rest is the interpreter: the fetch's checks, the dispatch's two switches, the register
+file's bounds checks, the tick. The lever for that remains a cached interpreter or a recompiler, and remains a
+decision.
+

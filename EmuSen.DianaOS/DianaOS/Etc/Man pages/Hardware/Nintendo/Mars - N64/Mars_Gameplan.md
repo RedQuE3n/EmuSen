@@ -743,6 +743,12 @@ of them.
 > FPGA core, Project64 and mupen64plus do not (a break's interrupt only on the bit's rise; single-step executed), kept
 > unchanged and left for a decision.
 
+> **Progress, 2026-09-18: the processor's own step** (`Mars_Performance.md` §16–§19). Three exact changes: a store is
+> reported to the debugger only while a watch or data breakpoint exists — every frontend had been paying about 27 ns
+> a store for nothing; the fetch, loads and stores take RDRAM directly; the privilege mode is a field refreshed on
+> every Status write and checked on every step in Debug. Together +9 to +14 per cent: 24.1, 30.4 and 35.3 fps, 48 to
+> 61 per cent of the console, every frame and state still matching the baseline.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

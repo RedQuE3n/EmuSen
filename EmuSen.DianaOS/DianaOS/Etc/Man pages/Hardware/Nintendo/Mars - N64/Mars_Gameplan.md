@@ -552,6 +552,15 @@ rather than raw samples.
 > and neither is a measurement, so Mars reads the dither as zero and says what that costs. What is left
 > here is the interrupt and the timing, and then AI, SI/PIF and PI.
 
+> **Progress, 2026-09-17: the half line and the video interrupt** (`Mars_VideoTiming.md`). The interface now
+> keeps time off the bus's own counter, reports the half line and the field in the current-line register, and
+> raises the interrupt when the half line reaches the one a game asked for. Nothing that graded the picture
+> slices can grade this one — the dump has no clock and the corpus tests no video group — so it rests on a
+> prediction `Mars_Microcode.md` §3 registered before the device existed: its stand-in video interrupt was
+> deleted and Wave Race still reaches its display list. Thirteen unit tests hold the semantics, and all
+> seventeen applicable breakages are caught. What is left
+> here is AI, SI/PIF and PI.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

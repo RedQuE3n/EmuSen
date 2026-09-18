@@ -53,6 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             Cycles += cycles;
             Sp.Step(cycles);
+            Vi.Step(cycles);
         }
 
         // The eight interface registers and the eight the display processor owns - see Mars_Rsp.md §5.

@@ -285,49 +285,162 @@ namespace EmuSen.WiseMan.Cores
             Assert.DoesNotContain(PadButton.Select, core.SupportedButtons);
         }
 
-        // An explicit save fails loudly, and before any file exists - see Mars_Core.md §6.
-        [Fact]
-        public void An_explicit_save_state_is_refused_and_writes_nothing()
+        // A counter the processor keeps in RDRAM, so every frame changes the machine - see Mars_SaveStates.md §4.
+        private static readonly byte[] CountForever =
         {
-            MarsCore core = Load();
+            0x3C, 0x04, 0xA0, 0x10, // lui   a0, 0xA010
+            0x8C, 0x88, 0x00, 0x00, // lw    t0, 0(a0)
+            0x25, 0x08, 0x00, 0x01, // addiu t0, t0, 1
+            0xAC, 0x88, 0x00, 0x00, // sw    t0, 0(a0)
+            0x10, 0x00, 0xFF, 0xFC, // b     the lw
+            0x00, 0x00, 0x00, 0x00, // nop
+        };
+
+        private MarsCore Counting()
+        {
+            var core = new MarsCore(batteryRamDisabled: true);
+            core.LoadRom(WriteRom(SyntheticN64Rom.Build(patches: (0, CountForever))));
+            ProgramVi(core.Bus!, 0x20, 0x40);
+            return core;
+        }
+
+        // A fresh core that loads a state keeps step with the one that saved it - see Mars_SaveStates.md §4.
+        [Fact]
+        public void A_fresh_core_loaded_from_a_state_keeps_step_with_the_one_that_saved_it()
+        {
+            MarsCore saver = Counting();
+            for (int i = 0; i < 20; i++) saver.RunFrame();
+
+            using var state = new MemoryStream();
+            saver.SaveState(state);
+            state.Position = 0;
+
+            MarsCore loader = Counting();
+            loader.RunFrame();
+            loader.LoadState(state);
+
+            for (int i = 0; i < 20; i++)
+            {
+                saver.RunFrame();
+                loader.RunFrame();
+
+                Assert.Equal(saver.Bus!.Cycles, loader.Bus!.Cycles);
+                Assert.Equal(saver.Cpu!.Pc, loader.Cpu!.Pc);
+                Assert.Equal(saver.Bus.Read32(0x0010_0000), loader.Bus.Read32(0x0010_0000));
+            }
+
+            Assert.Equal(saver.TotalFrames, loader.TotalFrames);
+            Assert.True(saver.Bus!.Read32(0x0010_0000) > 1000);
+        }
+
+        // A file that begins "MARS", and a load that puts back what came after - see Mars_SaveStates.md §1.
+        [Fact]
+        public void A_state_file_round_trips_the_machine()
+        {
+            MarsCore core = Counting();
+            for (int i = 0; i < 5; i++) core.RunFrame();
+            uint counted = core.Bus!.Read32(0x0010_0000);
+
             string path = Path.Combine(Path.GetTempPath(), $"wiseman_{Guid.NewGuid():N}.state");
             _temporaryFiles.Add(path);
+            core.SaveState(path);
 
-            Assert.Throws<NotSupportedException>(() => core.SaveState(path));
-            Assert.False(File.Exists(path));
+            for (int i = 0; i < 5; i++) core.RunFrame();
+            core.LoadState(path);
 
-            File.WriteAllBytes(path, new byte[] { 1, 2, 3, 4 });
-            Assert.Throws<NotSupportedException>(() => core.LoadState(path));
+            Assert.Equal("MARS"u8.ToArray(), File.ReadAllBytes(path)[..4]);
+            Assert.Equal(counted, core.Bus.Read32(0x0010_0000));
+            Assert.Equal(5, core.TotalFrames);
         }
 
-        // The stream overloads record nothing, so a caller that snapshots every few frames keeps running - see Mars_Core.md §6.
+        // Refused before anything is read into this machine, which is left as it was - see Mars_SaveStates.md §1.
         [Fact]
-        public void The_stream_overloads_record_nothing_and_consume_nothing()
+        public void A_state_for_another_machine_is_refused_before_anything_is_read()
         {
-            MarsCore core = Load();
+            var expanded = new MarsCore(expansionPak: true, batteryRamDisabled: true);
+            expanded.LoadRom(WriteRom(SyntheticN64Rom.Build(patches: (0, CountForever))));
+            using var state = new MemoryStream();
+            expanded.SaveState(state);
 
-            using var stream = new MemoryStream();
-            core.SaveState(stream);
-            Assert.Equal(0, stream.Length);
+            MarsCore stock = Counting();
+            stock.Bus!.Write32(0x0010_0000, 0x1234_5678);
 
-            stream.Write(new byte[] { 9, 9 });
-            stream.Position = 0;
-            core.LoadState(stream);
-            Assert.Equal(0, stream.Position);
+            state.Position = 0;
+            Assert.Throws<InvalidDataException>(() => stock.LoadState(state));
+            Assert.Throws<InvalidDataException>(() => stock.LoadState(new MemoryStream(new byte[] { 0x53, 0x45, 0x4E, 0x53, 1, 0, 0, 0 })));
+            Assert.Equal(0x1234_5678u, stock.Bus.Read32(0x0010_0000));
         }
 
-        // An empty snapshot is no history, so holding rewind reports nothing to step back to - see EmuSen_Rewind_And_FastForward.md §1.7.
+        // Reflection fills only what exists, so the chip is rebuilt before its bytes are read - see Mars_SaveStates.md §3.
         [Fact]
-        public void Mars_leaves_the_rewind_buffer_with_no_history()
+        public void A_state_carries_the_save_chip_the_pak_and_the_unmodelled_registers()
         {
-            MarsCore core = Load();
+            MarsCore saver = Counting();
+            MemoryBus bus = saver.Bus!;
+            bus.Save = new SaveChip(N64SaveType.Eeprom16k);
+            bus.Save.Eeprom!.Data[9] = 0x5A;
+            bus.Si.Controllers[0].Pak = new ControllerPak(null);
+            bus.Si.Controllers[0].Pak!.Data[0x4000] = 0x77;
+            bus.Write32(MemoryMap.RiBase + 4, 0xCAFE_F00D);
+
+            using var state = new MemoryStream();
+            saver.SaveState(state);
+            state.Position = 0;
+
+            MarsCore loader = Counting();
+            loader.Bus!.Si.Controllers[0].Pak = null;
+            loader.LoadState(state);
+
+            Assert.Equal(N64SaveType.Eeprom16k, loader.Bus.Save.Type);
+            Assert.Equal(0x5A, loader.Bus.Save.Eeprom!.Data[9]);
+            Assert.True(loader.Bus.Save.Dirty);
+            Assert.Equal(0x77, loader.Bus.Si.Controllers[0].Pak!.Data[0x4000]);
+            Assert.True(loader.Bus.Si.Controllers[0].Pak!.Dirty);
+            Assert.Equal(0xCAFE_F00Du, loader.Bus.Read32(MemoryMap.RiBase + 4));
+        }
+
+        // Samples a frontend has not drained belong to the moment before the load - see Mars_SaveStates.md §2.
+        [Fact]
+        public void Loading_a_state_drops_the_audio_a_frontend_has_not_drained()
+        {
+            MarsCore core = Counting();
+            using var state = new MemoryStream();
+            core.SaveState(state);
+
+            core.Bus!.Write32(MemoryMap.AiBase + AiInterface.DacRate, 0x1000);
+            core.Bus.Write32(MemoryMap.AiBase + AiInterface.Control, 1);
+            core.Bus.Write32(MemoryMap.AiBase + AiInterface.DramAddress, 0x0020_0000);
+            core.Bus.Write32(MemoryMap.AiBase + AiInterface.Length, 0x2000);
+            for (int i = 0; i < 200; i++) core.RunFrame();
+            Assert.True(core.Bus.Ai.BufferedSamples > 0);
+
+            state.Position = 0;
+            core.LoadState(state);
+
+            Assert.Equal(0, core.Bus.Ai.BufferedSamples);
+        }
+
+        // Real snapshots now, so holding rewind steps back to an earlier machine - see EmuSen_Rewind_And_FastForward.md §1.7.
+        [Fact]
+        public void Mars_gives_the_rewind_buffer_history_it_can_step_back_through()
+        {
+            MarsCore core = Counting();
             var rewind = new RewindBuffer { Enabled = true, IntervalFrames = 1 };
 
-            for (int i = 0; i < 5; i++) rewind.CaptureNow(core);
+            core.RunFrame();
+            rewind.CaptureNow(core);
+            uint earlier = core.Bus!.Read32(0x0010_0000);
 
-            Assert.Equal(0, rewind.Depth);
-            Assert.Equal(0, rewind.BufferedBytes);
-            Assert.False(rewind.Rewind(core));
+            for (int i = 0; i < 3; i++)
+            {
+                core.RunFrame();
+                rewind.CaptureNow(core);
+            }
+
+            Assert.Equal(3, rewind.Depth);
+            while (rewind.Rewind(core)) { }
+
+            Assert.Equal(earlier, core.Bus.Read32(0x0010_0000));
         }
 
         [Fact]

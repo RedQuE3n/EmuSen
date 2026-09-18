@@ -23,7 +23,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // Four ports, of which the first holds a controller until a frontend says otherwise - see §3.1.
         public readonly Controller[] Controllers = { new() { Present = true }, new(), new(), new() };
 
-        private readonly MemoryBus _bus;
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
 
         private uint _dramAddress;
 

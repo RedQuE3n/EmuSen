@@ -20,7 +20,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public readonly Rdp.Rdp Processor;
 
-        private readonly MemoryBus _bus;
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
 
         private uint _start;
         private uint _end;

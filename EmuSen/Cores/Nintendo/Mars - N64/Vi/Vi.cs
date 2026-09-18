@@ -30,11 +30,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         private const int PalHeight = 576;
         private const int NtscSyncLines = 525;
 
-        private readonly MemoryBus _bus;
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
         private readonly uint[] _registers = new uint[Registers];
 
         // Four bytes a pixel, red first; kept between frames, because a line nothing rewrites stays on the screen - see §2.4.
-        private readonly byte[] _raster = new byte[RasterWidth * RasterHeight * 4];
+        // Rebuilt by every scan, so a state need not carry its 1.4MB - see Mars_SaveStates.md §2.
+        [EmuSen.Common.SkipInState] private readonly byte[] _raster = new byte[RasterWidth * RasterHeight * 4];
         private readonly int[] _held = new int[RasterHeight];
 
         private bool _wasBlank;

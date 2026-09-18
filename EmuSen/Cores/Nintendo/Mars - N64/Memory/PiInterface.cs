@@ -22,7 +22,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private const uint BlockSize = 128;
         private const uint RowSize = 0x800;
 
-        private readonly MemoryBus _bus;
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
 
         private uint _dramAddress;
         private uint _cartAddress;

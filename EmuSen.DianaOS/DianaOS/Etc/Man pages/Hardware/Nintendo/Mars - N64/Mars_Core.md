@@ -28,7 +28,7 @@ not, below, so that nobody has to find them by using them.
 | audio | ~~**nothing** — there is no audio interface (§4)~~ what the game plays, at the rate it set (§4) | ~~silence~~ the game's sound |
 | input | ~~nine of the pad's fourteen buttons, and not its stick (§5)~~ every button, the stick, and the C buttons on the right stick (§5) | ~~no analog stick, no Z, no C buttons~~ the whole controller |
 | battery saves | ~~**nothing** — there are no save devices (§6)~~ the cartridge's chip in `<rom>.srm` and a Controller Pak in `<rom>.mpk` (§6, `Mars_Save.md`) | ~~progress is lost when the ROM is closed~~ progress kept between runs |
-| save states and rewind | explicit saves refused, rewind given no history (§6) | "Save State failed", and holding rewind freezes the picture |
+| save states and rewind | ~~explicit saves refused, rewind given no history (§6)~~ the whole machine, 6.4MB a state (`Mars_SaveStates.md`) | ~~"Save State failed", and holding rewind freezes the picture~~ saving, loading and rewinding |
 | a debug target | memory spaces, register readouts, a summary; nothing that halts (§8) | `watch`, `bp` and `framelog` accept arguments and never fire |
 | cheats | the database folder is kept; no codec applies anything (§8) | the N64 cheat tab says it takes no format |
 
@@ -231,7 +231,12 @@ game that saves loses it when the ROM is closed.~~
 > rather than beside the ROM — and `MarsCore` does the same every 300 frames. `Flushing_save_data_writes_nothing`
 > still passes, and now pins the narrower thing its name can still say: nothing changed, nothing written.
 
-**Save states are refused two different ways, because their callers fail two different ways.**
+> **Retired 2026-09-18 by the save-state slice** (`Mars_SaveStates.md`). Everything from here to the end of the
+> section describes the refusal that stood until then, and is kept because its argument about the two callers still
+> explains why a path save checks for a ROM before it creates a file. The stream overloads now write and read the
+> machine, the rewind buffer gets real history, and the tests that pinned the refusal were replaced.
+
+~~**Save states are refused two different ways, because their callers fail two different ways.**~~
 
 - **The path overloads throw `NotSupportedException` before touching the filesystem.** They are what an explicit
   save reaches, and both frontends catch and report the failure — Mistress's status bar says "Save State failed"

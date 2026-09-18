@@ -26,12 +26,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public bool InDelaySlot;
 
         // Where a raised exception is recorded until COP0 exists to vector it - see Mars_Cpu.md §4.1.
-        public CpuException? LastException;
+        [EmuSen.Common.SkipInState] public CpuException? LastException;
 
         public long Instructions;
 
-        private readonly MemoryBus _bus;
-        private readonly CpuException _exception = new();
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
+        [EmuSen.Common.SkipInState] private readonly CpuException _exception = new();
 
         private bool _branchPending;
         private uint _lastCount;

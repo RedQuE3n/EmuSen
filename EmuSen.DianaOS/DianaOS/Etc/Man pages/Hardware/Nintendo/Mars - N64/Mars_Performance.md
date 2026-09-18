@@ -126,3 +126,45 @@ addressing widths, all pass unchanged (the corpus at 46).
 | Ocarina of Time | 13.32 fps | 15.40 fps | 1.16× |
 | Super Mario 64 | 15.48 fps | 18.43 fps | 1.19× |
 | Wave Race 64 | 19.30 fps | 22.89 fps | 1.19× |
+
+## 5. Samples a zero fraction throws away, never asked for
+
+**What was wasted.** The walk mixes the four samples by the step's fractions, and a mix by a zero fraction returns the
+near pixel unchanged. With the common 320-to-640 scale, every other column lands exactly on a source pixel and its
+horizontal fraction is zero, so its `next` samples were fetched, filtered and discarded; a row whose vertical fraction
+is zero did the same with the whole row below. The cache of §3 made each such sample cheap to fetch twice, but not
+free to make once.
+
+**The change.** The walk asks for `next` only when the horizontal fraction is not zero, and for the row below only
+when the vertical fraction is not zero. A sample has no effect but its value, so not asking for one the arithmetic
+would ignore changes nothing, and a row whose vertical fraction is zero no longer filters the line below at all.
+
+**What it bought**, every frame identical to the baseline:
+
+| | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 15.40 fps | 15.34 fps | unchanged |
+| Super Mario 64 | 18.43 fps | 21.17 fps | 1.15× |
+| Wave Race 64 | 22.89 fps | 25.06 fps | 1.09× |
+
+Ocarina of Time's picture is scaled so that its fractions are rarely zero, which is what the unchanged figure says.
+
+## 6. Measured and rejected
+
+- **The video interface's timing, worked out when its registers change** rather than on every instruction. Its step
+  reads two registers, tests the TV standard and multiplies twice, every instruction, and a cache of the three values
+  it derives — forgotten on a write to either sync register and after a loaded state — is exactly equivalent. Two runs
+  of the probe, against the build before it: +2.3 and +1.5 per cent for Super Mario 64, +2.4 and +1.8 for Wave Race,
+  −3.2 and +0.8 for Ocarina of Time, whose own two runs differed by four per cent. That is inside what the probe can
+  distinguish, and the cache carries an invalidation duty on every state load that a later change could forget.
+  Reverted.
+
+**What that rejection taught about the probe.** §1's first pair of runs agreed within one per cent, and a later pair
+of one build differed by four. The noise is wider than it first looked, so a change is kept here only if it clears a
+few per cent in more than one game, or clears it twice.
+
+**And about the profile.** The diagnostic build that split the processor's share (§4) marked the step's callees
+non-inlinable and read exclusive time per method. .NET's sampler stops a thread at a safe point, and safe points
+cluster at calls and loop back-edges, so a method made mostly of calls — the bus's `Tick`, the step itself — collects
+more samples than it costs. Its component shares are sturdier than its method shares, and neither decides a change:
+the probe does.

@@ -64,10 +64,20 @@ heuristic rather than correcting a parse.
 Both are stored and neither is checked. Verifying them means implementing the boot
 checksum over the boot code, whose algorithm the survey found documented nowhere —
 the community wiki lists it as an open item (`Mars_Documentation.md` §5). Nothing in
-the phases needs it: the real console's check happens in code Mars replaces with an
-HLE boot (`Mars_Gameplan.md` §4.1). `SyntheticN64Rom` therefore writes recognisable
+the phases needs it: ~~the real console's check happens in code Mars replaces with an
+HLE boot (`Mars_Gameplan.md` §4.1).~~ `SyntheticN64Rom` therefore writes recognisable
 nonsense into both, which is safe precisely because nothing verifies them, and which
 will fail loudly the day something does.
+
+> **Corrected, 2026-09-18.** The struck sentence was half right. Mars still does not
+> verify these words itself, but the check that uses them is not in the code Mars
+> replaces: it is in IPL3, the cartridge's own boot code, which Mars runs. IPL3 checksums
+> the game's first megabyte from a seed the CIC supplies and compares the result with
+> these two words, and a mismatch parks it for ever — which is where *Ocarina of Time*
+> stopped once it got that far, on a seed meant for a different chip (`Mars_Boot.md` §6.2,
+> §8.2). What Mars skips is the *other* check, IPL2's of IPL3 itself. Nor does a failed
+> check fail loudly, as the last sentence expects: it is a silent `bal .` at `0x80000248`,
+> which is worth knowing the next time a commercial image stops before its entry point.
 
 ## 3. The save type, and the one case where the image answers
 

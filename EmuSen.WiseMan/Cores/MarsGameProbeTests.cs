@@ -50,6 +50,7 @@ namespace EmuSen.WiseMan.Cores
             uint origin = bus.Read32(MemoryMap.ViBase + VideoInterface.Origin);
             long steps = 0;
             string stop = "wall-clock limit";
+            var sound = new List<short>();
 
             try
             {
@@ -60,6 +61,9 @@ namespace EmuSen.WiseMan.Cores
                     bool halted = bus.Sp.Processor.Halted;
                     if (wasHalted && !halted) tasks[Math.Min(bus.Read32(TaskType), 3u) switch { 1 => 0, 2 => 1, _ => 2 }]++;
                     wasHalted = halted;
+
+                    // Drained as it goes, since the interface keeps only two seconds for a frontend that never comes.
+                    if ((steps & 0xFFFFF) == 0) sound.AddRange(bus.Ai.Drain(int.MaxValue));
 
                     // A new framebuffer handed to the video interface is the plainest sign a frame was finished.
                     if ((steps & 0x3FF) != 0) continue;
@@ -92,6 +96,9 @@ namespace EmuSen.WiseMan.Cores
                 tail = $" (stopped: {e.GetType().Name})";
             }
 
+            sound.AddRange(bus.Ai.Drain(int.MaxValue));
+            if (sound.Count > 0) AudioCapture.WriteWav(output + ".wav", sound, bus.Ai.SampleRate);
+
             bool scanned = bus.Vi.Scan();
             if (scanned)
             {
@@ -109,7 +116,7 @@ namespace EmuSen.WiseMan.Cores
                 $"signal processor tasks: graphics {tasks[0]}, audio {tasks[1]}, other {tasks[2]}",
                 $"framebuffers handed to the video interface: {switchCount}; first {string.Join(' ', switches)}",
                 $"distinct addresses over the next two million instructions: {pcs.Count}{tail}; now at {cpu.CurrentPc:X16}",
-                $"audio registers (unmodelled): {string.Join(' ', new uint[] { 0, 4, 8, 0xC, 0x10, 0x14 }.Select(r => bus.Read32(MemoryMap.AiBase + r).ToString("X8")))}",
+                $"audio: {bus.Ai.SamplesPlayed:N0} stereo samples played at {bus.Ai.SampleRate} Hz ({bus.Ai.SamplesPlayed / Math.Max(bus.Cycles / ProcessorHz, 1e-9):F0} a second of console time); status {bus.Read32(MemoryMap.AiBase + AiInterface.Status):X8}",
                 $"picture: {(scanned ? $"{VideoInterface.RasterWidth}x{bus.Vi.FrameHeight}, saved" : "the video interface is not scanning out")}",
             });
         }

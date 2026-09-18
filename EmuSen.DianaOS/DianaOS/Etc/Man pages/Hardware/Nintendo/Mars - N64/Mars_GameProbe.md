@@ -25,7 +25,8 @@ EMUSEN_MARS_PROBE=<output directory> dotnet test EmuSen.WiseMan --filter "FullyQ
 - **What it runs:** every `.z64` in `N64TestRomLibrary.Root` — the sandbox's `TestRoms/n64` — in name
   order, each on a fresh machine through `Boot.HandOff`. The ROMs are read, never written.
 
-For each game it writes `<name>.txt` and, if the video interface is scanning out, `<name>.png`.
+For each game it writes `<name>.txt`; `<name>.png` if the video interface is scanning out; and, since the audio
+interface landed, `<name>.wav` of everything the game played, drained as the run goes.
 
 ## 2. What each line of the report means
 
@@ -40,8 +41,10 @@ For each game it writes `<name>.txt` and, if the video interface is scanning out
 - **distinct addresses over the next two million instructions** — a few thousand is a game in its main
   loop; a handful is a spin on a flag; two million is the processor walking through memory that holds
   no program.
-- **audio registers** — the six the audio interface would own. No device models them yet (§4); they
-  read back what the game last wrote, so a nonzero line means the game is feeding audio to nothing.
+- ~~**audio registers** — the six the audio interface would own. No device models them yet (§4); they
+  read back what the game last wrote, so a nonzero line means the game is feeding audio to nothing.~~ **audio**
+  (since 2026-09-18) — the stereo samples the audio interface played, the rate the game set, how many that is a
+  second of console time, and the status register (`Mars_Audio.md`).
 - **picture** — the frame `Vi.Scan()` produces, saved as a PNG. **The raster's fourth byte is the
   pixel's coverage, not an opacity**, so the probe sets it to 255 before saving; without that, every
   frame looks bleached, because viewers composite a coverage of 7 as nearly transparent. The picture is
@@ -65,6 +68,10 @@ head over its tiled logo, and Wave Race its logo over the attract scene. Both cy
 Super Mario 64 every 0.04 seconds, which is 25 frames a second on a 50Hz console. Both write to the
 audio registers and carry on, so the missing audio interface does not stop either of them this far.
 
+> **Update 2026-09-18: with the audio interface present**, both still run, and play 32kHz stereo from about a second
+> in — 175,645 and 169,430 samples over 5.7 and 5.5 seconds of console time. `Mars_Audio.md` §5 has the numbers and what
+> the recordings show.
+
 **Ocarina of Time does not boot.** It starts no task and hands over no frame, and by the end the
 processor is executing through physical `0x02E890F4`, past the end of RDRAM, where Mars reads zeroes:
 two million instructions at two million addresses. Something early in its boot sent it somewhere with
@@ -81,7 +88,7 @@ inside it.
 
 - **That the frames are right.** Recognisable is not correct. Every rule that draws them is graded by
   its own slice; this page only shows that the rules compose into a picture a person would recognise.
-- **Anything about input, audio or saves.** No button is pressed, no audio device exists, and nothing
+- **Anything about input or saves, or what audio sounds like.** No button is pressed, the WAV is what the interface played rather than a comparison with a console, and nothing
   is saved.
 - **Any game not in the folder, or any length of play past 150 seconds** — here, about ten seconds of
   the console's time.

@@ -62,8 +62,8 @@ namespace EmuSen.Cores.Nintendo.Mars
 
         public bool SkipRendering { get; set; }
 
-        // There is no audio interface yet, so nothing is ever queued at this rate - see Mars_Core.md §4.
-        public int AudioSampleRate => 44100;
+        // The rate the game set the DAC to, which a frontend's audio sink follows when it changes - see Mars_Core.md §4.
+        public int AudioSampleRate => Bus?.Ai.SampleRate ?? AiInterface.DefaultSampleRate;
 
         // The pad's buttons on the generic template, with L2 as Z; the C buttons arrive on the right stick - see Mars_Core.md §5.
         public static IReadOnlyList<PadButton> PadButtons { get; } = new[]
@@ -168,7 +168,7 @@ namespace EmuSen.Cores.Nintendo.Mars
 
         public byte[] GetFrameBufferRgba() => _frame;
 
-        public short[] DequeueAudioSamples(int maxFrames) => Array.Empty<short>();
+        public short[] DequeueAudioSamples(int maxFrames) => Bus?.Ai.Drain(maxFrames) ?? Array.Empty<short>();
 
         // No save device is modelled, so there is nothing to flush - see Mars_Core.md §6.
         public void SaveSram() { }

@@ -45,7 +45,7 @@ namespace EmuSen.Cores
         // Plain RGBA8888, so no surface needs to know a core's native pixel format.
         byte[] GetFrameBufferRgba();
 
-        // Fixed for the session, so a device can be opened before any samples exist.
+        // Known before any samples exist, so a device can open; a core may change it when its machine does - see EmuSen_Audio_Sync.md §7.2.
         int AudioSampleRate { get; }
 
         // Destructive and non-blocking, unlike GetAudioSamples' snapshot - see §3.1.

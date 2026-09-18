@@ -170,7 +170,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
 
         public (byte[] Rgba, int Width, int Height) RenderPaletteSwatch() => (Array.Empty<byte>(), 0, 0);
 
-        public (short[] Samples, int SampleRate) GetAudioSamples() => (Array.Empty<short>(), _core.AudioSampleRate);
+        public (short[] Samples, int SampleRate) GetAudioSamples() => (_core.Bus?.Ai.Peek() ?? Array.Empty<short>(), _core.AudioSampleRate);
 
         public string GetSummaryText()
         {

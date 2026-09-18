@@ -195,3 +195,10 @@ This closed a real latent bug. The device was opened once, in the constructor, a
 - **`TargetQueuedFrames` is rescaled on reopen.** The latency target is a *frame count* (`OutputTargetLatencyMs * rate / 1000`), so leaving it at the 32 kHz value while running a 44.1 kHz device would silently shorten the target by 27% and invite underruns. Pinned by a test.
 
 This is the same class of defect as the `EmulatorSession.ScreenHeight` constant (`EmuSen_Multicore.md` §8): a global that was true while there was only ever one core.
+
+> **Update 2026-09-18: a core's rate may now change inside a session.** `ICore.AudioSampleRate` said *"fixed for the
+> session"*, and that held while every core synthesized at a rate it chose. A Nintendo 64 has no rate of its own: the game
+> sets the audio interface's DAC, usually once at boot (`Mars_Audio.md` §4). Mars reports that rate rather than resampling
+> to a fixed one, because this sink already reopens on a mismatch and a resampler in the core would stand in front of the
+> one here. The contract's comment now says a core may change the rate when its machine does; the cost is a reopen per
+> change, which for a game that sets its rate before it plays anything is one reopen with nothing yet queued.

@@ -25,6 +25,22 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0UL, cpu.Cop0[Cpu.CauseRegister] & Cpu.CauseCoprocessor);
         }
 
+        // A Status write with no exception level pending puts the processor in the mode it names at once - see Mars_Performance.md §18.
+        [Fact]
+        public void Writing_status_enters_the_named_mode_before_the_next_instruction()
+        {
+            var cpu = new MipsAssembler().Ori(1, 0, (ushort)(User << 3)).Mtc0(1, Cpu.StatusRegister).Mfc0(2, Cpu.StatusRegister).Build();
+
+            cpu.Run(2);
+            Assert.Equal(EmuSen.Cores.Nintendo.Mars.Memory.PrivilegeMode.User, cpu.Mode);
+            Assert.Null(cpu.LastException);
+
+            // The very next fetch is judged in the new mode, and user mode cannot execute from kseg0.
+            cpu.Step();
+            Assert.Equal(ExceptionCode.AddressErrorLoad, cpu.LastException!.Code);
+            Assert.Equal(MipsAssembler.EntryPoint + 8, cpu.LastException.Address);
+        }
+
         [Fact]
         public void Kernel_mode_needs_no_permission_bit_to_reach_coprocessor_zero()
         {

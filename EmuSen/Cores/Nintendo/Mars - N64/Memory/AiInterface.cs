@@ -49,6 +49,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private uint _dacRate;
         private long _debt;
 
+        // Derived, like the VI's: where _debt was last brought up to, and the first cycle a sample is owed - see Mars_Performance.md §9.
+        [EmuSen.Common.SkipInState] private long _debtAt;
+        [EmuSen.Common.SkipInState] public long Due;
+
         public AiInterface(MemoryBus bus) => _bus = bus;
 
         public int BufferedSamples => _samples.Count;
@@ -70,6 +74,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         };
 
         public void Write32(uint offset, uint value)
+        {
+            // Every register here can start, stop or re-pace the samples, so the debt is settled first - see Mars_Performance.md §9.
+            _bus.Settle();
+            Apply(offset, value);
+            _bus.Reschedule();
+        }
+
+        private void Apply(uint offset, uint value)
         {
             switch (offset & 0x1C)
             {
@@ -100,16 +112,24 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
         }
 
-        // Called from the bus's one counter; nothing moves while no buffer plays or the DMA is off - see Mars_Audio.md §3.
-        public void Step(long cycles)
+        // Whatever the ticks since _debtAt added; an idle tick zeroes the debt, as every idle step once did - see Mars_Performance.md §9.
+        public void Settle()
         {
-            if (_queued == 0 || !_dmaEnabled)
-            {
-                _debt = 0;
-                return;
-            }
+            long now = _bus.Cycles;
+            if (now == _debtAt) return;
 
-            _debt += cycles * _bus.Vi.VideoClock;
+            if (_queued == 0 || !_dmaEnabled) _debt = 0;
+            else _debt += (now - _debtAt) * _bus.Vi.VideoClock;
+
+            _debtAt = now;
+        }
+
+        // Nothing moves while no buffer plays or the DMA is off - see Mars_Audio.md §3.
+        public void Catch()
+        {
+            if (_bus.Cycles < Due) return;
+
+            Settle();
             long period = Period * ProcessorClock;
 
             while (_debt >= period && _queued > 0)
@@ -117,7 +137,26 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 _debt -= period;
                 Play();
             }
+
+            Schedule();
         }
+
+        // Only after Settle or Catch, since it counts from _debtAt - see Mars_Performance.md §9.
+        public void Schedule()
+        {
+            if (_queued == 0 || !_dmaEnabled)
+            {
+                Due = long.MaxValue;
+                return;
+            }
+
+            long clock = _bus.Vi.VideoClock;
+            long remaining = Period * ProcessorClock - _debt;
+            Due = remaining <= 0 ? _debtAt : _debtAt + (remaining + clock - 1) / clock;
+        }
+
+        // A loaded state was settled when it was saved - see Mars_SaveStates.md §2.
+        public void Rebase() => _debtAt = _bus.Cycles;
 
         // Destructive, interleaved left then right, and whole pairs only - what ICore.DequeueAudioSamples names.
         public short[] Drain(int maxFrames)

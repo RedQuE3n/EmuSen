@@ -1,7 +1,7 @@
 # Mars — the audio interface
 
 *Phase E's audio slice, landed 2026-09-18. `EmuSen/Cores/Nintendo/Mars - N64/Memory/AiInterface.cs`, stepped from
-`MemoryBus.Tick`; tests in `MarsAudioTests`, and the game probe (`Mars_GameProbe.md`) for the end-to-end check.*
+`MemoryBus.Tick` — since Phase G only on the ticks a sample is due (`Mars_Performance.md` §9); tests in `MarsAudioTests`, and the game probe (`Mars_GameProbe.md`) for the end-to-end check.*
 
 ---
 

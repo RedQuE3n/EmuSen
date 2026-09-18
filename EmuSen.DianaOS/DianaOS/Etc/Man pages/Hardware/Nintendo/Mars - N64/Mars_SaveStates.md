@@ -48,6 +48,10 @@ costs per step is what changed, not the whole.
   empty (`Loading_a_state_drops_the_audio_a_frontend_has_not_drained`).
 - **The debug port's transcript**, which is the harness's record of the port and not the port.
 - **The processor's exception scratch** (`Cpu.LastException` and the one instance it reuses), written before each use.
+- **The VI's and AI's schedules** — the cycle each debt was last settled at, the cycle each is next due, and the bus's
+  earliest event. They are derived: a save settles both debts first, so the state holds what a device stepped every
+  tick would, and a load rebases and reschedules from the state (`Mars_Performance.md` §9). Leaving them out is what
+  kept the format at version 1.
 
 ## 3. What reflection cannot walk
 

@@ -18,7 +18,8 @@ recorded baseline of the three games' output (§1), frame by frame.
 `MarsPerformanceProbeTests`, off unless `EMUSEN_MARS_PERF` names a directory, runs every game in the test folder for
 600 frames through the bundle a frontend loads — debug target attached, the picture presented every frame — in a
 data-store folder of its own, so no save from an earlier run changes the boot. It times `RunFrame` alone, and after
-each frame hashes the presented picture, all of RDRAM and the audio drained, beside the cycle count.
+each frame hashes the presented picture, all of RDRAM and the audio drained, beside the cycle count — and, since §9,
+the whole save state, so a divergence in a register or a device shows on the frame it happens.
 
 - **With `EMUSEN_MARS_PERF_RECORD=1`** it writes those hashes as the baseline, one file a game, in
   `~/.cache/emusen/mars-golden/`. They are derived from commercial games and stay out of the repository.
@@ -225,6 +226,93 @@ changing what a game does. The levers that remain are of a different size from t
 - **Timing restructured around events** — the devices told when their next event falls, instead of stepped every
   instruction — which can be exactly equivalent, and is the largest of the three in what it touches.
 
-Each is a decision about the core's design rather than a change to it, and is left for one. **What none of this is
+Each is a decision about the core's design rather than a change to it, and is left for one. **Decided the same day:
+timing restructured around events** (§9). **What none of this is
 evidence for**: speed in 3D gameplay. The probe runs boots, title screens and an attract race; a scene with more
 geometry moves work towards the RSP and the display processor, whose shares here are the smallest.
+
+## 9. The VI and the AI told when they are next due
+
+**What the step had left.** §8 named the work around each instruction as the wall; the question for a design change is
+how much of it there is. A microbenchmark measured it directly: a three-instruction loop in KSEG0 with interrupts off,
+the VI programmed for NTSC and a buffer playing, the RSP halted, stepped through `Cpu.Run` sixty million instructions
+at a time in a Release build carrying switches that turned each piece off. The build was never committed. Removing
+work from a loop that cannot take an interrupt changes nothing the loop does, which is what makes this measurement
+admissible where §6's deletions from a running game were not.
+
+| removed | ns an instruction, best of three |
+| --- | --- |
+| nothing | 10.5 |
+| the three device steps (the RSP's halted test kept inline) | 7.7 |
+| those, the interrupt check and the timer | 5.7 |
+
+**The single removals are not in the table because they did not separate.** Each sat inside the JIT's own spread — the
+same build measured 10.5 and 11.9 — and two measured *slower* than removing nothing, which is code layout and the
+tiered compiler's profile, not cost. Only the combined removals cleared the spread, and they did in every run.
+
+**The change.** The VI and the AI each owe a debt against a threshold, growing at a constant rate while their registers
+stand still (`Mars_VideoTiming.md` §1.1, `Mars_Audio.md` §3). Each now records the cycle its debt was last brought up
+to and the first cycle at which its next half line or sample is owed, and the bus keeps the earlier of the two. A tick
+is the cycle count, the RSP's steps while it runs, and one comparison. A tick that reaches the due cycle runs the
+devices as a stepped tick would have — every half line owed, then every sample — and schedules the next.
+
+**Why it is exact, and not merely close:**
+
+- *Between writes a debt is linear in cycles*, so the sum over any run of ticks is `(now − then) × rate` however the
+  ticks were cut. The one rule that is not linear — an idle AI zeroes its debt on every tick — is applied on the first
+  settle after a tick has passed idle, which is when a stepped tick would have applied it; a settle in the same cycle
+  the buffer ran out, when no tick has passed, keeps what was owed.
+- *The rates change only on register writes.* The VI's sync registers set the clock both devices divide, and the AI's
+  own registers start, stop and re-pace it, so a write to either device first settles both at the old rate and then
+  reschedules both at the new one. A write lands in `Execute`, before its instruction's tick, so the new rate governs
+  that tick, as it did.
+- *Events are eager; only the debts are lazy.* A tick at or past the due cycle fires, so the registers a game reads —
+  the current line, the AI's length and status, the MI's pending bits — hold at every instruction what they held when
+  stepped. Nothing but the devices reads a debt.
+- *A save settles both devices first*, so a state holds the bytes a stepped machine's would. The format is unchanged,
+  states saved before this change load, and the derived fields are left out of the state and rebased on load
+  (`Mars_SaveStates.md` §2).
+
+The RSP is not scheduled. It runs in step with the processor, and anything coarser would change what each sees of the
+other.
+
+**What grades it.** §1's probe now also hashes the whole save state after every frame — the processor and COP0, the
+MI, the devices' debts, the RSP — so a divergence is caught on the frame it happens rather than when it first reaches
+RDRAM or the picture. The baseline was re-recorded on the build before this change: its first five columns matched
+the old baseline exactly, and a second run matched the new one on all 600 frames of all three games. After the change,
+all 1,800 frames matched, state and all.
+
+**What it bought:**
+
+| | before (two runs) | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 17.18, 17.09 fps | 18.84 fps | +10% |
+| Super Mario 64 | 20.80, 20.57 fps | 23.38 fps | +13% |
+| Wave Race 64 | 24.14, 24.02 fps | 26.92 fps | +12% |
+
+**What catches a mistake in it.** Fourteen deliberate breakages of the scheduler, each run against every Mars test
+and, where those all passed, against the probe (`mutate_events.py` in the workbench):
+
+| breakage | before `MarsEventTimingTests` | after |
+| --- | --- | --- |
+| a VI write not rescheduling | three Wave Race boot tests | unchanged |
+| an AI write not rescheduling | the undrained-audio state test | unchanged |
+| a load not rebasing the debts | the fresh-core replay | unchanged |
+| the bus, or the AI, skipping an event on its own due cycle | two audio tests | unchanged |
+| a VI write not settling first | the probe alone (frames 1–2) | two tests |
+| an AI write not settling first | the probe alone (frames 6–9) | one test |
+| an idle AI tick not zeroing its debt | the probe alone, in two games of three | one test |
+| a save not settling | the probe alone (frames 6–9) | two tests |
+| the VI skipping its own due cycle | the probe alone (frames 1–2) | three tests |
+| an AI settled twice in one cycle zeroing its debt | **nothing** | one test |
+| a load into a running bus not rescheduling | **nothing** — the probe never loads | one test |
+| either due cycle rounded down rather than up | nothing, correctly | — |
+
+Five breakages had only the probe between them and a commit, and two had nothing; the new tests hold all seven without
+a game image. The last row is an equivalent mutant, recorded so that it is not mistaken for a gap: a device asked
+early finds nothing owed and asks again later.
+
+**What this does not cover.** The tests for the two rarest rows state the stepped design's rule, not the console's: a
+DAC whose phase resets once a tick passes idle is how Mars models the AI (`Mars_Audio.md` §3), and this change keeps
+the model rather than measuring the hardware. Nor does it reverse §6's rejection of a cache of the VI's timing: that
+cache kept the per-instruction step and made it cheaper, by an amount the probe could not see; this removes the step.

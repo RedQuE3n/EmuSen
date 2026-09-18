@@ -57,7 +57,9 @@ VI_H_SYNC × processor clock ÷ (2 × interface clock)
 processor cycles — 2978.4 of them at the NTSC defaults, and 2998.9 at the PAL ones. **Mars carries the
 remainder rather than rounding the period**, accumulating `cycles × interface clock × 2` against a threshold
 of `VI_H_SYNC × processor clock`, both in integers. A rounded period would drift by a line every few
-thousand, which is the kind of error that shows up as a game losing a frame an hour after it starts.
+thousand, which is the kind of error that shows up as a game losing a frame an hour after it starts. Since Phase G
+the sum is settled rather than stepped — brought up to date at each half line, before a register write and before a
+save — in the same integers, so every half line turns on the tick it always did (`Mars_Performance.md` §9).
 
 **The defaults are not assumed, and a game confirmed them.** Tracing Wave Race through the boot it already
 passes, the values it writes are `VI_V_SYNC = 0x20D` and `VI_H_SYNC = 0xC15` — 525 and 3093, which are

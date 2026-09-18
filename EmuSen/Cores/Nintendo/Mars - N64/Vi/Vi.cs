@@ -46,10 +46,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
         public void Write32(uint offset, uint value)
         {
+            // The sync registers set the clock both this and the audio interface run at, so both settle first - see Mars_Performance.md §9.
+            _bus.Settle();
+
             // Writing the current line clears the interrupt; the counter it names is the interface's own - see Mars_VideoTiming.md §2.
             if ((offset & ~3u) == CurrentLine) _bus.Mi.Clear(MiInterrupt.VideoInterface);
 
             if (offset < Registers * 4) _registers[offset >> 2] = value;
+
+            _bus.Reschedule();
         }
 
         public int FrameHeight => (IsPal ? PalHeight : NtscHeight) >> (Serrate ? 0 : 1);

@@ -88,7 +88,11 @@ namespace EmuSen.WiseMan.Cores
                 byte[] sound = new byte[audio.Length * 2];
                 Buffer.BlockCopy(audio, 0, sound, 0, sound.Length);
 
-                hashes.Add($"{frame} {Hash(core.GetFrameBufferRgba())} {Hash(core.Bus!.Rdram)} {Hash(sound)} {core.Bus.Cycles}");
+                // The whole machine as a state carries it, so a divergence shows before it reaches RDRAM - see Mars_Performance.md §1.
+                using var state = new MemoryStream();
+                core.SaveState(state);
+
+                hashes.Add($"{frame} {Hash(core.GetFrameBufferRgba())} {Hash(core.Bus!.Rdram)} {Hash(sound)} {core.Bus.Cycles} {Hash(state.ToArray())}");
             }
 
             return (clock.Elapsed.TotalSeconds, hashes);

@@ -140,6 +140,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // The fill cycle and the one-cycle mode draw every primitive, textured or not; the two-cycle and copy modes draw nothing yet - see Mars_RdpTextures.md §6.
         private void Draw((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
+            VerifyModes();
             if (CycleType == FillCycle) FillSpans(rows);
             else if (CycleType == OneCycle) DrawOneCycle(rows, majorOnLeft, tile, maxLevel);
             else if (CycleType == TwoCycle) DrawTwoCycle(rows, majorOnLeft, tile, maxLevel);

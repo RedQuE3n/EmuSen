@@ -760,6 +760,12 @@ of them.
 > fps, Super Mario 64 30.4 → 36.2, Wave Race 35.3 → 36.1: 60 to 72 per cent of the console, 2.5 to 4.2 times the
 > profile that opened the phase, every frame and state matching the baseline.
 
+> **Progress, 2026-09-18: the display processor** (`Mars_Performance.md` §23). A bench replays one recorded frame's
+> display list from a saved state. Its modes decoded once a word instead of once a use, the combiner's inputs selected
+> once instead of once a channel, the dither looked up in a table: a drawn frame 15 per cent cheaper in Ocarina of
+> Time, 9 in Super Mario 64, 4 in Wave Race, which is +4, 0 and +2 per cent of the games. A fourth change, the tile's
+> derived values cached, measured nothing and was not kept. What remains in a pixel is spread thin.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

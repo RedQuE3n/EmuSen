@@ -1,3 +1,4 @@
+using System.IO;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 
 namespace EmuSen.WiseMan.Cores
@@ -549,6 +550,30 @@ namespace EmuSen.WiseMan.Cores
 
             bus.Write32(MiMode, ClearDisplayProcessorInterrupt);
             Assert.Equal(MiInterrupt.None, bus.Mi.Pending);
+        }
+
+        // The modes a state carries are decoded again on load, so a fresh machine draws what the saved one would - see Mars_Performance.md §23.
+        [Fact]
+        public void A_loaded_state_draws_with_the_modes_it_carried()
+        {
+            var saver = new MemoryBus();
+            RunList(saver, ColorImage(Bits16, 8, Framebuffer), Scissor(0, 0, 8, 8), FillCycle, FillColor(0x07C0_07C0), SyncFull);
+
+            using var state = new MemoryStream();
+            using (var w = new BinaryWriter(state, System.Text.Encoding.UTF8, leaveOpen: true)) saver.WriteState(w);
+
+            var loader = new MemoryBus();
+            state.Position = 0;
+            using (var r = new BinaryReader(state, System.Text.Encoding.UTF8, leaveOpen: true)) loader.ReadState(r);
+
+            RunList(saver, FillRectangle(0, 0, 7, 7), SyncFull);
+            RunList(loader, FillRectangle(0, 0, 7, 7), SyncFull);
+
+            Assert.Equal(0x07C0, Pixel16(saver, 8, 3, 3));
+            for (uint y = 0; y < 8; y++)
+            {
+                for (uint x = 0; x < 8; x++) Assert.Equal(Pixel16(saver, 8, x, y), Pixel16(loader, 8, x, y));
+            }
         }
 
         private static void RunList(MemoryBus bus, params ulong[] words)

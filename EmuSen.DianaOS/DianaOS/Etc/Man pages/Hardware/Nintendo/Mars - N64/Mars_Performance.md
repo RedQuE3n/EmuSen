@@ -843,3 +843,81 @@ first time — a quarter of Ocarina of Time, whose two-cycle pipeline, texel fet
 entries under it. The video interface's walk and dither filter are what §21 left. `SpInterface.Step` shows 5 to 11
 per cent, which §15 found to be mostly the sampler's lean.
 
+## 23. The display processor: decoded once, selected once, looked up once
+
+**A bench for the display processor alone.** Its work arrives as a display list the signal processor builds during
+the frame, so to time it apart from everything else one drawn frame of each game was recorded — the state of the
+machine before the frame, and every command word the interface handed the processor during it — and the bench loads
+the state, replays the words into the processor and times the replay, hashing RDRAM and its hidden bits afterwards so
+that a change which alters a pixel is seen at once. Ocarina of Time and Wave Race draw on fewer fields than they
+display, so the recorder advances to a field that draws. The replay is deterministic, and its noise about one per cent
+on the best of fifty. Kept beside the speed tooling, outside the repository, since it holds images of commercial games.
+
+| one drawn frame, before | words | ms |
+| --- | --- | --- |
+| Ocarina of Time (frame 303) | 5,186 | 36.5 |
+| Super Mario 64 (frame 401) | 3,741 | 15.0 |
+| Wave Race 64 (frame 302) | 15,013 | 16.1 |
+
+At the field rates the games draw at, that is the quarter to a sixth of a frame the profile showed.
+
+**Where a pixel's time went**, from the bench's own profile: the two draw loops and the two-cycle mode's first cycles
+at 35 to 45 per cent exclusive, the texel path (`Texel`, `FetchTexel`, `FourTexels`) at 15 to 32, the combiner at 10 to
+14. And three things every pixel did that it did not need to:
+
+- *Every mode bit was re-extracted from the two 64-bit mode words on every use* — the cycle type, the dither modes, the
+  blender's and combiner's selector structs, some forty shifts and masks a pixel — though the words change only when
+  `SetOtherModes` or `SetCombine` lands.
+- *The combiner chose each input's source once a channel*, through a switch on the selector and a switch on the
+  channel: twenty-eight switches a cycle for four inputs and an alpha.
+- *The dither pattern was chosen by two switches a pixel*, on modes fixed for the primitive.
+
+**The changes.** Each mode bit is a field decoded when its word lands and after a loaded state, and Debug builds
+recompute all forty-one from the words at every draw and throw if any disagrees — §10's and §18's discipline again.
+The combiner selects each input's source colour once, and reads its three channels; a scalar input is broadcast to
+all three, which is what the per-channel switch returned. The dither is one lookup in one of sixteen tables built
+once, a table a pair of modes. All exact by construction, and all 1,800 probe frames match, state and all.
+
+| one drawn frame | before | modes decoded once | + combiner, dither | so far |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time | 36.5 ms | 34.0 | 30.9 | −15% |
+| Super Mario 64 | 15.0 ms | 14.5 | 13.7 | −9% |
+| Wave Race 64 | 16.1 ms | 16.0 | 15.5 | −4% |
+
+The RDRAM hash after each replay is unchanged by every change.
+
+**Measured and not kept.** A fourth change cached the texture tile's derived values — its clamp limits, mirror bits
+and the fetch's format-and-size key — in the tile when a tile command lands, and read the 16-bit texture-memory,
+colour and depth accesses as halfwords: all exact, and all inside the bench's noise (30.9, 13.6 and 15.3–16.0 ms
+against 30.9, 13.7 and 15.5). The tile's properties were cheaper than they looked. Reverted; the test it needed, a
+draw after a loaded state, stays, since it is what pins the modes' refresh below.
+
+**What catches a mistake in it.** Twelve breakages, every Mars test in Debug, each of the four decode sites with the
+verifier on and with it off:
+
+| breakage | verifier on | verifier off |
+| --- | --- | --- |
+| `SetOtherModes` not decoding | 1,497 tests, by the verifier | 1,424, by their own assertions |
+| `SetCombine` not decoding | 1,485 | 564 |
+| the dither table not following the modes | 1,484 | 225 |
+| a loaded state not refreshing | **nothing** | **nothing** — no test drew after a load; `A_loaded_state_draws_with_the_modes_it_carried` now does, and fails both ways |
+| a scalar C input short of a channel | 148 tests | |
+| C's texel-1 alpha read from texel 0 | 7 | |
+| keying passing input B through | 5 | |
+| the dither tables' alpha rule | 35 | |
+
+**And in the games**, §12's method, three rounds, medians (fps):
+
+| | before (`96beb4b`) | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 30.4 | 31.6 | +4%, every round |
+| Super Mario 64 | 36.4 | 36.1 | within the spread |
+| Wave Race 64 | 36.0 | 36.6 | +2%, every round |
+
+A sixth of the display processor's time is a twenty-fifth of Ocarina of Time's frame, which is what it measures as.
+**What is left in a pixel** is spread thin — the shade corrections, the depth compare, the memory reads and writes,
+the blender's selectors, the texel fetch's switch and the four fetches of a filtered texel — each a few nanoseconds
+and none redundant in the way the mode words, the combiner's switches and the dither were. The bench's profile after
+these changes puts the two draw loops at 35 to 45 per cent exclusive and the texel path at 20 to 33, and neither share
+is one thing.
+

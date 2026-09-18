@@ -146,24 +146,56 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void Dither(int x, int y, ref int color, ref int alpha)
         {
             int index = (((y >> (_scissorField ? 1 : 0)) & 3) << 2) | (x & 3);
+            (color, alpha) = _ditherTable[index];
+        }
 
-            (color, int pattern) = RgbDither switch
+        // The sixteen colour and alpha dithers of one pair of modes, one of sixteen tables built once - see Mars_Performance.md §23.
+        [EmuSen.Common.SkipInState] private (byte Color, byte Alpha)[] _ditherTable = DitherTables[0];
+
+        private static readonly (byte Color, byte Alpha)[][] DitherTables = BuildDitherTables();
+
+        private static (byte Color, byte Alpha)[][] BuildDitherTables()
+        {
+            var tables = new (byte Color, byte Alpha)[16][];
+
+            for (int rgb = 0; rgb < 4; rgb++)
             {
-                0 => (MagicSquare[index], (int)MagicSquare[index]),
-                1 => (Bayer[index], (int)Bayer[index]),
-                2 => (0, (int)MagicSquare[index]),
-                _ => (7, (int)Bayer[index]),
-            };
+                for (int alphaMode = 0; alphaMode < 4; alphaMode++)
+                {
+                    var table = new (byte Color, byte Alpha)[16];
+                    for (int index = 0; index < 16; index++)
+                    {
+                        (int color, int pattern) = rgb switch
+                        {
+                            0 => (MagicSquare[index], (int)MagicSquare[index]),
+                            1 => (Bayer[index], (int)Bayer[index]),
+                            2 => (0, (int)MagicSquare[index]),
+                            _ => (7, (int)Bayer[index]),
+                        };
 
-            alpha = AlphaDither switch { 0 => pattern, 1 => ~pattern & 7, _ => 0 };
+                        int alpha = alphaMode switch { 0 => pattern, 1 => ~pattern & 7, _ => 0 };
+                        table[index] = ((byte)color, (byte)alpha);
+                    }
+
+                    tables[rgb * 4 + alphaMode] = table;
+                }
+            }
+
+            return tables;
         }
 
         // (A - B) × C + D in nine-bit signed arithmetic for one cycle's selectors: colour before its shift to nine bits, alpha after - see §4.1.
-        private (int R, int G, int B, int A) CombinerEquations(CombinerSelectors c) => (
-            ColorEquation(ColorA(c.ColorA, 0), ColorB(c.ColorB, 0), ColorC(c.ColorC, 0), ColorD(c.ColorD, 0)),
-            ColorEquation(ColorA(c.ColorA, 1), ColorB(c.ColorB, 1), ColorC(c.ColorC, 1), ColorD(c.ColorD, 1)),
-            ColorEquation(ColorA(c.ColorA, 2), ColorB(c.ColorB, 2), ColorC(c.ColorC, 2), ColorD(c.ColorD, 2)),
-            AlphaEquation(AlphaABD(c.AlphaA), AlphaABD(c.AlphaB), AlphaC(c.AlphaC), AlphaABD(c.AlphaD)));
+        private (int R, int G, int B, int A) CombinerEquations(CombinerSelectors c)
+        {
+            // Each input's source is chosen once, not once a channel - see Mars_Performance.md §23.
+            Color a = ColorA(c.ColorA), b = ColorB(c.ColorB), m = ColorC(c.ColorC), d = ColorD(c.ColorD);
+
+            return (
+                ColorEquation(a.R, b.R, m.R, d.R),
+                ColorEquation(a.G, b.G, m.G, d.G),
+                ColorEquation(a.B, b.B, m.B, d.B),
+                AlphaEquation(AlphaABD(c.AlphaA), AlphaABD(c.AlphaB), AlphaC(c.AlphaC), AlphaABD(c.AlphaD)));
+        }
 
         // The one-cycle mode's cycle and the two-cycle mode's last: the pixel's colour and alpha, then clamped to eight bits - see §4.1.
         private void CombineSecondCycle(int ditherAlpha, ref int coverage)
@@ -178,7 +210,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             if (KeyEnabled)
             {
                 keyAlpha = ChromaKey(red, green, blue);
-                _pixel = new Color { R = Clamp9(ColorA(last.ColorA, 0)), G = Clamp9(ColorA(last.ColorA, 1)), B = Clamp9(ColorA(last.ColorA, 2)) };
+                Color through = ColorA(last.ColorA);
+                _pixel = new Color { R = Clamp9(through.R), G = Clamp9(through.G), B = Clamp9(through.B) };
             }
             else
             {
@@ -226,63 +259,66 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             return (Reads(1), Reads(2));
         }
 
-        private int ColorA(int selector, int channel) => selector switch
+        private Color ColorA(int selector) => selector switch
         {
-            0 => Channel(_combined, channel),
-            1 => Channel(_texel0, channel),
-            2 => Channel(_texel1, channel),
-            3 => Channel(_primitiveColor, channel),
-            4 => Channel(_shade, channel),
-            5 => Channel(_environmentColor, channel),
-            6 => 0x100,
-            _ => 0,
+            0 => _combined,
+            1 => _texel0,
+            2 => _texel1,
+            3 => _primitiveColor,
+            4 => _shade,
+            5 => _environmentColor,
+            6 => Broadcast(0x100),
+            _ => default,
         };
 
-        private int ColorB(int selector, int channel) => selector switch
+        private Color ColorB(int selector) => selector switch
         {
-            0 => Channel(_combined, channel),
-            1 => Channel(_texel0, channel),
-            2 => Channel(_texel1, channel),
-            3 => Channel(_primitiveColor, channel),
-            4 => Channel(_shade, channel),
-            5 => Channel(_environmentColor, channel),
-            6 => Channel(_keyCenter, channel),
-            7 => _k4,
-            _ => 0,
+            0 => _combined,
+            1 => _texel0,
+            2 => _texel1,
+            3 => _primitiveColor,
+            4 => _shade,
+            5 => _environmentColor,
+            6 => _keyCenter,
+            7 => Broadcast(_k4),
+            _ => default,
         };
 
-        private int ColorC(int selector, int channel) => selector switch
+        private Color ColorC(int selector) => selector switch
         {
-            0 => Channel(_combined, channel),
-            1 => Channel(_texel0, channel),
-            2 => Channel(_texel1, channel),
-            3 => Channel(_primitiveColor, channel),
-            4 => Channel(_shade, channel),
-            5 => Channel(_environmentColor, channel),
-            6 => Channel(_keyScale, channel),
-            7 => _combined.A,
-            8 => _texel0.A,
-            9 => _texel1.A,
-            10 => _primitiveColor.A,
-            11 => _shade.A,
-            12 => _environmentColor.A,
-            13 => _lodFraction,
-            14 => _primitiveLodFraction,
-            15 => _k5,
-            _ => 0,
+            0 => _combined,
+            1 => _texel0,
+            2 => _texel1,
+            3 => _primitiveColor,
+            4 => _shade,
+            5 => _environmentColor,
+            6 => _keyScale,
+            7 => Broadcast(_combined.A),
+            8 => Broadcast(_texel0.A),
+            9 => Broadcast(_texel1.A),
+            10 => Broadcast(_primitiveColor.A),
+            11 => Broadcast(_shade.A),
+            12 => Broadcast(_environmentColor.A),
+            13 => Broadcast(_lodFraction),
+            14 => Broadcast(_primitiveLodFraction),
+            15 => Broadcast(_k5),
+            _ => default,
         };
 
-        private int ColorD(int selector, int channel) => selector switch
+        private Color ColorD(int selector) => selector switch
         {
-            0 => Channel(_combined, channel),
-            1 => Channel(_texel0, channel),
-            2 => Channel(_texel1, channel),
-            3 => Channel(_primitiveColor, channel),
-            4 => Channel(_shade, channel),
-            5 => Channel(_environmentColor, channel),
-            6 => 0x100,
-            _ => 0,
+            0 => _combined,
+            1 => _texel0,
+            2 => _texel1,
+            3 => _primitiveColor,
+            4 => _shade,
+            5 => _environmentColor,
+            6 => Broadcast(0x100),
+            _ => default,
         };
+
+        // A scalar input is the same value on every channel.
+        private static Color Broadcast(int value) => new() { R = value, G = value, B = value };
 
         private int AlphaABD(int selector) => selector switch
         {
@@ -307,8 +343,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             6 => _primitiveLodFraction,
             _ => 0,
         };
-
-        private static int Channel(Color color, int channel) => channel switch { 0 => color.R, 1 => color.G, _ => color.B };
 
         private static int ColorEquation(int a, int b, int c, int d) =>
             ((Extend9(a) - Extend9(b)) * SignedMultiplier(c) + (Extend9(d) << 8) + 0x80) & 0x1FFFF;

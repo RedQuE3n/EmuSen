@@ -32,7 +32,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // The display processor's own four kilobytes of texture memory, in console byte order - see Mars_RdpTextures.md §2.
         public byte[] TextureMemory { get; } = new byte[0x1000];
 
-        public Rdp(MemoryBus bus) => _bus = bus;
+        public Rdp(MemoryBus bus)
+        {
+            _bus = bus;
+            Refresh();
+        }
 
         // True when the command this word completed was a full sync, which only the interface can answer - see §6.
         public bool Accept(ulong word)
@@ -71,7 +75,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case LoadPalette: Load(word, LoadKind.Palette); break;
                 case SyncFull: return true;
                 case SetScissor: Scissor(word); break;
-                case SetOtherModes: _otherModes = word; break;
+                case SetOtherModes: _otherModes = word; DecodeOtherModes(); break;
                 case FillRectangle: Fill(word); break;
                 case SetFillColor: _fillColor = (uint)word; break;
                 case SetColorImage: ColorImage(word); break;

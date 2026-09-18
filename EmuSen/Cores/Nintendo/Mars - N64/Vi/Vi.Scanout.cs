@@ -5,6 +5,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
     {
         private const int Replicate = 3;
 
+        // Room for every source pixel one row can reach: 640 columns at the largest step, and the neighbour beyond - see Mars_Performance.md §3.
+        private const int RowSpan = RasterWidth * 4 + 2;
+
+        // Each source pixel's sample, made once a row rather than once a use; presentation scratch, never state - see Mars_Performance.md §3.
+        [EmuSen.Common.SkipInState] private readonly Pixel[] _samples = new Pixel[2 * RowSpan];
+        [EmuSen.Common.SkipInState] private readonly int[] _sampledRow = new int[2 * RowSpan];
+        [EmuSen.Common.SkipInState] private int _row;
+
         // Where the picture sits in the raster, how far each step moves through the frame buffer, and which columns carry signal.
         private readonly record struct Picture(
             int Left, int Top, int Columns, int Rows, int Stride, int ActiveLines,
@@ -165,8 +173,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             bool divot = DivotEnabled;
             int bug = 0;
 
+            int first = (int)(picture.StartX >> 10);
+
             for (int row = 0; row < picture.Rows; row++)
             {
+                NextRow();
+
                 uint down = picture.StartY + (uint)row * picture.StepY;
                 int source = width * (int)(down >> 10);
                 int below = source + width;
@@ -182,13 +194,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                     int step = (int)(across >> 10);
                     int fractionX = (int)(across >> 5) & 0x1F;
 
-                    Pixel color = Across(origin, source + step, wide, width, 0, divot);
+                    Pixel color = Remembered(0, step - first, origin, source + step, wide, width, 0, divot);
 
                     if (resample)
                     {
-                        Pixel next = Across(origin, source + step + 1, wide, width, 0, divot);
-                        Pixel under = Across(origin, below + step, wide, width, bug, divot);
-                        Pixel underNext = Across(origin, below + step + 1, wide, width, bug, divot);
+                        Pixel next = Remembered(0, step + 1 - first, origin, source + step + 1, wide, width, 0, divot);
+                        Pixel under = Remembered(1, step - first, origin, below + step, wide, width, bug, divot);
+                        Pixel underNext = Remembered(1, step + 1 - first, origin, below + step + 1, wide, width, bug, divot);
 
                         color = Mix(color, under, fractionY);
                         next = Mix(next, underNext, fractionY);
@@ -211,6 +223,29 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                     if (shown) _raster[pixel + 3] = (byte)color.Coverage;
                 }
             }
+        }
+
+        // A new stamp for each row, so last row's samples are stale without being cleared - see Mars_Performance.md §3.
+        private void NextRow()
+        {
+            if (++_row != int.MaxValue) return;
+
+            System.Array.Clear(_sampledRow);
+            _row = 1;
+        }
+
+        // A sample is a function of RDRAM and the registers alone, neither of which a scan changes, so the first answer stands - see Mars_Performance.md §3.
+        private Pixel Remembered(int line, int offset, uint origin, int at, bool wide, int width, int bug, bool divot)
+        {
+            if ((uint)offset >= RowSpan) return Across(origin, at, wide, width, bug, divot);
+
+            int slot = line * RowSpan + offset;
+            if (_sampledRow[slot] == _row) return _samples[slot];
+
+            Pixel pixel = Across(origin, at, wide, width, bug, divot);
+            _samples[slot] = pixel;
+            _sampledRow[slot] = _row;
+            return pixel;
         }
 
         // The pixel a step lands on with its two neighbours across the row, which divot needs and nothing else does - see Mars_VideoPasses.md §2.

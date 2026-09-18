@@ -17,25 +17,65 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         private int _halfLine;
         private bool _field;
 
+        // The cycle _debt was last brought up to; derived, so a loaded state rebases it - see Mars_Performance.md §9.
+        [EmuSen.Common.SkipInState] private long _debtAt;
+
+        // The first cycle at which the next half line is owed, or never while the signal is unprogrammed - see Mars_Performance.md §9.
+        [EmuSen.Common.SkipInState] public long Due;
+
         // Fields completed since power-on, counted where the half line wraps, so a frame can end on one - see Mars_Core.md §3.
         public long Fields { get; private set; }
 
-        // Called from the bus's one counter, so the signal advances whether or not anything is scanning it - see §1.1.
-        public void Step(long cycles)
+        // A line is VI_H_SYNC of the interface's clocks and the field VI_V_SYNC half lines; zero in either stops the signal - see §1.1.
+        private bool Programmed(out int sync, out long line)
         {
-            int sync = (int)Register(VerticalSync) & 0x3FF;
-            long line = (long)(Register(HorizontalSync) & 0xFFF) * ProcessorClock;
-            if (sync <= 0 || line <= 0) return;
-
-            long clock = VideoClock;
-            _debt += cycles * clock * 2;
-
-            while (_debt >= line)
-            {
-                _debt -= line;
-                Advance(sync);
-            }
+            sync = (int)Register(VerticalSync) & 0x3FF;
+            line = (long)(Register(HorizontalSync) & 0xFFF) * ProcessorClock;
+            return sync > 0 && line > 0;
         }
+
+        // What every tick since _debtAt added, at the rate the registers set before a write changes them - see Mars_Performance.md §9.
+        public void Settle()
+        {
+            long now = _bus.Cycles;
+            if (Programmed(out _, out _)) _debt += (now - _debtAt) * VideoClock * 2;
+            _debtAt = now;
+        }
+
+        // Every half line owed by now, in one go, as a tick that crossed several always advanced them - see §1.1.
+        public void Catch()
+        {
+            if (_bus.Cycles < Due) return;
+
+            Settle();
+            if (Programmed(out int sync, out long line))
+            {
+                while (_debt >= line)
+                {
+                    _debt -= line;
+                    Advance(sync);
+                }
+            }
+
+            Schedule();
+        }
+
+        // Only after Settle or Catch, since it counts from _debtAt - see Mars_Performance.md §9.
+        public void Schedule()
+        {
+            if (!Programmed(out _, out long line))
+            {
+                Due = long.MaxValue;
+                return;
+            }
+
+            long step = VideoClock * 2;
+            long remaining = line - _debt;
+            Due = remaining <= 0 ? _debtAt : _debtAt + (remaining + step - 1) / step;
+        }
+
+        // A loaded state was settled when it was saved, so its debt is owed from the cycle it was saved at - see Mars_SaveStates.md §2.
+        public void Rebase() => _debtAt = _bus.Cycles;
 
         // One half line: the count wraps at the vertical sync, and only an interlaced signal changes field when it does - see §1.2.
         private void Advance(int sync)

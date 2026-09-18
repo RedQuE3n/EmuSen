@@ -55,6 +55,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // One counter for the whole machine, so no instruction can forget to advance it - see §3.
         public long Cycles;
 
+        // The earliest cycle the VI or AI has something to do; zero until the first tick asks them - see Mars_Performance.md §9.
+        [EmuSen.Common.SkipInState] private long _nextEvent;
+
         private long _countBias;
 
         // Stubs until each device exists; a register nobody models still has to read back - see §2.2.
@@ -78,6 +81,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // The reflected fields, then what reflection cannot walk: the stub registers, the save chip, each port's pak - see Mars_SaveStates.md §3.
         public void WriteState(BinaryWriter w)
         {
+            // Settled first, so a state holds what a device stepped every tick would - see Mars_Performance.md §9.
+            Settle();
             StateSerializer.Write(w, this);
 
             w.Write(_registers.Count);
@@ -119,14 +124,40 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
 
             Ai.DropUndrained();
+
+            Vi.Rebase();
+            Ai.Rebase();
+            Reschedule();
         }
 
+        // The RSP runs in step with the processor; the VI and AI act only when one of them is due - see Mars_Performance.md §9.
         public void Tick(long cycles)
         {
             Cycles += cycles;
-            Sp.Step(cycles);
-            Vi.Step(cycles);
-            Ai.Step(cycles);
+            if (!Sp.Processor.Halted) Sp.Step(cycles);
+            if (Cycles >= _nextEvent) RunEvents();
+        }
+
+        // In the order a tick once stepped them, the VI's half lines before the AI's samples - see Mars_Performance.md §9.
+        private void RunEvents()
+        {
+            Vi.Catch();
+            Ai.Catch();
+            _nextEvent = Math.Min(Vi.Due, Ai.Due);
+        }
+
+        // Before a write changes what either clock runs at, both are brought up to now at the old rate - see Mars_Performance.md §9.
+        public void Settle()
+        {
+            Vi.Settle();
+            Ai.Settle();
+        }
+
+        public void Reschedule()
+        {
+            Vi.Schedule();
+            Ai.Schedule();
+            _nextEvent = Math.Min(Vi.Due, Ai.Due);
         }
 
         // The eight interface registers and the eight the display processor owns - see Mars_Rsp.md §5.

@@ -18,9 +18,11 @@ namespace EmuSen.WiseMan.Cores
             return bus;
         }
 
+        // What a game does: the block in, and then out, which is when the PIF runs it - see §2.
         private static void Run(MemoryBus bus)
         {
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressWrite, 0);
+            bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
         }
 
         [Fact]
@@ -49,13 +51,38 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0u, bus.Read32(MemoryMap.SiBase + SiInterface.Status));
         }
 
+        // The referee's read walks the block whatever the last byte says; only the challenge bit steers it - see §2.
         [Fact]
-        public void A_block_runs_only_when_its_last_byte_asks()
+        public void A_block_runs_on_a_read_whatever_its_last_byte_says()
         {
             MemoryBus bus = WithBlock(0x01, 0x03, 0x00, 0xFF, 0xFF, 0xFF, 0xFE);
             bus.Rdram[Dram + 63] = 0;
 
             Run(bus);
+
+            Assert.Equal(0x05, bus.PifRam[3]);
+        }
+
+        // The regression the controller check found: a block written once and read every frame - see §2.
+        [Fact]
+        public void Each_read_runs_the_block_again_with_the_buttons_as_they_are_now()
+        {
+            MemoryBus bus = WithBlock(0xFF, 0x01, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0xFE);
+            Run(bus);
+            Assert.Equal(0x00, bus.Rdram[Dram + 4]);
+
+            bus.Si.Controllers[0].Buttons = 0x1000;
+            bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
+
+            Assert.Equal(new byte[] { 0x10, 0x00 }, bus.Rdram[(int)(Dram + 4)..(int)(Dram + 6)]);
+        }
+
+        [Fact]
+        public void A_block_does_not_run_on_the_way_in()
+        {
+            MemoryBus bus = WithBlock(0x01, 0x03, 0x00, 0xFF, 0xFF, 0xFF, 0xFE);
+
+            bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressWrite, 0);
 
             Assert.Equal(0xFF, bus.PifRam[3]);
         }
@@ -199,9 +226,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0x00, bus.PifRam[3]);
         }
 
-        // A block only runs on its way in; on the way out the PIF is being read, not asked - see §2.
+        // The block already in PIF RAM runs as it is read out, and what goes to memory is the answer - see §2.
         [Fact]
-        public void A_block_does_not_run_on_the_way_out()
+        public void A_block_runs_on_the_way_out()
         {
             var bus = new MemoryBus();
             byte[] block = { 0x01, 0x03, 0x00, 0xFF, 0xFF, 0xFF, 0xFE };
@@ -211,7 +238,8 @@ namespace EmuSen.WiseMan.Cores
             bus.Write32(MemoryMap.SiBase + SiInterface.DramAddress, Dram);
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
 
-            Assert.Equal(0xFF, bus.PifRam[3]);
+            Assert.Equal(0x05, bus.PifRam[3]);
+            Assert.Equal(0x05, bus.Rdram[Dram + 3]);
         }
 
         // Padding is not a channel, so the command after it still belongs to the first one - see §3.
@@ -236,14 +264,15 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0xFF, bus.PifRam[4]);
         }
 
+        // The referee's walk leaves the byte alone, so a block written once is walked on every read - see §2.
         [Fact]
-        public void The_pif_clears_the_byte_it_was_started_by()
+        public void The_pif_leaves_the_byte_it_was_started_by()
         {
             MemoryBus bus = WithBlock(0x01, 0x03, 0x00, 0xFF, 0xFF, 0xFF, 0xFE);
 
             Run(bus);
 
-            Assert.Equal(0x00, bus.PifRam[63]);
+            Assert.Equal(0x01, bus.PifRam[63]);
         }
     }
 }

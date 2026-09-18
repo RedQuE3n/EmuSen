@@ -620,6 +620,15 @@ rather than raw samples.
 > databases do. No corpus group covers any of it; the FPGA core is the source, and all fifty-one breakages are caught,
 > four of them by cases the round showed were missing.
 
+> **Progress, 2026-09-18: Ocarina of Time boots, and Phase E is finished.** A worktree agent traced the 6105 title's
+> stop to its IPL3's third instruction, which reads a register IPL2 leaves and the handoff did not (`Mars_Boot.md`
+> §6–§8), and it now reaches its title screen and names its SRAM by use. The controller check that closes the phase
+> found the joybus running when PIF RAM was written rather than read, which had frozen every button a game polled
+> after boot; with that fixed, Start reaches two games (`Mars_Serial.md` §2, `Mars_GameProbe.md` §5). Nothing the
+> corpus asks of this phase remains, and the done-when above is met. Left out, and named where each belongs: the
+> real-time clock, the rumble and transfer paks, busy periods, the domain-two timing registers, and PAL's IPL2
+> values. Phase F's surfaces and Phase G's speed are next.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's
@@ -632,6 +641,15 @@ This is the phase that makes `ICore` satisfiable: `GetFrameBufferRgba`,
 
 **Done when** a commercial title boots to its title screen headlessly, with audio
 sample production non-zero and a controller able to reach the game.
+
+> **Met, 2026-09-18, by all three titles in the library and two of them for the controller.** Super Mario 64, Wave
+> Race 64 and Ocarina of Time boot to their title pictures headlessly and play 32kHz audio (`Mars_GameProbe.md` §3,
+> `Mars_Audio.md` §5); Start pressed through `ICore.SetButton` takes Super Mario 64 off its title screen and Wave Race
+> 64 out of its attract race, against a control run identical until the press (`Mars_GameProbe.md` §5). The third
+> clause is the one that did work: the first attempt to meet it found the joybus answering on the wrong side of the
+> transfer, so that no button a game read after boot ever changed (`Mars_Serial.md` §2). **What it does not mean** is
+> that a game is playable. Mars runs at about a twelfth of the console's speed in Debug and a fifth in Release; that is
+> Phase G's question, and the done-when was written not to ask it.
 
 ### 4.6 Phase F — the project's own surfaces
 

@@ -211,7 +211,9 @@ use, as Mars does.
   other cores do. ~~The every-300-frames write is covered by nothing but the code: a test would need 300 frames of a
   running machine.~~ The breakage round found it uncovered, and a case on very short fields now covers it (§8.1).
 - **`--nobattery` is latched when the ROM is loaded**, as the other cores' cartridges latch it: nothing is read, nothing
-  written, and the chip still works for the run.
+  written, and the chip still works for the run. `MarsCore` also takes the switch as a constructor argument, as
+  Venus's `Cartridge` does, because four test files arm `--nobattery` for the whole test process and never disarm
+  it; the save-file tests passed alone and failed in the full suite until they passed their own.
 
 ## 8. What was measured
 
@@ -228,7 +230,7 @@ Neither game's picture, audio or frame count changed with the chips in place (19
 32kHz audio in both), and Wave Race draws its attract race with a pak in the slot as it did with none.
 
 **A save made by one run is found by the next, and the game behaves differently for it.** That was shown by accident.
-The first attempt at `Mars_GameProbe.md` §6's controller check ran Super Mario 64 twice in one save folder, expecting
+The first attempt at `Mars_GameProbe.md` §5's controller check ran Super Mario 64 twice in one save folder, expecting
 the two runs to be identical until a button was pressed; they parted by frame 399. A standalone run found Mars
 deterministic — two runs identical for 400 frames, side by side and one after the other — and then found the cause:
 the game writes its EEPROM at frame 61, the every-300-frames write put it in `<rom>.srm`, and the second run's
@@ -236,8 +238,13 @@ the game writes its EEPROM at frame 61, the every-300-frames write put it in `<r
 other cores (`Venus_Memory.md` §2.4a), met from the other side, and the check now gives each run its own folder. What it is evidence for is narrow: a save written by Mars is read by Mars, and changes what a game does.
 That the bytes are what a console would have written is not tested, since nothing here reads a console's EEPROM.
 
-**Ocarina of Time did not boot when this slice was measured**, so SRAM has met no game here; the next boot of it is
-the first such meeting (`Mars_Boot.md`).
+~~**Ocarina of Time did not boot when this slice was measured**, so SRAM has met no game here; the next boot of it is
+the first such meeting (`Mars_Boot.md`).~~
+
+> **Update 2026-09-18, the same day: Ocarina of Time boots** (`Mars_Boot.md` §8), and in 150 seconds of a Release build
+> — 31.3 seconds of the console's — its first move named SRAM, and it wrote it. That is the chip mupen64plus's
+> database gives it; Project64 has no row and finds it by use, as Mars did. All three games in the library now name
+> their chip by their own behaviour, and each names the one both databases would.
 
 ### 8.1 The breakage round
 

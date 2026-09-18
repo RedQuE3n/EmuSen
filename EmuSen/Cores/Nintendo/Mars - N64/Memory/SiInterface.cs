@@ -69,8 +69,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             byte[] ram = _bus.PifRam;
 
-            // Answered as the block goes out rather than as it comes in, which is when the referee answers - see Mars_Boot.md §7.2.
-            if (!toPif && (ram[^1] & ChallengeRequest) != 0) AnswerChallenge(ram);
+            // The PIF works as its RAM is read out: the challenge if one is asked, the joybus walk otherwise - see Mars_Serial.md §2.
+            if (!toPif)
+            {
+                if ((ram[^1] & ChallengeRequest) != 0) AnswerChallenge(ram);
+                else Joybus.Run(ram, Controllers, _bus.Save);
+            }
 
             for (uint i = 0; i < MemoryMap.PifRamSize; i++)
             {
@@ -81,7 +85,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 else _bus.Rdram[address] = ram[i];
             }
 
-            if (toPif && (ram[^1] & 1) != 0) Joybus.Run(ram, Controllers, _bus.Save);
 
             _bus.Mi.Raise(MiInterrupt.SerialInterface);
         }

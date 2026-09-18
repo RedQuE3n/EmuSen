@@ -19,7 +19,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         public bool Halted = true;
         public bool Broke;
 
-        private readonly MemoryBus _bus;
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
 
         public Rsp(MemoryBus bus) => _bus = bus;
 

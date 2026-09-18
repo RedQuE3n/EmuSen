@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mars.Rom;
 
 namespace EmuSen.Cores.Nintendo.Mars.Memory
@@ -28,10 +31,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public readonly Vi.Vi Vi;
         public readonly MiInterface Mi = new();
 
-        public RomImage? Cart;
+        [EmuSen.Common.SkipInState] public RomImage? Cart;
 
         // The cartridge's save chip on the second domain and the joybus's fifth channel - see Mars_Save.md §1.
-        public SaveChip Save = new(N64SaveType.Unknown);
+        [EmuSen.Common.SkipInState] public SaveChip Save = new(N64SaveType.Unknown);
 
         // What the RDRAM registers read once IPL3 has set RDRAM up, as the corpus measured them, every 64 bytes - see Mars_Memory.md §8.5.
         private static readonly uint[] RdramRegisters =
@@ -49,7 +52,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private long _countBias;
 
         // Stubs until each device exists; a register nobody models still has to read back - see §2.2.
-        private readonly Dictionary<uint, uint> _registers = new();
+        [EmuSen.Common.SkipInState] private readonly Dictionary<uint, uint> _registers = new();
 
         public MemoryBus(bool expansionPak = false)
         {
@@ -64,6 +67,52 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             // Nonzero tells libdragon's IPL3 that RDRAM needs no initialising - see Mars_TestOracle.md §3.
             _registers[MemoryMap.RiSelect] = 0x14;
+        }
+
+        // The reflected fields, then what reflection cannot walk: the stub registers, the save chip, each port's pak - see Mars_SaveStates.md §3.
+        public void WriteState(BinaryWriter w)
+        {
+            StateSerializer.Write(w, this);
+
+            w.Write(_registers.Count);
+            foreach (var (address, value) in _registers.OrderBy(pair => pair.Key))
+            {
+                w.Write(address);
+                w.Write(value);
+            }
+
+            Save.WriteState(w);
+
+            foreach (Controller port in Si.Controllers)
+            {
+                w.Write(port.Pak != null);
+                if (port.Pak != null) StateSerializer.Write(w, port.Pak);
+            }
+        }
+
+        public void ReadState(BinaryReader r)
+        {
+            StateSerializer.Read(r, this);
+
+            _registers.Clear();
+            for (int count = r.ReadInt32(); count > 0; count--) _registers[r.ReadUInt32()] = r.ReadUInt32();
+
+            Save.ReadState(r);
+
+            foreach (Controller port in Si.Controllers)
+            {
+                if (!r.ReadBoolean())
+                {
+                    port.Pak = null;
+                    continue;
+                }
+
+                port.Pak ??= new ControllerPak(null);
+                StateSerializer.Read(r, port.Pak);
+                port.Pak.Dirty = true;
+            }
+
+            Ai.DropUndrained();
         }
 
         public void Tick(long cycles)

@@ -1,6 +1,6 @@
 # EmuSen — Save State Format
 
-Covers `EmuSen/Common/StateSerializer.cs` and `VenusCore.SaveState`/`LoadState`. Rewind uses this same format in memory rather than on disk — see `EmuSen_Rewind_And_FastForward.md` §1.
+Covers `EmuSen/Common/StateSerializer.cs` and `VenusCore.SaveState`/`LoadState`; the other cores' own formats are in their pages (Mars's is `Mars_SaveStates.md`). Rewind uses this same format in memory rather than on disk — see `EmuSen_Rewind_And_FastForward.md` §1.
 
 ---
 
@@ -89,3 +89,28 @@ Lossless in both directions — loading a pre-v1 file and loading its converted 
 - **Positional layout, per §1.** Any field change needs a version bump plus a legacy read path.
 - **`Cartridge.SavePath` is serialized.** Loading a state therefore restores the SRAM path recorded when it was written, not the path the current session would have chosen. Pre-existing behavior, called out here because it is surprising: a state moved between machines carries the other machine's save path with it.
 - **A few sub-frame `VenusCore` fields were never in the format** (`_lineCycles`, `_scanlineStarted`, `_spc700CycleRemainder`). Since states are only taken at frame boundaries these are sub-scanline quantities and are not observable in practice.
+
+---
+
+## 5. Wide arrays, chars, structs, and the reads that were lost
+
+*Added 2026-09-18 for Mars (`Mars_SaveStates.md` §5).*
+
+Mars's graph had four kinds of field the serializer had no case for, and one it had a case for that did not work:
+
+- **`uint[]`, `long[]` and `ulong[]`** each have a case now. Before, they fell to the general array path, which walks
+  each element as an object: a boxed `uint` has one field, so it wrote exactly the four bytes the new case writes.
+  **Every existing state reads the same.** `Wide_arrays_write_the_bytes_the_element_walk_always_wrote` asserts those
+  bytes literally and passes against both the serializer before this change and after it, which is the whole of the
+  compatibility claim.
+- **`char`** is written as the `ushort` of its code.
+- **A struct field** is walked like a class's fields; before, it threw.
+- **A struct array's elements are stored back after they are read.** This is the one that did not work. The general
+  path read each element into the box `Array.GetValue` returns and never put the box back, so a write that walked
+  every element faithfully was paired with a read that restored none of them — silently.
+
+**That last defect was live on Venus.** `Ppu.Palette`, the 256 colours decoded from CGRAM, is a `uint[]` on the state
+graph; it was written correctly and never restored, so a loaded state kept whatever palette the session had before the
+load until the game next wrote CGRAM. `A_uint_array_is_restored_by_a_read` fails against the old serializer on
+Venus's own `Ppu` with exactly that — the palette left as it was — and passes now. How often it showed is not
+measured: loading a state from the same scene, the common case, leaves the two palettes identical and hides it.

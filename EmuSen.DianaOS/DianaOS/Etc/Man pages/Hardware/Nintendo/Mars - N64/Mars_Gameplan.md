@@ -667,6 +667,12 @@ a core whose seams get tested by the user.
 Mars in DianaOS, and the cheat-wiring tests cover Mars the way they now cover the
 other three cores.
 
+> **Progress, 2026-09-18: save states** (`Mars_SaveStates.md`). The whole machine, graded by replay: each of the three
+> games saved, loaded into a fresh core, and run a hundred frames beside the core that saved it, identical in picture,
+> RDRAM, program counter and cycles. The shared serializer needed four new cases, and one of them — struct and wide
+> arrays read back into boxes that were never stored — turned out to have been losing Venus's decoded palette on every
+> load. Left for this phase: the disassemblers, cheats, and the debug hooks behind `bp`, `watch`, `step` and coverage.
+
 > **Progress, 2026-09-18: registered ahead of this phase** (`Mars_Core.md`). `.z64`, `.n64` and `.v64` now
 > reach Mars from every frontend, behind a debug target with memory spaces, register readouts and nothing else.
 > The argument above is met only for the seams `MarsCoreTests` covers; the disassemblers, save states, cheats and

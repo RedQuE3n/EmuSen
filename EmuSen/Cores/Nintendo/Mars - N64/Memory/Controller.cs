@@ -13,6 +13,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public sbyte StickY;
 
         // A Controller Pak in the slot, or none - see Mars_Save.md §5.
-        public ControllerPak? Pak;
+        [EmuSen.Common.SkipInState] public ControllerPak? Pak;
     }
 }

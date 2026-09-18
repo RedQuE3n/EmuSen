@@ -13,7 +13,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // Readable RAM, because the corpus detects the port by reading back what it wrote - see §4.1.
         private readonly byte[] _memory = new byte[MemoryMap.IsViewerSize];
 
-        private readonly List<byte> _text = new();
+        // The harness's transcript of the port, not the port - see Mars_SaveStates.md §2.
+        [EmuSen.Common.SkipInState] private readonly List<byte> _text = new();
 
         public IReadOnlyList<byte> Captured => _text;
 

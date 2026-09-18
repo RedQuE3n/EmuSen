@@ -28,7 +28,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // Bit 12 of the memory address chooses which of the two banks a transfer touches.
         private const uint ImemSelect = 0x1000;
 
-        private readonly MemoryBus _bus;
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
 
         private uint _memAddress;
         private uint _dramAddress;

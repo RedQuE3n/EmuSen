@@ -23,7 +23,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // A triangle carrying shade, texture and depth, which is the longest thing the stream holds.
         private const int LongestCommand = 22;
 
-        private readonly MemoryBus _bus;
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
         private readonly ulong[] _command = new ulong[LongestCommand];
         private int _taken;
 

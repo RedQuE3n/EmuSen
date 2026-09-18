@@ -56,6 +56,7 @@ namespace EmuSen.Common
             if (t == typeof(ulong)) { w.Write((ulong)value!); return; }
             if (t == typeof(float)) { w.Write((float)value!); return; }
             if (t == typeof(string)) { w.Write((string?)value ?? ""); return; }
+            if (t == typeof(char)) { w.Write((ushort)(char)value!); return; }
             if (t.IsEnum) { w.Write(Convert.ToInt32(value)); return; }
 
             if (t == typeof(byte[])) { w.Write((byte[])value!); return; }
@@ -64,10 +65,22 @@ namespace EmuSen.Common
             if (t == typeof(int[])) { foreach (int v in (int[])value!) w.Write(v); return; }
             if (t == typeof(bool[])) { foreach (bool v in (bool[])value!) w.Write(v); return; }
 
+            // The same bytes the element walk below always wrote for these, so no older state changes - see EmuSen_Save_States.md §5.
+            if (t == typeof(uint[])) { foreach (uint v in (uint[])value!) w.Write(v); return; }
+            if (t == typeof(long[])) { foreach (long v in (long[])value!) w.Write(v); return; }
+            if (t == typeof(ulong[])) { foreach (ulong v in (ulong[])value!) w.Write(v); return; }
+
             if (t.IsArray)
             {
                 // Every element is assumed pre-constructed, which is how the owning classes initialise these.
                 foreach (object item in (Array)value!) Write(w, item);
+                return;
+            }
+
+            // A struct is its fields, in the same order a class's are.
+            if (t.IsValueType)
+            {
+                Write(w, value!);
                 return;
             }
 
@@ -98,6 +111,7 @@ namespace EmuSen.Common
             if (t == typeof(ulong)) { field.SetValue(owner, r.ReadUInt64()); return; }
             if (t == typeof(float)) { field.SetValue(owner, r.ReadSingle()); return; }
             if (t == typeof(string)) { field.SetValue(owner, r.ReadString()); return; }
+            if (t == typeof(char)) { field.SetValue(owner, (char)r.ReadUInt16()); return; }
             if (t.IsEnum) { field.SetValue(owner, Enum.ToObject(t, r.ReadInt32())); return; }
 
             if (t == typeof(byte[]))
@@ -111,10 +125,30 @@ namespace EmuSen.Common
             if (t == typeof(short[])) { var arr = (short[])field.GetValue(owner)!; for (int i = 0; i < arr.Length; i++) arr[i] = r.ReadInt16(); return; }
             if (t == typeof(int[])) { var arr = (int[])field.GetValue(owner)!; for (int i = 0; i < arr.Length; i++) arr[i] = r.ReadInt32(); return; }
             if (t == typeof(bool[])) { var arr = (bool[])field.GetValue(owner)!; for (int i = 0; i < arr.Length; i++) arr[i] = r.ReadBoolean(); return; }
+            if (t == typeof(uint[])) { var arr = (uint[])field.GetValue(owner)!; for (int i = 0; i < arr.Length; i++) arr[i] = r.ReadUInt32(); return; }
+            if (t == typeof(long[])) { var arr = (long[])field.GetValue(owner)!; for (int i = 0; i < arr.Length; i++) arr[i] = r.ReadInt64(); return; }
+            if (t == typeof(ulong[])) { var arr = (ulong[])field.GetValue(owner)!; for (int i = 0; i < arr.Length; i++) arr[i] = r.ReadUInt64(); return; }
 
             if (t.IsArray)
             {
-                foreach (object item in (Array)field.GetValue(owner)!) Read(r, item, includeAliases);
+                var array = (Array)field.GetValue(owner)!;
+                bool values = t.GetElementType()!.IsValueType;
+
+                // A struct element is read into a box, which has to be stored back or the read is lost - see EmuSen_Save_States.md §5.
+                for (int i = 0; i < array.Length; i++)
+                {
+                    object item = array.GetValue(i)!;
+                    Read(r, item, includeAliases);
+                    if (values) array.SetValue(item, i);
+                }
+                return;
+            }
+
+            if (t.IsValueType)
+            {
+                object boxed = field.GetValue(owner)!;
+                Read(r, boxed, includeAliases);
+                field.SetValue(owner, boxed);
                 return;
             }
 

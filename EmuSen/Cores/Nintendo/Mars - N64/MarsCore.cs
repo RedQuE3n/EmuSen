@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.Mars.Rom;
 using EmuSen.Galaxia.Input;
@@ -34,6 +35,10 @@ namespace EmuSen.Cores.Nintendo.Mars
 
         // The right stick stands in for the four C buttons, pressed past half its travel - see Mars_Core.md §5.
         public const double CButtonThreshold = 0.5;
+
+        // "MARS" little-endian, then the format version - see Mars_SaveStates.md §1.
+        private const uint StateMagic = 0x5352_414D;
+        private const int StateVersion = 1;
 
         // How often a changed save is written without being asked, as the other cores do - see Mars_Save.md §7.
         public const int SaveEveryNFrames = 300;
@@ -227,15 +232,61 @@ namespace EmuSen.Cores.Nintendo.Mars
 
         private static byte[]? Read(string? path) => path is null ? null : AtomicFile.TryRead(path);
 
-        // An explicit save refuses before any file exists, so no empty state is left behind - see Mars_Core.md §6.
-        public void SaveState(string path) => throw NoSaveStates(nameof(SaveState));
+        // Refused before any file exists, so a failed save leaves no empty state behind - see Mars_SaveStates.md §1.
+        public void SaveState(string path)
+        {
+            RequireRom(nameof(SaveState));
 
-        public void LoadState(string path) => throw NoSaveStates(nameof(LoadState));
+            using var stream = File.Create(path);
+            SaveState(stream);
+        }
 
-        // The rewind buffer calls these every few frames, so they record nothing rather than throw - see Mars_Core.md §6.
-        public void SaveState(Stream stream) => RequireRom(nameof(SaveState));
+        public void LoadState(string path)
+        {
+            RequireRom(nameof(LoadState));
 
-        public void LoadState(Stream stream) => RequireRom(nameof(LoadState));
+            using var stream = File.OpenRead(path);
+            LoadState(stream);
+        }
+
+        // A header, the processor, then the bus and everything it owns - see Mars_SaveStates.md §1.
+        public void SaveState(Stream stream)
+        {
+            RequireRom(nameof(SaveState));
+
+            using var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+            w.Write(StateMagic);
+            w.Write(StateVersion);
+            w.Write(Bus!.Rdram.Length);
+            w.Write(TotalFrames);
+            w.Write(_lastFrameCycles);
+
+            StateSerializer.Write(w, Cpu!);
+            Bus.WriteState(w);
+        }
+
+        // A state for another machine is refused before anything is read into this one - see Mars_SaveStates.md §1.
+        public void LoadState(Stream stream)
+        {
+            RequireRom(nameof(LoadState));
+
+            using var r = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+            if (r.ReadUInt32() != StateMagic) throw new InvalidDataException("Not a Mars save state.");
+
+            int version = r.ReadInt32();
+            if (version != StateVersion) throw new InvalidDataException($"Mars save state version {version} is not {StateVersion}.");
+
+            int rdram = r.ReadInt32();
+            if (rdram != Bus!.Rdram.Length) throw new InvalidDataException($"The state was saved with {rdram / (1024 * 1024)}MB of RDRAM and this machine has {Bus.Rdram.Length / (1024 * 1024)}MB.");
+
+            TotalFrames = r.ReadInt64();
+            _lastFrameCycles = r.ReadInt64();
+
+            StateSerializer.Read(r, Cpu!);
+            Bus.ReadState(r);
+
+            if (!SkipRendering) Present(Bus.Vi);
+        }
 
         // The raster's fourth byte is coverage, not opacity, and a progressive field is every other line - see Mars_Core.md §2.
         private void Present(VideoInterface vi)
@@ -277,10 +328,5 @@ namespace EmuSen.Cores.Nintendo.Mars
             if (Bus is null) throw new InvalidOperationException($"{member}() called before LoadRom().");
         }
 
-        private NotSupportedException NoSaveStates(string member)
-        {
-            RequireRom(member);
-            return new NotSupportedException("Mars has no save states yet - see Mars_Core.md §6.");
-        }
     }
 }

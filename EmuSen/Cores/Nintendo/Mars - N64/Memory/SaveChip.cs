@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mars.Rom;
 
 namespace EmuSen.Cores.Nintendo.Mars.Memory
@@ -32,6 +34,34 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (Sram != null) Sram.Dirty = false;
             if (Flash != null) Flash.Dirty = false;
         }
+
+        // The chip's type and then its device, rebuilt first because reflection only fills what exists - see Mars_SaveStates.md §3.
+        public void WriteState(BinaryWriter w)
+        {
+            w.Write((int)Type);
+            if (Device is { } device) StateSerializer.Write(w, device);
+        }
+
+        // A loaded chip is marked changed, so the file on disk catches up with it at the next write - see Mars_SaveStates.md §3.
+        public void ReadState(BinaryReader r)
+        {
+            var type = (N64SaveType)r.ReadInt32();
+
+            Eeprom = null;
+            Sram = null;
+            Flash = null;
+            Type = N64SaveType.Unknown;
+            if (type != N64SaveType.Unknown) Become(type);
+
+            if (Device is not { } device) return;
+            StateSerializer.Read(r, device);
+
+            if (Eeprom != null) Eeprom.Dirty = true;
+            if (Sram != null) Sram.Dirty = true;
+            if (Flash != null) Flash.Dirty = true;
+        }
+
+        private object? Device => (object?)Eeprom ?? (object?)Sram ?? Flash;
 
         // What an earlier run's save says the chip was, by its length alone - see §1.
         public static N64SaveType FromSaveLength(int length) => length switch

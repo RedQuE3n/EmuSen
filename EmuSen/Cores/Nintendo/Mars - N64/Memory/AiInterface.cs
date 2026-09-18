@@ -35,8 +35,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private const uint AddressMask = 0x00FF_FFF8;
         private const uint LengthMask = 0x0003_FFF8;
 
-        private readonly MemoryBus _bus;
-        private readonly Queue<short> _samples = new();
+        [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
+        // What the frontend has not drained yet, which a loaded state empties rather than replays - see Mars_SaveStates.md §2.
+        [EmuSen.Common.SkipInState] private readonly Queue<short> _samples = new();
 
         private uint _address;
         private uint _length;
@@ -132,6 +133,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         // A snapshot for audiodump; the queue keeps everything.
         public short[] Peek() => _samples.ToArray();
+
+        // A loaded state starts the frontend's queue afresh - see Mars_SaveStates.md §2.
+        public void DropUndrained() => _samples.Clear();
 
         // A buffer written while none plays begins at once; a second waits its turn; a third is dropped - see Mars_Audio.md §3.
         private void Queue(uint length)

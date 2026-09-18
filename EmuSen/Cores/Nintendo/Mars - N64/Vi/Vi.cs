@@ -60,6 +60,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
         private int AntiAlias => (int)(Register(Control) >> 8) & 3;
 
+        private bool GammaEnabled => (Register(Control) & (1 << 3)) != 0;
+
+        private bool DivotEnabled => (Register(Control) & (1 << 4)) != 0;
+
+        private bool DitherFilterEnabled => (Register(Control) & (1 << 16)) != 0;
+
         private bool IsPal => (int)(Register(VerticalSync) & 0x3FF) > NtscSyncLines + 25;
     }
 }

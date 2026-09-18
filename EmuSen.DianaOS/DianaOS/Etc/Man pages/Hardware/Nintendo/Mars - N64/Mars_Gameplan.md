@@ -545,6 +545,13 @@ rather than raw samples.
 > model, and it is now the first thing in Phase E to test on a console. What is left here is the dither
 > filter, divot and gamma, and then the interrupt and the timing.
 
+> **Progress, 2026-09-17: the dither filter, divot and gamma** (`Mars_VideoPasses.md`). One hundred and
+> fifty-one cases match angrylion on the first run, and the picture side of the video interface is complete
+> apart from one bit that is deliberately empty. The gamma dither reads a noise angrylion hashes from the
+> pixel's position and the FPGA core takes off a free-running shift register; the two cannot be reconciled
+> and neither is a measurement, so Mars reads the dither as zero and says what that costs. What is left
+> here is the interrupt and the timing, and then AI, SI/PIF and PI.
+
 VI (including the filters the console genuinely applies — anti-aliasing, divot and
 gamma — because a framebuffer read out raw is not what the machine displayed), AI
 streaming to `DequeueAudioSamples`, SI and the PIF's joybus for controllers, MI's

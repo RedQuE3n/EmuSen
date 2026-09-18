@@ -15,6 +15,9 @@ namespace EmuSen.WiseMan.Cores
         private const int Blank = 0, Rgba5551 = 2, Rgba8888 = 3;
         private const int FetchAlways = 0, FetchAsNeeded = 1, ResampleOnly = 2, Replicate = 3;
 
+        // The control bits of the passes past the filter; bit 2, the gamma dither, is not among them - see Mars_VideoPasses.md §3.1.
+        private const uint GammaOn = 1 << 3, DivotOn = 1 << 4, DitherFilter = 1 << 16;
+
         private const uint NtscSync = 525, PalSync = 625;
         private const uint NtscLeft = 108, NtscTop = 34, PalLeft = 128, PalTop = 44;
 
@@ -263,6 +266,7 @@ namespace EmuSen.WiseMan.Cores
             Scan("a narrower picture after a wider one", shown, With(shown, HorizontalStart, Start(NtscLeft + 40, NtscLeft + 40 + 400)), shown);
 
             AntiAliased(cases, uploads, mixed);
+            Passes(cases, uploads, mixed);
 
             var random = new Random(0x5649_4449);
             for (int n = 0; n < 80; n++)
@@ -281,10 +285,64 @@ namespace EmuSen.WiseMan.Cores
                 registers[ScaleX] = Scale(registers[ScaleX] & 0xFFF, (uint)random.Next(0, 0x400));
                 registers[ScaleY] = Scale(registers[ScaleY] & 0xFFF, (uint)random.Next(0, 0x400));
 
+                // Half the random cases also turn on a random set of the four passes past the filter - see Mars_VideoPasses.md §4.
+                if ((n & 1) == 1)
+                {
+                    uint passes = 0;
+                    if (random.Next(2) == 0) passes |= DitherFilter;
+                    if (random.Next(2) == 0) passes |= DivotOn;
+                    if (random.Next(2) == 0) passes |= GammaOn;
+                    registers[Control] |= passes;
+                }
+
                 cases.Add(new Case($"random {n}", new[] { registers }) { Uploads = uploads, Hidden = mixed });
             }
 
             return cases.ToArray();
+        }
+
+        // The dither filter, divot and gamma: each alone, each where it must do nothing, and all of them at once - see Mars_VideoPasses.md §4.
+        private static void Passes(List<Case> cases, (uint, byte[])[] uploads, (uint, byte[])[] mixed)
+        {
+            void Scan(string name, params uint[][] scans) => cases.Add(new Case(name, scans) { Uploads = uploads, Hidden = mixed });
+
+            uint[] Pass(uint[] registers, uint bits) => With(registers, Control, registers[Control] | bits);
+
+            Scan("the dither filter on a sixteen-bit picture", Pass(Ntsc(Rgba5551, Replicate), DitherFilter));
+            Scan("the dither filter on a thirty-two-bit picture", Pass(Ntsc(Rgba8888, Replicate), DitherFilter));
+            Scan("the dither filter under anti-aliasing", Pass(Ntsc(Rgba5551, FetchAsNeeded), DitherFilter));
+            Scan("the dither filter with no whole pixel to filter", Pass(Ntsc(Rgba8888, FetchAsNeeded), DitherFilter));
+            // The artefact only reaches the row a resampled pixel mixes with, so a replicated scan cannot show it - see §1.1.
+            Scan("the dither filter after a row read twice", Pass(With(Ntsc(Rgba5551, ResampleOnly), ScaleY, Scale(0x200, 0)), DitherFilter));
+            Scan("the dither filter after a row read twice, thirty-two bit", Pass(With(Ntsc(Rgba8888, ResampleOnly), ScaleY, Scale(0x200, 0)), DitherFilter));
+            Scan("the dither filter resampled", Pass(Ntsc(Rgba5551, ResampleOnly), DitherFilter));
+
+            Scan("divot on a sixteen-bit picture", Pass(Ntsc(Rgba5551, FetchAsNeeded), DivotOn));
+            Scan("divot on a thirty-two-bit picture", Pass(Ntsc(Rgba8888, FetchAsNeeded), DivotOn));
+            Scan("divot with a fractional step", Pass(With(With(Ntsc(Rgba5551, FetchAsNeeded), ScaleX, Scale(0x2AB, 0x80)), ScaleY, Scale(0x155, 0x40)), DivotOn));
+            Scan("divot where no pixel is whole", Pass(Ntsc(Rgba5551, Replicate), DivotOn));
+            Scan("divot and the dither filter together", Pass(Ntsc(Rgba5551, FetchAsNeeded), DivotOn | DitherFilter));
+
+            Scan("gamma", Pass(Ntsc(Rgba5551, Replicate), GammaOn));
+            Scan("gamma on a thirty-two-bit picture", Pass(Ntsc(Rgba8888, Replicate), GammaOn));
+            Scan("gamma resampled", Pass(Ntsc(Rgba5551, ResampleOnly), GammaOn));
+            Scan("gamma under anti-aliasing", Pass(Ntsc(Rgba5551, FetchAsNeeded), GammaOn));
+
+            // The gamma dither reads a noise neither reference models as hardware, so no case sets bit 2 - see §3.1.
+            Scan("every pass at once", Pass(Ntsc(Rgba5551, FetchAsNeeded), DitherFilter | DivotOn | GammaOn));
+            Scan("every pass at once, thirty-two bit", Pass(Ntsc(Rgba8888, FetchAsNeeded), DitherFilter | DivotOn | GammaOn));
+
+            void Bits(string name, int coverage, uint passes, params uint[][] scans) =>
+                cases.Add(new Case(name, scans)
+                {
+                    Uploads = new[] { (Framebuffer, Picture(coverage)) },
+                    Hidden = new[] { (Framebuffer / 2, Hidden(coverage * 3)) },
+                });
+
+            // Divot leaves a row of whole pixels alone, which is only visible against a picture that has nothing else - see §2.
+            Bits("divot where every pixel is whole", 1, DivotOn, Pass(Ntsc(Rgba5551, FetchAsNeeded), DivotOn));
+            Bits("divot where every pixel is partly covered", 0, DivotOn, Pass(Ntsc(Rgba5551, FetchAsNeeded), DivotOn));
+            Bits("the dither filter where every pixel is whole", 1, DitherFilter, Pass(Ntsc(Rgba5551, FetchAsNeeded), DitherFilter));
         }
 
         // Every case that needs a coverage: the filter itself, the neighbourhoods it can see, and the fetch bug - see Mars_VideoFilter.md §4.

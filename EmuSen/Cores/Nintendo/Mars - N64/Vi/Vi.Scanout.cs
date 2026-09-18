@@ -162,6 +162,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             int width = (int)Register(Width) & 0xFFF;
             bool resample = AntiAlias != Replicate;
             bool wide = (Type & 1) != 0;
+            bool divot = DivotEnabled;
             int bug = 0;
 
             for (int row = 0; row < picture.Rows; row++)
@@ -181,14 +182,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                     int step = (int)(across >> 10);
                     int fractionX = (int)(across >> 5) & 0x1F;
 
-                    Pixel color = Sample(origin, source + step, wide, width, 0);
+                    Pixel color = Across(origin, source + step, wide, width, 0, divot);
 
                     if (resample)
                     {
-                        Pixel next = Sample(origin, source + step + 1, wide, width, 0);
+                        Pixel next = Across(origin, source + step + 1, wide, width, 0, divot);
+                        Pixel under = Across(origin, below + step, wide, width, bug, divot);
+                        Pixel underNext = Across(origin, below + step + 1, wide, width, bug, divot);
 
-                        color = Mix(color, Sample(origin, below + step, wide, width, bug), fractionY);
-                        next = Mix(next, Sample(origin, below + step + 1, wide, width, bug), fractionY);
+                        color = Mix(color, under, fractionY);
+                        next = Mix(next, underNext, fractionY);
                         color = Mix(color, next, fractionX);
                     }
 
@@ -196,6 +199,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                     if (pixel < 0 || pixel + 3 >= _raster.Length) continue;
 
                     bool shown = column >= picture.FirstColumn && column < picture.LastColumn;
+
+                    // Gamma is the last thing a pixel meets; a dark column is written as zero whether or not it passes through - see Mars_VideoPasses.md §4.2.
+                    color = Gamma(color);
+
                     _raster[pixel] = (byte)(shown ? color.Red : 0);
                     _raster[pixel + 1] = (byte)(shown ? color.Green : 0);
                     _raster[pixel + 2] = (byte)(shown ? color.Blue : 0);
@@ -206,14 +213,27 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             }
         }
 
+        // The pixel a step lands on with its two neighbours across the row, which divot needs and nothing else does - see Mars_VideoPasses.md §2.
+        private Pixel Across(uint origin, int at, bool wide, int width, int bug, bool divot)
+        {
+            Pixel pixel = Sample(origin, at, wide, width, bug);
+
+            if (!divot) return pixel;
+
+            return Divot(pixel, Sample(origin, at - 1, wide, width, bug), Sample(origin, at + 1, wide, width, bug));
+        }
+
         // The pixel a step lands on, filtered against its neighbours where the mode reads coverage and the pixel is not whole - see Mars_VideoFilter.md §1.
         private Pixel Sample(uint origin, int at, bool wide, int width, int bug)
         {
             Pixel pixel = Fetch(origin, at, wide);
 
-            if (AntiAlias > Covered) return pixel with { Coverage = 7 };
+            if (AntiAlias > Covered) pixel = pixel with { Coverage = 7 };
 
-            return pixel.Coverage == 7 ? pixel : Filter(origin, at, wide, width, bug, pixel);
+            // A whole pixel takes the dither filter instead, which is what that test has decided since Mars_VideoPasses.md §1.
+            if (pixel.Coverage == 7) return DitherFilterEnabled ? Dither(origin, at, wide, width, bug, pixel) : pixel;
+
+            return Filter(origin, at, wide, width, bug, pixel);
         }
 
         // Five bits a channel become eight by moving up, not by filling in; the three bits below are the anti-aliasing's to fill - see §2.6.

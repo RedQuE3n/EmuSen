@@ -228,6 +228,46 @@ The cartridge's transfer engine, same length encoding, moving bytes in either
 direction between the cartridge bus and RDRAM, raising a completion flag that a
 write clears.
 
+### 7.2 Each side of a transfer advances by its own bus width
+
+*Added 2026-09-17, from nine of the corpus's `cart_memory` assertions. The rest of that
+group is still open, and the end of this section says what is known about it.*
+
+**The cartridge's bus is sixteen bits wide and RDRAM's is sixty-four, and a transfer leaves
+each address on a multiple of its own width**, whatever length was asked for:
+
+- **The cartridge address advances by the length rounded up to two.** A one-byte transfer
+  moves it by two, a seven-byte transfer by eight.
+- **The RDRAM address advances past the length and then up to the next multiple of eight** —
+  `(address + length + 7) & ~7`. A two-byte transfer starting at an aligned address moves it
+  by eight; a nine-byte transfer starting six bytes into a block leaves it two blocks on.
+
+The FPGA core states the second rule in two lines — `PI_DRAM_ADDR <= PI_DRAM_ADDR + 7;
+PI_DRAM_ADDR(2 downto 0) <= "000"` (`rtl/PI.vhd` §711–712) — and both address registers
+already dropped their low bit on a write, which Mars did too.
+
+**Nine assertions, predicted and then measured.** The corpus's census attributed five
+assertions to the cartridge address and four to the RDRAM address; the count went from 146
+to 137, which is nine.
+
+**What is still open, and one thing it is not.** Sixty-five assertions in the same group are
+about *which bytes land*, under four headings the corpus names itself: small sizes,
+misaligned, misaligned crossing a page, and misaligned at the end of a page. Two things are
+known:
+
+- The FPGA reads a block of at most `128 − (address & 7)` bytes, capped by the distance to
+  the end of a 2KB row, and then writes only the first `blocklength − (address & 7)` of them
+  to RDRAM (`rtl/PI.vhd` §585–597, §750). That count is declared `integer range -7 to 128`,
+  so it can be **negative**: a short transfer to a misaligned address writes nothing at all,
+  which is what the corpus expects for a one-byte transfer six bytes into a block.
+- ~~"An odd length carries one byte more than it asked for, on both sides."~~ **Refuted by
+  measurement.** The cartridge *address* does advance by the rounded length, so carrying the
+  extra byte through to RDRAM looked like the same rule seen twice. It is not: making the
+  transfer copy `(length + 1) & ~1` bytes cleared four assertions about a byte at the end of
+  a long transfer and broke five about bytes past the end of a short one — 137 to 138. The
+  extra byte is read from the cartridge and does not reach memory, and where exactly it is
+  dropped is part of the open rule above rather than a separate one.
+
 ### 7.1 Idle is not cosmetic; it is what lets the corpus speak
 
 The status register reports neither kind of busy. That is not tidiness — the corpus

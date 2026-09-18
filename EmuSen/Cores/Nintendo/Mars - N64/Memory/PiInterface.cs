@@ -74,8 +74,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 else _bus.Write8(_dramAddress + i, _bus.Read8(_cartAddress + i));
             }
 
-            _dramAddress += length;
-            _cartAddress += length;
+            // The cartridge's bus is sixteen bits wide and RDRAM's sixty-four, so each address advances to its own multiple - see §7.2.
+            _cartAddress += (length + 1) & ~1u;
+            _dramAddress = (_dramAddress + length + 7) & ~7u;
             _bus.Mi.Raise(MiInterrupt.PeripheralInterface);
         }
     }

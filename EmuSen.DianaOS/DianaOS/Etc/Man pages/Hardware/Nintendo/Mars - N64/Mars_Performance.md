@@ -149,6 +149,26 @@ would ignore changes nothing, and a row whose vertical fraction is zero no longe
 
 Ocarina of Time's picture is scaled so that its fractions are rarely zero, which is what the unchanged figure says.
 
+## 7. A source line filtered once a scan, not once a row
+
+**What was still repeated.** §3's cache lasted a row. A picture stretched vertically reads each source line in two or
+more consecutive rows — as the line a row lands on, then as the line below the next row's — and each of those rows
+filtered it again. Ocarina of Time, whose fractions are rarely zero (§5), paid for that in full.
+
+**The change.** Two slots, each keyed by the source line it holds and by whether it was sampled with the fetch bug
+folding the row below onto it — the only way the bug changes a sample, since the filters test it for the value 1 and
+nothing else. A row looks for its two lines among the slots and takes over the one it does not need when a line is
+missing; a new stamp retires what the slot held before. Every scan starts with both slots empty, because RDRAM has
+changed since the last one.
+
+**What it bought**, two runs, every frame identical to the baseline both times:
+
+| | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 15.34 fps | 17.44 and 17.35 fps | 1.13× |
+| Super Mario 64 | 21.17 fps | 21.04 and 20.83 fps | unchanged |
+| Wave Race 64 | 25.06 fps | 24.49 and 24.55 fps | unchanged, within the noise |
+
 ## 6. Measured and rejected
 
 - **The video interface's timing, worked out when its registers change** rather than on every instruction. Its step

@@ -8,10 +8,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         // Room for every source pixel one row can reach: 640 columns at the largest step, and the neighbour beyond - see Mars_Performance.md §3.
         private const int RowSpan = RasterWidth * 4 + 2;
 
-        // Each source pixel's sample, made once a row rather than once a use; presentation scratch, never state - see Mars_Performance.md §3.
+        // Each source line's samples, made once a scan rather than once a use; presentation scratch, never state - see Mars_Performance.md §3 and §7.
         [EmuSen.Common.SkipInState] private readonly Pixel[] _samples = new Pixel[2 * RowSpan];
         [EmuSen.Common.SkipInState] private readonly int[] _sampledRow = new int[2 * RowSpan];
         [EmuSen.Common.SkipInState] private int _row;
+
+        // Which source line each of the two slots holds, and whether it was sampled with the fetch bug folding it - see Mars_Performance.md §7.
+        [EmuSen.Common.SkipInState] private readonly int[] _slotLine = new int[2];
+        [EmuSen.Common.SkipInState] private readonly bool[] _slotFolded = new bool[2];
+        [EmuSen.Common.SkipInState] private readonly bool[] _slotLive = new bool[2];
+        [EmuSen.Common.SkipInState] private readonly int[] _slotStamp = new int[2];
 
         // Where the picture sits in the raster, how far each step moves through the frame buffer, and which columns carry signal.
         private readonly record struct Picture(
@@ -175,10 +181,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
             int first = (int)(picture.StartX >> 10);
 
+            // RDRAM has changed since the last scan, so nothing a slot holds from it stands - see Mars_Performance.md §7.
+            _slotLive[0] = _slotLive[1] = false;
+
             for (int row = 0; row < picture.Rows; row++)
             {
-                NextRow();
-
                 uint down = picture.StartY + (uint)row * picture.StepY;
                 int source = width * (int)(down >> 10);
                 int below = source + width;
@@ -188,33 +195,36 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                 // A row the next one reads again leaves the row after that fetching its own line twice - see Mars_VideoFilter.md §3.
                 bug = (down >> 10) == ((picture.StartY + (uint)(row + 1) * picture.StepY) >> 10) ? 2 : bug >> 1;
 
+                int here = Slot(source, folded: false, avoid: -1);
+                int under = Slot(below, folded: bug == 1, avoid: here);
+
                 uint across = picture.StartX;
                 for (int column = 0; column < picture.Columns; column++, across += picture.StepX)
                 {
                     int step = (int)(across >> 10);
                     int fractionX = (int)(across >> 5) & 0x1F;
 
-                    Pixel color = Remembered(0, step - first, origin, source + step, wide, width, 0, divot);
+                    Pixel color = Remembered(here, step - first, origin, source + step, wide, width, 0, divot);
 
                     // A mix by a zero fraction is the near pixel, so the far one is never asked for - see Mars_Performance.md §5.
                     if (resample && fractionX != 0)
                     {
-                        Pixel next = Remembered(0, step + 1 - first, origin, source + step + 1, wide, width, 0, divot);
+                        Pixel next = Remembered(here, step + 1 - first, origin, source + step + 1, wide, width, 0, divot);
 
                         if (fractionY != 0)
                         {
-                            Pixel under = Remembered(1, step - first, origin, below + step, wide, width, bug, divot);
-                            Pixel underNext = Remembered(1, step + 1 - first, origin, below + step + 1, wide, width, bug, divot);
+                            Pixel lower = Remembered(under, step - first, origin, below + step, wide, width, bug, divot);
+                            Pixel lowerNext = Remembered(under, step + 1 - first, origin, below + step + 1, wide, width, bug, divot);
 
-                            color = Mix(color, under, fractionY);
-                            next = Mix(next, underNext, fractionY);
+                            color = Mix(color, lower, fractionY);
+                            next = Mix(next, lowerNext, fractionY);
                         }
 
                         color = Mix(color, next, fractionX);
                     }
                     else if (resample && fractionY != 0)
                     {
-                        color = Mix(color, Remembered(1, step - first, origin, below + step, wide, width, bug, divot), fractionY);
+                        color = Mix(color, Remembered(under, step - first, origin, below + step, wide, width, bug, divot), fractionY);
                     }
 
                     int pixel = (line + column) * 4;
@@ -235,26 +245,43 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             }
         }
 
-        // A new stamp for each row, so last row's samples are stale without being cleared - see Mars_Performance.md §3.
-        private void NextRow()
+        // The slot already holding this line as this fold samples it, or the one the row's other line does not need - see Mars_Performance.md §7.
+        private int Slot(int line, bool folded, int avoid)
         {
-            if (++_row != int.MaxValue) return;
+            for (int slot = 0; slot < 2; slot++)
+            {
+                if (_slotLive[slot] && _slotLine[slot] == line && _slotFolded[slot] == folded) return slot;
+            }
+
+            int taken = avoid == 0 ? 1 : 0;
+            _slotLine[taken] = line;
+            _slotFolded[taken] = folded;
+            _slotLive[taken] = true;
+            _slotStamp[taken] = NextStamp();
+            return taken;
+        }
+
+        // A new stamp for a slot's new line, so what it held before is stale without being cleared - see Mars_Performance.md §3.
+        private int NextStamp()
+        {
+            if (++_row != int.MaxValue) return _row;
 
             System.Array.Clear(_sampledRow);
             _row = 1;
+            return _row;
         }
 
         // A sample is a function of RDRAM and the registers alone, neither of which a scan changes, so the first answer stands - see Mars_Performance.md §3.
-        private Pixel Remembered(int line, int offset, uint origin, int at, bool wide, int width, int bug, bool divot)
+        private Pixel Remembered(int slot, int offset, uint origin, int at, bool wide, int width, int bug, bool divot)
         {
             if ((uint)offset >= RowSpan) return Across(origin, at, wide, width, bug, divot);
 
-            int slot = line * RowSpan + offset;
-            if (_sampledRow[slot] == _row) return _samples[slot];
+            int index = slot * RowSpan + offset;
+            if (_sampledRow[index] == _slotStamp[slot]) return _samples[index];
 
             Pixel pixel = Across(origin, at, wide, width, bug, divot);
-            _samples[slot] = pixel;
-            _sampledRow[slot] = _row;
+            _samples[index] = pixel;
+            _sampledRow[index] = _slotStamp[slot];
             return pixel;
         }
 

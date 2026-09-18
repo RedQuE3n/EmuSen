@@ -708,6 +708,12 @@ interpreter, the RSP and the RDP is the wall, because the levers are different a
 the literature's default answer — "write a recompiler" — is an answer to only one
 of them.
 
+> **Progress, 2026-09-18: the profile** (`Mars_Performance.md`). It answered with a fourth option the question did not
+> list: the wall is the video interface's scan-out — 34 to 62 per cent of the emulation thread in the three games,
+> against 29 to 48 for the interpreter and under 15 for the RSP and the RDP together. A recompiler is the lever for a
+> third to a half of the time, not for the whole. The phase works under one rule: output stays bit for bit identical,
+> checked frame by frame against a recorded baseline of all three games, which reproduced exactly on a second run.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

@@ -129,6 +129,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Vi.Rebase();
             Ai.Rebase();
             Reschedule();
+            Dp.Processor.Refresh();
         }
 
         // The RSP runs in step with the processor; the VI and AI act only when one of them is due - see Mars_Performance.md §9.

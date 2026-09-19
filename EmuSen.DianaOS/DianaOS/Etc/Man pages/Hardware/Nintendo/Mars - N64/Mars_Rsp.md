@@ -188,3 +188,57 @@ defect in how Mars was *running the corpus*, which is `Mars_Corpus.md` §8.
   processor after each instruction; nothing is known about how hardware interacts it with
   a break or a delay slot.
 - **Timing.** §7.
+
+## 10. What the references do about stepping, and why Mars is not changing it yet
+
+*2026-09-19, Phase G. A study, and a decision not to act on it.* §7 calls one RSP instruction per bus tick a
+placeholder. A survey of every reference this project keeps says something sharper than that: **no reference
+interleaves the two processors at instruction granularity, and none needs to.**
+
+| | when the RSP is handed control | how much it runs |
+| --- | --- | --- |
+| mupen64plus-core | a CPU write to SP_STATUS clearing halt | the whole task (`doRspCycles(0xffffffff)`) |
+| cxd4 | the same | the whole task, an unbounded `for(;;)` |
+| paraLLEl-RSP | the same | the whole task, JIT regions of up to 128 instructions |
+| Project64 | the same, plus a timer every 0x200 CPU cycles | the whole task (`ExecuteOps(-1, -1)`) |
+| Mars | every CPU instruction | **one instruction** |
+
+**What they buy back the lost concurrency with** is a small set of yield heuristics, and the survey names every one:
+a per-destination-register counter on `MFC0` of SP_STATUS that force-halts a spin after sixteen turns; a yield on the
+first read of SP_SEMAPHORE; the same counter on the display processor's busy registers; a forced exit when a DMA
+writes instruction memory; and a "the task stopped without BREAK" path that clears halt again and raises the
+interrupt so the CPU learns the task yielded. paraLLEl removed the semaphore yield once for accuracy's sake and
+immediately broke four games, then restored it.
+
+**One hardware test depends on it.** The corpus's `ParallelRunning` has the RSP raise a signal and spin up to ten
+thousand times for a reply, then *records how far it got* in data memory; a run-to-completion RSP writes zero there
+and fails. Mars passes it by actually interleaving. The same corpus's `SemaphoreRegisterRSPOnly` proves real hardware
+reads the semaphore five times without yielding, which the two references' semaphore hack violates — so their
+compatibility is bought with a known inaccuracy that Mars does not have.
+
+**The structural advice, which is sound and is not being taken.** Mars's inner loop tests the halt flag twice per
+instruction (the interface's loop condition and `Step`'s own guard), tests the single-step flag and the coverage hook
+a third and fourth time, and keeps the counter as two fields so every instruction pays two loads and two stores.
+cxd4 keeps one program counter in a register, increments it *before* dispatch so it already names the delay slot, and
+reaches the slot with a `goto` on taken branches only; it writes the memory-mapped counter once, at exit, and checks
+the halt flag only in the two arms that can set it, with the comment *"only BREAK and COP0 set this"* as the
+argument. All of that is bit-identical by construction and attacks the loop directly.
+
+**Why it is not being done now.** `Mars_Performance.md` §32's fresh profile, taken after the display processor and
+the scan-out moved to their own threads, puts this loop at **1.4 to 2.4 per cent** of an emulation thread that is
+**idle 65 per cent of the time**. A change that made the loop free would shorten no frame, because the frame does not
+end when the emulation thread finishes. The advice is recorded here so that it is not re-derived, and it becomes
+worth building the moment the emulation thread is the bound again — which §32 says it is not.
+
+**One accuracy finding worth separating from the speed question.** The corpus's `ClockCPUvsRSP` pins the CPU and the
+RCP at three to two, and the MiSTer clock tree confirms it: 93.75 MHz against 62.5 MHz. Mars runs one RSP
+instruction per CPU instruction, which is one to one. That is §7's placeholder stated as a number, and it belongs to
+the phase's timing work rather than to this section.
+
+**What the hardware guarantees, for whenever the slice does change.** The MiSTer register-transfer code offers
+exactly one ordering guarantee: each register access is one indivisible bus transaction, with the RSP core winning
+arbitration, and halt takes effect on the following cycle. Anything finer is undefined — a CPU write to instruction
+or data memory that collides with the running RSP's own access in the same cycle raises an error flag rather than
+having a defined result. So any slice boundary is legal provided it does not fall inside a register access, and a
+yield must leave the program counter exact, clear halt again, and raise the interrupt.
+

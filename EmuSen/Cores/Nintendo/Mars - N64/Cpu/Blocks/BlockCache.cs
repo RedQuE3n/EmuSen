@@ -21,6 +21,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
         public long Discarded;
 
+        // Cold entries whose words changed shape before they were hot - see Mars_Recompiler.md §2.3.
+        public long Reshaped;
+
         public BlockCache(int rdramLength)
         {
             _pages = new Block?[]?[(rdramLength + (1 << PageShift) - 1) >> PageShift];

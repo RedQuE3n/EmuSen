@@ -21,6 +21,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public long BlocksDiscarded => _blocks.Discarded;
 
+        public long BlocksReshaped => _blocks.Reshaped;
+
         public long CompileTicks => _blocks.CompileTicks;
 
         // One block where one can run, one instruction through the interpreter where none can - see Mars_Recompiler.md §3.1.
@@ -46,6 +48,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             {
                 if (!block.Refused && ++block.Runs == BlockCache.Threshold)
                 {
+                    // The shape was taken from the words at the first run; code loaded over a cold block keeps it, so it is taken again - see Mars_Recompiler.md §2.3.
+                    Block current = BlockShape.Shape(physical, rdram);
+                    if (current.Length != block.Length || current.Refused)
+                    {
+                        _blocks.Reshaped++;
+                        _blocks.Place(current);
+                        Interpret(current.Length, capAt, fields);
+                        return;
+                    }
+
                     block.Image = rdram.AsSpan((int)physical, block.Length * 4).ToArray();
                     if (CompileInBackground) BlockCompiler.Enqueue(block, _blocks, rdram.Length);
                     else BlockCompiler.Compile(block, _blocks, rdram.Length);

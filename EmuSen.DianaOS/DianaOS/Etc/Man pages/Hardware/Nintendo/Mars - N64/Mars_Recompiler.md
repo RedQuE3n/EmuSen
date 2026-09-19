@@ -90,6 +90,20 @@ block, a fraction of a nanosecond an instruction at the block lengths games have
 dropped and its entry begins cold again; a game that reloads an overlay into the same address — Ocarina of Time does
 this constantly — gets the new code compiled once it is hot, and never the old.
 
+**The shape is taken again at the threshold.** *Added 2026-09-19, after a defect.* The paragraph above was true of the
+words and not of the shape. An entry's shape — its length, where its branch and slot fall, whether it is refused — was
+computed from the words at its first run and kept, while its image was taken from the words at its sixty-fourth. A block
+still cold when an overlay was loaded over it kept the old shape and was compiled from the new words with it: a branch
+the new code has in the middle of what had been a straight line was emitted as if it ended nothing, and after its slot
+the block ran on through instructions the branch had skipped. The comparison on entry cannot see it, because it compares
+memory with the image, and the image is the new words. A test demonstrated it before the change — a routine called
+twenty times, replaced by one whose first instruction branches over three adds, and called a hundred times more: the
+interpreter never ran the adds and the blocks ran them fifty-seven times. At the threshold the dispatcher now shapes the
+words again, and a shape that differs replaces the entry and starts its count over. Length and refusal are the whole of
+what the emitter takes from a shape; the kind of every instruction it decodes from the image, so a shape that matches in
+both is a shape the image can be compiled with. The defect was reached from a game, not from the lab: Ocarina of Time's
+opening diverged between a run that carried a history of blocks and one started from a saved state with none (§13).
+
 What a comparison on entry does not cover is memory that changes *while the block runs*. §4 is that.
 
 ### 2.4 Compiled on another thread
@@ -250,7 +264,8 @@ the mechanisms above, each one an observation point:
   fallen-through branch's slot, and the likely-branch form; two compiled blocks reaching each other, frames ending
   between them, one block rewriting another's first word, the timer and the devices' events landing between blocks, a
   fault on a block's first instruction, a register written by a call into the interpreter; and the dispatcher's own
-  address rules — a misaligned target, a target outside the direct segments, a branch to its own delay slot (§12.4).
+  address rules — a misaligned target, a target outside the direct segments, a branch to its own delay slot (§12.4);
+- a routine replaced under a block that was not yet hot, compiled from the new words with the old shape (§2.3, §13).
 
 The synthetic image's program has to be carried into RDRAM by a stub, because the boot runs an image's first kilobytes
 from the signal processor's memory, where no block applies — which is also why the existing core-level tests run the
@@ -727,3 +742,33 @@ run against the suite as it was:
 
 With the two tests the round catches all three, and the pending-branch mutant with six tests where it had five. The
 standing round has thirty-six sites.
+
+## 13. The first gameplay states, and a defect the probe could not reach
+
+*2026-09-19.* Every exactness claim above rests on the golden probe — boot, title screens and an attract race — and on
+programs written for the tests. The first states saved in play were three from Mistress: Super Mario 64 on the castle
+grounds, Ocarina of Time in the opening after a new file, Wave Race 64 on the watercraft screen before warm-up. A
+harness runs the interpreter and the blocks in lockstep from a saved state and compares the whole state every frame,
+and a second one steps the interpreter to the first fault and walks libultra's thread list; both are with the tooling
+outside the repository.
+
+**What diverged.** From the Ocarina of Time state the two machines were identical for 3,733 frames and differed on the
+3,734th: the same instruction count and cycle, a different program counter, a different state. Played on with blocks,
+the opening's "Navi…" message stopped after its first word and the game drew the same frame for ever; played on with
+the interpreter, the message ran to its end. The cause was §2.3's: a shape kept from words an overlay had since
+replaced. With the dispatcher shaping again at the threshold the two machines were identical for all 4,300 frames, and
+the counter showed eighteen entries reshaped in that stretch of the game alone. The probe's three games, which never
+reload code under a cold block, were identical before and after.
+
+**Why a state found it and a probe did not.** A run from a saved state starts with no blocks, and a run that has played
+there carries every entry shaped along the way — so the two ran different compiled code from the same machine, and the
+first sign of the defect was that a checkpoint saved mid-run and loaded again did not replay what the run itself did,
+though a save and load are exact (checked: a machine reloaded at frame 150 matched the straight run for 250 frames).
+That asymmetry is worth keeping as a test of its own: any divergence between a run with a history and one without is
+the block cache's.
+
+**What it does not explain.** The interpreter, and now the blocks with it, draw the whole of that message over a flat
+grey screen where the Great Deku Tree should stand. That is not the recompiler's — both machines draw it — and it is
+open. The earlier failures from the same games (a faulted graph thread in Ocarina of Time, a display list run past its
+buffer in Wave Race) were in states saved by a frontend that raced the emulation thread (`EmuSen_Settings_Reference.md`
+§4.21a) and cannot be reasoned about from those states.

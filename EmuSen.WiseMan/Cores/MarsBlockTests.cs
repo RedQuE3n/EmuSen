@@ -769,6 +769,37 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(compiled.BlocksCompiled >= 2);
         }
 
+        // A block shaped over one routine and hot only after another was copied over it: the image it is compiled from must have the shape it was given - see Mars_Recompiler.md §2.3.
+        [Fact]
+        public void A_block_shaped_over_code_that_was_replaced_before_it_was_hot_runs_the_new_code_exactly()
+        {
+            const int T6 = 14;
+            MipsAssembler program = new MipsAssembler()
+                .Addiu(T1, Zero, 20)
+                .Jal(0x100).Nop().Addiu(T0, T0, 1).Bne(T0, T1, -4).Nop()
+                .Lui(A0, 0x8000).Ori(A0, A0, 0x0100).Lui(A1, 0x8000).Ori(A1, A1, 0x0140).Addiu(T6, Zero, 9)
+                .Lw(T5, A1, 0).Sw(T5, A0, 0).Addiu(A0, A0, 4).Addiu(A1, A1, 4).Addiu(T6, T6, -1).Bne(T6, Zero, -6).Nop()
+                .Addiu(T0, Zero, 0).Addiu(T1, Zero, 100)
+                .Jal(0x100).Nop().Addiu(T0, T0, 1).Bne(T0, T1, -4).Nop()
+                .Beq(Zero, Zero, -1).Nop();
+            while (program.ToArray().Length < 64) program.Nop();
+
+            program.Addiu(T2, T2, 1).Addiu(T2, T2, 1).Addiu(T2, T2, 1).Addiu(T2, T2, 1).Addiu(T2, T2, 1).Addiu(T2, T2, 1).Addiu(T2, T2, 1).Jr(Ra).Nop();
+            while (program.ToArray().Length < 80) program.Nop();
+
+            program.Beq(Zero, Zero, 4).Addiu(T2, T2, 1).Addiu(T3, T3, 100).Addiu(T3, T3, 100).Addiu(T3, T3, 100).Addiu(T4, T4, 1).Nop().Jr(Ra).Nop();
+
+            uint[] words = program.ToArray();
+            var (interpreted, compiled) = Pair(a => { foreach (uint w in words) a.Word(w); return a; });
+
+            AssertSame(interpreted, compiled, 3_000);
+
+            Assert.True(compiled.BlocksCompiled >= 1);
+            Assert.Equal(240UL, compiled.Gpr[T2]);
+            Assert.Equal(0UL, compiled.Gpr[T3]);
+            Assert.Equal(100UL, compiled.Gpr[T4]);
+        }
+
         [Fact]
         public void A_synthetic_rom_runs_the_same_frames_with_blocks_as_without()
         {

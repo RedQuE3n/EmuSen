@@ -51,7 +51,8 @@ The shape is decided by scanning forward from the start:
 - **A branch or jump ends the block after its delay slot.** All of them: the four relative forms and their likely
   forms, REGIMM's eight, `J`, `JAL`, `JR`, `JALR`, and the coprocessor-1 branch. The slot is part of the block, since
   what the slot does after a branch is what the interpreter's two-program-counter model does (`Mars_Cpu.md` §3), and a
-  block reproduces that model with the same two fields.
+  block reproduces that model with the same two fields. (§10 measured going on past a conditional branch that fell
+  through, and did not keep it.)
 - **A COP0 write, a TLB instruction or `ERET` ends the block after itself**, because each can change the privilege
   mode, the timer, or the interrupt check's inputs, and the next instruction must be dispatched with those seen afresh.
   A COP0 read does not end it.
@@ -371,3 +372,112 @@ the arrival of its code, which the sweep bounds at a few per cent of instruction
 - **3D gameplay is still unmeasured.** Every number here comes from boots, title screens and an attract race, as every
   number in `Mars_Performance.md` does; a scene with more code hot at once compiles more blocks, and the queue's latency
   in such a scene is a number nobody has.
+
+## 9. The next levers, measured before any was built
+
+*2026-09-19.* §8 named three: registers kept in locals across a block, blocks extended past untaken branches, and
+chaining between blocks. Each was priced on the committed recompiler before a line of any was written, the way §7
+priced the recompiler itself.
+
+**Where the block time goes.** A sampled profile of 600 frames, the emulation thread only:
+
+| | Wave Race | Ocarina of Time |
+| --- | --- | --- |
+| the dispatcher's own frame (lookup, comparison, entry, the call) | 9.3% | 9.3% |
+| the emitted code | 5.0% | 7.7% |
+| `Execute` and what it calls (the call-outs) | 6.0% | 3.2% |
+| interpreted runs and fallbacks (`Interpret`, `Step`) | 6.6% | 5.4% |
+| the RSP (`Sp.Step` and the processor) | 29% | 15% |
+| the VI | 15% | 30% |
+| the RDP | 20% | 25% |
+
+The blocks' own code is the smallest of these. The dispatcher is the largest block-related share, and the counters put
+it at 18 to 19 million entries in 600 frames of each game — about 70 ns an entry.
+
+**What an entry costs, and why.** A ring of blocks each ending in a jump to the next, all compiled (`ringbench`),
+prices an entry with a given number of blocks live:
+
+| blocks live | instructions a block | ns an entry |
+| --- | --- | --- |
+| 1 (the loop stays in its block) | 8 | 9 |
+| 50 | 8 | 26 |
+| 500 | 8 | 43 |
+| 5,000 | 2 | 61 |
+| 5,000 | 8 | 100 |
+| 5,000 | 32 | 345 |
+| 5,000 | 64 | 1,133 |
+| 200 | 32 | 169 |
+
+Removing the comparison on entry changed 42 ns to 35 with 500 blocks and nothing with 5,000. So the cost is not the
+dispatcher's instructions and not the validation: it is memory. About fifty nanoseconds an entry is the block's
+metadata brought in cold, and the rest grows with the target's code — six to ten nanoseconds an instruction, up to
+twenty-five when 5,000 blocks of sixty-four no longer fit the last cache. The emitted code is 80 to 100 bytes of
+machine code an emulated instruction (the JIT's summary: about 1,430 bytes a block), and a block that is not in the
+instruction cache streams all of it in before running any of it at a nanosecond an instruction. Games have three to six
+thousand blocks live; their entries average 48 to 59 instructions and cost about what the ring's 5,000 rows cost.
+
+**What follows an entry.** Counting, in a switch build, where the next dispatch after a compiled block landed:
+
+| | fall-through past an untaken branch | the ending branch's static target | elsewhere |
+| --- | --- | --- | --- |
+| Ocarina of Time | 26.5% | 64.8% | 8.7% |
+| Super Mario 64 | 24.2% | 57.1% | 18.6% |
+| Wave Race | 22.5% | 60.2% | 17.3% |
+
+Extension removes the first column's entries outright — the instructions join the block. Chaining spares the second
+column the lookup, the delegate and the entry check, though not the target's comparison or its cold code. Together they
+reach about 85 per cent of entries.
+
+**Registers in locals**, hand-written against the emitter on the two ALU loops, identical state after sixty million
+instructions: 1.36 against 1.38 ns an instruction on the three-instruction loop (1 per cent) and 0.77 against 0.96 on
+the twelve-instruction one (20 per cent). On its own it buys a fifth of the emitted code's 5 to 8 per cent — one to
+one and a half per cent of a frame — with the writebacks a call-out forces still to be paid for. What it also buys,
+which the hand variant shows and the ring explains, is bytes: a register in a machine register is a four-byte add where
+the array is twenty.
+
+**The dynamic instruction mix is not where the time is.** Half the instructions the games run are `nop` and the branch
+of an idle loop (pure 49 to 50 per cent, branch 46 to 48, call-outs 1.5 to 4.2, stores about 1) and the idle loop costs
+nothing since §3.4. The time is in the other half's entries and the code they stream.
+
+**The order this sets.** Extension first: the smallest change, a quarter of the entries, and the groundwork for longer
+straight runs. Chaining second, for the sixty per cent. Then density — the per-instruction tick and check batched over
+a run of pure instructions where the RSP is halted and no stop falls inside it, with the run's registers in locals —
+which the ring names as the largest lever of all and §8 did not name, since it was not visible until an entry had a
+price. Each step is graded as every step of the phase has been: the probe's whole state, then interleaved builds.
+Beyond the blocks, the RSP is the largest single cost in Wave Race and the VI's scan-out in Ocarina of Time, and
+neither is this page's.
+
+## 10. Blocks extended past a branch that is not taken: measured, and not kept
+
+*2026-09-19, the first of §9's levers.* A conditional branch ends its block after the slot whatever it did, so a loop
+body with an `if` in it is two or three blocks, and §9's census found a quarter of all entries following a branch that
+had fallen through. The shape scan was made to run on past a conditional branch's slot to the next jump, ender or the
+cap; after the slot the emitted code compared `Pc` with the next instruction's address and, on a fall-through, lowered
+the delay-slot flag and went on through the usual stop compare; a likely branch that had nullified its slot jumped over
+the slot's code, with the stop compare moved ahead of that jump so an event due after the branch still ended the block
+there; a taken branch exited or looped as before.
+
+**What it measured.** Over 600 frames: entries fell by a quarter, as the census said they would — 19.0 to 14.5 million
+in Ocarina of Time, 18.8 to 13.8 in Super Mario 64, 18.4 to 14.3 in Wave Race, with 77, 79 and 62 instructions an entry
+against 59, 59 and 48. Blocks fell in number and grew in size: 2,724 bytes of machine code a block against 1,430, and
+the compiler's thread spent 40 per cent longer. Interleaved, three rounds of 600 frames against the commit before:
+39.2 → 39.0 fps, 48.1 → 47.8, 44.5 → 44.9. Nothing, in all three games.
+
+**Why, as §9 already said.** An entry's cost is mostly the target's code streamed in cold, and grows with it. Removing
+the entries that fell through to the next instruction removed the cheapest ones — their code was adjacent to what had
+just run — while every entry that remained now brought in a block nearly twice the size. The saving and the cost were
+the same quantity, moved.
+
+**The defect the probe found on the way.** The first version lowered `InDelaySlot` on the fall-through path *before*
+the stop compare. A frame that ends on that slot — an event due right after it — then saved the flag down where the
+interpreter, whose step had just run a delay slot, saves it up. Nothing behaves differently, the verifier has nothing to
+see, and the probe's whole-state hash caught it on frame 342 of Super Mario 64: one byte. A diff harness confirmed the
+byte was the flag. The lesson stays though the change does not: it is the second time this page has needed the whole
+state rather than the output (§3.3's `CurrentPc` was the first), and the reason §0 asks for it. Two tests from the work
+are kept as differential checks — a loop with a branch inside it, stopped once exactly on the slot of a branch that fell
+through, and the same with a likely branch — and they pass against the emitter as it was.
+
+**Not kept, and what reopens it.** By the rule of `Mars_Performance.md` §6 a change that measures nothing is not
+carried. The trade it lost is a trade on code size, and §9's third lever — density — changes the size side of it;
+extension is to be measured again once a block's instructions cost fewer bytes. The switch build and its timings are
+with the speed tooling outside the repository.

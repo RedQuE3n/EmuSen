@@ -825,27 +825,9 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(State(interpreted), State(compiled));
         }
 
-        // The boot runs a synthetic image from the signal processor's memory; a stub carries the program into RDRAM, where blocks apply.
-        private static uint[] IntoRdram(uint[] program)
-        {
-            const int Base = 24, Word = 25;
-            var stub = new MipsAssembler().Lui(Base, 0x8000).Ori(Base, Base, 0x0400);
-
-            for (int i = 0; i < program.Length; i++)
-            {
-                stub.Lui(Word, (ushort)(program[i] >> 16)).Ori(Word, Word, (ushort)program[i]).Sw(Word, Base, (short)(i * 4));
-            }
-
-            return stub.Jr(Base).Nop().ToArray();
-        }
-
         private static (MarsCore Interpreted, MarsCore Compiled) AssertSameFrames(uint[] program, int frames)
         {
-            uint[] words = IntoRdram(program);
-            var bytes = new byte[words.Length * 4];
-            for (int i = 0; i < words.Length; i++) System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(i * 4), words[i]);
-
-            string path = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build(patches: (0, bytes)));
+            string path = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.BuildRunningFromRdram(program));
 
             var interpreted = new MarsCore { UseBlocks = false };
             var compiled = new MarsCore();

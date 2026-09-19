@@ -2,12 +2,14 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EmuSen.Common;
 using EmuSen.Galaxia;
@@ -235,9 +237,9 @@ namespace EmuSen.WiseMan.Mistress
         public Task Slot_one_writes_the_plain_state_file_every_other_frontend_uses() => Session.Dispatch(() =>
         {
             var window = StartGame();
-            window.PauseEmulation(); // SaveState reads core state the emulation thread is writing
+            window.PauseEmulation(); // so the save is served by the woken thread - see §4.21a
 
-            Click(window, "SaveStateMenuItem");
+            Save(window);
 
             Assert.True(File.Exists(Path.Combine(_stateDir, "Playable.state")));
             Assert.Contains("slot 1", Status(window).Text!);
@@ -250,10 +252,10 @@ namespace EmuSen.WiseMan.Mistress
         {
             var window = StartGame();
             window.PauseEmulation();
-            Click(window, "SaveStateMenuItem");
+            Save(window);
 
             SelectSlot(window, 3);
-            Click(window, "SaveStateMenuItem");
+            Save(window);
 
             Assert.True(File.Exists(Path.Combine(_stateDir, "Playable.state")));
             Assert.True(File.Exists(Path.Combine(_stateDir, "Playable.slot3.state")));
@@ -281,7 +283,7 @@ namespace EmuSen.WiseMan.Mistress
             var window = StartGame();
             window.PauseEmulation();
             SelectSlot(window, 2);
-            Click(window, "SaveStateMenuItem");
+            Save(window);
 
             var slots = SlotItems(window);
             Assert.Equal(8, slots.Count);
@@ -410,6 +412,21 @@ namespace EmuSen.WiseMan.Mistress
             Item(w, "SaveSlotMenuItem").Submenu!.Items.ToList();
 
         private static void SelectSlot(MainWindow w, int slot) => SlotItems(w)[slot - 1].Invoke();
+
+        // The emulation thread serves the save and posts its status back, so the UI queue is pumped until it arrives - see §4.21a.
+        private static void Save(MainWindow w)
+        {
+            Status(w).Text = "";
+            Click(w, "SaveStateMenuItem");
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (Status(w).Text?.StartsWith("State saved") != true)
+            {
+                Dispatcher.UIThread.RunJobs();
+                if (clock.ElapsedMilliseconds > 20_000) Assert.Fail("the emulation thread never served the save");
+                Thread.Sleep(2);
+            }
+        }
 
         // Every action the window built, by the name its MenuItem used to carry.
         private static System.Collections.Generic.Dictionary<string, LunaAction> Actions(MainWindow w)

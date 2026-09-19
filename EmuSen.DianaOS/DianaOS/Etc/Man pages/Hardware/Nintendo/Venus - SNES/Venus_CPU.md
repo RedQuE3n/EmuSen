@@ -283,7 +283,7 @@ About **2%** — real but small, and worth having mainly for the string comparis
 
 **The dispatch table was not what dynamic PGO was buying.** Running with `DOTNET_TieredPGO=0` costs ~16% *with either dispatch style* (LttP 17.1% delegate / 15.5% switch; DKC 15.5% / 17.8%), so profile-guided devirtualisation is earning that ~16% somewhere other than the opcode table. The obvious suspect was `ICpuBus` — §10 tests that and rules it out.
 
-This also settles the NativeAOT question that prompted the change: AOT stays ~10–12% *slower* than the tiered JIT with the `switch` in place (LttP +10.4%, DKC +10.8%, SMW +12.2%), for the same reason — it has no dynamic profile, and the `switch` did nothing to reduce the dependence on one. See `EmuSen_Project_Overview_v2.md` for the AOT trimming hazards (`StateSerializer` silently produces a 20-byte save state under AOT) that make it a correctness question as well as a speed one.
+This also settles the NativeAOT question that prompted the change: AOT stays ~10–12% *slower* than the tiered JIT with the `switch` in place (LttP +10.4%, DKC +10.8%, SMW +12.2%), for the same reason — it has no dynamic profile, and the `switch` did nothing to reduce the dependence on one. (Re-measured on the N64 core on 2026-09-19, `Mars_Performance.md` §25: a fifth slower there, the save state still broken, and the recompiler impossible under it; ReadyToRun is exact and a small gain.) See `EmuSen_Project_Overview_v2.md` for the AOT trimming hazards (`StateSerializer` silently produces a 20-byte save state under AOT) that make it a correctness question as well as a speed one.
 
 ## 10. The `ICpuBus` interface call is not the bottleneck — measured, not assumed
 

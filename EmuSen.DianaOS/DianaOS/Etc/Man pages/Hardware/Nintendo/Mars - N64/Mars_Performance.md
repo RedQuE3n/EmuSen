@@ -958,3 +958,47 @@ whole state matched the §1 baseline on every frame of all three games, in a Deb
 but a loop onto their own start, and reach each other through the dispatcher; loads, stores and every coprocessor
 instruction are calls into the interpreter. Each is a lever the recompiler's §8 names and none is measured. The
 interpreter itself is unchanged and runs wherever a block cannot.
+
+## 25. Ahead-of-time compilation, re-evaluated on Mars
+
+*2026-09-19.* `Venus_CPU.md` §8's note had settled the question for the SNES core: Native AOT ran 10 to 12 per cent
+slower than the tiered JIT, for want of a dynamic profile, and trimming left `StateSerializer` writing a twenty-byte
+save state. The question was reopened for Mars, on the recompiler's build, because the earlier result was not trusted
+and because the recompiler changes what the question means.
+
+**Two things are called AOT.** *Native AOT* compiles the whole program to a native executable with no JIT in it, and
+therefore no `System.Reflection.Emit`: the recompiler cannot exist under it, and `MarsCore.UseBlocks` now defaults to
+`RuntimeFeature.IsDynamicCodeSupported` so that such a build runs the interpreter rather than throwing at the first
+block. *ReadyToRun* precompiles the assemblies at publish and keeps the JIT, which still compiles the dynamic methods
+and still re-compiles hot methods at the top tier with a profile; it is the form the recompiler can live with.
+
+**Correctness first.** A harness printing the whole save state's length and hash, and the picture's, every hundred
+frames, run on Super Mario 64 under the three:
+
+| | state | picture |
+| --- | --- | --- |
+| JIT, blocks and interpreter alike | 6,433,277 bytes, `011F94E2…` | `038854E3…` |
+| ReadyToRun, blocks | 6,433,277 bytes, `011F94E2…` | `038854E3…` |
+| Native AOT, interpreter | **48 bytes** | `038854E3…` |
+
+The emulation is the same under all three; under Native AOT the reflection the serializer walks finds nothing, as
+before. That alone rules Native AOT out as a way of shipping Mars until the serializer is rewritten for it.
+
+**Speed, §12's way**, four builds interleaved, three rounds of 600 frames from boot, medians:
+
+| | JIT, blocks | ReadyToRun, blocks | JIT, interpreter | Native AOT, interpreter |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time | 39.3 fps | 40.2 fps (+2%) | 31.1 fps | 24.9 fps (−20%) |
+| Super Mario 64 | 49.0 | 49.5 (+1%) | 36.4 | 29.4 (−19%) |
+| Wave Race 64 | 44.4 | 47.4 (+7%) | 36.2 | 29.1 (−20%) |
+
+Native AOT is a fifth slower than the JIT running the same interpreter, worse than the SNES core's figure, and against
+the JIT with blocks it is 37 per cent behind. The earlier result stands and is stronger here. ReadyToRun is a small
+gain over these 600 frames, most of it plausibly the warm-up that a run from boot includes — the JIT compiling several
+thousand of the core's own methods twice — and it is exact. It is not a lever of the kind this page keeps: it is a
+publish setting, it costs nothing at runtime, and whether it is turned on for the shipped builds is a decision about
+the publish (`project_publish_out_folder`), not about the core.
+
+**What was not measured.** Startup time, which is ReadyToRun's usual reason and which the harness does not time;
+memory; a Native AOT build with a static profile (`.mibc`), which would narrow the interpreter's gap and would not
+give it blocks.

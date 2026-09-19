@@ -116,6 +116,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // Everything up to end is taken at once; an address compare, so a list may run past data memory's end - see §2.3.
         private void Take()
         {
+            _bus.Written++;
+
             while (!_freeze && _current < _end)
             {
                 ulong word = _xbus ? ReadDataMemory(_current) : _bus.Read64(_current);

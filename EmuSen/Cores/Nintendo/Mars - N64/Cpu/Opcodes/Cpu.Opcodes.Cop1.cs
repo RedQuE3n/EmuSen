@@ -42,7 +42,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             else WriteFpuWord(Rt(instruction), _bus.Read32(physical));
         }
 
-        private void StoreCop1(uint instruction, bool wide)
+        private uint StoreCop1(uint instruction, bool wide)
         {
             RequireCop1();
 
@@ -53,6 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             if (wide) _bus.Write64(physical, ReadFpuWide(Rt(instruction)));
             else _bus.Write32(physical, ReadFpuWord(Rt(instruction)));
+            return physical;
         }
 
         // Scaffolding, not emulation: a real operation that Mars has not built stops loudly - see Mars_Fpu.md §6.

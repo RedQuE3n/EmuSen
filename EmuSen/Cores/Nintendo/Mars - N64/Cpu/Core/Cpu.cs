@@ -59,6 +59,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             _bus = bus;
             _mi = bus.Mi;
+            _blocks = new Blocks.BlockCache(bus.Rdram.Length);
             Pc = 0xFFFF_FFFF_A400_0040;
             NextPc = Pc + 4;
             RefreshMode();

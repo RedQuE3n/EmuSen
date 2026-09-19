@@ -42,7 +42,11 @@ namespace EmuSen.Cores.Nintendo.Mars
         // Past the end is dropped, as a store to RDRAM that is not installed is - see Mars_Cheats.md §3.1.
         private void WriteForCheat(string spaceName, int address, byte value)
         {
-            if (CheatSpace(spaceName) is { } bytes && (uint)address < (uint)bytes.Length) bytes[address] = value;
+            if (CheatSpace(spaceName) is { } bytes && (uint)address < (uint)bytes.Length)
+            {
+                bytes[address] = value;
+                Bus!.Written++;
+            }
         }
 
         // The writable spaces the debug target names, byte for byte as the bus stores them.

@@ -228,6 +228,68 @@ scans in three or one in two are of a frame buffer the last scan already walked;
 costs a core's time and not the frame's, so it is left. Hotaru presents at once. The display processor still
 draws on the emulation thread, which §26 names as the next thing to move.
 
+### 2.8 A scan that would repeat the last one
+
+*2026-09-19, Phase G.* The games this phase measures change their frame buffer on every second or third field and
+the interface scans on every field (`Mars_Performance.md` §26), so a half to two thirds of scans walk bytes the
+previous walk already walked. §2.7 made the walk run on another thread over a capture of the bytes it can reach,
+and that capture is what makes a redundant scan cheap to recognise.
+
+**The argument.** The walk reads two things and nothing else: the registers and derived geometry the job carries —
+the picture, the origin, the width, the pixel size, the resample, divot, anti-alias, dither-filter and gamma modes,
+and the byte range §2.7 computes — and the bytes of that range, with their hidden bits. It keeps no frame counter,
+reseeds no noise and reads nothing from the machine while it runs, which is what separates Mars from every reference
+read for this: angrylion reseeds the gamma dither's noise from a field counter (`vi.c`, `reseed_noise(…,
+vi_frame_count)`) and parallel-rdp from a frame count pushed to the shader, so in both a scan over identical bytes
+produces a different picture, and neither can skip one exactly. In Mars the walk is a pure function of those two
+inputs, so a scan whose geometry and bytes both equal the last walk's writes the raster the last walk left, byte for
+byte — and the picture already shows it.
+
+**The mechanism.** The job keeps the geometry of the last scan it captured, and its capture is written only when a
+walk follows, so the capture still holds the last walk's bytes. `Capture` compares the geometry first; if it
+matches, it compares the live range of RDRAM and its hidden bits against the capture, after the display processor's
+marks for that range have been waited on as §2.7 already does. If both match, no bytes are copied and no walk is
+queued, and the presentation keeps the picture it holds rather than swapping in the pending one — which is right
+because a deferred picture is one frame behind, and the frame it would have shown is the same picture. If either
+differs, the bytes are copied and walked as before. The borders and the two frames of grace of §2.4 are advanced in
+`Prepare`, which always runs, so a skipped walk leaves them as a walk would have.
+
+**A loaded state forgets the capture**, since the raster it presents at once is not the one the last walk wrote;
+the scan after a load always walks.
+
+**Measured.** Interleaved, order rotated, three rounds of 600 frames from each of `Mars_Performance.md` §26's
+gameplay states on a quiet machine, second halves, with the scan-out and the display processor's list already on
+their own threads:
+
+| from the state, second 300 frames | walking every scan | skipping the repeats | scans skipped of 600 |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50) | 49.9 fps | **52.2** | 399 |
+| Wave Race 64 (NTSC, 60) | 59.6 | **60.4** | 400 |
+| Super Mario 64, in the castle (PAL, 50) | 73.5 | 73.0 | 300 |
+| Super Mario 64, outside it (PAL, 50) | 55.2 | 55.6 | 299 |
+
+Medians of three. The first two rows' rounds do not overlap; the last two lie inside their own spread, and the
+change is recorded as worth nothing to them. The counts are the games' own draw rates: two scans in three repeat in
+the first two, one in two in the other two, exactly as §26 said they would. **The gain follows the scan-out's share
+of a frame rather than the count of scans skipped** — §26 put it at 24 per cent of Ocarina of Time's frame and 11
+and 17 of the others', and the two Super Mario 64 states are bound by the display processor's thread, where work
+taken off the emulation thread buys nothing.
+
+**A first version cost Wave Race what it saved.** It copied the bytes out and then compared the copy with the
+previous one, so a skipped scan still paid for a full copy of the range; Wave Race's median fell from 60.7 to 59.8
+while Ocarina of Time's rose. Since the previous capture is overwritten only when a walk follows it, the comparison
+can be made against live memory instead and the copy taken only when the bytes have changed — which deletes the
+copy on the half to two thirds of scans that skip, and a whole second buffer with it. That is the version measured
+above, and it turned Wave Race's loss into a gain.
+
+**What no reference does.** The study behind this section (`Mars_References.md`) found every scan-out read for it —
+angrylion, its parallel-n64 fork, parallel-rdp, the MiSTer register-transfer code and mupen64plus-core — decides
+not to scan only on register state: a zero origin, two blank fields in a row, an invalid width, and in parallel-rdp
+a self-described "dirty hack" that reuses the previous image when the registers are invalid. None looks at whether
+the bytes changed. The fork's own measured campaign attacks the cost of a scan — it found 97 to 100 per cent of
+pixels fully covered and doing no filtering, and skipped the vertical resample at a zero fraction — and Mars already
+had both of those (§2.6 and `Mars_Performance.md` §5 and §21).
+
 ## 3. What the differential says
 
 ### 3.1 The first run, and the bug it found

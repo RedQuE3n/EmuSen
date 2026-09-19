@@ -125,6 +125,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         {
             _bus.Dp.WaitForReadRange(job.From, job.Count, 8);
 
+            // The bytes of the last walk are still the capture, so a scan that would repeat it is recognised without copying anything - see §2.8.
+            job.Repeats = Repeated(job);
+
+            // The capture already holds this scan's bytes, so it is this scan's capture and a walk over it is still right - see §2.8.
+            if (job.Repeats)
+            {
+                job.Base = job.From;
+                job.Length = _bus.Rdram.Length;
+                job.Captured = true;
+                return;
+            }
+
             int count = job.Count;
             if (job.Rdram.Length < count) job.Rdram = new byte[count];
             if (job.Hidden.Length < count / 2) job.Hidden = new byte[count / 2];
@@ -135,6 +147,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             job.Base = job.From;
             job.Length = _bus.Rdram.Length;
             job.Captured = true;
+        }
+
+        // The walk reads the registers this job carries and the bytes it captured and nothing else, so the same two give the same raster - see §2.8.
+        private bool Repeated(ScanJob job)
+        {
+            var shape = (job.Picture, job.Origin, job.Width, job.Wide, job.Resample, job.Divot, job.AntiAlias, job.Dither, job.Gamma, job.From, job.Count);
+            bool same = job.LastCount == job.Count && job.LastShape.Equals(shape) && job.Rdram.Length >= job.Count;
+
+            job.LastShape = shape;
+            job.LastCount = job.Count;
+
+            return same
+                && _bus.Rdram.AsSpan((int)job.From, job.Count).SequenceEqual(job.Rdram.AsSpan(0, job.Count))
+                && _bus.RdramHidden.AsSpan((int)(job.From >> 1), job.Count / 2).SequenceEqual(job.Hidden.AsSpan(0, job.Count / 2));
         }
 
         // The registers as lengths and steps, with the picture pulled back inside the raster where it starts before it - see §2.1.

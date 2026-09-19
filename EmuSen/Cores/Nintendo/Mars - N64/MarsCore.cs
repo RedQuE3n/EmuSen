@@ -287,6 +287,11 @@ namespace EmuSen.Cores.Nintendo.Mars
         }
 
         // The scan-out walks on another thread while the next frame runs, and the picture shown is the last one joined - see Mars_Video.md §2.7.
+        // A deferred scan whose registers and bytes repeat the last walk's is skipped; the counter is what a bench reads - see Mars_Video.md §2.8.
+        public bool SkipRepeatedScans { get; set; } = true;
+
+        [EmuSen.Common.SkipInState] public long RepeatedScans;
+
         public bool DeferredPresentation
         {
             get => _deferred;
@@ -406,6 +411,7 @@ namespace EmuSen.Cores.Nintendo.Mars
 
             // The timer's due cycle and the interrupt check are derived from what was just read - see Mars_Performance.md §10.
             Cpu.Cop0Written();
+            _scan.Forget();
 
             if (!SkipRendering) Present(Bus.Vi);
         }
@@ -425,6 +431,14 @@ namespace EmuSen.Cores.Nintendo.Mars
 
             bool walk = vi.Prepare(_scan);
             if (walk) vi.Capture(_scan);
+
+            // A scan that would write the raster already there is not walked, and the picture on show is already it - see Mars_Video.md §2.8.
+            if (walk && _scan.Repeats && SkipRepeatedScans)
+            {
+                RepeatedScans++;
+                return;
+            }
+
             int rows = vi.FrameHeight;
             bool serrate = vi.Serrate;
 

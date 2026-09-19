@@ -956,8 +956,10 @@ whole state matched the §1 baseline on every frame of all three games, in a Deb
 
 **What remains in the processor.** The blocks keep registers in the array between instructions, end at every branch
 but a loop onto their own start, and reach each other through the dispatcher; loads, stores and every coprocessor
-instruction are calls into the interpreter. Each is a lever the recompiler's §8 names and none is measured. The
-interpreter itself is unchanged and runs wherever a block cannot.
+instruction are calls into the interpreter. Each is a lever the recompiler's §8 names, and on 2026-09-19 all three were
+measured (its §10–§12) and none kept: extension and chaining measured nothing, registers in locals lost 2 to 5 per cent,
+because an entry's cost is the target's code streamed in cold and none of them lowers it. The interpreter itself is
+unchanged and runs wherever a block cannot.
 
 ## 25. Ahead-of-time compilation, re-evaluated on Mars
 

@@ -533,6 +533,200 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(1500UL, compiled.Gpr[T7]);
         }
 
+        // A register the interpreter writes inside a block is read by the instruction after it - see Mars_Recompiler.md §11.
+        [Fact]
+        public void A_register_written_by_a_call_into_the_interpreter_is_seen_by_the_instruction_after()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Lui(A0, 0x8000).Ori(A0, A0, 0x0800).Addiu(T1, Zero, 2000)
+                .Addiu(T0, T0, 1)
+                .Sw(T0, A0, 0)
+                .Lw(T2, A0, 0)
+                .Addiu(T3, T2, 1)
+                .Addu(T4, T4, T3)
+                .Jal(0x38)
+                .Addiu(T5, Ra, 4)
+                .Bne(T0, T1, -8)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop()
+                .Addu(T6, T6, T5)
+                .Jr(Ra)
+                .Nop());
+
+            AssertSame(interpreted, compiled, 40_000);
+
+            Assert.True(compiled.BlocksCompiled >= 1);
+            Assert.Equal(2000UL, compiled.Gpr[T2]);
+            Assert.Equal(2001UL, compiled.Gpr[T3]);
+            Assert.Equal(MipsAssembler.EntryPoint + 0x2C, compiled.Gpr[T5]);
+        }
+
+        // Two compiled blocks jumping to each other, dispatched between; kept from the chaining round as a differential check - see Mars_Recompiler.md §12.
+        [Fact]
+        public void A_loop_across_two_compiled_blocks_leaves_the_machine_the_interpreter_leaves()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Addiu(T1, Zero, 3000)
+                .Addiu(T0, T0, 1)
+                .J(0x14)
+                .Addu(T2, T2, T0)
+                .Nop()
+                .Addiu(T3, T3, 2)
+                .Bne(T0, T1, -6)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop());
+
+            AssertSame(interpreted, compiled, 30_000);
+
+            Assert.True(compiled.BlocksCompiled >= 2);
+            Assert.Equal(3000UL, compiled.Gpr[T0]);
+            Assert.Equal(6000UL, compiled.Gpr[T3]);
+        }
+
+        // A field so short that frames end between two compiled blocks - see Mars_Recompiler.md §12.
+        [Fact]
+        public void A_frame_ending_between_two_compiled_blocks_ends_on_the_same_instruction()
+        {
+            uint[] program = new MipsAssembler()
+                .Lui(A0, 0xA440).Addiu(T1, Zero, 2).Sw(T1, A0, 0x18).Addiu(T1, Zero, 0x40).Sw(T1, A0, 0x1C)
+                .Addiu(T2, T2, 1)
+                .Beq(Zero, Zero, 2)
+                .Xor(T3, T3, T2)
+                .Nop()
+                .Addiu(T4, T4, 3)
+                .Beq(Zero, Zero, -6)
+                .Nop()
+                .ToArray();
+
+            (MarsCore interpreted, MarsCore compiled) = AssertSameFrames(program, 120);
+
+            Assert.True(compiled.Bus!.Vi.Fields >= 120);
+            Assert.Equal(interpreted.Bus!.Cycles, compiled.Bus.Cycles);
+        }
+
+        // One block rewrites the first word of the block it jumps to, and the dispatcher's comparison discards it every pass - see Mars_Recompiler.md §12.
+        [Fact]
+        public void A_block_whose_words_another_block_rewrote_is_discarded_at_the_next_entry()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Lui(A0, 0x8000).Addiu(T1, Zero, 2000).Lui(T4, 0x240A).Ori(T4, T4, 7).Addiu(T5, Zero, 6)
+                .Addiu(T0, T0, 1)
+                .Xor(T4, T4, T5)
+                .Sw(T4, A0, 44)
+                .J(44)
+                .Nop()
+                .Nop()
+                .Addiu(T2, Zero, 1)
+                .Addu(T3, T3, T2)
+                .Bne(T0, T1, -9)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop());
+
+            AssertSame(interpreted, compiled, 30_000);
+
+            Assert.True(compiled.BlocksCompiled >= 2);
+            Assert.True(compiled.BlocksDiscarded >= 1);
+            Assert.Equal(8000UL, compiled.Gpr[T3]);
+        }
+
+        [Fact]
+        public void The_timer_interrupts_between_two_compiled_blocks_on_the_instruction_the_interpreter_takes_it_on()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Addiu(T0, T0, 1)
+                .Beq(Zero, Zero, 2)
+                .Addu(T1, T1, T0)
+                .Nop()
+                .Addiu(T2, T2, 3)
+                .Beq(Zero, Zero, -6)
+                .Xor(T3, T3, T2), (bus, cpu) =>
+                {
+                    Handler(bus, a => a
+                        .Mfc0(K0, Cpu.CompareRegister).Addiu(K0, K0, 3000).Mtc0(K0, Cpu.CompareRegister)
+                        .Lui(K1, 0x8000).Lw(T4, K1, 0x800).Addiu(T4, T4, 1).Sw(T4, K1, 0x800)
+                        .Eret());
+                    cpu.Cop0[Cpu.CompareRegister] = 3000;
+                    cpu.Cop0[Cpu.StatusRegister] = Cpu.StatusInterruptEnable | (1UL << 15);
+                    cpu.Cop0Written();
+                });
+
+            AssertSame(interpreted, compiled, 100_000);
+
+            Assert.True(compiled.Bus.Read32(0x800) > 5);
+            Assert.True(compiled.BlocksCompiled >= 2);
+        }
+
+        [Fact]
+        public void An_event_between_two_compiled_blocks_fires_on_the_same_instruction()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Addiu(T0, T0, 1)
+                .Beq(Zero, Zero, 2)
+                .Addu(T1, T1, T0)
+                .Nop()
+                .Addiu(T2, T2, 3)
+                .Beq(Zero, Zero, -6)
+                .Xor(T3, T3, T2), ProgramDevices);
+
+            AssertSame(interpreted, compiled, 3_500_000);
+
+            Assert.True(compiled.Bus.Vi.Fields >= 2);
+            Assert.True(compiled.Bus.Ai.SamplesPlayed > 0);
+            Assert.True(compiled.BlocksCompiled >= 2);
+        }
+
+        // A jump to a misaligned address inside a compiled block's words: the fetch faults in the interpreter, where the dispatcher leaves it - see Mars_Recompiler.md §12.
+        [Fact]
+        public void A_misaligned_target_after_a_compiled_block_is_left_to_the_interpreter()
+        {
+            const int T9 = 25;
+
+            var (interpreted, compiled) = Pair(a => a
+                .Addiu(T1, Zero, 300)
+                .Lui(T9, 0x8000).Ori(T9, T9, 0x000E)
+                .Addiu(T0, T0, 1)
+                .Bne(T0, T1, -2)
+                .Nop()
+                .Jr(T9)
+                .Nop(), (bus, _) => Handler(bus, a => a.Eret()));
+
+            AssertSame(interpreted, compiled, 3 + 3 * 300 + 2 + 500);
+
+            Assert.Equal(300UL, compiled.Gpr[T0]);
+            Assert.Equal(MipsAssembler.EntryPoint + 0x0E, compiled.Cop0[Cpu.ExceptionPcRegister]);
+            Assert.True(compiled.BlocksCompiled >= 2);
+        }
+
+        // The faulting instruction is the first of a block entered from another, whose address only the entry can have set - see Mars_Recompiler.md §12.
+        [Fact]
+        public void A_fault_on_the_first_instruction_of_a_block_entered_from_another_reports_it()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Lui(A0, 0x8000).Ori(A0, A0, 0x0801).Addiu(T1, Zero, 300)
+                .Addiu(T0, T0, 1)
+                .Addu(T2, T2, T0)
+                .Beq(Zero, Zero, 2)
+                .Nop()
+                .Nop()
+                .Lw(T3, A0, 0)
+                .Addiu(T2, T2, 5)
+                .Bne(T0, T1, -8)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop(), (bus, _) => Handler(bus, a => a
+                    .Mfc0(K0, Cpu.ExceptionPcRegister).Addiu(K0, K0, 4).Mtc0(K0, Cpu.ExceptionPcRegister)
+                    .Lui(K1, 0x8000).Lw(T4, K1, 0x800).Addiu(T4, T4, 1).Sw(T4, K1, 0x800)
+                    .Eret()));
+
+            AssertSame(interpreted, compiled, 10_000);
+
+            Assert.Equal(300u, compiled.Bus.Read32(0x800));
+            Assert.True(compiled.BlocksCompiled >= 2);
+        }
+
         [Fact]
         public void A_synthetic_rom_runs_the_same_frames_with_blocks_as_without()
         {

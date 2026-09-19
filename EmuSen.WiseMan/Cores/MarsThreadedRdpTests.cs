@@ -94,8 +94,79 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, threaded.Dp.MarkFor(Framebuffer));
         }
 
+        // The page a load reads from is marked for writers and not for readers, and a writer beside the load's bytes on that page is a bystander.
+        [Fact]
+        public void A_page_only_a_load_reads_stops_writers_within_the_load_and_nobody_else()
+        {
+            var threaded = new MemoryBus();
+            threaded.Dp.Threaded = true;
+
+            HandOver(threaded, Scene(0x8000_8000, load: true, loadRows: 16));
+
+            Assert.NotEqual(0, threaded.Dp.Marks[Texture >> 12]);
+            Assert.Equal(0, threaded.Dp.WriteMarks[Texture >> 12]);
+            Assert.NotEqual(0, threaded.Dp.Marks[Framebuffer >> 12]);
+            Assert.NotEqual(0, threaded.Dp.WriteMarks[Framebuffer >> 12]);
+
+            threaded.Write32(Texture + 0x900, 0x1234_5678);
+            Assert.Equal(1, threaded.Dp.Bystanders);
+            Assert.NotEqual(0, threaded.Dp.Marks[Texture >> 12]);
+
+            threaded.Write32(Texture + 0x100, 0x1234_5678);
+            Assert.Equal(1, threaded.Dp.Bystanders);
+            Assert.Equal(0, threaded.Dp.Marks[Texture >> 12]);
+
+            threaded.Dp.Join();
+        }
+
+        // A list in the page after the depth image's last row is read by the interface without a wait, and drawn as at once.
+        [Fact]
+        public void A_list_beside_the_depth_image_is_read_without_waiting()
+        {
+            const uint list = Depth + Width * 2 * Rows + 0x100;
+            Assert.Equal(Depth + Width * 2 * (Rows - 1) >> 12, list >> 12);
+
+            MemoryBus atOnce = new(), threaded = new();
+            threaded.Dp.Threaded = true;
+
+            ulong[] scene = Scene(0x7C1F_7C1F);
+            HandOver(atOnce, scene, list);
+            HandOver(threaded, scene, list);
+
+            Assert.Equal(0, threaded.Dp.WaitsPerSite[10]);
+            Assert.True(threaded.Dp.Bystanders >= scene.Length);
+
+            threaded.Dp.Join();
+            Assert.Equal(atOnce.Rdram, threaded.Rdram);
+            Assert.Equal(State(atOnce), State(threaded));
+        }
+
+        // The verifier, given a byte the processor never touched, faults on the page and on the range, and the next join throws it.
+        [Fact]
+        public void The_verifier_faults_a_write_outside_the_marked_pages_and_one_outside_the_marked_rows()
+        {
+            var threaded = new MemoryBus();
+            threaded.Dp.Threaded = true;
+
+            HandOver(threaded, Scene(0x0001_0001));
+            threaded.Read32(Framebuffer);
+            threaded.Dp.Wrote(0x0018_0000);
+            var page = Assert.Throws<System.InvalidOperationException>(() => threaded.Dp.Join());
+            Assert.Contains("did not mark", page.InnerException!.Message);
+
+            HandOver(threaded, Scene(0x0002_0002));
+            threaded.Read32(Framebuffer);
+            Assert.NotEqual(0, threaded.Dp.WriteMarks[(Framebuffer + Width * 2 * Rows + 0x100) >> 12]);
+            threaded.Dp.Wrote(Framebuffer + Width * 2 * Rows + 0x100);
+            var range = Assert.Throws<System.InvalidOperationException>(() => threaded.Dp.Join());
+            Assert.Contains("outside every range", range.InnerException!.Message);
+
+            HandOver(threaded, Scene(0x0003_0003));
+            threaded.Dp.Join();
+        }
+
         // A full frame buffer of fill rectangles, with a depth image set and, when asked, a texture loaded from RDRAM.
-        private static ulong[] Scene(uint color, bool load = false)
+        private static ulong[] Scene(uint color, bool load = false, int loadRows = 32)
         {
             var list = new System.Collections.Generic.List<ulong>
             {
@@ -112,18 +183,18 @@ namespace EmuSen.WiseMan.Cores
             {
                 list.Add((0x3DUL << 56) | (0UL << 53) | (2UL << 51) | (63UL << 32) | Texture);
                 list.Add((0x35UL << 56) | (2UL << 51) | (16UL << 41));
-                list.Add((0x34UL << 56) | (0UL << 44) | (0UL << 32) | ((31UL << 2) << 12) | (31UL << 2));
+                list.Add((0x34UL << 56) | (0UL << 44) | (0UL << 32) | ((31UL << 2) << 12) | ((ulong)(loadRows - 1) << 2));
             }
 
             list.Add(SyncFull);
             return list.ToArray();
         }
 
-        private static void HandOver(MemoryBus bus, ulong[] list)
+        private static void HandOver(MemoryBus bus, ulong[] list, uint at = List)
         {
-            for (int i = 0; i < list.Length; i++) bus.Write64(List + (uint)i * 8, list[i]);
-            bus.Write32(Start, List);
-            bus.Write32(End, List + (uint)list.Length * 8);
+            for (int i = 0; i < list.Length; i++) bus.Write64(at + (uint)i * 8, list[i]);
+            bus.Write32(Start, at);
+            bus.Write32(End, at + (uint)list.Length * 8);
         }
 
         private static byte[] State(MemoryBus bus)

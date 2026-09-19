@@ -180,6 +180,84 @@ speed is unchanged, and on its own thread it is the frame's floor: in Wave Race 
 sixtieth of a second. The debugger's memory windows hand out the RDRAM array itself, and a window read from another
 thread while the list runs may see a partly drawn frame, as it may already see a partly run frame.
 
+### 2.6.1 Readers, writers, and the bytes behind a mark
+
+*2026-09-19, later the same day.* The first version of the marks conflated two things, and the interface's own
+counters, printed from the gameplay states of `Mars_Performance.md` §26, showed what each cost. **A mark did not
+say what the processor would do to the page.** A page a load reads from carried the same mark as one an image is
+drawn into, so a *reader* of that page — the signal processor's DMA fetching its display list, a block's fetch of
+code, the audio interface's samples — waited for a load it had no order with: two reads of the same bytes can
+happen in either order and agree. **And a mark named a page, not the bytes.** A page is 4 KB, an image's rows or a
+load's bytes seldom fill one, and a bystander sharing the page waited for the whole of it: Ocarina of Time keeps its
+display list in the page after its depth buffer's last rows, so the interface's own reading of the list, and the
+signal processor's, waited for the batch that cleared the depth buffer; Super Mario 64's and Wave Race's signal
+processors DMA from pages their textures are loaded from. Between them these waits were 4 to 7 ms of every frame.
+
+**Two marks a page.** The interface now keeps `Marks`, the count a *writer* of the page must wait for, set by
+every range the processor reaches, and `WriteMarks`, the count a *reader* must wait for, set only by the images the
+processor writes. The sites of §2.6 are sorted by what they do: the bus's word read, the processor's load, its
+fetch and a block's entry, the audio interface's samples, the scan-out's capture, the signal processor's DMA into
+its own memory, the serial interface's transfer into PIF RAM, a cheat's read and the interface's reading of a list
+test the reader's mark; the bus's word write, the processor's store, the DMAs into RDRAM, a cheat's write and the
+debugger's window test the writer's. The verifier splits the same way: a byte the processor *writes* passes
+`Wrote`, which asks the reader's mark — since the readers are the ones a write can mislead — and a byte it
+*reads* passes `Touched`, which asks the writer's.
+
+**The bytes behind a mark.** Every range that marks a page is also kept as a range: a ring of the last 1,024,
+each its first and last byte, the count of the word that first reaches it, the count that must run before it is
+free, and whether the processor writes it; and, for the batch still being taken, the image ranges it marked idle,
+whose count is not yet known. A waiter that finds its page marked, and the mark not yet run, consults them before
+waiting: a writer for any range that overlaps its bytes, a reader for one the processor writes; finding none, it is
+a **bystander** — it neither waits nor clears the mark, which still speaks for the range's bytes, and the
+interface counts it. The scan runs from the newest range back and stops at the first whose count has run, which is
+sound because the ring is appended in the order of the counts: a load's range as its word is taken, and a batch's
+image ranges when the batch ends, with the batch's own count, which no word of the batch exceeds. Two rules keep
+the page marks consistent with the ranges. A later mark never lowers an earlier one — a load on a page whose image
+is still idle leaves the idle mark, since the batch's later draws are not yet known — except at the batch's end,
+which writes its count over the idle marks it made. And a wait clears a page's mark only when the mark waited for
+is at least that mark, so an idle mark, or a later load's, stands.
+
+**The verifier is now exact to the byte.** A word `w` that touches byte `b` must find a range that contains `b`,
+whose first word is at most `w` and whose count is at least `w`, and a range the processor writes if the touch is
+a write; the page check of §2.6 is made first, as before. The ring is read newest first and stops where the counts
+fall below `w`; the open batch's ranges are read under a sequence the taking side increments before and after it
+changes them, and read again if it changed meanwhile. Two limits, both taken as covered so that neither can fault:
+a range older than the ring's 1,024 entries, which the thread detects by the count of appends having moved past its
+slot while it read; and a batch with more image ranges than the sixteen the interface remembers, which §2.6 already
+leaves idle. Neither has been reached by any run in §7 or `Mars_Performance.md` §29.
+
+**An image's extent is not the scissor's rectangle, and the verifier said so.** The first version of the ranges
+took the colour image's extent to be the scissor's rows times the image's width, and the verifier rejected it
+within forty frames of every gameplay state: the processor read and wrote bytes inside the marked pages and outside
+those ranges. The reason is that **a span's right edge is clipped by the scissor and not by the image's width**
+(§2 of `Mars_RdpTriangles.md`; `ClipEdge` clamps to `_scissorRight`), while an address is formed as
+`base + (y × width + x) × bytes`. A scissor wider than the image therefore carries an address past the end of its
+row — and on the last row, past the end of the image, which is where Ocarina of Time keeps the buffer after it. The
+extent a batch marks is now the least and greatest address a span can form: from the top row's first pixel, less two
+for a read beside a span, to the greater of the bottom row's first pixel and the bottom row's scissor-right pixel
+plus three. The rows themselves were also one too many, `bottom − top + 1` where the rasteriser draws `top` to the
+row the bottom edge ends in, exclusive; the bottom is now the row its quarter-pixel edge ends in. With both
+corrected the verifier accepts every run in §7 and `Mars_Performance.md` §29.
+
+**Two limits the first version simply lost.** A batch that named more images than the interface remembered left its
+pages idle and recorded no ranges at all, so a touch from one of its words found nothing and faulted; such a batch
+now appends a single range of the whole of RDRAM, which is the behaviour of §2.6 before this section and costs only
+what that cost. And the ring of ranges was a thousand entries, while the thread legitimately lags the machine by
+ten thousand words and more, so the ranges that spoke for the word being run had been written over; the ring is now
+eight thousand, and a scan that reaches its oldest entry, or finds its slot rewritten underneath it, reports that
+it has nothing to say rather than a miss. Both were found by the verifier and neither by reasoning, which is the
+argument for having it.
+
+**What a fault now says.** The first form of the message named the byte and the word and nothing else, and neither
+defect could be told from it. It now carries the shadow's images and scissor, every range the open batch holds,
+the last twelve of the ring, and — the line that settled both — the nearest range in the ring that holds the byte
+at all, with whichever of its two counts disagreed spelled out. The two defects above were each diagnosed from one
+run of forty frames after that was added. The strings are built only where a fault is being constructed.
+
+**What remains.** A reader of bytes inside an image still being drawn waits, as it must: the scan-out of a buffer
+the game displayed at the full sync, and Ocarina of Time's processor reading its depth buffer's page for the rows the
+list does not share. Those are the list's own speed on its thread, §2.6's last paragraph.
+
 ## 3. The command stream
 
 Words are taken into a buffer one at a time, and a command runs once all of its words have
@@ -355,8 +433,16 @@ on the thread: the interrupt register and the status word agree at the end write
 hidden bits and the whole bus state agree. Six such scenes with a state written after each, while the thread still
 runs, all identical. A read of the image being drawn returns the drawn pixel every time over twenty scenes, and
 finds the page marked before and unmarked after. Pages no command reaches are unmarked, the colour and depth images
-and a texture's source are marked, and a join clears them. What no test here forces is a fault from the verifier;
-that it fires is shown only by inspection of `Touched`.
+and a texture's source are marked, and a join clears them. ~~What no test here forces is a fault from the verifier;
+that it fires is shown only by inspection of `Touched`.~~
+
+**Readers, writers and bystanders, 2026-09-19** (§2.6.1, the same class). A texture's page is marked for writers
+and not for readers; a word written to that page beside the load's bytes is counted a bystander and leaves the
+mark; one written inside them waits and clears it. A list placed in the page after the depth image's last row is
+read by the interface without a wait — every word a bystander — and the drawing agrees with the list at once, in
+RDRAM and in the whole state. And the verifier's two faults are forced: told the processor wrote a byte in a page
+nothing marked, and then one in the colour image's last page beyond its rows, it records each, and the join that
+follows throws it, with the message naming which; a third scene after both joins clean.
 
 ## 8. Wave Race's first list, carried out
 

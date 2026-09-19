@@ -53,7 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         {
             if (!Prepare(_immediate)) return false;
 
-            _bus.Dp.WaitForRange(_immediate.From, _immediate.Count);
+            _bus.Dp.WaitForReadRange(_immediate.From, _immediate.Count, 8);
             Walk(_immediate);
             return true;
         }
@@ -123,7 +123,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         // The frame buffer's lines a walk can reach, copied out so the walk can run while the machine moves on - see §2.7.
         public void Capture(ScanJob job)
         {
-            _bus.Dp.WaitForRange(job.From, job.Count);
+            _bus.Dp.WaitForReadRange(job.From, job.Count, 8);
 
             int count = job.Count;
             if (job.Rdram.Length < count) job.Rdram = new byte[count];

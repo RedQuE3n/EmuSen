@@ -40,7 +40,7 @@ namespace EmuSen.Cores.Nintendo.Mars
         {
             if (CheatSpace(spaceName) is not { } bytes || (uint)address >= (uint)bytes.Length) return 0;
 
-            if (bytes == Bus!.Rdram) Bus.Dp.WaitFor((uint)address, 9);
+            if (bytes == Bus!.Rdram) Bus.Dp.WaitForRead((uint)address, 9);
             return bytes[address];
         }
 

@@ -76,7 +76,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 else Joybus.Run(ram, Controllers, _bus.Save);
             }
 
-            _bus.Dp.WaitForRange(_dramAddress, MemoryMap.PifRamSize, 6);
+            if (toPif) _bus.Dp.WaitForReadRange(_dramAddress, MemoryMap.PifRamSize, 6);
+            else _bus.Dp.WaitForRange(_dramAddress, MemoryMap.PifRamSize, 6);
 
             for (uint i = 0; i < MemoryMap.PifRamSize; i++)
             {

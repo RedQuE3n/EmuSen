@@ -1221,3 +1221,43 @@ The drainer's own rate is unchanged, 1.20 to 1.88 µs a word across the four sta
 whole states and pictures compared after every frame: identical. The probe's frames are identical to the baseline
 with the list at once and on the thread, and the Mars suite passes. The verifier found both of the defects in
 `Mars_Rdp.md` §2.6.1's last two paragraphs, and found them within forty frames.
+
+## 30. The signal processor's vector unit, eight elements at a time
+
+*2026-09-19.* §26 left the signal processor as the largest share of the emulation thread's frame once the display
+processor and the scan-out had gone to their own threads, 27 per cent of Ocarina of Time's frame and 35 to 36 of the
+other two. Its arithmetic is written element by element because the specification is, not because it needs to be,
+and the host has 256-bit vectors. `Mars_RspVector.md` §14 is the same arithmetic in host vectors, with the
+element-by-element unit kept as the reference it is graded against, and §14.1 has the table: **+4, +19 and +22 per
+cent** in play, Wave Race 64 reaching its console's sixty from this change alone.
+
+**Where the three levers of this day leave the four states.** All three on, interleaved in one session, second
+halves of 600 frames from each state:
+
+| | at boot (§24) | in play, §26 | now | of the console |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50) | 39.6 | 29.0 | 49.5 | 99% |
+| Wave Race 64 (NTSC, 60) | 45.6 | 29.6 | 60.1 | 100% |
+| Super Mario 64, in the castle (PAL, 50) | 49.3 | 34.7 | 72.9 | 146% |
+| Super Mario 64, outside it (PAL, 50) | — | — | 54.8 | 110% |
+
+That is from 29.0, 29.6 and 34.7 fps at the start of the day to 49.5, 60.1 and 72.9, a factor of 1.7 to 2.1, with
+every frame of every run identical to the frame the single-threaded, element-by-element build produces. The machine
+is a sixteen-thread desktop part and three of its cores are in use.
+
+**A fourth state, and a negative result.** The user saved a fourth state outside the castle during this work, and
+§30's change is worth **nothing** there: 54.5 fps with the loops and 54.8 with the vectors, three rounds each whose
+spreads overlap entirely. The reason is in the interface's counters rather than in the vector unit. That scene hands
+the display processor 8,058 words a frame and the drainer runs them at 1.88 µs each, 15.1 ms of a 20 ms frame, so
+the thread that bounds the frame is not the one the vector unit is on. It is recorded here because a change that
+helps three scenes and not a fourth is the normal case, and because the counter that explains it is the same one
+that would have predicted it.
+
+**What each state's remaining floor is.** Ocarina of Time is the one that does not reach its console, and it is the
+only one of the four whose frame is bounded by the display processor's own speed on its thread rather than by the
+emulation thread: 1.65 µs a word over roughly seven thousand words a frame, which is `Mars_Rdp.md` §2.6's last
+paragraph, plus the scan-out's quarter of a frame that §21 measured and §27 moved rather than shortened. Nothing in
+§29 or §30 touches either. The signal processor's remaining share is its fetch-and-dispatch loop, entered once per
+processor instruction (§26), and its vector loads and stores, which are byte loops and which the references also
+keep as byte loops; neither has been priced.
+

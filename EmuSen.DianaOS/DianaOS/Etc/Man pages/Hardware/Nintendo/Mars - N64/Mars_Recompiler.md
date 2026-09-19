@@ -767,8 +767,14 @@ though a save and load are exact (checked: a machine reloaded at frame 150 match
 That asymmetry is worth keeping as a test of its own: any divergence between a run with a history and one without is
 the block cache's.
 
-**What it does not explain.** The interpreter, and now the blocks with it, draw the whole of that message over a flat
+**What it does not explain.** ~~The interpreter, and now the blocks with it, draw the whole of that message over a flat
 grey screen where the Great Deku Tree should stand. That is not the recompiler's — both machines draw it — and it is
-open. The earlier failures from the same games (a faulted graph thread in Ocarina of Time, a display list run past its
+open.~~ *Closed the same day: the grey is the game's, not a defect.* The frame's commands, replayed from the RAM at its
+start through angrylion and through Mars, drew the same 76,800 pixels; cut before its last three fill rectangles, the
+same commands show the Deku Tree and Navi. The last rectangle is the scene transition's fade, grey at alpha 255, and
+the transition is held in its wait mode until the cutscene sets a control byte in the save context — which its
+transition command does, after the message box. Pressed through, the message closes and the tree fades in. The one
+difference the replay did find is its own item: cut before those fills, 1,168 of the 76,800 pixels differ between Mars
+and angrylion, hidden in that frame by the fade and not yet located. The earlier failures from the same games (a faulted graph thread in Ocarina of Time, a display list run past its
 buffer in Wave Race) were in states saved by a frontend that raced the emulation thread (`EmuSen_Settings_Reference.md`
 §4.21a) and cannot be reasoned about from those states.

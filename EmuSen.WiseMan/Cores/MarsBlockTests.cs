@@ -700,6 +700,48 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(compiled.BlocksCompiled >= 2);
         }
 
+        // A jump into a segment the TLB maps takes the refill vector in the interpreter, where the dispatcher leaves it; the same low bits in kseg0 are memory a block would be shaped from - see Mars_Recompiler.md §12.1.
+        [Fact]
+        public void A_target_outside_the_direct_segments_after_a_compiled_block_is_left_to_the_interpreter()
+        {
+            const int T9 = 25;
+
+            var (interpreted, compiled) = Pair(a => a
+                .Ori(T9, Zero, 0x2010)
+                .Addiu(T1, T0, 200)
+                .Nop()
+                .Nop()
+                .Addiu(T0, T0, 1)
+                .Bne(T0, T1, -2)
+                .Nop()
+                .Jr(T9)
+                .Nop(), (bus, _) => Handler(bus, a => a.Eret()));
+
+            AssertSame(interpreted, compiled, 50_000);
+
+            Assert.True(compiled.Gpr[T1] >= 600);
+            Assert.Equal(0x2010UL, compiled.Cop0[Cpu.BadVirtualAddressRegister]);
+            Assert.True(compiled.BlocksCompiled >= 1);
+        }
+
+        // A branch whose target is its own delay slot, so that a block starts at a slot's address, with the devices' events falling between the branch and the slot - see Mars_Recompiler.md §12.1.
+        [Fact]
+        public void A_branch_to_its_own_slot_leaves_the_machine_the_interpreter_leaves_under_events()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Addiu(T0, T0, 1)
+                .Bne(T0, Zero, 0)
+                .Addiu(T2, T2, 1)
+                .Addu(T3, T3, T2)
+                .Beq(Zero, Zero, -5)
+                .Nop(), ProgramDevices);
+
+            AssertSame(interpreted, compiled, 3_500_000);
+
+            Assert.True(compiled.BlocksCompiled >= 2);
+            Assert.Equal(2 * compiled.Gpr[T0], compiled.Gpr[T2]);
+        }
+
         // The faulting instruction is the first of a block entered from another, whose address only the entry can have set - see Mars_Recompiler.md §12.
         [Fact]
         public void A_fault_on_the_first_instruction_of_a_block_entered_from_another_reports_it()

@@ -245,7 +245,12 @@ the mechanisms above, each one an observation point:
   observers the same number of times;
 - the multiply and divide stalls; a store to the VI mid-loop, with the rescheduled field kept;
 - and two `MarsCore` cases, five frames of a synthetic program and three frames ending on the cycle cap, saved and
-  compared as whole states with `UseBlocks` on and off.
+  compared as whole states with `UseBlocks` on and off;
+- from the rounds of §10 and §12, kept as differential checks: a loop with a branch inside it, stopped once on a
+  fallen-through branch's slot, and the likely-branch form; two compiled blocks reaching each other, frames ending
+  between them, one block rewriting another's first word, the timer and the devices' events landing between blocks, a
+  fault on a block's first instruction, a register written by a call into the interpreter; and the dispatcher's own
+  address rules — a misaligned target, a target outside the direct segments, a branch to its own delay slot (§12.4).
 
 The synthetic image's program has to be carried into RDRAM by a stub, because the boot runs an image's first kilobytes
 from the signal processor's memory, where no block applies — which is also why the existing core-level tests run the
@@ -636,14 +641,15 @@ Escaped, and each is recorded as what it is:
 
 - *The pending-branch rule.* Equivalent in every test and not in general: it matters only when a block starts at a
   delay slot's address — a branch whose target is another branch's slot — and the stop falls between that branch and
-  its slot. No test has that shape. The test that would (a branch to its own slot, under the VI's events) was not
-  written, since the change is not kept; the dispatcher's own rule has its mutant in the standing round.
+  its slot. No test had that shape. The test that would — a branch to its own slot under the VI's and AI's events,
+  so that a block starts at a slot's address — was written afterwards (§12.4); it catches the dispatcher's own
+  pending-branch mutant beside five older tests.
 - *The mode, the segment, the alignment and the memory range.* Masked, in every test written, by the recheck flag:
   the `ERET` that changes the mode or returns to the misaligned address is a COP0 write, the flag is up, and the
   hand-over goes back to the dispatcher before those checks are reached. A hot `jr` from a compiled block to a
   misaligned address, to one beyond memory (where the mutant indexes past the table and throws), or into a segment the
-  TLB maps would have needed three further tests, and they were not written for the same reason. Recorded as what the
-  round would have needed, not as equivalence.
+  TLB maps would have needed three further tests. §12.4 says which of the three the dispatcher itself turned out to
+  need.
 - *The remembered target trusted at another address.* Masked by the comparison, which is made at the asked-for
   address: a stale block's words differ from the words there unless they are identical, and identical words run
   identically except for the store check's compile-time bounds. Equivalent for every test and nearly so in general.
@@ -697,3 +703,27 @@ and the RSP is halted — and keeps the per-instruction copy for when the guard 
 that is not measured, and the ring's rows say what it must beat: its own second copy. Beyond the processor, the RSP is
 29 per cent of Wave Race's frame and the VI 30 per cent of Ocarina of Time's (§9), both larger than anything left here,
 and both other pages'.
+
+### 12.4 The dispatcher's address checks, tested afterwards
+
+The four checks §12.1 found masked in the hand-over are the dispatcher's own (§3.1), so the question of whether the
+suite tests them stood after the change was reverted. Three mutants of the dispatcher's entry condition — the
+alignment test removed, the segment test removed, the memory-range test removed — were added to the standing round and
+run against the suite as it was:
+
+- *Misaligned*: caught by §12's misaligned-target test alone. Without the check the dispatcher indexes the table by the
+  address's word, finds the compiled block below it, fails its comparison two bytes out, shapes a block from misaligned
+  words in its place and, sixty-four faults later, compiles and runs them.
+- *Beyond memory*: caught by thirty-one tests, because the boot runs from the signal processor's memory, whose physical
+  addresses lie beyond RDRAM, and the mutant indexes past the page table on the first instruction.
+- *Outside the direct segments*: **escaped every test in the suite.** A jump into kuseg or kseg2 from RDRAM code was a
+  shape no test had. Its test now: a compiled loop ending in a `jr` to `0x2010`, which takes the TLB refill vector —
+  the program's own first word, where the count restarts and the loop runs again — while the dispatcher without the
+  check would have looked the address up by its low bits and run RDRAM as code. A first draft jumped to `0x10` and
+  never restarted: a zeroed TLB has entries whose page is zero, so an address in the first eight kilobytes of kuseg hits
+  an entry that is present and invalid, takes the general vector rather than the refill's, and an `ERET` there returns
+  to the same fault. Recorded because the difference between "no entry" and "an invalid entry" is the kind a fetch
+  test needs to know before it is written.
+
+With the two tests the round catches all three, and the pending-branch mutant with six tests where it had five. The
+standing round has thirty-six sites.

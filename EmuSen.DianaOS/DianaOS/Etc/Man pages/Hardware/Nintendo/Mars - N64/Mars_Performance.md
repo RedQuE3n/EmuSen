@@ -1302,3 +1302,140 @@ tables are already precomputed for every row with no thread term in them — the
 parallel-rdp needed a second pass to build. Two narrow mode cases block it and both are detectable from the mode
 bits. Thirteen of this machine's sixteen threads are idle.
 
+## 32. Where the time goes once three components are on three threads, and two things that measured nothing
+
+*2026-09-19.* §26's profile was taken before the scan-out, the display processor's list and the signal processor's
+vector unit moved or changed, so it no longer describes the machine. A fresh sampled profile of every thread, 600
+frames from two of the gameplay states, says something different from every profile this page has taken so far:
+**the emulation thread is mostly idle.**
+
+| share of the emulation thread | Ocarina of Time | Wave Race 64 |
+| --- | --- | --- |
+| spin-waiting (see below) | 43% | 63% |
+| waiting for the display processor's thread by name | 15% | 6% |
+| sleeping, or joining the scan-out | 7% | 2% |
+| the processor, its blocks and the signal processor | ~22% | ~16% |
+
+**The largest entry is not what it looks like.** The sampler names it `Thread.PollGCWorker`, the garbage-collection
+poll the compiler inserts into loops that call nothing, which is where a spin loop's time lands. It is not
+collection: over those runs the collector paused for 72 ms of 12.6 s and 56 ms of 10.5 s, **0.6 and 0.5 per cent**,
+across 9 and 7 generation-zero collections, and the program allocates about 12 MB a second, almost none of it per
+frame. Garbage collection is not a cost here and this page should stop wondering about it.
+
+**What the thread is actually waiting for**, from the interface's own counters, is a very small number of very long
+waits:
+
+| | waits in 600 frames | total | each |
+| --- | --- | --- | --- |
+| Ocarina of Time, the signal processor's DMA | 218 | 2,895 ms | 13.3 ms |
+| Ocarina of Time, the processor's load | 398 | 716 ms | 1.8 ms |
+| Wave Race 64, the scan-out's capture | 133 | 1,762 ms | 13.2 ms |
+
+Both of the thirteen-millisecond waits are genuine read-after-write dependencies on what the display processor
+writes — Wave Race's scan-out waits for the buffer the full sync just told the game was finished (`Mars_Rdp.md`
+§2.6's last paragraph), and Ocarina of Time's signal processor reads back a page the processor draws into. They cost
+a whole frame each **because a mark names the batch's last word**: a reader of bytes written early in a batch waits
+for the entire batch to drain. Marking each primitive's own rows with its own word, rather than the whole image
+extent with the batch's tail, would bound each wait by the primitives that actually cover the rows being read. That
+is the best-targeted lever this page can now name, and it is not built.
+
+**And the two pool threads are idle half the time.** The display processor's drain and the scan-out's walk share the
+same thread-pool threads, each busy 24 to 33 per cent of the run. So the work is not overlapping, it is
+ping-ponging: the emulation thread blocks, the drain runs, the drain empties, the emulation thread runs. That is the
+same finding from the other side.
+
+### 32.1 Measured and not kept: padding the two counts apart, and the verifier's per-word write
+
+Two small changes were built on the strength of the profile, proven exact by the threaded, deferred and save-state
+tests, and timed interleaved against `c70a9ee`, three rounds of 600 frames from each of the four states.
+
+*The counts.* `_issued` and `_completed` are declared adjacent, one written by each thread and read by the other,
+and `_completed` is written **once per command word** — seven thousand times a frame — while the emulation thread's
+spin loop reads it. That is a textbook false-sharing hazard, so each was given a cache line of its own with an
+explicit-layout 128-byte struct. *The verifier's write.* The drain loop set `_runningWord` on every word, a value
+only the byte-level verifier reads, in every build.
+
+| second 300 frames, medians of three | `c70a9ee` | both changes |
+| --- | --- | --- |
+| Ocarina of Time | 52.1 fps | 51.8 |
+| Wave Race 64 | 60.7 | 60.4 |
+| Super Mario 64, in the castle | 73.0 | 72.4 |
+| Super Mario 64, outside it | 55.4 | 55.6 |
+
+Every row overlaps and three of the four medians are *lower*. **Neither is kept.** The reason the padding buys
+nothing is in the numbers above: a word costs the display processor 1.15 to 1.57 µs of real work, and a contended
+cache line costs a fraction of that, so the line's ping-pong was never the cost of the loop it sits in. The
+128-byte structs also add 256 bytes to the interface and push its other hot fields apart, which is the likeliest
+reason for the small loss. The lesson worth keeping is the general one: a hazard that is real in the abstract is
+still only worth what the loop around it leaves it room to cost.
+
+## 33. What the runtime offers, and four of its answers measured
+
+*2026-09-19.* §25 settled ahead-of-time compilation and `project_dotnet11_measured` settled the runtime version, so
+this section is about what is left: the techniques the .NET runtime's own library uses in its hottest loops. Four of
+them could be checked without writing anything, and all four came back negative. A negative that costs one command
+is worth more than a plausible lever that costs a day.
+
+**The no-optimisation cliff is not being hit, and this is the one that mattered.** The compiler compiles an entire
+method with *no* optimisation — no common-subexpression elimination, no range-check removal, essentially no register
+allocation — if it crosses any one of five hard-coded limits: 60,000 bytes of intermediate language, 20,000
+instructions, 2,000 basic blocks, 2,000 locals, or 8,000 local references. A retail runtime hard-codes them, so they
+cannot be raised. This matters here more than in ordinary code because **an emitted block is compiled exactly once,
+at first call, and never re-compiled** — a dynamic method is excluded from tiered compilation altogether, so it gets
+no second chance and no profile. `DOTNET_JitDisasmSummary=1` over a 200-frame run reports every method the runtime
+compiled: **6,658 of them, and not one at `MinOpts`.** All 3,613 emitted blocks read `FullOpts`. That also retires a
+confound in `Mars_Recompiler.md` §9 to §12, two of whose rejected shapes — registers in locals, and extended blocks —
+push exactly the local count and the block count that trip this. They were slower for their own reasons, not because
+they fell off a cliff. The check costs one command and belongs in the recompiler's ratchet.
+
+**Garbage collection is not a cost, with numbers.** §32 has them: 72 ms and 56 ms of pause in runs of 12.6 s and
+10.5 s, 0.5 to 0.6 per cent, over 9 and 7 generation-zero collections. Every server-mode, heap-count, affinity and
+dynamic-adaptation knob is therefore measuring noise here, and the page can stop asking. The one mechanism that
+would matter — allocating RDRAM on the pinned object heap — only applies if raw pointers into it are ever cached,
+which they are not.
+
+**AVX-512 is worth nothing to the vector unit of §30**, which the runtime lets one measure without a code change.
+Wave Race, 600 frames, second halves:
+
+| | fps |
+| --- | --- |
+| default | 60.9 |
+| 512-bit vector forms disabled | 60.9 |
+| AVX-512 disabled entirely | 60.7 |
+
+That is the expected answer for this part — Zen 4 executes 512-bit operations over 256-bit datapaths, so per-element
+throughput matches AVX2 — and §14 of `Mars_RspVector.md` never asked for 512-bit lanes: the unit is eight sixteen-bit
+elements, which is 128 bits. The useful consequence is for the weak-machine effort
+(`project_optimization_for_weak_machines`): **the vector unit does not depend on AVX-512 and will not regress on a
+part that lacks it.**
+
+**The defensive-copy audit is almost empty.** A struct that is not declared read-only makes a defensive copy at every
+member access when it is reached through a read-only reference, which for a per-pixel struct would be one copy per
+access. Every struct Mars passes that way is already read-only except `SoftFloat`, in two floating-point comparison
+helpers. Real, mechanical, and in code that is not hot.
+
+**What the runtime's own library does that Mars has not tried**, recorded so that it is not re-derived. Two things,
+and both aim at the display processor's thread rather than the emulation thread, which is the only place §32 leaves
+room to win:
+
+- *The wait between the threads.* `SpinWait.SpinOnce(-1)` disables the millisecond sleep, which is the important
+  part, but after ten turns it alternates spinning with yielding and makes every fifth yield a `Sleep(0)` — so a long
+  wait settles into a loop that is half system calls. With three busy threads on sixteen, a bounded spin on the pause
+  instruction and then a single blocking wait would be strictly cheaper. And the drain is started through the thread
+  pool, which puts the pool's own dispatch latency on the path every time a drain begins, and whose injection
+  controller adds threads about once every 500 ms when its workers are busy. A dedicated thread parked on an event
+  removes both.
+- *The pixel loop's modes.* The runtime's library monomorphises hot loops by passing a mode as a **value-type type
+  parameter**, which the compiler instantiates exactly rather than sharing, so the mode's constant members inline to
+  constants and the untaken branches are eliminated with everything that fed them. That is the C# form of the
+  specialised span loops angrylion measured at 3.5 to 8 per cent (`Mars_Rdp.md`'s study), and §23's work already
+  reduced Mars's per-pixel mode tests to predictable branches on hoisted booleans, which is most of the way there.
+  The risk to price is code size: each instantiation is compiled separately, and enough of them could reach the
+  cliff this section just proved Mars is clear of.
+
+**What was advised against, and is not being done.** Suppressing the zeroing of locals and stack allocations is worth
+nothing to a method that allocates a small span per call, by its own author's measurements, and it would turn a
+read-before-write from deterministic zeros into whatever the last frame left on the stack. For a core whose whole
+claim is bit-identical output graded by differential runs, that trades nothing for a class of defect that reproduces
+differently every run. Not adopted.
+

@@ -229,6 +229,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             if (at + 3 < rdram.Length)
             {
+                if (_bus.Dp.Marks[at >> 12] != 0) _bus.Dp.WaitFor(at, 7);
                 left = (short)((rdram[at] << 8) | rdram[at + 1]);
                 right = (short)((rdram[at + 2] << 8) | rdram[at + 3]);
             }

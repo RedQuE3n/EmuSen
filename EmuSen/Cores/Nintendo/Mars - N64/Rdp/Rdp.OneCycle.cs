@@ -480,6 +480,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case 1:
                 {
                     uint at = _colorImage + (uint)pixel;
+                    Touch(at);
                     int value = at < rdram.Length ? rdram[at] : 0;
                     _memory = new Color { R = value, G = value, B = value, A = 0xE0 };
                     return 7;
@@ -488,6 +489,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case 2:
                 {
                     uint word = (_colorImage >> 1) + (uint)pixel;
+                    Touch(word * 2);
                     bool valid = word * 2 + 1 < rdram.Length;
                     int value = valid ? (rdram[word * 2] << 8) | rdram[word * 2 + 1] : 0;
                     int hidden = valid ? _bus.RdramHidden[word] : 0;
@@ -509,6 +511,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case 3:
                 {
                     uint at = ((_colorImage >> 2) + (uint)pixel) * 4;
+                    Touch(at);
                     uint value = at + 3 < rdram.Length ? (uint)((rdram[at] << 24) | (rdram[at + 1] << 16) | (rdram[at + 2] << 8) | rdram[at + 3]) : 0;
                     _memory = new Color { R = (int)(value >> 24), G = (int)(value >> 16) & 0xFF, B = (int)(value >> 8) & 0xFF };
 
@@ -531,6 +534,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case 0:
                 {
                     uint at = _colorImage + (uint)pixel;
+                    Touch(at);
                     if (at < rdram.Length) rdram[at] = 0;
                     return;
                 }
@@ -538,6 +542,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case 1:
                 {
                     uint at = _colorImage + (uint)pixel;
+                    Touch(at);
                     if (at >= rdram.Length) return;
 
                     int value = (at & 1) != 0 ? g : r;
@@ -549,6 +554,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 case 2:
                 {
                     uint word = (_colorImage >> 1) + (uint)pixel;
+                    Touch(word * 2);
                     if (word * 2 + 1 >= rdram.Length) return;
 
                     int stored = FinalCoverage(blend, coverage, memoryCoverage);
@@ -575,6 +581,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 {
                     uint index = (_colorImage >> 2) + (uint)pixel;
                     uint at = index * 4;
+                    Touch(at);
                     if (at + 3 >= rdram.Length) return;
 
                     int stored = FinalCoverage(blend, coverage, memoryCoverage);

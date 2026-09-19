@@ -62,6 +62,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             }
 
             byte[] rdram = _bus.Rdram;
+            Touch(index * 2);
             bool valid = index * 2 + 1 < rdram.Length;
             int stored = valid ? (rdram[index * 2] << 8) | rdram[index * 2 + 1] : 0;
             int storedHidden = valid ? _bus.RdramHidden[index] : 0;
@@ -123,6 +124,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void StoreDepth(uint index, int z, int deltaZEncoded)
         {
             byte[] rdram = _bus.Rdram;
+            Touch(index * 2);
             if (index * 2 + 1 >= rdram.Length) return;
 
             int stored = CompressDepth(z & 0x3FFFF) | (deltaZEncoded >> 2);

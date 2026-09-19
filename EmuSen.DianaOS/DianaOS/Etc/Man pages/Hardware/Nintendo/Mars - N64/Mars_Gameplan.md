@@ -787,8 +787,12 @@ of them.
 > §26–§27; `Mars_Video.md` §2.7). From states saved in play the three games ran at 29, 30 and 35 fps — 58, 49 and 69
 > per cent of their consoles — with the signal and display processors two thirds of a frame and the processor a
 > fifth. The video interface's walk now runs on a pool thread over a capture of the lines it can reach, the picture
-> one field behind the machine: 38, 33 and 41 fps in play, exact by lockstep and the probe. The display processor is
-> next, and needs an argument about pages rather than a capture.
+> one field behind the machine: 38, 33 and 41 fps in play, exact by lockstep and the probe. The display processor
+> followed the same day (`Mars_Rdp.md` §2.6, `Mars_Performance.md` §28), its lists run on a pool thread behind marks on
+> the RDRAM pages each batch can reach, every other access waiting for the words that marked its page, the processor
+> checking the marks byte by byte in verifying runs: 38, 41 and 53 fps in play against consoles of 50, 60 and 50, the
+> probe identical both ways. What is left of Wave Race's sixty is the two threads' own floors, the list at 1.33 µs a
+> word and the signal processor's loop.
 
 ## 5. Where this will actually hurt
 

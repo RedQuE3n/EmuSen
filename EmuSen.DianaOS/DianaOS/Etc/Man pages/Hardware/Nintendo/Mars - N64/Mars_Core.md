@@ -107,7 +107,9 @@ swaps its frame buffer mid-field would show the difference, and no test here has
 **Since 2026-09-19 a frontend may ask for the walk on another thread** (`MarsCore.DeferredPresentation`,
 `Mars_Video.md` §2.7). The contract above holds — the buffer and its height are still replaced together, in the
 join at the start of the next frame's presentation — but the picture is the frame before last's. Mistress turns
-it on for this core (`EmuSen_Settings_Reference.md` §4.21b); the probe and the tests present at once.
+it on for this core (`EmuSen_Settings_Reference.md` §4.21b); the probe and the tests present at once. The same
+day `MarsCore.ThreadedRdp` put the display processor's lists on a pool thread behind marks on the pages they reach
+(`Mars_Rdp.md` §2.6); that one changes nothing a consumer sees, since a state and a picture both wait for the list.
 
 **`SkipRendering` skips the scan and the copy, and nothing else.** The display processor still draws, because
 what it writes to RDRAM a game can read. What goes stale is the VI's held-line bookkeeping

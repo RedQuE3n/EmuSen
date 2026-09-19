@@ -27,6 +27,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public readonly SpInterface Sp;
         public readonly PiInterface Pi;
         public readonly DpInterface Dp;
+
+        // The display processor's page marks, read before every word the bus reads or writes in RDRAM - see Mars_Rdp.md §2.6.
+        [EmuSen.Common.SkipInState] private readonly long[] _dpMarks;
         public readonly SiInterface Si;
         public readonly AiInterface Ai;
         public readonly Vi.Vi Vi;
@@ -76,6 +79,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Sp = new SpInterface(this);
             Pi = new PiInterface(this);
             Dp = new DpInterface(this);
+            _dpMarks = Dp.Marks;
             Si = new SiInterface(this);
             Ai = new AiInterface(this);
             Vi = new Vi.Vi(this);
@@ -87,6 +91,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // The reflected fields, then what reflection cannot walk: the stub registers, the save chip, each port's pak - see Mars_SaveStates.md §3.
         public void WriteState(BinaryWriter w)
         {
+            // The display processor's thread finishes first, so the state holds what it drew - see Mars_Rdp.md §2.6.
+            Dp.Join();
+
             // Settled first, so a state holds what a device stepped every tick would - see Mars_Performance.md §9.
             Settle();
             StateSerializer.Write(w, this);
@@ -109,6 +116,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public void ReadState(BinaryReader r)
         {
+            Dp.Join();
             StateSerializer.Read(r, this);
             Written++;
 
@@ -136,6 +144,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Ai.Rebase();
             Reschedule();
             Dp.Processor.Refresh();
+            Dp.RefreshShadow();
         }
 
         // The RSP runs in step with the processor; the VI and AI act only when one of them is due - see Mars_Performance.md §9.
@@ -185,7 +194,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public uint Read32(uint physical)
         {
-            if (physical < Rdram.Length) return ReadArray32(Rdram, physical);
+            if (physical < Rdram.Length)
+            {
+                if (_dpMarks[physical >> 12] != 0) Dp.WaitFor(physical, 0);
+                return ReadArray32(Rdram, physical);
+            }
 
             // Above the installed size reads zero rather than mirroring, which IPL3 depends on - see §2.1.
             if (physical < RdramSizeExpanded) return 0;
@@ -230,6 +243,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             if (physical < Rdram.Length)
             {
+                if (_dpMarks[physical >> 12] != 0) Dp.WaitFor(physical, 1);
                 WriteArray32(Rdram, physical, value);
                 return;
             }

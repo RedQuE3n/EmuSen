@@ -1106,3 +1106,65 @@ the larger of the two in Wave Race and Ocarina of Time. It reads and writes RDRA
 the way the scan-out did, by capture; it can leave it only behind an argument about which pages each command touches
 and a wait at every other access to such a page, and that argument, with the display processor's own reads and
 writes checking it as they go, is what comes next.
+
+## 28. The display processor's list on another thread
+
+*2026-09-19.* §26 left the display processor as the largest or second-largest share of every game's frame in play,
+and §27's closing paragraph said why it could not follow the scan-out off the thread by capture: it reads and writes
+RDRAM, and so does everyone else. `Mars_Rdp.md` §2.6 is the design that takes it off anyway — the interface still
+reads the list's words at the end write and still raises the full sync at the word that completes it, but hands the
+words to a thread from the pool, and keeps a mark for every 4 KB page of RDRAM a batch can reach; every other reader
+and writer of a marked page waits for the words that marked it. The argument's correctness is checked by the
+processor itself, byte by byte, wherever verification is on.
+
+**Measured.** Four configurations interleaved, order rotated, three rounds of 600 frames from each of §26's states
+on a quiet machine, second halves; two builds, the commit before this one (`224b12a`) and this one
+(`ab-builds.sh`, `play-states3/ab-builds.txt`):
+
+| from the state, second 300 frames | before, at once | before, scan-out deferred (§27) | now, deferred, list at once | now, both threads | of the console |
+| --- | --- | --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50) | 27.7 fps | 35.4 | 34.8 | **37.7** | 75% |
+| Wave Race 64 (NTSC, 60) | 27.8 | 31.2 | 30.5 | **41.3** | 69% |
+| Super Mario 64 (PAL, 50) | 32.5 | 38.8 | 38.5 | **52.7** | 105% |
+
+Medians; every cell's spread is within half a frame a second but one (Ocarina of Time deferred, 35.2 to 36.1),
+and in every row each configuration's rounds lie wholly above the next slower one's. The machine as a whole ran
+about five per cent slower in this session than in §27's — the same committed build reads 27.7 here against 29.3
+there — which is the reason every comparison this page makes is between runs interleaved in one session and never
+across sessions.
+
+Three things the table separates. **The marks' cost on the path that does not use them**: the third column
+against the second, 1 to 2 per cent, the compare that every load, store, fetch and bus access now makes against a
+page's mark, cached in the processor and the bus as one array read (the first version reached it through two
+fields and cost six). It is paid whether or not the list is threaded, and a build that ships without the thread
+would pay it for nothing. **The thread's gain**: the fourth column against the third, +8, +35 and +37 per cent.
+**The whole against §26**: +36, +49 and +62 per cent in play, from 27.7, 27.8 and 32.5. Super Mario 64's castle
+runs past its console's fifty; Ocarina of Time is at three quarters; Wave Race at two thirds.
+
+**Why Wave Race and Ocarina of Time do not reach their consoles**, from the interface's own counters
+(`playbench` prints them). *The list is the floor.* On its thread the processor runs a word in 1.33 µs — Wave
+Race's 11,700 words a frame are 15.6 ms of the thread's time, near the 16.7 ms a sixtieth of a second allows, and
+the verifying compare adds 4 per cent to that. Whatever the emulation thread saves, the frame cannot end before the
+list is drawn, because the game, told by the full sync that its frame is done, displays it, and the scan-out then
+waits for the thread to finish it (`Mars_Rdp.md` §2.6, last paragraph). *The waits.* Wave Race's signal processor
+DMAs from pages a texture load marked, its water's data and its textures sharing pages, and waits for the load's
+words; Ocarina of Time reads its display list from the page after its depth buffer, and its processor writes to the
+page before it, so both wait for the batch that cleared the depth buffer. In the first version those waits were for
+*everything handed over so far* and lasted the tail of the frame; a batch now writes its own count over an
+image's pages when it ends, and the waits are for the words that drew them. What remains is inherent to a page as
+the unit: a finer unit would cost more on every access, and the marks are already the compare of the paragraph
+above. *The emulation thread's own frame.* Wave Race's processor and signal processor are 18 ms of it (§26), above
+the sixtieth on their own; the recompiler's fifth of the frame was priced in `Mars_Recompiler.md` §9–§12, and the
+signal processor's loop is the larger of the two.
+
+**Exact.** The probe's 1,800 frames are identical to the baseline with the list at once and with it on the thread,
+the latter with verification on, so every byte the processor touched in those frames was in a marked page. The Mars
+suite passes, 3,399 tests (`MarsThreadedRdpTests` are described in `Mars_Rdp.md` §7). From each of §26's states an
+immediate core and a threaded one ran 600 frames in lockstep, verifying, with whole states and pictures compared
+after every frame: identical throughout.
+
+**Where the phase stands.** Two of the three games run at or near their consoles in play on this machine, with
+three of its cores in use. What stands between Wave Race and its sixty is the display processor's own speed on its
+thread and the signal processor's loop on the emulation thread, both of them the same code that ran before, now
+each the floor of its own thread; and Ocarina of Time's remaining quarter is shared between the two threads' floors
+and the waits its layout of memory makes.

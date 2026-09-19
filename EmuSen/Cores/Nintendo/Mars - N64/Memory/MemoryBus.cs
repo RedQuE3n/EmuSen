@@ -59,6 +59,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // The earliest cycle the VI or AI has something to do; zero until the first tick asks them - see Mars_Performance.md §9.
         [EmuSen.Common.SkipInState] private long _nextEvent;
 
+        internal long NextEvent => _nextEvent;
+
+        // Counts every write to memory that is not the processor's own direct store, for the blocks - see Mars_Recompiler.md §4.
+        [EmuSen.Common.SkipInState] public long Written;
+
         private long _countBias;
 
         // Stubs until each device exists; a register nobody models still has to read back - see §2.2.
@@ -105,6 +110,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public void ReadState(BinaryReader r)
         {
             StateSerializer.Read(r, this);
+            Written++;
 
             _registers.Clear();
             for (int count = r.ReadInt32(); count > 0; count--) _registers[r.ReadUInt32()] = r.ReadUInt32();
@@ -141,7 +147,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         }
 
         // In the order a tick once stepped them, the VI's half lines before the AI's samples - see Mars_Performance.md §9.
-        private void RunEvents()
+        internal void RunEvents()
         {
             Vi.Catch();
             Ai.Catch();
@@ -220,6 +226,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public void Write32(uint physical, uint value)
         {
+            Written++;
+
             if (physical < Rdram.Length)
             {
                 WriteArray32(Rdram, physical, value);

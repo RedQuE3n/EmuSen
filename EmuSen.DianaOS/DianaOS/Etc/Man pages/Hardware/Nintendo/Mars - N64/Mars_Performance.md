@@ -921,3 +921,40 @@ and none redundant in the way the mode words, the combiner's switches and the di
 these changes puts the two draw loops at 35 to 45 per cent exclusive and the texel path at 20 to 33, and neither share
 is one thing.
 
+
+## 24. The recompiler, and where the phase stands after it
+
+`Mars_Recompiler.md` is the page; this is the entry in the phase's ledger. §20 had measured that the interpreter's fetch,
+decode and per-instruction checks were recoverable only by code that *is* the instruction, and the day's last change
+built that: runs of instructions compiled into one method each, calling the interpreter's own opcodes for anything that
+can fault, branch or reach a device, validated against memory on every entry, and compiled on a thread of their own.
+
+**Measured before it was built.** The three tickbench loops hand-compiled into exactly the methods the emitter was to
+produce, dispatched exactly as the dispatcher was to dispatch them, ran bit-identical to the interpreter for sixty
+million instructions each and took 2.05, 1.80 and 1.14 ns an instruction against the interpreter's 5.4 to 6.6
+(`Mars_Recompiler.md` §7). That was the decision to write the emitter.
+
+**What the first version of the emitter measured, and what it took to find out.** Super Mario 64 slower than the
+interpreter, because its idle loop is a block of two instructions and every iteration paid a dispatch; then Wave Race
+at two thirds of the interpreter's speed, with the profiler putting the time in the dispatcher's own frame. Two
+explanations — the emitted code's size, the RSP's stores — were each ruled out by a measurement, and the third was the
+JIT: a millisecond a block, paid on a dynamic method's first call and not in creating its delegate, 5.8 seconds of a
+10.3-second run. A loop stays in its block now, and the JIT runs on a background thread, its cost forced there with
+`RuntimeHelpers.PrepareDelegate`. The three are §3.4, §7 and §2.4 of the recompiler's page.
+
+| | at the profile | after the RDP (§23) | now | |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50 fps) | 7.3 fps | 31.6 fps | 39.6 fps | 5.4×, 79% of the console |
+| Super Mario 64 (PAL, 50 fps) | 9.6 fps | 36.1 fps | 49.3 fps | 5.1×, 99% of the console |
+| Wave Race 64 (NTSC, 60 fps) | 14.7 fps | 36.6 fps | 45.6 fps | 3.1×, 76% of the console |
+
+Medians of three interleaved rounds of 600 frames from boot, §12's method, against the commit before. The 600 frames
+include every block's compilation on the compiler's thread and every interpreted run before its code arrived; a longer
+session pays less, and the number a scene of gameplay would give remains unmeasured, as it has all phase. The probe's
+whole state matched the §1 baseline on every frame of all three games, in a Debug build with the block verifier
+(`Mars_Recompiler.md` §5) on after every instruction, and the Mars suite's 3,373 tests passed the same way.
+
+**What remains in the processor.** The blocks keep registers in the array between instructions, end at every branch
+but a loop onto their own start, and reach each other through the dispatcher; loads, stores and every coprocessor
+instruction are calls into the interpreter. Each is a lever the recompiler's §8 names and none is measured. The
+interpreter itself is unchanged and runs wherever a block cannot.

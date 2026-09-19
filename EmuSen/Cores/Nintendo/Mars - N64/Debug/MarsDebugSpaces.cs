@@ -33,6 +33,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
             if (Array(core, space) is { Length: > 0 } bytes)
             {
                 bytes[Wrap(address, bytes.Length)] = value;
+                if (core.Bus is { } owner) owner.Written++;
                 return;
             }
 

@@ -26,6 +26,15 @@ quarter of the step, but a cache trusted outright recovers under half of that, b
 its lookup and dispatch cost most of what the two switches do; the shape needing no
 invalidation was slower than decoding. What recovers the rest is a recompiled block.
 
+**Built, later the same day** (`Mars_Recompiler.md`): blocks of instructions compiled
+into one method each, which call this switch and its opcodes for everything that can
+fault, branch or reach a device, and inline only the arithmetic that cannot. The
+switch is therefore still the instruction set; a block is a way of not fetching,
+decoding and checking around each call. The interpreter runs unchanged wherever a
+block cannot — the other two modes, mapped or signal-processor addresses, a pending
+delay slot, anything the debugger has armed — and the store opcodes now return where
+they wrote, which is the one change a block asked of them.
+
 ## 2. Registers are 64-bit, always
 
 Thirty-two general registers of 64 bits, with 32-bit operations sign-extending their

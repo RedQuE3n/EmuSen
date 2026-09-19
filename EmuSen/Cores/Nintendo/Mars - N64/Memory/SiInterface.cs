@@ -85,6 +85,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 else _bus.Rdram[address] = ram[i];
             }
 
+            _bus.Written++;
+
 
             _bus.Mi.Raise(MiInterrupt.SerialInterface);
         }

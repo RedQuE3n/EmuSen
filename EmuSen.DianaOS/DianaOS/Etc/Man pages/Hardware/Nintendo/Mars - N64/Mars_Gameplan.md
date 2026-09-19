@@ -766,6 +766,15 @@ of them.
 > Time, 9 in Super Mario 64, 4 in Wave Race, which is +4, 0 and +2 per cent of the games. A fourth change, the tile's
 > derived values cached, measured nothing and was not kept. What remains in a pixel is spread thin.
 
+> **Progress, 2026-09-18: the recompiler** (`Mars_Recompiler.md`; `Mars_Performance.md` §24). Blocks of instructions
+> compiled into one method each, calling the interpreter's own opcodes for anything that can fault, branch or reach a
+> device; validated against memory on every entry rather than invalidated by writers; compiled on a thread of their own
+> once the JIT was found to cost a millisecond a block. Ocarina of Time 31.6 → 39.6 fps, Super Mario 64 36.1 → 49.3,
+> Wave Race 36.6 → 45.6: 76 to 99 per cent of the console, 3.1 to 5.4 times the profile that opened the phase, every
+> frame and state matching the baseline with Debug's verifier on after every instruction. §2.2's warning about
+> divergence made unobservable is answered in the recompiler's §0 and §5: the block calls the graded opcodes, and Debug
+> builds prove after each instruction that the interpreter's check would have done nothing.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this
@@ -805,7 +814,9 @@ one is not uniform.
 
 ## 6. Deferred, each with the condition that reopens it
 
-- **A recompiler** — Phase G, and only if the profile names the interpreter.
+- ~~**A recompiler** — Phase G, and only if the profile names the interpreter.~~ The profile named it on
+  2026-09-18 and it was built the same day (`Mars_Recompiler.md`): blocks calling the interpreter's own
+  opcodes, validated against memory on entry, compiled on a background thread.
 - **HLE graphics or audio as an option** — reopens only if §2.1's condition fires.
 - **A GPU-backed RDP** — same.
 - **64DD, the Expansion Pak as a default, rumble, the Transfer Pak, netplay** —

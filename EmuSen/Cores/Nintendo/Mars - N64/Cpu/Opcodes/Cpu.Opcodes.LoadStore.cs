@@ -28,7 +28,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             Write(Rt(instruction), value);
         }
 
-        private void Store(uint instruction, int size)
+        // Returns where the store landed, or a value beyond memory when it went through the bus - see Mars_Recompiler.md §4.
+        private uint Store(uint instruction, int size)
         {
             ulong address = EffectiveAddress(instruction);
             RequireAlignment(address, size, ExceptionCode.AddressErrorStore);
@@ -40,11 +41,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             if (physical < (uint)rdram.Length && !_bus.Mi.Repeating && !_bus.StoresWatched)
             {
                 WriteRdram(rdram, (int)physical, Read(Rt(instruction)), size);
-                return;
+                return physical;
             }
 
             // The whole register goes to the bus, because not every device takes only the bytes named - see Mars_Memory.md §2.4.
             _bus.Store(physical, Read(Rt(instruction)), size);
+            return uint.MaxValue;
         }
 
         private static ulong ReadRdram(byte[] rdram, int at, int size) => size switch
@@ -77,12 +79,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             Cop0[LinkedAddressRegister] = Translate(EffectiveAddress(instruction)) >> 4;
         }
 
-        private void StoreConditional(uint instruction, int size)
+        // A store that did not land reports address zero, which no block mistakes for its own code - see Mars_Recompiler.md §4.
+        private uint StoreConditional(uint instruction, int size)
         {
-            if (LinkedFlag) Store(instruction, size);
+            uint landed = LinkedFlag ? Store(instruction, size) : 0;
 
             Write(Rt(instruction), LinkedFlag ? 1UL : 0UL);
             LinkedFlag = false;
+            return landed;
         }
 
         // The operation is already complete; what remains of it is the address check - see Mars_Cpu.md §13.

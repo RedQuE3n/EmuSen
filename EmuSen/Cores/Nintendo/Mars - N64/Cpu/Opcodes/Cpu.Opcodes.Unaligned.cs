@@ -56,7 +56,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             Write(Rt(instruction), (value >> shift) | kept);
         }
 
-        private void StoreWordLeft(uint instruction)
+        private uint StoreWordLeft(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
             ulong access = Mirrored(address, 1);
@@ -66,9 +66,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             uint kept = _bus.Read32(physical) & ~(0xFFFF_FFFFu >> shift);
 
             _bus.Write32(physical, kept | ((uint)Read(Rt(instruction)) >> shift));
+            return physical;
         }
 
-        private void StoreWordRight(uint instruction)
+        private uint StoreWordRight(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
             ulong access = Mirrored(address, 1);
@@ -78,9 +79,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             uint kept = shift == 0 ? 0 : _bus.Read32(physical) & ((1u << shift) - 1);
 
             _bus.Write32(physical, kept | ((uint)Read(Rt(instruction)) << shift));
+            return physical;
         }
 
-        private void StoreDoubleLeft(uint instruction)
+        private uint StoreDoubleLeft(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
             ulong access = Mirrored(address, 1);
@@ -90,9 +92,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             ulong kept = _bus.Read64(physical) & ~(0xFFFF_FFFF_FFFF_FFFFUL >> shift);
 
             _bus.Write64(physical, kept | (Read(Rt(instruction)) >> shift));
+            return physical;
         }
 
-        private void StoreDoubleRight(uint instruction)
+        private uint StoreDoubleRight(uint instruction)
         {
             ulong address = EffectiveAddress(instruction);
             ulong access = Mirrored(address, 1);
@@ -102,6 +105,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             ulong kept = shift == 0 ? 0 : _bus.Read64(physical) & ((1UL << shift) - 1);
 
             _bus.Write64(physical, kept | (Read(Rt(instruction)) << shift));
+            return physical;
         }
     }
 }

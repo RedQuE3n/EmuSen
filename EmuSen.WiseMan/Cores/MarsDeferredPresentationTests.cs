@@ -179,6 +179,88 @@ namespace EmuSen.WiseMan.Cores
             return SyntheticN64Rom.BuildRunningFromRdram(program.ToArray());
         }
 
+        // A second scan of the same registers over the same bytes is reported as a repeat, and the capture it kept is still that scan's - see Mars_Video.md §2.8.
+        [Fact]
+        public void A_scan_that_would_repeat_the_last_one_says_so_and_its_capture_still_walks()
+        {
+            uint[] registers = Registers(2, 3, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0);
+            MemoryBus atOnce = Noisy(), later = Noisy();
+            var job = new ScanJob();
+
+            Program(atOnce, registers);
+            Program(later, registers);
+
+            Assert.True(atOnce.Vi.Scan());
+            Assert.True(later.Vi.Prepare(job));
+            later.Vi.Capture(job);
+            Assert.False(job.Repeats);
+            later.Vi.Walk(job);
+            Assert.Equal(atOnce.Vi.Frame.ToArray(), later.Vi.Frame.ToArray());
+
+            // Nothing wrote to the frame buffer, so the scan repeats and no bytes are taken; a walk over the kept capture is still right.
+            Assert.True(later.Vi.Prepare(job));
+            later.Vi.Capture(job);
+            Assert.True(job.Repeats);
+            Assert.True(job.Captured);
+
+            System.Array.Fill(later.Rdram, (byte)0xA5, (int)Framebuffer - 0x8000, 0x20000);
+            later.Vi.Walk(job);
+            Assert.Equal(atOnce.Vi.Frame.ToArray(), later.Vi.Frame.ToArray());
+
+            // One byte of the reachable range is enough to end the repeat.
+            System.Array.Copy(atOnce.Rdram, later.Rdram, atOnce.Rdram.Length);
+            later.Rdram[job.From + (uint)job.Count / 2] ^= 0xFF;
+            Assert.True(later.Vi.Prepare(job));
+            later.Vi.Capture(job);
+            Assert.False(job.Repeats);
+        }
+
+        // The anti-alias filter reads the hidden bits beside each word, so a change in those alone must end the repeat too - see Mars_Video.md §2.8.
+        [Fact]
+        public void A_change_in_the_hidden_bits_alone_ends_the_repeat()
+        {
+            uint[] registers = Registers(2, 1, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0);
+            var bus = Noisy();
+            var job = new ScanJob();
+
+            Program(bus, registers);
+            Assert.True(bus.Vi.Prepare(job));
+            bus.Vi.Capture(job);
+            Assert.False(job.Repeats);
+
+            Assert.True(bus.Vi.Prepare(job));
+            bus.Vi.Capture(job);
+            Assert.True(job.Repeats);
+
+            bus.RdramHidden[(job.From >> 1) + (uint)job.Count / 4] ^= 3;
+            Assert.True(bus.Vi.Prepare(job));
+            bus.Vi.Capture(job);
+            Assert.False(job.Repeats);
+        }
+
+        // A loaded state's raster is not what the last walk wrote, so the scan after one is never counted a repeat - see §2.8.
+        [Fact]
+        public void A_loaded_state_makes_the_next_scan_walk()
+        {
+            uint[] registers = Registers(2, 3, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0);
+            var bus = Noisy();
+            var job = new ScanJob();
+
+            Program(bus, registers);
+            Assert.True(bus.Vi.Prepare(job));
+            bus.Vi.Capture(job);
+            Assert.False(job.Repeats);
+
+            Assert.True(bus.Vi.Prepare(job));
+            bus.Vi.Capture(job);
+            Assert.True(job.Repeats);
+
+            job.Forget();
+            Assert.True(bus.Vi.Prepare(job));
+            bus.Vi.Capture(job);
+            Assert.False(job.Repeats);
+        }
+
         private static void Program(MemoryBus bus, uint[] registers)
         {
             for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);

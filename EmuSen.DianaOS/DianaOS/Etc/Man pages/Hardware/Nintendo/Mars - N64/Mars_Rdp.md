@@ -488,3 +488,51 @@ unmodified bus; that difference was not investigated.
 - **Any timing** (§3).
 - ~~**The reference differential**~~ — built the same day (`Mars_RdpDifferential.md`). It grades
   the fill cycle; every other drawing path above has nothing to grade yet.
+
+## 10. Whether the rasteriser could be split across scanlines, and what blocks it
+
+*2026-09-19, Phase G. A feasibility study, not an implementation.* §2.6 put the list on one thread and
+`Mars_Performance.md` §29 to §31 leave three of the four gameplay states bound by that thread's own speed, 1.2 to
+1.9 µs a word. angrylion-rdp-plus renders a display list on several threads by giving each one the rows where
+`row % workers == worker`, so the obvious question is whether Mars can do the same while keeping §2.6's rule that
+output is bit-identical. It is asked here because the answer is mostly yes, and because the two things that block
+it are worth recording whether or not it is ever built.
+
+**Mars is better placed for this than angrylion is.** In angrylion the worker's share of the rows is folded into
+the same `validline` flag that the level-of-detail path reads when it peeks at the next scanline, so with more than
+one worker that peek is never taken and the output changes with the worker count. Mars's edge walk (§2's walker)
+writes `_spanDrawn`, `_spanLeft`, `_spanRight`, `_spanAttributes` and the sub-scanline edges **for every row of the
+primitive before any shading starts, with no thread term in them** — `_spanDrawn` folds in only the scissor and the
+interlace field. So Mars's own next-row peek would stay exact under a split, and only the shading loop would need
+partitioning. That is the architecture angrylion lacks and that parallel-rdp had to build a second dispatch to get.
+
+**Two dependencies genuinely block a bit-identical split, and both are narrow.**
+
+*The previous pixel's stored depth slope.* `Rdp.Depth.cs` keeps `_pastStoredEncoded` from one pixel to the next and
+derives the first blend cycle's shifts from it, with no reset at a row or a primitive, so a row's first pixel uses
+the previous row's last. It cannot be recovered by recomputing one pixel redundantly: it is the slope that pixel
+*read out of RDRAM*, and whether the pixel before it wrote there depends on its own depth test. It is live only in
+two-cycle mode with the first blend selecting memory alpha, which is a mode bit the processor already computes.
+
+*The combiner's previous result.* `_combined` is read as the combined input and then overwritten, so within a
+primitive it chains from the first pixel to the last across row boundaries. Recomputing it for a row would mean
+replaying the whole primitive. It is live only when a combine mode selects COMBINED, which is decidable when the
+combine word lands.
+
+**Both are real hardware, not Mars's invention — and the study is the reason to believe that.** The MiSTer
+register-transfer code carries `combiner_save` and `combine_alpha_save` as clocked registers with no reset, in its
+own identifiers rather than angrylion's, which makes the one-cycle combiner feedback a genuine agreement rather
+than a borrowed one. The depth-slope carry is the opposite: MiSTer's nearest equivalent is a same-pixel pipeline
+alignment delay, and parallel-rdp has no such value at all — so there the references **disagree with angrylion**,
+and Mars follows angrylion. That disagreement is a question for `Mars_RdpReferee.md`, not for threading.
+
+**What a split would have to do**, if it is ever built: render primitives in those two modes on one thread, decided
+by predicates computed where the mode words land; give every thread its own copy of the per-pixel state and the
+coverage buffer, which are today fields on the one processor; join before the next command, since primitives read
+each other's output; and either clamp a span to the colour image's width or fall back to one thread when the
+scissor exceeds it, because Mars does not clamp today and two rows can otherwise address the same bytes. That last
+one is a latent defect of its own, independent of threading, and is recorded in §9.
+
+**Not attempted.** Three of Mars's four measured states are bound by this thread, so the prize is real; the work is
+not small, and nothing here is built.
+

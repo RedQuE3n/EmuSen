@@ -1261,3 +1261,44 @@ paragraph, plus the scan-out's quarter of a frame that §21 measured and §27 mo
 processor instruction (§26), and its vector loads and stores, which are byte loops and which the references also
 keep as byte loops; neither has been priced.
 
+## 31. The scan the machine had already been shown
+
+*2026-09-19.* §26 recorded that the games draw on every second or third field while the interface scans on every
+one, and called the repeated scans a thing to look at. `Mars_Video.md` §2.8 is that: a deferred scan whose geometry
+and whose bytes both equal the last walk's is not walked, because the walk is a pure function of those two and the
+raster it would write is the one already there.
+
+**It is the one change of this day that no reference suggested.** The scan-out study behind it read angrylion, its
+parallel-n64 fork, parallel-rdp, the MiSTer register-transfer code and mupen64plus-core, and none of the five
+declines to scan for any reason but the registers being degenerate — a zero origin, two blank fields, an invalid
+width. None looks at whether the frame buffer changed. Two of them *cannot*: angrylion reseeds the gamma dither's
+noise from a field counter and parallel-rdp from a frame count, so a scan over identical bytes genuinely produces a
+different picture in both. Mars keeps no such counter (`Mars_VideoPasses.md`), which is what makes the skip exact
+here and not there. The fork has a measured campaign against the cost of a scan instead — its census found 97 to
+100 per cent of pixels fully covered and filtering nothing, and it skips the vertical resample at a zero fraction —
+and §5 and §21 had already taken both of those.
+
+**Measured**: +4.6 per cent in Ocarina of Time and +1.3 in Wave Race, both outside their rounds' spread, and
+nothing in either Super Mario 64 state, which are bound by the display processor's thread. `Mars_Video.md` §2.8 has
+the table and the first version that cost what it saved.
+
+**Where the four states stand at the end of the day.** All three of this day's kept changes on, interleaved, second
+halves of 600 frames:
+
+| | in play, §26 | now | of the console |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50) | 29.0 | 52.2 | 104% |
+| Wave Race 64 (NTSC, 60) | 29.6 | 60.4 | 101% |
+| Super Mario 64, in the castle (PAL, 50) | 34.7 | 73.0 | 146% |
+| Super Mario 64, outside it (PAL, 50) | — | 55.6 | 111% |
+
+**All four are at or past their consoles**, from 1.8 to 2.1 times what they ran at when the day began, with every
+frame identical to the frame the single-threaded build produces.
+
+**What the next factor would have to come from.** Three of the four are now bound by the display processor's own
+speed on its one thread, which `Mars_Rdp.md` §2.6 leaves at 1.2 to 1.9 µs a word. The feasibility study for
+splitting the rasteriser across scanlines (`Mars_Rdp.md` §10) says Mars can do it bit-identically, and that its span
+tables are already precomputed for every row with no thread term in them — the architecture angrylion lacks and
+parallel-rdp needed a second pass to build. Two narrow mode cases block it and both are detectable from the mode
+bits. Thirteen of this machine's sixteen threads are idle.
+

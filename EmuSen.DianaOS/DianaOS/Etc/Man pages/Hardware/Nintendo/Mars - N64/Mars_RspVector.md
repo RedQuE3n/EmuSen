@@ -359,3 +359,76 @@ detail.
   hours on hardware. §6.1 is the one place their simulators were read, and was not followed.
 - **Performance.** Every vector operation copies three eight-element spans and writes one
   back. That is the simple way to get §2 right, and Phase G owns whether it is fast enough.
+
+## 14. The same arithmetic, eight elements at a time
+
+*2026-09-19, Phase G.* Every function in §6 to §11 is written as a loop over the eight elements, and
+`Mars_Performance.md` §26 measured the signal processor at 27 to 36 per cent of a frame of gameplay, the largest
+share left on the emulation thread once the display processor moved off it (`Mars_Rdp.md` §2.6). The unit is a
+vector unit; the host has 256-bit vectors; the loops are there because the specification is written element by
+element, not because the arithmetic needs them. `Rsp.VectorSimd.cs` is the same arithmetic in host vectors, and
+`Rsp.VectorMath.cs` stays exactly as it was, as the reference the vector form is checked against
+(`Rsp.UseSimd`, on where `Vector256.IsHardwareAccelerated`).
+
+**What the layout had to become.** The register file is already eight sixteen-bit elements laid out register-first,
+so a register is one 128-bit load and one store, and the element selector of §2 is one byte shuffle from a table of
+the sixteen patterns — the same table the references reach for (`Mars_References.md`: cxd4 keeps it as `ei[]` for
+its non-vector path and computes it inline otherwise; paraLLEl-RSP keeps sixteen `pshufb` keys). **The accumulator
+could not stay as it was and did.** Forty-eight bits per element is eight 64-bit lanes, which is two 256-bit
+vectors, and Mars stores them in exactly that order already, so the array the save state carries
+(`Mars_SaveStates.md`) is loaded as two vectors and stored back as two. The references instead transpose the
+accumulator into three vectors of eight sixteen-bit lanes — high, middle and low — and carry between them by hand,
+because SSE2 has no 64-bit compare and no 64-bit shift-with-sign; with AVX2 the wide lanes are available and the
+transposition buys nothing that the save state's layout does not already give. That is the one place this slice
+departs from every reference read for it, and the reason is the host's instruction set, not the hardware's.
+
+**How the pieces fall out.** A multiply is one 32-bit lane multiply: every product in §7 is a sixteen-by-sixteen
+product with a signedness per operand, and all four combinations fit a signed 32-bit lane except unsigned by
+unsigned, whose bits are right and are read back unsigned. The products widen to the accumulator's 64-bit lanes,
+where the shift and the add of the family happen, the sum wraps to 48 bits as §6.1 requires, and the clamp of the
+family is a minimum and a maximum. The three clamps of §7 keep their three shapes: the signed clamp of bits 47:16,
+the unsigned one, and the low clamp that keeps a low word only while the word above it fits sixteen signed bits.
+The flags are eight lane masks while the arithmetic runs and are packed to `VCO`, `VCC` and `VCE` by taking the
+lanes' sign bits, which is the one idea taken from the references unchanged. The comparisons, the clips and the
+merge of §8 become selects. The reciprocals of §10 stay scalar, a table lookup on one element, as they are in all
+three references.
+
+**Reading before writing, which §2 is about, is free here.** Both sources and the destination are loaded as whole
+vectors before anything is computed and the destination is stored once at the end, so the aliasing rule holds by
+construction rather than by copying to scratch spans.
+
+### 14.1 What it was worth
+
+Interleaved from the gameplay states of `Mars_Performance.md` §26, order rotated, three rounds of 600 frames each,
+second halves, with the scan-out and the display processor's list already on their own threads (§27, §28 of that
+page) so that what is measured is the emulation thread's own work:
+
+| from the state, second 300 frames | element by element | eight at a time | of the console |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50) | 47.6 fps | 49.5 | 99% |
+| Wave Race 64 (NTSC, 60) | 50.7 | **60.1** | 100% |
+| Super Mario 64, in the castle (PAL, 50) | 59.7 | **72.9** | 146% |
+
+Medians of three; the two columns' rounds do not overlap in any row. **+4, +19 and +22 per cent**, and the order of
+the three follows the profile that motivated the work: §26 put the signal processor at 27 per cent of a frame of
+Ocarina of Time and 35 to 36 per cent of the other two, and Ocarina of Time's frame is bounded by its display
+processor's list and its scan-out rather than by this. Wave Race 64 reaches its console's sixty from this change and
+no other.
+
+### 14.2 What the vector form is checked against
+
+The element-by-element unit is the oracle. `MarsRspVectorSimdTests` runs **every one of the 64 function codes with
+every one of the 16 selectors**, six rounds each, 6,144 cases: both paths are given the same thirty-two registers,
+the same eight accumulators, the same three flag registers, and one instruction through the processor's own fetch
+and dispatch; then all four registers the instruction can touch, all eight accumulators and all three flag
+registers are compared. Operands are drawn two times in three at random and one in three from the eight values the
+clamps and carries turn on — zero, one, `0x7FFF`, `0x8000`, `0x8001`, `0xFFFF`, `0x4000`, `0xC000` — and the
+accumulators are seeded across all 48 bits. One round of every case names the same register as source and
+destination, which is where §2's rule shows. The double-precision reciprocals are run as the pairs they are, the
+high half then the low, over all sixty-four corner combinations, since the high half leaves state for the low one.
+
+**The test was checked by mutation**, three of them, each reverted: the plain fraction multiply's rounding constant
+changed from `0x8000` to `0x4000`, the low clamp's upper bound moved by one, and the element selector's last lane
+pointed at the first. Each was caught — the first two by the sweep, the third by the sweep and the aliasing case
+both. The corpus's 155 vector groups pass through the vector path as they do through the other (§12), which is a
+weaker statement than the sweep and worth having anyway because it is the hardware's own test rather than Mars's.

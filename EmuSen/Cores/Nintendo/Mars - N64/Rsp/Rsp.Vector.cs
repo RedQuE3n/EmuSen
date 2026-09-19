@@ -25,7 +25,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         {
             if ((instruction & VectorOperation) != 0)
             {
-                ExecuteVector(instruction);
+                if (UseSimd) ExecuteVectorSimd(instruction);
+                else ExecuteVector(instruction);
                 return;
             }
 

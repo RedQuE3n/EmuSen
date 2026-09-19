@@ -88,6 +88,11 @@ namespace EmuSen.Mistress.Views
 
         public bool IsPaused => !_pauseSignal.IsSet;
 
+        // Save and load, handed to the thread that owns the core and run between frames or woken while paused - see §4.21a.
+        private readonly System.Collections.Concurrent.ConcurrentQueue<Action<EmulatorSession>> _coreRequests = new();
+        private readonly ManualResetEventSlim _requestSignal = new(initialState: false);
+        private WaitHandle[]? _parkedWakes;
+
         // Coalescing hand-off to the UI thread - see EmuSen_Serenity.md §4.
         private sealed class FrameData
         {
@@ -488,17 +493,24 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            try
+            int slot = _stateSlot;
+            RequestOnEmulationThread(session =>
             {
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
-                _session.SaveState(path);
-                StatusText.Text = $"State saved to slot {_stateSlot}: {System.IO.Path.GetFileName(path)}";
-                SyncMenuState(); // that slot has a timestamp now
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"Save State failed: {ex.Message}";
-            }
+                string status;
+                try
+                {
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+                    session.SaveState(path);
+                    status = $"State saved to slot {slot}: {System.IO.Path.GetFileName(path)}";
+                }
+                catch (Exception ex)
+                {
+                    status = $"Save State failed: {ex.Message}";
+                }
+
+                // SyncMenuState because that slot has a timestamp now.
+                Dispatcher.UIThread.Post(() => { StatusText.Text = status; SyncMenuState(); });
+            });
         }
 
         private void LoadState()
@@ -515,17 +527,37 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
-            try
+            int slot = _stateSlot;
+            RequestOnEmulationThread(session =>
             {
-                _session.LoadState(path);
-                _rewind.Clear(); // a discontinuous jump - see §1.4
-                _audioPlayer.RateControl.Reset();
-                StatusText.Text = $"State loaded from slot {_stateSlot}: {System.IO.Path.GetFileName(path)}";
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"Load State failed: {ex.Message}";
-            }
+                string status;
+                try
+                {
+                    session.LoadState(path);
+                    _rewind.Clear(); // a discontinuous jump - see §1.4
+                    _audioPlayer.RateControl.Reset();
+                    status = $"State loaded from slot {slot}: {System.IO.Path.GetFileName(path)}";
+                }
+                catch (Exception ex)
+                {
+                    status = $"Load State failed: {ex.Message}";
+                }
+
+                Dispatcher.UIThread.Post(() => StatusText.Text = status);
+            });
+        }
+
+        private void RequestOnEmulationThread(Action<EmulatorSession> request)
+        {
+            _coreRequests.Enqueue(request);
+            _requestSignal.Set();
+        }
+
+        // Only on the emulation thread; reset first, so a request queued while these run wakes the next wait - see §4.21a.
+        private void RunCoreRequests(EmulatorSession session)
+        {
+            _requestSignal.Reset();
+            while (_coreRequests.TryDequeue(out Action<EmulatorSession>? request)) request(session);
         }
 
         // The four menus - shortcuts stay with HotkeyBindingMap, see EmuSen_Settings_Reference.md §4.19.
@@ -936,6 +968,10 @@ namespace EmuSen.Mistress.Views
 
         private void StartEmulationThread()
         {
+            // A request queued for the session this one replaced is not this session's to run.
+            _coreRequests.Clear();
+            _requestSignal.Reset();
+            _parkedWakes ??= new[] { _pauseSignal.WaitHandle, _requestSignal.WaitHandle };
             _running = true;
             _emuThread = new Thread(EmulationLoop) { IsBackground = true, Name = "EmuSen-Emulation" };
             _emuThread.Start();
@@ -975,7 +1011,13 @@ namespace EmuSen.Mistress.Views
                 // Checked before waiting so the unpaused case stays a plain read - see §4.21.
                 if (!_pauseSignal.IsSet)
                 {
-                    _pauseSignal.Wait();
+                    // Woken by a save or a load as well as by resume, so the hotkeys work while paused - see §4.21a.
+                    while (!_pauseSignal.IsSet && _running)
+                    {
+                        WaitHandle.WaitAny(_parkedWakes!);
+                        if (_session is { } parked) RunCoreRequests(parked);
+                    }
+
                     if (!_running) break;
 
                     // Or the whole paused duration lands on one artificially slow frame - see §4.21.
@@ -999,6 +1041,7 @@ namespace EmuSen.Mistress.Views
                     session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
                     SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight);
+                    RunCoreRequests(session);
                     SleepUntil(nextTick, clock);
                     continue;
                 }
@@ -1023,6 +1066,9 @@ namespace EmuSen.Mistress.Views
                         _applyCheatsPending = false;
                         _debugTarget?.ApplyCheats();
                     }
+
+                    // Between frames, and before the rewind snapshot, so a loaded state seeds the chain - see §4.21a.
+                    RunCoreRequests(session);
 
                     // Right after RunFrame, which is what produces new samples to drain.
                     if (session.Core is not null) _rewind.OnFrameCompleted(session.Core);

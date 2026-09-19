@@ -47,6 +47,24 @@ namespace EmuSen.WiseMan.Fixtures
             return image;
         }
 
+        // A program a stub copies into RDRAM at 0x80000400 and jumps to, since the boot runs the image from the RSP's memory - see Mars_Recompiler.md §6.
+        public static byte[] BuildRunningFromRdram(uint[] program)
+        {
+            const int Base = 24, Word = 25;
+            var stub = new MipsAssembler().Lui(Base, 0x8000).Ori(Base, Base, 0x0400);
+
+            for (int i = 0; i < program.Length; i++)
+            {
+                stub.Lui(Word, (ushort)(program[i] >> 16)).Ori(Word, Word, (ushort)program[i]).Sw(Word, Base, (short)(i * 4));
+            }
+
+            uint[] words = stub.Jr(Base).Nop().ToArray();
+            var bytes = new byte[words.Length * 4];
+            for (int i = 0; i < words.Length; i++) WriteUInt32(bytes, i * 4, words[i]);
+
+            return Build(patches: (0, bytes));
+        }
+
         // An ED64-convention header, which is the only way an image can state its own save type.
         public static byte[] BuildHomebrew(N64SaveType saveType, bool realTimeClock = false, bool regionFree = false)
         {

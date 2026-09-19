@@ -1004,3 +1004,105 @@ the publish (`project_publish_out_folder`), not about the core.
 **What was not measured.** Startup time, which is ReadyToRun's usual reason and which the harness does not time;
 memory; a Native AOT build with a static profile (`.mibc`), which would narrow the interpreter's gap and would not
 give it blocks.
+
+## 26. The gameplay profile
+
+*2026-09-19.* Every number in this page to here came from the probe's 600 frames from boot — title screens, an
+attract race, a castle's exterior — and §24 said so: the number a scene of gameplay would give was unmeasured all
+phase. With the state hotkeys on the emulation thread (`EmuSen_Settings_Reference.md` §4.21a) three states were
+saved in play, Ocarina of Time in the field, Wave Race 64 on the course, Super Mario 64 inside the castle, and a
+harness that loads a state and times frames from it (`playbench`, in the speed tooling beside the states) gives the
+phase its first measurement of what it is for.
+
+| from the state, 600 frames, blocks | fps | of the console | at boot (§24) |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50) | 29.0 | 58% | 39.6 |
+| Wave Race 64 (NTSC, 60) | 29.6 | 49% | 45.6 |
+| Super Mario 64 (PAL, 50) | 34.7 | 69% | 49.3 |
+
+The second half of each run, once the scene's blocks are compiled: 6,600, 4,700 and 3,400 of them in the first six
+hundred frames, taking 5.4, 4.9 and 2.8 seconds of the compiler's thread. The processor runs 1.86, 1.48 and 1.86
+million instructions a frame, 99.8 per cent of them in blocks, 40, 50 and 85 instructions an entry. Gameplay is a
+quarter to a third slower than the boot sequences, and none of the three reaches its console.
+
+**Where a frame goes.** A sampled profile of 1,000 frames from each state, §2's method:
+
+| share of the emulation thread | processor and its blocks | RSP | RDP | VI |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time | 19% | 27% | 28% | 24% |
+| Wave Race 64 | 16% | 35% | 37% | 11% |
+| Super Mario 64 | 19% | 36% | 27% | 17% |
+
+Two corrections to the analyser's own attribution lie behind that table, and both matter. The display processor
+draws inside `SpInterface.Step` — the signal processor writes the command registers, the interface takes the list
+at once (`Mars_Rdp.md` §2) — so that method's *inclusive* share is 56, 72 and 64 per cent of the three frames,
+and it is not the RSP's. And its *exclusive* share, 12.6, 16.8 and 17.7 per cent, is the RSP's fetch-and-dispatch
+loop with `Rsp.Step` inlined into it, which the analyser's component rule files under the processor because the
+interface lives in the memory namespace. The table above puts the loop where it belongs, with the RSP's own
+`Execute` and vector methods; the processor's share is what remains of `StepBlock` once the tick's callees are
+taken out. **The signal and display processors together are two thirds of a frame of Wave Race and Super Mario 64
+and over half of Ocarina of Time**, and the processor the recompiler serves is a fifth. The scan-out is a quarter
+of Ocarina of Time, as §21 left it.
+
+**Three smaller things the profile shows.** Every interrupt the processor takes is a managed exception:
+`CheckInterrupts` throws, the dispatcher catches, and the runtime's dispatch is 1.0, 0.7 and 0.8 per cent of the
+thread — the only exceptions in play, and a cost the interpreter's design chose for every fault alike. The RSP's
+loop is entered once per processor instruction with a count of one, so its overhead is paid per step and not per
+run. And the games draw fewer pictures than the interface scans: from these states Ocarina of Time and Wave Race
+change their picture every third field and Super Mario 64 every second (§27's lockstep counts them), so two scans
+in three or one in two walk a frame buffer the last scan already walked.
+
+**What the frontend adds is outside this.** Mistress captures a rewind state every fourth frame, submits audio and
+copies the picture; none of it is in the harness, and none of it is measured here.
+
+**What this sets.** The recompiler's remaining levers were priced and rejected in §9 to §12 of its page; a fifth
+of the frame is not where the next factor of two is. The scan-out reads the machine and writes only the raster,
+so it can leave the emulation thread whole (§27). The display processor reads and writes RDRAM, and the argument
+for taking it off the thread is one about which pages it touches and when anyone else looks — the next section
+after §27's is that one. The RSP's loop and the interrupt's throw are smaller, and exact to fix.
+
+## 27. The scan-out walked on another thread
+
+*2026-09-19.* §26 put the video interface's scan-out at a quarter of Ocarina of Time's frame in play, a sixth of
+Super Mario 64's and a ninth of Wave Race's, and §21 had already taken from it everything a single thread could:
+what remained was the walk's own arithmetic over every output pixel. The scan-out reads RDRAM and the registers and
+writes only the raster; it is the one component of the frame that changes nothing the machine can see. So it now
+runs on a pool thread while the emulation thread runs the next frame. `Mars_Video.md` §2.7 is the design: the scan
+split at the walk, the frame buffer's reachable lines captured before the walk starts, the argument for the
+capture's reach and the throw that guards it, and the one-frame lag a frontend accepts for it.
+
+**Measured**, §12's method turned on the mode rather than the build: one binary, the mode on and off alternately,
+order rotated each round, three rounds of 600 frames from each of §26's states on a quiet machine, the second half
+of each run (`ab-defer.sh`, `play-states3/ab-defer.txt`):
+
+| from the state, second 300 frames | at once | deferred | | of the console |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50) | 29.3 fps | 37.8 fps | +29% | 76% |
+| Wave Race 64 (NTSC, 60) | 29.5 fps | 32.7 fps | +11% | 55% |
+| Super Mario 64 (PAL, 50) | 34.3 fps | 41.3 fps | +20% | 83% |
+
+Medians; the spread within a mode is under half a frame a second in every cell (29.3 to 29.3, 37.5 to 37.8; 29.4
+to 29.6, 32.6 to 32.8; 34.2 to 34.9, 41.2 to 41.4), and every deferred round is above every round at once. The whole
+runs, with the scene's compilation in them, move the same way: 27.9 to 35.5, 28.7 to 31.8, 33.6 to 40.4. The gains
+are the scan-out's shares of §26's profile, less the capture — a copy of a quarter megabyte a frame — and the
+join, which by the next frame's end has nothing to wait for.
+
+**Exact.** The probe's 1,800 frames are unchanged, since the probe presents at once and the immediate path is the
+same code over live memory. The Mars suite passes, 3,395 tests. From each of the three states, an immediate core
+and a deferred one run 600 frames in lockstep with their states compared after every frame and the deferred picture
+against the immediate picture of the frame before: identical throughout, 200, 200 and 300 distinct pictures. And
+`MarsDeferredPresentationTests` walks every geometry the reference test scans from a capture after live memory was
+overwritten under it.
+
+**What it costs.** A frontend that turns the mode on shows each frame one field late — 17 to 20 ms — and
+`EmuSen_Settings_Reference.md` §4.21b records that Mistress does. A thread from the pool for the walk, which on the
+machine of §26 has fifteen more. The capture is a copy the machine did not make before; on the bench it is under
+the noise.
+
+**Where the phase stands.** Ocarina of Time and Super Mario 64 are within a quarter of their consoles in play;
+Wave Race, whose scan-out was the smallest share, is at 55 per cent of its sixty. In all three the signal and
+display processors are now two thirds or more of the emulation thread's frame (§26), and the display processor is
+the larger of the two in Wave Race and Ocarina of Time. It reads and writes RDRAM, so it cannot leave the thread
+the way the scan-out did, by capture; it can leave it only behind an argument about which pages each command touches
+and a wait at every other access to such a page, and that argument, with the display processor's own reads and
+writes checking it as they go, is what comes next.

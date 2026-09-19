@@ -30,14 +30,38 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         [EmuSen.Common.SkipInState] private readonly bool[] _slotLive = new bool[2];
         [EmuSen.Common.SkipInState] private readonly int[] _slotStamp = new int[2];
 
+        // What the walk reads and how it filters, set from the job before each walk so a deferred walk reads a snapshot - see Mars_Video.md §2.7.
+        [EmuSen.Common.SkipInState] private byte[] _sourceRdram = System.Array.Empty<byte>();
+        [EmuSen.Common.SkipInState] private byte[] _sourceHidden = System.Array.Empty<byte>();
+        [EmuSen.Common.SkipInState] private uint _sourceBase;
+        [EmuSen.Common.SkipInState] private int _sourceCount;
+        [EmuSen.Common.SkipInState] private int _sourceLength;
+        [EmuSen.Common.SkipInState] private int _scanAntiAlias;
+        [EmuSen.Common.SkipInState] private bool _scanDither;
+        [EmuSen.Common.SkipInState] private bool _scanGamma;
+
+        // A scan's own job, walked at once over live memory - see Mars_Video.md §2.7.
+        [EmuSen.Common.SkipInState] private readonly ScanJob _immediate = new();
+
         // Where the picture sits in the raster, how far each step moves through the frame buffer, and which columns carry signal.
-        private readonly record struct Picture(
+        internal readonly record struct Picture(
             int Left, int Top, int Columns, int Rows, int Stride, int ActiveLines,
             uint StartX, uint StepX, uint StartY, uint StepY, int FirstColumn, int LastColumn, bool Lower);
 
         // True when a frame reached the raster; a frame buffer at zero, a signal too short, or a second blank in a row produce none - see §2.2.
         public bool Scan()
         {
+            if (!Prepare(_immediate)) return false;
+
+            Walk(_immediate);
+            return true;
+        }
+
+        // Everything a scan does before its walk, which alone reads the frame buffer; true when the walk is due - see §2.7.
+        public bool Prepare(ScanJob job)
+        {
+            job.Captured = false;
+
             uint origin = Register(Origin) & 0xFF_FFFF;
             if (origin == 0) return false;
 
@@ -61,8 +85,46 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
             if (!signal) return false;
 
-            Walk(picture, origin);
+            job.Picture = picture;
+            job.Origin = origin;
+            job.Width = (int)Register(Width) & 0xFFF;
+            job.Wide = (Type & 1) != 0;
+            job.Resample = AntiAlias != Replicate;
+            job.Divot = DivotEnabled;
+            job.AntiAlias = AntiAlias;
+            job.Dither = DitherFilterEnabled;
+            job.Gamma = GammaEnabled;
             return true;
+        }
+
+        // The frame buffer's lines a walk can reach, copied out so the walk can run while the machine moves on - see §2.7.
+        public void Capture(ScanJob job)
+        {
+            Picture picture = job.Picture;
+            int width = job.Width, bytesPerPixel = job.Wide ? 4 : 2;
+            uint origin = job.Wide ? job.Origin & 0xFF_FFFC : job.Origin & 0xFF_FFFE;
+
+            // The window fetches two lines above the first row's and three below the last's; a sample reaches a line and two pixels further, a step a row's span - see §2.7.
+            long firstLine = (long)(picture.StartY >> 10) - 3;
+            long lastLine = (((long)picture.StartY + (long)System.Math.Max(picture.Rows - 1, 0) * picture.StepY) >> 10) + 4;
+            long from = origin + ((firstLine - 1) * width - RowSpan - 4) * bytesPerPixel;
+            long to = origin + ((lastLine + 2) * width + 2 * RowSpan + 4) * bytesPerPixel;
+
+            byte[] rdram = _bus.Rdram;
+            from = System.Math.Clamp(from, 0, rdram.Length) & ~1L;
+            to = System.Math.Clamp(to, from, rdram.Length);
+
+            int count = (int)(to - from);
+            if (job.Rdram.Length < count) job.Rdram = new byte[count];
+            if (job.Hidden.Length < count / 2) job.Hidden = new byte[count / 2];
+
+            System.Buffer.BlockCopy(rdram, (int)from, job.Rdram, 0, count);
+            System.Buffer.BlockCopy(_bus.RdramHidden, (int)(from >> 1), job.Hidden, 0, count / 2);
+
+            job.Base = (uint)from;
+            job.Count = count;
+            job.Length = rdram.Length;
+            job.Captured = true;
         }
 
         // The registers as lengths and steps, with the picture pulled back inside the raster where it starts before it - see §2.1.
@@ -182,13 +244,36 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         }
 
         // One pass over the picture: each row starts a new line of the frame buffer, each step a new pixel of it - see §2.5.
-        private void Walk(Picture picture, uint origin)
+        public void Walk(ScanJob job)
         {
-            int width = (int)Register(Width) & 0xFFF;
-            bool resample = AntiAlias != Replicate;
-            bool wide = (Type & 1) != 0;
-            bool divot = DivotEnabled;
+            Picture picture = job.Picture;
+            uint origin = job.Origin;
+            int width = job.Width;
+            bool resample = job.Resample;
+            bool wide = job.Wide;
+            bool divot = job.Divot;
             int bug = 0;
+
+            _scanAntiAlias = job.AntiAlias;
+            _scanDither = job.Dither;
+            _scanGamma = job.Gamma;
+
+            if (job.Captured)
+            {
+                _sourceRdram = job.Rdram;
+                _sourceHidden = job.Hidden;
+                _sourceBase = job.Base;
+                _sourceCount = job.Count;
+                _sourceLength = job.Length;
+            }
+            else
+            {
+                _sourceRdram = _bus.Rdram;
+                _sourceHidden = _bus.RdramHidden;
+                _sourceBase = 0;
+                _sourceCount = _bus.Rdram.Length;
+                _sourceLength = _bus.Rdram.Length;
+            }
 
             int first = (int)(picture.StartX >> 10);
 
@@ -383,10 +468,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         {
             Pixel pixel = Fetched(origin, at, wide);
 
-            if (AntiAlias > Covered) pixel = pixel with { Coverage = 7 };
+            if (_scanAntiAlias > Covered) pixel = pixel with { Coverage = 7 };
 
             // A whole pixel takes the dither filter instead, which is what that test has decided since Mars_VideoPasses.md §1.
-            if (pixel.Coverage == 7) return DitherFilterEnabled ? Dither(origin, at, wide, width, bug, pixel) : pixel;
+            if (pixel.Coverage == 7) return _scanDither ? Dither(origin, at, wide, width, bug, pixel) : pixel;
 
             return Filter(origin, at, wide, width, bug, pixel);
         }
@@ -394,25 +479,36 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         // Five bits a channel become eight by moving up, not by filling in; the three bits below are the anti-aliasing's to fill - see §2.6.
         private Pixel Fetch(uint origin, int at, bool wide)
         {
-            byte[] rdram = _bus.Rdram;
+            byte[] rdram = _sourceRdram;
 
             if (wide)
             {
                 uint address = (origin & 0xFF_FFFC) + (uint)at * 4;
-                if (address + 3 >= rdram.Length) return default;
+                if (address + 3 >= _sourceLength) return default;
 
-                return new Pixel(rdram[address], rdram[address + 1], rdram[address + 2], (rdram[address + 3] >> 5) & 7);
+                int index = Within(address, 4);
+                return new Pixel(rdram[index], rdram[index + 1], rdram[index + 2], (rdram[index + 3] >> 5) & 7);
             }
 
             uint word = (origin & 0xFF_FFFE) + (uint)at * 2;
-            if (word + 1 >= rdram.Length) return default;
+            if (word + 1 >= _sourceLength) return default;
 
-            int pixel = (rdram[word] << 8) | rdram[word + 1];
+            int half = Within(word, 2);
+            int pixel = (rdram[half] << 8) | rdram[half + 1];
 
             // The high bit of a coverage is the word's own, the two below it are the hidden bits beside it - see Mars_VideoFilter.md §1.
-            int coverage = ((pixel & 1) << 2) | _bus.RdramHidden[word >> 1];
+            int coverage = ((pixel & 1) << 2) | _sourceHidden[half >> 1];
 
             return new Pixel((pixel >> 8) & 0xF8, (pixel & 0x7C0) >> 3, (pixel & 0x3E) << 2, coverage);
+        }
+
+        // An address inside memory that a snapshot does not hold is a defect in Capture's reach, and is said so rather than read stale - see §2.7.
+        private int Within(uint address, int size)
+        {
+            uint index = address - _sourceBase;
+            if (index + (uint)size > (uint)_sourceCount) throw new System.InvalidOperationException($"The scan reached frame buffer address {address:X} outside the lines captured for it.");
+
+            return (int)index;
         }
 
         // Mixing moves the colour and leaves the coverage, so a mixed pixel still carries the one the step landed on - see Mars_VideoFilter.md §1.

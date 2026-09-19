@@ -783,6 +783,13 @@ of them.
 > on the recompiler's build (no dynamic code, so no blocks; −20 per cent on the interpreter), ReadyToRun is exact and a
 > publish decision.
 
+> **Progress, 2026-09-19: the first gameplay profile, and the scan-out off the thread** (`Mars_Performance.md`
+> §26–§27; `Mars_Video.md` §2.7). From states saved in play the three games ran at 29, 30 and 35 fps — 58, 49 and 69
+> per cent of their consoles — with the signal and display processors two thirds of a frame and the processor a
+> fifth. The video interface's walk now runs on a pool thread over a capture of the lines it can reach, the picture
+> one field behind the machine: 38, 33 and 41 fps in play, exact by lockstep and the probe. The display processor is
+> next, and needs an argument about pages rather than a capture.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

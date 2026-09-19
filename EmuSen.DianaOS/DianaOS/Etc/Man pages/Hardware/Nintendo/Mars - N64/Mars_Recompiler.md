@@ -390,9 +390,11 @@ the arrival of its code, which the sweep bounds at a few per cent of instruction
   exception vectors and nothing anywhere else.
 - **The interpreter's return-observer quirk is kept**: `_returnAfterSlot` set by a `jr ra` whose slot faults survives
   until the next delay slot anywhere. A block reproduces it because it runs the same condition at every slot.
-- **3D gameplay is still unmeasured.** Every number here comes from boots, title screens and an attract race, as every
+- ~~**3D gameplay is still unmeasured.** Every number here comes from boots, title screens and an attract race, as every
   number in `Mars_Performance.md` does; a scene with more code hot at once compiles more blocks, and the queue's latency
-  in such a scene is a number nobody has.
+  in such a scene is a number nobody has.~~ Measured on 2026-09-19 from states saved in play (`Mars_Performance.md`
+  §26): 6,600, 4,700 and 3,400 blocks compiled in the first 600 frames of a scene, 5.4, 4.9 and 2.8 seconds of the
+  compiler's thread, 99.8 per cent of instructions in blocks once compiled, and the processor a fifth of the frame.
 
 ## 9. The next levers, measured before any was built
 

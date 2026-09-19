@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using EmuSen.Common;
 using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Cores.Nintendo.Mars.Rom;
+using EmuSen.Cores.Nintendo.Mars.Vi;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
@@ -52,6 +54,14 @@ namespace EmuSen.Cores.Nintendo.Mars
         private string? _savePath;
         private string? _pakPath;
         private int _screenHeight = DefaultScreenHeight;
+
+        // The picture a deferred walk composes while the next frame runs, shown once the walk is joined - see Mars_Video.md §2.7.
+        private byte[] _pendingFrame = Blank(DefaultScreenHeight);
+        private int _pendingHeight = DefaultScreenHeight;
+        private readonly ScanJob _scan = new();
+        private ManualResetEventSlim? _presenting;
+        private Exception? _presentationFault;
+        private bool _deferred;
         private long _lastFrameCycles = CycleCap;
 
         // A stock console by default, because the plan defers the Pak as a default - see Mars_Core.md §7.
@@ -156,6 +166,8 @@ namespace EmuSen.Cores.Nintendo.Mars
             _lastFrameCycles = CycleCap;
             _screenHeight = DefaultScreenHeight;
             _frame = Blank(DefaultScreenHeight);
+            _pendingFrame = Blank(DefaultScreenHeight);
+            _pendingHeight = DefaultScreenHeight;
         }
 
         // A binding for a button the pad lacks is dropped rather than moved onto another one - see Mars_Core.md §5.
@@ -256,7 +268,20 @@ namespace EmuSen.Cores.Nintendo.Mars
 
             if (TotalFrames % SaveEveryNFrames == 0) SaveSram();
 
-            if (!SkipRendering) Present(Bus.Vi);
+            if (SkipRendering) return;
+            if (_deferred) PresentDeferred(Bus.Vi);
+            else Present(Bus.Vi);
+        }
+
+        // The scan-out walks on another thread while the next frame runs, and the picture shown is the last one joined - see Mars_Video.md §2.7.
+        public bool DeferredPresentation
+        {
+            get => _deferred;
+            set
+            {
+                JoinPresentation();
+                _deferred = value;
+            }
         }
 
         // Compiled blocks between the checks the frame makes; the interpreter alone when switched off, or where no code can be emitted - see Mars_Recompiler.md §3.
@@ -372,17 +397,73 @@ namespace EmuSen.Cores.Nintendo.Mars
             if (!SkipRendering) Present(Bus.Vi);
         }
 
-        // The raster's fourth byte is coverage, not opacity, and a progressive field is every other line - see Mars_Core.md §2.
         private void Present(VideoInterface vi)
         {
+            JoinPresentation();
             vi.Scan();
+            Compose(vi, vi.FrameHeight, vi.Serrate, ref _frame);
+            _screenHeight = _frame.Length / (ScreenWidthPixels * 4);
+        }
 
-            ReadOnlySpan<byte> raster = vi.Frame;
+        // The walk and the composition go to the pool; what they read was captured, what they write is the pending picture - see Mars_Video.md §2.7.
+        private void PresentDeferred(VideoInterface vi)
+        {
+            JoinPresentation();
+
+            bool walk = vi.Prepare(_scan);
+            if (walk) vi.Capture(_scan);
             int rows = vi.FrameHeight;
-            int repeat = vi.Serrate ? 1 : 2;
+            bool serrate = vi.Serrate;
+
+            var done = new ManualResetEventSlim(false);
+            _presenting = done;
+            ThreadPool.UnsafeQueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    if (walk) vi.Walk(_scan);
+                    Compose(vi, rows, serrate, ref _pendingFrame);
+                    _pendingHeight = rows * (serrate ? 1 : 2);
+                }
+                catch (Exception fault)
+                {
+                    _presentationFault = fault;
+                }
+                finally
+                {
+                    done.Set();
+                }
+            }, null);
+        }
+
+        // Waits for the walk that is out, if one is, and makes its picture the shown one - see Mars_Video.md §2.7.
+        private void JoinPresentation()
+        {
+            ManualResetEventSlim? presenting = _presenting;
+            if (presenting is null) return;
+
+            presenting.Wait();
+            presenting.Dispose();
+            _presenting = null;
+
+            if (_presentationFault is { } fault)
+            {
+                _presentationFault = null;
+                throw new InvalidOperationException("The deferred scan-out failed.", fault);
+            }
+
+            (_frame, _pendingFrame) = (_pendingFrame, _frame);
+            _screenHeight = _pendingHeight;
+        }
+
+        // The raster's fourth byte is coverage, not opacity, and a progressive field is every other line - see Mars_Core.md §2.
+        private static void Compose(VideoInterface vi, int rows, bool serrate, ref byte[] frame)
+        {
+            ReadOnlySpan<byte> raster = vi.Raster(rows);
+            int repeat = serrate ? 1 : 2;
             int rowBytes = ScreenWidthPixels * 4;
 
-            byte[] frame = rows * repeat == _screenHeight ? _frame : new byte[rowBytes * rows * repeat];
+            if (frame.Length != rowBytes * rows * repeat) frame = new byte[rowBytes * rows * repeat];
 
             for (int row = 0; row < rows; row++)
             {
@@ -395,9 +476,6 @@ namespace EmuSen.Cores.Nintendo.Mars
                     for (int alpha = 3; alpha < rowBytes; alpha += 4) line[alpha] = 0xFF;
                 }
             }
-
-            _frame = frame;
-            _screenHeight = rows * repeat;
         }
 
         private static byte[] Blank(int height)

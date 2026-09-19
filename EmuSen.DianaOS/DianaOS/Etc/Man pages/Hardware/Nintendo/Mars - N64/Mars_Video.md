@@ -179,6 +179,55 @@ window is fetched as described here.
 across the row second: the pixel and the one below it, the pixel to the right and the one below that, then
 those two. Each mix is `near + ((far − near) × fraction + 16) >> 5`, with the fraction five bits.
 
+### 2.7 The walk deferred to another thread
+
+*2026-09-19, Phase G.* The scan-out was a quarter of Ocarina of Time's frame and a sixth of Super Mario 64's in
+play (`Mars_Performance.md` §26), and it reads the machine without changing it: a scan is a function of the
+registers and of the frame buffer's lines, and what it writes is the raster. So the walk — everything from §2.5
+and §2.6 — now runs on a thread of its own while the next frame runs, and the picture a frontend is handed is the
+one the walk before last produced.
+
+**The scan is split at the walk.** `Prepare` does everything §2.1 to §2.4 describe — the geometry, the blank
+rule, the borders and the held lines — and says whether a walk is due; it runs on the emulation thread, because the
+held-line count and the blank flag are state (`Mars_SaveStates.md`), and a state written between frames must hold
+what a scan at once would have left. `Capture` copies out of RDRAM the lines the walk can reach, and the hidden
+bits beside them. `Walk` runs over the capture. `Scan()` is the three in a row over live memory, and is what it
+was.
+
+**What a walk can reach, and the argument that the capture holds it.** A row's window fetches whole lines from two
+above its own to three below (`Mars_Performance.md` §21); a step lands up to the row's span past a line's start,
+2,563 pixels at the widest picture and the largest step; a sample reaches one line and two pixels either side of
+where it landed, through the filter's and the dither's neighbours and divot's; the fetch-bug fold reads the row's
+own line where the one below would be. The capture therefore begins one line and a row's span before the window's
+first line and ends two lines and two spans after its last, in pixels of the frame buffer's width, clamped to
+memory. An address the walk asks for inside memory and outside the capture is not read from live memory — that
+would be a torn picture, silently — but thrown as a defect in this argument, and the join rethrows it.
+A negative index wraps, as §2.6's arithmetic always has, to an address just below the origin or past the end of
+memory; the former is inside the capture, the latter reads zero as before.
+
+**The picture is one frame behind the machine.** After `RunFrame` *n* the walk of frame *n* is in flight; it is
+joined at the start of the next frame's presentation, before the raster is touched again, and its picture becomes
+the shown one. So `GetFrameBufferRgba()` after frame *n* + 1 is the picture of frame *n*, exactly, and the state
+is the state of frame *n* + 1. A loaded state is presented at once, on the loading thread, so a rewind or a slot
+shows what it loaded. Switching the mode off joins the walk in flight and shows it. `SkipRendering` skips both
+halves, as it skipped the scan.
+
+**What proves it.** `MarsDeferredPresentationTests`: every register set the reference test of §3.4 scans, walked
+from a capture after the live frame buffer and hidden bits were overwritten, against the same set walked over
+memory — twenty-seven geometries, both pixel formats, interlaced and progressive, a 320-wide picture at every
+pass, and a PAL one stepping down at 0x355; a synthetic program painting a changing frame buffer, run as an
+immediate core and a deferred one for eight frames, states identical every frame and the deferred picture the
+immediate one of the frame before; and a state loaded into a deferred core presented at once. From the three
+gameplay states of `Mars_Performance.md` §26, 600 frames each: the two machines identical every frame and the
+picture one behind, through 200 distinct pictures in Ocarina of Time and Wave Race and 300 in Super Mario 64.
+The probe's 1,800 frames are unchanged, since the probe presents at once.
+
+**What it does not do.** It does not skip a scan whose inputs have not changed, though the lockstep runs show the
+games draw a new picture every third field (Ocarina of Time, Wave Race) or every second (Super Mario 64), so two
+scans in three or one in two are of a frame buffer the last scan already walked; off the emulation thread that
+costs a core's time and not the frame's, so it is left. Hotaru presents at once. The display processor still
+draws on the emulation thread, which §26 names as the next thing to move.
+
 ## 3. What the differential says
 
 ### 3.1 The first run, and the bug it found

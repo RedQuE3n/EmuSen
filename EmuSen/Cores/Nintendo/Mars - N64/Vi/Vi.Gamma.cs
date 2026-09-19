@@ -41,7 +41,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         // The table stands in for the hardware's gamma ROM; the six bits below a channel are the dither's, and Mars has none - see §3.1.
         private Pixel Gamma(Pixel pixel)
         {
-            if (!GammaEnabled) return pixel;
+            if (!_scanGamma) return pixel;
 
             return pixel with
             {

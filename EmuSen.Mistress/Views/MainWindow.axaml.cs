@@ -742,6 +742,9 @@ namespace EmuSen.Mistress.Views
                 StartLogging(EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown");
                 _session.LoadRom(path);
 
+                // The N64's scan-out walks while the next frame runs, so the picture is one frame behind the machine - see EmuSen_Settings_Reference.md §4.21b.
+                if (_session.Core is EmuSen.Cores.Nintendo.Mars.MarsCore mars) mars.DeferredPresentation = true;
+
                 // The pad this ROM's console reads, not whatever the last one used.
                 _activeConsole = _session.CoreName;
                 _gamepad.Bindings = _gamepadBindings.For(_activeConsole);

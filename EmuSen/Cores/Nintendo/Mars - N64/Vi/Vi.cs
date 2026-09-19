@@ -59,7 +59,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
         public int FrameHeight => (IsPal ? PalHeight : NtscHeight) >> (Serrate ? 0 : 1);
 
-        public ReadOnlySpan<byte> Frame => _raster.AsSpan(0, RasterWidth * FrameHeight * 4);
+        public ReadOnlySpan<byte> Frame => Raster(FrameHeight);
+
+        // The raster's first lines by count, for a composition that took the count before the registers could move - see §2.7.
+        public ReadOnlySpan<byte> Raster(int rows) => _raster.AsSpan(0, RasterWidth * rows * 4);
 
         private uint Register(uint offset) => _registers[offset >> 2];
 

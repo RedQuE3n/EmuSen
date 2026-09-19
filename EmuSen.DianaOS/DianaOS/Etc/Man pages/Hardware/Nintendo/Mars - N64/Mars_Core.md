@@ -104,6 +104,11 @@ moment the half-line count wraps, or the moment the cap ran out if the VI is not
 register a game has written by the wrap is the one hardware would have latched for that field; a game that
 swaps its frame buffer mid-field would show the difference, and no test here has one.
 
+**Since 2026-09-19 a frontend may ask for the walk on another thread** (`MarsCore.DeferredPresentation`,
+`Mars_Video.md` §2.7). The contract above holds — the buffer and its height are still replaced together, in the
+join at the start of the next frame's presentation — but the picture is the frame before last's. Mistress turns
+it on for this core (`EmuSen_Settings_Reference.md` §4.21b); the probe and the tests present at once.
+
 **`SkipRendering` skips the scan and the copy, and nothing else.** The display processor still draws, because
 what it writes to RDRAM a game can read. What goes stale is the VI's held-line bookkeeping
 (`Mars_Video.md` §2.4), which no game can read either — the kind of render-derived state

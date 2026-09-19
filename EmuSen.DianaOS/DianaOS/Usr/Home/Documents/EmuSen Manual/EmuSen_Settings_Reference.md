@@ -591,6 +591,16 @@ Three details of that mechanism are load-bearing and none of them are obvious fr
 
 **Tests.** The three in `MainWindowSaveStateThreadTests`: states saved through the hotkey during play are each one instant (twelve saves spread across the frame); a save while paused is written and the frame count does not move; a load during play takes the machine back and leaves it one instant. §4.13's three slot tests keep their pause, which now exercises the woken thread, and wait for the posted status instead of reading the file at once.
 
+### 4.21b The N64's picture is one frame behind the machine
+
+*2026-09-19.* When the loaded core is Mars, `LoadRom` sets `MarsCore.DeferredPresentation`, and the video
+interface's scan-out — a quarter of an Ocarina of Time frame's time in play — runs on a pool thread while the
+emulation thread runs the next frame (`Mars_Video.md` §2.7). The picture `GetFrameBufferRgba()` hands the loop
+after frame *n* is therefore frame *n* − 1's, exactly; audio, input and states are the frame's own. At 50 or 60
+fields a second that is 17 to 20 ms of display latency, the price of the frame time it returns
+(`Mars_Performance.md` §27). A loaded state, from a slot or the rewind, is presented at once. Hotaru does not set
+it. Nothing here is a setting yet; if the latency is ever unwanted, the property is where a toggle would go.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

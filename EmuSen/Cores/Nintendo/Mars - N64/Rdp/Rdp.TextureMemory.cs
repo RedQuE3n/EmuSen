@@ -143,6 +143,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         {
             long at = (index & 0x3F_FFFF) * 4L;
             byte[] rdram = _bus.Rdram;
+            Touch((uint)at);
             return at + 3 < rdram.Length ? (uint)((rdram[at] << 24) | (rdram[at + 1] << 16) | (rdram[at + 2] << 8) | rdram[at + 3]) : 0;
         }
 

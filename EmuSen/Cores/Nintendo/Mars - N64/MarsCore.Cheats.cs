@@ -36,14 +36,20 @@ namespace EmuSen.Cores.Nintendo.Mars
         }
 
         // Past the end reads zero, as the bus reads RDRAM that is not installed - see Mars_Cheats.md §3.1.
-        private byte ReadForCheat(string spaceName, int address) =>
-            CheatSpace(spaceName) is { } bytes && (uint)address < (uint)bytes.Length ? bytes[address] : (byte)0;
+        private byte ReadForCheat(string spaceName, int address)
+        {
+            if (CheatSpace(spaceName) is not { } bytes || (uint)address >= (uint)bytes.Length) return 0;
+
+            if (bytes == Bus!.Rdram) Bus.Dp.WaitFor((uint)address, 9);
+            return bytes[address];
+        }
 
         // Past the end is dropped, as a store to RDRAM that is not installed is - see Mars_Cheats.md §3.1.
         private void WriteForCheat(string spaceName, int address, byte value)
         {
             if (CheatSpace(spaceName) is { } bytes && (uint)address < (uint)bytes.Length)
             {
+                if (bytes == Bus!.Rdram) Bus.Dp.WaitFor((uint)address, 9);
                 bytes[address] = value;
                 Bus!.Written++;
             }

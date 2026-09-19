@@ -115,6 +115,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Debug
 
             if (physical < bus.Rdram.Length)
             {
+                bus.Dp.WaitFor(physical, 9);
                 window = bus.Rdram;
                 offset = (int)physical;
             }

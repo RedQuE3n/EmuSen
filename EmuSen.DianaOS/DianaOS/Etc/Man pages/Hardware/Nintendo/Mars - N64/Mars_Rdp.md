@@ -118,6 +118,68 @@ up to start + 240 while frozen, as commands are transferred without being run. T
 modelled, and for that reason no Mars test asserts current while frozen — only that nothing is
 drawn until the thaw.
 
+### 2.6 The list carried out on another thread
+
+*2026-09-19, Phase G.* In play the display processor is a quarter to a third of the emulation thread's frame
+(`Mars_Performance.md` §26), and everything above describes a processor that runs its list *inside* the end write:
+`Take` reads every word up to end and runs it before the write returns, so the full sync's interrupt, the status
+word and every byte the list draws are in place at the cycle of the write. That instantaneous model is what the
+corpus graded and what the probe's baseline holds, and it is kept exactly. What moves is the work. With
+`MarsCore.ThreadedRdp` set (`DpInterface.Threaded`), the interface still reads the words at the write — from data
+memory or RDRAM, as §2.3 says — and still decides the full sync at the word that completes it, by gathering the
+stream as the processor's `Accept` does (§3), so the interrupt and the status are raised at the same instant as
+before; but the words go into a ring, and a thread from the pool runs them through the processor while the machine
+goes on.
+
+**The argument that nothing can tell.** The processor reads and writes RDRAM and the hidden bits (the colour
+image, the depth image, the texture image it loads from), and everyone else on the machine reads and writes RDRAM
+too. The two sides agree with the instantaneous model if, and only if, every access by anyone else to a byte the
+list will touch happens after the words that touch it have run. So the interface keeps a **mark per 4 KB page of
+RDRAM**: the count of words handed over up to and including the command that reaches the page. Every other reader
+and writer of RDRAM tests the mark of the page it is about to touch — one load and one compare on the fast paths —
+and where the mark is set, waits until the thread's count of words run has reached it, then clears the mark,
+since nothing later has marked the page. The sites are the bus's word read and word write, through which every
+byte, halfword and doubleword access and every device's DMA passes; the processor's own direct load, store and
+fetch (`Mars_Performance.md` §17) and the entry of a block (`Mars_Recompiler.md` §2.3), whose words are compared
+against memory; the signal processor's DMA, a range at a time; the audio interface's sample fetch; the serial
+interface's PIF transfer; the scan-out's capture (`Mars_Video.md` §2.7); a cheat's read and write; the debugger's
+memory spaces; and the interface itself, reading a list from RDRAM. A state written or read joins the thread first,
+so a state holds the finished drawing and a loaded one is not drawn over.
+
+**Which pages a batch marks.** The interface shadows what the processor's registers say a draw reaches: the
+colour image's address, width and pixel size, the depth image's address, the scissor's top and bottom rows, and
+the texture image's address, width and texel size, from the set-image and set-scissor words as they pass. At the
+first draw of a batch — a triangle, a textured rectangle, a fill — every row the scissor admits of the colour image
+and of the depth image is marked; a load command marks the bytes it reads, a block's one linear run or a tile's
+rows from its first column to its last, each widened by the sixteen-byte window `ImageWord` reads through. A draw's
+mark says *everything handed over so far*, since the batch's later draws are not yet known, and when the batch ends
+the interface writes over those pages the batch's own count, so a page drawn last frame is waited for only until
+last frame's words have run — the scan-out of a finished buffer, and a display list beside a depth buffer, would
+otherwise wait for a frame still being drawn. A batch that changes images more times than the interface remembers
+leaves them at *everything so far*, which is slower and still right.
+
+**The processor checks the argument as it draws.** Every byte of RDRAM the processor reads or writes passes
+`Touch`, which — in Debug builds and when `EMUSEN_MARS_VERIFY_RDP` is set, since it costs a compare a pixel — asks
+whether the page's mark reaches the word being run, and records the first byte for which it does not as a fault the
+next wait or join rethrows. So a run that ends without a fault has *proved*, byte by byte, that the marks reached
+everything the list touched. The probe's 1,800 frames and 600 frames from each of `Mars_Performance.md` §26's
+gameplay states have run this way without a fault; §7 says what the tests pin.
+
+**Ordering.** A word is marked for before it is published: the shadow runs, the marks are written, then the ring's
+count moves, so a waiter that sees a mark can always be satisfied by words the thread can see, and the thread never
+runs a word whose marks are not yet down. A batch that finds the ring full waits for the thread, and a batch larger
+than the ring gets a larger one. The thread is a pool item that drains what is published, lingers a moment for
+more, and hands its thread back; a waiter that finds no drainer starts one. A fault on the thread — the processor's
+own or the verifier's — stops the drain, lets every waiter through, and is thrown to whoever waits or joins next.
+
+**What it does not do.** The instantaneous model's consequence remains: a game told by the full sync that its
+frame is drawn swaps the display to that buffer at once, and the scan-out then waits for the thread to finish it,
+so the tail of a frame's list is on the emulation thread's path whenever the list is handed over late in the frame;
+what the thread buys is the part of the list issued while the machine still had work to do. The processor's own
+speed is unchanged, and on its own thread it is the frame's floor: in Wave Race its list takes longer than a
+sixtieth of a second. The debugger's memory windows hand out the RDRAM array itself, and a window read from another
+thread while the list runs may see a partly drawn frame, as it may already see a partly run frame.
+
 ## 3. The command stream
 
 Words are taken into a buffer one at a time, and a command runs once all of its words have
@@ -286,6 +348,15 @@ nothing, it fails at the pixel loop, expecting `0xFFFC` and finding zero.
 > behaviour is right. The unit test now pins the graded rule — the scissor's right column drawn, its
 > bottom row not — and the fill rule's own eleven mutations are recorded in
 > `Mars_RdpDifferential.md` §4.6.
+
+**The threaded list, 2026-09-19** (`MarsThreadedRdpTests`, verification on). A scene of fill rectangles over a
+whole frame buffer with a depth image set, handed over to a bus that runs its list at once and to one that runs it
+on the thread: the interrupt register and the status word agree at the end write, and after the join RDRAM, the
+hidden bits and the whole bus state agree. Six such scenes with a state written after each, while the thread still
+runs, all identical. A read of the image being drawn returns the drawn pixel every time over twenty scenes, and
+finds the page marked before and unmarked after. Pages no command reaches are unmarked, the colour and depth images
+and a texture's source are marked, and a join clears them. What no test here forces is a fault from the verifier;
+that it fires is shown only by inspection of `Touched`.
 
 ## 8. Wave Race's first list, carried out
 

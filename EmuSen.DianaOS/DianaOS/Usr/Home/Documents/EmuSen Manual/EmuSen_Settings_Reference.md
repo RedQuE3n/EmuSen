@@ -601,6 +601,11 @@ fields a second that is 17 to 20 ms of display latency, the price of the frame t
 (`Mars_Performance.md` §27). A loaded state, from a slot or the rewind, is presented at once. Hotaru does not set
 it. Nothing here is a setting yet; if the latency is ever unwanted, the property is where a toggle would go.
 
+The same `LoadRom` sets `MarsCore.ThreadedRdp`, which runs the display processor's lists on a pool thread behind
+marks on the RDRAM pages they reach (`Mars_Rdp.md` §2.6, `Mars_Performance.md` §28). That one adds no latency and
+changes nothing the frontend sees: a state, a cheat and the picture all wait for the list. Between the two, an N64
+frame now uses up to three cores of the host.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

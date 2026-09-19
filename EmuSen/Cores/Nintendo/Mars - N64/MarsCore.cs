@@ -62,6 +62,7 @@ namespace EmuSen.Cores.Nintendo.Mars
         private ManualResetEventSlim? _presenting;
         private Exception? _presentationFault;
         private bool _deferred;
+        private bool _threadedRdp;
         private long _lastFrameCycles = CycleCap;
 
         // A stock console by default, because the plan defers the Pak as a default - see Mars_Core.md §7.
@@ -161,6 +162,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             Rom = rom;
             Bus = bus;
             Cpu = cpu;
+            bus.Dp.Threaded = _threadedRdp;
 
             TotalFrames = 0;
             _lastFrameCycles = CycleCap;
@@ -271,6 +273,17 @@ namespace EmuSen.Cores.Nintendo.Mars
             if (SkipRendering) return;
             if (_deferred) PresentDeferred(Bus.Vi);
             else Present(Bus.Vi);
+        }
+
+        // The display processor's lists run on a pool thread behind marks on the pages they reach - see Mars_Rdp.md §2.6.
+        public bool ThreadedRdp
+        {
+            get => Bus?.Dp.Threaded ?? _threadedRdp;
+            set
+            {
+                _threadedRdp = value;
+                if (Bus is { } bus) bus.Dp.Threaded = value;
+            }
         }
 
         // The scan-out walks on another thread while the next frame runs, and the picture shown is the last one joined - see Mars_Video.md §2.7.

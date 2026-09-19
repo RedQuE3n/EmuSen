@@ -13,11 +13,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         internal bool Dither;
         internal bool Gamma;
 
+        // The bytes the walk can reach, computed by Prepare - see §2.7.
+        public uint From { get; internal set; }
+        public int Count { get; internal set; }
+
         // The captured lines, where they start in RDRAM, how much was taken, and how large RDRAM is - see §2.7.
         internal byte[] Rdram = System.Array.Empty<byte>();
         internal byte[] Hidden = System.Array.Empty<byte>();
         internal uint Base;
-        internal int Count;
         internal int Length;
         public bool Captured { get; internal set; }
     }

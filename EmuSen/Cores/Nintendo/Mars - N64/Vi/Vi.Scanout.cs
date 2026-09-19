@@ -53,6 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         {
             if (!Prepare(_immediate)) return false;
 
+            _bus.Dp.WaitForRange(_immediate.From, _immediate.Count);
             Walk(_immediate);
             return true;
         }
@@ -94,11 +95,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             job.AntiAlias = AntiAlias;
             job.Dither = DitherFilterEnabled;
             job.Gamma = GammaEnabled;
+            Reach(job);
             return true;
         }
 
-        // The frame buffer's lines a walk can reach, copied out so the walk can run while the machine moves on - see §2.7.
-        public void Capture(ScanJob job)
+        // The bytes of RDRAM a walk can reach, which a capture copies and any walk waits for the display processor over - see §2.7.
+        private void Reach(ScanJob job)
         {
             Picture picture = job.Picture;
             int width = job.Width, bytesPerPixel = job.Wide ? 4 : 2;
@@ -110,20 +112,28 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             long from = origin + ((firstLine - 1) * width - RowSpan - 4) * bytesPerPixel;
             long to = origin + ((lastLine + 2) * width + 2 * RowSpan + 4) * bytesPerPixel;
 
-            byte[] rdram = _bus.Rdram;
-            from = System.Math.Clamp(from, 0, rdram.Length) & ~1L;
-            to = System.Math.Clamp(to, from, rdram.Length);
+            int length = _bus.Rdram.Length;
+            from = System.Math.Clamp(from, 0, length) & ~1L;
+            to = System.Math.Clamp(to, from, length);
 
-            int count = (int)(to - from);
+            job.From = (uint)from;
+            job.Count = (int)(to - from);
+        }
+
+        // The frame buffer's lines a walk can reach, copied out so the walk can run while the machine moves on - see §2.7.
+        public void Capture(ScanJob job)
+        {
+            _bus.Dp.WaitForRange(job.From, job.Count);
+
+            int count = job.Count;
             if (job.Rdram.Length < count) job.Rdram = new byte[count];
             if (job.Hidden.Length < count / 2) job.Hidden = new byte[count / 2];
 
-            System.Buffer.BlockCopy(rdram, (int)from, job.Rdram, 0, count);
-            System.Buffer.BlockCopy(_bus.RdramHidden, (int)(from >> 1), job.Hidden, 0, count / 2);
+            System.Buffer.BlockCopy(_bus.Rdram, (int)job.From, job.Rdram, 0, count);
+            System.Buffer.BlockCopy(_bus.RdramHidden, (int)(job.From >> 1), job.Hidden, 0, count / 2);
 
-            job.Base = (uint)from;
-            job.Count = count;
-            job.Length = rdram.Length;
+            job.Base = job.From;
+            job.Length = _bus.Rdram.Length;
             job.Captured = true;
         }
 

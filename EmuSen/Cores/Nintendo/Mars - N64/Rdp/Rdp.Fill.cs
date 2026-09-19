@@ -169,6 +169,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void FillPixel(uint address)
         {
             byte[] rdram = _bus.Rdram;
+            Touch(address);
 
             for (uint i = 0; i < _colorImageBytes; i++)
             {

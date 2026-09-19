@@ -177,6 +177,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             for (uint row = 0; row < rows; row++)
             {
+                _bus.Dp.WaitForRange(_dramAddress, length, 11);
+
                 for (uint i = 0; i < length; i++)
                 {
                     // Wrapping inside the bank rather than running on into the next one - see Mars_Memory.md §6.2.

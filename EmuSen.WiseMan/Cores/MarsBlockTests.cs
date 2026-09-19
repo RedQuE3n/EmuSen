@@ -12,7 +12,7 @@ namespace EmuSen.WiseMan.Cores
     // Compiled blocks against the interpreter, whole state for whole state - see Mars_Recompiler.md §6.
     public class MarsBlockTests
     {
-        private const int Zero = 0, T0 = 8, T1 = 9, T2 = 10, T3 = 11, T4 = 12, T5 = 13, A0 = 4, A1 = 5, K0 = 26, K1 = 27, Ra = 31;
+        private const int Zero = 0, T0 = 8, T1 = 9, T2 = 10, T3 = 11, T4 = 12, T5 = 13, T6 = 14, T7 = 15, A0 = 4, A1 = 5, K0 = 26, K1 = 27, Ra = 31;
 
         [Fact]
         public void A_hot_loop_is_compiled_and_leaves_the_machine_the_interpreter_leaves()
@@ -408,7 +408,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_inlined_arithmetic_matches_the_interpreter_where_the_widths_matter()
         {
-            const int S0 = 16, S1 = 17, S2 = 18, T6 = 14, T7 = 15, T8 = 24, T9 = 25;
+            const int S0 = 16, S1 = 17, S2 = 18, T8 = 24, T9 = 25;
 
             var (interpreted, compiled) = Pair(a => a
                 .Lui(T8, 0x7FFF).Ori(T8, T8, 0xFFFF)
@@ -480,6 +480,57 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.True(compiled.Bus!.Vi.Fields >= 120);
             Assert.Equal(interpreted.Bus!.Cycles, compiled.Bus.Cycles);
+        }
+
+        // A loop with a branch inside it, stopped once on the slot of a branch that fell through, where the slot flag is still up - see Mars_Recompiler.md §10.
+        [Fact]
+        public void A_branch_inside_a_loop_leaves_the_machine_the_interpreter_leaves_including_on_its_slot()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Addiu(T1, Zero, 3000)
+                .Addiu(T0, T0, 1)
+                .Andi(T5, T0, 1)
+                .Beq(T5, Zero, 2)
+                .Addiu(T6, T6, 1)
+                .Addiu(T7, T7, 1)
+                .Addu(T2, T2, T0)
+                .Bne(T0, T1, -7)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop());
+
+            AssertSame(interpreted, compiled, 1 + 100 * 15 + 4);
+            Assert.True(compiled.InDelaySlot);
+            Assert.Equal(MipsAssembler.EntryPoint + 20, compiled.Pc);
+
+            AssertSame(interpreted, compiled, 30_000 - 1505);
+
+            Assert.Equal(3000UL, compiled.Gpr[T6]);
+            Assert.Equal(1500UL, compiled.Gpr[T7]);
+            Assert.True(compiled.BlocksCompiled >= 1);
+        }
+
+        // A likely branch inside a loop, nullifying its slot every other iteration - see Mars_Recompiler.md §10.
+        [Fact]
+        public void A_likely_branch_inside_a_loop_leaves_the_machine_the_interpreter_leaves()
+        {
+            var (interpreted, compiled) = Pair(a => a
+                .Addiu(T1, Zero, 3000)
+                .Addiu(T0, T0, 1)
+                .Andi(T5, T0, 1)
+                .Bnel(T5, Zero, 2)
+                .Addiu(T6, T6, 1)
+                .Addiu(T7, T7, 1)
+                .Addu(T2, T2, T0)
+                .Bne(T0, T1, -7)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop());
+
+            AssertSame(interpreted, compiled, 30_000);
+
+            Assert.Equal(1500UL, compiled.Gpr[T6]);
+            Assert.Equal(1500UL, compiled.Gpr[T7]);
         }
 
         [Fact]

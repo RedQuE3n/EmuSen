@@ -259,8 +259,8 @@ namespace EmuSen.Cores.Nintendo.Mars
             if (!SkipRendering) Present(Bus.Vi);
         }
 
-        // Compiled blocks between the checks the frame makes, or the interpreter alone when switched off - see Mars_Recompiler.md §3.
-        public bool UseBlocks { get; set; } = true;
+        // Compiled blocks between the checks the frame makes; the interpreter alone when switched off, or where no code can be emitted - see Mars_Recompiler.md §3.
+        public bool UseBlocks { get; set; } = System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported;
 
         // The same frame end as RunFrame's own loop, with no debugger between the instructions - see Mars_Performance.md §13.
         private static void RunQuietly(MemoryBus bus, global::EmuSen.Cores.Nintendo.Mars.Cpu.Core.Cpu cpu, long start, long fields, bool blocks)

@@ -356,7 +356,8 @@ the arrival of its code, which the sweep bounds at a few per cent of instruction
 
 - **No register allocation, no chaining, no extended blocks.** Registers live in the array between instructions; a
   block ends at every branch, taken or not, except the loop-back of §3.4; a block reaches the next through the
-  dispatcher. Each is a known lever and each was left until this one is measured in play.
+  dispatcher. Each is a known lever and each was left until this one is measured in play. Each was then measured —
+  §10, §11, §12 — and none is kept; §12.3 says what the three established together.
 - **Only what the interpreter's opcodes do.** Loads, stores, coprocessor work and anything that can fault call the
   interpreter's own methods; the inline set is the arithmetic that cannot. A defect in an opcode is the same defect
   either way, which is the point.
@@ -481,3 +482,218 @@ through, and the same with a likely branch — and they pass against the emitter
 carried. The trade it lost is a trade on code size, and §9's third lever — density — changes the size side of it;
 extension is to be measured again once a block's instructions cost fewer bytes. The switch build and its timings are
 with the speed tooling outside the repository.
+
+## 11. Density: the block's registers and counters in locals — measured, and not kept
+
+*2026-09-19, the third of §9's levers, built second.* §9's ring priced a block entry by the bytes of code it streamed in
+— 80 to 100 of machine code an emulated instruction — and §10 showed that moving entries around without changing the
+bytes changed nothing. This change changes the bytes.
+
+**What moves into locals.** Every general register an instruction of the block names, the cycle count and the
+instruction count. The prologue loads them once — the registers eagerly, so that every local is valid from the first
+instruction on — and reads the RSP's halted flag once, since the RSP cannot start without a store to its interface,
+which ends the block. A pure instruction is then an operation between locals: the JIT keeps them in machine registers,
+and an add that was a bounds-checked array load, an add and a bounds-checked store is an add. The tick is an add to a
+local; the stop compare is a compare between locals; the halted test is a test of a local.
+
+**Where the array and the fields are brought up to date.** The claim of §0 is about what can be observed, and the
+places the interpreter's state can be observed inside a block are exactly these:
+
+- *Before any call into the interpreter* — a load, a store, a branch, a coprocessor instruction, a trap — the cycle
+  and instruction counts are written to their fields and every register whose local differs from the array is written
+  back. The callee may read any of them; an exception out of it reaches the dispatcher's handler with the locals gone,
+  and the array and the fields must already hold what the instructions before the fault left. The dirty set is known at
+  compile time along the straight line, so a call costs a store for each register changed since the last, and no more.
+- *After a call that writes a register* — a load's target, a link register, a trapping add's destination, a
+  coprocessor move's — that register's local is reloaded from the array, so every local is valid again. Which register
+  a call writes is decided by the opcode, in one table.
+- *At every exit*, the epilogue writes the counters and every local back, changed or not; a value that matches the
+  array is written to it harmlessly, and the shared epilogue needs no per-exit knowledge of what changed.
+- *At the loop's back edge* (§3.4), the dirty registers are written back so that the top of the block, which the
+  prologue reaches with nothing dirty, is reached the same way from below.
+
+The halted flag is the one local with a subtlety of its own, and the RSP test found it on the first run: a store to
+the signal processor's interface starts it, and the interpreter's tick after that very store steps it once. The block
+exits after such a store, but not before ticking it, so the flag is re-read after every store — the only kind of
+instruction that can start the RSP inside a block. The symptom was the RSP's program counter one instruction behind
+after 65,000 of the CPU's, everything else equal.
+
+A trim tried on the way is worth recording because two tests refused it within a second: the instruction count is read
+inside a block only by coprocessor-zero instructions, so it was written back only before those. But a fault out of a
+load or a store never reaches the epilogue, and the count the interpreter leaves after a fault is the count of the
+instructions completed before it — which the field did not hold. Both counters go back before every call, for the
+same reason the dirty registers do.
+
+Nothing else inside a block reads the array or the counters: the RSP step reads neither (checked, since the RSP runs
+inside the block), the return observer reads neither, and the Debug verifier compares the count with a bias derived
+from the same field, so a stale field agrees with itself.
+
+**What it does not change.** `Pc`, `NextPc`, `CurrentPc` and the delay-slot flag stay fields, since a call may read any
+of them and they are set only where §3.3 says. `Hi` and `Lo` stay fields; the multiply and divide are calls. The slot
+preamble, the store check, the stubs and the loop-back are as they were. A register the block does not name has no
+local and is read and written in the array as before, which is how the emitter stays correct if the register table
+under-counts.
+
+**What it did to the bytes, which was not what §9 expected.** The JIT's summary on Super Mario 64's first hundred
+frames: 1,810 bytes of machine code a block against 1,430 before — *more*, not less. A pure instruction did shrink, to
+an operation between machine registers with a register add for the tick and a register compare for the stop. But every
+call into the interpreter now carries the writeback of the two counters and of whatever registers changed since the
+last call, and a reload after it, and real code is a load or a store every few instructions; the JIT also gives a
+method with a dozen long-lived locals a frame it did not need before. The ring (§9) priced the result the way it prices
+any code growth: an entry with 500 blocks live went from 43 to 68 ns, with 5,000 from 100 to 153, and a
+thirty-two-instruction block with 5,000 live from 345 to 793. By §9's model alone this change should have lost.
+
+**Measured.** Interleaved on a quiet machine, three rounds of 600 frames against the commit before: 39.7 → 38.1 fps
+in Ocarina of Time, 48.8 → 46.4 in Super Mario 64, 45.4 → 44.3 in Wave Race — a loss of 4.0, 4.9 and 2.4 per cent, in
+every round of every game. A first run taken while another program held seven of the machine's cores showed the same
+direction at a fifth less speed on both sides, and was discarded as a measurement though not as a hint. Exactness held
+throughout: the probe's whole state on every frame of the three games, the Mars suite, the block tests, all with the
+verifier on.
+
+**Not kept.** The ring's price of the bytes was the outcome, as the paragraph above said before the run. What the
+change established is that the writeback a call-out forces is not a small tax: real code calls into the interpreter
+every few instructions, and a scheme that keeps registers in machine registers pays for each call in bytes it cannot
+amortise. This change kept the tick and the stop compare per instruction, in locals; §9's description of density also
+batched them over a run of pure instructions, which this change did not do because the stop must fall after exactly
+the instruction it falls after — a batched run needs a guard that the whole run fits under the stop and a second,
+per-instruction copy for when it does not, which the ring prices as more bytes again. That shape is unmeasured (§12.3).
+The patch and its measurements are with the speed tooling outside the repository.
+
+## 12. Chaining: a block hands on to the next — measured, and not kept
+
+*2026-09-19, the second of §9's levers, built third.* §9's census found six entries in ten following the ending
+branch's static target and a further quarter falling through to the next instruction; §9's ring found an entry costing
+about fifty nanoseconds before the target's code was touched, and §10 found that moving entries about did not pay.
+This change leaves the entries where they are and takes the dispatcher out of most of them.
+
+**The mechanism.** A block's method now takes the block itself beside the processor, and returns a block or nothing.
+Its epilogue, after the step's tail (§3.2), calls `Cpu.Chain` with the block that is ending. `Chain` does what the
+dispatcher does at an entry, in the dispatcher's order, and returns the block that may run next — or null, in which case
+the method returns null and the dispatcher is back where it was. The dispatcher runs whatever is returned in a loop
+inside the same `try` the first block ran in. No block calls another: the stack is one frame deep whatever the chain's
+length, the fault handler is the dispatcher's whatever block faults, and the JIT is not asked for a tail call it may
+turn into a helper.
+
+`Chain` refuses, and hands the decision back, when:
+
+- a branch is pending — the block stopped between a branch and its slot, and §3.1's rule stands;
+- the VI's field is not the one the frame began in, or the cycle count has reached the frame's cap — the events the
+  epilogue just ran may have ended the frame, and the frame loop must see it;
+- the interrupt check's inputs have changed — `_recheck` is set or the MI line differs from what the check last saw —
+  so that the dispatcher takes the interrupt exactly as it does today, on the same instruction;
+- the mode is not kernel, the address is outside the direct segments or misaligned, or beyond RDRAM — §3.1's conditions,
+  unchanged;
+- the target has no block yet, or its block is not compiled — so that the dispatcher counts its runs and it becomes hot
+  as any block does;
+- the target's words are not the ones it was compiled from — §2.3's comparison, which chaining does not spare.
+
+Otherwise it does the entry's own work — the current address, the delay-slot flag lowered, the counters, the Debug
+build's mode check — and returns the target.
+
+**The remembered target.** Each block keeps the compiled block it last handed on to, and trusts it only while its
+address is the one asked for. A jump through a register whose target varies looks up the table again — the cost the
+dispatcher paid, no more. A remembered block whose comparison fails is forgotten, so that the block the dispatcher
+places in its stead is found at the next hand-over rather than the stale one retried for ever; a remembered block whose
+comparison succeeds after the dispatcher has replaced it is run, which is correct — its code is the code its words say
+— and merely leaves the newer block cold. A target that is not compiled is not remembered.
+
+**What it spares, and what it does not.** Spared: the table lookup (two dependent loads in a structure that does not
+stay in the first-level cache), the dispatcher's own checks and stores, its return and its call. Not spared: the
+comparison of the target's words, the delegate's invocation (the dispatcher's loop still calls through it), and the
+target's code brought in cold, which §9 named as the larger part of an entry's cost. §9's estimate of what chaining
+could buy was made on that account and stands: this is a change to the smaller part.
+
+**The argument for exactness** is §3.2's. Every field the interpreter's next step could read is set by the epilogue
+before `Chain` runs, and `Chain` sets exactly what the dispatcher's entry sets, under exactly the conditions the
+dispatcher would have entered; where any condition differs it does nothing and the dispatcher decides. A fault in the
+third block of a chain is caught by the frame that caught faults before. `RunBlocks(n)`'s exactness (§6) holds because
+no block is handed on to at or past the cap.
+
+**Tests**, each written before the round of §12.1 and each a differential comparison of the whole state:
+
+- two compiled blocks jumping to each other, with the counter of hand-overs proving the mechanism ran, not merely the
+  result;
+- a two-line field, so that frames end at hand-overs, saved and compared frame by frame as a whole state;
+- one block rewriting the first word of the block it jumps to: the hand-over compares and refuses, the dispatcher
+  discards, and the sum the rewritten instruction accumulates is the interpreter's;
+- the timer's interrupt and the VI's and AI's events landing at hand-overs, over a hundred thousand and three and a
+  half million instructions;
+- a jump to a misaligned address inside a compiled block's words, which faults in the interpreter and which a hand-over
+  that did not check would have run from the word below;
+- a fault on the first instruction of a block reached by a hand-over, whose address only the hand-over can have set.
+
+### 12.1 The mutation round
+
+Fifteen mutants of `Chain`, of the epilogue's call to it and of the dispatcher's loop, each also run with the verifier
+off: twenty-eight runs against every Mars test, fifteen caught. Caught: the frame's end ignored (four tests, two of them
+§12's); the cap ignored (seven); the interrupt check's flag ignored (eight, all by the verifier; three with it off, the
+two timer tests among them); the MI line ignored (the RSP break test and Wave Race's picture, both by the verifier);
+the comparison removed (the rewriting test alone, which is what it was written for); the current address not set (the
+first-instruction fault test alone, likewise); the delay-slot flag left up (eight); and the epilogue's call replaced by
+a null (the five tests that asserted the counter, which is what a counter in a test is for).
+
+Escaped, and each is recorded as what it is:
+
+- *The pending-branch rule.* Equivalent in every test and not in general: it matters only when a block starts at a
+  delay slot's address — a branch whose target is another branch's slot — and the stop falls between that branch and
+  its slot. No test has that shape. The test that would (a branch to its own slot, under the VI's events) was not
+  written, since the change is not kept; the dispatcher's own rule has its mutant in the standing round.
+- *The mode, the segment, the alignment and the memory range.* Masked, in every test written, by the recheck flag:
+  the `ERET` that changes the mode or returns to the misaligned address is a COP0 write, the flag is up, and the
+  hand-over goes back to the dispatcher before those checks are reached. A hot `jr` from a compiled block to a
+  misaligned address, to one beyond memory (where the mutant indexes past the table and throws), or into a segment the
+  TLB maps would have needed three further tests, and they were not written for the same reason. Recorded as what the
+  round would have needed, not as equivalence.
+- *The remembered target trusted at another address.* Masked by the comparison, which is made at the asked-for
+  address: a stale block's words differ from the words there unless they are identical, and identical words run
+  identically except for the store check's compile-time bounds. Equivalent for every test and nearly so in general.
+- *The dispatcher's loop removed.* Equivalent by construction — the hand-over's entry work is redone by the
+  dispatcher, and the counter counts a hand-over that did not run — and the loop's absence is a slower dispatcher, not
+  a different machine.
+
+### 12.2 Measured
+
+**How much of the dispatch it removed.** Over 600 frames, entries handed on without a dispatch: 18.1 of 18.9 million
+in Ocarina of Time (95.5 per cent), 17.7 of 18.7 in Super Mario 64 (94.5), 17.1 of 18.4 in Wave Race (93.0). More than
+§9's static-target column, because the remembered target looks up again when its address differs, so most of the
+"elsewhere" column joins. Instructions an entry unchanged: 58.8, 58.6, 48.3.
+
+**What an entry then cost.** §9's ring, base against chain, interleaved on a quiet machine (the base rows reproduce
+§9's table):
+
+| blocks live | instructions a block | ns an entry, dispatched | ns an entry, handed on |
+| --- | --- | --- | --- |
+| 500 | 8 | 43, 44 | 47, 49 |
+| 5,000 | 8 | 99, 100 | 99, 98 |
+| 5,000 | 32 | 380, 372 | 362, 373 |
+
+Nothing at 5,000 blocks, where the entries the games make live; four nanoseconds *dearer* at 500, where the table is
+warm and the lookup it spares cost less than the call that spares it. §9's sentence stands verbatim: the cost is not the
+dispatcher's instructions and not the validation, it is memory.
+
+**In play.** Interleaved, three rounds of 600 frames: 39.7 → 39.0 fps in Ocarina of Time (−1.8 per cent, each of the
+three rounds below each of the base's), 48.8 → 48.8 in Super Mario 64, 45.4 → 45.6 in Wave Race. Nothing, with a small
+real cost in the game with the most entries. Exactness held: the probe's whole state identical on every frame of all
+three games with the verifier on, the Mars suite at 3,389.
+
+**Not kept.** The seven tests are, as §10 kept two: they are the suite's only multi-block programs — two compiled
+blocks reaching each other, frames ending between them, one block rewriting another, the timer and the devices'
+events landing between them, a misaligned jump target, a fault on a block's first instruction — and each passes
+against the dispatcher as it was, which is what they now check. The patch is with the speed tooling.
+
+### 12.3 What the three levers established
+
+§9 priced them before any was built and said where the time was: the target's code brought in cold, and the
+comparison against it. §10 moved a quarter of the entries into their predecessors and gained nothing; §11 changed the
+bytes and lost; §12 took the dispatcher out of nineteen entries in twenty and gained nothing. The recompiler's
+remaining cost — five to eight per cent of a frame in its own code and nine in the entries (§9) — is memory traffic in
+proportion to the bytes emitted per instruction, eighty to a hundred, and a lever that does not lower that number does
+not move it.
+
+What would lower it is emitting less per instruction. The tick, the RSP's halted test and the stop compare are most of
+an instruction's bytes, and they are per instruction because an event must run after exactly the instruction it is due
+after. A shape that hoists them over a run of pure instructions behind one guard — the whole run fits under the stop
+and the RSP is halted — and keeps the per-instruction copy for when the guard fails is the one idea in this page's line
+that is not measured, and the ring's rows say what it must beat: its own second copy. Beyond the processor, the RSP is
+29 per cent of Wave Race's frame and the VI 30 per cent of Ocarina of Time's (§9), both larger than anything left here,
+and both other pages'.

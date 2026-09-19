@@ -775,6 +775,14 @@ of them.
 > divergence made unobservable is answered in the recompiler's §0 and §5: the block calls the graded opcodes, and Debug
 > builds prove after each instruction that the interpreter's check would have done nothing.
 
+> **Progress, 2026-09-19: the recompiler's levers, and AOT** (`Mars_Recompiler.md` §9–§12; `Mars_Performance.md`
+> §25). Blocks extended past untaken branches, registers kept in locals, and chaining between blocks were each priced
+> before building, then built, proven exact (probe, suite, mutation round) and timed interleaved on a quiet machine: the
+> first and third measured nothing, the second lost 2 to 5 per cent, and none is kept. The entry's cost is the target's
+> code streamed in cold, which none of them lowers; §24's table is the processor's shape. Native AOT was ruled out again
+> on the recompiler's build (no dynamic code, so no blocks; −20 per cent on the interpreter), ReadyToRun is exact and a
+> publish decision.
+
 ## 5. Where this will actually hurt
 
 Listed because a plan that only lists phases implies uniform difficulty, and this

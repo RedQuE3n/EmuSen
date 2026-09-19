@@ -50,8 +50,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         [EmuSen.Common.SkipInState] private bool _assertedSeen;
         [EmuSen.Common.SkipInState] private readonly MiInterface _mi;
 
-        // The display processor's page marks, kept here so a load tests them with one array read - see Mars_Rdp.md §2.6.
+        // The display processor's page marks, the writer's and the reader's, kept here so a store or a load tests them with one array read - see Mars_Rdp.md §2.6.1.
         [EmuSen.Common.SkipInState] private readonly long[] _dpMarks;
+        [EmuSen.Common.SkipInState] private readonly long[] _dpWriteMarks;
 
         // The first cycle the counter reaches Compare, and the two inputs it came from, which Debug builds check - see Mars_Performance.md §10.
         [EmuSen.Common.SkipInState] private long _timerDue;
@@ -63,6 +64,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             _bus = bus;
             _mi = bus.Mi;
             _dpMarks = bus.Dp.Marks;
+            _dpWriteMarks = bus.Dp.WriteMarks;
             _blocks = new Blocks.BlockCache(bus.Rdram.Length);
             Pc = 0xFFFF_FFFF_A400_0040;
             NextPc = Pc + 4;
@@ -139,7 +141,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 byte[] rdram = _bus.Rdram;
                 if (physical < (uint)rdram.Length)
                 {
-                    if (_dpMarks[physical >> 12] != 0) _bus.Dp.WaitFor(physical, 4);
+                    if (_dpWriteMarks[physical >> 12] != 0) _bus.Dp.WaitForRead(physical, 4);
                     return BinaryPrimitives.ReadUInt32BigEndian(rdram.AsSpan((int)physical));
                 }
 

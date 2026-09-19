@@ -16,7 +16,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             // An aligned RDRAM load is the bytes at the address, which the bus would also hand back - see Mars_Performance.md §17.
             byte[] rdram = _bus.Rdram;
-            if (physical < (uint)rdram.Length && _dpMarks[physical >> 12] != 0) _bus.Dp.WaitFor(physical, 2);
+            if (physical < (uint)rdram.Length && _dpWriteMarks[physical >> 12] != 0) _bus.Dp.WaitForRead(physical, 2);
             ulong raw = physical < (uint)rdram.Length ? ReadRdram(rdram, (int)physical, size) : _bus.Load(physical, size);
             ulong value = !signed ? raw : size switch
             {

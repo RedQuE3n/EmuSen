@@ -41,8 +41,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private Exception? _fault;
         [EmuSen.Common.SkipInState] private bool _threaded;
 
-        // For each page of RDRAM, the count of words that must have run before anyone else touches it; zero when nothing is due - see §2.6.
+        // For each page of RDRAM, the count of words that must have run before anyone writes it, and before anyone reads it; zero when nothing is due - see §2.6.
         [EmuSen.Common.SkipInState] private readonly long[] _marks;
+        [EmuSen.Common.SkipInState] private readonly long[] _writeMarks;
+
+        // The byte ranges behind the marks, in the order of their counts, so a bystander on a marked page can be told from the range - see §2.6.1.
+        private const int RangeCount = 1 << 13;
+        [EmuSen.Common.SkipInState] private readonly (long From, long To, long Start, long Mark, bool Write)[] _ranges = new (long, long, long, long, bool)[RangeCount];
+        [EmuSen.Common.SkipInState] private long _rangesAppended;
 
         // The mark an image's pages take: everything handed over so far, however much that comes to be - see §2.6.
         private const long Idle = long.MaxValue;
@@ -51,12 +57,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private int _shadowTaken;
         [EmuSen.Common.SkipInState] private ulong _shadowFirst;
         [EmuSen.Common.SkipInState] private uint _colorImage, _depthImage, _textureImage;
-        [EmuSen.Common.SkipInState] private int _colorWidth, _colorBytes, _textureWidth, _textureSize, _scissorTop, _scissorBottom;
+        [EmuSen.Common.SkipInState] private int _colorWidth, _colorBytes, _textureWidth, _textureSize, _scissorTop, _scissorBottom, _scissorRight;
         [EmuSen.Common.SkipInState] private bool _drawn;
 
-        // The image extents a batch marked idle, downgraded to the batch's own count when it ends - see §2.6.
-        [EmuSen.Common.SkipInState] private readonly (long From, long Count)[] _idleRanges = new (long, long)[16];
+        // The image extents a batch marked idle, downgraded to the batch's own count when it ends; the sequence lets the thread read them whole - see §2.6.1.
+        [EmuSen.Common.SkipInState] private readonly (long From, long To, long Start)[] _idleRanges = new (long, long, long)[256];
         [EmuSen.Common.SkipInState] private int _idleRangeCount;
+        [EmuSen.Common.SkipInState] private int _idleSequence;
+
+        // Where the batch being taken began, so a batch that outgrows the extents above can be given one range of everything - see §2.6.1.
+        [EmuSen.Common.SkipInState] private long _batchStart;
 
         // What the thread did: words run and the time in them, drains started and the delay from a kick to its start - see Mars_Performance.md §28.
         [EmuSen.Common.SkipInState] public long DrainWords, DrainTicks, DrainStarts, KickTicks;
@@ -66,7 +76,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private long _runningWord;
 
         // How often anyone waited for the thread, and for how long, by the kind of waiter - see Mars_Performance.md §28.
-        [EmuSen.Common.SkipInState] public long PageWaits, PageWaitTicks, RangeWaits, RangeWaitTicks, Joins, JoinTicks;
+        [EmuSen.Common.SkipInState] public long PageWaits, PageWaitTicks, RangeWaits, RangeWaitTicks, Joins, JoinTicks, Bystanders;
         [EmuSen.Common.SkipInState] public readonly long[] WaitsPerPage;
         [EmuSen.Common.SkipInState] public readonly long[] WaitsPerSite = new long[12], TicksPerSite = new long[12];
         [EmuSen.Common.SkipInState] public readonly (int Site, uint Page, bool Idle, long Ticks, long Lag, uint Color, uint Depth, uint Texture)[] WaitLog = new (int, uint, bool, long, long, uint, uint, uint)[64];
@@ -78,6 +88,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             _bus = bus;
             _marks = new long[bus.Rdram.Length >> 12];
+            _writeMarks = new long[_marks.Length];
             WaitsPerPage = new long[_marks.Length];
             Processor = new Rdp.Rdp(bus);
         }
@@ -205,8 +216,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
         }
 
-        // The marks, for the bus and the processor's direct paths to test before a touch - see §2.6.
+        // The marks a writer tests, and the ones a reader tests, for the bus and the processor's direct paths - see §2.6.1.
         public long[] Marks => _marks;
+
+        public long[] WriteMarks => _writeMarks;
 
         public long MarkFor(uint physical) => _marks[physical >> 12];
 
@@ -214,6 +227,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private void TakeOntoThread()
         {
             long tail = _issued;
+            _batchStart = tail;
             _drawn = false;
             _taking = true;
 
@@ -235,8 +249,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             _taking = false;
 
-            if (_idleRangeCount <= _idleRanges.Length) for (int i = 0; i < _idleRangeCount; i++) Mark(_idleRanges[i].From, _idleRanges[i].Count, tail);
+            // A batch that named more images than the extents hold keeps its pages idle and takes one range of the whole memory, which is the first version's behaviour - see §2.6.1.
+            if (_idleRangeCount > _idleRanges.Length) Append(0, _bus.Rdram.Length, _batchStart, tail, write: true);
+            else
+            {
+                for (int i = 0; i < _idleRangeCount; i++)
+                {
+                    (long from, long to, long start) = _idleRanges[i];
+                    Mark(from, to - from, tail, write: true, downgrade: true);
+                    Append(from, to, start, tail, write: true);
+                }
+            }
+
+            Volatile.Write(ref _idleSequence, _idleSequence + 1);
             _idleRangeCount = 0;
+            Volatile.Write(ref _idleSequence, _idleSequence + 1);
         }
 
         // A thread from the pool drains what is published, unless one already is - see §2.6.
@@ -277,7 +304,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 case >= 0x08 and <= 0x0F:
                 case Rdp.Rdp.TextureRectangle or Rdp.Rdp.TextureRectangleFlipped:
                 case Rdp.Rdp.FillRectangle:
-                    if (!_drawn) MarkImages();
+                    if (!_drawn) MarkImages(afterThisWord);
                     return false;
 
                 case Rdp.Rdp.SyncFull:
@@ -298,7 +325,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 case Rdp.Rdp.SetScissor:
                     _drawn = false;
                     _scissorTop = (int)((first >> 32) & 0xFFF) >> 2;
-                    _scissorBottom = (int)(first & 0xFFF) >> 2;
+                    _scissorBottom = ((int)(first & 0xFFF) + 3) >> 2;
+                    _scissorRight = ((int)((first >> 12) & 0xFFF) + 3) >> 2;
                     return false;
 
                 case Rdp.Rdp.SetTextureImage:
@@ -316,18 +344,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
         }
 
-        // Every row a draw may reach in the colour image and in the depth image, from the scissor's top to its bottom, marked idle once a batch - see §2.6.
-        private void MarkImages()
+        // The pixels a draw may address, which is not the scissor's rectangle: a span's right edge is bounded by the scissor and not by the image's width, so an address runs past its row - see §2.6.1.
+        private void MarkImages(long start)
         {
             _drawn = true;
-            const long after = Idle;
 
-            long rows = _scissorBottom - _scissorTop + 1;
-            if (rows <= 0) rows = 1;
             long width = _colorWidth;
+            long rows = _scissorBottom - _scissorTop;
+            if (rows <= 0) rows = 1;
 
-            MarkIdle(_colorImage + (long)_scissorTop * width * _colorBytes, rows * width * _colorBytes);
-            MarkIdle(_depthImage + (long)_scissorTop * width * 2, rows * width * 2);
+            // The first pixel the top row can name and the last the bottom row can, each with two pixels of slack for a read beside the span - see §2.6.1.
+            long first = Math.Max((long)_scissorTop * width - 2, 0);
+            long last = Math.Max((_scissorTop + rows) * width, (_scissorTop + rows - 1) * width + _scissorRight + 3);
+
+            MarkIdle(_colorImage + first * _colorBytes, (last - first) * _colorBytes, start);
+            MarkIdle(_depthImage + first * 2, (last - first) * 2, start);
         }
 
         // The rows a load reads from the texture image, from its first line to its last and the columns it names - see §2.6.
@@ -351,24 +382,59 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 to = _textureImage + (th >> 2) * rowBytes + (((long)sh >> 2) + 1) * bits / 8 + 32;
             }
 
-            Mark(from, Math.Max(to - from, 1), after);
+            to = Math.Max(to, from + 1);
+            Mark(from, to - from, after, write: false);
+            Append(from, to, after, after, write: false);
         }
 
         // Idle until the batch ends, then the batch's count; a batch changing images more often than the list holds keeps them idle - see §2.6.
-        private void MarkIdle(long from, long count)
+        private void MarkIdle(long from, long count, long start)
         {
-            Mark(from, count, Idle);
-            if (_idleRangeCount < _idleRanges.Length) _idleRanges[_idleRangeCount++] = (from, count);
+            Mark(from, count, Idle, write: true);
+
+            Volatile.Write(ref _idleSequence, _idleSequence + 1);
+            if (_idleRangeCount < _idleRanges.Length) _idleRanges[_idleRangeCount++] = (from, from + count, start);
             else _idleRangeCount = _idleRanges.Length + 1;
+            Volatile.Write(ref _idleSequence, _idleSequence + 1);
         }
 
-        private void Mark(long from, long count, long after)
+        // A later mark is never smaller, so the greater of the two keeps an image's idle mark over a load's, until the batch's end writes its count over it - see §2.6.1.
+        private void Mark(long from, long count, long after, bool write, bool downgrade = false)
         {
             long length = _bus.Rdram.Length;
             long first = Math.Clamp(from, 0, length) >> 12;
             long last = (Math.Clamp(from + count, 0, length) - 1) >> 12;
 
-            for (long page = first; page <= last; page++) _marks[page] = after;
+            for (long page = first; page <= last; page++)
+            {
+                _marks[page] = downgrade ? after : Math.Max(_marks[page], after);
+                if (write) _writeMarks[page] = downgrade ? after : Math.Max(_writeMarks[page], after);
+            }
+        }
+
+        // The range is written whole before its count moves, so the thread never reads one half-written - see §2.6.1.
+        private void Append(long from, long to, long start, long mark, bool write)
+        {
+            long length = _bus.Rdram.Length;
+            _ranges[(int)(_rangesAppended & (RangeCount - 1))] = (Math.Clamp(from, 0, length), Math.Clamp(to, 0, length), start, mark, write);
+            Volatile.Write(ref _rangesAppended, _rangesAppended + 1);
+        }
+
+        // Whether any range still pending overlaps the bytes, for a writer any range and for a reader one the processor writes - see §2.6.1.
+        private bool Reaches(long from, long to, long completed, bool write)
+        {
+            if (_idleRangeCount > _idleRanges.Length) return true;
+            for (int i = 0; i < _idleRangeCount; i++) if (from < _idleRanges[i].To && to > _idleRanges[i].From) return true;
+
+            long newest = _rangesAppended - 1, oldest = Math.Max(_rangesAppended - RangeCount, 0);
+            for (long i = newest; i >= oldest; i--)
+            {
+                ref var range = ref _ranges[(int)(i & (RangeCount - 1))];
+                if (range.Mark <= completed) return false;
+                if (from < range.To && to > range.From && (write || range.Write)) return true;
+            }
+
+            return newest - oldest + 1 >= RangeCount;
         }
 
         // Runs what was published, and stays a moment for more before handing the pool its thread back - see §2.6.
@@ -425,40 +491,76 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             return false;
         }
 
-        // Waits until the words a page waits for have run, and clears the mark, since nothing later has marked it - see §2.6.
-        public void WaitFor(uint physical) => WaitFor(physical, 0);
-
+        // A writer waits for every range on its page, a reader for the ones the processor writes; a bystander on the page waits for neither - see §2.6.1.
         public void WaitFor(uint physical, int site)
         {
             int page = (int)(physical >> 12);
             long mark = _marks[page];
-            if (mark == 0) return;
+            if (mark != 0) Wait(physical, physical + 1, page, mark, site, write: true);
+        }
+
+        public void WaitForRead(uint physical, int site)
+        {
+            int page = (int)(physical >> 12);
+            long mark = _writeMarks[page];
+            if (mark != 0) Wait(physical, physical + 1, page, mark, site, write: false);
+        }
+
+        private bool Wait(long from, long to, int page, long mark, int site, bool write)
+        {
+            long completed = Volatile.Read(ref _completed);
+            if (mark != Idle && completed >= mark)
+            {
+                Clear(page, mark);
+                return false;
+            }
+
+            if (!Reaches(from, to, completed, write))
+            {
+                Bystanders++;
+                return false;
+            }
 
             if (_taking && site == 0) site = 10;
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
             WaitUntil(mark == Idle ? _issued : mark);
-            _marks[page] = 0;
+            if (mark != Idle) Clear(page, mark);
             WaitsPerPage[page]++;
             long took = System.Diagnostics.Stopwatch.GetTimestamp() - started;
             WaitsPerSite[site]++; TicksPerSite[site] += took;
             if (WaitsLogged < WaitLog.Length && took > System.Diagnostics.Stopwatch.Frequency / 20000) WaitLog[WaitsLogged++] = (site, (uint)page << 12, mark == Idle, took, _issued - Volatile.Read(ref _completed), _colorImage, _depthImage, _textureImage);
             if (_waiting == 0) { PageWaits++; PageWaitTicks += took; }
+            return true;
         }
 
-        public void WaitForRange(long from, long count) => WaitForRange(from, count, 8);
+        // A mark no greater than the one waited for has been run; an idle one, or a later load's, stands - see §2.6.1.
+        private void Clear(int page, long mark)
+        {
+            if (_marks[page] <= mark) _marks[page] = 0;
+            if (_writeMarks[page] <= mark) _writeMarks[page] = 0;
+        }
 
-        public void WaitForRange(long from, long count, int site)
+        public void WaitForRange(long from, long count, int site) => WaitRange(from, count, site, write: true);
+
+        public void WaitForReadRange(long from, long count, int site) => WaitRange(from, count, site, write: false);
+
+        private void WaitRange(long from, long count, int site, bool write)
         {
             long length = _bus.Rdram.Length;
             long first = Math.Clamp(from, 0, length) >> 12;
             long last = (Math.Clamp(from + count, 0, length) - 1) >> 12;
+            long[] marks = write ? _marks : _writeMarks;
 
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
             _waiting++;
             bool waited = false;
             for (long page = first; page <= last; page++)
             {
-                if (_marks[page] != 0) { WaitFor((uint)(page << 12), site); waited = true; }
+                long mark = marks[page];
+                if (mark == 0) continue;
+
+                long pageFrom = Math.Max(from, page << 12), pageTo = Math.Min(from + count, (page + 1) << 12);
+                waited |= Wait(pageFrom, pageTo, (int)page, mark, site, write);
             }
             _waiting--;
             if (waited) { RangeWaits++; RangeWaitTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started; }
@@ -470,7 +572,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
             bool waited = Volatile.Read(ref _completed) < _issued;
             WaitUntil(_issued);
-            if (_threaded) Array.Clear(_marks);
+            if (_threaded)
+            {
+                Array.Clear(_marks);
+                Array.Clear(_writeMarks);
+                _rangesAppended = 0;
+            }
             if (waited) { Joins++; JoinTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started; }
         }
 
@@ -505,22 +612,103 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Environment.GetEnvironmentVariable("EMUSEN_MARS_VERIFY_RDP") == "1";
 #endif
 
-        // Called by the processor at every byte of RDRAM it reads or writes while threaded, to prove the marks reach it - see §2.6.
+        // Called by the processor at every byte of RDRAM it reads or writes while threaded, to prove the marks and their ranges reach it - see §2.6.1.
         public bool Verifying => _threaded && VerifyMarks;
 
-        public void Touched(uint physical)
+        public void Touched(uint physical) => Verify(physical, write: false);
+
+        public void Wrote(uint physical) => Verify(physical, write: true);
+
+        private void Verify(uint physical, bool write)
         {
             if (physical >= (uint)_bus.Rdram.Length) return;
-            if (Volatile.Read(ref _marks[physical >> 12]) >= _runningWord) return;
+            long word = _runningWord;
+            long[] marks = write ? _writeMarks : _marks;
 
-            _fault ??= new InvalidOperationException($"The display processor touched {physical:X6} in a page its interface did not mark before word {_runningWord}.");
+            if (Volatile.Read(ref marks[physical >> 12]) < word)
+            {
+                _fault ??= new InvalidOperationException($"The display processor {(write ? "wrote" : "read")} {physical:X6} in a page its interface did not mark before word {word}.");
+                return;
+            }
+
+            if (!Covers(physical, word, write)) _fault ??= new InvalidOperationException($"The display processor {(write ? "wrote" : "read")} {physical:X6} outside every range its interface marked for word {word}. {Nearest(physical, word)}. {Ranges()}");
+        }
+
+        // For a fault's message: the nearest range in the ring that holds the byte at all, whatever its counts said.
+        private string Nearest(uint physical, long word)
+        {
+            long appended = Volatile.Read(ref _rangesAppended);
+            for (long i = appended - 1; i >= Math.Max(appended - RangeCount, 0); i--)
+            {
+                var range = _ranges[(int)(i & (RangeCount - 1))];
+                if (physical >= range.From && physical < range.To)
+                {
+                    return $"nearest holder at {i} of {appended}: [{range.From:X6}-{range.To:X6} from {range.Start} to {range.Mark}{(range.Write ? " w" : " r")}]"
+                        + (range.Start > word ? " START TOO LATE" : "") + (range.Mark < word ? " MARK TOO EARLY" : "");
+                }
+            }
+
+            return $"no range in the ring of {appended} holds it";
+        }
+
+        // What was marked, for a fault's message: the images the shadow holds and every range still pending.
+        private string Ranges()
+        {
+            var text = new System.Text.StringBuilder($"color {_colorImage:X6} {_colorWidth}x{_colorBytes}B rows {_scissorTop}-{_scissorBottom}, depth {_depthImage:X6}, texture {_textureImage:X6} {_textureWidth}w size {_textureSize}; open");
+            for (int i = 0; i < Math.Min(_idleRangeCount, _idleRanges.Length); i++) text.Append($" [{_idleRanges[i].From:X6}-{_idleRanges[i].To:X6} from {_idleRanges[i].Start}]");
+
+            text.Append("; ring");
+            for (long i = _rangesAppended - 1; i >= Math.Max(_rangesAppended - 12, 0); i--)
+            {
+                var range = _ranges[(int)(i & (RangeCount - 1))];
+                text.Append($" [{range.From:X6}-{range.To:X6} from {range.Start} to {range.Mark}{(range.Write ? " w" : " r")}]");
+            }
+
+            return text.ToString();
+        }
+
+        // The batch still open, read whole by its sequence; then the ring newest first, stopping where the counts fall below the word - see §2.6.1.
+        private bool Covers(uint physical, long word, bool write)
+        {
+            while (true)
+            {
+                int sequence = Volatile.Read(ref _idleSequence);
+                if ((sequence & 1) != 0) continue;
+
+                int count = _idleRangeCount;
+                bool covered = count > _idleRanges.Length;
+                for (int i = 0; i < count && !covered; i++)
+                {
+                    var range = _idleRanges[i];
+                    covered = range.Start <= word && physical >= range.From && physical < range.To;
+                }
+
+                Interlocked.MemoryBarrier();
+                if (Volatile.Read(ref _idleSequence) != sequence) continue;
+                if (covered) return true;
+                break;
+            }
+
+            long appended = Volatile.Read(ref _rangesAppended);
+            for (long i = appended - 1; i >= Math.Max(appended - RangeCount, 0); i--)
+            {
+                var range = _ranges[(int)(i & (RangeCount - 1))];
+
+                // The slot may have been written over while it was read, which leaves the scan with nothing to say - see §2.6.1.
+                if (Volatile.Read(ref _rangesAppended) - i >= RangeCount) return true;
+                if (range.Mark < word) return false;
+                if (range.Start <= word && physical >= range.From && physical < range.To && (!write || range.Write)) return true;
+            }
+
+            // Every range the ring holds is newer than the word, so the one that spoke for it is gone - see §2.6.1.
+            return appended >= RangeCount;
         }
 
         // After a state is read, the gathering and the images come from the processor, which the state carried - see §2.6.
         public void RefreshShadow()
         {
             (_shadowTaken, _shadowFirst) = Processor.Gathered;
-            (_colorImage, _colorWidth, _colorBytes, _depthImage, _textureImage, _textureWidth, _textureSize, _scissorTop, _scissorBottom) = Processor.Images;
+            (_colorImage, _colorWidth, _colorBytes, _depthImage, _textureImage, _textureWidth, _textureSize, _scissorTop, _scissorBottom, _scissorRight) = Processor.Images;
             _drawn = false;
             _issued = _completed;
         }

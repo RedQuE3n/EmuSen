@@ -177,7 +177,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             for (uint row = 0; row < rows; row++)
             {
-                _bus.Dp.WaitForRange(_dramAddress, length, 11);
+                if (toSignalProcessor) _bus.Dp.WaitForReadRange(_dramAddress, length, 11);
+                else _bus.Dp.WaitForRange(_dramAddress, length, 11);
 
                 for (uint i = 0; i < length; i++)
                 {

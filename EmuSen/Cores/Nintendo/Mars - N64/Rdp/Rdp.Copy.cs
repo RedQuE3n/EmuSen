@@ -173,7 +173,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void WriteCopyByte(uint address, int value)
         {
             byte[] rdram = _bus.Rdram;
-            Touch(address);
+            Wrote(address);
             if (address >= rdram.Length) return;
 
             rdram[address] = (byte)value;

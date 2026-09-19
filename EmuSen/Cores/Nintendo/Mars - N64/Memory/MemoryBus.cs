@@ -28,8 +28,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public readonly PiInterface Pi;
         public readonly DpInterface Dp;
 
-        // The display processor's page marks, read before every word the bus reads or writes in RDRAM - see Mars_Rdp.md §2.6.
+        // The display processor's page marks, the writer's and the reader's, read before every word the bus writes or reads in RDRAM - see Mars_Rdp.md §2.6.1.
         [EmuSen.Common.SkipInState] private readonly long[] _dpMarks;
+        [EmuSen.Common.SkipInState] private readonly long[] _dpWriteMarks;
         public readonly SiInterface Si;
         public readonly AiInterface Ai;
         public readonly Vi.Vi Vi;
@@ -80,6 +81,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Pi = new PiInterface(this);
             Dp = new DpInterface(this);
             _dpMarks = Dp.Marks;
+            _dpWriteMarks = Dp.WriteMarks;
             Si = new SiInterface(this);
             Ai = new AiInterface(this);
             Vi = new Vi.Vi(this);
@@ -196,7 +198,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             if (physical < Rdram.Length)
             {
-                if (_dpMarks[physical >> 12] != 0) Dp.WaitFor(physical, 0);
+                if (_dpWriteMarks[physical >> 12] != 0) Dp.WaitForRead(physical, 0);
                 return ReadArray32(Rdram, physical);
             }
 

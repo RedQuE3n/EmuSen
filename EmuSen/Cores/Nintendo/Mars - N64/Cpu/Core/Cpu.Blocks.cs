@@ -39,7 +39,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             }
 
             // The display processor may be drawing over code; the block's words are waited for before they are compared or shaped - see Mars_Rdp.md §2.6.
-            if (_dpMarks[physical >> 12] != 0 || _dpMarks[(physical + BlockCache.MaxLength * 4 - 1) >> 12] != 0) _bus.Dp.WaitForRange(physical, BlockCache.MaxLength * 4, 5);
+            if (_dpWriteMarks[physical >> 12] != 0 || _dpWriteMarks[(physical + BlockCache.MaxLength * 4 - 1) >> 12] != 0) _bus.Dp.WaitForReadRange(physical, BlockCache.MaxLength * 4, 5);
 
             Block? block = _blocks.Find(physical);
             if (block is null) _blocks.Place(block = BlockShape.Shape(physical, rdram));

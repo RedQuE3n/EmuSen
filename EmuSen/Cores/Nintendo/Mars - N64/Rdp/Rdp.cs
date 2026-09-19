@@ -55,13 +55,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // What the interface's shadow takes after a state is read - see Mars_Rdp.md §2.6.
         public (int Taken, ulong First) Gathered => (_taken, _command[0]);
 
-        public (uint Color, int Width, int Bytes, uint Depth, uint Texture, int TextureWidth, int TextureSize, int ScissorTop, int ScissorBottom) Images =>
-            (_colorImage, _colorImageWidth, System.Math.Max(_colorImageBytes, 1), _depthImage, _textureImage, _textureImageWidth, _textureImageSize, _scissorTop >> 2, _scissorBottom >> 2);
+        public (uint Color, int Width, int Bytes, uint Depth, uint Texture, int TextureWidth, int TextureSize, int ScissorTop, int ScissorBottom, int ScissorRight) Images =>
+            (_colorImage, _colorImageWidth, System.Math.Max(_colorImageBytes, 1), _depthImage, _textureImage, _textureImageWidth, _textureImageSize, _scissorTop >> 2, (_scissorBottom + 3) >> 2, (_scissorRight + 3) >> 2);
 
-        // Every byte of RDRAM the processor reads or writes passes here while the list runs on a thread - see Mars_Rdp.md §2.6.
+        // Every byte of RDRAM the processor reads, and every one it writes, passes here while the list runs on a thread - see Mars_Rdp.md §2.6.1.
         private void Touch(uint physical)
         {
             if (_bus.Dp.Verifying) _bus.Dp.Touched(physical);
+        }
+
+        private void Wrote(uint physical)
+        {
+            if (_bus.Dp.Verifying) _bus.Dp.Wrote(physical);
         }
 
         // In words: triangles grow by what they carry, texture rectangles take two, everything else one - see §3.

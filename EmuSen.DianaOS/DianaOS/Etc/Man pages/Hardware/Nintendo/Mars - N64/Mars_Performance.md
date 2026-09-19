@@ -1168,3 +1168,56 @@ three of its cores in use. What stands between Wave Race and its sixty is the di
 thread and the signal processor's loop on the emulation thread, both of them the same code that ran before, now
 each the floor of its own thread; and Ocarina of Time's remaining quarter is shared between the two threads' floors
 and the waits its layout of memory makes.
+
+## 29. Which pages, and which bytes, a mark speaks for
+
+*2026-09-19, the same day as §28.* §28's closing paragraph named the waits its own counters showed and called the
+page "inherent to a page as the unit". That was wrong twice over, and the counters said so plainly enough that the
+two mistakes could be separated and priced.
+
+**A mark did not say what the processor would do to the page.** A page a texture load reads from carried the same
+mark as a page an image is drawn into, so a *reader* of that page waited for a load it has no order with: two
+reads of the same bytes may happen either way round and agree. Wave Race's signal processor DMAs its microcode and
+its data from pages its water textures are loaded from, and waited 3.6 ms a frame for them; Ocarina of Time's did
+the same, and the interface's own reading of a display list waited too.
+
+**And a mark named a page, not the bytes.** A page is four kilobytes; an image's rows or a load's bytes seldom fill
+one, and a bystander sharing the page waited for the whole of it. Ocarina of Time keeps its display list in the page
+after its depth buffer's last rows, which cost it 2.1 ms a frame in the list's own reading and 5.1 ms in its signal
+processor's.
+
+`Mars_Rdp.md` §2.6.1 is what replaced them: two marks a page, one for a writer and one for a reader, and behind
+each mark the byte ranges that set it, so a waiter that finds its page marked can ask whether any range still
+pending reaches the bytes it wants. A waiter that finds none is a **bystander**; it waits for nothing and leaves the
+mark, which still speaks for the range's own bytes.
+
+**Measured.** Two builds interleaved, order rotated, three rounds of 600 frames from each state, second halves;
+the commit before this one against this one, and a fourth state the user saved outside the castle:
+
+| from the state, second 300 frames | §28's build | with the split marks | of the console |
+| --- | --- | --- | --- |
+| Ocarina of Time (PAL, 50) | 40.5 fps | **52.2** | 104% |
+| Wave Race 64 (NTSC, 60) | 44.6 | **51.5** | 86% |
+| Super Mario 64, in the castle (PAL, 50) | 57.5 | **59.8** | 120% |
+| Super Mario 64, outside it (PAL, 50) | 47.0 | **49.8** | 100% |
+
+Medians of three; every round of the right column lies above every round of the left. **The machine was faster this
+session than in §28's** — the same committed build reads 40.5 here where §28's table reads 37.7 — which is again
+why this page compares only runs interleaved together, and why §28's absolute figures should not be read against
+these.
+
+**What each half bought, from the interface's counters.** Wave Race's waits were all reads of pages marked only for
+writing, so the reader's mark alone removed them: its signal processor's 5,445 waits and 2,178 ms became none, and
+it recorded no bystanders at all. Ocarina of Time's were bytes beside the marked ones, so the ranges removed them:
+its 12,464 signal-processor waits and 2,731 list waits, 4,319 ms together, became none, and it counts 3,542
+bystanders a frame — each one a wait the page would have cost and the range showed to be about other bytes.
+
+**What still waits.** Ocarina of Time reads a page being drawn 399 times in 600 frames, 1.8 ms a frame, which is a
+true read of the buffer the list is writing. Super Mario 64 outside the castle enters a block whose words span a
+page the list draws into, 297 times for 4.2 ms a frame. Both are the list's own speed on its thread, not the marks.
+The drainer's own rate is unchanged, 1.20 to 1.88 µs a word across the four states.
+
+**Exact.** From each of the four states an immediate core and a threaded one ran in lockstep with verification on,
+whole states and pictures compared after every frame: identical. The probe's frames are identical to the baseline
+with the list at once and on the thread, and the Mars suite passes. The verifier found both of the defects in
+`Mars_Rdp.md` §2.6.1's last two paragraphs, and found them within forty frames.

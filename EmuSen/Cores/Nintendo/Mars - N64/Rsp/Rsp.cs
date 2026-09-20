@@ -43,6 +43,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         public void Step()
         {
             if (Halted) return;
+            StepOne();
+        }
+
+        // The step for a caller that has tested the halt itself - see Mars_Rsp.md §10.1.
+        public void StepOne()
+        {
             if (Coverage is { IsArmed: true }) Coverage.Record((int)Pc);
 
             uint instruction = ReadInstruction(Pc);
@@ -206,8 +212,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         }
 
         // One big-endian word read rather than four byte reads, the same four bytes - see Mars_Performance.md §15.
+        // The mask keeps every fetch inside the four kilobytes, which is what the span's check would test - see Mars_Rsp.md §10.1.
         private uint ReadInstruction(uint pc) =>
-            System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(_imem.AsSpan((int)(pc & PcMask)));
+            System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(System.Runtime.CompilerServices.Unsafe.ReadUnaligned<uint>(
+                ref System.Runtime.CompilerServices.Unsafe.Add(ref System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(_imem), (nint)(pc & PcMask))));
 
         private uint Address(uint instruction) => (Read(Rs(instruction)) + Immediate(instruction)) & DataMask;
 

@@ -345,11 +345,25 @@ processors' own stale scratch is never read for output — every field but the t
 before that pixel reads it — which is the fact §10.2's inventory established and this design rests on.
 
 **A snapshot with several processors** (§2.7) needs a point every processor stands at. The pause point is the furthest
-command boundary any processor has reached when it sees the request: each raises the point to its own boundary if
-that is further, runs on to it if it is short of it, and stands there; the request is answered when all stand at the
-same point. A processor short of the point can never be waited for at a barrier by one past it, because a barrier
-is inside a command and the point is a boundary. The cost is that the slowest processor runs to the fastest's
-boundary, which is about a primitive.
+word any processor has reached when it sees the request: each raises the point to its own position if that is
+further, runs on to it if it is short of it, and stands there; the request is answered when all stand at the same
+word. A processor short of the point can never be waited for at a barrier by one past it, because a barrier is taken
+at a command's last word and a processor stops only before gathering a word. The cost is that the slowest processor
+runs to the fastest's position, which is about a primitive.
+
+*The first version stood only at a command's boundary, and hung.* The play harness takes no snapshots, so the case
+was met in the frontend, in play: a game hands its list over in pieces, and a piece can end inside a command — the
+signal processor writes the end register as it fills the buffer, not at commands' ends — so every processor sat
+waiting for the command's next word at the end of what was issued, none could reach a boundary, and the request
+spun forever. `A_snapshot_while_every_processor_waits_inside_a_command_is_written_and_loads` hands over the first
+words of a triangle, asks for the snapshot, and hangs on the first version; the fix is the paragraph above, and the
+state a mid-command snapshot writes is exact because every processor gathers the same words, which the state
+carries. Whether this was the freeze the first play test met in Super Mario 64 is inferred and not proven — the
+process was gone before it could be looked at — and the frontend's rewind is off for the N64 until the snapshot
+has been proven in play (`EmuSen_Settings_Reference.md` §4.21b). Two lessons from the test's own writing are worth
+keeping: a hand-over in pieces rewrites the list's bytes in memory and the interface's registers, so a machine fed one
+piece and one fed three differ in memory and state for reasons that are the test's, not the core's; both machines
+must be fed the same pieces at the same places.
 
 **What is exact, and how it is known.** `MarsThreadedRdpTests` hand over fills, shaded triangles clipped at the
 scissor's right edge, a two-cycle scene with memory alpha in its first blend, a load from the drawn image, an image

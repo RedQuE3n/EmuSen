@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.Intrinsics;
 
 namespace EmuSen.Cores.Nintendo.Mars.Rsp
 {
@@ -7,6 +8,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
     {
         // How far each format scales its seven-bit offset, in the order the format field numbers them.
         private static readonly int[] TransferScale = { 0, 1, 2, 3, 4, 4, 3, 3, 4, 4, 4, 4 };
+
+        private static readonly System.Runtime.Intrinsics.Vector128<byte> SwapPairs = System.Runtime.Intrinsics.Vector128.Create((byte)1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14);
 
         private const int FormatQuad = 4;
         private const int FormatRest = 5;
@@ -17,6 +20,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         private const int FormatWhole = 10;
         private const int FormatTransposed = 11;
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void ExecuteVectorLoad(uint instruction)
         {
             if (!TransferOperands(instruction, out int format, out int vt, out int element, out uint address)) return;
@@ -37,6 +41,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             }
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void ExecuteVectorStore(uint instruction)
         {
             if (!TransferOperands(instruction, out int format, out int vt, out int element, out uint address)) return;
@@ -72,6 +77,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         // A load that runs out of register stops there rather than wrapping - see §4.
         private void LoadBytes(int vt, int element, uint address, int count)
         {
+            // A whole register from sixteen bytes that do not wrap is one load with each pair of bytes exchanged - see Mars_RspVector.md §15.
+            if (element == 0 && count == 16 && address <= DataMask - 15 && BitConverter.IsLittleEndian)
+            {
+                var bytes = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref _bus.SpDmem[address]);
+                System.Runtime.Intrinsics.Vector128.StoreUnsafe(System.Runtime.Intrinsics.Vector128.ShuffleNative(bytes, SwapPairs).AsUInt16(), ref Vector[vt * Elements]);
+                return;
+            }
+
             for (int i = 0; i < Math.Min(16 - element, count); i++) SetVectorByte(vt, element + i, DataByte(address + (uint)i));
         }
 
@@ -137,6 +150,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         // A store that runs out of register wraps to its start, unlike a load - see §5.
         private void StoreBytes(int vt, int element, uint address, int count)
         {
+            if (element == 0 && count == 16 && address <= DataMask - 15 && BitConverter.IsLittleEndian)
+            {
+                var lanes = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref Vector[vt * Elements]).AsByte();
+                System.Runtime.Intrinsics.Vector128.StoreUnsafe(System.Runtime.Intrinsics.Vector128.ShuffleNative(lanes, SwapPairs), ref _bus.SpDmem[address]);
+                return;
+            }
+
             for (int i = 0; i < count; i++) SetDataByte(address + (uint)i, VectorByte(vt, (element + i) & 0xF));
         }
 

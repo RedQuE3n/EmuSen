@@ -318,3 +318,44 @@ than the samples of the fetch and dispatch promised: the time is inside the vect
 element shuffle and register arrays a block does not touch. Compiling those with their operands constant is the
 next step and is not begun. `EMUSEN_MARS_NORSPBLOCKS=1` turns the blocks off; `MarsIdleTests` is the proof they
 change nothing (`Mars_Recompiler.md` §15).
+
+## 12. The handlers folded into the blocks
+
+*2026-09-20.* §11's blocks called each instruction's handler with its word as a constant, and bought less than the
+samples promised. `Mars_RspVector.md` §15's benchmark of single operations said why: a vector operation cost about
+seven nanoseconds whatever it computed, a bitwise AND 5.4, and through a block only 0.6 less, because the block
+removed the fetch and the first dispatch and left the coprocessor's test, the vector function's entry, three field
+decodes, the element shuffle and a switch of sixty-four.
+
+**The change is an attribute.** The handlers — the scalar switch, the special and register-immediate groups, the
+coprocessor's moves, the vector function, the vector loads and stores — are marked for aggressive inlining, and a
+block calls the eight-lane vector function directly (behind a test that that unit is the one in use, since a test
+can switch units). The compiler inlines the handler into the block with the word a constant, and folds: the fields
+become constants, both switches become their one case, the selection's test for the whole register is decided, the
+accumulate and signedness flags are decided. No handler was rewritten and nothing was copied; an instruction in a
+block and the same instruction interpreted are still one piece of source.
+
+**Measured by operation, through blocks, nanoseconds a step, before and after:** a multiply-accumulate 6.7 to 3.2;
+an add 6.1 to 2.7; a bitwise AND 4.8 to 0.95; an add-immediate 2.5 to 2.0; a load word 4.2 to 3.5; a shift 1.8 to
+1.1; the quad load 14.6 to 3.1 and the quad store 11.9 to 2.3 (the last two are §15's fast case, not the inlining).
+
+**Measured in the games, it is two to three per cent**, five rounds interleaved against a build of the commit
+before, medians of the mean frame: Ocarina of Time 8.34 to 8.20 milliseconds, Wave Race 7.04 to 6.80, Super Mario
+64 4.80 to 4.71, the state hash after 1,200 frames identical in every run of both builds. An interrupt sample put
+the vector unit at 16 per cent of the thread where it had been 26.
+
+**Why so little of it reached the games, and a claim corrected.** Counting how each run of blocks ends, and how
+many steps are taken singly, in 900 frames of Ocarina of Time: 338 million steps in blocks, 24 million stepped
+singly inside the idle loop (after a branch's slot, a shape the compiler refuses, a budget too short, an event) —
+and **99 million, a fifth of all the processor's steps, taken outside the idle loop altogether**, one call from
+the CPU's tick for every instruction the CPU runs while the processor is running. `Mars_Performance.md` §38 said
+every step is taken inside the idle loop; its census counted a block's instructions by whether the processor was
+running when the block *ended*, and the blocks that run beside it are the operating system's own, short and
+frequent, which that count missed. The conclusion drawn from it, that the processor has no CPU work to overlap
+with, stands for four fifths of its steps and not for the last fifth.
+
+**What that fifth would take.** Those steps cannot simply be run ahead or owed: the CPU can read the processor's
+memory and its program counter at any instruction, and the processor's events must land on the instruction they
+always landed on. Running ahead to the next event would be exact only with a way to undo it when the CPU looks,
+and a copy of the processor's state at every block entry costs more than it saves. It is the next problem on this
+thread and is not begun.

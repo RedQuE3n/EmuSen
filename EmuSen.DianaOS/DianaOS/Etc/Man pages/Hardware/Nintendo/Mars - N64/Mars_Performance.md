@@ -1825,3 +1825,11 @@ half and loop 14, the CPU's interpreted instructions 17, its blocks 13, the disp
 point 6. The vector unit's time is arithmetic and not dispatch: its multiply-accumulates keep a 48-bit accumulator
 in 64-bit lanes, two 256-bit vectors an operation. A narrower accumulator, three 16-bit vectors as the reference
 cores keep it, is the next large piece of work on this thread, and is not begun.
+
+*Retired the same day.* That reading was wrong. The narrower accumulator was built and proved
+(`Mars_RspVector.md` §15) and was worth nothing measurable, and a benchmark of single operations showed a vector
+operation costing seven nanoseconds whether it multiplied or only ANDed: the function's fifteen per cent was
+reaching the arithmetic, not doing it, and had looked like arithmetic because the helpers were inlined into it.
+Folding the handlers into the blocks (`Mars_Rsp.md` §12) halved an operation's cost and took the vector unit from
+26 per cent of the thread to 16. It also corrected §38: a fifth of the signal processor's steps are taken outside
+the idle loop, beside the operating system's own code, which the block census had missed.

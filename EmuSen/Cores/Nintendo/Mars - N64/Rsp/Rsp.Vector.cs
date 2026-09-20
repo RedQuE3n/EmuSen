@@ -21,6 +21,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         // Bit 25 of a coprocessor-two word is what separates a vector operation from a transfer.
         private const uint VectorOperation = 1u << 25;
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void ExecuteCop2(uint instruction)
         {
             if ((instruction & VectorOperation) != 0)
@@ -73,6 +74,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
 
         private void ExecuteVector(uint instruction)
         {
+            WidenAccumulator();
+
             int vt = Rt(instruction);
             int vs = Rd(instruction);
             int vd = (int)((instruction >> 6) & 0x1F);

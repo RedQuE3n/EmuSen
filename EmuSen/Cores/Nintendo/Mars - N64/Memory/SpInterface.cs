@@ -152,25 +152,40 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         }
 
         // One instruction per tick, a placeholder for a clock ratio Phase G owns - see Mars_Rsp.md §7.
+        // One instruction a tick is nearly every call, so the halt is tested once before the loop and the loop counts down - see Mars_Rsp.md §10.1.
         public void Step(long cycles)
         {
             Rsp.Rsp processor = Processor;
-            for (long i = 0; i < cycles && !processor.Halted; i++)
+            if (processor.Halted) return;
+
+            do
             {
-                processor.Step();
-                if (_singleStep) processor.Halted = true;
+                processor.StepOne();
+                if (_singleStep)
+                {
+                    processor.Halted = true;
+                    return;
+                }
             }
+            while (--cycles > 0 && !processor.Halted);
         }
 
         // Read by the break itself, which raises the interrupt when it lands - see Mars_Performance.md §15.
         public bool InterruptOnBreak => _interruptOnBreak;
 
         // Length is encoded one short, and the row count and skip make it rectangular - see Mars_Memory.md §6.
+        // What the transfers moved: for the emulation thread's profile - see Mars_Performance.md §36.
+        [EmuSen.Common.SkipInState] public long Transfers, TransferRows, TransferBytes, TransferTicks;
+
         private void Transfer(uint encoded, bool toSignalProcessor)
         {
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
             uint length = ((encoded & 0xFFF) | 7) + 1;
             uint rows = ((encoded >> 12) & 0xFF) + 1;
             uint skip = (encoded >> 20) & 0xFFF;
+            Transfers++;
+            TransferRows += rows;
+            TransferBytes += rows * length;
 
             byte[] bank = (_memAddress & ImemSelect) != 0 ? _bus.SpImem : _bus.SpDmem;
             uint bankOffset = _memAddress & 0xFF8;
@@ -180,14 +195,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 if (toSignalProcessor) _bus.Dp.WaitForReadRange(_dramAddress, length, 11);
                 else _bus.Dp.WaitForRange(_dramAddress, length, 11);
 
-                for (uint i = 0; i < length; i++)
+                if (_dramAddress + length <= (uint)_bus.Rdram.Length) CopyRow(bank, bankOffset, length, toSignalProcessor);
+                else
                 {
-                    // Wrapping inside the bank rather than running on into the next one - see Mars_Memory.md §6.2.
-                    uint spOffset = (bankOffset + i) % MemoryMap.SpMemSize;
-                    uint dramAddress = _dramAddress + i;
+                    for (uint i = 0; i < length; i++)
+                    {
+                        // Wrapping inside the bank rather than running on into the next one - see Mars_Memory.md §6.2.
+                        uint spOffset = (bankOffset + i) % MemoryMap.SpMemSize;
+                        uint dramAddress = _dramAddress + i;
 
-                    if (toSignalProcessor) bank[spOffset] = _bus.Read8(dramAddress);
-                    else _bus.Write8(dramAddress, bank[spOffset]);
+                        if (toSignalProcessor) bank[spOffset] = _bus.Read8(dramAddress);
+                        else _bus.Write8(dramAddress, bank[spOffset]);
+                    }
                 }
 
                 bankOffset = (bankOffset + length) % MemoryMap.SpMemSize;
@@ -195,6 +214,27 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
 
             _memAddress = (_memAddress & ImemSelect) | bankOffset;
+            TransferTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started;
+        }
+
+        // A row inside RDRAM is the bytes the byte path moves, in two runs where the bank wraps, after the same wait - see Mars_Memory.md §6.2.
+        private void CopyRow(byte[] bank, uint bankOffset, uint length, bool toSignalProcessor)
+        {
+            uint first = Math.Min(length, MemoryMap.SpMemSize - bankOffset);
+            Span<byte> dram = _bus.Rdram.AsSpan((int)_dramAddress, (int)length);
+            Span<byte> head = bank.AsSpan((int)bankOffset, (int)first), tail = bank.AsSpan(0, (int)(length - first));
+
+            if (toSignalProcessor)
+            {
+                dram[..(int)first].CopyTo(head);
+                dram[(int)first..].CopyTo(tail);
+            }
+            else
+            {
+                head.CopyTo(dram[..(int)first]);
+                tail.CopyTo(dram[(int)first..]);
+                _bus.Written += length;
+            }
         }
     }
 }

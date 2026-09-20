@@ -32,6 +32,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             return masks;
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private Vector128<ushort> Register(int index) => Vector128.LoadUnsafe(ref Vector[index * Elements]);
 
         private void ExecuteVectorSimd(uint instruction)
@@ -106,43 +107,53 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         }
 
         // The accumulator as two vectors of four 64-bit lanes, the array itself being the state a save carries - see §14.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private (Vector256<ulong> Low, Vector256<ulong> High) LoadAccumulator() =>
             (Vector256.LoadUnsafe(ref Accumulator[0]), Vector256.LoadUnsafe(ref Accumulator[4]));
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void StoreAccumulator(Vector256<ulong> low, Vector256<ulong> high)
         {
             low.StoreUnsafe(ref Accumulator[0]);
             high.StoreUnsafe(ref Accumulator[4]);
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector256<long> Signed48(Vector256<ulong> value) => (value << 16).AsInt64() >> 16;
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector256<ulong> Wrap48(Vector256<long> value) => value.AsUInt64() & Mask48;
 
         // Sixteen-bit lanes widened to the two halves' 64-bit lanes, zero-filled or sign-filled.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static (Vector256<ulong> Low, Vector256<ulong> High) WidenUnsigned(Vector128<ushort> value)
         {
             Vector256<uint> wide = Vector256.WidenLower(value.ToVector256Unsafe());
             return (Vector256.WidenLower(wide), Vector256.WidenUpper(wide));
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static (Vector256<long> Low, Vector256<long> High) WidenSigned(Vector128<ushort> value)
         {
             Vector256<int> wide = Vector256.WidenLower(value.AsInt16().ToVector256Unsafe());
             return (Vector256.WidenLower(wide), Vector256.WidenUpper(wide));
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static (Vector256<long> Low, Vector256<long> High) WidenSigned(Vector256<int> value) =>
             (Vector256.WidenLower(value), Vector256.WidenUpper(value));
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector128<ushort> Narrow(Vector256<long> low, Vector256<long> high)
         {
             Vector256<int> wide = Vector256.Narrow(low, high);
             return Vector128.Narrow(wide.GetLower(), wide.GetUpper()).AsUInt16();
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector128<ushort> Narrow(Vector256<int> value) => Vector128.Narrow(value.GetLower(), value.GetUpper()).AsUInt16();
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void SetAccumulatorLow(Vector128<ushort> value)
         {
             (Vector256<ulong> low, Vector256<ulong> high) = LoadAccumulator();
@@ -151,13 +162,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         }
 
         // The lanes whose bit is set in the low eight bits of a flag word, as all-ones masks.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector128<ushort> LaneMask(int bits) => Vector128.Equals(Vector128.Create((ushort)bits) & LaneBits, LaneBits);
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector256<int> LaneMask32(int bits) => Vector256.Equals(Vector256.Create(bits) & LaneBits32, LaneBits32);
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static ushort Bits(Vector128<ushort> mask) => (ushort)mask.ExtractMostSignificantBits();
 
         // The products as 32-bit lanes; the mixed signedness fits a signed 32-bit lane exactly, so one multiply serves all four - see §14.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector256<int> Products(Vector128<ushort> s, Vector128<ushort> t, bool sSigned, bool tSigned)
         {
             Vector256<int> a = sSigned ? Vector256.WidenLower(s.AsInt16().ToVector256Unsafe()) : Vector256.WidenLower(s.ToVector256Unsafe()).AsInt32();
@@ -166,6 +181,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         }
 
         // The accumulator wraps first and every clamp reads what it wrapped to, as Accumulate does - see §6.1.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private (Vector256<long> Low, Vector256<long> High) Accumulate(Vector256<long> addendLow, Vector256<long> addendHigh, bool accumulate, long start)
         {
             (Vector256<ulong> low, Vector256<ulong> high) = LoadAccumulator();
@@ -178,11 +194,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             return (Signed48(low), Signed48(high));
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector256<long> ClampSigned(Vector256<long> value) =>
             Vector256.Min(Vector256.Max(value, Vector256.Create((long)short.MinValue)), Vector256.Create((long)short.MaxValue));
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector128<ushort> ClampSignedHalf(Vector256<long> low, Vector256<long> high) => Narrow(ClampSigned(low >> 16), ClampSigned(high >> 16));
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector256<long> ClampUnsigned(Vector256<long> value)
         {
             Vector256<long> negative = Vector256.LessThan(value, Vector256<long>.Zero);
@@ -191,6 +210,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         }
 
         // A low word is kept only while the word above it fits in sixteen signed bits - see §7.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector256<long> ClampLow(Vector256<long> value)
         {
             Vector256<long> upper = value >> 16;

@@ -251,3 +251,24 @@ cycles, and its own history records accuracy given up for it. simple64 and gophe
 emulation thread and back-date its cost by scheduling the interrupt the burst's cycles later. None of this moves the
 decision above: a thread for the signal processor buys concurrency the machine's thread does not need while it is idle
 two thirds of the time, at the price of an ordering no reference has made exact.
+
+### 10.1 The loop, once the thread was the bound
+
+*2026-09-20.* §10 declined its own advice while the emulation thread was idle. `Mars_Rdp.md` §2.8 made that thread
+the bound, and an interrupt-based sample of it (`Mars_Performance.md` §36) put the per-instruction loop at eleven per
+cent of the thread and the signal processor as a whole at half of it. Two of §10's items are taken, both exact by
+construction, and the rest are recorded as still open.
+
+*The halt tested once, and the loop counting down.* The interface's step was a counted loop testing the halt flag
+each turn, calling a step that tested it again, then testing the single-step flag; nearly every call is for one
+instruction from a block's tick, which has already tested the halt. The halt is now tested once before a do-while
+that counts the cycles down, the step it calls (`StepOne`) does not test it, and the single-step flag is still read
+after every instruction, because the processor can set it on itself through its own status write.
+
+*The fetch without the span's check.* The program counter is masked to the four kilobytes of instruction memory
+before every fetch, so the span's bounds check tested what the mask had already made true; the fetch now reads the
+word through an unchecked reference and swaps its bytes, which is the same instruction sequence less the compare.
+
+*Not taken, still.* One program counter in place of the pair: the branch code and the state format both carry
+`NextPc`, and the saving is two stores an instruction against a change that reaches every branch. The dispatch
+itself — a switch on the opcode, then one on the function — is the shape cxd4 has, and nothing here is cheaper.

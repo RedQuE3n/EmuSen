@@ -1580,3 +1580,85 @@ verifier on in Debug.
 (`project_optimization_for_weak_machines`); a scene with many primitives drawn alone, which none of the four states
 or three frames has; and the frontend's own path, §34's, with the workers on. The count the frontend uses is a
 product setting and is not this section's to decide.
+
+## 36. The emulation thread, once it is the bound: an honest profile, and what the sampler had been measuring
+
+*2026-09-20.* §35 left the emulation thread as what a frame waits for, and every profile of it in this page was
+taken with `dotnet-trace`'s sampled-thread-time provider. Two things this section establishes before anything is
+optimised: that sampler cannot attribute this thread's time, and what does.
+
+**The sampler stops threads at safepoints.** The runtime's sample profiler suspends the runtime to walk stacks, and
+a thread is suspended where it next reaches a safepoint: a garbage-collection poll at a loop's back edge, or a
+return hijacked on the way out of a call. The sample is charged to the frame at that point, which is the loop the
+thread passes through most often, not where its time went. §32 read `PollGCWorker` under the signal processor's
+DMA transfer as a wait inlined into it, and §34 read it as the transfer's own loop and tested a bulk copy, which
+measured nothing — and the test was blind, because the thread was idle two thirds of the time and nothing on it
+could shorten a frame. With four rasteriser workers the same sampler charges 56 to 65 per cent of the thread to the
+transfer. A cycle counter around the transfer (`SpInterface.TransferTicks`, printed by the play harness) says
+**0.95 ms a frame in Wave Race and 1.12 in Ocarina of Time**, seven per cent, for about two thousand rows and 190 KB
+a frame. The sampler was wrong by a factor of eight, in the direction of the loop with the most polls.
+
+**The instrument that replaced it.** `ipsample.py` in the speed tooling spawns the harness, and at each interval stops
+its main thread with `ptrace`, reads the instruction pointer, resumes it, and attributes the address through the
+runtime's perf map; the stop is an interrupt, not a poll, so the sample is where the thread was. Linux `perf` would do
+the same and is not installed; Yama's default scope permits tracing one's own child. Twenty thousand samples of Wave
+Race's emulation thread and, by component:
+
+| share of the emulation thread, four workers | Wave Race 64 | Ocarina of Time |
+| --- | --- | --- |
+| the signal processor's vector unit | 30% | 21% |
+| the signal processor's scalar half, its dispatch and the per-instruction loop | 24% | 19% |
+| the processor's opcodes a block calls the interpreter for | 17% | 23% |
+| the processor's compiled blocks | 13% | 18% |
+| the processor's software floating point | 4% | 4% |
+| the signal processor's DMA | 3.5% | 3.3% |
+| the display processor's interface, mostly the kick a word | 3% | 2% |
+| the runtime and native code | 2% | 8% |
+
+The signal processor is half the thread in Wave Race and two fifths in Ocarina of Time, and within it the
+per-instruction loop — the interface's loop with the step inlined into it, called once per processor instruction with
+a count of one — is eleven per cent of the thread by itself. The vector unit's small helpers (the 48-bit wrap, the
+accumulator's low half, the clamps, the accumulator's load) appear as methods of their own in the samples, which
+means the compiler did not inline them into the fifty-case dispatcher, whose inlining budget they exhausted; each
+vector operation therefore made calls that pass 256-bit vectors through memory. Those two, and the transfer's byte
+loop, are the three exact changes §36.1 measures. The interpreted opcodes and the blocks are the recompiler's own
+levers (`Mars_Recompiler.md` §9 to §12) and are not touched here.
+
+### 36.1 Three exact changes on that thread, measured
+
+The per-instruction loop restructured (`Mars_Rsp.md` §10.1: the halt tested once, the loop counting down, the fetch
+without the span's check); the vector unit's small helpers marked for aggressive inlining, twenty of them, so that
+the dispatcher's exhausted budget no longer leaves them as calls passing 256-bit vectors through memory; and the
+transfer's rows inside RDRAM copied whole, §34's change, after the same wait for the marks. All three are exact by
+construction, and the suites and the probe grade them. Interleaved against the split's commit, four workers, four
+states, three rounds of 600 frames, second halves, medians with the rounds' range:
+
+| fps | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 74.6 (74.4–75.0) | 80.3 (79.5–80.3) | +7.6% |
+| Wave Race 64 | 73.2 (71.4–75.7) | 84.0 (82.1–86.1) | +14.8% |
+| Super Mario 64, in the castle | 80.0 (78.4–80.3) | 92.2 (91.8–92.4) | +15.3% |
+| Super Mario 64, outside it | 84.4 (83.6–86.5) | 96.6 (96.6–97.0) | +14.5% |
+
+No round overlaps. The sampler of §36, run again on the changed build, says which of the three did what: in Wave
+Race the vector unit's share of the thread fell from 30 to 25 per cent and its helpers no longer appear as methods
+of their own; the DMA fell from 3.5 to 0.3 per cent; and the per-instruction loop kept its twelve per cent of self
+time, so the restructure bought the least of the three — its remaining cost is the loop's own shape, one call and
+one fetch-and-dispatch per processor instruction, which §10.1 records as still open. The thread is now the
+signal processor's for half its time in Wave Race (28 per cent scalar and dispatch, 25 per cent vector) and the
+processor's for a third (20 per cent interpreted opcodes, 15 per cent blocks); in Ocarina of Time the shares are
+the other way about, and a tenth of that thread is native code the map cannot name, most likely the exceptions the
+interrupts throw and the runtime's own copies.
+
+**A measurement that had to be thrown away.** The first A/B of these changes read +42 to +74 per cent, and it was
+wrong: the head harness's program had been copied from the live one, referenced counters the head commit lacks,
+failed to build, and its bin still held the binary from before the split, which ran silently as "head". It was
+caught because its numbers matched the one-worker column of §35 to the decimal. The harness scripts cannot tell a
+stale binary from a fresh one; the harness's own last line, which names its worker count, can, and the tooling's
+README now says to read it.
+
+**What is next on this thread.** The recompiler's share — the opcodes a block hands the interpreter, and the blocks
+themselves — is a third to two fifths of the thread, and `Mars_Recompiler.md` §9 to §12 priced its shapes with a
+sampler that this section has shown cannot attribute time on this thread. Those measurements were interleaved
+timings, which stand; the attributions behind them were the sampler's, which do not. The signal processor's
+dispatch, and one program counter in place of two, are the other half.

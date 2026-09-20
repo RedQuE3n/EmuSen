@@ -219,12 +219,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
 
         private uint Address(uint instruction) => (Read(Rs(instruction)) + Immediate(instruction)) & DataMask;
 
-        private uint Read(int register) => Gpr[register];
+        // Every index is a five-bit field of the word, or 31, so the array's check would test what the mask made true - see Mars_Rsp.md §10.1.
+        private uint Read(int register) => System.Runtime.CompilerServices.Unsafe.Add(ref System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(Gpr), register);
 
         // Register zero is wired to zero here too, so a write to it is dropped rather than stored.
         private void Write(int register, uint value)
         {
-            if (register != 0) Gpr[register] = value;
+            if (register != 0) System.Runtime.CompilerServices.Unsafe.Add(ref System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(Gpr), register) = value;
         }
 
         private static uint Immediate(uint instruction) => (uint)(int)(short)instruction;

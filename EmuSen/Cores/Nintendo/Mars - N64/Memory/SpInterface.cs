@@ -34,6 +34,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private uint _dramAddress;
         private bool _semaphore;
         private bool _singleStep;
+
+        // Read once a tick by a block, which then steps the processor itself - see Mars_Rsp.md §10.1.
+        public bool SingleStepping => _singleStep;
         private bool _interruptOnBreak;
         private uint _signals;
 

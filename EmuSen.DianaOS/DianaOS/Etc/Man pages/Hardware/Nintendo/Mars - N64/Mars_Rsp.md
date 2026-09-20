@@ -272,3 +272,13 @@ word through an unchecked reference and swaps its bytes, which is the same instr
 *Not taken, still.* One program counter in place of the pair: the branch code and the state format both carry
 `NextPc`, and the saving is two stores an instruction against a change that reaches every branch. The dispatch
 itself — a switch on the opcode, then one on the function — is the shape cxd4 has, and nothing here is cheaper.
+
+*Taken the same day, once §10.1's first two measured the least of §36.1's three:* the block's tick now steps the
+processor itself for the one instruction a tick nearly always is, reading the single-step flag once and skipping the
+interface's loop; and the register file is read and written through an unchecked reference, since every index is a
+five-bit field of the word or the constant 31, which is what the array's check would have tested. Interleaved at four
+workers, three rounds of 600 frames, second halves: Wave Race 64 83.2 to 90.0 fps, Super Mario 64 90.7 to 96.9 in the
+castle and 96.3 to 102.1 outside it, the rounds disjoint; Ocarina of Time 78.8 to 77.5 with the rounds overlapping,
+which is the state where the signal processor's share is smallest. Kept on three states' evidence
+(`Mars_Performance.md` §36.2). What is still open is what §10 named first: one program counter, and a dispatch that
+does not return to a loop between instructions.

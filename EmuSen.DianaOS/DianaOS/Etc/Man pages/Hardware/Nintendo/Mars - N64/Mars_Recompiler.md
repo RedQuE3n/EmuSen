@@ -780,3 +780,46 @@ difference the replay did find is its own item: cut before those fills, 1,168 of
 and angrylion, hidden in that frame by the fade and not yet located. The earlier failures from the same games (a faulted graph thread in Ocarina of Time, a display list run past its
 buffer in Wave Race) were in states saved by a frontend that raced the emulation thread (`EmuSen_Settings_Reference.md`
 §4.21a) and cannot be reasoned about from those states.
+
+## 14. A census of what blocks hand the interpreter, and the six branches compiled inline
+
+*2026-09-20.* §7's attributions, and §9 to §12's, came from the runtime's sample profiler, which
+`Mars_Performance.md` §36 shows cannot attribute time on the emulation thread: it stops a thread at its next safepoint
+and charges the sample there. Their interleaved timings stand; the picture of *where* the interpreted share went does
+not. So the question was asked again with a counter instead of a sampler: a count, by opcode, of every word that
+reaches the interpreter's switch, kept when `EMUSEN_MARS_CENSUS` is set and folded away by the compiler otherwise,
+printed by the play harness.
+
+**One opcode.** From the gameplay states, four rasteriser workers, 300 frames:
+
+| of the words reaching the switch | Wave Race 64 | Ocarina of Time |
+| --- | --- | --- |
+| BEQ | 86.9% | 81.5% |
+| LW | 2.4% | 3.4% |
+| LWC1 | 1.6% | 2.1% |
+| BNE | 1.2% | 0.9% |
+| the floating-point multiply | 0.9% | 1.3% |
+| everything else | under 0.6% each | under 0.9% each |
+| words a frame | 744,000 | 944,000 |
+
+That is not a distribution of a program's branches; it is the idle loop. Both games spend most of their processor's
+time in libultra's idle thread, a branch to itself with a nothing in its slot, which §3.4 keeps inside its block but
+§3.3 still hands to the interpreter for the compare: a call, the switch, and `BranchIf`, seven hundred thousand
+times a frame. Every load, every store and every floating-point operation put together is a tenth of that. The
+recompiler's interpreted share, measured honestly, is one instruction.
+
+**What is compiled now.** The six plain conditional branches — BEQ, BNE, BLEZ, BGTZ, BLTZ and BGEZ, not the likely
+forms and not the linking ones — are emitted inline: the two registers loaded and compared, or one against zero
+signed, the target stored into `NextPc` when taken, and the pending flag set either way. That is what the interpreter's
+`BranchIf` does for them and nothing else: the target is a constant of the block, `Pc` plus the offset, and the
+untaken path leaves the `NextPc` the block already stored before the branch. Everything around the branch — the
+addresses stored before it, the tick, the slot's handling, the exit if the slot was nullified — is unchanged, and the
+likely forms and the links still go through the interpreter, since they nullify a slot or write a register and an
+observer.
+
+**How it is known to be exact.** `The_inlined_branches_leave_the_machine_the_interpreter_leaves_taken_and_not` runs
+all six over a counter that changes sign, each taken and not taken a hundred times, into an idle loop, against the
+interpreter, whole state compared; with BEQ's condition flipped in the emitter it fails at once. The interpreter and
+the blocks run in lockstep from the four gameplay states (`h-play`, 200 to 400 frames each, whole state compared every
+frame) and stay identical; the probe's 1,800 frames are identical to the baseline with the verifier on. The
+measurement is `Mars_Performance.md` §36.2.

@@ -138,7 +138,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         // The signal processor's share of one instruction, and whether what it did ends the block - see Mars_Recompiler.md §4.
         internal bool RspRan(long cycles, long written)
         {
-            _bus.Sp.Step(cycles);
+            SpInterface sp = _bus.Sp;
+            if (cycles == 1 && !sp.SingleStepping) sp.Processor.StepOne();
+            else sp.Step(cycles);
             return _bus.Written != written || _mi.Asserted != _assertedSeen;
         }
 

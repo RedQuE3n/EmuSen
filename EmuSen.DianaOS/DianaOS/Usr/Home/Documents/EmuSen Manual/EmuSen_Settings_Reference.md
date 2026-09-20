@@ -695,6 +695,18 @@ loop calls it from its catch and names the file in the status bar. Writing is be
 cannot be written must not become a second fault. `CrashLogTests` holds the file's contents. What this does not
 do is find the fault: it is the instrument for the next occurrence, and the pause-menu fault is still open.
 
+### 4.28 A late frame's time is owed, up to three frames
+
+*2026-09-20.* §4.21's loop, finding itself past a frame's tick, reset the tick to the present. That is right for a
+stall and wrong for a core whose frames cost unevenly: the N64's games draw one picture every two or three fields,
+the drawing field costs more than its slot and the others far less, and resetting the tick threw away about ten
+milliseconds at every drawing frame. Ocarina of Time ran at 96.8 per cent of full speed while averaging twelve
+milliseconds against a slot of twenty (`Mars_Performance.md` §37). `FramePacer.Settle` now leaves a late tick where
+it is, so the frames after it run without waiting until the time is made up, and moves it only when more than three
+frame intervals are owed, to three: a long stall is still forgotten rather than replayed as a burst. The same run
+holds 100.0 per cent. `FramePacerTests` holds both halves. What it does not do is make a drawing frame cheaper;
+the picture's cadence is still the game's.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

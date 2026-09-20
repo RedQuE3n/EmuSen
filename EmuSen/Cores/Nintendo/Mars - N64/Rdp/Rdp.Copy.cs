@@ -21,7 +21,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             for (int y = rows.First; y <= rows.Last; y++)
             {
-                if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y]) continue;
+                if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y] || !Owns(y)) continue;
 
                 int at = y * Attributes;
                 int s = _spanAttributes[at + AttributeS], t = _spanAttributes[at + AttributeT], w = _spanAttributes[at + AttributeW];

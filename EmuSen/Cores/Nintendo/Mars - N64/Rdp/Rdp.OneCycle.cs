@@ -47,7 +47,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             for (int y = rows.First; y <= rows.Last; y++)
             {
-                if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y]) continue;
+                if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y] || !Owns(y)) continue;
+
+                _rowStamp = Stamp(y);
+                _lastShadedStamp = _memoryStamp = _pastStoredStamp = _lodStamp = _rowStamp;
+                if (texel0 || texel1) _texel0Stamp = _rowStamp;
+                if (texel1) _texel1Stamp = _rowStamp;
 
                 int left = _spanLeft[y], right = _spanRight[y];
                 RowCoverage(y, left, right);

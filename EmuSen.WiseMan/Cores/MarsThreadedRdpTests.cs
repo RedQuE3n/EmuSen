@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using System.Linq;
 using EmuSen.Cores.Nintendo.Mars.Memory;
 
 namespace EmuSen.WiseMan.Cores
@@ -150,14 +152,14 @@ namespace EmuSen.WiseMan.Cores
 
             HandOver(threaded, Scene(0x0001_0001));
             threaded.Read32(Framebuffer);
-            threaded.Dp.Wrote(0x0018_0000);
+            threaded.Dp.Wrote(0x0018_0000, threaded.Dp.Processor.RunningWord);
             var page = Assert.Throws<System.InvalidOperationException>(() => threaded.Dp.Join());
             Assert.Contains("did not mark", page.InnerException!.Message);
 
             HandOver(threaded, Scene(0x0002_0002));
             threaded.Read32(Framebuffer);
             Assert.NotEqual(0, threaded.Dp.WriteMarks[(Framebuffer + Width * 2 * Rows + 0x100) >> 12]);
-            threaded.Dp.Wrote(Framebuffer + Width * 2 * Rows + 0x100);
+            threaded.Dp.Wrote(Framebuffer + Width * 2 * Rows + 0x100, threaded.Dp.Processor.RunningWord);
             var range = Assert.Throws<System.InvalidOperationException>(() => threaded.Dp.Join());
             Assert.Contains("outside every range", range.InnerException!.Message);
 
@@ -208,6 +210,243 @@ namespace EmuSen.WiseMan.Cores
             Load(loaded, snapshot);
             Assert.Equal(state, State(loaded));
         }
+
+        // Several processors sharing a list leave what one leaves: the memory, its hidden bits and the state, on fills, shaded triangles and rectangles - see Mars_Rdp.md §2.8.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(4)]
+        public void Processors_sharing_a_list_leave_what_one_leaves(int workers)
+        {
+            foreach (ulong[] list in new[] { Scene(0x1234_5678), Shaded(0x11223344, toTheEdge: false), Shaded(0x55667788, toTheEdge: true), Shaded(0x99AABBCC, toTheEdge: true, twoCycle: true) })
+            {
+                MemoryBus atOnce = new(), threaded = new(), split = new();
+                threaded.Dp.Threaded = true;
+                split.Dp.Threaded = true;
+                split.Dp.Workers = workers;
+
+                HandOver(atOnce, list);
+                HandOver(threaded, list);
+                HandOver(split, list);
+
+                threaded.Dp.Join();
+                split.Dp.Join();
+                Assert.Equal(atOnce.Rdram, split.Rdram);
+                Assert.Equal(atOnce.RdramHidden, split.RdramHidden);
+                Assert.Equal(State(atOnce), State(split));
+                Assert.Equal(State(threaded), State(split));
+                Assert.Equal(workers, split.Dp.Workers);
+            }
+        }
+
+        // A load from the image being drawn, and a primitive in the mode whose carry crosses rows, are each run by every processor together or by one alone, and leave the same bytes.
+        [Fact]
+        public void A_load_from_the_drawn_image_and_a_live_carry_are_drawn_as_at_once()
+        {
+            var list = new System.Collections.Generic.List<ulong>();
+            list.AddRange(Shaded(0x0F0F_0F0F, toTheEdge: true));
+            list.RemoveAt(list.Count - 1);
+            list.Add(Combine(4, 0, 11, 7, 4, 7, 4, 7));
+            list.AddRange(Shaded(0x0F0F_0F0F, toTheEdge: true).Skip(12).SkipLast(1));
+            list.Add((0x3DUL << 56) | (0UL << 53) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer);
+            list.Add((0x35UL << 56) | (2UL << 51) | (16UL << 41));
+            list.Add((0x34UL << 56) | (0UL << 44) | (0UL << 32) | ((31UL << 2) << 12) | (15UL << 2));
+            list.AddRange(Shaded(0xF0F0_F0F0, toTheEdge: true, twoCycle: true, memoryAlphaFirst: true).Skip(0));
+            ulong[] words = list.ToArray();
+
+            MemoryBus atOnce = new(), split = new();
+            split.Dp.Threaded = true;
+            split.Dp.Workers = 3;
+            HandOver(atOnce, words);
+            HandOver(split, words);
+            split.Dp.Join();
+
+            Assert.True(split.Dp.Processor.HazardLoads >= 1);
+            Assert.True(split.Dp.Processor.SerialisedPrimitives >= 1);
+            Assert.Equal(atOnce.Rdram, split.Rdram);
+            Assert.Equal(atOnce.RdramHidden, split.RdramHidden);
+            Assert.Equal(State(atOnce), State(split));
+        }
+
+        // A row's last pixel past the width reads the next row's first bytes; the owner of that row reads them at its end of the primitive, before it runs on to fill them - see Mars_Rdp.md §2.8.
+        [Fact]
+        public void The_read_past_a_rows_end_is_made_by_the_next_rows_owner_before_it_runs_on()
+        {
+            ulong[] list =
+            {
+                FillCycle,
+                (0x3FUL << 56) | (0UL << 53) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer,
+                (0x3EUL << 56) | Depth,
+                Scissor(0, 0, Width, Rows),
+                (0x37UL << 56) | 0x0001_0001,
+                FillRectangle(0, 0, Width - 1, Rows - 1),
+                (0x2FUL << 56) | (3UL << 38) | (3UL << 36) | (1UL << 22) | (1UL << 20) | (1UL << 4) | (1UL << 5) | (1UL << 3) | (1UL << 6),
+                Combine(4, 8, 11, 7, 4, 7, 4, 7),
+                (0x36UL << 56) | ((ulong)(Width << 2) << 44) | (403UL << 32) | 400UL,
+                FillCycle,
+                (0x37UL << 56) | 0x7777_7777,
+                FillRectangle(0, 101, Width - 1, 101),
+                SyncFull,
+            };
+
+            MemoryBus atOnce = new(), split = new();
+            split.Dp.Threaded = true;
+            split.Dp.Workers = 2;
+            HandOver(atOnce, list);
+            HandOver(split, list);
+            split.Dp.Join();
+
+            Assert.Equal(1, split.Dp.AliasedReads);
+            Assert.Equal(atOnce.Rdram, split.Rdram);
+            Assert.Equal(State(atOnce), State(split));
+        }
+
+        // An image set one row into the last is drawn only once every processor has finished the last, since its rows are the other's rows by another count - see Mars_Rdp.md §2.8.
+        [Fact]
+        public void An_image_one_row_into_the_last_is_drawn_after_the_last_is_finished()
+        {
+            var list = new System.Collections.Generic.List<ulong>
+            {
+                FillCycle,
+                (0x3FUL << 56) | (0UL << 53) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer,
+                (0x3EUL << 56) | Depth,
+                Scissor(0, 0, Width, Rows),
+                (0x2FUL << 56) | (3UL << 38) | (3UL << 36) | (1UL << 22) | (1UL << 20) | (1UL << 4) | (1UL << 5) | (1UL << 3) | (1UL << 6),
+                Combine(4, 8, 11, 7, 4, 7, 4, 7),
+            };
+
+            // Twenty rows' worth of shading on odd rows alone, so the odd rows' owner reaches the fill long after the even rows' owner has finished it.
+            for (int i = 0; i < 20; i++) list.Add((0x36UL << 56) | ((ulong)((Width - 1) << 2) << 44) | (7UL << 32) | 4UL);
+            list.Add(FillCycle);
+            list.Add((0x37UL << 56) | 0x1111_1111);
+            list.Add(FillRectangle(0, 0, Width - 1, Rows - 1));
+            list.Add((0x3FUL << 56) | (0UL << 53) | (2UL << 51) | ((ulong)(Width - 1) << 32) | (Framebuffer + Width * 2));
+            list.Add((0x37UL << 56) | 0x2222_2222);
+            list.Add(FillRectangle(0, 0, Width - 1, Rows - 2));
+            list.Add(SyncFull);
+            ulong[] words = list.ToArray();
+
+            MemoryBus atOnce = new(), split = new();
+            split.Dp.Threaded = true;
+            split.Dp.Workers = 2;
+            HandOver(atOnce, words);
+            HandOver(split, words);
+            split.Dp.Join();
+
+            Assert.Equal(atOnce.Rdram, split.Rdram);
+            Assert.Equal(State(atOnce), State(split));
+        }
+
+        // A snapshot with several processors stands them all at one boundary, and its tail loads to the finished list.
+        [Fact]
+        public void A_snapshot_with_several_processors_stands_them_at_one_boundary()
+        {
+            MemoryBus atOnce = new(), split = new(), loaded = new();
+            split.Dp.Threaded = true;
+            split.Dp.Workers = 4;
+            loaded.Dp.Threaded = true;
+            loaded.Dp.Workers = 2;
+
+            ulong[] list = Shaded(0x2468_ACE0, toTheEdge: true);
+            HandOver(atOnce, list);
+            split.Dp.Pause();
+            HandOver(split, list);
+            byte[] snapshot = State(split, snapshot: true);
+            split.Dp.Resume();
+
+            Load(loaded, snapshot);
+            Assert.Equal(atOnce.Rdram, loaded.Rdram);
+            Assert.Equal(State(atOnce), State(loaded));
+
+            split.Dp.Join();
+            Assert.Equal(State(atOnce), State(split));
+        }
+
+        // A one-cycle scene of shaded, depth-tested triangles over a full frame buffer; to the edge, their right edges cross a scissor as wide as the image - see Mars_Rdp.md §2.8.
+        private static ulong[] Shaded(uint seed, bool toTheEdge, bool twoCycle = false, bool memoryAlphaFirst = false)
+        {
+            var list = new System.Collections.Generic.List<ulong>
+            {
+                FillCycle,
+                (0x3FUL << 56) | (0UL << 53) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer,
+                (0x3EUL << 56) | Depth,
+                Scissor(0, 0, Width, Rows),
+                (0x37UL << 56) | 0x0001_0001,
+                FillRectangle(0, 0, Width - 1, Rows - 1),
+                (0x37UL << 56) | 0xFFFC_FFFC,
+                (0x3FUL << 56) | (0UL << 53) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Depth,
+                FillRectangle(0, 0, Width - 1, Rows - 1),
+                (0x3FUL << 56) | (0UL << 53) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer,
+            };
+
+            // One or two cycles, depth compared and updated, blending the pixel into memory by its alpha, and in the first cycle by memory alpha when asked - see Mars_RdpTwoCycle.md §4.
+            ulong blend = (1UL << 22) | (1UL << 20) | (memoryAlphaFirst ? (1UL << 18) | (1UL << 16) : 0);
+            list.Add((0x2FUL << 56) | ((ulong)(twoCycle ? 1 : 0) << 52) | (3UL << 38) | (3UL << 36) | blend | (1UL << 4) | (1UL << 5) | (1UL << 3) | (1UL << 6));
+            list.Add(Combine(4, 8, 11, 7, 4, 7, 4, 7));
+
+            uint state = seed;
+            for (int i = 0; i < 24; i++)
+            {
+                double x1 = Next(ref state) % (Width + 40) - 20, y1 = Next(ref state) % (Rows + 20) - 10;
+                double x2 = Next(ref state) % (Width + 40) - 20, y2 = Next(ref state) % (Rows + 20) - 10;
+                double x3 = Next(ref state) % (Width + 40) - 20, y3 = Next(ref state) % (Rows + 20) - 10;
+                if (toTheEdge && (i & 1) == 0) x2 = Width + 30;
+                list.AddRange(Triangle(0x0C, x1, y1, x2, y2, x3, y3, Next(ref state)));
+            }
+
+            list.Add(SyncFull);
+            return list.ToArray();
+        }
+
+        // Both cycles the same: (A - B) × C + D for colour and alpha; selector 0 is the previous pixel's result, which makes a primitive live - see Mars_RdpTwoCycle.md §4.
+        private static ulong Combine(int a, int b, int c, int d, int alphaA, int alphaB, int alphaC, int alphaD)
+        {
+            ulong high = (ulong)((a << 20) | (c << 15) | (alphaA << 12) | (alphaC << 9) | (a << 5) | c);
+            ulong low = (ulong)(uint)((b << 28) | (b << 24) | (alphaA << 21) | (alphaC << 18) | (d << 15) | (alphaB << 12) | (alphaD << 9) | (d << 6) | (alphaB << 3) | alphaD);
+            return (0x3CUL << 56) | (high << 32) | low;
+        }
+
+        private static uint Next(ref uint state)
+        {
+            state = state * 1664525u + 1013904223u;
+            return state >> 8;
+        }
+
+        // A triangle's edges from three corners, with its shade and depth words from a seed; any well-formed words are a valid test - see MarsRdpDifferentialTests.
+        private static ulong[] Triangle(int id, double x1, double y1, double x2, double y2, double x3, double y3, uint seed)
+        {
+            var sorted = new[] { (X: x1, Y: y1), (X: x2, Y: y2), (X: x3, Y: y3) }.OrderBy(v => v.Y).ToArray();
+            var (top, middle, bottom) = (sorted[0], sorted[1], sorted[2]);
+
+            double major = bottom.Y > top.Y ? (bottom.X - top.X) / (bottom.Y - top.Y) : 0;
+            double upper = middle.Y > top.Y ? (middle.X - top.X) / (middle.Y - top.Y) : 0;
+            double lower = bottom.Y > middle.Y ? (bottom.X - middle.X) / (bottom.Y - middle.Y) : 0;
+
+            int yh = (int)Math.Floor(top.Y * 4), ym = (int)Math.Floor(middle.Y * 4), yl = (int)Math.Floor(bottom.Y * 4);
+            double rowTop = Math.Floor(top.Y);
+            double xh = top.X + major * (rowTop - top.Y), xm = top.X + upper * (rowTop - top.Y), xl = middle.X + lower * (ym / 4.0 - middle.Y);
+            bool majorOnLeft = middle.X > top.X + major * (middle.Y - top.Y);
+
+            var words = new ulong[EmuSen.Cores.Nintendo.Mars.Rdp.Rdp.Length((uint)id)];
+            words[0] = ((ulong)id << 56) | (majorOnLeft ? 1UL << 55 : 0) | ((ulong)(uint)(yl & 0x3FFF) << 32) | ((ulong)(uint)(ym & 0x3FFF) << 16) | (uint)(yh & 0x3FFF);
+            words[1] = Edge(xl, lower);
+            words[2] = Edge(xh, major);
+            words[3] = Edge(xm, upper);
+
+            // Shade: colours in the low half of their range and small steps; depth: mid-range with a small slope, so the tests draw and compare rather than clip everything.
+            uint s = seed;
+            for (int i = 4; i < 12; i++) words[i] = ((ulong)(Next(ref s) & 0x007F_FFFF) << 32) | (Next(ref s) & 0x0003_FFFF);
+            if (words.Length > 12)
+            {
+                words[12] = ((ulong)(0x1000 + (Next(ref s) & 0xFFFF)) << 48) | ((ulong)(Next(ref s) & 0xFFFF) << 32) | ((ulong)(Next(ref s) & 0x3FF) << 16) | (Next(ref s) & 0xFFFF);
+                words[13] = ((ulong)(Next(ref s) & 0x3FF) << 48) | ((ulong)(Next(ref s) & 0xFFFF) << 32) | (Next(ref s) & 0x03FF_FFFF);
+            }
+
+            return words;
+        }
+
+        private static ulong Edge(double x, double slope) =>
+            ((ulong)(uint)(int)Math.Round(x * 65536) << 32) | (uint)(int)Math.Round(Math.Clamp(slope, -8192, 8191) * 65536);
 
         // A full frame buffer of fill rectangles, with a depth image set and, when asked, a texture loaded from RDRAM.
         private static ulong[] Scene(uint color, bool load = false, int loadRows = 32)

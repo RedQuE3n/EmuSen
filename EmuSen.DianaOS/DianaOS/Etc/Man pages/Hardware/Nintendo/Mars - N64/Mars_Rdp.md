@@ -273,6 +273,93 @@ thread is the standstill, under a millisecond a capture. `A_snapshot_taken_while
 pauses before a list is handed over, so every word of it is pending, and proves the loaded machine equal to the list
 run at once.
 
+### 2.8 The list shared by several processors, each shading the rows that are its by count
+
+*2026-09-20, Phase G. Built from §10.2's pricing; the measurements are `Mars_Performance.md` §35.* The interface can
+hold more than one processor (`Workers`, `MarsCore.RdpWorkers`), each a complete `Rdp` on a thread of its own, each
+reading every word of the ring in order and running every command, and each shading only the rows whose number
+modulo the count is its index. That is angrylion-plus's shape (§10.1), and it fits Mars better than it fits angrylion
+because the processor was already one object with no thread in it: the walk, the loads and the register writes are
+simply done N times, which costs about a fifth of one processor's work, and the shading, the other four fifths, is
+divided. The first processor is `Processor`, the one the state serialises and the immediate path runs; the others
+are made when the count is set, copied from it (`CopyStateFrom`, the serializer's own bytes and the decoded modes),
+and discarded when it is set back.
+
+**A word is done when every processor has run it.** `Completed()` is the least of their counts, and everything the
+machine's thread reads — a mark's wait, the ring's room, a join, a snapshot's tail — reads that. Each processor
+publishes its own count after every word; nothing else is shared between them but RDRAM, its hidden bits and the
+ring, and the ring's slots are reused only past the least count.
+
+**Four things a shared list cannot let happen, and the step each command is given for them.** A command's step is
+decided by every processor alike at the word that completes it (`Classify`), from the processor's own registers, so
+no processor tells another anything: the decision is deterministic because every register was set by a command they
+all ran in order. The only decision that once depended on the interface's timing — whether a load's bytes are being
+drawn — was made deterministic by tracking the furthest pixel any draw could have reached in each image since it was
+set (`Reach`, the interface's own extent for an image), which the barrier at every image change makes sufficient.
+
+1. *A carry that crosses rows* (§10's two): the previous pixel's stored depth slope, read by a two-cycle primitive
+   whose first blend selects memory alpha, and the combiner's previous result, selected as COMBINED by the second
+   cycle in one-cycle mode or the first in two-cycle mode. Such a primitive is `Step.Leader`: every processor arrives
+   at a barrier, the first draws every row alone, and every processor arrives again before any goes on. Before it
+   draws, the first takes the scratch each field's last writer in raster order left (below), so the slope it starts
+   from is the raster order's.
+
+2. *A span that writes past its row.* A span is clipped by the scissor and not by the image's width, so a scissor
+   past the width lets a pixel of row *y* write row *y* + 1's bytes, which another processor owns. In one and
+   two-cycle modes the pixel at exactly the width has no coverage and writes nothing, so only a scissor, or a
+   rectangle's own right edge, past the width in any fraction serialises the primitive; in fill and copy modes the
+   scissor's own column is drawn (§5.2), so reaching the width at all does. A primitive whose colour and depth images
+   overlap is serialised for the same reason: one row's depth word is another row's colour bytes.
+
+3. *A load from bytes a draw may have written*, since the primitives before it may still be drawing on another
+   processor, and the primitives after it may write its source before another processor has read it. Such a load is
+   `Step.AllJoined`: a barrier, every processor's own load into its own texture memory, and a barrier.
+
+4. *An image change*, which maps the rows onto other bytes, so that a row of the new image is a row of the old one
+   by another count. `Step.All`: a barrier, then every processor's own register write. The barrier is a counting
+   spin barrier with a generation, three to nine passes a frame in the recorded frames, and it lets everyone through
+   when a processor has faulted so that the fault, not a hang, is what the machine's thread sees.
+
+**The pixel at the width, which reads and does not write.** With a scissor equal to the image's width — the usual
+case — a span clipped by it visits the column at the width, whose bytes are the next row's first, and the pixel reads
+them (the memory colour, and the stored depth slope) with zero coverage and writes nothing. Nothing in the picture
+depends on the read, but the scratch it leaves does — `_memory`, the blend shifts and the stored slope are in the
+state, and the slope is read by the next live primitive — and its value depends on when the read happens relative to
+the next row's owner. So, for a shared primitive whose last shaded row's last pixel is at or past the width, the
+processor that *owns the next row* makes those reads itself, at its own end of the primitive (`RecordAliasedRead`):
+at that moment it has finished every row of its own of every primitive up to this one and started nothing after, and
+no other processor writes its rows, so what it reads is what raster order reads. The processor that shaded the row
+still makes the read at the pixel, and what it reads is timing; the stamps below discard it. This is the one place
+the split needed something angrylion does not have, and the test that proves the need
+(`The_read_past_a_rows_end_is_made_by_the_next_rows_owner_before_it_runs_on`) is the day's best instrument: without the
+record it fails three runs in five, which is what a frontend would have seen.
+
+**What a join assembles.** The state serialises every field of the first processor, and the scratch fields hold
+their last write in raster order — a different pixel for each field, as §10.2 found. Every processor stamps each
+scratch field it writes with the primitive's count over the row (`Stamp`), the fields that every pixel writes once at
+the row's start and the conditional ones at the write; at a join, at a snapshot's pause and at a live primitive's
+barrier, the first processor takes each field from whichever processor's stamp is the latest (`TakeScratchFrom`),
+the coverage buffer entry by entry. The tables the walk writes need no stamps: every processor walks every primitive
+it does not draw alone, and the ones it skips are rewritten by the next walk before anything reads them. The
+processors' own stale scratch is never read for output — every field but the two carries is written by a pixel
+before that pixel reads it — which is the fact §10.2's inventory established and this design rests on.
+
+**A snapshot with several processors** (§2.7) needs a point every processor stands at. The pause point is the furthest
+command boundary any processor has reached when it sees the request: each raises the point to its own boundary if
+that is further, runs on to it if it is short of it, and stands there; the request is answered when all stand at the
+same point. A processor short of the point can never be waited for at a barrier by one past it, because a barrier
+is inside a command and the point is a boundary. The cost is that the slowest processor runs to the fastest's
+boundary, which is about a primitive.
+
+**What is exact, and how it is known.** `MarsThreadedRdpTests` hand over fills, shaded triangles clipped at the
+scissor's right edge, a two-cycle scene with memory alpha in its first blend, a load from the drawn image, an image
+set one row into the last, and a snapshot, to two, three and four processors, and compare RDRAM, the hidden bits and
+the state byte for byte with the list run at once. Each of the four mechanisms above was removed in turn and its
+test failed — every run for the serialisation, the load and the image change, three of five for the aliased read.
+The rasteriser bench replays the three recorded frames of §7 with the same RDRAM hashes at one, two and four
+processors; the probe grades 1,800 frames with the byte-level verifier on. None of it is a proof of the design;
+all of it is what the design predicts and nothing yet contradicts.
+
 ## 3. The command stream
 
 Words are taken into a buffer one at a time, and a command runs once all of its words have
@@ -645,4 +732,4 @@ or a reader, waits for every worker's count. The verifier runs per worker unchan
 the live mode, both aliasings and a load from a drawn image — and then the probe and the differential. §10.1's warning
 stands: no worker may be the machine's thread.
 
-**Not built.** The snapshot of §2.7 and this pricing were the day's work on this thread; the split is the next.
+**Built the next day, as §2.8**, to this shape; what the inventory did not foresee — the read at the width, made by the next row's owner — is that section's fourth paragraph.

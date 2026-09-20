@@ -55,17 +55,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             {
                 blend = ForceBlend || (!overflow && Antialias);
                 int far = deltaZEncoded < 0xB ? 4 : 0xF - deltaZEncoded;
-                if (shifts) (_blendShiftA, _blendShiftB) = (0, far);
-                if (pastShifts) (_pastShiftA, _pastShiftB) = (0, far);
+                if (shifts) (_blendShiftA, _blendShiftB, _shiftStamp) = (0, far, _rowStamp);
+                if (pastShifts) (_pastShiftA, _pastShiftB, _pastShiftStamp) = (0, far, _rowStamp);
                 _pastStoredEncoded = 0xF;
                 return true;
             }
 
-            byte[] rdram = _bus.Rdram;
-            Touch(index * 2);
-            bool valid = index * 2 + 1 < rdram.Length;
-            int stored = valid ? (rdram[index * 2] << 8) | rdram[index * 2 + 1] : 0;
-            int storedHidden = valid ? _bus.RdramHidden[index] : 0;
+            (int stored, int storedHidden) = ReadDepthWord(index);
 
             int old = DecompressDepth(stored);
             int storedEncoded = ((stored & 3) << 2) | storedHidden;
@@ -75,12 +71,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             {
                 _blendShiftA = Math.Clamp(deltaZEncoded - storedEncoded, 0, 4);
                 _blendShiftB = Math.Clamp(storedEncoded - deltaZEncoded, 0, 4);
+                _shiftStamp = _rowStamp;
             }
 
             if (pastShifts)
             {
                 _pastShiftA = Math.Clamp(deltaZEncoded - _pastStoredEncoded, 0, 4);
                 _pastShiftB = Math.Clamp(_pastStoredEncoded - deltaZEncoded, 0, 4);
+                _pastShiftStamp = _rowStamp;
             }
 
             _pastStoredEncoded = storedEncoded;
@@ -119,6 +117,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 default:
                     return farther && nearer && !maximum;
             }
+        }
+
+        // The word and its hidden bits at a depth index, or zero past the memory's end.
+        private (int Stored, int Hidden) ReadDepthWord(uint index)
+        {
+            byte[] rdram = _bus.Rdram;
+            Touch(index * 2);
+            bool valid = index * 2 + 1 < rdram.Length;
+            return (valid ? (rdram[index * 2] << 8) | rdram[index * 2 + 1] : 0, valid ? _bus.RdramHidden[index] : 0);
         }
 
         private void StoreDepth(uint index, int z, int deltaZEncoded)

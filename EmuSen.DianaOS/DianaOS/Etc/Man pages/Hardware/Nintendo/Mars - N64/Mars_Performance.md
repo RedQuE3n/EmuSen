@@ -1529,3 +1529,54 @@ are the kind of thing the bench catches and reasoning does not.
 **What it costs in history.** A delta now carries the tail's changed words as well as the frame's — about 400 to
 600 KB a capture in Wave Race, against the buffer's 96 MB, which is forty seconds of rewind rather than minutes. The
 interval is the knob, and it is a product decision (`EmuSen_Rewind_And_FastForward.md` §1.5).
+
+## 35. The rasteriser split across scanlines, and where the bound moves to
+
+*2026-09-20.* `Mars_Rdp.md` §10.2 priced the split and §2.8 records what was built: N complete processors reading the
+same words, each shading the rows whose number modulo N is its own, a barrier at an image change, a load from drawn
+bytes and a primitive whose carry crosses rows, and the read at the width made by the next row's owner. This section
+is what it measures.
+
+**The rasteriser alone.** The three recorded frames of §7's bench, replayed thirty times from their states, best of
+thirty; the RDRAM and hidden-bit hashes were the same at every count.
+
+| best, ms | direct | 1 worker | 2 | 4 |
+| --- | --- | --- | --- | --- |
+| Ocarina of Time, frame 302 (5,186 words) | 31.4 | 31.8 | 16.7 | 10.4 |
+| Super Mario 64, frame 400 (3,741 words) | 14.0 | 14.0 | 8.0 | 4.8 |
+| Wave Race 64, frame 301 (15,013 words) | 16.4 | 16.0 | 9.2 | 6.6 |
+
+That is 1.8 to 1.9× at two and 2.5 to 3.0× at four, against §10.2's estimate of 1.7 and 2.5 from a fifth of the
+work being replayed rather than divided. None of these frames has a primitive drawn alone or a load waited for; the
+barriers are the image changes, three to nine a frame.
+
+**In play.** The four gameplay states through the play harness, deferred scan-out and the threaded list, one build
+in four modes interleaved, three rounds of 600 frames; second halves, medians, the rounds' range in brackets:
+
+| fps | 1 worker | 2 | 3 | 4 | of the console at 4 |
+| --- | --- | --- | --- | --- | --- |
+| Ocarina of Time (50 Hz) | 51.1 (50.7–51.8) | 67.2 (67.1–67.4) | 71.8 (71.2–72.0) | 74.1 (73.4–74.2) | 148% |
+| Wave Race 64 (60 Hz) | 60.2 (60.0–60.9) | 70.7 (70.5–72.1) | 70.1 (65.8–73.6) | 73.2 (72.4–73.7) | 122% |
+| Super Mario 64, in the castle (50 Hz) | 73.5 (73.2–73.6) | 79.4 (78.6–79.7) | 80.6 (79.2–80.8) | 80.3 (79.9–80.8) | 161% |
+| Super Mario 64, outside it (50 Hz) | 54.8 (54.2–55.7) | 80.7 (80.7–80.9) | 84.6 (82.2–85.4) | 84.8 (84.0–84.9) | 170% |
+
+Every state is past its console at two workers and the second pair of workers adds a tenth or less, where the
+rasteriser alone gained a further third. **The bound has moved.** With the list drawn in half the time, the
+emulation thread — the processor, its blocks and the signal processor's loop, which §32 found idle two thirds of
+the time — is what a frame waits for in three of the four states; Wave Race's 73 fps is 13.7 ms a frame, which is
+close to what §26 measured that thread doing on its own. §33's advice about the signal processor's loop, recorded
+and not taken because the thread was idle, is worth taking now, and `Mars_Rsp.md` §10 has it.
+
+**What the split costs when it is off.** The stamps are a few stores a row and one a pixel under a mode predicate,
+and the coverage buffer's stamp is filled beside it; the classification is two compares a primitive. The one-worker
+column above is the split's code at one worker, and it is within the rounds of §34.1's numbers for the same build
+without it, so the cost is below what the harness resolves.
+
+**Graded.** The probe's 1,800 frames from boot, threaded, with the byte-level verifier on, are identical to the
+baseline at four workers and at two, save state and all; the Mars and Common suites pass, 3,505 tests, with the
+verifier on in Debug.
+
+**What is not measured.** A weak machine, where the workers share cores with the emulation thread and the scan-out
+(`project_optimization_for_weak_machines`); a scene with many primitives drawn alone, which none of the four states
+or three frames has; and the frontend's own path, §34's, with the workers on. The count the frontend uses is a
+product setting and is not this section's to decide.

@@ -12,6 +12,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void RowCoverage(int row, int left, int right)
         {
             Array.Fill(_coverage, (byte)0xFF, left, right - left + 1);
+            Array.Fill(_coverageStamp, _rowStamp, left, right - left + 1);
 
             for (int sub = 0; sub < 4; sub++)
             {

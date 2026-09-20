@@ -31,6 +31,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             _colorImageBytes = _colorImageSize switch { 1 => 1, 2 => 2, 3 => 4, _ => 0 };
             _colorImageWidth = (int)((word >> 32) & 0x3FF) + 1;
             _colorImage = (uint)word & 0x00FF_FFFF;
+            _colorDrawnTo = 0;
         }
 
         private void Scissor(ulong word)
@@ -145,6 +146,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             else if (CycleType == OneCycle) DrawOneCycle(rows, majorOnLeft, tile, maxLevel);
             else if (CycleType == TwoCycle) DrawTwoCycle(rows, majorOnLeft, tile, maxLevel);
             else DrawCopy(rows, majorOnLeft, tile, maxLevel);
+
+            if (_workers > 1 && !_alone && CycleType <= TwoCycle) RecordAliasedRead(rows, majorOnLeft);
         }
 
         // A four-bit image has nothing to fill - see Mars_Rdp.md §5.3.
@@ -156,7 +159,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             for (int y = rows.First; y <= rows.Last; y++)
             {
-                if (!_spanDrawn[y]) continue;
+                if (!_spanDrawn[y] || !Owns(y)) continue;
 
                 for (int x = _spanLeft[y]; x <= _spanRight[y]; x++)
                 {

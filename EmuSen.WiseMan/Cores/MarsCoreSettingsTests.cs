@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Linq;
+using EmuSen.WiseMan.Fixtures;
 using EmuSen.Cores;
 using EmuSen.Cores.Nintendo.Mars;
 
@@ -9,10 +11,10 @@ namespace EmuSen.WiseMan.Cores
     public class MarsCoreSettingsTests
     {
         [Fact]
-        public void The_catalogue_offers_the_same_six_settings_the_core_answers()
+        public void The_catalogue_offers_the_same_seven_settings_the_core_answers()
         {
             ICoreSettings core = new MarsCore();
-            Assert.Equal(new[] { "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale", "ExpansionPak" }, core.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale", "Antialiasing", "ExpansionPak" }, core.Settings.Select(s => s.Key));
             Assert.Same(core.Settings, CoreCatalog.SettingsFor("N64"));
             Assert.Empty(CoreCatalog.SettingsFor("SNES"));
         }
@@ -50,6 +52,51 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(Math.Clamp(Environment.ProcessorCount / 3, 1, 4), core.RdpWorkers);
             Assert.Equal(1, core.RenderScale);
             Assert.True(core.ExpansionPak);
+            Assert.Equal(1, core.Antialiasing);
+        }
+
+        // The drawing is the resolution times the averaging and never past four, the averaging giving way - see Mars_Video.md §2.10.
+        [Theory]
+        [InlineData(1, "Off", 1, 1)]
+        [InlineData(1, "4x", 4, 4)]
+        [InlineData(2, "2x", 4, 2)]
+        [InlineData(2, "4x", 4, 2)]
+        [InlineData(3, "2x", 3, 1)]
+        [InlineData(4, "3x", 4, 1)]
+        public void Antialiasing_multiplies_the_drawing_and_is_held_to_four_with_the_resolution(int scale, string level, int drawn, int averaged)
+        {
+            var core = new MarsCore(batteryRamDisabled: true);
+            core.LoadRom(WriteRom());
+            ICoreSettings settings = core;
+            settings.Set("RenderScale", scale.ToString());
+            settings.Set("Antialiasing", level);
+
+            Assert.Equal(level, settings.Get("Antialiasing"));
+            Assert.Equal(scale, core.RenderScale);
+            Assert.Equal(drawn, core.Bus!.Dp.Scale);
+            Assert.Equal(averaged, core.Bus.Vi.Average);
+            Assert.Throws<ArgumentException>(() => settings.Set("Antialiasing", "8x"));
+        }
+
+        // A square of the multiple's raster becomes one pixel, its rounded mean in every channel - see Mars_Video.md §2.10.
+        [Fact]
+        public void The_average_of_a_square_is_its_rounded_mean_channel_by_channel()
+        {
+            byte[] source =
+            {
+                0, 10, 255, 255,   1, 20, 255, 255,   100, 0, 0, 255,   100, 0, 0, 255,
+                1, 30, 255, 255,   1, 40, 255, 255,   100, 0, 0, 255,   104, 0, 0, 255,
+            };
+            var into = new byte[8];
+            EmuSen.Cores.Nintendo.Mars.Vi.Vi.BoxAverage(source, 4, 2, into);
+            Assert.Equal(new byte[] { 1, 25, 255, 255, 101, 0, 0, 255 }, into);
+        }
+
+        private static string WriteRom()
+        {
+            string path = Path.Combine(Path.GetTempPath(), "mars_settings_" + Guid.NewGuid().ToString("N") + ".z64");
+            File.WriteAllBytes(path, SyntheticN64Rom.Build());
+            return path;
         }
 
         [Fact]

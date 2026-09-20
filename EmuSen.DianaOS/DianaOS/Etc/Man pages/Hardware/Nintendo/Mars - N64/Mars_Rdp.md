@@ -756,7 +756,7 @@ console's drawing, exactly as at one. The multiple is a second drawing, made bes
 into a memory nothing in the machine reads, which the scan-out shows in the first's place (`Mars_Video.md` §2.9).
 
 **The shape.** `DpInterface.Scale` allocates a shadow of RDRAM and its hidden bits at the multiple squared
-(`ScaledRdram`, `ScaledHidden`: 32, 72 and 128 megabytes at two, three and four), and beside every native processor
+(`ScaledRdram`, `ScaledHidden`: 32, 72 and 128 megabytes at two, three and four on the eight-megabyte machine a frontend builds, half that on a stock one, and half as much again for the hidden bits), and beside every native processor
 a processor at the multiple: one for the direct paths (`_scaledProcessor`, fed by `Take` and the pool's drain after
 the native processor takes each word) and one per worker of §2.8 (`Worker.Scaled`, fed by the worker's loop). A
 processor at the multiple is an ordinary `Rdp` told `DrawAt(scale, frame, hidden)`: it takes the same words, walks

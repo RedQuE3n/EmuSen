@@ -839,7 +839,8 @@ one is not uniform.
 - **HLE graphics or audio as an option** — reopens only if §2.1's condition fires.
 - **A GPU-backed RDP** — same.
 - **64DD, the Expansion Pak as a default, rumble, the Transfer Pak, netplay** —
-  each reopens when something concrete needs it, not before.
+  each reopens when something concrete needs it, not before. *The Expansion Pak reopened on 2026-09-20, for
+  Majora's Mask, and is now the frontends' default: `Mars_Core.md` §7.*
 
 ## 7. Scale, stated without false precision
 

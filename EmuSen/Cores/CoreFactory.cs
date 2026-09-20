@@ -36,7 +36,7 @@ namespace EmuSen.Cores
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => new MoonCore(),
             ".gb" or ".gbc" => new MercuryCore(),
-            ".z64" or ".n64" or ".v64" => new MarsCore(),
+            ".z64" or ".n64" or ".v64" => new MarsCore(expansionPak: true),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };

@@ -69,10 +69,10 @@ namespace EmuSen.Cores.Nintendo.Mars
         private int _rdpWorkers = 1;
         private long _lastFrameCycles = CycleCap;
 
-        // A stock console by default, because the plan defers the Pak as a default - see Mars_Core.md §7.
+        // A stock console unless asked; the factory asks, so a frontend's machine has the Pak - see Mars_Core.md §7.
         public MarsCore(bool expansionPak = false, bool? batteryRamDisabled = null)
         {
-            ExpansionPak = expansionPak;
+            _expansionPak = expansionPak;
             _batteryRamDisabled = batteryRamDisabled;
 
             // The seams `bt`, `step over`/`out` and `cov` read, as the other cores wire them - see Mars_Debug.md §2.
@@ -109,7 +109,20 @@ namespace EmuSen.Cores.Nintendo.Mars
         // Null defers to --nobattery; a test passes its own so no other test's switch can reach it - see Mars_Save.md §7.
         private readonly bool? _batteryRamDisabled;
 
-        public bool ExpansionPak { get; }
+        // The Pak the next load builds; before the first frame a change rebuilds the machine at once - see Mars_Core.md §7.
+        public bool ExpansionPak
+        {
+            get => _expansionPak;
+            set
+            {
+                if (value == _expansionPak) return;
+                _expansionPak = value;
+                if (Bus is not null && TotalFrames == 0 && _romPath is { } path) LoadRom(path);
+            }
+        }
+
+        private bool _expansionPak;
+        private string? _romPath;
 
         public RomImage? Rom { get; private set; }
         public MemoryBus? Bus { get; private set; }
@@ -165,6 +178,12 @@ namespace EmuSen.Cores.Nintendo.Mars
         public void LoadRom(string path)
         {
             var rom = RomImage.Load(path);
+
+            // A machine being replaced gives up its threads first - see Mars_Core.md §7.
+            JoinPresentation();
+            if (Bus is { } replaced) replaced.Dp.Threaded = false;
+            _romPath = path;
+
             var bus = new MemoryBus(ExpansionPak);
             bus.RomPatcher = new global::EmuSen.Cores.CheatRomPatcher(Cheats);
             var cpu = new Cpu.Core.Cpu(bus);
@@ -308,7 +327,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             }
         }
 
-        // The four video settings a frontend can offer, with the defaults Mistress used to set by hand - see Mars_Core.md §10.
+        // The settings a frontend can offer, with the defaults Mistress used to set by hand - see Mars_Core.md §10.
         public static readonly IReadOnlyList<global::EmuSen.Cores.CoreSetting> VideoSettings = new global::EmuSen.Cores.CoreSetting[]
         {
             new("ThreadedRdp", "Draw on a separate thread", "The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact; faster on any machine with two cores to spare.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
@@ -316,6 +335,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             new("DeferredPresentation", "Scan out while the next frame runs", "The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late. Off, the frame waits for its picture.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
             new("SkipRepeatedScans", "Skip a scan that repeats the last", "A scan whose registers and bytes match the last walk is not walked again. Exact; the picture is the same either way.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
             new("RenderScale", "Internal resolution", "The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed.", global::EmuSen.Cores.CoreSettingKind.Choice, "1", Choices: new[] { "1", "2", "3", "4" }),
+            new("ExpansionPak", "Expansion Pak", "The memory accessory that doubles the console's 4MB. A few games refuse to start without it and more use it when it is there. Takes effect when a game is next loaded; a save state resumes with the memory it was made with.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
         };
 
         IReadOnlyList<global::EmuSen.Cores.CoreSetting> global::EmuSen.Cores.ICoreSettings.Settings => VideoSettings;
@@ -327,6 +347,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             "DeferredPresentation" => DeferredPresentation ? "true" : "false",
             "SkipRepeatedScans" => SkipRepeatedScans ? "true" : "false",
             "RenderScale" => RenderScale.ToString(),
+            "ExpansionPak" => ExpansionPak ? "true" : "false",
             _ => throw new ArgumentException($"Mars has no setting named {key}.", nameof(key)),
         };
 
@@ -340,6 +361,7 @@ namespace EmuSen.Cores.Nintendo.Mars
                 case "DeferredPresentation": DeferredPresentation = Switch(value); break;
                 case "SkipRepeatedScans": SkipRepeatedScans = Switch(value); break;
                 case "RenderScale": RenderScale = Math.Clamp(Count(value), 1, 4); break;
+                case "ExpansionPak": ExpansionPak = Switch(value); break;
                 default: throw new ArgumentException($"Mars has no setting named {key}.", nameof(key));
             }
 
@@ -466,7 +488,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             Bus.WriteState(w, snapshot);
         }
 
-        // A state for another machine is refused before anything is read into this one - see Mars_SaveStates.md §1.
+        // A state made with the other amount of memory rebuilds the machine to it; any other size is refused before anything is read - see Mars_SaveStates.md §1.
         public void LoadState(Stream stream)
         {
             RequireRom(nameof(LoadState));
@@ -478,7 +500,13 @@ namespace EmuSen.Cores.Nintendo.Mars
             if (version != StateVersion && version != SnapshotVersion) throw new InvalidDataException($"Mars save state version {version} is not {StateVersion}.");
 
             int rdram = r.ReadInt32();
-            if (rdram != Bus!.Rdram.Length) throw new InvalidDataException($"The state was saved with {rdram / (1024 * 1024)}MB of RDRAM and this machine has {Bus.Rdram.Length / (1024 * 1024)}MB.");
+            if (rdram != Bus!.Rdram.Length)
+            {
+                bool known = rdram == MemoryBus.RdramSize || rdram == MemoryBus.RdramSizeExpanded;
+                if (!known || _romPath is null) throw new InvalidDataException($"The state was saved with {rdram / (1024 * 1024)}MB of RDRAM and this machine has {Bus.Rdram.Length / (1024 * 1024)}MB.");
+                _expansionPak = rdram == MemoryBus.RdramSizeExpanded;
+                LoadRom(_romPath);
+            }
 
             TotalFrames = r.ReadInt64();
             _lastFrameCycles = r.ReadInt64();

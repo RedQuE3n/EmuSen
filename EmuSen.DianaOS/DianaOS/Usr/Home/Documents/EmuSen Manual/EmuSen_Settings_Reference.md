@@ -655,6 +655,14 @@ memory for the multiple's frame, 32 to 128 megabytes. What it cannot show: a fra
 draws, which the core's drawing does not see, comes out black or stale at a multiple. What it costs in play is
 `Mars_Rdp.md` §11.1.
 
+**Second addendum, 2026-09-20: the Expansion Pak.** The N64's tab gained *Expansion Pak*, a switch, on by default,
+and the first setting there that is not about the picture. Games that need the accessory (Majora's Mask shows its
+own "not installed" screen without it) now start, because the console a frontend builds has it; the switch is for
+taking it out. The game reads the memory's size once as it boots, so a change while playing waits for the next load
+of a game, while the value applied at `LoadRom` takes effect at once. Save states made before this, on four
+megabytes, still load: the core rebuilds the console to the state's memory (`Mars_SaveStates.md` §1), so such a
+game resumes without the Pak until it is loaded afresh.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

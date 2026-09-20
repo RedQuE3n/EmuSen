@@ -359,3 +359,52 @@ memory and its program counter at any instruction, and the processor's events mu
 always landed on. Running ahead to the next event would be exact only with a way to undo it when the CPU looks,
 and a copy of the processor's state at every block entry costs more than it saves. It is the next problem on this
 thread and is not begun.
+
+## 13. The fifth of the steps taken beside the CPU's own code: two routes measured, neither kept
+
+*2026-09-20.* §12 left 99 million steps in 900 frames of Ocarina of Time, a fifth of the processor's work, taken
+one at a time from the CPU's tick while the CPU runs real code. Two ways of making them cheaper were tried the same
+day. Both were measured before anything was kept, and neither is.
+
+**Route one: every instruction slot compiled, so a single step is its handler with the word folded in.** This keeps
+the interleave exactly as it is — one step a cycle, in the same order, so it is exact by construction, and the state
+hash after 1,200 frames was identical in all three games — and takes §12's folding to the steps a block cannot
+cover. A table of compiled one-instruction methods, four to a slot found by the word, the step moving its own
+counters and then calling the method. *It made the games slower*: four rounds interleaved against the commit
+before, Ocarina of Time's mean frame 8.29 to 8.80 milliseconds, Wave Race 6.91 to 7.30, Super Mario 64 level. A
+benchmark of single steps put the fixed cost of the compiled step at seven to eight nanoseconds whatever the
+operation — the table's compare, the delegate, its shuffle thunk and an indirect call whose target changes every
+step — against an interpreted add-immediate at 3.6 and a vector AND at 5.3. Folding pays inside a block because
+sixteen instructions share one call; a step at a time, the call costs more than the two switches it removes. One
+thing from it was worth knowing: inlining the handlers into the *interpreter's* dispatch as well makes that one
+method enormous and slow, so §12's attribute must stay off the path the interpreter takes. It does: the
+interpreter's `Execute` is not inlined into the step, and only emitted code names the handlers directly.
+
+**Route two: the processor run ahead of the CPU to its next event, and the CPU's ticks paid from the steps already
+run.** The pure instructions between two events touch nothing the CPU can see unless it reads the processor's
+memory, its program counter or writes its status, so the processor could run them early in blocks and the tick
+become a subtraction. To be exact it needs the events never run early (blocks ending before them, not after), a
+record of the processor's registers and the parts of data memory it has written since the last event, and an undo
+that restores them and steps forward again whenever the CPU touches the processor while steps are owed — at a
+state, a debugger's read, a status write. Events come about every fifty steps in the graphics microcode, so the
+record is taken that often. Before any of that was built, a prototype with no record and no undo — inexact, and
+flattering, since it pays none of those costs — was switched on in the same build: Ocarina of Time's mean frame
+fell 7.5 per cent, **and its drawing frames two**, 18.78 to 18.34 milliseconds at the ninetieth percentile. The
+steps taken beside the CPU's own code are mostly the sound task's, in the light fields, which cost four
+milliseconds against a slot of twenty. The frames that are over their slot are the drawing frames, and this route
+gives them a third of a millisecond at best, before its overhead. (Wave Race ran 15 per cent *slower* under the
+prototype, which says only that a game whose events land at the wrong cycles does different work; it is why an
+inexact prototype can bound a gain and cannot measure one.)
+
+**Why neither is kept.** The first loses. The second, at its ceiling, improves the frames that need it by two per
+cent, and costs the most delicate machinery on this thread: an undo that has to be right at every place the CPU can
+look at the processor. The exactness contract is the project's first rule and this would put the most weight on it
+for the least return of anything measured this phase. If the light fields ever matter — a slower host, where four
+milliseconds is not nothing — the prototype's number is here to start from.
+
+**What the drawing frames are made of now** is not this processor so much as the CPU: by an interrupt sample with
+the scan-out off, the CPU's interpreted instructions 17 per cent of the thread, its blocks 13, the dispatcher's
+entry 8 and software floating point 7, against the vector unit's 16 and the scalar half's 14. The next gains for
+Ocarina of Time's drawing frames are on that side: the coprocessor's arithmetic, a sixth of what reaches the
+interpreter's switch, and the register jumps, links and likely branches (`Mars_Recompiler.md` §16).
+

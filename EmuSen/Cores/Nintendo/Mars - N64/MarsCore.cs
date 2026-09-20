@@ -15,7 +15,7 @@ using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 namespace EmuSen.Cores.Nintendo.Mars
 {
     // The Nintendo 64's ICore; what the machine cannot provide yet is stubbed on purpose - see Mars_Core.md.
-    public sealed partial class MarsCore : global::EmuSen.Cores.ICore
+    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore
     {
         // The VR4300's pipeline clock, which is what MemoryBus.Cycles counts - see Mars_Memory.md §3.
         public const long ProcessorClockHz = 93_750_000;
@@ -43,6 +43,9 @@ namespace EmuSen.Cores.Nintendo.Mars
         // "MARS" little-endian, then the format version - see Mars_SaveStates.md §1.
         private const uint StateMagic = 0x5352_414D;
         private const int StateVersion = 1;
+
+        // The same body, then the words the display processor's thread had not run - see Mars_SaveStates.md §1.
+        private const int SnapshotVersion = 2;
 
         // How often a changed save is written without being asked, as the other cores do - see Mars_Save.md §7.
         public const int SaveEveryNFrames = 300;
@@ -374,19 +377,24 @@ namespace EmuSen.Cores.Nintendo.Mars
         }
 
         // A header, the processor, then the bus and everything it owns - see Mars_SaveStates.md §1.
-        public void SaveState(Stream stream)
+        public void SaveState(Stream stream) => Write(stream, snapshot: false);
+
+        // Written without waiting for the display processor's thread, for the rewind buffer - see Mars_SaveStates.md §1.
+        public void SaveSnapshot(Stream stream) => Write(stream, snapshot: true);
+
+        private void Write(Stream stream, bool snapshot)
         {
             RequireRom(nameof(SaveState));
 
             using var w = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
             w.Write(StateMagic);
-            w.Write(StateVersion);
+            w.Write(snapshot ? SnapshotVersion : StateVersion);
             w.Write(Bus!.Rdram.Length);
             w.Write(TotalFrames);
             w.Write(_lastFrameCycles);
 
             StateSerializer.Write(w, Cpu!);
-            Bus.WriteState(w);
+            Bus.WriteState(w, snapshot);
         }
 
         // A state for another machine is refused before anything is read into this one - see Mars_SaveStates.md §1.
@@ -398,7 +406,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             if (r.ReadUInt32() != StateMagic) throw new InvalidDataException("Not a Mars save state.");
 
             int version = r.ReadInt32();
-            if (version != StateVersion) throw new InvalidDataException($"Mars save state version {version} is not {StateVersion}.");
+            if (version != StateVersion && version != SnapshotVersion) throw new InvalidDataException($"Mars save state version {version} is not {StateVersion}.");
 
             int rdram = r.ReadInt32();
             if (rdram != Bus!.Rdram.Length) throw new InvalidDataException($"The state was saved with {rdram / (1024 * 1024)}MB of RDRAM and this machine has {Bus.Rdram.Length / (1024 * 1024)}MB.");
@@ -407,7 +415,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             _lastFrameCycles = r.ReadInt64();
 
             StateSerializer.Read(r, Cpu!);
-            Bus.ReadState(r);
+            Bus.ReadState(r, snapshot: version == SnapshotVersion);
 
             // The timer's due cycle and the interrupt check are derived from what was just read - see Mars_Performance.md §10.
             Cpu.Cop0Written();

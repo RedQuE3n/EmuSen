@@ -305,6 +305,35 @@ namespace EmuSen.WiseMan.Cores
             return core;
         }
 
+        // A snapshot is version 2 and loads like a state; a state keeps version 1 and its bytes - see Mars_SaveStates.md §1.
+        [Fact]
+        public void A_snapshot_loads_like_a_state_and_a_state_keeps_its_version()
+        {
+            MarsCore saver = Counting();
+            for (int i = 0; i < 20; i++) saver.RunFrame();
+
+            using var state = new MemoryStream();
+            saver.SaveState(state);
+            using var snapshot = new MemoryStream();
+            saver.SaveSnapshot(snapshot);
+
+            Assert.Equal(1, BitConverter.ToInt32(state.GetBuffer(), 4));
+            Assert.Equal(2, BitConverter.ToInt32(snapshot.GetBuffer(), 4));
+            Assert.Equal(state.Length + 4 + 8 * EmuSen.Cores.Nintendo.Mars.Memory.DpInterface.SnapshotWords, snapshot.Length);
+
+            snapshot.Position = 0;
+            MarsCore loader = Counting();
+            loader.LoadState(snapshot);
+
+            for (int i = 0; i < 20; i++)
+            {
+                saver.RunFrame();
+                loader.RunFrame();
+                Assert.Equal(saver.Bus!.Cycles, loader.Bus!.Cycles);
+                Assert.Equal(saver.Cpu!.Pc, loader.Cpu!.Pc);
+            }
+        }
+
         // A fresh core that loads a state keeps step with the one that saved it - see Mars_SaveStates.md §4.
         [Fact]
         public void A_fresh_core_loaded_from_a_state_keeps_step_with_the_one_that_saved_it()

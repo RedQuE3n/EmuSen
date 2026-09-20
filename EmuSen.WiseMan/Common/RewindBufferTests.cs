@@ -66,6 +66,37 @@ namespace EmuSen.WiseMan.Common
             }
         }
 
+        // The same machine, offering the snapshot a core with other threads writes without joining them - see §1.8.
+        private sealed class SnapshotCore : ICore, ISnapshotCore
+        {
+            public readonly FakeCore Inner = new();
+            public int Snapshots;
+
+            public string CoreName => Inner.CoreName;
+            public int ScreenWidth => Inner.ScreenWidth;
+            public int ScreenHeight => Inner.ScreenHeight;
+            public double FrameRateHz => Inner.FrameRateHz;
+            public bool IsRomLoaded => Inner.IsRomLoaded;
+            public long TotalFrames => Inner.TotalFrames;
+            public int AudioSampleRate => Inner.AudioSampleRate;
+            public bool SkipRendering { get => Inner.SkipRendering; set => Inner.SkipRendering = value; }
+            public void LoadRom(string path) { }
+            public void RunFrame() => Inner.RunFrame();
+            public byte[] GetFrameBufferRgba() => Inner.GetFrameBufferRgba();
+            public short[] DequeueAudioSamples(int maxFrames) => Inner.DequeueAudioSamples(maxFrames);
+            public void SaveSram() { }
+            public void SaveState(Stream stream) => Inner.SaveState(stream);
+            public void LoadState(Stream stream) => Inner.LoadState(stream);
+            public void SaveState(string path) => Inner.SaveState(path);
+            public void LoadState(string path) => Inner.LoadState(path);
+
+            public void SaveSnapshot(Stream stream)
+            {
+                Snapshots++;
+                Inner.SaveState(stream);
+            }
+        }
+
         private static (FakeCore Core, RewindBuffer Buffer) Run(int frames, int interval = 1)
         {
             var core = new FakeCore();
@@ -179,6 +210,36 @@ namespace EmuSen.WiseMan.Common
             int before = core.Counter;
             Assert.True(buffer.Rewind(core));
             Assert.Equal(before - 1, core.Counter);
+        }
+
+        // A core that can snapshot without joining its threads is asked to, and the chain rewinds through those snapshots - see §1.8.
+        [Fact]
+        public void A_core_with_snapshots_is_captured_through_them()
+        {
+            var core = new SnapshotCore();
+            var buffer = new RewindBuffer { Enabled = true, IntervalFrames = 1 };
+            buffer.CaptureNow(core);
+            for (int i = 0; i < 10; i++) { core.RunFrame(); buffer.OnFrameCompleted(core); }
+
+            Assert.Equal(11, core.Snapshots);
+            Assert.Equal(10, buffer.Depth);
+
+            for (int i = 0; i < 4; i++) Assert.True(buffer.Rewind(core));
+            Assert.Equal(6, core.Inner.Counter);
+        }
+
+        // The delta is encoded off the caller's thread, and the chain is whole by the time it is read - see §1.8.
+        [Fact]
+        public void A_capture_still_encoding_counts_and_rewinds()
+        {
+            var (core, buffer) = Run(3);
+            core.RunFrame();
+            buffer.OnFrameCompleted(core);
+
+            Assert.Equal(4, buffer.Depth);
+            Assert.True(buffer.Rewind(core));
+            Assert.Equal(3, core.Counter);
+            Assert.Equal(3, buffer.Depth);
         }
 
         [Fact]

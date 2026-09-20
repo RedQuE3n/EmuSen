@@ -91,13 +91,29 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         }
 
         // The reflected fields, then what reflection cannot walk: the stub registers, the save chip, each port's pak - see Mars_SaveStates.md §3.
-        public void WriteState(BinaryWriter w)
-        {
-            // The display processor's thread finishes first, so the state holds what it drew - see Mars_Rdp.md §2.6.
-            Dp.Join();
+        public void WriteState(BinaryWriter w) => WriteState(w, snapshot: false);
 
-            // Settled first, so a state holds what a device stepped every tick would - see Mars_Performance.md §9.
-            Settle();
+        // A snapshot holds the thread where it stands and carries the words it has not run; a state waits for it - see Mars_Rdp.md §2.7.
+        public void WriteState(BinaryWriter w, bool snapshot)
+        {
+            if (snapshot) Dp.Hold();
+            else Dp.Join();
+
+            try
+            {
+                // Settled first, so a state holds what a device stepped every tick would - see Mars_Performance.md §9.
+                Settle();
+                WriteStateBody(w);
+                if (snapshot) Dp.WritePending(w);
+            }
+            finally
+            {
+                if (snapshot) Dp.Resume();
+            }
+        }
+
+        private void WriteStateBody(BinaryWriter w)
+        {
             StateSerializer.Write(w, this);
 
             w.Write(_registers.Count);
@@ -116,7 +132,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
         }
 
-        public void ReadState(BinaryReader r)
+        public void ReadState(BinaryReader r) => ReadState(r, snapshot: false);
+
+        public void ReadState(BinaryReader r, bool snapshot)
         {
             Dp.Join();
             StateSerializer.Read(r, this);
@@ -146,6 +164,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Ai.Rebase();
             Reschedule();
             Dp.Processor.Refresh();
+            if (snapshot) Dp.ReadPending(r);
             Dp.RefreshShadow();
         }
 

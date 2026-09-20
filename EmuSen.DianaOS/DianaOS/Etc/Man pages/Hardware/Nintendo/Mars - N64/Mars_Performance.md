@@ -1439,3 +1439,93 @@ read-before-write from deterministic zeros into whatever the last frame left on 
 claim is bit-identical output graded by differential runs, that trades nothing for a class of defect that reproduces
 differently every run. Not adopted.
 
+## 34. The frontend's path, the transfer that was not the cost, and what the interface's counters say
+
+*2026-09-19.* §31 left the four states at or past their consoles in the play harness, and Mistress does not run them
+so. This section measures what the frontend adds — the rewind buffer's capture every fourth frame, the audio dequeue
+and the picture copy, which `frontbench` in the speed tooling runs after each frame as Mistress does — and then two
+things the day's profile-reading turned up.
+
+**The frontend's baseline.** Second halves of 600 frames from each state, two rounds, the capture on and off:
+
+| | buffer off | buffer on | of the console, buffer on |
+| --- | --- | --- | --- |
+| Ocarina of Time (50 Hz) | 50.6 / 50.1 | 49.1 / 48.8 | 98% |
+| Wave Race 64 (60 Hz) | 60.9 / 61.4 | 54.0 / 53.5 | 90% |
+| Super Mario 64, in the castle (50 Hz) | 73.3 / 75.0 | 69.1 / 70.0 | 139% |
+| Super Mario 64, outside it (50 Hz) | 55.4 / 55.8 | 52.0 / 51.1 | 103% |
+
+The picture and the audio are free. The capture is not: a join of the display processor's thread of 7.0 ms in Wave
+Race and 4.9 ms outside the castle (nothing in Ocarina and the castle, whose thread has caught up by the frame's
+end), then 3.3 ms of writing the 6.4 MB state, copying it and encoding the delta, on the emulation thread. Mistress
+therefore ran Wave Race at 90 per cent of its console with the buffer on. What was done about it is §34.1.
+
+**The transfer that was not the cost.** §32's per-thread profile put 47.6 per cent of Wave Race's emulation thread
+under the signal processor's DMA transfer with the garbage-collection poll as the leaf, and the transfer copies a
+byte at a time through the bus — a 32-bit read with the page-mark test for each byte read, a read and a write for
+each byte written. That is the profile a byte loop would give. The loop was replaced by a bulk copy for rows inside
+RDRAM, exact by construction (the same bytes, and the write counter advanced by the same count so the blocks' exit
+is unchanged), and timed interleaved against `c70a9ee`: three rounds of 600 frames from each of the four states,
+second halves, medians.
+
+| | `c70a9ee` | bulk copy |
+| --- | --- | --- |
+| Ocarina of Time | 52.1 | 52.7 |
+| Wave Race 64 | 60.0 | 60.0 |
+| Super Mario 64, in the castle | 73.6 | 75.2 |
+| Super Mario 64, outside it | 56.5 | 55.8 |
+
+Every row's rounds overlap, and the change is **not kept**, by the phase's rule. The finding is the attribution. The
+sampler suspends the runtime to take each sample, and a thread answers the suspension at the next poll it passes:
+the poll a spin loop calls, the poll after a native call returns, the poll the compiler places in a loop that calls
+nothing. The leaf is therefore always the poll, and the frame above it is whichever method the poll was *inlined*
+into — for a wait inlined through four small methods, the caller of the wait. The 47.6 per cent was the transfer's
+wait on the marks, not its copy loop. §32's reading of the same leaf as spinning was right; its attribution to
+methods by name, at this depth, is not to be trusted, and the interface's own counters are what to read instead.
+
+**What the interface's counters say.** From the play harness on `c70a9ee`, 600 frames from each state:
+
+| | waits | each | of the run |
+| --- | --- | --- | --- |
+| Wave Race 64: the scan-out's capture, on the two frame buffers | 133 | 12–25 ms | 18% |
+| Ocarina of Time: the processor's loads | 399 | 2.7 ms | 8% |
+| Ocarina of Time: the signal processor's DMA writing a texture page | a handful | 40–46 ms | — |
+
+Wave Race's is the whole of its waiting: the scan-out captures the buffer the game has just swapped to, and the
+thread has 12 to 25 thousand words of it still to draw. No finer mark shortens that, because the scan-out needs
+every byte of the buffer; only a faster rasteriser does, and the drainer's own count says the same from the other
+side — 7.03 million words in 600 frames at 1.17 µs each is 13.7 ms of drawing in a 16.7 ms frame. Ocarina's 399
+loads are the case per-primitive marks (§32) would shorten, and its DMA waits are the thread two frames behind the
+machine, which the ring allows and a snapshot's tail has to fit (`Mars_Rdp.md` §2.7).
+
+### 34.1 The snapshot: the capture without the join, measured
+
+Built as `Mars_Rdp.md` §2.7 and the rewind manual's §1.8 describe: the buffer asks the core for a snapshot, Mars
+holds its thread between two words and writes the words it has not run in a fixed 32k-word tail, and the buffer
+encodes the delta on a pool thread. Three rounds of 600 frames from each state, the capture every fourth frame, the
+old join and the snapshot interleaved on the same build; second halves, medians, the rounds in brackets:
+
+| | join before the capture | snapshot | per capture, join → snapshot |
+| --- | --- | --- | --- |
+| Ocarina of Time | 50.9 (50.9–51.7) | 51.3 (50.9–52.1) | 1.4 → 1.4 ms |
+| Wave Race 64 | 55.2 (54.9–55.5) | **58.7** (58.5–59.5) | 8.3 → 1.7 ms |
+| Super Mario 64, in the castle | 71.4 (70.7–72.4) | 72.8 (68.8–73.6) | 1.5 → 1.4 ms |
+| Super Mario 64, outside it | 54.0 (53.5–54.4) | **56.4** (55.5–56.6) | 6.3 → 1.5 ms |
+
+The two states whose thread was behind at the frame's end gain, and their rounds do not overlap; the two whose
+thread had caught up are unchanged, as they should be. The capture now costs the emulation thread 1.4 to 1.7 ms
+against 3.3 before, which is the encode leaving the thread. Wave Race is still short of its console — 98 per cent
+with the buffer on, against 90 — and the reason is in the frames themselves: they grew by 0.6 ms when the join went,
+because the thread's backlog moved from the join to the scan-out's wait. That is §34's finding again: the frame is
+the rasteriser's, and the buffer's cost was only ever the part of the wait that the join added on top of it.
+
+**Two defects on the way, recorded.** The first version's tail was as long as the backlog, so the state's length
+changed at every capture, and the buffer, which requires equal lengths for a delta, restarted its chain each time:
+the bench showed a 10 ms capture and no history at all. The tail is fixed at 32k words, 256 KB, and a backlog longer
+than it is waited for down to it. The second was the bench: its own second, joined state write after each capture
+put back the join the snapshot had removed, and the first comparison read as equal; that write is now opt-in. Both
+are the kind of thing the bench catches and reasoning does not.
+
+**What it costs in history.** A delta now carries the tail's changed words as well as the frame's — about 400 to
+600 KB a capture in Wave Race, against the buffer's 96 MB, which is forty seconds of rewind rather than minutes. The
+interval is the knob, and it is a product decision (`EmuSen_Rewind_And_FastForward.md` §1.5).

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 
 namespace EmuSen.Cores
 {
@@ -32,5 +33,11 @@ namespace EmuSen.Cores
     public interface ITraceFlushable
     {
         void FlushVerboseTrace();
+    }
+
+    // A core that can write a state without waiting for work it has on other threads; LoadState reads it - see EmuSen_Rewind_And_FastForward.md §1.8.
+    public interface ISnapshotCore
+    {
+        void SaveSnapshot(Stream stream);
     }
 }

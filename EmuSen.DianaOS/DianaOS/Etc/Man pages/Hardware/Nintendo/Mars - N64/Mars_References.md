@@ -29,6 +29,13 @@ under a citation. Full history, because §5 needs the commit log.
 > It is the only checkout here that is compiled and run rather than read, and nothing of it is in
 > this repository either.
 
+> **Provenance, read 2026-09-19.** Two of the checkouts are not upstream. `parallel-n64-reference` is a locally
+> modified fork whose commit log heads with its own angrylion work, so its comments describe the fork's reasoning
+> and not upstream's. The `angrylion-rdp-plus` submodule under `parallel-rdp-reference` is Themaister's fork,
+> r8-26-g31bdb1f, carrying determinism patches upstream lacks (`Mars_Rdp.md` §10.1). The differential grades against
+> that fork, and the fork's rules — the combined colour cleared at each primitive, noise a function of position — are
+> the ones Mars follows. A citation of angrylion's behaviour should say which angrylion.
+
 Nothing about them is in this repository — no submodule, no vendored file, no
 gitignore entry, because there is nothing here to ignore.
 

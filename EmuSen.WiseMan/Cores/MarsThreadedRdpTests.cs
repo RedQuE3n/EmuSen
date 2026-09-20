@@ -165,6 +165,50 @@ namespace EmuSen.WiseMan.Cores
             threaded.Dp.Join();
         }
 
+        // A state written while the thread stands mid-list carries the words it had not run, and loads to what the finished list leaves - see Mars_Rdp.md §2.7.
+        [Fact]
+        public void A_snapshot_taken_while_the_thread_stands_loads_to_what_the_finished_list_leaves()
+        {
+            MemoryBus atOnce = new(), threaded = new(), loaded = new();
+            threaded.Dp.Threaded = true;
+            loaded.Dp.Threaded = true;
+
+            ulong[] list = Scene(0x2345_6789);
+            HandOver(atOnce, list);
+
+            // Held before the list is handed over, so every word of it is still pending when the snapshot is written.
+            threaded.Dp.Pause();
+            HandOver(threaded, list);
+            Assert.Equal(0, threaded.Dp.DrainWords);
+
+            byte[] snapshot = State(threaded, snapshot: true);
+            byte[] finished = State(atOnce);
+            Assert.Equal(finished.Length + 4 + 8 * DpInterface.SnapshotWords, snapshot.Length);
+
+            Load(loaded, snapshot);
+            Assert.Equal(atOnce.Rdram, loaded.Rdram);
+            Assert.Equal(atOnce.RdramHidden, loaded.RdramHidden);
+            Assert.Equal(finished, State(loaded));
+
+            threaded.Dp.Join();
+            Assert.Equal(finished, State(threaded));
+        }
+
+        [Fact]
+        public void A_snapshot_of_a_machine_with_nothing_in_flight_is_the_state_with_an_empty_tail()
+        {
+            var bus = new MemoryBus();
+            HandOver(bus, Scene(0x0F0F_0F0F));
+
+            byte[] state = State(bus), snapshot = State(bus, snapshot: true);
+            Assert.Equal(state.Length + 4 + 8 * DpInterface.SnapshotWords, snapshot.Length);
+            Assert.Equal(state, snapshot[..state.Length]);
+
+            var loaded = new MemoryBus();
+            Load(loaded, snapshot);
+            Assert.Equal(state, State(loaded));
+        }
+
         // A full frame buffer of fill rectangles, with a depth image set and, when asked, a texture loaded from RDRAM.
         private static ulong[] Scene(uint color, bool load = false, int loadRows = 32)
         {
@@ -197,13 +241,20 @@ namespace EmuSen.WiseMan.Cores
             bus.Write32(End, at + (uint)list.Length * 8);
         }
 
-        private static byte[] State(MemoryBus bus)
+        private static byte[] State(MemoryBus bus, bool snapshot = false)
         {
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
-            bus.WriteState(writer);
+            bus.WriteState(writer, snapshot);
             writer.Flush();
             return stream.ToArray();
+        }
+
+        private static void Load(MemoryBus bus, byte[] snapshot)
+        {
+            using var stream = new MemoryStream(snapshot);
+            using var reader = new BinaryReader(stream);
+            bus.ReadState(reader, snapshot: true);
         }
 
         private static ulong Scissor(uint left, uint top, uint right, uint bottom) =>

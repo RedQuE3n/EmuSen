@@ -16,7 +16,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             ulong word = _command[0], coordinates = _command[1];
             ClearAttributes();
 
-            int dsdx = (short)(coordinates >> 16) << 11, dtdy = (short)coordinates << 11;
+            int dsdx = ((short)(coordinates >> 16) << 11) / _scale, dtdy = ((short)coordinates << 11) / _scale;
             _attributeValue[AttributeS] = (int)(coordinates >> 48) << 16;
             _attributeValue[AttributeT] = (int)((coordinates >> 32) & 0xFFFF) << 16;
 

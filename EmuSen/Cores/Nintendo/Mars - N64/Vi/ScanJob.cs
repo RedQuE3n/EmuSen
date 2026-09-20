@@ -26,10 +26,22 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
         // The geometry the last walk ran over; its bytes are still in the capture above, which is written only when a walk follows - see Mars_Video.md §2.8.
         internal int LastCount = -1;
-        internal (Vi.Picture Picture, uint Origin, int Width, bool Wide, bool Resample, bool Divot, int AntiAlias, bool Dither, bool Gamma, uint From, int Count) LastShape;
+        internal (Vi.Picture Picture, uint Origin, int Width, bool Wide, bool Resample, bool Divot, int AntiAlias, bool Dither, bool Gamma, uint From, int Count, int Scale) LastShape;
 
         // True when this scan's geometry and bytes are the last walk's, so its walk would write the raster already there - see §2.8.
         public bool Repeats { get; internal set; }
+
+        // The multiple the walk reads at, and the scaled memory's lines captured for it, when a picture at the multiple exists - see Mars_Video.md §2.9.
+        public int Scale { get; internal set; } = 1;
+        internal Vi.Picture ScaledPicture;
+        internal uint ScaledFrom;
+        internal int ScaledCount;
+        internal uint ScaledBase;
+        internal int ScaledLength;
+        internal byte[] ScaledRdram = System.Array.Empty<byte>();
+        internal byte[] ScaledHidden = System.Array.Empty<byte>();
+        internal byte[] LiveScaledRdram = System.Array.Empty<byte>();
+        internal byte[] LiveScaledHidden = System.Array.Empty<byte>();
 
         // Forgets the last capture, for a loaded state, whose raster the walk that follows must write - see §2.8.
         public void Forget() => LastCount = -1;

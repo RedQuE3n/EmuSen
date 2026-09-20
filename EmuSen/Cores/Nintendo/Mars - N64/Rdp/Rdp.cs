@@ -28,6 +28,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private readonly ulong[] _command = new ulong[LongestCommand];
         private int _taken;
 
+        // Drawing at a multiple: every coordinate times the scale, colour and depth into a memory of the scale squared, textures from the machine's own - see Mars_Rdp.md §11.
+        [EmuSen.Common.SkipInState] private int _scale = 1;
+        [EmuSen.Common.SkipInState] private bool _scaled;
+        [EmuSen.Common.SkipInState] private byte[] _frame;
+        [EmuSen.Common.SkipInState] private byte[] _frameHidden;
+        [EmuSen.Common.SkipInState] public bool Drew;
+
         // Which rows this processor shades when several share a list: those whose row modulo the count is its index, or every row when it draws alone - see Mars_Rdp.md §2.8.
         [EmuSen.Common.SkipInState] private int _worker;
         [EmuSen.Common.SkipInState] private int _workers = 1;
@@ -46,7 +53,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         // What the list asked of several processors: primitives, those one drew alone, and loads every one waited for - see Mars_Performance.md §35.
         [EmuSen.Common.SkipInState] public long Primitives, SerialisedPrimitives, HazardLoads, AliasedReads;
-        [EmuSen.Common.SkipInState] private readonly long[] _coverageStamp = new long[1024];
+        [EmuSen.Common.SkipInState] private long[] _coverageStamp = new long[SpanRows];
 
         // What the drain does with a gathered command: more words, run it, run it on the leading processor alone, or run it on every processor together - see §2.8.
         public enum Step { More, Ready, Leader, All, AllJoined }
@@ -59,7 +66,40 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         public Rdp(MemoryBus bus)
         {
             _bus = bus;
+            _frame = bus.Rdram;
+            _frameHidden = bus.RdramHidden;
             Refresh();
+        }
+
+        public int Scale => _scale;
+
+        public bool Scaled => _scaled;
+
+        // This processor draws at the multiple into the memory given, which nothing in the machine reads - see Mars_Rdp.md §11.
+        public void DrawAt(int scale, byte[] frame, byte[] hidden)
+        {
+            _scale = scale;
+            _scaled = scale > 1;
+            _frame = frame;
+            _frameHidden = hidden;
+            Widen(scale);
+        }
+
+        // The native processor decides what draws alone; the scaled one follows it - see §11.
+        public void Follow(Rdp native) => _alone = native._alone;
+
+        // After the state copied from the native processor, its images and scissor are the machine's and are taken to the multiple - see §11.
+        public void Rescale()
+        {
+            if (!_scaled) return;
+            uint area = (uint)(_scale * _scale);
+            _colorImage *= area;
+            _colorImageWidth *= _scale;
+            _depthImage *= area;
+            _scissorLeft *= _scale;
+            _scissorTop *= _scale;
+            _scissorRight *= _scale;
+            _scissorBottom *= _scale;
         }
 
         // True when the command this word completed was a full sync, which only the interface can answer - see §6.
@@ -174,6 +214,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // The last row's last pixel past the image's width reads the next row's first bytes, which the owner of that row reads here, at its end of the primitive, which is the raster order's time - see §2.8.
         private void RecordAliasedRead((int First, int Last) rows, bool majorOnLeft)
         {
+            if (_scaled) return;
             int y = rows.Last;
             while (y >= rows.First && (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y])) y--;
             if (y < rows.First) return;
@@ -247,14 +288,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             using var stream = new System.IO.MemoryStream();
             using (var w = new System.IO.BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true)) EmuSen.Common.StateSerializer.Write(w, other);
             stream.Position = 0;
+
+            // The walker's scratch is read at the console's width, and widened again after for a processor at a multiple - see §11.
+            if (_scaled) Widen(1);
             using (var r = new System.IO.BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true)) EmuSen.Common.StateSerializer.Read(r, this);
+            if (_scaled) Widen(_scale);
             Refresh();
 
             _primitiveSequence = other._primitiveSequence;
             (_colorDrawnTo, _depthDrawnTo) = (other._colorDrawnTo, other._depthDrawnTo);
             (_lastShadedStamp, _memoryStamp, _pastStoredStamp, _texel0Stamp, _texel1Stamp, _lodStamp, _blendedStamp, _shiftStamp, _pastShiftStamp) =
                 (other._lastShadedStamp, other._memoryStamp, other._pastStoredStamp, other._texel0Stamp, other._texel1Stamp, other._lodStamp, other._blendedStamp, other._shiftStamp, other._pastShiftStamp);
-            Array.Copy(other._coverageStamp, _coverageStamp, _coverageStamp.Length);
+            Array.Copy(other._coverageStamp, _coverageStamp, other._coverageStamp.Length);
         }
 
         public static uint Id(ulong word) => (uint)(word >> 56) & 0x3F;
@@ -268,12 +313,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // Every byte of RDRAM the processor reads, and every one it writes, passes here while the list runs on a thread - see Mars_Rdp.md §2.6.1.
         private void Touch(uint physical)
         {
-            if (_bus.Dp.Verifying) _bus.Dp.Touched(physical, RunningWord);
+            if (!_scaled && _bus.Dp.Verifying) _bus.Dp.Touched(physical, RunningWord);
         }
 
         private void Wrote(uint physical)
         {
-            if (_bus.Dp.Verifying) _bus.Dp.Wrote(physical, RunningWord);
+            if (!_scaled && _bus.Dp.Verifying) _bus.Dp.Wrote(physical, RunningWord);
         }
 
         // In words: triangles grow by what they carry, texture rectangles take two, everything else one - see §3.

@@ -747,3 +747,112 @@ the live mode, both aliasings and a load from a drawn image — and then the pro
 stands: no worker may be the machine's thread.
 
 **Built the next day, as §2.8**, to this shape; what the inventory did not foresee — the read at the width, made by the next row's owner — is that section's fourth paragraph.
+
+## 11. The picture drawn at a multiple of the console's resolution
+
+*2026-09-20.* `MarsCore.RenderScale` (`Mars_Core.md` §10) asks for the picture at two, three or four times the console's
+resolution. The machine is not touched: what games read back, what a state holds and what the probe grades are the
+console's drawing, exactly as at one. The multiple is a second drawing, made beside the first from the same words,
+into a memory nothing in the machine reads, which the scan-out shows in the first's place (`Mars_Video.md` §2.9).
+
+**The shape.** `DpInterface.Scale` allocates a shadow of RDRAM and its hidden bits at the multiple squared
+(`ScaledRdram`, `ScaledHidden`: 32, 72 and 128 megabytes at two, three and four), and beside every native processor
+a processor at the multiple: one for the direct paths (`_scaledProcessor`, fed by `Take` and the pool's drain after
+the native processor takes each word) and one per worker of §2.8 (`Worker.Scaled`, fed by the worker's loop). A
+processor at the multiple is an ordinary `Rdp` told `DrawAt(scale, frame, hidden)`: it takes the same words, walks
+the same primitives and runs the same pipeline, with every coordinate multiplied and every image address taken to
+the multiple's square — the colour and depth images' addresses ×N², their width ×N, the scissor ×N, a rectangle's
+edges ×N, a triangle's six y and x values ×N with the slopes unchanged, the attribute steps across, along and down a
+pixel ÷N (`DecodeAttributes`), and the texture rectangle's ds/dx and dt/dy likewise. A fill or copy rectangle draws
+its right and bottom edge pixel, so those two edges are extended by N−1 whole pixels; without that a fill of the
+image at two leaves the multiple's last column and row bare. Textures are loaded by the native processor from the
+machine's RDRAM as ever; the processor at the multiple reads and writes only its own frame, through `_frame` and
+`_frameHidden` in place of the bus's arrays at every colour and depth access. It is made by `NewScaled`:
+constructed, told its frame, given the native processor's state by `CopyStateFrom`, then `Rescale`d — the images
+and scissor the state carries taken to the multiple once. It skips the verifier's marks, §2.8's aliased-read record
+and the hazard accounting, all of which are the native machine's to decide; it `Follow`s the native processor's
+decision to draw alone, and the leader's takes the others' scratch at `Assemble` as the native leader does. A state
+read empties the shadow (`ResetScaled`), and the scan-out shows the multiple only once something has drawn there
+(`ScaledDrawn`).
+
+**What is proved.** `Drawing_at_a_multiple_leaves_the_machines_memory_as_at_one` runs the fill scene and both
+shaded scenes at two and three, with one and three workers, and finds the machine's RDRAM, hidden bits and
+serialised state byte-identical to the machine at one: the multiple touches nothing the machine owns.
+`A_fill_at_a_multiple_is_the_fill_at_one_at_every_pixel_of_the_multiple` reads every pixel of the multiple's fill
+against the console's. `A_shaded_scene_at_a_multiple_averages_back_close_to_the_scene_at_one` draws twenty-four
+shaded, coverage-blended triangles with quarter-pixel corners at two, three and four, averages each block of the
+multiple back to one pixel and compares the channels: the mean difference is 0.10, 0.12 and 0.13 of a level over
+the 76,800 pixels, with 9, 19 and 23 beyond eight levels, every one on a triangle's edge, where the multiple's
+coverage resolves a slope the console's could not. The test asks for a mean under a quarter of a level and fewer
+than one pixel in two thousand beyond eight.
+
+**The walker at a multiple is not the console's walker.** Three of its widths are the hardware's, and a multiple
+exceeds them. (1) Its scratch — the spans, the sub-scanline edges, the row attributes and a row's coverage — is
+sized for 1,024 rows and columns; `Widen` sizes a processor at the multiple by N, since a 640-pixel image at four is
+2,560 columns. (2) `ClipEdge` keeps ten bits of column and a sticky bit, reads the eleventh bit as past the right
+and the twelfth as under the left (the console's wrap of an edge more than 2,048 pixels off the image); the row's
+major column is kept as twelve signed bits, the clipped count is masked to twelve, the crossing test is made on
+fourteen bits of quarter pixel, and the row limits read a fourteen-bit y with bit 12 meaning past the last row. At
+the multiple each is done at full width: an edge is under the scissor when its column is less than the left edge
+and over when at or past the right, the crossing test compares the quarter-pixel columns as signed integers, the row
+limits are the plain comparisons, and the clipped count is not masked. The wrap at 2,048 columns is therefore not
+reproduced at a multiple; a game that relied on it would draw differently there, and none is known to. (3) The
+edges are given at the console's row top: `xh` and `xm` are the columns where the two edges cross the top of the
+row holding `yh`, and the walk begins there. At the multiple the walk begins at the multiple's row top,
+`(N·yh) & ~3`, which lies up to N−1 of the console's sub-scanlines below `N·(yh & ~3)`, where the multiplied
+columns are true. Without moving both edges along by that many sub-scanline steps, and the row attributes by as many
+rows of their edge step, every triangle whose top is off a row boundary is drawn shifted: the closeness test with
+quarter-pixel corners measured that shift at 79 pixels beyond eight levels against 9 with the offset, which is why
+its corners are on quarter pixels.
+
+**What the first test measured was the test.** The closeness test's first form reported the drawing at two touching
+13,500 more of the console's pixels than the console's drawing, mostly darker, and this was recorded as a rasteriser
+defect and pursued for a session. A harness drawing each triangle alone at both resolutions found every triangle
+grown, and its dump found two defects in the scene. The corners were computed in unsigned arithmetic (`uint % int`
+with a constant divisor is unsigned), so "twenty pixels off the left" was a column of four billion, which the
+saturating conversion turned into a degenerate edge at column zero with the steepest slope — which the console's
+twelve-bit column wrap then shaded from wrapped counts, differently at each multiple. And the "gentle" shade put its
+random values into the integer halves of the green and alpha steps, so the shade wrapped every few pixels and the
+alpha reached zero, where a blend over the clear colour reproduces the clear colour and a drawn pixel counts as
+untouched. With signed corners and steps within a quarter of a level a pixel, the well-formed triangles agreed to
+their edges before any change to the walker; only the width limits and the start offset above were then real. The
+lesson is §0's: a scene that is meant to be gentle has to be checked to be, and the first thing to do with a
+surprising count is to draw one primitive and look.
+
+**The scratch is in the state.** §10.2's third item noted the coverage buffer is serialised; so are the walker's
+per-row arrays, some 70 kilobytes of every state that no command reads across a word, since a primitive is walked
+and drawn in one `Execute`. `CopyStateFrom` into a processor at a multiple therefore reads them at the console's
+width and widens again after. Dropping them from the format would shrink every state and the rewind's deltas; it is
+not done here because the states in use are format 1 and the gain is not this section's.
+
+**What the multiple is not.** It is an approximation of the console's picture, not another exact one: the level of
+detail and the texel a pixel samples are chosen at the multiple's pixel positions with steps ÷N, so texture
+filtering resolves finer where the console's would blur, which is the behaviour a high-resolution plugin has and the
+reason to want the multiple. A frame the CPU writes rather than draws — a copy the processor makes, an effect it
+paints, a buffer the game fills without the display processor — is not in the shadow, which holds only what the
+display processor drew, so once anything has drawn at the multiple such a buffer scans out from the shadow as black
+or stale. The shadow costs its memory at the multiple squared, and the processors at the multiple cost their
+shading, N² pixels for every one of the console's, on the same threads as §2.8's; what that comes to in play is
+§11.1.
+
+### 11.1 What the multiple costs in play
+
+*2026-09-20.* `playbench` took a `RENDERSCALE=n` switch, and `ab-modes2.sh` ran one build in three modes from the
+four in-game states, three rounds of 600 frames, order rotated, four workers, the display processor on its thread.
+Medians of the second half, frames a second:
+
+| State | 1× | 2× | 4× |
+|---|---|---|---|
+| Ocarina of Time, the field | 53.6 | 35.5 | 17.8 |
+| Wave Race, racing | 71.5 | 45.9 | 18.6 |
+| Super Mario 64, the castle | 72.8 | 55.6 | 27.0 |
+| Super Mario 64, outside | 77.8 | 41.4 | 15.7 |
+
+The multiple is drawn beside the console's, not instead of it, so the display processor's threads shade 1 + N²
+pictures: five at two and seventeen at four. Two costs a third to a half of the frame rate and stays above the
+console's sixty in the castle and near it elsewhere, which is the setting's hint; four is a quarter of one's and not
+playable on this machine at four workers. The states are bound by the display processor's thread at four workers
+before the multiple is added (§35 of `Mars_Performance.md`), so more workers would carry the multiple further, and
+a run at eight was not made. The 1× column is below §36's figures for the same states because the rounds ran on a
+loaded machine; only the interleaved difference is the measurement, as the harness's README says.
+

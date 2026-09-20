@@ -10,6 +10,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // Eight bytes a step, cut short at the span's end, and mirrored when the span runs right to left - see §1.
         private void DrawCopy((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
+            if (_scaled)
+            {
+                DrawCopyScaled(rows, majorOnLeft, tile, maxLevel);
+                return;
+            }
+
             // A 32-bit colour image crashes the reference's pipeline, which then draws nothing - see §1.
             if (_colorImageSize == 3) return;
 
@@ -172,12 +178,49 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // One byte, and the hidden bits its pair shares, which only an odd address writes - see §3.
         private void WriteCopyByte(uint address, int value)
         {
-            byte[] rdram = _bus.Rdram;
+            byte[] rdram = _frame;
             Wrote(address);
             if (address >= rdram.Length) return;
 
             rdram[address] = (byte)value;
-            if ((address & 1) != 0) _bus.RdramHidden[address >> 1] = (byte)((value & 1) * 3);
+            if ((address & 1) != 0) _frameHidden[address >> 1] = (byte)((value & 1) * 3);
+        }
+
+        // At a multiple, each pixel takes the texel its own coordinate names, so a texel is repeated across the pixels that share it - see Mars_Rdp.md §11.
+        private void DrawCopyScaled((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
+        {
+            if (_colorImageSize == 3) return;
+
+            int direction = majorOnLeft ? 1 : -1;
+            int pixelBytes = _colorImageSize == 2 ? 2 : 1;
+            int ds = direction * _textureStep[0], dt = direction * _textureStep[1], dw = direction * _textureStep[2];
+
+            for (int y = rows.First; y <= rows.Last; y++)
+            {
+                if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y] || !Owns(y)) continue;
+
+                int at = y * Attributes;
+                int s = _spanAttributes[at + AttributeS], t = _spanAttributes[at + AttributeT], w = _spanAttributes[at + AttributeW];
+                int x = majorOnLeft ? _spanLeft[y] : _spanRight[y];
+
+                for (int n = _spanRight[y] - _spanLeft[y]; n >= 0; n--, x += direction)
+                {
+                    (int cs, int ct) = TextureCoordinates(s, t, w);
+                    int from = LevelOfDetail(s + ds, t + dt, w + dw, s + (ds << 1), t + (dt << 1), w + (dw << 1), tile, maxLevel).Tile;
+                    ulong texels = _colorImageSize == 0 ? 0 : CopyTexels(cs, ct, from);
+                    int mask = CopyAlphaMask(texels);
+
+                    uint pointer = _colorImage + (uint)((y * _colorImageWidth + x) * pixelBytes);
+                    for (int k = 7, b = 0; b < pixelBytes; k--, b++)
+                    {
+                        if ((mask & (1 << k)) != 0) WriteCopyByte(pointer + (uint)b, (int)(texels >> (k << 3)) & 0xFF);
+                    }
+
+                    s += ds;
+                    t += dt;
+                    w += dw;
+                }
+            }
         }
     }
 }

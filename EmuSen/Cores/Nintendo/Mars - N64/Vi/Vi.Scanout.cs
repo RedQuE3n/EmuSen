@@ -78,6 +78,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             {
                 System.Array.Clear(_held);
                 System.Array.Clear(_raster);
+                System.Array.Clear(_rasterScaled);
             }
             else
             {
@@ -96,7 +97,42 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             job.Dither = DitherFilterEnabled;
             job.Gamma = GammaEnabled;
             Reach(job);
+
+            // The scaled memory is read in place of the machine's once something has drawn into it - see Mars_Video.md §2.9.
+            job.Scale = _bus.Dp.ScaledDrawn ? _bus.Dp.Scale : 1;
+            if (job.Scale > 1)
+            {
+                int n = job.Scale;
+                Picture p = picture;
+                job.ScaledPicture = new Picture(p.Left * n, p.Top * n, p.Columns * n, p.Rows * n, p.Stride * n, p.ActiveLines * n,
+                    p.StartX * (uint)n, p.StepX, p.StartY * (uint)n, p.StepY, p.FirstColumn * n, p.LastColumn * n, p.Lower);
+                job.LiveScaledRdram = _bus.Dp.ScaledRdram;
+                job.LiveScaledHidden = _bus.Dp.ScaledHidden;
+                ReachScaled(job);
+            }
+
             return true;
+        }
+
+        // The scaled memory's bytes a walk at the multiple can reach, by the same rule over the scaled origin, width and lines - see §2.9.
+        private void ReachScaled(ScanJob job)
+        {
+            Picture picture = job.ScaledPicture;
+            int n = job.Scale;
+            long width = (long)job.Width * n, bytesPerPixel = job.Wide ? 4 : 2;
+            long origin = (long)(job.Wide ? job.Origin & 0xFF_FFFC : job.Origin & 0xFF_FFFE) * n * n;
+
+            long firstLine = (long)(picture.StartY >> 10) - 3;
+            long lastLine = (((long)picture.StartY + (long)System.Math.Max(picture.Rows - 1, 0) * picture.StepY) >> 10) + 4;
+            long from = origin + ((firstLine - 1) * width - RowSpan * n - 4) * bytesPerPixel;
+            long to = origin + ((lastLine + 2) * width + 2 * RowSpan * n + 4) * bytesPerPixel;
+
+            long length = job.LiveScaledRdram.Length;
+            from = System.Math.Clamp(from, 0, length) & ~1L;
+            to = System.Math.Clamp(to, from, length);
+
+            job.ScaledFrom = (uint)from;
+            job.ScaledCount = (int)(to - from);
         }
 
         // The bytes of RDRAM a walk can reach, which a capture copies and any walk waits for the display processor over - see §2.7.
@@ -144,6 +180,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             System.Buffer.BlockCopy(_bus.Rdram, (int)job.From, job.Rdram, 0, count);
             System.Buffer.BlockCopy(_bus.RdramHidden, (int)(job.From >> 1), job.Hidden, 0, count / 2);
 
+            // The scaled memory changes only when the machine's does, so its capture is due exactly when this one is - see §2.9.
+            if (job.Scale > 1)
+            {
+                int scaled = job.ScaledCount;
+                if (job.ScaledRdram.Length < scaled) job.ScaledRdram = new byte[scaled];
+                if (job.ScaledHidden.Length < scaled / 2) job.ScaledHidden = new byte[scaled / 2];
+                System.Buffer.BlockCopy(job.LiveScaledRdram, (int)job.ScaledFrom, job.ScaledRdram, 0, scaled);
+                System.Buffer.BlockCopy(job.LiveScaledHidden, (int)(job.ScaledFrom >> 1), job.ScaledHidden, 0, scaled / 2);
+                job.ScaledBase = job.ScaledFrom;
+                job.ScaledLength = job.LiveScaledRdram.Length;
+            }
+
             job.Base = job.From;
             job.Length = _bus.Rdram.Length;
             job.Captured = true;
@@ -152,7 +200,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         // The walk reads the registers this job carries and the bytes it captured and nothing else, so the same two give the same raster - see §2.8.
         private bool Repeated(ScanJob job)
         {
-            var shape = (job.Picture, job.Origin, job.Width, job.Wide, job.Resample, job.Divot, job.AntiAlias, job.Dither, job.Gamma, job.From, job.Count);
+            var shape = (job.Picture, job.Origin, job.Width, job.Wide, job.Resample, job.Divot, job.AntiAlias, job.Dither, job.Gamma, job.From, job.Count, job.Scale);
             bool same = job.LastCount == job.Count && job.LastShape.Equals(shape) && job.Rdram.Length >= job.Count;
 
             job.LastShape = shape;
@@ -277,24 +325,49 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             if (line >= RasterHeight || count <= 0) return;
 
             System.Array.Clear(_raster, (line * RasterWidth + from) * 4, count * 4);
+
+            // The raster at the multiple darkens the same lines and columns, each at the multiple - see Mars_Video.md §2.9.
+            int n = _rasterScale;
+            if (n > 1 && _rasterScaled.Length > 0)
+            {
+                for (int i = 0; i < n; i++) System.Array.Clear(_rasterScaled, ((line * n + i) * RasterWidth * n + from * n) * 4, count * n * 4);
+            }
         }
 
         // One pass over the picture: each row starts a new line of the frame buffer, each step a new pixel of it - see §2.5.
         public void Walk(ScanJob job)
         {
-            Picture picture = job.Picture;
-            uint origin = job.Origin;
-            int width = job.Width;
+            int scale = job.Scale;
+            Picture picture = scale > 1 ? job.ScaledPicture : job.Picture;
+            uint origin = scale > 1 ? job.Origin * (uint)(scale * scale) : job.Origin;
+            int width = job.Width * scale;
             bool resample = job.Resample;
             bool wide = job.Wide;
             bool divot = job.Divot;
             int bug = 0;
+            int rasterWidth = RasterWidth * scale;
 
             _scanAntiAlias = job.AntiAlias;
             _scanDither = job.Dither;
             _scanGamma = job.Gamma;
 
-            if (job.Captured)
+            if (scale > 1 && job.Captured)
+            {
+                _sourceRdram = job.ScaledRdram;
+                _sourceHidden = job.ScaledHidden;
+                _sourceBase = job.ScaledBase;
+                _sourceCount = job.ScaledCount;
+                _sourceLength = job.ScaledLength;
+            }
+            else if (scale > 1)
+            {
+                _sourceRdram = job.LiveScaledRdram;
+                _sourceHidden = job.LiveScaledHidden;
+                _sourceBase = 0;
+                _sourceCount = job.LiveScaledRdram.Length;
+                _sourceLength = job.LiveScaledRdram.Length;
+            }
+            else if (job.Captured)
             {
                 _sourceRdram = job.Rdram;
                 _sourceHidden = job.Hidden;
@@ -311,6 +384,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                 _sourceLength = _bus.Rdram.Length;
             }
 
+            // A raster at the multiple, made when the multiple changes; the walk writes one raster and names which - see Mars_Video.md §2.9.
+            byte[] raster = _raster;
+            if (scale > 1)
+            {
+                if (_rasterScale != scale) { _rasterScaled = new byte[rasterWidth * RasterHeight * scale * 4]; _rasterScale = scale; }
+                raster = _rasterScaled;
+            }
+            _outputScale = scale;
+
             int first = (int)(picture.StartX >> 10);
 
             // RDRAM has changed since the last scan, so nothing a slot holds from it stands - see Mars_Performance.md §7.
@@ -323,7 +405,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                 int source = width * (int)(down >> 10);
                 int below = source + width;
                 int fractionY = (int)(down >> 5) & 0x1F;
-                int line = picture.Top * picture.Stride + picture.Left + (picture.Lower ? RasterWidth : 0) + picture.Stride * row;
+                int line = picture.Top * picture.Stride + picture.Left + (picture.Lower ? rasterWidth : 0) + picture.Stride * row;
 
                 // A row the next one reads again leaves the row after that fetching its own line twice - see Mars_VideoFilter.md §3.
                 bug = (down >> 10) == ((picture.StartY + (uint)(row + 1) * picture.StepY) >> 10) ? 2 : bug >> 1;
@@ -364,19 +446,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                     }
 
                     int pixel = (line + column) * 4;
-                    if (pixel < 0 || pixel + 3 >= _raster.Length) continue;
+                    if (pixel < 0 || pixel + 3 >= raster.Length) continue;
 
                     bool shown = column >= picture.FirstColumn && column < picture.LastColumn;
 
                     // Gamma is the last thing a pixel meets; a dark column is written as zero whether or not it passes through - see Mars_VideoPasses.md §4.2.
                     color = Gamma(color);
 
-                    _raster[pixel] = (byte)(shown ? color.Red : 0);
-                    _raster[pixel + 1] = (byte)(shown ? color.Green : 0);
-                    _raster[pixel + 2] = (byte)(shown ? color.Blue : 0);
+                    raster[pixel] = (byte)(shown ? color.Red : 0);
+                    raster[pixel + 1] = (byte)(shown ? color.Green : 0);
+                    raster[pixel + 2] = (byte)(shown ? color.Blue : 0);
 
                     // A darkened column keeps the coverage the raster already held, because only the colour is cleared - see §2.5.
-                    if (shown) _raster[pixel + 3] = (byte)color.Coverage;
+                    if (shown) raster[pixel + 3] = (byte)color.Coverage;
                 }
             }
         }

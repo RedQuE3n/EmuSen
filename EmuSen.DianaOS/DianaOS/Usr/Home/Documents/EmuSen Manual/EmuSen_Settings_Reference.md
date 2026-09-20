@@ -644,6 +644,17 @@ What is not here: the frontend's own window size, vsync and filtering (`graphics
 frontend does not read), and anything a core does not offer. §4.21b's numbers are now Mars's defaults, and the
 weak-machine question it left open is now the user's to answer from this window.
 
+**Addendum, 2026-09-20: the first choice setting.** The N64's tab gained *Internal resolution*, a dropdown of 1 to
+4: the multiple the core draws the picture at (`Mars_Rdp.md` §11). It is internal. The frame the window scales is
+640×480 at 2 and 1,280×960 at 4 rather than 320×240 stretched, so edges and textures resolve where the console's
+could not, and the window's own size is not changed by it. The game is not changed by it either: what the game
+reads back, save states and the probe are the console's exact drawing, which is why it can be switched while
+playing and takes effect at the next frame. Its cost is the display processor's — each step draws its square in
+pixels, four times the work at 2 and sixteen at 4, on the RDP threads, so `RdpWorkers` helps it directly — and the
+memory for the multiple's frame, 32 to 128 megabytes. What it cannot show: a frame the game's CPU writes rather than
+draws, which the core's drawing does not see, comes out black or stale at a multiple. What it costs in play is
+`Mars_Rdp.md` §11.1.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

@@ -396,7 +396,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // A one-cycle scene of shaded, depth-tested triangles over a full frame buffer; to the edge, their right edges cross a scissor as wide as the image - see Mars_Rdp.md §2.8.
-        private static ulong[] Shaded(uint seed, bool toTheEdge, bool twoCycle = false, bool memoryAlphaFirst = false)
+        private static ulong[] Shaded(uint seed, bool toTheEdge, bool twoCycle = false, bool memoryAlphaFirst = false, bool gentle = false)
         {
             var list = new System.Collections.Generic.List<ulong>
             {
@@ -417,14 +417,15 @@ namespace EmuSen.WiseMan.Cores
             list.Add((0x2FUL << 56) | ((ulong)(twoCycle ? 1 : 0) << 52) | (3UL << 38) | (3UL << 36) | blend | (1UL << 4) | (1UL << 5) | (1UL << 3) | (1UL << 6));
             list.Add(Combine(4, 8, 11, 7, 4, 7, 4, 7));
 
+            // Corners up to twenty pixels off the image on any side; the gentle scene's on quarter pixels, so every row top is walked from - see §11.
             uint state = seed;
             for (int i = 0; i < 24; i++)
             {
-                double x1 = Next(ref state) % (Width + 40) - 20, y1 = Next(ref state) % (Rows + 20) - 10;
-                double x2 = Next(ref state) % (Width + 40) - 20, y2 = Next(ref state) % (Rows + 20) - 10;
-                double x3 = Next(ref state) % (Width + 40) - 20, y3 = Next(ref state) % (Rows + 20) - 10;
+                double x1 = Corner(ref state, Width, 20, gentle), y1 = Corner(ref state, Rows, 10, gentle);
+                double x2 = Corner(ref state, Width, 20, gentle), y2 = Corner(ref state, Rows, 10, gentle);
+                double x3 = Corner(ref state, Width, 20, gentle), y3 = Corner(ref state, Rows, 10, gentle);
                 if (toTheEdge && (i & 1) == 0) x2 = Width + 30;
-                list.AddRange(Triangle(0x0C, x1, y1, x2, y2, x3, y3, Next(ref state)));
+                list.AddRange(Triangle(0x0C, x1, y1, x2, y2, x3, y3, Next(ref state), gentle));
             }
 
             list.Add(SyncFull);
@@ -439,6 +440,9 @@ namespace EmuSen.WiseMan.Cores
             return (0x3CUL << 56) | (high << 32) | low;
         }
 
+        private static double Corner(ref uint state, int extent, int beyond, bool quarters) =>
+            (int)(Next(ref state) % (uint)(extent + 2 * beyond)) - beyond + (quarters ? (Next(ref state) & 3) / 4.0 : 0);
+
         private static uint Next(ref uint state)
         {
             state = state * 1664525u + 1013904223u;
@@ -446,7 +450,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // A triangle's edges from three corners, with its shade and depth words from a seed; any well-formed words are a valid test - see MarsRdpDifferentialTests.
-        private static ulong[] Triangle(int id, double x1, double y1, double x2, double y2, double x3, double y3, uint seed)
+        private static ulong[] Triangle(int id, double x1, double y1, double x2, double y2, double x3, double y3, uint seed, bool gentle = false)
         {
             var sorted = new[] { (X: x1, Y: y1), (X: x2, Y: y2), (X: x3, Y: y3) }.OrderBy(v => v.Y).ToArray();
             var (top, middle, bottom) = (sorted[0], sorted[1], sorted[2]);
@@ -468,7 +472,8 @@ namespace EmuSen.WiseMan.Cores
 
             // Shade: colours in the low half of their range and small steps; depth: mid-range with a small slope, so the tests draw and compare rather than clip everything.
             uint s = seed;
-            for (int i = 4; i < 12; i++) words[i] = ((ulong)(Next(ref s) & 0x007F_FFFF) << 32) | (Next(ref s) & 0x0003_FFFF);
+            if (gentle) GentleShade(words, ref s);
+            else for (int i = 4; i < 12; i++) words[i] = ((ulong)(Next(ref s) & 0x007F_FFFF) << 32) | (Next(ref s) & 0x0003_FFFF);
             if (words.Length > 12)
             {
                 words[12] = ((ulong)(0x1000 + (Next(ref s) & 0xFFFF)) << 48) | ((ulong)(Next(ref s) & 0xFFFF) << 32) | ((ulong)(Next(ref s) & 0x3FF) << 16) | (Next(ref s) & 0xFFFF);
@@ -478,8 +483,135 @@ namespace EmuSen.WiseMan.Cores
             return words;
         }
 
+        // Gentle: colours in the low half of their range, alpha full, and every step within a quarter of a level a pixel, so two multiples should agree to the edges - see §11.
+        private static void GentleShade(ulong[] words, ref uint s)
+        {
+            int[] value = new int[4], dx = new int[4], de = new int[4], dy = new int[4];
+            for (int c = 0; c < 4; c++)
+            {
+                value[c] = c == 3 ? 0xFF << 16 : (int)((Next(ref s) & 0x7F) << 16) | (int)(Next(ref s) & 0xFFFF);
+                dx[c] = c == 3 ? 0 : (int)(Next(ref s) & 0x7FFF) - 0x4000;
+                de[c] = c == 3 ? 0 : (int)(Next(ref s) & 0x7FFF) - 0x4000;
+                dy[c] = c == 3 ? 0 : (int)(Next(ref s) & 0x7FFF) - 0x4000;
+            }
+
+            (words[4], words[6]) = (Pack(value, 16), Pack(value, 0));
+            (words[5], words[7]) = (Pack(dx, 16), Pack(dx, 0));
+            (words[8], words[10]) = (Pack(de, 16), Pack(de, 0));
+            (words[9], words[11]) = (Pack(dy, 16), Pack(dy, 0));
+        }
+
+        private static ulong Pack(int[] v, int shift) =>
+            ((ulong)(uint)((v[0] >> shift) & 0xFFFF) << 48) | ((ulong)(uint)((v[1] >> shift) & 0xFFFF) << 32) | ((ulong)(uint)((v[2] >> shift) & 0xFFFF) << 16) | (uint)((v[3] >> shift) & 0xFFFF);
+
         private static ulong Edge(double x, double slope) =>
             ((ulong)(uint)(int)Math.Round(x * 65536) << 32) | (uint)(int)Math.Round(Math.Clamp(slope, -8192, 8191) * 65536);
+
+        // Drawing at a multiple leaves the machine's memory and state exactly as drawing at one, at once and shared - see Mars_Rdp.md §11.
+        [Theory]
+        [InlineData(2, 1)]
+        [InlineData(2, 3)]
+        [InlineData(3, 2)]
+        public void Drawing_at_a_multiple_leaves_the_machines_memory_as_at_one(int scale, int workers)
+        {
+            foreach (ulong[] list in new[] { Scene(0x1234_1234), Shaded(0x5566_7788, toTheEdge: true), Shaded(0x99AA_BBCC, toTheEdge: true, twoCycle: true) })
+            {
+                MemoryBus atOnce = new(), scaled = new();
+                scaled.Dp.Scale = scale;
+                if (workers > 1) { scaled.Dp.Threaded = true; scaled.Dp.Workers = workers; }
+
+                HandOver(atOnce, list);
+                HandOver(scaled, list);
+                scaled.Dp.Join();
+
+                Assert.Equal(atOnce.Rdram, scaled.Rdram);
+                Assert.Equal(atOnce.RdramHidden, scaled.RdramHidden);
+                Assert.Equal(State(atOnce), State(scaled));
+                Assert.True(scaled.Dp.ScaledDrawn);
+            }
+        }
+
+        // A fill at a multiple lays the same pixel over every pixel of the multiple, at the address the multiple's square gives its image - see §11.
+        [Fact]
+        public void A_fill_at_a_multiple_is_the_fill_at_one_at_every_pixel_of_the_multiple()
+        {
+            const int scale = 2;
+            MemoryBus atOnce = new(), scaled = new();
+            scaled.Dp.Scale = scale;
+            HandOver(atOnce, Scene(0x1234_1234));
+            HandOver(scaled, Scene(0x1234_1234));
+
+            byte[] wide = scaled.Dp.ScaledRdram;
+            long image = (long)Framebuffer * scale * scale;
+            for (int y = 0; y < Rows; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    int native = (int)(Framebuffer + (y * Width + x) * 2);
+                    for (int j = 0; j < scale; j++)
+                    {
+                        for (int i = 0; i < scale; i++)
+                        {
+                            long at = image + ((long)(y * scale + j) * (Width * scale) + x * scale + i) * 2;
+                            Assert.True(atOnce.Rdram[native] == wide[at] && atOnce.Rdram[native + 1] == wide[at + 1], $"pixel {x},{y} of the multiple {i},{j} differs");
+                        }
+                    }
+                }
+            }
+        }
+
+        // A shaded scene at a multiple, averaged back to the console's pixels, is the scene at one to within a tenth of a level, its edges apart - see §11.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(4)]
+        public void A_shaded_scene_at_a_multiple_averages_back_close_to_the_scene_at_one(int scale)
+        {
+            MemoryBus atOnce = new(), scaled = new();
+            scaled.Dp.Scale = scale;
+            ulong[] list = Shaded(0x2468_ACE0, toTheEdge: true, gentle: true);
+            HandOver(atOnce, list);
+            HandOver(scaled, list);
+
+            byte[] wide = scaled.Dp.ScaledRdram;
+            long image = (long)Framebuffer * scale * scale;
+            double total = 0; int counted = 0, far = 0, brighter = 0, darker = 0, untouchedNative = 0, untouchedScaled = 0;
+            var bands = new int[8, 8];
+            for (int y = 0; y < Rows; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    int native = (int)(Framebuffer + (y * Width + x) * 2);
+                    int nativePixel = (atOnce.Rdram[native] << 8) | atOnce.Rdram[native + 1];
+                    (int r, int g, int b) = Channels(nativePixel);
+                    int sr = 0, sg = 0, sb = 0, sameAsClear = 0;
+                    for (int j = 0; j < scale; j++)
+                    {
+                        for (int i = 0; i < scale; i++)
+                        {
+                            long at = image + ((long)(y * scale + j) * (Width * scale) + x * scale + i) * 2;
+                            int scaledPixel = (wide[at] << 8) | wide[at + 1];
+                            if (scaledPixel == 0x0001) sameAsClear++;
+                            (int wr, int wg, int wb) = Channels(scaledPixel);
+                            sr += wr; sg += wg; sb += wb;
+                        }
+                    }
+                    double area = scale * scale;
+                    double d = (Math.Abs(r - sr / area) + Math.Abs(g - sg / area) + Math.Abs(b - sb / area)) / 3;
+                    total += d; counted++;
+                    if (nativePixel == 0x0001) untouchedNative++;
+                    if (sameAsClear == area) untouchedScaled++;
+                    if (d > 8) { far++; bands[y * 8 / Rows, x * 8 / Width]++; if (sr + sg + sb > (r + g + b) * 4) brighter++; else darker++; }
+                }
+            }
+
+            double mean = total / counted;
+            string map = string.Join(" / ", Enumerable.Range(0, 8).Select(row => string.Join(",", Enumerable.Range(0, 8).Select(col => bands[row, col].ToString()))));
+            string report = $"mean {mean:F2}; {far} of {counted} beyond eight ({brighter} brighter, {darker} darker); untouched native {untouchedNative} scaled {untouchedScaled}; bands {map}";
+            Assert.True(mean < 0.25 && far < counted / 2000, report);
+
+            static (int, int, int) Channels(int pixel) => ((pixel >> 11) & 0x1F, (pixel >> 6) & 0x1F, (pixel >> 1) & 0x1F);
+        }
 
         // A full frame buffer of fill rectangles, with a depth image set and, when asked, a texture loaded from RDRAM.
         private static ulong[] Scene(uint color, bool load = false, int loadRows = 32)

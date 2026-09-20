@@ -117,7 +117,23 @@ namespace EmuSen.Cores.Nintendo.Mars
 
         public string CoreName => "N64";
 
-        public int ScreenWidth => ScreenWidthPixels;
+        public int ScreenWidth => _frameWidth;
+
+        // The picture's width, which a walk at a multiple multiplies - see Mars_Video.md §2.9.
+        [EmuSen.Common.SkipInState] private int _frameWidth = ScreenWidthPixels;
+        [EmuSen.Common.SkipInState] private int _pendingWidth = ScreenWidthPixels;
+        private int _renderScale = 1;
+
+        // The multiple the display processor draws the picture at beside the machine's own, exact in memory and only the picture grows - see Mars_Rdp.md §11.
+        public int RenderScale
+        {
+            get => Bus?.Dp.Scale ?? _renderScale;
+            set
+            {
+                _renderScale = Math.Clamp(value, 1, 4);
+                if (Bus is { } bus) bus.Dp.Scale = _renderScale;
+            }
+        }
 
         // Set with the buffer it describes, so the two cannot disagree between frames - see Mars_Core.md §2.
         public int ScreenHeight => _screenHeight;
@@ -168,6 +184,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             Cpu = cpu;
             bus.Dp.Threaded = _threadedRdp;
             bus.Dp.Workers = _rdpWorkers;
+            bus.Dp.Scale = _renderScale;
 
             TotalFrames = 0;
             _lastFrameCycles = CycleCap;
@@ -298,6 +315,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             new("RdpWorkers", "Rasteriser threads", "How many processors share each list, each shading every Nth row. Exact at any count; past two, each adds less. One per three cores is the default.", global::EmuSen.Cores.CoreSettingKind.Count, Math.Clamp(Environment.ProcessorCount / 3, 1, 4).ToString(), 1, 8),
             new("DeferredPresentation", "Scan out while the next frame runs", "The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late. Off, the frame waits for its picture.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
             new("SkipRepeatedScans", "Skip a scan that repeats the last", "A scan whose registers and bytes match the last walk is not walked again. Exact; the picture is the same either way.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
+            new("RenderScale", "Internal resolution", "The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed.", global::EmuSen.Cores.CoreSettingKind.Choice, "1", Choices: new[] { "1", "2", "3", "4" }),
         };
 
         IReadOnlyList<global::EmuSen.Cores.CoreSetting> global::EmuSen.Cores.ICoreSettings.Settings => VideoSettings;
@@ -308,6 +326,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             "RdpWorkers" => RdpWorkers.ToString(),
             "DeferredPresentation" => DeferredPresentation ? "true" : "false",
             "SkipRepeatedScans" => SkipRepeatedScans ? "true" : "false",
+            "RenderScale" => RenderScale.ToString(),
             _ => throw new ArgumentException($"Mars has no setting named {key}.", nameof(key)),
         };
 
@@ -320,6 +339,7 @@ namespace EmuSen.Cores.Nintendo.Mars
                 case "RdpWorkers": RdpWorkers = Math.Clamp(Count(value), 1, 8); break;
                 case "DeferredPresentation": DeferredPresentation = Switch(value); break;
                 case "SkipRepeatedScans": SkipRepeatedScans = Switch(value); break;
+                case "RenderScale": RenderScale = Math.Clamp(Count(value), 1, 4); break;
                 default: throw new ArgumentException($"Mars has no setting named {key}.", nameof(key));
             }
 
@@ -477,8 +497,8 @@ namespace EmuSen.Cores.Nintendo.Mars
         {
             JoinPresentation();
             vi.Scan();
-            Compose(vi, vi.FrameHeight, vi.Serrate, ref _frame);
-            _screenHeight = _frame.Length / (ScreenWidthPixels * 4);
+            _frameWidth = Compose(vi, vi.FrameHeight, vi.Serrate, ref _frame);
+            _screenHeight = _frame.Length / (_frameWidth * 4);
         }
 
         // The walk and the composition go to the pool; what they read was captured, what they write is the pending picture - see Mars_Video.md §2.7.
@@ -506,8 +526,8 @@ namespace EmuSen.Cores.Nintendo.Mars
                 try
                 {
                     if (walk) vi.Walk(_scan);
-                    Compose(vi, rows, serrate, ref _pendingFrame);
-                    _pendingHeight = rows * (serrate ? 1 : 2);
+                    _pendingWidth = Compose(vi, rows, serrate, ref _pendingFrame);
+                    _pendingHeight = rows * (serrate ? 1 : 2) * vi.OutputScale;
                 }
                 catch (Exception fault)
                 {
@@ -538,14 +558,17 @@ namespace EmuSen.Cores.Nintendo.Mars
 
             (_frame, _pendingFrame) = (_pendingFrame, _frame);
             _screenHeight = _pendingHeight;
+            _frameWidth = _pendingWidth;
         }
 
         // The raster's fourth byte is coverage, not opacity, and a progressive field is every other line - see Mars_Core.md §2.
-        private static void Compose(VideoInterface vi, int rows, bool serrate, ref byte[] frame)
+        private static int Compose(VideoInterface vi, int rows, bool serrate, ref byte[] frame)
         {
             ReadOnlySpan<byte> raster = vi.Raster(rows);
             int repeat = serrate ? 1 : 2;
-            int rowBytes = ScreenWidthPixels * 4;
+            int width = vi.OutputWidth;
+            int rowBytes = width * 4;
+            rows *= vi.OutputScale;
 
             if (frame.Length != rowBytes * rows * repeat) frame = new byte[rowBytes * rows * repeat];
 
@@ -560,6 +583,8 @@ namespace EmuSen.Cores.Nintendo.Mars
                     for (int alpha = 3; alpha < rowBytes; alpha += 4) line[alpha] = 0xFF;
                 }
             }
+
+            return width;
         }
 
         private static byte[] Blank(int height)

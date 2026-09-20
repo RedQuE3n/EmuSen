@@ -377,3 +377,16 @@ against the corpus after the `Fields` counter went in, through a runner outside 
 - **Whether Wave Race's picture holds still after frame 83.** Its lit-pixel count reaches 245,622 there and is
   the same in every frame sampled up to 600, which suggests a still picture without showing one. If it is still,
   the missing audio interface is one candidate and the attract sequence another; neither has been looked at.
+
+## 10. The video settings the core offers
+
+*2026-09-20.* `MarsCore` implements `ICoreSettings` (`EmuSen_Multicore.md` §13) with four settings, the ones Mistress
+used to set by hand after `LoadRom`, now with those values as their defaults: `ThreadedRdp` (a switch, on:
+`Mars_Rdp.md` §2.6), `RdpWorkers` (a count, one to eight, default one per three logical cores at most four:
+`Mars_Rdp.md` §2.8, `Mars_Performance.md` §35), `DeferredPresentation` (a switch, on: `Mars_Video.md` §2.7) and
+`SkipRepeatedScans` (a switch, on: `Mars_Video.md` §2.8). `Get` answers each in its text form and `Set` parses it: a
+count is clamped into its range, a switch must be `true` or `false`, and anything else, or an unknown key, is refused
+with an argument exception. Every one of the four keeps the output exact; what they trade is speed against threads
+and latency, which is why they are a frontend's to offer and not the core's to decide. `UseBlocks` and the expansion
+pak are deliberately not among them: the first is not a video setting and the second is fixed at construction (§7).
+`MarsCoreSettingsTests` hold the round trip, the clamp and the refusals.

@@ -141,6 +141,7 @@ namespace EmuSen.Mistress.Views
         private string _activeConsole = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder[0].Console;
         private readonly HotkeyBindingMap _hotkeyBindings = HotkeyBindingMap.Load();
         private readonly AppSettings _appSettings = AppSettings.Load();
+        private readonly GraphicsConfig _graphics = GraphicsConfig.Load();
         private readonly GamepadManager _gamepad;
 
         // Constructed once and reused across every load, same lifetime as _gamepad.
@@ -362,6 +363,29 @@ namespace EmuSen.Mistress.Views
             // A rebind has to reach the menu, or it advertises the old key - see §4.19.
             window.Closed += (_, _) => SyncMenuState();
             window.Show(this);
+        }
+
+        private void ShowGraphicsSettings()
+        {
+            var window = new GraphicsSettingsWindow(_graphics, console =>
+            {
+                // On the emulation thread, between frames, and only when the running game is that console's - see §4.26.
+                if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
+            }, _session is null ? null : _activeConsole);
+            window.Show(this);
+        }
+
+        // Every setting the core offers, from the config or its default; a value the core refuses falls back to the default - see §4.26.
+        private void ApplyConsoleSettings(EmulatorSession session, string console)
+        {
+            if (session.Core is not EmuSen.Cores.ICoreSettings settings) return;
+
+            foreach (EmuSen.Cores.CoreSetting setting in settings.Settings)
+            {
+                string value = _graphics.Value(console, setting.Key) ?? setting.Default;
+                try { settings.Set(setting.Key, value); }
+                catch (ArgumentException) { settings.Set(setting.Key, setting.Default); }
+            }
         }
 
         private void ShowPreferences()
@@ -588,6 +612,7 @@ namespace EmuSen.Mistress.Views
                 new LunaMenu("_View", _fullscreen),
                 new LunaMenu("_Settings",
                     new LunaAction("_Controller Bindings...", ShowControllerBindings),
+                    new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
                     new LunaAction("_Debug Logging...", () => new DebugSettingsWindow().Show(this)),
                     new LunaAction("_Preferences...", ShowPreferences),
                     new LunaAction("Chea_t Database...", ShowCheatDatabase),
@@ -742,17 +767,11 @@ namespace EmuSen.Mistress.Views
                 StartLogging(EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown");
                 _session.LoadRom(path);
 
-                // The N64's scan-out walks while the next frame runs, so the picture is one frame behind the machine, and its display processor draws on a thread of its own - see EmuSen_Settings_Reference.md §4.21b.
-                if (_session.Core is EmuSen.Cores.Nintendo.Mars.MarsCore mars)
-                {
-                    mars.DeferredPresentation = true;
-                    mars.ThreadedRdp = true;
-                    // A processor per three logical cores, at most four: the second pair buys a tenth on sixteen cores - see Mars_Performance.md §35.
-                    mars.RdpWorkers = Math.Clamp(Environment.ProcessorCount / 3, 1, 4);
-                }
-
                 // The pad this ROM's console reads, not whatever the last one used.
                 _activeConsole = _session.CoreName;
+
+                // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
+                ApplyConsoleSettings(_session, _activeConsole);
                 _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
                 _gamepad.LeftStickIsAnalog = _session.SupportedAxes.Contains(PadAxis.LeftX);
 

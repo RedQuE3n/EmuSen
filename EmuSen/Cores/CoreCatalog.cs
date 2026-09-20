@@ -132,6 +132,15 @@ namespace EmuSen.Cores
             ?? Cores.FirstOrDefault(c => string.Equals(c.Console, name, StringComparison.OrdinalIgnoreCase));
 
         // AllConsoles first, so a filter combo can bind straight to it.
+        // The settings each console's core offers a frontend, by console, empty for one that offers none - see EmuSen_Multicore.md §13.
+        private static readonly Dictionary<string, IReadOnlyList<CoreSetting>> SettingsByConsole = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["N64"] = Nintendo.Mars.MarsCore.VideoSettings,
+        };
+
+        public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>
+            SettingsByConsole.TryGetValue(console, out var settings) ? settings : Array.Empty<CoreSetting>();
+
         public static IReadOnlyList<string> FilterChoices { get; } =
             new[] { AllConsoles }.Concat(Cores.Select(c => c.DisplayName)).ToArray();
     }

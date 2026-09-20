@@ -1703,3 +1703,49 @@ transfer's rows copied whole, the signal processor stepped from the tick with it
 the idle loop's branch compiled; each was measured alone and each was exact. Two of §36's items are still open: the
 signal processor's dispatch shape, and the interpreter's remaining share, which after the branch is the loads, the
 floating-point operations and the likely branches, none of them above four per cent of what reaches the switch.
+
+## 37. Frame pacing in a frontend: what makes the frame rate uneven at one
+
+*2026-09-20.* The games ran above their console's rate in every §35 and §36 table and still did not feel even in
+Mistress. `pacebench` (beside the other harnesses) runs a state as the frontend does — the factory's machine, the
+graphics window's defaults, four workers, the scan-out deferred, the frame taken and the sound drained each frame,
+and the frontend's own pacing loop — and records for every frame its cost, its slot, what it allocated, the
+collections and their pauses, the blocks compiled and the display processor's waits. 1,500 frames a state:
+
+| State | slot | RunFrame mean | median | 90th | 99th | worst | frames over their slot |
+|---|---|---|---|---|---|---|---|
+| Ocarina of Time, the field | 19.99 ms | 12.0 to 14.4 | 8.4 to 9.1 | 22.2 to 28.5 | 25.9 to 31.9 | 40 to 61 | 437 to 502 |
+| Super Mario 64, outside | 19.99 ms | 8.9 | 12.6 | 15.6 | 19.7 | 36.7 | 11 |
+| Wave Race, racing | 16.68 ms | 10.3 | 9.5 | 17.0 | 20.0 | 39.7 | 228 |
+
+**The cost of a frame is bimodal, and the mean hides it.** Ocarina of Time draws one picture every two and a half
+to three fields. The fields in which it does not cost eight or nine milliseconds; the field in which the game
+builds and submits its list costs twenty-two to thirty-two, against a slot of twenty. A third of all frames overrun,
+and they are exactly the game's drawing frames. In them the display processor's waits are two to six milliseconds:
+the overrun is the emulation thread's own work, the CPU and the signal processor, which is §35's conclusion seen
+frame by frame. The rasteriser, on the CPU or anywhere else, is not what makes these frames late.
+
+**The frontend forgot the time a late frame lost.** Mistress's loop, on finding itself past a frame's tick, reset
+the tick to now, "rather than burst-catching up with no pacing at all". With costs like the above that rule loses
+about ten milliseconds every game frame and never recovers them, although the two light fields that follow have
+twenty-two milliseconds to spare: the state ran at **96.8 per cent** of full speed (Wave Race 99.1), which the
+sound's rate control then has to absorb. `FramePacer.Settle` keeps the tick when a frame is late, so the following
+frames run without waiting until the debt is repaid, and forgets only what exceeds three frames' worth, so a stall
+(a breakpoint, a window drag) is still not replayed as a burst. With a sixty-millisecond cap both states ran at
+**100.0 per cent**. `FramePacerTests` holds the rule and the thirty-nine-nine pattern it was made for. The picture's
+cadence is the game's own in either case, since the picture changes only on its drawing frames; what the fix
+removes is the drift.
+
+**The collector is the smaller part, and was left alone.** Allocation is forty to fifty-five kilobytes a frame,
+nearly all of it the recompiler's (`Reflection.Emit`'s fixups, labels and field tokens, by an allocation-tick
+listener) and the sound's arrays; nothing reaches the large object heap. That produces seven to nine collections
+in thirty seconds, one or two of them full, with pauses of seventeen to thirty-one milliseconds: about eight
+hitches a minute. `SustainedLowLatency` changed nothing. A young generation of 256 megabytes cut the collections to
+one and made that one forty-five milliseconds, so the pause does not scale with the garbage and is more likely the
+cost of stopping a dozen busy threads or of walking the block tables; that was not pursued. The remedies that
+remain are to allocate less while compiling (pooled emit state) and to find what the pause is made of; neither is
+done here.
+
+**What this says about moving work to the GPU** is in `Mars_GpuPlan.md` §0: at one it would change none of the
+numbers above, and its case rests entirely on the multiple.
+

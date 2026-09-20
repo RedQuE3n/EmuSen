@@ -1167,8 +1167,8 @@ namespace EmuSen.Mistress.Views
                 }
                 else
                 {
-                    // Resync to now rather than burst-catching up with no pacing at all.
-                    nextTick = clock.Elapsed;
+                    // Owed rather than forgotten, up to a cap, or a game whose drawing frames overrun runs slow - see §4.28.
+                    nextTick = FramePacer.Settle(nextTick, clock.Elapsed, _speed.FrameInterval(session.FrameRateHz));
                 }
             }
         }

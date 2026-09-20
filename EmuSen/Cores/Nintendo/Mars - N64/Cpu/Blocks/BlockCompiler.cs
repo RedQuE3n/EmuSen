@@ -36,6 +36,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
         private static readonly FieldInfo ExtraCycles = CpuField("_extraCycles");
         private static readonly FieldInfo Hi = CpuField("Hi");
         private static readonly FieldInfo Lo = CpuField("Lo");
+        private static readonly FieldInfo DpWriteMarks = CpuField("_dpWriteMarks");
+        private static readonly FieldInfo Cop0 = CpuField("Cop0");
+        private static readonly MethodInfo WriteFpuWord = CpuMethod("WriteFpuWord", typeof(int), typeof(uint));
+        private static readonly MethodInfo WriteFpuWide = CpuMethod("WriteFpuWide", typeof(int), typeof(ulong));
+        private static readonly MethodInfo ReadFpuWord = CpuMethod("ReadFpuWord", typeof(int));
+        private static readonly FieldInfo BusRdram = Field(typeof(MemoryBus), "Rdram");
+        private static readonly MethodInfo Swap16 = Method(typeof(System.Buffers.Binary.BinaryPrimitives), "ReverseEndianness", typeof(short));
+        private static readonly MethodInfo SwapU16 = Method(typeof(System.Buffers.Binary.BinaryPrimitives), "ReverseEndianness", typeof(ushort));
+        private static readonly MethodInfo Swap32 = Method(typeof(System.Buffers.Binary.BinaryPrimitives), "ReverseEndianness", typeof(int));
+        private static readonly MethodInfo SwapU32 = Method(typeof(System.Buffers.Binary.BinaryPrimitives), "ReverseEndianness", typeof(uint));
+        private static readonly MethodInfo Swap64 = Method(typeof(System.Buffers.Binary.BinaryPrimitives), "ReverseEndianness", typeof(long));
+
+        // Off only to measure what the inlined loads save, or to show they change nothing - see Mars_Recompiler.md §16.
+        public static bool InlineLoads = Environment.GetEnvironmentVariable("EMUSEN_MARS_NOINLINELOADS") != "1";
 
         private static readonly FieldInfo BusCycles = Field(typeof(MemoryBus), "Cycles");
         private static readonly FieldInfo BusSp = Field(typeof(MemoryBus), "Sp");
@@ -122,6 +136,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
             private readonly LocalBuilder _entry;
             private readonly LocalBuilder _p;
             private readonly LocalBuilder _exitAt;
+            private readonly LocalBuilder _rdram;
+            private readonly LocalBuilder _marks;
+            private readonly LocalBuilder _address;
+            private readonly LocalBuilder _physical;
             private readonly Label _head;
             private readonly Label _epilogue;
             private readonly Label[] _stubs;
@@ -141,6 +159,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _entry = il.DeclareLocal(typeof(ulong));
                 _p = il.DeclareLocal(typeof(uint));
                 _exitAt = il.DeclareLocal(typeof(int));
+                _rdram = il.DeclareLocal(typeof(byte[]));
+                _marks = il.DeclareLocal(typeof(long[]));
+                _address = il.DeclareLocal(typeof(long));
+                _physical = il.DeclareLocal(typeof(int));
                 _head = il.DefineLabel();
                 _epilogue = il.DefineLabel();
                 _stubs = new Label[block.Length];
@@ -163,6 +185,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Gpr); _il.Emit(OpCodes.Stloc, _g);
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusSp); _il.Emit(OpCodes.Ldfld, SpProcessor); _il.Emit(OpCodes.Stloc, _sp);
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Pc); _il.Emit(OpCodes.Stloc, _entry);
+                _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusRdram); _il.Emit(OpCodes.Stloc, _rdram);
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, DpWriteMarks); _il.Emit(OpCodes.Stloc, _marks);
 
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Call, BusNextEvent);
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, TimerDue); _il.Emit(OpCodes.Call, MathMin);
@@ -201,6 +225,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                     case Kind.Pure: Pure(d.Word); break;
                     case Kind.Store: StoreOf(d); break;
                     case Kind.Branch when Compares(d.Word): Compare(d.Word, k); break;
+                    case Kind.Call when InlineLoads && Loads(d.Word): Load(d.Word); break;
+                    case Kind.Call when InlineLoads && (d.Word >> 26) is 0x31 or 0x35: LoadFloat(d.Word); break;
+                    case Kind.Call when InlineLoads && MovesFloat(d.Word): MoveFloat(d.Word); break;
                     default:
                         _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)d.Word)); _il.Emit(OpCodes.Call, Execute);
                         break;
@@ -371,6 +398,115 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _il.Emit(OpCodes.Ldloc, _p); _il.Emit(OpCodes.Ldc_I4, end); _il.Emit(OpCodes.Bge_Un, noHit);
                 _il.Emit(OpCodes.Br, exit);
                 _il.MarkLabel(noHit);
+            }
+
+            // The aligned integer loads into a register other than zero - see Mars_Recompiler.md §16.
+            private static bool Loads(uint word) => (word >> 26) is 0x20 or 0x21 or 0x23 or 0x24 or 0x25 or 0x27 or 0x37 && ((word >> 16) & 0x1F) != 0;
+
+            // The interpreter's own fast case, tested in its order: a direct kernel address, aligned, inside RDRAM, on a page the display processor is not writing; anything else is the interpreter's - see §16.
+            private void Load(uint word)
+            {
+                uint op = word >> 26;
+                int rs = (int)((word >> 21) & 0x1F), rt = (int)((word >> 16) & 0x1F);
+                int size = op switch { 0x20 or 0x24 => 1, 0x21 or 0x25 => 2, 0x37 => 8, _ => 4 };
+                Label slow = _il.DefineLabel(), done = _il.DefineLabel();
+
+                DirectAddress(rs, (short)word, size, slow);
+
+                _il.Emit(OpCodes.Ldloc, _g); _il.Emit(OpCodes.Ldc_I4, rt);
+                _il.Emit(OpCodes.Ldloc, _rdram); _il.Emit(OpCodes.Ldloc, _physical);
+
+                switch (op)
+                {
+                    case 0x20: _il.Emit(OpCodes.Ldelem_I1); _il.Emit(OpCodes.Conv_I8); break;
+                    case 0x24: _il.Emit(OpCodes.Ldelem_U1); _il.Emit(OpCodes.Conv_U8); break;
+                    case 0x21: Unaligned(OpCodes.Ldind_I2); _il.Emit(OpCodes.Call, Swap16); _il.Emit(OpCodes.Conv_I8); break;
+                    case 0x25: Unaligned(OpCodes.Ldind_U2); _il.Emit(OpCodes.Call, SwapU16); _il.Emit(OpCodes.Conv_U8); break;
+                    case 0x23: Unaligned(OpCodes.Ldind_I4); _il.Emit(OpCodes.Call, Swap32); _il.Emit(OpCodes.Conv_I8); break;
+                    case 0x27: Unaligned(OpCodes.Ldind_U4); _il.Emit(OpCodes.Call, SwapU32); _il.Emit(OpCodes.Conv_U8); break;
+                    default: Unaligned(OpCodes.Ldind_I8); _il.Emit(OpCodes.Call, Swap64); break;
+                }
+
+                _il.Emit(OpCodes.Stelem_I8);
+                _il.Emit(OpCodes.Br, done);
+
+                _il.MarkLabel(slow);
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
+                _il.MarkLabel(done);
+            }
+
+            // Leaves the physical address in its local, or goes to the interpreter's call: not a direct kernel address, not aligned, not RDRAM, or a page being drawn to - see §16.
+            private void DirectAddress(int rs, short offset, int size, Label slow)
+            {
+                LdReg(rs); _il.Emit(OpCodes.Ldc_I8, (long)offset); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Stloc, _address);
+                _il.Emit(OpCodes.Ldloc, _address); _il.Emit(OpCodes.Ldc_I8, unchecked((long)0xFFFF_FFFF_8000_0000)); _il.Emit(OpCodes.Sub); _il.Emit(OpCodes.Ldc_I8, 0x4000_0000L); _il.Emit(OpCodes.Bge_Un, slow);
+
+                if (size > 1)
+                {
+                    _il.Emit(OpCodes.Ldloc, _address); _il.Emit(OpCodes.Conv_I4); _il.Emit(OpCodes.Ldc_I4, size - 1); _il.Emit(OpCodes.And); _il.Emit(OpCodes.Brtrue, slow);
+                }
+
+                _il.Emit(OpCodes.Ldloc, _address); _il.Emit(OpCodes.Conv_I4); _il.Emit(OpCodes.Ldc_I4, 0x1FFF_FFFF); _il.Emit(OpCodes.And); _il.Emit(OpCodes.Stloc, _physical);
+                _il.Emit(OpCodes.Ldloc, _physical); _il.Emit(OpCodes.Ldc_I4, _rdramLength); _il.Emit(OpCodes.Bge_Un, slow);
+                _il.Emit(OpCodes.Ldloc, _marks); _il.Emit(OpCodes.Ldloc, _physical); _il.Emit(OpCodes.Ldc_I4, 12); _il.Emit(OpCodes.Shr_Un); _il.Emit(OpCodes.Ldelem_I8); _il.Emit(OpCodes.Brtrue, slow);
+            }
+
+            // A load into the coprocessor's register, usable or the interpreter raises what it raises - see §16.
+            private void LoadFloat(uint word)
+            {
+                bool wide = (word >> 26) == 0x35;
+                Label slow = _il.DefineLabel(), done = _il.DefineLabel();
+
+                Usable(slow);
+                DirectAddress((int)((word >> 21) & 0x1F), (short)word, wide ? 8 : 4, slow);
+
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, (int)((word >> 16) & 0x1F));
+                _il.Emit(OpCodes.Ldloc, _rdram); _il.Emit(OpCodes.Ldloc, _physical);
+                if (wide) { Unaligned(OpCodes.Ldind_I8); _il.Emit(OpCodes.Call, Swap64); _il.Emit(OpCodes.Call, WriteFpuWide); }
+                else { Unaligned(OpCodes.Ldind_U4); _il.Emit(OpCodes.Call, SwapU32); _il.Emit(OpCodes.Call, WriteFpuWord); }
+                _il.Emit(OpCodes.Br, done);
+
+                _il.MarkLabel(slow);
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
+                _il.MarkLabel(done);
+            }
+
+            // A word moved to the coprocessor, or from it into a register other than zero - see §16.
+            private static bool MovesFloat(uint word) =>
+                (word >> 26) == 0x11 && (((word >> 21) & 0x1F) == 0x04 || (((word >> 21) & 0x1F) == 0x00 && ((word >> 16) & 0x1F) != 0));
+
+            private void MoveFloat(uint word)
+            {
+                int rt = (int)((word >> 16) & 0x1F), fs = (int)((word >> 11) & 0x1F);
+                Label slow = _il.DefineLabel(), done = _il.DefineLabel();
+
+                Usable(slow);
+
+                if (((word >> 21) & 0x1F) == 0x04)
+                {
+                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, fs); LdReg(rt); _il.Emit(OpCodes.Conv_U4); _il.Emit(OpCodes.Call, WriteFpuWord);
+                }
+                else
+                {
+                    StReg(rt, () => { _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, fs); _il.Emit(OpCodes.Call, ReadFpuWord); SignExtend32(); });
+                }
+
+                _il.Emit(OpCodes.Br, done);
+                _il.MarkLabel(slow);
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
+                _il.MarkLabel(done);
+            }
+
+            private void Usable(Label slow)
+            {
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Cop0); _il.Emit(OpCodes.Ldc_I4, Core.Cpu.StatusRegister); _il.Emit(OpCodes.Ldelem_I8);
+                _il.Emit(OpCodes.Ldc_I8, (long)Core.Cpu.StatusCop1Usable); _il.Emit(OpCodes.And); _il.Emit(OpCodes.Brfalse, slow);
+            }
+
+            // The element's address, read through whatever the host's alignment is.
+            private void Unaligned(OpCode read)
+            {
+                _il.Emit(OpCodes.Ldelema, typeof(byte)); _il.Emit(OpCodes.Unaligned, (byte)1); _il.Emit(read);
             }
 
             private void LdReg(int r)

@@ -859,3 +859,48 @@ every step and not only the break. The probe's 4,800 frames are identical with b
 
 `EMUSEN_MARS_NOIDLESKIP=1` turns it off, for measurement. What it does not cover: an idle loop of another shape —
 a wait on a memory word, a counted delay — is a block like any other.
+
+## 16. The loads compiled inline
+
+*2026-09-20.* §14's census, taken again from Ocarina of Time's field with the idle loop set aside
+(`Mars_Performance.md` §38), put 52 per cent of the busy instructions through the interpreter's switch. A third of
+those are integer loads, the load of a word alone 21 per cent; the loads into the coprocessor are 14 per cent and
+the word moves to and from it six; its arithmetic is 17; the rest are the register jumps and links, the likely
+branches and the coprocessor's branch.
+
+**What is compiled.** The seven aligned integer loads into a register other than zero, the two loads into the
+coprocessor, and the word moved to it and from it. Each is the interpreter's own fast case and nothing more, tested
+in the interpreter's order: the address is the base plus the offset; it is a direct kernel address (`address −
+0xFFFFFFFF80000000` below `0x40000000`, unsigned, and a block only ever runs in kernel mode, where the byte order is
+never reversed); it is aligned; its physical address is inside RDRAM, whose length the block is compiled for; and
+the page is not one the display processor is writing (`_dpWriteMarks`, the same word the interpreter tests). Then
+the bytes are read big-endian straight from the array and extended as the instruction says. For the coprocessor the
+status register's usable bit is tested first, as `RequireCop1` tests it, and the value goes through the
+interpreter's own `WriteFpuWord`, `WriteFpuWide` and `ReadFpuWord`, so the half and full register modes are theirs.
+**Any test that fails goes to the call the block made before**, `Execute` with the word, which raises what it
+raises, waits for what it waits for and reaches the devices. Nothing the fast case skips has a side effect.
+
+**What it bought.** One build, the loads inlined or called (`EMUSEN_MARS_NOINLINELOADS=1`), four rounds of 1,200
+frames interleaved, the scan-out off, medians: Ocarina of Time's mean frame 9.10 to 8.61 milliseconds and its
+ninetieth percentile, the drawing frames, **20.87 to 19.88, under the slot of twenty for the first time**; Super
+Mario 64 5.12 to 4.93; Wave Race 7.49 to 7.36. Five per cent, where a third of the switch's traffic was removed:
+the interpreter's fast case was already short, and what was saved is the call, the switch and the decode. The state
+hash after 900 frames is unchanged in all three games.
+
+**The proof.** `The_inlined_loads_leave_the_machine_the_interpreter_leaves` runs every one of them in a loop beside
+the interpreter — bytes with their top bit set, both signs of offset, a load into register zero, a load from a
+device, which takes the slow call — refuses to pass unless the loop compiled, and in its second case takes the
+coprocessor away half way, so a block that has run a hundred times finds it unusable. 
+`An_inlined_load_that_is_not_aligned_faults_as_the_interpreter_faults` moves the address by one at the 128th turn.
+Four mutants of the emitter were tried and all four caught: the signed half word read unsigned, alignment not
+tested, the usable bit not tested, the word from the coprocessor not sign-extended. The first form of both tests
+passed without compiling anything — the fault came on the first turn, before any block existed — which is why they
+now assert that one did.
+
+**What is not compiled, and why.** Stores already call their handler directly and return where they landed, for
+the block's check of its own words. The coprocessor's arithmetic is software floating point, exact by construction;
+a host-float fast case would have to prove the inexact flag bit for bit and is its own piece of work. The register
+jump and the link call the debugger's call-stack observers. The likely branches annul their slot. Each is a few per
+cent of the switch. After this the largest single item on the CPU's side is the dispatcher's entry, which §9 and
+§12 measured as memory and declined to chase, and the largest on the thread is the signal processor's vector unit
+(`Mars_Performance.md` §38).

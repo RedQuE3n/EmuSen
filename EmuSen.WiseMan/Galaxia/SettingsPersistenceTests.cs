@@ -94,6 +94,28 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(128, AudioSettings.OutputTargetLatencyMs);
         }
 
+        // A console's settings by key, in their text form, survive a save and a load beside the window fields - see EmuSen_Config_Reference.md §3.3.
+        [Fact]
+        public void A_consoles_settings_round_trip_through_the_graphics_file()
+        {
+            var written = new GraphicsConfig();
+            written.SetValue("N64", "RdpWorkers", "3");
+            written.SetValue("N64", "ThreadedRdp", "false");
+            written.SetValue("SNES", "Anything", "text");
+            Assert.True(written.Save());
+
+            GraphicsConfig read = GraphicsConfig.Load();
+            Assert.Equal("3", read.Value("N64", "RdpWorkers"));
+            Assert.Equal("false", read.Value("N64", "ThreadedRdp"));
+            Assert.Equal("text", read.Value("SNES", "Anything"));
+            Assert.Null(read.Value("N64", "DeferredPresentation"));
+            Assert.Null(read.Value("NES", "RdpWorkers"));
+
+            read.Forget("N64");
+            Assert.Null(read.Value("N64", "RdpWorkers"));
+            Assert.Equal("text", read.Value("SNES", "Anything"));
+        }
+
         [Fact]
         public void Graphics_settings_round_trip_through_the_hub()
         {

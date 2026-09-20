@@ -614,12 +614,35 @@ adds a third to a half (`Mars_Performance.md` §35), which is where the four com
 where those threads share cores with the emulation thread and the scan-out, is unmeasured, and the divisor is the
 number to revisit when it is. Not a setting; the property is where one would go.
 
+*Later still:* the three values above are no longer set by hand here; they are Mars's defaults in the graphics
+window (§4.26), and a user can change each.
+
 *Later the same day:* **rewind is off for the N64 in this frontend for now.** The first play test of the workers froze
 Super Mario 64 in a level, and the rewind buffer's snapshot every fourth frame is the one path the play harness never
 took with several workers; a snapshot asked for while every worker waits inside a command — a list handed over up to
 the middle of one, which games do — could not be answered, and a test reproduces the hang. Until the snapshot with
 workers is proven in play, `OnFrameCompleted` is skipped for Mars; the hotkey then has no history to step back
 through. The other cores' rewind is unchanged.
+
+### 4.26 The graphics window: one tab per console, the settings its core offers
+
+*2026-09-20.* Settings → Graphics Settings... opens a LunaP `ToolWindow` built in code like the preferences: a hint,
+a `Tabs` with one tab per console in release order, and two buttons. Each tab is the console's `CoreSetting`s from
+`CoreCatalog.SettingsFor` (`EmuSen_Multicore.md` §13), one `FieldRow` each with the label and the hint, its control a
+`LunaSwitch` for a switch, a `Dropdown` of the range's counts for a count, or of the names for a choice; a console
+with none shows an `EmptyState`. The controls are named `<console>.<key>` so a test can find them. The tab opened
+is the running game's console, as the controller window does.
+
+**A change is saved at once and reaches a running game between frames.** The window writes `GraphicsConfig.Consoles`
+and saves on every change, and tells the main window which console changed; if that is the running one, the main
+window queues `ApplyConsoleSettings` on the emulation thread, where the core's setters may join their threads.
+`ApplyConsoleSettings` is also what `LoadRom` runs, in place of the values §4.21b hand-set for Mars: every setting
+the core offers, from the config or its default, and a value the core refuses (a hand edit) falls back to the
+default. *Reset This Console* forgets the console's entries and shows the defaults again.
+
+What is not here: the frontend's own window size, vsync and filtering (`graphics.json`'s other fields, which this
+frontend does not read), and anything a core does not offer. §4.21b's numbers are now Mars's defaults, and the
+weak-machine question it left open is now the user's to answer from this window.
 
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 

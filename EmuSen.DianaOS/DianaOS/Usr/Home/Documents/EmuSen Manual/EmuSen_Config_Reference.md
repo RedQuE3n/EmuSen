@@ -141,6 +141,13 @@ The same arrangement for `EmuSen.Graphics.GraphicsSettings`: window size, target
 
 `WindowTitle` is deliberately **not** persisted. It is branding rather than a preference, and a corrupt config blanking the application's title is a worse outcome than not being able to change it from a file.
 
+*2026-09-20:* the file also holds **`Consoles`**, each console's own settings by key in their text form, as its core
+reads and writes them (`EmuSen_Multicore.md` §13): `"Consoles": { "N64": { "RdpWorkers": "4", "ThreadedRdp": "true" } }`.
+A key that is absent means the setting's default; a console that is absent means all of them. The values are text
+on purpose, so the file needs no schema per console and a hand edit that the core refuses falls back to the default
+rather than failing the load. `Value`, `SetValue` and `Forget` are the accessors; Mistress's graphics window writes
+them and saves at once.
+
 ### 3.4 `cheats/<name>.json` — `CheatFile`
 
 New capability, not a migration: `CheatRegistry` previously had no persistence at all, so every cheat was lost on exit.

@@ -15,7 +15,7 @@ using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 namespace EmuSen.Cores.Nintendo.Mars
 {
     // The Nintendo 64's ICore; what the machine cannot provide yet is stubbed on purpose - see Mars_Core.md.
-    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore
+    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings
     {
         // The VR4300's pipeline clock, which is what MemoryBus.Cycles counts - see Mars_Memory.md §3.
         public const long ProcessorClockHz = 93_750_000;
@@ -289,6 +289,42 @@ namespace EmuSen.Cores.Nintendo.Mars
                 _threadedRdp = value;
                 if (Bus is { } bus) bus.Dp.Threaded = value;
             }
+        }
+
+        // The four video settings a frontend can offer, with the defaults Mistress used to set by hand - see Mars_Core.md §10.
+        public static readonly IReadOnlyList<global::EmuSen.Cores.CoreSetting> VideoSettings = new global::EmuSen.Cores.CoreSetting[]
+        {
+            new("ThreadedRdp", "Draw on a separate thread", "The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact; faster on any machine with two cores to spare.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
+            new("RdpWorkers", "Rasteriser threads", "How many processors share each list, each shading every Nth row. Exact at any count; past two, each adds less. One per three cores is the default.", global::EmuSen.Cores.CoreSettingKind.Count, Math.Clamp(Environment.ProcessorCount / 3, 1, 4).ToString(), 1, 8),
+            new("DeferredPresentation", "Scan out while the next frame runs", "The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late. Off, the frame waits for its picture.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
+            new("SkipRepeatedScans", "Skip a scan that repeats the last", "A scan whose registers and bytes match the last walk is not walked again. Exact; the picture is the same either way.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
+        };
+
+        IReadOnlyList<global::EmuSen.Cores.CoreSetting> global::EmuSen.Cores.ICoreSettings.Settings => VideoSettings;
+
+        public string Get(string key) => key switch
+        {
+            "ThreadedRdp" => ThreadedRdp ? "true" : "false",
+            "RdpWorkers" => RdpWorkers.ToString(),
+            "DeferredPresentation" => DeferredPresentation ? "true" : "false",
+            "SkipRepeatedScans" => SkipRepeatedScans ? "true" : "false",
+            _ => throw new ArgumentException($"Mars has no setting named {key}.", nameof(key)),
+        };
+
+        // A count outside its range is clamped and a switch is read as a boolean; text that is neither is refused - see Mars_Core.md §10.
+        public void Set(string key, string value)
+        {
+            switch (key)
+            {
+                case "ThreadedRdp": ThreadedRdp = Switch(value); break;
+                case "RdpWorkers": RdpWorkers = Math.Clamp(Count(value), 1, 8); break;
+                case "DeferredPresentation": DeferredPresentation = Switch(value); break;
+                case "SkipRepeatedScans": SkipRepeatedScans = Switch(value); break;
+                default: throw new ArgumentException($"Mars has no setting named {key}.", nameof(key));
+            }
+
+            static bool Switch(string text) => bool.TryParse(text, out bool on) ? on : throw new ArgumentException($"{text} is not on or off.");
+            static int Count(string text) => int.TryParse(text, out int count) ? count : throw new ArgumentException($"{text} is not a count.");
         }
 
         // How many processors share the display processor's list, each shading its own rows, when the list runs threaded - see Mars_Rdp.md §2.8.

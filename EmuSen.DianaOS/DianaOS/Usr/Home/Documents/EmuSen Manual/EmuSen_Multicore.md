@@ -280,3 +280,22 @@ Two questions look the same and are not: *which console is this ROM* and *which 
 `EmulatorSession.CoreName` keeps its fallback, because callers after a load are entitled to a non-null string; its comment now says the fallback is only meaningful post-load rather than claiming there is only one core.
 
 **Two names, one console.** A `CoreDescriptor` carries both `Console` (`"SNES"`) and `DisplayName` (`"SNES (Venus)"`), and different call sites hold different ones — `AppSettings.SelectedCore` is a display name, `ICore.CoreName` is a console. `CoreFactory.CheatCodecsFor` took a display name and fell back to the SNES pair for anything it did not recognise, so passing the *console* name got working-looking SNES codecs for every console. That is the same shape of bug as the log directory: a wrong answer that reads as a right one. It resolves through `CoreCatalog.ByAnyName` now, which accepts either. The fallback itself stays — a window opened with no console chosen still needs some pair — but it is no longer reachable by naming a console correctly in the wrong vocabulary.
+
+## 13. Settings a console offers its frontend
+
+*2026-09-20.* `ICoreSettings` (`EmuSen/Cores/CoreCapabilities.cs`) is the capability a core implements when it has
+settings a frontend should offer per console: a list of `CoreSetting` — a key, a label, a hint, a kind (a switch, a
+count within a range, or a choice among names) and a default — and `Get`/`Set` by key, every value in its text form.
+The catalogue holds the same list statically per console (`CoreCatalog.SettingsFor`), beside the buttons and axes,
+so a frontend can build the console's page with no core loaded; the core answers the same list when it is.
+
+Three decisions worth stating. **The default is the frontend's, not the core's constructed state.** Mars is built
+with its display processor on the calling thread, because that is what the harness and the tests want, and the
+frontend used to turn the threads on by hand after `LoadRom`; the setting's default is what the frontend wants, so
+applying every setting's default reproduces what the frontend did, and a config file that names nothing changes
+nothing. **Values are text.** A frontend that stores them needs no type per key, a hand-edited file needs no schema,
+and the core parses what it is given and refuses what it cannot — a count outside its range is clamped rather than
+refused, since a range is advice about what is useful, not about what is safe. **Set runs on the emulation thread,
+between frames.** Mars's setters join threads; a frontend calls them where its other requests to the core run.
+
+Only Mars offers any today (`Mars_Core.md` §10). A console with none gets an empty list and a page that says so.

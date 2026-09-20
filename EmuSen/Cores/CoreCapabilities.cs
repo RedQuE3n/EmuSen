@@ -35,6 +35,22 @@ namespace EmuSen.Cores
         void FlushVerboseTrace();
     }
 
+    // What kind of value a setting takes: on or off, a count within a range, or one name of several - see EmuSen_Multicore.md §13.
+    public enum CoreSettingKind { Switch, Count, Choice }
+
+    // One setting a console offers its frontend, every value in its text form; the default is the frontend's, not the core's constructed state - see EmuSen_Multicore.md §13.
+    public sealed record CoreSetting(string Key, string Label, string Hint, CoreSettingKind Kind, string Default, int Min = 0, int Max = 0, IReadOnlyList<string>? Choices = null);
+
+    // A core whose video settings a frontend reads and writes by key, on the emulation thread between frames - see EmuSen_Multicore.md §13.
+    public interface ICoreSettings
+    {
+        IReadOnlyList<CoreSetting> Settings { get; }
+
+        string Get(string key);
+
+        void Set(string key, string value);
+    }
+
     // A core that can write a state without waiting for work it has on other threads; LoadState reads it - see EmuSen_Rewind_And_FastForward.md §1.8.
     public interface ISnapshotCore
     {

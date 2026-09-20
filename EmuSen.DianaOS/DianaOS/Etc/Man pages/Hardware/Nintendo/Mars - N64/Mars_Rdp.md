@@ -835,6 +835,14 @@ or stale. The shadow costs its memory at the multiple squared, and the processor
 shading, N² pixels for every one of the console's, on the same threads as §2.8's; what that comes to in play is
 §11.1.
 
+**A defect found the same day: after a state was read the multiple never showed again.** `ResetScaled` replaces
+every processor at the multiple, but a worker's loop held the one it started with in a local, so the threads went
+on drawing with processors nothing looked at while `ScaledDrawn` asked the new ones, which never drew. The loop now
+takes its processor again whenever it has stood or slept, which is the only time a state can have been read.
+`After_a_state_is_read_the_multiple_is_drawn_and_shown_again` fails without that and passes with it. It was found by
+a run from a state that reported the console's width at a multiple of two, not by a test, because every test of the
+multiple until then had drawn without reading a state.
+
 ### 11.1 What the multiple costs in play
 
 *2026-09-20.* `playbench` took a `RENDERSCALE=n` switch, and `ab-modes2.sh` ran one build in three modes from the

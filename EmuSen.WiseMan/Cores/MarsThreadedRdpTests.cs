@@ -531,6 +531,25 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // A state read replaces the processors at the multiple, and the threads must draw with the new ones or the multiple never shows again - see §11.
+        [Fact]
+        public void After_a_state_is_read_the_multiple_is_drawn_and_shown_again()
+        {
+            MemoryBus bus = new();
+            bus.Dp.Threaded = true;
+            bus.Dp.Workers = 3;
+            bus.Dp.Scale = 2;
+            HandOver(bus, Scene(0x1234_1234));
+            State(bus);
+            Assert.True(bus.Dp.ScaledDrawn);
+
+            Load(bus, State(bus, snapshot: true));
+            Assert.False(bus.Dp.ScaledDrawn);
+            HandOver(bus, Scene(0x4321_4321));
+            State(bus);
+            Assert.True(bus.Dp.ScaledDrawn);
+        }
+
         // A fill at a multiple lays the same pixel over every pixel of the multiple, at the address the multiple's square gives its image - see §11.
         [Fact]
         public void A_fill_at_a_multiple_is_the_fill_at_one_at_every_pixel_of_the_multiple()

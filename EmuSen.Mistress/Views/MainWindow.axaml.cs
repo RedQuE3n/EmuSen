@@ -1153,8 +1153,10 @@ namespace EmuSen.Mistress.Views
                 {
                     _running = false;
                     string message = ex.Message;
+                    string settings = string.Join(", ", EmuSen.Cores.CoreCatalog.SettingsFor(_activeConsole).Select(k => $"{k.Key}={_graphics.Value(_activeConsole, k.Key) ?? k.Default}"));
+                    string? report = CrashLog.Write("emulation halt", ex, $"{_activeConsole}, frame {session.Core?.TotalFrames}: {settings}");
                     // Halt and print rather than recover; StatusText needs the UI thread.
-                    Dispatcher.UIThread.Post(() => StatusText.Text = $"[CPU HALT] {message}");
+                    Dispatcher.UIThread.Post(() => StatusText.Text = $"[CPU HALT] {message}" + (report is null ? "" : $" - written to {report}"));
                     break;
                 }
 

@@ -759,7 +759,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             {
                 while (true)
                 {
-                    if (Volatile.Read(ref _pauseRequested) != 0) Stand(w, completed);
+                    if (Volatile.Read(ref _pauseRequested) != 0)
+                    {
+                        Stand(w, completed);
+                        s = w.Scaled;
+                    }
                     if (Volatile.Read(ref _stopping) != 0) return;
 
                     if (completed == Volatile.Read(ref _issued))
@@ -767,6 +771,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                         w.Words += completed - runFrom;
                         w.Ticks += System.Diagnostics.Stopwatch.GetTimestamp() - runStart;
                         Sleep(w, completed);
+                        s = w.Scaled;
                         runStart = System.Diagnostics.Stopwatch.GetTimestamp();
                         runFrom = completed;
                         continue;

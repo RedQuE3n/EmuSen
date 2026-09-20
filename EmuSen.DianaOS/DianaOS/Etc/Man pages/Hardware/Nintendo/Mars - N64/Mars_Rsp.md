@@ -242,3 +242,12 @@ or data memory that collides with the running RSP's own access in the same cycle
 having a defined result. So any slice boundary is legal provided it does not fall inside a register access, and a
 yield must leave the program counter exact, clear halt again, and raise the interrupt.
 
+**Whether any reference runs the signal processor on a thread of its own, read on 2026-09-19.** One does, optionally:
+Project64's "RSP multi-threaded" setting runs a low-level task on a second thread in slices of a hundred instructions,
+and the processor reads data memory, instruction memory and the status register with no lock, fence or wait between
+them, so the ordering is whatever the host's memory system gives. It is off by default and no game entry turns it on.
+CEN64 runs the RCP and the VR4300 on two threads that rendezvous on a condition variable every slice of a few thousand
+cycles, and its own history records accuracy given up for it. simple64 and gopher64 run the task in bursts on the
+emulation thread and back-date its cost by scheduling the interrupt the burst's cycles later. None of this moves the
+decision above: a thread for the signal processor buys concurrency the machine's thread does not need while it is idle
+two thirds of the time, at the price of an ordering no reference has made exact.

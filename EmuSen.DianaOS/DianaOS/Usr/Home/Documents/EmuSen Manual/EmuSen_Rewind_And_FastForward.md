@@ -85,6 +85,20 @@ Verified end-to-end against SMW: dumping `regs` + `mem WRAM 0 100` + `mem APURAM
 
 **Why the guard does not generalise into a rule about cores.** Every other core writes at least a magic word and a version (`EmuSen_Save_States.md` §3), so for them a zero-length state cannot occur and the guard never fires. It is a statement about one sentinel, not a capability check; a core that someday cannot snapshot *some* of the time would need a real way to say so, and this is not it.
 
+
+### 1.8 A core with work on other threads: the snapshot, and the delta encoded elsewhere
+
+*2026-09-19.* Mars runs its display processor's list on a thread of its own (`Hardware/Nintendo/Mars - N64/Mars_Rdp.md` §2.6), and a state must hold what that thread drew, so `SaveState` waits for it. At a frame boundary the thread is typically a whole list behind — 7 ms in Wave Race 64, 5 ms in Super Mario 64 outside the castle, measured by the frontend bench — and a capture every fourth frame therefore cost the emulation thread that wait plus the 3.3 ms of writing, copying and encoding a 6 MB state: Wave Race ran at 61 fps without the buffer and 54 with it, against a console of 60 (`Mars_Performance.md` §34).
+
+Two changes, one offered by the core and one in the buffer:
+
+- **`ISnapshotCore.SaveSnapshot`** (`EmuSen/Cores/CoreCapabilities.cs`) is an optional capability: a state written without waiting for work the core has in flight elsewhere, which its own `LoadState` reads. `CaptureNow` asks for it when the core offers it and falls back to `SaveState` otherwise. Mars implements it by holding its thread between two command words and writing the words it has not run after the state's body (`Mars_SaveStates.md` §1, `Mars_Rdp.md` §2.7); a load runs those words before the machine continues, so the chain restores the same machine a joined state would.
+- **The delta is encoded on a pool thread.** `CaptureNow` copies the state into a spare buffer — the previous state's, reused, so a capture allocates no state-sized array — and hands the pair to a task. `Depth`, `BufferedBytes`, `Rewind` and `Clear` settle that task first, so nothing reads or moves the chain while a delta is missing from it. The buffer is still driven from one thread; the task only computes.
+
+What a capture then costs the emulation thread is the state write alone, under a millisecond for Mars. What it costs the core is the standstill during that write, which the display processor's thread would otherwise have spent drawing: a fraction of a millisecond a capture. The accuracy note of §1.6 holds unchanged, since a rewound state is a state and Mars's tail is the same words the thread would have run, run at the load instead. `RewindBufferTests` cover the capability and a capture whose delta is still encoding; `MarsThreadedRdpTests` cover a snapshot taken with every word of a list pending.
+
+**Measured** (`Mars_Performance.md` §34.1): Wave Race 64 with the buffer on went from 55.2 to 58.7 fps and Super Mario 64 outside the castle from 54.0 to 56.4, the two states whose thread was behind at the frame's end; the other two were unchanged. A capture costs the emulation thread 1.4 to 1.7 ms now, against 3.3 plus the join. Two things to know. Mars's tail is a fixed 32k words, because the chain needs every snapshot of a machine to be the same length — a tail as long as the backlog restarted the chain at every capture, which the bench found. And a delta now carries the tail's changed words, 400 to 600 KB a capture in Wave Race, so the default budget holds about forty seconds of that game rather than minutes; `IntervalFrames` is the knob (§1.5).
+
 ---
 
 ## 2. Fast forward

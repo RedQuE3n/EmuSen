@@ -18,17 +18,20 @@ and it is the whole of the evidence for the slice. The rest of this page is the 
 | | |
 | --- | --- |
 | magic | `0x5352_414D`, "MARS" in the file's first four bytes |
-| version | 1 |
+| version | 1; 2 for a snapshot, whose body is the same and which carries the tail below |
 | RDRAM size | 4MB or 8MB |
 | frames | `TotalFrames`, and the length of the last frame, which `FrameRateHz` reports |
 | the processor | `Cpu`, reflected (`EmuSen_Save_States.md` §1) |
 | the bus | `MemoryBus` reflected — RDRAM, its hidden bits, the RSP's memories, PIF RAM and every device it owns — then §3's tail |
+| a snapshot's tail | version 2 only: a count, then the display processor's words handed over and not yet run, which the load runs — `Mars_Rdp.md` §2.7 |
 
 **Three things are refused before anything is read into the machine**: a file that is not a Mars state, a version
 this build does not know, and a state saved with a different amount of RDRAM, which would otherwise read four
 megabytes into an eight-megabyte array and misalign everything after it. `A_state_for_another_machine_is_refused_before_anything_is_read`
 holds all three, and checks the machine is untouched. A path save checks for a ROM before it creates the file, so a
 failed save leaves no empty state behind, which is what the old refusal was careful of too (`Mars_Core.md` §6).
+
+**Version 2 is a snapshot, not a second format.** *2026-09-19.* `SaveSnapshot` — the `ISnapshotCore` capability, written for the rewind buffer (`EmuSen_Rewind_And_FastForward.md` §1.8) — writes the body of a version 1 state while the display processor's thread stands between two words rather than after it has finished, and then the words it had not run. `LoadState` reads either version, and for a snapshot runs the tail on the loading thread before the machine continues, with the full sync's interrupt already answered when the words were handed over. `SaveState` still writes version 1, so every state on disk and every hash the probe holds is unchanged. `A_snapshot_loads_like_a_state_and_a_state_keeps_its_version` holds the two versions and the four-byte tail of an idle machine; the pending case is `MarsThreadedRdpTests`.
 
 **The ROM is not in the state**, and nothing checks that a state is loaded into the game that wrote it. This is the
 other cores' behaviour as well; it is named here because a state for another game would load, and run nonsense.

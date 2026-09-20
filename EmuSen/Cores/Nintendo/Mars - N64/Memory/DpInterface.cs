@@ -41,6 +41,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private Exception? _fault;
         [EmuSen.Common.SkipInState] private bool _threaded;
 
+        // Asked of the thread between two words, and answered when it stands there - see §2.7.
+        [EmuSen.Common.SkipInState] private int _pauseRequested;
+        [EmuSen.Common.SkipInState] private int _paused;
+        [EmuSen.Common.SkipInState] private bool _replaying;
+
         // For each page of RDRAM, the count of words that must have run before anyone writes it, and before anyone reads it; zero when nothing is due - see §2.6.
         [EmuSen.Common.SkipInState] private readonly long[] _marks;
         [EmuSen.Common.SkipInState] private readonly long[] _writeMarks;
@@ -222,6 +227,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public long[] WriteMarks => _writeMarks;
 
         public long MarkFor(uint physical) => _marks[physical >> 12];
+
+        // Words handed over that the thread has not run, which a snapshot carries - see §2.7.
+        public long Pending => _issued - Volatile.Read(ref _completed);
+
+        // A snapshot's tail is this many words whatever is pending, so every snapshot of a machine is the same length - see §2.7.
+        public const int SnapshotWords = 1 << 15;
+
+        // Waits for the backlog to fit a snapshot's tail, then holds the thread - see §2.7.
+        public void Hold()
+        {
+            if (Pending > SnapshotWords) WaitUntil(_issued - SnapshotWords);
+            Pause();
+        }
 
         // The same words, read now as the immediate path reads them; each is marked for, then published, so a wait on a mark can always end - see §2.6.
         private void TakeOntoThread()
@@ -454,6 +472,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
                     while (completed < issued)
                     {
+                        if (Volatile.Read(ref _pauseRequested) != 0) StandStill();
                         _runningWord = completed + 1;
                         Processor.Accept(_ring[(int)(completed & (_ring.Length - 1))]);
                         completed++;
@@ -484,11 +503,64 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             for (int i = 0; i < 400; i++)
             {
+                if (Volatile.Read(ref _pauseRequested) != 0) return false;
                 if (Volatile.Read(ref _issued) != completed) return true;
                 Thread.SpinWait(50);
             }
 
             return false;
+        }
+
+        // The thread, between two words, until the request is withdrawn - see §2.7.
+        private void StandStill()
+        {
+            Volatile.Write(ref _paused, 1);
+            SpinWait spin = default;
+            while (Volatile.Read(ref _pauseRequested) != 0) spin.SpinOnce(-1);
+            Volatile.Write(ref _paused, 0);
+        }
+
+        // Nothing runs on the thread until Resume: it stands between two words, or it has left and cannot be started from here - see §2.7.
+        public void Pause()
+        {
+            Volatile.Write(ref _pauseRequested, 1);
+            SpinWait spin = default;
+            while (Volatile.Read(ref _draining) != 0 && Volatile.Read(ref _paused) == 0) spin.SpinOnce(-1);
+            Rethrow();
+        }
+
+        public void Resume()
+        {
+            Volatile.Write(ref _pauseRequested, 0);
+            if (Volatile.Read(ref _completed) < _issued) Kick();
+        }
+
+        // The words handed over and not yet run, for a state written while the thread stands - see §2.7.
+        public void WritePending(System.IO.BinaryWriter w)
+        {
+            long completed = Volatile.Read(ref _completed), issued = _issued;
+            if (issued - completed > SnapshotWords) throw new InvalidOperationException("More words are pending than a snapshot's tail holds; Hold was not called.");
+
+            w.Write((int)(issued - completed));
+            for (long i = completed; i < issued; i++) w.Write(_ring[(int)(i & (_ring.Length - 1))]);
+            for (long i = issued - completed; i < SnapshotWords; i++) w.Write(0UL);
+        }
+
+        // Run here and now, as the immediate path would have, with the full sync already answered when the words were handed over - see §2.7.
+        public void ReadPending(System.IO.BinaryReader r)
+        {
+            int count = r.ReadInt32();
+            _replaying = true;
+            try
+            {
+                for (int i = 0; i < count; i++) Processor.Accept(r.ReadUInt64());
+            }
+            finally
+            {
+                _replaying = false;
+            }
+
+            r.BaseStream.Seek((SnapshotWords - count) * 8L, System.IO.SeekOrigin.Current);
         }
 
         // A writer waits for every range on its page, a reader for the ones the processor writes; a bystander on the page waits for neither - see §2.6.1.
@@ -613,7 +685,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 #endif
 
         // Called by the processor at every byte of RDRAM it reads or writes while threaded, to prove the marks and their ranges reach it - see §2.6.1.
-        public bool Verifying => _threaded && VerifyMarks;
+        public bool Verifying => _threaded && VerifyMarks && !_replaying;
 
         public void Touched(uint physical) => Verify(physical, write: false);
 

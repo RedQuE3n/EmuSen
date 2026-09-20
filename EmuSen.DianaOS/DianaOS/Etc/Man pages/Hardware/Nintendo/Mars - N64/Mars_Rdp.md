@@ -258,6 +258,21 @@ run of forty frames after that was added. The strings are built only where a fau
 the game displayed at the full sync, and Ocarina of Time's processor reading its depth buffer's page for the rows the
 list does not share. Those are the list's own speed on its thread, §2.6's last paragraph.
 
+### 2.7 The thread held between two words
+
+*2026-09-19.* A state must hold what the thread drew, so writing one joins it (§2.6), and at a frame boundary the thread
+is a list behind: the rewind buffer's capture every fourth frame cost Wave Race 64 a 7 ms join each time
+(`Mars_Performance.md` §34). A snapshot for that buffer holds the thread instead. `Pause` raises a request the drain
+reads before every word and in its linger; the thread answers by standing still between two words, or by leaving,
+and only the machine's thread can start it again, so once `Pause` returns nothing writes RDRAM until `Resume`. The
+state's body is then written as of the words run so far, and the words handed over but not run follow it
+(`WritePending`); a load runs them at once on the loading thread (`ReadPending`), with the byte-level verifier off
+for the replay, because the join that precedes a load has cleared the ranges it would check against, and with the
+full sync's interrupt not raised again, since the interface answered it when the word was handed over. The cost to the
+thread is the standstill, under a millisecond a capture. `A_snapshot_taken_while_the_thread_stands_loads_to_what_the_finished_list_leaves`
+pauses before a list is handed over, so every word of it is pending, and proves the loaded machine equal to the list
+run at once.
+
 ## 3. The command stream
 
 Words are taken into a buffer one at a time, and a command runs once all of its words have
@@ -536,3 +551,98 @@ one is a latent defect of its own, independent of threading, and is recorded in 
 **Not attempted.** Three of Mars's four measured states are bound by this thread, so the prize is real; the work is
 not small, and nothing here is built.
 
+### 10.1 What the references and the field do, read on 2026-09-19
+
+Read after §10, from the local checkouts and from what is published; mechanism only, as `Mars_References.md` §2
+requires.
+
+**angrylion-rdp-plus.** Every worker replays every buffered command against its own complete copy of the processor's
+state — the span table, the combined colour, the previous pixel's stored depth slope, the coverage buffer, a copy of
+texture memory — and rasterises the rows where `row % workers == worker`; state commands, loads and edge setup are
+run N times and only the span shading is divided. Commands buffer until a full sync, a full buffer, or an image change
+in the medium and high compatibility profiles, and the flush blocks the emulator thread until every worker is done,
+with worker 0 on the calling thread. That is what §10 said, with three additions. First, the checkout is Themaister's
+fork, and it carries determinism patches upstream lacks: the combined colour cleared at every primitive, the noise a
+function of the pixel and the primitive count rather than a per-worker seed, the memory colour readable in the
+blender's first cycle. Mars clears `_combined` at the start of every walk too, which is the fork's rule, and is graded
+against the fork. Second, the next-scanline peek — the level-of-detail and texel paths that read the row below's
+span — is gated on that row's `validline`, which under more than one worker is never the same worker's, so the peek
+is dead and the fallback runs: the output's dependence on the worker count is silent, and no comment, option or
+readme names it. Against that, one published test found Super Mario 64's RDRAM byte-identical over 300 frames across
+one and four workers, so the peek does not bite in every scene. Third, the conformance oracle runs angrylion
+single-threaded, bypassing the command buffer, which is the configuration Mars is graded against. Published speed is
+thin: one report of Super Mario 64 doubling on a four-core part, several of no scaling at all, and one that an odd
+worker count beats an even one on a six-core, which is worker 0 contending with the emulation thread.
+
+**parallel-rdp** renders on the GPU and is not a rasteriser to split, but its synchronisation is the design Mars's
+marks approximate from the other side: a full sync is a flush, not a wait; the CPU blocks only on a real read or
+write of RDRAM, through a timeline whose values name a submission of at most 256 primitives, eight passes or a
+millisecond, rather than a batch to the next full sync. Its integrator ares waits fully at every full sync regardless.
+gopher64's integration keeps a dirty bitmap of RDRAM at eight-byte granularity, marked by each draw's colour and depth
+images, and waits only when an access intersects a dirty run — the nearest published analogue to §2.6.1's ranges,
+armed at the full sync rather than at the word. Dolphin bounds its GPU thread by a distance window in emulated cycles
+and blocks the CPU only at a read of the GPU's output. mupen64plus, Project64 and parallel-n64's angrylion all run
+the list synchronously on the CPU thread, so they have nothing to say about the wait.
+
+**What this changes for §10.** Nothing in its two blockers; both are confirmed to be what a bit-exact split must
+handle and what the references chose not to. The precomputed span tables remain Mars's advantage: the peek angrylion
+loses under a split is a read of Mars's own tables, which every thread can see. What the survey adds is a warning
+about the emulation thread: angrylion's worker 0 shares the calling thread, and Mars's split must not — the drain's
+thread is the natural owner of a worker, and the machine's thread is not.
+
+### 10.2 The split, priced from an inventory of the rasteriser's state
+
+*2026-09-19.* An inventory of every field the shading loops write — per-pixel carry, same-pixel scratch, per-row
+scratch, per-primitive read-only state, and memory — was taken to price §10's design. It confirms the design in
+most of its parts and changes it in three.
+
+**Confirmed.** The two carries of §10 are the only ones that chain a pixel to a later pixel across a row boundary:
+`_combined` (in one-cycle mode pixel n reads n−1's result; in two-cycle mode the next pixel's first cycle reads this
+pixel's second, and the row's synthetic pixel past its end is what the next row's first pixel reads) and
+`_pastStoredEncoded` (written by every pixel that reaches the depth compare in either mode, read only in two-cycle
+mode with the first blend's second alpha selecting memory alpha). `_blenderShadeAlpha` and `_lodFraction` look like
+carries and are not observable across rows: the row's first pixel recomputes the former, and the latter is recomputed
+whenever it is read. The coverage buffer is rebuilt per row within `[left, right]`, and nothing reads a previous row's
+entries. Dither is a function of the pixel's position and the mode word; noise is not built at all. Every read and
+write of RDRAM a pixel makes is at the pixel's own address, colour and depth alike, and the two-cycle "next pixel"
+reads are the coverage of `x + direction` and a synthetic first cycle that touches no memory. Texture memory is
+written only by loads, never by shading.
+
+**Three things the inventory adds.**
+
+1. *The stored depth slope crosses primitives.* `_pastStoredEncoded` has no reset anywhere: a two-cycle primitive's
+   first pixel reads what the previous primitive's last pixel left, including a one-cycle primitive's, while fill and
+   copy leave it alone. A primitive drawn on one thread in the live mode must therefore start from the value the
+   raster-order last pixel of the previous primitive left, which under a split lives on whichever thread drew that
+   primitive's last row.
+
+2. *Two aliasings of the registers make rows share bytes.* A span is clipped to the scissor and never to the image's
+   width, so a scissor wider than the image sends x ≥ width into the next row's bytes (§9's latent defect, which the
+   marks accommodate); and the colour and depth images are independent addresses, so one pixel's depth word can be
+   another row's colour word. Neither is a carry, but both make two rows' bytes overlap, and a split must draw such a
+   primitive on one thread. Both predicates are decidable from the registers when the primitive lands.
+
+3. *The state format holds the scratch.* The serializer walks every field of the processor not marked skipped, so
+   `_combined`, `_pixel`, `_memory`, `_shade`, the texels, the blend shifts, `_blended`, `_pastStoredEncoded`,
+   `_lodFraction` and the whole coverage buffer are in a state, each holding its last write in raster order — and that
+   is a different pixel for each: the last pixel that passed depth and coverage for `_blended`, the last pixel to reach
+   the compare for the slope, the last row's synthetic pixel for the two-cycle texels. A split that keeps the state
+   identical must, at a join, assemble each of these from the thread that holds the raster-order last write: for the
+   fields every pixel writes that is the thread of the last drawn row, and for the conditional ones the row of the last
+   write has to be remembered beside the value.
+
+**The shape this prices.** The angrylion shape — each worker a complete processor of its own, replaying every word,
+owning the rows where `row % workers == worker`, sharing only RDRAM and its hidden bits — fits Mars unusually well
+because the processor is already one object: N workers are N instances of `Rdp` fed the same words, each walking
+every primitive's spans (the walk is under two per cent of the thread) and shading a share of the rows. Shading is 75
+to 85 per cent of the thread's time, so N workers cost about 0.2 + 0.8/N of one: 1.7× at two, 2.5× at four. What
+must be serialised is exactly the list above: a primitive in the live mode or either aliasing is drawn by one worker
+after the others have finished the words before it and before they take the words after; a load whose source
+overlaps bytes the batch has written waits for every worker, which §2.6.1's ranges can already decide; an image
+change re-partitions the rows' bytes and waits likewise, which is angrylion's medium profile; and a join, for a state
+or a reader, waits for every worker's count. The verifier runs per worker unchanged. The exactness proof is the one
+§2.6 used — the list at once against the list split, byte for byte and state for state, on scenes built to exercise
+the live mode, both aliasings and a load from a drawn image — and then the probe and the differential. §10.1's warning
+stands: no worker may be the machine's thread.
+
+**Not built.** The snapshot of §2.7 and this pricing were the day's work on this thread; the split is the next.

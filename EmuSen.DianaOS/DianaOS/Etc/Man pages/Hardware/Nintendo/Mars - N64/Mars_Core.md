@@ -267,7 +267,7 @@ restoring nothing. **What a user sees is the same before and after** — holding
 picture holds — and what changed is the memory and the harness's `rewind` report, which no longer counts steps
 that were never taken.
 
-## 7. The Expansion Pak: off
+## 7. The Expansion Pak: off, until a game needed it
 
 **`CoreFactory` builds a 4 MB machine.** `Mars_Gameplan.md` §6 defers "the Expansion Pak as a default" until
 something concrete needs it, and the commercial-game tests (`MarsCommercialRomTests`, `MarsMicrocodeTests`) all
@@ -278,6 +278,45 @@ caller that wants 8 MB; nothing in the frontends passes it.
 **What this does not settle is what a game that needs the Pak does.** A stock console shows such a game's own
 "Expansion Pak required" screen; whether Mars gets that far, and whether a game's boot code detects 8 MB when
 the Pak is on, has not been run.
+
+**It has now been run, and the Pak is on in every frontend.** *2026-09-20.* The concrete need §6 of the gameplan
+waited for arrived as *Majora's Mask*. A frame-dump tool beside the speed harnesses (`framedump`, a Release build
+that runs a ROM to named frames and writes the picture) ran it both ways. On the stock machine the cartridge's own
+boot code writes four megabytes to `osMemSize` and the game reaches its four-language "Expansion Pak not installed"
+screen and stays there, which is what a stock console does; with `expansionPak: true` the same boot code writes
+eight, and the game plays the mask, the Happy Mask Salesman and the whole Clock Town introduction through frame
+3,600. Both of the paragraph above's questions are therefore answered yes, and neither needed a change to the
+machine: the hand-off runs the cartridge's IPL3, which sizes memory by probing it, and the upper half was already
+real memory (`An_expansion_pak_makes_the_upper_half_real_memory`). What was missing was only that nothing could ask
+for it.
+
+**Three changes, none to the machine.** `CoreFactory` now builds `new MarsCore(expansionPak: true)`, so every
+frontend's console has the Pak, as every reference emulator's does; `new MarsCore()` is still a stock console, so
+the commercial-game tests and everything else that names the core keep the machine they were written on
+(`The_default_machine_is_a_stock_console`, `The_factorys_machine_has_the_pak`). `ExpansionPak` became a property a
+frontend can set, offered as the core's sixth setting (§10), default on: a game that behaves differently with the
+Pak can have it taken out. The memory's size is read once, by boot code, so the property is what the *next* load
+builds — except before the first frame, when nothing has run and the machine is rebuilt at once, which is exactly
+when a frontend applies its settings after `LoadRom`
+(`The_pak_set_before_the_first_frame_rebuilds_the_machine_and_after_it_waits_for_a_load`). `LoadRom` on a loaded
+core now joins the scan-out and stops the old machine's display-processor threads before replacing it. And a save
+state made with the other amount of memory no longer fails: the state is the machine it was made on, so `LoadState`
+rebuilds the machine to the state's size and then reads it (`Mars_SaveStates.md` §1). Without that, turning the
+default on would have refused every state a user had already made.
+
+**The probe runs the factory's machine, so its baselines were recorded again, after being compared.** Its hashes
+include all of RDRAM and the whole state, which differ at frame 0 on a machine with twice the memory and say nothing.
+The four-megabyte baselines were kept (`~/.cache/emusen/mars-golden-4mb`) and the other columns compared over the 600
+frames. Super Mario 64 and Wave Race are identical in picture, sound and cycle count at every frame: the Pak changes
+nothing they do. Ocarina of Time is not: its cycle count is 1,310,927 higher from the second frame and *exactly*
+that much higher at every frame after, to the six-hundredth; its sound first differs at frame 326 and its picture at
+506. A constant offset that never grows is a machine doing the same work later, not a machine doing different work:
+the game spends about fourteen milliseconds more at boot, which is what clearing memory sized by `osMemSize` costs
+when there is twice as much of it, and its title sequence is then sampled at another phase. A console with the Pak
+does the same. The new baselines are the eight-megabyte machine's, for all eight games now in the library, Majora's
+Mask among them. What this does not cover: a game that *misbehaves* with the Pak has not been looked
+for, only provided for, and the GameShark codec still refuses the code that hides the Pak (`Mars_Cheats.md`), for
+which the setting is now the answer.
 
 ## 8. The debug target and the catalogue
 
@@ -398,3 +437,8 @@ above it it does not keep the *picture* exact: the machine, its memory and its s
 shown is the multiple's approximation, to §11's closeness figures.
 `The_multiple_is_a_choice_of_one_to_four_and_reaches_the_display_processor` holds the round trip, and the catalogue
 test now counts five.
+
+*Second addendum, the same day.* The sixth, `ExpansionPak`, is a switch, default on, and the first that is not a
+video setting: the list is the console's settings, shown in the window that was named for graphics when graphics
+was all it held. It takes effect at the next load, or at once before the first frame (§7); the catalogue test counts
+six.

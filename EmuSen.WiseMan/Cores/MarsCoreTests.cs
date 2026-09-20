@@ -431,22 +431,76 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(5, core.TotalFrames);
         }
 
-        // Refused before anything is read into this machine, which is left as it was - see Mars_SaveStates.md §1.
+        // A state is the machine it was made on: one with the other amount of memory rebuilds this machine to it - see Mars_SaveStates.md §1.
         [Fact]
-        public void A_state_for_another_machine_is_refused_before_anything_is_read()
+        public void A_state_made_with_the_pak_rebuilds_a_stock_machine_to_it_and_the_reverse()
         {
             var expanded = new MarsCore(expansionPak: true, batteryRamDisabled: true);
             expanded.LoadRom(WriteRom(SyntheticN64Rom.Build(patches: (0, CountForever))));
-            using var state = new MemoryStream();
-            expanded.SaveState(state);
+            expanded.Bus!.Write32(0x0060_0000, 0xCAFE_F00D);
+            using var withPak = new MemoryStream();
+            expanded.SaveState(withPak);
 
             MarsCore stock = Counting();
             stock.Bus!.Write32(0x0010_0000, 0x1234_5678);
+            using var withoutPak = new MemoryStream();
+            stock.SaveState(withoutPak);
 
-            state.Position = 0;
-            Assert.Throws<InvalidDataException>(() => stock.LoadState(state));
+            withPak.Position = 0;
+            stock.LoadState(withPak);
+            Assert.Equal(MemoryBus.RdramSizeExpanded, stock.Bus!.Rdram.Length);
+            Assert.True(stock.ExpansionPak);
+            Assert.Equal(0xCAFE_F00Du, stock.Bus.Read32(0x0060_0000));
+
+            withoutPak.Position = 0;
+            expanded.LoadState(withoutPak);
+            Assert.Equal(MemoryBus.RdramSize, expanded.Bus!.Rdram.Length);
+            Assert.Equal(0x1234_5678u, expanded.Bus.Read32(0x0010_0000));
+        }
+
+        // Refused before anything is read into this machine, which is left as it was - see Mars_SaveStates.md §1.
+        [Fact]
+        public void A_state_that_is_not_one_is_refused_before_anything_is_read()
+        {
+            MarsCore stock = Counting();
+            stock.Bus!.Write32(0x0010_0000, 0x1234_5678);
+
             Assert.Throws<InvalidDataException>(() => stock.LoadState(new MemoryStream(new byte[] { 0x53, 0x45, 0x4E, 0x53, 1, 0, 0, 0 })));
+
+            using var state = new MemoryStream();
+            stock.SaveState(state);
+            byte[] bytes = state.ToArray();
+            BitConverter.GetBytes(0x0030_0000).CopyTo(bytes, 8);
+            Assert.Throws<InvalidDataException>(() => stock.LoadState(new MemoryStream(bytes)));
+            Assert.Equal(MemoryBus.RdramSize, stock.Bus.Rdram.Length);
             Assert.Equal(0x1234_5678u, stock.Bus.Read32(0x0010_0000));
+        }
+
+        // Before the first frame nothing has read the memory's size, so the machine is rebuilt; after it the change waits for the next load - see Mars_Core.md §7.
+        [Fact]
+        public void The_pak_set_before_the_first_frame_rebuilds_the_machine_and_after_it_waits_for_a_load()
+        {
+            string rom = WriteRom(SyntheticN64Rom.Build(patches: (0, CountForever)));
+            var core = new MarsCore(batteryRamDisabled: true);
+            core.LoadRom(rom);
+            core.ExpansionPak = true;
+            Assert.Equal(MemoryBus.RdramSizeExpanded, core.Bus!.Rdram.Length);
+
+            core.RunFrame();
+            core.ExpansionPak = false;
+            Assert.Equal(MemoryBus.RdramSizeExpanded, core.Bus.Rdram.Length);
+            Assert.False(core.ExpansionPak);
+
+            core.LoadRom(rom);
+            Assert.Equal(MemoryBus.RdramSize, core.Bus!.Rdram.Length);
+        }
+
+        // A frontend's machine has the Pak, because the factory asks for it - see Mars_Core.md §7.
+        [Fact]
+        public void The_factorys_machine_has_the_pak()
+        {
+            var core = (MarsCore)global::EmuSen.Cores.CoreFactory.Create("game.z64");
+            Assert.True(core.ExpansionPak);
         }
 
         // Reflection fills only what exists, so the chip is rebuilt before its bytes are read - see Mars_SaveStates.md §3.

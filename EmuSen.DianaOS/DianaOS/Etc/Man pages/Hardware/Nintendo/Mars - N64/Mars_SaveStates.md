@@ -26,9 +26,15 @@ and it is the whole of the evidence for the slice. The rest of this page is the 
 | a snapshot's tail | version 2 only: a count, then the display processor's words handed over and not yet run, which the load runs — `Mars_Rdp.md` §2.7 |
 
 **Three things are refused before anything is read into the machine**: a file that is not a Mars state, a version
-this build does not know, and a state saved with a different amount of RDRAM, which would otherwise read four
-megabytes into an eight-megabyte array and misalign everything after it. `A_state_for_another_machine_is_refused_before_anything_is_read`
-holds all three, and checks the machine is untouched. A path save checks for a ROM before it creates the file, so a
+this build does not know, and a state whose RDRAM size is neither four megabytes nor eight, which would otherwise
+misalign everything after it. `A_state_that_is_not_one_is_refused_before_anything_is_read` holds them, and checks
+the machine is untouched. *Until 2026-09-20 the third refusal was any size other than the machine's.* When the
+frontends' machine gained the Expansion Pak (`Mars_Core.md` §7) that rule would have refused every state already
+made on four megabytes, so a state with the other of the two sizes now rebuilds the machine to the state's — the
+ROM is loaded again with or without the Pak, and the state is read into that — on the argument that a state is the
+machine it was made on, and the game inside it read the memory's size long ago. It works in both directions
+(`A_state_made_with_the_pak_rebuilds_a_stock_machine_to_it_and_the_reverse`), and the core's `ExpansionPak` follows
+the state, so a reset after the load builds the same machine. A path save checks for a ROM before it creates the file, so a
 failed save leaves no empty state behind, which is what the old refusal was careful of too (`Mars_Core.md` §6).
 
 **Version 2 is a snapshot, not a second format.** *2026-09-19.* `SaveSnapshot` — the `ISnapshotCore` capability, written for the rewind buffer (`EmuSen_Rewind_And_FastForward.md` §1.8) — writes the body of a version 1 state while the display processor's thread stands between two words rather than after it has finished, and then the words it had not run. `LoadState` reads either version, and for a snapshot runs the tail on the loading thread before the machine continues, with the full sync's interrupt already answered when the words were handed over. `SaveState` still writes version 1, so every state on disk and every hash the probe holds is unchanged. `A_snapshot_loads_like_a_state_and_a_state_keeps_its_version` holds the two versions and the four-byte tail of an idle machine; the pending case is `MarsThreadedRdpTests`.

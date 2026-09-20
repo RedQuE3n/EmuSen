@@ -9,10 +9,10 @@ namespace EmuSen.WiseMan.Cores
     public class MarsCoreSettingsTests
     {
         [Fact]
-        public void The_catalogue_offers_the_same_five_settings_the_core_answers()
+        public void The_catalogue_offers_the_same_six_settings_the_core_answers()
         {
             ICoreSettings core = new MarsCore();
-            Assert.Equal(new[] { "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale" }, core.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale", "ExpansionPak" }, core.Settings.Select(s => s.Key));
             Assert.Same(core.Settings, CoreCatalog.SettingsFor("N64"));
             Assert.Empty(CoreCatalog.SettingsFor("SNES"));
         }
@@ -49,6 +49,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(core.SkipRepeatedScans);
             Assert.Equal(Math.Clamp(Environment.ProcessorCount / 3, 1, 4), core.RdpWorkers);
             Assert.Equal(1, core.RenderScale);
+            Assert.True(core.ExpansionPak);
         }
 
         [Fact]

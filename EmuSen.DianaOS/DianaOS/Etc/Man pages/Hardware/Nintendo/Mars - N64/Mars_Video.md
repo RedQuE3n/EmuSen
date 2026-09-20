@@ -307,6 +307,34 @@ blank clears both. `MarsCore.Compose` returns the width it composed and multipli
 would any other. Nothing about the walk's rules changes: the same registers, the same fetch, the same filters, on a
 denser source.
 
+### 2.10 Antialiasing: the multiple averaged down
+
+*2026-09-20.* `MarsCore.Antialiasing` (Off, 2x, 3x, 4x) is supersampling, built from §2.9 and nothing else: the
+display processor draws the picture that many times finer each way than it is to be shown, the walk of §2.9 scans
+that drawing out at its full density, and `Raster` averages each square of the dense raster into one pixel of the
+picture (`BoxAverage`: the rounded mean of the square, channel by channel). The drawn multiple is the internal
+resolution times the averaging, `DpInterface.Scale = RenderScale × Antialiasing`, and the picture the frontend
+receives is the internal resolution's: 2x resolution with 2x antialiasing draws at four and shows the picture at two. The product is held to four, the limit §11.1 of `Mars_Rdp.md` measured as already a quarter of full
+speed, and the averaging gives way first: at 2x resolution 4x antialiasing is 2x, and at 3x or 4x there is none
+(`EffectiveAntialiasing`, `Antialiasing_multiplies_the_drawing_and_is_held_to_four_with_the_resolution`).
+
+**Why the average is taken in `Raster` and not in the walk.** `Darken` and the blank path write the dense raster
+after the walk has filled it, and a line nothing rewrites is held there between frames (§2.4); an average taken at
+the end of the walk would miss them, and one taken where the raster is read sees whatever the scan left. It also
+runs on whichever thread composes the frame, which with §2.7 is not the machine's. It is taken only when the dense
+raster's multiple is one the averaging divides, so the frame between a change of either setting and the next
+drawing shows the console's raster or the dense one whole, never a torn one.
+
+**What it is and is not.** The console's own antialiasing — coverage blended at silhouette edges by the display
+processor, and the video interface's filter over it — is the game's choice and is untouched; it runs on the dense
+drawing as on any other. This averaging is over the top of it and smooths what the console's cannot: interior
+edges, texture shimmer, and the stair steps the console's 320 columns leave. The mean is of the stored bytes, not of
+linear light, which darkens a high-contrast edge slightly; a gamma-correct mean was not tried. Seen on Majora's
+Mask's Clock Town introduction, frame 2,200, with the `framedump` harness at Off, 2x and 4x: the rooftop diagonals
+lose their steps at 2x and the textures resolve further at 4x. The cost is the drawn multiple's, exactly §11.1's
+table, plus the average, which is a few milliseconds at four on the composing thread and was not separately timed.
+`The_average_of_a_square_is_its_rounded_mean_channel_by_channel` holds the arithmetic.
+
 ## 3. What the differential says
 
 ### 3.1 The first run, and the bug it found

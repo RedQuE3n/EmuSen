@@ -663,6 +663,12 @@ of a game, while the value applied at `LoadRom` takes effect at once. Save state
 megabytes, still load: the core rebuilds the console to the state's memory (`Mars_SaveStates.md` §1), so such a
 game resumes without the Pak until it is loaded afresh.
 
+**Third addendum, 2026-09-20: antialiasing.** The N64's tab gained *Antialiasing*, a dropdown of Off, 2x, 3x and 4x.
+It draws the picture that many times finer each way and averages it down to the internal resolution, which smooths
+edges and texture shimmer without making the frame larger (`Mars_Video.md` §2.10). It costs what the same internal
+resolution would, and the two multiply, so together they are held to four: at 2x resolution the most antialiasing
+is 2x, and at 3x or 4x resolution it does nothing. The game is unchanged by it, as by the resolution.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

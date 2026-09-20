@@ -442,3 +442,7 @@ test now counts five.
 video setting: the list is the console's settings, shown in the window that was named for graphics when graphics
 was all it held. It takes effect at the next load, or at once before the first frame (§7); the catalogue test counts
 six.
+
+*Third addendum, the same day.* The seventh, `Antialiasing`, is a choice of `Off`, `2x`, `3x` and `4x`, default
+`Off`: supersampling over the internal resolution, the two held to a drawing of four (`Mars_Video.md` §2.10).
+`RenderScale` now answers what was asked for rather than the display processor's multiple, which is the product.

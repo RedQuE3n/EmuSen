@@ -135,6 +135,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
 
         private static MethodInfo Handler(string name) => typeof(Rsp).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic, new[] { typeof(uint) })!;
 
+        private static readonly FieldInfo UseSimdField = typeof(Rsp).GetField(nameof(UseSimd))!;
+        private static readonly MethodInfo VectorSimd = Handler(nameof(ExecuteVectorSimd));
         private static readonly MethodInfo ExecuteAny = Handler(nameof(Execute)), Special = Handler(nameof(ExecuteSpecial)), RegImm = Handler(nameof(ExecuteRegImm)),
             Cop0 = Handler(nameof(ExecuteCop0)), Cop2 = Handler(nameof(ExecuteCop2)), VectorLoad = Handler(nameof(ExecuteVectorLoad)), VectorStore = Handler(nameof(ExecuteVectorStore));
 
@@ -171,6 +173,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
                     0x3A => VectorStore,
                     _ => ExecuteAny,
                 };
+
+                // A vector operation goes to the eight-lane unit itself while that unit is the one in use, so the compiler can fold it to its word - see §12.
+                if ((word >> 26) == 0x12 && (word & VectorOperation) != 0)
+                {
+                    Label plain = il.DefineLabel(), next = il.DefineLabel();
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, UseSimdField); il.Emit(OpCodes.Brfalse, plain);
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); il.Emit(OpCodes.Call, VectorSimd);
+                    il.Emit(OpCodes.Br, next);
+                    il.MarkLabel(plain);
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); il.Emit(OpCodes.Call, handler);
+                    il.MarkLabel(next);
+                    slot = false;
+                    continue;
+                }
 
                 il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); il.Emit(OpCodes.Call, handler);
                 slot = IsBranch(word);

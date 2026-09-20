@@ -432,3 +432,57 @@ changed from `0x8000` to `0x4000`, the low clamp's upper bound moved by one, and
 pointed at the first. Each was caught — the first two by the sweep, the third by the sweep and the aliasing case
 both. The corpus's 155 vector groups pass through the vector path as they do through the other (§12), which is a
 weaker statement than the sweep and worth having anyway because it is the hardware's own test rather than Mars's.
+
+## 15. The accumulator in three sixteen-bit thirds, and what the measurement said it was worth
+
+*2026-09-20.* §14 kept the accumulator as the array a state carries, eight 48-bit values in 64-bit lanes, and every
+operation of the eight-lane unit loaded it as two 256-bit vectors, sign-extended, added, wrapped and stored. Almost
+every operation touches it, since every one that writes a register also writes its low third. The eight-lane unit
+now keeps it as three vectors of sixteen-bit lanes, the high, middle and low thirds, and computes in them.
+
+**The arithmetic.** A product is one 32-bit multiply in eight lanes as before, narrowed into its low and high
+words. What is added is 48 bits made from those: for the fraction multiplies twice the product — the low word
+doubled, the high word doubled with the low word's top bit carried in, and above them the product's sign, which is
+right even for the one product past thirty-one bits, the most negative value squared, because its sign is taken
+before the doubling; for the middle and normal multiplies the product sign-extended; for the high multiply the
+product one third up; for the low multiply the unsigned product's upper word alone. `Add48` adds three lanes of
+sixteen and carries: a sum below its addend carried, which is an unsigned compare; the carry into the middle third
+can itself carry, when the middle sum was all ones, and that second carry is a second compare. There is no fourth
+lane, which is the wrap. The clamps read the thirds directly: the middle third is the signed result while the high
+third equals the middle's sign extension, and otherwise the nearer end by the high third's sign; the unsigned clamp
+is nothing below zero and all ones once the upper thirds pass the largest positive word; the low clamp keeps the
+low third under the same fit; the quarter multiply's result, the accumulator down seventeen bits, fits only while
+the high third is all zeros or all ones. The two rounds and the accumulating quarter add a masked constant or the
+sign-extended operand through the same `Add48`.
+
+**The array stays the state.** The format is unchanged and so is every state on disk. The thirds are the truth
+while the eight-lane unit runs and the array is brought up to date only when something asks: `WidenAccumulator`
+before a state is written and at the top of the element-by-element unit, and `AccumulatorWritten` after a state is
+read or a test fills the array. The cost is a branch an operation.
+
+**The proof.** §14's 6,144 cases, every function and selector against the element-by-element unit with the clamps'
+boundary values, pass unchanged. They step one instruction at a time from an array, so a carry kept wrongly would
+be rewritten each case; `Chains_of_accumulator_operations_agree_with_the_unit_they_are_built_from` runs 4,000 chains
+of ten operations from the accumulator's family over random registers without touching the array between. Four
+mutants were caught by both: the carry of a carry dropped, the doubled product's sign taken after the doubling, the
+quarter clamp fitting only a zero high third, and the array never brought up to date.
+
+**What it was worth: almost nothing, and the reason is the finding.** Two interleaved rounds of the games gave five
+per cent and then one, which is the noise. A benchmark of single operations (`rspbench`: fifteen of one instruction
+and a jump, through the processor's own fetch and dispatch) showed why: before the change a multiply-accumulate
+cost 7.3 nanoseconds and a bitwise AND 5.4. The arithmetic was a quarter of an operation; three quarters was
+getting to it — the step, the first dispatch, the coprocessor's test, the vector function's entry, its three field
+decodes, its element shuffle through a table, and its switch of sixty-four. `Mars_Performance.md` §38.1 had read
+the vector function's fifteen per cent of the thread as arithmetic because its helpers were inlined into it; that
+reading was wrong, and is retired there. The narrow accumulator is kept because it is exact, proven and no slower,
+and because once the dispatch was removed (`Mars_Rsp.md` §12) the arithmetic became what is left.
+
+**Two things found on the way, both kept.** The element selection was a shuffle with a mask from a table, and
+selections zero and one are the register as it stands, so they skip it, and the rest use the native shuffle, whose
+indices are all in range. And the quad load and store, the commonest vector memory operations, moved their sixteen
+bytes one at a time through two helpers, 15 and 12 nanoseconds: when the whole register moves and the bytes do not
+wrap, which is whenever the address is aligned, they are now one vector load, one exchange of each pair of bytes
+and one store, 3.1 and 2.3. `A_quad_load_and_store_move_the_bytes_their_definition_moves_up_to_the_end_of_memory`
+checks every address in the last forty-eight bytes of data memory at four elements against the definition written
+out byte by byte. One mutant of it, the bound loosened by a byte, survives and is equivalent: a quad load moves
+sixteen bytes only from an aligned address, and the last aligned address does not wrap.

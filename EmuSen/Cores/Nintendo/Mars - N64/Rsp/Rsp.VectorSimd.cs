@@ -12,8 +12,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         private static readonly Vector128<byte>[] SelectorMasks = BuildSelectorMasks();
         private static readonly Vector128<ushort> LaneBits = Vector128.Create((ushort)1, 2, 4, 8, 16, 32, 64, 128);
         private static readonly Vector256<int> LaneBits32 = Vector256.Create(1, 2, 4, 8, 16, 32, 64, 128);
-        private static readonly Vector256<ulong> Mask48 = Vector256.Create(AccumulatorMask);
-        private static readonly Vector256<ulong> LowMask = Vector256.Create(0xFFFFUL);
 
         private static Vector128<byte>[] BuildSelectorMasks()
         {
@@ -35,8 +33,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private Vector128<ushort> Register(int index) => Vector128.LoadUnsafe(ref Vector[index * Elements]);
 
+        // Inlined into a compiled block with its word a constant, the fields and both switches fold to the one operation - see Mars_Rsp.md §12.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void ExecuteVectorSimd(uint instruction)
         {
+            if (!_narrow) NarrowAccumulator();
+
             int vt = Rt(instruction);
             int vs = Rd(instruction);
             int vd = (int)((instruction >> 6) & 0x1F);
@@ -44,7 +46,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
 
             // Both sources are read whole before the destination is stored, as §2 requires.
             Vector128<ushort> s = Register(vs);
-            Vector128<ushort> t = Vector128.Shuffle(Register(vt).AsByte(), SelectorMasks[selector]).AsUInt16();
+            // Selections zero and one are the register as it stands; the rest are a byte shuffle whose indices are all in range, which the native form does in one instruction - see Mars_RspVector.md §15.
+            Vector128<ushort> t = selector < 2 ? Register(vt) : Vector128.ShuffleNative(Register(vt).AsByte(), SelectorMasks[selector]).AsUInt16();
             Vector128<ushort> d = Register(vd);
 
             switch (instruction & 0x3F)
@@ -106,60 +109,44 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             d.StoreUnsafe(ref Vector[vd * Elements]);
         }
 
-        // The accumulator as two vectors of four 64-bit lanes, the array itself being the state a save carries - see §14.
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private (Vector256<ulong> Low, Vector256<ulong> High) LoadAccumulator() =>
-            (Vector256.LoadUnsafe(ref Accumulator[0]), Vector256.LoadUnsafe(ref Accumulator[4]));
+        // The accumulator as its three sixteen-bit thirds, which is what this unit computes in; the array a state carries is brought up to date only when something asks for it - see Mars_RspVector.md §15.
+        [EmuSen.Common.SkipInState] private Vector128<ushort> _accHigh, _accMiddle, _accLow;
+        [EmuSen.Common.SkipInState] private bool _narrow;
 
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private void StoreAccumulator(Vector256<ulong> low, Vector256<ulong> high)
+        private void NarrowAccumulator()
         {
-            low.StoreUnsafe(ref Accumulator[0]);
-            high.StoreUnsafe(ref Accumulator[4]);
+            Span<ushort> high = stackalloc ushort[Elements], middle = stackalloc ushort[Elements], low = stackalloc ushort[Elements];
+            for (int i = 0; i < Elements; i++)
+            {
+                high[i] = (ushort)(Accumulator[i] >> 32);
+                middle[i] = (ushort)(Accumulator[i] >> 16);
+                low[i] = (ushort)Accumulator[i];
+            }
+
+            (_accHigh, _accMiddle, _accLow) = (Vector128.Create<ushort>(high), Vector128.Create<ushort>(middle), Vector128.Create<ushort>(low));
+            _narrow = true;
         }
 
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector256<long> Signed48(Vector256<ulong> value) => (value << 16).AsInt64() >> 16;
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector256<ulong> Wrap48(Vector256<long> value) => value.AsUInt64() & Mask48;
-
-        // Sixteen-bit lanes widened to the two halves' 64-bit lanes, zero-filled or sign-filled.
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static (Vector256<ulong> Low, Vector256<ulong> High) WidenUnsigned(Vector128<ushort> value)
+        // Before anything reads the array: a state, the element-by-element unit, a test - see §15.
+        public void WidenAccumulator()
         {
-            Vector256<uint> wide = Vector256.WidenLower(value.ToVector256Unsafe());
-            return (Vector256.WidenLower(wide), Vector256.WidenUpper(wide));
+            if (!_narrow) return;
+            for (int i = 0; i < Elements; i++) Accumulator[i] = ((ulong)_accHigh.GetElement(i) << 32) | ((ulong)_accMiddle.GetElement(i) << 16) | _accLow.GetElement(i);
+            _narrow = false;
         }
 
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static (Vector256<long> Low, Vector256<long> High) WidenSigned(Vector128<ushort> value)
-        {
-            Vector256<int> wide = Vector256.WidenLower(value.AsInt16().ToVector256Unsafe());
-            return (Vector256.WidenLower(wide), Vector256.WidenUpper(wide));
-        }
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static (Vector256<long> Low, Vector256<long> High) WidenSigned(Vector256<int> value) =>
-            (Vector256.WidenLower(value), Vector256.WidenUpper(value));
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector128<ushort> Narrow(Vector256<long> low, Vector256<long> high)
-        {
-            Vector256<int> wide = Vector256.Narrow(low, high);
-            return Vector128.Narrow(wide.GetLower(), wide.GetUpper()).AsUInt16();
-        }
+        // After anything writes the array - see §15.
+        public void AccumulatorWritten() => _narrow = false;
 
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector128<ushort> Narrow(Vector256<int> value) => Vector128.Narrow(value.GetLower(), value.GetUpper()).AsUInt16();
 
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private void SetAccumulatorLow(Vector128<ushort> value)
-        {
-            (Vector256<ulong> low, Vector256<ulong> high) = LoadAccumulator();
-            (Vector256<ulong> valueLow, Vector256<ulong> valueHigh) = WidenUnsigned(value);
-            StoreAccumulator((low & ~LowMask) | valueLow, (high & ~LowMask) | valueHigh);
-        }
+        private void SetAccumulatorLow(Vector128<ushort> value) => _accLow = value;
+
+        // All ones where a lane's top bit is set.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private static Vector128<ushort> Sign(Vector128<ushort> value) => (value.AsInt16() >> 15).AsUInt16();
 
         // The lanes whose bit is set in the low eight bits of a flag word, as all-ones masks.
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
@@ -180,128 +167,129 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             return a * b;
         }
 
-        // The accumulator wraps first and every clamp reads what it wrapped to, as Accumulate does - see §6.1.
+        // Forty-eight bits added in three lanes of sixteen, a lane that wrapped below its addend carrying one into the lane above; the accumulator wraps by having no fourth - see §15.
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private (Vector256<long> Low, Vector256<long> High) Accumulate(Vector256<long> addendLow, Vector256<long> addendHigh, bool accumulate, long start)
+        private void Add48(Vector128<ushort> high, Vector128<ushort> middle, Vector128<ushort> low, bool accumulate, ushort startLow = 0)
         {
-            (Vector256<ulong> low, Vector256<ulong> high) = LoadAccumulator();
-            Vector256<long> baseLow = accumulate ? Signed48(low) : Vector256.Create(start);
-            Vector256<long> baseHigh = accumulate ? Signed48(high) : Vector256.Create(start);
+            Vector128<ushort> baseHigh = accumulate ? _accHigh : Vector128<ushort>.Zero;
+            Vector128<ushort> baseMiddle = accumulate ? _accMiddle : Vector128<ushort>.Zero;
+            Vector128<ushort> baseLow = accumulate ? _accLow : Vector128.Create(startLow);
 
-            low = Wrap48(baseLow + addendLow);
-            high = Wrap48(baseHigh + addendHigh);
-            StoreAccumulator(low, high);
-            return (Signed48(low), Signed48(high));
+            Vector128<ushort> sumLow = baseLow + low;
+            Vector128<ushort> carryLow = Vector128.LessThan(sumLow, low);
+            Vector128<ushort> sumMiddle = baseMiddle + middle;
+            Vector128<ushort> carryMiddle = Vector128.LessThan(sumMiddle, middle);
+            Vector128<ushort> carried = sumMiddle - carryLow;
+            Vector128<ushort> carryCarried = Vector128.LessThan(carried, sumMiddle);
+
+            _accHigh = baseHigh + high - carryMiddle - carryCarried;
+            _accMiddle = carried;
+            _accLow = sumLow;
         }
 
+        // The middle third, unless the upper two are not one signed sixteen-bit value, and then the nearer end - see §7.
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector256<long> ClampSigned(Vector256<long> value) =>
-            Vector256.Min(Vector256.Max(value, Vector256.Create((long)short.MinValue)), Vector256.Create((long)short.MaxValue));
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector128<ushort> ClampSignedHalf(Vector256<long> low, Vector256<long> high) => Narrow(ClampSigned(low >> 16), ClampSigned(high >> 16));
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector256<long> ClampUnsigned(Vector256<long> value)
+        private Vector128<ushort> ClampSignedMiddle()
         {
-            Vector256<long> negative = Vector256.LessThan(value, Vector256<long>.Zero);
-            Vector256<long> large = Vector256.GreaterThan(value, Vector256.Create(0x7FFF_FFFFL));
-            return Vector256.ConditionalSelect(negative, Vector256<long>.Zero, Vector256.ConditionalSelect(large, Vector256.Create(0xFFFFL), (value >> 16) & Vector256.Create(0xFFFFL)));
+            Vector128<ushort> fits = Vector128.Equals(_accHigh, Sign(_accMiddle));
+            return Vector128.ConditionalSelect(fits, _accMiddle, Sign(_accHigh) ^ Vector128.Create((ushort)0x7FFF));
+        }
+
+        // Nothing below zero, all ones above the largest positive upper word, the middle third between - see §7.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private Vector128<ushort> ClampUnsignedMiddle()
+        {
+            Vector128<ushort> large = ~Vector128.Equals(_accHigh, Vector128<ushort>.Zero) | Sign(_accMiddle);
+            return (_accMiddle | large) & ~Sign(_accHigh);
         }
 
         // A low word is kept only while the word above it fits in sixteen signed bits - see §7.
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector256<long> ClampLow(Vector256<long> value)
+        private Vector128<ushort> ClampLow()
         {
-            Vector256<long> upper = value >> 16;
-            Vector256<long> under = Vector256.LessThan(upper, Vector256.Create((long)short.MinValue));
-            Vector256<long> over = Vector256.GreaterThan(upper, Vector256.Create((long)short.MaxValue));
-            return Vector256.ConditionalSelect(under, Vector256<long>.Zero, Vector256.ConditionalSelect(over, Vector256.Create(0xFFFFL), value & Vector256.Create(0xFFFFL)));
+            Vector128<ushort> fits = Vector128.Equals(_accHigh, Sign(_accMiddle));
+            return Vector128.ConditionalSelect(fits, _accLow, ~Sign(_accHigh));
         }
 
+        // The accumulator shifted down seventeen and clamped, less its low four bits: it fits only while the high third is all zeros or all ones - see §9.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private Vector128<ushort> ClampQuarter()
+        {
+            Vector128<ushort> fits = Vector128.Equals(_accHigh, Vector128<ushort>.Zero) | Vector128.Equals(_accHigh, Vector128<ushort>.AllBitsSet);
+            Vector128<ushort> value = (_accMiddle >>> 1) | (_accHigh << 15);
+            return Vector128.ConditionalSelect(fits, value, Sign(_accHigh) ^ Vector128.Create((ushort)0x7FFF)) & Vector128.Create((ushort)0xFFF0);
+        }
+
+        // Twice the signed product, whose one case past thirty-one bits, the most negative squared, is a plain positive here - see §15.
         private Vector128<ushort> FractionSimd(Vector128<ushort> s, Vector128<ushort> t, bool unsigned, bool accumulate)
         {
-            (Vector256<long> low, Vector256<long> high) = WidenSigned(Products(s, t, sSigned: true, tSigned: true));
-            (low, high) = Accumulate(low << 1, high << 1, accumulate, accumulate ? 0 : 0x8000);
-            return unsigned ? Narrow(ClampUnsigned(low), ClampUnsigned(high)) : ClampSignedHalf(low, high);
+            Vector256<int> products = Products(s, t, sSigned: true, tSigned: true);
+            Vector128<ushort> low = Narrow(products), high = Narrow(products >> 16);
+            Add48(Sign(high), (high << 1) | (low >>> 15), low << 1, accumulate, startLow: 0x8000);
+            return unsigned ? ClampUnsignedMiddle() : ClampSignedMiddle();
         }
 
         private Vector128<ushort> LowSimd(Vector128<ushort> s, Vector128<ushort> t, bool accumulate)
         {
-            Vector256<uint> products = Products(s, t, sSigned: false, tSigned: false).AsUInt32() >> 16;
-            (Vector256<long> low, Vector256<long> high) = Accumulate(Vector256.WidenLower(products).AsInt64(), Vector256.WidenUpper(products).AsInt64(), accumulate, 0);
-            return Narrow(ClampLow(low), ClampLow(high));
+            Vector128<ushort> upper = Narrow((Products(s, t, sSigned: false, tSigned: false).AsUInt32() >> 16).AsInt32());
+            Add48(Vector128<ushort>.Zero, Vector128<ushort>.Zero, upper, accumulate);
+            return ClampLow();
         }
 
         private Vector128<ushort> MiddleSimd(Vector128<ushort> s, Vector128<ushort> t, bool accumulate)
         {
-            (Vector256<long> low, Vector256<long> high) = WidenSigned(Products(s, t, sSigned: true, tSigned: false));
-            (low, high) = Accumulate(low, high, accumulate, 0);
-            return ClampSignedHalf(low, high);
+            Vector256<int> products = Products(s, t, sSigned: true, tSigned: false);
+            Vector128<ushort> high = Narrow(products >> 16);
+            Add48(Sign(high), high, Narrow(products), accumulate);
+            return ClampSignedMiddle();
         }
 
         private Vector128<ushort> NormalSimd(Vector128<ushort> s, Vector128<ushort> t, bool accumulate)
         {
-            (Vector256<long> low, Vector256<long> high) = WidenSigned(Products(s, t, sSigned: false, tSigned: true));
-            (low, high) = Accumulate(low, high, accumulate, 0);
-            return Narrow(ClampLow(low), ClampLow(high));
+            Vector256<int> products = Products(s, t, sSigned: false, tSigned: true);
+            Vector128<ushort> high = Narrow(products >> 16);
+            Add48(Sign(high), high, Narrow(products), accumulate);
+            return ClampLow();
         }
 
         private Vector128<ushort> HighSimd(Vector128<ushort> s, Vector128<ushort> t, bool accumulate)
         {
-            (Vector256<long> low, Vector256<long> high) = WidenSigned(Products(s, t, sSigned: true, tSigned: true));
-            (low, high) = Accumulate(low << 16, high << 16, accumulate, 0);
-            return ClampSignedHalf(low, high);
+            Vector256<int> products = Products(s, t, sSigned: true, tSigned: true);
+            Add48(Narrow(products >> 16), Narrow(products), Vector128<ushort>.Zero, accumulate);
+            return ClampSignedMiddle();
         }
 
         // A negative product is biased by thirty-one before it is kept, and the result loses its low four bits - see §7.
         private Vector128<ushort> QuarterSimd(Vector128<ushort> s, Vector128<ushort> t)
         {
-            (Vector256<long> low, Vector256<long> high) = WidenSigned(Products(s, t, sSigned: true, tSigned: true));
-            Vector256<long> bias = Vector256.Create(0x1F_0000L);
-            low = (low << 16) + (Vector256.LessThan(low, Vector256<long>.Zero) & bias);
-            high = (high << 16) + (Vector256.LessThan(high, Vector256<long>.Zero) & bias);
-            (low, high) = Accumulate(low, high, accumulate: false, 0);
-            return Narrow(ClampSigned(low >> 17), ClampSigned(high >> 17)) & Vector128.Create((ushort)0xFFF0);
+            Vector256<int> products = Products(s, t, sSigned: true, tSigned: true);
+            Vector128<ushort> high = Narrow(products >> 16);
+            Add48(high, Narrow(products), Vector128<ushort>.Zero, accumulate: false);
+            Add48(Vector128<ushort>.Zero, Sign(high) & Vector128.Create((ushort)0x1F), Vector128<ushort>.Zero, accumulate: true);
+            return ClampQuarter();
         }
 
         // The accumulating quarter multiply ignores both sources and only nudges the accumulator toward zero - see §9.
         private Vector128<ushort> AccumulatedQuarterSimd()
         {
-            (Vector256<ulong> low, Vector256<ulong> high) = LoadAccumulator();
-            low = Wrap48(NudgeToZero(Signed48(low)));
-            high = Wrap48(NudgeToZero(Signed48(high)));
-            StoreAccumulator(low, high);
+            Vector128<ushort> clear = Vector128.Equals(_accMiddle & Vector128.Create((ushort)0x20), Vector128<ushort>.Zero);
+            Vector128<ushort> negative = Sign(_accHigh);
+            Vector128<ushort> positive = ~negative & (~Vector128.Equals(_accHigh, Vector128<ushort>.Zero) | ~Vector128.Equals(_accMiddle >>> 6, Vector128<ushort>.Zero));
 
-            return Narrow(ClampSigned(Signed48(low) >> 17), ClampSigned(Signed48(high) >> 17)) & Vector128.Create((ushort)0xFFF0);
-
-            static Vector256<long> NudgeToZero(Vector256<long> value)
-            {
-                Vector256<long> step = Vector256.Create(0x20_0000L);
-                Vector256<long> clear = Vector256.Equals(value & step, Vector256<long>.Zero);
-                Vector256<long> upper = value >> 22;
-                Vector256<long> nudge = Vector256.ConditionalSelect(Vector256.LessThan(upper, Vector256<long>.Zero), step,
-                    Vector256.ConditionalSelect(Vector256.GreaterThan(upper, Vector256<long>.Zero), -step, Vector256<long>.Zero));
-
-                return value + (clear & nudge);
-            }
+            Vector128<ushort> middle = clear & ((negative & Vector128.Create((ushort)0x0020)) | (positive & Vector128.Create((ushort)0xFFE0)));
+            Add48(clear & positive, middle, Vector128<ushort>.Zero, accumulate: true);
+            return ClampQuarter();
         }
 
         // The parity of vs's register number, not anything in it, decides whether vt is shifted - see §9.
         private Vector128<ushort> RoundSimd(Vector128<ushort> t, bool shifted, bool positive)
         {
-            (Vector256<ulong> low, Vector256<ulong> high) = LoadAccumulator();
-            (Vector256<long> addLow, Vector256<long> addHigh) = WidenSigned(t);
-            if (shifted) (addLow, addHigh) = (addLow << 16, addHigh << 16);
+            Vector128<ushort> take = positive ? ~Sign(_accHigh) : Sign(_accHigh);
+            Vector128<ushort> sign = Sign(t);
 
-            Vector256<long> valueLow = Signed48(low), valueHigh = Signed48(high);
-            Vector256<long> takeLow = Vector256.GreaterThanOrEqual(valueLow, Vector256<long>.Zero), takeHigh = Vector256.GreaterThanOrEqual(valueHigh, Vector256<long>.Zero);
-            if (!positive) (takeLow, takeHigh) = (~takeLow, ~takeHigh);
-
-            low = Wrap48(valueLow + (takeLow & addLow));
-            high = Wrap48(valueHigh + (takeHigh & addHigh));
-            StoreAccumulator(low, high);
-            return ClampSignedHalf(Signed48(low), Signed48(high));
+            if (shifted) Add48(take & sign, take & t, Vector128<ushort>.Zero, accumulate: true);
+            else Add48(take & sign, take & sign, take & t, accumulate: true);
+            return ClampSignedMiddle();
         }
 
         // Carry in from the flags, clamp what is written, keep what was not clamped - see §8.
@@ -346,14 +334,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         }
 
         // Selectors eight, nine and ten read the high, middle and low thirds, and every other one reads zero - see §6.
-        private Vector128<ushort> ReadAccumulatorSimd(int selector)
+        private Vector128<ushort> ReadAccumulatorSimd(int selector) => selector switch
         {
-            int shift = selector switch { 8 => 32, 9 => 16, 10 => 0, _ => -1 };
-            if (shift < 0) return Vector128<ushort>.Zero;
-
-            (Vector256<ulong> low, Vector256<ulong> high) = LoadAccumulator();
-            return Narrow((low >> shift).AsInt64(), (high >> shift).AsInt64());
-        }
+            8 => _accHigh,
+            9 => _accMiddle,
+            10 => _accLow,
+            _ => Vector128<ushort>.Zero,
+        };
 
         // An equal pair is settled by whatever carry and not-equal flags VCO already holds - see §8.
         private Vector128<ushort> CompareSimd(Vector128<ushort> s, Vector128<ushort> t, VectorComparison comparison)

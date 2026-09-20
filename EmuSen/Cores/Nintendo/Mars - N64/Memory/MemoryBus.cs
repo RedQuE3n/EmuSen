@@ -103,6 +103,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             {
                 // Settled first, so a state holds what a device stepped every tick would - see Mars_Performance.md §9.
                 Settle();
+                Sp.Processor.WidenAccumulator();
                 WriteStateBody(w);
                 if (snapshot) Dp.WritePending(w);
             }
@@ -138,6 +139,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             Dp.Join();
             StateSerializer.Read(r, this);
+            Sp.Processor.AccumulatorWritten();
             Written++;
 
             _registers.Clear();

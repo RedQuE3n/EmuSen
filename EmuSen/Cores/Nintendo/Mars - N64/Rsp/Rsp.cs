@@ -59,6 +59,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             Execute(instruction);
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void Execute(uint instruction)
         {
             uint op = instruction >> 26;
@@ -109,6 +110,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             }
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void ExecuteSpecial(uint instruction)
         {
             int shift = (int)((instruction >> 6) & 0x1F);
@@ -145,6 +147,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             }
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void ExecuteRegImm(uint instruction)
         {
             int value = (int)Read(Rs(instruction));

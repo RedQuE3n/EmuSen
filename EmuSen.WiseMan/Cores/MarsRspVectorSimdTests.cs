@@ -39,6 +39,87 @@ namespace EmuSen.WiseMan.Cores
             Assert.Empty(failures);
         }
 
+        // Chains of the operations that read and write the accumulator, so a carry kept wrongly in its three thirds compounds instead of being rewritten from the array each time - see Mars_RspVector.md §15.
+        [Fact]
+        public void Chains_of_accumulator_operations_agree_with_the_unit_they_are_built_from()
+        {
+            int[] family = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x14, 0x1D };
+            var failures = new System.Collections.Generic.List<string>();
+
+            for (int chain = 0; chain < 4000; chain++)
+            {
+                var seed = new Random(chain);
+                var plain = Started(false, out var plainRsp);
+                var wide = Started(true, out var wideRsp);
+
+                ushort[] vector = new ushort[32 * 8];
+                ulong[] accumulator = new ulong[8];
+                for (int i = 0; i < vector.Length; i++) vector[i] = Value(seed);
+                for (int i = 0; i < accumulator.Length; i++) accumulator[i] = ((ulong)Value(seed) << 32 | (ulong)Value(seed) << 16 | Value(seed)) & 0xFFFF_FFFF_FFFF;
+
+                foreach (var rsp in new[] { plainRsp, wideRsp })
+                {
+                    vector.CopyTo(rsp.Vector, 0);
+                    accumulator.CopyTo(rsp.Accumulator, 0);
+                    rsp.AccumulatorWritten();
+                }
+
+                for (int link = 0; link < 10; link++)
+                {
+                    int function = family[seed.Next(family.Length)];
+                    uint instruction = Vector(function, vd: 1 + seed.Next(4), vt: 1 + seed.Next(4), vs: 1 + seed.Next(4), function == 0x1D ? 8 + seed.Next(3) : seed.Next(16));
+                    Step(plain, plainRsp, instruction);
+                    Step(wide, wideRsp, instruction);
+                }
+
+                string one = State(plainRsp), two = State(wideRsp);
+                if (one != two && failures.Count < 6) failures.Add($"chain {chain}:\n  by lanes {one}\n  by vector {two}");
+            }
+
+            Assert.Empty(failures);
+        }
+
+        // The quad load and store at every address near the end of data memory and at several elements, against their definition byte by byte: the whole-register case is one vector move, and it must stop where the bytes would wrap - see Mars_RspVector.md §15.
+        [Fact]
+        public void A_quad_load_and_store_move_the_bytes_their_definition_moves_up_to_the_end_of_memory()
+        {
+            var seed = new Random(11);
+
+            foreach (bool store in new[] { false, true })
+            {
+                for (uint address = 0xFD0; address <= 0xFFF; address++)
+                {
+                    foreach (int element in new[] { 0, 1, 2, 15 })
+                    {
+                        var bus = Started(true, out var rsp);
+                        seed.NextBytes(bus.SpDmem);
+                        for (int i = 0; i < rsp.Vector.Length; i++) rsp.Vector[i] = (ushort)seed.Next(0x10000);
+
+                        byte[] memory = (byte[])bus.SpDmem.Clone();
+                        byte[] register = new byte[16];
+                        for (int b = 0; b < 16; b++) register[b] = (byte)(b % 2 == 0 ? rsp.Vector[5 * 8 + b / 2] >> 8 : rsp.Vector[5 * 8 + b / 2]);
+
+                        int count = 16 - (int)(address & 0xF);
+                        if (store) for (int i = 0; i < count; i++) memory[(address + i) & 0xFFF] = register[(element + i) & 0xF];
+                        else for (int i = 0; i < Math.Min(16 - element, count); i++) register[element + i] = memory[(address + i) & 0xFFF];
+
+                        // The base register holds the address and the offset is zero.
+                        rsp.Gpr[1] = address;
+                        Step(bus, rsp, (store ? 0xE800_0000u : 0xC800_0000u) | (1u << 21) | (5u << 16) | (4u << 11) | ((uint)element << 7));
+
+                        for (int b = 0; b < 16; b++)
+                        {
+                            byte got = (byte)(b % 2 == 0 ? rsp.Vector[5 * 8 + b / 2] >> 8 : rsp.Vector[5 * 8 + b / 2]);
+                            Assert.True(register[b] == got, $"{(store ? "store" : "load")} at {address:X3} element {element}: register byte {b} is {got:X2}, not {register[b]:X2}");
+                        }
+
+                        // The instruction itself was written over the start of instruction memory, not data memory, so every data byte is comparable.
+                        Assert.Equal(memory, bus.SpDmem);
+                    }
+                }
+            }
+        }
+
         // The two halves of a double-precision reciprocal in sequence, since the high half leaves state for the low one.
         [Fact]
         public void A_double_precision_reciprocal_agrees_across_its_two_instructions()
@@ -114,6 +195,7 @@ namespace EmuSen.WiseMan.Cores
             {
                 vector.CopyTo(rsp.Vector, 0);
                 accumulator.CopyTo(rsp.Accumulator, 0);
+                rsp.AccumulatorWritten();
                 rsp.Vco = vco;
                 rsp.Vcc = vcc;
                 rsp.Vce = vce;
@@ -155,6 +237,7 @@ namespace EmuSen.WiseMan.Cores
                 for (int i = 0; i < 8; i++) text.Append($"{rsp.Vector[register * 8 + i]:X4},");
             }
 
+            rsp.WidenAccumulator();
             text.Append(" acc=");
             foreach (ulong value in rsp.Accumulator) text.Append($"{value:X12},");
 

@@ -44,12 +44,20 @@ namespace EmuSen.Mistress.Views
             int selected = selectedConsole is null ? -1 : consoles.IndexOf(selectedConsole);
             if (selected >= 0) _tabs.SelectedIndex = selected;
 
-            Content = Ui.Stack(10,
-                Ui.Hint("What each console's core does with its picture. A change is saved at once and reaches a running game between frames; a game loaded later reads these too. Every setting here keeps the output exact - they trade speed for latency or threads, never for accuracy."),
-                _tabs,
-                Ui.Buttons(
-                    Ui.Button("Reset This Console", ResetSelected),
-                    Ui.Button("Close", Close))).Margin(16);
+            // A dock, not a stack: a stack offers its children unbounded height, and a tab's scroll viewer then never scrolls - see §4.26.
+            Control hint = Ui.Hint("What each console's core does with its picture and its machine. A change is saved at once and reaches a running game between frames unless its hint says otherwise; a game loaded later reads these too.");
+            Control buttons = Ui.Buttons(
+                Ui.Button("Reset This Console", ResetSelected),
+                Ui.Button("Close", Close));
+            hint.Margin = new Avalonia.Thickness(0, 0, 0, 10);
+            buttons.Margin = new Avalonia.Thickness(0, 10, 0, 0);
+            DockPanel.SetDock(hint, Dock.Top);
+            DockPanel.SetDock(buttons, Dock.Bottom);
+            var dock = new DockPanel { Margin = new Avalonia.Thickness(16), LastChildFill = true };
+            dock.Children.Add(hint);
+            dock.Children.Add(buttons);
+            dock.Children.Add(_tabs);
+            Content = dock;
         }
 
         private Control BuildConsolePanel(string console)

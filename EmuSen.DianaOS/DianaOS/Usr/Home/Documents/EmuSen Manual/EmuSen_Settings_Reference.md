@@ -669,6 +669,17 @@ edges and texture shimmer without making the frame larger (`Mars_Video.md` §2.1
 resolution would, and the two multiply, so together they are held to four: at 2x resolution the most antialiasing
 is 2x, and at 3x or 4x resolution it does nothing. The game is unchanged by it, as by the resolution.
 
+**Fixed, 2026-09-20: the tab could not scroll.** Each tab has been a `ScrollViewer` since the window was written,
+and with four settings nothing showed it did not work. With seven the N64's tab ran off the bottom of the window and
+no scroll bar came. The window's content was a `Ui.Stack`, and a stack panel measures its children with unbounded
+height, so the tabs, and the scroll viewer inside, were told they could be as tall as they liked: the viewport was
+710 pixels high in a window of 400, and a viewport that holds everything never scrolls. The content is now a
+`DockPanel`, the hint docked to the top, the buttons to the bottom and the tabs filling what is left, which bounds
+them. `A_tab_taller_than_the_window_scrolls_and_its_last_setting_can_be_reached` fails against the stack with that
+710 and passes with the dock. The hint also stopped claiming that every setting keeps the output exact, which the
+internal resolution, the antialiasing and the Expansion Pak had made untrue. The controller window has the same
+scroll viewer per tab but is laid out from markup, and was not examined.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

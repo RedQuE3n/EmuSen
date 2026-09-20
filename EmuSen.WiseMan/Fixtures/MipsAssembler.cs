@@ -78,6 +78,9 @@ namespace EmuSen.WiseMan.Fixtures
         public MipsAssembler Beql(int rs, int rt, short offset) => I(0x14, rs, rt, offset);
         public MipsAssembler Bnel(int rs, int rt, short offset) => I(0x15, rs, rt, offset);
         public MipsAssembler Bgez(int rs, short offset) => I(0x01, rs, 0x01, offset);
+        public MipsAssembler Bltz(int rs, short offset) => I(0x01, rs, 0x00, offset);
+        public MipsAssembler Blez(int rs, short offset) => I(0x06, rs, 0, offset);
+        public MipsAssembler Bgtz(int rs, short offset) => I(0x07, rs, 0, offset);
         public MipsAssembler Bgezal(int rs, short offset) => I(0x01, rs, 0x11, offset);
         public MipsAssembler Bltzal(int rs, short offset) => I(0x01, rs, 0x10, offset);
 

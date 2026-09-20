@@ -200,6 +200,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 {
                     case Kind.Pure: Pure(d.Word); break;
                     case Kind.Store: StoreOf(d); break;
+                    case Kind.Branch when Compares(d.Word): Compare(d.Word, k); break;
                     default:
                         _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)d.Word)); _il.Emit(OpCodes.Call, Execute);
                         break;
@@ -290,6 +291,36 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Stfld, InDelaySlot);
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Stfld, CurrentPc);
                 _il.Emit(OpCodes.Br, _head);
+            }
+
+            // The six plain conditional branches: the compare, the target into NextPc when taken, and the pending flag either way, as the interpreter's BranchIf leaves them - see Mars_Recompiler.md §14.
+            private static bool Compares(uint word)
+            {
+                uint op = word >> 26;
+                return op is 0x04 or 0x05 or 0x06 or 0x07 || (op == 0x01 && ((word >> 16) & 0x1F) is 0 or 1);
+            }
+
+            private void Compare(uint word, int k)
+            {
+                uint op = word >> 26;
+                int rs = (int)((word >> 21) & 0x1F), rt = (int)((word >> 16) & 0x1F);
+                Label notTaken = _il.DefineLabel();
+
+                LdReg(rs);
+                if (op is 0x04 or 0x05)
+                {
+                    LdReg(rt);
+                    _il.Emit(op == 0x04 ? OpCodes.Bne_Un : OpCodes.Beq, notTaken);
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldc_I8, 0L);
+                    _il.Emit(op switch { 0x06 => OpCodes.Bgt, 0x07 => OpCodes.Ble, _ => rt == 0 ? OpCodes.Bge : OpCodes.Blt }, notTaken);
+                }
+
+                StoreAddress(NextPc, k * 4 + 4 + ((short)word << 2));
+                _il.MarkLabel(notTaken);
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
             }
 
             private void StoreAddress(FieldInfo field, int offset)

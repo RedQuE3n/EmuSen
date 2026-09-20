@@ -510,6 +510,51 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(compiled.BlocksCompiled >= 1);
         }
 
+        // The six plain conditional branches a block compiles inline, each taken and not taken over a counter that changes sign, ending in the idle loop - see Mars_Recompiler.md §14.
+        [Fact]
+        public void The_inlined_branches_leave_the_machine_the_interpreter_leaves_taken_and_not()
+        {
+            const int S0 = 16, S1 = 17;
+            var (interpreted, compiled) = Pair(a => a
+                .Addiu(T1, Zero, 100)
+                .Addiu(T0, Zero, -101)
+                .Addiu(T0, T0, 1)
+                .Andi(T2, T0, 1)
+                .Beq(T2, Zero, 2)
+                .Nop()
+                .Addiu(T4, T4, 1)
+                .Bne(T2, Zero, 2)
+                .Nop()
+                .Addiu(T5, T5, 1)
+                .Blez(T0, 2)
+                .Nop()
+                .Addiu(T6, T6, 1)
+                .Bgtz(T0, 2)
+                .Nop()
+                .Addiu(T7, T7, 1)
+                .Bltz(T0, 2)
+                .Nop()
+                .Addiu(S0, S0, 1)
+                .Bgez(T0, 2)
+                .Nop()
+                .Addiu(S1, S1, 1)
+                .Bne(T0, T1, -21)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop());
+
+            AssertSame(interpreted, compiled, 2 + 90 * 22 + 7);
+            AssertSame(interpreted, compiled, 111 * 22 + 300);
+
+            Assert.Equal(100UL, compiled.Gpr[T4]);
+            Assert.Equal(101UL, compiled.Gpr[T5]);
+            Assert.Equal(100UL, compiled.Gpr[T6]);
+            Assert.Equal(101UL, compiled.Gpr[T7]);
+            Assert.Equal(101UL, compiled.Gpr[S0]);
+            Assert.Equal(100UL, compiled.Gpr[S1]);
+            Assert.True(compiled.BlocksCompiled >= 1);
+        }
+
         // A likely branch inside a loop, nullifying its slot every other iteration - see Mars_Recompiler.md §10.
         [Fact]
         public void A_likely_branch_inside_a_loop_leaves_the_machine_the_interpreter_leaves()

@@ -1662,3 +1662,44 @@ themselves — is a third to two fifths of the thread, and `Mars_Recompiler.md` 
 sampler that this section has shown cannot attribute time on this thread. Those measurements were interleaved
 timings, which stand; the attributions behind them were the sampler's, which do not. The signal processor's
 dispatch, and one program counter in place of two, are the other half.
+
+### 36.2 The signal processor's dispatch, and the branch the recompiler hands the interpreter
+
+*2026-09-20.* Two more, each measured against the commit before it at four workers, three rounds of 600 frames
+from the four states, second halves, medians with the rounds' range.
+
+**The signal processor's dispatch** (`Mars_Rsp.md` §10.1's addendum): the block's tick steps the processor directly
+for one instruction, and the register file is reached through an unchecked reference.
+
+| fps | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 78.8 (77.9–79.4) | 77.5 (76.6–79.3) | overlap |
+| Wave Race 64 | 83.2 (80.7–85.6) | 90.0 (90.0–90.3) | +8.2% |
+| Super Mario 64, in the castle | 90.7 (90.6–92.1) | 96.9 (95.3–97.6) | +6.8% |
+| Super Mario 64, outside it | 96.3 (95.9–98.0) | 102.1 (102.0–103.5) | +6.0% |
+
+Kept: three states gain with disjoint rounds, and the one that does not is the one where the signal processor is
+the smallest share of the thread.
+
+**The six conditional branches compiled inline** (`Mars_Recompiler.md` §14), measured against the build with the
+dispatch change and without them:
+
+| fps | before | after | |
+| --- | --- | --- | --- |
+| Ocarina of Time | 82.1 (79.9–82.3) | 85.5 (85.0–85.8) | +4.1% |
+| Wave Race 64 | 90.9 (89.3–91.2) | 97.7 (96.9–100.0) | +7.5% |
+| Super Mario 64, in the castle | 97.0 (96.6–97.1) | 105.4 (103.1–106.2) | +8.7% |
+| Super Mario 64, outside it | 103.8 (102.2–103.8) | 109.6 (109.0–109.8) | +5.6% |
+
+Every round disjoint. That is the idle loop's compare taken out of the interpreter: the census put nine tenths of
+what blocks hand the interpreter on one branch, and the gain is the size of that one call, seven hundred thousand
+times a frame. The interpreter and the blocks stay in lockstep from all four states, and the probe is identical to the
+baseline with the verifier on.
+
+**Where the thread stands after the day.** From the split's commit to here, at four workers and in play: Ocarina of
+Time 74.6 to 85.5 fps (171% of its console), Wave Race 64 73.2 to 97.7 (163%), Super Mario 64 80.0 to 105.4 in the
+castle and 84.4 to 109.6 outside it (211% and 219%). The changes were the vector unit's helpers inlined, the
+transfer's rows copied whole, the signal processor stepped from the tick with its registers reached unchecked, and
+the idle loop's branch compiled; each was measured alone and each was exact. Two of §36's items are still open: the
+signal processor's dispatch shape, and the interpreter's remaining share, which after the branch is the loads, the
+floating-point operations and the likely branches, none of them above four per cent of what reaches the switch.

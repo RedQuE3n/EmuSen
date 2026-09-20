@@ -8,8 +8,26 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
     {
         private int _extraCycles;
 
+        // A count of what reaches this switch by opcode, for the recompiler's census when EMUSEN_MARS_CENSUS is set; a constant to the compiler otherwise - see Mars_Recompiler.md §14.
+        public static readonly bool Census = Environment.GetEnvironmentVariable("EMUSEN_MARS_CENSUS") == "1";
+        public static readonly long[] CensusCounts = new long[256];
+
+        private static void Count(uint instruction)
+        {
+            uint op = instruction >> 26;
+            int index = op switch
+            {
+                0x00 => 64 + (int)(instruction & 0x3F),
+                0x01 => 128 + (int)((instruction >> 16) & 0x1F),
+                0x11 => ((instruction >> 21) & 0x1F) is 0x10 or 0x11 ? 192 + (int)(instruction & 0x3F) : 160 + (int)((instruction >> 21) & 0x1F),
+                _ => (int)op,
+            };
+            CensusCounts[index]++;
+        }
+
         private void Execute(uint instruction)
         {
+            if (Census) Count(instruction);
             uint op = instruction >> 26;
 
             // Kernel mode never restricts, so nothing is classified in the common case - see Mars_Privilege.md §4.

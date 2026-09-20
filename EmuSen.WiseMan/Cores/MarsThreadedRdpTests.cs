@@ -337,6 +337,39 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(State(atOnce), State(split));
         }
 
+        // A list handed over up to the middle of a command leaves every processor waiting for its next word; a snapshot then must not wait for a boundary that cannot come - see Mars_Rdp.md §2.8.
+        [Fact]
+        public void A_snapshot_while_every_processor_waits_inside_a_command_is_written_and_loads()
+        {
+            MemoryBus atOnce = new(), split = new(), loaded = new();
+            split.Dp.Threaded = true;
+            split.Dp.Workers = 2;
+            loaded.Dp.Threaded = true;
+            loaded.Dp.Workers = 2;
+
+            // Both machines take the same three pieces at the same places, so the list's bytes and the registers agree when they are compared.
+            ulong[] list = Shaded(0x1357_9BDF, toTheEdge: true);
+            int cut = list.Length - 12;
+            HandOver(atOnce, list[..cut]);
+            HandOver(atOnce, list[cut..(cut + 5)], List + (uint)cut * 8);
+            HandOver(atOnce, list[(cut + 5)..], List + (uint)(cut + 5) * 8);
+            HandOver(split, list[..cut]);
+            split.Dp.Join();
+            HandOver(split, list[cut..(cut + 5)], List + (uint)cut * 8);
+
+            byte[] snapshot = State(split, snapshot: true);
+            HandOver(split, list[(cut + 5)..], List + (uint)(cut + 5) * 8);
+            split.Dp.Join();
+            Assert.True(atOnce.Rdram.AsSpan().SequenceEqual(split.Rdram), "the resumed machine's memory differs");
+            Assert.True(State(atOnce).AsSpan().SequenceEqual(State(split)), "the resumed machine's state differs");
+
+            Load(loaded, snapshot);
+            HandOver(loaded, list[(cut + 5)..], List + (uint)(cut + 5) * 8);
+            loaded.Dp.Join();
+            Assert.True(atOnce.Rdram.AsSpan().SequenceEqual(loaded.Rdram), "the loaded machine's memory differs");
+            Assert.True(State(atOnce).AsSpan().SequenceEqual(State(loaded)), "the loaded machine's state differs");
+        }
+
         // A snapshot with several processors stands them all at one boundary, and its tail loads to the finished list.
         [Fact]
         public void A_snapshot_with_several_processors_stands_them_at_one_boundary()

@@ -614,6 +614,13 @@ adds a third to a half (`Mars_Performance.md` §35), which is where the four com
 where those threads share cores with the emulation thread and the scan-out, is unmeasured, and the divisor is the
 number to revisit when it is. Not a setting; the property is where one would go.
 
+*Later the same day:* **rewind is off for the N64 in this frontend for now.** The first play test of the workers froze
+Super Mario 64 in a level, and the rewind buffer's snapshot every fourth frame is the one path the play harness never
+took with several workers; a snapshot asked for while every worker waits inside a command — a list handed over up to
+the middle of one, which games do — could not be answered, and a test reproduces the hang. Until the snapshot with
+workers is proven in play, `OnFrameCompleted` is skipped for Mars; the hotkey then has no history to step back
+through. The other cores' rewind is unchanged.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

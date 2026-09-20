@@ -685,7 +685,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             {
                 while (true)
                 {
-                    if (!inCommand && Volatile.Read(ref _pauseRequested) != 0) Stand(w, completed);
+                    if (Volatile.Read(ref _pauseRequested) != 0) Stand(w, completed);
                     if (Volatile.Read(ref _stopping) != 0) return;
 
                     if (completed == Volatile.Read(ref _issued))
@@ -757,7 +757,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Volatile.Write(ref w.Sleeping, 0);
         }
 
-        // The pause point is the furthest boundary any thread has reached when asked; a thread short of it runs on, one at it stands - see §2.8.
+        // The pause point is the furthest word any thread has reached when asked, inside a command or not; a thread short of it runs on, one at it stands - see §2.8.
         private void Stand(Worker w, long completed)
         {
             while (true)

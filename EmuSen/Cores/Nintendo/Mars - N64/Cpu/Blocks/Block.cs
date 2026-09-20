@@ -11,6 +11,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
         // A shape the compiler does not take, which the interpreter runs every time - see Mars_Recompiler.md §2.2.
         public readonly bool Refused;
 
+        // The cycles of one turn of a loop that does nothing but branch to itself, or zero - see Mars_Recompiler.md §15.
+        public int IdleCycles, IdleBranchCycles;
+
         public int Runs;
         public byte[]? Image;
         public BlockCode? Code;

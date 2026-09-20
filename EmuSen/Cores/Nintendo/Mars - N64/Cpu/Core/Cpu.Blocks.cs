@@ -94,7 +94,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 bool asserted = _mi.Asserted;
                 if (_recheck || asserted != _assertedSeen) CheckInterrupts(asserted);
 
-                code(this);
+                if (block.IdleCycles != 0 && SkipIdle) RunIdle(block, pc, capAt);
+                else code(this);
             }
             catch (CpuException raised)
             {
@@ -105,7 +106,73 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             }
 
             BlockInstructions += Instructions - before;
+            if (BlockCensus) { var e = BlockCensusCounts.GetValueOrDefault(physical); bool rsp = !_bus.Sp.Processor.Halted; long n = Instructions - before; BlockCensusCounts[physical] = (e.Item1 + 1, e.Item2 + n, e.Item3 + (rsp ? n : 0), block.Length); }
         }
+
+        // Off only to measure what it saves - see Mars_Recompiler.md §15.
+        public static bool SkipIdle = Environment.GetEnvironmentVariable("EMUSEN_MARS_NOIDLESKIP") != "1";
+
+        // The idle loop run here instead of by its block: whole turns passed at once while the signal processor is halted, the processor stepped without the block's bookkeeping while it runs, and every exit left as the block leaves it - see Mars_Recompiler.md §15.
+        private void RunIdle(Block block, ulong entry, long capAt)
+        {
+            MemoryBus bus = _bus;
+            Rsp.Rsp rsp = bus.Sp.Processor;
+            long stop = Math.Min(Math.Min(bus.NextEvent, _timerDue), capAt), written = bus.Written;
+            int branch = block.IdleBranchCycles, slot = block.IdleCycles - branch;
+            bool afterSlot = false, atSlot = false;
+            long idleFrom = Instructions;
+            bool whole = branch == 1 && slot == 1 && Rsp.Rsp.UseBlocks && !bus.Sp.SingleStepping && rsp.Coverage is not { IsArmed: true };
+
+            while (true)
+            {
+                if (rsp.Halted)
+                {
+                    long turns = atSlot ? 0 : (stop - bus.Cycles - 1) / block.IdleCycles - 1;
+                    if (turns > 0)
+                    {
+                        bus.Cycles += turns * block.IdleCycles;
+                        Instructions += turns * 2;
+                        IdleTurnsPassed += turns;
+                    }
+                }
+                else if (whole)
+                {
+                    // One step a cycle and one cycle an instruction here, so the steps run are the instructions passed, and an event ends the run on its own step - see Mars_Rsp.md §11.
+                    long ran = rsp.RunBlocks(stop - bus.Cycles - 1);
+                    if (ran > 0)
+                    {
+                        bus.Cycles += ran;
+                        Instructions += ran;
+                        RspSteps += ran;
+                        afterSlot = (ran & 1) != 0 ? atSlot : !atSlot;
+                        atSlot = !afterSlot;
+                        if (bus.Written != written || _mi.Asserted != _assertedSeen) break;
+                    }
+                }
+
+                int cycles = atSlot ? slot : branch;
+                afterSlot = atSlot;
+                bus.Cycles += cycles;
+                Instructions++;
+                if (!rsp.Halted && RspRan(cycles, written)) break;
+                if (bus.Cycles >= stop) break;
+                atSlot = !atSlot;
+            }
+
+            // What the block's own exits leave: after the branch, pending into the slot; after the slot, back at the loop's head.
+            Pc = afterSlot ? entry : entry + 4;
+            NextPc = afterSlot ? entry + 4 : entry;
+            _branchPending = !afterSlot;
+            InDelaySlot = afterSlot;
+            CurrentPc = afterSlot ? entry + 4 : entry;
+            IdleInstructions += Instructions - idleFrom;
+            AfterInstruction();
+        }
+
+        [EmuSen.Common.SkipInState] public long IdleTurnsPassed, IdleInstructions, RspSteps;
+
+        public static readonly bool BlockCensus = Environment.GetEnvironmentVariable("EMUSEN_MARS_BLOCKCENSUS") == "1";
+        public static readonly System.Collections.Generic.Dictionary<uint, (long, long, long, int)> BlockCensusCounts = new();
 
         // Exactly <steps> instructions: a block may run only as many cycles as instructions remain, and each costs at least one - see Mars_Recompiler.md §6.
         public void RunBlocks(long steps)
@@ -139,6 +206,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         internal bool RspRan(long cycles, long written)
         {
             SpInterface sp = _bus.Sp;
+            RspSteps += cycles;
             if (cycles == 1 && !sp.SingleStepping) sp.Processor.StepOne();
             else sp.Step(cycles);
             return _bus.Written != written || _mi.Asserted != _assertedSeen;

@@ -25,12 +25,26 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 if (decoded.Kind != Kind.Branch) continue;
 
                 bool slotFits = i + 1 < available && Decode(Word(rdram, physical, i + 1)).Kind is not (Kind.Branch or Kind.Ender);
-                if (slotFits) return new Block(physical, i + 2, refused: false);
+                if (slotFits) return Idle(new Block(physical, i + 2, refused: false), rdram, i == 0);
 
                 return i == 0 ? new Block(physical, 1, refused: true) : new Block(physical, i, refused: false);
             }
 
             return new Block(physical, limit, refused: false);
+        }
+
+        // An unconditional branch or jump to itself over a no-operation: the idle thread's loop, which changes nothing but the time - see Mars_Recompiler.md §15.
+        private static Block Idle(Block block, byte[] rdram, bool whole)
+        {
+            if (!whole) return block;
+
+            uint branch = Word(rdram, block.Physical, 0);
+            bool toItself = branch == 0x1000_FFFF || ((branch >> 26) == 2 && ((branch & 0x03FF_FFFF) << 2) == (block.Physical & 0x0FFF_FFFF));
+            if (!toItself || Word(rdram, block.Physical, 1) != 0) return block;
+
+            block.IdleBranchCycles = Decode(branch).Cycles;
+            block.IdleCycles = block.IdleBranchCycles + Decode(0).Cycles;
+            return block;
         }
 
         public static uint Word(byte[] rdram, uint physical, int index) =>

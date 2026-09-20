@@ -282,3 +282,39 @@ castle and 96.3 to 102.1 outside it, the rounds disjoint; Ocarina of Time 78.8 t
 which is the state where the signal processor's share is smallest. Kept on three states' evidence
 (`Mars_Performance.md` §36.2). What is still open is what §10 named first: one program counter, and a dispatch that
 does not return to a loop between instructions.
+
+## 11. Straight lines compiled, and run whole while the CPU idles
+
+*2026-09-20.* §10 kept the rule that the signal processor takes one step for each cycle of the CPU, and this does
+not change it: the steps are the same steps in the same order at the same cycles. What changes is who runs them.
+`Mars_Performance.md` §38 found that every step is taken while the CPU is in its idle loop, and
+`Mars_Recompiler.md` §15 runs that loop natively; from there, when a cycle is a step, the processor is asked to
+`RunBlocks` with a budget of the cycles left before the CPU's stop.
+
+**A block** is a straight line of instruction memory: up to a branch and its slot, or up to and including a move to
+or from the control registers or a break, at most thirty-two instructions and never across the end of the memory.
+It is compiled (`Reflection.Emit`, off the machine's thread, run interpreted until published) to what `StepOne`
+does for each instruction — the two counters moved past it, as constants except in a slot, where they are taken
+from the branch as the step takes them — and then a call of the instruction's own handler with its word as a
+constant: `ExecuteSpecial`, `ExecuteRegImm`, `ExecuteCop0`, `ExecuteCop2`, the two vector memory handlers, or
+`Execute` for the rest. No handler was changed or copied; the block removes the fetch, the first decode and the
+step's bookkeeping, and nothing else.
+
+**Why the events end a block.** Between two steps the CPU's side tests two things, a write through the bus and the
+interrupt line. Only two kinds of instruction can change either: a control-register move (a DMA, a status write, a
+display-processor register) and a break. Ending a block on them, and returning at once when a block so ended has
+run, means the test is made after the same step it was always made after. A branch whose slot is an event or a
+branch is left to the interpreter, so the shape never has to reason about it.
+
+**Several blocks an address.** The graphics and the sound microcode are loaded over each other every field, so the
+same address holds different code from one task to the next. Blocks are found by address and then by comparing
+their words with memory, four to an address, the least run giving way; nothing is invalidated when instruction
+memory is written, because every entry compares. A block is compiled after three runs.
+
+**What it bought and what it did not** is §38's table: a quarter to a third of the emulation thread in Super Mario
+64 and Wave Race, less in Ocarina of Time, with 74 per cent of steps run in blocks. The rest are runs shorter than
+a block near the CPU's stop, branches with awkward slots, and blocks not yet compiled. The per-step cost fell less
+than the samples of the fetch and dispatch promised: the time is inside the vector handlers, whose own dispatch,
+element shuffle and register arrays a block does not touch. Compiling those with their operands constant is the
+next step and is not begun. `EMUSEN_MARS_NORSPBLOCKS=1` turns the blocks off; `MarsIdleTests` is the proof they
+change nothing (`Mars_Recompiler.md` §15).

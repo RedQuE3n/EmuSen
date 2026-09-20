@@ -46,6 +46,23 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("N64", (string)((TabItem)tabs.Items[tabs.SelectedIndex]!).Header!);
         }, default);
 
+        // The tab's settings are taller than the window, so its scroll viewer must be given a bounded height to scroll in - see §4.26.
+        [Fact]
+        public Task A_tab_taller_than_the_window_scrolls_and_its_last_setting_can_be_reached() => Session.Dispatch(() =>
+        {
+            var window = new GraphicsSettingsWindow(new GraphicsConfig(), null, "N64") { Height = 400 };
+            window.Show();
+            window.CaptureRenderedFrame();
+
+            ScrollViewer scroll = ByName<LunaSwitch>(window, "N64.ExpansionPak").FindAncestorOfType<ScrollViewer>()!;
+            Assert.True(scroll.Viewport.Height < window.Height, $"the viewport is {scroll.Viewport.Height} high in a window of {window.Height}");
+            Assert.True(scroll.Extent.Height > scroll.Viewport.Height, $"extent {scroll.Extent.Height}, viewport {scroll.Viewport.Height}");
+
+            scroll.ScrollToEnd();
+            window.CaptureRenderedFrame();
+            Assert.True(scroll.Offset.Y > 0);
+        }, default);
+
         [Fact]
         public Task The_N64s_controls_show_the_configs_values_and_the_defaults_where_it_has_none() => Session.Dispatch(() =>
         {

@@ -747,6 +747,8 @@ namespace EmuSen.Mistress.Views
                 {
                     mars.DeferredPresentation = true;
                     mars.ThreadedRdp = true;
+                    // A processor per three logical cores, at most four: the second pair buys a tenth on sixteen cores - see Mars_Performance.md §35.
+                    mars.RdpWorkers = Math.Clamp(Environment.ProcessorCount / 3, 1, 4);
                 }
 
                 // The pad this ROM's console reads, not whatever the last one used.

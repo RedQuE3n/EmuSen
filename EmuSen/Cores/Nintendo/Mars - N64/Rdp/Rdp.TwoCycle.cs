@@ -44,7 +44,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             for (int y = rows.First; y <= rows.Last; y++)
             {
-                if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y]) continue;
+                if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y] || !Owns(y)) continue;
+
+                _rowStamp = Stamp(y);
+                _lastShadedStamp = _memoryStamp = _pastStoredStamp = _texel0Stamp = _texel1Stamp = _rowStamp;
 
                 int left = _spanLeft[y], right = _spanRight[y];
                 RowCoverage(y, left, right);
@@ -83,6 +86,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     {
                         BlendEquation(FirstBlendCycle, _pixel, divide: false, _pastShiftA, _pastShiftB, out int br, out int bg, out int bb);
                         _blended = new Color { R = br, G = bg, B = bb };
+                        _blendedStamp = _rowStamp;
                     }
 
                     for (int c = 0; c < Attributes; c++) values[c] += steps[c];
@@ -128,6 +132,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 {
                     (int first, int second, int fraction) = lod ? NextRowLevelOfDetail(y + 1, ds, dt, dw, tile, maxLevel) : (tile, tile, _lodFraction);
                     _lodFraction = fraction;
+                    _lodStamp = _rowStamp;
 
                     (int cs, int ct) = TextureCoordinates(s, t, w);
                     _texel0 = Texel(cs, ct, first, BilinearFirstCycle, convert: false, default);
@@ -140,6 +145,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 {
                     (int first, int second, int fraction) = lod ? TwoCycleLevelOfDetail(s, t, w, ds, dt, dw, tile, maxLevel) : (tile, (tile + 1) & 7, _lodFraction);
                     _lodFraction = fraction;
+                    _lodStamp = _rowStamp;
 
                     (int cs, int ct) = TextureCoordinates(s, t, w);
                     _texel0 = Texel(cs, ct, first, BilinearFirstCycle, convert: false, default);
@@ -150,6 +156,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             {
                 (int first, _, int fraction) = lod ? TwoCycleLevelOfDetail(s, t, w, ds, dt, dw, tile, maxLevel) : (tile, 0, _lodFraction);
                 _lodFraction = fraction;
+                _lodStamp = _rowStamp;
 
                 (int cs, int ct) = TextureCoordinates(s, t, w);
                 _texel0 = Texel(cs, ct, first, BilinearFirstCycle, convert: false, default);

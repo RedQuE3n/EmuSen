@@ -606,6 +606,14 @@ marks on the RDRAM pages they reach (`Mars_Rdp.md` §2.6, `Mars_Performance.md` 
 changes nothing the frontend sees: a state, a cheat and the picture all wait for the list. Between the two, an N64
 frame now uses up to three cores of the host.
 
+*2026-09-20.* The same place sets `MarsCore.RdpWorkers` to one processor per three logical cores, at most four,
+so a sixteen-thread host gets four, an eight-core host two, and a four-core host the one thread it had. Each is a
+complete display processor on a thread of its own shading every fourth (or second) row of every primitive, exact
+to the byte (`Mars_Rdp.md` §2.8); on this machine the second pair of workers adds a tenth where the first pair
+adds a third to a half (`Mars_Performance.md` §35), which is where the four comes from. The weak-machine case,
+where those threads share cores with the emulation thread and the scan-out, is unmeasured, and the divisor is the
+number to revisit when it is. Not a setting; the property is where one would go.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

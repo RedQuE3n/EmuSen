@@ -83,7 +83,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     _primitiveDeltaZ = (int)word & 0xFFFF;
                     _primitiveZ = (int)((uint)word & (0x7FFFu << 16));
                     return true;
-                case SetMaskImage: _depthImage = (uint)word & 0x00FF_FFFF; return true;
+                case SetMaskImage: _depthImage = (uint)word & 0x00FF_FFFF; _depthDrawnTo = 0; return true;
                 default: return false;
             }
         }

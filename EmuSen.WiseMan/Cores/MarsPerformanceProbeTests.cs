@@ -18,6 +18,7 @@ namespace EmuSen.WiseMan.Cores
         public const string DirectoryVariable = "EMUSEN_MARS_PERF";
         public const string RecordVariable = "EMUSEN_MARS_PERF_RECORD";
         public const string ThreadedVariable = "EMUSEN_MARS_PERF_THREADED";
+        public const string WorkersVariable = "EMUSEN_MARS_PERF_WORKERS";
         public const int Frames = 600;
 
         // Derived from commercial games, so kept beside the other probe output rather than in the repository.
@@ -77,6 +78,7 @@ namespace EmuSen.WiseMan.Cores
         {
             var core = (MarsCore)CoreFactory.Load(rom, headless: true).Core;
             core.ThreadedRdp = Environment.GetEnvironmentVariable(ThreadedVariable) == "1";
+            if (int.TryParse(Environment.GetEnvironmentVariable(WorkersVariable), out int workers)) core.RdpWorkers = workers;
             var hashes = new List<string>(Frames);
             var clock = new Stopwatch();
 

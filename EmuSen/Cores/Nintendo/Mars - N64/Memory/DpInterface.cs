@@ -46,6 +46,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private int _paused;
         [EmuSen.Common.SkipInState] private bool _replaying;
 
+        // The processors that share a list when more than one does, each on a thread of its own, the first being Processor - see §2.8.
+        [EmuSen.Common.SkipInState] private Worker[] _workers = Array.Empty<Worker>();
+        [EmuSen.Common.SkipInState] private int _workerCount = 1;
+        [EmuSen.Common.SkipInState] private readonly SpinBarrier _barrier;
+        [EmuSen.Common.SkipInState] private int _stopping;
+        [EmuSen.Common.SkipInState] private int _faulted;
+        [EmuSen.Common.SkipInState] private long _pauseAt = -1;
+
         // For each page of RDRAM, the count of words that must have run before anyone writes it, and before anyone reads it; zero when nothing is due - see §2.6.
         [EmuSen.Common.SkipInState] private readonly long[] _marks;
         [EmuSen.Common.SkipInState] private readonly long[] _writeMarks;
@@ -77,9 +85,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] public long DrainWords, DrainTicks, DrainStarts, KickTicks;
         [EmuSen.Common.SkipInState] private long _kickedAt;
 
-        // Set by the thread before each word it runs, so a touch can be checked against the marks - see §2.6.
-        [EmuSen.Common.SkipInState] private long _runningWord;
-
         // How often anyone waited for the thread, and for how long, by the kind of waiter - see Mars_Performance.md §28.
         [EmuSen.Common.SkipInState] public long PageWaits, PageWaitTicks, RangeWaits, RangeWaitTicks, Joins, JoinTicks, Bystanders;
         [EmuSen.Common.SkipInState] public readonly long[] WaitsPerPage;
@@ -96,6 +101,49 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             _writeMarks = new long[_marks.Length];
             WaitsPerPage = new long[_marks.Length];
             Processor = new Rdp.Rdp(bus);
+            _barrier = new SpinBarrier(this);
+        }
+
+        // One processor's thread: how far it has come, whether it sleeps, and where it stands when asked to - see §2.8.
+        private sealed class Worker
+        {
+            public readonly int Index;
+            public readonly Rdp.Rdp Processor;
+            public readonly ManualResetEventSlim Wake = new(false);
+            public Thread? Thread;
+            public long Completed;
+            public long Standing = -1;
+            public int Sleeping;
+            public long Words, Ticks;
+
+            public Worker(int index, Rdp.Rdp processor) => (Index, Processor) = (index, processor);
+        }
+
+        // Every worker arrives before any leaves; a fault lets them all through - see §2.8.
+        private sealed class SpinBarrier
+        {
+            private readonly DpInterface _owner;
+            private int _parties, _arrived, _generation;
+            public long Passed;
+
+            public SpinBarrier(DpInterface owner) => _owner = owner;
+
+            public void Reset(int parties) => (_parties, _arrived) = (parties, 0);
+
+            public void Arrive()
+            {
+                int generation = Volatile.Read(ref _generation);
+                if (Interlocked.Increment(ref _arrived) == _parties)
+                {
+                    Passed++;
+                    _arrived = 0;
+                    Volatile.Write(ref _generation, generation + 1);
+                    return;
+                }
+
+                SpinWait spin = default;
+                while (Volatile.Read(ref _generation) == generation && Volatile.Read(ref _owner._faulted) == 0) spin.SpinOnce(-1);
+            }
         }
 
         // The buffer is never full, because every word handed over has already been taken - see §2.2.
@@ -216,9 +264,93 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             set
             {
                 Join();
+                StopWorkers();
                 _threaded = value;
                 if (value) RefreshShadow();
+                StartWorkers();
             }
+        }
+
+        // How many processors share the list, on threads of their own, each shading the rows that are its by count - see §2.8.
+        public int Workers
+        {
+            get => _workerCount;
+            set
+            {
+                int count = Math.Max(1, value);
+                if (count == _workerCount) return;
+                Join();
+                StopWorkers();
+                _workerCount = count;
+                StartWorkers();
+            }
+        }
+
+        // What each processor's thread did, and how often every one of them waited for the others - see Mars_Performance.md §35.
+        public (long Words, long Ticks)[] WorkerLoads => Array.ConvertAll(_workers, w => (w.Words, w.Ticks));
+
+        public long Barriers => _barrier.Passed;
+
+        // Reads past a row's end made for another processor's row, by whichever processor made them - see §2.8.
+        public long AliasedReads
+        {
+            get
+            {
+                long reads = Processor.AliasedReads;
+                foreach (Worker worker in _workers) if (worker.Index > 0) reads += worker.Processor.AliasedReads;
+                return reads;
+            }
+        }
+
+        private void StartWorkers()
+        {
+            if (!_threaded || _workerCount == 1) return;
+
+            long completed = Completed();
+            _barrier.Reset(_workerCount);
+            _workers = new Worker[_workerCount];
+            for (int i = 0; i < _workerCount; i++)
+            {
+                Rdp.Rdp processor = i == 0 ? Processor : new Rdp.Rdp(_bus);
+                if (i > 0) processor.CopyStateFrom(Processor);
+                processor.Configure(i, _workerCount);
+                Worker worker = new(i, processor) { Completed = completed };
+                worker.Thread = new Thread(() => RunWorker(worker)) { IsBackground = true, Name = $"Mars RDP {i}" };
+                _workers[i] = worker;
+            }
+
+            foreach (Worker worker in _workers) worker.Thread!.Start();
+        }
+
+        // After a join, so every thread stands at the end; the count carries over to the pool path - see §2.8.
+        private void StopWorkers()
+        {
+            if (_workers.Length == 0) return;
+
+            Volatile.Write(ref _stopping, 1);
+            foreach (Worker worker in _workers) worker.Wake.Set();
+            foreach (Worker worker in _workers) worker.Thread!.Join();
+            Volatile.Write(ref _stopping, 0);
+
+            _completed = Math.Min(Completed(), _issued);
+            _workers = Array.Empty<Worker>();
+            Processor.Configure(0, 1);
+        }
+
+        // How far every processor has come: the least of them, since a word is done when all have run it - see §2.8.
+        private long Completed()
+        {
+            if (_workers.Length == 0) return Volatile.Read(ref _completed);
+
+            long least = long.MaxValue;
+            foreach (Worker worker in _workers) least = Math.Min(least, Volatile.Read(ref worker.Completed));
+            return least;
+        }
+
+        // The leader's scratch replaced by whichever processor wrote each field last in raster order - see §2.8.
+        private void Assemble()
+        {
+            for (int i = 1; i < _workers.Length; i++) Processor.TakeScratchFrom(_workers[i].Processor);
         }
 
         // The marks a writer tests, and the ones a reader tests, for the bus and the processor's direct paths - see §2.6.1.
@@ -229,7 +361,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public long MarkFor(uint physical) => _marks[physical >> 12];
 
         // Words handed over that the thread has not run, which a snapshot carries - see §2.7.
-        public long Pending => _issued - Volatile.Read(ref _completed);
+        public long Pending => _issued - Completed();
 
         // A snapshot's tail is this many words whatever is pending, so every snapshot of a machine is the same length - see §2.7.
         public const int SnapshotWords = 1 << 15;
@@ -253,20 +385,43 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             {
                 ulong word = _xbus ? ReadDataMemory(_current) : _bus.Read64(_current);
                 _current += 8;
-
-                if (tail - Volatile.Read(ref _completed) >= _ring.Length) MakeRoom(tail);
-                _ring[(int)(tail & (_ring.Length - 1))] = word;
-                tail++;
-
-                bool sync = Shadow(word, tail);
-                Volatile.Write(ref _issued, tail);
-                Kick();
-
-                if (sync) FullSync();
+                tail = Publish(word, tail);
             }
 
             _taking = false;
+            EndBatch(tail);
+        }
 
+        // Words from a test or a bench, handed over as a list of their own would be, without a fetch from memory - see §2.8.
+        public void HandOver(ReadOnlySpan<ulong> words)
+        {
+            if (!_threaded) throw new InvalidOperationException("Words can only be handed over to the threaded interface.");
+
+            long tail = _issued;
+            _batchStart = tail;
+            _drawn = false;
+            _taking = true;
+            foreach (ulong word in words) tail = Publish(word, tail);
+            _taking = false;
+            EndBatch(tail);
+        }
+
+        private long Publish(ulong word, long tail)
+        {
+            if (tail - Completed() >= _ring.Length) MakeRoom(tail);
+            _ring[(int)(tail & (_ring.Length - 1))] = word;
+            tail++;
+
+            bool sync = Shadow(word, tail);
+            Volatile.Write(ref _issued, tail);
+            Kick();
+
+            if (sync) FullSync();
+            return tail;
+        }
+
+        private void EndBatch(long tail)
+        {
             // A batch that named more images than the extents hold keeps its pages idle and takes one range of the whole memory, which is the first version's behaviour - see §2.6.1.
             if (_idleRangeCount > _idleRanges.Length) Append(0, _bus.Rdram.Length, _batchStart, tail, write: true);
             else
@@ -287,6 +442,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // A thread from the pool drains what is published, unless one already is - see §2.6.
         private void Kick()
         {
+            if (_workers.Length > 0)
+            {
+                Interlocked.MemoryBarrier();
+                foreach (Worker worker in _workers) if (Volatile.Read(ref worker.Sleeping) != 0) worker.Wake.Set();
+                return;
+            }
+
             if (Volatile.Read(ref _draining) == 0 && Interlocked.CompareExchange(ref _draining, 1, 0) == 0)
             {
                 _kickedAt = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -298,7 +460,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private void MakeRoom(long tail)
         {
             SpinWait spin = default;
-            while (tail - Volatile.Read(ref _completed) >= _ring.Length)
+            while (tail - Completed() >= _ring.Length)
             {
                 Rethrow();
                 spin.SpinOnce(-1);
@@ -473,7 +635,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                     while (completed < issued)
                     {
                         if (Volatile.Read(ref _pauseRequested) != 0) StandStill();
-                        _runningWord = completed + 1;
+                        Processor.RunningWord = completed + 1;
                         Processor.Accept(_ring[(int)(completed & (_ring.Length - 1))]);
                         completed++;
                         Volatile.Write(ref _completed, completed);
@@ -511,6 +673,107 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             return false;
         }
 
+        // A processor's thread: every word in order, each command as its kind asks, standing when asked to and sleeping when there is nothing - see §2.8.
+        private void RunWorker(Worker w)
+        {
+            Rdp.Rdp p = w.Processor;
+            long completed = w.Completed;
+            bool inCommand = false;
+            long runStart = System.Diagnostics.Stopwatch.GetTimestamp(), runFrom = completed;
+
+            try
+            {
+                while (true)
+                {
+                    if (!inCommand && Volatile.Read(ref _pauseRequested) != 0) Stand(w, completed);
+                    if (Volatile.Read(ref _stopping) != 0) return;
+
+                    if (completed == Volatile.Read(ref _issued))
+                    {
+                        w.Words += completed - runFrom;
+                        w.Ticks += System.Diagnostics.Stopwatch.GetTimestamp() - runStart;
+                        Sleep(w, completed);
+                        runStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                        runFrom = completed;
+                        continue;
+                    }
+
+                    p.RunningWord = completed + 1;
+                    Rdp.Rdp.Step step = p.Gather(_ring[(int)(completed & (_ring.Length - 1))]);
+                    inCommand = step == Rdp.Rdp.Step.More;
+                    switch (step)
+                    {
+                        case Rdp.Rdp.Step.Ready:
+                            p.Execute();
+                            break;
+
+                        case Rdp.Rdp.Step.Leader:
+                            _barrier.Arrive();
+                            if (w.Index == 0)
+                            {
+                                Assemble();
+                                p.Execute();
+                            }
+                            _barrier.Arrive();
+                            break;
+
+                        case Rdp.Rdp.Step.All:
+                            _barrier.Arrive();
+                            p.Execute();
+                            break;
+
+                        case Rdp.Rdp.Step.AllJoined:
+                            _barrier.Arrive();
+                            p.Execute();
+                            _barrier.Arrive();
+                            break;
+                    }
+
+                    completed++;
+                    Volatile.Write(ref w.Completed, completed);
+                }
+            }
+            catch (Exception fault)
+            {
+                _fault ??= fault;
+                Volatile.Write(ref _faulted, 1);
+                Volatile.Write(ref w.Completed, long.MaxValue >> 1);
+            }
+        }
+
+        // Spins a moment for more, then sleeps until kicked; the flag and the fence keep a kick from passing unseen - see §2.8.
+        private void Sleep(Worker w, long completed)
+        {
+            for (int i = 0; i < 400; i++)
+            {
+                if (Volatile.Read(ref _issued) != completed || Volatile.Read(ref _pauseRequested) != 0 || Volatile.Read(ref _stopping) != 0) return;
+                Thread.SpinWait(50);
+            }
+
+            Volatile.Write(ref w.Sleeping, 1);
+            Interlocked.MemoryBarrier();
+            w.Wake.Reset();
+            if (Volatile.Read(ref _issued) == completed && Volatile.Read(ref _pauseRequested) == 0 && Volatile.Read(ref _stopping) == 0) w.Wake.Wait();
+            Volatile.Write(ref w.Sleeping, 0);
+        }
+
+        // The pause point is the furthest boundary any thread has reached when asked; a thread short of it runs on, one at it stands - see §2.8.
+        private void Stand(Worker w, long completed)
+        {
+            while (true)
+            {
+                long at = Volatile.Read(ref _pauseAt);
+                if (at >= completed || Interlocked.CompareExchange(ref _pauseAt, completed, at) == at) break;
+            }
+
+            if (Volatile.Read(ref _pauseAt) > completed) return;
+
+            Volatile.Write(ref w.Standing, completed);
+            SpinWait spin = default;
+            while (Volatile.Read(ref _pauseRequested) != 0 && Volatile.Read(ref _pauseAt) == completed && Volatile.Read(ref _stopping) == 0) spin.SpinOnce(-1);
+            Volatile.Write(ref w.Standing, -1);
+        }
+
         // The thread, between two words, until the request is withdrawn - see §2.7.
         private void StandStill()
         {
@@ -525,6 +788,24 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             Volatile.Write(ref _pauseRequested, 1);
             SpinWait spin = default;
+
+            if (_workers.Length > 0)
+            {
+                Kick();
+                while (true)
+                {
+                    Rethrow();
+                    long at = Volatile.Read(ref _pauseAt);
+                    bool standing = at >= 0;
+                    foreach (Worker worker in _workers) standing &= Volatile.Read(ref worker.Standing) == at;
+                    if (standing) break;
+                    spin.SpinOnce(-1);
+                }
+
+                Assemble();
+                return;
+            }
+
             while (Volatile.Read(ref _draining) != 0 && Volatile.Read(ref _paused) == 0) spin.SpinOnce(-1);
             Rethrow();
         }
@@ -532,13 +813,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public void Resume()
         {
             Volatile.Write(ref _pauseRequested, 0);
-            if (Volatile.Read(ref _completed) < _issued) Kick();
+            Volatile.Write(ref _pauseAt, -1);
+            if (Completed() < _issued || _workers.Length > 0) Kick();
         }
 
         // The words handed over and not yet run, for a state written while the thread stands - see §2.7.
         public void WritePending(System.IO.BinaryWriter w)
         {
-            long completed = Volatile.Read(ref _completed), issued = _issued;
+            long completed = Completed(), issued = _issued;
             if (issued - completed > SnapshotWords) throw new InvalidOperationException("More words are pending than a snapshot's tail holds; Hold was not called.");
 
             w.Write((int)(issued - completed));
@@ -551,6 +833,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             int count = r.ReadInt32();
             _replaying = true;
+            Processor.Configure(0, 1);
             try
             {
                 for (int i = 0; i < count; i++) Processor.Accept(r.ReadUInt64());
@@ -558,6 +841,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             finally
             {
                 _replaying = false;
+                Processor.Configure(0, _workers.Length > 0 ? _workerCount : 1);
             }
 
             r.BaseStream.Seek((SnapshotWords - count) * 8L, System.IO.SeekOrigin.Current);
@@ -580,7 +864,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         private bool Wait(long from, long to, int page, long mark, int site, bool write)
         {
-            long completed = Volatile.Read(ref _completed);
+            long completed = Completed();
             if (mark != Idle && completed >= mark)
             {
                 Clear(page, mark);
@@ -600,7 +884,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             WaitsPerPage[page]++;
             long took = System.Diagnostics.Stopwatch.GetTimestamp() - started;
             WaitsPerSite[site]++; TicksPerSite[site] += took;
-            if (WaitsLogged < WaitLog.Length && took > System.Diagnostics.Stopwatch.Frequency / 20000) WaitLog[WaitsLogged++] = (site, (uint)page << 12, mark == Idle, took, _issued - Volatile.Read(ref _completed), _colorImage, _depthImage, _textureImage);
+            if (WaitsLogged < WaitLog.Length && took > System.Diagnostics.Stopwatch.Frequency / 20000) WaitLog[WaitsLogged++] = (site, (uint)page << 12, mark == Idle, took, _issued - Completed(), _colorImage, _depthImage, _textureImage);
             if (_waiting == 0) { PageWaits++; PageWaitTicks += took; }
             return true;
         }
@@ -642,8 +926,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public void Join()
         {
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
-            bool waited = Volatile.Read(ref _completed) < _issued;
+            bool waited = Completed() < _issued;
             WaitUntil(_issued);
+            if (_workers.Length > 0) Assemble();
             if (_threaded)
             {
                 Array.Clear(_marks);
@@ -655,10 +940,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         private void WaitUntil(long words)
         {
-            if (Volatile.Read(ref _completed) < words) Kick();
+            if (Completed() < words) Kick();
 
             SpinWait spin = default;
-            while (Volatile.Read(ref _completed) < words)
+            while (Completed() < words)
             {
                 Rethrow();
                 spin.SpinOnce(-1);
@@ -687,14 +972,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // Called by the processor at every byte of RDRAM it reads or writes while threaded, to prove the marks and their ranges reach it - see §2.6.1.
         public bool Verifying => _threaded && VerifyMarks && !_replaying;
 
-        public void Touched(uint physical) => Verify(physical, write: false);
+        public void Touched(uint physical, long word) => Verify(physical, word, write: false);
 
-        public void Wrote(uint physical) => Verify(physical, write: true);
+        public void Wrote(uint physical, long word) => Verify(physical, word, write: true);
 
-        private void Verify(uint physical, bool write)
+        private void Verify(uint physical, long word, bool write)
         {
             if (physical >= (uint)_bus.Rdram.Length) return;
-            long word = _runningWord;
             long[] marks = write ? _writeMarks : _marks;
 
             if (Volatile.Read(ref marks[physical >> 12]) < word)
@@ -782,7 +1066,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             (_shadowTaken, _shadowFirst) = Processor.Gathered;
             (_colorImage, _colorWidth, _colorBytes, _depthImage, _textureImage, _textureWidth, _textureSize, _scissorTop, _scissorBottom, _scissorRight) = Processor.Images;
             _drawn = false;
-            _issued = _completed;
+            _issued = _completed = Completed();
+            foreach (Worker worker in _workers)
+            {
+                worker.Completed = _issued;
+                if (worker.Index > 0) worker.Processor.CopyStateFrom(Processor);
+            }
         }
     }
 }

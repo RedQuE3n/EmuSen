@@ -555,6 +555,84 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(compiled.BlocksCompiled >= 1);
         }
 
+        // Every load a block compiles inline, signed and unsigned over bytes with their top bit set, by both signs of offset, into register zero, from a device, and into and out of the coprocessor - see Mars_Recompiler.md §16.
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void The_inlined_loads_leave_the_machine_the_interpreter_leaves(bool coprocessorTakenAway)
+        {
+            const int A0 = 4, A1 = 5, S0 = 16, S1 = 17, S2 = 18;
+            var (interpreted, compiled) = Pair(a => a
+                .Lui(A0, 0x8010)
+                .Addiu(A1, A0, 8)
+                .Addiu(T1, Zero, 200)
+                .Addiu(T0, T0, 1)
+                .Lb(T2, A0, 1)
+                .Lbu(T3, A0, 1)
+                .Lh(T4, A0, 2)
+                .Lhu(T5, A0, 2)
+                .Lw(T6, A0, 4)
+                .Lwu(T7, A0, 4)
+                .Ld(S0, A0, 8)
+                .Lw(Zero, A0, 4)
+                .Lw(S1, A1, -4)
+                .Lui(S2, 0xA430)
+                .Lw(S2, S2, 4)
+                .Lwc1(2, A0, 4)
+                .Ldc1(4, A0, 8)
+                .Mtc1(T6, 6)
+                .Mfc1(S1, 2)
+                .Bne(T0, T1, -17)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop(),
+                (bus, cpu) =>
+                {
+                    for (uint i = 0; i < 16; i += 4) bus.Write32(0x0010_0000 + i, 0x8091_A2B3 + i * 0x0101_0101);
+                    cpu.Cop0[Cpu.StatusRegister] |= Cpu.StatusCop1Usable;
+                    cpu.Cop0Written();
+                });
+
+            AssertSame(interpreted, compiled, 3 + 120 * 19 + 5);
+            Assert.True(compiled.BlocksCompiled >= 1, "the loop never compiled, so the test compared nothing");
+            Assert.Equal(unchecked((ulong)(long)(sbyte)0x91), compiled.Gpr[T2]);
+
+            // The compiled block now finds the coprocessor unusable, and must raise what the interpreter raises.
+            if (coprocessorTakenAway)
+            {
+                foreach (Cpu cpu in new[] { interpreted, compiled })
+                {
+                    cpu.Cop0[Cpu.StatusRegister] &= ~Cpu.StatusCop1Usable;
+                    cpu.Cop0Written();
+                }
+            }
+
+            AssertSame(interpreted, compiled, 80 * 19 + 300);
+        }
+
+        // The address gains one at the 128th turn, so a block that has loaded from it a hundred times finds it unaligned and faults as the interpreter does - see §16.
+        [Fact]
+        public void An_inlined_load_that_is_not_aligned_faults_as_the_interpreter_faults()
+        {
+            const int A0 = 4;
+            var (interpreted, compiled) = Pair(a => a
+                .Lui(A0, 0x8010)
+                .Addiu(T1, Zero, 200)
+                .Addiu(T0, T0, 1)
+                .Srl(T3, T0, 7)
+                .Addu(T4, A0, T3)
+                .Lw(T2, T4, 4)
+                .Bne(T0, T1, -5)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop());
+
+            AssertSame(interpreted, compiled, 2 + 120 * 6);
+            Assert.True(compiled.BlocksCompiled >= 1, "the loop never compiled, so the test compared nothing");
+            AssertSame(interpreted, compiled, 80 * 6 + 60);
+            Assert.NotEqual(0UL, compiled.Cop0[Cpu.StatusRegister] & 2);
+        }
+
         // A likely branch inside a loop, nullifying its slot every other iteration - see Mars_Recompiler.md §10.
         [Fact]
         public void A_likely_branch_inside_a_loop_leaves_the_machine_the_interpreter_leaves()

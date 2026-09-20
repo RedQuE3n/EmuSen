@@ -1814,3 +1814,14 @@ floating point compiled inline rather than called, which is the recompiler's nex
 game the vector unit compiled to its operation with the registers, the element selection and the flags constant,
 which removes the second dispatch and the shuffle where the selection is none. Neither is begun. The collector's
 pauses (§37) and the first call of a newly compiled block are what the worst single frames are now made of.
+
+### 38.1 The loads inlined, and where the thread stands after them
+
+*2026-09-20.* `Mars_Recompiler.md` §16: the integer and coprocessor loads and the word moves compiled as the
+interpreter's fast case, five per cent of Ocarina of Time's mean and its drawing frames from 20.87 to 19.88
+milliseconds, under their slot. An interrupt sample of the thread afterwards, the scan-out off: the signal
+processor's vector unit 30 per cent (one function, the vector operation with its arithmetic inlined, 15), its scalar
+half and loop 14, the CPU's interpreted instructions 17, its blocks 13, the dispatcher's entry 10, software floating
+point 6. The vector unit's time is arithmetic and not dispatch: its multiply-accumulates keep a 48-bit accumulator
+in 64-bit lanes, two 256-bit vectors an operation. A narrower accumulator, three 16-bit vectors as the reference
+cores keep it, is the next large piece of work on this thread, and is not begun.

@@ -390,3 +390,11 @@ with an argument exception. Every one of the four keeps the output exact; what t
 and latency, which is why they are a frontend's to offer and not the core's to decide. `UseBlocks` and the expansion
 pak are deliberately not among them: the first is not a video setting and the second is fixed at construction (§7).
 `MarsCoreSettingsTests` hold the round trip, the clamp and the refusals.
+
+*Addendum, later the same day.* A fifth setting, `RenderScale`, is the first choice: `"1"` to `"4"`, default `"1"`,
+the multiple `Mars_Rdp.md` §11 draws the picture at. `Set` clamps it into one to four and hands it to
+`DpInterface.Scale`, which allocates the shadow and the processors at the multiple between frames. Unlike the four
+above it it does not keep the *picture* exact: the machine, its memory and its states stay exact, and the picture
+shown is the multiple's approximation, to §11's closeness figures.
+`The_multiple_is_a_choice_of_one_to_four_and_reaches_the_display_processor` holds the round trip, and the catalogue
+test now counts five.

@@ -290,6 +290,23 @@ the bytes changed. The fork's own measured campaign attacks the cost of a scan �
 pixels fully covered and doing no filtering, and skipped the vertical resample at a zero fraction — and Mars already
 had both of those (§2.6 and `Mars_Performance.md` §5 and §21).
 
+### 2.9 The walk at a multiple
+
+*2026-09-20.* When the display processor draws at a multiple (`Mars_Rdp.md` §11), the scan-out walks the multiple's
+memory into a raster N times as wide and as tall, and that is what the frontend shows. `Prepare` sets the job's
+`Scale` to the processor's multiple once it has drawn there (`ScaledDrawn`) and one otherwise, and builds a second
+`Picture` from the first with its left, top, columns, rows, stride, active lines, start column and row and first and
+last column multiplied by N and its two steps unchanged: the source is N times wider and the output N times wider,
+so the fractional step an output pixel takes is the same, and the multiple's detail is in the raster being N times
+denser. The job takes the multiple's lines as it takes the console's (`ReachScaled` and the capture), so a walk on
+another thread (§2.7) reads one frame, and the repeat test of §2.8 includes the multiple, so a change of it is never
+a repeat. `Walk` chooses the multiple's source, picture and raster and records which it walked (`OutputScale`);
+`Raster` returns that raster and `OutputWidth` its width; `Darken` writes the darkened lines into both rasters, and a
+blank clears both. `MarsCore.Compose` returns the width it composed and multiplies the rows by the multiple, and
+`ScreenWidth` follows it, so the frontend receives a 640×480 frame at two and 1,280×960 at four and scales it as it
+would any other. Nothing about the walk's rules changes: the same registers, the same fetch, the same filters, on a
+denser source.
+
 ## 3. What the differential says
 
 ### 3.1 The first run, and the bug it found

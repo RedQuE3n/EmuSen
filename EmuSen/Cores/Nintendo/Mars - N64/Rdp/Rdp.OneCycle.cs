@@ -60,7 +60,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 for (int c = 0; c < Attributes; c++) values[c] = _spanAttributes[y * Attributes + c];
                 if (PrimitiveDepth) values[AttributeZ] = _primitiveZ;
 
-                int clipped = (majorOnLeft ? left - _spanMajorX[y] : _spanMajorX[y] - right) & 0xFFF;
+                int clipped = majorOnLeft ? left - _spanMajorX[y] : _spanMajorX[y] - right;
+                if (!_scaled) clipped &= 0xFFF;
                 for (int c = 0; c < Attributes; c++) values[c] += steps[c] * clipped;
 
                 // The next pixel's texel of a long span's last pixel is the next row's first, when that row is drawn - see Mars_RdpTextures.md §6.
@@ -477,7 +478,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // Reads memory colour and, with image reads on, the coverage stored beside it - see §3.
         private int ReadMemory(int pixel)
         {
-            byte[] rdram = _bus.Rdram;
+            byte[] rdram = _frame;
             _memory = new Color { A = 0xE0 };
 
             switch (_colorImageSize)
@@ -497,7 +498,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     Touch(word * 2);
                     bool valid = word * 2 + 1 < rdram.Length;
                     int value = valid ? (rdram[word * 2] << 8) | rdram[word * 2 + 1] : 0;
-                    int hidden = valid ? _bus.RdramHidden[word] : 0;
+                    int hidden = valid ? _frameHidden[word] : 0;
 
                     if (_colorImageFormat == 0) _memory = new Color { R = (value >> 8) & 0xF8, G = (value & 0x7C0) >> 3, B = (value & 0x3E) << 2 };
                     else _memory = new Color { R = value >> 8, G = value >> 8, B = value >> 8 };
@@ -532,7 +533,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // A four-bit image takes a zero byte, an eight-bit one alternates red and green by address - see §3.
         private void WriteMemory(int pixel, int r, int g, int b, bool blend, int coverage, int memoryCoverage)
         {
-            byte[] rdram = _bus.Rdram;
+            byte[] rdram = _frame;
 
             switch (_colorImageSize)
             {
@@ -552,7 +553,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
                     int value = (at & 1) != 0 ? g : r;
                     rdram[at] = (byte)value;
-                    if ((at & 1) != 0) _bus.RdramHidden[at >> 1] = (byte)((value & 1) * 3);
+                    if ((at & 1) != 0) _frameHidden[at >> 1] = (byte)((value & 1) * 3);
                     return;
                 }
 
@@ -578,7 +579,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     int value = (color | (stored >> 2)) & 0xFFFF;
                     rdram[word * 2] = (byte)(value >> 8);
                     rdram[word * 2 + 1] = (byte)value;
-                    _bus.RdramHidden[word] = (byte)(stored & 3);
+                    _frameHidden[word] = (byte)(stored & 3);
                     return;
                 }
 
@@ -594,8 +595,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     rdram[at + 1] = (byte)g;
                     rdram[at + 2] = (byte)b;
                     rdram[at + 3] = (byte)(stored << 5);
-                    _bus.RdramHidden[index * 2] = (byte)((g & 1) * 3);
-                    _bus.RdramHidden[index * 2 + 1] = 0;
+                    _frameHidden[index * 2] = (byte)((g & 1) * 3);
+                    _frameHidden[index * 2 + 1] = 0;
                     return;
                 }
             }

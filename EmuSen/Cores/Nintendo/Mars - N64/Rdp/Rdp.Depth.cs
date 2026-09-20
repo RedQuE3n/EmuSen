@@ -122,22 +122,22 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // The word and its hidden bits at a depth index, or zero past the memory's end.
         private (int Stored, int Hidden) ReadDepthWord(uint index)
         {
-            byte[] rdram = _bus.Rdram;
+            byte[] rdram = _frame;
             Touch(index * 2);
             bool valid = index * 2 + 1 < rdram.Length;
-            return (valid ? (rdram[index * 2] << 8) | rdram[index * 2 + 1] : 0, valid ? _bus.RdramHidden[index] : 0);
+            return (valid ? (rdram[index * 2] << 8) | rdram[index * 2 + 1] : 0, valid ? _frameHidden[index] : 0);
         }
 
         private void StoreDepth(uint index, int z, int deltaZEncoded)
         {
-            byte[] rdram = _bus.Rdram;
+            byte[] rdram = _frame;
             Wrote(index * 2);
             if (index * 2 + 1 >= rdram.Length) return;
 
             int stored = CompressDepth(z & 0x3FFFF) | (deltaZEncoded >> 2);
             rdram[index * 2] = (byte)(stored >> 8);
             rdram[index * 2 + 1] = (byte)stored;
-            _bus.RdramHidden[index] = (byte)(deltaZEncoded & 3);
+            _frameHidden[index] = (byte)(deltaZEncoded & 3);
         }
 
         // Shade scaled back from its extra precision, or moved to the first covered sample of a partial pixel - see §2.

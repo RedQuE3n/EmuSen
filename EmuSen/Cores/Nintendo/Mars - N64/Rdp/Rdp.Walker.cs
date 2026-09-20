@@ -7,14 +7,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
     {
         private const int SpanRows = 1024;
 
-        private readonly bool[] _spanDrawn = new bool[SpanRows];
-        private readonly int[] _spanLeft = new int[SpanRows];
-        private readonly int[] _spanRight = new int[SpanRows];
+        // The rows and columns of the console, widened by the multiple for a processor drawing at one - see Mars_Rdp.md §11.
+        private bool[] _spanDrawn = new bool[SpanRows];
+        private int[] _spanLeft = new int[SpanRows];
+        private int[] _spanRight = new int[SpanRows];
 
         // Each sub-scanline's clipped edges in eighth pixels, indexed by sub-scanline, which coverage reads - see Mars_RdpCoverage.md §2.
-        private readonly int[] _edgeLeft = new int[SpanRows * 4];
-        private readonly int[] _edgeRight = new int[SpanRows * 4];
-        private readonly bool[] _edgeInvalid = new bool[SpanRows * 4];
+        private int[] _edgeLeft = new int[SpanRows * 4];
+        private int[] _edgeRight = new int[SpanRows * 4];
+        private bool[] _edgeInvalid = new bool[SpanRows * 4];
 
         // Red, green, blue, alpha, depth and the texture's s, t and w: a command's values at its first row, and their steps across x, along the major edge and down y - see Mars_RdpDepth.md §1.
         private const int Attributes = 8;
@@ -26,8 +27,23 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private readonly int[] _attributeDy = new int[Attributes];
 
         // Each row's attributes where its major edge crosses it, and that edge's unclipped column - see Mars_RdpDepth.md §1.2.
-        private readonly int[] _spanAttributes = new int[SpanRows * Attributes];
-        private readonly int[] _spanMajorX = new int[SpanRows];
+        private int[] _spanAttributes = new int[SpanRows * Attributes];
+        private int[] _spanMajorX = new int[SpanRows];
+
+        // The per-row and per-column scratch sized for a multiple of the console's rows and columns - see Mars_Rdp.md §11.
+        private void Widen(int scale)
+        {
+            _spanDrawn = new bool[SpanRows * scale];
+            _spanLeft = new int[SpanRows * scale];
+            _spanRight = new int[SpanRows * scale];
+            _edgeLeft = new int[SpanRows * scale * 4];
+            _edgeRight = new int[SpanRows * scale * 4];
+            _edgeInvalid = new bool[SpanRows * scale * 4];
+            _spanAttributes = new int[SpanRows * scale * Attributes];
+            _spanMajorX = new int[SpanRows * scale];
+            _coverage = new byte[SpanRows * scale];
+            _coverageStamp = new long[SpanRows * scale];
+        }
 
         // Per-pixel steps and the coarser steps partial-coverage correction uses - see Mars_RdpDepth.md §1.3.
         private readonly int[] _shadeStep = new int[4];
@@ -72,6 +88,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             int major = xh & ~1, minor = xm & ~1;
             int majorStep = (dxhdy >> 2) & ~1, minorStep = (dxmdy >> 2) & ~1;
 
+            // The edges are given at the console's row top; at a multiple the walk begins at the multiple's, some sub-scanlines on - see Mars_Rdp.md §11.
+            if (_scaled)
+            {
+                int ahead = (yh & ~3) - ((yh / _scale) & ~3) * _scale;
+                major += ahead * majorStep;
+                minor += ahead * minorStep;
+                for (int c = 0; c < Attributes; c++) running[c] += (ahead >> 2) * _attributeDe[c];
+            }
+
             int left = 0, right = 0;
             bool over = true, under = true, outside = true;
 
@@ -87,7 +112,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 {
                     if ((k & 3) == 0)
                     {
-                        left = 0xFFF;
+                        left = _scaled ? int.MaxValue : 0xFFF;
                         right = 0;
                         over = under = outside = true;
                     }
@@ -100,11 +125,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     over &= leftOver && rightOver;
                     under &= leftUnder && rightUnder;
 
-                    bool invalid = k < upper || k >= lower || QuarterPixel(rightEdge) < QuarterPixel(leftEdge);
+                    bool crossed = _scaled ? (rightEdge >> 14) < (leftEdge >> 14) : QuarterPixel(rightEdge) < QuarterPixel(leftEdge);
+                    bool invalid = k < upper || k >= lower || crossed;
                     outside &= invalid;
 
-                    _edgeLeft[k] = leftAt & 0x1FFF;
-                    _edgeRight[k] = rightAt & 0x1FFF;
+                    _edgeLeft[k] = _scaled ? leftAt : leftAt & 0x1FFF;
+                    _edgeRight[k] = _scaled ? rightAt : rightAt & 0x1FFF;
                     _edgeInvalid[k] = invalid;
 
                     if (!invalid)
@@ -116,7 +142,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                     if ((k & 3) == sampleSub)
                     {
                         int row = k >> 2;
-                        _spanMajorX[row] = SignExtend((ulong)(major >> 16), 12);
+                        _spanMajorX[row] = _scaled ? major >> 16 : SignExtend((ulong)(major >> 16), 12);
                         int fraction = (major >> 8) & 0xFF;
 
                         for (int c = 0; c < Attributes; c++)
@@ -153,6 +179,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             int sticky = ((x >> 1) & 0x1FFF) != 0 ? 1 : 0;
             int clipLeft = _scissorLeft * 2, clipRight = _scissorRight * 2;
 
+            // At a multiple the column keeps its full width, so nothing wraps at the console's - see Mars_Rdp.md §11.
+            if (_scaled)
+            {
+                int wide = ((x >> 13) & ~1) | sticky;
+                bool wideUnder = wide < clipLeft;
+                wide = wideUnder ? clipLeft : wide;
+                bool wideOver = wide >= clipRight;
+                return (wideOver ? clipRight : wide, wideUnder, wideOver);
+            }
+
             int at = ((x >> 13) & 0x1FFE) | sticky;
             bool under = (x & 0x0800_0000) != 0 || (at < clipLeft && (x & 0x0400_0000) == 0);
 
@@ -166,11 +202,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private static int QuarterPixel(int x) => (x ^ (1 << 27)) & (0x3FFF << 14);
 
         // Negative tops start at the scissor and tops past the last row stand; otherwise the lower of the two wins - see §2.2.
-        private int UpperLimit(int yh) =>
-            (yh & 0x2000) != 0 ? _scissorTop : (yh & 0x1000) != 0 ? yh : Math.Max(yh, _scissorTop);
+        private int UpperLimit(int yh) => _scaled
+            ? yh < 0 ? _scissorTop : Math.Max(yh, _scissorTop)
+            : (yh & 0x2000) != 0 ? _scissorTop : (yh & 0x1000) != 0 ? yh : Math.Max(yh, _scissorTop);
 
-        private int LowerLimit(int yl) =>
-            (yl & 0x2000) != 0 ? yl : (yl & 0x1000) != 0 ? _scissorBottom : Math.Min(yl, _scissorBottom);
+        private int LowerLimit(int yl) => _scaled
+            ? yl < 0 ? yl : Math.Min(yl, _scissorBottom)
+            : (yl & 0x2000) != 0 ? yl : (yl & 0x1000) != 0 ? _scissorBottom : Math.Min(yl, _scissorBottom);
 
         // The derived steps, with the depth slope summed from the two derivatives' magnitudes - see Mars_RdpDepth.md §1.3.
         private void PrepareAttributes()

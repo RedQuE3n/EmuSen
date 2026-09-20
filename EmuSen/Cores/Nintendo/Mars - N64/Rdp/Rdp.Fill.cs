@@ -29,17 +29,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             _colorImageFormat = (int)(word >> 53) & 7;
             _colorImageSize = (int)(word >> 51) & 3;
             _colorImageBytes = _colorImageSize switch { 1 => 1, 2 => 2, 3 => 4, _ => 0 };
-            _colorImageWidth = (int)((word >> 32) & 0x3FF) + 1;
-            _colorImage = (uint)word & 0x00FF_FFFF;
+            _colorImageWidth = ((int)((word >> 32) & 0x3FF) + 1) * _scale;
+            _colorImage = ((uint)word & 0x00FF_FFFF) * (uint)(_scale * _scale);
             _colorDrawnTo = 0;
         }
 
         private void Scissor(ulong word)
         {
-            _scissorLeft = Quarters(word >> 44);
-            _scissorTop = Quarters(word >> 32);
-            _scissorRight = Quarters(word >> 12);
-            _scissorBottom = Quarters(word);
+            _scissorLeft = Quarters(word >> 44) * _scale;
+            _scissorTop = Quarters(word >> 32) * _scale;
+            _scissorRight = Quarters(word >> 12) * _scale;
+            _scissorBottom = Quarters(word) * _scale;
             _scissorField = ((word >> 25) & 1) != 0;
             _scissorKeepOdd = ((word >> 24) & 1) != 0;
         }
@@ -53,10 +53,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // A rectangle is walked as a primitive with its major edge on the left and no slope - see Mars_RdpTriangles.md §3.
         private (int First, int Last) WalkRectangle(ulong word)
         {
-            int right = Quarters(word >> 44);
-            int bottom = Quarters(word >> 32) | (CycleType >= CopyCycle ? 3 : 0);
-            int left = Quarters(word >> 12);
-            int top = Quarters(word);
+            // A fill or copy draws the edge's own pixel, so at a multiple the edge moves out to that pixel's last - see Mars_Rdp.md §11.
+            int inclusive = CycleType >= CopyCycle ? (_scale - 1) * 4 : 0;
+            int right = Quarters(word >> 44) * _scale + inclusive;
+            int bottom = (Quarters(word >> 32) * _scale + inclusive) | (CycleType >= CopyCycle ? 3 : 0);
+            int left = Quarters(word >> 12) * _scale;
+            int top = Quarters(word) * _scale;
 
             int rightX = ((right >> 2) << 16) | ((right & 3) << 14);
             int leftX = ((left >> 2) << 16) | ((left & 3) << 14);
@@ -73,12 +75,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             Draw(Walk(
                 majorOnLeft,
-                yh: SignExtend(edges, 14),
-                ym: SignExtend(edges >> 16, 14),
-                yl: SignExtend(edges >> 32, 14),
-                xh: SignExtend(_command[2] >> 32, 28),
-                xm: SignExtend(_command[3] >> 32, 28),
-                xl: SignExtend(_command[1] >> 32, 28),
+                yh: SignExtend(edges, 14) * _scale,
+                ym: SignExtend(edges >> 16, 14) * _scale,
+                yl: SignExtend(edges >> 32, 14) * _scale,
+                xh: SignExtend(_command[2] >> 32, 28) * _scale,
+                xm: SignExtend(_command[3] >> 32, 28) * _scale,
+                xl: SignExtend(_command[1] >> 32, 28) * _scale,
                 dxhdy: SignExtend(_command[2], 30),
                 dxmdy: SignExtend(_command[3], 30),
                 dxldy: SignExtend(_command[1], 30),
@@ -126,6 +128,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 _attributeDe[AttributeZ] = (int)(_command[at + 1] >> 32);
                 _attributeDy[AttributeZ] = (int)_command[at + 1];
             }
+
+            // A step across or down a pixel of the multiple is the step's share - see Mars_Rdp.md §11.
+            if (_scaled)
+            {
+                for (int c = 0; c < Attributes; c++)
+                {
+                    _attributeDx[c] /= _scale;
+                    _attributeDe[c] /= _scale;
+                    _attributeDy[c] /= _scale;
+                }
+            }
         }
 
         private void ClearAttributes()
@@ -142,6 +155,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void Draw((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             VerifyModes();
+            Drew = true;
             if (CycleType == FillCycle) FillSpans(rows);
             else if (CycleType == OneCycle) DrawOneCycle(rows, majorOnLeft, tile, maxLevel);
             else if (CycleType == TwoCycle) DrawTwoCycle(rows, majorOnLeft, tile, maxLevel);
@@ -171,7 +185,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         // Each byte takes the lane of the fill colour its address holds in a big-endian word, and each word's low byte its hidden bits - see §5.1.
         private void FillPixel(uint address)
         {
-            byte[] rdram = _bus.Rdram;
+            byte[] rdram = _frame;
             Wrote(address);
 
             for (uint i = 0; i < _colorImageBytes; i++)
@@ -181,7 +195,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
                 byte value = (byte)(_fillColor >> (int)(24 - 8 * (at & 3)));
                 rdram[at] = value;
-                if ((at & 1) != 0) _bus.RdramHidden[at >> 1] = (byte)((value & 1) * 3);
+                if ((at & 1) != 0) _frameHidden[at >> 1] = (byte)((value & 1) * 3);
             }
         }
 

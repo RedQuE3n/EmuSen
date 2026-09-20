@@ -55,7 +55,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 for (int c = 0; c < Attributes; c++) values[c] = _spanAttributes[y * Attributes + c];
                 if (PrimitiveDepth) values[AttributeZ] = _primitiveZ;
 
-                int clipped = (majorOnLeft ? left - _spanMajorX[y] : _spanMajorX[y] - right) & 0xFFF;
+                int clipped = majorOnLeft ? left - _spanMajorX[y] : _spanMajorX[y] - right;
+                if (!_scaled) clipped &= 0xFFF;
                 for (int c = 0; c < Attributes; c++) values[c] += steps[c] * clipped;
 
                 int last = right - left, length = last + clipped;

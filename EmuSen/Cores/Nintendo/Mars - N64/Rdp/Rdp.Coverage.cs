@@ -6,7 +6,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
     // Coverage: eight of each pixel's sixteen sub-samples, taken from the walker's sub-scanline edges - see Mars_RdpCoverage.md §2.
     public sealed partial class Rdp
     {
-        private readonly byte[] _coverage = new byte[1024];
+        private byte[] _coverage = new byte[SpanRows];
 
         // Each sub-scanline owns two samples of a pixel's eight, the pairs offset by one column on alternate lines - see §2.1.
         private void RowCoverage(int row, int left, int right)

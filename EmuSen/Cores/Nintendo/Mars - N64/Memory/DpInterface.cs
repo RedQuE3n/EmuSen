@@ -46,6 +46,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private int _paused;
         [EmuSen.Common.SkipInState] private bool _replaying;
 
+        // Drawing at a multiple: a memory of the scale squared and a processor per thread that draws into it beside the native one - see Mars_Rdp.md §11.
+        [EmuSen.Common.SkipInState] private int _scale = 1;
+        [EmuSen.Common.SkipInState] private byte[] _scaledRdram = Array.Empty<byte>();
+        [EmuSen.Common.SkipInState] private byte[] _scaledHidden = Array.Empty<byte>();
+        [EmuSen.Common.SkipInState] private Rdp.Rdp? _scaledProcessor;
+
         // The processors that share a list when more than one does, each on a thread of its own, the first being Processor - see §2.8.
         [EmuSen.Common.SkipInState] private Worker[] _workers = Array.Empty<Worker>();
         [EmuSen.Common.SkipInState] private int _workerCount = 1;
@@ -109,6 +115,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             public readonly int Index;
             public readonly Rdp.Rdp Processor;
+            public Rdp.Rdp? Scaled;
             public readonly ManualResetEventSlim Wake = new(false);
             public Thread? Thread;
             public long Completed;
@@ -240,6 +247,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 _current += 8;
 
                 if (Processor.Accept(word)) FullSync();
+                _scaledProcessor?.Accept(word);
             }
         }
 
@@ -268,6 +276,64 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 _threaded = value;
                 if (value) RefreshShadow();
                 StartWorkers();
+            }
+        }
+
+        // The multiple the picture is drawn at beside the machine's own, into a memory of its own; one is the machine's alone - see Mars_Rdp.md §11.
+        public int Scale
+        {
+            get => _scale;
+            set
+            {
+                int scale = Math.Clamp(value, 1, 8);
+                if (scale == _scale) return;
+                Join();
+                StopWorkers();
+                _scale = scale;
+                _scaledRdram = scale > 1 ? new byte[_bus.Rdram.Length * scale * scale] : Array.Empty<byte>();
+                _scaledHidden = scale > 1 ? new byte[_bus.RdramHidden.Length * scale * scale] : Array.Empty<byte>();
+                _scaledProcessor = scale > 1 ? NewScaled() : null;
+                StartWorkers();
+            }
+        }
+
+        public byte[] ScaledRdram => _scaledRdram;
+
+        public byte[] ScaledHidden => _scaledHidden;
+
+        // True once a draw has reached the scaled memory since it was last emptied, which is when the scan-out may show it - see Mars_Rdp.md §11.
+        public bool ScaledDrawn
+        {
+            get
+            {
+                if (_scale == 1) return false;
+                if (_scaledProcessor is { Drew: true }) return true;
+                foreach (Worker worker in _workers) if (worker.Scaled is { Drew: true }) return true;
+                return false;
+            }
+        }
+
+        // A processor at the multiple, standing where the native one stands - see Mars_Rdp.md §11.
+        private Rdp.Rdp NewScaled()
+        {
+            var scaled = new Rdp.Rdp(_bus);
+            scaled.DrawAt(_scale, _scaledRdram, _scaledHidden);
+            scaled.CopyStateFrom(Processor);
+            scaled.Rescale();
+            return scaled;
+        }
+
+        // After a state is read, the scaled memory holds another machine's picture: emptied, and shown again only once something draws - see §11.
+        private void ResetScaled()
+        {
+            if (_scale == 1) return;
+            Array.Clear(_scaledRdram);
+            Array.Clear(_scaledHidden);
+            _scaledProcessor = NewScaled();
+            foreach (Worker worker in _workers)
+            {
+                worker.Scaled = NewScaled();
+                worker.Scaled.Configure(worker.Index, _workerCount);
             }
         }
 
@@ -315,6 +381,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 if (i > 0) processor.CopyStateFrom(Processor);
                 processor.Configure(i, _workerCount);
                 Worker worker = new(i, processor) { Completed = completed };
+                if (_scale > 1)
+                {
+                    worker.Scaled = NewScaled();
+                    worker.Scaled.Configure(i, _workerCount);
+                }
                 worker.Thread = new Thread(() => RunWorker(worker)) { IsBackground = true, Name = $"Mars RDP {i}" };
                 _workers[i] = worker;
             }
@@ -351,6 +422,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private void Assemble()
         {
             for (int i = 1; i < _workers.Length; i++) Processor.TakeScratchFrom(_workers[i].Processor);
+            if (_workers.Length > 0 && _workers[0].Scaled is { } leader) for (int i = 1; i < _workers.Length; i++) leader.TakeScratchFrom(_workers[i].Scaled!);
         }
 
         // The marks a writer tests, and the ones a reader tests, for the bus and the processor's direct paths - see §2.6.1.
@@ -637,6 +709,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                         if (Volatile.Read(ref _pauseRequested) != 0) StandStill();
                         Processor.RunningWord = completed + 1;
                         Processor.Accept(_ring[(int)(completed & (_ring.Length - 1))]);
+                        _scaledProcessor?.Accept(_ring[(int)(completed & (_ring.Length - 1))]);
                         completed++;
                         Volatile.Write(ref _completed, completed);
                     }
@@ -677,6 +750,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private void RunWorker(Worker w)
         {
             Rdp.Rdp p = w.Processor;
+            Rdp.Rdp? s = w.Scaled;
             long completed = w.Completed;
             bool inCommand = false;
             long runStart = System.Diagnostics.Stopwatch.GetTimestamp(), runFrom = completed;
@@ -699,12 +773,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                     }
 
                     p.RunningWord = completed + 1;
-                    Rdp.Rdp.Step step = p.Gather(_ring[(int)(completed & (_ring.Length - 1))]);
+                    ulong word = _ring[(int)(completed & (_ring.Length - 1))];
+                    Rdp.Rdp.Step step = p.Gather(word);
+                    if (s is not null)
+                    {
+                        s.Gather(word);
+                        s.Follow(p);
+                    }
                     inCommand = step == Rdp.Rdp.Step.More;
                     switch (step)
                     {
                         case Rdp.Rdp.Step.Ready:
                             p.Execute();
+                            s?.Execute();
                             break;
 
                         case Rdp.Rdp.Step.Leader:
@@ -713,6 +794,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                             {
                                 Assemble();
                                 p.Execute();
+                                s?.Execute();
                             }
                             _barrier.Arrive();
                             break;
@@ -720,11 +802,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                         case Rdp.Rdp.Step.All:
                             _barrier.Arrive();
                             p.Execute();
+                            s?.Execute();
                             break;
 
                         case Rdp.Rdp.Step.AllJoined:
                             _barrier.Arrive();
                             p.Execute();
+                            s?.Execute();
                             _barrier.Arrive();
                             break;
                     }
@@ -836,7 +920,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             Processor.Configure(0, 1);
             try
             {
-                for (int i = 0; i < count; i++) Processor.Accept(r.ReadUInt64());
+                for (int i = 0; i < count; i++)
+                {
+                    ulong word = r.ReadUInt64();
+                    Processor.Accept(word);
+                    _scaledProcessor?.Accept(word);
+                }
             }
             finally
             {
@@ -1072,6 +1161,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 worker.Completed = _issued;
                 if (worker.Index > 0) worker.Processor.CopyStateFrom(Processor);
             }
+
+            ResetScaled();
         }
     }
 }

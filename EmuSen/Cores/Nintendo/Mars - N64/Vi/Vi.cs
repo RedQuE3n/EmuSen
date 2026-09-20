@@ -38,6 +38,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         [EmuSen.Common.SkipInState] private readonly byte[] _raster = new byte[RasterWidth * RasterHeight * 4];
         private readonly int[] _held = new int[RasterHeight];
 
+        // The raster at the multiple, when the last walk read the scaled memory; the multiple is what the picture's width is divided by - see Mars_Video.md §2.9.
+        [EmuSen.Common.SkipInState] private byte[] _rasterScaled = System.Array.Empty<byte>();
+        [EmuSen.Common.SkipInState] private int _rasterScale = 1;
+        [EmuSen.Common.SkipInState] private int _outputScale = 1;
+
+        public int OutputScale => _outputScale;
+
+        public int OutputWidth => RasterWidth * _outputScale;
+
         private bool _wasBlank;
 
         public Vi(MemoryBus bus) => _bus = bus;
@@ -62,7 +71,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         public ReadOnlySpan<byte> Frame => Raster(FrameHeight);
 
         // The raster's first lines by count, for a composition that took the count before the registers could move - see §2.7.
-        public ReadOnlySpan<byte> Raster(int rows) => _raster.AsSpan(0, RasterWidth * rows * 4);
+        public ReadOnlySpan<byte> Raster(int rows) =>
+            _outputScale == 1 ? _raster.AsSpan(0, RasterWidth * rows * 4) : _rasterScaled.AsSpan(0, OutputWidth * rows * _outputScale * 4);
 
         private uint Register(uint offset) => _registers[offset >> 2];
 

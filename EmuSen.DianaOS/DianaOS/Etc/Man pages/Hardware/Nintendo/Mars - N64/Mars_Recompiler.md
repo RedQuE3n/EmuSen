@@ -823,3 +823,39 @@ interpreter, whole state compared; with BEQ's condition flipped in the emitter i
 the blocks run in lockstep from the four gameplay states (`h-play`, 200 to 400 frames each, whole state compared every
 frame) and stay identical; the probe's 1,800 frames are identical to the baseline with the verifier on. The
 measurement is `Mars_Performance.md` §36.2.
+
+## 15. The idle loop, run without its block
+
+*2026-09-20.* `Mars_Performance.md` §38's census found one block of two instructions, an unconditional branch to
+itself over a no-operation, to be 82 to 93 per cent of every instruction executed: the operating system's idle
+thread. `BlockShape` now recognises it when a block is shaped — `b` to itself as `0x1000FFFF`, or a `j` whose target
+is its own address, with a zero word in the slot — and records the cycles of the branch and of the whole turn on the
+block. When the dispatcher reaches such a block with compiled code (so the words have just been compared with the
+image, as for any block), `RunIdle` runs it instead of the code.
+
+**The argument for exactness.** The loop changes nothing but the time: each instruction adds its cycles to the bus
+and one to the instruction count, steps the signal processor if it is running, and leaves when the bus reports a
+write or the interrupt line differs from what the CPU last saw, or when the cycles reach the block's stop, the
+least of the next event, the timer and the caller's cap. `RunIdle` does exactly those things in that order, one
+instruction at a time, and differs in two places only. While the signal processor is halted nothing can happen
+before the stop, so it adds whole turns at once — all but the last, which it runs singly, so the exit falls on the
+instruction it would have. And while the processor runs and a cycle is a step and an instruction (both instructions
+cost one), it lets the processor run compiled blocks (`Mars_Rsp.md` §11) and adds as many cycles and instructions
+as steps were run; the parity of that count says which of the two instructions was the last. On leaving it writes
+what the block's own exits write: after the branch, the counters past it with the branch pending into the slot;
+after the slot, the counters at the loop's head and the slot flag set; then `AfterInstruction`, as the epilogue does.
+
+**The proof.** `MarsIdleTests` runs a machine whose CPU idles in RDRAM while the signal processor runs a counted
+loop of scalar, vector, store and control-register work that raises its interrupt half way, with the CPU's
+interrupts on and a handler that stores the count register it was entered at; with a leading no-operation the whole
+program lands on the other instruction of the pair. The state after seven frames must equal the state with both
+paths off, and the test refuses to pass unless idle turns were passed and more than ten thousand steps ran in
+blocks. Four mutants were tried against it: the exit after the branch leaving no branch pending, the parity of a
+block run ignored, a control-register move not ending a block, and idle turns passed up to the stop itself. The
+first version of the test caught one of the four; it caught all four only once the interrupt came from a block
+that had run thousands of times (a status write that runs once is never compiled), once the handler recorded when
+it was entered (a handler of no-operations ends in the same state two cycles later), and once the padding moved
+every step and not only the break. The probe's 4,800 frames are identical with both paths on.
+
+`EMUSEN_MARS_NOIDLESKIP=1` turns it off, for measurement. What it does not cover: an idle loop of another shape —
+a wait on a memory word, a counted delay — is a block like any other.

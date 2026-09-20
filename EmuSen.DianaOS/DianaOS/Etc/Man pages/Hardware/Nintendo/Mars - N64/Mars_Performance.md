@@ -1749,3 +1749,68 @@ done here.
 **What this says about moving work to the GPU** is in `Mars_GpuPlan.md` §0: at one it would change none of the
 numbers above, and its case rests entirely on the multiple.
 
+## 38. What a drawing frame is made of, and the first two changes against it
+
+*2026-09-20.* §37 left the drawing frame as the problem: twenty-two to thirty-two milliseconds against a slot of
+twenty, all of it on the emulation thread. This section takes that thread apart frame by frame and records what was
+built against it, what it bought, and what it did not.
+
+**The scan-out was half of a light frame and none of a heavy one.** With the scan-out off and eight rasteriser
+workers, Ocarina of Time's light fields cost 4.0 milliseconds, not 8.5, and its drawing fields still cost 21 to 23.
+The difference in the light fields is the frame waiting for the previous field's deferred walk (`Mars_Video.md`
+§2.7), which is under the slot and harmless. A drawing frame is the emulation thread and nothing else.
+
+**A block census** (`EMUSEN_MARS_BLOCKCENSUS=1`, the dispatcher's instructions per block and how many of them ran
+with the signal processor running; off, it costs nothing) found that **82 to 93 per cent of every instruction the
+CPU executes is one block of two**: the operating system's idle thread, a branch to itself over a no-operation, at
+`0x7C0` in Ocarina of Time, `0x242E54` in Super Mario 64 and `0x47A84` in Wave Race. And every step the signal
+processor takes, it takes while the CPU is in that loop: of the busy blocks, essentially none ran with the signal
+processor running. Two conclusions follow. The signal processor cannot usefully be given a thread of its own, since
+in console time the CPU has nothing to overlap it with; that option is closed by measurement. And while it runs,
+nothing on the CPU's side needs executing at all.
+
+**A fit of each frame's cost** against its busy CPU instructions and its signal-processor steps (per-frame counters
+in `pacebench`, least squares over the frames with no collection and few compilations) gave a drawing frame as
+0.80 million busy instructions at about 13.7 nanoseconds, eleven milliseconds, and 1.04 million steps at about 9.9,
+ten milliseconds; a light frame is 0.11 million and 0.17 million. The two terms rise together, so the split between
+them is soft, and after the changes below the same fit moved weight from one to the other; the sum is what it
+measures well. Neither per-instruction figure is good: a compiled MIPS instruction ought to cost a nanosecond or
+two, and these blocks call the interpreter for every load, store and floating-point operation
+(`Mars_Recompiler.md` §14's census).
+
+**Two changes, both exact.** The idle loop is no longer run by its block (`Mars_Recompiler.md` §15): whole turns
+are passed at once while the signal processor is halted, and while it runs the loop is a few additions around the
+processor's step. And while the CPU idles, the signal processor runs straight lines of its code as compiled blocks
+that call its own handlers (`Mars_Rsp.md` §11). One build, three modes, interleaved, three rounds of 1,200 frames,
+the scan-out off so that only the emulation thread is timed; medians, milliseconds a frame:
+
+| State | | mean | median | 90th | 99th |
+|---|---|---|---|---|---|
+| Ocarina of Time, the field | neither | 10.58 | 5.63 | 21.87 | 24.79 |
+| | the idle loop | 9.49 | 4.13 | 21.70 | 24.54 |
+| | and the blocks | 8.96 | 3.83 | 20.55 | 23.94 |
+| Super Mario 64, outside | neither | 7.92 | 12.29 | 12.95 | 13.75 |
+| | the idle loop | 6.73 | 11.87 | 12.57 | 13.73 |
+| | and the blocks | 5.17 | 8.74 | 9.41 | 10.24 |
+| Wave Race, racing | neither | 9.81 | 8.79 | 16.48 | 20.30 |
+| | the idle loop | 9.28 | 8.31 | 16.73 | 17.92 |
+| | and the blocks | 7.50 | 6.29 | 13.85 | 15.17 |
+
+Super Mario 64's mean falls by 35 per cent and Wave Race's by 24, and Wave Race's ninety-ninth percentile comes
+under its slot of 16.68. Ocarina of Time's mean falls by 15 per cent and its drawing frames by six: they are still
+over their slot. The state hash after 900 frames is the same in every mode for all three games, the suite passes,
+and the probe is identical to its baseline for all eight games.
+
+**A prediction retired.** Passing the idle loop's turns was expected to be the large gain, since it removes seven
+instructions in ten. It removed about a twentieth of the time: a compiled loop of two instructions with nothing to
+do was already nearly free, and the census had counted instructions, not nanoseconds. The gain came from the part
+that looked smaller, the signal processor's steps, and even there removing the fetch, the decode and the first
+dispatch bought less than their share of the samples suggested, because 74 per cent of steps ran in blocks and the
+time is inside the handlers: the vector unit's second dispatch, its element shuffle on every operation, and the
+register arrays.
+
+**What is left, in order of what the numbers say.** For Ocarina of Time the busy CPU instructions: loads, stores and
+floating point compiled inline rather than called, which is the recompiler's next stage and its largest. For every
+game the vector unit compiled to its operation with the registers, the element selection and the flags constant,
+which removes the second dispatch and the shuffle where the selection is none. Neither is begun. The collector's
+pauses (§37) and the first call of a newly compiled block are what the worst single frames are now made of.

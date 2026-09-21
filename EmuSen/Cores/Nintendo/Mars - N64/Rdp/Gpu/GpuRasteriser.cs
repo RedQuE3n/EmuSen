@@ -66,6 +66,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
         // What the batch asked that this phase does not shade, and columns past the image's width, which the CPU path wraps into the next row - see §5.
         public long Flushes, RowsShaded, PrimitivesNotShaded, ColumnsPastTheWidth, RowsOfUnsupportedImages;
 
+        // Why a primitive was not shaded, which is what phase 4 has to choose between - see Mars_Gpu.md §9.
+        public long NotShadedCarry, NotShadedTwoCycle, NotShadedCopy, NotShadedImage;
+
         public string DeviceName => _device.Name;
 
         private GpuRasteriser(GpuDevice device, uint memoryWords)
@@ -175,7 +178,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             return record;
         }
 
-        public void NotShaded() => PrimitivesNotShaded++;
+        public enum Declined { Carry, TwoCycle, Copy, Image }
+
+        public void NotShaded(Declined why)
+        {
+            PrimitivesNotShaded++;
+            switch (why)
+            {
+                case Declined.Carry: NotShadedCarry++; break;
+                case Declined.TwoCycle: NotShadedTwoCycle++; break;
+                case Declined.Copy: NotShadedCopy++; break;
+                default: NotShadedImage++; break;
+            }
+        }
 
         // The snapshot the primitives that follow sample, pushed only when the processor's own has changed since the last - see §7.1.
         public uint TextureMemory(ReadOnlySpan<byte> memory, bool changed)

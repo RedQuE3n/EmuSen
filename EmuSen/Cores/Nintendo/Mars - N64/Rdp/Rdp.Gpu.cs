@@ -22,11 +22,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void RecordForTheDevice((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             GpuRasteriser gpu = _gpu!;
-            if (CycleType != FillCycle && (CycleType != OneCycle || !TheDeviceShadesThisPrimitive())) { gpu.NotShaded(); return; }
+            if (CycleType == TwoCycle) { gpu.NotShaded(GpuRasteriser.Declined.TwoCycle); return; }
+            if (CycleType == CopyCycle) { gpu.NotShaded(GpuRasteriser.Declined.Copy); return; }
+            if (CycleType == OneCycle && !TheDeviceShadesThisPrimitive()) { gpu.NotShaded(GpuRasteriser.Declined.Carry); return; }
 
             gpu.Image(_colorImage & ~(uint)Math.Max(_colorImageBytes - 1, 0), _colorImageWidth, _colorImageBytes == 1 ? 0 : _colorImageBytes);
             gpu.DepthImage(_depthImage);
-            if (!gpu.Shades) { gpu.NotShaded(); return; }
+            if (!gpu.Shades) { gpu.NotShaded(GpuRasteriser.Declined.Image); return; }
 
             if (CycleType == FillCycle)
             {

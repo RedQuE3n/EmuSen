@@ -495,6 +495,25 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(MemoryBus.RdramSize, core.Bus!.Rdram.Length);
         }
 
+        // The warm boot path skips the memory sizing, so the hand-off leaves what it would have: the size where libultra reads it, or where the 6105's boot code copies it from - see Mars_Boot.md §6.5.
+        [Theory]
+        [InlineData(false, EmuSen.Cores.Nintendo.Mars.Rom.CicChip.Nus6102, 0x318u, 0x0040_0000u)]
+        [InlineData(true, EmuSen.Cores.Nintendo.Mars.Rom.CicChip.Nus6102, 0x318u, 0x0080_0000u)]
+        [InlineData(true, EmuSen.Cores.Nintendo.Mars.Rom.CicChip.Unknown, 0x318u, 0x0080_0000u)]
+        [InlineData(false, EmuSen.Cores.Nintendo.Mars.Rom.CicChip.Nus6105, 0x3F0u, 0x0040_0000u)]
+        [InlineData(true, EmuSen.Cores.Nintendo.Mars.Rom.CicChip.Nus6105, 0x3F0u, 0x0080_0000u)]
+        public void The_hand_off_leaves_the_memory_size_a_cold_boot_would_have_left(bool pak, EmuSen.Cores.Nintendo.Mars.Rom.CicChip chip, uint at, uint size)
+        {
+            var rom = EmuSen.Cores.Nintendo.Mars.Rom.RomImage.Load(WriteRom(SyntheticN64Rom.Build()));
+            rom.CicChip = chip;
+            var bus = new MemoryBus(pak);
+
+            Boot.HandOff(bus, new EmuSen.Cores.Nintendo.Mars.Cpu.Core.Cpu(bus), rom);
+
+            Assert.Equal(size, bus.Read32(at));
+            Assert.Equal(0u, bus.Read32(at == 0x318u ? 0x3F0u : 0x318u));
+        }
+
         // A frontend's machine has the Pak, because the factory asks for it - see Mars_Core.md §7.
         [Fact]
         public void The_factorys_machine_has_the_pak()

@@ -228,6 +228,28 @@ them.
   after the entry point stores `osGetMemSize()`'s `0x00400000` over it (`0x800004E4`, twelve
   thousand steps in). Project64 writes the RDRAM size to `0x318`, or `0x3F0` for the 6105, on the
   first cartridge DMA; Mars leaves this to the RDRAM interface, whose registers are still stubs.
+  *Closed 2026-09-20: §6.5.*
+
+### 6.5 The memory size a cold boot would have left
+
+*2026-09-20.* §6's last item came due. With the Expansion Pak in every frontend's machine (`Mars_Core.md` §7),
+*Majora's Mask* started and *Donkey Kong 64* and *Perfect Dark* still said there was no Pak. A single-stepped run
+from boot, printing every change to the two words, showed the difference. No boot code writes either word here:
+the select register comes up nonzero, IPL3 takes its warm path, and the sizing is skipped. Majora's Mask does not
+care — its own `osInitialize` probes memory and stores `0x00800000` at `0x80000318`, seven million steps in, as
+Ocarina of Time stores its four. The two Rare games trust the word. On the 6105 the boot code copies `0x800003F0`
+to `0x80000318` (at `0x80000224`), nothing had written `0x3F0`, and they read zero.
+
+**The hand-off now leaves the size**, the length of RDRAM, at `0x318`, or at `0x3F0` when the chip is a 6105, whose
+boot code then carries it across itself. It is the one result of the skipped sizing that a game can see, and what
+Project64 supplies at the first cartridge DMA; mupen64plus needs no such thing because it models the RDRAM modules
+and lets IPL3 size them, which is the honest route and is still not Mars's (`Mars_Memory.md` §8.5).
+`The_hand_off_leaves_the_memory_size_a_cold_boot_would_have_left` holds both addresses at both sizes.
+
+**Seen, not inferred.** With the Pak, Donkey Kong 64 plays its introduction and Perfect Dark reaches its language
+menu over its 3D background; without it each shows its own screen — DK64's pink Pak in three languages, Perfect
+Dark's "Expansion Pak not detected" — which is what a stock console does. What this does not cover: a game that
+reads the RDRAM modules' own registers to size memory would still find the stubs.
 
 ## 7. The 6105's challenge, answered through the PIF
 

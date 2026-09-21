@@ -1849,3 +1849,14 @@ those presses lead to — Ocarina of Time's and Majora's Mask's language screens
 Race's and Mario Kart's mode menus, Kirby's title, Mischief Makers' and Yoshi's Story's. The suite's 6,184 tests
 pass. The probe now runs nine games and takes about half an hour.
 
+## 40. The probe grades two games
+
+*2026-09-20.* The probe ran every cartridge in the library, which was three games when it was written, nine by
+§39 and nineteen an hour later, at about three minutes each. It now grades **Super Mario 64 and Ocarina of Time**
+and nothing else unless asked: `EMUSEN_MARS_PERF_GAMES` names others by part of their file name, comma separated,
+or `all`. Two games are enough for what the probe is for — that a change meant to be exact left the machine's
+output bit for bit — and a game-specific fix is checked by looking at that game, as §39 and `Mars_Boot.md` §6.5
+did. With the memory size left at the hand-off (`Mars_Boot.md` §6.5) both games' picture, sound and cycle columns
+are identical to the baselines before it for all 600 frames, and the memory hash differs from frame 0, by the word
+that now holds the size; the baselines were recorded again.
+

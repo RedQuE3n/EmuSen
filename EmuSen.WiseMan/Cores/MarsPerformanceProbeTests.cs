@@ -21,6 +21,19 @@ namespace EmuSen.WiseMan.Cores
         public const string WorkersVariable = "EMUSEN_MARS_PERF_WORKERS";
         public const int Frames = 600;
 
+        // Two games are the baseline, whatever else the library holds; the variable names others, or "all" - see Mars_Performance.md §40.
+        public const string GamesVariable = "EMUSEN_MARS_PERF_GAMES";
+        private static readonly string[] Baseline = { "Super Mario 64", "Ocarina of Time" };
+
+        private static bool Graded(string rom)
+        {
+            string? asked = Environment.GetEnvironmentVariable(GamesVariable);
+            if (string.Equals(asked, "all", StringComparison.OrdinalIgnoreCase)) return true;
+            string[] wanted = string.IsNullOrWhiteSpace(asked) ? Baseline : asked.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            string name = Path.GetFileNameWithoutExtension(rom);
+            return wanted.Any(w => name.Contains(w, StringComparison.OrdinalIgnoreCase));
+        }
+
         // Derived from commercial games, so kept beside the other probe output rather than in the repository.
         public static string BaselineDirectory =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "mars-golden");
@@ -48,7 +61,7 @@ namespace EmuSen.WiseMan.Cores
             var report = new List<string>();
             var failures = new List<string>();
 
-            foreach (string rom in N64TestRomLibrary.Find().Where(p => !p.EndsWith(N64TestRomLibrary.SystemTestRomName)))
+            foreach (string rom in N64TestRomLibrary.Find().Where(p => !p.EndsWith(N64TestRomLibrary.SystemTestRomName)).Where(Graded))
             {
                 string game = Path.GetFileNameWithoutExtension(rom);
                 (double seconds, List<string> hashes) = Run(rom);

@@ -11,6 +11,9 @@ namespace EmuSen.Cores.Nintendo.Mars
         // The cartridge's own boot code, which the real machine copies before running it.
         public const int BootCodeLength = 0x1000;
 
+        // Where libultra's osMemSize lives, and where the 6105's boot code expects to find it first - see Mars_Boot.md §6.5.
+        public const uint MemorySizeAt = 0x318, MemorySizeAt6105 = 0x3F0;
+
         public const ulong EntryPoint = 0xFFFF_FFFF_A400_0040;
         public const ulong StackPointer = 0xFFFF_FFFF_A400_1FF0;
 
@@ -37,6 +40,10 @@ namespace EmuSen.Cores.Nintendo.Mars
                 bus.SpImem[i * 4 + 2] = (byte)(word >> 8);
                 bus.SpImem[i * 4 + 3] = (byte)word;
             }
+
+            // What a cold boot's memory sizing would have left, since the warm path taken here skips it: the 6105's boot code copies its word to the other - see Mars_Boot.md §6.5.
+            uint sizeAt = rom.CicChip == CicChip.Nus6105 ? MemorySizeAt6105 : MemorySizeAt;
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(bus.Rdram.AsSpan((int)sizeAt), (uint)bus.Rdram.Length);
 
             cpu.Pc = EntryPoint;
             cpu.NextPc = EntryPoint + 4;

@@ -1498,6 +1498,10 @@ side — 7.03 million words in 600 frames at 1.17 µs each is 13.7 ms of drawing
 loads are the case per-primitive marks (§32) would shorten, and its DMA waits are the thread two frames behind the
 machine, which the ring allows and a snapshot's tail has to fit (`Mars_Rdp.md` §2.7).
 
+*Retired 2026-09-21: it was not the whole of the buffer. The capture reached a line into the next buffer's first page,
+which the batch had marked whole before drawing anything there; marking each draw's own rows (`Mars_Rdp.md` §2.6.2)
+took Wave Race's waits to nothing.*
+
 ### 34.1 The snapshot: the capture without the join, measured
 
 Built as `Mars_Rdp.md` §2.7 and the rewind manual's §1.8 describe: the buffer asks the core for a snapshot, Mars

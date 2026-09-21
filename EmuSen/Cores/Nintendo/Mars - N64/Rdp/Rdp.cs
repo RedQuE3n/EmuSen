@@ -303,6 +303,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             Array.Copy(other._coverageStamp, _coverageStamp, other._coverageStamp.Length);
         }
 
+        // The raw scissor rows and the other modes, which the interface's shadow bounds each draw by after a state is read - see Mars_Rdp.md §2.6.
+        public (int Top, int Bottom, ulong OtherModes) Bounds => (_scissorTop, _scissorBottom, _otherModes);
+
         public static uint Id(ulong word) => (uint)(word >> 56) & 0x3F;
 
         // What the interface's shadow takes after a state is read - see Mars_Rdp.md §2.6.

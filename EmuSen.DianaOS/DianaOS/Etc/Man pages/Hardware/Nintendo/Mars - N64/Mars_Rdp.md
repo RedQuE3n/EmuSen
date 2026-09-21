@@ -258,6 +258,47 @@ run of forty frames after that was added. The strings are built only where a fau
 the game displayed at the full sync, and Ocarina of Time's processor reading its depth buffer's page for the rows the
 list does not share. Those are the list's own speed on its thread, §2.6's last paragraph.
 
+*Retired 2026-09-21 by §2.6.2: most of what this paragraph called unavoidable was not a reader of bytes being drawn
+but a mark wider than the draw. Wave Race's scan-out wait went to nothing and Ocarina's fell, once each draw marked
+only its own rows.*
+
+### 2.6.2 Each draw marks its own rows (2026-09-21)
+
+§2.6.1 marked, at a batch's first draw, the whole scissor of both the colour and the depth image, and kept that mark
+for the batch. A census of the waits by call site, with the last word to touch each eight bytes of memory tracked
+beside them, found that most waits were for bytes **no pending word would touch**. In Ocarina of Time the RSP's
+memory transfer into the page after the depth buffer waited for about twelve thousand words when forty to six
+hundred reached its bytes, and the processor's loads of its depth buffer waited on words that reached none of them.
+In Wave Race the scan-out's capture reached a line past the end of the buffer on show, into the first page of the one
+being drawn next, which the new batch had claimed whole before drawing anything there. Super Mario 64's waits were
+genuine: the last word to write the captured bytes was ninety-four per cent of the way to the mark.
+
+**The mark is now each draw's own rows.** A triangle or rectangle marks the rows the walker can shade, from its own
+limits (`Rdp.Walker.cs`'s `UpperLimit` and `LowerLimit`, the machine's processor only, since the interface never
+drives the multiple's) to the scissor, with §2.6.1's reach past a row's end and two pixels of slack. Fill and copy
+modes draw a rectangle's bottom row whole, and the mark does. **The depth image is marked only in the one- and
+two-cycle modes with depth compared or updated**, since fill and copy never reach it. Within a batch, one extent per
+image grows in place as draws reach further, under the sequence the verifier reads the open batch by, so the batch
+still ends with one range an image; the extent keeps its first word, which the verifier's "the range started no
+later than the word" test accepts for every draw it covers. After a state is read, the shadow takes the raw scissor
+and the other modes from the processor (`Rdp.Bounds`), as it takes the images.
+
+**Measured** (`pacebench`, flat out, 7d68f4d against this with and without the walk of `Mars_Video.md` §2.12,
+interleaved, three rounds, medians, every state hash the same): the interface's waits went from 0.41 to 0.00 ms a
+frame in Wave Race, and from 2.03 to 1.54 in Ocarina; Wave Race at one ran at 263 per cent of full speed against
+240 with the walk alone, Ocarina at 223 against 217, and Mario unchanged. The verifier, in every Debug test and
+forced on for 600 frames of each of the three games in Release, found no touch outside a mark.
+
+**What this does not cover.** Ocarina's remaining waits are its processor's small reads of the depth buffer, which a
+row mark still covers because the rows are the draw's; a test of those reads against the pending draws' edges at the
+read's own row would take most of them, and was not built. Marking columns as well as rows was measured and bought
+nothing over rows alone. Two tests changed meaning: the depth image is no longer marked by a scene drawn in fill mode,
+which `Pages_no_command_reaches_are_not_marked_and_the_images_and_texture_source_are` now holds both ways, and a list
+beside the depth image is found unmarked until the draw that reaches its page is shadowed. One unrelated test,
+`A_page_only_a_load_reads_stops_writers_within_the_load_and_nobody_else`, failed once in twenty-one runs of its class:
+it counts a bystander only if the thread has not yet finished the batch, a race of the test's own that this change
+does not touch.
+
 ### 2.7 The thread held between two words
 
 *2026-09-19.* A state must hold what the thread drew, so writing one joins it (§2.6), and at a frame boundary the thread

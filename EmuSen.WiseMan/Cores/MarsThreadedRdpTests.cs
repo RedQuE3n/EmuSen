@@ -86,8 +86,13 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.NotEqual(0, threaded.Dp.MarkFor(Framebuffer));
             Assert.NotEqual(0, threaded.Dp.MarkFor(Framebuffer + (uint)(Width * 2 * (Rows - 1))));
-            Assert.NotEqual(0, threaded.Dp.MarkFor(Depth + (uint)(Width * 2 * 120)));
             Assert.NotEqual(0, threaded.Dp.MarkFor(Texture));
+
+            // Fill mode never reads or writes depth, so the depth image is not marked; with depth on, it is - see Mars_Rdp.md §2.6.2.
+            Assert.Equal(0, threaded.Dp.MarkFor(Depth + (uint)(Width * 2 * 120)));
+            threaded.Dp.Join();
+            HandOver(threaded, Scene(0x8000_8000, load: true, depth: true));
+            Assert.NotEqual(0, threaded.Dp.MarkFor(Depth + (uint)(Width * 2 * 120)));
             Assert.Equal(0, threaded.Dp.MarkFor(0x0018_0000));
             Assert.Equal(0, threaded.Dp.MarkFor(0x0038_0000));
             Assert.Equal(0, threaded.Dp.MarkFor(List));
@@ -131,12 +136,13 @@ namespace EmuSen.WiseMan.Cores
             MemoryBus atOnce = new(), threaded = new();
             threaded.Dp.Threaded = true;
 
-            ulong[] scene = Scene(0x7C1F_7C1F);
+            ulong[] scene = Scene(0x7C1F_7C1F, depth: true);
             HandOver(atOnce, scene, list);
             HandOver(threaded, scene, list);
 
+            // Words read before the last rows are shadowed find the page unmarked; those after find it marked and are bystanders - see Mars_Rdp.md §2.6.2.
             Assert.Equal(0, threaded.Dp.WaitsPerSite[10]);
-            Assert.True(threaded.Dp.Bystanders >= scene.Length);
+            Assert.True(threaded.Dp.Bystanders > 0);
 
             threaded.Dp.Join();
             Assert.Equal(atOnce.Rdram, threaded.Rdram);
@@ -633,11 +639,14 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // A full frame buffer of fill rectangles, with a depth image set and, when asked, a texture loaded from RDRAM.
-        private static ulong[] Scene(uint color, bool load = false, int loadRows = 32)
+        // One cycle with depth compared and updated draws the same rectangles through the depth image, which fill mode never touches.
+        private const ulong DepthCycle = (0x2FUL << 56) | (0UL << 52) | (3UL << 4);
+
+        private static ulong[] Scene(uint color, bool load = false, int loadRows = 32, bool depth = false)
         {
             var list = new System.Collections.Generic.List<ulong>
             {
-                FillCycle,
+                depth ? DepthCycle : FillCycle,
                 (0x3FUL << 56) | (0UL << 53) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer,
                 (0x3EUL << 56) | Depth,
                 Scissor(0, 0, Width, Rows),

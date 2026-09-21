@@ -1187,3 +1187,22 @@ lines, which at four averaged by two is 6.4 MB where a progressive frame needs 2
 submission, which the VI has, and was left for simplicity. The other half of the plan's phase 7, the frontend
 presenting the device's image, is still not started; with the average on the device, what it would now remove is a
 transfer of at most the frame itself, at one averaged by four 1.6 MB.
+
+## 16. Handing the device's image to the frontend: measured, and not built (2026-09-21)
+
+The last half of the plan's phase 7 was the frontend presenting the device's own image, with no readback. It is
+feasible here: Avalonia 12.1 imports an outside device's image and semaphores (`ICompositionGpuInterop`,
+`CompositionDrawingSurface.UpdateWithSemaphoresAsync`), and this machine's radeonsi GL offers
+`GL_EXT_memory_object_fd` and `GL_EXT_semaphore_fd`. It would couple the core to the frontend through a new optional
+interface, need exportable images and semaphores on Mars's device, and be verifiable only in a real window.
+
+So the frontend's side was measured first (`EmuSen_Serenity.md` §2.5). At four, Mistress's render thread spends about
+three milliseconds a frame copying and uploading the picture, and the game runs at full speed at every multiple. What
+the interop would remove, that copy and upload plus the deferred thread's readback and `Compose`, is off the thread
+that bounds the frame rate on this machine. **It is not built.** The decision is this machine's: on a weak one, with
+an integrated adapter and fewer cores, 23.6 MB a frame copied and uploaded at fifty frames a second is over a
+gigabyte a second of memory traffic twice over, and the measurement should be taken there before the question is
+reopened. The same reading found two cheaper things: the frame is line-doubled on the processor, half of it
+duplicate, and the control redraws frames it has already shown; both are the frontend's to fix, and both help every
+core, not only this path.
+

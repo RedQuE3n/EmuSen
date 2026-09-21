@@ -347,7 +347,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         {
             int scale = job.Scale;
             Picture picture = scale > 1 ? job.ScaledPicture : job.Picture;
-            uint origin = scale > 1 ? job.Origin * (uint)(scale * scale) : job.Origin;
+            // Aligned as the console's twenty-four-bit register is, then scaled: the product may pass twenty-four bits - see Mars_Video.md §2.11.
+            uint aligned = job.Wide ? job.Origin & 0xFF_FFFC : job.Origin & 0xFF_FFFE;
+            uint origin = scale > 1 ? aligned * (uint)(scale * scale) : aligned;
             int width = job.Width * scale;
             bool resample = job.Resample;
             bool wide = job.Wide;
@@ -609,14 +611,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
             if (wide)
             {
-                uint address = (origin & 0xFF_FFFC) + (uint)at * 4;
+                uint address = origin + (uint)at * 4;
                 if (address + 3 >= _sourceLength) return default;
 
                 int index = Within(address, 4);
                 return new Pixel(rdram[index], rdram[index + 1], rdram[index + 2], (rdram[index + 3] >> 5) & 7);
             }
 
-            uint word = (origin & 0xFF_FFFE) + (uint)at * 2;
+            uint word = origin + (uint)at * 2;
             if (word + 1 >= _sourceLength) return default;
 
             int half = Within(word, 2);
@@ -632,7 +634,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         private int Within(uint address, int size)
         {
             uint index = address - _sourceBase;
-            if (index + (uint)size > (uint)_sourceCount) throw new System.InvalidOperationException($"The scan reached frame buffer address {address:X} outside the lines captured for it.");
+            if (index + (uint)size > (uint)_sourceCount)
+                throw new System.InvalidOperationException($"The scan reached frame buffer address {address:X} outside the lines captured for it, {_sourceBase:X} for {_sourceCount:X} bytes.");
 
             return (int)index;
         }

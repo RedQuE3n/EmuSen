@@ -335,6 +335,46 @@ lose their steps at 2x and the textures resolve further at 4x. The cost is the d
 table, plus the average, which is a few milliseconds at four on the composing thread and was not separately timed.
 `The_average_of_a_square_is_its_rounded_mean_channel_by_channel` holds the arithmetic.
 
+### 2.11 Fixed: the walk at a multiple lost the origin's high bits
+
+*2026-09-21. Found while measuring the GPU path at four (`Mars_Gpu.md` §11.5); the defect is older than that work and
+has nothing to do with it.*
+
+**What happened.** At three or four, a frame buffer above one megabyte scanned out as the wrong part of memory on the
+immediate path and crashed the deferred one — *"the scan reached frame buffer address DA9400 outside the lines
+captured for it"*. Deferred presentation is on by default, so a player choosing an internal resolution of four in a
+game that keeps its frame buffer high in memory, which Super Mario 64 does, saw the emulator stop.
+
+**Why.** The VI's origin register holds twenty-four bits, and the console never needs more: eight megabytes is
+twenty-three. The memory at a multiple is bigger by the multiple squared, and at four an eight-megabyte machine's is
+128 megabytes, which is twenty-seven bits. `Walk` computed the origin at the multiple as `job.Origin × n²` and passed
+it to `Fetch`, and `Fetch` then aligned it with `& 0xFF_FFFE`: a mask that aligns *and* keeps twenty-four bits. On
+the console the second part is invisible. At a multiple it cut 0x3DA9400 to 0xDA9400. `ReachScaled`, which decides
+what a deferred scan captures, aligns the register's value first and multiplies after, so it held the right lines,
+and the walk then reached for lines it had not been given.
+
+**The two paths failed differently, and one of them silently.** The deferred path checks every read against what it
+captured, so it threw. The immediate path reads the whole shadow, so every address was in bounds and nothing was
+checked: it drew whatever lay at the truncated address, which is usually memory nothing had drawn into. That is the
+worse of the two failures, because it looks like a picture.
+
+**The fix** aligns the register's value first and multiplies after, in `Walk` as `ReachScaled` and `Reach` already
+did, and `Fetch` stops masking what it is given. For the console's own scan the address is what it was, bit for bit,
+since the aligned twenty-four-bit value is exactly what `Fetch` used to compute; the golden probe at one is unchanged.
+
+**Coverage.** `A_frame_buffer_high_in_memory_scans_out_at_a_multiple_as_a_low_one_does` draws eight bands of colour
+into a frame buffer at 512 kilobytes and again at three megabytes, and requires the two scans to be the same picture,
+at two, three and four, on the immediate path and on the deferred one. Against the unfixed code the two cases at two
+pass, since three megabytes times four is twelve and fits; the four at three and four fail, the immediate ones on the
+picture and the deferred ones on the capture. All six pass with the fix. At two the defect is still reachable in
+principle, by a frame buffer above four megabytes on an eight-megabyte machine, which this test does not construct.
+
+**What this retires.** `Mars_Rdp.md` §11.1's speed numbers at four, and `Mars_Gpu.md` §11 and §12's claim that the
+device and the CPU path agree at four, were all taken on this defect. The timings stand, since a walk over the wrong
+lines is the same amount of work as a walk over the right ones. The agreement at four stood only in the sense that
+both paths were wrong in the same way for any game whose frame buffer is above a megabyte, and it was taken again
+with the fix (`Mars_Gpu.md` §11.5).
+
 ## 3. What the differential says
 
 ### 3.1 The first run, and the bug it found

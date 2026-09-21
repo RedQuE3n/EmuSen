@@ -391,3 +391,67 @@ paths therefore agree for every input the machine can present. Recorded rather t
 - **A texture image of four bits**, whose loads the C# already declines.
 - **Speed.** Nothing here was measured. The texture memory ring is eight kilobytes a snapshot, and a batch of a
   real game's frame may hold many; whether that upload matters is phase 5's question, not this one's.
+
+## 8. Phase 3, part two: filtering, the palette and the level of detail (2026-09-21)
+
+With this the one-cycle mode is whole. `Rdp.Filter.cs` and `Rdp.Lod.cs` are ported, and the only primitive the device
+still declines is one whose combiner reads its own previous result (§6.2). `TheDeviceShadesThisPrimitive` is now that
+single test.
+
+### 8.1 What was ported
+
+**Four texels.** `FourTexels` with `Texels`, `PaletteTexels`, `NearestPaletteTexels`, `Wrapped`, `Interpolated`,
+`PaletteIndex` and `PaletteColor`. The second cycle's conversion path is left out, since the one-cycle mode never
+asks for it; it belongs with phase 4. The luma crossing between the two chroma triangles is kept, as is the
+mid-texel's average and YUV's half-width chroma.
+
+**The level of detail.** `LevelOfDetail`, `LevelSignals`, `PixelLevelOfDetail`, `AfterSpanTile`, `Movement` and
+`Saturated`, with `Log2` computed by `findMSB` where the C# tabulates it. §7.3 argued this stage was per-pixel; it
+is, and the row record's three next-row coordinates are what the argument needed. The fraction the combiner reads
+is now a value an invocation computes, so `CombineColorC == 13` and `CombineAlphaC == 0` no longer keep a primitive
+back.
+
+### 8.2 Coverage, and three more corners a scene does not reach
+
+The scene of §7.4 gained the filter and palette mode bits, a palette loaded through a tile of its own, mask values
+up to ten, and the level-of-detail bits with a maximum level per triangle. Fourteen mutants of the filter were run
+against it and eleven died. The three survivors were the same kind of finding as before, and each needed something
+the scene could not produce by chance:
+
+- **The mid texel** wants both fractions at exactly half a texel, which a moving coordinate hits only by accident.
+- **The wrap** returns a different step only on the mask's last texel, and only for masks of nine or ten, which the
+  scene did not generate.
+- **YUV's chroma step** needs the four-texel path on a YUV tile without a palette.
+
+`The_filters_corners_reach_the_picture` is the answer: 180 flat triangles, one per format, size, mask and fraction,
+each holding one coordinate over all its pixels, with filtering and the mid texel on and the palette on alternate
+cases. It caught all three — but only after one more measured correction. **A tile line of eight hides the wrap**:
+the wrap's two answers differ by 768 rows, and at eight words a row that is 49,152 bytes, an exact multiple of the
+four-kilobyte address mask, so both land on the same byte. The test now uses lines of eight, nine and ten, and an
+odd line makes the difference visible.
+
+Twelve mutants of the level of detail followed, of which ten died at once. `The_level_of_detail_reaches_the_picture`
+was built for the other two: 112 flat triangles sweeping fourteen measured movements against all eight maximum
+levels, with a combiner whose colour *is* the level's fraction, so that the fraction is the picture. Two more scene
+faults had to be corrected in it, both found by looking at what the numbers could be rather than by reading the
+code:
+
+- The first version stepped the coordinate by exact powers of two. The fraction is `(lod << 3) >> level`, and when
+  the measurement is a power of two that is 0x100 for every level, so the fraction was zero in all 64 cases.
+- The measurements only reached 0x1034, and two of the bits that declare a pixel distant sit at 0x2000 and 0x4000.
+  The sweep now runs to 0xC600, which also covers the multiples, since a step is divided by the multiple.
+
+### 8.3 One more equivalent mutant, proven
+
+`Saturated` is `(m & 0x7FFF) | ((m & 0x1C000) != 0 ? 0x4000 : 0)`. Narrowing the test to `0x18000` changes nothing:
+the bit the test would drop is 0x4000, and `m & 0x7FFF` has already kept it, so the only case the two tests decide
+differently is one where the OR contributes a bit that is present either way. Recorded beside §7.6.
+
+### 8.4 What the one-cycle mode still does not cover
+
+- **The combiner's previous result**, the one true carry (§6.2), and the reason a primitive is still counted rather
+  than drawn. Phase 4 decides between recomputing the neighbour and drawing those primitives on the CPU.
+- **Copy mode** and **two-cycle**, both phase 4's.
+- **Eight-bit colour images** (§5.1) and **spans past the image's width** (§5.4), unchanged.
+- **Speed.** Still unmeasured for textures. The texture memory ring is the thing to watch: eight kilobytes a
+  snapshot, and a game that loads a texture between every primitive would upload one per primitive.

@@ -41,13 +41,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             RecordOneCycle(gpu, rows, majorOnLeft, tile, maxLevel);
         }
 
-        // The previous pixel's result is a carry; four texels and the level of detail are stages not ported yet - see §6.2 and §7.
+        // The combiner's own previous result is the one carry an invocation per pixel cannot see - see §6.2.
         private bool TheDeviceShadesThisPrimitive()
         {
             bool lodFraction = CombineColorC == 13 || CombineAlphaC == 0;
             bool combined = CombineColorA == 0 || CombineColorB == 0 || CombineColorD == 0 || CombineColorC == 0 || CombineColorC == 7
                 || CombineAlphaA == 0 || CombineAlphaB == 0 || CombineAlphaD == 0;
-            return !combined && !lodFraction && !LodEnabled && !SampleFour && !PaletteEnabled;
+            return !combined;
         }
 
         // The eight tiles as the shader reads them, four words each - see §7.1.
@@ -77,6 +77,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             for (int c = 0; c < 3; c++) steps[AttributeS + c] = direction * _textureStep[c];
 
             (bool texel0, bool texel1) = CombinerTexels();
+            bool readsLodFraction = CombineColorC == 13 || CombineAlphaC == 0;
             uint memory = gpu.TextureMemory(TextureMemory, _textureMemoryChanged);
             Span<uint> packed = gpu.Tiles(_tilesChanged, out uint tileSet);
             if (!packed.IsEmpty) RecordTiles(packed);
@@ -115,7 +116,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             p[39] = Bit(0, texel0) | Bit(1, texel1) | Bit(2, Perspective) | Bit(3, SampleFour) | Bit(4, PaletteEnabled)
                 | Bit(5, PaletteIntensityAlpha) | Bit(6, MidTexel) | Bit(7, BilinearFirstCycle) | Bit(8, DetailEnabled)
-                | Bit(9, SharpenEnabled) | Bit(10, LodEnabled) | Bit(11, ConvertOne);
+                | Bit(9, SharpenEnabled) | Bit(10, LodEnabled) | Bit(11, ConvertOne) | Bit(12, readsLodFraction);
             p[58] = memory;
             p[59] = tileSet;
             p[60] = (uint)tile;
@@ -141,7 +142,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
                 int length = (right - left) + clipped;
                 bool nextRowDrawn = y + 1 <= rows.Last && _spanDrawn[y + 1];
-                row[24] = Bit(0, nextRowDrawn) | Bit(1, length > 7) | Bit(2, length == 7);
+                row[24] = Bit(0, nextRowDrawn) | Bit(1, length > 7) | Bit(2, length == 7) | Bit(3, length == 6);
                 if (nextRowDrawn)
                     for (int c = 0; c < 3; c++) row[21 + c] = (uint)_spanAttributes[(y + 1) * Attributes + AttributeS + c];
 

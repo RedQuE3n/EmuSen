@@ -181,12 +181,12 @@ namespace EmuSen.WiseMan.Cores
             | ((ulong)(uint)((v[2] >> shift) & 0xFFFF) << 16) | (uint)((v[3] >> shift) & 0xFFFF);
 
         // A triangle carrying shade, texture and depth; its texture coordinates land inside a thirty-two texel tile and step gently.
-        private static ulong[] TexturedTriangle(double x1, double y1, double x2, double y2, double x3, double y3, int mode, int tile, int index, ref uint s)
+        private static ulong[] TexturedTriangle(double x1, double y1, double x2, double y2, double x3, double y3, int mode, int tile, int index, int maxLevel, ref uint s)
         {
             ulong[] shaded = Triangle(x1, y1, x2, y2, x3, y3, ref s);
             var words = new ulong[Rdp.Length(0x0F)];
             Array.Copy(shaded, words, 12);
-            words[0] = (words[0] & ~(0xFFUL << 56)) | (0x0FUL << 56) | ((ulong)tile << 48);
+            words[0] = (words[0] & ~(0xFFUL << 56)) | (0x0FUL << 56) | ((ulong)tile << 48) | ((ulong)maxLevel << 51);
             words[20] = shaded[12];
             words[21] = shaded[13];
 
@@ -246,9 +246,9 @@ namespace EmuSen.WiseMan.Cores
         private static ulong TexturedCombine(ref uint s)
         {
             int a = Pick(ref s, 1, 2, 3, 4, 5, 6, 7), b = Pick(ref s, 1, 2, 3, 4, 5, 7);
-            int c = Pick(ref s, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 14, 15, 31), d = Pick(ref s, 1, 2, 3, 4, 5, 6, 7);
+            int c = Pick(ref s, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 31), d = Pick(ref s, 1, 2, 3, 4, 5, 6, 7);
             int alphaA = Pick(ref s, 1, 2, 3, 4, 5, 6, 7), alphaB = Pick(ref s, 1, 2, 3, 4, 5, 7);
-            int alphaC = Pick(ref s, 1, 2, 3, 4, 5, 6, 7), alphaD = Pick(ref s, 1, 2, 3, 4, 5, 6, 7);
+            int alphaC = Pick(ref s, 0, 1, 2, 3, 4, 5, 6, 7), alphaD = Pick(ref s, 1, 2, 3, 4, 5, 6, 7);
 
             ulong high = (ulong)((a << 20) | (c << 15) | (alphaA << 12) | (alphaC << 9) | (a << 5) | c);
             ulong low = unchecked((uint)((b << 28) | (b << 24) | (alphaA << 21) | (alphaC << 18) | (d << 15) | (alphaB << 12) | (alphaD << 9) | (d << 6) | (alphaB << 3) | alphaD));
@@ -275,11 +275,11 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < Formats.Length * 3; i++)
             {
                 (int format, int size) = Formats[i % Formats.Length];
-                int tile = (int)(Next(ref s) & 7);
+                int tile = (int)(Next(ref s) % 7u);
                 int line = 4 + (int)(Next(ref s) & 7);
                 int memory = (int)(Next(ref s) % 3u) * 64;
                 int shiftS = (int)(Next(ref s) % 16u), shiftT = (int)(Next(ref s) % 16u);
-                int maskS = (int)(Next(ref s) % 6u), maskT = (int)(Next(ref s) % 6u);
+                int maskS = (int)(Next(ref s) % 11u), maskT = (int)(Next(ref s) % 11u);
                 uint wraps = Next(ref s);
 
                 list.Add((0x35UL << 56) | ((ulong)format << 53) | ((ulong)size << 51) | ((ulong)line << 41) | ((ulong)memory << 32) | ((ulong)tile << 24)
@@ -287,10 +287,16 @@ namespace EmuSen.WiseMan.Cores
                     | ((wraps & 4) << 7) | ((wraps & 8) << 5) | ((ulong)maskS << 4) | (uint)shiftS);
                 list.Add((0x34UL << 56) | ((ulong)tile << 24) | ((31UL << 2) << 12) | (31UL << 2));
 
+                // A palette in the upper half of texture memory, loaded through a tile of its own, so that the indexed formats have one to read.
+                list.Add((0x35UL << 56) | (2UL << 51) | (0x100UL << 32) | (7UL << 24));
+                list.Add((0x30UL << 56) | (7UL << 24) | ((ulong)(255 << 2) << 12));
+
                 // The clean list drops the depth and alpha tests, so that a divided coordinate reaches the picture at every pixel it covers rather than at a few.
                 ulong low = mode == 1 ? Next(ref s) & 0x7FEE : Next(ref s) & 0x7FFF;
                 list.Add((0x2FUL << 56) | ((ulong)(Next(ref s) & 3) << 38) | ((ulong)(Next(ref s) & 3) << 36)
                     | (mode == 0 ? 0 : 1UL << 51) | ((ulong)(Next(ref s) & 1) << 43)
+                    | ((ulong)(Next(ref s) & 1) << 45) | ((ulong)(Next(ref s) & 1) << 47) | ((ulong)(Next(ref s) & 1) << 46) | ((ulong)(Next(ref s) & 1) << 44)
+                    | ((ulong)(Next(ref s) & 1) << 48) | ((ulong)(Next(ref s) & 1) << 49) | ((ulong)(Next(ref s) & 1) << 50)
                     | ((ulong)(Next(ref s) & 3) << 30) | ((ulong)(Next(ref s) & 3) << 26) | ((ulong)(Next(ref s) & 3) << 22) | ((ulong)(Next(ref s) & 3) << 18)
                     | low);
                 list.Add(TexturedCombine(ref s));
@@ -300,27 +306,27 @@ namespace EmuSen.WiseMan.Cores
                 // One primitive of each list carries no texture coordinates at all: a w of zero is a state the divider reaches and random values do not.
                 if (i == Formats.Length && mode != 0)
                 {
-                    ulong[] degenerate = TexturedTriangle(10, 10, 300, 40, 40, 200, 2, tile, i, ref s);
+                    ulong[] degenerate = TexturedTriangle(10, 10, 300, 40, 40, 200, 2, tile, i, 0, ref s);
                     for (int at = 12; at < 20; at++) degenerate[at] = 0;
                     list.AddRange(degenerate);
                 }
 
                 double cx = Next(ref s) % Width, cy = Next(ref s) % Rows;
                 double Near(double c) => c + (int)(Next(ref s) % 90) - 45 + (Next(ref s) & 3) / 4.0;
-                list.AddRange(TexturedTriangle(Near(cx), Near(cy), Near(cx), Near(cy), Near(cx), Near(cy), mode, tile, i, ref s));
+                list.AddRange(TexturedTriangle(Near(cx), Near(cy), Near(cx), Near(cy), Near(cx), Near(cy), mode, tile, i, (int)(Next(ref s) & 7), ref s));
             }
 
             return list.ToArray();
         }
 
         // A triangle whose texture coordinates do not move: every pixel of it shows the one coordinate the divider answered.
-        private static ulong[] FlatTriangle(double left, double top, int sw, int st, int w, int tile)
+        private static ulong[] FlatTriangle(double left, double top, int sw, int st, int w, int tile, int dsdx = 0, int maxLevel = 0)
         {
             const int id = 0x0B;
             double right = left + 14, bottom = top + 6;
 
             var words = new ulong[Rdp.Length(id)];
-            words[0] = ((ulong)id << 56) | (1UL << 55) | ((ulong)tile << 48)
+            words[0] = ((ulong)id << 56) | (1UL << 55) | ((ulong)tile << 48) | ((ulong)maxLevel << 51)
                 | ((ulong)(uint)(((int)Math.Floor(bottom * 4)) & 0x3FFF) << 32)
                 | ((ulong)(uint)(((int)Math.Floor(bottom * 4)) & 0x3FFF) << 16) | (uint)(((int)Math.Floor(top * 4)) & 0x3FFF);
             words[1] = Edge(right, 0);
@@ -328,7 +334,9 @@ namespace EmuSen.WiseMan.Cores
             words[3] = Edge(right, 0);
 
             int[] value = { sw, st, w, 0 };
+            int[] across = { dsdx, dsdx, 0, 0 };
             (words[4], words[6]) = (Pack(value, 16), Pack(value, 0));
+            (words[5], words[7]) = (Pack(across, 16), Pack(across, 0));
             return words;
         }
 
@@ -406,6 +414,140 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, gpu.PrimitivesNotShaded);
             Assert.True(colours.Count > 16, $"only {colours.Count} colours: the divider's answers are not reaching the picture");
             _output.WriteLine($"{device.Name} at {scale}x: {colours.Count} colours over {at} coordinates");
+        }
+
+        // The filter's own corners, which a scene of moving coordinates reaches by accident if at all: the mid texel, which
+        // wants both fractions at exactly half a texel, and the wrap, which wants a coordinate on the mask's last texel.
+        [Theory]
+        [MemberData(nameof(DevicesAndScales))]
+        public void The_filters_corners_reach_the_picture(string deviceName, int scale)
+        {
+            if (deviceName.Length == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            using GpuDevice device = GpuDevice.TryCreate(deviceName, out string report) ?? throw new InvalidOperationException(report);
+            using GpuRasteriser? gpu = GpuRasteriser.TryCreate(device, (long)new MemoryBus().Rdram.Length * scale * scale, out report);
+            if (gpu is null) { _output.WriteLine($"not run: {report}"); return; }
+
+            var list = new List<ulong>
+            {
+                FillCycle,
+                ColorImage(Framebuffer, 2), Scissor(0, 0, Width * 4, Rows * 4), FillColor(0x2109_8421), FillRectangle(0, 0, Width * 4 - 4, Rows * 4 - 4),
+                (0x3DUL << 56) | (2UL << 51) | (63UL << 32) | TextureSource,
+                (0x35UL << 56) | (2UL << 51) | (0x100UL << 32) | (7UL << 24),
+                (0x30UL << 56) | (7UL << 24) | ((ulong)(255 << 2) << 12),
+            };
+
+            int at = 0;
+            foreach ((int format, int size) in Formats)
+            {
+                foreach (int mask in new[] { 5, 9, 10 })
+                {
+                    foreach (int fraction in new[] { 0, 0x10, 0x1F })
+                    {
+                        bool palette = (at & 1) != 0;
+
+                        // An odd line as well as an even one: with a line of eight the wrap's two answers differ by a whole
+                        // multiple of the address mask, so the fetch lands on the same byte and the difference is invisible.
+                        int line = 8 + at % 3;
+
+                        list.Add((0x35UL << 56) | ((ulong)format << 53) | ((ulong)size << 51) | ((ulong)line << 41)
+                            | ((ulong)mask << 14) | ((ulong)mask << 4));
+                        list.Add((0x34UL << 56) | ((31UL << 2) << 12) | (31UL << 2));
+
+                        // One cycle, no perspective, no dither, filtering on, the mid texel on, and the palette on alternate cases.
+                        list.Add((0x2FUL << 56) | (3UL << 38) | (3UL << 36) | (1UL << 43) | (1UL << 45) | (1UL << 44)
+                            | (palette ? 1UL << 47 : 0) | ((at & 2) != 0 ? 1UL << 46 : 0));
+                        list.Add(TexelOnlyCombine());
+
+                        // The mask's last texel for the wrap, an ordinary one otherwise, and the fraction on top of it.
+                        int coordinate = ((mask >= 9 ? (1 << mask) - 1 : 20) << 5) | fraction;
+                        list.AddRange(FlatTriangle(2 + at % 20 * 16, 2 + at / 20 * 8, coordinate << 16, coordinate << 16, 0, 0));
+                        at++;
+                    }
+                }
+            }
+
+            list.Add(0x29UL << 56);
+            ulong[] words = list.ToArray();
+
+            gpu.Clear();
+            var cpu = OnTheCpu(words, scale);
+            AssertIdentical(cpu, OnTheDevice(gpu, words, scale), $"at {scale}x on {device.Name}");
+
+            var colours = new HashSet<int>();
+            long image = (long)Framebuffer * scale * scale;
+            for (int y = 0; y < Rows * scale; y++)
+                for (int x = 0; x < Width * scale; x++)
+                    colours.Add((cpu.Rdram[image + (y * Width * scale + x) * 2] << 8) | cpu.Rdram[image + (y * Width * scale + x) * 2 + 1]);
+
+            Assert.Equal(0, gpu.PrimitivesNotShaded);
+            Assert.True(colours.Count > 16, $"only {colours.Count} colours: the filter's answers are not reaching the picture");
+            _output.WriteLine($"{device.Name} at {scale}x: {colours.Count} colours over {at} tile settings");
+        }
+
+        // The level of detail decides a pixel is distant when the level it measured is the tile's last, and the only thing
+        // that turns on that equality is the fraction the combiner reads. Random movement lands on it rarely, so it is swept here.
+        [Theory]
+        [MemberData(nameof(DevicesAndScales))]
+        public void The_level_of_detail_reaches_the_picture(string deviceName, int scale)
+        {
+            if (deviceName.Length == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            using GpuDevice device = GpuDevice.TryCreate(deviceName, out string report) ?? throw new InvalidOperationException(report);
+            using GpuRasteriser? gpu = GpuRasteriser.TryCreate(device, (long)new MemoryBus().Rdram.Length * scale * scale, out report);
+            if (gpu is null) { _output.WriteLine($"not run: {report}"); return; }
+
+            var list = new List<ulong>
+            {
+                FillCycle,
+                ColorImage(Framebuffer, 2), Scissor(0, 0, Width * 4, Rows * 4), FillColor(0x2109_8421), FillRectangle(0, 0, Width * 4 - 4, Rows * 4 - 4),
+                (0x3DUL << 56) | (2UL << 51) | (63UL << 32) | TextureSource,
+                (0x35UL << 56) | (2UL << 51) | (8UL << 41),
+                (0x34UL << 56) | ((31UL << 2) << 12) | (31UL << 2),
+            };
+
+            // None of these is a power of two, which would leave the fraction at zero whatever the level; the large ones
+            // reach the two high bits of the measurement that declare a pixel distant on their own, at one multiple or another.
+            int[] movements = { 35, 70, 141, 290, 583, 1200, 2501, 5003, 0x2100, 0x3300, 0x4200, 0x6300, 0x8400, 0xC600 };
+
+            int at = 0;
+            foreach (int movement in movements)
+            {
+                for (int maxLevel = 0; maxLevel < 8; maxLevel++)
+                {
+                    // Plain: neither sharpen nor detail, which is the pair that makes a distant pixel's fraction the saturated one.
+                    list.Add((0x2FUL << 56) | (3UL << 38) | (3UL << 36) | (1UL << 48) | (1UL << 43) | (1UL << 45));
+                    list.Add(LodFractionCombine());
+                    list.AddRange(FlatTriangle(2 + at % 8 * 39, 2 + at / 8 * 15, 0, 0, 0, 0, movement << 16, maxLevel));
+                    at++;
+                }
+            }
+
+            list.Add(0x29UL << 56);
+            ulong[] words = list.ToArray();
+
+            gpu.Clear();
+            var cpu = OnTheCpu(words, scale);
+            AssertIdentical(cpu, OnTheDevice(gpu, words, scale), $"at {scale}x on {device.Name}");
+
+            var colours = new HashSet<int>();
+            long image = (long)Framebuffer * scale * scale;
+            for (int y = 0; y < Rows * scale; y++)
+                for (int x = 0; x < Width * scale; x++)
+                    colours.Add((cpu.Rdram[image + (y * Width * scale + x) * 2] << 8) | cpu.Rdram[image + (y * Width * scale + x) * 2 + 1]);
+
+            Assert.Equal(0, gpu.PrimitivesNotShaded);
+            Assert.True(colours.Count > 4, $"only {colours.Count} colours: the level's fraction is not reaching the picture");
+            _output.WriteLine($"{device.Name} at {scale}x: {colours.Count} colours over {at} levels");
+        }
+
+        // The colour is the level's own fraction: (0x100 - 0) times it, which lands in the picture unchanged.
+        private static ulong LodFractionCombine()
+        {
+            const int a = 6, b = 8, c = 13, d = 7, alphaA = 6, alphaB = 7, alphaC = 7, alphaD = 7;
+            ulong high = (ulong)((a << 20) | (c << 15) | (alphaA << 12) | (alphaC << 9) | (a << 5) | c);
+            ulong low = unchecked((uint)((b << 28) | (b << 24) | (alphaA << 21) | (alphaC << 18) | (d << 15) | (alphaB << 12) | (alphaD << 9) | (d << 6) | (alphaB << 3) | alphaD));
+            return (0x3CUL << 56) | (high << 32) | low;
         }
 
         private static ulong TexelOnlyCombine()

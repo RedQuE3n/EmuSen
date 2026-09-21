@@ -160,9 +160,9 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Programs the VI for a 320 by 240 picture with every pass on, then paints the frame buffer with a word that advances each pass.
-        private static byte[] Painter()
+        private static byte[] Painter(uint control = DitherFilter | DivotOn | GammaOn)
         {
-            uint[] registers = Registers(2, 0, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, control: DitherFilter | DivotOn | GammaOn);
+            uint[] registers = Registers(2, 0, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, control: control);
             registers[7] = 0xC15;
 
             var program = new MipsAssembler().Lui(A0, 0xA440);
@@ -175,6 +175,112 @@ namespace EmuSen.WiseMan.Cores
             program.Lui(A1, 0xA020).Ori(T1, Zero, 0x9600).Lui(T0, 0x0101).Ori(T0, T0, 0x0101).Addu(T2, T2, T0)
                 .Sw(T2, A1, 0).Addiu(A1, A1, 4).Addiu(T1, T1, -1).Bne(T1, Zero, -4).Nop()
                 .Beq(Zero, Zero, -11).Nop();
+
+            return SyntheticN64Rom.BuildRunningFromRdram(program.ToArray());
+        }
+
+        // Rows sent once are the even rows of the repeated frame, shown twice; an interlaced frame has none to repeat - see EmuSen_Multicore.md §15.
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public void Rows_sent_once_are_the_repeated_frames_own_rows(bool deferred, bool interlaced)
+        {
+            const uint Serrated = 1 << 6;
+            string path = SyntheticN64Rom.WriteTemp(Painter(DitherFilter | DivotOn | GammaOn | (interlaced ? Serrated : 0)));
+            try
+            {
+                var repeated = new MarsCore { DeferredPresentation = deferred };
+                var once = new MarsCore { DeferredPresentation = deferred, RepeatRows = false };
+                repeated.LoadRom(path);
+                once.LoadRom(path);
+
+                for (int frame = 1; frame <= 6; frame++)
+                {
+                    repeated.RunFrame();
+                    once.RunFrame();
+                    if (frame < 3) continue;
+
+                    byte[] full = repeated.GetFrameBufferRgba(), half = once.GetFrameBufferRgba();
+                    int rowBytes = repeated.ScreenWidth * 4;
+                    Assert.Equal(repeated.ScreenWidth, once.ScreenWidth);
+                    Assert.Equal(1, repeated.RowRepeat);
+
+                    if (interlaced)
+                    {
+                        Assert.Equal(1, once.RowRepeat);
+                        Assert.Equal(full, half);
+                        continue;
+                    }
+
+                    Assert.Equal(2, once.RowRepeat);
+                    Assert.Equal(repeated.ScreenHeight, once.ScreenHeight * 2);
+                    for (int row = 0; row < once.ScreenHeight; row++)
+                        Assert.True(full.AsSpan(row * 2 * rowBytes, rowBytes).SequenceEqual(half.AsSpan(row * rowBytes, rowBytes)), $"frame {frame}, row {row}");
+                }
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        // An unchanged serial promises unchanged pixels; a still picture keeps it once shown, a moving one moves it every frame - see EmuSen_Multicore.md §14.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void The_frame_serial_moves_when_the_picture_does_and_only_then(bool deferred)
+        {
+            foreach ((string Name, byte[] Image, bool Moving) rom in new[] { ("painter", Painter(), true), ("still", Still(), false) })
+            {
+                string path = SyntheticN64Rom.WriteTemp(rom.Image);
+                try
+                {
+                    var core = new MarsCore { DeferredPresentation = deferred };
+                    core.LoadRom(path);
+
+                    long serial = core.FrameSerial;
+                    byte[] pixels = core.GetFrameBufferRgba().ToArray();
+                    int moved = 0;
+                    for (int frame = 1; frame <= 12; frame++)
+                    {
+                        core.RunFrame();
+                        long now = core.FrameSerial;
+                        byte[] shown = core.GetFrameBufferRgba().ToArray();
+
+                        if (now == serial) Assert.True(pixels.AsSpan().SequenceEqual(shown), $"{rom.Name}, frame {frame}: the serial stood still and the picture did not");
+                        else if (frame > 4) moved++;
+
+                        serial = now;
+                        pixels = shown;
+                    }
+
+                    if (rom.Moving) Assert.Equal(8, moved);
+                    else if (deferred) Assert.Equal(0, moved);
+                }
+                finally
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        // The painter's registers, the frame buffer painted once, and then nothing: every scan after the first repeats it.
+        private static byte[] Still()
+        {
+            uint[] registers = Registers(2, 0, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, control: DitherFilter | DivotOn | GammaOn);
+            registers[7] = 0xC15;
+
+            var program = new MipsAssembler().Lui(A0, 0xA440);
+            for (int i = 0; i < registers.Length; i++)
+            {
+                program.Lui(T0, (ushort)(registers[i] >> 16)).Ori(T0, T0, (ushort)registers[i]).Sw(T0, A0, (short)(i * 4));
+            }
+
+            program.Lui(A1, 0xA020).Ori(T1, Zero, 0x9600).Lui(T2, 0x3C5A).Ori(T2, T2, 0x96A5)
+                .Sw(T2, A1, 0).Addiu(A1, A1, 4).Addiu(T1, T1, -1).Bne(T1, Zero, -4).Nop()
+                .Beq(Zero, Zero, -1).Nop();
 
             return SyntheticN64Rom.BuildRunningFromRdram(program.ToArray());
         }

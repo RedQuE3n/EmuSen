@@ -329,3 +329,44 @@ refused, since a range is advice about what is useful, not about what is safe. *
 between frames.** Mars's setters join threads; a frontend calls them where its other requests to the core run.
 
 Only Mars offers any today (`Mars_Core.md` §10). A console with none gets an empty list and a page that says so.
+
+## 14. A picture that has not changed (2026-09-21)
+
+`IFrameSerial` is a core's promise about its own frame: `FrameSerial` changes whenever `GetFrameBufferRgba` may return
+a different picture, and **an unchanged value means unchanged pixels**. The promise runs one way only. A core may
+advance the serial without the picture changing, which costs a frontend a needless copy and nothing else; it may
+never keep the serial while the picture changes, which would leave a stale frame on the screen. A core that cannot
+tell does not implement it, `EmulatorSession.FrameSerial` is null for it, and a frontend reads null as "new every
+frame", which is what it did before.
+
+Mars implements it because it knows exactly. Its frame is replaced in three places, the reset to a blank frame, the
+immediate composition, and the swap when a deferred walk completes (`Mars_Video.md` §2.7), and the serial advances
+in those three places and nowhere else. A scan skipped as a repeat (`Mars_Video.md` §2.8) replaces nothing, so the
+many N64 games that draw every second or third field keep one serial across the fields they did not draw. In
+immediate presentation every frame is composed, so the serial moves every frame; the promise holds and the saving is
+lost, which is the right way round.
+
+Mistress offers the frame control a picture only when the serial moved (`EmuSen_Serenity.md` §2.6).
+`The_frame_serial_moves_when_the_picture_does_and_only_then` holds the promise frame by frame in both presentation
+modes, and holds that a still picture keeps its serial under deferred presentation and a moving one moves it every
+frame; one mutant advancing the serial every frame and one not advancing it at the swap both fail it.
+
+## 15. Rows a core would otherwise repeat (2026-09-21)
+
+Mars repeats every row of a progressive field so that a frontend drawing the buffer at its own aspect shows the
+picture the right way up (`Mars_Core.md` §2). At four that makes a frame of 2,560 by 2,304 whose every other row is a
+copy of the one above, and the frontend copies and uploads all of it (`EmuSen_Serenity.md` §2.5). `IRepeatedRows`
+lets a frontend that can stretch take the rows once: `RepeatRows` is true by default and repeats them in the frame as
+before, false sends each once, and `RowRepeat` says how many times the frame **on show** has each row shown, so it
+travels with the frame through the deferred swap exactly as its height does.
+
+**The default is the old behaviour, and only Mistress changes it.** Every other consumer of `GetFrameBufferRgba`
+(the golden probe, the tests, Hotaru, screenshots, recordings) reads a buffer as square pixels, and keeps getting one
+that is right that way. This is a channel for a **row** repeat, not a pixel aspect: the PAL picture is still drawn
+20% too tall and Venus's at 8:7 (`Mars_Core.md` §2); a pixel aspect is the general form and would subsume this, and
+was not taken on here.
+
+`Rows_sent_once_are_the_repeated_frames_own_rows` holds that the rows sent once are the even rows of the repeated
+frame, with half its height and a repeat of two, deferred and immediate, and that an interlaced frame, which has
+nothing to repeat, is unchanged with a repeat of one. Dropping the repeat at the deferred swap fails it.
+

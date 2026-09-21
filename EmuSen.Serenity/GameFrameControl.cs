@@ -18,6 +18,17 @@ namespace EmuSen.Serenity
         private int _frameWidth;
         private int _frameHeight;
 
+        // How many times each row of the frame is shown, stretched here rather than repeated in the frame - see EmuSen_Serenity.md §2.7.
+        private int _rowRepeat = 1;
+
+        // Each offer is a new version even of the same array, whose contents a core may have rewritten - see EmuSen_Serenity.md §2.6.
+        private long _version;
+
+        // The image made from the last version drawn, reused when the control is only redrawn; the render thread's, under the lock.
+        private readonly object _cacheLock = new();
+        private SKImage? _cachedImage;
+        private long _cachedVersion = -1;
+
         private readonly Dictionary<ShaderEffect, SKRuntimeEffect> _effects = new();
 
         // One long-lived builder per effect, never rebuilt per frame - see EmuSen_Serenity.md §2.2.
@@ -27,10 +38,10 @@ namespace EmuSen.Serenity
         public ShaderEffect ActiveEffect { get; set; } = ShaderEffect.None;
 
         // What the render thread spent showing frames, summed until a frontend takes them - see EmuSen_Serenity.md §2.5.
-        private long _presented, _copyTicks, _drawTicks, _shape;
+        private long _presented, _copies, _copyTicks, _drawTicks, _shape;
         private int _gpu;
 
-        public readonly record struct PresentationStatistics(long Frames, double CopyMilliseconds, double DrawMilliseconds, bool Gpu, int Width, int Height);
+        public readonly record struct PresentationStatistics(long Frames, long Copies, double CopyMilliseconds, double DrawMilliseconds, bool Gpu, int Width, int Height);
 
         // Safe from any thread: the sums are exchanged for zero, so each frame is counted by exactly one take.
         public PresentationStatistics TakeStatistics()
@@ -39,14 +50,16 @@ namespace EmuSen.Serenity
             long shape = System.Threading.Interlocked.Read(ref _shape);
             return new PresentationStatistics(
                 System.Threading.Interlocked.Exchange(ref _presented, 0),
+                System.Threading.Interlocked.Exchange(ref _copies, 0),
                 System.Threading.Interlocked.Exchange(ref _copyTicks, 0) * ms,
                 System.Threading.Interlocked.Exchange(ref _drawTicks, 0) * ms,
                 System.Threading.Volatile.Read(ref _gpu) != 0,
                 (int)(shape >> 32), (int)shape);
         }
 
-        private void Presented(long copyTicks, long drawTicks, bool gpu, int width, int height)
+        private void Presented(bool copied, long copyTicks, long drawTicks, bool gpu, int width, int height)
         {
+            if (copied) System.Threading.Interlocked.Increment(ref _copies);
             System.Threading.Interlocked.Add(ref _copyTicks, copyTicks);
             System.Threading.Interlocked.Add(ref _drawTicks, drawTicks);
             System.Threading.Volatile.Write(ref _gpu, gpu ? 1 : 0);
@@ -55,11 +68,13 @@ namespace EmuSen.Serenity
         }
 
         // Stores the frame and asks for a repaint; drawing happens in Render() below.
-        public void UpdateFrame(byte[] rgba, int width, int height)
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1)
         {
             _rgba = rgba;
             _frameWidth = width;
             _frameHeight = height;
+            _rowRepeat = Math.Max(1, rowRepeat);
+            _version++;
             InvalidateVisual();
         }
 
@@ -110,12 +125,24 @@ namespace EmuSen.Serenity
             return builder;
         }
 
+        // The cached image is native memory the size of a frame, so a control leaving the window gives it back.
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+            lock (_cacheLock)
+            {
+                _cachedImage?.Dispose();
+                _cachedImage = null;
+                _cachedVersion = -1;
+            }
+        }
+
         public override void Render(DrawingContext context)
         {
             base.Render(context);
             if (_rgba == null || _frameWidth <= 0 || _frameHeight <= 0) return;
 
-            context.Custom(new DrawOp(new Rect(Bounds.Size), this, _rgba, _frameWidth, _frameHeight, ActiveEffect));
+            context.Custom(new DrawOp(new Rect(Bounds.Size), this, _rgba, _frameWidth, _frameHeight, _rowRepeat, ActiveEffect, _version));
         }
 
         // An immutable snapshot per Render() call - see EmuSen_Serenity.md §2.3.
@@ -126,9 +153,13 @@ namespace EmuSen.Serenity
             private readonly int _width;
             private readonly int _height;
             private readonly ShaderEffect _effect;
+            private readonly long _version;
+            private readonly int _rowRepeat;
 
-            public DrawOp(Rect bounds, GameFrameControl owner, byte[] rgba, int width, int height, ShaderEffect effect)
+            public DrawOp(Rect bounds, GameFrameControl owner, byte[] rgba, int width, int height, int rowRepeat, ShaderEffect effect, long version)
             {
+                _version = version;
+                _rowRepeat = rowRepeat;
                 Bounds = bounds;
                 _owner = owner;
                 _rgba = rgba;
@@ -153,16 +184,25 @@ namespace EmuSen.Serenity
                 using ISkiaSharpApiLease lease = feature.Lease();
                 SKCanvas canvas = lease.SkCanvas;
 
-                long started = System.Diagnostics.Stopwatch.GetTimestamp();
-                var sourceInfo = new SKImageInfo(_width, _height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                using SKImage sourceImage = SKImage.FromPixelCopy(sourceInfo, _rgba);
-                long copied = System.Diagnostics.Stopwatch.GetTimestamp();
+                lock (_owner._cacheLock)
+                {
+                    long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                    bool copy = _owner._cachedImage is null || _owner._cachedVersion != _version;
+                    if (copy)
+                    {
+                        var sourceInfo = new SKImageInfo(_width, _height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+                        _owner._cachedImage?.Dispose();
+                        _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, _rgba);
+                        _owner._cachedVersion = _version;
+                    }
+                    long copied = System.Diagnostics.Stopwatch.GetTimestamp();
 
-                Draw(canvas, sourceImage);
+                    Draw(canvas, _owner._cachedImage!);
 
-                // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
-                lease.GrContext?.Flush();
-                _owner.Presented(copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, lease.GrContext is not null, _width, _height);
+                    // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
+                    lease.GrContext?.Flush();
+                    _owner.Presented(copy, copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, lease.GrContext is not null, _width, _height);
+                }
             }
 
             private void Draw(SKCanvas canvas, SKImage sourceImage)
@@ -172,7 +212,7 @@ namespace EmuSen.Serenity
                     ? new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None)
                     : new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None);
 
-                var (x, y, w, h) = ComputeLetterboxRect(_width, _height, Bounds.Width, Bounds.Height);
+                var (x, y, w, h) = ComputeLetterboxRect(_width, _height * _rowRepeat, Bounds.Width, Bounds.Height);
                 int upscaledW = Math.Max(1, (int)Math.Round(w));
                 int upscaledH = Math.Max(1, (int)Math.Round(h));
                 var destRect = new SKRect((float)x, (float)y, (float)x + upscaledW, (float)y + upscaledH);

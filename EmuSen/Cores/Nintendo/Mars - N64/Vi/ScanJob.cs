@@ -26,7 +26,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
         // The geometry the last walk ran over; its bytes are still in the capture above, which is written only when a walk follows - see Mars_Video.md §2.8.
         internal int LastCount = -1;
-        internal (Vi.Picture Picture, uint Origin, int Width, bool Wide, bool Resample, bool Divot, int AntiAlias, bool Dither, bool Gamma, uint From, int Count, int Scale) LastShape;
+        internal (Vi.Picture Picture, uint Origin, int Width, bool Wide, bool Resample, bool Divot, int AntiAlias, bool Dither, bool Gamma, uint From, int Count, int Scale, bool Device) LastShape;
 
         // True when this scan's geometry and bytes are the last walk's, so its walk would write the raster already there - see §2.8.
         public bool Repeats { get; internal set; }
@@ -43,9 +43,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         internal byte[] LiveScaledRdram = System.Array.Empty<byte>();
         internal byte[] LiveScaledHidden = System.Array.Empty<byte>();
 
-        // The picture as the compute device walked it, one word a pixel, when the device holds the memory at the multiple - see Mars_Gpu.md §13.
-        internal uint[] DevicePicture = System.Array.Empty<uint>();
+        // True when the compute device walked this job's picture, which the walk reads where the device left it - see Mars_Gpu.md §14.
         internal bool DeviceScanned;
+
+        // The interface's count of scans when the device walked this job's picture, which it still holds while the count stands.
+        internal long DeviceScanAt = -1;
 
         // Forgets the last capture, for a loaded state, whose raster the walk that follows must write - see §2.8.
         public void Forget() => LastCount = -1;

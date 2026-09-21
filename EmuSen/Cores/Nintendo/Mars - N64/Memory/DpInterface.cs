@@ -81,6 +81,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // A device and a rasteriser for this multiple, or neither and the reason why - see §11.1.
         private void RebuildGpu()
         {
+            _scanOuts++;
             _gpu?.Dispose();
             _gpu = null;
             _device?.Dispose();
@@ -99,12 +100,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // True when the device holds the memory at the multiple and can walk the picture out of it itself - see Mars_Gpu.md §13.
         public bool CanScanOut => _gpu is not null;
 
-        // The VI's walk over the device's own memory, once the drawing is finished; the result is valid until the next scan.
-        public ReadOnlySpan<uint> ScanOut(in Rdp.Gpu.GpuRasteriser.ScanParameters scan)
+        // Counts the device's scans and its rebuilds, so a job can tell whether the picture the device holds is still its own - see Mars_Gpu.md §14.
+        [EmuSen.Common.SkipInState] private long _scanOuts;
+
+        public long ScanOuts => _scanOuts;
+
+        // The VI's walk over the device's own memory, once the drawing is finished, submitted without waiting - see Mars_Gpu.md §14.
+        public void ScanOut(in Rdp.Gpu.GpuRasteriser.ScanParameters scan)
         {
             Join();
-            return _gpu!.ScanOut(scan);
+            _gpu!.ScanOut(scan);
+            _scanOuts++;
         }
+
+        // The last scan's picture once the device has walked it; valid until the next scan or a change of the device.
+        public ReadOnlySpan<uint> ScannedPicture => _gpu!.ScannedPicture;
 
         // Everything the device holds, read back into the shadow the scan-out walks - see §11.2.
         public void ReadBackScaled(uint from, int count)
@@ -394,6 +404,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             if (_scale == 1) return;
             Array.Clear(_scaledRdram);
             Array.Clear(_scaledHidden);
+            _gpu?.Clear();
             _scaledProcessor = NewScaled();
             foreach (Worker worker in _workers)
             {

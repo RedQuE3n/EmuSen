@@ -20,8 +20,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
         private readonly Device _device;
         private readonly Queue _queue;
         private readonly CommandPool _pool;
-        private readonly CommandBuffer _commands;
-        private readonly Fence _fence;
+        private readonly CommandBuffer _commands, _pendingCommands;
+        private readonly Fence _fence, _pendingFence;
+        private volatile bool _pending;
         private readonly PhysicalDeviceMemoryProperties _memory;
         private bool _disposed;
 
@@ -72,9 +73,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
                 SType = StructureType.CommandBufferAllocateInfo, CommandPool = _pool, Level = CommandBufferLevel.Primary, CommandBufferCount = 1,
             };
             Check(_vk.AllocateCommandBuffers(_device, &allocate, out _commands), "vkAllocateCommandBuffers");
+            Check(_vk.AllocateCommandBuffers(_device, &allocate, out _pendingCommands), "vkAllocateCommandBuffers");
 
             var fenceInfo = new FenceCreateInfo { SType = StructureType.FenceCreateInfo };
             Check(_vk.CreateFence(_device, &fenceInfo, null, out _fence), "vkCreateFence");
+            Check(_vk.CreateFence(_device, &fenceInfo, null, out _pendingFence), "vkCreateFence");
 
             _vk.GetPhysicalDeviceMemoryProperties(physical, out _memory);
             _vk.GetPhysicalDeviceProperties(physical, out PhysicalDeviceProperties properties);
@@ -354,24 +357,50 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             _vk.DestroyDescriptorSetLayout(_device, program.SetLayout, null);
         }
 
-        // Records, submits and waits: nothing of a batch is in flight when this returns, which is what lets a set be rebound freely.
+        // Records, submits and waits: nothing of this batch is in flight when this returns, though a pending one may be - see Mars_Gpu.md §14.
         public void Submit(Action<GpuCommands> record)
         {
-            Check(_vk.ResetCommandBuffer(_commands, 0), "vkResetCommandBuffer");
-            var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
-            Check(_vk.BeginCommandBuffer(_commands, &begin), "vkBeginCommandBuffer");
-
-            record(new GpuCommands(_vk, _device, _commands));
-
-            Check(_vk.EndCommandBuffer(_commands), "vkEndCommandBuffer");
-
-            CommandBuffer commands = _commands;
-            var submit = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &commands };
-            Check(_vk.QueueSubmit(_queue, 1, &submit, _fence), "vkQueueSubmit");
+            Record(_commands, _fence, record);
 
             Fence fence = _fence;
             Check(_vk.WaitForFences(_device, 1, &fence, true, ulong.MaxValue), "vkWaitForFences");
             Check(_vk.ResetFences(_device, 1, &fence), "vkResetFences");
+        }
+
+        // Records and submits without waiting; one is pending at a time, and the next waits for the last before it records - see Mars_Gpu.md §14.
+        public void SubmitPending(Action<GpuCommands> record)
+        {
+            WaitForPending();
+            Fence fence = _pendingFence;
+            Check(_vk.ResetFences(_device, 1, &fence), "vkResetFences");
+            Record(_pendingCommands, _pendingFence, record);
+            _pending = true;
+        }
+
+        // Returns once the pending submission has finished; safe from a thread that does not submit, while nothing submits a pending one.
+        public void WaitForPending()
+        {
+            if (!_pending) return;
+            Fence fence = _pendingFence;
+            Check(_vk.WaitForFences(_device, 1, &fence, true, ulong.MaxValue), "vkWaitForFences");
+            _pending = false;
+        }
+
+        // Every command already ends in a barrier that orders the submissions after it; this adds only the host's - see Mars_Gpu.md §14.
+        private void Record(CommandBuffer buffer, Fence fence, Action<GpuCommands> record)
+        {
+            Check(_vk.ResetCommandBuffer(buffer, 0), "vkResetCommandBuffer");
+            var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
+            Check(_vk.BeginCommandBuffer(buffer, &begin), "vkBeginCommandBuffer");
+
+            var commands = new GpuCommands(_vk, _device, buffer);
+            record(commands);
+            commands.ToHost();
+
+            Check(_vk.EndCommandBuffer(buffer), "vkEndCommandBuffer");
+
+            var submit = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &buffer };
+            Check(_vk.QueueSubmit(_queue, 1, &submit, fence), "vkQueueSubmit");
         }
 
         public void Dispose()
@@ -381,6 +410,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
 
             _vk.DeviceWaitIdle(_device);
             _vk.DestroyFence(_device, _fence, null);
+            _vk.DestroyFence(_device, _pendingFence, null);
             _vk.DestroyCommandPool(_device, _pool, null);
             _vk.DestroyDevice(_device, null);
             _vk.DestroyInstance(_instance, null);
@@ -491,7 +521,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             Barrier();
         }
 
-        // Everything after waits for everything before: coarse, and one submission holds a handful of commands.
+        // Everything after waits for everything before, in this submission and the ones that follow it: coarse, and a submission holds a handful of commands.
         private void Barrier()
         {
             var barrier = new MemoryBarrier
@@ -502,6 +532,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             };
             const PipelineStageFlags stages = PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.TransferBit;
             _vk.CmdPipelineBarrier(_commands, stages, stages, 0, 1, &barrier, 0, null, 0, null);
+        }
+
+        // A fence makes only the device's own accesses complete; a host read of mapped memory needs this as well.
+        internal void ToHost()
+        {
+            var barrier = new MemoryBarrier
+            {
+                SType = StructureType.MemoryBarrier,
+                SrcAccessMask = AccessFlags.ShaderWriteBit | AccessFlags.TransferWriteBit,
+                DstAccessMask = AccessFlags.HostReadBit,
+            };
+            _vk.CmdPipelineBarrier(_commands, PipelineStageFlags.ComputeShaderBit | PipelineStageFlags.TransferBit, PipelineStageFlags.HostBit, 0, 1, &barrier, 0, null, 0, null);
         }
     }
 

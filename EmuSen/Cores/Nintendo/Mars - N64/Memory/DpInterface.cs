@@ -171,6 +171,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private int _idleRangeCount;
         [EmuSen.Common.SkipInState] private int _idleSequence;
 
+        // The batch's colour and depth extents, grown by each draw's own rows, and what bounds them - see Mars_Rdp.md §2.6.2.
+        private struct Extent { public int Index; public long First, Last; }
+        [EmuSen.Common.SkipInState] private Extent _colorExtent = new() { Index = -1 }, _depthExtent = new() { Index = -1 };
+        [EmuSen.Common.SkipInState] private int _scissorTopRaw, _scissorBottomRaw, _shadowCycle;
+        [EmuSen.Common.SkipInState] private bool _shadowDepth;
+
         // Where the batch being taken began, so a batch that outgrows the extents above can be given one range of everything - see §2.6.1.
         [EmuSen.Common.SkipInState] private long _batchStart;
 
@@ -545,6 +551,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             long tail = _issued;
             _batchStart = tail;
             _drawn = false;
+            _colorExtent.Index = _depthExtent.Index = -1;
             _taking = true;
 
             while (!_freeze && _current < _end)
@@ -566,6 +573,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             long tail = _issued;
             _batchStart = tail;
             _drawn = false;
+            _colorExtent.Index = _depthExtent.Index = -1;
             _taking = true;
             foreach (ulong word in words) tail = Publish(word, tail);
             _taking = false;
@@ -650,7 +658,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 case >= 0x08 and <= 0x0F:
                 case Rdp.Rdp.TextureRectangle or Rdp.Rdp.TextureRectangleFlipped:
                 case Rdp.Rdp.FillRectangle:
-                    if (!_drawn) MarkImages(afterThisWord);
+                    MarkDraw(id, first, afterThisWord);
+                    return false;
+
+                case Rdp.Rdp.SetOtherModes:
+                    _shadowCycle = (int)(first >> 52) & 3;
+                    _shadowDepth = ((first >> 4) & 3) != 0;
                     return false;
 
                 case Rdp.Rdp.SyncFull:
@@ -658,6 +671,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
                 case Rdp.Rdp.SetColorImage:
                     _drawn = false;
+                    _colorExtent.Index = -1;
                     _colorBytes = (int)((first >> 51) & 3) switch { 1 => 1, 2 => 2, 3 => 4, _ => 1 };
                     _colorWidth = (int)((first >> 32) & 0x3FF) + 1;
                     _colorImage = (uint)first & 0x00FF_FFFF;
@@ -665,11 +679,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
                 case Rdp.Rdp.SetMaskImage:
                     _drawn = false;
+                    _depthExtent.Index = -1;
                     _depthImage = (uint)first & 0x00FF_FFFF;
                     return false;
 
                 case Rdp.Rdp.SetScissor:
                     _drawn = false;
+                    _colorExtent.Index = _depthExtent.Index = -1;
+                    _scissorTopRaw = (int)((first >> 32) & 0xFFF);
+                    _scissorBottomRaw = (int)(first & 0xFFF);
                     _scissorTop = (int)((first >> 32) & 0xFFF) >> 2;
                     _scissorBottom = ((int)(first & 0xFFF) + 3) >> 2;
                     _scissorRight = ((int)((first >> 12) & 0xFFF) + 3) >> 2;
@@ -690,21 +708,61 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
         }
 
-        // The pixels a draw may address, which is not the scissor's rectangle: a span's right edge is bounded by the scissor and not by the image's width, so an address runs past its row - see §2.6.1.
-        private void MarkImages(long start)
+        // A draw marks the rows the walker can shade, by its own limits, and the depth image only in a mode that reads or writes it - see Mars_Rdp.md §2.6.2.
+        private void MarkDraw(uint id, ulong first, long start)
         {
             _drawn = true;
+            int upper, lower;
+            if (id is >= 0x08 and <= 0x0F)
+            {
+                int yh = SignExtend14(first), yl = SignExtend14(first >> 32);
+                upper = (yh & 0x2000) != 0 ? _scissorTopRaw : (yh & 0x1000) != 0 ? yh : Math.Max(yh, _scissorTopRaw);
+                lower = (yl & 0x2000) != 0 ? yl : (yl & 0x1000) != 0 ? _scissorBottomRaw : Math.Min(yl, _scissorBottomRaw);
+            }
+            else
+            {
+                // Fill and copy draw a rectangle's bottom row whole, which the other modes' sub-scanline test would not.
+                int top = (int)(first & 0xFFF), bottom = (int)((first >> 32) & 0xFFF) | (_shadowCycle >= 2 ? 3 : 0);
+                upper = Math.Max(top, _scissorTopRaw);
+                lower = Math.Min(bottom, _scissorBottomRaw);
+            }
 
-            long width = _colorWidth;
-            long rows = _scissorBottom - _scissorTop;
-            if (rows <= 0) rows = 1;
+            if (lower <= upper) return;
 
-            // The first pixel the top row can name and the last the bottom row can, each with two pixels of slack for a read beside the span - see §2.6.1.
-            long first = Math.Max((long)_scissorTop * width - 2, 0);
-            long last = Math.Max((_scissorTop + rows) * width, (_scissorTop + rows - 1) * width + _scissorRight + 3);
+            // A span's right edge is bounded by the scissor, not the width, so it runs past its row; two pixels of slack for a read beside it - see §2.6.1.
+            long width = _colorWidth, firstRow = upper >> 2, lastRow = (lower - 1) >> 2;
+            long from = Math.Max(firstRow * width - 2, 0);
+            long to = Math.Max((lastRow + 1) * width, lastRow * width + _scissorRight + 3);
 
-            MarkIdle(_colorImage + first * _colorBytes, (last - first) * _colorBytes, start);
-            MarkIdle(_depthImage + first * 2, (last - first) * 2, start);
+            Grow(ref _colorExtent, _colorImage, _colorBytes, from, to, start);
+            if (_shadowCycle < 2 && _shadowDepth) Grow(ref _depthExtent, _depthImage, 2, from, to, start);
+        }
+
+        private static int SignExtend14(ulong v) => ((int)(v & 0x3FFF) << 18) >> 18;
+
+        // An extent's idle range grown in place under the sequence the verifier reads it by; one that could not be listed stays whole-memory.
+        private void Grow(ref Extent extent, uint image, int bytes, long from, long to, long start)
+        {
+            if (extent.Index == -2) return;
+            if (extent.Index >= 0 && from >= extent.First && to <= extent.Last) return;
+            if (extent.Index >= 0) { from = Math.Min(from, extent.First); to = Math.Max(to, extent.Last); }
+
+            long address = image + from * bytes, count = (to - from) * bytes;
+            if (extent.Index < 0)
+            {
+                MarkIdle(address, count, start);
+                extent.Index = _idleRangeCount <= _idleRanges.Length ? _idleRangeCount - 1 : -2;
+            }
+            else
+            {
+                Mark(address, count, Idle, write: true);
+                Volatile.Write(ref _idleSequence, _idleSequence + 1);
+                _idleRanges[extent.Index] = (address, address + count, _idleRanges[extent.Index].Start);
+                Volatile.Write(ref _idleSequence, _idleSequence + 1);
+            }
+
+            extent.First = from;
+            extent.Last = to;
         }
 
         // The rows a load reads from the texture image, from its first line to its last and the columns it names - see §2.6.
@@ -1254,6 +1312,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             (_shadowTaken, _shadowFirst) = Processor.Gathered;
             (_colorImage, _colorWidth, _colorBytes, _depthImage, _textureImage, _textureWidth, _textureSize, _scissorTop, _scissorBottom, _scissorRight) = Processor.Images;
             _drawn = false;
+            (_scissorTopRaw, _scissorBottomRaw, ulong modes) = Processor.Bounds;
+            _shadowCycle = (int)(modes >> 52) & 3;
+            _shadowDepth = ((modes >> 4) & 3) != 0;
+            _colorExtent.Index = _depthExtent.Index = -1;
             _issued = _completed = Completed();
             foreach (Worker worker in _workers)
             {

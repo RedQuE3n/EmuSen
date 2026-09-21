@@ -375,6 +375,32 @@ lines is the same amount of work as a walk over the right ones. The agreement at
 both paths were wrong in the same way for any game whose frame buffer is above a megabyte, and it was taken again
 with the fix (`Mars_Gpu.md` §11.5).
 
+### 2.12 The walk in bands, side by side (2026-09-21)
+
+At one the walk runs on the processor, on the deferred thread (§2.7), and the next frame's end joins it. Timed in
+place, the walk took 4.9 ms a walk in Super Mario 64, 8.4 in Ocarina of Time and 3.9 in Wave Race, starting 0.015 ms
+after it was queued, and the join waited 1.44, 1.84 and 0.62 ms a frame for it: nineteen, seventeen and eight per
+cent of the emulation thread, which the sampler showed as its largest native wait.
+
+**Rows are independent, so the walk is split into bands.** Two things looked like carries from row to row, and
+`Mars_Gpu.md` §13.1 showed neither is: the slot cache and the line window are caches of a pure function of memory
+and the registers, so any order of asking gives the same answers, and the fetch bug's counter has a closed form, two
+where a row reads its line again and one where the row before did. Each band therefore has caches of its own (the
+walk's state moved into a nested `Walker`), starts its counter from the closed form at its first row, and writes rows
+of the raster no other band writes. The bands are contiguous, as many as a quarter of the processors and at most
+four, with no band under thirty-two rows; a picture smaller than that is one band, as before.
+
+**Measured** (`pacebench`, flat out, 7d68f4d against this, interleaved and rotated, three rounds, medians, every state
+hash the same): at one, Mario ran at 324 per cent of full speed against 261, Ocarina at 217 against 169, Wave Race at
+240 against 221; at two on the processor, Mario 142 against 105, Ocarina 86 against 66. The golden probe's pictures
+were identical for all six hundred frames of both its games, and a mutant starting every band's counter at zero
+failed fifteen of the video tests.
+
+**What this does not cover.** On a machine of four processors the walk is still one band, and a weak machine is
+where the join costs most; there the device's walk (`Mars_Gpu.md` §13) or a walk started earlier would be the
+lever. The bands share the processors with the emulation thread and the display processor's workers, so their
+count is a guess at a fair share, not a measured optimum.
+
 ## 3. What the differential says
 
 ### 3.1 The first run, and the bug it found

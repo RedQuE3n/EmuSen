@@ -9,43 +9,46 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         // A pixel as the interface reads it: eight bits a channel, and the coverage stored beside them - see §1.
         private readonly record struct Pixel(int Red, int Green, int Blue, int Coverage);
 
-        // Six neighbours, of which only the whole ones count; the row below becomes this row when the fetch bug is on - see §2.1 and §3.
-        private Pixel Filter(uint origin, int at, bool wide, int width, int bug, Pixel centre)
+        private sealed partial class Walker
         {
-            Span<int> red = stackalloc int[7];
-            Span<int> green = stackalloc int[7];
-            Span<int> blue = stackalloc int[7];
-
-            red[0] = centre.Red;
-            green[0] = centre.Green;
-            blue[0] = centre.Blue;
-            int full = 1;
-
-            Span<int> around = stackalloc int[6]
+            // Six neighbours, of which only the whole ones count; the row below becomes this row when the fetch bug is on - see §2.1 and §3.
+            private Pixel Filter(uint origin, int at, bool wide, int width, int bug, Pixel centre)
             {
-                at - width - 1, at - width + 1, at - 2, at + 2,
-                bug == 1 ? at - 2 : at + width - 1,
-                bug == 1 ? at + 2 : at + width + 1,
-            };
+                Span<int> red = stackalloc int[7];
+                Span<int> green = stackalloc int[7];
+                Span<int> blue = stackalloc int[7];
 
-            foreach (int neighbour in around)
-            {
-                Pixel pixel = Fetched(origin, neighbour, wide);
-                if (pixel.Coverage != 7) continue;
+                red[0] = centre.Red;
+                green[0] = centre.Green;
+                blue[0] = centre.Blue;
+                int full = 1;
 
-                red[full] = pixel.Red;
-                green[full] = pixel.Green;
-                blue[full] = pixel.Blue;
-                full++;
+                Span<int> around = stackalloc int[6]
+                {
+                    at - width - 1, at - width + 1, at - 2, at + 2,
+                    bug == 1 ? at - 2 : at + width - 1,
+                    bug == 1 ? at + 2 : at + width + 1,
+                };
+
+                foreach (int neighbour in around)
+                {
+                    Pixel pixel = Fetched(origin, neighbour, wide);
+                    if (pixel.Coverage != 7) continue;
+
+                    red[full] = pixel.Red;
+                    green[full] = pixel.Green;
+                    blue[full] = pixel.Blue;
+                    full++;
+                }
+
+                int missing = 7 - centre.Coverage;
+
+                return new Pixel(
+                    Pull(red[..full], centre.Red, missing),
+                    Pull(green[..full], centre.Green, missing),
+                    Pull(blue[..full], centre.Blue, missing),
+                    centre.Coverage);
             }
-
-            int missing = 7 - centre.Coverage;
-
-            return new Pixel(
-                Pull(red[..full], centre.Red, missing),
-                Pull(green[..full], centre.Green, missing),
-                Pull(blue[..full], centre.Blue, missing),
-                centre.Coverage);
         }
 
         // The two runners-up stand for the neighbourhood, and the pixel moves towards them by the coverage it lacks - see §2.2.

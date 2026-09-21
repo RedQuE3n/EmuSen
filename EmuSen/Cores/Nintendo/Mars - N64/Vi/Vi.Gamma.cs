@@ -38,17 +38,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             return result;
         }
 
-        // The table stands in for the hardware's gamma ROM; the six bits below a channel are the dither's, and Mars has none - see §3.1.
-        private Pixel Gamma(Pixel pixel)
+        private sealed partial class Walker
         {
-            if (!_scanGamma) return pixel;
-
-            return pixel with
+            // The table stands in for the hardware's gamma ROM; the six bits below a channel are the dither's, and Mars has none - see §3.1.
+            private Pixel Gamma(Pixel pixel)
             {
-                Red = GammaTable[pixel.Red << 6],
-                Green = GammaTable[pixel.Green << 6],
-                Blue = GammaTable[pixel.Blue << 6],
-            };
+                if (!_scanGamma) return pixel;
+
+                return pixel with
+                {
+                    Red = GammaTable[pixel.Red << 6],
+                    Green = GammaTable[pixel.Green << 6],
+                    Blue = GammaTable[pixel.Blue << 6],
+                };
+            }
         }
     }
 }

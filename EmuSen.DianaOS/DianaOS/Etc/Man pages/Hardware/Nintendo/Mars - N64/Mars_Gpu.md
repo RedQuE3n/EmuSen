@@ -1066,3 +1066,124 @@ the table says; nothing in this phase touches it.
 per-frame cost, which none of these tools measures, since `pacebench` has no render thread; the hazard the
 presentation join closes (§14.2), argued and not demonstrated; and the staging wait and the host barrier (§14.4),
 required by the specification and not observable on this machine.
+
+## 15. The antialiasing average on the device, over a raster the device keeps (2026-09-21)
+
+The antialiasing setting draws at the multiple and shows the picture averaged back down: `Vi.Raster` box-averages
+the raster at the multiple on the host, after the walk, on the deferred thread. §14 left it there. Measured in Super
+Mario 64 (`pacebench`, flat out, the device on), drawing at four and showing at one cost 12.36 ms a frame against
+10.25 for drawing and showing at four; at two shown at one, 8.06 against 7.09; at four shown at two, 13.51 against
+10.25. `Vi.BoxAverage` alone, timed over a raster of the same size, is 1.85 ms at two averaged by two, 7.4 at four
+averaged by two and 4.9 at four by four, and the whole picture at the multiple was being read back to be averaged.
+
+### 15.1 Why the picture could not simply be averaged where it is walked
+
+The average is over the **raster**, not the picture, and the raster is more than this scan's walk. In an interlaced
+mode it holds this field's rows interleaved with the last field's; the borders are darkened into it every scan; lines
+the picture no longer covers keep their old contents for two frames of grace before they are cleared (Mars_Video.md
+§2.4); a blank clears it. A square of the average can straddle both fields, so the device's picture of one field is
+not enough to compute it. An exact port therefore keeps **the raster at the multiple on the device** whenever the
+device averages, and sends it every change the host would have made to its own.
+
+### 15.2 How the host's raster becomes the device's
+
+Four things change the raster at the multiple, and each has its device counterpart:
+
+| On the host | On the device |
+|---|---|
+| a blank clears it | the next submission fills it with zero |
+| `Darken(line, from, count)` clears the same lines and columns at the multiple | recorded as spans of the device's raster, cleared by `clear.comp` before the walk |
+| the walk writes the picture, a dark column's colour cleared and its coverage kept | `scan.comp` writes into the raster at `Walk`'s own placement, by the same rule |
+| a new multiple starts a zeroed raster | a raster of a new size starts zeroed |
+
+The average is `average.comp`, `BoxAverage` restated in integers, and only its result comes back: at four averaged
+by four, 1.6 MB instead of the 9.8 MB picture. The clears, the walk and the average go out as one submission left
+pending, as §14's walk does, and `Raster` reads the result through the same wait.
+
+**When the submission goes.** Clears accumulate until something needs the raster: a walk (the capture, or the
+immediate scan), or a scan with no signal, which darkens without walking and is still shown. A scan that repeats the
+last is the one subtle case. The processor's path walks it again after this scan's clears, so a blank between the
+two, which a repeat's shape does not see, is undone by the repeat; the device must do the same, so a repeat with
+clears pending is walked again on the device. Nearly every scan darkens its borders, so that rule alone would walk
+every repeated frame the frontend then throws away; `Capture` therefore takes `walkRepeats`, which `MarsCore`
+passes as the inverse of `SkipRepeatedScans`.
+
+**Entering and leaving.** When the device comes on over a raster the processor made, that raster seeds the device's,
+so the other field and the held lines survive the change. When it goes off, the host's raster has been stale since
+the device took it, and is cleared, as a blank would be: **the first frames after turning the device off show the
+current field alone where the processor's path would still show the last one.** That is a deviation, it lasts at most
+the two frames of grace, and it was chosen over reading back the whole raster at every scan to keep the host's
+current.
+
+### 15.3 Coverage
+
+`Averaging_on_the_device_is_the_cpus_scan_after_scan` runs one sequence of twenty-three scans on two machines in step,
+at two averaged by two, four by two and four by four, immediate and deferred, comparing the averaged frame after each:
+a bordered picture, a shorter one whose lower lines expire, interlaced fields alternating, a new scene drawn between
+fields, a blank and a second blank, a picture with no signal, a thirty-two-bit mode with gamma, and scans repeated so
+that the repeat's path runs with clears pending. `Averaging_moved_onto_the_device_keeps_the_raster_the_processor_made`
+turns the device on between interlaced fields over a raster the processor made.
+
+Nine mutants, all killed in the end; three of them only after the sequence was changed, and how is the useful part:
+
+| Mutant | Killed by |
+|---|---|
+| the average does not round | every case |
+| a dark column's coverage cleared, not kept | every case |
+| the clear shader clears nothing | every case |
+| no spans sent for `Darken` | every case |
+| the walk writes the host's raster, not the device's | every case |
+| the lower field's offset dropped | every case |
+| no seed on entering | the entering test only, as designed |
+| a blank's clear not sent | only once the sequence had a blank over a **smaller** picture |
+| a repeat with clears pending not walked again | only once the sequence had a repeat after a blank **followed by a scan that shows without walking** |
+
+The first sequence had a blank over a picture covering the whole frame, whose walk rewrote everything the blank had
+cleared, so the clear was invisible. The repeat case needed two things at once: a blank with the geometry of the
+scan before it (a repeat's shape does not include blanking), so that the repeat runs with a clear pending; and then a
+scan whose clears reach the device without a walk rewriting them. The first attempt at that third scan was a picture
+with no columns, and it failed to kill the mutant because `Borders` darkens every line for a picture of no width,
+on both paths alike; a picture starting past the raster's right edge also has no signal, but darkens nothing, and the
+held lines still show, which is where the two paths differ. The repeat mutant dies in the deferred cases only, since the immediate scan has
+no repeat path.
+
+In play, `framedump` over Super Mario 64 and Ocarina of Time from their play states, deferred, at one averaged by
+two, one by four and two by two: all thirty-six frames compared were byte for byte the processor's, with the device
+in use on every device run.
+
+### 15.4 The number
+
+`pacebench`, flat out, deferred presentation, the device on; 55c5e05 and this work interleaved and the order
+alternated, three rounds, medians. "Drawn at 4, shown at 1" is the antialiasing setting at four with the resolution
+at one. Each game's state hash was the same across every run.
+
+| Game | Drawn at, shown at | 55c5e05 | now |
+|---|---|---|---|
+| Super Mario 64 | 2, 1 | 245% (8.12 ms) | **282% (7.05)** |
+| | 4, 1 | 164% (12.15) | **248% (8.04)** |
+| | 4, 2 | 147% (13.54) | **239% (8.35)** |
+| | 4, 4 | 190% (10.51) | 195% (10.22) |
+| Ocarina of Time | 2, 1 | 201% (9.92) | **218% (9.16)** |
+| | 4, 1 | 155% (12.91) | **201% (9.90)** |
+| | 4, 2 | 144% (13.86) | **193% (10.34)** |
+| | 4, 4 | 169% (11.78) | 170% (11.75) |
+| Wave Race 64 | 2, 1 | 182% (9.12) | **195% (8.54)** |
+| | 4, 1 | 139% (12.00) | **174% (9.56)** |
+| | 4, 2 | 131% (12.72) | **171% (9.74)** |
+| | 4, 4 | 152% (10.98) | 152% (10.94) |
+
+The last row of each game, drawn and shown at four, does not average and is unchanged, as it should be. Averaging
+now costs less than showing at the multiple it averages from: Mario drawn at four and shown at one runs at 248 per
+cent against 195 for the same drawing shown at four, because what comes back and what the host composes are a
+sixteenth of the size. Drawn at two and shown at one, Mario and Ocarina are faster than at one on the processor
+alone (§14.6), for §14's reason.
+
+### 15.5 What this does not cover
+
+**The transition off the device** (§15.2) deviates from the processor's path for up to two frames, and no test holds
+it; the entering transition is tested. **The immediate path's repeat** has no repeat logic to test. **The average of
+the raster lines past the frame's height** is computed and sent back although `Raster` reads only the frame's first
+lines, which at four averaged by two is 6.4 MB where a progressive frame needs 2.5; trimming it needs the frame height at
+submission, which the VI has, and was left for simplicity. The other half of the plan's phase 7, the frontend
+presenting the device's image, is still not started; with the average on the device, what it would now remove is a
+transfer of at most the frame itself, at one averaged by four 1.6 MB.

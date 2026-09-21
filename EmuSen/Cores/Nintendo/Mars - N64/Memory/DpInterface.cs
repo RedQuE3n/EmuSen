@@ -116,6 +116,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // The last scan's picture once the device has walked it; valid until the next scan or a change of the device.
         public ReadOnlySpan<uint> ScannedPicture => _gpu!.ScannedPicture;
 
+        // True when the device already holds the raster at the multiple of this size, so no seed need go with the next submission.
+        public bool HoldsRaster(int width, int height) => _gpu is not null && _gpu.HoldsRaster(width, height);
+
+        // The VI's clears and walk into the raster the device keeps while it averages, submitted without waiting - see Mars_Gpu.md §15.
+        public void ScanIntoRaster(int width, int height, int side, ReadOnlySpan<byte> seed, bool clear, ReadOnlySpan<uint> spans, bool walk, in Rdp.Gpu.GpuRasteriser.ScanParameters scan)
+        {
+            // Joined even with no walk: the leading worker submits its own flushes, and the queue takes one thread at a time.
+            Join();
+            _gpu!.ScanIntoRaster(width, height, side, seed, clear, spans, walk, scan);
+            if (walk) _scanOuts++;
+        }
+
+        // The raster averaged on the device, once it has finished; valid until the next submission to it or a change of the device.
+        public ReadOnlySpan<uint> AveragedRaster => _gpu!.AveragedRaster;
+
         // Everything the device holds, read back into the shadow the scan-out walks - see §11.2.
         public void ReadBackScaled(uint from, int count)
         {

@@ -900,6 +900,169 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // The average on the device over a raster it keeps, through borders, fades, blanks, fields and repeats, against the processor's - see Mars_Gpu.md §15.
+        [Theory]
+        [InlineData(2, 2, false)]
+        [InlineData(4, 2, false)]
+        [InlineData(4, 4, false)]
+        [InlineData(2, 2, true)]
+        [InlineData(4, 2, true)]
+        [InlineData(4, 4, true)]
+        public void Averaging_on_the_device_is_the_cpus_scan_after_scan(int scale, int side, bool deferred)
+        {
+            if (GpuDevice.DeviceNames().Count == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            const uint Serrated = 1 << 6, CurrentLine = 4;
+            uint[] bordered = ViRegisters(2, 0, 320, 0x200, 0x400, 124, 600, 34, 240, 0, 0, control: DitherFilter | DivotOn);
+            uint[] shorter = ViRegisters(2, 0, 320, 0x200, 0x400, 124, 600, 34, 200, 0, 0, control: DitherFilter | DivotOn);
+            uint[] interlaced = ViRegisters(2, 1, 320, 0x200, 0x200, 108, 640, 34, 240, 0, 0, control: Serrated | DivotOn);
+            uint[] blank = ViRegisters(0, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0);
+
+            // A blank over a smaller picture leaves what it cleared in sight, and one over the last picture's own geometry repeats it.
+            uint[] blankSmaller = ViRegisters(0, 0, 320, 0x200, 0x400, 124, 600, 34, 200, 0, 0);
+            uint[] blankBordered = ViRegisters(0, 0, 320, 0x200, 0x400, 124, 600, 34, 240, 0, 0, control: DitherFilter | DivotOn);
+            uint[] noSignal = ViRegisters(2, 0, 320, 0x200, 0x400, 108, 0, 34, 240, 0, 0);
+
+            // No signal either, but starting past the raster's right edge, so it darkens nothing and the held lines still show.
+            uint[] offTheEdge = ViRegisters(2, 0, 320, 0x200, 0x400, 808, 100, 34, 240, 0, 0);
+            uint[] wide = ViRegisters(3, 0, 320, 0x200, 0x400, 116, 620, 34, 240, 0, 0, control: GammaOn);
+
+            // A register set a scan, the field it shows where it is interlaced, and whether a new scene is drawn before it.
+            (uint[] Registers, uint Line, bool Draw)[] steps =
+            {
+                (bordered, 0, false), (bordered, 0, false), (shorter, 0, false), (shorter, 0, true), (shorter, 0, false),
+                (interlaced, 0, false), (interlaced, 1, false), (interlaced, 0, true), (interlaced, 1, false),
+                (blankSmaller, 0, false), (bordered, 0, false), (bordered, 0, false), (blankBordered, 0, false), (offTheEdge, 0, false),
+                (blank, 0, false), (blank, 0, false), (bordered, 0, false), (noSignal, 0, false), (noSignal, 0, false),
+                (bordered, 0, true), (wide, 0, false), (wide, 0, false), (bordered, 0, false),
+            };
+
+            static void HandOver(MemoryBus bus, ulong[] list, uint at)
+            {
+                for (int i = 0; i < list.Length; i++) bus.Write64(at + (uint)i * 8, list[i]);
+                bus.Write32(MemoryMap.DpCommandBase, at);
+                bus.Write32(MemoryMap.DpCommandBase + 4, at + (uint)list.Length * 8);
+                bus.Dp.Join();
+            }
+
+            MemoryBus Machine(bool gpu)
+            {
+                var bus = new MemoryBus();
+                SeedTextureSource(bus);
+                bus.Dp.Scale = scale;
+                bus.Dp.Gpu = gpu;
+                bus.Vi.Average = side;
+                HandOver(bus, Shaded(0x7E57_5CA2, 2), 0x0010_0000);
+                return bus;
+            }
+
+            MemoryBus cpu = Machine(false), device = Machine(true);
+            var cpuJob = new EmuSen.Cores.Nintendo.Mars.Vi.ScanJob();
+            var deviceJob = new EmuSen.Cores.Nintendo.Mars.Vi.ScanJob();
+            uint seed = 0x0DDF_00D5;
+            int repeats = 0;
+
+            byte[] Step(MemoryBus bus, EmuSen.Cores.Nintendo.Mars.Vi.ScanJob job, (uint[] Registers, uint Line, bool Draw) step, uint scene)
+            {
+                if (step.Draw) HandOver(bus, Shaded(scene, 2), 0x0011_0000);
+                for (int i = 0; i < step.Registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, step.Registers[i]);
+                bus.Write32(MemoryMap.ViBase + CurrentLine * 4, step.Line);
+
+                if (!deferred) bus.Vi.Scan();
+                else if (bus.Vi.Prepare(job))
+                {
+                    bus.Vi.Capture(job);
+                    if (job.Repeats && bus == device) repeats++;
+                    bus.Vi.Walk(job);
+                }
+
+                return bus.Vi.Frame.ToArray();
+            }
+
+            for (int k = 0; k < steps.Length; k++)
+            {
+                if (steps[k].Draw) seed = seed * 1664525 + 1013904223;
+                byte[] expected = Step(cpu, cpuJob, steps[k], seed), actual = Step(device, deviceJob, steps[k], seed);
+                Assert.Equal(expected.Length, actual.Length);
+                int at = expected.AsSpan().CommonPrefixLength(actual);
+                if (at != expected.Length)
+                    Assert.Fail($"{scale}x averaged by {side}, {(deferred ? "deferred" : "immediate")}, step {k}: byte {at} is {actual[at]:X2} on the device and {expected[at]:X2} on the CPU (pixel {at / 4}, channel {at % 4})");
+            }
+
+            Assert.True(repeats > 0 || !deferred, "some scan repeats the one before it, which is the repeat's own path");
+            _output.WriteLine($"{repeats} repeated captures");
+        }
+
+        // Turned on over a raster the processor made, the device's raster starts as that one, whose other field it shows - see Mars_Gpu.md §15.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Averaging_moved_onto_the_device_keeps_the_raster_the_processor_made(bool deferred)
+        {
+            if (GpuDevice.DeviceNames().Count == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            const int scale = 2, side = 2;
+            const uint Serrated = 1 << 6, CurrentLine = 4;
+            uint[] interlaced = ViRegisters(2, 1, 320, 0x200, 0x200, 108, 640, 34, 240, 0, 0, control: Serrated | DivotOn);
+
+            static void HandOver(MemoryBus bus, ulong[] list, uint at)
+            {
+                for (int i = 0; i < list.Length; i++) bus.Write64(at + (uint)i * 8, list[i]);
+                bus.Write32(MemoryMap.DpCommandBase, at);
+                bus.Write32(MemoryMap.DpCommandBase + 4, at + (uint)list.Length * 8);
+                bus.Dp.Join();
+            }
+
+            // The whole image filled first, so the memory each walk reads is the same whether or not the device drew the scene before.
+            static ulong[] Covered(uint seed) =>
+                new[] { FillCycle, ColorImage(Framebuffer, 2), Scissor(0, 0, Width * 4, Rows * 4), FillColor(0x2468_1357), FillRectangle(0, 0, Width * 4 - 4, Rows * 4 - 4) }
+                    .Concat(Shaded(seed, 2)).ToArray();
+
+            MemoryBus Machine()
+            {
+                var bus = new MemoryBus();
+                SeedTextureSource(bus);
+                bus.Dp.Scale = scale;
+                bus.Vi.Average = side;
+                HandOver(bus, Covered(0x7E57_5CA2), 0x0010_0000);
+                return bus;
+            }
+
+            MemoryBus cpu = Machine(), device = Machine();
+            var cpuJob = new EmuSen.Cores.Nintendo.Mars.Vi.ScanJob();
+            var deviceJob = new EmuSen.Cores.Nintendo.Mars.Vi.ScanJob();
+
+            byte[] Field(MemoryBus bus, EmuSen.Cores.Nintendo.Mars.Vi.ScanJob job, uint line)
+            {
+                for (int i = 0; i < interlaced.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, interlaced[i]);
+                bus.Write32(MemoryMap.ViBase + CurrentLine * 4, line);
+
+                if (!deferred) bus.Vi.Scan();
+                else if (bus.Vi.Prepare(job))
+                {
+                    bus.Vi.Capture(job);
+                    bus.Vi.Walk(job);
+                }
+
+                return bus.Vi.Frame.ToArray();
+            }
+
+            for (uint line = 0; line < 3; line++) Assert.Equal(Field(cpu, cpuJob, line & 1), Field(device, deviceJob, line & 1));
+
+            device.Dp.Gpu = true;
+            Assert.True(device.Dp.CanScanOut);
+            HandOver(cpu, Covered(0x0DDF_00D5), 0x0011_0000);
+            HandOver(device, Covered(0x0DDF_00D5), 0x0011_0000);
+
+            for (uint line = 1; line < 4; line++)
+            {
+                byte[] expected = Field(cpu, cpuJob, line & 1), actual = Field(device, deviceJob, line & 1);
+                int at = expected.AsSpan().CommonPrefixLength(actual);
+                if (at != expected.Length)
+                    Assert.Fail($"{(deferred ? "deferred" : "immediate")}, field {line} after the device came on: byte {at} is {actual[at]:X2} on the device and {expected[at]:X2} on the CPU");
+            }
+        }
+
         // The device's walk is left pending at capture, and what reaches the device next must not reach the picture it walks - see Mars_Gpu.md §14.
         [Theory]
         [InlineData(2, false)]

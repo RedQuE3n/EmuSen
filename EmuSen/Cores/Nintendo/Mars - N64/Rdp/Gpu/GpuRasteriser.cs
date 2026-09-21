@@ -15,7 +15,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
 
         private readonly GpuDevice _device;
         private readonly GpuProgram _shade;
-        private readonly GpuProgram _scan;
+        private readonly GpuProgram _scan, _clear, _average;
         private readonly GpuBuffer _memory;
         private readonly GpuBuffer _divide;
         private readonly uint _memoryWords;
@@ -78,7 +78,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             _memoryWords = memoryWords;
             _memory = device.CreateBuffer((ulong)memoryWords * 4, GpuMemory.Device);
             _shade = device.CreateProgram(GpuShaders.Load("shade"), buffers: 8, pushBytes: 36);
-            _scan = device.CreateProgram(GpuShaders.Load("scan"), buffers: 2, pushBytes: 44);
+            _scan = device.CreateProgram(GpuShaders.Load("scan"), buffers: 2, pushBytes: 68);
+            _clear = device.CreateProgram(GpuShaders.Load("clear"), buffers: 2, pushBytes: 8);
+            _average = device.CreateProgram(GpuShaders.Load("average"), buffers: 2, pushBytes: 16);
 
             // The reciprocals perspective division reads are a table of the host's, uploaded once: their construction rounds in floating point - see §7.2.
             using (GpuBuffer staged = device.CreateBuffer((ulong)DivideTable.Length * 4))
@@ -352,9 +354,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
         public struct ScanParameters
         {
             public uint Origin, Width, SourceBytes, Flags, StartX, StepX, StartY, StepY, Rows, Columns, AntiAlias;
+
+            // Where the walk lands in the raster at the multiple, for a walk into it - see Mars_Gpu.md §15.
+            public uint RasterPixels, LineBase, Stride;
+            public int FirstColumn, LastColumn;
+            public uint Unused;
         }
 
-        public const uint ScanWide = 1, ScanResample = 2, ScanDivot = 4, ScanDither = 8, ScanGamma = 16;
+        public const uint ScanWide = 1, ScanResample = 2, ScanDivot = 4, ScanDither = 8, ScanGamma = 16, ScanRaster = 32;
 
         private GpuBuffer? _scanDevice, _scanHost;
         private int _scanPixels;
@@ -404,9 +411,106 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
 
         public long Scans;
 
+        private struct ClearPush { public uint Count, Pixels; }
+
+        private struct AveragePush { public uint Width, Side, Columns, Rows; }
+
+        // The raster at the multiple, kept here while the VI averages it here, and what of it comes back - see Mars_Gpu.md §15.
+        private GpuBuffer? _raster, _averaged, _averagedHost, _spans;
+        private int _rasterWidth, _rasterHeight, _averagedPixels;
+
+        public const int MaxSpans = 65535;
+
+        public bool HoldsRaster(int width, int height) => _raster is not null && _rasterWidth == width && _rasterHeight == height;
+
+        // The spans cleared, the walk written into the raster if there is one, and the raster averaged and sent back, without waiting - see Mars_Gpu.md §15.
+        public void ScanIntoRaster(int width, int height, int side, ReadOnlySpan<byte> seed, bool clear, ReadOnlySpan<uint> spans, bool walk, in ScanParameters scan)
+        {
+            if (spans.Length > MaxSpans * 2) throw new ArgumentException($"at most {MaxSpans} spans a submission", nameof(spans));
+
+            Action<GpuCommands>? shade = walk ? Stage() : null;
+            _device.WaitForPending();
+
+            int pixels = width * height, columns = width / side, rows = height / side;
+            bool fresh = !HoldsRaster(width, height);
+            if (fresh)
+            {
+                _raster?.Dispose();
+                _raster = _device.CreateBuffer((ulong)pixels * 4, GpuMemory.Device);
+                _rasterWidth = width;
+                _rasterHeight = height;
+            }
+
+            if (_averaged is null || _averagedPixels != columns * rows)
+            {
+                _averaged?.Dispose();
+                _averagedHost?.Dispose();
+                _averagedPixels = columns * rows;
+                _averaged = _device.CreateBuffer((ulong)Math.Max(_averagedPixels, 1) * 4, GpuMemory.Device);
+                _averagedHost = _device.CreateBuffer((ulong)Math.Max(_averagedPixels, 1) * 4);
+            }
+
+            GpuBuffer? seeded = null;
+            if (fresh && seed.Length == pixels * 4)
+            {
+                seeded = _device.CreateBuffer((ulong)pixels * 4);
+                seed.CopyTo(seeded.Span<byte>());
+            }
+
+            if (_spans is null || _spans.Bytes < (ulong)Math.Max(spans.Length, 1) * 4)
+            {
+                _spans?.Dispose();
+                _spans = _device.CreateBuffer(System.Numerics.BitOperations.RoundUpToPowerOf2((ulong)Math.Max(spans.Length, 2) * 4));
+            }
+            spans.CopyTo(_spans.Span<uint>());
+
+            ScanParameters push = scan;
+            push.SourceBytes = _memoryWords * 2;
+            push.Flags |= ScanRaster;
+            push.RasterPixels = (uint)pixels;
+            GpuBuffer raster = _raster!, averaged = _averaged!, host = _averagedHost!, listed = _spans;
+            var cleared = new ClearPush { Count = (uint)(spans.Length / 2), Pixels = (uint)pixels };
+            var averaging = new AveragePush { Width = (uint)width, Side = (uint)side, Columns = (uint)columns, Rows = (uint)rows };
+
+            _device.SubmitPending(commands =>
+            {
+                if (seeded is not null) commands.Copy(seeded, raster, (ulong)pixels * 4);
+                else if (fresh) commands.Fill(raster, 0);
+                if (clear) commands.Fill(raster, 0);
+                if (cleared.Count > 0) commands.Dispatch(_clear, new[] { raster, listed }, cleared, cleared.Count);
+                if (walk)
+                {
+                    shade?.Invoke(commands);
+                    commands.Dispatch(_scan, new[] { _memory, raster }, push, (push.Columns + 7) / 8, (push.Rows + 7) / 8);
+                }
+                commands.Dispatch(_average, new[] { raster, averaged }, averaging, ((uint)columns + 7) / 8, ((uint)rows + 7) / 8);
+                commands.Copy(averaged, host, (ulong)columns * (ulong)rows * 4);
+            });
+
+            // The seed's host copy is read by the submission, so it goes when that has finished.
+            if (seeded is not null) { _device.WaitForPending(); seeded.Dispose(); }
+            if (walk) Scans++;
+        }
+
+        // The averaged raster, once the device has finished it; valid until the next submission to the raster or Dispose.
+        public ReadOnlySpan<uint> AveragedRaster
+        {
+            get
+            {
+                _device.WaitForPending();
+                return _averagedHost is null ? ReadOnlySpan<uint>.Empty : _averagedHost.Span<uint>()[.._averagedPixels];
+            }
+        }
+
         public void Dispose()
         {
             _device.WaitForPending();
+            _raster?.Dispose();
+            _averaged?.Dispose();
+            _averagedHost?.Dispose();
+            _spans?.Dispose();
+            _clear.Dispose();
+            _average.Dispose();
             _scanDevice?.Dispose();
             _scanHost?.Dispose();
             _scan.Dispose();

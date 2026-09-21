@@ -53,6 +53,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             set => _average = System.Math.Clamp(value, 1, 4);
         }
 
+        // While the device averages, the raster at the multiple is the device's, and these are the clears not yet sent to it - see Mars_Gpu.md §15.
+        [EmuSen.Common.SkipInState] private readonly System.Collections.Generic.List<uint> _deviceSpans = new();
+        [EmuSen.Common.SkipInState] private bool _deviceClear, _deviceRaster, _shownFromDevice, _seedValid = true;
+
+        private bool AveragesOnTheDevice => _average > 1 && _bus.Dp.CanScanOut && _bus.Dp.Scale % _average == 0;
+
         // Averaging waits for a raster it divides, so a change of either setting never shows a torn picture - see §2.10.
         private int Averaging => _outputScale > 1 && _average > 1 && _outputScale % _average == 0 ? _average : 1;
 
@@ -92,6 +98,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             if (average == 1) return _rasterScaled.AsSpan(0, wide * rows * _outputScale * 4);
 
             int width = wide / average, lines = rows * _outputScale / average;
+            if (_shownFromDevice) return System.Runtime.InteropServices.MemoryMarshal.AsBytes(_bus.Dp.AveragedRaster)[..(width * lines * 4)];
             if (_rasterAveraged.Length < width * lines * 4) _rasterAveraged = new byte[width * RasterHeight * (_outputScale / average) * 4];
             BoxAverage(_rasterScaled, wide, average, _rasterAveraged.AsSpan(0, width * lines * 4));
             return _rasterAveraged.AsSpan(0, width * lines * 4);

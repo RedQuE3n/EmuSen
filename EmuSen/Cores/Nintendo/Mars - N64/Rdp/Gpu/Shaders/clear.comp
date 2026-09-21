@@ -1,0 +1,28 @@
+#version 450
+
+// The raster at the multiple's darkened spans cleared, one workgroup a span, before the walk writes it - see Mars_Gpu.md §15.
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) buffer Raster { uint raster[]; };
+
+// Pairs of a first pixel and a count, in the order Vi.Darken made them; the order does not matter, since all write zero.
+layout(std430, set = 0, binding = 1) readonly buffer Spans { uint spans[]; };
+
+layout(push_constant) uniform Push
+{
+    uint count;
+    uint pixels;
+} push;
+
+void main()
+{
+    uint span = gl_WorkGroupID.x;
+    if (span >= push.count) return;
+
+    uint first = spans[span * 2u], count = spans[span * 2u + 1u];
+    for (uint i = gl_LocalInvocationID.x; i < count; i += gl_WorkGroupSize.x)
+    {
+        uint at = first + i;
+        if (at < push.pixels) raster[at] = 0u;
+    }
+}

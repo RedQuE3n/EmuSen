@@ -43,6 +43,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         internal byte[] LiveScaledRdram = System.Array.Empty<byte>();
         internal byte[] LiveScaledHidden = System.Array.Empty<byte>();
 
+        // The picture as the compute device walked it, one word a pixel, when the device holds the memory at the multiple - see Mars_Gpu.md §13.
+        internal uint[] DevicePicture = System.Array.Empty<uint>();
+        internal bool DeviceScanned;
+
         // Forgets the last capture, for a loaded state, whose raster the walk that follows must write - see §2.8.
         public void Forget() => LastCount = -1;
     }

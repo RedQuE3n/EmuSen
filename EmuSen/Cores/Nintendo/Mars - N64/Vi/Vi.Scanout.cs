@@ -55,8 +55,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
             _bus.Dp.WaitForReadRange(_immediate.From, _immediate.Count, 8);
 
-            // The immediate walk reads the live shadow without a capture, so the device's picture is read back here too - see Mars_Gpu.md §11.2.
-            if (_immediate.Scale > 1) _bus.Dp.ReadBackScaled(_immediate.ScaledFrom, _immediate.ScaledCount);
+            // The immediate walk reads the live shadow without a capture, so the device either walks it or reads it back here - see Mars_Gpu.md §11.2 and §13.
+            if (_immediate.Scale > 1 && _bus.Dp.CanScanOut) DeviceScan(_immediate);
+            else if (_immediate.Scale > 1) _bus.Dp.ReadBackScaled(_immediate.ScaledFrom, _immediate.ScaledCount);
 
             Walk(_immediate);
             return true;
@@ -66,6 +67,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         public bool Prepare(ScanJob job)
         {
             job.Captured = false;
+            job.DeviceScanned = false;
 
             uint origin = Register(Origin) & 0xFF_FFFF;
             if (origin == 0) return false;
@@ -188,6 +190,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             if (job.Scale > 1)
             {
                 int scaled = job.ScaledCount;
+
+                // The device walks its own memory here, where it is idle, so nothing of that memory needs copying - see Mars_Gpu.md §13.
+                if (_bus.Dp.CanScanOut)
+                {
+                    DeviceScan(job);
+                    job.Base = job.From;
+                    job.Length = _bus.Rdram.Length;
+                    job.Captured = true;
+                    return;
+                }
 
                 // What the device holds becomes the shadow's bytes here, which is the one place the walk reads them - see Mars_Gpu.md §11.2.
                 _bus.Dp.ReadBackScaled(job.ScaledFrom, scaled);
@@ -403,6 +415,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             }
             _outputScale = scale;
 
+            if (job.DeviceScanned)
+            {
+                WriteDevicePicture(job, picture, raster, rasterWidth);
+                return;
+            }
+
             int first = (int)(picture.StartX >> 10);
 
             // RDRAM has changed since the last scan, so nothing a slot holds from it stands - see Mars_Performance.md §7.
@@ -469,6 +487,59 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
                     // A darkened column keeps the coverage the raster already held, because only the colour is cleared - see §2.5.
                     if (shown) raster[pixel + 3] = (byte)color.Coverage;
+                }
+            }
+        }
+
+        // The walk's parameters for the device, which walks exactly what Walk would over the same memory - see Mars_Gpu.md §13.
+        private void DeviceScan(ScanJob job)
+        {
+            Picture p = job.ScaledPicture;
+            int n = job.Scale;
+            uint aligned = job.Wide ? job.Origin & 0xFF_FFFC : job.Origin & 0xFF_FFFE;
+
+            var scan = new Rdp.Gpu.GpuRasteriser.ScanParameters
+            {
+                Origin = aligned * (uint)(n * n),
+                Width = (uint)(job.Width * n),
+                Flags = (job.Wide ? Rdp.Gpu.GpuRasteriser.ScanWide : 0) | (job.Resample ? Rdp.Gpu.GpuRasteriser.ScanResample : 0)
+                    | (job.Divot ? Rdp.Gpu.GpuRasteriser.ScanDivot : 0) | (job.Dither ? Rdp.Gpu.GpuRasteriser.ScanDither : 0)
+                    | (job.Gamma ? Rdp.Gpu.GpuRasteriser.ScanGamma : 0),
+                StartX = p.StartX, StepX = p.StepX, StartY = p.StartY, StepY = p.StepY,
+                Rows = (uint)System.Math.Max(p.Rows, 0), Columns = (uint)System.Math.Max(p.Columns, 0),
+                AntiAlias = (uint)job.AntiAlias,
+            };
+
+            System.ReadOnlySpan<uint> walked = _bus.Dp.ScanOut(scan);
+            if (job.DevicePicture.Length < walked.Length) job.DevicePicture = new uint[walked.Length];
+            walked.CopyTo(job.DevicePicture);
+            job.DeviceScanned = true;
+        }
+
+        // The device's words into the raster as the walk writes them: a shown pixel whole, a dark one's colour cleared and its coverage kept.
+        private static void WriteDevicePicture(ScanJob job, Picture picture, byte[] raster, int rasterWidth)
+        {
+            System.Span<byte> words = System.Runtime.InteropServices.MemoryMarshal.AsBytes(job.DevicePicture.AsSpan());
+            int limit = raster.Length / 4;
+
+            for (int row = 0; row < picture.Rows; row++)
+            {
+                int line = picture.Top * picture.Stride + picture.Left + (picture.Lower ? rasterWidth : 0) + picture.Stride * row;
+                int from = row * picture.Columns;
+
+                // The shown columns are one run of whole pixels, so they go across in one copy.
+                int shownFrom = System.Math.Max(System.Math.Max(picture.FirstColumn, 0), -line);
+                int shownTo = System.Math.Min(System.Math.Min(picture.LastColumn, picture.Columns), limit - line);
+                if (shownTo > shownFrom)
+                    words.Slice((from + shownFrom) * 4, (shownTo - shownFrom) * 4).CopyTo(raster.AsSpan((line + shownFrom) * 4));
+
+                for (int column = 0; column < picture.Columns; column++)
+                {
+                    if (column >= picture.FirstColumn && column < picture.LastColumn) continue;
+
+                    int pixel = (line + column) * 4;
+                    if (pixel < 0 || pixel + 3 >= raster.Length) continue;
+                    raster[pixel] = raster[pixel + 1] = raster[pixel + 2] = 0;
                 }
             }
         }

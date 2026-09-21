@@ -15,6 +15,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
 
         private readonly GpuDevice _device;
         private readonly GpuProgram _shade;
+        private readonly GpuProgram _scan;
         private readonly GpuBuffer _memory;
         private readonly GpuBuffer _divide;
         private readonly uint _memoryWords;
@@ -77,6 +78,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             _memoryWords = memoryWords;
             _memory = device.CreateBuffer((ulong)memoryWords * 4, GpuMemory.Device);
             _shade = device.CreateProgram(GpuShaders.Load("shade"), buffers: 8, pushBytes: 36);
+            _scan = device.CreateProgram(GpuShaders.Load("scan"), buffers: 2, pushBytes: 44);
 
             // The reciprocals perspective division reads are a table of the host's, uploaded once: their construction rounds in floating point - see §7.2.
             using (GpuBuffer staged = device.CreateBuffer((ulong)DivideTable.Length * 4))
@@ -337,8 +339,54 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             }
         }
 
+        // What the VI's walk needs to know about one scan, as scan.comp reads it - see Mars_Gpu.md §13.
+        public struct ScanParameters
+        {
+            public uint Origin, Width, SourceBytes, Flags, StartX, StepX, StartY, StepY, Rows, Columns, AntiAlias;
+        }
+
+        public const uint ScanWide = 1, ScanResample = 2, ScanDivot = 4, ScanDither = 8, ScanGamma = 16;
+
+        private GpuBuffer? _scanDevice, _scanHost;
+
+        // The picture walked out of the device's own memory, one word a pixel; valid until the next scan. Drawing must be finished.
+        public ReadOnlySpan<uint> ScanOut(in ScanParameters scan)
+        {
+            Flush();
+
+            int pixels = checked((int)(scan.Rows * scan.Columns));
+            ulong bytes = (ulong)Math.Max(pixels, 1) * 4;
+            if (_scanDevice is null || _scanDevice.Bytes < bytes)
+            {
+                _scanDevice?.Dispose();
+                _scanHost?.Dispose();
+                ulong capacity = System.Numerics.BitOperations.RoundUpToPowerOf2(bytes);
+                _scanDevice = _device.CreateBuffer(capacity, GpuMemory.Device);
+                _scanHost = _device.CreateBuffer(capacity);
+            }
+
+            ScanParameters push = scan;
+            push.SourceBytes = _memoryWords * 2;
+            GpuBuffer device = _scanDevice, host = _scanHost!;
+            uint groupsX = (push.Columns + 7) / 8, groupsY = (push.Rows + 7) / 8;
+
+            _device.Submit(commands =>
+            {
+                commands.Dispatch(_scan, new[] { _memory, device }, push, groupsX, groupsY);
+                commands.Copy(device, host, bytes);
+            });
+
+            Scans++;
+            return host.Span<uint>()[..pixels];
+        }
+
+        public long Scans;
+
         public void Dispose()
         {
+            _scanDevice?.Dispose();
+            _scanHost?.Dispose();
+            _scan.Dispose();
             _readback?.Dispose();
             _divide.Dispose();
             foreach (Staged staged in _inputs) { staged.Host?.Dispose(); staged.Device?.Dispose(); }

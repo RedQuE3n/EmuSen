@@ -777,3 +777,101 @@ integrated adapter was not measured in a running game.
 The deferred crash at four is fixed (§11.5). And the join inside the readback, which §11 suspected of putting the device path's single-threaded walk on the
 critical path, is not separated from the readback's own cost by these runs; the scan-out on the device would remove
 both, so it was not worth separating first.
+
+## 13. Phase 7: the VI's walk on the device (2026-09-21)
+
+§12 found that at four the device had made drawing cost what it costs at one, and that what remained was
+presentation: the VI walking sixteen times the pixels on the processor, and the readback of the memory it walks.
+This phase moves that walk onto the device, which removes both at once. The device walks its own memory into the
+finished picture, so the memory never comes back to the host; only the picture does, and the frontend wants the
+picture anyway.
+
+### 13.1 The walk is per pixel, once two things are seen through
+
+`Vi.Walk` reads as a loop full of state, and two pieces of it look like carries.
+
+**The slot cache.** `Remembered` and `Sampled` keep each line's samples in two slots, keyed by the line and by whether
+the row is "folded". It is a cache and not a carry — "a sample is a function of RDRAM and the registers alone", as
+its own comment says — but its key holds only whether the fetch bug is *one*, while the value it stores is computed
+with a bug that may be zero, one or two. If a value differed between zero and two, the cache would make a pixel
+depend on which row asked first. It does not: every use of the bug in `Filter` and `Dither` compares it with one.
+So the cache returns what a direct computation would, and an invocation can compute directly.
+
+**The fetch bug.** `bug = repeats ? 2 : bug >> 1`, row after row. Since it only ever holds two, one or zero, it has a
+closed form: two where this row reads its line again, one where the row before did, zero otherwise. The shader
+computes that from the row's neighbours' lines.
+
+Everything else — the fetch, the anti-aliasing filter with its runners-up, the de-dither, divot's median, the
+resampling mix and gamma — is a function of the memory and the pixel's own coordinates. The gamma table is computed
+in the shader from `Vi.Root`, the reference's integer square root, rather than uploaded, since it is integers
+throughout and exact.
+
+### 13.2 When the device walks, and why then
+
+A deferred scan is captured on the machine's thread and walked on another. The walk cannot submit to the device
+from that other thread: the rasteriser submits from the leading worker while the next frame draws, and one command
+buffer does not take two threads. So the device walks **at capture time**, on the machine's thread, after the join
+that makes the drawing complete and the device idle, and writes its picture into the job. The deferred walk then
+only copies that picture into the raster: one block copy a row for the shown columns, and the few dark columns
+either side cleared without touching their coverage, which is what `Walk` does to them.
+
+The immediate path does the same inline. Neither path reads back the memory at the multiple any more when the device
+holds it; `ReadBackScaled` is now only the fallback's.
+
+### 13.3 Coverage, and the two survivors
+
+`The_scan_out_on_the_device_is_the_cpus_byte_for_byte` draws a shaded scene into the memory at the multiple through
+the whole interface, once with the device and once without, and scans it both ways under thirteen VI
+configurations: every anti-aliasing mode, the de-dither, divot and gamma on and off, resampling steps that give every
+fraction, a 625-line mode, and four thirty-two-bit modes over a thirty-two-bit scene — at two, three and four, on the
+immediate path and the deferred one. The whole frame is compared byte for byte.
+
+Fourteen mutants of `scan.comp`. Twelve were caught. The first run had nine VI configurations, all sixteen-bit, and
+three survived; the reasons are the part worth keeping.
+
+- **The filter's rounding cannot be seen through a sixteen-bit frame buffer, and this is arithmetic.** `Pull` adds
+  four before shifting right by three. A sixteen-bit pixel's channels are five bits moved up three, so every value
+  the filter sees is a multiple of eight, the difference it scales is a multiple of eight, and adding four can never
+  carry into the shift. Only a thirty-two-bit pixel, with eight-bit channels, distinguishes the two. So did
+  **the wide coverage** survive, for the plainer reason that no mode read a thirty-two-bit pixel at all. Four
+  thirty-two-bit modes were added and both mutants, and a third on the wide fetch's blue byte, died.
+- **The runner-up's tie-break is equivalent, proven by exhaustion.** `Runners` displaces its leader on `>`; with `>=`
+  a tie displaces as well. The function only ever compares values, so every array of up to seven values — the
+  filter's centre and its six neighbours — over seven distinct values covers every ordering there is, ties included.
+  That is 873,612 arrays, and the two agree on all of them.
+
+### 13.4 The number
+
+`pacebench`, flat out, deferred presentation, the device off and on interleaved and the order alternated, three
+rounds each; medians. Each game's state hash was the same across all eighteen of its runs, at one, two and four,
+with and without the device.
+
+| Game | 1× | 2×, CPU | 2×, device | 4×, CPU | 4×, device |
+|---|---|---|---|---|---|
+| Super Mario 64 | 7.57 ms, 263% | 19.55, 102% | **8.39, 237%** | 58.07, 34.4% | **12.53, 159%** |
+| Ocarina of Time | 10.55, 189% | 27.96, 71.4% | **10.61, 188%** | 85.93, 23.3% | **14.06, 142%** |
+| Wave Race 64 | 7.60, 219% | 20.82, 80.0% | **9.94, 167%** | 60.65, 27.5% | **13.92, 120%** |
+
+**The plan's criterion, carried over from §12 unchanged, is met for four and in part for two.** *4× at full speed on
+this machine*: all three games, the slowest at 120 per cent. *2× within five per cent of 1×'s frame rate*: Ocarina,
+at 0.6 per cent; Mario misses at 11 per cent and Wave Race at 31. That part of the criterion is stricter than it
+reads, since one runs flat out at two to two and a half times full speed here, so "within five per cent of it" at two
+means well over twice real time. In play, which is paced, every game at two and at four now runs above full speed
+with room to spare; the worst frames improve most, Wave Race's ninetieth percentile at four falling from 203
+milliseconds to 24.
+
+The phase-6 table (§12.1) measured the device path before this phase at two and four; against it the device's own
+frame at four fell from 45.9 milliseconds to 12.5 for Mario.
+
+### 13.5 What is left, and what this does not cover
+
+**What four still costs** over one is 5 milliseconds for Mario and Wave Race and 3.5 for Ocarina. It is no longer
+drawing or walking. It is the picture's readback — nineteen megabytes at four — two host copies of it, one into the
+job and one into the raster, and the join before the scan. The copies can be halved by writing the raster directly
+on the immediate path and double-buffering the device's output for the deferred one; the readback goes away only if
+the frontend presents the device's image itself, which is the remaining half of the plan's phase 7 and is not
+started.
+
+**Not covered:** the integrated adapter in a running game; `Vi.Average`, the antialiasing setting's downsampling,
+which still runs on the host after the walk; the borders and the two frames of grace, which the host writes as
+before; and more than one state a game.

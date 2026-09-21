@@ -96,6 +96,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             _gpuReport = report;
         }
 
+        // True when the device holds the memory at the multiple and can walk the picture out of it itself - see Mars_Gpu.md §13.
+        public bool CanScanOut => _gpu is not null;
+
+        // The VI's walk over the device's own memory, once the drawing is finished; the result is valid until the next scan.
+        public ReadOnlySpan<uint> ScanOut(in Rdp.Gpu.GpuRasteriser.ScanParameters scan)
+        {
+            Join();
+            return _gpu!.ScanOut(scan);
+        }
+
         // Everything the device holds, read back into the shadow the scan-out walks - see §11.2.
         public void ReadBackScaled(uint from, int count)
         {

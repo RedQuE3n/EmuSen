@@ -807,6 +807,99 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(off.Hidden.AsSpan().SequenceEqual(on.Hidden));
         }
 
+        private const uint GammaOn = 1 << 3, DivotOn = 1 << 4, DitherFilter = 1 << 16;
+
+        // The VI's registers as MarsDeferredPresentationTests builds them, over this class's frame buffer.
+        private static uint[] ViRegisters(int type, int antialias, uint width, uint stepX, uint stepY,
+            uint left, uint columns, uint top, uint rows, uint biasX, uint biasY, uint origin = Framebuffer, uint control = 0, uint sync = 525)
+        {
+            var registers = new uint[14];
+            registers[0] = (uint)(type & 3) | ((uint)(antialias & 3) << 8) | control;
+            registers[1] = origin;
+            registers[2] = width;
+            registers[6] = sync;
+            registers[9] = ((left & 0x3FF) << 16) | ((left + columns) & 0x3FF);
+            registers[10] = ((top & 0x3FF) << 16) | ((top + rows * 2) & 0x3FF);
+            registers[12] = ((biasX & 0xFFF) << 16) | (stepX & 0xFFF);
+            registers[13] = ((biasY & 0xFFF) << 16) | (stepY & 0xFFF);
+            return registers;
+        }
+
+        // Every filter the VI has, at one scale and at resampling steps that give each fraction, over a sixteen-bit frame buffer.
+        public static TheoryData<int, bool> ScalesAndPaths()
+        {
+            var data = new TheoryData<int, bool>();
+            foreach (int scale in new[] { 2, 3, 4 }) foreach (bool deferred in new[] { false, true }) data.Add(scale, deferred);
+            return data;
+        }
+
+        // The VI's walk on the device against the CPU's walk, over the same drawn memory - see Mars_Gpu.md §13.
+        [Theory]
+        [MemberData(nameof(ScalesAndPaths))]
+        public void The_scan_out_on_the_device_is_the_cpus_byte_for_byte(int scale, bool deferred)
+        {
+            if (GpuDevice.DeviceNames().Count == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            // Type two reads sixteen-bit pixels and type three thirty-two: only the wide ones have eight-bit channels, which
+            // is what the filter's rounding and the wide coverage can be seen through - see Mars_Gpu.md §13.3.
+            (uint[] Registers, int Size)[] modes =
+            {
+                (ViRegisters(3, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), 3),
+                (ViRegisters(3, 1, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), 3),
+                (ViRegisters(3, 0, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, control: DitherFilter | DivotOn), 3),
+                (ViRegisters(3, 1, 320, 0x2AB, 0x155, 108, 320, 34, 200, 0x80, 0x40, control: DivotOn | GammaOn), 3),
+                (ViRegisters(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), 2),
+                (ViRegisters(2, 1, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), 2),
+                (ViRegisters(2, 2, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), 2),
+                (ViRegisters(2, 3, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0), 2),
+                (ViRegisters(2, 0, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, control: DitherFilter), 2),
+                (ViRegisters(2, 1, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, control: DivotOn), 2),
+                (ViRegisters(2, 0, 320, 0x2AB, 0x155, 108, 320, 34, 200, 0x80, 0x40, control: DitherFilter | DivotOn | GammaOn), 2),
+                (ViRegisters(2, 1, 320, 0x200, 0x355, 108, 640, 44, 288, 0, 0, sync: 625, control: DitherFilter | DivotOn), 2),
+                (ViRegisters(2, 0, 320, 0x333, 0x2CC, 100, 400, 30, 260, 0x155, 0x0AA, control: GammaOn), 2),
+            };
+
+            byte[] Through(bool gpu, uint[] registers, int size)
+            {
+                var bus = new MemoryBus();
+                SeedTextureSource(bus);
+                bus.Dp.Scale = scale;
+                bus.Dp.Gpu = gpu;
+
+                ulong[] list = Shaded(0x7E57_5CA2, size);
+                for (int i = 0; i < list.Length; i++) bus.Write64(0x0010_0000 + (uint)i * 8, list[i]);
+                bus.Write32(MemoryMap.DpCommandBase, 0x0010_0000);
+                bus.Write32(MemoryMap.DpCommandBase + 4, 0x0010_0000 + (uint)list.Length * 8);
+                bus.Dp.Join();
+
+                for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
+
+                if (deferred)
+                {
+                    var job = new EmuSen.Cores.Nintendo.Mars.Vi.ScanJob();
+                    Assert.True(bus.Vi.Prepare(job));
+                    bus.Vi.Capture(job);
+                    bus.Vi.Walk(job);
+                }
+                else
+                {
+                    Assert.True(bus.Vi.Scan());
+                }
+
+                return bus.Vi.Frame.ToArray();
+            }
+
+            for (int m = 0; m < modes.Length; m++)
+            {
+                byte[] cpu = Through(false, modes[m].Registers, modes[m].Size), device = Through(true, modes[m].Registers, modes[m].Size);
+                Assert.Contains(cpu, b => b != 0);
+
+                int at = cpu.AsSpan().CommonPrefixLength(device);
+                if (at != cpu.Length)
+                    Assert.Fail($"mode {m} at {scale}x {(deferred ? "deferred" : "immediate")}: byte {at} is {device[at]:X2} on the device and {cpu[at]:X2} on the CPU (pixel {at / 4}, channel {at % 4})");
+            }
+        }
+
         // Not a test of anything: the stop-or-go measurement of Mars_Gpu.md §6.5, run by hand with EMUSEN_MARS_GPU_BENCH=1.
         [Fact]
         public void Bench_shading_at_a_multiple_on_the_cpu_and_on_the_device()

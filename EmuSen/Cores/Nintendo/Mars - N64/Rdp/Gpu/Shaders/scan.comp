@@ -1,0 +1,231 @@
+#version 450
+
+// The VI's walk at a multiple, one invocation per pixel of the picture, over the device's own memory - see Mars_Gpu.md §13.
+// Every function is Vi's C# restated, named in its comment. Integers only.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// The memory at the multiple as the rasteriser keeps it: a sixteen-bit word in the low half, its two hidden bits above.
+layout(std430, set = 0, binding = 0) readonly buffer Memory { uint memory[]; };
+
+// One word a picture pixel: red, green, blue and coverage from the low byte up.
+layout(std430, set = 0, binding = 1) writeonly buffer Output { uint picture[]; };
+
+layout(push_constant) uniform Push
+{
+    uint origin;
+    uint width;
+    uint sourceBytes;
+    uint flags;
+    uint startX;
+    uint stepX;
+    uint startY;
+    uint stepY;
+    uint rows;
+    uint columns;
+    uint antiAlias;
+} push;
+
+const uint WIDE = 1u, RESAMPLE = 2u, DIVOT = 4u, DITHER = 8u, GAMMA = 16u;
+const int COVERED = 1;
+
+bool flag(uint f) { return (push.flags & f) != 0u; }
+
+// Vi.Pixel: eight bits a channel and the coverage stored beside them.
+struct Pixel { int r; int g; int b; int c; };
+
+// Vi.Fetch: five bits a channel become eight by moving up; the high bit of a coverage is the word's own.
+Pixel fetch(int at)
+{
+    Pixel p = Pixel(0, 0, 0, 0);
+
+    if (flag(WIDE))
+    {
+        uint address = push.origin + uint(at) * 4u;
+        if (address + 3u >= push.sourceBytes) return p;
+
+        uint high = memory[address >> 1], low = memory[(address >> 1) + 1u];
+        p.r = int(high >> 8) & 0xFF;
+        p.g = int(high) & 0xFF;
+        p.b = int(low >> 8) & 0xFF;
+        p.c = (int(low) >> 5) & 7;
+        return p;
+    }
+
+    uint word = push.origin + uint(at) * 2u;
+    if (word + 1u >= push.sourceBytes) return p;
+
+    uint stored = memory[word >> 1];
+    int pixel = int(stored & 0xFFFFu), hidden = int(stored >> 16) & 3;
+    p.r = (pixel >> 8) & 0xF8;
+    p.g = (pixel & 0x7C0) >> 3;
+    p.b = (pixel & 0x3E) << 2;
+    p.c = ((pixel & 1) << 2) | hidden;
+    return p;
+}
+
+// Vi.Runners: the runner-up at each end, except that a centre nothing ever beats stands as its own.
+ivec2 runners(int values[7], int count)
+{
+    int lowest = 0, highest = 0;
+    int low = values[0], high = values[0];
+
+    for (int i = 1; i < count; i++)
+    {
+        if (values[i] > values[highest]) { high = values[highest]; highest = i; }
+        if (values[i] < values[lowest]) { low = values[lowest]; lowest = i; }
+    }
+
+    for (int i = highest + 1; i < count; i++) if (values[i] > high) high = values[i];
+    for (int i = lowest + 1; i < count; i++) if (values[i] < low) low = values[i];
+
+    return ivec2(low, high);
+}
+
+// Vi.Pull: the pixel moves towards the two runners-up by the coverage it lacks.
+int pull(int values[7], int count, int centre, int missing)
+{
+    ivec2 lh = runners(values, count);
+    return ((((lh.x + lh.y - (centre << 1)) * missing) + 4) >> 3) + centre;
+}
+
+// Vi.Filter: six neighbours, of which only the whole ones count; the row below becomes this row when the fetch bug is on.
+Pixel filterPixel(int at, int bug, Pixel centre)
+{
+    int w = int(push.width);
+    int red[7], green[7], blue[7];
+    red[0] = centre.r; green[0] = centre.g; blue[0] = centre.b;
+    int full = 1;
+
+    int around[6] = int[6](at - w - 1, at - w + 1, at - 2, at + 2, bug == 1 ? at - 2 : at + w - 1, bug == 1 ? at + 2 : at + w + 1);
+    for (int k = 0; k < 6; k++)
+    {
+        Pixel n = fetch(around[k]);
+        if (n.c != 7) continue;
+        red[full] = n.r; green[full] = n.g; blue[full] = n.b;
+        full++;
+    }
+
+    int missing = 7 - centre.c;
+    return Pixel(pull(red, full, centre.r, missing), pull(green, full, centre.g, missing), pull(blue, full, centre.b, missing), centre.c);
+}
+
+// Vi.Step: only the five bits the processor dithered at are compared; the integer sign, since the shaders keep to integers.
+int stepTowards(int centre, int neighbour) { return sign((neighbour & 0xF8) - (centre & 0xF8)); }
+
+// Vi.Dither: a whole pixel steps towards each brighter neighbour and away from each darker one.
+Pixel ditherPixel(int at, int bug, Pixel centre)
+{
+    int w = int(push.width);
+    int around[8] = int[8](at - w - 1, at - w, at - w + 1,
+        bug == 1 ? at - 1 : at + w - 1, bug == 1 ? at : at + w, bug == 1 ? at + 1 : at + w + 1,
+        at - 1, at + 1);
+
+    int r = centre.r, g = centre.g, b = centre.b;
+    for (int k = 0; k < 8; k++)
+    {
+        Pixel n = fetch(around[k]);
+        r += stepTowards(centre.r, n.r);
+        g += stepTowards(centre.g, n.g);
+        b += stepTowards(centre.b, n.b);
+    }
+
+    return Pixel(r, g, b, centre.c);
+}
+
+// Vi.Sample: filtered against its neighbours where the mode reads coverage and the pixel is not whole.
+Pixel samplePixel(int at, int bug)
+{
+    Pixel p = fetch(at);
+    if (int(push.antiAlias) > COVERED) p.c = 7;
+    if (p.c == 7) return flag(DITHER) ? ditherPixel(at, bug, p) : p;
+    return filterPixel(at, bug, p);
+}
+
+// Vi.Median, as the reference spells it.
+int median(int centre, int left, int right)
+{
+    if ((left >= centre && right >= left) || (left >= right && centre >= left)) return left;
+    if ((right >= centre && left >= right) || (right >= left && centre >= right)) return right;
+    return centre;
+}
+
+// Vi.Across with Vi.Divot: a row of whole pixels is left alone, otherwise the middle takes the median of three.
+Pixel acrossPixel(int at, int bug)
+{
+    Pixel p = samplePixel(at, bug);
+    if (!flag(DIVOT)) return p;
+
+    Pixel left = samplePixel(at - 1, bug), right = samplePixel(at + 1, bug);
+    if ((p.c & left.c & right.c) == 7) return p;
+    return Pixel(median(p.r, left.r, right.r), median(p.g, left.g, right.g), median(p.b, left.b, right.b), p.c);
+}
+
+// Vi.Between and Vi.Mix: the colour moves and the coverage stays.
+int between(int near, int far, int fraction) { return ((((far - near) * fraction + 16) >> 5) + near) & 0xFF; }
+
+Pixel mixPixel(Pixel near, Pixel far, int fraction)
+{
+    if (fraction == 0) return near;
+    return Pixel(between(near.r, far.r, fraction), between(near.g, far.g, fraction), between(near.b, far.b, fraction), near.c);
+}
+
+// Vi.Root: the reference's own square root, two bits of the argument a step.
+int root(int value)
+{
+    int rest = value, result = 0, one = 1 << 30;
+    while (one > rest) one >>= 2;
+    while (one != 0)
+    {
+        if (rest >= result + one) { rest -= result + one; result += one << 1; }
+        result >>= 1;
+        one >>= 2;
+    }
+    return result;
+}
+
+int gammaOf(int channel) { return (root(channel << 6) << 1) & 0xFF; }
+
+void main()
+{
+    uint column = gl_GlobalInvocationID.x, row = gl_GlobalInvocationID.y;
+    if (column >= push.columns || row >= push.rows) return;
+
+    // Vi.Walk for one pixel of the picture.
+    uint down = push.startY + row * push.stepY;
+    int w = int(push.width);
+    int source = w * int(down >> 10);
+    int below = source + w;
+    int fractionY = int(down >> 5) & 0x1F;
+
+    // The row-to-row bug counter in closed form: two where this row reads its line again, one where the row before did.
+    bool repeats = (down >> 10) == ((push.startY + (row + 1u) * push.stepY) >> 10);
+    bool repeated = row > 0u && ((push.startY + (row - 1u) * push.stepY) >> 10) == (down >> 10);
+    int bug = repeats ? 2 : repeated ? 1 : 0;
+
+    uint across = push.startX + column * push.stepX;
+    int step = int(across >> 10);
+    int fractionX = int(across >> 5) & 0x1F;
+
+    Pixel color = acrossPixel(source + step, 0);
+
+    if (flag(RESAMPLE) && fractionX != 0)
+    {
+        Pixel next = acrossPixel(source + step + 1, 0);
+        if (fractionY != 0)
+        {
+            Pixel lower = acrossPixel(below + step, bug);
+            Pixel lowerNext = acrossPixel(below + step + 1, bug);
+            color = mixPixel(color, lower, fractionY);
+            next = mixPixel(next, lowerNext, fractionY);
+        }
+        color = mixPixel(color, next, fractionX);
+    }
+    else if (flag(RESAMPLE) && fractionY != 0)
+    {
+        color = mixPixel(color, acrossPixel(below + step, bug), fractionY);
+    }
+
+    if (flag(GAMMA)) { color.r = gammaOf(color.r); color.g = gammaOf(color.g); color.b = gammaOf(color.b); }
+
+    picture[row * push.columns + column] = uint(color.r & 0xFF) | uint(color.g & 0xFF) << 8 | uint(color.b & 0xFF) << 16 | uint(color.c & 0xFF) << 24;
+}

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace EmuSen.Mistress.Input
 {
     // What a pad asks of the interface, named by what it does rather than by the button - see EmuSen_Settings_Reference.md §4.29.
-    public enum UiButton { Up, Down, Left, Right, Accept, Back, Menu, Options, PageUp, PageDown, First, Last, Guide }
+    public enum UiButton { Up, Down, Left, Right, Accept, Back, Menu, Options, PageUp, PageDown, First, Last, Guide, Search }
 
     // Held buttons turned into presses: one on the way down, and for the ones that move, more while held - see §4.29.
     public sealed class PadNavigator

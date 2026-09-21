@@ -740,6 +740,7 @@ library if it is showing.
 | East | back to a suspended game | close | close an open dropdown, else the window |
 | L1, R1 | ten titles | | previous and next tab |
 | L2, R2 | first and last title | | |
+| North | focus the search box and ask for the keyboard (§4.30) | | |
 | Start | open the menu | close | |
 | Guide, or Back and Start together | open the menu | | |
 
@@ -783,8 +784,7 @@ resuming unconditionally, letting accept repeat, dropping the synthesised Tab, a
   buttons to `UiButton`, the stick threshold of 0.55 and the release wait after a menu closes are read from a
   physical pad that a headless run does not have, and are verified only by hand. A fake `GamepadManager` is the
   harness extension that would close this.
-- *Text entry.* The search box and every path field still want a keyboard. On a Deck that is Steam's on-screen
-  keyboard; nothing here summons it.
+- *Text entry.* Closed the same day by §4.30, as far as it can be closed without a Deck to try it on.
 - *File pickers and the binding capture.* The system's file dialog is not an Avalonia window and the router cannot see
   it. The controller-binding window can be walked and its capture started from the pad, but what the capture then
   hears is that window's own business and was not changed.
@@ -793,6 +793,45 @@ resuming unconditionally, letting accept repeat, dropping the synthesised Tab, a
 - *A defect the tests found on the way, fixed beside this work:* stepping the filter onto "SNES (Venus)" was saved as
   such and read back as every console, because the legacy upgrade ran on every load rather than once. See
   `EmuSen_Multicore.md` §10.3a.
+
+### 4.30 Text from a pad: Steam's keyboard is asked for, not rebuilt
+
+*2026-09-21.* §4.29 left text entry to a keyboard the player does not have. On SteamOS there is already an on-screen
+keyboard, the player already knows it, and Steam opens it for any client that asks through the URL
+`steam://open/keyboard`. `SteamKeyboard.Show` hands that URL to the running client. What it types arrives as
+ordinary key events, so nothing downstream of the text box knows where they came from.
+
+**Why not a keyboard of our own.** It would be a second one on the machine this is for, laid out differently from
+the one a finger already knows, with no languages and no swipe, and it would be ours to maintain. It would earn its
+place only on a machine with a pad and no Steam, which is not the target (§4.29). That case is left open rather than
+argued away: see below.
+
+**When it is asked for.** In the library the north button focuses the search box and asks; the hint footer says so.
+In any other window, accept on a focused text box asks, where it would otherwise have sent Enter. The library keeps
+moving under a focused search box, so a match can be chosen with the D-pad and started with the south button without
+leaving the box, and the east button leaves the box for the selected row, keeping what was typed. Enter from the
+keyboard starts the top match, which is what Enter in that box has always done (§4.11a).
+
+**Only a Steam that is already there is asked.** The command that delivers the URL to a running client is the same
+command that starts a client when none is running, and a search box that launches Steam on a desktop is a defect.
+`IsAvailable` is therefore true only under a Deck's session (`SteamDeck=1`), under a game launched by Steam
+(`SteamGameId`), or when `~/.steam/steam.pid` names a live process. Otherwise `Show` does nothing and says so by
+returning false. A launch that throws is also false and nothing more: a missing keyboard must not take a window down.
+
+**Coverage.** Four cases in `PadNavigationTests`, with the launcher, the environment and the running check replaced,
+so that no test starts Steam: the gate's three ways of being open and its being shut; a throwing launcher; the
+library's search, list movement under it and the way back; and accept on a text box in the preferences window. One
+mutant, removing the router's text-box case, was caught by the last.
+
+**What it does not cover.**
+
+- *It has not been seen to open.* No test can, and this machine was not in a Steam session when it was written. The
+  URL is Steam's documented one; that Game Mode honours it for a non-Steam shortcut is the claim to check first on a
+  Deck. Steam and X together open the same keyboard by hand, so a failure here costs a chord, not the feature.
+- *Where it opens.* The URL takes a position and size; none is passed, so it docks where Steam puts it and may cover
+  the list's lower rows while typing.
+- *A pad with no Steam.* Nothing opens and the box wants a real keyboard, as before.
+- *The system file picker* is still out of reach (§4.29); typing a path into a path field's box is now the way round it.
 
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 

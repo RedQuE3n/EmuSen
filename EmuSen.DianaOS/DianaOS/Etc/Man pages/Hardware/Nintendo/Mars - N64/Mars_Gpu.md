@@ -513,7 +513,48 @@ memory — sixteen megabytes at two, sixty-four at four — because it compares 
 picture, which at two is six hundred kilobytes. The figure is still worth keeping as an upper bound on what a
 readback costs: about 1.3 gigabytes a second on this card, so the picture alone would be under half a millisecond.
 
-**What this does not measure.** One frame each, one run each, no threading on the CPU side, and the state was
+### 9.3 The integrated adapter, and a prediction retired
+
+§6.5 measured the synthetic scenes on the integrated Radeon and called the result "parity, not a win": from 1.5
+times four ideal CPU workers down to 0.7. **Real frames say otherwise, and by a wide margin.**
+
+| Frame | Multiple | CPU, one worker | A quarter of it | Integrated shading | Discrete shading |
+|---|---|---|---|---|---|
+| Super Mario 64 | 2× | 236 ms | 59 | **9.9** | 1.5 |
+| Wave Race 64 | 2× | 212 | 53 | **10.5** | 1.8 |
+| Super Mario 64 | 4× | 318 | 79 | **34.9** | 3.3 |
+| Wave Race 64 | 4× | 354 | 88 | **35.2** | 3.9 |
+
+Six times the ideal four workers at two, and two and a half at four, on two compute units. Both frames are
+byte-identical there as well.
+
+**Why the synthetic scenes were wrong about this.** They were seventy-two large triangles with heavy overdraw,
+chosen to exercise the blender, which makes them shader-bound in a way a game's frame is not. A real frame has many
+small primitives and far less overdraw per pixel, so the device is not saturated and the weak adapter keeps up. The
+lesson is the one §5.5 and §6.4 keep teaching in another form: **a scene built to exercise a stage is not a scene
+that predicts its cost**, and the speed question needed the recorded frames as much as the exactness question did.
+
+This retires §6.5's "parity" sentence. What survives of it is the caution that a handheld's answer needs games, and
+that is still true: this is one frame, not a frame rate.
+
+### 9.4 What this does not measure
+
+One frame each, one run each, no threading on the CPU side, and the state was
 restored before each. The CPU column is a single worker, not the four the CPU path would use; divide by four for a
-fair bound and the device is still fifty times faster at shading. Nothing here is a frame rate: the machine's own
-thread (`Mars_Performance.md` §37) is untouched by any of it.
+fair bound and the device is still thirty times faster at shading on the discrete card and six times on the
+integrated one.
+
+**Nothing here is a frame rate**, and the three things between this and one are all phase 5's: every batch is
+flushed and waited for synchronously, a frame changes its colour image more often than these replays did, and the
+picture has to be read back once a frame rather than once a measurement. Nor does any of it touch the machine's own
+thread, which `Mars_Performance.md` §37 found to be the bound at one — the device is aimed at the multiple and at
+nothing else, exactly as `Mars_GpuPlan.md` §0 said.
+
+### 9.5 Is the host's walk a problem?
+
+It is the next thing to make faster and it is not a reason to doubt the design, because **the CPU path pays it
+too**. Both paths run the same `Walk`; the device path then writes 72 words a primitive and 32 a row where the CPU
+path shades every pixel. So the device path's own CPU cost, ten to fourteen milliseconds, is measured against the
+CPU path's whole one hundred and eighty to six hundred, and the walk is common to both. Removing the shading
+removes about ninety-five per cent of what drawing at a multiple costs the processor, and what is left is a walk
+that was always there.

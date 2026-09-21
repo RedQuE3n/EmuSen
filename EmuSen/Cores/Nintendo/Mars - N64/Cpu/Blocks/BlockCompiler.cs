@@ -36,6 +36,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
         private static readonly FieldInfo ExtraCycles = CpuField("_extraCycles");
         private static readonly FieldInfo Hi = CpuField("Hi");
         private static readonly FieldInfo Lo = CpuField("Lo");
+        private static readonly FieldInfo CallObserver = CpuField("CallObserver");
+        private static readonly FieldInfo ReturnObserver = CpuField("ReturnObserver");
         private static readonly FieldInfo DpWriteMarks = CpuField("_dpWriteMarks");
         private static readonly FieldInfo Cop0 = CpuField("Cop0");
         private static readonly MethodInfo WriteFpuWord = CpuMethod("WriteFpuWord", typeof(int), typeof(uint));
@@ -47,6 +49,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
         private static readonly MethodInfo Swap32 = Method(typeof(System.Buffers.Binary.BinaryPrimitives), "ReverseEndianness", typeof(int));
         private static readonly MethodInfo SwapU32 = Method(typeof(System.Buffers.Binary.BinaryPrimitives), "ReverseEndianness", typeof(uint));
         private static readonly MethodInfo Swap64 = Method(typeof(System.Buffers.Binary.BinaryPrimitives), "ReverseEndianness", typeof(long));
+
+        // Off only to measure what the inlined jumps and likely branches save, or to show they change nothing - see Mars_Recompiler.md §18.
+        public static bool InlineJumps = Environment.GetEnvironmentVariable("EMUSEN_MARS_NOINLINEJUMPS") != "1";
 
         // Off only to measure what the inlined loads save, or to show they change nothing - see Mars_Recompiler.md §16.
         public static bool InlineLoads = Environment.GetEnvironmentVariable("EMUSEN_MARS_NOINLINELOADS") != "1";
@@ -225,6 +230,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                     case Kind.Pure: Pure(d.Word); break;
                     case Kind.Store: StoreOf(d); break;
                     case Kind.Branch when Compares(d.Word): Compare(d.Word, k); break;
+                    case Kind.Branch when InlineJumps && Jumps(d.Word): Jump(d.Word, k); break;
                     case Kind.Call when InlineLoads && Loads(d.Word): Load(d.Word); break;
                     case Kind.Call when InlineLoads && (d.Word >> 26) is 0x31 or 0x35: LoadFloat(d.Word); break;
                     case Kind.Call when InlineLoads && MovesFloat(d.Word): MoveFloat(d.Word); break;
@@ -324,13 +330,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
             private static bool Compares(uint word)
             {
                 uint op = word >> 26;
-                return op is 0x04 or 0x05 or 0x06 or 0x07 || (op == 0x01 && ((word >> 16) & 0x1F) is 0 or 1);
+                if (op is 0x04 or 0x05 or 0x06 or 0x07 || (op == 0x01 && ((word >> 16) & 0x1F) is 0 or 1)) return true;
+                return InlineJumps && Likely(word);
             }
 
             private void Compare(uint word, int k)
             {
-                uint op = word >> 26;
+                // A likely branch compares as its plain twin does: the opcode less its likely bit, and the register-immediate pair two on.
+                uint op = (word >> 26) & ~0x10u;
                 int rs = (int)((word >> 21) & 0x1F), rt = (int)((word >> 16) & 0x1F);
+                if (op == 0x01) rt &= 1;
                 Label notTaken = _il.DefineLabel();
 
                 LdReg(rs);
@@ -346,8 +355,65 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 }
 
                 StoreAddress(NextPc, k * 4 + 4 + ((short)word << 2));
+
+                // A likely branch not taken annuls its slot: the counters go past it and nothing is pending, as NullifyDelaySlot leaves them - see §18.
+                if (Likely(word))
+                {
+                    Label done = _il.DefineLabel();
+                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
+                    _il.Emit(OpCodes.Br, done);
+                    _il.MarkLabel(notTaken);
+                    StoreAddress(Pc, k * 4 + 8);
+                    StoreAddress(NextPc, k * 4 + 12);
+                    _il.MarkLabel(done);
+                    return;
+                }
+
                 _il.MarkLabel(notTaken);
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
+            }
+
+            private static bool Likely(uint word) => (word >> 26) is 0x14 or 0x15 or 0x16 or 0x17 || ((word >> 26) == 0x01 && ((word >> 16) & 0x1F) is 2 or 3);
+
+            // The jumps and the register jumps, with and without a link - see §18.
+            private static bool Jumps(uint word) => (word >> 26) is 0x02 or 0x03 || ((word >> 26) == 0 && (word & 0x3F) is 0x08 or 0x09);
+
+            // What Branch leaves: the target next and a branch pending; a link first, and the interpreter's call instead while a debugger's call stack is listening - see §18.
+            private void Jump(uint word, int k)
+            {
+                uint op = word >> 26;
+                int rs = (int)((word >> 21) & 0x1F), rd = (int)((word >> 11) & 0x1F);
+                bool register = op == 0, link = op == 0x03 || (register && (word & 0x3F) == 0x09);
+                Label slow = _il.DefineLabel(), done = _il.DefineLabel();
+
+                if (link || (register && rs == 31))
+                {
+                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, link ? CallObserver : ReturnObserver); _il.Emit(OpCodes.Brtrue, slow);
+                }
+
+                if (register)
+                {
+                    // The target is read before the link is written, since they may be one register.
+                    LdReg(rs); _il.Emit(OpCodes.Stloc, _address);
+                    if (link) StReg(rd, () => { _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Ldc_I8, (long)(k * 4 + 8)); _il.Emit(OpCodes.Add); });
+                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldloc, _address); _il.Emit(OpCodes.Stfld, NextPc);
+                }
+                else
+                {
+                    if (link) StReg(31, () => { _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Ldc_I8, (long)(k * 4 + 8)); _il.Emit(OpCodes.Add); });
+                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Ldc_I8, (long)(k * 4 + 4)); _il.Emit(OpCodes.Add);
+                    _il.Emit(OpCodes.Ldc_I8, unchecked((long)0xFFFF_FFFF_F000_0000)); _il.Emit(OpCodes.And);
+                    _il.Emit(OpCodes.Ldc_I8, (long)((word & 0x03FF_FFFF) << 2)); _il.Emit(OpCodes.Or);
+                    _il.Emit(OpCodes.Stfld, NextPc);
+                }
+
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
+                _il.Emit(OpCodes.Br, done);
+
+                _il.MarkLabel(slow);
+                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
+                _il.MarkLabel(done);
             }
 
             private void StoreAddress(FieldInfo field, int offset)

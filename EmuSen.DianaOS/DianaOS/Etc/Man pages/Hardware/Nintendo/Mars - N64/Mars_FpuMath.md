@@ -288,3 +288,42 @@ cartridges are not in the repository and never will be.
 > test harness starts both games' audio microcode, and raising the serial interrupt as well
 > gets Wave Race to its first graphics task (`Mars_Microcode.md` §2). Both games had unmasked
 > the video interrupt and programmed its line before settling, so the inference was right.
+
+## 11. Single-precision add, subtract and multiply on the host, where its answer is provably the unit's
+
+*2026-09-20.* The software unit is exact by construction and costs what that costs: an interrupt sample of Ocarina
+of Time in play put it at 8.5 per cent of the emulation thread, a multiply, an add and the rounding they share
+most of it, and the census put the three single-precision operations at a fifth of what still reaches the
+interpreter (`Mars_Recompiler.md` §18). `HostSingle.TryCompute` answers those three on the host **only where the
+host's answer can be proved to be the unit's**, and declines everything else.
+
+**The argument.** A single has twenty-four significant bits. The product of two is at most forty-eight, which a
+double holds whole, so `(double)a * (double)b` is the exact product; the sum or difference of two singles whose
+exponents differ by no more than twenty-eight is likewise whole in a double's fifty-three. The host's conversion of
+that exact double to a single rounds to nearest, ties to even, which is the unit's rounding in the only mode the
+path accepts, and because the double was exact there is one rounding and not two. The result is inexact exactly
+when converting it back does not give the double. So for such operands the bits and the inexact flag are the
+unit's, and no other flag can arise.
+
+**What is declined**, and left to the unit with its flags and its refusals: any operand that is not a normal
+number — a zero, a denormal, an infinity, a NaN — since zeros have sign rules and the rest raise or are refused;
+any rounding mode but nearest; a sum whose exponents are more than twenty-eight apart; an exact result smaller
+than the smallest normal number, which covers tininess by either definition and the zero of a cancelling sum; and a
+result that rounds to infinity. Double precision is not attempted: its products are not whole in anything the
+host offers.
+
+**Delivered the same way.** The host's bits and flag go to `Deliver` as the unit's would: the cause bits replaced,
+the enables consulted, the sticky flags added, the register written. Nothing about the status register is decided
+twice.
+
+**The proof.** `MarsHostSingleTests` compares `TryCompute` with the unit (`HostSingle.Reference`) for each
+operation over 1.5 million random bit patterns, every exponent against every exponent within thirty-two of it with
+the mantissas that sit on rounding boundaries and random ones in all four sign pairs, and 400,000 products aimed at
+both ends of the range, and insists that the host answered more than a million cases, found more than 100,000
+inexact and declined more than 100,000. Four mutants of the guards were all caught: sums allowed past the
+exponents a double holds whole, tiny results not declined, overflow not declined, the inexact flag never raised.
+The state hash after 1,200 frames is the same with the path off and on in Ocarina of Time, Super Mario 64 and
+GoldenEye, and the probe's two games are identical to their baselines. `EMUSEN_MARS_NOHOSTFLOAT=1` turns it off.
+
+**What it was worth** is `Mars_Recompiler.md` §18: about three per cent of Ocarina of Time's frame, the game that
+leans on the unit most. Division, the square root, the conversions and the compares are still the unit's.

@@ -93,6 +93,24 @@ on the software backend "draw" is the whole scale-and-filter on the processor, w
 GPU backend's. `Each_drawn_frame_is_counted_once_with_its_size_and_backend` checks the counting on the headless
 platform, which has no GPU; the GPU backend's figures exist only in a real window.
 
+**The first reading** (2026-09-21, Mistress on this machine's RX 6800 under GLX, Super Mario 64's European release, so
+50 fps, the Mars GPU setting on, antialiasing off, paced; one one-second window each, read off the screen):
+
+| Resolution | Frame | Copy | Draw and upload | Emulated fps | Shown fps |
+|---|---|---|---|---|---|
+| 1× | 640×576 | 0.06 ms | 0.16 ms | 50.5 | 51.5 |
+| 2× | 1280×1152 | 0.29 | 0.35 | 50.8 | 51.8 |
+| 3× | 1920×1728 | 0.84 | 0.84 | 50.0 | 50.0 |
+| 4× | 2560×2304 | 1.71 | 1.32 | 49.4 | 51.4 |
+
+The cost grows with the frame's area, as a copy and an upload should, and at four is some three milliseconds of a
+twenty-millisecond frame, on a thread that is not the one bounding the frame rate: every multiple ran at full speed.
+Two things in the same numbers are worth more than their size suggests. **The frame is twice as tall as the picture**:
+2,304 lines at four are 288 doubled, because `MarsCore.Compose` repeats each line of a progressive field and the
+frontend has no way to be told to stretch instead, so half of what is copied and uploaded is a copy of the line
+above. **More frames are shown than offered**, by one or two a second: the control redraws when anything else in the
+window invalidates it, such as this readout's own text, and each redraw copies and uploads the frame again.
+
 ---
 
 ## 3. The built-in shaders

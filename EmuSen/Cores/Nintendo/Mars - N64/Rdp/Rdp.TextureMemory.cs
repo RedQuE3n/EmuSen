@@ -36,6 +36,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         private void Tile(ulong word)
         {
+            _tilesChanged = true;
             ref TextureTile tile = ref _tiles[(word >> 24) & 7];
             tile.Format = (int)(word >> 53) & 7;
             tile.Size = (int)(word >> 51) & 3;
@@ -54,6 +55,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         private ref TextureTile TileSize(ulong word)
         {
+            _tilesChanged = true;
             ref TextureTile tile = ref _tiles[(word >> 24) & 7];
             tile.SL = Quarters(word >> 44);
             tile.TL = Quarters(word >> 32);
@@ -199,6 +201,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
         private void WriteTextureWord(int index, int value)
         {
+            _textureMemoryChanged = true;
             TextureMemory[index * 2] = (byte)(value >> 8);
             TextureMemory[index * 2 + 1] = (byte)value;
         }

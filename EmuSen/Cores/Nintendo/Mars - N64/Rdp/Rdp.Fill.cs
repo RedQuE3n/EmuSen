@@ -156,7 +156,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         {
             VerifyModes();
             Drew = true;
-            if (_gpu is not null) { RecordForTheDevice(rows, majorOnLeft); return; }
+            if (_gpu is not null) { RecordForTheDevice(rows, majorOnLeft, tile, maxLevel); return; }
             if (CycleType == FillCycle) FillSpans(rows);
             else if (CycleType == OneCycle) DrawOneCycle(rows, majorOnLeft, tile, maxLevel);
             else if (CycleType == TwoCycle) DrawTwoCycle(rows, majorOnLeft, tile, maxLevel);

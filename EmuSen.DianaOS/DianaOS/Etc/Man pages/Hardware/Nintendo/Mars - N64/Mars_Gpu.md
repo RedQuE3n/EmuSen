@@ -283,3 +283,111 @@ Real lists change images and modes more often, and every change of image is a fl
 **Not covered:** the carries of §6.2; eight-bit images; a depth image that aliases another pixel's colour word,
 which the invocation's two locals would get wrong and which no scene draws; the noise dithers, which the CPU path
 does not build either.
+
+## 7. Phase 3, part one: point-sampled textures (2026-09-21)
+
+The plan's phase 3 is textures, and it is large enough to land in parts. This part is the texel a coordinate names:
+the perspective division, the tile's shift, clamp, mask and mirror, and the fetch for every format and size. The four
+texels of a filtered sample and the palette are `Rdp.Filter.cs`, and the level of detail is `Rdp.Lod.cs`; both wait
+for the next part. Primitives that ask for them are counted and not drawn, as §6.2's are.
+
+### 7.1 What a primitive carries, and what a ring carries
+
+A texel needs the processor's four kilobytes of texture memory and its eight tile descriptors. Both change far less
+often than a primitive is drawn, so neither belongs in a primitive's record. They go into two rings of their own, and
+a primitive holds an index into each. The host pushes a snapshot only when the thing has changed: `Rdp` sets a flag
+in `WriteTextureWord` and in the two tile commands, and clears it when the rasteriser has taken a copy. A batch that
+loads no texture therefore uploads one snapshot, not one per primitive.
+
+Texture memory is uploaded as its 2,048 sixteen-bit words, which is how `Rdp.TextureWord` already addresses it; a
+byte index is halved in the shader as the C# halves it. A tile is four words: format, size, line, memory and palette
+in the first, the clamp, mirror, mask and shift fields in the second, and its four quarter-texel bounds in the last
+two. The primitive record grew from 64 words to 72 to hold the texture flags, the two ring indices, the base tile,
+the two level bounds and the four conversion constants. A row's grew from 24 to 32, for the next row's first three
+texture coordinates and three span flags, which is what the last pixel of a long span needs (§7.3).
+
+**The loads themselves stay on the host**, unported. `Rdp.Load` walks rows of the machine's memory into texture
+memory in the console's byte order, with its own swizzling; it runs once per load and not once per pixel, and it
+reads the machine's own memory, which the device does not have. Both processors run it, as they run every command.
+
+### 7.2 The reciprocal table is the host's
+
+`Rdp.BuildDivideTable` rounds in floating point (`Math.Round(0x100000 / (64.0 + segment))`). Putting that in a
+shader would be a second implementation of a rounding rule, held equal only by luck. The table is built once on the
+host, exactly as the C# builds it, and uploaded to a device buffer at creation: 32,768 words, 128 KB, written once
+and read by every dispatch. It is the only input that is not per-batch.
+
+### 7.3 The level of detail is not a carry, and neither is the next pixel's texel
+
+`Rdp.DrawOneCycle` carries a `levelReady` flag: the level measured for a pixel's texel 1 is reused by the next pixel
+instead of being measured again. Read as a carry that would have put the whole of the level of detail out of an
+invocation's reach. It is not one. The arguments the next pixel would pass are the arguments the previous pixel
+passed for its texel 1, term for term, so the flag is an optimisation and the level at a pixel is a function of that
+pixel alone. The same holds for texel 1's coordinates, which are the next pixel's, except at the last pixel of a long
+span, where they are the next drawn row's first — and the host knows that row and now writes its three coordinates
+into the record. So the only true carry in the one-cycle mode remains the combiner's COMBINED input (§6.2).
+
+### 7.4 Coverage, and four scene gaps the mutants found
+
+`Point_sampled_textures_on_the_device_are_the_cpus_byte_for_byte` draws, for each of the twenty format and size
+pairs three times over, a tile loaded from a sixteen-bit image and then read under that format, with random line,
+memory offset, palette, mask, shift, clamp and mirror, and a triangle over it whose combiner reads texel 0 and
+texel 1. Four lists: one without perspective, two with the divider in its ordinary range, one with it at its edges.
+
+The first run of that test passed at every multiple, and **eleven of twelve mutants of the new code survived it**.
+The test was very nearly worthless, and four separate faults of the scene had to be found and fixed, each by
+measurement rather than by reading:
+
+1. **The texture source address was 0x400000**, which is the first byte past a four megabyte machine. Every load
+   read zero, so texture memory was empty and every texel was the same. Found by writing different bytes at the
+   source and counting how many bytes of the picture changed: none.
+2. **Every triangle used tile zero**, because the tile index lives in bits 48 to 50 of a triangle's first word and
+   nothing put it there, while the loads used a tile chosen at random.
+3. **No tile had a memory offset**, so a mutant that dropped the offset from the fetch's address changed nothing.
+4. **The perspective divider was never exercised**, and this took three attempts. A census of the shifts and the
+   overflow flags, taken by instrumenting the CPU, showed every coordinate saturating. The cause was arithmetic the
+   scene generator had backwards: the divider answers s over w, so a coordinate inside its range needs **s below w**,
+   and the generator made s a multiple of w. Correcting that gave clean results at every shift.
+
+### 7.5 A test that shows the divider, because a scene will not
+
+Even with all four fixed, three mutants of the divider survived. The reason is a property of the hardware worth
+recording: **at its coarsest shifts the divider can answer almost nothing**. The result is s times two to the
+fifteen over w, so with w of two the only coordinates it can produce are zero and sixteen thousand; with w of one,
+only zero. A scene of random triangles reaches those states constantly and can distinguish nothing in them, because
+neighbouring inputs give the same answer.
+
+`Every_shift_of_the_perspective_divider_reaches_the_picture` is the answer: 356 triangles, each carrying one
+constant coordinate and one constant w, over a tile that neither clamps nor mirrors, with a combiner that is the
+texel itself and no depth or alpha test. Each triangle therefore paints the coordinate the divider gave it. The
+cases sweep every shift, each with a power of two and a nearby non-power of two, so that the table interpolates
+between two reciprocals rather than landing on one, and with coordinates below w, at w and past it, which is where
+the divider decides a result is out of range. A w of zero and two negative ones close the sign test. The test also
+asserts that the picture holds more than sixteen colours, so that a future change which collapses every coordinate
+to one texel fails rather than passes quietly.
+
+With it, three of the four survivors are caught: the shift's special case at fourteen, the sign test's boundary at
+zero, and a reciprocal off by one.
+
+### 7.6 One equivalent mutant, and why it is equivalent
+
+Widening the divider's range test by one bit — `(1 << 29) >> shift` to `(1 << 28) >> shift` — changes nothing, and
+this is provable rather than merely unobserved. The range's lowest bit is the bit that becomes bit 16 of the
+seventeen-bit result, so the original declares overflow when bits 16 and above are not all equal. The wider range
+declares it when bits 15 and above are not, which is exactly the case `ClampCoordinate` saturates on without any
+flag: bit 15 set and bit 16 clear gives 0x7FFF, the reverse gives 0x8000. The mutant's flags give the same two
+values, choosing between them by bit 29 of the product, and bit 29 is the product's sign extension here because the
+reciprocal never exceeds 2^14 and the coordinate never exceeds 2^15, so the product never reaches 2^29. The two
+paths therefore agree for every input the machine can present. Recorded rather than chased.
+
+### 7.7 What this part does not cover
+
+- **Filtering and the palette.** `SampleFour` and `PaletteEnabled` primitives are kept back and counted. That is
+  most textured drawing in a real game, so the counter will be large until the next part.
+- **The level of detail.** Argued above to be per-pixel, but not written; `LodEnabled` primitives are kept back, and
+  so is a combiner reading the level fraction.
+- **Copy mode**, still, for the reason §5.4 gave.
+- **The loads**, which run on the host and are not the device's business.
+- **A texture image of four bits**, whose loads the C# already declines.
+- **Speed.** Nothing here was measured. The texture memory ring is eight kilobytes a snapshot, and a batch of a
+  real game's frame may hold many; whether that upload matters is phase 5's question, not this one's.

@@ -15,10 +15,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             if (gpu is not null) { _alone = true; _workers = 1; }
         }
 
-        private void RecordForTheDevice((int First, int Last) rows, bool majorOnLeft)
+        // Set when a load or a tile command has changed what the device's copy would have to hold - see Mars_Gpu.md §7.1.
+        [EmuSen.Common.SkipInState] private bool _textureMemoryChanged = true;
+        [EmuSen.Common.SkipInState] private bool _tilesChanged = true;
+
+        private void RecordForTheDevice((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             GpuRasteriser gpu = _gpu!;
-            if (CycleType != FillCycle && (CycleType != OneCycle || !TheDeviceShadesThisCombiner())) { gpu.NotShaded(); return; }
+            if (CycleType != FillCycle && (CycleType != OneCycle || !TheDeviceShadesThisPrimitive())) { gpu.NotShaded(); return; }
 
             gpu.Image(_colorImage & ~(uint)Math.Max(_colorImageBytes - 1, 0), _colorImageWidth, _colorImageBytes == 1 ? 0 : _colorImageBytes);
             gpu.DepthImage(_depthImage);
@@ -34,21 +38,34 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 return;
             }
 
-            RecordOneCycle(gpu, rows, majorOnLeft);
+            RecordOneCycle(gpu, rows, majorOnLeft, tile, maxLevel);
         }
 
-        // The previous pixel's result, a texel and the level of detail are carries or fetches the device does not have yet - see §6.
-        private bool TheDeviceShadesThisCombiner()
+        // The previous pixel's result is a carry; four texels and the level of detail are stages not ported yet - see §6.2 and §7.
+        private bool TheDeviceShadesThisPrimitive()
         {
-            (bool texel0, bool texel1) = CombinerTexels();
             bool lodFraction = CombineColorC == 13 || CombineAlphaC == 0;
             bool combined = CombineColorA == 0 || CombineColorB == 0 || CombineColorD == 0 || CombineColorC == 0 || CombineColorC == 7
                 || CombineAlphaA == 0 || CombineAlphaB == 0 || CombineAlphaD == 0;
-            return !texel0 && !texel1 && !lodFraction && !combined;
+            return !combined && !lodFraction && !LodEnabled && !SampleFour && !PaletteEnabled;
+        }
+
+        // The eight tiles as the shader reads them, four words each - see §7.1.
+        private void RecordTiles(Span<uint> into)
+        {
+            for (int i = 0; i < _tiles.Length; i++)
+            {
+                ref TextureTile tile = ref _tiles[i];
+                into[i * 4] = (uint)(tile.Format | (tile.Size << 3) | (tile.Line << 5) | (tile.Memory << 14) | (tile.Palette << 23));
+                into[i * 4 + 1] = (uint)(Bit(0, tile.ClampS) | Bit(1, tile.MirrorS) | Bit(2, tile.ClampT) | Bit(3, tile.MirrorT)
+                    | ((uint)tile.MaskS << 4) | ((uint)tile.ShiftS << 8) | ((uint)tile.MaskT << 12) | ((uint)tile.ShiftT << 16));
+                into[i * 4 + 2] = (uint)(tile.SL | (tile.TL << 12));
+                into[i * 4 + 3] = (uint)(tile.SH | (tile.TH << 12));
+            }
         }
 
         // DrawOneCycle's setup, written down instead of run: the layout is shade.comp's - see §6.
-        private void RecordOneCycle(GpuRasteriser gpu, (int First, int Last) rows, bool majorOnLeft)
+        private void RecordOneCycle(GpuRasteriser gpu, (int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             int deltaZ = PrimitiveDepth ? _primitiveDeltaZ : _depthSlope;
             if (PrimitiveDepth) _depthCorrectDx = _depthCorrectDy = 0;
@@ -58,6 +75,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             for (int c = 0; c < 4; c++) steps[c] = direction * _shadeStep[c];
             steps[AttributeZ] = PrimitiveDepth ? 0 : direction * _depthStep;
             for (int c = 0; c < 3; c++) steps[AttributeS + c] = direction * _textureStep[c];
+
+            (bool texel0, bool texel1) = CombinerTexels();
+            uint memory = gpu.TextureMemory(TextureMemory, _textureMemoryChanged);
+            Span<uint> packed = gpu.Tiles(_tilesChanged, out uint tileSet);
+            if (!packed.IsEmpty) RecordTiles(packed);
+            _textureMemoryChanged = _tilesChanged = false;
 
             Span<uint> p = gpu.Primitive(out int primitive);
             p[0] = 0;
@@ -90,6 +113,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             p[56] = (uint)_depthCorrectDx;
             p[57] = (uint)_depthCorrectDy;
 
+            p[39] = Bit(0, texel0) | Bit(1, texel1) | Bit(2, Perspective) | Bit(3, SampleFour) | Bit(4, PaletteEnabled)
+                | Bit(5, PaletteIntensityAlpha) | Bit(6, MidTexel) | Bit(7, BilinearFirstCycle) | Bit(8, DetailEnabled)
+                | Bit(9, SharpenEnabled) | Bit(10, LodEnabled) | Bit(11, ConvertOne);
+            p[58] = memory;
+            p[59] = tileSet;
+            p[60] = (uint)tile;
+            p[61] = (uint)maxLevel;
+            p[62] = (uint)_minLevel;
+            p[64] = (uint)_k0;
+            p[65] = (uint)_k1;
+            p[66] = (uint)_k2;
+            p[67] = (uint)_k3;
+
             for (int y = rows.First; y <= rows.Last; y++)
             {
                 if (!_spanDrawn[y] || _spanRight[y] < _spanLeft[y]) continue;
@@ -100,7 +136,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
                 // The row's values at its first pixel, as DrawOneCycle steps them there from the major edge.
                 int clipped = majorOnLeft ? left - _spanMajorX[y] : _spanMajorX[y] - right;
+                if (!_scaled) clipped &= 0xFFF;
                 for (int c = 0; c < Attributes; c++) row[4 + c] = (uint)(_spanAttributes[y * Attributes + c] + steps[c] * clipped);
+
+                int length = (right - left) + clipped;
+                bool nextRowDrawn = y + 1 <= rows.Last && _spanDrawn[y + 1];
+                row[24] = Bit(0, nextRowDrawn) | Bit(1, length > 7) | Bit(2, length == 7);
+                if (nextRowDrawn)
+                    for (int c = 0; c < 3; c++) row[21 + c] = (uint)_spanAttributes[(y + 1) * Attributes + AttributeS + c];
 
                 uint invalid = 0;
                 for (int sub = 0; sub < 4; sub++)

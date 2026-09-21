@@ -1,3 +1,4 @@
+using EmuSen.Galaxia.Library;
 using System;
 using System.IO;
 using System.Linq;
@@ -31,11 +32,13 @@ namespace EmuSen.WiseMan.Mistress
             _romDir = Path.Combine(_root, "Roms");
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            DataStore.OverrideDirectory = Path.Combine(_root, "Home");
         }
 
         public void Dispose()
         {
             ConfigStore.OverrideDirectory = null;
+            DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 

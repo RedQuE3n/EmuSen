@@ -1,3 +1,4 @@
+using EmuSen.Galaxia.Library;
 using System;
 using System.IO;
 using System.Linq;
@@ -37,15 +38,17 @@ namespace EmuSen.WiseMan.Mistress
             _romDir = Path.Combine(_root, "Roms");
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             _stateDir = Path.Combine(_root, "States");
             // Or every load in here writes into the real user log/state trees.
-            new AppSettings { RomDirectory = _romDir, LogDirectory = Path.Combine(_root, "Logs"), StateDirectory = _stateDir }.Save();
+            new AppSettings { RomDirectory = _romDir, LogDirectory = Path.Combine(_root, "Logs"), StateDirectory = _stateDir, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             File.WriteAllBytes(Path.Combine(_romDir, "Playable.smc"), SyntheticRom.BuildBlank());
         }
 
         public void Dispose()
         {
             ConfigStore.OverrideDirectory = null;
+            DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 

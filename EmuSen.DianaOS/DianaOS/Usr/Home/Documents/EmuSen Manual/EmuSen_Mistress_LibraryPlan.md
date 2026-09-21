@@ -153,3 +153,13 @@ worth wanting — OpenVGDB — is the one whose licence is unstated.
   than lead it.
 - **Whether the sidebar earns its width on a Steam Deck.** OpenEmu's is a desktop layout. Big-screen mode hides the
   menu bar for a reason; a sidebar would take the same space back.
+
+## 7. Carried out (2026-09-21)
+
+**The decision this plan was written against has changed.** The csproj header, `EmuSen_Launcher_Multicore_Gameplan.md` §0 and Path E of `EmuSen_LunaP_Adoption_Gameplan.md` all record that a polished frontend was to be a separate project and that Mistress would stay a bug-testing tool. On 2026-09-21 the user asked for Mistress itself to be modelled on OpenEmu. Those records are left as they were, since they were true when written; this section is where the change is recorded, and the csproj header is updated to point here.
+
+**Stage 0 is built** (`EmuSen_Settings_Reference.md` §4.31, `EmuSen_Galaxia.md` §5.2), together with the first half of stage 2: every state written from the window now has its picture beside it.
+
+**Stage 1's storage went to SQLite, not to a JSON sibling as the table proposed.** The table's "in `appsettings.json` or a small sibling" treated play records as settings. By `EmuSen_Galaxia.md` §7.2's own test (who is the author) they are data. They live in `home/Library/games.db`, which has schema versioning from its first row (§4.32). **Stage 3 is not a prerequisite for the grid after all:** art is matched by file name (§8 below), so identity by hash is still worth having for renames but no longer holds up the visual stages.
+
+**The open question in §6 about the grid** is answered by the request itself: the grid is wanted. It is a view beside the list, not a replacement, so the 24-point list that §4.29 made legible on a handheld stays one toggle away.

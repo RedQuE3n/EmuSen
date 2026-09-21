@@ -127,6 +127,19 @@ string StatePathFor(romPath, slot, directoryOverride)  // Save States/<stem>[.sl
 
 **The directory override is a parameter, not a read.** `StatePathFor` could have consulted `AppSettings.StateDirectory` itself, since `AppSettings` lives in Galaxia too. It does not, because that would give path resolution a dependency on settings load order — a `ConfigFile` read on a code path that a cartridge constructor reaches. Mistress passes its Preferences value in; everything else passes nothing and gets the default.
 
+### 5.2 The resume state and a state's picture (2026-09-21)
+
+```csharp
+string ResumeStatePathFor(romPath, directoryOverride)  // Save States/<stem>.resume.state
+string PicturePathFor(statePath)                       // the same name with .png
+```
+
+**The resume state is not a slot.** It is written when a game is left (closed, replaced by another, or the window shut) and offered back at that game's next start (`EmuSen_Settings_Reference.md` §4.31). It takes a name no slot can take, so no manual save overwrites it and no automatic one overwrites a manual save. A Reset does not write it, because a Reset is not leaving the game.
+
+**Every state Mistress writes gets a picture beside it**: the frame on screen when it was written, as a PNG named by `PicturePathFor`. The picture is taken on the emulation thread in the same request as the state, so it shows the instant the state holds rather than a later frame; a core that sends each scanline once (`EmuSen_Multicore.md` §15) has its rows repeated back to the displayed height before writing. The picture is a sidecar and never read by a core: a state without one loads exactly as before, and deleting one loses nothing but the thumbnail.
+
+**What this does not cover.** The state still carries no record of which core version wrote it; OpenEmu's per-state plist does, and that remains stage 2's second half in `EmuSen_Mistress_LibraryPlan.md`. States written by the DianaOS `state save` command get no picture. And the resume state goes wherever `StateDirectory` points, which on this machine is the ROM folder itself; that is the user's setting and not changed here, but it means leaving a game now writes two files there.
+
 ---
 
 ## 6. What this pass deliberately did not do

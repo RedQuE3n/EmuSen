@@ -19,6 +19,15 @@ namespace EmuSen.Galaxia.Library
 
         public static string SaveStates => Path.Combine(Saves, "Save States");
 
+        // The player's own library database, which is kept and migrated - see EmuSen_Settings_Reference.md §4.32.
+        public static string Library => Path.Combine(UsrHome, "Library");
+
+        // Pictures taken from the running game - see EmuSen_Galaxia.md §3.
+        public static string Screenshots => Path.Combine(UsrHome, "Screenshots");
+
+        // Box art the user supplies, read and never fetched - see EmuSen_Settings_Reference.md §4.33.
+        public static string Artwork => Path.Combine(UsrHome, "Artwork");
+
         // Coprocessor firmware dumps the user supplies - see EmuSen_Firmware.md §2.
         public static string Firmware => Path.Combine(UsrHome, "Firmware");
 

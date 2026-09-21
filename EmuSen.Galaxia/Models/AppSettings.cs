@@ -46,6 +46,12 @@ namespace EmuSen.Galaxia.Models
         // Full screen, no menu bar and larger type, for a handheld or a television; a Steam Deck's session asks for it by itself - see EmuSen_Settings_Reference.md §4.29.
         public bool BigScreen { get; set; } = false;
 
+        // Ask, Resume or Restart when a game with a resume state starts - see EmuSen_Settings_Reference.md §4.31.
+        public string ResumeOnLaunch { get; set; } = ResumeAsk;
+        public const string ResumeAsk = "Ask";
+        public const string ResumeAlways = "Resume";
+        public const string ResumeNever = "Restart";
+
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 
         public void Save() => File.Save(this);

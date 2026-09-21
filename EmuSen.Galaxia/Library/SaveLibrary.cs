@@ -22,5 +22,15 @@ namespace EmuSen.Galaxia.Library
             string suffix = slot == DefaultStateSlot ? "" : $".slot{slot}";
             return Path.Combine(directory, stem + suffix + StateExtension);
         }
+
+        // Written when a game is closed and offered at its next start - see EmuSen_Galaxia.md §5.2.
+        public static string ResumeStatePathFor(string romPath, string? directoryOverride = null)
+        {
+            string directory = string.IsNullOrWhiteSpace(directoryOverride) ? DataStore.SaveStates : directoryOverride;
+            return Path.Combine(directory, Path.GetFileNameWithoutExtension(romPath) + ".resume" + StateExtension);
+        }
+
+        // The picture on screen when a state was written, beside it - see EmuSen_Galaxia.md §5.2.
+        public static string PicturePathFor(string statePath) => Path.ChangeExtension(statePath, ".png");
     }
 }

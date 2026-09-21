@@ -1031,7 +1031,7 @@ namespace EmuSen.Mistress.Views
 
             // Counts completed RunFrame calls, not presented frames - see §4.21.
             TimeSpan fpsWindowStart = clock.Elapsed;
-            int framesInWindow = 0;
+            int framesInWindow = 0, offeredInWindow = 0;
 
             // RunFrame alone against the rest of this loop's per-frame work - see §4.21.
             TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
@@ -1129,6 +1129,7 @@ namespace EmuSen.Mistress.Views
                     {
                         byte[] frame = session.GetFrameBufferRgba();
                         SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight);
+                        offeredInWindow++;
                     }
 
                     framesInWindow++;
@@ -1149,9 +1150,18 @@ namespace EmuSen.Mistress.Views
                         string breakdown = top.Length == 0 ? "" : $" [{top}]";
                         if (nested.Length > 0) breakdown += $" ({nested})";
 
-                        Dispatcher.UIThread.Post(() => FpsText.Text =
-                            $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}");
+                        // Frames handed over against frames the render thread drew, and what drawing them cost it - see EmuSen_Serenity.md §2.5.
+                        var shown = GameFrame.TakeStatistics();
+                        double seconds = windowElapsed.TotalSeconds;
+                        string presentation = shown.Frames == 0
+                            ? $" | offered {offeredInWindow / seconds:F1}, shown 0"
+                            : $" | offered {offeredInWindow / seconds:F1}, shown {shown.Frames / seconds:F1} fps, copy {shown.CopyMilliseconds / shown.Frames:F2} draw {shown.DrawMilliseconds / shown.Frames:F2}ms, {(shown.Gpu ? "GPU" : "software")} {shown.Width}x{shown.Height}";
+                        string line = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}{presentation}";
+                        Console.WriteLine($"[fps] {line}");
+
+                        Dispatcher.UIThread.Post(() => FpsText.Text = line);
                         framesInWindow = 0;
+                        offeredInWindow = 0;
                         Array.Clear(phaseMsInWindow);
                         runFrameTimeInWindow = TimeSpan.Zero;
                         fpsWindowStart = clock.Elapsed;

@@ -309,5 +309,34 @@ namespace EmuSen.WiseMan.Serenity
                 }
             }, default);
         }
+        // Each drawn frame reaches a frontend's readout once, with its size, and the headless lease has no GPU - see EmuSen_Serenity.md §2.5.
+        [Fact]
+        public async Task Each_drawn_frame_is_counted_once_with_its_size_and_backend()
+        {
+            await Session.Dispatch(() =>
+            {
+                (Window window, GameFrameControl control) = NewWindow(16, 16);
+                try
+                {
+                    control.TakeStatistics();
+                    for (int i = 0; i < 3; i++)
+                    {
+                        control.UpdateFrame(SolidColorFrame(6, 4, (byte)(40 * i), 20, 30), 6, 4);
+                        using WriteableBitmap captured = window.CaptureRenderedFrame()!;
+                    }
+
+                    GameFrameControl.PresentationStatistics taken = control.TakeStatistics();
+                    Assert.Equal(3, taken.Frames);
+                    Assert.Equal((6, 4), (taken.Width, taken.Height));
+                    Assert.False(taken.Gpu);
+                    Assert.True(taken.CopyMilliseconds > 0 && taken.DrawMilliseconds > 0);
+                    Assert.Equal(0, control.TakeStatistics().Frames);
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }, default);
+        }
     }
 }

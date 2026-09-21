@@ -961,3 +961,30 @@ brush. Only the `.css` theme form is exercised; the `.axaml` form is untested he
 and is LunaP's own to cover. And nothing offers to open the themes folder, so the
 first theme a user installs still requires knowing where it goes — which is what
 `man theme` is for.
+
+### 4.31 Resume where you left off (2026-09-21)
+
+Leaving a game writes its state; starting it again offers that state back. This is OpenEmu's auto-save on quit and its "Would you like to continue your last game?" prompt, and it is stage 0 of `EmuSen_Mistress_LibraryPlan.md`, taken first because a handheld is suspended and closed rather than saved from a menu.
+
+**Where it is written.** `ShutDownCurrentSession` writes `SaveLibrary.ResumeStatePathFor` (`EmuSen_Galaxia.md` §5.2) after the emulation thread has stopped, so the state is one instant of the machine without going through the request queue of §4.21a. The window's own Closing handler does the same. A Reset calls `LoadGame(..., reset: true)` and writes nothing, since it is not leaving the game; this is the case the reset test pins, because a reset that wrote the resume state would make the next start offer the moment before a reset the player asked for.
+
+**Where it is asked.** Every way of starting a game from outside it (Open ROM, a drop, Browse ROMs, the library) now runs `StartGameAsync`: the firmware prompt, then the resume question, then the load. `AppSettings.ResumeOnLaunch` is `Ask`, `Resume` or `Restart`; the dialog's "Do not ask again" writes the answer given. Closing the dialog, or B on a pad (§4.29's router), cancels the launch rather than choosing, because a player who backs out of a question has not answered it.
+
+**When the state will not load.** The half-loaded session is dropped and the game started again from nothing, with the reason in the status line. The alternative, running a machine whose state load threw part way through, is not a machine anyone asked for.
+
+**What it does not cover.** A crash is not a clean leave: if the process dies, no resume state is written, and one from an earlier session may be offered instead. A core that halted (a fault) is still written on leaving, and resuming it resumes the fault; Restart is the way out. The state is tied to the file's name, not its contents, so a renamed ROM loses it. Tests: `ResumeWhereYouLeftOffTests` (8), and three mutants each caught (no write on leaving; a reset that writes; a resume that does not load).
+
+### 4.32 The player's library database (2026-09-21)
+
+What Mistress remembers about each game it has seen (favourite, last played, play count, time played) is kept in SQLite at `home/Library/games.db`, one row per path, only for games that have been played or marked.
+
+**Why a database and not a JSON file.** `EmuSen_Galaxia.md` §7.2 draws the line at authorship: a human writes the preferences, so they stay JSON; the program writes this, and it has shape, so it is a database. A first version of this section's code wrote `games.json`, on the reasoning that config stays JSON. The reasoning was wrong because this is not configuration, and it was replaced before anything read the file.
+
+**Why not the catalogue's file.** `catalogue-schema.sql` describes a cache that is "always safe to delete". A favourite or a year's play time is not safe to delete, so the two must not share a file whose documented remedy for trouble is removal. The catalogue stays a cache beside it.
+
+**Schema versioning.** `EmuSen_Stack.md` §4.3 names schema versioning as the sharpest gap in the project's storage. This file carries `PRAGMA user_version`, and `GameRecords` holds an append-only list of migrations, each run in its own transaction with the version bump. A file stamped newer than the build is refused with `InvalidDataException` rather than opened, because an older build writing into a newer schema is how a downgrade destroys data. Tests: `GameRecordsTests` (4).
+
+**Play time.** A stopwatch runs while a game is on screen and unpaused; pausing, or stepping out to the library (which pauses, §4.18), stops it, and leaving the game adds it to the row. The count and the last-played stamp are written at the start, so a crash loses at most the time of the session that crashed.
+
+**What it does not cover.** Rows are keyed by path, so moving the library orphans them; identity by hash waits on the catalogue (stage 3 of the plan). The driver sits in Mistress rather than in `EmuSen` beside `SqliteCatalogue` (§7.1's convergence argument), because Mistress is its only reader; if Hotaru or the shell ever wants it, that argument applies and it moves.
+

@@ -192,6 +192,9 @@ namespace EmuSen.Mistress.Views
                 _padTimer?.Stop();
                 StopEmulationThread();
                 _session?.SaveSram();
+                WriteResumeState();
+                RecordPlayTime();
+                _records.Dispose();
                 _gamepad.Dispose();
                 _audioPlayer.Dispose();
                 StopLogging();
@@ -318,8 +321,7 @@ namespace EmuSen.Mistress.Views
             string? startIn = Directory.Exists(_appSettings.RomDirectory) ? _appSettings.RomDirectory : null;
             if (await Dialogs.PickFileAsync(this, "Open ROM", types, startIn) is not { } file) return;
 
-            await PromptForMissingFirmwareAsync(file.Path);
-            LoadRom(file.Path, file.Name);
+            await StartGameAsync(file.Path, file.Name);
         }
 
         // Runs before LoadRom because afterwards is too late; declining is fine - see EmuSen_Firmware.md §3.
@@ -349,8 +351,7 @@ namespace EmuSen.Mistress.Views
         // The same sequence Open ROM... runs, so a drop cannot skip the firmware prompt - see §4.20.
         private async Task OpenDroppedRomAsync(string path)
         {
-            await PromptForMissingFirmwareAsync(path);
-            LoadRom(path, System.IO.Path.GetFileName(path));
+            await StartGameAsync(path, System.IO.Path.GetFileName(path));
         }
 
         // Lists the ROM directory directly, as an alternative to the OS picker - see §4.11.
@@ -359,8 +360,7 @@ namespace EmuSen.Mistress.Views
             string? selected = await new RomBrowserWindow(_appSettings.RomDirectory).ShowDialog<string?>(this);
             if (selected is null) return;
 
-            await PromptForMissingFirmwareAsync(selected);
-            LoadRom(selected, Path.GetFileName(selected));
+            await StartGameAsync(selected, Path.GetFileName(selected));
         }
 
         private void ShowControllerBindings()
@@ -532,6 +532,7 @@ namespace EmuSen.Mistress.Views
                 {
                     System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
                     session.SaveState(path);
+                    WriteStatePicture(session, path);
                     status = $"State saved to slot {slot}: {System.IO.Path.GetFileName(path)}";
                 }
                 catch (Exception ex)
@@ -748,23 +749,32 @@ namespace EmuSen.Mistress.Views
             if (_currentRomPath is not string path || _currentDisplayName is not string displayName) return;
 
             ResumeEmulation(); // a reset always comes back running, however it was paused
-            LoadRom(path, displayName);
+            LoadGame(path, displayName, resumeFrom: null, reset: true);
             if (_session is { IsRomLoaded: true }) StatusText.Text = $"Reset: {displayName}";
         }
 
         // Everything that must happen before _session can be replaced or dropped.
-        private void ShutDownCurrentSession()
+        private void ShutDownCurrentSession(bool leaving = true)
         {
             _timer?.Stop();
             StopEmulationThread(); // must fully stop before _session changes - see that method's own comment
             _session?.SaveSram(); // flush whatever was previously running before switching
+            // A Reset starts the same game again, so it is not leaving it - see EmuSen_Settings_Reference.md §4.31.
+            if (leaving)
+            {
+                WriteResumeState();
+                RecordPlayTime();
+            }
             // On the OLD session: StartLogging's own StopLogging would take the new one - see §4.22.
             _session?.FlushVerboseLogs();
         }
 
-        private void LoadRom(string path, string displayName)
+        private void LoadRom(string path, string displayName) => LoadGame(path, displayName, resumeFrom: null, reset: false);
+
+        // resumeFrom is a state to load before the first frame runs - see EmuSen_Settings_Reference.md §4.31.
+        private void LoadGame(string path, string displayName, string? resumeFrom, bool reset)
         {
-            ShutDownCurrentSession();
+            ShutDownCurrentSession(leaving: !reset);
             int restoredCheats = DropCheatsFromAnotherGame(path);
 
             try
@@ -779,6 +789,14 @@ namespace EmuSen.Mistress.Views
 
                 // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
                 ApplyConsoleSettings(_session, _activeConsole);
+                // A half-loaded state is not a machine to run on, so the game starts again from nothing.
+                if (resumeFrom is not null && TryResume(_session, resumeFrom) is string resumeFailure)
+                {
+                    _session = null;
+                    LoadGame(path, displayName, resumeFrom: null, reset: false);
+                    StatusText.Text = resumeFailure;
+                    return;
+                }
                 _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
                 _gamepad.LeftStickIsAnalog = _session.SupportedAxes.Contains(PadAxis.LeftX);
 
@@ -799,6 +817,7 @@ namespace EmuSen.Mistress.Views
                     : $"Running: {displayName}";
                 _currentRomPath = path;
                 _currentDisplayName = displayName;
+                if (!reset) RecordStart(path);
 
                 // Gamepad polling only; emulation is _emuThread's - see §4.21.
                 _timer = new DispatcherTimer { Interval = FrameInterval };
@@ -981,8 +1000,7 @@ namespace EmuSen.Mistress.Views
         {
             if (LibraryList.Selected is not RomEntry entry) return;
 
-            await PromptForMissingFirmwareAsync(entry.FullPath);
-            LoadRom(entry.FullPath, entry.FileName);
+            await StartGameAsync(entry.FullPath, entry.FileName);
         }
 
         // Hotkey counterpart to the console's pause/resume pair - see `man pause`.
@@ -995,6 +1013,7 @@ namespace EmuSen.Mistress.Views
         public void PauseEmulation()
         {
             _pauseSignal.Reset();
+            _playClock.Stop();
             if (_session is { IsRomLoaded: true }) StatusText.Text = "Paused";
             SyncMenuState();
         }
@@ -1002,7 +1021,11 @@ namespace EmuSen.Mistress.Views
         public void ResumeEmulation()
         {
             _pauseSignal.Set();
-            if (_session is { IsRomLoaded: true }) StatusText.Text = $"Running: {_currentDisplayName}";
+            if (_session is { IsRomLoaded: true })
+            {
+                _playClock.Start();
+                StatusText.Text = $"Running: {_currentDisplayName}";
+            }
             SyncMenuState();
         }
 

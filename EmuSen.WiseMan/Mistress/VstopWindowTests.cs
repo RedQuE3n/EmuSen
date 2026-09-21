@@ -1,3 +1,4 @@
+using EmuSen.Galaxia.Library;
 using System;
 using EmuSen.WiseMan.LunaP;
 using EmuSen.LunaP.Windowing;
@@ -33,11 +34,13 @@ namespace EmuSen.WiseMan.Mistress
             _root = Path.Combine(Path.GetTempPath(), "EmuSenVstopWindowTests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_root);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            DataStore.OverrideDirectory = Path.Combine(_root, "Home");
         }
 
         public void Dispose()
         {
             ConfigStore.OverrideDirectory = null;
+            DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 

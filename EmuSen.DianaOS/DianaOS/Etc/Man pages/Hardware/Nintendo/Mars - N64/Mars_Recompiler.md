@@ -991,3 +991,52 @@ cost to be memory and not dispatch, and nothing here contradicts them. Software 
 and is what §11 of `Mars_FpuMath.md` went after. What this round says about method is what the day's other rounds
 said: a census counts instructions and a sample counts time, and only a bound measured in the games says what a
 change is worth before it is built.
+
+## 19. The dispatcher again: the bytes read rather than reasoned about
+
+*2026-09-20.* §9 to §12 established that an entry's cost is memory — the emitted code streamed in cold, eighty to
+a hundred bytes an emulated instruction — and that a lever which does not lower that number does not move it. Two
+levers since had tried to lower it and raised it instead (§11), and one prototype had bounded the counters' share
+at under two per cent (§18). What none of them had done is look at the bytes.
+
+**The size now.** From the runtime's perf map (`runs/blockbytes.sh`, Ocarina of Time in play, 600 frames): 6,224
+blocks, 11.9 megabytes of machine code, a mean of 1,911 bytes a block and a median of 1,332, against blocks that
+average seven instructions an entry. No cache near the processor holds that.
+
+**First guess, and wrong.** Every register access in a block is an array access with a bounds check, three to an
+arithmetic instruction, some thirteen bytes each. Blocks now take the registers, RDRAM and the write marks by a
+reference to their first element, made once in the prologue, and address them without a check — a register's index
+is five bits of the instruction, and a physical address has just been compared with RDRAM's length where it is
+used. The code shrank by three per cent, 1,940 to 1,876 bytes a block, and the time by nothing measurable. It is
+kept because it is smaller and no less exact (`EMUSEN_MARS_CHECKEDBLOCKS=1` restores the checks), but the bounds
+checks were never the bulk.
+
+**What the disassembly showed** (`DOTNET_JitDisasm=mars_block_…`, which the release runtime honours). Of an
+instruction's hundred and forty-five bytes, about ninety were one thing: the compiler had *inlined `RspRan` after
+every instruction* — the count, the single-step test, the call of the processor's step, the compare of the bus's
+write count and the compare of the interrupt line — a path taken only while the signal processor runs beside busy
+code, a fifth of its steps (`Mars_Rsp.md` §12), and jumped over on every other instruction. The instruction itself
+with its tick was about fifty. `RspRan` had been small enough to inline since it was written, and had grown under
+§36.1 and §15's work without anyone looking at where it went.
+
+**The change is an attribute**: `RspRan` is not inlined, and the block carries a call. Blocks fell from 1,876 to
+1,331 bytes in the mean and 1,307 to 943 in the median, 12.3 megabytes to 9.0. Interleaved against the commit
+before, four rounds of 1,200 frames, the scan-out off: Ocarina of Time's mean frame 8.37 to 8.21 milliseconds and
+Super Mario 64's 4.81 to 4.72, two per cent each; GoldenEye, whose blocks are shortest at five instructions an
+entry, a median frame of 7.25 to 6.63 and a ninetieth percentile of 19.34 to 16.62. The state hash is the same in
+both builds in all three, the Mars suite passes and the probe's two games are identical.
+
+**Tried after it and not kept:** the call sites moved to the end of the method beside the exit stubs, so that the
+path with the processor halted would run straight on. Neither the bytes nor the time moved, and the emitter is
+simpler without it.
+
+**What an instruction is now**, read from the same block: the operation some seventeen bytes, the two counters
+fourteen, the halted test seven, the call's site twenty-six, the stop compare seventeen — about eighty, of which
+the operation is a fifth. §12.3's unmeasured shape, the tick and the tests hoisted over a run behind one guard,
+is still the only thing that would change that, and §18's prototype bounded the counters' part of it at under two
+per cent; the tests' part is not bounded.
+
+**The method, recorded because it would have saved a day.** §9's model was right and its number was measured, and
+for a day the bytes were reasoned about from the emitter's source. The JIT's listing for one block answered in a
+minute what the source could not: the largest thing in a block was not anything the emitter emits.
+

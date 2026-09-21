@@ -240,6 +240,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         }
 
         // The signal processor's share of one instruction, and whether what it did ends the block - see Mars_Recompiler.md §4.
+        // Not inlined: a block carries this after every instruction, and inlined it was most of the block's bytes for a path taken only while the signal processor runs - see Mars_Recompiler.md §19.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         internal bool RspRan(long cycles, long written)
         {
             SpInterface sp = _bus.Sp;

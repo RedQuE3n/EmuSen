@@ -3,6 +3,7 @@
         xmlns:luna="clr-namespace:EmuSen.LunaP.Windowing;assembly=EmuSen.LunaP"
         xmlns:lunac="clr-namespace:EmuSen.LunaP.Controls;assembly=EmuSen.LunaP"
         xmlns:lib="clr-namespace:EmuSen.Mistress.Library"
+        xmlns:input="clr-namespace:EmuSen.Mistress.Input"
         xmlns:serenity="clr-namespace:EmuSen.Serenity;assembly=EmuSen.Serenity"
         x:Class="EmuSen.Mistress.Views.MainWindow"
         Title="EmuSen Testing Studio"
@@ -68,6 +69,24 @@
                                 KeyDown="OnLibraryKeyDown" />
             </DockPanel>
             <serenity:GameFrameControl x:Name="GameFrame" IsVisible="False" />
+
+            <!-- The pad's menu, over whichever screen is showing - see EmuSen_Settings_Reference.md §4.29. -->
+            <Border x:Name="PadMenuPanel" IsVisible="False" Background="#D0000000">
+                <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Padding="28,22" CornerRadius="10" MinWidth="460"
+                        Background="{DynamicResource LunaVoid}"
+                        BorderBrush="{DynamicResource LunaMuted}" BorderThickness="1">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" x:Name="PadMenuTitle" FontSize="24" Margin="0,0,0,12" />
+                        <TextBlock DockPanel.Dock="Bottom" x:Name="PadMenuHint"
+                                   Foreground="{DynamicResource LunaMuted}" Margin="0,12,0,0" />
+                        <lunac:LunaList x:TypeArguments="input:PadMenuEntry"
+                                        x:Name="PadMenuList"
+                                        AutomationProperties.Name="Menu"
+                                        FontSize="20" Background="Transparent" MaxHeight="520" />
+                    </DockPanel>
+                </Border>
+            </Border>
         </Grid>
 
     </DockPanel>

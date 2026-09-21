@@ -43,6 +43,9 @@ namespace EmuSen.Galaxia.Models
         public bool AnalogStickAsDpad { get; set; } = true;
         public double StickDeadzone { get; set; } = 0.5;
 
+        // Full screen, no menu bar and larger type, for a handheld or a television; a Steam Deck's session asks for it by itself - see EmuSen_Settings_Reference.md §4.29.
+        public bool BigScreen { get; set; } = false;
+
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 
         public void Save() => File.Save(this);

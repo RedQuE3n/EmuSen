@@ -146,6 +146,12 @@ namespace EmuSen.Endymion.Input
             };
         }
 
+        // The pad's own buttons and axes, whatever a console's bindings say, for steering the interface - see EmuSen_Settings_Reference.md §4.29.
+        public bool IsRawPressed(SDL.GamepadButton button) => IsConnected && SDL.GetGamepadButton(_gamepad, button);
+
+        public double RawAxis(SDL.GamepadAxis axis) =>
+            IsConnected ? Math.Clamp(SDL.GetGamepadAxis(_gamepad, axis) / (double)short.MaxValue, -1.0, 1.0) : 0;
+
         // First currently-held pad button, for InputSettingsWindow's rebind
         // capture - see EmuSen_Settings_Reference.md §4.6.
         public SDL.GamepadButton? GetAnyPressedButton()

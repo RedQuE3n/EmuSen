@@ -125,6 +125,10 @@ Moved here from `EmuSen.Mistress/Settings/`; it holds no frontend types, so ther
 
 `LibrarySearch` and `CheatSearch` are the search halves of the two filter bars, and they live here rather than in a file of their own because `SelectedCore` is already the *facet* half of the library's. Splitting one filter bar's state across two files to keep a config file tidy is the wrong trade. Both are written on window close rather than on change, and both default to the empty string, so an older `appsettings.json` loads unchanged. See `EmuSen_Settings_Reference.md` §4.23 for why restoring them was not safe before LunaP 0.10.0.
 
+`SelectedCoreUpgraded` records that the one-time rewrite of the legacy `SelectedCore` default has been done, so that the same string chosen afterwards is kept. It is absent from older files, which is the point. See `EmuSen_Multicore.md` §10.3a.
+
+`BigScreen` (default `false`) starts Mistress full screen with no menu bar and larger library text, for a handheld or a television. It is read once at start; `--bigscreen` and a Steam Deck session's `SteamDeck=1` ask for the same thing without it. See `EmuSen_Settings_Reference.md` §4.29.
+
 The class name and the file name are unchanged, so existing files load as-is.
 
 ### 3.2 `audio.json` — `AudioConfig`

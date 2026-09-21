@@ -4,10 +4,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
     public sealed class GpuRasteriser : IDisposable
     {
         public const int TileSize = 8;
-        public const int PrimitiveWords = 8;
-        public const int RowWords = 4;
+        public const int PrimitiveWords = 64;
+        public const int RowWords = 24;
 
-        private struct Push { public uint ImageWord, Width, PixelWords, MemoryWords, TileX0, TileY0, TilesWide, TilesHigh; }
+        private struct Push { public uint ImageWord, Width, PixelWords, MemoryWords, TileX0, TileY0, TilesWide, TilesHigh, DepthWord; }
 
         private readonly GpuDevice _device;
         private readonly GpuProgram _shade;
@@ -20,7 +20,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
         private uint[] _tileRows = new uint[4096];
         private int _primitiveCount, _rowCount;
 
-        private uint _imageWord, _width, _pixelWords;
+        private uint _imageWord, _width, _pixelWords, _depthWord;
         private int _minX, _minY, _maxX, _maxY;
 
         // Host and device twins of each input, grown together; and the host side of a readback.
@@ -39,7 +39,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             _device = device;
             _memoryWords = memoryWords;
             _memory = device.CreateBuffer((ulong)memoryWords * 4, GpuMemory.Device);
-            _shade = device.CreateProgram(GpuShaders.Load("shade"), buffers: 5, pushBytes: 32);
+            _shade = device.CreateProgram(GpuShaders.Load("shade"), buffers: 5, pushBytes: 36);
             Clear();
         }
 
@@ -84,38 +84,52 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             _pixelWords = words;
         }
 
-        public int FillPrimitive(uint color)
+        // The depth image the rows that follow test against; a change of it ends the batch, since an invocation carries one depth word - see §6.
+        public void DepthImage(uint address)
+        {
+            if (address >> 1 == _depthWord) return;
+            Flush();
+            _depthWord = address >> 1;
+        }
+
+        // False for an image this cannot shade: an eight-bit one shares a word between two pixels, which two invocations cannot both write - see §5.
+        public bool Shades => _pixelWords != 0;
+
+        // A primitive's record, zeroed, for the caller to fill; its index is what its rows name.
+        public Span<uint> Primitive(out int index)
         {
             if ((_primitiveCount + 1) * PrimitiveWords > _primitives.Length) Array.Resize(ref _primitives, _primitives.Length * 2);
 
-            int at = _primitiveCount * PrimitiveWords;
-            Array.Clear(_primitives, at, PrimitiveWords);
-            _primitives[at] = 3;
-            _primitives[at + 1] = color;
-            return _primitiveCount++;
+            Span<uint> record = _primitives.AsSpan(_primitiveCount * PrimitiveWords, PrimitiveWords);
+            record.Clear();
+            index = _primitiveCount++;
+            return record;
         }
 
-        public void Row(int primitive, int y, int left, int right)
+        // A row's record with its first four words set; the span keeps its true ends, which the values at its first pixel are measured from.
+        // The caller says how many columns past the width the CPU path would have written, which is what the counter is for - see §5.4.
+        public Span<uint> Row(int primitive, int y, int left, int right, int writtenPastTheWidth)
         {
-            // An eight-bit image shares a word between two pixels, which two invocations cannot both write - see §5.
-            if (_pixelWords == 0) { RowsOfUnsupportedImages++; return; }
+            if (!Shades) { RowsOfUnsupportedImages++; return default; }
 
-            if (right >= _width) { ColumnsPastTheWidth += right - Math.Max(left, (int)_width) + 1; right = (int)_width - 1; }
-            if (left < 0) left = 0;
-            if (right < left || y < 0) return;
+            ColumnsPastTheWidth += writtenPastTheWidth;
+            int shownLeft = Math.Max(left, 0), shownRight = Math.Min(right, (int)_width - 1);
+            if (shownRight < shownLeft || y < 0) return default;
 
             if ((_rowCount + 1) * RowWords > _rows.Length) Array.Resize(ref _rows, _rows.Length * 2);
 
-            int at = _rowCount++ * RowWords;
-            _rows[at] = (uint)primitive;
-            _rows[at + 1] = (uint)y;
-            _rows[at + 2] = (uint)left;
-            _rows[at + 3] = (uint)right;
+            Span<uint> record = _rows.AsSpan(_rowCount++ * RowWords, RowWords);
+            record.Clear();
+            record[0] = (uint)primitive;
+            record[1] = (uint)y;
+            record[2] = (uint)left;
+            record[3] = (uint)right;
 
-            _minX = Math.Min(_minX, left);
-            _maxX = Math.Max(_maxX, right);
+            _minX = Math.Min(_minX, shownLeft);
+            _maxX = Math.Max(_maxX, shownRight);
             _minY = Math.Min(_minY, y);
             _maxY = Math.Max(_maxY, y);
+            return record;
         }
 
         public void NotShaded() => PrimitivesNotShaded++;
@@ -139,7 +153,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             {
                 int at = r * RowWords;
                 int slot = ((int)_rows[at + 1] / TileSize - tileY0) * tilesWide - tileX0;
-                for (int t = (int)_rows[at + 2] / TileSize; t <= (int)_rows[at + 3] / TileSize; t++) _tileOffsets[slot + t + 1]++;
+                for (int t = Math.Max((int)_rows[at + 2], 0) / TileSize; t <= Math.Min((int)_rows[at + 3], (int)_width - 1) / TileSize; t++) _tileOffsets[slot + t + 1]++;
             }
 
             for (int t = 0; t < tiles; t++) _tileOffsets[t + 1] += _tileOffsets[t];
@@ -154,7 +168,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             {
                 int at = r * RowWords;
                 int slot = ((int)_rows[at + 1] / TileSize - tileY0) * tilesWide - tileX0;
-                for (int t = (int)_rows[at + 2] / TileSize; t <= (int)_rows[at + 3] / TileSize; t++) _tileRows[cursor[slot + t]++] = (uint)r;
+                for (int t = Math.Max((int)_rows[at + 2], 0) / TileSize; t <= Math.Min((int)_rows[at + 3], (int)_width - 1) / TileSize; t++) _tileRows[cursor[slot + t]++] = (uint)r;
             }
 
             return total;
@@ -194,7 +208,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             var push = new Push
             {
                 ImageWord = _imageWord, Width = _width, PixelWords = _pixelWords, MemoryWords = _memoryWords,
-                TileX0 = (uint)tileX0, TileY0 = (uint)tileY0, TilesWide = (uint)tilesWide, TilesHigh = (uint)tilesHigh,
+                TileX0 = (uint)tileX0, TileY0 = (uint)tileY0, TilesWide = (uint)tilesWide, TilesHigh = (uint)tilesHigh, DepthWord = _depthWord,
             };
 
             _device.Submit(commands =>

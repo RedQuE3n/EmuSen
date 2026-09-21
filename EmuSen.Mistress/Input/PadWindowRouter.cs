@@ -41,6 +41,7 @@ namespace EmuSen.Mistress.Input
                     return;
 
                 case UiButton.Accept:
+                    if (focused is TextBox) { SteamKeyboard.Show(); return; }
                     if (open is not null) { open.IsDropDownOpen = false; open.Focus(); return; }
                     if (focused is ComboBox closed) { closed.IsDropDownOpen = true; return; }
                     if (focused is ToggleButton toggle) { toggle.IsChecked = toggle.IsChecked != true; return; }

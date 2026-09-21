@@ -68,6 +68,7 @@ namespace EmuSen.Mistress.Views
             UiButton.PageDown => _gamepad.IsRawPressed(SDL.GamepadButton.RightShoulder),
             UiButton.First => _gamepad.RawAxis(SDL.GamepadAxis.LeftTrigger) > 0.5,
             UiButton.Last => _gamepad.RawAxis(SDL.GamepadAxis.RightTrigger) > 0.5,
+            UiButton.Search => _gamepad.IsRawPressed(SDL.GamepadButton.North),
             _ => _gamepad.IsRawPressed(SDL.GamepadButton.Guide),
         };
 
@@ -128,9 +129,27 @@ namespace EmuSen.Mistress.Views
                 case UiButton.Left: StepLibraryConsole(-1); break;
                 case UiButton.Right: StepLibraryConsole(1); break;
                 case UiButton.Accept: LaunchSelectedLibraryEntry(); break;
-                case UiButton.Back: if (_session is { IsRomLoaded: true }) ToggleLibrary(); break;
+                case UiButton.Search: SearchFromThePad(); break;
+                case UiButton.Back: if (!LeaveTheSearchBox() && _session is { IsRomLoaded: true }) ToggleLibrary(); break;
                 case UiButton.Menu: OpenPadMenu(); break;
             }
+        }
+
+        // The search box takes the focus and Steam's keyboard is asked for; the list still moves under it, so a match can be picked without leaving.
+        private void SearchFromThePad()
+        {
+            LibraryFilter.FocusSearch();
+            SteamKeyboard.Show();
+        }
+
+        // Back out of the search box to the list, keeping what was typed.
+        private bool LeaveTheSearchBox()
+        {
+            if (FocusManager?.GetFocusedElement() is not TextBox) return false;
+            // The rows take the focus, not the list; with no row the window takes it.
+            if (LibraryList.ContainerFromIndex(Math.Max(LibraryList.SelectedIndex, 0)) is { } row) row.Focus();
+            else Focus();
+            return true;
         }
 
         private void MoveLibrarySelection(int by)
@@ -156,8 +175,8 @@ namespace EmuSen.Mistress.Views
 
         private string PadLibraryHint() =>
             _session is { IsRomLoaded: true }
-                ? $"A  Play      B  Back to {_currentDisplayName}      L1 R1  Page      L2 R2  Top, End      Left Right  Console      Start  Menu"
-                : "A  Play      L1 R1  Page      L2 R2  Top, End      Left Right  Console      Start  Menu";
+                ? $"A  Play      B  Back to {_currentDisplayName}      Y  Search      L1 R1  Page      L2 R2  Top, End      Left Right  Console      Start  Menu"
+                : "A  Play      Y  Search      L1 R1  Page      L2 R2  Top, End      Left Right  Console      Start  Menu";
 
         private void OpenPadMenu()
         {

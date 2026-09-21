@@ -287,6 +287,94 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(!before, toggle.IsChecked == true);
         }, default);
 
+        // Steam's keyboard with its three questions answered by the test, and what it was asked to open.
+        private sealed class FakeSteam : IDisposable
+        {
+            private readonly Action<string> _launcher = SteamKeyboard.Launcher;
+            private readonly Func<string, string?> _environment = SteamKeyboard.Environment;
+            private readonly Func<bool> _running = SteamKeyboard.ClientRunning;
+
+            public System.Collections.Generic.List<string> Opened { get; } = new();
+
+            public FakeSteam(bool running = false, string? deck = null, string? gameId = null)
+            {
+                SteamKeyboard.Launcher = Opened.Add;
+                SteamKeyboard.ClientRunning = () => running;
+                SteamKeyboard.Environment = name => name == "SteamDeck" ? deck : name == "SteamGameId" ? gameId : null;
+            }
+
+            public void Dispose()
+            {
+                SteamKeyboard.Launcher = _launcher;
+                SteamKeyboard.Environment = _environment;
+                SteamKeyboard.ClientRunning = _running;
+            }
+        }
+
+        [Fact]
+        public void The_keyboard_is_asked_of_a_steam_that_is_there_and_never_of_one_that_is_not()
+        {
+            using (var steam = new FakeSteam())
+            {
+                Assert.False(SteamKeyboard.Show());
+                Assert.Empty(steam.Opened);
+            }
+
+            using (var steam = new FakeSteam(running: true))
+            {
+                Assert.True(SteamKeyboard.Show());
+                Assert.Equal(new[] { "steam://open/keyboard" }, steam.Opened);
+            }
+
+            using (var steam = new FakeSteam(deck: "1")) Assert.True(SteamKeyboard.Show());
+            using (var steam = new FakeSteam(gameId: "12345")) Assert.True(SteamKeyboard.Show());
+        }
+
+        [Fact]
+        public void A_launcher_that_throws_is_a_keyboard_that_did_not_open_and_nothing_more()
+        {
+            using var steam = new FakeSteam(running: true);
+            SteamKeyboard.Launcher = _ => throw new System.ComponentModel.Win32Exception("no steam");
+
+            Assert.False(SteamKeyboard.Show());
+        }
+
+        [Fact]
+        public Task Search_focuses_the_box_and_asks_for_the_keyboard_the_list_still_moves_and_back_returns_to_it() => Session.Dispatch(() =>
+        {
+            using var steam = new FakeSteam(running: true);
+            MainWindow window = LibraryOf(5);
+            Library(window).SelectedIndex = 0;
+
+            Pad(window, UiButton.Search);
+            Assert.IsType<TextBox>(window.FocusManager!.GetFocusedElement());
+            Assert.Single(steam.Opened);
+
+            Pad(window, UiButton.Down);
+            Assert.Equal(1, Library(window).SelectedIndex);
+            Assert.IsType<TextBox>(window.FocusManager!.GetFocusedElement());
+
+            Pad(window, UiButton.Back);
+            Assert.IsNotType<TextBox>(window.FocusManager!.GetFocusedElement());
+            Assert.True(window.GetControl<Control>("LibraryView").IsVisible);
+        }, default);
+
+        [Fact]
+        public Task Accept_on_a_text_box_in_another_window_asks_for_the_keyboard() => Session.Dispatch(() =>
+        {
+            using var steam = new FakeSteam(running: true);
+            var window = new PreferencesWindow(new AppSettings());
+            window.Show();
+            window.CaptureRenderedFrame();
+
+            TextBox box = window.GetVisualDescendants().OfType<TextBox>().First();
+            box.Focus();
+            PadWindowRouter.Send(window, UiButton.Accept);
+
+            Assert.Single(steam.Opened);
+            Assert.True(window.IsVisible);
+        }, default);
+
         private static bool IsPaused(MainWindow window) =>
             (bool)typeof(MainWindow).GetProperty("IsPaused", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(window)!;
 

@@ -175,7 +175,27 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private struct Extent { public int Index; public long First, Last; }
         [EmuSen.Common.SkipInState] private Extent _colorExtent = new() { Index = -1 }, _depthExtent = new() { Index = -1 };
         [EmuSen.Common.SkipInState] private int _scissorTopRaw, _scissorBottomRaw, _shadowCycle;
-        [EmuSen.Common.SkipInState] private bool _shadowDepth;
+
+        // Each draw's rows and columns, the images it writes, and the word it ends on, newest last; a small read waits only for the ones holding it - see Mars_Rdp.md §2.6.3.
+        private struct Box
+        {
+            public long End;
+            public uint Color, Depth;
+            public int Bytes, Width, ScissorRight, RowFirst, RowLast, Kind;
+
+            // The command's own words, kept as they came; its columns are worked out from them only when a read or the verifier asks.
+            public ulong First, Low, High, Middle;
+        }
+
+        private const int Empty = 0, Rectangle = 1, Triangle = 2, WholeRows = 3;
+        private const int BoxCount = 1 << 14;
+        [EmuSen.Common.SkipInState] private readonly Box[] _boxes = new Box[BoxCount];
+        [EmuSen.Common.SkipInState] private long _boxesAppended;
+        [EmuSen.Common.SkipInState] public long ReadsNarrowed, ReadsFreed;
+
+        // A command already being gathered when a state was read has its first words in the processor, not the ring, so its columns are not the ring's to tell.
+        [EmuSen.Common.SkipInState] private bool _gatheredBeforeTheRing;
+        [EmuSen.Common.SkipInState] private bool _shadowDepth, _shadowDepthUpdate;
 
         // Where the batch being taken began, so a batch that outgrows the extents above can be given one range of everything - see §2.6.1.
         [EmuSen.Common.SkipInState] private long _batchStart;
@@ -652,18 +672,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             _shadowTaken = 0;
             ulong first = _shadowFirst;
+            bool straddled = _gatheredBeforeTheRing;
+            _gatheredBeforeTheRing = false;
 
             switch (id)
             {
                 case >= 0x08 and <= 0x0F:
                 case Rdp.Rdp.TextureRectangle or Rdp.Rdp.TextureRectangleFlipped:
                 case Rdp.Rdp.FillRectangle:
-                    MarkDraw(id, first, afterThisWord);
+                    MarkDraw(id, first, afterThisWord, straddled);
                     return false;
 
                 case Rdp.Rdp.SetOtherModes:
                     _shadowCycle = (int)(first >> 52) & 3;
                     _shadowDepth = ((first >> 4) & 3) != 0;
+                    _shadowDepthUpdate = ((first >> 5) & 1) != 0;
                     return false;
 
                 case Rdp.Rdp.SyncFull:
@@ -709,7 +732,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         }
 
         // A draw marks the rows the walker can shade, by its own limits, and the depth image only in a mode that reads or writes it - see Mars_Rdp.md §2.6.2.
-        private void MarkDraw(uint id, ulong first, long start)
+        private void MarkDraw(uint id, ulong first, long start, bool straddled)
         {
             _drawn = true;
             int upper, lower;
@@ -727,7 +750,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 lower = Math.Min(bottom, _scissorBottomRaw);
             }
 
-            if (lower <= upper) return;
+            // A draw with no rows still records a box, an empty one, so a write it makes is one the verifier can fault.
+            if (lower <= upper)
+            {
+                AppendBox(Empty, first, 0, -1, start);
+                return;
+            }
+
+            int kind = straddled ? WholeRows : id is >= 0x08 and <= 0x0F ? Triangle : Rectangle;
+            AppendBox(kind, first, upper, lower, start);
 
             // A span's right edge is bounded by the scissor, not the width, so it runs past its row; two pixels of slack for a read beside it - see §2.6.1.
             long width = _colorWidth, firstRow = upper >> 2, lastRow = (lower - 1) >> 2;
@@ -739,6 +770,137 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         }
 
         private static int SignExtend14(ulong v) => ((int)(v & 0x3FFF) << 18) >> 18;
+
+        // Written whole before its count moves, as a range is, so the verifier on a worker never reads one half-written.
+        private void AppendBox(int kind, ulong first, int upper, int lower, long end)
+        {
+            // A draw that compares depth without updating it only reads the depth image, and a read never waits for another reader.
+            bool depth = _shadowCycle < 2 && _shadowDepthUpdate;
+            ref Box box = ref _boxes[(int)(_boxesAppended & (BoxCount - 1))];
+            box.End = end;
+            box.Kind = kind;
+            box.Color = _colorImage;
+            box.Depth = depth ? _depthImage : uint.MaxValue;
+            box.Bytes = _colorBytes;
+            box.Width = _colorWidth;
+            box.ScissorRight = _scissorRight;
+            box.RowFirst = upper >> 2;
+            box.RowLast = (lower - 1) >> 2;
+            box.First = first;
+            if (kind == Triangle)
+            {
+                int length = Rdp.Rdp.Length(Rdp.Rdp.Id(first));
+                box.Low = _ring[(int)((end - length + 1) & (_ring.Length - 1))];
+                box.High = _ring[(int)((end - length + 2) & (_ring.Length - 1))];
+                box.Middle = _ring[(int)((end - length + 3) & (_ring.Length - 1))];
+                box.RowFirst = upper;
+                box.RowLast = lower;
+            }
+
+            Volatile.Write(ref _boxesAppended, _boxesAppended + 1);
+        }
+
+        private static long Signed(ulong v, int bits) => ((long)(v & ((1UL << bits) - 1)) << (64 - bits)) >> (64 - bits);
+
+        // A triangle's edges as the walker steps them, from its words: each edge's start and its step a sub-scanline, and the sub-scanlines it spans; null when unsure.
+        private static (long Xh, long Xm, long Xl, long Sh, long Sm, long Sl, long Top, long Bottom, long Ym)? Edges(in Box box)
+        {
+            long xl = Signed(box.Low >> 32, 28), dl = Signed(box.Low, 30);
+            long xh = Signed(box.High >> 32, 28), dh = Signed(box.High, 30);
+            long xm = Signed(box.Middle >> 32, 28), dm = Signed(box.Middle, 30);
+            int yh = SignExtend14(box.First), ym = SignExtend14(box.First >> 16);
+
+            long top = yh & ~3, bottom = box.RowLast | 3, span = Math.Max(0, bottom - top);
+            long sh = (dh >> 2) & ~1, sm = (dm >> 2) & ~1, sl = (dl >> 2) & ~1;
+            if (Math.Abs(xh + sh * span) >= (1L << 31)) return null;
+            return (xh, xm, xl, sh, sm, sl, top, bottom, ym);
+        }
+
+        // The columns a triangle's sub-scanlines can name from one sub-scanline to another, from its edges' two ends there, since an edge is a line.
+        private static (long, long) Reach((long Xh, long Xm, long Xl, long Sh, long Sm, long Sl, long Top, long Bottom, long Ym) e, long from, long to)
+        {
+            long low = long.MaxValue, high = long.MinValue;
+            void Edge(long x, long step, long first, long last)
+            {
+                long a = (x + step * first) & ~1, b = (x + step * last) & ~1;
+                low = Math.Min(low, Math.Min(a, b));
+                high = Math.Max(high, Math.Max(a, b));
+            }
+
+            Edge(e.Xh, e.Sh, from - e.Top, to - e.Top);
+            if (e.Ym >= e.Top && e.Ym <= e.Bottom)
+            {
+                if (from <= e.Ym) Edge(e.Xm, e.Sm, from - e.Top, Math.Min(to, e.Ym) - e.Top);
+                if (to >= e.Ym) Edge(e.Xl, e.Sl, Math.Max(from, e.Ym) - e.Ym, to - e.Ym);
+            }
+            else Edge(e.Xm, e.Sm, from - e.Top, to - e.Top);
+
+            return (low, high);
+        }
+
+        // The rows and, for one row, the columns a box's draw can reach, a pixel of slack each way and the scissor's reach past the row kept; false for none.
+        private static bool Row(in Box box, long row, out long left, out long right)
+        {
+            left = 0;
+            right = -1;
+            if (box.Kind == Empty) return false;
+
+            if (box.Kind == Triangle)
+            {
+                long firstRow = box.RowFirst >> 2, lastRow = (box.RowLast - 1) >> 2;
+                if (row < firstRow || row > lastRow) return false;
+
+                if (Edges(box) is not { } e) { left = -3; right = box.ScissorRight + 3; return true; }
+                (long low, long high) = Reach(e, Math.Max(row * 4, e.Top), Math.Min(row * 4 + 3, e.Bottom));
+                if (low < 0 || high >= (1L << 27)) { left = -3; right = box.ScissorRight + 3; return true; }
+                left = (low >> 16) - 4;
+                right = Math.Min((high >> 16) + 5, box.ScissorRight) + 3;
+                return true;
+            }
+
+            if (row < box.RowFirst || row > box.RowLast) return false;
+            if (box.Kind == WholeRows) { left = -3; right = box.ScissorRight + 3; return true; }
+
+            left = ((long)((box.First >> 12) & 0xFFF) >> 2) - 3;
+            right = Math.Min(((long)((box.First >> 44) & 0xFFF) >> 2) + 2, box.ScissorRight) + 3;
+            return true;
+        }
+
+        // Whether any byte from one address to another is a pixel the box's draw can reach, a span running on into the next row included.
+        private static bool Holds(in Box box, long from, long to) =>
+            Within(box, box.Color, box.Bytes, from, to) || (box.Depth != uint.MaxValue && Within(box, box.Depth, 2, from, to));
+
+        private static bool Within(in Box box, uint image, int bytes, long from, long to)
+        {
+            for (long at = from; at < to; at += bytes)
+            {
+                if (at < image) continue;
+                long pixel = (at - image) / bytes, row = pixel / box.Width, column = pixel - row * box.Width;
+                for (long r = row - 1; r <= row + 1; r++)
+                {
+                    long c = column + (row - r) * box.Width;
+                    if (Row(box, r, out long left, out long right) && c >= left && c <= right) return true;
+                }
+            }
+
+            return false;
+        }
+
+        // The last draw still pending whose box holds the eight bytes about an address; zero when none does, the idle count when the ring cannot say.
+        private long LastHolding(long physical, long completed)
+        {
+            long from = physical & ~7L, to = from + 8;
+            long appended = _boxesAppended;
+            for (long i = appended - 1; i >= 0; i--)
+            {
+                if (appended - i > BoxCount) return Idle;
+                ref Box box = ref _boxes[(int)(i & (BoxCount - 1))];
+                if (box.End <= completed) return 0;
+                if (Holds(box, from, to)) return box.End;
+            }
+
+            return 0;
+        }
 
         // An extent's idle range grown in place under the sequence the verifier reads it by; one that could not be listed stays whole-memory.
         private void Grow(ref Extent extent, uint image, int bytes, long from, long to, long start)
@@ -1123,10 +1285,23 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 return false;
             }
 
+            // A read is written over only by draws, so it waits for the last pending draw whose box holds it, if one does - see Mars_Rdp.md §2.6.3.
+            long goal = mark == Idle ? _issued : mark;
+            if (!write)
+            {
+                long holding = LastHolding(from, completed);
+                if (holding != Idle && holding < goal)
+                {
+                    ReadsNarrowed++;
+                    if (holding <= completed) { ReadsFreed++; return false; }
+                    goal = holding;
+                }
+            }
+
             if (_taking && site == 0) site = 10;
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
-            WaitUntil(mark == Idle ? _issued : mark);
-            if (mark != Idle) Clear(page, mark);
+            WaitUntil(goal);
+            if (mark != Idle && goal >= mark) Clear(page, mark);
             WaitsPerPage[page]++;
             long took = System.Diagnostics.Stopwatch.GetTimestamp() - started;
             WaitsPerSite[site]++; TicksPerSite[site] += took;
@@ -1234,6 +1409,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
 
             if (!Covers(physical, word, write)) _fault ??= new InvalidOperationException($"The display processor {(write ? "wrote" : "read")} {physical:X6} outside every range its interface marked for word {word}. {Nearest(physical, word)}. {Ranges()}");
+
+            // A read waits only for the draws whose boxes hold it, so every byte a draw writes must be in its own box - see Mars_Rdp.md §2.6.3.
+            if (write && !BoxHolds(physical, word)) _fault ??= new InvalidOperationException($"The display processor wrote {physical:X6} outside the box its interface recorded for the draw ending at word {word}.");
         }
 
         // For a fault's message: the nearest range in the ring that holds the byte at all, whatever its counts said.
@@ -1267,6 +1445,21 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
 
             return text.ToString();
+        }
+
+        // The box of the draw ending at the word, found newest first; a word that ends no recorded draw, or one the ring has lost, is not the boxes' to judge.
+        private bool BoxHolds(uint physical, long word)
+        {
+            long appended = Volatile.Read(ref _boxesAppended);
+            for (long i = appended - 1; i >= Math.Max(appended - BoxCount, 0); i--)
+            {
+                Box box = _boxes[(int)(i & (BoxCount - 1))];
+                if (Volatile.Read(ref _boxesAppended) - i > BoxCount) return true;
+                if (box.End < word) return true;
+                if (box.End == word) return Holds(box, physical, physical + 1);
+            }
+
+            return true;
         }
 
         // The batch still open, read whole by its sequence; then the ring newest first, stopping where the counts fall below the word - see §2.6.1.
@@ -1310,11 +1503,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public void RefreshShadow()
         {
             (_shadowTaken, _shadowFirst) = Processor.Gathered;
+            _gatheredBeforeTheRing = _shadowTaken > 0;
             (_colorImage, _colorWidth, _colorBytes, _depthImage, _textureImage, _textureWidth, _textureSize, _scissorTop, _scissorBottom, _scissorRight) = Processor.Images;
             _drawn = false;
             (_scissorTopRaw, _scissorBottomRaw, ulong modes) = Processor.Bounds;
             _shadowCycle = (int)(modes >> 52) & 3;
             _shadowDepth = ((modes >> 4) & 3) != 0;
+            _shadowDepthUpdate = ((modes >> 5) & 1) != 0;
             _colorExtent.Index = _depthExtent.Index = -1;
             _issued = _completed = Completed();
             foreach (Worker worker in _workers)

@@ -68,12 +68,14 @@ Sizes are for someone who knows this codebase. Each stage is worth having on its
 
 | # | What | Touches | Size | Depends on |
 |---|---|---|---|---|
+| 0 | **Continue where you left off.** Write a state when a game is closed or the window shuts, and offer Resume or Restart the next time that game is started, with a "do not ask again" that remembers either answer. Mistress has eight manual slots and nothing automatic, so closing the window today loses the session. This is the cheapest thing on the list and the one a handheld wants most, since a Deck is suspended and resumed rather than quit. | `MainWindow` close path and `LoadRom`, one LunaP dialog | half a day | — |
 | 1 | **Favourites and recency.** A favourite flag and a last-played stamp per path, in `appsettings.json` or a small sibling. Y marks a favourite from the pad (EmulationStation's grammar, already half-built in §4.29); the filter bar gains "Favourites" and "Recent" as facets. | `MainWindow.axaml.cs`, `MainWindow.Pad.cs`, `AppSettings` | half a day | — |
-| 2 | **Save states as objects.** Give each state a screenshot (the frontend already has the frame it just presented), a timestamp, and the core's name and version. Show them in a strip in the pad menu and a pane in the library. | `MainWindow` state code, a new `SaveStateIndex`, a LunaP tile list | 2 days | — |
+| 2 | **Save states as objects.** Give each state a screenshot (the frontend already has the frame it just presented), a timestamp, and **the core's name and its save-state version**. Show them in a strip in the pad menu and a pane in the library. OpenEmu keeps each state as a directory holding the data, a screenshot and a plist naming the core that wrote it, and refuses or switches on a mismatch. **For EmuSen that last part is the point, not the decoration:** Mercury is on save-state version 5, Mars's changed with the Expansion Pak, and a state written by an older build currently loads into whatever it happens to be compatible with. A state that names its writer can say so instead. | `MainWindow` state code, a new `SaveStateIndex`, a LunaP tile list | 2 days | — |
 | 3 | **The catalogue behind the library.** Point `RomLibrary` at Galaxia's `ICatalogue`: walk on first run, store path, size, MD5 and console, and re-walk only what changed. Keeps the list instant on a large tree and gives every later stage a stable identity for a file. | `EmuSen.Mistress/Library/RomLibrary.cs`, `Galaxia/Library/Catalogue/` | 2–3 days | — |
 | 4 | **Cover art, local only.** An `Artwork/` folder beside the state directory, `<md5>.jpg` or `<title>.jpg`, shown in a grid; a placeholder with the title when absent. A grid/list toggle in the view menu and on the pad. | new `LibraryGrid` view, probably a new LunaP tile control | 3–4 days | 3 |
 | 5 | **Collections.** User-made lists, plus the fixed ones OpenEmu has (All Games, Save States, Screenshots). A sidebar replaces the console facet. | `MainWindow.axaml`, `SidebarController` equivalent | 2 days | 1 |
-| 6 | **An in-game bar for the pointer.** The pad menu of §4.29 already carries the entries; this is the same list as a fading bar for mouse users, with the scale and the console's settings on it. | `MainWindow.Pad.cs` generalised, a new overlay | 1–2 days | — |
+| 6 | **An in-game bar for the pointer.** The pad menu of §4.29 already carries the entries; this is the same list as a fading bar for mouse users, with the scale and the console's settings on it. OpenEmu's is a borderless child window that appears on mouse movement and fades after a second and a half. | `MainWindow.Pad.cs` generalised, a new overlay | 1–2 days | — |
+| 6a | **A glyph when something happens.** A small icon flashed over the picture for a state written, a screenshot taken, fast-forward or rewind. On a handheld there is no status bar and no window title to say that a button did anything. | the same overlay as 6 | a few hours | 6 |
 | 7 | **Metadata, if wanted at all.** See §4. | — | — | 3 |
 
 **Stage 3 is the keystone** and the one to do first if only one is done. Everything visual above it wants a stable
@@ -126,6 +128,8 @@ one `PRAGMA user_version` and a real migration path, not to import someone else'
 **Do not copy the settings model.** It is worse than what Mistress has. A hidden Debug pane unlocked by the Konami
 code, no core options anywhere, and a per-core display-mode menu as the only escape hatch, would be a step back
 from a graphics window that lists what a core actually declares.
+
+**Do not copy the core installer.** OpenEmu downloads cores at run time from an XML feed, per-core Sparkle appcasts and a newer JSON manifest, and offers to install one when a game needs it. EmuSen's cores are built into the assembly and there is no plugin boundary to hang this on; `EmuSen_Assembly_Pruning` has been arguing the other way, towards fewer boundaries rather than more.
 
 **Do not copy per-game core selection.** OpenEmu's in-game "Select Core" is session-scoped and writes nothing; the
 next launch goes back to the per-system default. Either persist it or do not offer it.

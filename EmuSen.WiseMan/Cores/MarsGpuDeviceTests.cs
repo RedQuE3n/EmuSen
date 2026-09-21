@@ -17,12 +17,11 @@ namespace EmuSen.WiseMan.Cores
 
         private struct AddPush { public uint Count; public int Bias; }
 
-        // Every device the machine offers, so the software one is exercised beside the real one; none at all is a machine the CPU path serves.
+        // The machine's first choice of device, or every one with EMUSEN_MARS_GPU_TEST_DEVICES=all; none at all is a machine the CPU path serves.
         public static TheoryData<string> Devices()
         {
             var data = new TheoryData<string>();
-            foreach (string name in GpuDevice.DeviceNames().Distinct()) data.Add(name);
-            if (data.Count == 0) data.Add("");
+            foreach (string name in GpuTestDevices.Names) data.Add(name);
             return data;
         }
 

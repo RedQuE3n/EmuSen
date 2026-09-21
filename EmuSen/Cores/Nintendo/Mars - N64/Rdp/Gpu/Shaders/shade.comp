@@ -1,0 +1,71 @@
+#version 450
+
+// One invocation per pixel of the multiple, walking its tile's rows in the order they were drawn - see Mars_Gpu.md §5.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// The memory at the multiple in sixteen-bit words of console order: the word in the low half, its two hidden bits above it.
+layout(std430, set = 0, binding = 0) buffer Memory { uint memory[]; };
+layout(std430, set = 0, binding = 1) readonly buffer Primitives { uint primitives[]; };
+layout(std430, set = 0, binding = 2) readonly buffer Rows { uint rows[]; };
+layout(std430, set = 0, binding = 3) readonly buffer TileOffsets { uint tileOffsets[]; };
+layout(std430, set = 0, binding = 4) readonly buffer TileRows { uint tileRows[]; };
+
+layout(push_constant) uniform Push
+{
+    uint imageWord;
+    uint width;
+    uint pixelWords;
+    uint memoryWords;
+    uint tileX0;
+    uint tileY0;
+    uint tilesWide;
+    uint tilesHigh;
+} push;
+
+const uint PRIMITIVE_WORDS = 8;
+const uint ROW_WORDS = 4;
+const uint KIND_FILL = 3;
+
+// Rdp.FillPixel: a word takes the half of the fill colour its address holds, and its hidden bits follow its low bit.
+uint filled(uint word, uint color)
+{
+    uint value = (word & 1u) == 0u ? color >> 16 : color & 0xFFFFu;
+    return value | ((value & 1u) * 3u) << 16;
+}
+
+void main()
+{
+    uvec2 tile = gl_WorkGroupID.xy;
+    if (tile.x >= push.tilesWide || tile.y >= push.tilesHigh) return;
+
+    uint x = (push.tileX0 + tile.x) * 8u + gl_LocalInvocationID.x;
+    uint y = (push.tileY0 + tile.y) * 8u + gl_LocalInvocationID.y;
+    if (x >= push.width) return;
+
+    uint slot = tile.y * push.tilesWide + tile.x;
+    uint begin = tileOffsets[slot], end = tileOffsets[slot + 1u];
+    if (begin == end) return;
+
+    uint word = push.imageWord + (y * push.width + x) * push.pixelWords;
+    uint first = word < push.memoryWords ? memory[word] : 0u;
+    uint second = push.pixelWords == 2u && word + 1u < push.memoryWords ? memory[word + 1u] : 0u;
+    bool touched = false;
+
+    for (uint i = begin; i < end; i++)
+    {
+        uint row = tileRows[i] * ROW_WORDS;
+        if (rows[row + 1u] != y || int(x) < int(rows[row + 2u]) || int(x) > int(rows[row + 3u])) continue;
+
+        uint primitive = rows[row] * PRIMITIVE_WORDS;
+        if (primitives[primitive] == KIND_FILL)
+        {
+            first = filled(word, primitives[primitive + 1u]);
+            second = filled(word + 1u, primitives[primitive + 1u]);
+            touched = true;
+        }
+    }
+
+    if (!touched) return;
+    if (word < push.memoryWords) memory[word] = first;
+    if (push.pixelWords == 2u && word + 1u < push.memoryWords) memory[word + 1u] = second;
+}

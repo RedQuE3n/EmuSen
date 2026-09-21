@@ -5,6 +5,22 @@ using Silk.NET.Shaderc;
 
 namespace EmuSen.WiseMan.Fixtures
 {
+    // Which devices the GPU tests run on: the machine's first choice, or every one when asked - see Mars_Gpu.md §3.
+    public static class GpuTestDevices
+    {
+        public const string AllVariable = "EMUSEN_MARS_GPU_TEST_DEVICES";
+
+        public static string[] Names
+        {
+            get
+            {
+                string[] names = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Distinct(EmuSen.Cores.Nintendo.Mars.Rdp.Gpu.GpuDevice.DeviceNames()));
+                if (names.Length == 0) return new[] { "" };
+                return Environment.GetEnvironmentVariable(AllVariable) == "all" ? names : new[] { names[0] };
+            }
+        }
+    }
+
     // GLSL compute source to SPIR-V, for Mars's shaders; the product ships the result and never this - see Mars_Gpu.md §2.
     public static unsafe class ShaderCompiler
     {

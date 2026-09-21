@@ -28,6 +28,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
         public string Name { get; }
         public bool IsSoftware { get; }
 
+        // The most one storage buffer may bind, which the memory at a multiple is measured against - see Mars_Gpu.md §5.
+        public ulong MaxBufferBytes { get; }
+
         private GpuDevice(Vk vk, Instance instance, PhysicalDevice physical, string name, bool software, uint family)
         {
             _vk = vk;
@@ -74,6 +77,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             Check(_vk.CreateFence(_device, &fenceInfo, null, out _fence), "vkCreateFence");
 
             _vk.GetPhysicalDeviceMemoryProperties(physical, out _memory);
+            _vk.GetPhysicalDeviceProperties(physical, out PhysicalDeviceProperties properties);
+            MaxBufferBytes = properties.Limits.MaxStorageBufferRange;
         }
 
         // Every compute-capable device the loader offers, in the order it would be chosen; empty with no loader or no driver.
@@ -447,9 +452,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             _commands = commands;
         }
 
-        public void Copy(GpuBuffer from, GpuBuffer to, ulong bytes = 0)
+        public void Fill(GpuBuffer buffer, uint word)
         {
-            var region = new BufferCopy { Size = bytes == 0 ? Math.Min(from.Bytes, to.Bytes) : bytes };
+            _vk.CmdFillBuffer(_commands, buffer.Handle, 0, Vk.WholeSize, word);
+            Barrier();
+        }
+
+        public void Copy(GpuBuffer from, GpuBuffer to, ulong bytes = 0, ulong fromOffset = 0, ulong toOffset = 0)
+        {
+            var region = new BufferCopy { SrcOffset = fromOffset, DstOffset = toOffset, Size = bytes == 0 ? Math.Min(from.Bytes, to.Bytes) : bytes };
             _vk.CmdCopyBuffer(_commands, from.Handle, to.Handle, 1, &region);
             Barrier();
         }

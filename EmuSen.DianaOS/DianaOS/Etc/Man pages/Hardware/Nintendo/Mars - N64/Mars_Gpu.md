@@ -64,8 +64,16 @@ a frame image will take. Every element is compared against `unchecked` C#.
 | llvmpipe, software | 48–50 ms | 1.6–1.7 ms | 2.8–3.0 ms |
 
 Three runs each; the first run of the session is in the cold figures. All three devices agree with the CPU on every
-element. The test is a theory over whatever devices the machine offers, so a machine with only llvmpipe still runs
-it and a machine with none reports that and passes, since that machine is the CPU path's.
+element. A machine with no device reports that and passes, since that machine is the CPU path's.
+
+**Which device the tests use.** The table above was taken with every test run as a theory over all three devices.
+Since the same day they run on the machine's first choice only, here the RX 6800, because the suite's time is the
+user's and llvmpipe at four is slow; `EMUSEN_MARS_GPU_TEST_DEVICES=all` brings the other two back for an occasional
+cross-check, which is worth doing when a phase of the shader port lands and is recorded where it was done. This
+retires the plan's §4 sentence that tests run on lavapipe: they can, and by default they do not. The integrated
+adapter has a second use. With two RDNA2 compute units against a Steam Deck's eight it is the machine's stand-in for
+a low-end device, so speed at a multiple is to be measured on it as well as on the discrete card
+(`EMUSEN_MARS_GPU_DEVICE=RAPHAEL`), and a multiple that holds there is a conservative answer for the Deck.
 
 **What these numbers are and are not.** Thirty milliseconds to create a device is paid once, at the moment the
 setting is turned on, and is nothing. The third column bounds the fixed cost of a flush from above: a submission
@@ -106,3 +114,76 @@ keep it so: no 64-bit integers in shader code, no subgroup operations, no featur
 means publishing `Silk.NET.MoltenVK.Native` with the macOS builds, which is a publish decision for whoever has the
 machine to check it on. Until someone does, "Metal support" means that nothing in the design stands in its way, and
 no more than that.
+
+## 5. Phase 1: memory, rows, tiles, and the fill cycle (2026-09-21)
+
+**The exit was** fill scenes identical to the CPU path at the multiple. It is met at two, three and four, byte for
+byte over the whole of the memory and its hidden bits, on all three devices.
+
+### 5.1 The memory is a mirror, not a set of images
+
+The plan's §3 kept "frame images on the device per colour-image address". What was built instead is one device
+buffer mirroring the **whole** memory at the multiple, in the console's sixteen-bit words: one `uint` a word, the
+word in the low half and its two hidden bits above. The reasons are the console's habits. Every game clears its
+depth image by making it the colour image and filling it; images overlap and alias; a pixel's address is arithmetic
+on a base, not an index into an object. A mirror gives all of that the CPU path's meaning with no bookkeeping, and
+makes the oracle's comparison a comparison of two memories. The cost is size: 64 MB of device memory at two and 256
+MB at four for an 8 MB machine. `GpuRasteriser.TryCreate` measures that against the device's
+`maxStorageBufferRange` and returns null with the reason when it does not fit, which is the CPU path's case like any
+other.
+
+**Why a word and not a byte.** GLSL has no byte arrays, and two invocations writing different bytes of one `uint`
+is a race. A sixteen-bit pixel is one word and a thirty-two-bit pixel two, so an invocation per pixel owns what it
+writes. An **eight-bit image** puts two pixels in a word. Those rows are not shaded and are counted
+(`RowsOfUnsupportedImages`); the fix is an invocation per word for such images, and it waits for a game that needs
+it at a multiple.
+
+### 5.2 Host: rows, then tiles
+
+`Rdp.ShadeOn` turns a processor at the multiple into a recorder. `Draw` reaches one new line, and instead of
+shading, the walker's spans go to the rasteriser: a primitive record of eight words (so far the kind and the fill
+colour) and a row record of four (primitive, row, left, right). A change of colour image ends the batch.
+
+At a flush the rows are binned into tiles of 8×8 pixels over the batch's bounding box, by counting, summing and
+placing, so that each tile's list is in the order the rows were drawn. The four arrays are copied to device memory in
+the same submission that dispatches, because a discrete card reading its inputs across the bus for every pixel is
+the slow way to be correct.
+
+### 5.3 Device: one invocation a pixel, in order
+
+`shade.comp` runs one invocation per pixel, a work group per tile. It loads its one or two words, walks its tile's
+list, applies every row that is its row and covers its column, and stores once at the end. The fill is
+`Rdp.FillPixel` restated on words: a word takes the half of the fill colour its address holds, and its hidden bits
+are three times its low bit. Words past the end of memory are dropped, as the CPU path drops bytes.
+
+### 5.4 Where it departs from the CPU path, on purpose
+
+**A span past the image's width is clipped and counted** (`ColumnsPastTheWidth`). On the CPU path, and on the
+console, such a span runs on into the next row's first bytes, because a pixel is an address. A per-pixel invocation
+cannot own a pixel that two coordinates reach. The exact answer is an invocation per address that considers both
+coordinates and merges them in drawing order; it is not built, and the counter is there so that a game which leans
+on the wrap is seen rather than suspected. The oracle's claim is therefore conditional, and the test asserts the
+condition: identical **where the counter is zero**.
+
+**Copy mode moved to phase 3.** The plan put "the copy mode's rectangles" here. Copy mode fetches texels, and texels
+are phase 3. Until then every primitive that is not a fill is counted (`PrimitivesNotShaded`) and not drawn.
+
+### 5.5 Coverage
+
+`MarsGpuRasteriserTests`: per list, an edge-to-edge fill and then sixty random overlapping rectangles into each of
+three image bindings, sixteen-bit and thirty-two-bit, at quarter-pixel positions under scissors that fall inside
+pixels, three seeds, three multiples. Fill colours have differing halves and low bits, so the word lanes and hidden
+bits are exercised. Three mutants:
+
+| Mutant | Result |
+|---|---|
+| Tile lists placed in reverse order | caught, all nine |
+| Hidden bits taken from the wrong bit, in the shader | caught, all nine |
+| Host clips one column short of the width | **survived at first**: no scene reached the image's last column, since every scissor stopped short of it. The edge-to-edge fill was added for this, and it is now caught |
+
+The surviving mutant is the useful result of the three: a scene generator that draws "randomly" had a systematic
+hole at exactly the place an off-by-one lives.
+
+**Not covered:** speed, of which nothing here is a measurement; the batch is flushed and waited for at every image
+change, which is phase 5's to reconsider. Rows above the image or left of it. Eight-bit images. A memory larger than
+the device binds, which is refused by a path no test reaches on this machine's devices at these sizes.

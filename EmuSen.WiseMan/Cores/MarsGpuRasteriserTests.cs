@@ -900,6 +900,170 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // The device's walk is left pending at capture, and what reaches the device next must not reach the picture it walks - see Mars_Gpu.md §14.
+        [Theory]
+        [InlineData(2, false)]
+        [InlineData(4, false)]
+        [InlineData(2, true)]
+        [InlineData(4, true)]
+        public void A_walk_left_pending_shows_the_frame_it_captured(int scale, bool stateReadBetween)
+        {
+            if (GpuDevice.DeviceNames().Count == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            static void HandOver(MemoryBus bus, ulong[] list, uint at)
+            {
+                for (int i = 0; i < list.Length; i++) bus.Write64(at + (uint)i * 8, list[i]);
+                bus.Write32(MemoryMap.DpCommandBase, at);
+                bus.Write32(MemoryMap.DpCommandBase + 4, at + (uint)list.Length * 8);
+                bus.Dp.Join();
+            }
+
+            byte[] Through(bool gpu)
+            {
+                var bus = new MemoryBus();
+                SeedTextureSource(bus);
+                bus.Dp.Scale = scale;
+                bus.Dp.Gpu = gpu;
+
+                HandOver(bus, Shaded(0x7E57_5CA2, 2), 0x0010_0000);
+                uint[] registers = ViRegisters(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0, control: DitherFilter | DivotOn);
+                for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
+
+                // Written before the capture, so that reading it is the first thing the device meets after the walk is left pending.
+                using var stream = new System.IO.MemoryStream();
+                if (stateReadBetween)
+                    using (var writer = new System.IO.BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true)) bus.WriteState(writer, snapshot: true);
+
+                var job = new EmuSen.Cores.Nintendo.Mars.Vi.ScanJob();
+                Assert.True(bus.Vi.Prepare(job));
+                bus.Vi.Capture(job);
+
+                if (stateReadBetween)
+                {
+                    stream.Position = 0;
+                    using var reader = new System.IO.BinaryReader(stream);
+                    bus.ReadState(reader, snapshot: true);
+                }
+                else
+                {
+                    // The next frame over the same image, pushed through to the device before the walk reads the first.
+                    HandOver(bus, Shaded(0x0DDF_00D5, 2), 0x0011_0000);
+                    bus.Dp.ReadBackScaled(0, 4);
+                }
+
+                bus.Vi.Walk(job);
+                return bus.Vi.Frame.ToArray();
+            }
+
+            byte[] cpu = Through(false), device = Through(true);
+            Assert.Contains(cpu, b => b != 0);
+            int at = cpu.AsSpan().CommonPrefixLength(device);
+            if (at != cpu.Length)
+                Assert.Fail($"at {scale}x with {(stateReadBetween ? "a state read" : "a frame drawn")} between: byte {at} is {(at < device.Length ? device[at] : -1):X2} on the device and {cpu[at]:X2} on the CPU");
+        }
+
+        // A capture that repeats the last is still walked when the frontend asks for every scan, and the device's walk must still be there - see Mars_Gpu.md §14.
+        [Theory]
+        [InlineData(2, false)]
+        [InlineData(4, false)]
+        [InlineData(2, true)]
+        [InlineData(4, true)]
+        public void A_repeated_capture_walked_again_on_the_device_is_the_cpus(int scale, bool scannedBetween)
+        {
+            if (GpuDevice.DeviceNames().Count == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            (byte[] First, byte[] Second, bool Repeats) Through(bool gpu)
+            {
+                var bus = new MemoryBus();
+                SeedTextureSource(bus);
+                bus.Dp.Scale = scale;
+                bus.Dp.Gpu = gpu;
+
+                ulong[] list = Shaded(0x7E57_5CA2, 2);
+                for (int i = 0; i < list.Length; i++) bus.Write64(0x0010_0000 + (uint)i * 8, list[i]);
+                bus.Write32(MemoryMap.DpCommandBase, 0x0010_0000);
+                bus.Write32(MemoryMap.DpCommandBase + 4, 0x0010_0000 + (uint)list.Length * 8);
+                bus.Dp.Join();
+
+                uint[] registers = ViRegisters(2, 0, 320, 0x200, 0x400, 108, 640, 34, 240, 0, 0);
+                for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
+
+                var job = new EmuSen.Cores.Nintendo.Mars.Vi.ScanJob();
+                Assert.True(bus.Vi.Prepare(job));
+                bus.Vi.Capture(job);
+                bus.Vi.Walk(job);
+                byte[] first = bus.Vi.Frame.ToArray();
+
+                // Another picture walked in between, from other registers, replaces the one the device held.
+                if (scannedBetween)
+                {
+                    uint[] other = ViRegisters(2, 1, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, control: DivotOn);
+                    for (int i = 0; i < other.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, other[i]);
+                    Assert.True(bus.Vi.Scan());
+                    for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
+                }
+
+                Assert.True(bus.Vi.Prepare(job));
+                bus.Vi.Capture(job);
+                bool repeats = job.Repeats;
+                bus.Vi.Walk(job);
+                return (first, bus.Vi.Frame.ToArray(), repeats);
+            }
+
+            var cpu = Through(false);
+            var device = Through(true);
+            Assert.True(cpu.Repeats && device.Repeats, "the second capture repeats the first on both paths");
+            Assert.Equal(cpu.First, cpu.Second);
+            Assert.True(cpu.Second.AsSpan().SequenceEqual(device.Second), $"at {scale}x{(scannedBetween ? " with a scan between" : "")} the repeated walk on the device differs from the CPU's from byte {cpu.Second.AsSpan().CommonPrefixLength(device.Second)}");
+        }
+
+        // A state read empties the memory at the multiple, so the device must hold afterwards what the CPU path's shadow holds - see Mars_Gpu.md §14.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void After_a_state_is_read_the_device_holds_what_the_cpu_path_holds(bool shadedBeforeTheState)
+        {
+            if (GpuDevice.DeviceNames().Count == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+            const int scale = 2;
+
+            static void HandOver(MemoryBus bus, ulong[] list, uint at)
+            {
+                for (int i = 0; i < list.Length; i++) bus.Write64(at + (uint)i * 8, list[i]);
+                bus.Write32(MemoryMap.DpCommandBase, at);
+                bus.Write32(MemoryMap.DpCommandBase + 4, at + (uint)list.Length * 8);
+                bus.Dp.Join();
+            }
+
+            (byte[] Rdram, byte[] Hidden) Through(bool gpu)
+            {
+                var bus = new MemoryBus();
+                SeedTextureSource(bus);
+                bus.Dp.Scale = scale;
+                bus.Dp.Gpu = gpu;
+                Assert.Equal(gpu, bus.Dp.CanScanOut);
+
+                HandOver(bus, Shaded(0x51A7_E000, 2), 0x0010_0000);
+                if (shadedBeforeTheState) bus.Dp.ReadBackScaled(0, 4);
+
+                using (var stream = new System.IO.MemoryStream())
+                {
+                    using (var writer = new System.IO.BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true)) bus.WriteState(writer, snapshot: true);
+                    stream.Position = 0;
+                    using var reader = new System.IO.BinaryReader(stream);
+                    bus.ReadState(reader, snapshot: true);
+                }
+
+                // A corner only, so everything else shows whether the state emptied the memory.
+                HandOver(bus, new[] { FillCycle, ColorImage(Framebuffer, 2), Scissor(0, 0, Width * 4, Rows * 4), FillColor(0x1357_2468), FillRectangle(0, 0, 255, 127) }, 0x0011_0000);
+                bus.Dp.ReadBackScaled(0, bus.Dp.ScaledRdram.Length);
+                return (bus.Dp.ScaledRdram.ToArray(), bus.Dp.ScaledHidden.ToArray());
+            }
+
+            var cpu = Through(false);
+            Assert.Contains(cpu.Rdram, b => b != 0);
+            AssertIdentical(cpu, Through(true), $"after a state is read, {(shadedBeforeTheState ? "shaded" : "recorded")} before it");
+        }
+
         // Not a test of anything: the stop-or-go measurement of Mars_Gpu.md §6.5, run by hand with EMUSEN_MARS_GPU_BENCH=1.
         [Fact]
         public void Bench_shading_at_a_multiple_on_the_cpu_and_on_the_device()

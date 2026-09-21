@@ -24,7 +24,8 @@ submits them, and **waits**. Nothing is in flight when it returns. That is a del
 lets a program's one descriptor set be rebound before every dispatch, and it puts a barrier after every command
 rather than reasoning about which need one. A submission here holds a handful of commands, not thousands. If phase 5
 finds the wait on the emulation thread, the answer is the deferred presentation of `Mars_Video.md` §2.7, which
-already moves the scan-out off it, and not an asynchronous layer built before anything needs it.
+already moves the scan-out off it, and not an asynchronous layer built before anything needs it. *(§14 records the
+measurement that did need it, and the one submission left pending that it added.)*
 
 **Choosing a device.** Discrete before integrated before virtual before software, by the loader's own type field.
 `EMUSEN_MARS_GPU_DEVICE=<part of a name>` overrides, which is how a test names llvmpipe on a machine that has
@@ -144,7 +145,7 @@ it at a multiple.
 shading, the walker's spans go to the rasteriser: a primitive record of eight words (so far the kind and the fill
 colour) and a row record of four (primitive, row, left, right). A change of colour image ends the batch.
 
-At a flush the rows are binned into tiles of 8×8 pixels over the batch's bounding box, by counting, summing and
+At a flush the rows are binned into tiles of 8×8 pixels (64×1 since §14.1, which says why) over the batch's bounding box, by counting, summing and
 placing, so that each tile's list is in the order the rows were drawn. The four arrays are copied to device memory in
 the same submission that dispatches, because a discrete card reading its inputs across the bus for every pixel is
 the slow way to be correct.
@@ -865,8 +866,9 @@ frame at four fell from 45.9 milliseconds to 12.5 for Mario.
 
 ### 13.5 What is left, and what this does not cover
 
-**What four still costs** over one is 5 milliseconds for Mario and Wave Race and 3.5 for Ocarina. It is no longer
-drawing or walking. It is the picture's readback — nineteen megabytes at four — two host copies of it, one into the
+**What four still costs** over one is 5 milliseconds for Mario and Wave Race and 3.5 for Ocarina. *(The attribution
+that follows was reasoned, not measured, and §14 retires it: the largest piece was the last batch's shading, waited
+for at the scan.)* It is no longer drawing or walking. It is the picture's readback — nineteen megabytes at four — two host copies of it, one into the
 job and one into the raster, and the join before the scan. The copies can be halved by writing the raster directly
 on the immediate path and double-buffering the device's output for the deferred one; the readback goes away only if
 the frontend presents the device's image itself, which is the remaining half of the plan's phase 7 and is not
@@ -875,3 +877,192 @@ started.
 **Not covered:** the integrated adapter in a running game; `Vi.Average`, the antialiasing setting's downsampling,
 which still runs on the host after the walk; the borders and the two frames of grace, which the host writes as
 before; and more than one state a game.
+
+## 14. After phase 7: where four's remaining cost was, and a submission left pending (2026-09-21)
+
+§13.5 said what four still cost over one, about five milliseconds, and named where: the picture's readback, two host
+copies of it, and the join. **That attribution was a reasoned one, and it was mostly wrong.** Timed with temporary
+stopwatches around each piece on the machine's thread (Super Mario 64, four, the device on, deferred presentation,
+400 frames, of which 200 draw), a drawn frame spent:
+
+| Piece | ms |
+|---|---|
+| the join before the scan | 1.3 |
+| the last batch: binning on the host | 1.1 |
+| the last batch: staging | 0.3 |
+| the last batch: submitted and waited for | 3.0 |
+| the walk and its transfer | 1.5 |
+| the copy into the job | 0.7 |
+
+The largest piece was not presentation at all but **the frame's shading**, which reaches the device only when the
+scan flushes the batch, and which the machine's thread therefore waited through. The copies §13.5 proposed to halve
+were the smallest two.
+
+### 14.1 The tile was the wrong shape
+
+`shade.comp` gave each 8×8 tile of the image one workgroup, one invocation a pixel, and walked the tile's rows in
+drawing order. A row is one line, so of the sixty-four invocations that read each entry at most eight could use it;
+the rest compared its line with their own and moved on, and a wave waits for its slowest lane. The host's binning
+paid the same factor: a row of span L was listed about L/8 + 1 times.
+
+Tiles of 64×1 remove both. Every invocation of a workgroup shares its line, so an entry is useful to all of them
+that fall in its span, and a row is listed about L/64 + 1 times. The rows of Mario at four average some 115 pixels,
+which predicts about 5.5 times fewer entries; the count measured was 286,931 against 50,856 a frame, 5.6. The
+machine's flush halved (2.22 to 1.10 ms a frame) and RunFrame at four fell from 12.53 to 11.17 ms, with the state
+hash unchanged. Nothing in the shader depended on the square: a pixel's writes and reads are its own, and each pixel
+still meets its rows in drawing order, which is the one thing the binning must keep.
+
+128×1 measured the same as 64 and 256×1 slightly worse, so the tile stays at 64, the width every device offers,
+MoltenVK's included.
+
+### 14.2 The last batch and the walk go out together, and nobody waits for them
+
+`GpuDevice` gained one submission that is not waited for (`SubmitPending`), beside the waiting one. §1 had put that
+off until something needed it; this is the measurement that did. The scan now stages the frame's last batch and
+submits it with the walk and the walk's transfer, then returns. The deferred walk's thread waits for the device
+(`ScannedPicture`) and copies the picture into the raster **from the mapped buffer itself**, so the copy into the
+job is gone as well.
+
+Three things make that sound, each for a different hazard:
+
+- **Barriers that reach past their submission.** Every command is followed by a barrier over compute and transfer,
+  and a barrier's second scope is everything later in submission order, other submissions included. So what is
+  submitted after a pending walk, including what stages no batch (a clear on a state read, a readback), waits for it
+  on the device. An opening barrier on every submission was written first, in the belief that a submission's
+  barriers stop at its end; §14.4 shows it equivalent, and it was removed.
+- **Staging waits for the pending submission.** The batch's host staging buffers and the shading program's one
+  descriptor set belong to the pending submission until it finishes, so `Stage` waits for it before rewriting
+  either. In a game this wait falls on the leading drawing worker in the next frame, by when the device has long
+  finished.
+- **A presentation join before any rebuild.** The walk's thread reads memory the device owns, so the device must
+  outlive it: `MarsCore.ApplyMultiple` joins the deferred walk before changing the multiple or the device. The
+  hazard this closes (a settings change disposing the buffer under a walk still reading it) is closed by
+  construction and **was not demonstrated**: it needs a walk slowed to the length of a setting change, and there is
+  no deterministic way to arrange that without instrumenting the thread.
+
+Every submission also ends with a barrier to the host. A fence makes the device's own accesses complete, not
+visible to a host read of mapped memory; the specification asks for the barrier, the driver here did not need it,
+and no test can tell the two apart on this machine (§14.4).
+
+### 14.3 Two defects found on the way, both older than this work
+
+**A state read did not empty the device's memory.** `DpInterface.ResetScaled` zeroes the shadow at the multiple when
+a state is read, and the device's copy was never told: `GpuRasteriser.Clear` was called only by its constructor, at
+HEAD and since phase 5. After a load the device kept the old scene wherever the new one did not reach, and any rows
+recorded before the load were still queued and would be drawn after it.
+`After_a_state_is_read_the_device_holds_what_the_cpu_path_holds` failed on both counts before the fix (byte 0x800102,
+0x84 on the device and 0 on the CPU) and passes after it. Each half of `Clear` has its own variant: without the
+dropped batch the recorded case fails, without the fill both do.
+
+**A repeated capture walked again on the device showed nothing it should.** A capture with the device copies no
+scaled bytes, since the device walks its own memory; a capture that repeats the last returned before walking at all.
+With `SkipRepeatedScans` off, the walk that followed read a scaled capture that had never been taken. Reachable in
+Mistress by turning that setting off with the device on; since 4ddc4a8. The repeat now reuses the device's last
+picture when the interface's count of scans (`ScanOuts`, which a rebuild also advances) says nothing has replaced it,
+and walks on the device again otherwise. `A_repeated_capture_walked_again_on_the_device_is_the_cpus` failed before
+(from byte 64 at two, 128 at four); its variant with another scan between catches a mutant that always reuses the
+picture. Whether the device holds the multiple is now part of a repeat's shape, so turning the device on or off
+between two scans makes the second a fresh capture.
+
+### 14.4 The validation layer as a witness, and how it was made one
+
+The Khronos validation layer (`vulkan-validation-layers` 1.4.341) was installed for this work, to have a witness
+for ordering that does not depend on timing. **Its default configuration is blind to exactly the hazards this phase
+has.** With synchronization validation turned on by the variable most documentation gives
+(`VK_KHRONOS_VALIDATION_VALIDATE_SYNC`), and then by the layer's own current one (`VK_LAYER_VALIDATE_SYNC=1`), a
+mutant that removed the barrier between the staging copies and the shading dispatch corrupted 331 bytes of a
+recorded Mario frame and the layer said nothing. Core validation was working (an oversized copy was reported at
+once), so the silence was specific: synchronization validation counts a shader's storage-buffer accesses only when
+`syncval_shader_accesses_heuristic` is on, and every access this rasteriser makes is one. With it on, the same mutant
+is reported as a read-after-write at the dispatch, naming the binding. The working configuration is therefore
+
+    VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation VK_LAYER_VALIDATE_SYNC=1 VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1
+
+with `VK_KHRONOS_VALIDATION_LOG_FILENAME` when the process is a test host, whose native output does not reach the
+test log. That the same mutant also once produced a byte-identical frame is the reason to prefer the layer to the
+oracle for ordering: a race that loses is invisible to a comparison.
+
+Under that configuration the tree with the new tiles alone was silent over the three recorded frames at two and four
+and over every GPU test, and the tree with the pending submission as well was silent over every GPU,
+deferred-presentation and settings test.
+
+**The mutants**, each run through the scan-out oracle, the repeated capture and
+`A_walk_left_pending_shows_the_frame_it_captured` (a capture, then either the next frame drawn and pushed to the
+device or a state read, then the walk), under the layer:
+
+| Mutant | Tests | Layer | Reading |
+|---|---|---|---|
+| the walk's thread does not wait for the device | 8 of 14 fail | silent | caught |
+| staging does not wait for the pending submission | all pass | silent | not demonstrable here |
+| no opening barrier on a submission | all pass | silent | equivalent |
+| no barrier to the host | all pass | silent | not demonstrable here |
+
+*The opening barrier is equivalent, and was removed.* Every command `GpuCommands` records is followed by a barrier
+over compute and transfer, and a barrier's second scope is everything later in submission order, other command
+buffers included. The last command of a pending walk is such a command, so whatever is submitted next already
+waits for it. The layer, which reasons about exactly this, agrees. The opening barrier was written in the belief that
+a submission's barriers stop at its end; they do not.
+
+*The staging wait is required by the specification and cannot be shown to matter on this machine.* Without it the
+next batch rewrites staging a pending submission copies from, and a descriptor set it has bound. Neither happened in
+time to be seen: the device finishes the pending batch in well under a millisecond, and recording the next scene
+takes the host longer. The layer does not track host writes to mapped memory and did not report the descriptor
+update. The wait is kept on the specification's authority, and this is recorded as an argument, not a result.
+
+*The barrier to the host* is the same case: the memory here is coherent and cached, so the driver makes the device's
+writes visible without it, and nothing the layer checks can tell.
+
+The earlier interrupted run of these mutants is worth one sentence, because it went wrong in the way
+`reference_mutation_runner_trap` warns of: a command that was interrupted ran twice, its second copy saved the
+"clean" backup while the first had a mutant applied, and every restore afterwards put the mutant back. It was found
+because a later mutant would not apply, and the runner now refuses to start unless its backups contain every piece a
+mutant removes.
+
+### 14.5 `Compose`'s alpha
+
+The deferred walk's thread, once it no longer copied through the job, spent most of its time in `MarsCore.Compose`,
+which copies the raster into the frame a line at a time, twice for a progressive field, and sets each pixel's fourth
+byte to opaque one byte at a time. It now copies each line once with the alpha ORed in a vector at a time and copies
+the finished line for the doubled row. Measured in isolation on the same raster (four 400-iteration trials, the
+minimum, the machine otherwise loaded): 0.079 to 0.018 ms at one, 0.34 to 0.068 at two, 1.63 to 0.45 at four, and
+byte-identical output at every multiple. The first measurements showed the new loop slower at one and two; that was
+the JIT's first tier, and disappeared with warming. This is the host's path at every multiple and at one, device or
+not, so the whole Mars suite (3,517 tests) and the golden probe (Super Mario 64 and Ocarina, identical for all 600
+frames) were run over it.
+
+### 14.6 The number
+
+`pacebench`, flat out, deferred presentation, HEAD (4ddc4a8) and this work interleaved and the order alternated,
+three rounds; medians. The device is on at two and four and off at one. Each game's state hash was the same across
+all eighteen of its runs.
+
+| Game | | 1× | 2× | 4× | 4×, 90th percentile |
+|---|---|---|---|---|---|
+| Super Mario 64 | HEAD | 265% | 237% (8.41 ms) | 159% (12.57) | 22.4 ms |
+| | now | 265% | **272% (7.31)** | **192% (10.38)** | **15.1** |
+| Ocarina of Time | HEAD | 187% | 188% (10.59) | 141% (14.17) | 34.2 |
+| | now | 189% | **213% (9.35)** | **168% (11.85)** | **23.6** |
+| Wave Race 64 | HEAD | 216% | 167% (9.96) | 120% (13.93) | 24.2 |
+| | now | 218% | **191% (8.70)** | **150% (11.11)** | **14.2** |
+
+One is unchanged, as it should be: nothing here runs at one except `Compose`, whose saving there is a
+twentieth of a millisecond. **Two is now faster than one for Mario and Ocarina**, which is not a paradox: at a
+multiple the device walks the picture, while at one the processor walks it on the deferred thread, and the next
+frame's join waited on that walk for 1.4 milliseconds a frame in Mario, measured with the same stopwatches. The
+plan's criterion for two, *within five per cent of one*, is now met by Mario and Ocarina and missed by Wave Race at 12
+per cent. Four is now at 150 per cent or more for all three, and its ninetieth percentile fell by a third.
+
+### 14.7 What is left, and what this does not cover
+
+**At four**, what remains over two is the deferred walk's own length: the wait for the device's shading of the last
+batch and its walk, then the copy into the raster and `Compose`, a little over seven milliseconds of a drawn frame at
+the last stopwatch reading (before `Compose` was vectorised), which the next frame's join partly waits for. The
+readback of the picture itself is unchanged; only presenting the device's image in the frontend would remove it.
+
+**At one**, the processor's walk on the deferred thread is now the visible cost of the path, as the paragraph above
+the table says; nothing in this phase touches it.
+
+**Not covered:** the integrated adapter in a running game; `Vi.Average`, still on the host; the frontend's own
+per-frame cost, which none of these tools measures, since `pacebench` has no render thread; the hazard the
+presentation join closes (§14.2), argued and not demonstrated; and the staging wait and the host barrier (§14.4),
+required by the specification and not observable on this machine.

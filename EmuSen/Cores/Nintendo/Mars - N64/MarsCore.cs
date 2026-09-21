@@ -183,6 +183,9 @@ namespace EmuSen.Cores.Nintendo.Mars
         private void ApplyMultiple()
         {
             if (Bus is not { } bus) return;
+
+            // A walk still out reads the device's picture where the device left it, so the device outlives it - see Mars_Gpu.md §14.
+            JoinPresentation();
             bus.Dp.Scale = _renderScale * EffectiveAntialiasing;
             bus.Dp.Gpu = _gpu;
             bus.Vi.Average = EffectiveAntialiasing;
@@ -648,17 +651,30 @@ namespace EmuSen.Cores.Nintendo.Mars
 
             for (int row = 0; row < rows; row++)
             {
-                ReadOnlySpan<byte> source = raster.Slice(row * rowBytes, rowBytes);
-
-                for (int copy = 0; copy < repeat; copy++)
-                {
-                    Span<byte> line = frame.AsSpan((row * repeat + copy) * rowBytes, rowBytes);
-                    source.CopyTo(line);
-                    for (int alpha = 3; alpha < rowBytes; alpha += 4) line[alpha] = 0xFF;
-                }
+                Span<byte> line = frame.AsSpan(row * repeat * rowBytes, rowBytes);
+                Opaque(raster.Slice(row * rowBytes, rowBytes), line);
+                for (int copy = 1; copy < repeat; copy++) line.CopyTo(frame.AsSpan((row * repeat + copy) * rowBytes, rowBytes));
             }
 
             return width;
+        }
+
+        // Each pixel copied with its fourth byte made opaque, a vector at a time - see Mars_Gpu.md §14.5.
+        private static void Opaque(ReadOnlySpan<byte> source, Span<byte> into)
+        {
+            ReadOnlySpan<uint> from = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(source);
+            Span<uint> to = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(into);
+            uint alpha = BitConverter.IsLittleEndian ? 0xFF00_0000u : 0xFFu;
+            int i = 0;
+
+            if (System.Numerics.Vector.IsHardwareAccelerated)
+            {
+                var alphas = new System.Numerics.Vector<uint>(alpha);
+                for (; i <= from.Length - System.Numerics.Vector<uint>.Count; i += System.Numerics.Vector<uint>.Count)
+                    (new System.Numerics.Vector<uint>(from.Slice(i)) | alphas).CopyTo(to.Slice(i));
+            }
+
+            for (; i < from.Length; i++) to[i] = from[i] | alpha;
         }
 
         private static byte[] Blank(int height)

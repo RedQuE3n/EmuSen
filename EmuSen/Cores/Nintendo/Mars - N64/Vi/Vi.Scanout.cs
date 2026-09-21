@@ -173,6 +173,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             // The capture already holds this scan's bytes, so it is this scan's capture and a walk over it is still right - see §2.8.
             if (job.Repeats)
             {
+                // The device captures no scaled bytes, so its repeat is its last picture, walked again only if another scan has replaced it - see Mars_Gpu.md §14.
+                if (job.Scale > 1 && _bus.Dp.CanScanOut)
+                {
+                    if (job.DeviceScanAt == _bus.Dp.ScanOuts) job.DeviceScanned = true;
+                    else DeviceScan(job);
+                }
+
                 job.Base = job.From;
                 job.Length = _bus.Rdram.Length;
                 job.Captured = true;
@@ -220,7 +227,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         // The walk reads the registers this job carries and the bytes it captured and nothing else, so the same two give the same raster - see §2.8.
         private bool Repeated(ScanJob job)
         {
-            var shape = (job.Picture, job.Origin, job.Width, job.Wide, job.Resample, job.Divot, job.AntiAlias, job.Dither, job.Gamma, job.From, job.Count, job.Scale);
+            var shape = (job.Picture, job.Origin, job.Width, job.Wide, job.Resample, job.Divot, job.AntiAlias, job.Dither, job.Gamma, job.From, job.Count, job.Scale, _bus.Dp.CanScanOut);
             bool same = job.LastCount == job.Count && job.LastShape.Equals(shape) && job.Rdram.Length >= job.Count;
 
             job.LastShape = shape;
@@ -417,7 +424,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
 
             if (job.DeviceScanned)
             {
-                WriteDevicePicture(job, picture, raster, rasterWidth);
+                WriteDevicePicture(picture, raster, rasterWidth);
                 return;
             }
 
@@ -510,16 +517,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                 AntiAlias = (uint)job.AntiAlias,
             };
 
-            System.ReadOnlySpan<uint> walked = _bus.Dp.ScanOut(scan);
-            if (job.DevicePicture.Length < walked.Length) job.DevicePicture = new uint[walked.Length];
-            walked.CopyTo(job.DevicePicture);
+            _bus.Dp.ScanOut(scan);
             job.DeviceScanned = true;
+            job.DeviceScanAt = _bus.Dp.ScanOuts;
         }
 
         // The device's words into the raster as the walk writes them: a shown pixel whole, a dark one's colour cleared and its coverage kept.
-        private static void WriteDevicePicture(ScanJob job, Picture picture, byte[] raster, int rasterWidth)
+        private void WriteDevicePicture(Picture picture, byte[] raster, int rasterWidth)
         {
-            System.Span<byte> words = System.Runtime.InteropServices.MemoryMarshal.AsBytes(job.DevicePicture.AsSpan());
+            System.ReadOnlySpan<byte> words = System.Runtime.InteropServices.MemoryMarshal.AsBytes(_bus.Dp.ScannedPicture);
             int limit = raster.Length / 4;
 
             for (int row = 0; row < picture.Rows; row++)

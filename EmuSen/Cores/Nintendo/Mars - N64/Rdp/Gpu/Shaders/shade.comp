@@ -2,7 +2,7 @@
 
 // One invocation per pixel of the multiple, walking its tile's rows in the order they were drawn - see Mars_Gpu.md §5 and §6.
 // Every stage is Rdp's C# restated; the names in comments are the methods ported. Integers only, and they wrap.
-layout(local_size_x = 8, local_size_y = 8) in;
+layout(local_size_x = 64, local_size_y = 1) in;
 
 // The memory at the multiple in sixteen-bit words of console order: the word in the low half, its two hidden bits above it.
 layout(std430, set = 0, binding = 0) buffer Memory { uint memory[]; };
@@ -1118,8 +1118,8 @@ void main()
     uvec2 tile = gl_WorkGroupID.xy;
     if (tile.x >= push.tilesWide || tile.y >= push.tilesHigh) return;
 
-    uint ux = (push.tileX0 + tile.x) * 8u + gl_LocalInvocationID.x;
-    uint uy = (push.tileY0 + tile.y) * 8u + gl_LocalInvocationID.y;
+    uint ux = (push.tileX0 + tile.x) * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
+    uint uy = (push.tileY0 + tile.y) * gl_WorkGroupSize.y + gl_LocalInvocationID.y;
     if (ux >= push.width) return;
     int x = int(ux), y = int(uy);
 

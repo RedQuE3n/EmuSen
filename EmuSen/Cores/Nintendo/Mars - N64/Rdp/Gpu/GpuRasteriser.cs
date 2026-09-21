@@ -3,7 +3,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
     // The multiple's shading on a compute device: the host walks and bins rows, the device shades them - see Mars_Gpu.md §5.
     public sealed class GpuRasteriser : IDisposable
     {
-        public const int TileSize = 8;
+        public const int TileWidth = 64, TileHeight = 1;
         public const int PrimitiveWords = 80;
         public const int RowWords = 32;
 
@@ -240,8 +240,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             for (int r = 0; r < _rowCount; r++)
             {
                 int at = r * RowWords;
-                int slot = ((int)_rows[at + 1] / TileSize - tileY0) * tilesWide - tileX0;
-                for (int t = Math.Max((int)_rows[at + 2], 0) / TileSize; t <= Math.Min((int)_rows[at + 3], (int)_width - 1) / TileSize; t++) _tileOffsets[slot + t + 1]++;
+                int slot = ((int)_rows[at + 1] / TileHeight - tileY0) * tilesWide - tileX0;
+                for (int t = Math.Max((int)_rows[at + 2], 0) / TileWidth; t <= Math.Min((int)_rows[at + 3], (int)_width - 1) / TileWidth; t++) _tileOffsets[slot + t + 1]++;
             }
 
             for (int t = 0; t < tiles; t++) _tileOffsets[t + 1] += _tileOffsets[t];
@@ -255,8 +255,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             for (int r = 0; r < _rowCount; r++)
             {
                 int at = r * RowWords;
-                int slot = ((int)_rows[at + 1] / TileSize - tileY0) * tilesWide - tileX0;
-                for (int t = Math.Max((int)_rows[at + 2], 0) / TileSize; t <= Math.Min((int)_rows[at + 3], (int)_width - 1) / TileSize; t++) _tileRows[cursor[slot + t]++] = (uint)r;
+                int slot = ((int)_rows[at + 1] / TileHeight - tileY0) * tilesWide - tileX0;
+                for (int t = Math.Max((int)_rows[at + 2], 0) / TileWidth; t <= Math.Min((int)_rows[at + 3], (int)_width - 1) / TileWidth; t++) _tileRows[cursor[slot + t]++] = (uint)r;
             }
 
             return total;
@@ -280,13 +280,22 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             return staged.Host;
         }
 
-        // Everything recorded is shaded, and nothing is in flight when this returns.
+        // Everything recorded is shaded, and nothing of it is in flight when this returns.
         public void Flush()
         {
-            if (_rowCount == 0) { ResetBatch(); return; }
+            if (Stage() is { } shade) _device.Submit(shade);
+        }
 
-            int tileX0 = _minX / TileSize, tileY0 = _minY / TileSize;
-            int tilesWide = _maxX / TileSize - tileX0 + 1, tilesHigh = _maxY / TileSize - tileY0 + 1;
+        // The batch binned and its inputs staged, as the commands that shade it; null when nothing was recorded.
+        private Action<GpuCommands>? Stage()
+        {
+            if (_rowCount == 0) { ResetBatch(); return null; }
+
+            // The staging buffers and the program's set belong to the pending submission until it finishes - see Mars_Gpu.md §14.
+            _device.WaitForPending();
+
+            int tileX0 = _minX / TileWidth, tileY0 = _minY / TileHeight;
+            int tilesWide = _maxX / TileWidth - tileX0 + 1, tilesHigh = _maxY / TileHeight - tileY0 + 1;
             int listed = Bin(tileX0, tileY0, tilesWide, tilesHigh);
 
             int[] counts = { _primitiveCount * PrimitiveWords, _rowCount * RowWords, tilesWide * tilesHigh + 1, listed, _textureMemoryCount * TextureMemoryWords, _tileCount * TileWords };
@@ -299,18 +308,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
                 TileX0 = (uint)tileX0, TileY0 = (uint)tileY0, TilesWide = (uint)tilesWide, TilesHigh = (uint)tilesHigh, DepthWord = _depthWord,
             };
 
-            _device.Submit(commands =>
+            Flushes++;
+            RowsShaded += _rowCount;
+            ResetBatch();
+
+            return commands =>
             {
-                for (int i = 0; i < sources.Length; i++) commands.Copy(_inputs[i].Host!, _inputs[i].Device!, (ulong)Math.Max(counts[i], 1) * 4);
+                for (int i = 0; i < counts.Length; i++) commands.Copy(_inputs[i].Host!, _inputs[i].Device!, (ulong)Math.Max(counts[i], 1) * 4);
                 commands.Dispatch(
                     _shade,
                     new[] { _memory, _inputs[0].Device!, _inputs[1].Device!, _inputs[2].Device!, _inputs[3].Device!, _inputs[4].Device!, _inputs[5].Device!, _divide },
                     push, (uint)tilesWide, (uint)tilesHigh);
-            });
-
-            Flushes++;
-            RowsShaded += _rowCount;
-            ResetBatch();
+            };
         }
 
         // The device's words from one byte address for so many bytes, laid into the shadow's two arrays as the CPU path would have left them.
@@ -348,11 +357,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
         public const uint ScanWide = 1, ScanResample = 2, ScanDivot = 4, ScanDither = 8, ScanGamma = 16;
 
         private GpuBuffer? _scanDevice, _scanHost;
+        private int _scanPixels;
 
-        // The picture walked out of the device's own memory, one word a pixel; valid until the next scan. Drawing must be finished.
-        public ReadOnlySpan<uint> ScanOut(in ScanParameters scan)
+        // The last batch and the walk, submitted without waiting; ScannedPicture waits for them. Drawing must be finished - see Mars_Gpu.md §14.
+        public void ScanOut(in ScanParameters scan)
         {
-            Flush();
+            Action<GpuCommands>? shade = Stage();
+            _device.WaitForPending();
 
             int pixels = checked((int)(scan.Rows * scan.Columns));
             ulong bytes = (ulong)Math.Max(pixels, 1) * 4;
@@ -370,20 +381,32 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             GpuBuffer device = _scanDevice, host = _scanHost!;
             uint groupsX = (push.Columns + 7) / 8, groupsY = (push.Rows + 7) / 8;
 
-            _device.Submit(commands =>
+            _device.SubmitPending(commands =>
             {
+                shade?.Invoke(commands);
                 commands.Dispatch(_scan, new[] { _memory, device }, push, groupsX, groupsY);
                 commands.Copy(device, host, bytes);
             });
 
+            _scanPixels = pixels;
             Scans++;
-            return host.Span<uint>()[..pixels];
+        }
+
+        // The last scan's picture, one word a pixel, once the device has finished it; valid until the next scan or Dispose.
+        public ReadOnlySpan<uint> ScannedPicture
+        {
+            get
+            {
+                _device.WaitForPending();
+                return _scanHost is null ? ReadOnlySpan<uint>.Empty : _scanHost.Span<uint>()[.._scanPixels];
+            }
         }
 
         public long Scans;
 
         public void Dispose()
         {
+            _device.WaitForPending();
             _scanDevice?.Dispose();
             _scanHost?.Dispose();
             _scan.Dispose();

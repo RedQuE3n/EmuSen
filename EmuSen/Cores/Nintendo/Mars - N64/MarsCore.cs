@@ -164,10 +164,27 @@ namespace EmuSen.Cores.Nintendo.Mars
         // The drawing is the resolution times the averaging, held to four: the averaging gives way first - see Mars_Video.md §2.10.
         public int EffectiveAntialiasing => Math.Max(1, Math.Min(_antialiasing, 4 / _renderScale));
 
+        private bool _gpu;
+
+        // Shade the multiple on a compute device instead of the processor's own threads; the machine's picture is never the device's - see Mars_Gpu.md §11.
+        public bool Gpu
+        {
+            get => _gpu;
+            set
+            {
+                _gpu = value;
+                ApplyMultiple();
+            }
+        }
+
+        // What the device setting actually got, which is a sentence when it got nothing.
+        public string GpuReport => Bus?.Dp.GpuReport ?? "off";
+
         private void ApplyMultiple()
         {
             if (Bus is not { } bus) return;
             bus.Dp.Scale = _renderScale * EffectiveAntialiasing;
+            bus.Dp.Gpu = _gpu;
             bus.Vi.Average = EffectiveAntialiasing;
         }
 
@@ -359,6 +376,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             new("SkipRepeatedScans", "Skip a scan that repeats the last", "A scan whose registers and bytes match the last walk is not walked again. Exact; the picture is the same either way.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
             new("RenderScale", "Internal resolution", "The picture drawn at a multiple of the console's, beside the exact drawing games read back. Each step costs its square in drawing: 2x is four times the pixels, 4x sixteen. Threads help; 2x is what most machines can hold at full speed.", global::EmuSen.Cores.CoreSettingKind.Choice, "1", Choices: new[] { "1", "2", "3", "4" }),
             new("Antialiasing", "Antialiasing", "Each pixel of the picture averaged from a drawing that many times finer each way, which smooths edges and shimmering textures. It multiplies the drawing's cost like the internal resolution, and the two together are held to four: at 2x resolution the most is 2x.", global::EmuSen.Cores.CoreSettingKind.Choice, "Off", Choices: new[] { "Off", "2x", "3x", "4x" }),
+            new("Gpu", "Draw the multiple on the graphics card", "The picture at an internal resolution above one is shaded by the graphics card rather than by the processor's own threads, which is where nearly all of that setting's cost is. It needs Vulkan; without it the setting does nothing and the processor draws as before. It changes nothing at 1x, and the drawing the game itself reads back is never the card's.", global::EmuSen.Cores.CoreSettingKind.Switch, "false"),
             new("ExpansionPak", "Expansion Pak", "The memory accessory that doubles the console's 4MB. A few games refuse to start without it and more use it when it is there. Takes effect when a game is next loaded; a save state resumes with the memory it was made with.", global::EmuSen.Cores.CoreSettingKind.Switch, "true"),
         };
 
@@ -372,6 +390,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             "SkipRepeatedScans" => SkipRepeatedScans ? "true" : "false",
             "RenderScale" => RenderScale.ToString(),
             "Antialiasing" => Antialiasing == 1 ? "Off" : $"{Antialiasing}x",
+            "Gpu" => Gpu ? "true" : "false",
             "ExpansionPak" => ExpansionPak ? "true" : "false",
             _ => throw new ArgumentException($"Mars has no setting named {key}.", nameof(key)),
         };
@@ -387,6 +406,7 @@ namespace EmuSen.Cores.Nintendo.Mars
                 case "SkipRepeatedScans": SkipRepeatedScans = Switch(value); break;
                 case "RenderScale": RenderScale = Math.Clamp(Count(value), 1, 4); break;
                 case "Antialiasing": Antialiasing = value == "Off" ? 1 : value is "2x" or "3x" or "4x" ? value[0] - '0' : throw new ArgumentException($"{value} is not a level of antialiasing."); break;
+                case "Gpu": Gpu = Switch(value); break;
                 case "ExpansionPak": ExpansionPak = Switch(value); break;
                 default: throw new ArgumentException($"Mars has no setting named {key}.", nameof(key));
             }

@@ -72,6 +72,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         // Stubs until each device exists; a register nobody models still has to read back - see §2.2.
         [EmuSen.Common.SkipInState] private readonly Dictionary<uint, uint> _registers = new();
+        private const uint SiDueLow = 0xFFFF_FF00, SiDueHigh = 0xFFFF_FF04;
 
         public MemoryBus(bool expansionPak = false)
         {
@@ -117,6 +118,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             StateSerializer.Write(w, this);
 
+            // A transfer under way rides among the unmodelled registers at two addresses no bus reaches, so the format stands - see Mars_Serial.md §2.2.
+            _registers.Remove(SiDueLow);
+            _registers.Remove(SiDueHigh);
+            if (Si.Due != long.MaxValue) (_registers[SiDueLow], _registers[SiDueHigh]) = ((uint)Si.Due, (uint)(Si.Due >> 32));
+
             w.Write(_registers.Count);
             foreach (var (address, value) in _registers.OrderBy(pair => pair.Key))
             {
@@ -144,6 +150,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             _registers.Clear();
             for (int count = r.ReadInt32(); count > 0; count--) _registers[r.ReadUInt32()] = r.ReadUInt32();
+
+            Si.Due = _registers.TryGetValue(SiDueLow, out uint low) && _registers.TryGetValue(SiDueHigh, out uint high) ? (long)(((ulong)high << 32) | low) : long.MaxValue;
+            _registers.Remove(SiDueLow);
+            _registers.Remove(SiDueHigh);
 
             Save.ReadState(r);
 
@@ -183,8 +193,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             Vi.Catch();
             Ai.Catch();
-            _nextEvent = Math.Min(Vi.Due, Ai.Due);
+            Si.Catch();
+            _nextEvent = Math.Min(Math.Min(Vi.Due, Ai.Due), Si.Due);
         }
+
+        // A device that has just become due earlier than anything scheduled - see Mars_Serial.md §2.2.
+        internal void Sooner(long due) => _nextEvent = Math.Min(_nextEvent, due);
 
         // Before a write changes what either clock runs at, both are brought up to now at the old rate - see Mars_Performance.md §9.
         public void Settle()
@@ -197,7 +211,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             Vi.Schedule();
             Ai.Schedule();
-            _nextEvent = Math.Min(Vi.Due, Ai.Due);
+            _nextEvent = Math.Min(Math.Min(Vi.Due, Ai.Due), Si.Due);
         }
 
         // The eight interface registers and the eight the display processor owns - see Mars_Rsp.md §5.

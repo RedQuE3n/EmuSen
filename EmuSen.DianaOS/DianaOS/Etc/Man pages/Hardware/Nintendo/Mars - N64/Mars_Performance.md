@@ -1833,3 +1833,19 @@ reaching the arithmetic, not doing it, and had looked like arithmetic because th
 Folding the handlers into the blocks (`Mars_Rsp.md` §12) halved an operation's cost and took the vector unit from
 26 per cent of the thread to 16. It also corrected §38: a fifth of the signal processor's steps are taken outside
 the idle loop, beside the operating system's own code, which the block census had missed.
+
+## 39. The probe's baselines after the serial transfer took time
+
+*2026-09-20.* `Mars_Serial.md` §2.2 moved every game's serial interrupt 4,608 cycles later, to unhang *Nightmare
+Creatures*, so the probe could not match its baselines and they were recorded again, the old set kept
+(`~/.cache/emusen/mars-golden-si-instant`). Compared column by column over the 600 frames of the eight games that
+had baselines: the cycle count at a frame's end is the same in every game but for a single frame in four of them,
+by 5 to 41 cycles, and the same again by the last frame — a field ends where the video interface says, whatever
+the game is doing. The picture and the sound diverge in every game from somewhere between frame 22 and frame 480
+and do not come back: a thread that now waits for its controller read lets the threads below it run at other
+moments, and a game's timing is its own from there. A hash cannot tell a game running at another phase from a game
+running wrongly, so each was looked at: all eight at frame 900 with Start pressed at 500 and 700 are at the menus
+those presses lead to — Ocarina of Time's and Majora's Mask's language screens, Super Mario 64's sound select, Wave
+Race's and Mario Kart's mode menus, Kirby's title, Mischief Makers' and Yoshi's Story's. The suite's 6,184 tests
+pass. The probe now runs nine games and takes about half an hour.
+

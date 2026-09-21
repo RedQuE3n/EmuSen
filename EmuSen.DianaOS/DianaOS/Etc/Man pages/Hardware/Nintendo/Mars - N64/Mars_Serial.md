@@ -45,9 +45,52 @@ easy way to break this rule is to apply it everywhere, and the test that pins ma
 PIF RAM out to the address in the DRAM register; writing the write register carries memory in~~, and then the
 PIF runs whatever block arrived (§3)~~. Either way the serial interrupt is raised when it is done.
 
-**Only a write to the status register clears that interrupt**, as with the peripheral interface, and the
-status register reports nothing else: no transfer is ever busy, because every transfer has already finished
-by the time the instruction that started it retires.
+**Only a write to the status register clears that interrupt**, as with the peripheral interface. ~~The status
+register reports nothing else: no transfer is ever busy, because every transfer has already finished by the time
+the instruction that started it retires.~~ *Retired 2026-09-20: §2.2.*
+
+### 2.2 A transfer takes time, and a game hung until it did
+
+*2026-09-20.* **Retired: "no transfer is ever busy, because every transfer has already finished by the time the
+instruction that started it retires."** The bytes still move at once, but the interrupt is raised 4,608 processor
+cycles later (`SiInterface.TransferCycles`), and until then the status register reads DMA busy.
+
+**What it cost.** *Nightmare Creatures* booted to a black screen and stayed there: no fault, no halt, a picture
+origin of `0x280` and sound playing. The thread walker (`h-inspect threads`, its dispatcher signature loosened to
+two words, since this game's libultra orders the third differently) showed why. Thread 8, priority 15, was always
+*running*, inside the serial DMA routine with PIF RAM's address in a register, and the main thread, priority 10, was
+*runnable* and never ran. A trace of the joybus showed the first block asking the four ports for their identity and
+then only `FF 01 04 01`, the controller's state, more than four thousand times in the first sixty frames. The
+game reads its controller from a thread that does nothing else: it starts a transfer, waits for the interrupt,
+and starts another. On the console that wait is where every lower priority runs. With the interrupt raised in the
+same instruction that started the transfer, the wait never blocks, the thread never yields, and the game under it
+never starts. Nothing was wrong with any answer the PIF gave.
+
+**The duration and where it comes from.** Both references make the transfer take time. mupen64plus raises the
+interrupt `dma_duration` count units after the transfer, `DEFAULT_SI_DMA_DURATION = 0x900` (`rom.c`), with a few
+games given 8,192 in its database; the count register is half the processor's clock, so 0x900 is 4,608 cycles,
+about forty-nine microseconds. The FPGA core holds `SI_STATUS_DMA_busy` and does not interrupt until its PIF
+processor has finished (`SI.vhd`, `READ_WAITPIFPROC`, `WRITE_WAITPIFPROC`, `WAITDONE`), which is the console's
+mechanism rather than a figure. Mars takes mupen64plus's default as a number known to work across its library,
+and records that the console's is longer: a joybus exchange with a controller alone is some hundreds of
+microseconds. A game that depends on the longer figure is what would reopen this.
+
+**How it is scheduled.** `SiInterface.Due` is the cycle the transfer under way finishes at; the bus's event
+horizon is the least of the video's, the sound's and this, `Sooner` pulls it in when a transfer starts, and
+`RunEvents` calls `Catch`, which raises the interrupt once the time has passed. The store that starts a transfer
+bumps the bus's write count, so a compiled block leaves and takes the new horizon before it runs on.
+
+**In a state without a new format.** A transfer under way has to survive a save, or the loaded game waits for an
+interrupt that never comes. The due cycle rides among the unmodelled registers, which a state carries as a count
+and pairs, at two addresses no bus can reach (`0xFFFFFF00`, `0xFFFFFF04`); they are written only while a transfer
+is pending and removed on reading. An idle machine's state is byte for byte what it was, and an old state reads as
+no transfer pending. `A_state_saved_during_a_transfer_still_interrupts_when_it_is_loaded` holds the round trip and
+the sixteen bytes.
+
+**What it changes elsewhere.** Every game's serial interrupt now lands 4,608 cycles later than it did, so the
+probe's baselines were recorded again; the comparison of the old and the new columns is in `Mars_Performance.md`
+§39. The peripheral interface still finishes at once (`Mars_Memory.md`), which no game here has been seen to
+mind, and is the same kind of claim this section has just retired.
 
 ~~**The block runs on the way in only.** A game writes its command block to memory, DMAs it to PIF RAM — which
 is what makes the PIF read it — and then DMAs PIF RAM back to see the replies. Running the block on the way

@@ -25,12 +25,20 @@ namespace EmuSen.WiseMan.Cores
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
         }
 
+        // The bytes move at once; the interface is busy and silent until the transfer's time has passed, and then it interrupts - see Mars_Serial.md §2.2.
         [Fact]
-        public void A_transfer_carries_sixty_four_bytes_each_way_and_interrupts()
+        public void A_transfer_carries_sixty_four_bytes_each_way_and_interrupts_when_its_time_has_passed()
         {
             MemoryBus bus = WithBlock(0xFE);
 
             Run(bus);
+            Assert.False(bus.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
+            Assert.Equal(SiInterface.StatusDmaBusy, bus.Read32(MemoryMap.SiBase + SiInterface.Status));
+
+            bus.Tick(SiInterface.TransferCycles - 1);
+            Assert.False(bus.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
+
+            bus.Tick(1);
             Assert.True(bus.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
             Assert.Equal(SiInterface.StatusInterrupt, bus.Read32(MemoryMap.SiBase + SiInterface.Status));
 
@@ -45,10 +53,39 @@ namespace EmuSen.WiseMan.Cores
             MemoryBus bus = WithBlock(0xFE);
 
             Run(bus);
+            bus.Tick(SiInterface.TransferCycles);
+            Assert.True(bus.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
             bus.Write32(MemoryMap.SiBase + SiInterface.Status, 0);
 
             Assert.False(bus.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
             Assert.Equal(0u, bus.Read32(MemoryMap.SiBase + SiInterface.Status));
+        }
+
+        // A state written while a transfer is under way carries its interrupt, in a format no older state differs from - see §2.2.
+        [Fact]
+        public void A_state_saved_during_a_transfer_still_interrupts_when_it_is_loaded()
+        {
+            MemoryBus bus = WithBlock(0xFE);
+            Run(bus);
+            bus.Tick(100);
+
+            using var stream = new System.IO.MemoryStream();
+            using (var w = new System.IO.BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true)) bus.WriteState(w);
+
+            var loaded = new MemoryBus();
+            stream.Position = 0;
+            using (var r = new System.IO.BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true)) loaded.ReadState(r);
+
+            Assert.Equal(bus.Si.Due, loaded.Si.Due);
+            loaded.Tick(SiInterface.TransferCycles - 101);
+            Assert.False(loaded.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
+            loaded.Tick(1);
+            Assert.True(loaded.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
+
+            // Idle again, the two addresses are gone, and the state is the length it always was.
+            using var idle = new System.IO.MemoryStream();
+            using (var w = new System.IO.BinaryWriter(idle, System.Text.Encoding.UTF8, leaveOpen: true)) loaded.WriteState(w);
+            Assert.Equal(stream.Length - 16, idle.Length);
         }
 
         // The referee's read walks the block whatever the last byte says; only the challenge bit steers it - see §2.

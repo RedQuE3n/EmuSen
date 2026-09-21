@@ -53,6 +53,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
         // Off only to measure what the inlined jumps and likely branches save, or to show they change nothing - see Mars_Recompiler.md §18.
         public static bool InlineJumps = Environment.GetEnvironmentVariable("EMUSEN_MARS_NOINLINEJUMPS") != "1";
 
+        // Off only to measure what unchecked access to the registers and memory saves in bytes and time - see Mars_Recompiler.md §19.
+        public static bool Unchecked = Environment.GetEnvironmentVariable("EMUSEN_MARS_CHECKEDBLOCKS") != "1";
+
         // Off only to measure what the inlined loads save, or to show they change nothing - see Mars_Recompiler.md §16.
         public static bool InlineLoads = Environment.GetEnvironmentVariable("EMUSEN_MARS_NOINLINELOADS") != "1";
 
@@ -142,6 +145,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
             private readonly LocalBuilder _p;
             private readonly LocalBuilder _exitAt;
             private readonly LocalBuilder _rdram;
+            private readonly LocalBuilder _registers;
+            private readonly LocalBuilder _memory;
+            private readonly LocalBuilder _marked;
             private readonly LocalBuilder _marks;
             private readonly LocalBuilder _address;
             private readonly LocalBuilder _physical;
@@ -165,6 +171,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _p = il.DeclareLocal(typeof(uint));
                 _exitAt = il.DeclareLocal(typeof(int));
                 _rdram = il.DeclareLocal(typeof(byte[]));
+                _registers = il.DeclareLocal(typeof(ulong).MakeByRefType());
+                _memory = il.DeclareLocal(typeof(byte).MakeByRefType());
+                _marked = il.DeclareLocal(typeof(long).MakeByRefType());
                 _marks = il.DeclareLocal(typeof(long[]));
                 _address = il.DeclareLocal(typeof(long));
                 _physical = il.DeclareLocal(typeof(int));
@@ -192,6 +201,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Pc); _il.Emit(OpCodes.Stloc, _entry);
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusRdram); _il.Emit(OpCodes.Stloc, _rdram);
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, DpWriteMarks); _il.Emit(OpCodes.Stloc, _marks);
+
+                // The three arrays by their first elements, so an access whose index is already known to be inside is an address and not a checked one - see Mars_Recompiler.md §19.
+                _il.Emit(OpCodes.Ldloc, _g); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Ldelema, typeof(ulong)); _il.Emit(OpCodes.Stloc, _registers);
+                _il.Emit(OpCodes.Ldloc, _rdram); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Ldelema, typeof(byte)); _il.Emit(OpCodes.Stloc, _memory);
+                _il.Emit(OpCodes.Ldloc, _marks); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Ldelema, typeof(long)); _il.Emit(OpCodes.Stloc, _marked);
 
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Call, BusNextEvent);
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, TimerDue); _il.Emit(OpCodes.Call, MathMin);
@@ -479,13 +493,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
                 DirectAddress(rs, (short)word, size, slow);
 
-                _il.Emit(OpCodes.Ldloc, _g); _il.Emit(OpCodes.Ldc_I4, rt);
-                _il.Emit(OpCodes.Ldloc, _rdram); _il.Emit(OpCodes.Ldloc, _physical);
+                if (Unchecked) RegisterAddress(rt);
+                else { _il.Emit(OpCodes.Ldloc, _g); _il.Emit(OpCodes.Ldc_I4, rt); }
 
                 switch (op)
                 {
-                    case 0x20: _il.Emit(OpCodes.Ldelem_I1); _il.Emit(OpCodes.Conv_I8); break;
-                    case 0x24: _il.Emit(OpCodes.Ldelem_U1); _il.Emit(OpCodes.Conv_U8); break;
+                    case 0x20: MemoryAddress(); _il.Emit(OpCodes.Ldind_I1); _il.Emit(OpCodes.Conv_I8); break;
+                    case 0x24: MemoryAddress(); _il.Emit(OpCodes.Ldind_U1); _il.Emit(OpCodes.Conv_U8); break;
                     case 0x21: Unaligned(OpCodes.Ldind_I2); _il.Emit(OpCodes.Call, Swap16); _il.Emit(OpCodes.Conv_I8); break;
                     case 0x25: Unaligned(OpCodes.Ldind_U2); _il.Emit(OpCodes.Call, SwapU16); _il.Emit(OpCodes.Conv_U8); break;
                     case 0x23: Unaligned(OpCodes.Ldind_I4); _il.Emit(OpCodes.Call, Swap32); _il.Emit(OpCodes.Conv_I8); break;
@@ -493,7 +507,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                     default: Unaligned(OpCodes.Ldind_I8); _il.Emit(OpCodes.Call, Swap64); break;
                 }
 
-                _il.Emit(OpCodes.Stelem_I8);
+                _il.Emit(Unchecked ? OpCodes.Stind_I8 : OpCodes.Stelem_I8);
                 _il.Emit(OpCodes.Br, done);
 
                 _il.MarkLabel(slow);
@@ -514,7 +528,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
                 _il.Emit(OpCodes.Ldloc, _address); _il.Emit(OpCodes.Conv_I4); _il.Emit(OpCodes.Ldc_I4, 0x1FFF_FFFF); _il.Emit(OpCodes.And); _il.Emit(OpCodes.Stloc, _physical);
                 _il.Emit(OpCodes.Ldloc, _physical); _il.Emit(OpCodes.Ldc_I4, _rdramLength); _il.Emit(OpCodes.Bge_Un, slow);
-                _il.Emit(OpCodes.Ldloc, _marks); _il.Emit(OpCodes.Ldloc, _physical); _il.Emit(OpCodes.Ldc_I4, 12); _il.Emit(OpCodes.Shr_Un); _il.Emit(OpCodes.Ldelem_I8); _il.Emit(OpCodes.Brtrue, slow);
+                if (Unchecked)
+                {
+                    // The physical address has just been found below RDRAM's length, which the marks cover page for page.
+                    _il.Emit(OpCodes.Ldloc, _marked); _il.Emit(OpCodes.Ldloc, _physical); _il.Emit(OpCodes.Ldc_I4, 12); _il.Emit(OpCodes.Shr_Un); _il.Emit(OpCodes.Ldc_I4_3); _il.Emit(OpCodes.Shl); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Ldind_I8); _il.Emit(OpCodes.Brtrue, slow);
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldloc, _marks); _il.Emit(OpCodes.Ldloc, _physical); _il.Emit(OpCodes.Ldc_I4, 12); _il.Emit(OpCodes.Shr_Un); _il.Emit(OpCodes.Ldelem_I8); _il.Emit(OpCodes.Brtrue, slow);
+                }
             }
 
             // A load into the coprocessor's register, usable or the interpreter raises what it raises - see §16.
@@ -527,7 +549,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 DirectAddress((int)((word >> 21) & 0x1F), (short)word, wide ? 8 : 4, slow);
 
                 _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, (int)((word >> 16) & 0x1F));
-                _il.Emit(OpCodes.Ldloc, _rdram); _il.Emit(OpCodes.Ldloc, _physical);
                 if (wide) { Unaligned(OpCodes.Ldind_I8); _il.Emit(OpCodes.Call, Swap64); _il.Emit(OpCodes.Call, WriteFpuWide); }
                 else { Unaligned(OpCodes.Ldind_U4); _il.Emit(OpCodes.Call, SwapU32); _il.Emit(OpCodes.Call, WriteFpuWord); }
                 _il.Emit(OpCodes.Br, done);
@@ -572,19 +593,35 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
             // The element's address, read through whatever the host's alignment is.
             private void Unaligned(OpCode read)
             {
-                _il.Emit(OpCodes.Ldelema, typeof(byte)); _il.Emit(OpCodes.Unaligned, (byte)1); _il.Emit(read);
+                MemoryAddress(); _il.Emit(OpCodes.Unaligned, (byte)1); _il.Emit(read);
+            }
+
+            // The byte at the physical address the tests above have just found inside RDRAM - see §19.
+            private void MemoryAddress()
+            {
+                if (Unchecked) { _il.Emit(OpCodes.Ldloc, _memory); _il.Emit(OpCodes.Ldloc, _physical); _il.Emit(OpCodes.Add); }
+                else { _il.Emit(OpCodes.Ldloc, _rdram); _il.Emit(OpCodes.Ldloc, _physical); _il.Emit(OpCodes.Ldelema, typeof(byte)); }
             }
 
             private void LdReg(int r)
             {
                 if (r == 0) { _il.Emit(OpCodes.Ldc_I8, 0L); return; }
+                if (Unchecked) { RegisterAddress(r); _il.Emit(OpCodes.Ldind_I8); return; }
                 _il.Emit(OpCodes.Ldloc, _g); _il.Emit(OpCodes.Ldc_I4, r); _il.Emit(OpCodes.Ldelem_I8);
             }
 
             private void StReg(int r, Action value)
             {
                 if (r == 0) return;
+                if (Unchecked) { RegisterAddress(r); value(); _il.Emit(OpCodes.Stind_I8); return; }
                 _il.Emit(OpCodes.Ldloc, _g); _il.Emit(OpCodes.Ldc_I4, r); value(); _il.Emit(OpCodes.Stelem_I8);
+            }
+
+            // A register is five bits of an instruction, so its address needs no check - see §19.
+            private void RegisterAddress(int r)
+            {
+                _il.Emit(OpCodes.Ldloc, _registers);
+                if (r != 0) { _il.Emit(OpCodes.Ldc_I4, r * 8); _il.Emit(OpCodes.Add); }
             }
 
             private void SignExtend32()

@@ -1,0 +1,38 @@
+#version 450
+
+// Vi.BoxAverage over the raster at the multiple: each pixel the rounded mean of a square, channel by channel - see Mars_Gpu.md §15.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Raster { uint raster[]; };
+layout(std430, set = 0, binding = 1) writeonly buffer Averaged { uint averaged[]; };
+
+layout(push_constant) uniform Push
+{
+    uint width;
+    uint side;
+    uint columns;
+    uint rows;
+} push;
+
+void main()
+{
+    uint x = gl_GlobalInvocationID.x, y = gl_GlobalInvocationID.y;
+    if (x >= push.columns || y >= push.rows) return;
+
+    uint r = 0u, g = 0u, b = 0u, c = 0u;
+    for (uint j = 0u; j < push.side; j++)
+    {
+        uint row = (y * push.side + j) * push.width + x * push.side;
+        for (uint i = 0u; i < push.side; i++)
+        {
+            uint v = raster[row + i];
+            r += v & 0xFFu;
+            g += (v >> 8) & 0xFFu;
+            b += (v >> 16) & 0xFFu;
+            c += v >> 24;
+        }
+    }
+
+    uint area = push.side * push.side, half_ = area / 2u;
+    averaged[y * push.columns + x] = ((r + half_) / area) | ((g + half_) / area) << 8 | ((b + half_) / area) << 16 | ((c + half_) / area) << 24;
+}

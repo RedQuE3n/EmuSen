@@ -584,7 +584,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             JoinPresentation();
 
             bool walk = vi.Prepare(_scan);
-            if (walk) vi.Capture(_scan);
+            if (walk) vi.Capture(_scan, walkRepeats: !SkipRepeatedScans);
 
             // A scan that would write the raster already there is not walked, and the picture on show is already it - see Mars_Video.md §2.8.
             if (walk && _scan.Repeats && SkipRepeatedScans)

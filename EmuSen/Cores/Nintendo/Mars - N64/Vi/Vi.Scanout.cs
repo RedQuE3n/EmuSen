@@ -68,6 +68,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         {
             job.Captured = false;
             job.DeviceScanned = false;
+            FollowTheDevice();
 
             uint origin = Register(Origin) & 0xFF_FFFF;
             if (origin == 0) return false;
@@ -84,14 +85,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             {
                 System.Array.Clear(_held);
                 System.Array.Clear(_raster);
-                System.Array.Clear(_rasterScaled);
+                if (_deviceRaster) { _deviceClear = true; _deviceSpans.Clear(); }
+                else System.Array.Clear(_rasterScaled);
             }
             else
             {
                 Borders(picture, signal);
             }
 
-            if (!signal) return false;
+            // Nothing is walked, but what was darkened must still reach the raster the device averages.
+            if (!signal)
+            {
+                if (_deviceRaster && RasterEditsPending) PublishRaster(null);
+                return false;
+            }
 
             job.Picture = picture;
             job.Origin = origin;
@@ -163,7 +170,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         }
 
         // The frame buffer's lines a walk can reach, copied out so the walk can run while the machine moves on - see §2.7.
-        public void Capture(ScanJob job)
+        public void Capture(ScanJob job, bool walkRepeats = true)
         {
             _bus.Dp.WaitForReadRange(job.From, job.Count, 8);
 
@@ -174,9 +181,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             if (job.Repeats)
             {
                 // The device captures no scaled bytes, so its repeat is its last picture, walked again only if another scan has replaced it - see Mars_Gpu.md §14.
-                if (job.Scale > 1 && _bus.Dp.CanScanOut)
+                if (walkRepeats && job.Scale > 1 && _bus.Dp.CanScanOut)
                 {
-                    if (job.DeviceScanAt == _bus.Dp.ScanOuts) job.DeviceScanned = true;
+                    // Into the raster, clears since the last walk would be undone by the walk the processor makes again - see Mars_Gpu.md §15.
+                    if (job.DeviceScanAt == _bus.Dp.ScanOuts && !(_deviceRaster && RasterEditsPending)) job.DeviceScanned = true;
                     else DeviceScan(job);
                 }
 
@@ -354,6 +362,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             System.Array.Clear(_raster, (line * RasterWidth + from) * 4, count * 4);
 
             // The raster at the multiple darkens the same lines and columns, each at the multiple - see Mars_Video.md §2.9.
+            if (_deviceRaster)
+            {
+                DarkenOnTheDevice(line, from, count);
+                return;
+            }
+
             int n = _rasterScale;
             if (n > 1 && _rasterScaled.Length > 0)
             {
@@ -421,6 +435,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                 raster = _rasterScaled;
             }
             _outputScale = scale;
+
+            _shownFromDevice = job.DeviceScanned && _deviceRaster;
+            if (_shownFromDevice) return;
 
             if (job.DeviceScanned)
             {
@@ -501,6 +518,19 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
         // The walk's parameters for the device, which walks exactly what Walk would over the same memory - see Mars_Gpu.md §13.
         private void DeviceScan(ScanJob job)
         {
+            if (_deviceRaster)
+            {
+                PublishRaster(job);
+                return;
+            }
+
+            _bus.Dp.ScanOut(ScanParametersOf(job));
+            job.DeviceScanned = true;
+            job.DeviceScanAt = _bus.Dp.ScanOuts;
+        }
+
+        private static Rdp.Gpu.GpuRasteriser.ScanParameters ScanParametersOf(ScanJob job)
+        {
             Picture p = job.ScaledPicture;
             int n = job.Scale;
             uint aligned = job.Wide ? job.Origin & 0xFF_FFFC : job.Origin & 0xFF_FFFE;
@@ -517,7 +547,64 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                 AntiAlias = (uint)job.AntiAlias,
             };
 
-            _bus.Dp.ScanOut(scan);
+            return scan;
+        }
+
+        private bool RasterEditsPending => _deviceClear || _deviceSpans.Count > 0;
+
+        // Entering, the host's raster seeds the device's; leaving, the host's is stale and is cleared, as a blank would - see Mars_Gpu.md §15.
+        private void FollowTheDevice()
+        {
+            bool device = AveragesOnTheDevice;
+            if (_deviceRaster && !device)
+            {
+                System.Array.Clear(_rasterScaled);
+                _deviceSpans.Clear();
+                _deviceClear = false;
+                _shownFromDevice = false;
+                _seedValid = true;
+            }
+
+            _deviceRaster = device;
+        }
+
+        // Vi.Darken's clear at the multiple, as spans of the device's raster; sent early when there are more than one submission takes.
+        private void DarkenOnTheDevice(int line, int from, int count)
+        {
+            int n = _bus.Dp.Scale, width = RasterWidth * n;
+            for (int i = 0; i < n; i++)
+            {
+                _deviceSpans.Add((uint)((line * n + i) * width + from * n));
+                _deviceSpans.Add((uint)(count * n));
+            }
+
+            if (_deviceSpans.Count / 2 >= Rdp.Gpu.GpuRasteriser.MaxSpans - n) PublishRaster(null);
+        }
+
+        // The clears, the walk if there is one, and the average, as one submission the deferred thread waits for - see Mars_Gpu.md §15.
+        private void PublishRaster(ScanJob? job)
+        {
+            int n = _bus.Dp.Scale, width = RasterWidth * n, height = RasterHeight * n;
+            bool seeding = !_bus.Dp.HoldsRaster(width, height) && _seedValid && _rasterScale == n && _rasterScaled.Length == width * height * 4;
+            System.ReadOnlySpan<byte> seed = seeding ? _rasterScaled : default;
+            _seedValid = false;
+
+            var scan = default(Rdp.Gpu.GpuRasteriser.ScanParameters);
+            if (job is not null)
+            {
+                Picture p = job.ScaledPicture;
+                scan = ScanParametersOf(job);
+                scan.LineBase = (uint)(p.Top * p.Stride + p.Left + (p.Lower ? width : 0));
+                scan.Stride = (uint)p.Stride;
+                scan.FirstColumn = p.FirstColumn;
+                scan.LastColumn = p.LastColumn;
+            }
+
+            _bus.Dp.ScanIntoRaster(width, height, _average, seed, _deviceClear, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_deviceSpans), job is not null, scan);
+            _deviceSpans.Clear();
+            _deviceClear = false;
+
+            if (job is null) return;
             job.DeviceScanned = true;
             job.DeviceScanAt = _bus.Dp.ScanOuts;
         }

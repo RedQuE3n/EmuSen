@@ -7,8 +7,8 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // The memory at the multiple as the rasteriser keeps it: a sixteen-bit word in the low half, its two hidden bits above.
 layout(std430, set = 0, binding = 0) readonly buffer Memory { uint memory[]; };
 
-// One word a picture pixel: red, green, blue and coverage from the low byte up.
-layout(std430, set = 0, binding = 1) writeonly buffer Output { uint picture[]; };
+// One word a picture pixel: red, green, blue and coverage from the low byte up; or, into the raster, one word a raster pixel.
+layout(std430, set = 0, binding = 1) buffer Output { uint picture[]; };
 
 layout(push_constant) uniform Push
 {
@@ -23,9 +23,15 @@ layout(push_constant) uniform Push
     uint rows;
     uint columns;
     uint antiAlias;
+    uint rasterPixels;
+    uint lineBase;
+    uint stride;
+    int firstColumn;
+    int lastColumn;
+    uint unused;
 } push;
 
-const uint WIDE = 1u, RESAMPLE = 2u, DIVOT = 4u, DITHER = 8u, GAMMA = 16u;
+const uint WIDE = 1u, RESAMPLE = 2u, DIVOT = 4u, DITHER = 8u, GAMMA = 16u, INTO_RASTER = 32u;
 const int COVERED = 1;
 
 bool flag(uint f) { return (push.flags & f) != 0u; }
@@ -227,5 +233,16 @@ void main()
 
     if (flag(GAMMA)) { color.r = gammaOf(color.r); color.g = gammaOf(color.g); color.b = gammaOf(color.b); }
 
-    picture[row * push.columns + column] = uint(color.r & 0xFF) | uint(color.g & 0xFF) << 8 | uint(color.b & 0xFF) << 16 | uint(color.c & 0xFF) << 24;
+    uint word = uint(color.r & 0xFF) | uint(color.g & 0xFF) << 8 | uint(color.b & 0xFF) << 16 | uint(color.c & 0xFF) << 24;
+    if (!flag(INTO_RASTER))
+    {
+        picture[row * push.columns + column] = word;
+        return;
+    }
+
+    // Vi.Walk's own placement: a shown column whole, a dark one's colour cleared and the coverage the raster held kept - see Mars_Gpu.md §15.
+    uint at = push.lineBase + row * push.stride + column;
+    if (at >= push.rasterPixels) return;
+    bool shown = int(column) >= push.firstColumn && int(column) < push.lastColumn;
+    picture[at] = shown ? word : picture[at] & 0xFF000000u;
 }

@@ -249,6 +249,36 @@ Since nothing ever read the value, a stored `"SNES (Venus)"` cannot be distingui
 
 `AllConsoles` is spelled once, in `AppSettings` (Galaxia persists it), and re-exported by `CoreCatalog.AllConsoles` so UI code has one source. A test pins the two together.
 
+### 10.3a The upgrade was not once, and a chosen Super Nintendo was lost
+
+*2026-09-21.* §10.3 says `AppSettings.Load` upgrades the legacy string "once". It did so on every load. The claim
+that "a genuinely chosen console survives, because the only value that gets rewritten is the legacy default" was true
+of every console but one: the legacy default is also the Super Nintendo's display name, so a player who filtered the
+library to it found every console back at the next start. The argument of §10.3, that the stored string "cannot be
+distinguished from a real choice and does not need to be", holds for a file written *before* the filter read the
+value and stops holding the moment a build that honours the value has saved it.
+
+The defect went unseen because reaching it took a deliberate pick of one entry in a dropdown and a restart. It was
+found when the pad's left and right began stepping the filter (`EmuSen_Settings_Reference.md` §4.29) and a test
+stepped onto that entry and read the file back.
+
+**The mechanism.** `AppSettings.SelectedCoreUpgraded`, false by default and so false for any file that lacks it.
+`Upgraded` rewrites the legacy string only while it is false, and sets it; the next save carries it. A file from
+before the filter is upgraded as before. If it is never saved again the upgrade simply repeats, which is harmless,
+since nothing was chosen. A file saved since is believed.
+
+A version number for the whole file was considered and not used: there is one migration, and a number invites the
+reading that the file has a schema history it does not have. If a second migration arrives, that is the time.
+
+**Coverage.** `ConsoleContextTests.The_super_nintendo_chosen_by_a_build_that_honours_it_is_kept` fails on the
+unmodified code, reading "All consoles" where "SNES (Venus)" was saved, and passes with the flag.
+`The_legacy_default_is_upgraded_rather_than_honoured` is unchanged and still passes, which is the other half: a file
+without the flag is still upgraded.
+
+**What it does not cover.** A player who chose the Super Nintendo under an earlier build and lost it is not given it
+back; the file no longer says so. And a file hand-edited to carry the legacy string *and* the flag is believed, which
+is the intent.
+
 ### 10.4 Search, not just filtering
 
 3,537 titles under one console is not scrollable, so the library has a title search box next to the console combo — the same conclusion `CheatDatabaseWindow` already reached for its own game list ("a system holds thousands, so the filter is not optional in practice"). The disk walk happens once per console change; typing only re-filters what was already found.

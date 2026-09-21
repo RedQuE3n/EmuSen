@@ -140,14 +140,51 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         private static readonly MethodInfo ExecuteAny = Handler(nameof(Execute)), Special = Handler(nameof(ExecuteSpecial)), RegImm = Handler(nameof(ExecuteRegImm)),
             Cop0 = Handler(nameof(ExecuteCop0)), Cop2 = Handler(nameof(ExecuteCop2)), VectorLoad = Handler(nameof(ExecuteVectorLoad)), VectorStore = Handler(nameof(ExecuteVectorStore));
 
+        // A method's inlining stops near 512 inlinees, which undid the folding of §12 half way through a block, so a block is methods of four - see §14.
+        private const int ChunkLength = 4;
+
+        private static readonly MethodInfo Cop2Plain = Handler(nameof(ExecuteCop2Plain));
+
+        // The whole unit again on the path a block does not take while the eight lanes are in use, kept out of the block's own inlining - see §14.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void ExecuteCop2Plain(uint instruction) => ExecuteCop2(instruction);
+
         // Each instruction as the step runs it: the counters moved past it, then its handler called with its word - see §11.
         private static Action<Rsp> Compile(CodeBlock block, uint pc)
         {
             var method = new DynamicMethod($"mars_rsp_{pc:X3}", typeof(void), new[] { typeof(Rsp) }, typeof(Rsp), skipVisibility: true);
-            ILGenerator il = method.GetILGenerator();
+            ILGenerator root = method.GetILGenerator();
             bool slot = false;
+            var chunks = new System.Collections.Generic.List<DynamicMethod>();
 
-            for (int i = 0; i < block.Length; i++)
+            for (int from = 0; from < block.Length; from += ChunkLength)
+            {
+                if (block.Length <= ChunkLength)
+                {
+                    Emit(root, block, pc, from, block.Length, ref slot);
+                    break;
+                }
+
+                var chunk = new DynamicMethod($"mars_rsp_{pc:X3}_{from}", typeof(void), new[] { typeof(Rsp) }, typeof(Rsp), skipVisibility: true);
+                ILGenerator il = chunk.GetILGenerator();
+                Emit(il, block, pc, from, Math.Min(block.Length, from + ChunkLength), ref slot);
+                il.Emit(OpCodes.Ret);
+                chunks.Add(chunk);
+                root.Emit(OpCodes.Ldarg_0);
+                root.Emit(OpCodes.Call, chunk);
+            }
+
+            root.Emit(OpCodes.Ret);
+
+            // A dynamic method is compiled when first called, so each chunk is prepared here, on the compiling thread - see Mars_Recompiler.md §7.
+            foreach (DynamicMethod chunk in chunks) RuntimeHelpers.PrepareDelegate(chunk.CreateDelegate<Action<Rsp>>());
+            return method.CreateDelegate<Action<Rsp>>();
+        }
+
+        // The instructions from one index to another; a branch's delay slot may begin the next chunk, which the flag carries over.
+        private static void Emit(ILGenerator il, CodeBlock block, uint pc, int from, int to, ref bool slot)
+        {
+            for (int i = from; i < to; i++)
             {
                 uint at = pc + (uint)i * 4;
                 uint word = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(block.Image.AsSpan(i * 4));
@@ -182,7 +219,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
                     il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); il.Emit(OpCodes.Call, VectorSimd);
                     il.Emit(OpCodes.Br, next);
                     il.MarkLabel(plain);
-                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); il.Emit(OpCodes.Call, handler);
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); il.Emit(OpCodes.Call, Cop2Plain);
                     il.MarkLabel(next);
                     slot = false;
                     continue;
@@ -191,9 +228,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
                 il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); il.Emit(OpCodes.Call, handler);
                 slot = IsBranch(word);
             }
-
-            il.Emit(OpCodes.Ret);
-            return method.CreateDelegate<Action<Rsp>>();
         }
     }
 }

@@ -6,8 +6,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
     // The twelve vector loads and twelve vector stores, each with its own idea of size and alignment - see Mars_RspVector.md §4 and §5.
     public sealed partial class Rsp
     {
-        // How far each format scales its seven-bit offset, in the order the format field numbers them.
-        private static readonly int[] TransferScale = { 0, 1, 2, 3, 4, 4, 3, 3, 4, 4, 4, 4 };
+        // The formats the field names, of the thirty-two it could.
+        private const int TransferFormats = 12;
 
         private static readonly System.Runtime.Intrinsics.Vector128<byte> SwapPairs = System.Runtime.Intrinsics.Vector128.Create((byte)1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14);
 
@@ -60,6 +60,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             }
         }
 
+        // Inlined, with the scale a constant's nibble, so a block's word folds the format and its switch away - see §14.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool TransferOperands(uint instruction, out int format, out int vt, out int element, out uint address)
         {
             format = (int)((instruction >> 11) & 0x1F);
@@ -67,12 +69,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             element = (int)((instruction >> 7) & 0xF);
             address = 0;
 
-            if (format >= TransferScale.Length) return false;
+            if (format >= TransferFormats) return false;
 
             int offset = (int)(instruction << 25) >> 25;
-            address = (Read(Rs(instruction)) + (uint)(offset << TransferScale[format])) & DataMask;
+            address = (Read(Rs(instruction)) + (uint)(offset << (int)((TransferScales >> (format * 4)) & 0xF))) & DataMask;
             return true;
         }
+
+        // The scale of each format's offset, a nibble a format from the lowest: 0, 1, 2, 3, 4, 4, 3, 3, 4, 4, 4, 4.
+        private const ulong TransferScales = 0x4444_3344_3210;
 
         // A load that runs out of register stops there rather than wrapping - see §4.
         private void LoadBytes(int vt, int element, uint address, int count)
@@ -85,7 +90,40 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
                 return;
             }
 
+            // Two, four or eight bytes to an even element that neither wrap nor run past the register are whole lanes, each pair exchanged - see §14.
+            if (Lanes(element, address, count))
+            {
+                ref byte from = ref _bus.SpDmem[address];
+                ref byte to = ref System.Runtime.CompilerServices.Unsafe.As<ushort, byte>(ref Vector[vt * Elements + (element >> 1)]);
+                SwapLanes(ref from, ref to, count);
+                return;
+            }
+
             for (int i = 0; i < Math.Min(16 - element, count); i++) SetVectorByte(vt, element + i, DataByte(address + (uint)i));
+        }
+
+        private static bool Lanes(int element, uint address, int count) =>
+            BitConverter.IsLittleEndian && (element & 1) == 0 && element + count <= 16 && address + (uint)count <= DataMask + 1 && count is 2 or 4 or 8;
+
+        // Big-endian bytes to little-endian lanes and back are the same exchange of each pair.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private static void SwapLanes(ref byte from, ref byte to, int count)
+        {
+            if (count == 8)
+            {
+                ulong x = System.Runtime.CompilerServices.Unsafe.ReadUnaligned<ulong>(ref from);
+                System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ref to, ((x & 0x00FF00FF00FF00FFUL) << 8) | ((x >> 8) & 0x00FF00FF00FF00FFUL));
+            }
+            else if (count == 4)
+            {
+                uint x = System.Runtime.CompilerServices.Unsafe.ReadUnaligned<uint>(ref from);
+                System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ref to, ((x & 0x00FF00FFu) << 8) | ((x >> 8) & 0x00FF00FFu));
+            }
+            else
+            {
+                ushort x = System.Runtime.CompilerServices.Unsafe.ReadUnaligned<ushort>(ref from);
+                System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ref to, (ushort)((x << 8) | (x >> 8)));
+            }
         }
 
         // The bytes before the address, from the start of its region, landing at the register's end - see §4.
@@ -154,6 +192,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             {
                 var lanes = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref Vector[vt * Elements]).AsByte();
                 System.Runtime.Intrinsics.Vector128.StoreUnsafe(System.Runtime.Intrinsics.Vector128.ShuffleNative(lanes, SwapPairs), ref _bus.SpDmem[address]);
+                return;
+            }
+
+            if (Lanes(element, address, count))
+            {
+                ref byte from = ref System.Runtime.CompilerServices.Unsafe.As<ushort, byte>(ref Vector[vt * Elements + (element >> 1)]);
+                SwapLanes(ref from, ref _bus.SpDmem[address], count);
                 return;
             }
 

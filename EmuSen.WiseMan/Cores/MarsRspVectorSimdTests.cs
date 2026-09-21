@@ -120,6 +120,52 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // The byte, short, word and double loads and stores at every element and at addresses through the end of data memory, against their definition byte by byte: an even element that neither wraps nor clips is whole lanes, the rest the loop - see Mars_Rsp.md §14.
+        [Fact]
+        public void The_small_loads_and_stores_move_the_bytes_their_definition_moves_at_every_element()
+        {
+            var seed = new Random(29);
+            var addresses = new System.Collections.Generic.List<uint>();
+            for (uint a = 0x000; a <= 0x011; a++) addresses.Add(a);
+            for (uint a = 0x7F7; a <= 0x809; a++) addresses.Add(a);
+            for (uint a = 0xFEE; a <= 0xFFF; a++) addresses.Add(a);
+
+            foreach (bool store in new[] { false, true })
+            {
+                for (int format = 0; format < 4; format++)
+                {
+                    int count = 1 << format;
+                    foreach (uint address in addresses)
+                    {
+                        for (int element = 0; element < 16; element++)
+                        {
+                            var bus = Started(true, out var rsp);
+                            seed.NextBytes(bus.SpDmem);
+                            for (int i = 0; i < rsp.Vector.Length; i++) rsp.Vector[i] = (ushort)seed.Next(0x10000);
+
+                            byte[] memory = (byte[])bus.SpDmem.Clone();
+                            byte[] register = new byte[16];
+                            for (int b = 0; b < 16; b++) register[b] = (byte)(b % 2 == 0 ? rsp.Vector[5 * 8 + b / 2] >> 8 : rsp.Vector[5 * 8 + b / 2]);
+
+                            if (store) for (int i = 0; i < count; i++) memory[(address + i) & 0xFFF] = register[(element + i) & 0xF];
+                            else for (int i = 0; i < Math.Min(16 - element, count); i++) register[element + i] = memory[(address + i) & 0xFFF];
+
+                            rsp.Gpr[1] = address;
+                            Step(bus, rsp, (store ? 0xE800_0000u : 0xC800_0000u) | (1u << 21) | (5u << 16) | ((uint)format << 11) | ((uint)element << 7));
+
+                            for (int b = 0; b < 16; b++)
+                            {
+                                byte got = (byte)(b % 2 == 0 ? rsp.Vector[5 * 8 + b / 2] >> 8 : rsp.Vector[5 * 8 + b / 2]);
+                                if (register[b] != got) Assert.Fail($"{(store ? "store" : "load")} of {count} at {address:X3} element {element}: register byte {b} is {got:X2}, not {register[b]:X2}");
+                            }
+
+                            Assert.Equal(memory, bus.SpDmem);
+                        }
+                    }
+                }
+            }
+        }
+
         // The two halves of a double-precision reciprocal in sequence, since the high half leaves state for the low one.
         [Fact]
         public void A_double_precision_reciprocal_agrees_across_its_two_instructions()

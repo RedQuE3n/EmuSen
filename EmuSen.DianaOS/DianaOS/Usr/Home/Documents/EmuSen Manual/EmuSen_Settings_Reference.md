@@ -833,6 +833,10 @@ mutant, removing the router's text-box case, was caught by the last.
 - *A pad with no Steam.* Nothing opens and the box wants a real keyboard, as before.
 - *The system file picker* is still out of reach (§4.29); typing a path into a path field's box is now the way round it.
 
+*A plan, not a record, sits beside this file: `EmuSen_Mistress_LibraryPlan.md` reads OpenEmu's frontend and says
+what it would take to model this library on it, which of its ideas are worth taking, and which are against this
+project's own rules. Nothing in it is built.*
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

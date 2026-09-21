@@ -124,7 +124,7 @@ the in-game states. The plan's reason to exist is a number, so each phase that c
 |---|---|---|
 | 0 — **done 2026-09-21, `Mars_Gpu.md` §3** | Spike: Silk.NET Vulkan instance, compute pipeline, storage buffers, readback, in a WiseMan test on lavapipe and on the real device | A shader adds two buffers and the test reads the sum; packaging cost and start-up time written down |
 | 1 — **done 2026-09-21, `Mars_Gpu.md` §5**; a memory mirror instead of frame images (§5.1), and copy mode moved to phase 3 (§5.4) | Frame images, primitive, row and tile buffers; the fill cycle and the copy mode's rectangles | Fill and copy scenes identical to the CPU multiple |
-| 2 | One-cycle, untextured: coverage, shade, combiner, blender, depth, dither | The shaded scenes identical; first `playbench` number at 2× and 4× on a shade-heavy state |
+| 2 — **done 2026-09-21, `Mars_Gpu.md` §6**; go on the discrete card, parity on the integrated one (§6.5); the one-cycle mode has a neighbour carry too (§6.2) | One-cycle, untextured: coverage, shade, combiner, blender, depth, dither | The shaded scenes identical; first `playbench` number at 2× and 4× on a shade-heavy state |
 | 3 | Textures: the ring, tile descriptors, all formats and TLUT, filtering, level of detail, perspective | Recorded display lists of the three probe games identical for a frame each |
 | 4 | Two-cycle, and the neighbour carries by whichever of §3's options measures better | Every scene in the threaded suite identical; the serialised share recorded |
 | 5 | Integration: a GPU back end behind `DpInterface.Scale`, flush rules, the scan-out reading the readback, the setting, fallback when no device | Majora's Mask and the three probe games play at 2× and 4×; the probe at scale one still identical |

@@ -187,3 +187,99 @@ hole at exactly the place an off-by-one lives.
 **Not covered:** speed, of which nothing here is a measurement; the batch is flushed and waited for at every image
 change, which is phase 5's to reconsider. Rows above the image or left of it. Eight-bit images. A memory larger than
 the device binds, which is refused by a path no test reaches on this machine's devices at these sizes.
+
+## 6. Phase 2: the one-cycle mode, untextured, and the first number (2026-09-21)
+
+**The exit was** shaded scenes identical to the CPU path at the multiple, and a first speed number on a shade-heavy
+scene, which the plan named as the point to stop if the device was not several times faster than four CPU workers.
+The scenes are identical. The number says go on the discrete card and is an honest maybe on the integrated one.
+
+### 6.1 What was ported
+
+`shade.comp` now restates, stage for stage and under the C# method's name in a comment, `RowCoverage` for one
+column, the coverage offsets, `CorrectShade` and `CorrectDepth`, the dither patterns, `CombineSecondCycle` with its
+selectors and the chroma key, `ReadMemory`, `CompareDepth` with its four modes and the blend shifts, `Blend` and
+`BlendEquation`, `FinalCoverage`, `WriteMemory` for sixteen and thirty-two bits, and `StoreDepth` with the depth
+encoding. Two tables the C# builds once are computed where they are used instead: the coverage offsets, and the
+blender's quotients, whose bit-serial divider is eight iterations a channel and costs less than a binding.
+
+On the host, `Rdp.RecordOneCycle` is `DrawOneCycle`'s setup written down instead of run. A primitive's record is 64
+words: flags, the packed modes, combiner and blender selectors, seven colours, the constants, the eight steps already
+signed by the direction of the span, and the corrections. A row's is 24: its ends, its eight values **at its first
+pixel**, stepped there from the major edge on the host exactly as the loop does, and the four sub-scanline edges
+coverage reads. An invocation therefore computes a pixel's values as the row's plus the step times its distance from
+the first pixel, which is the loop's repeated addition in closed form and equal to it because both wrap.
+
+The depth word is carried through the tile's list in a local, like the colour words, and a change of depth image
+ends the batch for the same reason a change of colour image does.
+
+### 6.2 What is kept back from the device, and why it is a carry
+
+Reading the C# for the port found something the plan's §3 had attributed only to the two-cycle mode: **in the
+one-cycle mode the combiner's COMBINED input is the previous pixel's result** (`_combined`, `Rdp.OneCycle.cs`). It
+is a carry between neighbouring pixels, which an invocation per pixel cannot see. So is a texel, until phase 3, and
+the level-of-detail fraction, which is measured from texture coordinates. `TheDeviceShadesThisCombiner` keeps back
+any primitive whose selectors read one of them, and it is counted (`PrimitivesNotShaded`), not drawn. Zero constants
+are selectors 7, 15 and 31 and not 0, so a plain shaded primitive is not caught by this. The carries are phase 4's,
+by one of the two routes the plan's §3 names.
+
+### 6.3 The counter of §5.4 was wrong, and the oracle said so
+
+The first run of the new test failed, and not on a byte: every byte matched at two, three and four. It failed on
+the guard, thousands of `ColumnsPastTheWidth` under a scissor exactly as wide as the image. The walker's spans
+include the scissor's own column, where the clipped edge leaves no sample covered; the CPU path reads that pixel and
+never writes it, which is the "read by the next row's owner" of `Mars_Rdp.md` §2.8. The counter now counts what it
+was meant to: columns past the width **that the CPU path would have written**, found by running the CPU's own
+`RowCoverage` over them on the host. For a fill that is every column, as before.
+
+### 6.4 Coverage, and two mutants that taught something
+
+`Shaded_depth_tested_triangles_on_the_device_are_the_cpus_byte_for_byte`: the depth image cleared by filling it as a
+colour image, the picture cleared, then 72 triangles over and past the image, each under its own random modes (both
+dithers, the key, the first blend's four selectors and the low fifteen mode bits whole), its own combiner from the
+inputs the device has, and its own seven colours and constants. Five lists, sixteen-bit and thirty-two-bit, at two,
+three and four.
+
+Sixteen mutants, one a ported stage, each recompiled to SPIR-V and run. Fourteen were caught at once: the dither
+compare, the depth margin, the blend divisor, the coverage offset's column, the shade correction's shift, the final
+coverage, the depth encoding, the stored coverage's hidden bits, coverage's right edge, the blend shifts swapped,
+full alpha's promotion to 0x100, the depth mode's scaled coverage, and the thirty-two-bit hidden bits.
+
+**Two in the chroma key survived, twice.** The reason is arithmetic and is worth keeping. The key's alpha varies
+only while a channel is within 256 of the key's width times sixteen, out of 131,072 values, and the alpha's low
+bits reach the picture through one thing only, the blender's test for an opaque pixel under one pair of selectors.
+Random modes do not line those up: making the widths narrow did nothing, and keying a third of the triangles did
+nothing. What caught both was two lists aimed at it, where shade times a scalar sweeps the window and a forced
+blend weighted by the pixel's alpha carries the key's alpha into the colour. The lesson is §5.5's again in another
+place: a generator that is random over the *inputs* can be nearly empty over the *behaviours*, and a mutant is how
+one finds out.
+
+### 6.5 The number
+
+Release build, medians of nine, interleaved, one list drawn at the multiple and the picture read back. "A quarter"
+is the single CPU worker's time divided by four: the bound four workers cannot beat, and better than they do.
+
+| Scene | Multiple | CPU, one worker | A quarter of it | RX 6800 | of which host | Raphael (integrated) | of which host |
+|---|---|---|---|---|---|---|---|
+| 72 large triangles, heavy overdraw | 2 | 152 ms | 38 | **5.4** | 2.1 | 29.1 | 3.8 |
+| 2,000 small triangles | 2 | 73 | 18 | **9.2** | 5.7 | 24.4 | 7.4 |
+| 72 large | 4 | 579 | 145 | **14.3** | 3.3 | 96.5 | 5.9 |
+| 2,000 small | 4 | 247 | 62 | **20.6** | 12.3 | 61.0 | 13.5 |
+
+**On the discrete card the plan's condition is met**: seven and ten times the ideal four workers where shading
+dominates, and two and three times where it does not. **Where it does not, the device is not the cost.** With many
+small triangles, more than half of the device path's time is the host walking at the multiple and writing 24 words a
+row, and that half is the same on either adapter. That is the next thing to make cheaper, and it is ordinary C#.
+
+**On the integrated adapter it is parity, not a win**: from 1.5 times the ideal four workers to 0.7. Two things
+keep it from being a no. The comparison flatters the CPU, which does not scale by four. And the device's time is not
+the emulation thread's, nor four cores': `Mars_Performance.md` §37 found the machine bound by that thread, and cores
+given back to it are worth something a table of rasteriser times does not show. Whether that is enough on a
+handheld is phase 6's question and needs games, which need textures. **Decision: go on to phase 3.**
+
+**What this is not.** Not a game. Synthetic lists with no textures, one flush a list, the picture read back once.
+Real lists change images and modes more often, and every change of image is a flush and a wait here.
+
+**Not covered:** the carries of §6.2; eight-bit images; a depth image that aliases another pixel's colour word,
+which the invocation's two locals would get wrong and which no scene draws; the noise dithers, which the CPU path
+does not build either.

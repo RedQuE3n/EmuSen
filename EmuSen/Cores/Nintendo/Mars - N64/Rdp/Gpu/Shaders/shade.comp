@@ -1,6 +1,7 @@
 #version 450
 
-// One invocation per pixel of the multiple, walking its tile's rows in the order they were drawn - see Mars_Gpu.md §5.
+// One invocation per pixel of the multiple, walking its tile's rows in the order they were drawn - see Mars_Gpu.md §5 and §6.
+// Every stage is Rdp's C# restated; the names in comments are the methods ported. Integers only, and they wrap.
 layout(local_size_x = 8, local_size_y = 8) in;
 
 // The memory at the multiple in sixteen-bit words of console order: the word in the low half, its two hidden bits above it.
@@ -20,11 +21,46 @@ layout(push_constant) uniform Push
     uint tileY0;
     uint tilesWide;
     uint tilesHigh;
+    uint depthWord;
 } push;
 
-const uint PRIMITIVE_WORDS = 8;
-const uint ROW_WORDS = 4;
+const uint PRIMITIVE_WORDS = 64;
+const uint ROW_WORDS = 24;
+const uint KIND_ONE_CYCLE = 0;
 const uint KIND_FILL = 3;
+
+// Primitive record, as GpuRasteriser lays it out.
+const uint P_KIND = 0, P_FILL = 1, P_FLAGS = 2, P_MODES = 3, P_COMBINE = 4, P_BLEND = 5;
+const uint P_PRIMITIVE = 6, P_ENVIRONMENT = 10, P_BLEND_COLOR = 14, P_FOG = 18, P_KEY_CENTER = 22, P_KEY_SCALE = 26, P_KEY_WIDTH = 30;
+const uint P_K4 = 33, P_K5 = 34, P_PRIMITIVE_LOD = 35, P_PRIMITIVE_Z = 36, P_DELTA_Z = 37, P_DELTA_Z_ENCODED = 38;
+const uint P_STEPS = 40, P_SHADE_DX = 48, P_SHADE_DY = 52, P_DEPTH_DX = 56, P_DEPTH_DY = 57;
+
+const uint F_KEY = 1u << 0, F_COVERAGE_TIMES_ALPHA = 1u << 1, F_ALPHA_FROM_COVERAGE = 1u << 2, F_ALPHA_COMPARE = 1u << 3;
+const uint F_DITHER_ALPHA = 1u << 4, F_ANTIALIAS = 1u << 5, F_COLOR_ON_COVERAGE = 1u << 6, F_FORCE_BLEND = 1u << 7;
+const uint F_IMAGE_READ = 1u << 8, F_DEPTH_UPDATE = 1u << 9, F_DEPTH_COMPARE = 1u << 10, F_PRIMITIVE_DEPTH = 1u << 11;
+const uint F_SCISSOR_FIELD = 1u << 12, F_MAJOR_ON_LEFT = 1u << 13, F_DITHER = 1u << 14;
+
+// Row record.
+const uint R_PRIMITIVE = 0, R_Y = 1, R_LEFT = 2, R_RIGHT = 3, R_VALUES = 4, R_EDGE_LEFT = 12, R_EDGE_RIGHT = 16, R_INVALID = 20;
+
+const int MAGIC_SQUARE[16] = int[16](0, 6, 1, 7, 4, 2, 5, 3, 3, 5, 2, 4, 7, 1, 6, 0);
+const int BAYER[16] = int[16](0, 4, 1, 5, 4, 0, 5, 1, 3, 7, 2, 6, 7, 3, 6, 2);
+
+uint pb;
+uint rb;
+
+// What the stages share, as the C# keeps them in fields.
+ivec4 shade;
+ivec4 pixel;
+ivec4 memoryColor;
+int blenderShadeAlpha;
+int blendShiftA;
+int blendShiftB;
+
+uint flags;
+bool flag(uint f) { return (flags & f) != 0u; }
+int pint(uint i) { return int(primitives[pb + i]); }
+ivec4 pcolor(uint i) { return ivec4(pint(i), pint(i + 1u), pint(i + 2u), pint(i + 3u)); }
 
 // Rdp.FillPixel: a word takes the half of the fill colour its address holds, and its hidden bits follow its low bit.
 uint filled(uint word, uint color)
@@ -33,39 +69,474 @@ uint filled(uint word, uint color)
     return value | ((value & 1u) * 3u) << 16;
 }
 
+// Rdp.RowCoverage for one column.
+int coverageMask(int x, int left, int right)
+{
+    int mask = 0xFF;
+    uint invalid = rows[rb + R_INVALID];
+
+    for (int sub = 0; sub < 4; sub++)
+    {
+        int samples = 0xA >> (sub & 1);
+        int shift = (sub - 2) & 4;
+        int cleared = ~(samples << shift) & 0xFF;
+
+        if ((invalid & (1u << sub)) != 0u) { mask &= cleared; continue; }
+
+        int leftEdge = int(rows[rb + R_EDGE_LEFT + uint(sub)]), rightEdge = int(rows[rb + R_EDGE_RIGHT + uint(sub)]);
+        int leftPixel = leftEdge >> 3, rightPixel = rightEdge >> 3;
+
+        if (x <= leftPixel) mask &= cleared;
+        if (x >= rightPixel) mask &= cleared;
+
+        int leftSamples = (0x0F >> (((leftEdge & 7) + 1) >> 1)) & samples;
+        int rightSamples = (0xF0 >> (((rightEdge & 7) + 1) >> 1)) & samples;
+
+        if (rightPixel > leftPixel)
+        {
+            if (x == leftPixel) mask |= (leftSamples << shift) & 0xFF;
+            if (x == rightPixel) mask |= (rightSamples << shift) & 0xFF;
+        }
+        else if (rightPixel == leftPixel && x == leftPixel)
+        {
+            mask |= ((leftSamples & rightSamples) << shift) & 0xFF;
+        }
+    }
+
+    return mask;
+}
+
+// Rdp.BuildCoverageOffsets, computed where the C# tabulates.
+ivec2 coverageOffset(int mask)
+{
+    int samples = (mask & 0x5) | ((mask & 0x5A) << 4) | ((mask & 0xA0) << 8);
+
+    int row = 0;
+    while (row < 3 && (samples & (0xF000 >> (row * 4))) == 0) row++;
+    if ((samples & (0xF000 >> (row * 4))) == 0) row = 0;
+
+    int columns = (samples >> (12 - row * 4)) & 0xF;
+    int column = columns == 0 ? 0 : 3 - findMSB(columns);
+    return ivec2(column, row);
+}
+
+int clamp9(int value)
+{
+    int top = (value >> 7) & 3;
+    return top == 2 ? 0xFF : top == 3 ? 0 : value & 0xFF;
+}
+
+int extend9(int value) { return (value & 0x180) == 0x180 ? value | ~0x1FF : value & 0x1FF; }
+int signedMultiplier(int value) { return value | -(value & 0x100); }
+
+int correctShade(int value, int dx, int dy, ivec2 offset, int coverage)
+{
+    int corrected = coverage == 8 ? value >> 2 : ((value << 2) + offset.x * dx + offset.y * dy) >> 4;
+    return clamp9(corrected & 0x1FF);
+}
+
+int correctDepth(int z, int dx, int dy, ivec2 offset, int coverage)
+{
+    int corrected = coverage == 8 ? z >> 3 : ((z << 2) + offset.x * dx + offset.y * dy) >> 5;
+    int top = (corrected & 0x60000) >> 17;
+    return top == 2 ? 0x3FFFF : top == 3 ? 0 : corrected & 0x3FFFF;
+}
+
+// The inputs that read the previous pixel's result, a texel or the level of detail never reach here: the host keeps such primitives back - see §6.
+ivec4 colorA(int s) { return s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : s == 6 ? ivec4(0x100, 0x100, 0x100, 0) : ivec4(0); }
+
+ivec4 colorB(int s)
+{
+    if (s == 6) return pcolor(P_KEY_CENTER);
+    if (s == 7) return ivec4(pint(P_K4), pint(P_K4), pint(P_K4), 0);
+    return s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : ivec4(0);
+}
+
+ivec4 colorC(int s)
+{
+    switch (s)
+    {
+        case 3: return pcolor(P_PRIMITIVE);
+        case 4: return shade;
+        case 5: return pcolor(P_ENVIRONMENT);
+        case 6: return pcolor(P_KEY_SCALE);
+        case 10: return ivec4(pint(P_PRIMITIVE + 3u));
+        case 11: return ivec4(shade.a);
+        case 12: return ivec4(pint(P_ENVIRONMENT + 3u));
+        case 14: return ivec4(pint(P_PRIMITIVE_LOD));
+        case 15: return ivec4(pint(P_K5));
+        default: return ivec4(0);
+    }
+}
+
+int alphaABD(int s) { return s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? 0x100 : 0; }
+int alphaC(int s) { return s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? pint(P_PRIMITIVE_LOD) : 0; }
+
+int colorEquation(int a, int b, int c, int d) { return ((extend9(a) - extend9(b)) * signedMultiplier(c) + (extend9(d) << 8) + 0x80) & 0x1FFFF; }
+int alphaEquation(int a, int b, int c, int d) { return (((extend9(a) - extend9(b)) * signedMultiplier(c) + (extend9(d) << 8) + 0x80) >> 8) & 0x1FF; }
+
+// Rdp.ChromaKey and Distance.
+int keyDistance(int channel, int width)
+{
+    int value = (channel << 15) >> 15;
+    if (value > 0) value = (value & 0xF) == 8 ? 0x10 - value : -value;
+    return (width << 4) + value;
+}
+
+// Rdp.CombineSecondCycle; returns the coverage it may have scaled.
+int combine(int ditherAlpha, int coverage)
+{
+    int c = pint(P_COMBINE);
+    int sa = c & 0xF, sb = (c >> 4) & 0xF, sc = (c >> 8) & 0x1F, sd = (c >> 13) & 0x7;
+    ivec4 a = colorA(sa), b = colorB(sb), m = colorC(sc), d = colorA(sd);
+
+    int red = colorEquation(a.r, b.r, m.r, d.r), green = colorEquation(a.g, b.g, m.g, d.g), blue = colorEquation(a.b, b.b, m.b, d.b);
+    int alpha = alphaEquation(alphaABD((c >> 16) & 7), alphaABD((c >> 19) & 7), alphaC((c >> 22) & 7), alphaABD((c >> 25) & 7));
+
+    int keyAlpha = 0;
+    if (flag(F_KEY))
+    {
+        keyAlpha = clamp(min(keyDistance(red, pint(P_KEY_WIDTH)), min(keyDistance(green, pint(P_KEY_WIDTH + 1u)), keyDistance(blue, pint(P_KEY_WIDTH + 2u)))), 0, 0xFF);
+        pixel = ivec4(clamp9(a.r), clamp9(a.g), clamp9(a.b), 0);
+    }
+    else
+    {
+        pixel = ivec4(clamp9(red >> 8), clamp9(green >> 8), clamp9(blue >> 8), 0);
+    }
+
+    int pixelAlpha = clamp9(alpha);
+    if (pixelAlpha == 0xFF) pixelAlpha = 0x100;
+
+    int scaled = 0;
+    if (flag(F_COVERAGE_TIMES_ALPHA))
+    {
+        scaled = (pixelAlpha * coverage + 4) >> 3;
+        coverage = (scaled >> 5) & 0xF;
+    }
+
+    if (!flag(F_ALPHA_FROM_COVERAGE))
+    {
+        if (flag(F_KEY)) pixelAlpha = keyAlpha;
+        else
+        {
+            pixelAlpha += ditherAlpha;
+            if ((pixelAlpha & 0x100) != 0) pixelAlpha = 0xFF;
+        }
+    }
+    else
+    {
+        pixelAlpha = flag(F_COVERAGE_TIMES_ALPHA) ? scaled : coverage << 5;
+        if (pixelAlpha > 0xFF) pixelAlpha = 0xFF;
+    }
+
+    pixel.a = pixelAlpha;
+
+    blenderShadeAlpha = shade.a + ditherAlpha;
+    if ((blenderShadeAlpha & 0x100) != 0) blenderShadeAlpha = 0xFF;
+    return coverage;
+}
+
+// Rdp.ReadMemory on the invocation's own words; returns the stored coverage.
+int readMemory(uint word, uint first, uint second)
+{
+    int modes = pint(P_MODES);
+    int size = (modes >> 8) & 3, format = (modes >> 10) & 7;
+    memoryColor = ivec4(0, 0, 0, 0xE0);
+
+    if (size == 2)
+    {
+        int value = int(first & 0xFFFFu), hidden = int(first >> 16) & 3;
+        if (format == 0) memoryColor.rgb = ivec3((value >> 8) & 0xF8, (value & 0x7C0) >> 3, (value & 0x3E) << 2);
+        else memoryColor.rgb = ivec3(value >> 8);
+
+        if (!flag(F_IMAGE_READ)) return 7;
+
+        int stored = format == 0 ? ((value & 1) << 2) | hidden : (value >> 5) & 7;
+        memoryColor.a = stored << 5;
+        return stored;
+    }
+
+    bool valid = word + 1u < push.memoryWords;
+    int high = valid ? int(first & 0xFFFFu) : 0, low = valid ? int(second & 0xFFFFu) : 0;
+    memoryColor.rgb = ivec3(high >> 8, high & 0xFF, low >> 8);
+    memoryColor.a = flag(F_IMAGE_READ) ? low & 0xE0 : 0xE0;
+    return flag(F_IMAGE_READ) ? (low >> 5) & 7 : 7;
+}
+
+int highestBit(int value) { return value == 0 ? 0 : 1 << findMSB(value); }
+
+int deltaZEncoding(int value)
+{
+    return ((value & 0xFF00) != 0 ? 8 : 0) | ((value & 0xF0F0) != 0 ? 4 : 0) | ((value & 0xCCCC) != 0 ? 2 : 0) | ((value & 0xAAAA) != 0 ? 1 : 0);
+}
+
+int decompressDepth(int stored)
+{
+    int packed = (stored >> 2) & 0x3FFF;
+    int exponent = (packed >> 11) & 7;
+    return (((packed & 0x7FF) << max(6 - exponent, 0)) + (0x40000 - (0x40000 >> exponent))) & 0x3FFFF;
+}
+
+int compressDepth(int z)
+{
+    uint inverted = ~(uint(z & 0x3FFFF) << 14);
+    int leading = min(inverted == 0u ? 32 : 31 - findMSB(inverted), 7);
+    int mantissa = leading <= 4 ? z >> (4 - leading) : z << min(leading - 4, 2);
+    return (mantissa & 0x1FFC) | (leading << 13);
+}
+
+// Rdp.CompareDepth, the one-cycle half of it: the two-cycle mode's carried shifts are phase 4's.
+bool compareDepth(uint depth, int z, int deltaZ, int deltaZEncoded, int memoryCoverage, inout int coverage, out bool blend, out bool overflow)
+{
+    z &= 0x3FFFF;
+    overflow = ((memoryCoverage + coverage) & 8) != 0;
+    bool shifts = ((pint(P_BLEND) >> 6) & 3) == 1;
+
+    if (!flag(F_DEPTH_COMPARE))
+    {
+        blend = flag(F_FORCE_BLEND) || (!overflow && flag(F_ANTIALIAS));
+        if (shifts) { blendShiftA = 0; blendShiftB = deltaZEncoded < 0xB ? 4 : 0xF - deltaZEncoded; }
+        return true;
+    }
+
+    int stored = int(depth & 0xFFFFu), storedHidden = int(depth >> 16) & 3;
+    int old = decompressDepth(stored);
+    int storedEncoded = ((stored & 3) << 2) | storedHidden;
+    int storedSlope = 1 << storedEncoded;
+
+    if (shifts)
+    {
+        blendShiftA = clamp(deltaZEncoded - storedEncoded, 0, 4);
+        blendShiftB = clamp(storedEncoded - deltaZEncoded, 0, 4);
+    }
+
+    if (((stored >> 13) & 0xF) < 3) storedSlope = storedSlope != 0x8000 ? max(storedSlope << 1, 16 >> ((stored >> 13) & 0xF)) : 0xFFFF;
+
+    int slope = highestBit((deltaZ | storedSlope) & 0xFFFF);
+    int margin = slope << 3;
+
+    bool farther = z + margin >= old;
+    blend = flag(F_FORCE_BLEND) || (!overflow && flag(F_ANTIALIAS) && farther);
+
+    bool inFront = z < old, nearer = z - margin <= old, maximum = old == 0x3FFFF;
+    int mode = (pint(P_MODES) >> 4) & 3;
+
+    if (mode == 0) return maximum || (overflow ? inFront : nearer);
+    if (mode == 1)
+    {
+        if (!inFront || !farther || !overflow) return maximum || (overflow ? inFront : nearer);
+        int shift = deltaZEncoding(slope & 0xFFFF);
+        coverage = ((((old >> shift) - (z >> shift)) & 0xF) * coverage >> 3) & 0xF;
+        return true;
+    }
+    if (mode == 2) return inFront || maximum;
+    return farther && nearer && !maximum;
+}
+
+ivec3 blendInput(int selector, ivec4 source)
+{
+    return selector == 0 ? source.rgb : selector == 1 ? memoryColor.rgb : selector == 2 ? pcolor(P_BLEND_COLOR).rgb : pcolor(P_FOG).rgb;
+}
+
+// Rdp.BuildBlendQuotients for one index: the bit-serial divider, run where the C# looks it up.
+int blendQuotient(int divisor, int dividend)
+{
+    int complement = ~divisor & 0xF;
+    int remainder = (complement + (dividend >> 8) + 1) & 7;
+    int quotient = 0;
+
+    for (int bit = 7; bit >= 0; bit--)
+    {
+        int incoming = (dividend >> bit) & 1;
+        int sum = ((quotient >> (bit + 1)) & 1) != 0 ? complement + (remainder << 1) + incoming + 1 : divisor + (remainder << 1) + incoming;
+        remainder = sum & 7;
+        if ((sum & 0x10) != 0) quotient |= 1 << bit;
+    }
+
+    return quotient;
+}
+
+int dithered(int value, int dither)
+{
+    int raised = value > 247 ? 255 : (value & 0xF8) + 8;
+    return dither < (value & 7) ? raised : value;
+}
+
+// Rdp.Blend with BlendEquation inside it.
+ivec3 blendPixel(int ditherColor, bool blend, bool overflow)
+{
+    int selectors = pint(P_BLEND);
+    int firstColor = selectors & 3, firstAlphaSelector = (selectors >> 2) & 3, secondColor = (selectors >> 4) & 3, secondAlphaSelector = (selectors >> 6) & 3;
+    ivec3 result;
+
+    if (!flag(F_COLOR_ON_COVERAGE) || overflow)
+    {
+        bool opaque = firstAlphaSelector == 0 && secondAlphaSelector == 0 && pixel.a >= 0xFF;
+
+        if (!blend || opaque) result = blendInput(firstColor, pixel);
+        else
+        {
+            int firstAlpha = firstAlphaSelector == 0 ? pixel.a : firstAlphaSelector == 1 ? pint(P_FOG + 3u) : firstAlphaSelector == 2 ? blenderShadeAlpha : 0;
+            int secondAlpha = secondAlphaSelector == 0 ? ~firstAlpha & 0xFF : secondAlphaSelector == 1 ? memoryColor.a : secondAlphaSelector == 2 ? 0xFF : 0;
+
+            int first = firstAlpha >> 3, second = secondAlpha >> 3;
+            if (secondAlphaSelector == 1)
+            {
+                first = (first >> blendShiftA) & 0x3C;
+                second = (second >> blendShiftB) | 3;
+            }
+
+            ivec3 sum = blendInput(firstColor, pixel) * first + blendInput(secondColor, pixel) * (second + 1);
+
+            if (flag(F_FORCE_BLEND)) result = (sum >> 5) & 0xFF;
+            else
+            {
+                int divisor = (((first & ~3) + (second & ~3) + 4) >> 2) & 0xF;
+                result = ivec3(blendQuotient(divisor, (sum.r >> 2) & 0x7FF), blendQuotient(divisor, (sum.g >> 2) & 0x7FF), blendQuotient(divisor, (sum.b >> 2) & 0x7FF));
+            }
+        }
+    }
+    else
+    {
+        result = blendInput(secondColor, pixel);
+    }
+
+    int rgbDither = pint(P_MODES) & 3;
+    if (rgbDither != 3)
+    {
+        result.r = dithered(result.r, rgbDither == 2 ? ditherColor & 7 : ditherColor);
+        result.g = dithered(result.g, rgbDither == 2 ? (ditherColor >> 3) & 7 : ditherColor);
+        result.b = dithered(result.b, rgbDither == 2 ? (ditherColor >> 6) & 7 : ditherColor);
+    }
+
+    return result;
+}
+
+// Rdp.FinalCoverage.
+int finalCoverage(bool blend, int coverage, int memoryCoverage)
+{
+    int destination = (pint(P_MODES) >> 6) & 3;
+    if (destination == 0)
+    {
+        int sum = blend ? coverage + memoryCoverage : coverage - 1;
+        return (sum & 8) != 0 ? 7 : sum & 7;
+    }
+    return destination == 1 ? (coverage + memoryCoverage) & 7 : destination == 2 ? 7 : memoryCoverage;
+}
+
 void main()
 {
     uvec2 tile = gl_WorkGroupID.xy;
     if (tile.x >= push.tilesWide || tile.y >= push.tilesHigh) return;
 
-    uint x = (push.tileX0 + tile.x) * 8u + gl_LocalInvocationID.x;
-    uint y = (push.tileY0 + tile.y) * 8u + gl_LocalInvocationID.y;
-    if (x >= push.width) return;
+    uint ux = (push.tileX0 + tile.x) * 8u + gl_LocalInvocationID.x;
+    uint uy = (push.tileY0 + tile.y) * 8u + gl_LocalInvocationID.y;
+    if (ux >= push.width) return;
+    int x = int(ux), y = int(uy);
 
     uint slot = tile.y * push.tilesWide + tile.x;
     uint begin = tileOffsets[slot], end = tileOffsets[slot + 1u];
     if (begin == end) return;
 
-    uint word = push.imageWord + (y * push.width + x) * push.pixelWords;
+    uint offset = uy * push.width + ux;
+    uint word = push.imageWord + offset * push.pixelWords;
+    uint depthAt = push.depthWord + offset;
+
     uint first = word < push.memoryWords ? memory[word] : 0u;
     uint second = push.pixelWords == 2u && word + 1u < push.memoryWords ? memory[word + 1u] : 0u;
-    bool touched = false;
+    uint depth = depthAt < push.memoryWords ? memory[depthAt] : 0u;
+    bool touched = false, depthTouched = false;
 
     for (uint i = begin; i < end; i++)
     {
-        uint row = tileRows[i] * ROW_WORDS;
-        if (rows[row + 1u] != y || int(x) < int(rows[row + 2u]) || int(x) > int(rows[row + 3u])) continue;
+        rb = tileRows[i] * ROW_WORDS;
+        int left = int(rows[rb + R_LEFT]), right = int(rows[rb + R_RIGHT]);
+        if (rows[rb + R_Y] != uy || x < left || x > right) continue;
 
-        uint primitive = rows[row] * PRIMITIVE_WORDS;
-        if (primitives[primitive] == KIND_FILL)
+        pb = rows[rb + R_PRIMITIVE] * PRIMITIVE_WORDS;
+        uint kind = primitives[pb + P_KIND];
+
+        if (kind == KIND_FILL)
         {
-            first = filled(word, primitives[primitive + 1u]);
-            second = filled(word + 1u, primitives[primitive + 1u]);
+            first = filled(word, primitives[pb + P_FILL]);
+            second = filled(word + 1u, primitives[pb + P_FILL]);
             touched = true;
+            continue;
+        }
+
+        // Rdp.DrawOneCycle for one pixel: the row's values at its first pixel, stepped to this one.
+        flags = primitives[pb + P_FLAGS];
+        int n = flag(F_MAJOR_ON_LEFT) ? x - left : right - x;
+
+        int mask = coverageMask(x, left, right);
+        int coverage = bitCount(mask);
+        bool coverageBit = (mask & 0x80) != 0;
+        ivec2 firstSample = coverageOffset(mask);
+
+        for (uint c = 0u; c < 4u; c++)
+        {
+            int value = int(rows[rb + R_VALUES + c]) + pint(P_STEPS + c) * n;
+            shade[c] = correctShade(value >> 14, pint(P_SHADE_DX + c), pint(P_SHADE_DY + c), firstSample, coverage);
+        }
+
+        int zValue = flag(F_PRIMITIVE_DEPTH) ? pint(P_PRIMITIVE_Z) : int(rows[rb + R_VALUES + 4u]) + pint(P_STEPS + 4u) * n;
+        int z = correctDepth((zValue >> 10) & 0x3FFFFF, pint(P_DEPTH_DX), pint(P_DEPTH_DY), firstSample, coverage);
+
+        int ditherColor = 7, ditherAlpha = 0;
+        if (flag(F_DITHER))
+        {
+            int index = (((y >> (flag(F_SCISSOR_FIELD) ? 1 : 0)) & 3) << 2) | (x & 3);
+            int modes = pint(P_MODES);
+            int rgb = modes & 3, alphaMode = (modes >> 2) & 3;
+            int pattern = rgb == 0 || rgb == 2 ? MAGIC_SQUARE[index] : BAYER[index];
+            ditherColor = rgb == 0 ? MAGIC_SQUARE[index] : rgb == 1 ? BAYER[index] : rgb == 2 ? 0 : 7;
+            ditherAlpha = alphaMode == 0 ? pattern : alphaMode == 1 ? ~pattern & 7 : 0;
+        }
+
+        coverage = combine(ditherAlpha, coverage);
+        int memoryCoverage = readMemory(word, first, second);
+
+        bool blend, overflow;
+        if (!compareDepth(depth, z, pint(P_DELTA_Z), pint(P_DELTA_Z_ENCODED), memoryCoverage, coverage, blend, overflow)) continue;
+
+        if (flag(F_ALPHA_COMPARE) && pixel.a < (flag(F_DITHER_ALPHA) ? 0 : pint(P_BLEND_COLOR + 3u))) continue;
+        if (flag(F_ANTIALIAS) ? coverage == 0 : !coverageBit) continue;
+
+        ivec3 color = blendPixel(ditherColor, blend, overflow) & 0xFF;
+
+        // Rdp.WriteMemory, sixteen and thirty-two bits.
+        int stored = finalCoverage(blend, coverage, memoryCoverage);
+        int imageModes = pint(P_MODES);
+        if (((imageModes >> 8) & 3) == 2)
+        {
+            int packed;
+            if (((imageModes >> 10) & 7) == 0) packed = ((color.r & ~7) << 8) | ((color.g & ~7) << 3) | ((color.b & ~7) >> 2);
+            else { packed = (color.r << 8) | (stored << 5); stored = 0; }
+
+            first = uint((packed | (stored >> 2)) & 0xFFFF) | uint(stored & 3) << 16;
+            touched = true;
+        }
+        else if (word + 1u < push.memoryWords)
+        {
+            first = uint((color.r << 8) | color.g) | uint((color.g & 1) * 3) << 16;
+            second = uint((color.b << 8) | ((stored << 5) & 0xFF));
+            touched = true;
+        }
+
+        // Rdp.StoreDepth.
+        if (flag(F_DEPTH_UPDATE))
+        {
+            int deltaZEncoded = pint(P_DELTA_Z_ENCODED);
+            depth = uint((compressDepth(z & 0x3FFFF) | (deltaZEncoded >> 2)) & 0xFFFF) | uint(deltaZEncoded & 3) << 16;
+            depthTouched = true;
         }
     }
 
-    if (!touched) return;
-    if (word < push.memoryWords) memory[word] = first;
-    if (push.pixelWords == 2u && word + 1u < push.memoryWords) memory[word + 1u] = second;
+    if (touched)
+    {
+        if (word < push.memoryWords) memory[word] = first;
+        if (push.pixelWords == 2u && word + 1u < push.memoryWords) memory[word + 1u] = second;
+    }
+
+    if (depthTouched && depthAt < push.memoryWords) memory[depthAt] = depth;
 }

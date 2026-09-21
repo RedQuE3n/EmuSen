@@ -27,6 +27,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         private uint _dramAddress;
 
+        // How long a transfer holds the interface before its interrupt, in processor cycles - see Mars_Serial.md §2.2.
+        public const long TransferCycles = 0x900 * 2;
+
+        // The cycle the transfer under way finishes at, or never; carried in a state beside the unmodelled registers - see §2.2.
+        [EmuSen.Common.SkipInState] public long Due = long.MaxValue;
+
+        // The interrupt a transfer earned, raised once its time has passed - see §2.2.
+        public void Catch()
+        {
+            if (_bus.Cycles < Due) return;
+            Due = long.MaxValue;
+            _bus.Mi.Raise(MiInterrupt.SerialInterface);
+        }
+
         public SiInterface(MemoryBus bus) => _bus = bus;
 
         public uint Read32(uint offset)
@@ -35,8 +49,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             {
                 case DramAddress: return _dramAddress;
 
-                // Never busy, because every transfer has already finished - see §2.1.
-                case Status: return _bus.Mi.Pending.HasFlag(MiInterrupt.SerialInterface) ? StatusInterrupt : 0;
+                // Busy until the transfer's time has passed, and then the interrupt - see §2.2.
+                case Status: return (Due != long.MaxValue ? StatusDmaBusy : 0) | (_bus.Mi.Pending.HasFlag(MiInterrupt.SerialInterface) ? StatusInterrupt : 0);
 
                 default: return 0;
             }
@@ -90,8 +104,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
             _bus.Written++;
 
-
-            _bus.Mi.Raise(MiInterrupt.SerialInterface);
+            // The bytes have moved; the interrupt waits the time the console's transfer takes - see §2.2.
+            Due = _bus.Cycles + TransferCycles;
+            _bus.Sooner(Due);
         }
 
         // Only a 6105 answers; for any other chip the request is dropped and the challenge left where it was - see Mars_Boot.md §7.2.

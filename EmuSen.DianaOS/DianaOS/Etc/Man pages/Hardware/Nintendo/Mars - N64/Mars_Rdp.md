@@ -299,6 +299,51 @@ beside the depth image is found unmarked until the draw that reaches its page is
 it counts a bystander only if the thread has not yet finished the batch, a race of the test's own that this change
 does not touch.
 
+### 2.6.3 A small read waits only for the draws that write it (2026-09-21)
+
+After §2.6.2, Ocarina of Time still waited 1.07 ms a frame for its processor's loads of the depth buffer, a seventh of
+its frame, and 0.46 for the RSP's transfer into the page after it. The marks are ranges of rows; a load of four bytes
+at one pixel waited for every pending draw whose rows reached the pixel's row.
+
+**Each draw now also records a box**: the command's words as they came, the images it writes, and the word it ends
+on, in a ring of sixteen thousand. A read of eight bytes or fewer that reaches a pending range scans the ring newest
+first and waits only for the last pending draw whose box holds one of those bytes, or not at all. Only draws write
+memory, so this is enough for a read. A write, and any transfer of a range, keeps §2.6.1's wait, since a write must
+also wait for readers.
+
+**What a box holds, and how that was arrived at, since each step was measured.**
+
+- *The bounding box of the draw* (its rows, and its columns from its edges' ends, with §2.6.1's reach past a row's
+  end, a span running on into the next row included) took the loads' wait from 1.07 to 0.95 ms a frame: 1,340 of
+  1,938 narrowed reads in 900 frames were freed outright, the rest still found a box.
+- *A triangle's own reach at the read's row*, from its edges over that row's four sub-scanlines, took it to 0.92.
+  So the geometry was not what held them.
+- A log of the first waiting reads showed what was: every one was a read of the depth buffer at a pixel a small
+  triangle late in the frame really does cover, and **those triangles compare depth without updating it**. They read
+  the depth buffer and never write it, and a read never waits for another reader. A box now names the depth image only
+  for a draw that updates depth. The loads' wait fell to 0.51 ms a frame, and the interface's waits from 1.40 to 0.95.
+
+**Sound by test, not by argument.** The verifier of §2.6.1 now also checks, for every byte the processor writes, that
+it lies inside the box of the draw that wrote it; a draw with no rows records an empty box, so a write it made would
+fault. Shrinking every box by four columns, or by one row, or narrowing the row reach to the edges themselves, each
+fails eight to eighteen of the threaded tests with that fault. **It found one real defect before anything shipped**: a
+command being gathered when a snapshot was read has its first words in the processor, not the ring, and the column
+bound read stale words from the ring for it; such a command now takes whole rows. With the verifier forced on, 600
+frames of each of the three games found no write outside a box, and every state hash was the same.
+
+**The first version cost the other games.** Working out every draw's columns as it was shadowed made Mario and Wave
+Race 1.4 and 1.6 per cent slower, Wave Race having no waits to save. A box now keeps only the command's words, and
+its columns are worked out when a read or the verifier asks, which is rarely.
+
+**Measured** (`pacebench`, flat out, 9536644 against this, five rounds alternated, medians, every state hash the
+same): Ocarina at one 274 per cent of full speed against 258, Mario 356 against 350, Wave Race level at 280.
+
+**What this does not cover, and one suspicion.** The RSP's transfer into the page after the depth buffer (0.44 ms a
+frame) is a write of a range and keeps the coarse wait; narrowing it needs boxes that also name what a draw reads. And
+the single-address wait that decides whether a read is a bystander at all checks the first byte of the access only,
+so a four-byte read whose second half entered a pending range would not wait. Nothing has shown that happening, and it
+is recorded here rather than changed.
+
 ### 2.7 The thread held between two words
 
 *2026-09-19.* A state must hold what the thread drew, so writing one joins it (§2.6), and at a frame boundary the thread

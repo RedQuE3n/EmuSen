@@ -70,9 +70,12 @@ namespace EmuSen.WiseMan.Cores
                 uint color = (uint)(0x1111_1111 * (pass & 0xF)) | 1;
                 HandOver(threaded, Scene(color));
 
+                long narrowed = threaded.Dp.ReadsNarrowed;
                 Assert.NotEqual(0, threaded.Dp.MarkFor(Framebuffer + (uint)(Width * 2 * 100)));
                 Assert.Equal(color, threaded.Read32(Framebuffer + (uint)(Width * 2 * 100) + 40));
-                Assert.Equal(0, threaded.Dp.MarkFor(Framebuffer + (uint)(Width * 2 * 100)));
+
+                // It waits for the draw whose box holds it, not the batch, so the page stays marked for the rows drawn after - see Mars_Rdp.md §2.6.3.
+                Assert.True(threaded.Dp.ReadsNarrowed > narrowed || threaded.Dp.MarkFor(Framebuffer + (uint)(Width * 2 * 100)) == 0);
             }
         }
 

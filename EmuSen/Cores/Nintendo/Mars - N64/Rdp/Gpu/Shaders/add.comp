@@ -1,0 +1,17 @@
+#version 450
+
+// The spike of Mars_Gpu.md §3: c[i] = a[i] + b[i] + bias, in the integers the pixel pipeline will use.
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer A { int a[]; };
+layout(std430, set = 0, binding = 1) readonly buffer B { int b[]; };
+layout(std430, set = 0, binding = 2) writeonly buffer C { int c[]; };
+
+layout(push_constant) uniform Push { uint count; int bias; } push;
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= push.count) return;
+    c[i] = a[i] + b[i] + push.bias;
+}

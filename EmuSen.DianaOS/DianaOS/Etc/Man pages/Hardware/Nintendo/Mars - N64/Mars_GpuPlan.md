@@ -1,6 +1,6 @@
 # Mars: a plan for drawing the multiple on the GPU
 
-*Drafted 2026-09-20. A plan, not a record: nothing here is built. It follows `Mars_Rdp.md` §11 (the picture at a
+*Drafted 2026-09-20; go-ahead given and phase 0 carried out 2026-09-21, recorded in `Mars_Gpu.md`. A plan, not a record. It follows `Mars_Rdp.md` §11 (the picture at a
 multiple), `Mars_Video.md` §2.10 (antialiasing) and `Mars_Performance.md` §37 (what frame pacing measured), and it
 should be retired into those pages, phase by phase, as it is carried out or abandoned.*
 
@@ -122,7 +122,7 @@ the in-game states. The plan's reason to exist is a number, so each phase that c
 
 | Phase | What | Exit |
 |---|---|---|
-| 0 | Spike: Silk.NET Vulkan instance, compute pipeline, storage buffers, readback, in a WiseMan test on lavapipe and on the real device | A shader adds two buffers and the test reads the sum; packaging cost and start-up time written down |
+| 0 — **done 2026-09-21, `Mars_Gpu.md` §3** | Spike: Silk.NET Vulkan instance, compute pipeline, storage buffers, readback, in a WiseMan test on lavapipe and on the real device | A shader adds two buffers and the test reads the sum; packaging cost and start-up time written down |
 | 1 | Frame images, primitive, row and tile buffers; the fill cycle and the copy mode's rectangles | Fill and copy scenes identical to the CPU multiple |
 | 2 | One-cycle, untextured: coverage, shade, combiner, blender, depth, dither | The shaded scenes identical; first `playbench` number at 2× and 4× on a shade-heavy state |
 | 3 | Textures: the ring, tile descriptors, all formats and TLUT, filtering, level of detail, perspective | Recorded display lists of the three probe games identical for a frame each |

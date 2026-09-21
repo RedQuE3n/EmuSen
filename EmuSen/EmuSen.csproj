@@ -11,6 +11,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Vulkan's binding is pointers throughout; only Mars's Rdp/Gpu uses them - see Mars_Gpu.md §1. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +23,13 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <!-- Managed binding only: the loader and the driver are the system's, and their absence is the CPU path - see Mars_Gpu.md §1. -->
+    <PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Compiled from the .comp beside each by WiseMan, which also holds them equal - see Mars_Gpu.md §2. -->
+    <EmbeddedResource Include="Cores\Nintendo\Mars - N64\Rdp\Gpu\Shaders\*.spv" LogicalName="Mars.Gpu.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

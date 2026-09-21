@@ -41,6 +41,20 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(AppSettings.AllConsoles, AppSettings.Load().SelectedCore);
         }
 
+        // The upgrade is for a file written before the filter read the value; the same string saved since is a choice - see EmuSen_Multicore.md §10.3a.
+        [Fact]
+        public void The_super_nintendo_chosen_by_a_build_that_honours_it_is_kept()
+        {
+            new AppSettings { SelectedCore = AppSettings.LegacySelectedCoreDefault }.Save();
+            AppSettings upgraded = AppSettings.Load();
+            Assert.Equal(AppSettings.AllConsoles, upgraded.SelectedCore);
+
+            upgraded.SelectedCore = AppSettings.LegacySelectedCoreDefault;
+            upgraded.Save();
+
+            Assert.Equal(AppSettings.LegacySelectedCoreDefault, AppSettings.Load().SelectedCore);
+        }
+
         // A console the user actually picked must survive a round trip.
         [Fact]
         public void A_real_choice_is_kept()

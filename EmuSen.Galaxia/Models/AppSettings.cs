@@ -21,6 +21,9 @@ namespace EmuSen.Galaxia.Models
 
         public string SelectedCore { get; set; } = AllConsoles;
 
+        // Absent from a file written before the filter read SelectedCore, which is what makes the upgrade happen once - see EmuSen_Multicore.md §10.3a.
+        public bool SelectedCoreUpgraded { get; set; } = false;
+
         // The search half of the filter bars SelectedCore is the facet half of - see EmuSen_Config_Reference.md §3.1.
         public string LibrarySearch { get; set; } = "";
 
@@ -49,7 +52,8 @@ namespace EmuSen.Galaxia.Models
         // A stored legacy default is not a choice - see EmuSen_Multicore.md §10.3.
         private static AppSettings Upgraded(AppSettings settings)
         {
-            if (settings.SelectedCore == LegacySelectedCoreDefault) settings.SelectedCore = AllConsoles;
+            if (!settings.SelectedCoreUpgraded && settings.SelectedCore == LegacySelectedCoreDefault) settings.SelectedCore = AllConsoles;
+            settings.SelectedCoreUpgraded = true;
             return settings;
         }
     }

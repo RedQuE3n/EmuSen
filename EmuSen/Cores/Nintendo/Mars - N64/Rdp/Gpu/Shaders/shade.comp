@@ -10,6 +10,9 @@ layout(std430, set = 0, binding = 1) readonly buffer Primitives { uint primitive
 layout(std430, set = 0, binding = 2) readonly buffer Rows { uint rows[]; };
 layout(std430, set = 0, binding = 3) readonly buffer TileOffsets { uint tileOffsets[]; };
 layout(std430, set = 0, binding = 4) readonly buffer TileRows { uint tileRows[]; };
+layout(std430, set = 0, binding = 5) readonly buffer TextureMemory { uint tmem[]; };
+layout(std430, set = 0, binding = 6) readonly buffer Tiles { uint tiles[]; };
+layout(std430, set = 0, binding = 7) readonly buffer Divide { int divideTable[]; };
 
 layout(push_constant) uniform Push
 {
@@ -24,8 +27,10 @@ layout(push_constant) uniform Push
     uint depthWord;
 } push;
 
-const uint PRIMITIVE_WORDS = 64;
-const uint ROW_WORDS = 24;
+const uint PRIMITIVE_WORDS = 72;
+const uint ROW_WORDS = 32;
+const uint TMEM_WORDS = 2048u;
+const uint TILE_WORDS = 32u;
 const uint KIND_ONE_CYCLE = 0;
 const uint KIND_FILL = 3;
 
@@ -33,7 +38,15 @@ const uint KIND_FILL = 3;
 const uint P_KIND = 0, P_FILL = 1, P_FLAGS = 2, P_MODES = 3, P_COMBINE = 4, P_BLEND = 5;
 const uint P_PRIMITIVE = 6, P_ENVIRONMENT = 10, P_BLEND_COLOR = 14, P_FOG = 18, P_KEY_CENTER = 22, P_KEY_SCALE = 26, P_KEY_WIDTH = 30;
 const uint P_K4 = 33, P_K5 = 34, P_PRIMITIVE_LOD = 35, P_PRIMITIVE_Z = 36, P_DELTA_Z = 37, P_DELTA_Z_ENCODED = 38;
+const uint P_TEXTURE = 39;
 const uint P_STEPS = 40, P_SHADE_DX = 48, P_SHADE_DY = 52, P_DEPTH_DX = 56, P_DEPTH_DY = 57;
+const uint P_TMEM = 58, P_TILES = 59, P_TILE = 60, P_MAXLEVEL = 61, P_MINLEVEL = 62, P_K0 = 64;
+
+const uint T_TEXEL0 = 1u << 0, T_TEXEL1 = 1u << 1, T_PERSPECTIVE = 1u << 2, T_SAMPLE_FOUR = 1u << 3, T_PALETTE = 1u << 4;
+const uint T_PALETTE_IA = 1u << 5, T_MID_TEXEL = 1u << 6, T_BILINEAR = 1u << 7, T_DETAIL = 1u << 8, T_SHARPEN = 1u << 9;
+const uint T_LOD = 1u << 10, T_CONVERT_ONE = 1u << 11;
+
+const uint ATTRIBUTE_S = 5u, ATTRIBUTE_T = 6u, ATTRIBUTE_W = 7u;
 
 const uint F_KEY = 1u << 0, F_COVERAGE_TIMES_ALPHA = 1u << 1, F_ALPHA_FROM_COVERAGE = 1u << 2, F_ALPHA_COMPARE = 1u << 3;
 const uint F_DITHER_ALPHA = 1u << 4, F_ANTIALIAS = 1u << 5, F_COLOR_ON_COVERAGE = 1u << 6, F_FORCE_BLEND = 1u << 7;
@@ -42,6 +55,8 @@ const uint F_SCISSOR_FIELD = 1u << 12, F_MAJOR_ON_LEFT = 1u << 13, F_DITHER = 1u
 
 // Row record.
 const uint R_PRIMITIVE = 0, R_Y = 1, R_LEFT = 2, R_RIGHT = 3, R_VALUES = 4, R_EDGE_LEFT = 12, R_EDGE_RIGHT = 16, R_INVALID = 20;
+const uint R_NEXT = 21, R_SPAN = 24;
+const uint S_NEXT_ROW_DRAWN = 1u << 0, S_LONG_SPAN = 1u << 1;
 
 const int MAGIC_SQUARE[16] = int[16](0, 6, 1, 7, 4, 2, 5, 3, 3, 5, 2, 4, 7, 1, 6, 0);
 const int BAYER[16] = int[16](0, 4, 1, 5, 4, 0, 5, 1, 3, 7, 2, 6, 7, 3, 6, 2);
@@ -51,6 +66,12 @@ uint rb;
 
 // What the stages share, as the C# keeps them in fields.
 ivec4 shade;
+ivec4 texel0;
+ivec4 texel1;
+uint tmemBase;
+uint tileBase;
+uint texture_;
+bool tflag(uint f) { return (texture_ & f) != 0u; }
 ivec4 pixel;
 ivec4 memoryColor;
 int blenderShadeAlpha;
@@ -142,24 +163,229 @@ int correctDepth(int z, int dx, int dy, ivec2 offset, int coverage)
     return top == 2 ? 0x3FFFF : top == 3 ? 0 : corrected & 0x3FFFF;
 }
 
-// The inputs that read the previous pixel's result, a texel or the level of detail never reach here: the host keeps such primitives back - see §6.
-ivec4 colorA(int s) { return s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : s == 6 ? ivec4(0x100, 0x100, 0x100, 0) : ivec4(0); }
+// Rdp.TextureMemory as sixteen-bit words; a byte index is masked by the caller, as the C# masks it.
+int tmemByte(int at) { uint w = tmem[tmemBase + uint((at >> 1) & 0x7FF)]; return (at & 1) == 0 ? int(w >> 8) & 0xFF : int(w) & 0xFF; }
+int tmemWord(int at) { return int(tmem[tmemBase + uint(at & 0x7FF)]); }
+
+// Rdp.TextureTile, packed four words to a tile by Rdp.RecordTiles.
+int tileWord(int tile, uint w) { return int(tiles[tileBase + uint(tile) * 4u + w]); }
+int tileFormat(int tile) { return tileWord(tile, 0u) & 7; }
+int tileSize(int tile) { return (tileWord(tile, 0u) >> 3) & 3; }
+int tileLine(int tile) { return (tileWord(tile, 0u) >> 5) & 0x1FF; }
+int tileMemory(int tile) { return (tileWord(tile, 0u) >> 14) & 0x1FF; }
+int tilePalette(int tile) { return (tileWord(tile, 0u) >> 23) & 0xF; }
+int tileMaskS(int tile) { return (tileWord(tile, 1u) >> 4) & 0xF; }
+int tileShiftS(int tile) { return (tileWord(tile, 1u) >> 8) & 0xF; }
+int tileMaskT(int tile) { return (tileWord(tile, 1u) >> 12) & 0xF; }
+int tileShiftT(int tile) { return (tileWord(tile, 1u) >> 16) & 0xF; }
+bool tileMirrorS(int tile) { return (tileWord(tile, 1u) & 2) != 0; }
+bool tileMirrorT(int tile) { return (tileWord(tile, 1u) & 8) != 0; }
+bool tileClampsS(int tile) { return (tileWord(tile, 1u) & 1) != 0 || tileMaskS(tile) == 0; }
+bool tileClampsT(int tile) { return (tileWord(tile, 1u) & 4) != 0 || tileMaskT(tile) == 0; }
+int tileSL(int tile) { return tileWord(tile, 2u) & 0xFFF; }
+int tileTL(int tile) { return (tileWord(tile, 2u) >> 12) & 0xFFF; }
+int tileSH(int tile) { return tileWord(tile, 3u) & 0xFFF; }
+int tileTH(int tile) { return (tileWord(tile, 3u) >> 12) & 0xFFF; }
+int tileMirrorBitS(int tile) { int m = tileMaskS(tile); return m <= 10 ? m : 10; }
+int tileMirrorBitT(int tile) { int m = tileMaskT(tile); return m <= 10 ? m : 10; }
+int tileClampLimitS(int tile) { return ((tileSH(tile) >> 2) - (tileSL(tile) >> 2)) & 0x3FF; }
+int tileClampLimitT(int tile) { return ((tileTH(tile) >> 2) - (tileTL(tile) >> 2)) & 0x3FF; }
+
+int short_(int v) { return (v << 16) >> 16; }
+int fiveToEight(int v) { return ((v << 3) | ((v >> 2) & 7)) & 0xFF; }
+ivec4 gray(int v) { return ivec4(v & 0xFF); }
+
+// Rdp.FetchTexel: each format and size from its place in texture memory, formats past four as intensity.
+ivec4 fetchTexel(int s, int row, int tile)
+{
+    int line = tileLine(tile) * row + tileMemory(tile);
+    bool odd = (row & 1) != 0;
+    int byteSwap = odd ? 4 : 0, wordSwap = odd ? 2 : 0;
+
+    int format = min(tileFormat(tile), 4), size = tileSize(tile);
+    int key = (format << 2) | size;
+
+    if (key == 0x0 || key == 0x10)
+    {
+        int at = (((line << 4) + s) >> 1) ^ byteSwap;
+        int v = tmemByte(at & 0xFFF);
+        v = (s & 1) != 0 ? v & 0xF : v >> 4;
+        return gray(v | (v << 4));
+    }
+    if (key == 0x1 || key == 0x9 || key == 0x11) return gray(tmemByte(((line << 3) + s ^ byteSwap) & 0xFFF));
+    if (key == 0x2)
+    {
+        int v = tmemWord(((line << 2) + s ^ wordSwap) & 0x7FF);
+        return ivec4(fiveToEight(v >> 11), fiveToEight((v >> 6) & 0x1F), fiveToEight((v >> 1) & 0x1F), (v & 1) != 0 ? 0xFF : 0);
+    }
+    if (key == 0x3)
+    {
+        int index = ((line << 2) + s ^ wordSwap) & 0x3FF;
+        int first = tmemWord(index), second = tmemWord(index | 0x400);
+        return ivec4(first >> 8, first & 0xFF, second >> 8, second & 0xFF);
+    }
+    if (key == 0x4 || key == 0x5)
+    {
+        int v = tmemByte(((line << 3) + s ^ byteSwap) & 0x7FF);
+        if (size == 0) v = (v & 0xF0) | ((v & 0xF0) >> 4);
+        return ivec4(v - 0x80, v - 0x80, v, v);
+    }
+    if (key == 0x6 || key == 0x7)
+    {
+        int bytes = (line << 3) + s;
+        int chroma = tmemWord(((bytes >> 1) ^ wordSwap) & 0x3FF);
+        ivec4 t = ivec4((chroma >> 8) - 0x80, (chroma & 0xFF) - 0x80, 0, 0);
+
+        if (size == 2 || (s & 1) != 0) { t.b = t.a = tmemByte(((bytes ^ byteSwap) & 0x7FF) | 0x800); }
+        else
+        {
+            int luma = tmemWord(((((bytes >> 1) ^ wordSwap) & 0x3FF) | 0x400));
+            t.b = luma >> 8;
+            t.a = ((luma >> 8) & 0xF) | (luma & 0xF0);
+        }
+        return t;
+    }
+    if (key == 0x8)
+    {
+        int at = (((line << 4) + s) >> 1) ^ byteSwap;
+        int v = tmemByte(at & 0xFFF);
+        v = (s & 1) != 0 ? v & 0xF : v >> 4;
+        return gray((tilePalette(tile) << 4) | v);
+    }
+    if (key == 0xC)
+    {
+        int at = (((line << 4) + s) >> 1) ^ byteSwap;
+        int v = tmemByte(at & 0xFFF);
+        v = (s & 1) != 0 ? v & 0xF : v >> 4;
+        int intensity = ((v & 0xE) << 4 | (v & 0xE) << 1 | (v & 0xE) >> 2) & 0xFF;
+        return ivec4(intensity, intensity, intensity, (v & 1) != 0 ? 0xFF : 0);
+    }
+    if (key == 0xD)
+    {
+        int v = tmemByte(((line << 3) + s ^ byteSwap) & 0xFFF);
+        int intensity = (v & 0xF0) | ((v & 0xF0) >> 4);
+        return ivec4(intensity, intensity, intensity, ((v & 0xF) << 4) | (v & 0xF));
+    }
+    if (key == 0xE)
+    {
+        int v = tmemWord(((line << 2) + s ^ wordSwap) & 0x7FF);
+        return ivec4(v >> 8, v >> 8, v >> 8, v & 0xFF);
+    }
+
+    int v = tmemWord(((line << 2) + s ^ wordSwap) & 0x7FF);
+    return ivec4(v >> 8, v & 0xFF, v >> 8, v & 0xFF);
+}
+
+ivec4 signedNine(ivec4 c) { return ivec4((c.r << 23) >> 23, (c.g << 23) >> 23, (c.b << 23) >> 23, c.a); }
+
+// Rdp.Converted: the luma plus the chroma through the four conversion constants.
+ivec4 converted(ivec4 chroma, int luma)
+{
+    int k0 = pint(P_K0), k1 = pint(P_K0 + 1u), k2 = pint(P_K0 + 2u), k3 = pint(P_K0 + 3u);
+    return ivec4(
+        (luma + ((k0 * chroma.g + 0x80) >> 8)) & 0x1FF,
+        (luma + ((k1 * chroma.r + k2 * chroma.g + 0x80) >> 8)) & 0x1FF,
+        (luma + ((k3 * chroma.r + 0x80) >> 8)) & 0x1FF,
+        luma & 0x1FF);
+}
+
+int shiftedCoordinate(int c, int sh) { return sh < 11 ? short_(c) >> sh : short_(c << (16 - sh)); }
+
+int clampedCoordinate(int c, bool clamps, bool beyond, int limit)
+{
+    if (!clamps) return c >> 5;
+    if (beyond) return limit;
+    return (c & 0x10000) == 0 ? c >> 5 : 0;
+}
+
+int maskedCoordinate(int c, int mask, bool mirror, int mirrorBit)
+{
+    if (mirror && ((c >> mirrorBit) & 1) != 0) c = ~c;
+    return c & (0xFFFF >> (16 - mask)) & 0x3FF;
+}
+
+// Rdp.PointTexel; the four-texel path of Rdp.Filter.cs is phase 3b.
+ivec4 pointTexel(int s, int t, int tile)
+{
+    s = shiftedCoordinate(s, tileShiftS(tile));
+    t = shiftedCoordinate(t, tileShiftT(tile));
+    bool beyondS = (s >> 3) >= tileSH(tile), beyondT = (t >> 3) >= tileTH(tile);
+
+    s -= tileSL(tile) << 3;
+    t -= tileTL(tile) << 3;
+
+    s = clampedCoordinate(s, tileClampsS(tile), beyondS, tileClampLimitS(tile));
+    t = clampedCoordinate(t, tileClampsT(tile), beyondT, tileClampLimitT(tile));
+
+    if (tileMaskS(tile) != 0) s = maskedCoordinate(s, tileMaskS(tile), tileMirrorS(tile), tileMirrorBitS(tile));
+    if (tileMaskT(tile) != 0) t = maskedCoordinate(t, tileMaskT(tile), tileMirrorT(tile), tileMirrorBitT(tile));
+
+    ivec4 texel = fetchTexel(s, t & 0xFF, tile);
+    return tflag(T_BILINEAR) ? texel : converted(texel, texel.b);
+}
+
+// Rdp.Divided.
+int divided(int product, int shift)
+{
+    int range = ((1 << 30) - 1) & -((1 << 29) >> shift);
+    int outside = product & range;
+
+    int scaled;
+    if (shift != 0xE) { product >>= 13 - shift; scaled = product; }
+    else scaled = product << 1;
+
+    int f = (outside == range || outside == 0) ? 0 : ((product & (1 << 29)) == 0 ? 2 << 17 : 1 << 17);
+    return (scaled & 0x1FFFF) | f;
+}
+
+// Rdp.DividedCoordinates: s and t over w to seventeen bits and two overflow flags.
+ivec2 dividedCoordinates(int s, int t, int w)
+{
+    s >>= 16; t >>= 16; w >>= 16;
+    if (!tflag(T_PERSPECTIVE)) return ivec2(short_(s) & 0x1FFFF, short_(t) & 0x1FFFF);
+
+    int f = short_(w) <= 0 ? 2 << 17 : 0;
+    int entry = divideTable[w & 0x7FFF];
+    int reciprocal = entry >> 4, shift = entry & 0xF;
+    return ivec2(divided(short_(s) * reciprocal, shift) | f, divided(short_(t) * reciprocal, shift) | f);
+}
+
+int clampCoordinate(int v)
+{
+    if ((v & 0x40000) != 0) return 0x7FFF;
+    if ((v & 0x20000) != 0) return 0x8000;
+    int top = v & 0x18000;
+    return top == 0x8000 ? 0x7FFF : top == 0x10000 ? 0x8000 : v & 0xFFFF;
+}
+
+ivec2 textureCoordinates(int s, int t, int w)
+{
+    ivec2 d = dividedCoordinates(s, t, w);
+    return ivec2(clampCoordinate(d.x), clampCoordinate(d.y));
+}
+
+// The inputs that read the previous pixel's result or the level of detail never reach here: the host keeps such primitives back - see §6.
+ivec4 colorA(int s) { return s == 1 ? texel0 : s == 2 ? texel1 : s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : s == 6 ? ivec4(0x100, 0x100, 0x100, 0) : ivec4(0); }
 
 ivec4 colorB(int s)
 {
     if (s == 6) return pcolor(P_KEY_CENTER);
     if (s == 7) return ivec4(pint(P_K4), pint(P_K4), pint(P_K4), 0);
-    return s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : ivec4(0);
+    return s == 1 ? texel0 : s == 2 ? texel1 : s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : ivec4(0);
 }
 
 ivec4 colorC(int s)
 {
     switch (s)
     {
+        case 1: return texel0;
+        case 2: return texel1;
         case 3: return pcolor(P_PRIMITIVE);
         case 4: return shade;
         case 5: return pcolor(P_ENVIRONMENT);
         case 6: return pcolor(P_KEY_SCALE);
+        case 8: return ivec4(texel0.a);
+        case 9: return ivec4(texel1.a);
         case 10: return ivec4(pint(P_PRIMITIVE + 3u));
         case 11: return ivec4(shade.a);
         case 12: return ivec4(pint(P_ENVIRONMENT + 3u));
@@ -169,8 +395,8 @@ ivec4 colorC(int s)
     }
 }
 
-int alphaABD(int s) { return s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? 0x100 : 0; }
-int alphaC(int s) { return s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? pint(P_PRIMITIVE_LOD) : 0; }
+int alphaABD(int s) { return s == 1 ? texel0.a : s == 2 ? texel1.a : s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? 0x100 : 0; }
+int alphaC(int s) { return s == 1 ? texel0.a : s == 2 ? texel1.a : s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? pint(P_PRIMITIVE_LOD) : 0; }
 
 int colorEquation(int a, int b, int c, int d) { return ((extend9(a) - extend9(b)) * signedMultiplier(c) + (extend9(d) << 8) + 0x80) & 0x1FFFF; }
 int alphaEquation(int a, int b, int c, int d) { return (((extend9(a) - extend9(b)) * signedMultiplier(c) + (extend9(d) << 8) + 0x80) >> 8) & 0x1FF; }
@@ -491,6 +717,35 @@ void main()
             int pattern = rgb == 0 || rgb == 2 ? MAGIC_SQUARE[index] : BAYER[index];
             ditherColor = rgb == 0 ? MAGIC_SQUARE[index] : rgb == 1 ? BAYER[index] : rgb == 2 ? 0 : 7;
             ditherAlpha = alphaMode == 0 ? pattern : alphaMode == 1 ? ~pattern & 7 : 0;
+        }
+
+        texture_ = primitives[pb + P_TEXTURE];
+        if (tflag(T_TEXEL0 | T_TEXEL1))
+        {
+            tmemBase = primitives[pb + P_TMEM] * TMEM_WORDS;
+            tileBase = primitives[pb + P_TILES] * TILE_WORDS;
+            int tile = pint(P_TILE);
+
+            int vs = int(rows[rb + R_VALUES + ATTRIBUTE_S]) + pint(P_STEPS + ATTRIBUTE_S) * n;
+            int vt = int(rows[rb + R_VALUES + ATTRIBUTE_T]) + pint(P_STEPS + ATTRIBUTE_T) * n;
+            int vw = int(rows[rb + R_VALUES + ATTRIBUTE_W]) + pint(P_STEPS + ATTRIBUTE_W) * n;
+
+            ivec2 st = textureCoordinates(vs, vt, vw);
+            texel0 = pointTexel(st.x, st.y, tile);
+
+            if (tflag(T_TEXEL1))
+            {
+                int ds = pint(P_STEPS + ATTRIBUTE_S), dt = pint(P_STEPS + ATTRIBUTE_T), dw = pint(P_STEPS + ATTRIBUTE_W);
+                uint span = rows[rb + R_SPAN];
+
+                // The next pixel's texel of a long span's last pixel is the next row's first - see Mars_RdpTextures.md §6.
+                if (n == right - left && (span & S_LONG_SPAN) != 0u && (span & S_NEXT_ROW_DRAWN) != 0u)
+                    st = textureCoordinates(int(rows[rb + R_NEXT]), int(rows[rb + R_NEXT + 1u]), int(rows[rb + R_NEXT + 2u]));
+                else
+                    st = textureCoordinates(vs + ds, vt + dt, vw + dw);
+
+                texel1 = pointTexel(st.x, st.y, tile);
+            }
         }
 
         coverage = combine(ditherAlpha, coverage);

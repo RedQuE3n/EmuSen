@@ -4,30 +4,64 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
     public sealed class GpuRasteriser : IDisposable
     {
         public const int TileSize = 8;
-        public const int PrimitiveWords = 64;
-        public const int RowWords = 24;
+        public const int PrimitiveWords = 72;
+        public const int RowWords = 32;
+
+        // A snapshot of the processor's four kilobytes, in sixteen-bit words, and the eight tile descriptors packed into four words each - see Mars_Gpu.md §7.
+        public const int TextureMemoryWords = 2048;
+        public const int TileWords = 32;
 
         private struct Push { public uint ImageWord, Width, PixelWords, MemoryWords, TileX0, TileY0, TilesWide, TilesHigh, DepthWord; }
 
         private readonly GpuDevice _device;
         private readonly GpuProgram _shade;
         private readonly GpuBuffer _memory;
+        private readonly GpuBuffer _divide;
         private readonly uint _memoryWords;
 
         private uint[] _primitives = new uint[PrimitiveWords * 256];
         private uint[] _rows = new uint[RowWords * 4096];
         private uint[] _tileOffsets = new uint[1];
         private uint[] _tileRows = new uint[4096];
-        private int _primitiveCount, _rowCount;
+        private uint[] _textureMemory = new uint[TextureMemoryWords * 8];
+        private uint[] _tiles = new uint[TileWords * 64];
+        private int _primitiveCount, _rowCount, _textureMemoryCount, _tileCount;
 
         private uint _imageWord, _width, _pixelWords, _depthWord;
         private int _minX, _minY, _maxX, _maxY;
 
         // Host and device twins of each input, grown together; and the host side of a readback.
-        private readonly Staged[] _inputs = { new(), new(), new(), new() };
+        private readonly Staged[] _inputs = { new(), new(), new(), new(), new(), new() };
         private GpuBuffer? _readback;
 
         private sealed class Staged { public GpuBuffer? Host, Device; }
+
+        // A normalised w's top six bits pick a reciprocal and a slope, as Rdp.BuildDivideTable builds them - see §7.2.
+        private static readonly int[] DivideTable = BuildDivideTable();
+
+        private static int[] BuildDivideTable()
+        {
+            var table = new int[0x8000];
+
+            for (int w = 0; w < table.Length; w++)
+            {
+                int k = 1;
+                while (k <= 14 && ((w << k) & 0x8000) == 0) k++;
+                int shift = k - 1;
+
+                int normalised = (w << shift) & 0x3FFF;
+                int fraction = (normalised & 0xFF) << 2;
+                int segment = normalised >> 8;
+
+                int point = ReciprocalPoint(segment);
+                int slope = ReciprocalPoint(segment + 1) - point;
+                table[w] = shift | (((((slope * fraction) >> 10) + point) & 0x7FFF) << 4);
+            }
+
+            return table;
+        }
+
+        private static int ReciprocalPoint(int segment) => segment == 6 ? 0x3A83 : (int)Math.Round(0x10_0000 / (64.0 + segment));
 
         // What the batch asked that this phase does not shade, and columns past the image's width, which the CPU path wraps into the next row - see §5.
         public long Flushes, RowsShaded, PrimitivesNotShaded, ColumnsPastTheWidth, RowsOfUnsupportedImages;
@@ -39,7 +73,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             _device = device;
             _memoryWords = memoryWords;
             _memory = device.CreateBuffer((ulong)memoryWords * 4, GpuMemory.Device);
-            _shade = device.CreateProgram(GpuShaders.Load("shade"), buffers: 5, pushBytes: 36);
+            _shade = device.CreateProgram(GpuShaders.Load("shade"), buffers: 8, pushBytes: 36);
+
+            // The reciprocals perspective division reads are a table of the host's, uploaded once: their construction rounds in floating point - see §7.2.
+            using (GpuBuffer staged = device.CreateBuffer((ulong)DivideTable.Length * 4))
+            {
+                DivideTable.CopyTo(staged.Span<int>());
+                _divide = device.CreateBuffer((ulong)DivideTable.Length * 4, GpuMemory.Device);
+                device.Submit(commands => commands.Copy(staged, _divide));
+            }
+
             Clear();
         }
 
@@ -134,10 +177,38 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
 
         public void NotShaded() => PrimitivesNotShaded++;
 
+        // The snapshot the primitives that follow sample, pushed only when the processor's own has changed since the last - see §7.1.
+        public uint TextureMemory(ReadOnlySpan<byte> memory, bool changed)
+        {
+            if (!changed && _textureMemoryCount > 0) return (uint)(_textureMemoryCount - 1);
+
+            if ((_textureMemoryCount + 1) * TextureMemoryWords > _textureMemory.Length) Array.Resize(ref _textureMemory, _textureMemory.Length * 2);
+
+            Span<uint> into = _textureMemory.AsSpan(_textureMemoryCount * TextureMemoryWords, TextureMemoryWords);
+            for (int i = 0; i < TextureMemoryWords; i++) into[i] = (uint)((memory[i * 2] << 8) | memory[i * 2 + 1]);
+            return (uint)_textureMemoryCount++;
+        }
+
+        public Span<uint> Tiles(bool changed, out uint index)
+        {
+            if (!changed && _tileCount > 0)
+            {
+                index = (uint)(_tileCount - 1);
+                return default;
+            }
+
+            if ((_tileCount + 1) * TileWords > _tiles.Length) Array.Resize(ref _tiles, _tiles.Length * 2);
+
+            index = (uint)_tileCount++;
+            return _tiles.AsSpan((int)index * TileWords, TileWords);
+        }
+
         private void ResetBatch()
         {
             _primitiveCount = 0;
             _rowCount = 0;
+            _textureMemoryCount = 0;
+            _tileCount = 0;
             _minX = _minY = int.MaxValue;
             _maxX = _maxY = int.MinValue;
         }
@@ -201,9 +272,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
             int tilesWide = _maxX / TileSize - tileX0 + 1, tilesHigh = _maxY / TileSize - tileY0 + 1;
             int listed = Bin(tileX0, tileY0, tilesWide, tilesHigh);
 
-            int[] counts = { _primitiveCount * PrimitiveWords, _rowCount * RowWords, tilesWide * tilesHigh + 1, listed };
-            uint[][] sources = { _primitives, _rows, _tileOffsets, _tileRows };
-            for (int i = 0; i < 4; i++) Upload(i, sources[i], counts[i]);
+            int[] counts = { _primitiveCount * PrimitiveWords, _rowCount * RowWords, tilesWide * tilesHigh + 1, listed, _textureMemoryCount * TextureMemoryWords, _tileCount * TileWords };
+            uint[][] sources = { _primitives, _rows, _tileOffsets, _tileRows, _textureMemory, _tiles };
+            for (int i = 0; i < sources.Length; i++) Upload(i, sources[i], counts[i]);
 
             var push = new Push
             {
@@ -213,8 +284,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
 
             _device.Submit(commands =>
             {
-                for (int i = 0; i < 4; i++) commands.Copy(_inputs[i].Host!, _inputs[i].Device!, (ulong)Math.Max(counts[i], 1) * 4);
-                commands.Dispatch(_shade, new[] { _memory, _inputs[0].Device!, _inputs[1].Device!, _inputs[2].Device!, _inputs[3].Device! }, push, (uint)tilesWide, (uint)tilesHigh);
+                for (int i = 0; i < sources.Length; i++) commands.Copy(_inputs[i].Host!, _inputs[i].Device!, (ulong)Math.Max(counts[i], 1) * 4);
+                commands.Dispatch(
+                    _shade,
+                    new[] { _memory, _inputs[0].Device!, _inputs[1].Device!, _inputs[2].Device!, _inputs[3].Device!, _inputs[4].Device!, _inputs[5].Device!, _divide },
+                    push, (uint)tilesWide, (uint)tilesHigh);
             });
 
             Flushes++;
@@ -251,6 +325,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
         public void Dispose()
         {
             _readback?.Dispose();
+            _divide.Dispose();
             foreach (Staged staged in _inputs) { staged.Host?.Dispose(); staged.Device?.Dispose(); }
             _shade.Dispose();
             _memory.Dispose();

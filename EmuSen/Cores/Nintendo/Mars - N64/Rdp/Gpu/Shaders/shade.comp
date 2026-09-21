@@ -44,7 +44,7 @@ const uint P_TMEM = 58, P_TILES = 59, P_TILE = 60, P_MAXLEVEL = 61, P_MINLEVEL =
 
 const uint T_TEXEL0 = 1u << 0, T_TEXEL1 = 1u << 1, T_PERSPECTIVE = 1u << 2, T_SAMPLE_FOUR = 1u << 3, T_PALETTE = 1u << 4;
 const uint T_PALETTE_IA = 1u << 5, T_MID_TEXEL = 1u << 6, T_BILINEAR = 1u << 7, T_DETAIL = 1u << 8, T_SHARPEN = 1u << 9;
-const uint T_LOD = 1u << 10, T_CONVERT_ONE = 1u << 11;
+const uint T_LOD = 1u << 10, T_CONVERT_ONE = 1u << 11, T_LOD_FRACTION = 1u << 12;
 
 const uint ATTRIBUTE_S = 5u, ATTRIBUTE_T = 6u, ATTRIBUTE_W = 7u;
 
@@ -56,7 +56,7 @@ const uint F_SCISSOR_FIELD = 1u << 12, F_MAJOR_ON_LEFT = 1u << 13, F_DITHER = 1u
 // Row record.
 const uint R_PRIMITIVE = 0, R_Y = 1, R_LEFT = 2, R_RIGHT = 3, R_VALUES = 4, R_EDGE_LEFT = 12, R_EDGE_RIGHT = 16, R_INVALID = 20;
 const uint R_NEXT = 21, R_SPAN = 24;
-const uint S_NEXT_ROW_DRAWN = 1u << 0, S_LONG_SPAN = 1u << 1;
+const uint S_NEXT_ROW_DRAWN = 1u << 0, S_LONG_SPAN = 1u << 1, S_MID_SPAN = 1u << 2, S_ONE_BEFORE_MID = 1u << 3;
 
 const int MAGIC_SQUARE[16] = int[16](0, 6, 1, 7, 4, 2, 5, 3, 3, 5, 2, 4, 7, 1, 6, 0);
 const int BAYER[16] = int[16](0, 4, 1, 5, 4, 0, 5, 1, 3, 7, 2, 6, 7, 3, 6, 2);
@@ -68,6 +68,7 @@ uint rb;
 ivec4 shade;
 ivec4 texel0;
 ivec4 texel1;
+int lodFraction;
 uint tmemBase;
 uint tileBase;
 uint texture_;
@@ -304,16 +305,9 @@ int maskedCoordinate(int c, int mask, bool mirror, int mirrorBit)
     return c & (0xFFFF >> (16 - mask)) & 0x3FF;
 }
 
-// Rdp.PointTexel; the four-texel path of Rdp.Filter.cs is phase 3b.
-ivec4 pointTexel(int s, int t, int tile)
+// Rdp.PointTexel, after Rdp.Texel has shifted the coordinates and made them relative to the tile.
+ivec4 pointTexel(int s, int t, bool beyondS, bool beyondT, int tile)
 {
-    s = shiftedCoordinate(s, tileShiftS(tile));
-    t = shiftedCoordinate(t, tileShiftT(tile));
-    bool beyondS = (s >> 3) >= tileSH(tile), beyondT = (t >> 3) >= tileTH(tile);
-
-    s -= tileSL(tile) << 3;
-    t -= tileTL(tile) << 3;
-
     s = clampedCoordinate(s, tileClampsS(tile), beyondS, tileClampLimitS(tile));
     t = clampedCoordinate(t, tileClampsT(tile), beyondT, tileClampLimitT(tile));
 
@@ -322,6 +316,153 @@ ivec4 pointTexel(int s, int t, int tile)
 
     ivec4 texel = fetchTexel(s, t & 0xFF, tile);
     return tflag(T_BILINEAR) ? texel : converted(texel, texel.b);
+}
+
+// Rdp.Wrapped: masked and mirrored as for one texel, and the step to the next.
+int wrapped(inout int c, int mask, bool mirror, int mirrorBit, int wrapBits)
+{
+    if (mask == 0) return 1;
+
+    int bits = (0xFFFF >> (16 - mask)) & 0x3FF;
+    if (mirror)
+    {
+        int wrap = (c >> mirrorBit) & 1;
+        c = (c ^ -wrap) & bits;
+        return ((c - wrap) & bits) == bits ? 0 : 1 - (wrap << 1);
+    }
+
+    c &= bits;
+    return c == bits ? -(c & wrapBits) : 1;
+}
+
+// Rdp.Interpolated: three texels weighted by the triangle the fraction lies in, or all four at the mid-texel.
+int interpolated(int t0, int t1, int t2, int t3, int sFraction, int tFraction, bool upper, bool center)
+{
+    if (center) return (t0 + t1 + t2 + t3 + 2) >> 2;
+    if (upper) return t3 + (((0x20 - sFraction) * (t2 - t3) + (0x20 - tFraction) * (t1 - t3) + 0x10) >> 5);
+    return t0 + ((sFraction * (t1 - t0) + tFraction * (t2 - t0) + 0x10) >> 5);
+}
+
+// Rdp.PaletteIndex: a nibble with the tile's palette number, a byte, or a word's high byte.
+int paletteIndex(int s, int row, int tile)
+{
+    int line = tileLine(tile) * row + tileMemory(tile);
+    bool odd = (row & 1) != 0;
+    int byteSwap = odd ? 4 : 0, wordSwap = odd ? 2 : 0;
+    bool yuv = tileFormat(tile) == 1;
+    int size = tileSize(tile);
+
+    if (size == 0 && !yuv)
+    {
+        int value = tmemByte(((((line << 4) + s) >> 1) ^ byteSwap) & 0x7FF);
+        return (tilePalette(tile) << 4) | ((s & 1) != 0 ? value & 0xF : value >> 4);
+    }
+
+    if (size >= 2 && !yuv) return tmemWord(((line << 2) + s ^ wordSwap) & 0x3FF) >> 8;
+
+    int bytes = tmemByte(((line << 3) + s ^ byteSwap) & 0x7FF);
+    return size == 0 ? (tilePalette(tile) << 4) | (bytes >> 4) : bytes;
+}
+
+// Rdp.PaletteColor: the palette's upper half of texture memory, its bank reversed in the upper chroma triangle.
+ivec4 paletteColor(int entry, bool upperRg)
+{
+    int value = tmemWord(0x400 | (upperRg ? entry ^ 3 : entry));
+    if (tflag(T_PALETTE_IA)) return ivec4(value >> 8, value >> 8, value >> 8, value & 0xFF);
+    return ivec4(fiveToEight(value >> 11), fiveToEight((value >> 6) & 0x1F), fiveToEight((value >> 1) & 0x1F), (value & 1) != 0 ? 0xFF : 0);
+}
+
+// Rdp.FourTexels without the second cycle's conversion, which the one-cycle mode never asks for.
+ivec4 fourTexels(int s, int t, bool beyondS, bool beyondT, int tile)
+{
+    bool clampsS = tileClampsS(tile), clampsT = tileClampsT(tile);
+    int sFraction = clampsS && (beyondS || (s & 0x10000) != 0) ? 0 : s & 0x1F;
+    int tFraction = clampsT && (beyondT || (t & 0x10000) != 0) ? 0 : t & 0x1F;
+
+    s = clampedCoordinate(s, clampsS, beyondS, tileClampLimitS(tile));
+    t = clampedCoordinate(t, clampsT, beyondT, tileClampLimitT(tile));
+    int sStep = wrapped(s, tileMaskS(tile), tileMirrorS(tile), tileMirrorBitS(tile), -1);
+    int tStep = wrapped(t, tileMaskT(tile), tileMirrorT(tile), tileMirrorBitT(tile), 0xFF);
+
+    int format = tileFormat(tile), size = tileSize(tile);
+    bool upper = ((sFraction + tFraction) & 0x20) != 0;
+    int sFractionRg = format == 1 ? (sFraction >> 1) | ((s & 1) << 4) : sFraction;
+    bool upperRg = ((sFractionRg + tFraction) & 0x20) != 0;
+
+    ivec4 tx[4];
+    int row0 = t & 0xFF, row1 = row0 + tStep;
+
+    if (!tflag(T_SAMPLE_FOUR))
+    {
+        // Rdp.NearestPaletteTexels: one texel's palette entry from all four banks.
+        int entry = paletteIndex(s, t, tile) << 2;
+        for (int bank = 0; bank < 4; bank++) tx[bank] = paletteColor(entry | bank, upperRg);
+    }
+    else if (tflag(T_PALETTE))
+    {
+        // Rdp.PaletteTexels.
+        int s1 = s + (format == 1 ? sStep << 1 : sStep);
+        tx[0] = paletteColor(paletteIndex(s, row0, tile) << 2, upperRg);
+        tx[1] = paletteColor((paletteIndex(s1, row0, tile) << 2) | 1, upperRg);
+        tx[2] = paletteColor((paletteIndex(s, row1, tile) << 2) | 2, upperRg);
+        tx[3] = paletteColor((paletteIndex(s1, row1, tile) << 2) | 3, upperRg);
+    }
+    else
+    {
+        // Rdp.Texels: YUV reads chroma a further step along, and at sixteen bits and above takes luma from the texel itself.
+        int s1 = s + sStep;
+        tx[0] = fetchTexel(s, row0, tile);
+        tx[2] = fetchTexel(s, row1, tile);
+
+        if (format != 1)
+        {
+            tx[1] = fetchTexel(s1, row0, tile);
+            tx[3] = fetchTexel(s1, row1, tile);
+        }
+        else
+        {
+            tx[1] = fetchTexel(s1 + sStep, row0, tile);
+            tx[3] = fetchTexel(s1 + sStep, row1, tile);
+            if (size >= 2)
+            {
+                ivec4 luma1 = fetchTexel(s1, row0, tile), luma3 = fetchTexel(s1, row1, tile);
+                tx[1].ba = luma1.ba;
+                tx[3].ba = luma3.ba;
+            }
+        }
+    }
+
+    // Luma crosses to the other corner when the two triangles differ.
+    if (upper != upperRg && ((format == 1 && size < 2) || tflag(T_PALETTE)))
+    {
+        ivec2 a = tx[0].ba, b = tx[1].ba;
+        tx[0].ba = tx[3].ba; tx[3].ba = a;
+        tx[1].ba = tx[2].ba; tx[2].ba = b;
+    }
+
+    if (!tflag(T_BILINEAR)) return converted(upperRg ? tx[3] : tx[0], (upper ? tx[3] : tx[0]).b);
+
+    bool center = tflag(T_MID_TEXEL) && sFraction == 0x10 && tFraction == 0x10;
+    bool centerRg = tflag(T_MID_TEXEL) && sFractionRg == 0x10 && tFraction == 0x10;
+
+    return ivec4(
+        interpolated(tx[0].r, tx[1].r, tx[2].r, tx[3].r, sFractionRg, tFraction, upperRg, centerRg),
+        interpolated(tx[0].g, tx[1].g, tx[2].g, tx[3].g, sFractionRg, tFraction, upperRg, centerRg),
+        interpolated(tx[0].b, tx[1].b, tx[2].b, tx[3].b, sFraction, tFraction, upper, center),
+        interpolated(tx[0].a, tx[1].a, tx[2].a, tx[3].a, sFraction, tFraction, upper, center));
+}
+
+// Rdp.Texel: shifted and made relative to the tile's corner, then sampled at one texel, or at four when filtering or a palette asks.
+ivec4 texelAt(int s, int t, int tile)
+{
+    s = shiftedCoordinate(s, tileShiftS(tile));
+    t = shiftedCoordinate(t, tileShiftT(tile));
+    bool beyondS = (s >> 3) >= tileSH(tile), beyondT = (t >> 3) >= tileTH(tile);
+
+    s -= tileSL(tile) << 3;
+    t -= tileTL(tile) << 3;
+
+    return tflag(T_SAMPLE_FOUR) || tflag(T_PALETTE) ? fourTexels(s, t, beyondS, beyondT, tile) : pointTexel(s, t, beyondS, beyondT, tile);
 }
 
 // Rdp.Divided.
@@ -364,7 +505,86 @@ ivec2 textureCoordinates(int s, int t, int w)
     return ivec2(clampCoordinate(d.x), clampCoordinate(d.y));
 }
 
-// The inputs that read the previous pixel's result or the level of detail never reach here: the host keeps such primitives back - see §6.
+// Rdp.Movement: seventeen-bit coordinates subtracted, a negative difference taken as its complement rather than negated.
+int movement(int from, int to)
+{
+    int difference = ((to << 15) >> 15) - ((from << 15) >> 15);
+    return (difference & 0x20000) != 0 ? ~difference & 0x1FFFF : difference;
+}
+
+int saturated(int m) { return (m & 0x7FFF) | ((m & 0x1C000) != 0 ? 0x4000 : 0); }
+
+// Rdp.BuildLog2, computed where the C# tabulates it.
+int log2of(int i) { return i <= 0 ? 0 : findMSB(i); }
+
+// Rdp.LevelSignals, as level, magnify, distant and fraction.
+ivec4 levelSignals(int lod, bool overflow, int maxLevel)
+{
+    bool plain = !tflag(T_SHARPEN) && !tflag(T_DETAIL);
+
+    if ((lod & 0x4000) != 0 || overflow) return ivec4(0, 0, 1, 0xFF);
+
+    if (lod < 32)
+    {
+        bool magnifiedDistant = maxLevel == 0;
+        int magnified = plain ? (magnifiedDistant ? 0xFF : 0) : ((max(lod, pint(P_MINLEVEL)) << 3) | (tflag(T_SHARPEN) ? 0x100 : 0));
+        return ivec4(0, 1, magnifiedDistant ? 1 : 0, magnified);
+    }
+
+    int level = log2of((lod >> 5) & 0xFF);
+    bool distant = maxLevel == 0 || (lod & 0x6000) != 0 || level >= maxLevel;
+    return ivec4(level, 0, distant ? 1 : 0, (plain && distant) ? 0xFF : ((lod << 3) >> level) & 0xFF);
+}
+
+// Rdp.LevelOfDetail: the larger of s's and t's movement gives the tile and the fraction.
+ivec2 levelOfDetail(int nearS, int nearT, int nearW, int farS, int farT, int farW, int tile, int maxLevel)
+{
+    ivec2 n = dividedCoordinates(nearS, nearT, nearW);
+    ivec2 f = dividedCoordinates(farS, farT, farW);
+
+    bool overflow = ((n.x | n.y | f.x | f.y) & 0x60000) != 0;
+    int lod = overflow ? 0 : saturated(max(movement(n.x, f.x), movement(n.y, f.y)));
+
+    ivec4 signals = levelSignals(lod, overflow, maxLevel);
+    if (!tflag(T_LOD)) return ivec2(tile, signals.w);
+
+    int level = signals.z != 0 ? maxLevel : signals.x;
+    return ivec2((tile + level + ((tflag(T_DETAIL) && signals.y == 0) ? 1 : 0)) & 7, signals.w);
+}
+
+// The three coordinates the next drawn row starts from, which a span's last pixel measures against.
+ivec3 rowStart() { return ivec3(int(rows[rb + R_NEXT]), int(rows[rb + R_NEXT + 1u]), int(rows[rb + R_NEXT + 2u])); }
+
+// Rdp.PixelLevelOfDetail: the next pixel against the one after, or near a span's end the one before, or the next row's.
+ivec2 pixelLevelOfDetail(int s, int t, int w, int ds, int dt, int dw, bool nextRowDrawn, bool end, bool beforeEnd, bool longSpan, bool midSpan, int tile, int maxLevel)
+{
+    if (nextRowDrawn && end && longSpan)
+    {
+        ivec3 r = rowStart();
+        return levelOfDetail(r.x, r.y, r.z, r.x + ds, r.y + dt, r.z + dw, tile, maxLevel);
+    }
+
+    if (nextRowDrawn && ((beforeEnd && longSpan) || (end && midSpan)))
+        return levelOfDetail(s + ds, t + dt, w + dw, s - ds, t - dt, w - dw, tile, maxLevel);
+
+    return levelOfDetail(s + ds, t + dt, w + dw, s + (ds << 1), t + (dt << 1), w + (dw << 1), tile, maxLevel);
+}
+
+// Rdp.AfterSpanTile: the tile of a span's last texel 1, measured from the pixel after the span.
+int afterSpanTile(int s, int t, int w, int ds, int dt, int dw, bool nextRowDrawn, bool longSpan, bool midSpan, bool oneBeforeMid, int tile, int maxLevel)
+{
+    if (nextRowDrawn && (longSpan || midSpan))
+    {
+        ivec3 r = rowStart();
+        if (longSpan) r += ivec3(ds, dt, dw);
+        return levelOfDetail(r.x, r.y, r.z, r.x + ds, r.y + dt, r.z + dw, tile, maxLevel).x;
+    }
+
+    if (nextRowDrawn && oneBeforeMid) return levelOfDetail(s + ds, t + dt, w + dw, s - ds, t - dt, w - dw, tile, maxLevel).x;
+    return levelOfDetail(s + ds, t + dt, w + dw, s + (ds << 1), t + (dt << 1), w + (dw << 1), tile, maxLevel).x;
+}
+
+// The inputs that read the previous pixel's result never reach here: the host keeps such primitives back - see §6.
 ivec4 colorA(int s) { return s == 1 ? texel0 : s == 2 ? texel1 : s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : s == 6 ? ivec4(0x100, 0x100, 0x100, 0) : ivec4(0); }
 
 ivec4 colorB(int s)
@@ -389,6 +609,7 @@ ivec4 colorC(int s)
         case 10: return ivec4(pint(P_PRIMITIVE + 3u));
         case 11: return ivec4(shade.a);
         case 12: return ivec4(pint(P_ENVIRONMENT + 3u));
+        case 13: return ivec4(lodFraction);
         case 14: return ivec4(pint(P_PRIMITIVE_LOD));
         case 15: return ivec4(pint(P_K5));
         default: return ivec4(0);
@@ -396,7 +617,7 @@ ivec4 colorC(int s)
 }
 
 int alphaABD(int s) { return s == 1 ? texel0.a : s == 2 ? texel1.a : s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? 0x100 : 0; }
-int alphaC(int s) { return s == 1 ? texel0.a : s == 2 ? texel1.a : s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? pint(P_PRIMITIVE_LOD) : 0; }
+int alphaC(int s) { return s == 0 ? lodFraction : s == 1 ? texel0.a : s == 2 ? texel1.a : s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? pint(P_PRIMITIVE_LOD) : 0; }
 
 int colorEquation(int a, int b, int c, int d) { return ((extend9(a) - extend9(b)) * signedMultiplier(c) + (extend9(d) << 8) + 0x80) & 0x1FFFF; }
 int alphaEquation(int a, int b, int c, int d) { return (((extend9(a) - extend9(b)) * signedMultiplier(c) + (extend9(d) << 8) + 0x80) >> 8) & 0x1FF; }
@@ -720,31 +941,49 @@ void main()
         }
 
         texture_ = primitives[pb + P_TEXTURE];
-        if (tflag(T_TEXEL0 | T_TEXEL1))
+        if (tflag(T_TEXEL0 | T_TEXEL1 | T_LOD_FRACTION))
         {
             tmemBase = primitives[pb + P_TMEM] * TMEM_WORDS;
             tileBase = primitives[pb + P_TILES] * TILE_WORDS;
-            int tile = pint(P_TILE);
+            int tile = pint(P_TILE), maxLevel = pint(P_MAXLEVEL);
 
             int vs = int(rows[rb + R_VALUES + ATTRIBUTE_S]) + pint(P_STEPS + ATTRIBUTE_S) * n;
             int vt = int(rows[rb + R_VALUES + ATTRIBUTE_T]) + pint(P_STEPS + ATTRIBUTE_T) * n;
             int vw = int(rows[rb + R_VALUES + ATTRIBUTE_W]) + pint(P_STEPS + ATTRIBUTE_W) * n;
+            int ds = pint(P_STEPS + ATTRIBUTE_S), dt = pint(P_STEPS + ATTRIBUTE_T), dw = pint(P_STEPS + ATTRIBUTE_W);
 
-            ivec2 st = textureCoordinates(vs, vt, vw);
-            texel0 = pointTexel(st.x, st.y, tile);
+            uint span = rows[rb + R_SPAN];
+            bool nextRowDrawn = (span & S_NEXT_ROW_DRAWN) != 0u, longSpan = (span & S_LONG_SPAN) != 0u;
+            bool midSpan = (span & S_MID_SPAN) != 0u, oneBeforeMid = (span & S_ONE_BEFORE_MID) != 0u;
+            int last = right - left;
 
-            if (tflag(T_TEXEL1))
+            // Each pixel's level is what its predecessor measured for its texel 1, which is this pixel's own measurement - see Mars_Gpu.md §7.3.
+            int levelTile = tile;
+            if (tflag(T_LOD | T_LOD_FRACTION))
             {
-                int ds = pint(P_STEPS + ATTRIBUTE_S), dt = pint(P_STEPS + ATTRIBUTE_T), dw = pint(P_STEPS + ATTRIBUTE_W);
-                uint span = rows[rb + R_SPAN];
+                ivec2 level = pixelLevelOfDetail(vs, vt, vw, ds, dt, dw, nextRowDrawn, n == last, n == last - 1, longSpan, midSpan, tile, maxLevel);
+                levelTile = level.x;
+                lodFraction = level.y;
+            }
 
-                // The next pixel's texel of a long span's last pixel is the next row's first - see Mars_RdpTextures.md §6.
-                if (n == right - left && (span & S_LONG_SPAN) != 0u && (span & S_NEXT_ROW_DRAWN) != 0u)
-                    st = textureCoordinates(int(rows[rb + R_NEXT]), int(rows[rb + R_NEXT + 1u]), int(rows[rb + R_NEXT + 2u]));
-                else
-                    st = textureCoordinates(vs + ds, vt + dt, vw + dw);
+            if (tflag(T_TEXEL0 | T_TEXEL1))
+            {
+                ivec2 st = textureCoordinates(vs, vt, vw);
+                texel0 = texelAt(st.x, st.y, levelTile);
 
-                texel1 = pointTexel(st.x, st.y, tile);
+                if (tflag(T_TEXEL1))
+                {
+                    int nextTile = tile;
+                    if (tflag(T_LOD | T_LOD_FRACTION))
+                        nextTile = n < last
+                            ? pixelLevelOfDetail(vs + ds, vt + dt, vw + dw, ds, dt, dw, nextRowDrawn, n + 1 == last, n + 1 == last - 1, longSpan, midSpan, tile, maxLevel).x
+                            : afterSpanTile(vs + ds, vt + dt, vw + dw, ds, dt, dw, nextRowDrawn, longSpan, midSpan, oneBeforeMid, tile, maxLevel);
+
+                    // The next pixel's texel of a long span's last pixel is the next row's first - see Mars_RdpTextures.md §6.
+                    ivec3 r = rowStart();
+                    st = (n == last && longSpan && nextRowDrawn) ? textureCoordinates(r.x, r.y, r.z) : textureCoordinates(vs + ds, vt + dt, vw + dw);
+                    texel1 = texelAt(st.x, st.y, nextTile);
+                }
             }
         }
 

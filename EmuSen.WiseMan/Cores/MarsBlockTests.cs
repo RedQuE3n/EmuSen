@@ -633,6 +633,85 @@ namespace EmuSen.WiseMan.Cores
             Assert.NotEqual(0UL, compiled.Cop0[Cpu.StatusRegister] & 2);
         }
 
+        // A loop behind the TLB that straddles two pages whose frames are not neighbours: a block must stop at its page, or it runs the decoy that lies after the first frame in memory - see Mars_Recompiler.md §17.
+        [Fact]
+        public void A_mapped_loop_across_two_pages_leaves_the_machine_the_interpreter_leaves()
+        {
+            const int T9 = 25;
+            var (interpreted, compiled) = Pair(a => a
+                .Lui(T9, 0x1000)
+                .Ori(T9, T9, 0x0FF8)
+                .Addiu(T1, Zero, 300)
+                .Jr(T9)
+                .Nop(),
+                (bus, cpu) =>
+                {
+                    // Virtual 0x10000000 is frame 0 and virtual 0x10001000 is frame 3; frame 1, next in memory, holds a decoy that adds to another register.
+                    uint[] first = { 0x2508_0001, 0x256B_0001 };
+                    uint[] second = { 0x256B_0001, 0x1509_FFFC, 0x0000_0000, 0x1000_FFFF, 0x0000_0000 };
+                    uint[] decoy = { 0x258C_0007, 0x1509_FFFC, 0x0000_0000, 0x1000_FFFF, 0x0000_0000 };
+                    for (int i = 0; i < first.Length; i++) bus.Write32(0x0FF8 + (uint)i * 4, first[i]);
+                    for (int i = 0; i < second.Length; i++) bus.Write32(0x3000 + (uint)i * 4, second[i]);
+                    for (int i = 0; i < decoy.Length; i++) bus.Write32(0x1000 + (uint)i * 4, decoy[i]);
+
+                    ref var entry = ref cpu.Tlb.Entries[0];
+                    entry.EntryHi = 0x1000_0000;
+                    entry.PageMask = 0;
+                    entry.EntryLo0 = (0UL << 6) | 0x7;
+                    entry.EntryLo1 = (3UL << 6) | 0x7;
+                    cpu.Cop0Written();
+                });
+
+            AssertSame(interpreted, compiled, 5 + 200 * 5);
+            Assert.True(compiled.BlocksCompiled >= 1, "nothing compiled, so the test compared nothing");
+            AssertSame(interpreted, compiled, 100 * 5 + 200);
+
+            Assert.Equal(600UL, compiled.Gpr[11]);
+            Assert.Equal(0UL, compiled.Gpr[12]);
+            Assert.True(compiled.BlockInstructions > 600, $"only {compiled.BlockInstructions} instructions ran in blocks, so the mapped loop was interpreted");
+        }
+
+        // A page run from, then remapped by a TLB write whose registers were loaded long before, then run from again: the translation remembered for fetches must be forgotten by the write itself - see Mars_Recompiler.md §17.
+        [Fact]
+        public void A_page_remapped_by_a_tlb_write_alone_is_fetched_from_its_new_frame()
+        {
+            const int T8 = 24, T9 = 25;
+            var (interpreted, compiled) = Pair(a => a
+                .Lui(T9, 0x1000)
+                .Ori(T9, T9, 0x0040)
+                .Lui(T8, 0x8000)
+                .Ori(T8, T8, 0x0100)
+                .Addiu(T1, Zero, 200)
+                .Jr(T9)
+                .Nop(),
+                (bus, cpu) =>
+                {
+                    // Frame 2 counts to two hundred, long enough to be compiled, and leaves for the handler; the handler only writes the entry and returns; frame 5 counts in another and idles.
+                    uint[] before = { 0x2508_0001, 0x1509_FFFE, 0x0000_0000, 0x0300_0008, 0x0000_0000 };
+                    uint[] handler = { 0x4200_0002, 0x0320_0008, 0x0000_0000 };
+                    uint[] after = { 0x256B_0001, 0x1000_FFFF, 0x0000_0000 };
+                    for (int i = 0; i < before.Length; i++) bus.Write32(0x2040 + (uint)i * 4, before[i]);
+                    for (int i = 0; i < 3; i++) bus.Write32(0x0100 + (uint)i * 4, handler[i]);
+                    for (int i = 0; i < 3; i++) bus.Write32(0x5040 + (uint)i * 4, after[i]);
+
+                    ref var entry = ref cpu.Tlb.Entries[0];
+                    (entry.EntryHi, entry.PageMask, entry.EntryLo0, entry.EntryLo1) = (0x1000_0000, 0, (2UL << 6) | 0x7, (2UL << 6) | 0x7);
+
+                    cpu.Cop0[Cpu.IndexRegister] = 0;
+                    cpu.Cop0[Cpu.EntryHiRegister] = 0x1000_0000;
+                    cpu.Cop0[Cpu.PageMaskRegister] = 0;
+                    cpu.Cop0[Cpu.EntryLo0Register] = (5UL << 6) | 0x7;
+                    cpu.Cop0[Cpu.EntryLo1Register] = (5UL << 6) | 0x7;
+                    cpu.Cop0Written();
+                });
+
+            AssertSame(interpreted, compiled, 7 + 200 * 3 + 2 + 3 + 40);
+
+            Assert.True(compiled.BlocksCompiled >= 1, "the first frame's loop never compiled, so a stale translation had nothing to run");
+            Assert.Equal(200UL, compiled.Gpr[T0]);
+            Assert.Equal(1UL, compiled.Gpr[11]);
+        }
+
         // A likely branch inside a loop, nullifying its slot every other iteration - see Mars_Recompiler.md §10.
         [Fact]
         public void A_likely_branch_inside_a_loop_leaves_the_machine_the_interpreter_leaves()

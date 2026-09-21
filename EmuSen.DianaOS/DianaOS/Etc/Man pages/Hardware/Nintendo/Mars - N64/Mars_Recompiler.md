@@ -904,3 +904,49 @@ jump and the link call the debugger's call-stack observers. The likely branches 
 cent of the switch. After this the largest single item on the CPU's side is the dispatcher's entry, which §9 and
 §12 measured as memory and declined to chase, and the largest on the thread is the signal processor's vector unit
 (`Mars_Performance.md` §38).
+
+## 17. Blocks behind the TLB
+
+*2026-09-20.* *GoldenEye* ran at a third of full speed, thirty to fifty-five milliseconds a frame, with every one of
+its 1.87 million instructions a frame counted as busy and none passed as idle. The pacing harness run from boot
+(`pacebench` with `-` for the state) put 0.2 per cent of its instructions in blocks, and the program counter at
+every frame's end in `0x70xxxxxx` or `0x7Fxxxxxx`: the game runs from mapped memory, and §2's dispatcher took a
+block only from a direct kernel address, so the whole game went through the interpreter, its idle loop included.
+
+**What changed.** The dispatcher translates a mapped address itself: the segment must be a mapped one in 32-bit
+addressing, the TLB must hold a valid entry for it, and the page's frame is remembered for the next fetch from the
+same page. Anything else — no entry, an invalid half, 64-bit addressing, a user or supervisor mode — is the
+interpreter's step, which raises the refill or the address error exactly as before; a block never raises a fetch
+fault. The block is found and proved by its physical address as ever (§2.3), and its code names no address of its
+own — the entry is read from the program counter, branches are relative, and a jump's target is formed by the
+interpreter from the counter — so one compiled block serves every address its frame is mapped at.
+
+**The page is the limit.** Inside a page, virtual and physical addresses run together; past its end the next
+virtual word may be in any frame. A block shaped from a mapped address is cut at the end of its four-kilobyte page
+(the smallest, so safe for every page size), and a block already in the cache that crosses its page, having been
+shaped from a direct address, is left to the interpreter when reached through the TLB.
+
+**The remembered page is forgotten** whenever coprocessor 0 is written (`Cop0Written`, which a state's load also
+calls) and whenever a TLB entry is written. The second looked redundant: GoldenEye's state hash after 1,620 frames
+was the same with it removed, because the game loads its entry registers immediately before each write and those
+loads already forget. It is kept for the handler that writes an entry from registers loaded earlier, and
+`A_page_remapped_by_a_tlb_write_alone_is_fetched_from_its_new_frame` is that case. The test's first form passed
+with the forgetting removed: a stale frame only matters once the block at it is *compiled*, since a cold block is
+run by the interpreter, which translates for itself; the loop in the first frame now runs two hundred turns.
+
+**The idle loop anywhere.** §15 recognised the loop by a branch to itself or a jump to its own physical address.
+The jump names an address and is only trusted at a direct one; the branch names none, and is now recognised
+wherever it is mapped, which is where GoldenEye's is (`0x70000710`).
+
+**Measured**, 1,500 frames from boot with Start pressed three times, one build with the mapped blocks off and on
+(`EMUSEN_MARS_NOMAPPEDBLOCKS=1`): the mean frame 36.8 to 13.1 milliseconds, the median 36.8 to 9.2, 99.3 per cent of
+instructions in blocks and 87 per cent of all instructions passed as idle turns. The state hash is identical in
+both modes. `A_mapped_loop_across_two_pages_leaves_the_machine_the_interpreter_leaves` runs a loop across two pages
+whose frames are not neighbours, with a decoy after the first frame that adds to another register; a block not held
+to its page runs the decoy, and that mutant and one that drops the page offset are both caught. The probe's two
+games, neither of which maps its code, are identical to their baselines. Seen: the game reaches its mission
+select, the Dam's briefing and the level's opening.
+
+**What it does not cover.** Loads and stores through the TLB still call the interpreter (§16 inlines only direct
+addresses), and a mapped block that would cross its page is interpreted rather than split.
+

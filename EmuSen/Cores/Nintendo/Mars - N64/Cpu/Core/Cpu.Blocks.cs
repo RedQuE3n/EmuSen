@@ -30,9 +30,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         {
             ulong pc = Pc;
             byte[] rdram = _bus.Rdram;
+            bool direct = pc - KernelDirectBase < KernelDirectSize;
             uint physical = (uint)pc & 0x1FFF_FFFF;
 
-            if (_branchPending || _mode != PrivilegeMode.Kernel || pc - KernelDirectBase >= KernelDirectSize || physical >= (uint)rdram.Length || (pc & 3) != 0)
+            // Code behind the TLB runs in blocks too, where its page is mapped; anything else is the interpreter's, which raises what is to be raised - see Mars_Recompiler.md §17.
+            if (_branchPending || _mode != PrivilegeMode.Kernel || (pc & 3) != 0 || (!direct && !MappedFetch(pc, out physical)) || physical >= (uint)rdram.Length)
             {
                 Step();
                 return;
@@ -42,7 +44,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             if (_dpWriteMarks[physical >> 12] != 0 || _dpWriteMarks[(physical + BlockCache.MaxLength * 4 - 1) >> 12] != 0) _bus.Dp.WaitForReadRange(physical, BlockCache.MaxLength * 4, 5);
 
             Block? block = _blocks.Find(physical);
-            if (block is null) _blocks.Place(block = BlockShape.Shape(physical, rdram));
+            if (block is null) _blocks.Place(block = BlockShape.Shape(physical, rdram, withinPage: !direct));
+
+            // Past its page a mapped block's next word may be another frame's, so such a block is left to the interpreter from a mapped address - see §17.
+            if (!direct && (physical & 0xFFF) + (uint)block.Length * 4 > 0x1000)
+            {
+                Step();
+                return;
+            }
 
             // Read once: code the compiler's thread publishes after this read runs at the next entry, after the comparison - see Mars_Recompiler.md §2.4.
             BlockCode? code = block.Code;
@@ -94,7 +103,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
                 bool asserted = _mi.Asserted;
                 if (_recheck || asserted != _assertedSeen) CheckInterrupts(asserted);
 
-                if (block.IdleCycles != 0 && SkipIdle) RunIdle(block, pc, capAt);
+                if (block.IdleCycles != 0 && SkipIdle && (direct || block.IdleAnywhere)) RunIdle(block, pc, capAt);
                 else code(this);
             }
             catch (CpuException raised)
@@ -108,6 +117,34 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
             BlockInstructions += Instructions - before;
             if (BlockCensus) { var e = BlockCensusCounts.GetValueOrDefault(physical); bool rsp = !_bus.Sp.Processor.Halted; long n = Instructions - before; BlockCensusCounts[physical] = (e.Item1 + 1, e.Item2 + n, e.Item3 + (rsp ? n : 0), block.Length); }
         }
+
+        // The last page a fetch was translated through; forgotten whenever the TLB or coprocessor 0 is written - see Mars_Recompiler.md §17.
+        [EmuSen.Common.SkipInState] private ulong _fetchPage = ulong.MaxValue;
+        [EmuSen.Common.SkipInState] private uint _fetchFrame;
+
+        // Off only to measure what mapped blocks save, or to show they change nothing - see §17.
+        public static bool MappedBlocks = Environment.GetEnvironmentVariable("EMUSEN_MARS_NOMAPPEDBLOCKS") != "1";
+
+        private bool MappedFetch(ulong pc, out uint physical)
+        {
+            ulong page = pc & ~0xFFFUL;
+            if (page == _fetchPage)
+            {
+                physical = _fetchFrame | (uint)(pc & 0xFFF);
+                return true;
+            }
+
+            physical = 0;
+            if (!MappedBlocks) return false;
+            if (WideAddressing || Segments.Decode(pc, Mode, WideAddressing).Access != SegmentAccess.Mapped) return false;
+            if (Tlb.TryTranslate(pc, Cop0[EntryHiRegister], false, out uint mapped, out _) != TlbResult.Mapped) return false;
+
+            (_fetchPage, _fetchFrame) = (page, mapped & ~0xFFFu);
+            physical = mapped;
+            return true;
+        }
+
+        internal void ForgetFetchPage() => _fetchPage = ulong.MaxValue;
 
         // Off only to measure what it saves - see Mars_Recompiler.md §15.
         public static bool SkipIdle = Environment.GetEnvironmentVariable("EMUSEN_MARS_NOIDLESKIP") != "1";

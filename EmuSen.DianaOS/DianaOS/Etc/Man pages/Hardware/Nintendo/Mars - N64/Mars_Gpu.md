@@ -558,3 +558,58 @@ path shades every pixel. So the device path's own CPU cost, ten to fourteen mill
 CPU path's whole one hundred and eighty to six hundred, and the walk is common to both. Removing the shading
 removes about ninety-five per cent of what drawing at a multiple costs the processor, and what is left is a walk
 that was always there.
+
+## 10. Phase 4: the two-cycle mode (2026-09-21)
+
+With this the device draws every primitive of all three recorded frames, at two and at four, byte for byte, and
+declines none of them. §9's table is now three identical rows.
+
+### 10.1 A pipeline, and which of its edges are real carries
+
+`Rdp.DrawTwoCycle` is written as a pipeline: a pixel's first combiner cycle runs **before its predecessor's last
+blender cycle**. Read as a list of carries that looks disqualifying, and three of the four are not:
+
+- **The second cycle's COMBINED** is this pixel's own first cycle, not the pixel before. Fine, and now the device's
+  `ReadsCombined` test applies to the *first* cycle only in this mode.
+- **The first cycle's COMBINED** is the pixel before. Declined, as in the one-cycle mode (§6.2).
+- **The last blend's shade alpha is the NEXT pixel's**, because the successor's first cycles have already run by
+  then. That is a forward carry, and a forward carry over an affine value is not a carry at all: the invocation
+  computes the next pixel's shade alpha and its dither directly. It is the only thing the successor's first cycles
+  change that this pixel's last blend reads, which is what makes the whole pipeline collapse into one invocation.
+- **The first blend's memory-alpha weighting** uses `_pastShiftA`/`_pastShiftB`, which come from the depth slope
+  stored at the **previous** pixel, as it was before that pixel's own store. That is a backward carry through memory
+  and it is genuinely serial, so a primitive whose first blend cycle weighs by memory alpha is declined and counted.
+  Across the three frames, no primitive does.
+
+Also declined: `ConvertOne`, whose conversion path through the filter is not ported.
+
+### 10.2 Two defects the port had, and how each was found
+
+**The blend shifts came from the wrong cycle.** `CompareDepth` decides whether to compute its shifts from
+`twoCycle ? SecondBlendCycle.SecondAlpha : BlendSecondAlpha` — the *last* blend cycle in this mode, the *only* one
+in the other. The shader read the first cycle's selector in both. Ocarina's frame differed by 110 bytes of
+16,777,216, all of them one step in red and green. Found by bisecting the display list with `WORDS=n` in `rdpgpu`
+down to a single triangle at word 1086, then printing the modes in force for it. The 110 bytes are what a shift of
+zero instead of a shift of one does to a blend, which is a good illustration of how small a real defect can be and
+still be a defect.
+
+**COMBINED is assigned before the key reads it back.** `CombineSecondCycle` writes its own result into `_combined`
+and *then*, when keying is on, passes `ColorA(last.ColorA)` through in place of that result. So a key whose first
+input is COMBINED passes through **this** cycle's colour, not the previous one's. The shader assigned `combined`
+only in the first cycle, so the key read a value a cycle too old. Found by the synthetic scene, not by the games:
+none of the three frames pairs a chroma key with a second cycle reading COMBINED.
+
+### 10.3 Coverage
+
+The `Shaded` and `Textured` scenes gained two-cycle lists: the cycle type, both blend cycles' four selectors each,
+and `TwoCycleCombine`, which gives the two cycles **separate** selectors — the first drawn from a set that excludes
+COMBINED, the second from one that includes it. Eleven mutants of the new code, then two more.
+
+Twelve of the thirteen died at once. The survivor was the handover between the cycles itself — dropping the shift
+when the first cycle's result becomes COMBINED — and it survived for the reason §7.4 and §8.2 keep finding: the
+scene could not express it. `Combine` gave both cycles the *same* selectors, drawn from a set with no COMBINED in
+it, so nothing the first cycle produced was ever read by the second. `TwoCycleCombine` is the fix, and it caught
+the mutant and the second defect of §10.2 in the same run.
+
+**Not covered:** the two declined cases above, copy mode, and everything §5.4 and §8.4 already list. And the games
+still only vouch for one frame each.

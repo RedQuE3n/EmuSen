@@ -22,9 +22,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void RecordForTheDevice((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             GpuRasteriser gpu = _gpu!;
-            if (CycleType == TwoCycle) { gpu.NotShaded(GpuRasteriser.Declined.TwoCycle); return; }
             if (CycleType == CopyCycle) { gpu.NotShaded(GpuRasteriser.Declined.Copy); return; }
-            if (CycleType == OneCycle && !TheDeviceShadesThisPrimitive()) { gpu.NotShaded(GpuRasteriser.Declined.Carry); return; }
+            if (CycleType != FillCycle && !TheDeviceShadesThisPrimitive()) { gpu.NotShaded(GpuRasteriser.Declined.Carry); return; }
 
             gpu.Image(_colorImage & ~(uint)Math.Max(_colorImageBytes - 1, 0), _colorImageWidth, _colorImageBytes == 1 ? 0 : _colorImageBytes);
             gpu.DepthImage(_depthImage);
@@ -40,17 +39,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 return;
             }
 
-            RecordOneCycle(gpu, rows, majorOnLeft, tile, maxLevel);
+            RecordShaded(gpu, rows, majorOnLeft, tile, maxLevel);
         }
 
-        // The combiner's own previous result is the one carry an invocation per pixel cannot see - see §6.2.
-        private bool TheDeviceShadesThisPrimitive()
-        {
-            bool lodFraction = CombineColorC == 13 || CombineAlphaC == 0;
-            bool combined = CombineColorA == 0 || CombineColorB == 0 || CombineColorD == 0 || CombineColorC == 0 || CombineColorC == 7
-                || CombineAlphaA == 0 || CombineAlphaB == 0 || CombineAlphaD == 0;
-            return !combined;
-        }
+        // A cycle reading the combiner's own previous result is the carry an invocation per pixel cannot see - see §6.2.
+        private static bool ReadsCombined(CombinerSelectors c) =>
+            c.ColorA == 0 || c.ColorB == 0 || c.ColorD == 0 || c.ColorC == 0 || c.ColorC == 7
+            || c.AlphaA == 0 || c.AlphaB == 0 || c.AlphaD == 0;
+
+        // In the two-cycle mode the second cycle's COMBINED is this pixel's first cycle and is fine; the first cycle's
+        // is the pixel before. The first blend weighing memory alpha carries the previous pixel's depth slope - see §10.1.
+        private bool TheDeviceShadesThisPrimitive() =>
+            CycleType == OneCycle
+                ? !ReadsCombined(SecondCombineCycle)
+                : !ReadsCombined(FirstCombineCycle) && BlendSecondAlpha != 1 && !ConvertOne;
 
         // The eight tiles as the shader reads them, four words each - see §7.1.
         private void RecordTiles(Span<uint> into)
@@ -67,7 +69,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         }
 
         // DrawOneCycle's setup, written down instead of run: the layout is shade.comp's - see §6.
-        private void RecordOneCycle(GpuRasteriser gpu, (int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
+        private void RecordShaded(GpuRasteriser gpu, (int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             int deltaZ = PrimitiveDepth ? _primitiveDeltaZ : _depthSlope;
             if (PrimitiveDepth) _depthCorrectDx = _depthCorrectDy = 0;
@@ -85,11 +87,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             if (!packed.IsEmpty) RecordTiles(packed);
             _textureMemoryChanged = _tilesChanged = false;
 
+            bool twoCycle = CycleType == TwoCycle;
+            int texelLevel = twoCycle ? TwoCycleTexels(out _) : 3;
+
             Span<uint> p = gpu.Primitive(out int primitive);
-            p[0] = 0;
+            p[0] = twoCycle ? 1u : 0u;
             p[2] = Bit(0, KeyEnabled) | Bit(1, CoverageTimesAlpha) | Bit(2, AlphaFromCoverage) | Bit(3, AlphaCompare) | Bit(4, DitherAlpha)
                 | Bit(5, Antialias) | Bit(6, ColorOnCoverage) | Bit(7, ForceBlend) | Bit(8, ImageRead) | Bit(9, DepthUpdate) | Bit(10, DepthCompare)
-                | Bit(11, PrimitiveDepth) | Bit(12, _scissorField) | Bit(13, majorOnLeft) | Bit(14, ((RgbDither << 2) | AlphaDither) != 0xF);
+                | Bit(11, PrimitiveDepth) | Bit(12, _scissorField) | Bit(13, majorOnLeft) | Bit(14, ((RgbDither << 2) | AlphaDither) != 0xF)
+                | Bit(15, (CycleType == TwoCycle ? SecondBlendCycle.SecondAlpha : BlendSecondAlpha) == 1);
             p[3] = (uint)(RgbDither | (AlphaDither << 2) | (DepthMode << 4) | (CoverageDestination << 6) | (_colorImageSize << 8) | (_colorImageFormat << 10));
 
             CombinerSelectors c2 = SecondCombineCycle;
@@ -118,12 +124,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             p[39] = Bit(0, texel0) | Bit(1, texel1) | Bit(2, Perspective) | Bit(3, SampleFour) | Bit(4, PaletteEnabled)
                 | Bit(5, PaletteIntensityAlpha) | Bit(6, MidTexel) | Bit(7, BilinearFirstCycle) | Bit(8, DetailEnabled)
-                | Bit(9, SharpenEnabled) | Bit(10, LodEnabled) | Bit(11, ConvertOne) | Bit(12, readsLodFraction);
+                | Bit(9, SharpenEnabled) | Bit(10, LodEnabled) | Bit(11, ConvertOne) | Bit(12, readsLodFraction) | Bit(13, BilinearSecondCycle);
             p[58] = memory;
             p[59] = tileSet;
             p[60] = (uint)tile;
             p[61] = (uint)maxLevel;
             p[62] = (uint)_minLevel;
+            CombinerSelectors c1 = FirstCombineCycle;
+            p[68] = (uint)(c1.ColorA | (c1.ColorB << 4) | (c1.ColorC << 8) | ((c1.ColorD & 7) << 13) | (c1.AlphaA << 16) | (c1.AlphaB << 19) | (c1.AlphaC << 22) | (c1.AlphaD << 25));
+
+            BlendSelectors blend2 = SecondBlendCycle;
+            p[69] = (uint)(blend2.FirstColor | (blend2.FirstAlpha << 2) | (blend2.SecondColor << 4) | (blend2.SecondAlpha << 6));
+            p[70] = (uint)texelLevel;
+            for (int c = 0; c < 3; c++) p[72 + c] = (uint)(_attributeDy[AttributeS + c] & ~0x7FFF);
+
             p[64] = (uint)_k0;
             p[65] = (uint)_k1;
             p[66] = (uint)_k2;
@@ -144,7 +158,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
                 int length = (right - left) + clipped;
                 bool nextRowDrawn = y + 1 <= rows.Last && _spanDrawn[y + 1];
-                row[24] = Bit(0, nextRowDrawn) | Bit(1, length > 7) | Bit(2, length == 7) | Bit(3, length == 6);
+                row[24] = Bit(0, nextRowDrawn) | Bit(1, length > 7) | Bit(2, length == 7) | Bit(3, length == 6) | Bit(4, length >= 3);
                 if (nextRowDrawn)
                     for (int c = 0; c < 3; c++) row[21 + c] = (uint)_spanAttributes[(y + 1) * Attributes + AttributeS + c];
 

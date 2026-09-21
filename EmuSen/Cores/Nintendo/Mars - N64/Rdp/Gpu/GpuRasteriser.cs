@@ -4,7 +4,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp.Gpu
     public sealed class GpuRasteriser : IDisposable
     {
         public const int TileSize = 8;
-        public const int PrimitiveWords = 72;
+        public const int PrimitiveWords = 80;
         public const int RowWords = 32;
 
         // A snapshot of the processor's four kilobytes, in sixteen-bit words, and the eight tile descriptors packed into four words each - see Mars_Gpu.md §7.

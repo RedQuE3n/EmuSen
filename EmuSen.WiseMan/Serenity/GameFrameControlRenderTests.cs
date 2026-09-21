@@ -27,6 +27,10 @@ namespace EmuSen.WiseMan.Serenity
     // construction is only valid on it.
     public class GameFrameControlRenderTests
     {
+        private readonly Xunit.Abstractions.ITestOutputHelper _output;
+
+        public GameFrameControlRenderTests(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
+
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(GameFrameControlRenderTests).GetTypeInfo().Assembly);
 
@@ -327,6 +331,7 @@ namespace EmuSen.WiseMan.Serenity
 
                     GameFrameControl.PresentationStatistics taken = control.TakeStatistics();
                     Assert.Equal(3, taken.Frames);
+                    Assert.Equal(3, taken.Copies);
                     Assert.Equal((6, 4), (taken.Width, taken.Height));
                     Assert.False(taken.Gpu);
                     Assert.True(taken.CopyMilliseconds > 0 && taken.DrawMilliseconds > 0);
@@ -334,6 +339,88 @@ namespace EmuSen.WiseMan.Serenity
                 }
                 finally
                 {
+                    window.Close();
+                }
+            }, default);
+        }
+        // A redraw with no new frame reuses the last image; a new offer is copied again even of the same array - see EmuSen_Serenity.md §2.6.
+        [Fact]
+        public async Task A_redraw_reuses_the_frame_and_a_new_offer_of_the_same_array_is_copied_again()
+        {
+            await Session.Dispatch(() =>
+            {
+                (Window window, GameFrameControl control) = NewWindow(16, 16);
+                try
+                {
+                    byte[] frame = SolidColorFrame(8, 8, 200, 50, 25);
+                    control.TakeStatistics();
+                    control.UpdateFrame(frame, 8, 8);
+
+                    byte[]? first = null;
+                    for (int i = 0; i < 3; i++)
+                    {
+                        // A redraw with nothing new, as when something else in the window changes.
+                        if (i > 0) control.InvalidateVisual();
+                        using WriteableBitmap captured = window.CaptureRenderedFrame()!;
+                        byte[] pixels = ToRgbaBytes(captured);
+                        first ??= pixels;
+                        Assert.Equal(first, pixels);
+                    }
+
+                    GameFrameControl.PresentationStatistics redrawn = control.TakeStatistics();
+                    Assert.Equal(3, redrawn.Frames);
+                    Assert.Equal(1, redrawn.Copies);
+
+                    // The same array, rewritten in place as a core that owns its buffer does, and offered again.
+                    SolidColorFrame(8, 8, 10, 220, 90).CopyTo(frame, 0);
+                    control.UpdateFrame(frame, 8, 8);
+                    using WriteableBitmap after = window.CaptureRenderedFrame()!;
+                    byte[] changed = ToRgbaBytes(after);
+                    int centre = ((after.PixelSize.Height / 2) * after.PixelSize.Width + after.PixelSize.Width / 2) * 4;
+                    Assert.Equal((10, 220, 90), (changed[centre], changed[centre + 1], changed[centre + 2]));
+                    Assert.Equal(1, control.TakeStatistics().Copies);
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }, default);
+        }
+        // A frame whose rows are shown twice, stretched here, draws what the frame with its rows repeated draws, where the filter is nearest - see EmuSen_Serenity.md §2.7.
+        [Fact]
+        public async Task Rows_stretched_here_draw_what_rows_repeated_in_the_frame_draw()
+        {
+            await Session.Dispatch(() =>
+            {
+                bool bilinear = EmuSen.Graphics.GraphicsSettings.BilinearFiltering;
+                (Window window, GameFrameControl control) = NewWindow(16, 16);
+                try
+                {
+                    var half = new byte[8 * 4 * 4];
+                    for (int i = 0; i < half.Length; i += 4) { half[i] = (byte)(i * 7); half[i + 1] = (byte)(i * 3); half[i + 2] = (byte)(255 - i); half[i + 3] = 255; }
+                    var full = new byte[8 * 8 * 4];
+                    for (int row = 0; row < 8; row++) half.AsSpan(row / 2 * 32, 32).CopyTo(full.AsSpan(row * 32));
+
+                    byte[] Drawn(byte[] frame, int height, int repeat)
+                    {
+                        control.UpdateFrame(frame, 8, height, repeat);
+                        using WriteableBitmap captured = window.CaptureRenderedFrame()!;
+                        return ToRgbaBytes(captured);
+                    }
+
+                    EmuSen.Graphics.GraphicsSettings.BilinearFiltering = false;
+                    Assert.Equal(Drawn(full, 8, 1), Drawn(half, 4, 2));
+
+                    // Bilinear blends a row with the next where repeating would not; how much is recorded, not held.
+                    EmuSen.Graphics.GraphicsSettings.BilinearFiltering = true;
+                    byte[] repeatedRows = Drawn(full, 8, 1), stretchedRows = Drawn(half, 4, 2);
+                    int differs = 0, most = 0;
+                    for (int i = 0; i < repeatedRows.Length; i++) { int d = Math.Abs(repeatedRows[i] - stretchedRows[i]); if (d > 0) differs++; most = Math.Max(most, d); }
+                    _output.WriteLine($"bilinear: {differs} of {repeatedRows.Length} bytes differ, by at most {most}");
+                }
+                finally
+                {
+                    EmuSen.Graphics.GraphicsSettings.BilinearFiltering = bilinear;
                     window.Close();
                 }
             }, default);

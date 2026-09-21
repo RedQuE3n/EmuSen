@@ -15,7 +15,7 @@ using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 namespace EmuSen.Cores.Nintendo.Mars
 {
     // The Nintendo 64's ICore; what the machine cannot provide yet is stubbed on purpose - see Mars_Core.md.
-    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings
+    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings, global::EmuSen.Cores.IFrameSerial, global::EmuSen.Cores.IRepeatedRows
     {
         // The VR4300's pipeline clock, which is what MemoryBus.Cycles counts - see Mars_Memory.md §3.
         public const long ProcessorClockHz = 93_750_000;
@@ -134,6 +134,18 @@ namespace EmuSen.Cores.Nintendo.Mars
 
         // The picture's width, which a walk at a multiple multiplies - see Mars_Video.md §2.9.
         [EmuSen.Common.SkipInState] private int _frameWidth = ScreenWidthPixels;
+
+        // Advanced wherever the shown frame is replaced, and nowhere else - see EmuSen_Multicore.md §14.
+        [EmuSen.Common.SkipInState] private long _frameSerial;
+
+        public long FrameSerial => _frameSerial;
+
+        // A progressive field's rows once each, for a frontend that stretches them itself; the frame's own repeat travels with it - see EmuSen_Multicore.md §15.
+        public bool RepeatRows { get; set; } = true;
+
+        [EmuSen.Common.SkipInState] private int _rowRepeat = 1, _pendingRowRepeat = 1;
+
+        public int RowRepeat => _rowRepeat;
         [EmuSen.Common.SkipInState] private int _pendingWidth = ScreenWidthPixels;
         private int _renderScale = 1;
 
@@ -252,8 +264,10 @@ namespace EmuSen.Cores.Nintendo.Mars
             _lastFrameCycles = CycleCap;
             _screenHeight = DefaultScreenHeight;
             _frame = Blank(DefaultScreenHeight);
+            _frameSerial++;
             _pendingFrame = Blank(DefaultScreenHeight);
             _pendingHeight = DefaultScreenHeight;
+            _rowRepeat = _pendingRowRepeat = 1;
         }
 
         // A binding for a button the pad lacks is dropped rather than moved onto another one - see Mars_Core.md §5.
@@ -574,7 +588,9 @@ namespace EmuSen.Cores.Nintendo.Mars
         {
             JoinPresentation();
             vi.Scan();
-            _frameWidth = Compose(vi, vi.FrameHeight, vi.Serrate, ref _frame);
+            _frameWidth = Compose(vi, vi.FrameHeight, vi.Serrate, RepeatRows, ref _frame);
+            _frameSerial++;
+            _rowRepeat = vi.Serrate || RepeatRows ? 1 : 2;
             _screenHeight = _frame.Length / (_frameWidth * 4);
         }
 
@@ -594,7 +610,7 @@ namespace EmuSen.Cores.Nintendo.Mars
             }
 
             int rows = vi.FrameHeight;
-            bool serrate = vi.Serrate;
+            bool serrate = vi.Serrate, repeatRows = RepeatRows;
 
             var done = new ManualResetEventSlim(false);
             _presenting = done;
@@ -603,8 +619,9 @@ namespace EmuSen.Cores.Nintendo.Mars
                 try
                 {
                     if (walk) vi.Walk(_scan);
-                    _pendingWidth = Compose(vi, rows, serrate, ref _pendingFrame);
-                    _pendingHeight = rows * (serrate ? 1 : 2) * vi.OutputScale;
+                    _pendingWidth = Compose(vi, rows, serrate, repeatRows, ref _pendingFrame);
+                    _pendingHeight = rows * (serrate || !repeatRows ? 1 : 2) * vi.OutputScale;
+                    _pendingRowRepeat = serrate || repeatRows ? 1 : 2;
                 }
                 catch (Exception fault)
                 {
@@ -634,15 +651,17 @@ namespace EmuSen.Cores.Nintendo.Mars
             }
 
             (_frame, _pendingFrame) = (_pendingFrame, _frame);
+            _frameSerial++;
             _screenHeight = _pendingHeight;
             _frameWidth = _pendingWidth;
+            _rowRepeat = _pendingRowRepeat;
         }
 
         // The raster's fourth byte is coverage, not opacity, and a progressive field is every other line - see Mars_Core.md §2.
-        private static int Compose(VideoInterface vi, int rows, bool serrate, ref byte[] frame)
+        private static int Compose(VideoInterface vi, int rows, bool serrate, bool repeatRows, ref byte[] frame)
         {
             ReadOnlySpan<byte> raster = vi.Raster(rows);
-            int repeat = serrate ? 1 : 2;
+            int repeat = serrate || !repeatRows ? 1 : 2;
             int width = vi.OutputWidth;
             int rowBytes = width * 4;
             rows *= vi.OutputScale;

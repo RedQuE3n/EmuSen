@@ -99,6 +99,7 @@ namespace EmuSen.Mistress.Views
             public required byte[] Pixels;
             public required int Width;
             public required int Height;
+            public required int RowRepeat;
         }
         // Was written out here, in Hotaru and in Serenity, all three with one defect - LunaP.md §22.1.
         private readonly Latest<FrameData> _frames;
@@ -804,6 +805,9 @@ namespace EmuSen.Mistress.Views
                 _timer.Tick += (_, _) => PollGamepad();
                 _timer.Start();
 
+                // The frame control stretches repeated rows on the GPU, so a core that can is asked to send each once - see EmuSen_Multicore.md §15.
+                if (_session.Core is EmuSen.Cores.IRepeatedRows repeated) repeated.RepeatRows = false;
+
                 StartEmulationThread();
                 SyncMenuState();
             }
@@ -1033,6 +1037,9 @@ namespace EmuSen.Mistress.Views
             TimeSpan fpsWindowStart = clock.Elapsed;
             int framesInWindow = 0, offeredInWindow = 0;
 
+            // The serial of the picture last offered; a core that says its picture is unchanged is not offered it again - see EmuSen_Multicore.md §14.
+            long? offeredSerial = null;
+
             // RunFrame alone against the rest of this loop's per-frame work - see §4.21.
             TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
             var frameStopwatch = new Stopwatch();
@@ -1076,7 +1083,8 @@ namespace EmuSen.Mistress.Views
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight);
+                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat);
+                    offeredSerial = null;
                     RunCoreRequests(session);
                     SleepUntil(nextTick, clock);
                     continue;
@@ -1125,10 +1133,12 @@ namespace EmuSen.Mistress.Views
                     }
 
                     // Nothing new was drawn on a skipped frame.
-                    if (!session.SkipRendering)
+                    long? serial = session.FrameSerial;
+                    if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
                         byte[] frame = session.GetFrameBufferRgba();
-                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight);
+                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat);
+                        offeredSerial = serial;
                         offeredInWindow++;
                     }
 
@@ -1155,7 +1165,7 @@ namespace EmuSen.Mistress.Views
                         double seconds = windowElapsed.TotalSeconds;
                         string presentation = shown.Frames == 0
                             ? $" | offered {offeredInWindow / seconds:F1}, shown 0"
-                            : $" | offered {offeredInWindow / seconds:F1}, shown {shown.Frames / seconds:F1} fps, copy {shown.CopyMilliseconds / shown.Frames:F2} draw {shown.DrawMilliseconds / shown.Frames:F2}ms, {(shown.Gpu ? "GPU" : "software")} {shown.Width}x{shown.Height}";
+                            : $" | offered {offeredInWindow / seconds:F1}, shown {shown.Frames / seconds:F1} fps ({shown.Copies / seconds:F1} copied), copy {shown.CopyMilliseconds / Math.Max(shown.Copies, 1):F2} draw {shown.DrawMilliseconds / shown.Frames:F2}ms, {(shown.Gpu ? "GPU" : "software")} {shown.Width}x{shown.Height}";
                         string line = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}{presentation}";
                         Console.WriteLine($"[fps] {line}");
 
@@ -1201,15 +1211,15 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat)
         {
-            _frames.Offer(new FrameData { Pixels = pixels, Width = width, Height = height });
+            _frames.Offer(new FrameData { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat });
         }
 
         // Presents whatever is newest when it runs; dropping stale frames is intended.
         private void PresentPendingFrame(FrameData frame)
         {
-            GameFrame.UpdateFrame(frame.Pixels, frame.Width, frame.Height);
+            GameFrame.UpdateFrame(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat);
         }
 
         private void OnExitClick(object? sender, RoutedEventArgs e)

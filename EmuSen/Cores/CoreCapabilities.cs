@@ -51,6 +51,23 @@ namespace EmuSen.Cores
         void Set(string key, string value);
     }
 
+    // A core that knows when its picture is the one it gave last, so a frontend need not present it again - see EmuSen_Multicore.md §14.
+    public interface IFrameSerial
+    {
+        // Changes whenever GetFrameBufferRgba may return a different picture; an unchanged value is a promise the pixels are too.
+        long FrameSerial { get; }
+    }
+
+    // A core whose picture repeats rows, which can hand each over once and say how many times it is shown - see EmuSen_Multicore.md §15.
+    public interface IRepeatedRows
+    {
+        // True, the default, repeats them in the frame; false leaves the repeating to the frontend.
+        bool RepeatRows { get; set; }
+
+        // How many times each row of the frame on show is shown: one whenever the frame already repeats it.
+        int RowRepeat { get; }
+    }
+
     // A core that can write a state without waiting for work it has on other threads; LoadState reads it - see EmuSen_Rewind_And_FastForward.md §1.8.
     public interface ISnapshotCore
     {

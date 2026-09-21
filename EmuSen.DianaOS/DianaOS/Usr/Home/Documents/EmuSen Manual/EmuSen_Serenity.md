@@ -111,6 +111,35 @@ frontend has no way to be told to stretch instead, so half of what is copied and
 above. **More frames are shown than offered**, by one or two a second: the control redraws when anything else in the
 window invalidates it, such as this readout's own text, and each redraw copies and uploads the frame again.
 
+### 2.6 A redraw is not a new frame (2026-09-21)
+
+The first reading of §2.5 showed more frames drawn than offered. The control is redrawn whenever the window needs
+it, and each redraw copied the frame out of its array and uploaded it again. Now each `UpdateFrame` is a new
+**version**, and the control keeps the image it made from the last version drawn: a redraw of the same version
+reuses it, with neither a copy nor, since Skia keeps an image's texture for as long as the image lives, an upload.
+The cache is the render thread's, under a lock, and is given back when the control leaves the window.
+
+**A new offer is always a new version, even of the same array.** Moon and Mercury hand over their PPU's own buffer
+every frame, rewritten in place, so a cache keyed on the array would show a stale picture; keyed on the offer it
+cannot. What stops an unchanged picture from being offered at all is the core's frame serial, read by the frontend
+(`EmuSen_Multicore.md` §14), not anything here. The counters now separate draws from copies, and Mistress's readout
+shows both. `A_redraw_reuses_the_frame_and_a_new_offer_of_the_same_array_is_copied_again` fails both for a control
+that always copies and for one that never recopies a new offer.
+
+### 2.7 Rows stretched here rather than repeated in the frame (2026-09-21)
+
+`UpdateFrame` takes how many times each row is shown (`EmuSen_Multicore.md` §15), and the control letterboxes to the
+shown height, `height × rowRepeat`, and draws the image into that rectangle, which stretches the rows on the GPU. With
+nearest filtering this is exactly the picture a frame with its rows repeated would draw
+(`Rows_stretched_here_draw_what_rows_repeated_in_the_frame_draw`).
+
+**With bilinear filtering, the default, it is not the same picture, and that is a visible change.** Repeated rows
+come in identical pairs, so the filter blends only across the boundary between pairs; stretched rows are all
+different, so it blends every row with the next. On the test's deliberately high-contrast pattern, 576 of 1,024 bytes
+differ, by up to 28 levels. The stretched version is the filter applied to the picture the console made rather than
+to a copy of it with its rows doubled, and it is the one Mistress now shows; it is recorded here because it is a
+change in what the player sees, not only in what it costs.
+
 ---
 
 ## 3. The built-in shaders

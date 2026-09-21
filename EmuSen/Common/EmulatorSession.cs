@@ -95,6 +95,12 @@ namespace EmuSen.Common
             set { if (_core is not null) _core.SkipRendering = value; }
         }
 
+        // Null for a core that cannot tell, which a frontend must read as a new picture every frame - see EmuSen_Multicore.md §14.
+        public long? FrameSerial => (_core as EmuSen.Cores.IFrameSerial)?.FrameSerial;
+
+        // How many times the frontend shows each row of the frame; one for a core that repeats its own - see EmuSen_Multicore.md §15.
+        public int RowRepeat => (_core as EmuSen.Cores.IRepeatedRows)?.RowRepeat ?? 1;
+
         public byte[] GetFrameBufferRgba()
         {
             if (_core is null) throw new InvalidOperationException("GetFrameBufferRgba() called before LoadRom().");

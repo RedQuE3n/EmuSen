@@ -83,6 +83,11 @@ that between its first and second frames). The unintended one is that **a PAL pi
 640×576 at square pixels is 10:9, where a PAL set shows 4:3. `ICore` has no channel for a pixel aspect, and
 Venus has the same class of error (256×224 drawn at 8:7), so this is recorded rather than worked around.
 
+*Addendum 2026-09-21: the repeat can now be left to a frontend that stretches.* `RepeatRows = false` sends each
+progressive row once and `RowRepeat` says it is shown twice (`EmuSen_Multicore.md` §15); Mistress asks for it. The
+default is unchanged, and so is everything above for every other consumer. It is a row repeat, not the pixel aspect
+the last paragraph wants, so the PAL and Venus aspect errors stand.
+
 ### 2.1 The fourth byte is coverage, not opacity
 
 **The VI's raster keeps each pixel's coverage — zero to seven — where an RGBA buffer keeps alpha**

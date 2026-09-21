@@ -699,8 +699,15 @@ same address, on `db4b74d`, a build from before any of this work. So it is a def
 of the memory at a multiple, present since that capture was written, and it is **reachable by a player**: deferred
 presentation is on by default, so an internal resolution of four crashes the emulator. Reading `Walk` and
 `ReachScaled` shows a reach that covers more lines than the walk fetches, so the two must disagree in a number
-reading did not find. Not fixed here; it is recorded so that it is not mistaken for the device's, and it is the
-first thing to do next.
+reading did not find.
+
+**Fixed the same day; `Mars_Video.md` §2.11.** Putting the captured range into the exception's message found it at
+once: the capture started at 0x3DA2FE8 and the walk reached 0xDA9400, which is the same address with its top digit
+gone. `Walk` multiplied the register's origin by the multiple squared and `Fetch` then aligned it with a mask that
+also keeps only twenty-four bits. The immediate path had the same fault silently, drawing whatever lay at the
+truncated address. **This means the agreement at four claimed in §11 was, for any game whose frame buffer is above a
+megabyte, two paths reading the same wrong memory.** It was taken again after the fix: Super Mario 64, Ocarina of
+Time, Majora's Mask and Wave Race 64 all agree at four, now on a correct picture, and the deferred path runs.
 
 ## 12. Phase 6: the measurement, and a criterion that was wrong about where the cost lived (2026-09-21)
 
@@ -724,7 +731,11 @@ never sees the device, which is the plan's first promise kept.
 | Ocarina of Time | 4× | 153.2 | 123.9 | 237.0 | 141.7 | 13.1% | 16.1% |
 | Wave Race 64 | 4× | 67.5 | 55.2 | 137.8 | 68.6 | 24.7% | 30.2% |
 
-The 4× rows are through the immediate scan-out, because the deferred one crashes at four on every build (§11.5).
+The 4× rows are through the immediate scan-out, because the deferred one crashed at four on every build (§11.5);
+they were taken before that was fixed, over the wrong lines of memory, and the timings stand because the walk does
+the same work either way. After the fix, Mario at four through the **deferred** path, which is the default, runs at
+58.6 milliseconds and 34 per cent of full speed on the CPU and **45.9 milliseconds and 43.5 per cent with the device**:
+better than either immediate figure, because the scan-out's walk has a thread of its own there.
 
 **At two the device is plainly worth having.** Ocarina goes from visibly slow to full speed, and the worst frames
 improve most: Wave Race's ninetieth percentile falls from 56 milliseconds to 15.5.
@@ -762,7 +773,7 @@ picture, and does the VI's per-pixel filtering where the pixels already are. The
 unchanged, as the thing that phase must meet.
 
 **What this does not establish.** One state per game and three rounds, on one machine with a discrete card. The
-integrated adapter was not measured in a running game. Nothing here is the deferred path at four, which crashes.
-And the join inside the readback, which §11 suspected of putting the device path's single-threaded walk on the
+integrated adapter was not measured in a running game.
+The deferred crash at four is fixed (§11.5). And the join inside the readback, which §11 suspected of putting the device path's single-threaded walk on the
 critical path, is not separated from the readback's own cost by these runs; the scan-out on the device would remove
 both, so it was not worth separating first.

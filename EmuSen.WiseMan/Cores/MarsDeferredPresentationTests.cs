@@ -261,6 +261,65 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(job.Repeats);
         }
 
+        // The VI's origin register holds twenty-four bits and the memory at a multiple does not: an origin times the
+        // multiple squared can pass what twenty-four bits name, at three or four for a frame buffer above a megabyte - see Mars_Video.md §2.11.
+        [Theory]
+        [InlineData(2, false)]
+        [InlineData(3, false)]
+        [InlineData(4, false)]
+        [InlineData(2, true)]
+        [InlineData(3, true)]
+        [InlineData(4, true)]
+        public void A_frame_buffer_high_in_memory_scans_out_at_a_multiple_as_a_low_one_does(int scale, bool deferred)
+        {
+            const uint Low = 0x0008_0000, High = 0x0030_0000, List = 0x0020_0000;
+
+            byte[] Picture(uint framebuffer)
+            {
+                var bus = new MemoryBus();
+                bus.Dp.Scale = scale;
+
+                var list = new System.Collections.Generic.List<ulong>
+                {
+                    (0x2FUL << 56) | (3UL << 52),
+                    (0x3FUL << 56) | (2UL << 51) | (319UL << 32) | framebuffer,
+                    (0x2DUL << 56) | ((ulong)(320 << 2) << 12) | (240 << 2),
+                };
+                for (int band = 0; band < 8; band++)
+                {
+                    list.Add((0x37UL << 56) | (uint)(0x0843_0843 * (band + 1)));
+                    list.Add((0x36UL << 56) | ((ulong)(319 << 2) << 44) | ((ulong)((band * 30 + 29) << 2) << 32) | (uint)((band * 30) << 2));
+                }
+                list.Add(0x29UL << 56);
+
+                for (int i = 0; i < list.Count; i++) bus.Write64(List + (uint)i * 8, list[i]);
+                bus.Write32(MemoryMap.DpCommandBase, List);
+                bus.Write32(MemoryMap.DpCommandBase + 4, List + (uint)list.Count * 8);
+                bus.Dp.Join();
+                Assert.True(bus.Dp.ScaledDrawn);
+
+                Program(bus, Registers(2, 0, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, origin: framebuffer));
+
+                if (deferred)
+                {
+                    var job = new ScanJob();
+                    Assert.True(bus.Vi.Prepare(job));
+                    bus.Vi.Capture(job);
+                    bus.Vi.Walk(job);
+                }
+                else
+                {
+                    Assert.True(bus.Vi.Scan());
+                }
+
+                return bus.Vi.Frame.ToArray();
+            }
+
+            byte[] low = Picture(Low), high = Picture(High);
+            Assert.Contains(low, b => b != 0);
+            Assert.True(low.AsSpan().SequenceEqual(high), $"at {scale}x {(deferred ? "deferred" : "immediate")}: the high frame buffer's picture is not the low one's");
+        }
+
         private static void Program(MemoryBus bus, uint[] registers)
         {
             for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);

@@ -26,6 +26,34 @@ namespace EmuSen.Serenity
         // Not "Effect" - Avalonia's Visual already has an unrelated one - see EmuSen_Serenity.md §2.4.
         public ShaderEffect ActiveEffect { get; set; } = ShaderEffect.None;
 
+        // What the render thread spent showing frames, summed until a frontend takes them - see EmuSen_Serenity.md §2.5.
+        private long _presented, _copyTicks, _drawTicks, _shape;
+        private int _gpu;
+
+        public readonly record struct PresentationStatistics(long Frames, double CopyMilliseconds, double DrawMilliseconds, bool Gpu, int Width, int Height);
+
+        // Safe from any thread: the sums are exchanged for zero, so each frame is counted by exactly one take.
+        public PresentationStatistics TakeStatistics()
+        {
+            double ms = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            long shape = System.Threading.Interlocked.Read(ref _shape);
+            return new PresentationStatistics(
+                System.Threading.Interlocked.Exchange(ref _presented, 0),
+                System.Threading.Interlocked.Exchange(ref _copyTicks, 0) * ms,
+                System.Threading.Interlocked.Exchange(ref _drawTicks, 0) * ms,
+                System.Threading.Volatile.Read(ref _gpu) != 0,
+                (int)(shape >> 32), (int)shape);
+        }
+
+        private void Presented(long copyTicks, long drawTicks, bool gpu, int width, int height)
+        {
+            System.Threading.Interlocked.Add(ref _copyTicks, copyTicks);
+            System.Threading.Interlocked.Add(ref _drawTicks, drawTicks);
+            System.Threading.Volatile.Write(ref _gpu, gpu ? 1 : 0);
+            System.Threading.Interlocked.Exchange(ref _shape, (long)width << 32 | (uint)height);
+            System.Threading.Interlocked.Increment(ref _presented);
+        }
+
         // Stores the frame and asks for a repaint; drawing happens in Render() below.
         public void UpdateFrame(byte[] rgba, int width, int height)
         {
@@ -125,9 +153,20 @@ namespace EmuSen.Serenity
                 using ISkiaSharpApiLease lease = feature.Lease();
                 SKCanvas canvas = lease.SkCanvas;
 
+                long started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var sourceInfo = new SKImageInfo(_width, _height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
                 using SKImage sourceImage = SKImage.FromPixelCopy(sourceInfo, _rgba);
+                long copied = System.Diagnostics.Stopwatch.GetTimestamp();
 
+                Draw(canvas, sourceImage);
+
+                // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
+                lease.GrContext?.Flush();
+                _owner.Presented(copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, lease.GrContext is not null, _width, _height);
+            }
+
+            private void Draw(SKCanvas canvas, SKImage sourceImage)
+            {
                 // GraphicsSettings.BilinearFiltering - see EmuSen_Settings_Reference.md §3.
                 SKSamplingOptions sampling = GraphicsSettings.BilinearFiltering
                     ? new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None)

@@ -573,6 +573,13 @@ Three details of that mechanism are load-bearing and none of them are obvious fr
 
 **What this does not cover.** The `catch` around `RunFrame()` is deliberately fatal — `_running = false`, `[CPU HALT] <message>` posted to the status bar through the UI thread, break — matching the console build's halt-and-print behaviour rather than attempting recovery. It does **not** flush SRAM; the core's own periodic autosave inside `RunFrame()` is what covers a crash, and that is unchanged from before this thread existed. Nothing here throttles the *presenter* — dropping stale frames is `Latest<T>`'s job, not this loop's — and nothing here is a general job queue: ~~`DrainPendingFromEmulationThread` and `_applyCheatsPending` are the only two things the UI thread hands over, and both exist for the same reason `pause` does (§4.15).~~ *Three since 2026-09-19: the state hotkeys hand over their save and load as well (§4.21a), after a torn state showed that they had to. The console's queue and the cheat flag exist for the reason `pause` does (§4.15); the third exists because a save is not a read.*
 
+*Addendum 2026-09-21: the readout now also shows presentation, after a bar: frames offered to the frame control and
+frames it drew, per second, with the render thread's copy and draw time a frame, the backend, and the frame's size
+(`EmuSen_Serenity.md` §2.5). The first figure is still `RunFrame`'s count, for the reason above; the presentation
+figures sit beside it, labelled as what they are, so the dropped frames the hand-off makes on purpose read as the
+difference between two named rates rather than as a slow emulator. The same line goes to the session's
+`general.log` once a second, prefixed `[fps]`.*
+
 ### 4.21a Save and load states run on the emulation thread
 
 *2026-09-19.* Until this date `SaveState()` and `LoadState()` — the `F5`/`F8` hotkeys and both Emulation menu items — called `_session.SaveState`/`LoadState` on the UI thread while `EmulationLoop` ran `RunFrame()` on its own. Nothing ordered the two. They now hand the work to the emulation thread, as the console and Hotaru already did.

@@ -68,6 +68,31 @@ Avalonia may call `Render()` again on the same control before a previously-issue
 
 Avalonia's `Visual` base class already has an unrelated `Effect` property — a compositor bitmap effect such as blur or drop-shadow. Hiding it would be legal and confusing, so the shader selector gets its own name.
 
+### 2.5 What the render thread's drawing costs, counted where it happens (2026-09-21)
+
+Nothing measured presentation before this. The fps readout counts `RunFrame` (§4 and `EmuSen_Settings_Reference.md`
+§4.21), `pacebench` has no render thread, and `frontbench`'s picture time was the getter's. The Mars GPU work
+(`Mars_Gpu.md` §15.5) left one decision waiting on exactly this number: whether handing the device's image to the
+compositor, with no readback and no copy, would be worth what it couples. So `GameFrameControl` now counts what the
+render thread does with each frame.
+
+`DrawOp.Render` times two things: **the copy**, `SKImage.FromPixelCopy`, which copies the frame out of the array the
+core handed over; and **the draw**, which is the draw call and a `GRContext.Flush`. The flush is there because Skia
+defers a raster image's upload to the GPU until a flush, so without it the draw would time a recorded command and the
+upload would land, untimed, in Avalonia's own flush after the scene. Flushing earlier moves that cost; it does not
+add to it. It also records whether the lease had a `GRContext`, which is the difference between the GPU backend and
+Avalonia's software one, and the frame's size.
+
+The sums are exchanged for zero by `TakeStatistics`, from any thread, so a frontend reading them once a second sees
+each frame exactly once. Mistress prints frames *offered* (handed to the control) and frames *shown* (drawn by the
+render thread) side by side with the two costs; the difference between the two rates is the hand-off dropping stale
+frames, which is correct behaviour (§4), not a fault.
+
+**What this does not measure:** the GPU's own time, the compositor's swap, or anything after the flush returns; and
+on the software backend "draw" is the whole scale-and-filter on the processor, which is a different quantity from the
+GPU backend's. `Each_drawn_frame_is_counted_once_with_its_size_and_backend` checks the counting on the headless
+platform, which has no GPU; the GPU backend's figures exist only in a real window.
+
 ---
 
 ## 3. The built-in shaders

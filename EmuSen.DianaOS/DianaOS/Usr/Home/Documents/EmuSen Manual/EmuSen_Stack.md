@@ -110,6 +110,15 @@ Recorded so they are not re-derived from scratch:
 - **`FrameRecorder`'s `frames.log`** is a four-column TSV that nothing in the repo reads back. The documented cross-reference against `ffmpeg -f framemd5` (`EmuSen_Debugging_Tools_Reference_v5.md` §3.15b) is a real join performed by hand — a good future Python tool, at which point the table becomes worth having.
 - **Schema versioning.** No database here has `PRAGMA user_version` or any migration path. The catalogue re-runs its `IF NOT EXISTS` schema on every open, so a new column silently does nothing to an existing file — tolerable only because the catalogue is declared a deletable cache. The dictionary runs its schema *only when the file is absent*, so editing `schema.sql` has no effect on an existing `known-differences.db`, and that database accumulates `verification` rows that are the only thing making `proven` reachable. Deleting it to pick up a schema change would destroy the proof history. This is the sharpest known gap in the storage design.
 
+### 4.4 GLSL, for the one thing that runs on a GPU
+
+*2026-09-21.* Mars's compute shaders are GLSL (`Rdp/Gpu/Shaders/*.comp`), compiled to SPIR-V by a test-time
+dependency of WiseMan and embedded in the core (`Mars_Gpu.md` §2). It is a fifth language in the tree and is
+recorded here as an exception rather than an addition to the four, because it is not a choice among languages for
+host code: a GPU runs shader code or nothing, and the host side of the same work is C# like the rest of the core.
+It does not generalise. Nothing that runs on the CPU has a reason to be written in it, and a second shading
+language (`Mars_Gpu.md` §4 on Metal) was declined for the reason the stack is four languages at all.
+
 ## 5. Adding to the stack
 
 - A new **database**: schema as committed `.sql` next to its owner, `IF NOT EXISTS` throughout, `PRAGMA foreign_keys = ON`, a header comment carrying the argument for the table's existence, a `<None … CopyToOutputDirectory="PreserveNewest">` item in the owning `.csproj` (it propagates transitively through `ProjectReference`; no consumer needs its own), and a new `.gitignore` line for the `.db`.

@@ -455,3 +455,65 @@ differently is one where the OR contributes a bit that is present either way. Re
 - **Eight-bit colour images** (§5.1) and **spans past the image's width** (§5.4), unchanged.
 - **Speed.** Still unmeasured for textures. The texture memory ring is the thing to watch: eight kilobytes a
   snapshot, and a game that loads a texture between every primitive would upload one per primitive.
+
+## 9. Phase 3's real exit: three recorded frames (2026-09-21)
+
+The plan's exit for phase 3 is "recorded display lists of the three probe games identical for a frame each". Those
+recordings already exist, from `rdprecord` in the speed tooling: one frame each of Super Mario 64, Ocarina of Time
+and Wave Race 64, with the machine state from before it. They need a commercial ROM, so the harness that replays
+them lives in the probe (`~/.cache/emusen/probe/mars-speed/rdpgpu/`) and not in the suite, as `rdpbench` does.
+`rdpgpu <rom> <state> <dplist> [scale]` builds two processors at the multiple exactly as `DpInterface.NewScaled`
+does, runs the frame's words through both, and compares the whole of the scaled memory and its hidden bits.
+
+| Frame | Words | 2× | 4× | Declined |
+|---|---|---|---|---|
+| Super Mario 64, frame 400 | 3,741 | **identical** | **identical** | none |
+| Wave Race 64, frame 301 | 15,013 | **identical** | **identical** | 6, all two-cycle |
+| Ocarina of Time, frame 302 | 5,186 | differs | differs | 144, all two-cycle |
+
+**The exit is met for two of the three games outright**, and the third fails for one reason only. Wave Race is
+identical *despite* six declined primitives, which means those six drew nothing the picture kept.
+
+### 9.1 The carry does not happen, and that redirects phase 4
+
+The reason to break the counter down by cause was to price the plan's §3 choice between recomputing a neighbouring
+pixel and drawing the affected primitives on the CPU. The answer is that **the choice does not need making yet**:
+across three frames of three games, the number of primitives declined for the combiner's carry is **zero**. Every
+declined primitive is in the **two-cycle mode**, which is a stage not yet ported rather than a carry that cannot be.
+
+This retires the assumption under §6.2's closing sentence. The carry is real and still unhandled, but it is not what
+stands between the device and these games; the two-cycle mode is. Phase 4 should therefore be read as "port the
+two-cycle mode", with the carry as a smaller question inside it, and the plan's two options priced when a game is
+found that needs them.
+
+### 9.2 What the frames cost, and where the time actually goes
+
+Medians of one run each, Release, at the two multiples, against a single CPU worker drawing the same frame at the
+same multiple:
+
+| Frame | Multiple | CPU, one worker | Host walk and record | Device shading | Readback of the whole memory |
+|---|---|---|---|---|---|
+| Super Mario 64 | 2× | 183 ms | 12.3 | **1.5** | 21.1 |
+| Ocarina of Time | 2× | 259 | 10.6 | **1.5** | 21.2 |
+| Wave Race 64 | 2× | 250 | 14.1 | **1.8** | 20.6 |
+| Super Mario 64 | 4× | 317 | 12.2 | **3.3** | 77.7 |
+| Ocarina of Time | 4× | 642 | 11.5 | **2.0** | 78.9 |
+| Wave Race 64 | 4× | 351 | 14.2 | **3.9** | 80.3 |
+
+**The shading is no longer the cost of anything.** One to four milliseconds a frame, against 183 to 642 on a single
+CPU worker: two orders of magnitude, and far past the plan's condition. What remains is two things that are not the
+rasteriser.
+
+**The host's walk is now the larger half.** Ten to fourteen milliseconds, and it does not change with the multiple,
+because the walker's step is divided by the multiple and the span count is what grows. It is the same `Walk` the CPU
+path runs, plus writing 72 words a primitive and 32 a row. That is ordinary C# and is where the next work is.
+
+**The readback here is an artefact of the measurement, not of the design.** The harness reads the entire scaled
+memory — sixteen megabytes at two, sixty-four at four — because it compares every byte. A frontend reads the
+picture, which at two is six hundred kilobytes. The figure is still worth keeping as an upper bound on what a
+readback costs: about 1.3 gigabytes a second on this card, so the picture alone would be under half a millisecond.
+
+**What this does not measure.** One frame each, one run each, no threading on the CPU side, and the state was
+restored before each. The CPU column is a single worker, not the four the CPU path would use; divide by four for a
+fair bound and the device is still fifty times faster at shading. Nothing here is a frame rate: the machine's own
+thread (`Mars_Performance.md` §37) is untouched by any of it.

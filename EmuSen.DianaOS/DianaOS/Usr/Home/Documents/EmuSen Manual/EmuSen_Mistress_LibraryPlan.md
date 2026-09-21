@@ -44,11 +44,12 @@ for the database, and this is that candidate arriving.
 
 ## 2. The one idea worth taking outright
 
-**Identification strategy as shipped data, not code.** OpenVGDB carries a `systems` table keyed by OpenEmu's own
-system identifier, whose columns tell the *client* how to identify a file for that system: `systemhashless` (match
-the filename, for arcade), `systemheader` (match a header string), `systemserial` (match a serial), and
-`systemheadersizebytes` (how many bytes to skip before hashing). OpenEmu's own code carries no per-console hashing
-special case; the policy is in the dataset.
+**Identification strategy as shipped data, not code.** OpenVGDB carries a `SYSTEMS` table keyed by OpenEmu's own
+system identifier, whose columns tell the *client* how to identify a file for that system: `systemHashless` (match
+the filename, for arcade), `systemHeader` (match a header string), `systemSerial` (match a serial), and
+`systemHeaderSizeBytes` (how many bytes to skip before hashing). The client asks the dataset which of the four to
+use and then does it; OpenEmu's own code carries no per-console hashing special case. The whole database is four
+tables — `ROMs`, `RELEASES`, `SYSTEMS`, `REGIONS` — and that first idea is the only part of it this plan wants.
 
 That is exactly the shape EmuSen wants, because the alternative is a `switch` on console in the frontend, and this
 project has spent a lot of effort keeping console knowledge inside cores. The rule generalises even if the dataset
@@ -86,18 +87,34 @@ files around the copy. EmuSen's working rule is that **the ROM library is read a
 moves the user's files is the opposite of that rule, and no part of this plan needs it: a catalogue keyed by path
 and hash gets every benefit of the organised tree without touching it.
 
-**Do not build a network metadata fetch without asking.** OpenVGDB is fetched from GitHub releases, and cover art
-is an HTTP download of a URL out of that database. Three problems, in order of weight: its provenance is
-undocumented — the repository has no licence file and its GitHub licence field is null, and whether its hashes
-derive from No-Intro, TOSEC or Redump is unstated; it turns a local, offline emulator into one that talks to the
-network about which games a person owns, which is a decision for the user and not for this plan; and the fetch
-would be a new dependency in a project that has been careful about those. **Stage 4 is local art on purpose.** If a
-fetch is ever wanted, it should be off by default, one explicit action, and clear about what it sends.
+**Do not build a network metadata fetch without settling the licence first.** OpenVGDB is one SQLite file fetched
+from GitHub releases, and cover art is an HTTP download of a URL out of it. Four findings, and the first is close
+to disqualifying:
 
-**Do not copy the metadata model.** It is thinner than it looks: title, description, cover, a user star rating,
-play count, last played, play time, serial, header and MD5. There is **no developer, publisher, year, player count
-or region** — the `Genre`, `Credit` and `Contributor` entities exist in the schema and appear never to be populated,
-since the lookup does not select them. Region *is* fetched, used only to break a tie between matching rows, and then
+- **It has no licence.** No licence file, a twenty-eight byte README whose entire content is the project's own
+  name, an empty wiki, and a `license` field of null. Its issue #43, "License?", was opened in September 2024 by
+  someone asking whether they could use it in a GPL application, and has never been answered. Using it is a legal
+  judgement, not a settled permission, and for a project whose output is academic that judgement should be made
+  deliberately or not at all.
+- **The cover art is not its art.** The four cover columns hold **hotlinks to GameFAQs**
+  (`gamefaqs1.cbsistatic.com`). A frontend that caches them is redistributing someone else's scans. Two of the
+  releases exist only because GameFAQs moved its host and every link broke.
+- **It is frozen.** The newest release is v29.0, 11 November 2021. Anything dumped or renamed since is absent, and
+  when the image host moves again there will be no upstream fix.
+- **Provenance is per row, not per project.** There is a `romDumpSource` column; observed values include `Redump`,
+  the maintainer has said in an OpenEmu thread that No-Intro DATs are the source for cartridge systems, and one
+  release note credits a MAME 0.149 set for arcade. So the data is derived from the usual DAT projects without
+  saying so anywhere in the project itself.
+
+**Stage 4 is local art on purpose.** If a fetch is ever wanted it should be off by default, one explicit action,
+clear about what it sends, and preceded by a decision about the licence that this plan does not make.
+
+**Do not copy the metadata model.** What OpenEmu *keeps* is thinner than what it *could* keep: title, description,
+cover, a user star rating, play count, last played, play time, serial, header and MD5. There is no developer,
+publisher, year, player count or region, and the `Genre`, `Credit` and `Contributor` entities in its schema appear
+never to be populated. This is not because the data is unavailable — OpenVGDB's `RELEASES` table carries
+`releaseDeveloper`, `releasePublisher`, `releaseGenre`, `releaseDate` and three more cover columns, and OpenEmu's
+own query selects none of them. Region *is* fetched, used only to break a tie between matching rows, and then
 explicitly discarded. If EmuSen wants region it must get it elsewhere; Galaxia's catalogue already has a column for
 it, filled from the cartridge rather than from a database.
 
@@ -123,8 +140,9 @@ worth wanting — OpenVGDB — is the one whose licence is unstated.
 
 ## 6. Open questions
 
-- **OpenVGDB's licence, schema and provenance** are unresolved. If stage 7 is ever wanted, this is the first thing
-  to settle, and it may settle it negatively.
+- **OpenVGDB is settled, and settled badly**: unlicensed, unanswered on the question, frozen since 2021, and
+  hotlinking someone else's cover scans (§4). Stage 7 should be read as "probably not, and certainly not without a
+  decision taken on purpose". What survives from it is the idea in §2, which needs none of its data.
 - **Whether a grid is wanted at all.** Mistress's list shows a title and a console tag and is legible on a handheld
   at 24 points (§4.29). A grid of placeholders, which is what a library with no art would be, is worse than a list.
   Stage 4 is worth doing only if art is actually present, and so it should follow the user's own art folder rather

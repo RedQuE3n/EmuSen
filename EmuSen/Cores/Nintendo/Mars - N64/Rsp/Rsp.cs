@@ -179,9 +179,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             Broke = true;
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void Link() => Write(31, NextPc);
 
         // The target is read before the link is written, which is the only way they can be one register - see §2.1.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void LinkAndJump(int register, uint target)
         {
             uint jump = target & PcMask;
@@ -190,14 +192,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             NextPc = jump;
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void Jump(uint instruction) => NextPc = (instruction << 2) & PcMask;
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void BranchIf(bool taken, uint instruction)
         {
             if (taken) NextPc = (Pc + (Immediate(instruction) << 2)) & PcMask;
         }
 
         // An unaligned access is ordinary here: the bytes are taken in order and wrap - see §4.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private uint ReadData(uint address, int size)
         {
             uint value = 0;
@@ -206,6 +211,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             return value;
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void WriteData(uint address, uint value, int size)
         {
             for (int i = 0; i < size; i++)
@@ -220,12 +226,15 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(System.Runtime.CompilerServices.Unsafe.ReadUnaligned<uint>(
                 ref System.Runtime.CompilerServices.Unsafe.Add(ref System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(_imem), (nint)(pc & PcMask))));
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private uint Address(uint instruction) => (Read(Rs(instruction)) + Immediate(instruction)) & DataMask;
 
         // Every index is a five-bit field of the word, or 31, so the array's check would test what the mask made true - see Mars_Rsp.md §10.1.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private uint Read(int register) => System.Runtime.CompilerServices.Unsafe.Add(ref System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(Gpr), register);
 
         // Register zero is wired to zero here too, so a write to it is dropped rather than stored.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void Write(int register, uint value)
         {
             if (register != 0) System.Runtime.CompilerServices.Unsafe.Add(ref System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(Gpr), register) = value;

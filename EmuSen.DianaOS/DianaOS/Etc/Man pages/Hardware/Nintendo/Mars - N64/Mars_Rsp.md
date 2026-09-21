@@ -378,7 +378,9 @@ step — against an interpreted add-immediate at 3.6 and a vector AND at 5.3. Fo
 sixteen instructions share one call; a step at a time, the call costs more than the two switches it removes. One
 thing from it was worth knowing: inlining the handlers into the *interpreter's* dispatch as well makes that one
 method enormous and slow, so §12's attribute must stay off the path the interpreter takes. It does: the
-interpreter's `Execute` is not inlined into the step, and only emitted code names the handlers directly.
+interpreter's `Execute` is not inlined into the step, and only emitted code names the handlers directly. *(Corrected
+2026-09-21, §14: the disassembly of the step, `Cpu.RspRan`, shows `Execute` inlined into it, with the vector unit
+behind it, in 5,061 bytes; what this sentence describes is what §14's cold paths do for the blocks.)*
 
 **Route two: the processor run ahead of the CPU to its next event, and the CPU's ticks paid from the steps already
 run.** The pure instructions between two events touch nothing the CPU can see unless it reads the processor's
@@ -407,4 +409,55 @@ the scan-out off, the CPU's interpreted instructions 17 per cent of the thread, 
 entry 8 and software floating point 7, against the vector unit's 16 and the scalar half's 14. The next gains for
 Ocarina of Time's drawing frames are on that side: the coprocessor's arithmetic, a sixth of what reaches the
 interpreter's switch, and the register jumps, links and likely branches (`Mars_Recompiler.md` §16).
+
+## 14. The folding that the inliner undid, and the byte loads taken whole (2026-09-21)
+
+**Measured first, by the processor's own counters and a census** (600 frames of each of the three play states,
+instructions retired on the emulation thread by `perf_event_open`): 81, 73 and 81 per cent of the processor's steps
+already run in blocks in Super Mario 64, Ocarina of Time and Wave Race. But in those blocks **45, 53 and 46 per cent
+of the vector operations executed, and a third of the vector loads and stores, were still full calls** into the
+vector unit rather than §12's folded code. In the hottest block, of nineteen vector operations eight were folded and
+every one after them a call. The compiler stops inlining a method at about five hundred inlinees, and §12's folding
+inlines a handler, and everything the handler inlines, for every instruction of a block. Two things spent that
+allowance early: each vector operation's path for when the eight-lane unit is not the one in use inlined the whole
+unit a second time, and `TransferOperands` was never inlined, so a vector load or store kept its format switch. The
+sampler had also been filing the interpreted steps under the CPU: counted where they run, the processor is about
+42 per cent of Mario's emulation thread, not 28.
+
+**The changes, all exact by construction:**
+
+- A block longer than four instructions is compiled as methods of four, each with the compiler's allowance of its
+  own, called in order from the block's method. A branch whose slot begins the next method carries its flag across.
+- The fallback when the eight lanes are not in use goes through a method that is never inlined.
+- `TransferOperands` is inlined, and its scale is a nibble of a constant rather than an entry of an array, so a
+  block's word folds the format away.
+- The scalar half's small helpers (the register reads and writes, the address, the data reads and writes, the
+  branches, jumps and links) are marked for inlining.
+- **The byte, short, word and double loads and stores take whole lanes** when the element is even, the bytes do not
+  run past the register and the address does not wrap: one unaligned read, each pair of bytes exchanged, one write,
+  where the loop took each byte with two loads, a bounds check and a read-modify-write of half a lane. It is taken
+  on a little-endian host only, as the quad fast case is.
+
+Of the operations still called rather than folded, 45.5 per cent fell to 5.0 in Mario's blocks. Instructions retired
+on the emulation thread fell 17.9, 11.1 and 16.6 per cent in the three games, and the blocks' machine code grew from
+2.56 to 2.89 MB.
+
+**The time is less than the instructions**, as it should be read. `pacebench`, flat out, eaed28d against this, five
+rounds alternated, medians, every state hash the same: Mario at one ran at 354 per cent of full speed against 340,
+Wave Race at 285 against 259, Ocarina at 256 against 253. Ocarina's frames are bound by its CPU and the interface's
+waits more than by this processor. The golden probe was identical.
+
+**Tested.** `The_small_loads_and_stores_move_the_bytes_their_definition_moves_at_every_element` runs the four small
+formats, loading and storing, at every element and at the start, the middle and the end of data memory, against the
+definition byte by byte; three mutants (no exchange of the bytes, odd elements taken whole, a wrapping address taken
+whole) each fail it. The chunking, the cold path and the inlining change which code the compiler emits and nothing
+it computes, and the state hash over 600 frames of each game and the whole Mars suite hold them.
+
+**Measured and not kept:** marking the nineteen vector arithmetic helpers for inlining as well made the count worse,
+since it spent the allowance again; moving the program counter once a block instead of once an instruction, and
+delegates closed over nothing to avoid the shuffle thunk, each changed the count by under half a per cent; routing
+the interpreter's own vector cases through cold wrappers changed it by under one.
+
+**What this does not cover.** A fifth of the steps are still taken one at a time beside the CPU's own code (§13), and
+the entry to each block still compares its image against instruction memory.
 

@@ -18,6 +18,7 @@ namespace EmuSen.Mistress.Views
 
         private readonly AppSettings _settings;
         private readonly Dropdown _core = new() { Name = "CoreComboBox", HorizontalAlignment = HorizontalAlignment.Stretch };
+        private readonly LunaSwitch _bigScreen = new() { Name = "BigScreenSwitch", Label = "Start in big screen mode" };
         private readonly Dropdown _theme = new() { Name = "ThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
 
         // Parameterless constructor exists only for tooling - real code always uses the one below.
@@ -73,7 +74,20 @@ namespace EmuSen.Mistress.Views
                     Hint = "Colours and fonts for every window. Drop a theme file in the themes folder and it appears here; a change applies without a restart.",
                     Content = _theme,
                 },
+                new FieldRow
+                {
+                    Label = "Big Screen",
+                    Hint = "Start full screen with no menu bar and larger text, for a handheld or a television; a controller opens the menu with Start. Takes effect at the next start.",
+                    Content = _bigScreen,
+                },
                 Ui.Buttons(Ui.Button("Close", Close)).Margin(0, 12, 0, 0)).Margin(16);
+
+            _bigScreen.IsChecked = _settings.BigScreen;
+            _bigScreen.IsCheckedChanged += (_, _) =>
+            {
+                _settings.BigScreen = _bigScreen.IsChecked == true;
+                _settings.Save();
+            };
 
             // Fill restores a selection without reporting one, which is what the old spurious-event flag was for.
             _core.Fill(AvailableCores, AvailableCores.Contains(_settings.SelectedCore) ? _settings.SelectedCore : AvailableCores[0]);

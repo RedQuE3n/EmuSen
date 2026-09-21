@@ -707,6 +707,93 @@ frame intervals are owed, to three: a long stall is still forgotten rather than 
 holds 100.0 per cent. `FramePacerTests` holds both halves. What it does not do is make a drawing frame cheaper;
 the picture's cadence is still the game's.
 
+### 4.29 The interface steered from a pad, and the big screen
+
+*2026-09-21.* Until now a controller played the game and did nothing else: the library, the menus and every settings
+window wanted a keyboard or a pointer, which a handheld has neither of. The gamepad was not even polled unless a game
+was running. This section is the design that closes that, what was borrowed for it, and what it does not reach.
+
+**What was borrowed.** EmulationStation's button grammar, because it is the one a player of these machines already
+knows: the south button accepts and the east button goes back, Start opens the main menu, the shoulders move a page,
+the triggers go to the first and last entry, left and right change the system, and a footer names the buttons.
+OpenEmu contributed one idea rather than a layout: a menu laid *over* the running game that carries the save states,
+so that nothing a player wants mid-game needs the menu bar. OpenEmu's console sidebar and cover grid were not
+borrowed. The library here is a titled list with a console filter, there is no cover art to show, and a grid of
+identical tiles is a worse list.
+
+**The layers.** `GamepadManager` gained `IsRawPressed` and `RawAxis`, which read the physical pad and ignore the
+game's bindings: the interface must work on a pad whose bindings are wrong, since fixing them is one of the things it
+is for. `PadNavigator` turns what is held into presses. Every button presses once on the way down; the four
+directions and the two shoulders then repeat, after 400 ms and every 80 ms, and nothing else repeats, because a held
+accept that repeated would start a game and then answer its first prompt. It takes the time as an argument and owns no
+clock, which is what lets its tests state those numbers exactly. `MainWindow.Pad.cs` polls at about sixty times a
+second from a dispatcher timer of its own, so the pad is read whether or not a game is running, and routes each press
+to one of three places in a fixed order: another window if one is active, else the pad's menu if it is open, else the
+library if it is showing.
+
+**The mapping.**
+
+| Button | Library | Pad menu | Another window |
+|---|---|---|---|
+| D-pad, left stick | up and down move one title; left and right step the console filter, wrapping | up and down wrap; left and right change an entry that has a value | up and down move the focus (Tab and Shift+Tab), or the rows of a list, or an open dropdown; left and right step a closed dropdown |
+| South | start the game | choose | press the button, flip the switch, open or commit the dropdown |
+| East | back to a suspended game | close | close an open dropdown, else the window |
+| L1, R1 | ten titles | | previous and next tab |
+| L2, R2 | first and last title | | |
+| Start | open the menu | close | |
+| Guide, or Back and Start together | open the menu | | |
+
+**While a game is on screen the pad is the game's.** Only the chord reaches the interface: the guide button, or Back
+and Start held together. Start alone cannot open the menu there, because Start is a button every one of these
+consoles has. The guide button alone would not do either, since Steam takes it on a Deck, which is why the two-button
+chord exists. The menu pauses the game before it shows, the library's rule (§4.18), and resumes only what it paused:
+a game the player had already paused stays paused when the menu closes.
+
+**The press that closes a menu is not the game's.** The east button that dismisses the menu is, a sixtieth of a
+second later, still held, and to the game it is a button. `PollGamepad` therefore hears nothing while the menu is up,
+while another window is active, and afterwards until every button has been let go. `PadNavigator.Forget` is the same
+idea in the other direction, so the chord's own Start is not a press in the menu it opened.
+
+**Other windows are driven through their keys, not rewritten.** `PadWindowRouter` synthesises the key events a
+keyboard user would type, and sets a dropdown's index or a switch's state directly where a key would need the popup
+open. Every LunaP window is therefore reachable without knowing a pad exists, including ones not yet written. The
+cost is that it is only as good as the window's tab order. A window takes the pad only while it is the *active*
+window, so a debug window left open beside a game takes nothing from the game.
+
+**Big screen.** `AppSettings.BigScreen`, the `--bigscreen` argument, or `SteamDeck=1` in the environment, which a
+Deck's own session sets, starts the window full screen with the menu bar hidden and the library's text at 24 points.
+Everything the bar held that a player wants is in the pad's menu; the rest is a desktop session's business. It is
+read once, at start, because hiding and restoring the bar under a running game bought nothing worth the states it
+adds.
+
+**The menu's entries.** Over a game: Resume, Save State, Load State, State Slot, Speed, Reset, then the three
+settings windows, Full Screen, Game Library, Close Game and Exit. In the library the game's entries give way to a
+single "Back to" line when a game is suspended. State Slot and Speed are changed with left and right and do not
+close the menu; every other entry closes it first and then acts, so a window it opens is not opened behind it.
+
+**Coverage.** `PadNavigationTests`, twelve cases: the repeat timing to the millisecond, accept never repeating, the
+chord firing once, `Forget`; the library's moves and the clamp at either end; the console filter stepping and being
+saved; the menu pausing and resuming, and leaving a paused game paused; its wrap and its slot entry; and the graphics
+window driven end to end, tabs, focus walk, dropdown and switch. Four mutants were each caught by exactly one case:
+resuming unconditionally, letting accept repeat, dropping the synthesised Tab, and clamping instead of wrapping.
+
+**What it does not cover.**
+
+- *No test holds a real pad.* The cases enter at `OnPadCommand` and at `PadNavigator.Feed`. The mapping from SDL's
+  buttons to `UiButton`, the stick threshold of 0.55 and the release wait after a menu closes are read from a
+  physical pad that a headless run does not have, and are verified only by hand. A fake `GamepadManager` is the
+  harness extension that would close this.
+- *Text entry.* The search box and every path field still want a keyboard. On a Deck that is Steam's on-screen
+  keyboard; nothing here summons it.
+- *File pickers and the binding capture.* The system's file dialog is not an Avalonia window and the router cannot see
+  it. The controller-binding window can be walked and its capture started from the pad, but what the capture then
+  hears is that window's own business and was not changed.
+- *Menus of the menu bar.* A popup is its own top level (§4.24), and the router does not drive it. In big-screen mode
+  the bar is hidden, so this is a desktop-mode gap only.
+- *A defect the tests found on the way, fixed beside this work:* stepping the filter onto "SNES (Venus)" was saved as
+  such and read back as every console, because the legacy upgrade ran on every load rather than once. See
+  `EmuSen_Multicore.md` §10.3a.
+
 ### 4.22 Logging is redirected per ROM, and redirected unconditionally
 
 *2026-08-16, from the same comment-block move as §4.21. `EmuSen_Project_Overview_v2.md` describes what `CategorizedLogWriter` produces; this is why this frontend calls it the way it does.*

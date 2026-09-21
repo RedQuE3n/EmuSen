@@ -188,6 +188,7 @@ namespace EmuSen.Mistress.Views
                 _idleCursor?.Dispose();
                 _fileDrop?.Dispose();
                 _timer?.Stop();
+                _padTimer?.Stop();
                 StopEmulationThread();
                 _session?.SaveSram();
                 _gamepad.Dispose();
@@ -204,6 +205,7 @@ namespace EmuSen.Mistress.Views
 
             RefreshLibrary();
             BuildSaveSlotItems();
+            StartPadNavigation();
 
             // Tunnel, not bubbling, or focus navigation eats the arrows - see EmuSen_Settings_Reference.md §4.2.
             AddHandler(KeyDownEvent, (_, e) => SetButtonFromKey(e.Key, pressed: true, e), RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -283,6 +285,10 @@ namespace EmuSen.Mistress.Views
         private void PollGamepad()
         {
             _gamepad.Poll();
+
+            // A menu over the game, or the button that closed one, is not the game's - see §4.29.
+            if (PadBelongsToTheInterface()) return;
+
             foreach (PadButton button in Enum.GetValues<PadButton>())
             {
                 bool held = _gamepad.IsPressed(button);
@@ -928,9 +934,11 @@ namespace EmuSen.Mistress.Views
             // Otherwise a suspended game is unreachable from here - see EmuSen_Settings_Reference.md §4.18.
             bool suspended = _session is { IsRomLoaded: true };
             LibraryHintText.IsVisible = shownEntries.Count > 0 || suspended;
-            LibraryHintText.Text = suspended
-                ? $"Press {ExitToLibraryKeyName()} to return to {_currentDisplayName}."
-                : "Double-click a title, or press Enter, to start it.";
+            LibraryHintText.Text = _gamepad.IsConnected
+                ? PadLibraryHint()
+                : suspended
+                    ? $"Press {ExitToLibraryKeyName()} to return to {_currentDisplayName}."
+                    : "Double-click a title, or press Enter, to start it.";
 
             if (shownEntries.Count > 0)
             {

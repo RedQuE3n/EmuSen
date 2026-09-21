@@ -27,11 +27,12 @@ layout(push_constant) uniform Push
     uint depthWord;
 } push;
 
-const uint PRIMITIVE_WORDS = 72;
+const uint PRIMITIVE_WORDS = 80;
 const uint ROW_WORDS = 32;
 const uint TMEM_WORDS = 2048u;
 const uint TILE_WORDS = 32u;
 const uint KIND_ONE_CYCLE = 0;
+const uint KIND_TWO_CYCLE = 1;
 const uint KIND_FILL = 3;
 
 // Primitive record, as GpuRasteriser lays it out.
@@ -41,22 +42,24 @@ const uint P_K4 = 33, P_K5 = 34, P_PRIMITIVE_LOD = 35, P_PRIMITIVE_Z = 36, P_DEL
 const uint P_TEXTURE = 39;
 const uint P_STEPS = 40, P_SHADE_DX = 48, P_SHADE_DY = 52, P_DEPTH_DX = 56, P_DEPTH_DY = 57;
 const uint P_TMEM = 58, P_TILES = 59, P_TILE = 60, P_MAXLEVEL = 61, P_MINLEVEL = 62, P_K0 = 64;
+const uint P_COMBINE1 = 68, P_BLEND2 = 69, P_TEXEL_LEVEL = 70, P_DOWNSTEP = 72;
 
 const uint T_TEXEL0 = 1u << 0, T_TEXEL1 = 1u << 1, T_PERSPECTIVE = 1u << 2, T_SAMPLE_FOUR = 1u << 3, T_PALETTE = 1u << 4;
 const uint T_PALETTE_IA = 1u << 5, T_MID_TEXEL = 1u << 6, T_BILINEAR = 1u << 7, T_DETAIL = 1u << 8, T_SHARPEN = 1u << 9;
 const uint T_LOD = 1u << 10, T_CONVERT_ONE = 1u << 11, T_LOD_FRACTION = 1u << 12;
+const uint T_BILINEAR2 = 1u << 13;
 
 const uint ATTRIBUTE_S = 5u, ATTRIBUTE_T = 6u, ATTRIBUTE_W = 7u;
 
 const uint F_KEY = 1u << 0, F_COVERAGE_TIMES_ALPHA = 1u << 1, F_ALPHA_FROM_COVERAGE = 1u << 2, F_ALPHA_COMPARE = 1u << 3;
 const uint F_DITHER_ALPHA = 1u << 4, F_ANTIALIAS = 1u << 5, F_COLOR_ON_COVERAGE = 1u << 6, F_FORCE_BLEND = 1u << 7;
 const uint F_IMAGE_READ = 1u << 8, F_DEPTH_UPDATE = 1u << 9, F_DEPTH_COMPARE = 1u << 10, F_PRIMITIVE_DEPTH = 1u << 11;
-const uint F_SCISSOR_FIELD = 1u << 12, F_MAJOR_ON_LEFT = 1u << 13, F_DITHER = 1u << 14;
+const uint F_SCISSOR_FIELD = 1u << 12, F_MAJOR_ON_LEFT = 1u << 13, F_DITHER = 1u << 14, F_BLEND_SHIFTS = 1u << 15;
 
 // Row record.
 const uint R_PRIMITIVE = 0, R_Y = 1, R_LEFT = 2, R_RIGHT = 3, R_VALUES = 4, R_EDGE_LEFT = 12, R_EDGE_RIGHT = 16, R_INVALID = 20;
 const uint R_NEXT = 21, R_SPAN = 24;
-const uint S_NEXT_ROW_DRAWN = 1u << 0, S_LONG_SPAN = 1u << 1, S_MID_SPAN = 1u << 2, S_ONE_BEFORE_MID = 1u << 3;
+const uint S_NEXT_ROW_DRAWN = 1u << 0, S_LONG_SPAN = 1u << 1, S_MID_SPAN = 1u << 2, S_ONE_BEFORE_MID = 1u << 3, S_LENGTH_THREE = 1u << 4;
 
 const int MAGIC_SQUARE[16] = int[16](0, 6, 1, 7, 4, 2, 5, 3, 3, 5, 2, 4, 7, 1, 6, 0);
 const int BAYER[16] = int[16](0, 4, 1, 5, 4, 0, 5, 1, 3, 7, 2, 6, 7, 3, 6, 2);
@@ -66,6 +69,7 @@ uint rb;
 
 // What the stages share, as the C# keeps them in fields.
 ivec4 shade;
+ivec4 combined;
 ivec4 texel0;
 ivec4 texel1;
 int lodFraction;
@@ -306,7 +310,7 @@ int maskedCoordinate(int c, int mask, bool mirror, int mirrorBit)
 }
 
 // Rdp.PointTexel, after Rdp.Texel has shifted the coordinates and made them relative to the tile.
-ivec4 pointTexel(int s, int t, bool beyondS, bool beyondT, int tile)
+ivec4 pointTexel(int s, int t, bool beyondS, bool beyondT, int tile, bool bilinear)
 {
     s = clampedCoordinate(s, tileClampsS(tile), beyondS, tileClampLimitS(tile));
     t = clampedCoordinate(t, tileClampsT(tile), beyondT, tileClampLimitT(tile));
@@ -315,7 +319,7 @@ ivec4 pointTexel(int s, int t, bool beyondS, bool beyondT, int tile)
     if (tileMaskT(tile) != 0) t = maskedCoordinate(t, tileMaskT(tile), tileMirrorT(tile), tileMirrorBitT(tile));
 
     ivec4 texel = fetchTexel(s, t & 0xFF, tile);
-    return tflag(T_BILINEAR) ? texel : converted(texel, texel.b);
+    return bilinear ? texel : converted(texel, texel.b);
 }
 
 // Rdp.Wrapped: masked and mirrored as for one texel, and the step to the next.
@@ -373,7 +377,7 @@ ivec4 paletteColor(int entry, bool upperRg)
 }
 
 // Rdp.FourTexels without the second cycle's conversion, which the one-cycle mode never asks for.
-ivec4 fourTexels(int s, int t, bool beyondS, bool beyondT, int tile)
+ivec4 fourTexels(int s, int t, bool beyondS, bool beyondT, int tile, bool bilinear)
 {
     bool clampsS = tileClampsS(tile), clampsT = tileClampsT(tile);
     int sFraction = clampsS && (beyondS || (s & 0x10000) != 0) ? 0 : s & 0x1F;
@@ -440,7 +444,7 @@ ivec4 fourTexels(int s, int t, bool beyondS, bool beyondT, int tile)
         tx[1].ba = tx[2].ba; tx[2].ba = b;
     }
 
-    if (!tflag(T_BILINEAR)) return converted(upperRg ? tx[3] : tx[0], (upper ? tx[3] : tx[0]).b);
+    if (!bilinear) return converted(upperRg ? tx[3] : tx[0], (upper ? tx[3] : tx[0]).b);
 
     bool center = tflag(T_MID_TEXEL) && sFraction == 0x10 && tFraction == 0x10;
     bool centerRg = tflag(T_MID_TEXEL) && sFractionRg == 0x10 && tFraction == 0x10;
@@ -453,7 +457,7 @@ ivec4 fourTexels(int s, int t, bool beyondS, bool beyondT, int tile)
 }
 
 // Rdp.Texel: shifted and made relative to the tile's corner, then sampled at one texel, or at four when filtering or a palette asks.
-ivec4 texelAt(int s, int t, int tile)
+ivec4 texelAt(int s, int t, int tile, bool bilinear)
 {
     s = shiftedCoordinate(s, tileShiftS(tile));
     t = shiftedCoordinate(t, tileShiftT(tile));
@@ -462,7 +466,7 @@ ivec4 texelAt(int s, int t, int tile)
     s -= tileSL(tile) << 3;
     t -= tileTL(tile) << 3;
 
-    return tflag(T_SAMPLE_FOUR) || tflag(T_PALETTE) ? fourTexels(s, t, beyondS, beyondT, tile) : pointTexel(s, t, beyondS, beyondT, tile);
+    return tflag(T_SAMPLE_FOUR) || tflag(T_PALETTE) ? fourTexels(s, t, beyondS, beyondT, tile, bilinear) : pointTexel(s, t, beyondS, beyondT, tile, bilinear);
 }
 
 // Rdp.Divided.
@@ -584,20 +588,79 @@ int afterSpanTile(int s, int t, int w, int ds, int dt, int dw, bool nextRowDrawn
     return levelOfDetail(s + ds, t + dt, w + dw, s + (ds << 1), t + (dt << 1), w + (dw << 1), tile, maxLevel).x;
 }
 
+// Rdp.DownStep: a texture coordinate's step down one row, with its low fifteen bits cleared.
+int downStep(uint c) { return pint(P_DOWNSTEP + c); }
+
+// Rdp.TwoCycleLevelOfDetail: measured from the pixel itself, across to the next and down to the next row, for two tiles.
+ivec3 twoCycleLevelOfDetail(int s, int t, int w, int ds, int dt, int dw, int tile, int maxLevel)
+{
+    ivec2 c = dividedCoordinates(s, t, w);
+    ivec2 x = dividedCoordinates(s + ds, t + dt, w + dw);
+    ivec2 y = dividedCoordinates(s + downStep(0u), t + downStep(1u), w + downStep(2u));
+
+    bool overflow = ((c.x | c.y | x.x | x.y | y.x | y.y) & 0x60000) != 0;
+    int lod = 0;
+    if (!overflow)
+    {
+        lod = saturated(max(movement(c.x, x.x), movement(c.y, x.y)));
+        lod = saturated(max(lod, max(movement(c.x, y.x), movement(c.y, y.y))));
+    }
+
+    ivec4 signals = levelSignals(lod, overflow, maxLevel);
+    if (!tflag(T_LOD)) return ivec3(tile, (tile + 1) & 7, signals.w);
+
+    int level = signals.z != 0 ? maxLevel : signals.x;
+    bool magnify = signals.y != 0, distant = signals.z != 0;
+
+    if (!tflag(T_DETAIL))
+    {
+        int first = (tile + level) & 7;
+        return ivec3(first, (distant || (!tflag(T_SHARPEN) && magnify)) ? first : (first + 1) & 7, signals.w);
+    }
+
+    return ivec3((tile + level + (magnify ? 0 : 1)) & 7, (tile + level + ((!distant && !magnify) ? 2 : 1)) & 7, signals.w);
+}
+
+// Rdp.NextRowLevelOfDetail: past a row's end, the next row's first pixel measured down alone, and also across.
+ivec3 nextRowLevelOfDetail(int ds, int dt, int dw, int tile, int maxLevel)
+{
+    ivec3 r = rowStart();
+    ivec2 c = dividedCoordinates(r.x, r.y, r.z);
+    ivec2 y = dividedCoordinates(r.x + downStep(0u), r.y + downStep(1u), r.z + downStep(2u));
+
+    bool overflow = ((c.x | c.y | y.x | y.y) & 0x60000) != 0;
+    int lod = overflow ? 0 : saturated(max(movement(c.x, y.x), movement(c.y, y.y)));
+
+    ivec4 signals = levelSignals(lod, overflow, maxLevel);
+    if (!tflag(T_LOD)) return ivec3(tile, tile, signals.w);
+
+    int first = (tile + (signals.z != 0 ? maxLevel : signals.x) + ((tflag(T_DETAIL) && signals.y == 0) ? 1 : 0)) & 7;
+
+    ivec2 x = dividedCoordinates(r.x + ds, r.y + dt, r.z + dw);
+    overflow = overflow || ((x.x | x.y) & 0x60000) != 0;
+    if (!overflow) lod = saturated(max(lod, max(movement(c.x, x.x), movement(c.y, x.y))));
+
+    signals = levelSignals(lod, overflow, maxLevel);
+    int second = (tile + (signals.z != 0 ? maxLevel : signals.x) + ((tflag(T_DETAIL) && signals.y == 0) ? 1 : 0)) & 7;
+    return ivec3(first, second, signals.w);
+}
+
 // The inputs that read the previous pixel's result never reach here: the host keeps such primitives back - see §6.
-ivec4 colorA(int s) { return s == 1 ? texel0 : s == 2 ? texel1 : s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : s == 6 ? ivec4(0x100, 0x100, 0x100, 0) : ivec4(0); }
+ivec4 colorA(int s) { return s == 0 ? combined : s == 1 ? texel0 : s == 2 ? texel1 : s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : s == 6 ? ivec4(0x100, 0x100, 0x100, 0) : ivec4(0); }
 
 ivec4 colorB(int s)
 {
     if (s == 6) return pcolor(P_KEY_CENTER);
     if (s == 7) return ivec4(pint(P_K4), pint(P_K4), pint(P_K4), 0);
-    return s == 1 ? texel0 : s == 2 ? texel1 : s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : ivec4(0);
+    return s == 0 ? combined : s == 1 ? texel0 : s == 2 ? texel1 : s == 3 ? pcolor(P_PRIMITIVE) : s == 4 ? shade : s == 5 ? pcolor(P_ENVIRONMENT) : ivec4(0);
 }
 
 ivec4 colorC(int s)
 {
     switch (s)
     {
+        case 0: return combined;
+        case 7: return ivec4(combined.a);
         case 1: return texel0;
         case 2: return texel1;
         case 3: return pcolor(P_PRIMITIVE);
@@ -616,7 +679,7 @@ ivec4 colorC(int s)
     }
 }
 
-int alphaABD(int s) { return s == 1 ? texel0.a : s == 2 ? texel1.a : s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? 0x100 : 0; }
+int alphaABD(int s) { return s == 0 ? combined.a : s == 1 ? texel0.a : s == 2 ? texel1.a : s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? 0x100 : 0; }
 int alphaC(int s) { return s == 0 ? lodFraction : s == 1 ? texel0.a : s == 2 ? texel1.a : s == 3 ? pint(P_PRIMITIVE + 3u) : s == 4 ? shade.a : s == 5 ? pint(P_ENVIRONMENT + 3u) : s == 6 ? pint(P_PRIMITIVE_LOD) : 0; }
 
 int colorEquation(int a, int b, int c, int d) { return ((extend9(a) - extend9(b)) * signedMultiplier(c) + (extend9(d) << 8) + 0x80) & 0x1FFFF; }
@@ -630,21 +693,67 @@ int keyDistance(int channel, int width)
     return (width << 4) + value;
 }
 
+// Rdp.CombinerEquations for one cycle's packed selectors.
+ivec4 combinerEquations(int c)
+{
+    int sa = c & 0xF, sb = (c >> 4) & 0xF, sc = (c >> 8) & 0x1F, sd = (c >> 13) & 0x7;
+    ivec4 a = colorA(sa), b = colorB(sb), m = colorC(sc), d = colorA(sd);
+
+    return ivec4(
+        colorEquation(a.r, b.r, m.r, d.r),
+        colorEquation(a.g, b.g, m.g, d.g),
+        colorEquation(a.b, b.b, m.b, d.b),
+        alphaEquation(alphaABD((c >> 16) & 7), alphaABD((c >> 19) & 7), alphaC((c >> 22) & 7), alphaABD((c >> 25) & 7)));
+}
+
+// Rdp.CombineFirstCycle: the combined colour the second cycle reads, and the alpha the pixel's alpha compare tests.
+int combineFirstCycle(int ditherAlpha, int coverage)
+{
+    ivec4 e = combinerEquations(pint(P_COMBINE1));
+
+    int compareAlpha = 0;
+    if (flag(F_ALPHA_COMPARE))
+    {
+        compareAlpha = clamp9(e.a);
+        if (compareAlpha == 0xFF) compareAlpha = 0x100;
+
+        if (!flag(F_ALPHA_FROM_COVERAGE))
+        {
+            compareAlpha += ditherAlpha;
+            if ((compareAlpha & 0x100) != 0) compareAlpha = 0xFF;
+        }
+        else
+        {
+            compareAlpha = flag(F_COVERAGE_TIMES_ALPHA) ? (compareAlpha * coverage + 4) >> 3 : coverage << 5;
+            if (compareAlpha > 0xFF) compareAlpha = 0xFF;
+        }
+    }
+
+    combined = ivec4(e.r >> 8, e.g >> 8, e.b >> 8, e.a);
+
+    blenderShadeAlpha = shade.a + ditherAlpha;
+    if ((blenderShadeAlpha & 0x100) != 0) blenderShadeAlpha = 0xFF;
+
+    return compareAlpha;
+}
+
 // Rdp.CombineSecondCycle; returns the coverage it may have scaled.
 int combine(int ditherAlpha, int coverage)
 {
     int c = pint(P_COMBINE);
-    int sa = c & 0xF, sb = (c >> 4) & 0xF, sc = (c >> 8) & 0x1F, sd = (c >> 13) & 0x7;
-    ivec4 a = colorA(sa), b = colorB(sb), m = colorC(sc), d = colorA(sd);
+    ivec4 e = combinerEquations(c);
+    int red = e.r, green = e.g, blue = e.b, alpha = e.a;
 
-    int red = colorEquation(a.r, b.r, m.r, d.r), green = colorEquation(a.g, b.g, m.g, d.g), blue = colorEquation(a.b, b.b, m.b, d.b);
-    int alpha = alphaEquation(alphaABD((c >> 16) & 7), alphaABD((c >> 19) & 7), alphaC((c >> 22) & 7), alphaABD((c >> 25) & 7));
+    // This cycle's own result becomes COMBINED before the key reads its first input back, so a key whose first
+    // input is COMBINED passes through this cycle's colour, not the one before it - see Mars_Gpu.md §10.2.
+    combined = ivec4(red >> 8, green >> 8, blue >> 8, alpha);
 
     int keyAlpha = 0;
     if (flag(F_KEY))
     {
         keyAlpha = clamp(min(keyDistance(red, pint(P_KEY_WIDTH)), min(keyDistance(green, pint(P_KEY_WIDTH + 1u)), keyDistance(blue, pint(P_KEY_WIDTH + 2u)))), 0, 0xFF);
-        pixel = ivec4(clamp9(a.r), clamp9(a.g), clamp9(a.b), 0);
+        ivec4 through = colorA(c & 0xF);
+        pixel = ivec4(clamp9(through.r), clamp9(through.g), clamp9(through.b), 0);
     }
     else
     {
@@ -737,7 +846,8 @@ bool compareDepth(uint depth, int z, int deltaZ, int deltaZEncoded, int memoryCo
 {
     z &= 0x3FFFF;
     overflow = ((memoryCoverage + coverage) & 8) != 0;
-    bool shifts = ((pint(P_BLEND) >> 6) & 3) == 1;
+    // Which cycle's second alpha decides this is the two-cycle mode's last blend, not its first - see Mars_Gpu.md §10.1.
+    bool shifts = flag(F_BLEND_SHIFTS);
 
     if (!flag(F_DEPTH_COMPARE))
     {
@@ -809,43 +919,46 @@ int dithered(int value, int dither)
     return dither < (value & 7) ? raised : value;
 }
 
-// Rdp.Blend with BlendEquation inside it.
-ivec3 blendPixel(int ditherColor, bool blend, bool overflow)
+// Rdp.BlendEquation: weighted by the two alphas in eighths, then divided by their sum unless told not to.
+ivec3 blendEquation(int selectors, ivec4 source, bool divide, int shiftA, int shiftB)
 {
-    int selectors = pint(P_BLEND);
-    int firstColor = selectors & 3, firstAlphaSelector = (selectors >> 2) & 3, secondColor = (selectors >> 4) & 3, secondAlphaSelector = (selectors >> 6) & 3;
+    int firstColor = selectors & 3, firstAlphaSelector = (selectors >> 2) & 3;
+    int secondColor = (selectors >> 4) & 3, secondAlphaSelector = (selectors >> 6) & 3;
+
+    int firstAlpha = firstAlphaSelector == 0 ? pixel.a : firstAlphaSelector == 1 ? pint(P_FOG + 3u) : firstAlphaSelector == 2 ? blenderShadeAlpha : 0;
+    int secondAlpha = secondAlphaSelector == 0 ? ~firstAlpha & 0xFF : secondAlphaSelector == 1 ? memoryColor.a : secondAlphaSelector == 2 ? 0xFF : 0;
+
+    int first = firstAlpha >> 3, second = secondAlpha >> 3;
+    if (secondAlphaSelector == 1)
+    {
+        first = (first >> shiftA) & 0x3C;
+        second = (second >> shiftB) | 3;
+    }
+
+    ivec3 sum = blendInput(firstColor, source) * first + blendInput(secondColor, source) * (second + 1);
+
+    if (!divide) return (sum >> 5) & 0xFF;
+
+    int divisor = (((first & ~3) + (second & ~3) + 4) >> 2) & 0xF;
+    return ivec3(blendQuotient(divisor, (sum.r >> 2) & 0x7FF), blendQuotient(divisor, (sum.g >> 2) & 0x7FF), blendQuotient(divisor, (sum.b >> 2) & 0x7FF));
+}
+
+// Rdp.Blend: blend, pass the first input through, or take the second, then dither.
+ivec3 blendCycle(int selectors, ivec4 source, int ditherColor, bool blend, bool overflow, int shiftA, int shiftB)
+{
+    int firstColor = selectors & 3, firstAlphaSelector = (selectors >> 2) & 3;
+    int secondColor = (selectors >> 4) & 3, secondAlphaSelector = (selectors >> 6) & 3;
     ivec3 result;
 
     if (!flag(F_COLOR_ON_COVERAGE) || overflow)
     {
         bool opaque = firstAlphaSelector == 0 && secondAlphaSelector == 0 && pixel.a >= 0xFF;
-
-        if (!blend || opaque) result = blendInput(firstColor, pixel);
-        else
-        {
-            int firstAlpha = firstAlphaSelector == 0 ? pixel.a : firstAlphaSelector == 1 ? pint(P_FOG + 3u) : firstAlphaSelector == 2 ? blenderShadeAlpha : 0;
-            int secondAlpha = secondAlphaSelector == 0 ? ~firstAlpha & 0xFF : secondAlphaSelector == 1 ? memoryColor.a : secondAlphaSelector == 2 ? 0xFF : 0;
-
-            int first = firstAlpha >> 3, second = secondAlpha >> 3;
-            if (secondAlphaSelector == 1)
-            {
-                first = (first >> blendShiftA) & 0x3C;
-                second = (second >> blendShiftB) | 3;
-            }
-
-            ivec3 sum = blendInput(firstColor, pixel) * first + blendInput(secondColor, pixel) * (second + 1);
-
-            if (flag(F_FORCE_BLEND)) result = (sum >> 5) & 0xFF;
-            else
-            {
-                int divisor = (((first & ~3) + (second & ~3) + 4) >> 2) & 0xF;
-                result = ivec3(blendQuotient(divisor, (sum.r >> 2) & 0x7FF), blendQuotient(divisor, (sum.g >> 2) & 0x7FF), blendQuotient(divisor, (sum.b >> 2) & 0x7FF));
-            }
-        }
+        if (!blend || opaque) result = blendInput(firstColor, source);
+        else result = blendEquation(selectors, source, !flag(F_FORCE_BLEND), shiftA, shiftB);
     }
     else
     {
-        result = blendInput(secondColor, pixel);
+        result = blendInput(secondColor, source);
     }
 
     int rgbDither = pint(P_MODES) & 3;
@@ -869,6 +982,44 @@ int finalCoverage(bool blend, int coverage, int memoryCoverage)
         return (sum & 8) != 0 ? 7 : sum & 7;
     }
     return destination == 1 ? (coverage + memoryCoverage) & 7 : destination == 2 ? 7 : memoryCoverage;
+}
+
+// Rdp.FirstCycles' texel half: both texels through the two cycles, the first alone, or neither.
+void twoCycleTexels(int vs, int vt, int vw, int ds, int dt, int dw, bool beyond, bool nextRowDrawn, int length, int tile, int maxLevel)
+{
+    int level = pint(P_TEXEL_LEVEL);
+    if (level >= 3) return;
+
+    if (level <= 1)
+    {
+        // Past a long enough row's end, when both texels are read through the second cycle, the second is the next row's first.
+        if (beyond && level == 0 && nextRowDrawn && length >= 3)
+        {
+            ivec3 pick = nextRowLevelOfDetail(ds, dt, dw, tile, maxLevel);
+            lodFraction = pick.z;
+
+            ivec2 st = textureCoordinates(vs, vt, vw);
+            texel0 = texelAt(st.x, st.y, pick.x, tflag(T_BILINEAR));
+
+            ivec3 r = rowStart();
+            ivec2 next = textureCoordinates(r.x, r.y, r.z);
+            texel1 = texelAt(next.x, next.y, pick.y, tflag(T_BILINEAR));
+            return;
+        }
+
+        ivec3 pick = twoCycleLevelOfDetail(vs, vt, vw, ds, dt, dw, tile, maxLevel);
+        lodFraction = pick.z;
+
+        ivec2 st = textureCoordinates(vs, vt, vw);
+        texel0 = texelAt(st.x, st.y, pick.x, tflag(T_BILINEAR));
+        texel1 = texelAt(st.x, st.y, pick.y, tflag(T_BILINEAR2));
+        return;
+    }
+
+    ivec3 pick = twoCycleLevelOfDetail(vs, vt, vw, ds, dt, dw, tile, maxLevel);
+    lodFraction = pick.z;
+    ivec2 st = textureCoordinates(vs, vt, vw);
+    texel0 = texelAt(st.x, st.y, pick.x, tflag(T_BILINEAR));
 }
 
 void main()
@@ -941,6 +1092,94 @@ void main()
         }
 
         texture_ = primitives[pb + P_TEXTURE];
+
+        // Rdp.DrawTwoCycle for one pixel. Its two cycles are pipelined: this pixel's first run before its
+        // predecessor's last blend, so that blend reads the NEXT pixel's shade alpha - see Mars_Gpu.md §10.
+        if (kind == KIND_TWO_CYCLE)
+        {
+            tmemBase = primitives[pb + P_TMEM] * TMEM_WORDS;
+            tileBase = primitives[pb + P_TILES] * TILE_WORDS;
+            int tile = pint(P_TILE), maxLevel = pint(P_MAXLEVEL);
+
+            uint span = rows[rb + R_SPAN];
+            bool nextRowDrawn = (span & S_NEXT_ROW_DRAWN) != 0u;
+            int length = (span & S_LENGTH_THREE) != 0u ? 3 : 0;
+            int last = right - left;
+            int direction = flag(F_MAJOR_ON_LEFT) ? 1 : -1;
+
+            int vs = int(rows[rb + R_VALUES + ATTRIBUTE_S]) + pint(P_STEPS + ATTRIBUTE_S) * n;
+            int vt = int(rows[rb + R_VALUES + ATTRIBUTE_T]) + pint(P_STEPS + ATTRIBUTE_T) * n;
+            int vw = int(rows[rb + R_VALUES + ATTRIBUTE_W]) + pint(P_STEPS + ATTRIBUTE_W) * n;
+            int ds = pint(P_STEPS + ATTRIBUTE_S), dt = pint(P_STEPS + ATTRIBUTE_T), dw = pint(P_STEPS + ATTRIBUTE_W);
+
+            twoCycleTexels(vs, vt, vw, ds, dt, dw, false, nextRowDrawn, length, tile, maxLevel);
+            int compareAlpha = combineFirstCycle(ditherAlpha, coverage);
+
+            // The second cycle reads the second texel as texel 0 and the first as texel 1.
+            ivec4 swapped = texel0;
+            texel0 = texel1;
+            texel1 = swapped;
+            coverage = combine(ditherAlpha, coverage);
+
+            int memoryCoverage = readMemory(word, first, second);
+            bool blend, overflow;
+            if (!compareDepth(depth, z, pint(P_DELTA_Z), pint(P_DELTA_Z_ENCODED), memoryCoverage, coverage, blend, overflow)) continue;
+            if (flag(F_ANTIALIAS) ? coverage == 0 : !coverageBit) continue;
+
+            // The first blend is never divided; a primitive whose first cycle weighs memory alpha is declined, so its shifts are zero.
+            ivec3 blended = blendEquation(pint(P_BLEND), pixel, false, 0, 0);
+
+            // The next pixel's shade alpha, which is the one thing its first cycles change that this pixel's last blend reads.
+            int nextX = x + direction;
+            int nextMask = n < last ? coverageMask(nextX, left, right) : 0;
+            int nextValue = int(rows[rb + R_VALUES + 3u]) + pint(P_STEPS + 3u) * (n + 1);
+            int nextShade = correctShade(nextValue >> 14, pint(P_SHADE_DX + 3u), pint(P_SHADE_DY + 3u), coverageOffset(nextMask), bitCount(nextMask));
+
+            int nextDitherAlpha = 0;
+            if (flag(F_DITHER))
+            {
+                int index = (((y >> (flag(F_SCISSOR_FIELD) ? 1 : 0)) & 3) << 2) | (nextX & 3);
+                int modes = pint(P_MODES);
+                int rgb = modes & 3, alphaMode = (modes >> 2) & 3;
+                int pattern = (rgb == 0 || rgb == 2) ? MAGIC_SQUARE[index] : BAYER[index];
+                nextDitherAlpha = alphaMode == 0 ? pattern : alphaMode == 1 ? ~pattern & 7 : 0;
+            }
+
+            blenderShadeAlpha = nextShade + nextDitherAlpha;
+            if ((blenderShadeAlpha & 0x100) != 0) blenderShadeAlpha = 0xFF;
+
+            if (flag(F_ALPHA_COMPARE) && compareAlpha < (flag(F_DITHER_ALPHA) ? 0 : pint(P_BLEND_COLOR + 3u))) continue;
+
+            ivec3 twoColor = blendCycle(pint(P_BLEND2), ivec4(blended, 0), ditherColor, blend, overflow, blendShiftA, blendShiftB) & 0xFF;
+
+            int twoStored = finalCoverage(blend, coverage, memoryCoverage);
+            int twoModes = pint(P_MODES);
+            if (((twoModes >> 8) & 3) == 2)
+            {
+                int packed;
+                if (((twoModes >> 10) & 7) == 0) packed = ((twoColor.r & ~7) << 8) | ((twoColor.g & ~7) << 3) | ((twoColor.b & ~7) >> 2);
+                else { packed = (twoColor.r << 8) | (twoStored << 5); twoStored = 0; }
+
+                first = uint((packed | (twoStored >> 2)) & 0xFFFF) | uint(twoStored & 3) << 16;
+                touched = true;
+            }
+            else if (word + 1u < push.memoryWords)
+            {
+                first = uint((twoColor.r << 8) | twoColor.g) | uint((twoColor.g & 1) * 3) << 16;
+                second = uint((twoColor.b << 8) | ((twoStored << 5) & 0xFF));
+                touched = true;
+            }
+
+            if (flag(F_DEPTH_UPDATE))
+            {
+                int deltaZEncoded = pint(P_DELTA_Z_ENCODED);
+                depth = uint((compressDepth(z & 0x3FFFF) | (deltaZEncoded >> 2)) & 0xFFFF) | uint(deltaZEncoded & 3) << 16;
+                depthTouched = true;
+            }
+
+            continue;
+        }
+
         if (tflag(T_TEXEL0 | T_TEXEL1 | T_LOD_FRACTION))
         {
             tmemBase = primitives[pb + P_TMEM] * TMEM_WORDS;
@@ -969,7 +1208,7 @@ void main()
             if (tflag(T_TEXEL0 | T_TEXEL1))
             {
                 ivec2 st = textureCoordinates(vs, vt, vw);
-                texel0 = texelAt(st.x, st.y, levelTile);
+                texel0 = texelAt(st.x, st.y, levelTile, tflag(T_BILINEAR));
 
                 if (tflag(T_TEXEL1))
                 {
@@ -982,7 +1221,7 @@ void main()
                     // The next pixel's texel of a long span's last pixel is the next row's first - see Mars_RdpTextures.md §6.
                     ivec3 r = rowStart();
                     st = (n == last && longSpan && nextRowDrawn) ? textureCoordinates(r.x, r.y, r.z) : textureCoordinates(vs + ds, vt + dt, vw + dw);
-                    texel1 = texelAt(st.x, st.y, nextTile);
+                    texel1 = texelAt(st.x, st.y, nextTile, tflag(T_BILINEAR));
                 }
             }
         }
@@ -996,7 +1235,7 @@ void main()
         if (flag(F_ALPHA_COMPARE) && pixel.a < (flag(F_DITHER_ALPHA) ? 0 : pint(P_BLEND_COLOR + 3u))) continue;
         if (flag(F_ANTIALIAS) ? coverage == 0 : !coverageBit) continue;
 
-        ivec3 color = blendPixel(ditherColor, blend, overflow) & 0xFF;
+        ivec3 color = blendCycle(pint(P_BLEND), pixel, ditherColor, blend, overflow, blendShiftA, blendShiftB) & 0xFF;
 
         // Rdp.WriteMemory, sixteen and thirty-two bits.
         int stored = finalCoverage(blend, coverage, memoryCoverage);

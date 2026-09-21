@@ -135,17 +135,47 @@ namespace EmuSen.WiseMan.Cores
             return (0x3CUL << 56) | (high << 32) | low;
         }
 
+        // Two cycles with selectors of their own. The first must not read the combiner's own previous result, which is
+        // the pixel before it; the second's is this pixel's first cycle, so it may and should, and a scene that never
+        // does leaves the whole handover between the cycles untested.
+        private static ulong TwoCycleCombine(ref uint s)
+        {
+            int a1 = Pick(ref s, 1, 2, 3, 4, 5, 6, 7), b1 = Pick(ref s, 1, 2, 3, 4, 5, 7);
+            int c1 = Pick(ref s, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 31), d1 = Pick(ref s, 1, 2, 3, 4, 5, 6, 7);
+            int aa1 = Pick(ref s, 1, 2, 3, 4, 5, 6, 7), ab1 = Pick(ref s, 1, 2, 3, 4, 5, 7);
+            int ac1 = Pick(ref s, 0, 1, 2, 3, 4, 5, 6, 7), ad1 = Pick(ref s, 1, 2, 3, 4, 5, 6, 7);
+
+            int a2 = Pick(ref s, 0, 1, 2, 3, 4, 5, 6, 7), b2 = Pick(ref s, 0, 1, 2, 3, 4, 5, 7);
+            int c2 = Pick(ref s, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 31), d2 = Pick(ref s, 0, 1, 2, 3, 4, 5, 6, 7);
+            int aa2 = Pick(ref s, 0, 1, 2, 3, 4, 5, 6, 7), ab2 = Pick(ref s, 0, 1, 2, 3, 4, 5, 7);
+            int ac2 = Pick(ref s, 0, 1, 2, 3, 4, 5, 6, 7), ad2 = Pick(ref s, 0, 1, 2, 3, 4, 5, 6, 7);
+
+            ulong high = (ulong)((a1 << 20) | (c1 << 15) | (aa1 << 12) | (ac1 << 9) | (a2 << 5) | c2);
+            ulong low = unchecked((uint)((b1 << 28) | (b2 << 24) | (aa2 << 21) | (ac2 << 18) | (d1 << 15)
+                | (ab1 << 12) | (ad1 << 9) | (d2 << 6) | (ab2 << 3) | ad2));
+            return (0x3CUL << 56) | (high << 32) | low;
+        }
+
         // The one-cycle mode with everything below the cycle type a seed's: dithers, key, the first blend's four selectors, and the sixteen low bits whole.
-        private static ulong OneCycleModes(ref uint s)
+        private static ulong OneCycleModes(ref uint s, bool twoCycle = false)
         {
             ulong modes = (0x2FUL << 56) | ((ulong)(Next(ref s) & 3) << 38) | ((ulong)(Next(ref s) & 3) << 36);
             if (Next(ref s) % 3 == 0) modes |= 1UL << 40;
-            modes |= (ulong)(Next(ref s) & 3) << 30 | (ulong)(Next(ref s) & 3) << 26 | (ulong)(Next(ref s) & 3) << 22 | (ulong)(Next(ref s) & 3) << 18;
+
+            // The first blend cycle's second alpha must not be memory alpha: that weighs it by the previous pixel's
+            // stored depth slope, which is a carry the device declines. The second cycle's may be, and should be.
+            ulong firstSecondAlpha = twoCycle ? (ulong)Pick(ref s, 0, 2, 3) : Next(ref s) & 3;
+            modes |= (ulong)(Next(ref s) & 3) << 30 | (ulong)(Next(ref s) & 3) << 26 | (ulong)(Next(ref s) & 3) << 22 | firstSecondAlpha << 18;
+
+            if (twoCycle)
+                modes |= (1UL << 52) | ((ulong)(Next(ref s) & 3) << 28) | ((ulong)(Next(ref s) & 3) << 24)
+                    | ((ulong)(Next(ref s) & 3) << 20) | ((ulong)(Next(ref s) & 3) << 16);
+
             return modes | (Next(ref s) & 0x7FFF);
         }
 
         // Depth cleared by filling it as a colour image, the picture cleared, then triangles over and past the image, each under modes, colours and a combiner of its own.
-        private static ulong[] Shaded(uint seed, int size, bool keyed = false)
+        private static ulong[] Shaded(uint seed, int size, bool keyed = false, bool twoCycle = false)
         {
             uint s = seed;
             var list = new List<ulong>
@@ -159,8 +189,8 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 72; i++)
             {
                 // Keyed: shade times a scalar sweeps the key's narrow window, and a forced blend by the pixel's alpha carries the key's alpha into the picture - see Mars_Gpu.md §6.4.
-                list.Add(keyed ? (0x2FUL << 56) | ((ulong)(Next(ref s) & 3) << 38) | (1UL << 40) | (1UL << 22) | (1UL << 14) : OneCycleModes(ref s));
-                list.Add(keyed ? KeyedCombine(Pick(ref s, 10, 12, 15)) : Combine(ref s));
+                list.Add(keyed ? (0x2FUL << 56) | ((ulong)(Next(ref s) & 3) << 38) | (1UL << 40) | (1UL << 22) | (1UL << 14) : OneCycleModes(ref s, twoCycle));
+                list.Add(keyed ? KeyedCombine(Pick(ref s, 10, 12, 15)) : twoCycle ? TwoCycleCombine(ref s) : Combine(ref s));
                 foreach (int id in new[] { 0x38, 0x39, 0x3A, 0x3B, 0x2C, 0x2E })
                     list.Add(((ulong)id << 56) | ((ulong)(Next(ref s) & 0xFF_FFFF) << 32) | ((ulong)Next(ref s) << 8) | (Next(ref s) & 0xFF));
 
@@ -260,7 +290,7 @@ namespace EmuSen.WiseMan.Cores
             Enumerable.Range(0, 5).SelectMany(f => Enumerable.Range(0, 4).Select(z => (f, z))).ToArray();
 
         // A tile loaded from a sixteen-bit image and then read under a format and size of its own, and triangles over it.
-        private static ulong[] Textured(uint seed, int mode)
+        private static ulong[] Textured(uint seed, int mode, bool twoCycle = false)
         {
             uint s = seed;
             var list = new List<ulong>
@@ -293,13 +323,17 @@ namespace EmuSen.WiseMan.Cores
 
                 // The clean list drops the depth and alpha tests, so that a divided coordinate reaches the picture at every pixel it covers rather than at a few.
                 ulong low = mode == 1 ? Next(ref s) & 0x7FEE : Next(ref s) & 0x7FFF;
-                list.Add((0x2FUL << 56) | ((ulong)(Next(ref s) & 3) << 38) | ((ulong)(Next(ref s) & 3) << 36)
+                ulong cycles = twoCycle
+                    ? (1UL << 52) | ((ulong)(Next(ref s) & 3) << 28) | ((ulong)(Next(ref s) & 3) << 24) | ((ulong)(Next(ref s) & 3) << 20) | ((ulong)(Next(ref s) & 3) << 16)
+                    : 0;
+                list.Add(cycles | (0x2FUL << 56) | ((ulong)(Next(ref s) & 3) << 38) | ((ulong)(Next(ref s) & 3) << 36)
                     | (mode == 0 ? 0 : 1UL << 51) | ((ulong)(Next(ref s) & 1) << 43)
                     | ((ulong)(Next(ref s) & 1) << 45) | ((ulong)(Next(ref s) & 1) << 47) | ((ulong)(Next(ref s) & 1) << 46) | ((ulong)(Next(ref s) & 1) << 44)
                     | ((ulong)(Next(ref s) & 1) << 48) | ((ulong)(Next(ref s) & 1) << 49) | ((ulong)(Next(ref s) & 1) << 50)
-                    | ((ulong)(Next(ref s) & 3) << 30) | ((ulong)(Next(ref s) & 3) << 26) | ((ulong)(Next(ref s) & 3) << 22) | ((ulong)(Next(ref s) & 3) << 18)
+                    | ((ulong)(Next(ref s) & 3) << 30) | ((ulong)(Next(ref s) & 3) << 26) | ((ulong)(Next(ref s) & 3) << 22)
+                    | ((ulong)(twoCycle ? Pick(ref s, 0, 2, 3) : (int)(Next(ref s) & 3)) << 18)
                     | low);
-                list.Add(TexturedCombine(ref s));
+                list.Add(twoCycle ? TwoCycleCombine(ref s) : TexturedCombine(ref s));
                 foreach (int id in new[] { 0x38, 0x39, 0x3A, 0x3B, 0x2C, 0x2E })
                     list.Add(((ulong)id << 56) | ((ulong)(Next(ref s) & 0xFF_FFFF) << 32) | ((ulong)Next(ref s) << 8) | (Next(ref s) & 0xFF));
 
@@ -570,11 +604,16 @@ namespace EmuSen.WiseMan.Cores
             if (gpu is null) { _output.WriteLine($"not run: {report}"); return; }
 
             // No perspective, the divider in its ordinary range, and the divider at its edges: a w of zero, below zero, and past what it can answer.
-            foreach ((uint seed, int mode) in new[] { (0x0BAD_F00Du, 0), (0x1234_ABCDu, 1), (0x5EED_1234u, 2), (0x2468_ACE0u, 1) })
+            foreach ((uint seed, int mode, bool twoCycle) in new[]
+            {
+                (0x0BAD_F00Du, 0, false), (0x1234_ABCDu, 1, false), (0x5EED_1234u, 2, false), (0x2468_ACE0u, 1, false),
+                (0x0FED_CBA9u, 0, true), (0x7531_ECA8u, 1, true), (0xFACE_B00Cu, 2, true),
+            })
             {
                 gpu.Clear();
-                ulong[] list = Textured(seed, mode);
-                AssertIdentical(OnTheCpu(list, scale), OnTheDevice(gpu, list, scale), $"seed {seed:X8}, mode {mode}, at {scale}x on {device.Name}");
+                ulong[] list = Textured(seed, mode, twoCycle);
+                AssertIdentical(OnTheCpu(list, scale), OnTheDevice(gpu, list, scale),
+                    $"seed {seed:X8}, mode {mode}, {(twoCycle ? "two" : "one")} cycle, at {scale}x on {device.Name}");
             }
 
             Assert.Equal(0, gpu.PrimitivesNotShaded);
@@ -591,11 +630,17 @@ namespace EmuSen.WiseMan.Cores
             using GpuRasteriser? gpu = GpuRasteriser.TryCreate(device, (long)new MemoryBus().Rdram.Length * scale * scale, out report);
             if (gpu is null) { _output.WriteLine($"not run: {report}"); return; }
 
-            foreach ((uint seed, int size, bool keyed) in new[] { (0x1111_2222u, 2, false), (0x3333_4444u, 3, false), (0x5555_6666u, 2, false), (0x7777_8888u, 2, true), (0x9999_AAAAu, 3, true) })
+            foreach ((uint seed, int size, bool keyed, bool twoCycle) in new[]
+            {
+                (0x1111_2222u, 2, false, false), (0x3333_4444u, 3, false, false), (0x5555_6666u, 2, false, false),
+                (0x7777_8888u, 2, true, false), (0x9999_AAAAu, 3, true, false),
+                (0xBBBB_CCCCu, 2, false, true), (0xDDDD_EEEEu, 3, false, true), (0x1357_9BDFu, 2, false, true),
+            })
             {
                 gpu.Clear();
-                ulong[] list = Shaded(seed, size, keyed);
-                AssertIdentical(OnTheCpu(list, scale), OnTheDevice(gpu, list, scale), $"seed {seed:X8}, {(size == 2 ? 16 : 32)}-bit, at {scale}x on {device.Name}");
+                ulong[] list = Shaded(seed, size, keyed, twoCycle);
+                AssertIdentical(OnTheCpu(list, scale), OnTheDevice(gpu, list, scale),
+                    $"seed {seed:X8}, {(size == 2 ? 16 : 32)}-bit, {(twoCycle ? "two" : "one")} cycle, at {scale}x on {device.Name}");
             }
 
             Assert.Equal(0, gpu.PrimitivesNotShaded);

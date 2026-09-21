@@ -27,6 +27,14 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
             uint funct = instruction & 0x3F;
 
+            // The three commonest single operations on the host where its answer is the software unit's; delivered the same way, flags and enables included - see Mars_FpuMath.md §11.
+            if (!wide && funct <= 0x02 && mode == SoftFloatMath.RoundNearest && HostSingle.Enabled
+                && HostSingle.TryCompute(funct, (uint)left, (uint)right, out ulong hostBits, out uint hostFlags))
+            {
+                Deliver(FloatResult.Raised(hostBits, hostFlags), Fd(instruction), false);
+                return;
+            }
+
             // The sign operations never round, but they do classify, and a move does neither - see §5.1.
             switch (funct)
             {

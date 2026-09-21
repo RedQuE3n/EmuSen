@@ -950,3 +950,44 @@ select, the Dam's briefing and the level's opening.
 **What it does not cover.** Loads and stores through the TLB still call the interpreter (§16 inlines only direct
 addresses), and a mapped block that would cross its page is interpreted rather than split.
 
+## 18. A round on the compiler: what the census named, what each was worth, and two things bounded before they were built
+
+*2026-09-20.* With the loads inline (§16) and mapped code in blocks (§17), the census was taken again, on Ocarina
+of Time in play and on GoldenEye into its first level. A quarter of busy instructions still reach the
+interpreter's switch in both: 26 and 27 per cent. Of that traffic the jumps and links are 18 per cent, the likely
+branches 12 to 17, the coprocessor's arithmetic 27 in Ocarina of Time and 12 in GoldenEye, its conversions and
+branch another 10 or so; the rest are instructions the interpreter runs for blocks still cold.
+
+**The jumps, the links and the likely branches compiled.** A jump leaves its target in the next counter — the
+slot's address with its low twenty-eight bits replaced — and a branch pending, as `Branch` does; a link writes the
+address after the slot first; a register jump reads its target before the link is written, since they may be one
+register. While a debugger's call stack is listening, which is the only thing `JumpAndLink` and `JumpRegister` do
+besides that, the interpreter's call is kept: the link forms test `CallObserver` and a jump through `ra` tests
+`ReturnObserver`, at run time. A likely branch compares as its plain twin (the opcode less its likely bit, the
+register-immediate pair two on) and, not taken, annuls its slot as `NullifyDelaySlot` does — the counters past the
+slot and nothing pending — which sends the block out by the exit it already had. The state hash after 1,200 frames
+is unchanged in three games. Three mutants: a link one word short and a likely branch that runs its slot were
+caught by tests already there; a register jump reading its target after its link was written was caught by
+nothing, and `A_register_call_whose_link_is_its_own_register_leaves_the_machine_the_interpreter_leaves` is the test
+written for it. **What it was worth was inside the noise**, and the arithmetic says why: nine per cent of busy
+instructions made about five nanoseconds cheaper is a third of a millisecond in a drawing frame of twenty.
+
+**Single-precision arithmetic on the host** (`Mars_FpuMath.md` §11) is the change that showed: with both changes on
+against both off, four rounds interleaved, Ocarina of Time's mean frame 9.25 to 9.00 milliseconds and its drawing
+frames 21.49 to 20.84; Super Mario 64 one per cent.
+
+**Bounded first and not built: batching the counters.** Every compiled instruction adds its cycles to the bus and
+one to the instruction count in memory, and tests the stop. The pending counts are compile-time constants along a
+straight line, so they could be kept out of memory and flushed before anything that can observe them; the design
+is long and every exit of a block takes part in it. A prototype that moves both counters once at a block's head —
+inexact, and so an upper bound — was switched on in the same build: **1.7 per cent of Ocarina of Time's mean frame
+and 0.6 of Super Mario 64's.** Not built.
+
+**Where a busy instruction's time is, after all this.** Blocks average 6.9 instructions in Ocarina of Time and 5.0
+in GoldenEye, so a drawing frame enters a block a hundred thousand times. By an interrupt sample the dispatcher's
+entry is 8.5 per cent of the thread, the largest single item on the CPU's side and about what all the block bodies
+together cost; §9 and §12 measured extension, density and chaining against exactly this and kept none, finding the
+cost to be memory and not dispatch, and nothing here contradicts them. Software floating point was the other 8.5,
+and is what §11 of `Mars_FpuMath.md` went after. What this round says about method is what the day's other rounds
+said: a census counts instructions and a sample counts time, and only a bound measured in the games says what a
+change is worth before it is built.

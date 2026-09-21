@@ -712,6 +712,34 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(1UL, compiled.Gpr[11]);
         }
 
+        // A call through a register that is also its link register, two hundred times: the target is read before the link is written, or the call lands on its own return address - see Mars_Recompiler.md §18.
+        [Fact]
+        public void A_register_call_whose_link_is_its_own_register_leaves_the_machine_the_interpreter_leaves()
+        {
+            const int T8 = 24, T9 = 25;
+            var (interpreted, compiled) = Pair(a => a
+                .Lui(T8, 0x8000)
+                .Ori(T8, T8, 0x002C)
+                .Addiu(T1, Zero, 200)
+                .Addu(T9, T8, Zero)
+                .Word(0x0320_C809)
+                .Nop()
+                .Addiu(T0, T0, 1)
+                .Bne(T0, T1, -5)
+                .Nop()
+                .Beq(Zero, Zero, -1)
+                .Nop()
+                .Addiu(T2, T2, 1)
+                .Jr(T9)
+                .Nop());
+
+            AssertSame(interpreted, compiled, 3 + 120 * 9);
+            Assert.True(compiled.BlocksCompiled >= 1, "nothing compiled, so the test compared nothing");
+            AssertSame(interpreted, compiled, 80 * 9 + 40);
+
+            Assert.Equal(200UL, compiled.Gpr[T2]);
+        }
+
         // A likely branch inside a loop, nullifying its slot every other iteration - see Mars_Recompiler.md §10.
         [Fact]
         public void A_likely_branch_inside_a_loop_leaves_the_machine_the_interpreter_leaves()

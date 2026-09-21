@@ -12,9 +12,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
     // What each word is to a block, and where a block starting at an address has to end - see Mars_Recompiler.md §2.1.
     internal static class BlockShape
     {
-        public static Block Shape(uint physical, byte[] rdram)
+        public static Block Shape(uint physical, byte[] rdram, bool withinPage = false)
         {
             int available = (rdram.Length - (int)physical) >> 2;
+            if (withinPage) available = Math.Min(available, (int)(0x1000 - (physical & 0xFFF)) >> 2);
             int limit = Math.Min(available, BlockCache.MaxLength);
 
             for (int i = 0; i < limit; i++)
@@ -42,6 +43,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
             bool toItself = branch == 0x1000_FFFF || ((branch >> 26) == 2 && ((branch & 0x03FF_FFFF) << 2) == (block.Physical & 0x0FFF_FFFF));
             if (!toItself || Word(rdram, block.Physical, 1) != 0) return block;
 
+            block.IdleAnywhere = branch == 0x1000_FFFF;
             block.IdleBranchCycles = Decode(branch).Cycles;
             block.IdleCycles = block.IdleBranchCycles + Decode(0).Cycles;
             return block;

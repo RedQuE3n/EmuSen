@@ -176,6 +176,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         public void Cop0Written()
         {
             _recheck = true;
+            ForgetFetchPage();
             RefreshMode();
             ScheduleTimer();
         }
@@ -303,6 +304,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
         private void WriteTlbEntry(int index)
         {
             ref TlbEntry entry = ref Tlb.Entries[index & 0x1F];
+            ForgetFetchPage();
 
             ulong pageMask = Tlb.PairedPageMask(Cop0[PageMaskRegister]);
             ulong global = Cop0[EntryLo0Register] & Cop0[EntryLo1Register] & Tlb.EntryLoGlobal;

@@ -14,6 +14,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
         // The cycles of one turn of a loop that does nothing but branch to itself, or zero - see Mars_Recompiler.md §15.
         public int IdleCycles, IdleBranchCycles;
 
+        // The branch form of the loop names no address, so it is the same loop wherever it is mapped - see §17.
+        public bool IdleAnywhere;
+
         public int Runs;
         public byte[]? Image;
         public BlockCode? Code;

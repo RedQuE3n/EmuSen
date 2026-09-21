@@ -22,8 +22,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         private void RecordForTheDevice((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
             GpuRasteriser gpu = _gpu!;
-            if (CycleType == CopyCycle) { gpu.NotShaded(GpuRasteriser.Declined.Copy); return; }
-            if (CycleType != FillCycle && !TheDeviceShadesThisPrimitive()) { gpu.NotShaded(GpuRasteriser.Declined.Carry); return; }
+            // A thirty-two-bit image in copy mode draws nothing on the CPU path either, so there is nothing to decline - see Mars_Rdp.md §11.
+            if (CycleType == CopyCycle && _colorImageSize == 3) return;
+            if (CycleType != FillCycle && CycleType != CopyCycle && !TheDeviceShadesThisPrimitive()) { gpu.NotShaded(GpuRasteriser.Declined.Carry); return; }
 
             gpu.Image(_colorImage & ~(uint)Math.Max(_colorImageBytes - 1, 0), _colorImageWidth, _colorImageBytes == 1 ? 0 : _colorImageBytes);
             gpu.DepthImage(_depthImage);
@@ -87,11 +88,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             if (!packed.IsEmpty) RecordTiles(packed);
             _textureMemoryChanged = _tilesChanged = false;
 
-            bool twoCycle = CycleType == TwoCycle;
+            bool twoCycle = CycleType == TwoCycle, copy = CycleType == CopyCycle;
             int texelLevel = twoCycle ? TwoCycleTexels(out _) : 3;
 
             Span<uint> p = gpu.Primitive(out int primitive);
-            p[0] = twoCycle ? 1u : 0u;
+            p[0] = copy ? 2u : twoCycle ? 1u : 0u;
             p[2] = Bit(0, KeyEnabled) | Bit(1, CoverageTimesAlpha) | Bit(2, AlphaFromCoverage) | Bit(3, AlphaCompare) | Bit(4, DitherAlpha)
                 | Bit(5, Antialias) | Bit(6, ColorOnCoverage) | Bit(7, ForceBlend) | Bit(8, ImageRead) | Bit(9, DepthUpdate) | Bit(10, DepthCompare)
                 | Bit(11, PrimitiveDepth) | Bit(12, _scissorField) | Bit(13, majorOnLeft) | Bit(14, ((RgbDither << 2) | AlphaDither) != 0xF)
@@ -154,7 +155,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
                 // The row's values at its first pixel, as DrawOneCycle steps them there from the major edge.
                 int clipped = majorOnLeft ? left - _spanMajorX[y] : _spanMajorX[y] - right;
                 if (!_scaled) clipped &= 0xFFF;
-                for (int c = 0; c < Attributes; c++) row[4 + c] = (uint)(_spanAttributes[y * Attributes + c] + steps[c] * clipped);
+
+                // The copy mode at a multiple starts each row from its major edge's values, unstepped - see Mars_Gpu.md §11.3.
+                int offset = copy ? 0 : clipped;
+                for (int c = 0; c < Attributes; c++) row[4 + c] = (uint)(_spanAttributes[y * Attributes + c] + steps[c] * offset);
 
                 int length = (right - left) + clipped;
                 bool nextRowDrawn = y + 1 <= rows.Last && _spanDrawn[y + 1];

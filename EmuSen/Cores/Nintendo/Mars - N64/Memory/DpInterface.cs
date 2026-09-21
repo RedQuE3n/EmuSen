@@ -52,6 +52,58 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         [EmuSen.Common.SkipInState] private byte[] _scaledHidden = Array.Empty<byte>();
         [EmuSen.Common.SkipInState] private Rdp.Rdp? _scaledProcessor;
 
+        // The compute device the multiple is shaded on, when one was asked for and one exists - see Mars_Gpu.md §11.
+        [EmuSen.Common.SkipInState] private Rdp.Gpu.GpuDevice? _device;
+        [EmuSen.Common.SkipInState] private Rdp.Gpu.GpuRasteriser? _gpu;
+        [EmuSen.Common.SkipInState] private bool _wantsGpu;
+
+        // What the setting asked for and what it got, which a frontend shows and a test reads. Not machine state:
+        // a device is a property of the host, and a state carried one string of it into the serializer's walk.
+        [EmuSen.Common.SkipInState] private string _gpuReport = "off";
+
+        public string GpuReport => _gpuReport;
+
+        public bool Gpu
+        {
+            get => _wantsGpu;
+            set
+            {
+                if (value == _wantsGpu) return;
+                Join();
+                StopWorkers();
+                _wantsGpu = value;
+                RebuildGpu();
+                if (_scale > 1) { _scaledProcessor = NewScaled(); }
+                StartWorkers();
+            }
+        }
+
+        // A device and a rasteriser for this multiple, or neither and the reason why - see §11.1.
+        private void RebuildGpu()
+        {
+            _gpu?.Dispose();
+            _gpu = null;
+            _device?.Dispose();
+            _device = null;
+
+            if (!_wantsGpu || _scale <= 1) { _gpuReport = _wantsGpu ? "off at one" : "off"; return; }
+
+            _device = Rdp.Gpu.GpuDevice.TryCreate(null, out string report);
+            if (_device is null) { _gpuReport = report; return; }
+
+            _gpu = Rdp.Gpu.GpuRasteriser.TryCreate(_device, _scaledRdram.Length, out report);
+            if (_gpu is null) { _device.Dispose(); _device = null; }
+            _gpuReport = report;
+        }
+
+        // Everything the device holds, read back into the shadow the scan-out walks - see §11.2.
+        public void ReadBackScaled(uint from, int count)
+        {
+            if (_gpu is null || count <= 0) return;
+            Join();
+            _gpu.Read(from, count, _scaledRdram, _scaledHidden);
+        }
+
         // The processors that share a list when more than one does, each on a thread of its own, the first being Processor - see §2.8.
         [EmuSen.Common.SkipInState] private Worker[] _workers = Array.Empty<Worker>();
         [EmuSen.Common.SkipInState] private int _workerCount = 1;
@@ -292,6 +344,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 _scale = scale;
                 _scaledRdram = scale > 1 ? new byte[_bus.Rdram.Length * scale * scale] : Array.Empty<byte>();
                 _scaledHidden = scale > 1 ? new byte[_bus.RdramHidden.Length * scale * scale] : Array.Empty<byte>();
+                RebuildGpu();
                 _scaledProcessor = scale > 1 ? NewScaled() : null;
                 StartWorkers();
             }
@@ -307,6 +360,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             get
             {
                 if (_scale == 1) return false;
+                if (_gpu is not null) return _scaledProcessor is { Drew: true };
                 if (_scaledProcessor is { Drew: true }) return true;
                 foreach (Worker worker in _workers) if (worker.Scaled is { Drew: true }) return true;
                 return false;
@@ -320,6 +374,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             scaled.DrawAt(_scale, _scaledRdram, _scaledHidden);
             scaled.CopyStateFrom(Processor);
             scaled.Rescale();
+            scaled.ShadeOn(_gpu);
             return scaled;
         }
 
@@ -332,8 +387,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             _scaledProcessor = NewScaled();
             foreach (Worker worker in _workers)
             {
-                worker.Scaled = NewScaled();
-                worker.Scaled.Configure(worker.Index, _workerCount);
+                if (_gpu is null)
+                {
+                    worker.Scaled = NewScaled();
+                    worker.Scaled.Configure(worker.Index, _workerCount);
+                }
             }
         }
 
@@ -381,7 +439,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 if (i > 0) processor.CopyStateFrom(Processor);
                 processor.Configure(i, _workerCount);
                 Worker worker = new(i, processor) { Completed = completed };
-                if (_scale > 1)
+                if (_scale > 1 && _gpu is null)
                 {
                     worker.Scaled = NewScaled();
                     worker.Scaled.Configure(i, _workerCount);
@@ -422,7 +480,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private void Assemble()
         {
             for (int i = 1; i < _workers.Length; i++) Processor.TakeScratchFrom(_workers[i].Processor);
-            if (_workers.Length > 0 && _workers[0].Scaled is { } leader) for (int i = 1; i < _workers.Length; i++) leader.TakeScratchFrom(_workers[i].Scaled!);
+            if (_workers.Length > 0 && _workers[0].Scaled is { } leader) for (int i = 1; i < _workers.Length; i++) if (_workers[i].Scaled is { } other) leader.TakeScratchFrom(other);
         }
 
         // The marks a writer tests, and the ones a reader tests, for the bus and the processor's direct paths - see §2.6.1.
@@ -750,7 +808,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         private void RunWorker(Worker w)
         {
             Rdp.Rdp p = w.Processor;
-            Rdp.Rdp? s = w.Scaled;
+            Rdp.Rdp? s = w.Scaled ?? (w.Index == 0 ? _scaledProcessor : null);
             long completed = w.Completed;
             bool inCommand = false;
             long runStart = System.Diagnostics.Stopwatch.GetTimestamp(), runFrom = completed;
@@ -762,7 +820,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                     if (Volatile.Read(ref _pauseRequested) != 0)
                     {
                         Stand(w, completed);
-                        s = w.Scaled;
+                        s = w.Scaled ?? (w.Index == 0 ? _scaledProcessor : null);
                     }
                     if (Volatile.Read(ref _stopping) != 0) return;
 
@@ -771,7 +829,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                         w.Words += completed - runFrom;
                         w.Ticks += System.Diagnostics.Stopwatch.GetTimestamp() - runStart;
                         Sleep(w, completed);
-                        s = w.Scaled;
+                        s = w.Scaled ?? (w.Index == 0 ? _scaledProcessor : null);
                         runStart = System.Diagnostics.Stopwatch.GetTimestamp();
                         runFrom = completed;
                         continue;

@@ -584,6 +584,79 @@ namespace EmuSen.WiseMan.Cores
             return (0x3CUL << 56) | (high << 32) | low;
         }
 
+        // Texture rectangles in copy mode, which is how a game blits: every format over a loaded tile, flipped and not,
+        // with the palette, the alpha test, perspective and the level of detail each on for some of them.
+        private static ulong[] Copied(uint seed)
+        {
+            uint s = seed;
+            var list = new List<ulong>
+            {
+                FillCycle,
+                ColorImage(Framebuffer, 2), Scissor(0, 0, Width * 4, Rows * 4), FillColor(0x2109_8421), FillRectangle(0, 0, Width * 4 - 4, Rows * 4 - 4),
+                (0x3DUL << 56) | (2UL << 51) | (63UL << 32) | TextureSource,
+                (0x35UL << 56) | (2UL << 51) | (0x100UL << 32) | (7UL << 24),
+                (0x30UL << 56) | (7UL << 24) | ((ulong)(255 << 2) << 12),
+            };
+
+            for (int i = 0; i < Formats.Length * 3; i++)
+            {
+                (int format, int size) = Formats[i % Formats.Length];
+
+                // Lines up to the field's nine bits, so that a line times a texel row passes the 0x1FF the fetch wraps it at.
+                int tile = i % 7, line = (i % 4) == 3 ? 0x40 + (int)(Next(ref s) % 0x1C0u) : 8 + i % 3;
+                uint wraps = Next(ref s);
+
+                list.Add((0x35UL << 56) | ((ulong)format << 53) | ((ulong)size << 51) | ((ulong)line << 41) | ((ulong)((i % 3) * 64) << 32)
+                    | ((ulong)tile << 24) | ((ulong)(Next(ref s) & 0xF) << 20) | ((wraps & 1) << 19) | ((wraps & 2) << 17)
+                    | ((ulong)(Next(ref s) % 11u) << 14) | ((ulong)(Next(ref s) % 16u) << 10)
+                    | ((wraps & 4) << 7) | ((wraps & 8) << 5) | ((ulong)(Next(ref s) % 11u) << 4) | (Next(ref s) % 16u));
+                list.Add((0x34UL << 56) | ((ulong)tile << 24) | ((31UL << 2) << 12) | (31UL << 2));
+
+                // Copy is cycle type two; the bits below it that copy mode reads are the alpha test, the palette, perspective and the level.
+                list.Add((0x2FUL << 56) | (2UL << 52) | (Next(ref s) & 1) | ((ulong)(Next(ref s) & 1) << 47) | ((ulong)(Next(ref s) & 1) << 46)
+                    | ((ulong)(Next(ref s) & 1) << 51) | ((ulong)(Next(ref s) & 1) << 48) | ((ulong)(Next(ref s) & 1) << 50) | ((ulong)(Next(ref s) & 1) << 49));
+                list.Add((0x3AUL << 56) | ((ulong)(Next(ref s) & 0xFF_FFFF) << 32) | ((ulong)Next(ref s) << 8) | (Next(ref s) & 0xFF));
+
+                int left = (int)(Next(ref s) % (Width * 4 - 200)), top = (int)(Next(ref s) % (Rows * 4 - 120));
+                int right = left + 16 + (int)(Next(ref s) % 180), bottom = top + 8 + (int)(Next(ref s) % 110);
+                ulong id = (i & 1) == 0 ? 0x24UL : 0x25UL;
+                list.Add((id << 56) | ((ulong)right << 44) | ((ulong)bottom << 32) | ((ulong)tile << 24) | ((ulong)left << 12) | (uint)top);
+
+                // s and t in 10.5, and their steps in 5.10: a copy steps four texels a pixel, and anything else is legal too.
+                // Coordinates over the whole of their sixteen bits for a third of them, which reaches texel rows far past the tile.
+                bool far = i % 3 == 1;
+                int sStart = (int)(Next(ref s) % (far ? 0x8000u : 1024u)), tStart = (int)(Next(ref s) % (far ? 0x8000u : 1024u));
+                int dsdx = (i % 3) switch { 0 => 4 << 10, 1 => 1 << 10, _ => (int)(Next(ref s) & 0x1FFF) };
+                int dtdy = (i % 3) == 2 ? (int)(Next(ref s) & 0x1FFF) : 1 << 10;
+                list.Add(((ulong)(uint)sStart << 48) | ((ulong)(uint)tStart << 32) | ((ulong)(ushort)dsdx << 16) | (ushort)dtdy);
+            }
+
+            list.Add(0x29UL << 56);
+            return list.ToArray();
+        }
+
+        [Theory]
+        [MemberData(nameof(DevicesAndScales))]
+        public void Copy_mode_rectangles_on_the_device_are_the_cpus_byte_for_byte(string deviceName, int scale)
+        {
+            if (deviceName.Length == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            using GpuDevice device = GpuDevice.TryCreate(deviceName, out string report) ?? throw new InvalidOperationException(report);
+            using GpuRasteriser? gpu = GpuRasteriser.TryCreate(device, (long)new MemoryBus().Rdram.Length * scale * scale, out report);
+            if (gpu is null) { _output.WriteLine($"not run: {report}"); return; }
+
+            foreach (uint seed in new[] { 0xC0B1_0001u, 0xC0B1_0002u, 0xC0B1_0003u })
+            {
+                gpu.Clear();
+                ulong[] list = Copied(seed);
+                var cpu = OnTheCpu(list, scale);
+                AssertIdentical(cpu, OnTheDevice(gpu, list, scale), $"seed {seed:X8} at {scale}x on {device.Name}");
+            }
+
+            Assert.Equal(0, gpu.PrimitivesNotShaded);
+            _output.WriteLine($"{device.Name} at {scale}x: {gpu.RowsShaded} rows in {gpu.Flushes} flushes");
+        }
+
         private static ulong TexelOnlyCombine()
         {
             // A and B are zero so C does not matter, and C must not be seven, which is the previous pixel's alpha.
@@ -663,6 +736,75 @@ namespace EmuSen.WiseMan.Cores
             }
 
             return list.ToArray();
+        }
+
+        // The device behind DpInterface, which is how a game reaches it: the same list through the interface with the
+        // device on and off must leave the same shadow memory, threaded or not - see Mars_Gpu.md §11.
+        [Theory]
+        [InlineData(2, 1)]
+        [InlineData(2, 3)]
+        [InlineData(3, 4)]
+        [InlineData(4, 1)]
+        public void The_interface_draws_the_multiple_on_the_device_as_it_does_on_the_cpu(int scale, int workers)
+        {
+            if (GpuDevice.DeviceNames().Count == 0) { _output.WriteLine("no Vulkan device: the CPU path's machine"); return; }
+
+            (byte[] Rdram, byte[] Hidden, string Report) Through(bool gpu)
+            {
+                var bus = new MemoryBus();
+                SeedTextureSource(bus);
+                bus.Dp.Scale = scale;
+                bus.Dp.Gpu = gpu;
+                if (workers > 1) { bus.Dp.Threaded = true; bus.Dp.Workers = workers; }
+
+                foreach (ulong[] list in new[] { Shaded(0x2222_7777, 2), Textured(0x3333_8888, 1), Shaded(0x4444_9999, 2, false, true) })
+                {
+                    for (int i = 0; i < list.Length; i++) bus.Write64(0x0010_0000 + (uint)i * 8, list[i]);
+                    bus.Write32(MemoryMap.DpCommandBase, 0x0010_0000);
+                    bus.Write32(MemoryMap.DpCommandBase + 4, 0x0010_0000 + (uint)list.Length * 8);
+                    bus.Dp.Join();
+                }
+
+                bus.Dp.ReadBackScaled(0, bus.Dp.ScaledRdram.Length);
+                Assert.True(bus.Dp.ScaledDrawn, "nothing was drawn at the multiple");
+                return (bus.Dp.ScaledRdram, bus.Dp.ScaledHidden, bus.Dp.GpuReport);
+            }
+
+            var cpu = Through(false);
+            var device = Through(true);
+
+            Assert.DoesNotContain("no Vulkan", device.Report);
+            int at = cpu.Rdram.AsSpan().CommonPrefixLength(device.Rdram);
+            if (at != cpu.Rdram.Length)
+                Assert.Fail($"{scale}x with {workers} workers on {device.Report}: byte {at:X} is {device.Rdram[at]:X2} on the device and {cpu.Rdram[at]:X2} on the CPU");
+            Assert.True(cpu.Hidden.AsSpan().SequenceEqual(device.Hidden), "the hidden bits differ");
+            _output.WriteLine($"{scale}x with {workers} workers on {device.Report}: identical");
+        }
+
+        // The setting's promise: at one it changes nothing, holds no device, and says so.
+        [Fact]
+        public void At_one_the_device_setting_changes_nothing_and_holds_no_device()
+        {
+            (byte[] Rdram, byte[] Hidden, string Report) Through(bool gpu)
+            {
+                var bus = new MemoryBus();
+                SeedTextureSource(bus);
+                bus.Dp.Gpu = gpu;
+
+                ulong[] list = Shaded(0x5151_0101, 2);
+                for (int i = 0; i < list.Length; i++) bus.Write64(0x0010_0000 + (uint)i * 8, list[i]);
+                bus.Write32(MemoryMap.DpCommandBase, 0x0010_0000);
+                bus.Write32(MemoryMap.DpCommandBase + 4, 0x0010_0000 + (uint)list.Length * 8);
+                bus.Dp.Join();
+                return (bus.Rdram, bus.RdramHidden, bus.Dp.GpuReport);
+            }
+
+            var off = Through(false);
+            var on = Through(true);
+
+            Assert.Equal("off at one", on.Report);
+            Assert.True(off.Rdram.AsSpan().SequenceEqual(on.Rdram), "the machine's own memory changed with the device setting at one");
+            Assert.True(off.Hidden.AsSpan().SequenceEqual(on.Hidden));
         }
 
         // Not a test of anything: the stop-or-go measurement of Mars_Gpu.md §6.5, run by hand with EMUSEN_MARS_GPU_BENCH=1.

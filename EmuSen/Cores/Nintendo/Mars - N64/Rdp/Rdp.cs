@@ -86,7 +86,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
         }
 
         // The native processor decides what draws alone; the scaled one follows it - see §11.
-        public void Follow(Rdp native) => _alone = native._alone;
+        // A processor shading on the device always draws alone, so it does not take the native one's split - see Mars_Gpu.md §11.
+        public void Follow(Rdp native) { if (_gpu is null) _alone = native._alone; }
 
         // After the state copied from the native processor, its images and scissor are the machine's and are taken to the multiple - see §11.
         public void Rescale()

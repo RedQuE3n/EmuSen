@@ -613,3 +613,156 @@ the mutant and the second defect of §10.2 in the same run.
 
 **Not covered:** the two declined cases above, copy mode, and everything §5.4 and §8.4 already list. And the games
 still only vouch for one frame each.
+
+## 11. Phase 5: the device behind the interface, and a game on it (2026-09-21)
+
+**The plan's exit was** Majora's Mask and the three probe games playing at two and four, and the probe at one still
+identical. Both are met. Four games — Super Mario 64, Ocarina of Time, Majora's Mask and Wave Race 64 — were run
+from boot through the whole machine with the device on and off, and every frame compared was byte for byte the same
+at two and at four with nothing declined. The probe at one passed unchanged.
+
+### 11.1 Where the device sits
+
+`DpInterface` owns the device. `Gpu` is a new property beside `Scale`; setting either rebuilds a `GpuDevice` and a
+`GpuRasteriser` for the multiple, or neither, with the reason in `GpuReport`. The machine's own processor is never
+the device's (the plan's §0): only the processor drawing at the multiple is given one, through `Rdp.ShadeOn`.
+
+**One processor at the multiple, not one a worker.** The CPU path gives every drawing thread a processor at the
+multiple, each shading its own rows. The device path has exactly one, because the device is the parallelism. It
+rides the **leading worker's** thread, which already sees every word in order, so nothing about the interface's
+threading, marks or barriers changed. `Rdp.Follow`, which hands a scaled processor its native one's split, is now a
+no-op for a processor on the device, since that one must always draw alone.
+
+**No device is the CPU path.** With no Vulkan, no matching device or a memory too large to bind, `_gpu` stays null
+and every line above falls through to what was there: a processor a worker, and `ScaledDrawn` as before. That
+fallback is tested only structurally — through the same interface test with the device off — because selecting
+"no device" in a test means an environment variable, and GPU tests run in parallel.
+
+**The setting** is `Gpu` in `MarsCore.Settings`, a switch, off by default. The graphics window builds its controls
+from the catalogue, so it appears there with no frontend change.
+
+### 11.2 The readback, and the path that skipped it
+
+The device's memory has to reach `_scaledRdram` before the scan-out walks it. The scan-out already knows exactly
+which bytes it will read (`ReachScaled`), so `DpInterface.ReadBackScaled(from, count)` joins the drawing and reads
+back just that range.
+
+It went first into `Vi.Capture`, the deferred path, and a real game then differed on two frames of three. The
+cause: **the scan-out has a second path.** `Vi.Scan` walks the live shadow directly, without a capture, and so
+never reached the readback; on that path the shadow held whatever the last deferred frame had left. Found by
+running Super Mario 64 through `framedump` with the device on and off and comparing the PPMs, then reading which
+branch of `Walk` chose its source. The readback is now in both.
+
+### 11.3 Copy mode
+
+Copy mode was put off in phase 1 because it fetches texels, and by phase 4 it was the last cycle type left. It
+turned out to be the first thing a game in play needed: Mario's frames were identical until frame 600, where 245
+copy-mode primitives were declined.
+
+At a multiple it reduces neatly. `Rdp.DrawCopyScaled` fetches a pixel's four texels exactly as the machine's copy
+does, and writes only the top one or two bytes. For a sixteen-bit image that is **the top half of the fetched
+sixty-four bits**, kept whole or not at all by the first texel's low bit. The port carries `CopyTexels`, with its
+bank rule, `Replicated`, `CopyPaletteIndex` and the YUV chroma step, in two 32-bit halves, since the shaders keep to
+32-bit integers for MoltenVK's sake (§4).
+
+One detail had to be matched rather than reasoned about: **the copy mode at a multiple starts each row from the
+major edge's values, not stepped to the first drawn pixel** as the one-cycle mode does. That is how the CPU path is
+written, and the device must equal the CPU path, so the host writes the row's values unstepped for this mode.
+
+**Coverage.** `Copy_mode_rectangles_on_the_device_are_the_cpus_byte_for_byte`: texture rectangles, flipped and not,
+over every format and size, with lines up to the field's nine bits and coordinates over their whole range for a
+third of them. Ten mutants; eight died.
+
+- **The line mask is provably redundant.** `CopyTexels` masks `line × t` to nine bits and then shifts left four and
+  masks to thirteen, which keeps nine anyway, and addition distributes over the mask. Removing it changes nothing
+  for any input.
+- **The bank rule for the second texel is believed equivalent at a multiple, not proven.** It redirects a texel to
+  an earlier one's word when both land in the same bank. At a multiple only the first two bytes are written, which
+  come from the first two texels, and in every case analysed — sizes of four and eight bits with and without a
+  wrapping mask — two adjacent texels either fall in different banks or in the same word. Mirrored wraps and YUV's
+  chroma step were not worked through. The machine's own copy path writes all four texels and is where the rule
+  does its work.
+
+### 11.4 A crash the save state found
+
+Adding `GpuReport` as a public auto-property crashed the test host with an access violation — in
+`MarsSaveStateTests`, far from anything to do with a device. The state serializer walks `DpInterface`'s fields, and
+an auto-property's backing field is a field it had never been told to skip. The fix is a `[SkipInState]` field, and
+the lesson is worth stating plainly because the failure pointed nowhere near its cause: **on a class the state walks,
+a new auto-property is new machine state unless it is said otherwise.**
+
+### 11.5 A crash found on the way, not caused by it
+
+At four, with deferred presentation, `pacebench` fails in the scan-out: *"The scan reached frame buffer address
+DA9400 outside the lines captured for it."* It fails with the device off as well, and it fails identically, at the
+same address, on `db4b74d`, a build from before any of this work. So it is a defect in `Vi.ReachScaled`'s capture
+of the memory at a multiple, present since that capture was written, and it is **reachable by a player**: deferred
+presentation is on by default, so an internal resolution of four crashes the emulator. Reading `Walk` and
+`ReachScaled` shows a reach that covers more lines than the walk fetches, so the two must disagree in a number
+reading did not find. Not fixed here; it is recorded so that it is not mistaken for the device's, and it is the
+first thing to do next.
+
+## 12. Phase 6: the measurement, and a criterion that was wrong about where the cost lived (2026-09-21)
+
+The plan set its decision in advance: *2× within five per cent of 1×'s frame rate and 4× at full speed on this
+machine, or the plan is recorded as not worth its dependency and retired.* By that sentence the device fails.
+The measurements say something more useful than that sentence does.
+
+### 12.1 What was measured
+
+`pacebench`, flat out, from three in-game states, the device off and on interleaved and the order alternated, three
+rounds each. The state hash was identical with the device on and off in every run, at every multiple: the machine
+never sees the device, which is the plan's first promise kept.
+
+| Game | Multiple | Mean, CPU | Mean, device | 90th pct, CPU | 90th pct, device | Full speed, CPU | Full speed, device |
+|---|---|---|---|---|---|---|---|
+| Super Mario 64 | 1× | 7.6 ms | 7.6 | 11.3 | 11.3 | 260% | 261% |
+| Super Mario 64 | 2× | 19.1 | **16.6** | 25.9 | **18.3** | 104% | **121%** |
+| Ocarina of Time | 2× | 27.9 | **20.2** | 48.5 | **31.9** | 71.7% | **98.6%** |
+| Wave Race 64 | 2× | 20.8 | **14.0** | 56.4 | **15.5** | 79.9% | **119%** |
+| Super Mario 64 | 4× | 77.6 | 66.4 | 118.0 | 76.3 | 25.8% | 30.1% |
+| Ocarina of Time | 4× | 153.2 | 123.9 | 237.0 | 141.7 | 13.1% | 16.1% |
+| Wave Race 64 | 4× | 67.5 | 55.2 | 137.8 | 68.6 | 24.7% | 30.2% |
+
+The 4× rows are through the immediate scan-out, because the deferred one crashes at four on every build (§11.5).
+
+**At two the device is plainly worth having.** Ocarina goes from visibly slow to full speed, and the worst frames
+improve most: Wave Race's ninetieth percentile falls from 56 milliseconds to 15.5.
+
+**At four it is worth twenty per cent,** and four stays nowhere near real time either way.
+
+### 12.2 Where four's time goes, measured rather than reasoned
+
+Phase 3 measured the device shading a frame at four in two to four milliseconds, so the device was not the
+bound. The same Mario state was run with the scan-out skipped (`SKIPRENDER=1`), which removes both the VI's walk and
+the readback that feeds it:
+
+| 4×, Super Mario 64 | CPU | Device |
+|---|---|---|
+| Scan-out on | 77.3 ms | 65.9 |
+| Scan-out skipped | 29.7 | **6.5** |
+
+**With the scan-out skipped, drawing at four costs the device path 6.5 milliseconds, the same as drawing at one.**
+The device has made drawing at a multiple free, which is exactly and only what the plan built it for. What four
+costs now is presentation: the CPU path spends about 47 milliseconds on its scan-out, of which the display
+processor wait is 18 and the VI's walk over sixteen times the pixels is the rest; the device path spends about 59,
+the same walk plus the readback of the picture and the join before it.
+
+### 12.3 The decision
+
+**The criterion conflated drawing with presentation.** It was written when the drawing was the cost, and it
+assumed that removing the drawing's cost would bring the frame to one's rate. The drawing's cost has been removed —
+6.5 milliseconds at four against 7.6 at one. What the criterion measures now is the VI scan-out and the readback,
+neither of which the plan's phases 0 to 5 touched.
+
+So the decision is not retirement. It is that **the device stays, and the next phase is the scan-out on the
+device**, which the plan already names as its phase 7 and which removes both remaining costs at once: a compute
+pass that walks the device's own memory into the finished picture needs no readback of that memory, only of the
+picture, and does the VI's per-pixel filtering where the pixels already are. The criterion is carried over to it
+unchanged, as the thing that phase must meet.
+
+**What this does not establish.** One state per game and three rounds, on one machine with a discrete card. The
+integrated adapter was not measured in a running game. Nothing here is the deferred path at four, which crashes.
+And the join inside the readback, which §11 suspected of putting the device path's single-threaded walk on the
+critical path, is not separated from the readback's own cost by these runs; the scan-out on the device would remove
+both, so it was not worth separating first.

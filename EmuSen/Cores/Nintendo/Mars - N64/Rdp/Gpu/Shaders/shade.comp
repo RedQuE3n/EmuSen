@@ -33,6 +33,7 @@ const uint TMEM_WORDS = 2048u;
 const uint TILE_WORDS = 32u;
 const uint KIND_ONE_CYCLE = 0;
 const uint KIND_TWO_CYCLE = 1;
+const uint KIND_COPY = 2;
 const uint KIND_FILL = 3;
 
 // Primitive record, as GpuRasteriser lays it out.
@@ -984,6 +985,96 @@ int finalCoverage(bool blend, int coverage, int memoryCoverage)
     return destination == 1 ? (coverage + memoryCoverage) & 7 : destination == 2 ? 7 : memoryCoverage;
 }
 
+// Rdp.CopyBankWord: four addresses reach four banks at once, so a texel whose bank an earlier one claimed reads that one's word.
+int copyBankWord(int addresses[4], int texel, int upperHalf)
+{
+    int bank = (addresses[texel] >> 2) & 3;
+    int first = 0;
+    while (((addresses[first] >> 2) & 3) != bank) first++;
+    return tmemWord(upperHalf | ((addresses[first] >> 2) & 0x3FF));
+}
+
+// Rdp.Replicated: a texel narrower than sixteen bits becomes one byte.
+int replicated(int word, int nibble, int size, int format, int palette)
+{
+    if (size == 0)
+    {
+        int value = (word >> ((nibble ^ 3) << 2)) & 0xF;
+        if (format == 2) return (palette << 4) | value;
+        if (format != 3) return (value << 4) | value;
+
+        int doubled = (value << 4) | value;
+        return (doubled & 0xE0) | ((doubled & 0xE0) >> 3) | ((doubled & 0xC0) >> 6);
+    }
+
+    if (size != 1) return (word >> 8) & 0xFF;
+
+    int at = ((nibble ^ 3) | 1) << 2;
+    if (format != 3) return (((word >> at) & 0xF) << 4) | ((word >> (at & ~4)) & 0xF);
+
+    int nib = (word >> at) & 0xF;
+    return (nib << 4) | nib;
+}
+
+// Rdp.CopyPaletteIndex.
+int copyPaletteIndex(int word, int nibble, int tile)
+{
+    if (tileSize(tile) == 0) return (tilePalette(tile) << 4) | ((word >> ((nibble ^ 3) << 2)) & 0xF);
+
+    int at = ((nibble & 2) ^ 2) << 2;
+    return ((at != 0 ? (word >> 12) & 0xF : (word >> 4) & 0xF) << 4) | ((word >> at) & 0xF);
+}
+
+// Rdp.CopyTexels as its sixty-four bits in two halves, since the port keeps to 32-bit integers - see Mars_Gpu.md §4.
+uvec2 copyTexels(int s, int t, int tile)
+{
+    s = (shiftedCoordinate(s, tileShiftS(tile)) - (tileSL(tile) << 3)) >> 5;
+    t = (shiftedCoordinate(t, tileShiftT(tile)) - (tileTL(tile) << 3)) >> 5;
+    if (tileMaskT(tile) != 0) t = maskedCoordinate(t, tileMaskT(tile), tileMirrorT(tile), tileMirrorBitT(tile));
+
+    int format = tileFormat(tile), tsize = tileSize(tile);
+    bool yuv = format == 1;
+    int stride = (yuv || tsize == 1) ? 2 : tsize >= 2 ? 4 : 1;
+    int start = ((((tileLine(tile) * t) & 0x1FF) + tileMemory(tile)) << 4) & 0x1FFF;
+
+    int along[4], upper[4], lower[4];
+    for (int k = 0; k < 4; k++)
+    {
+        int column = tileMaskS(tile) != 0 ? maskedCoordinate(s + k, tileMaskS(tile), tileMirrorS(tile), tileMirrorBitS(tile)) : s + k;
+        along[k] = (column * stride) & 0x1FFF;
+        upper[k] = (start + along[k]) & 0x1FFF;
+    }
+
+    // YUV reads its chroma from a further step along, in the lower half's read alone.
+    lower[0] = upper[0];
+    lower[2] = upper[2];
+    lower[1] = yuv ? (upper[0] + ((along[1] - along[0]) << 1)) & 0x1FFF : upper[1];
+    lower[3] = yuv ? (lower[1] + along[3] - along[0]) & 0x1FFF : upper[3];
+
+    if ((t & 1) != 0)
+        for (int k = 0; k < 4; k++) { upper[k] ^= 8; lower[k] ^= 8; }
+
+    bool palette = tflag(T_PALETTE);
+    int psize = palette ? 2 : tsize;
+    bool wide = !palette && (format == 1 || (format == 0 && tsize == 3));
+
+    int words[4];
+    for (int k = 0; k < 4; k++)
+    {
+        int word = copyBankWord(lower, k, 0);
+        if (palette) words[k] = tmemWord(0x400 | (copyPaletteIndex(word, lower[k] & 3, tile) << 2) | k);
+        else if (wide || (lower[k] & 0x1000) == 0) words[k] = word;
+        else words[k] = copyBankWord(upper, k, 0x400);
+    }
+
+    uint lo = (uint(words[2]) << 16) | uint(words[3] & 0xFFFF);
+    if (psize == 2) return uvec2((uint(words[0]) << 16) | uint(words[1] & 0xFFFF), lo);
+
+    uint hi = 0u;
+    for (int k = 0; k < 4; k++) hi = (hi << 8) | uint(replicated(words[k], lower[k] & 3, psize, format, tilePalette(tile)) & 0xFF);
+    return uvec2(hi, lo);
+}
+
 // Rdp.FirstCycles' texel half: both texels through the two cycles, the first alone, or neither.
 void twoCycleTexels(int vs, int vt, int vw, int ds, int dt, int dw, bool beyond, bool nextRowDrawn, int length, int tile, int maxLevel)
 {
@@ -1062,9 +1153,36 @@ void main()
             continue;
         }
 
-        // Rdp.DrawOneCycle for one pixel: the row's values at its first pixel, stepped to this one.
         flags = primitives[pb + P_FLAGS];
         int n = flag(F_MAJOR_ON_LEFT) ? x - left : right - x;
+
+        // Rdp.DrawCopyScaled for one pixel: its own texel, no combiner and no blender. The row's values here are the
+        // major edge's, not stepped to the first drawn pixel, which is how the CPU path at a multiple does it - see §11.3.
+        if (kind == KIND_COPY)
+        {
+            texture_ = primitives[pb + P_TEXTURE];
+            tmemBase = primitives[pb + P_TMEM] * TMEM_WORDS;
+            tileBase = primitives[pb + P_TILES] * TILE_WORDS;
+
+            int vs = int(rows[rb + R_VALUES + ATTRIBUTE_S]) + pint(P_STEPS + ATTRIBUTE_S) * n;
+            int vt = int(rows[rb + R_VALUES + ATTRIBUTE_T]) + pint(P_STEPS + ATTRIBUTE_T) * n;
+            int vw = int(rows[rb + R_VALUES + ATTRIBUTE_W]) + pint(P_STEPS + ATTRIBUTE_W) * n;
+            int ds = pint(P_STEPS + ATTRIBUTE_S), dt = pint(P_STEPS + ATTRIBUTE_T), dw = pint(P_STEPS + ATTRIBUTE_W);
+
+            ivec2 st = textureCoordinates(vs, vt, vw);
+            int from = levelOfDetail(vs + ds, vt + dt, vw + dw, vs + (ds << 1), vt + (dt << 1), vw + (dw << 1), pint(P_TILE), pint(P_MAXLEVEL)).x;
+            uvec2 texels = copyTexels(st.x, st.y, from);
+
+            // A sixteen-bit image takes the top two bytes, both kept or both not by the first texel's low bit.
+            uint value = texels.x >> 16;
+            if (flag(F_ALPHA_COMPARE) && (value & 1u) == 0u) continue;
+
+            first = value | ((value & 1u) * 3u) << 16;
+            touched = true;
+            continue;
+        }
+
+        // Rdp.DrawOneCycle for one pixel: the row's values at its first pixel, stepped to this one.
 
         int mask = coverageMask(x, left, right);
         int coverage = bitCount(mask);

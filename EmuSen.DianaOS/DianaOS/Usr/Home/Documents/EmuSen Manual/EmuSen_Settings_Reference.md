@@ -680,6 +680,14 @@ them. `A_tab_taller_than_the_window_scrolls_and_its_last_setting_can_be_reached`
 internal resolution, the antialiasing and the Expansion Pak had made untrue. The controller window has the same
 scroll viewer per tab but is laid out from markup, and was not examined.
 
+**Added, 2026-09-21: an eighth N64 setting, "Draw the multiple on the graphics card".** `MarsCore.Gpu`, a switch, off
+by default. With an internal resolution or antialiasing above one it shades the picture at the multiple on a Vulkan
+compute device instead of on the processor's own threads (`Mars_Gpu.md` §11). The window needed no change: it builds
+its rows from the catalogue, and the setting arrived as one more entry there. It does nothing at one, which
+`At_one_the_device_setting_changes_nothing_and_holds_no_device` holds, and nothing without Vulkan, where the CPU path
+draws as before. What the setting actually got — a device's name, or the sentence saying why there is none — is
+`MarsCore.GpuReport`, which the window does not yet show; that is the one frontend change still owed to it.
+
 ### 4.27 A fault leaves a report
 
 *2026-09-20.* A game stopped when its pause menu was opened, twice, and not a third time from a state saved just

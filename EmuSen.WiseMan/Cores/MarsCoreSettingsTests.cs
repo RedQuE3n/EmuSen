@@ -11,10 +11,10 @@ namespace EmuSen.WiseMan.Cores
     public class MarsCoreSettingsTests
     {
         [Fact]
-        public void The_catalogue_offers_the_same_seven_settings_the_core_answers()
+        public void The_catalogue_offers_the_same_eight_settings_the_core_answers()
         {
             ICoreSettings core = new MarsCore();
-            Assert.Equal(new[] { "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale", "Antialiasing", "ExpansionPak" }, core.Settings.Select(s => s.Key));
+            Assert.Equal(new[] { "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans", "RenderScale", "Antialiasing", "Gpu", "ExpansionPak" }, core.Settings.Select(s => s.Key));
             Assert.Same(core.Settings, CoreCatalog.SettingsFor("N64"));
             Assert.Empty(CoreCatalog.SettingsFor("SNES"));
         }

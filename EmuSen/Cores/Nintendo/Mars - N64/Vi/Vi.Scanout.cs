@@ -54,6 +54,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             if (!Prepare(_immediate)) return false;
 
             _bus.Dp.WaitForReadRange(_immediate.From, _immediate.Count, 8);
+
+            // The immediate walk reads the live shadow without a capture, so the device's picture is read back here too - see Mars_Gpu.md §11.2.
+            if (_immediate.Scale > 1) _bus.Dp.ReadBackScaled(_immediate.ScaledFrom, _immediate.ScaledCount);
+
             Walk(_immediate);
             return true;
         }
@@ -184,6 +188,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             if (job.Scale > 1)
             {
                 int scaled = job.ScaledCount;
+
+                // What the device holds becomes the shadow's bytes here, which is the one place the walk reads them - see Mars_Gpu.md §11.2.
+                _bus.Dp.ReadBackScaled(job.ScaledFrom, scaled);
+
                 if (job.ScaledRdram.Length < scaled) job.ScaledRdram = new byte[scaled];
                 if (job.ScaledHidden.Length < scaled / 2) job.ScaledHidden = new byte[scaled / 2];
                 System.Buffer.BlockCopy(job.LiveScaledRdram, (int)job.ScaledFrom, job.ScaledRdram, 0, scaled);

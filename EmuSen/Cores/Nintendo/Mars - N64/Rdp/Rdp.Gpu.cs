@@ -79,7 +79,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             Span<int> steps = stackalloc int[Attributes];
             for (int c = 0; c < 4; c++) steps[c] = direction * _shadeStep[c];
             steps[AttributeZ] = PrimitiveDepth ? 0 : direction * _depthStep;
-            for (int c = 0; c < 3; c++) steps[AttributeS + c] = direction * _textureStep[c];
+            for (int c = 0; c < 3; c++) steps[AttributeS + c] = direction * (CycleType == CopyCycle ? CopyPixelStep(c) : _textureStep[c]);
 
             (bool texel0, bool texel1) = CombinerTexels();
             bool readsLodFraction = CombineColorC == 13 || CombineAlphaC == 0;

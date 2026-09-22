@@ -662,7 +662,9 @@ copy-mode primitives were declined.
 
 At a multiple it reduces neatly. `Rdp.DrawCopyScaled` fetches a pixel's four texels exactly as the machine's copy
 does, and writes only the top one or two bytes. For a sixteen-bit image that is **the top half of the fetched
-sixty-four bits**, kept whole or not at all by the first texel's low bit. The port carries `CopyTexels`, with its
+sixty-four bits**, kept whole or not at all by the first texel's low bit. Each pixel is stepped by the group's step shared among its four
+pixels, not by the group's whole step; until 2026-09-21 it was the whole step on both paths, and the byte-for-byte test
+below could not see it because it compares the device with the CPU path (`Mars_Rdp.md` §11.2). The port carries `CopyTexels`, with its
 bank rule, `Replicated`, `CopyPaletteIndex` and the YUV chroma step, in two 32-bit halves, since the shaders keep to
 32-bit integers for MoltenVK's sake (§4).
 

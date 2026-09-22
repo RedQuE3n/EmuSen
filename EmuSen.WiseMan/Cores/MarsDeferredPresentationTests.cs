@@ -160,7 +160,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Programs the VI for a 320 by 240 picture with every pass on, then paints the frame buffer with a word that advances each pass.
-        private static byte[] Painter(uint control = DitherFilter | DivotOn | GammaOn)
+        internal static byte[] Painter(uint control = DitherFilter | DivotOn | GammaOn)
         {
             uint[] registers = Registers(2, 0, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0, control: control);
             registers[7] = 0xC15;

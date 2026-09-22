@@ -9,6 +9,7 @@ pub mod cop1;
 pub mod cpu;
 pub mod dp;
 pub mod ffi;
+pub mod ffi_vi;
 pub mod idle;
 pub mod interp;
 pub mod isviewer;

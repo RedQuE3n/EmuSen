@@ -46,7 +46,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private byte[] _frame = Blank(MarsCore.DefaultScreenHeight);
         private int _screenWidth = MarsCore.ScreenWidthPixels, _screenHeight = MarsCore.DefaultScreenHeight, _rowRepeat = 1;
         private long _frameSerial, _takenSerial;
-        private bool _skipRendering, _idleSkip = true, _rspWhole = true, _framesRdp;
+        private bool _skipRendering, _idleSkip = true, _rspWhole = true, _framesRdp, _repeatRows = true;
 
         public static bool Available => LoadRomExport != null;
 
@@ -71,7 +71,12 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public long IdleTurnsPassed => Counter(4);
         public int StateVersion => 1;
         public long FrameSerial => _frameSerial;
-        public bool RepeatRows { get; set; } = true;
+        public bool RepeatRows
+        {
+            get => _repeatRows;
+            set { _repeatRows = value; ApplyOptions(); }
+        }
+
         public int RowRepeat => _rowRepeat;
         public IReadOnlyList<PadButton> SupportedButtons => MarsCore.PadButtons;
         public IReadOnlyList<PadAxis> SupportedAxes => MarsCore.PadAxes;
@@ -106,7 +111,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         private void ApplyOptions()
         {
-            if (_handle != 0) SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_framesRdp ? 8u : 0));
+            if (_handle != 0) SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_framesRdp ? 8u : 0) | (_repeatRows ? 16u : 0));
         }
 
         // The RDRAM ranges the framer saw primitives drawn into since the last call, merged.
@@ -221,12 +226,12 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             }
         }
 
-        // What the VI's scan gave, composed as MarsCore composes it; nothing new while the scan-out is a stub.
+        // What the VI's scan composed, as MarsCore's Present composes it after every scan, walked or not.
         private void TakePicture()
         {
             long* info = stackalloc long[4];
-            bool shown = FrameInfo(_handle, info) != 0;
-            if (!shown || info[3] == _takenSerial) return;
+            FrameInfo(_handle, info);
+            if (info[3] == _takenSerial) return;
             _takenSerial = info[3];
             int width = (int)info[0], height = (int)info[1];
             long length = (long)FrameBytes(_handle, null, 0);

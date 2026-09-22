@@ -53,7 +53,8 @@ namespace EmuSen.WiseMan.Cores
             SkipRendering = true,
         };
 
-        public static MarsRtCore Twin(bool expansionPak = false) => new(expansionPak, batteryRamDisabled: true) { SkipRendering = true };
+        // MarsRT's interpreter, now that the shim's default is the recompiler; the tier runs turn the blocks on themselves.
+        public static MarsRtCore Twin(bool expansionPak = false) => new(expansionPak, batteryRamDisabled: true) { SkipRendering = true, UseBlocks = false };
 
         [Theory]
         [InlineData(false)]

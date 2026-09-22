@@ -73,8 +73,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private bool _threadedRdp, _deferredPresentation, _skipRepeatedScans = true, _verifyRdp;
         private int _rdpWorkers = 1;
 
-        // The recompiler, off until proven in play; exact either way - see Mars_Native.md §5.8.
-        private bool _useBlocks, _verifyBlocks;
+        // The recompiler, on since 2026-09-22 at the tier §5.8.7 recommends; off is the interpreter, exact as well - see Mars_Native.md §5.8.
+        private bool _useBlocks = true, _verifyBlocks;
         private int _blockTier;
 
         public static bool Available => LoadRomExport != null && MemorySize != null;
@@ -237,7 +237,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly string[] Honoured = { "ExpansionPak", "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans" };
 
         // MarsRT's own key for Mars's UseBlocks, which is no setting of Mars's; before VideoSettings for the same reason - see Mars_Native.md §5.8.
-        private static readonly CoreSetting Recompiler = new("Recompiler", "Compile the processor's code", "The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter. Off by default on MarsRT until proven in play.", CoreSettingKind.Switch, "false");
+        private static readonly CoreSetting Recompiler = new("Recompiler", "Compile the processor's code", "The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter, which is what off leaves running, slower.", CoreSettingKind.Switch, "true");
 
         // Mars's keys, so one graphics tab serves either engine; the multiple, antialiasing and the device are not honoured yet - see Mars_Native.md §5.5 and §5.6.
         public static readonly IReadOnlyList<CoreSetting> VideoSettings =

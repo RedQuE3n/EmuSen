@@ -9,10 +9,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         public const int Elements = 8;
 
         // Thirty-two registers of eight 16-bit elements, flattened register first - see Mars_RspVector.md §1.
-        public readonly ushort[] Vector = new ushort[VectorRegisters * Elements];
+        public readonly ushort[] Vector = GC.AllocateArray<ushort>(VectorRegisters * Elements, pinned: true);
 
         // Forty-eight bits per element, kept wrapped - see Mars_RspVector.md §6.
-        public readonly ulong[] Accumulator = new ulong[Elements];
+        public readonly ulong[] Accumulator = GC.AllocateArray<ulong>(Elements, pinned: true);
 
         public ushort Vco;
         public ushort Vcc;

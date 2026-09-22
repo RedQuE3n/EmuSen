@@ -1,0 +1,19 @@
+[package]
+name = "emusen-native"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# A C-ABI library the C# cores call into; each component keeps its C# twin as oracle and fallback. See Mars_Native.md.
+[lib]
+name = "emusen_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"

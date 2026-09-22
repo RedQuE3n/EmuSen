@@ -160,6 +160,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             Rsp.Rsp processor = Processor;
             if (processor.Halted) return;
+            if (!_singleStep && Rsp.Rsp.UseNative && processor.NativeRun(cycles)) return;
 
             do
             {

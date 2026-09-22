@@ -44,6 +44,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         // Whole blocks only, at most the steps given, stopping after a block that ends in a move to or from the control registers or a break; returns the steps run - see §11.
         public long RunBlocks(long budget)
         {
+            if (UseNative && NativeBlocks && NativeRunToEvent(budget) is long native and >= 0)
+            {
+                BlockSteps += native;
+                return native;
+            }
+
             long ran = 0;
 
             while (!Halted && NextPc == ((Pc + 4) & PcMask))

@@ -52,4 +52,20 @@
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
+  <!-- The Rust components, built by cargo when it is installed and copied beside the assemblies; without them Mars runs its C# paths - see Mars_Native.md §1. -->
+  <PropertyGroup>
+    <EmuSenNativeDir>$(MSBuildThisFileDirectory)..\EmuSen.Native\</EmuSenNativeDir>
+    <EmuSenNativeFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">emusen_native.dll</EmuSenNativeFile>
+    <EmuSenNativeFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libemusen_native.dylib</EmuSenNativeFile>
+    <EmuSenNativeFile Condition="'$(EmuSenNativeFile)' == ''">libemusen_native.so</EmuSenNativeFile>
+    <EmuSenNativeForHost Condition="'$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)'">true</EmuSenNativeForHost>
+  </PropertyGroup>
+
+  <Target Name="BuildEmuSenNative" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Command="cargo build --release --manifest-path &quot;$(EmuSenNativeDir)Cargo.toml&quot;" ContinueOnError="true" StandardOutputImportance="low" />
+    <ItemGroup Condition="Exists('$(EmuSenNativeDir)target\release\$(EmuSenNativeFile)')">
+      <None Include="$(EmuSenNativeDir)target\release\$(EmuSenNativeFile)" Link="$(EmuSenNativeFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
 </Project>

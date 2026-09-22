@@ -18,8 +18,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         // The display processor's extra bits beside each sixteen-bit word, which the CPU cannot see - see Mars_RdpCoverage.md §3.1.
         public byte[] RdramHidden;
-        public readonly byte[] SpDmem = new byte[MemoryMap.SpMemSize];
-        public readonly byte[] SpImem = new byte[MemoryMap.SpMemSize];
+        // Pinned, so the native signal processor can hold their addresses - see Mars_Native.md §3.1.
+        public readonly byte[] SpDmem = GC.AllocateArray<byte>((int)MemoryMap.SpMemSize, pinned: true);
+        public readonly byte[] SpImem = GC.AllocateArray<byte>((int)MemoryMap.SpMemSize, pinned: true);
         public readonly byte[] PifRam = new byte[MemoryMap.PifRamSize];
 
         public readonly IsViewer IsViewer = new();

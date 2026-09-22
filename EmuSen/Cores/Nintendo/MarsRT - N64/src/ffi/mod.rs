@@ -1,6 +1,7 @@
 //! MarsRT's C ABI: the machine, its state, and a frame at a time. A negative return is a status. See Mars_Native.md §5.1, §5.2 and §5.5.
 
 pub mod rdp;
+pub mod threads;
 pub mod vi;
 
 use std::ptr;
@@ -13,7 +14,7 @@ use crate::machine::Machine;
 use crate::memory::bus_access::map;
 use crate::rom::RomImage;
 use crate::state::{State, StateResult, StateWriter};
-use crate::vi::scan::{self, Scanout};
+use crate::vi::scan::Scanout;
 
 /// A null handle or buffer.
 pub const STATUS_NULL: i32 = -1;
@@ -49,11 +50,11 @@ impl Core {
         Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false }
     }
 
-    /// `Present`: the VI's scan of what the machine left, which writes the VI's held lines; the frame is composed on every call.
+    /// `Present`: the VI's scan of what the machine left, at once or deferred as the machine is set; the serial moves when the shown frame does.
     pub fn present(&mut self) {
-        let bus = &mut self.machine.bus;
-        self.shown = scan::scan(&mut bus.vi, &bus.rdram, &bus.rdram_hidden, &mut self.scanout);
-        self.frame_serial += 1;
+        let presented = self.machine.present(&mut self.scanout);
+        self.shown = presented.walked;
+        self.frame_serial += presented.replaced as i64;
     }
 
     pub fn run_frame(&mut self) {
@@ -124,6 +125,10 @@ impl Core {
 
     /// Bytes from a memory into `out`, zero wherever the address names nothing, and nothing disturbed; the host reads between frames.
     pub fn read_memory(&self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
+        // C# waits at site 9 per byte; RDRAM's whole slice is formed below, so the drain is waited for whole (Mars_Native.md §5.6).
+        if space == space::RDRAM || space == space::CPU {
+            self.machine.bus.dp.wait_all();
+        }
         if space == space::CPU {
             for (i, byte) in out.iter_mut().enumerate() {
                 *byte = self
@@ -146,6 +151,9 @@ impl Core {
 
     /// Bytes into a memory, those past its end dropped, as a store to memory not installed is; returns how many landed, and any lands as a write the idle loop sees.
     pub fn write_memory(&mut self, space: u32, address: u32, data: &[u8]) -> Result<usize, i32> {
+        if space == space::RDRAM || space == space::CPU {
+            self.machine.join_rdp();
+        }
         let mut landed = 0;
         if space == space::CPU {
             for (i, &value) in data.iter().enumerate() {
@@ -243,8 +251,11 @@ pub unsafe extern "C" fn mars_machine_restore_state(core: *mut Core, data: *cons
                 c.scanout = Scanout::default();
                 c.scanout.repeat_rows = repeat_rows;
             }
+            c.scanout.forget();
             if !c.skip_rendering {
-                c.present();
+                let presented = c.machine.present_now(&mut c.scanout);
+                c.shown = presented.walked;
+                c.frame_serial += 1;
             }
             0
         }

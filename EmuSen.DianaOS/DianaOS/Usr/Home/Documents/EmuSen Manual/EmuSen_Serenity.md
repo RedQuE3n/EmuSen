@@ -244,3 +244,23 @@ All headless, in `EmuSen.WiseMan/Serenity/`, through `HeadlessUnitTestSession` �
 - `BuiltInShadersTests.cs` — asserts the SkSL source itself, via the `InternalsVisibleTo` in `AssemblyInfo.cs`.
 - `FramePresenterEffectCyclingTests.cs` — `NextEffect`'s cycle, without a window.
 - `Common/LeafAssemblyTests.cs` — §1's reference set.
+
+## 7. RetroArch's shaders
+
+The plan of §3.6, carried out in stages, each committed working. The pack is libretro's own distribution, `shaders_slang.zip` from `buildbot.libretro.com/assets/frontend/`, the file RetroArch's online updater fetches (54 MB, rebuilt nightly; the copy read here was built 2026-09-22 02:00 UTC).
+
+### 7.1 Reading a preset (2026-09-21)
+
+`SlangPreset.Load` reads a `.slangp` as RetroArch's `video_shader_parse.c` does. Keys are merged through `#reference` chains: the referenced file first, then the referring file's keys over it, each path resolved against **the directory of the file that wrote that key**, which is what lets a preset three folders away reference `crt-guest-advanced` and still find its lookup images. A chain deeper than sixteen is refused as a loop. Per pass: the shader, `alias`, `filter_linear`, `wrap_mode` (clamp to border by default), `scale_type` with its per-axis forms and `scale`/`scale_x`/`scale_y`, `float_framebuffer`, `srgb_framebuffer`, `mipmap_input` and `frame_count_mod`; a pass with no scale type is source 1.0, or the viewport when it is the last. `textures` names the lookup images, each with `_linear`, `_wrap_mode` and `_mipmap`. **Every other key with a number is a parameter's value**, which is how 695 of the pack's presets are nothing but a `#reference` and a few overrides.
+
+**RetroArch tolerates an unterminated quote, and so must this.** The first run over the pack failed 37 presets. Thirty-one were values like `"../../../../crt/shaders/guest/advanced/lut/trinitron-lut.png` with no closing quote, which the first reader kept with the quote at the front and so resolved to a path that does not exist; a quoted value now runs to its closing quote, or to a comment or the line's end when there is none. Six were not presets at all but fragments, files of overrides with no shaders of their own, meant only to be referenced, which the pack test now counts apart.
+
+**Five presets in the pack are broken upstream**, not here: `bezel/koko-aio/Presets_HiresGames_Fast/Presets_Handhelds-ng/PSP*.slangp` name `../textures/overlays/psp-e1000.jpg`, which exists one folder further up, in `koko-aio/textures/`. RetroArch cannot load their overlay either. They are reported by the test and not failed.
+
+### 7.2 Reading a pass's source (2026-09-21)
+
+`SlangSource.Load` expands `#include` (textual, relative to the including file, refused past thirty-two deep) and `#pragma include_optional` (skipped when absent), then splits the result at `#pragma stage vertex` and `#pragma stage fragment`: lines before the first stage go to both, lines after a stage to that one only. It reads `#pragma parameter id "description" initial minimum maximum [step]` (first declaration wins, as a shared include declares the same parameter in several passes), `#pragma name` (the pass's alias from inside the shader) and `#pragma format`. Every pragma line, and every line belonging to the other stage, is kept as a blank, so both stages have the same number of lines and a compiler's line numbers point at the right line of the expanded text.
+
+**Measured over the whole pack** (`Every_preset_in_the_pack_reads_and_every_pass_it_names_splits`, run with `EMUSEN_SLANG_PACK` pointing at an unpacked copy): 2,652 presets and 6 fragments; 1,350 distinct passes, every one of which expands and splits; no failures; 5 missing images, the upstream defect above. The test is skipped without the variable, because the pack is not in the repository and a test must not reach the network.
+
+**Not yet**: nothing is compiled or run. Stage 2 compiles each stage to SPIR-V and reads back what it binds.

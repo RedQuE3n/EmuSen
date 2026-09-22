@@ -341,6 +341,8 @@ One thread removes the stall, but it compiles slowly enough that a fifth of the 
 
 `EMUSEN_MARS_RSPCOMPILERS=n` overrides the count, for measurement.
 
+*Superseded the next day (§11.2).* Two compiler threads were a remedy for a compile that was itself the defect. Blocks now compile in two tiers: one thread compiles the cheap first tier, and one folds the hot blocks. `EMUSEN_MARS_RSPCOMPILERS` now sets the number of folding threads. The measurements above stand as the record of the pool defect and of what thread count alone could do.
+
 **The prediction that did not hold.** Before the table was measured, the expectation was that compile threads could only help, and that the fix would be a matter of taking them off the pool. The rows for four and eight threads retire that: the compiler competes for the same cores the machine runs on. The right number is a property of the core count and of the emulation thread's load. Two is right for this 16-core machine, and it is unmeasured on the low-end x86-64 laptop the project also targets.
 
 **Confirmed over three interleaved rounds** (base and new, both games):
@@ -361,6 +363,56 @@ One thread removes the stall, but it compiles slowly enough that a fifth of the 
 That is about a quarter of a second in total, spent on a black screen. What the frontend adds between choosing a game and the first frame (the resume prompt, a state read, the audio device) is not measured here.
 
 **Test:** `MarsIdleTests.Blocks_compiled_in_the_background_are_compiled_off_the_pool_and_change_nothing`. With background compiling on, it asserts that blocks were compiled, that none was compiled on a pool thread (`Rsp.PoolCompiles`), and that the state equals the single-stepped one. A mutant that restores `Task.Run` fails it.
+
+### 11.2 Two tiers: a block compiled cheaply at once, and folded when hot (2026-09-22)
+
+**The report.** On a Legion Go S (Ryzen Z1 Extreme, SteamOS, RADV), Ocarina of Time's intro was "very slow" after the file-select screen. The case was a state the player made there, with A pressed to load a save. It was run headless on the device over SSH with pacebench built ReadyToRun, from that state, with the device's settings (GPU on, 8 RDP workers).
+
+**The build on the device predated §11.1.** It showed a single frame of **5,233 ms** and 58.5% of full speed over fifteen seconds: the pool defect of §11.1, worse on a handheld's slower cores.
+
+With §11.1 the stall went, to 71 ms worst and 93.2% of full speed. But only **24%** of the RSP's steps ran in blocks after fifteen seconds, against 80% on the old build. Another thread count did not help: four compiled more and made the early frames worse, eight worse again.
+
+**The measurement that located it.** The time from shaping a block to publishing it was **29 to 34 ms a block** on the device, and 19 to 23 ms on the desktop's 16-core Ryzen. It did not vary with thread count or with the compile threshold (3, 30 and 200 runs were tried). With two threads that is about 1,100 blocks in fifteen seconds, whatever the scheduling.
+
+The cost is §12's design working as intended. Every instruction is a call to a general handler with the word as a constant. The JIT inlines the handler's decode switch and folds it to the one instruction, and §14 splits the block into methods of four so that the inliner's budget is not exhausted. The code produced is fast. The price is the JIT importing and optimising the whole decode tree once per instruction.
+
+**The same calls, uninlined.** When every handler call goes through a `NoInlining` wrapper, the JIT compiles only the calls:
+
+| Blocks | Compile a block | Legion Go S steady frame | Desktop steady frame (SM64) |
+|---|---|---|---|
+| folded (§12) | 29 ms | 3.40 ms | 8.84 ms |
+| uninlined | **0.38 ms** | **3.21 ms** | 9.37 ms |
+
+Uninlined blocks compile 55 to 76 times faster. On the handheld they are not even slower, because far more of them exist in time. On the desktop they are about 5% slower once everything is compiled. §12's gain is real where the machine has time to buy it, and a loss where it has not.
+
+**The change: two tiers.**
+- A block that has run three times is compiled uninlined on the "Mars RSP block compiler" thread. It is published within about half a millisecond.
+- A block that has then run `FoldAfter` times is compiled again, folded, on a separate "Mars RSP block folder" thread, and its code is swapped in with a volatile write.
+
+Both tiers call the same handlers in the same order, so they compute the same state. Only the inlining differs.
+
+`FoldAfter` was chosen by measurement:
+
+| FoldAfter | Blocks folded (device) | Device steady frame | Desktop SM64 steady frame | Desktop SM64 worst frame |
+|---|---|---|---|---|
+| 500 | 551 | 2.96 ms | not measured | not measured |
+| 2,000 | 267 | 2.88 ms | 9.23 / 8.94 ms | 30 / 31 ms |
+| **10,000** | 99 | **2.64 ms** | **8.86 / 8.82 ms** | 29 / 30 ms |
+| never | 0 | 3.56 ms | 9.32 / 9.36 ms | 33 / 30 ms |
+
+At 10,000 the desktop's steady frame equals the folded-only build's (8.84 and 8.81 ms). Its worst frame falls from about 104 ms to about 29 ms, and its mean over 1,200 frames from 8.7 to 7.7 ms. On the device, 99 folded blocks give the best steady frame measured. `EMUSEN_MARS_RSPFOLDAFTER=n` overrides the threshold.
+
+**Why the threshold is high.** Folding is worth doing only for the blocks that carry the time. At 10,000 runs a hundred to two hundred blocks qualify, and folding them costs 2.5 to 4 s of one background thread spread over the first twenty seconds. Lower thresholds fold hundreds more blocks that barely run, and on a handheld those compiles compete for the same power budget as the emulation thread. The number is specific to libultra's microcode mix in these two games, and is unmeasured elsewhere.
+
+**Exactness.** The state checksum after fifteen seconds on the device is `093C9C669DA764B2` in every configuration: the old build, §11.1, both tiers and every threshold. On the desktop over 1,200 frames it is `0B629FEAC97BA032` (SM64) and `51196CF259709DF9` (OoT), unchanged.
+
+**What is left on the device, and why it is not the RSP.** With every block compiled within a second, the first 300 frames after pressing A still average 9 to 10 ms, against 2.6 to 2.8 ms later, with 60 to 80 frames over their interval (worst 40 to 70 ms late). The emulated work in those frames is about twice the steady workload while the scene loads and the CPU's recompiler compiles its own blocks (40 to 100 in the worst frames). Some frames also wait 18 to 64 ms for the RDP.
+
+GPU on or off, and four or eight RDP workers, change it within noise: 9.1 to 10.0 ms mean, 62 to 83 late frames. The device has no profiler that can see managed code, so this was not traced further. It is the next question.
+
+**Tests.** `MarsIdleTests.Either_tier_of_block_and_the_move_between_them_leave_the_state_the_single_steps_leave` runs `FoldAfter` = 1, 50 and never, and compares each with the single-stepped state. A mutant that routes ordinary instructions to the wrong decoder in the first tier fails all three.
+
+A mutant that routes vector loads to the store handler **survives**: the test's RSP program has no vector loads or stores. The first tier's load and store wrappers are therefore covered only by the checksums of the game runs above.
 
 ## 12. The handlers folded into the blocks
 

@@ -31,6 +31,7 @@ namespace EmuSen.WiseMan.Cores
             Cpu.SkipIdle = true;
             Rsp.UseBlocks = true;
             Rsp.CompileBlocksInBackground = true;
+            Rsp.FoldAfter = 10000;
         }
 
         // The CPU takes the signal processor's interrupt on the instruction it lands on, so a step early or late, or the wrong one of the two, changes the state.
@@ -64,6 +65,25 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.True(blocksCompiled > 0, "no block was compiled, so the test compared nothing");
             Assert.Equal(0, System.Threading.Interlocked.Read(ref Rsp.PoolCompiles) - before);
+            Assert.Equal(stepped, compiled);
+        }
+
+        // A block runs first uninlined and later folded; either tier, or the change between them, leaves the state the single steps leave - see Mars_Rsp.md §11.2.
+        [Theory]
+        [InlineData(1)]
+        [InlineData(50)]
+        [InlineData(int.MaxValue)]
+        public void Either_tier_of_block_and_the_move_between_them_leave_the_state_the_single_steps_leave(int foldAfter)
+        {
+            Rsp.CompileBlocksInBackground = false;
+            (byte[] stepped, _, _) = Run(skipIdle: false, blocks: false, padded: false);
+
+            Rsp.FoldAfter = foldAfter;
+            (byte[] compiled, _, long blockSteps) = Run(skipIdle: true, blocks: true, padded: false, out MarsCore core);
+
+            Assert.True(blockSteps > 10_000, $"only {blockSteps} steps ran in blocks, so the test compared nothing");
+            if (foldAfter == int.MaxValue) Assert.Equal(0, core.Bus!.Sp.Processor.BlocksFolded);
+            else Assert.True(core.Bus!.Sp.Processor.BlocksFolded > 0, "no block was folded, so the second tier was not compared");
             Assert.Equal(stepped, compiled);
         }
 

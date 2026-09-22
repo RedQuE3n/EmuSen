@@ -414,3 +414,33 @@ fn the_guard_columns_are_dark_and_keep_their_coverage() {
     assert!(lit(8) && lit(248));
 }
 
+
+/// A picture that shrinks leaves its old lines held a field more; they expire while the next scans repeat, and the deferred picture must darken them too.
+#[test]
+fn a_deferred_scan_repeating_after_a_held_line_expired_shows_the_darkened_picture() {
+    let (rdram, hidden) = noisy();
+    let mut deferred = crate::memory::bus::MemoryBus::new(rdram.len());
+    deferred.rdram[..].copy_from_slice(&rdram);
+    deferred.rdram_hidden[..].copy_from_slice(&hidden);
+    let mut at_once = deferred.clone();
+    let (mut now, mut later) = (Scanout::default(), Scanout::default());
+    let tall = regs(2, 3, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0).words();
+    let short = regs(2, 3, 64, 0x400, 0x400, 108, 256, 34, 60, 0, 0).words();
+    let mut previous: Option<Vec<u8>> = None;
+    let mut changed = 0;
+    for (step, registers) in [tall, tall, tall, short, short, short, short].into_iter().enumerate() {
+        at_once.vi.registers = registers;
+        deferred.vi.registers = registers;
+        present_now(&mut at_once, &mut now);
+        present_deferred(&mut deferred, &mut later);
+        if let Some(picture) = &previous {
+            assert!(later.frame == *picture, "step {step}: the deferred picture is not the immediate picture of the step before");
+        }
+        if previous.as_ref().is_some_and(|p| *p != now.frame) {
+            changed += 1;
+        }
+        previous = Some(now.frame.clone());
+    }
+    assert!(later.repeated_scans >= 2, "no scan repeated, so the case was not reached");
+    assert!(changed >= 1, "the expiry changed no picture, so the case was not reached");
+}

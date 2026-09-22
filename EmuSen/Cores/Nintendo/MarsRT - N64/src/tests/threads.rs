@@ -96,6 +96,7 @@ fn corner(state: &mut u32, extent: u32, beyond: u32) -> f64 {
     (next(state) % (extent + 2 * beyond)) as f64 - beyond as f64
 }
 
+#[allow(clippy::too_many_arguments)]
 fn combine(a: u64, b: u64, c: u64, d: u64, alpha_a: u64, alpha_b: u64, alpha_c: u64, alpha_d: u64) -> u64 {
     let high = (a << 20) | (c << 15) | (alpha_a << 12) | (alpha_c << 9) | (a << 5) | c;
     let low = ((b << 28) | (b << 24) | (alpha_a << 21) | (alpha_c << 18) | (d << 15) | (alpha_b << 12) | (alpha_d << 9) | (d << 6) | (alpha_b << 3) | alpha_d) & 0xFFFF_FFFF;
@@ -393,7 +394,7 @@ fn stress(seed: u32, rounds: u32) {
                 }
             }
         }
-        if next(&mut s) % 5 == 0 {
+        if next(&mut s).is_multiple_of(5) {
             assert!(state(&once) == state(&drain), "seed {seed} round {round}");
         }
     }
@@ -408,4 +409,31 @@ fn seeded_lists_with_processor_accesses_between_leave_what_the_lists_at_once_lea
     for seed in 1..=seeds {
         stress(seed, 12);
     }
+}
+
+/// A read of a range waits for every pending draw on its pages, where C# frees one whose first eight bytes no pending draw holds (Mars_Native.md §5.6.2).
+#[test]
+fn a_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest() {
+    let list = [FILL_CYCLE, color_image(FRAMEBUFFER), scissor(0, 0, WIDTH, ROWS), (0x37 << 56) | 0x1234_5678, fill_rectangle(0, 8, WIDTH - 1, 9), SYNC_FULL];
+    let page = FRAMEBUFFER + 0x1000;
+    let row = (FRAMEBUFFER + WIDTH * 2 * 8) as usize;
+    assert!(page + 8 < FRAMEBUFFER + WIDTH * 2 * 7, "the page's first bytes lie above the drawn rows");
+    let (mut once, mut drain) = (at_once(), threaded());
+    hand_over(&mut once, &list, LIST);
+    threads(&drain).hold();
+    hand_over(&mut drain, &list, LIST);
+    assert_ne!(write_mark(&drain, page), 0);
+
+    let resume = threads(&drain).resumer();
+    let watchdog = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        resume();
+    });
+    let started = std::time::Instant::now();
+    drain.bus.dp.wait_read_range(page, 0x1000, site::VI);
+    let waited = started.elapsed();
+    let seen = drain.bus.rdram[row..row + 0x80].to_vec();
+    watchdog.join().unwrap();
+    assert!(waited >= std::time::Duration::from_millis(250), "the read went ahead of the draw after {waited:?}");
+    assert!(seen[..] == once.bus.rdram[row..row + 0x80], "the read saw the rows before the draw");
 }

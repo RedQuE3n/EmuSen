@@ -43,7 +43,6 @@ fn replay(stream: &Path, expected: &Path) {
 
     let mut memory = RdpMemory::new(&mut memory_rdram, &mut memory_hidden);
     let syncs = words.iter().filter(|&&w| rdp.accept(w, &mut memory)).count();
-    drop(memory);
 
     let data = std::fs::read(expected).unwrap();
     let mut e = Cursor { data: &data, at: 0 };

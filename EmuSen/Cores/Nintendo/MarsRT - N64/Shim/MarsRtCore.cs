@@ -1,21 +1,28 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using EmuSen.Cores.Nintendo.Mars;
+using EmuSen.Cores.Nintendo.Mars.Debug;
 using EmuSen.Cores.Nintendo.Mars.Native;
+using EmuSen.DianaOS.DianaOS.Var;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 
 namespace EmuSen.Cores.Nintendo.MarsRT
 {
-    // MarsRT, the N64 core in Rust, behind the interfaces MarsCore implements; the boundary is crossed once a frame - see Mars_Native.md §5.2.
-    public sealed unsafe class MarsRtCore : ICore, ISnapshotCore, IStateFormat, IFrameSerial, IRepeatedRows, IDisposable
+    // The memories the library reads and writes by number; Cpu is the processor's kernel view of a virtual address - see Mars_Native.md §5.5.
+    public enum MarsRtSpace : uint { Rdram = 0, Dmem = 1, Imem = 2, PifRam = 3, Rom = 4, Cpu = 5 }
+
+    // MarsRT, the N64 core in Rust, behind the interfaces MarsCore implements; the boundary is crossed once a frame - see Mars_Native.md §5.2 and §5.5.
+    public sealed unsafe class MarsRtCore : ICore, ISnapshotCore, IStateFormat, IFrameSerial, IRepeatedRows, ICoreSettings, ICheatRegistryHost, IDisposable
     {
         private static readonly delegate* unmanaged<byte*, nuint, uint, byte*, nuint, byte*, nuint, nint> LoadRomExport = (delegate* unmanaged<byte*, nuint, uint, byte*, nuint, byte*, nuint, nint>)MarsNative.Export("mars_machine_load_rom");
         private static readonly delegate* unmanaged<byte*, nuint, uint, nint> BootExport = (delegate* unmanaged<byte*, nuint, uint, nint>)MarsNative.Export("mars_machine_boot");
         private static readonly delegate* unmanaged<nint, void> Free = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_free");
-        private static readonly delegate* unmanaged<nint, void> RunFrameExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_run_frame");
+        private static readonly delegate* unmanaged<nint, void> AdvanceExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_advance");
+        private static readonly delegate* unmanaged<nint, void> PresentExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_present");
         private static readonly delegate* unmanaged<nint, ulong, void> RunStepsExport = (delegate* unmanaged<nint, ulong, void>)MarsNative.Export("mars_machine_run_steps");
         private static readonly delegate* unmanaged<nint, uint, void> SetOptions = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_set_options");
         private static readonly delegate* unmanaged<nint, uint, uint, uint, void> PressExport = (delegate* unmanaged<nint, uint, uint, uint, void>)MarsNative.Export("mars_machine_press");
@@ -28,17 +35,27 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, long*, void> Counters = (delegate* unmanaged<nint, long*, void>)MarsNative.Export("mars_machine_counters");
         private static readonly delegate* unmanaged<nint, byte*, nuint, ulong> IsViewerText = (delegate* unmanaged<nint, byte*, nuint, ulong>)MarsNative.Export("mars_machine_is_viewer_text");
         private static readonly delegate* unmanaged<nint, byte*, nuint, int> RestoreState = (delegate* unmanaged<nint, byte*, nuint, int>)MarsNative.Export("mars_machine_restore_state");
+        private static readonly delegate* unmanaged<nint, uint> RdramBytes = (delegate* unmanaged<nint, uint>)MarsNative.Export("mars_machine_rdram_bytes");
         private static readonly delegate* unmanaged<nint, uint, long> SizeOf = (delegate* unmanaged<nint, uint, long>)MarsNative.Export("mars_machine_save_state_size");
         private static readonly delegate* unmanaged<nint, byte*, nuint, uint, long> SaveStateExport = (delegate* unmanaged<nint, byte*, nuint, uint, long>)MarsNative.Export("mars_machine_save_state");
         private static readonly delegate* unmanaged<nint, byte*, nuint, int*, long> SaveData = (delegate* unmanaged<nint, byte*, nuint, int*, long>)MarsNative.Export("mars_machine_save_data");
         private static readonly delegate* unmanaged<nint, byte*, nuint, int*, long> PakData = (delegate* unmanaged<nint, byte*, nuint, int*, long>)MarsNative.Export("mars_machine_pak_data");
         private static readonly delegate* unmanaged<nint, uint, void> MarkSaved = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_mark_saved");
         private static readonly delegate* unmanaged<nint, byte*, nuint, long> SaveCpu = (delegate* unmanaged<nint, byte*, nuint, long>)MarsNative.Export("mars_machine_save_cpu");
+        private static readonly delegate* unmanaged<nint, uint, long> MemorySize = (delegate* unmanaged<nint, uint, long>)MarsNative.Export("mars_machine_memory_size");
+        private static readonly delegate* unmanaged<nint, uint, uint, byte*, nuint, long> ReadMemory = (delegate* unmanaged<nint, uint, uint, byte*, nuint, long>)MarsNative.Export("mars_machine_read_memory");
+        private static readonly delegate* unmanaged<nint, uint, uint, byte*, nuint, long> WriteMemory = (delegate* unmanaged<nint, uint, uint, byte*, nuint, long>)MarsNative.Export("mars_machine_write_memory");
+        private static readonly delegate* unmanaged<nint, uint, ulong> Cop0Export = (delegate* unmanaged<nint, uint, ulong>)MarsNative.Export("mars_machine_cop0");
+        private static readonly delegate* unmanaged<nint, ulong*, nuint, long> CpuRegistersExport = (delegate* unmanaged<nint, ulong*, nuint, long>)MarsNative.Export("mars_machine_cpu_registers");
+        private static readonly delegate* unmanaged<nint, uint*, nuint, long> RspRegistersExport = (delegate* unmanaged<nint, uint*, nuint, long>)MarsNative.Export("mars_machine_rsp_registers");
+        private static readonly delegate* unmanaged<nint, uint*, nuint, long> ViRegistersExport = (delegate* unmanaged<nint, uint*, nuint, long>)MarsNative.Export("mars_machine_vi_registers");
 
         private const ushort ButtonA = 0x8000, ButtonB = 0x4000, ButtonZ = 0x2000, ButtonStart = 0x1000;
         private const ushort DpadUp = 0x0800, DpadDown = 0x0400, DpadLeft = 0x0200, DpadRight = 0x0100;
         private const ushort ButtonL = 0x0020, ButtonR = 0x0010;
         private const ushort CUp = 0x0008, CDown = 0x0004, CLeft = 0x0002, CRight = 0x0001;
+        private const int StatusRegister = 12;
+        private const int ExpandedRdram = 8 * 1024 * 1024;
 
         private nint _handle;
         private string? _romPath, _savePath, _pakPath;
@@ -48,7 +65,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private long _frameSerial, _takenSerial;
         private bool _skipRendering, _idleSkip = true, _rspWhole = true, _repeatRows = true;
 
-        public static bool Available => LoadRomExport != null;
+        public static bool Available => LoadRomExport != null && MemorySize != null;
 
         // A stock console unless asked, as MarsCore; null defers to --nobattery.
         public MarsRtCore(bool expansionPak = false, bool? batteryRamDisabled = null)
@@ -119,7 +136,136 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             if (_handle != 0) SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_repeatRows ? 16u : 0));
         }
 
+        // Mars's keys, so one graphics tab serves either engine; only the Expansion Pak is honoured yet - see Mars_Native.md §5.5.
+        public static readonly IReadOnlyList<CoreSetting> VideoSettings =
+            MarsCore.VideoSettings.Select(s => s.Key == "ExpansionPak" ? s : s with { Hint = IgnoredHint + s.Hint }).ToArray();
 
+        private const string IgnoredHint = "MarsRT does not implement this yet and ignores it. On Mars (C#): ";
+
+        private readonly Dictionary<string, string> _ignored = new();
+
+        IReadOnlyList<CoreSetting> ICoreSettings.Settings => VideoSettings;
+
+        public string Get(string key) => key == "ExpansionPak"
+            ? (ExpansionPak ? "true" : "false")
+            : _ignored.TryGetValue(Setting(key).Key, out string? value) ? value : Setting(key).Default;
+
+        // Checked as its kind says, as MarsCore refuses text that is no value, and kept; only the Expansion Pak acts - see Mars_Native.md §5.5.
+        public void Set(string key, string value)
+        {
+            CoreSetting setting = Setting(key);
+            string accepted = setting.Kind switch
+            {
+                CoreSettingKind.Switch => bool.TryParse(value, out bool on) ? (on ? "true" : "false") : throw new ArgumentException($"{value} is not on or off."),
+                CoreSettingKind.Count => int.TryParse(value, out int count) ? Math.Clamp(count, setting.Min, setting.Max).ToString() : throw new ArgumentException($"{value} is not a count."),
+                _ => setting.Choices?.Contains(value) == true ? value : throw new ArgumentException($"{value} is not a choice of {setting.Label}."),
+            };
+
+            if (key == "ExpansionPak") ExpansionPak = accepted == "true";
+            else _ignored[key] = accepted;
+        }
+
+        private static CoreSetting Setting(string key) =>
+            VideoSettings.FirstOrDefault(s => s.Key == key) ?? throw new ArgumentException($"MarsRT has no setting named {key}.", nameof(key));
+
+        private CheatRegistry _cheats = new();
+
+        // Settable so the registry a frontend already fills becomes this core's own - see EmuSen_Cheats.md §6.
+        public CheatRegistry Cheats
+        {
+            get => _cheats;
+            set => _cheats = value;
+        }
+
+        // Public so a paused frontend need not wait for a frame boundary; ROM patches are not applied - see Mars_Native.md §5.5.
+        public void ApplyCheats()
+        {
+            if (_handle != 0) Cheats.ApplyAll(ReadForCheat, WriteForCheat);
+        }
+
+        // Held while interrupts are off, as MarsCore holds it - see Mars_Cheats.md §5.1.
+        private void ApplyCheatsAtFrameEnd()
+        {
+            if ((Cop0(StatusRegister) & 1) != 0) ApplyCheats();
+        }
+
+        // Past the end reads zero and a write there is dropped, as MarsCore's are - see Mars_Cheats.md §3.1.
+        private byte ReadForCheat(string spaceName, int address) => CheatSpace(spaceName) is { } space ? Peek(space, (uint)address) : (byte)0;
+
+        private void WriteForCheat(string spaceName, int address, byte value)
+        {
+            if (CheatSpace(spaceName) is { } space) Poke(space, (uint)address, value);
+        }
+
+        private static MarsRtSpace? CheatSpace(string spaceName)
+        {
+            if (string.Equals(spaceName, MarsDebugSpaces.Rdram, StringComparison.OrdinalIgnoreCase)) return MarsRtSpace.Rdram;
+            if (string.Equals(spaceName, MarsDebugSpaces.Dmem, StringComparison.OrdinalIgnoreCase)) return MarsRtSpace.Dmem;
+            if (string.Equals(spaceName, MarsDebugSpaces.Imem, StringComparison.OrdinalIgnoreCase)) return MarsRtSpace.Imem;
+            if (string.Equals(spaceName, MarsDebugSpaces.PifRam, StringComparison.OrdinalIgnoreCase)) return MarsRtSpace.PifRam;
+            return null;
+        }
+
+        // A memory's length, zero before a ROM; the processor's view is the whole 32-bit space.
+        public long SpaceSize(MarsRtSpace space) => _handle == 0 ? 0 : Math.Max(0, MemorySize(_handle, (uint)space));
+
+        public byte Peek(MarsRtSpace space, uint address)
+        {
+            byte value = 0;
+            if (_handle != 0) ReadMemory(_handle, (uint)space, address, &value, 1);
+            return value;
+        }
+
+        public void Poke(MarsRtSpace space, uint address, byte value)
+        {
+            if (_handle != 0) WriteMemory(_handle, (uint)space, address, &value, 1);
+        }
+
+        // A copy of a stretch of memory, zero wherever the address names nothing.
+        public byte[] ReadSpace(MarsRtSpace space, uint address, int length)
+        {
+            var bytes = new byte[length];
+            if (_handle != 0 && length > 0) fixed (byte* data = bytes) ReadMemory(_handle, (uint)space, address, data, (nuint)length);
+            return bytes;
+        }
+
+        public ulong Cop0(int register) => _handle == 0 ? 0 : Cop0Export(_handle, (uint)register);
+
+        // PC, the 32 GPRs, HI, LO and the cycle count.
+        public ulong[] CpuRegisters()
+        {
+            if (_handle == 0) return Array.Empty<ulong>();
+            var values = new ulong[CpuRegistersExport(_handle, null, 0)];
+            fixed (ulong* data = values) CpuRegistersExport(_handle, data, (nuint)values.Length);
+            return values;
+        }
+
+        // PC, halted, broke, and the 32 scalar registers.
+        public uint[] RspRegisters() => Words(RspRegistersExport);
+
+        public uint[] ViRegisters() => Words(ViRegistersExport);
+
+        private uint[] Words(delegate* unmanaged<nint, uint*, nuint, long> export)
+        {
+            if (_handle == 0) return Array.Empty<uint>();
+            var values = new uint[export(_handle, null, 0)];
+            fixed (uint* data = values) export(_handle, data, (nuint)values.Length);
+            return values;
+        }
+
+        // The save chip's bytes as the game left them, or null for a cartridge with none.
+        public byte[]? BatteryContents
+        {
+            get
+            {
+                int* info = stackalloc int[2];
+                long length = SaveData(Handle, null, 0, info);
+                if (length <= 0) return null;
+                var contents = new byte[length];
+                fixed (byte* data = contents) SaveData(_handle, data, (nuint)contents.Length, info);
+                return contents;
+            }
+        }
 
         public void LoadRom(string path)
         {
@@ -201,11 +347,16 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             }
         }
 
+        // MarsCore.RunFrame's order: the frame, the cheats, the periodic save, then the picture - see Mars_Native.md §5.5.
         public void RunFrame()
         {
-            RunFrameExport(Handle);
+            nint handle = Handle;
+            AdvanceExport(handle);
+            ApplyCheatsAtFrameEnd();
             if (TotalFrames % MarsCore.SaveEveryNFrames == 0) SaveSram();
-            if (!_skipRendering) TakePicture();
+            if (_skipRendering) return;
+            PresentExport(handle);
+            TakePicture();
         }
 
         // The interpreter alone, the given number of instructions, as MarsCorpusTests steps the C# core.
@@ -240,7 +391,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             _frameSerial++;
         }
 
-        public byte[] GetFrameBufferRgba() => _frame;
+        // A copy, since the next frame refills this core's buffer while a frontend may still be drawing the last - see Mars_Native.md §5.5.
+        public byte[] GetFrameBufferRgba() => _frame.AsSpan().ToArray();
 
         public short[] DequeueAudioSamples(int maxFrames)
         {
@@ -296,12 +448,16 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             LoadState(copy.ToArray());
         }
 
-        // The C# Mars's format byte for byte; the machine then derives what MarsCore.LoadState derives.
+        // The C# Mars's format byte for byte; a state of the other memory size rebuilds the machine and the Pak follows it, as MarsCore's does.
         public void LoadState(ReadOnlySpan<byte> state)
         {
+            nint handle = Handle;
+            uint before = RdramBytes(handle);
             int status;
-            fixed (byte* data = state) status = RestoreState(Handle, data, (nuint)state.Length);
+            fixed (byte* data = state) status = RestoreState(handle, data, (nuint)state.Length);
             if (status != 0) throw new InvalidDataException($"MarsRT refused the state: {MarsMachine.Describe(status)}.");
+            uint after = RdramBytes(handle);
+            if (after != before) _expansionPak = after == ExpandedRdram;
             if (!_skipRendering) TakePicture();
         }
 

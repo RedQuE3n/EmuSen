@@ -186,6 +186,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
             if ((address & 1) != 0) _frameHidden[address >> 1] = (byte)((value & 1) * 3);
         }
 
+        // The group's step shared among the group's pixels, since at a multiple each pixel is stepped on its own - see Mars_Rdp.md §11.2.
+        private int CopyPixelStep(int attribute) => _textureStep[attribute] / (_colorImageSize == 2 ? 4 : 8);
+
         // At a multiple, each pixel takes the texel its own coordinate names, so a texel is repeated across the pixels that share it - see Mars_Rdp.md §11.
         private void DrawCopyScaled((int First, int Last) rows, bool majorOnLeft, int tile, int maxLevel)
         {
@@ -193,7 +196,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rdp
 
             int direction = majorOnLeft ? 1 : -1;
             int pixelBytes = _colorImageSize == 2 ? 2 : 1;
-            int ds = direction * _textureStep[0], dt = direction * _textureStep[1], dw = direction * _textureStep[2];
+            int ds = direction * CopyPixelStep(0), dt = direction * CopyPixelStep(1), dw = direction * CopyPixelStep(2);
 
             for (int y = rows.First; y <= rows.Last; y++)
             {

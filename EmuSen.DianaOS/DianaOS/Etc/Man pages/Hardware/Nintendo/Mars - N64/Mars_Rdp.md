@@ -950,3 +950,63 @@ before the multiple is added (§35 of `Mars_Performance.md`), so more workers wo
 a run at eight was not made. The 1× column is below §36's figures for the same states because the rounds ran on a
 loaded machine; only the interleaved difference is the measurement, as the harness's README says.
 
+
+### 11.2 Fixed: a copy at a multiple stepped a group's texels at every pixel
+
+*2026-09-21.* At an internal resolution above one, the HUD of Super Mario 64 and the status bar of Kirby 64 were
+drawn wrong, on the processor's threads and on the device alike. In Mario's HUD each glyph — the head, the cross, the
+digits, the star, the camera — appeared as four copies side by side, each a quarter of the glyph's width, at two, three
+and four; Kirby's status bar was squeezed into the left quarter of its width, and the remaining three quarters showed
+the texture memory beyond the image the game had loaded. From the user's two states (made in Mistress with
+`RenderScale` 2, the device on), each run ten frames and the multiple sampled at the centre of every console pixel of
+the HUD, the mean largest-channel difference from the picture at one was 35.9 (Mario, 21,150 pixels) and 96.1 (Kirby,
+65,400 pixels) at two; after the fix it is 8.1 and 6.2, what is left being the scene behind and around the HUD, which
+the multiple resolves more finely. Device and processor pictures were identical before the fix and after it, at every
+multiple.
+
+**It was not the recorded limit of §11.** A frame the CPU writes scans out stale at a multiple, and a HUD would be a
+plausible such frame; but both HUDs are drawn by the display processor, as copy-mode texture rectangles, and the
+multiple held them — at the wrong texels.
+
+**The cause.** The copy mode advances its texture coordinates once per group of eight bytes, which is four pixels of
+a sixteen-bit image and eight of a narrower one (`Mars_RdpCopy.md` §1), so content gives a copy rectangle a step of
+four texels, not one. `DrawCopyScaled` (`Rdp.Copy.cs`) walks the multiple one pixel at a time, each pixel taking the
+texel its own coordinate names, and it stepped that coordinate by `_textureStep` — the group's step, divided by the
+multiple — at every pixel. At two, each pixel of the multiple therefore moved two texels where it should move half of
+one: four times too fast, whatever the multiple, which is exactly the fourfold repetition in Mario's glyphs and the
+fourfold squeeze in Kirby's bar. `RecordShaded` (`Rdp.Gpu.cs`) handed the device the same steps. The fix is
+`CopyPixelStep`: at a multiple, the copy's per-pixel step is the group's step shared among the group's pixels,
+`_textureStep / 4` for a sixteen-bit image and `/ 8` for a narrower one, used by both `DrawCopyScaled` and the
+device's record. The machine's own copy (`DrawCopy`) is untouched, and so is everything at one.
+
+**Why the device's tests did not see it.** `Copy_mode_rectangles_on_the_device_are_the_cpus_byte_for_byte` holds the
+device to the CPU path at the multiple, and the two were wrong the same way. No test held the multiple's copy to the
+console's. `A_copy_at_a_multiple_is_the_copy_at_one_at_every_pixel_of_the_multiple` (`MarsThreadedRdpTests`) does:
+three rectangles of a 32×32 sixteen-bit texture with a step of four texels — from the tile's corner, from an odd
+column and an odd texel, and a third elsewhere — and every pixel of the multiple compared with the console's pixel
+whose square holds it. Before the fix it failed at every multiple ("11456 pixels of the multiple differ; the first:
+pixel 81,40 of the multiple is 0005 where the console's 40,20 is 0001", at two: two texels along after one pixel);
+after it, none differ at two and four.
+
+**Mutants.** The per-pixel step left undivided in `DrawCopyScaled`: the new test fails at 2, 3 and 4, and so does the
+device test, the device now differing from the processor. Left undivided in the device's record only: the device test
+fails at 2, 3 and 4. A group of two pixels for a sixteen-bit image: the new test fails at 2, 3 and 4 (the device test
+does not, since both paths share `CopyPixelStep`). A group of four for every image size: **survives**; no test draws a
+copy into an eight- or four-bit image at a multiple.
+
+**What the fix does not cover.**
+
+- **Three is not exact.** A step divided by three is truncated, so a texel the console reaches exactly — every one,
+  with the usual step — begins one pixel of the multiple late, in both directions. The test accepts at three a pixel
+  equal to the console's pixel to its left, above, or above-left, and nothing else. The one-cycle texture rectangle
+  divides its steps by the multiple the same way and is presumed to have the same one-pixel lag at three; that was not
+  measured. Stepping in the console's units with a remainder would make three exact and is not done here.
+- **A flipped copy rectangle differs from the console's.** The copy mode fetches four consecutive columns of s for a
+  group whichever way the rectangle is flipped, while the multiple samples each pixel on its own and so walks t along
+  the row. With the third rectangle flipped, 3,072 of the 4,096 pixels of the multiple it covers at two differ from the
+  console's: all but the first pixel of every group. Reproducing the group's fetch at the multiple would fix it, and it
+  would also make a copy whose step is not four texels match the console's rather than sample each pixel; neither case
+  has been seen in a game.
+- **Eight- and four-bit images** take `/ 8` on reading §1 of `Mars_RdpCopy.md`, not on a measurement; the surviving
+  mutant above is the record of that. The byte order of a right-to-left copy (§5.2 of that page) is still written as
+  whole pixels at the multiple.

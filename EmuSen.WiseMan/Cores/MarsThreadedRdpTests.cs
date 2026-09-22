@@ -588,6 +588,82 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // A copy-mode texture rectangle, as a game blits its HUD, lays each console pixel's texel over that pixel's square of the multiple - see §11.2.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(4)]
+        public void A_copy_at_a_multiple_is_the_copy_at_one_at_every_pixel_of_the_multiple(int scale)
+        {
+            MemoryBus atOnce = new(), scaled = new();
+            scaled.Dp.Scale = scale;
+            foreach (MemoryBus bus in new[] { atOnce, scaled })
+                for (uint texel = 0; texel < 32 * 32; texel += 2) bus.Write32(Texture + texel * 2, (((texel << 1) | 1) << 16) | (((texel + 1) << 1) | 1));
+
+            ulong[] list = Copy();
+            HandOver(atOnce, list);
+            HandOver(scaled, list);
+
+            byte[] wide = scaled.Dp.ScaledRdram;
+            long image = (long)Framebuffer * scale * scale;
+            int differing = 0;
+            string first = "";
+            for (int y = 0; y < Rows * scale; y++)
+            {
+                for (int x = 0; x < Width * scale; x++)
+                {
+                    long at = image + ((long)y * (Width * scale) + x) * 2;
+                    int actual = (wide[at] << 8) | wide[at + 1], expected = Console(x, y);
+                    if (expected == actual) continue;
+
+                    // A third of a step is truncated, so at three a texel the console lands on exactly begins one pixel of the multiple late - see §11.2.
+                    if (scale == 3 && (actual == Console(x - 1, y) || actual == Console(x, y - 1) || actual == Console(x - 1, y - 1))) continue;
+                    if (differing++ == 0) first = $"pixel {x},{y} of the multiple is {actual:X4} where the console's {x / scale},{y / scale} is {expected:X4}";
+                }
+            }
+
+            Assert.True(atOnce.Rdram[Framebuffer + (20 * Width + 41) * 2 + 1] == 3, "the console's copy did not draw the texture");
+            Assert.True(differing == 0, $"{differing} pixels of the multiple differ; the first: {first}");
+
+            int Console(int x, int y)
+            {
+                int native = (int)(Framebuffer + ((Math.Max(y, 0) / scale) * Width + Math.Max(x, 0) / scale) * 2);
+                return (atOnce.Rdram[native] << 8) | atOnce.Rdram[native + 1];
+            }
+        }
+
+        // Rectangles of a 32×32 sixteen-bit texture, four texels a group: from the tile's corner, and from an odd column and texel.
+        private static ulong[] Copy()
+        {
+            var list = new System.Collections.Generic.List<ulong>
+            {
+                FillCycle,
+                (0x3FUL << 56) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer,
+                Scissor(0, 0, Width, Rows),
+                (0x37UL << 56) | 0xFFFE_FFFE,
+                FillRectangle(0, 0, Width - 1, Rows - 1),
+                (0x3DUL << 56) | (2UL << 51) | (31UL << 32) | Texture,
+                (0x35UL << 56) | (2UL << 51) | (8UL << 41),
+                (0x34UL << 56) | ((31UL << 2) << 12) | (31UL << 2),
+                (0x2FUL << 56) | (2UL << 52),
+            };
+
+            foreach ((ulong id, uint left, uint top, uint width, uint s, uint dsdx, uint dtdy) in new[]
+            {
+                (0x24UL, 40u, 20u, 32u, 0u, 4u << 10, 1u << 10),
+                (0x24UL, 101u, 30u, 27u, 5u << 5, 4u << 10, 1u << 10),
+                (0x24UL, 200u, 100u, 32u, 0u, 4u << 10, 1u << 10),
+            })
+            {
+                uint right = left + width - 1, bottom = top + 31;
+                list.Add((id << 56) | ((ulong)(right << 2) << 44) | ((ulong)(bottom << 2) << 32) | ((ulong)(left << 2) << 12) | (top << 2));
+                list.Add(((ulong)s << 48) | ((ulong)dsdx << 16) | dtdy);
+            }
+
+            list.Add(SyncFull);
+            return list.ToArray();
+        }
+
         // A shaded scene at a multiple, averaged back to the console's pixels, is the scene at one to within a tenth of a level, its edges apart - see §11.
         [Theory]
         [InlineData(2)]

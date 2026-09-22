@@ -144,6 +144,65 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(once.Vi.Frame.ToArray(), twice.Vi.Frame.ToArray());
         }
 
+        // A walker's stamps wrap after 2^31 new lines, and a wide picture after a long narrow one must not find its old samples - see Mars_Video.md §2.13.
+        [Fact]
+        public void A_scan_after_the_walkers_stamps_wrap_reads_no_sample_from_before_it()
+        {
+            // Forty rows take stamps 1 to 41 and thirty-seven take 1 to 38, so after the wrap the wide picture's first two rows are stamped as its last two were.
+            uint[] wide = Registers(2, 0, 320, 0x200, 0x400, 108, 640, 34, 40, 0, 0, control: DitherFilter | DivotOn);
+            uint[] narrow = Registers(2, 0, 320, 0x200, 0x400, 108, 256, 34, 37, 0, 0, control: DitherFilter | DivotOn);
+            MemoryBus wrapped = Painted(1), fresh = Painted(1);
+
+            foreach (MemoryBus bus in new[] { wrapped, fresh })
+            {
+                Program(bus, wide);
+                Assert.True(bus.Vi.Scan());
+                Program(bus, narrow);
+                Assert.True(bus.Vi.Scan());
+            }
+
+            // The narrow picture's two thousand million lines, which leave the wide one's outer offsets as it stamped them.
+            object vi = wrapped.Vi;
+            var walkers = (Array)vi.GetType().GetField("_walkers", NonPublic)!.GetValue(vi)!;
+            Assert.NotEmpty(walkers);
+            foreach (object walker in walkers) walker.GetType().GetField("_row", NonPublic)!.SetValue(walker, int.MaxValue - 1);
+
+            foreach (MemoryBus bus in new[] { wrapped, fresh })
+            {
+                Paint(bus, 2);
+                Program(bus, narrow);
+                Assert.True(bus.Vi.Scan());
+                Program(bus, wide);
+                Assert.True(bus.Vi.Scan());
+            }
+
+            byte[] after = wrapped.Vi.Frame.ToArray(), expected = fresh.Vi.Frame.ToArray();
+            int[] wrong = Enumerable.Range(0, after.Length).Where(i => after[i] != expected[i]).ToArray();
+            Assert.True(wrong.Length == 0, wrong.Length == 0 ? "" :
+                $"{wrong.Length} bytes of the picture after the wrap are not a fresh interface's, in rows {wrong.Min() / 2560} to {wrong.Max() / 2560} and columns {wrong.Min(i => i % 2560) / 4} to {wrong.Max(i => i % 2560) / 4}");
+        }
+
+        private const System.Reflection.BindingFlags NonPublic = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+
+        // A frame buffer of 320-wide lines and its coverage, different for every seed.
+        private static MemoryBus Painted(uint seed)
+        {
+            var bus = new MemoryBus();
+            Paint(bus, seed);
+            return bus;
+        }
+
+        private static void Paint(MemoryBus bus, uint seed)
+        {
+            uint state = seed * 0x9E37_79B9;
+            for (int i = 0; i < 0x10000; i++)
+            {
+                state = state * 1103515245 + 12345;
+                bus.Rdram[Framebuffer + i] = (byte)(state >> 16);
+                if ((i & 1) == 0) bus.RdramHidden[(Framebuffer + i) / 2] = (byte)(state >> 30);
+            }
+        }
+
         private static void Program(MemoryBus bus, uint[] registers)
         {
             for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);

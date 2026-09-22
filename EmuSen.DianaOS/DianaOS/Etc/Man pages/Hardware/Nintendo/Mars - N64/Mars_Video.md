@@ -401,6 +401,44 @@ where the join costs most; there the device's walk (`Mars_Gpu.md` §13) or a wal
 lever. The bands share the processors with the emulation thread and the display processor's workers, so their
 count is a guess at a fair share, not a measured optimum.
 
+### 2.13 Fixed: the walker's stamps wrapped into its own memo (2026-09-22)
+
+*Found while porting the walk to MarsRT (`Mars_Native.md` §5.4.2); the defect is as old as the pre-divot memo of
+`Mars_Performance.md` §21.*
+
+**The mechanism.** A walker keeps two memos of a slot's samples, `_samples` after divot and `_plain` before it, each
+entry tagged with the stamp of the line its slot held when it was made (`Mars_Performance.md` §3 and §21). A stamp is
+a counter that only rises, so a tag equal to the slot's stamp means the entry is this line's. The counter wraps at
+`int.MaxValue` and starts again at 1, and at the wrap `NextStamp` cleared `_sampledRow` and not `_plainRow`. Any
+plain entry still tagged with a small stamp from before the wrap was then taken for the new line that reached the same
+stamp after it.
+
+**What it takes to see it.** An entry is re-tagged whenever a row touches it, so the stale one is found only if the
+first touch after the wrap falls exactly on the stamp it was left with. That needs an offset no scan reached for the
+whole of the counter's span, which is a picture mode used once and then not again: a wide picture, a narrow one for
+two thousand million lines, and the wide one back at the right stamp. At one or two stamps a row, the span is about ten
+hours of continuous play in one process at the most (a 480-row interlaced picture reading two new lines a row, in one
+band) and days at the usual rate. No run has been shown to meet it; the case below constructs it.
+
+**The case.** `A_scan_after_the_walkers_stamps_wrap_reads_no_sample_from_before_it` scans a forty-row picture 640
+columns wide, stepping at half a pixel, then the same picture 256 columns wide and 37 rows tall, over one frame buffer.
+It sets every walker's counter to one below the wrap by reflection, which stands in for the narrow picture's two
+thousand million lines, paints the frame buffer anew, and scans the narrow picture and the wide one again. The first
+wide picture left the outer offsets of its two slots tagged 39 and 40, from its last two rows; after the wrap the
+narrow picture takes stamps 1 to 38 and never reaches those offsets, so the wide picture's first two rows are stamped
+39 and 40 again. The raster is compared with an interface that ran the same four scans without the jump.
+
+**Measured.** Against the code as it was, 2,886 bytes differed, all in rows 0 and 1 and columns 257 to 632: the outer
+part of the first two rows showed lines 38 and 39 of the old frame buffer. With `_plainRow` cleared beside
+`_sampledRow` the rasters are identical. Each clear alone is needed: without `_plainRow`'s, 2,886 bytes differ; without
+`_sampledRow`'s, 2,894. The golden probe was not run, since the counter cannot wrap in its 600 frames, and
+`MarsViTests`, `MarsViDifferentialTests`, `MarsDeferredPresentationTests` and `MarsRTViTests` pass unchanged.
+
+**The claim this retires.** `Mars_Performance.md` §21 says the pre-divot memo "is stamped by the slot's line as
+`Remembered` is", which was true of the tags and not of the wrap: until this fix the two memos were exact only below
+the counter's first wrap. MarsRT's walker cleared both from the start (`Mars_Native.md` §5.4.2), so the two
+implementations now agree at the wrap as well.
+
 ## 3. What the differential says
 
 ### 3.1 The first run, and the bug it found

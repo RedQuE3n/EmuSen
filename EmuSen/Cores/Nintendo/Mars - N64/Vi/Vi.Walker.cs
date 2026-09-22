@@ -146,12 +146,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
                 return taken;
             }
 
-            // A new stamp for a slot's new line, so what it held before is stale without being cleared - see Mars_Performance.md §3.
+            // A new stamp for a slot's new line, so what it held before is stale without being cleared; at the wrap both memos are - see Mars_Video.md §2.13.
             private int NextStamp()
             {
                 if (++_row != int.MaxValue) return _row;
 
                 System.Array.Clear(_sampledRow);
+                System.Array.Clear(_plainRow);
                 _row = 1;
                 return _row;
             }

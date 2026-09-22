@@ -1,10 +1,81 @@
-//! The VR4300's serialized state, the C# `Cpu` (with COP0, the FPU's registers and COP2's latch).
+//! The VR4300's state, the C# `Cpu` (with COP0, the FPU's registers and COP2's latch), and what C# derives beside it.
 
+use crate::Skip;
+use crate::segments::Mode;
 use crate::state::{State, StateReader, StateResult, StateWriter};
 use crate::tlb::Tlb;
 
+/// `ExceptionCode`, the Cause register's codes.
+pub mod code {
+    pub const INTERRUPT: u32 = 0;
+    pub const TLB_MODIFICATION: u32 = 1;
+    pub const TLB_LOAD: u32 = 2;
+    pub const TLB_STORE: u32 = 3;
+    pub const ADDRESS_ERROR_LOAD: u32 = 4;
+    pub const ADDRESS_ERROR_STORE: u32 = 5;
+    pub const SYSCALL: u32 = 8;
+    pub const BREAKPOINT: u32 = 9;
+    pub const RESERVED_INSTRUCTION: u32 = 10;
+    pub const COPROCESSOR_UNUSABLE: u32 = 11;
+    pub const OVERFLOW: u32 = 12;
+    pub const TRAP: u32 = 13;
+    pub const FLOATING_POINT: u32 = 15;
+}
+
+/// C#'s `CpuException`, recorded where the fault is found; the step then enters it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Fault {
+    pub code: u32,
+    pub address: u64,
+    pub in_delay_slot: bool,
+    pub refill: bool,
+    pub coprocessor: u32,
+}
+
+/// The marker a raising instruction returns; the fault itself is in `CpuRun::fault`.
+#[derive(Clone, Copy, Debug)]
+pub struct Raised;
+
+pub type Exec<T = ()> = Result<T, Raised>;
+
+/// The C# `Cpu`'s `[SkipInState]` fields that a load rebuilds (`Cop0Written`), and the idle loop's counters.
+#[derive(Clone, Copy, Debug)]
+pub struct CpuRun {
+    pub mode: Mode,
+    pub recheck: bool,
+    pub asserted_seen: bool,
+    pub timer_due: i64,
+    pub scheduled_compare: u32,
+    pub scheduled_bias: u32,
+    pub fault: Fault,
+    /// The last address a branch to itself was taken from, where the idle loop is looked for.
+    pub idle_at: u64,
+    pub idle_turns_passed: i64,
+    pub idle_instructions: i64,
+    pub rsp_steps: i64,
+}
+
+impl Default for CpuRun {
+    fn default() -> Self {
+        CpuRun {
+            mode: Mode::Kernel,
+            recheck: true,
+            asserted_seen: false,
+            timer_due: 0,
+            scheduled_compare: 0,
+            scheduled_bias: 0,
+            fault: Fault::default(),
+            idle_at: u64::MAX,
+            idle_turns_passed: 0,
+            idle_instructions: 0,
+            rsp_steps: 0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Cpu {
+    pub run: Skip<CpuRun>,
     pub cop0: [u64; 32],
     pub cop2_latch: u64,
     pub current_pc: u64,

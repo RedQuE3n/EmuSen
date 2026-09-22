@@ -1,6 +1,10 @@
 //! The C# `MemoryBus`: every memory, the devices, and the hand-written tail of the state. See Mars_Native.md §5.1.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use crate::Skip;
+use crate::rom::RomImage;
 
 use crate::ai::AiInterface;
 use crate::controller::ControllerPak;
@@ -51,6 +55,12 @@ pub struct MemoryBus {
     pub registers: BTreeMap<u32, u32>,
     /// `Save`: `[SkipInState]` in C#, and written after the registers.
     pub save: SaveChip,
+    /// `_nextEvent`: the earliest cycle the VI, AI or SI has something to do; zero until the first tick asks them.
+    pub next_event: Skip<i64>,
+    /// `Written`: every write to memory that is not the processor's own direct store, which ends an idle run.
+    pub written: Skip<i64>,
+    /// `Cart`: the cartridge, shared by every copy of the machine.
+    pub cart: Skip<Option<Arc<RomImage>>>,
 }
 
 impl MemoryBus {
@@ -73,6 +83,9 @@ impl MemoryBus {
             count_bias: 0,
             registers: BTreeMap::from([(RI_SELECT, 0x14)]),
             save: SaveChip::default(),
+            next_event: Skip(0),
+            written: Skip(0),
+            cart: Skip(None),
         }
     }
 

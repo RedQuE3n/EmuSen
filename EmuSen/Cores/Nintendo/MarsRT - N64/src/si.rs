@@ -19,7 +19,9 @@ pub struct SiInterface {
 
 impl Default for SiInterface {
     fn default() -> Self {
-        SiInterface { controllers: Default::default(), dram_address: 0, due: i64::MAX, pending_read: -1 }
+        let mut controllers: [Controller; 4] = Default::default();
+        controllers[0].present = true;
+        SiInterface { controllers, dram_address: 0, due: i64::MAX, pending_read: -1 }
     }
 }
 

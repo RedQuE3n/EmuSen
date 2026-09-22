@@ -187,8 +187,6 @@ impl Machine {
     /// The bus and processor as built, then `Boot.HandOff`; what the corpus runs, and what `load_rom` starts from.
     pub fn boot(rom: Arc<RomImage>, expansion_pak: bool) -> Machine {
         let mut bus = MemoryBus::new(if expansion_pak { RDRAM_SIZE_EXPANDED } else { RDRAM_SIZE });
-        bus.sp.processor.halted = true;
-        bus.si.controllers[0].present = true;
         let mut cpu = Cpu::power_on(&bus);
         hand_off(&mut bus, &mut cpu, rom);
         Machine { total_frames: 0, last_frame_cycles: CYCLE_CAP, cpu, bus, loaded_version: 0, options: Skip(Options::default()) }

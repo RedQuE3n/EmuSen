@@ -13,7 +13,7 @@ pub const STATUS_NULL: i32 = -1;
 /// An image that is not a Nintendo 64 cartridge.
 pub const STATUS_NOT_A_ROM: i32 = -9;
 
-/// The machine and its host: what the VI last showed, and whether a frame is scanned at all.
+/// The machine and its host: the VI's scan-out, one for the machine's life as C#'s raster is, and whether a frame is scanned at all.
 pub struct Core {
     pub machine: Machine,
     pub scanout: Scanout,
@@ -28,10 +28,10 @@ impl Core {
         Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false }
     }
 
-    /// `Present`: the VI's scan of what the machine left; the scan-out is the VI stage's.
+    /// `Present`: the VI's scan of what the machine left, which writes the VI's held lines; the frame is composed on every call.
     pub fn present(&mut self) {
-        let bus = &self.machine.bus;
-        self.shown = vi_scan::scan(&bus.vi, &bus.rdram, &bus.rdram_hidden, &mut self.scanout);
+        let bus = &mut self.machine.bus;
+        self.shown = vi_scan::scan(&mut bus.vi, &bus.rdram, &bus.rdram_hidden, &mut self.scanout);
         self.frame_serial += 1;
     }
 
@@ -216,7 +216,8 @@ pub unsafe extern "C" fn mars_machine_run_steps(core: *mut Core, steps: u64) {
     }
 }
 
-/// Bit 0 skips rendering; bit 1 turns the idle skip off; bit 2 steps the signal processor through the idle loop; bit 3 frames the RDP's words.
+/// Bit 0 skips rendering; bit 1 turns the idle skip off; bit 2 steps the signal processor through the idle loop; bit 3 frames the RDP's words;
+/// bit 4 is C#'s `RepeatRows`.
 ///
 /// # Safety
 /// `core` must be live or null.
@@ -227,6 +228,7 @@ pub unsafe extern "C" fn mars_machine_set_options(core: *mut Core, flags: u32) {
         c.machine.options.idle_skip = flags & 2 == 0;
         c.machine.options.rsp_whole = flags & 4 == 0;
         c.machine.bus.dp.framer.on = flags & 8 != 0;
+        c.scanout.repeat_rows = flags & 16 != 0;
     }
 }
 
@@ -305,7 +307,8 @@ pub unsafe extern "C" fn mars_machine_audio_sample_rate(core: *const Core) -> i3
     unsafe { core.as_ref() }.map_or(crate::ai::DEFAULT_SAMPLE_RATE, |c| c.machine.bus.ai.sample_rate(c.machine.bus.vi.video_clock()))
 }
 
-/// The picture the last scan gave: width, height, rows shown per row, and the serial; the bytes are `mars_machine_frame_bytes`.
+/// The picture the last scan composed: width, height, rows shown per row, and the serial; the bytes are `mars_machine_frame_bytes`.
+/// Returns whether that scan walked, as C#'s `Scan()` does.
 ///
 /// # Safety
 /// `core` must be live or null; `out` valid for four values.

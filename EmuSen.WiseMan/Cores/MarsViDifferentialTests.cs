@@ -36,6 +36,10 @@ namespace EmuSen.WiseMan.Cores
 
         private static readonly Lazy<Replay?> Replayed = new(ReplayAll);
 
+        private static readonly Lazy<IReadOnlyList<IReadOnlyList<byte[]>>> ReplayedMars = new(ReplayMars);
+
+        private static readonly Lazy<IReadOnlyList<IReadOnlyList<byte[]>>?> ReplayedMarsRT = new(() => MarsRTViScan.Available ? ReplayMarsRT() : null);
+
         public static TheoryData<string> CaseNames()
         {
             var data = new TheoryData<string>();
@@ -118,6 +122,57 @@ namespace EmuSen.WiseMan.Cores
                 {
                     for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
                     if (bus.Vi.Scan()) frames.Add(bus.Vi.Frame.ToArray());
+                }
+
+                scanned.Add(frames);
+            }
+
+            return scanned;
+        }
+
+        // MarsRT's scan-out over every case, against the C# VI always and against angrylion when it is built - see Mars_Native.md §5.4.
+        [Theory]
+        [MemberData(nameof(CaseNames))]
+        public void MarsRT_scans_out_what_the_csharp_vi_and_the_reference_scan_out(string name)
+        {
+            IReadOnlyList<IReadOnlyList<byte[]>>? rt = ReplayedMarsRT.Value;
+            Assert.True(rt is not null, EmuSen.Cores.Nintendo.Mars.Native.MarsNative.Report);
+
+            int index = Array.FindIndex(Cases, c => c.Name == name);
+            IReadOnlyList<byte[]> mars = ReplayedMars.Value[index];
+            Assert.True(mars.Count == rt[index].Count, $"{name}: the C# VI scanned {mars.Count} frames and MarsRT {rt[index].Count}");
+            for (int frame = 0; frame < mars.Count; frame++) Assert.True(mars[frame].AsSpan().SequenceEqual(rt[index][frame]), $"{name}: frame {frame} differs from the C# VI's");
+
+            if (Replayed.Value is { } replay)
+            {
+                string differences = Differences(replay.Reference[index].Frames, rt[index]);
+                Assert.True(differences.Length == 0, $"{name}, MarsRT against the reference:\n{differences}");
+            }
+        }
+
+        // ReplayMars with MarsRT scanning the same memory, a frame being the raster's first rows as the C# VI's Frame is.
+        private static IReadOnlyList<IReadOnlyList<byte[]>> ReplayMarsRT()
+        {
+            var bus = new MemoryBus(expansionPak: true);
+            var cache = new byte[bus.Rdram.Length];
+            var hidden = new byte[bus.RdramHidden.Length];
+            var scanned = new List<IReadOnlyList<byte[]>>();
+            using var rt = new MarsRTViScan { RepeatRows = false };
+
+            foreach (Case c in Cases)
+            {
+                foreach ((uint address, byte[] bytes) in c.Uploads) bytes.CopyTo(cache, address);
+                foreach ((uint index, byte[] bytes) in c.Hidden) bytes.CopyTo(hidden, index);
+                cache.CopyTo(bus.Rdram, 0);
+                hidden.CopyTo(bus.RdramHidden, 0);
+
+                var frames = new List<byte[]>();
+                foreach (uint[] registers in c.Scans)
+                {
+                    rt.Set(registers);
+                    if (!rt.Scan(bus.Rdram, bus.RdramHidden)) continue;
+                    rt.Frame(out int width, out int height, out _);
+                    frames.Add(rt.Raster().AsSpan(0, width * height * 4).ToArray());
                 }
 
                 scanned.Add(frames);

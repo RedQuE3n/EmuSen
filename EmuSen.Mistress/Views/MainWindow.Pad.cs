@@ -30,11 +30,18 @@ namespace EmuSen.Mistress.Views
 
         private bool GameOnScreen => GameFrame.IsVisible && _session is { IsRomLoaded: true };
 
-        // Asked for by the setting, by --bigscreen, or by a Steam Deck's own session, which says so in its environment.
+        // Asked for by the setting, by --bigscreen, or by a Deck's Game Mode, which SteamDeck=1 alone does not tell from Desktop Mode - see EmuSen_Settings_Reference.md §4.43.
         private bool WantsBigScreen() =>
             _appSettings.BigScreen
             || Environment.GetCommandLineArgs().Contains("--bigscreen")
-            || Environment.GetEnvironmentVariable("SteamDeck") == "1";
+            || InGameModeSession(Environment.GetEnvironmentVariable);
+
+        internal static bool InGameModeSession(Func<string, string?> environment)
+        {
+            string? desktop = environment("XDG_CURRENT_DESKTOP");
+            if (string.IsNullOrEmpty(desktop)) return environment("SteamDeck") == "1";
+            return desktop.Split(':').Any(d => d.Equals("gamescope", StringComparison.OrdinalIgnoreCase));
+        }
 
         private void StartPadNavigation()
         {

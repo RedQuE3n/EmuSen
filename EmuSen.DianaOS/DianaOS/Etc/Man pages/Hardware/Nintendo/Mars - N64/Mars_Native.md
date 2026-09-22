@@ -533,3 +533,209 @@ and here the boundary is crossed once per full sync, which is the shape §5 chos
 - YUV texels, flipped texture rectangles and keyed combines are covered by the random lists and by no game's.
 - The replay covers lists as they arrive at a processor, not the game's own evolution of memory; the machine stage's
   frame-by-frame comparison against the C# core is what will cover that.
+
+### 5.4 The scan-out
+
+*Stage 4's first part, 2026-09-22.* MarsRT's video interface turns its registers and RDRAM into a picture.
+`src/vi_scan.rs` is C#'s `Vi.Scan()` followed by `MarsCore.Compose`, on the immediate path, at a `RenderScale` of
+one, with no antialiasing and no compute device. The C# scan-out is the oracle. The claim is that the two agree byte
+for byte in everything a scan leaves behind: the frame, its width, height and row repeat, the whole raster with its
+coverage bytes, the held lines, the blank flag, and the value `Scan()` returns.
+
+**What was built.**
+
+| Module | The C# it ports | Lines |
+| --- | --- | --- |
+| `vi_scan.rs` | `Vi.Prepare`, `Measure`, `Borders`, `Hold`, `Fade`, `Expire`, `Darken`, `FrameHeight`; `MarsCore.Compose` | 327 |
+| `vi_scan/walker.rs` | `Vi.Walk` and `Vi.Walker`: the fetch, the line window, the two slots and their sample caches, `Filter`, `Dither` | 366 |
+| `vi_scan/filters.rs` | `Pixel`, `Pull`, `Runners`, `Step`, `Divot`, `Median`, `Mix`, `Between`, the gamma table and `Root` | 138 |
+| `vi_scan/tests.rs` | `MarsViTests`' angrylion pixels, and the filters against formulations written independently of them | 416 |
+| `ffi_vi.rs` | nothing: a test-only C ABI, one VI and its scan-out behind a handle | 125 |
+
+`EmuSen.WiseMan/Fixtures/MarsRTViScan.cs` wraps the test ABI, and `MarsRTViTests` and one theory added to
+`MarsViDifferentialTests` drive it. The port keeps the C# structure closely, down to the window's sliding rule and the
+slots' stamps. Every cache in the walk is a pure function of memory and the registers (`Mars_Video.md` §2.12), so a
+different cache would be equally exact; keeping the same one keeps the same cost profile, which makes §5.4.4's
+comparison one of languages rather than of algorithms.
+
+**The seam moved in one respect.** The stub was `scan(vi: &Vi, …)`. A scan writes `_held` and `_wasBlank`, and both
+are serialized (§5.1). A scan that could not write them would leave MarsRT's state different from the C# state after
+the same frame, which is the property the whole port is graded by. The signature is therefore
+`scan(vi: &mut Vi, rdram, hidden, out: &mut Scanout) -> bool`. What the C# marks `[SkipInState]` for the scan, the
+raster and the walker's caches, lives in `Scanout`, so `vi.rs`'s state layout is untouched. A machine holds one
+`Scanout` for its life and keeps it across a load, as the C# raster is kept across one. `Scanout` also carries
+`repeat_rows`, C#'s `RepeatRows`, false as Mistress sets it.
+
+**The return value keeps C#'s meaning, and that meaning is narrower than the stub's comment said.** `Scan()` is true
+when a walk ran. It does not say whether there is a picture. `Present` composes the raster whatever `Scan()`
+returned, since a scan that walks nothing may still have cleared, darkened or faded lines, and a raster nothing
+rewrote is still on the screen (`Mars_Video.md` §2.4). `scan` composes on every call too, so `out.frame` is always the
+frame to show. The stub's "false when the VI shows nothing" would have invited a caller to keep the previous frame on
+false, which the C# never does.
+
+**What is left out:** the deferred path (`Prepare`, `Capture` and `Walk` on the pool, and the repeat test of
+`Mars_Video.md` §2.8), the multiple, averaging, the device, and the bands. Only the last bears on exactness, and the
+argument that it does not is `Mars_Video.md` §2.12's: the rows are independent and the fetch bug's counter has a
+closed form, so one band over every row writes the raster four bands write. The differential below is incidentally a
+second test of that argument across two implementations: on the sixteen-processor machine it ran on, the C# oracle
+walked every game picture in four bands and MarsRT in one.
+
+#### 5.4.1 The evidence
+
+Four oracles, each able to see something the others cannot.
+
+1. **angrylion's own pixels, without the tools.** `cargo test` runs `MarsViTests`' twenty-seven scans and checks its
+   81 constants, colour and coverage byte alike. All 81 matched on the first run.
+2. **Formulations written independently of the code.** The runners-up against the FPGA's sort-and-clamp, over all
+   1,835,008 configurations of a pixel and six neighbours (`Mars_VideoFilter.md` §5). The median against a sort. The
+   square root against the floating-point root at all 16,384 entries. The gamma lookup, the dither's five-bit step and
+   the pull's rounding against the FPGA's formulas, stated in the test. The guard columns and the coverage they keep,
+   and a scan after the walker's stamps wrap (§5.4.2).
+3. **The C# VI, on synthetic registers.** `MarsRTViTests` scans the register sets of `MarsViTests` and of
+   `MarsDeferredPresentationTests`' immediate walk, twenty-nine of them, three times over with the hidden bits random,
+   all 3 and all 0: 87 scans. `MarsRT_scans_out_what_the_csharp_vi_and_the_reference_scan_out` replays every one of
+   the 151 cases of `MarsViDifferentialTests` through MarsRT, and compares each frame with the C# VI's and, since the
+   reference is built on this machine, with angrylion's. The painter program of `MarsDeferredPresentationTests` runs
+   through the core's own `Present` for twelve frames, rows sent once and repeated, progressive and interlaced.
+4. **The C# VI, on real frames.** For each of three games, a C# `MarsCore` runs from power-on for 1,500 frames and
+   from a gameplay state for 600, with immediate presentation, the display processor on the emulation thread,
+   `RenderScale` 1 and `RepeatRows` false. After each frame the core's own `Present` runs, and MarsRT scans the same
+   registers over the same RDRAM.
+   - MarsRT carries its own held lines from the start, and they are compared before the scan as well as after, so a
+     divergence in them cannot be hidden by copying the C# values across.
+   - `Present` discards `Scan()`'s return value, so it is taken from `Prepare` on a scratch bus given the same
+     registers and blank flag, which is what `Scan()` returns at one.
+   - Every tenth frame the same memory is also scanned by both under eight other control words, keeping every other
+     register as the game set it.
+
+**Every comparison was identical.**
+
+| Game | Frames compared | Of which walked | Swept scans | Modes the game set: control / width / x step / y step |
+| --- | --- | --- | --- | --- |
+| Super Mario 64 (PAL) | 2,100 | 1,953 | 1,680 | `13016` / 320 / `200` / `400` throughout |
+| Ocarina of Time (PAL) | 2,100 | 2,078 | 1,680 | `311E` / 320 / `200` / `400` for 20 frames at boot, then `13016` / 320 / `200` / `354` |
+| GoldenEye, the Dam | 2,100 | 2,042 | 1,680 | `311E` and `13016` at 320 wide, NTSC for 55 frames and then PAL; `13016` / 440 / `2C0` / `49D` for 1,441 |
+
+A frame that did not walk is one with its origin at zero or a second blank in a row, and it was still composed and
+compared. `13016` is a sixteen-bit picture in anti-alias mode 0 with divot and the dither filter; `311E` is mode 1 with
+divot and gamma. Both set bit 2, the gamma dither, which neither implementation models (`Mars_VideoPasses.md` §3.1),
+so the two agree on a picture that differs from the console's by exactly the dither. Ocarina of Time's vertical step
+of `354` is the corpus's one fractional step down, and GoldenEye's 440-wide buffer its one fractional step across.
+**No game here uses a thirty-two-bit frame buffer or anti-alias modes 2 and 3.** Those were reached only by the sweep,
+which reads the games' sixteen-bit memory as thirty-two-bit pixels and resamples it in both modes: real bytes through
+paths no game here takes. That is weaker evidence than a game that takes them, and stronger than none.
+
+#### 5.4.2 Where the C# fails, and MarsRT does not follow it
+
+Three inputs make the C# scan-out misbehave. MarsRT does something defined at each. None is reachable by a game in
+the ordinary run of play.
+
+- **The walker's stamps wrap, and one of its two caches is not emptied.** A walker stamps each slot's line with a
+  counter that wraps at `int.MaxValue`. The wrap clears `_sampledRow` and not `_plainRow`, so a slot stamped 1 after
+  the wrap finds the plain samples of a slot stamped 1 before it.
+  - *Demonstrated, not argued.* A throwaway test scanned one row, set the walker's counter to `int.MaxValue − 1` by
+    reflection, changed the frame buffer and scanned again: 879 bytes of the raster differed from a fresh VI's scan
+    of the new memory. Clearing `_plainRow` at the same point made them identical.
+  - *Its reach.* A walker takes one or two stamps a row, so the wrap comes after about ten hours of continuous play
+    in one process at the worst (a 480-row interlaced picture reading two new lines a row, in one band) and days at
+    the usual. Even then, a stale sample needs an offset no scan has written since the stamp last had that value,
+    which in practice means a mode change long before.
+  - MarsRT empties both caches, and `a_scan_after_the_stamp_wraps_reads_no_sample_from_before_it` holds it. The C# is
+    not changed here, since it is the oracle and this stage does not own it; the one-line fix is left for it.
+- **`Borders` indexes `_held` past its end** once an interlaced picture's active lines exceed 625, which needs a
+  vertical sync above 669 half lines. The C# throws out of `RunFrame`. MarsRT stops at the raster's last line.
+- **A hidden byte above 3 can carry a channel outside a byte** through the filter's pull, and the C# gamma lookup then
+  throws. No writer in Mars stores such a byte (`Mars_VideoFilter.md` §1). MarsRT reads zero there.
+
+MarsRT also treats an RDRAM longer than twice its hidden bits as ending where the hidden bits do. The test ABI
+refuses the mismatch outright, and the C# cannot construct it.
+
+#### 5.4.3 Mutants
+
+Thirty-one were made in the Rust, each applied alone and run against `cargo test` and against the WiseMan suites
+above, with the games at 200 frames from power-on and 200 from the state. The WiseMan count is the tests that failed,
+of 160.
+
+| Mutant | `cargo test` | WiseMan |
+| --- | --- | --- |
+| Filter: the upper-left neighbour one column nearer | caught | 74, all three games |
+| Filter: a neighbour of coverage 6 counted whole | caught | 74 |
+| Filter: the fetch bug never folds the row below | caught | 27, of the games Ocarina of Time only |
+| Filter: the pull rounds with `+ 3` | survived, then caught | 44 |
+| Filter: the low rescan starts at the leader | caught | 75 |
+| Filter: the plain maximum instead of the runner-up | caught | 75 |
+| Filter: mode 1 reads no coverage | caught | 64 |
+| Fetch: the sixteen-bit coverage's halves exchanged | caught | 71 |
+| Dither: six bits compared | survived, then caught | 44 |
+| Dither: the neighbour above dropped | caught | 52 |
+| Divot: the right pixel's coverage ignored | caught | 31 |
+| Divot: ties fall to the right first | **equivalent** | survived |
+| Divot: the right pixel never the median | caught | 33 |
+| Divot: the right neighbour two across | caught | 33 |
+| Gamma: the entry one above | survived, then caught | 60 |
+| Gamma: before the mix rather than after | caught | 44 |
+| Mix: rounds with `+ 15` | caught | 101 |
+| Geometry: NTSC's left offset 107 | caught | 151, no game |
+| Geometry: the top halved by a shift | survived, then caught | 36, no game |
+| Geometry: the left guard seven columns | survived, then caught | 139 |
+| Geometry: the right guard eight columns | survived, then caught | 150 |
+| Walker: the vertical fraction one bit low | caught | 113 |
+| Walker: the fetch bug fires on the repeat itself | caught | 32, of the games Ocarina of Time only |
+| Walker: an interlaced field starts on the other line | caught | 154 |
+| Walker: a dark column clears its coverage | survived, then caught | 79, no game |
+| Walker: the stamp wrap empties only one cache | caught | **survived** |
+| Borders: a held line gets three frames | caught | 61 |
+| Borders: below the picture the count is watched | **survived** | 2 |
+| Borders: a spent line darkened whole | **survived** | 1 |
+| Compose: the row repeat always one | caught | 4, the games and the painter only |
+| Compose: the coverage byte kept | caught | 7, the games and the painter only |
+
+**What the pattern says.**
+
+- *The tie mutant was predicted equivalent before it ran.* When both ends pass the median's test they are equal, so
+  which one is returned cannot change a value. `Mars_VideoPasses.md` §2 says ties fall to the left pixel first, which
+  is true of the code and invisible in its output.
+- *Seven survived `cargo test` and were caught once a test was written for each.* Three are the pull's rounding, the
+  dither's five bits and the gamma index, which the tool-free test's sixteen-bit pixels cannot reach; that is what
+  `Mars_VideoFilter.md` §4.3 and `Mars_VideoPasses.md` §4.3 found for the C# a slice ago. The others are the
+  half-line truncation, the two guards and the coverage a dark column keeps. Two border rules still survive
+  `cargo test`, and are held only by the named differential cases written for them in `Mars_Video.md` §3.2.
+- *The games are a weak oracle for geometry and the only one for composition.* Every game here is PAL except
+  GoldenEye's first 55 frames. The NTSC mutant passed in that game, so a one-column shift leaves those 55 pictures
+  unchanged, as it would a uniform one; that they are the black screen before the logo is likely and was not checked.
+  No game's start is an odd half line above the offset. The composition mutants, conversely, cannot be seen by the
+  differential, which compares rasters; only a composed frame shows them.
+- *The stamp wrap is the one rule only `cargo test` holds,* because no real run reaches two thousand million lines.
+
+#### 5.4.4 Speed
+
+Per scan and composition, from each gameplay state: 300 frames, with the C# `Present` and MarsRT's `scan` timed on
+the same frame one after the other and the order swapped every frame, three rounds, Release. Medians in
+milliseconds; the range is over the rounds.
+
+| Game | C#, four bands | MarsRT, one thread | C#, one band | MarsRT, beside it |
+| --- | --- | --- | --- | --- |
+| Super Mario 64 | 1.76–1.80 | 2.85–2.89 | 4.55–4.57 | 2.81–2.82 |
+| Ocarina of Time | 2.82–2.88 | 4.48 | 8.46–8.51 | 4.44–4.45 |
+| GoldenEye | 1.94–2.02 | 3.16–3.17 | 5.12–5.25 | 3.12–3.15 |
+
+The first pair is the C# as it ships on this sixteen-processor machine, where `Vi.Bands` is four. The second pair
+held the C# to one band by running the process with `DOTNET_PROCESSOR_COUNT=4`. **MarsRT is 1.6 to 1.9 times faster
+than the C# walk it ports, and 1.6 times slower than four of them in parallel.**
+
+Before these numbers, one change was measured on a Rust-only loop over one dumped frame per game. Forcing the four
+per-sample functions inline (`fetch`, `fetched`, `filter`, `undither`) took a fifth off MarsRT's time with identical
+rasters, and was kept. Storing the window as four bytes a pixel gained nothing, and inlining `sample` as well lost
+time; both were reverted.
+
+**Why this does not settle the stage's question.** §5 moved the whole machine so that the boundary is crossed once a
+frame, and the scan-out is a per-frame component that meets no boundary at all, so it compares the Rust with the C# on
+equal terms. The result says that a single-threaded Rust walk beats a single-threaded C# walk. It does not say that
+the port pays, because the C# does not run its walk single-threaded: it defers it to another thread
+(`Mars_Video.md` §2.7) and splits it into bands. A machine that walks for 3 to 4.5 ms a frame on its own thread costs
+the frame nothing if the walk overlaps the next one, and all of it if it does not; which of the two MarsRT does is the
+machine stage's decision.
+
+**Left for the machine stage.** The call itself: the machine calls `scan` at the field's end, where `RunFrame` calls
+`Present`, and after a load, where `LoadState` does, and does not reset the `Scanout` when it loads. The deferred
+presentation, the repeat test, the bands, the multiple and the device are not ported.

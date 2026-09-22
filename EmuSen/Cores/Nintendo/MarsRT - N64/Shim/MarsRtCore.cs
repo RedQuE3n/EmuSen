@@ -227,7 +227,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             _ => _ignored.TryGetValue(Setting(key).Key, out string? value) ? value : Setting(key).Default,
         };
 
-        // Checked as its kind says, as MarsCore refuses text that is no value, and kept; only the Expansion Pak acts - see Mars_Native.md §5.5.
+        // Checked as its kind says, as MarsCore refuses text that is no value, and kept; the Expansion Pak and the thread switches act - see Mars_Native.md §5.5 and §5.6.
         public void Set(string key, string value)
         {
             CoreSetting setting = Setting(key);

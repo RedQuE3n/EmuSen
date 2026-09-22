@@ -344,6 +344,13 @@ the single-address wait that decides whether a read is a bystander at all checks
 so a four-byte read whose second half entered a pending range would not wait. Nothing has shown that happening, and it
 is recorded here rather than changed.
 
+*2026-09-22, from MarsRT's port (`Mars_Native.md` §5.6.2).* MarsRT tests every byte of an access, and no comparison
+changed. A second finding corrects this section. The statement above, that "any transfer of a range keeps §2.6.1's
+wait", does not hold for a read. `WaitForReadRange` narrows by the boxes that hold the range's first eight bytes. A
+capture whose first bytes no pending draw holds is therefore freed, even while draws still hold its later rows.
+`The_csharp_interface_lets_a_range_read_pass_the_draws_that_hold_all_but_its_first_bytes` shows it with the thread
+paused. The C# is unchanged.
+
 ### 2.7 The thread held between two words
 
 *2026-09-19.* A state must hold what the thread drew, so writing one joins it (§2.6), and at a frame boundary the thread
@@ -406,6 +413,11 @@ set (`Reach`, the interface's own extent for an image), which the barrier at eve
    spin barrier with a generation, three to nine passes a frame in the recorded frames, and it lets everyone through
    when a processor has faulted so that the fault, not a hang, is what the machine's thread sees.
 
+*2026-09-22, on item 3 (`Mars_Native.md` §5.6.6).* The reach is counted from the moment the image was set. A load
+made before the image's first draw is therefore run apart, and the draws after it can write its source before a
+slower processor has read it. ThreadSanitizer found this race in MarsRT's port of the rule, in Ocarina of Time, where
+the frames matched by timing. It has not been shown in C#.
+
 **The pixel at the width, which reads and does not write.** With a scissor equal to the image's width — the usual
 case — a span clipped by it visits the column at the width, whose bytes are the next row's first, and the pixel reads
 them (the memory colour, and the stored depth slope) with zero coverage and writes nothing. Nothing in the picture
@@ -430,12 +442,25 @@ it does not draw alone, and the ones it skips are rewritten by the next walk bef
 processors' own stale scratch is never read for output — every field but the two carries is written by a pixel
 before that pixel reads it — which is the fact §10.2's inventory established and this design rests on.
 
+*2026-09-22: one field breaks that fact* (`Mars_Native.md` §5.6.6). A one-cycle primitive that computes no level of
+detail writes each processor's own last `_lodFraction` at every pixel, with its row's stamp. So a primitive drawn
+alone then assembles a stale value.
+`The_csharp_split_assembles_a_stale_level_of_detail_fraction_from_rows_that_computed_none` finds the state wrong in
+that field alone for 8 of 16 seeds. It never reaches a picture.
+
 **A snapshot with several processors** (§2.7) needs a point every processor stands at. The pause point is the furthest
 word any processor has reached when it sees the request: each raises the point to its own position if that is
 further, runs on to it if it is short of it, and stands there; the request is answered when all stand at the same
 word. A processor short of the point can never be waited for at a barrier by one past it, because a barrier is taken
 at a command's last word and a processor stops only before gathering a word. The cost is that the slowest processor
 runs to the fastest's position, which is about a primitive.
+
+*2026-09-22: the argument has a gap* (`Mars_Native.md` §5.6.6). A processor waiting at a barrier for word *k* + 1 is
+not past the point but at it. If the others were short of the barrier when the request came, they stand at *k*, and
+the waiter never gets through. MarsRT's port deadlocked this way on four workers.
+`The_csharp_workers_deadlock_when_a_pause_finds_some_at_a_barrier_and_the_rest_short_of_it`, run behind
+`EMUSEN_MARS_DEADLOCK_PROBE=1`, finds the C# pause unanswered too. This is a candidate cause of the Super Mario 64
+freeze described below, and it has not been shown to be that cause.
 
 *The first version stood only at a command's boundary, and hung.* The play harness takes no snapshots, so the case
 was met in the frontend, in play: a game hands its list over in pieces, and a piece can end inside a command — the

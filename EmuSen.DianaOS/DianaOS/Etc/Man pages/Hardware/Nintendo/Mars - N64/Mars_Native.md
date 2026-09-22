@@ -1159,6 +1159,8 @@ default and says that instead.
   falls back to the default in Mistress as it does for Mars. They are then recorded, read back and ignored. Each one's
   hint begins "MarsRT does not implement this yet and ignores it." Those are the hints the core answers. The window
   shows the catalogue's, which are Mars's, so the Engine row's hint carries the qualification there.
+  *Since §5.6:* `ThreadedRdp`, `RdpWorkers`, `DeferredPresentation` and `SkipRepeatedScans` act as well, and three
+  settings remain ignored.
 - **Cheats, in `MarsCore.RunFrame`'s order.** They are applied after the frame, before the periodic save and before
   the picture, and only while Status.IE is set (`Mars_Cheats.md` §5.1). That order needed the frame split in two:
   `mars_machine_advance` runs the machine to the field's end, and `mars_machine_present` scans. `ApplyCheats`, the
@@ -1191,6 +1193,8 @@ default and says that instead.
 - **Rewind stays off for MarsRT.** §4.21b of the settings reference turned it off for Mars because a snapshot taken
   with several rasteriser workers hung. MarsRT has no workers, so that reason does not reach it today. But §5.6 gives
   it a threaded RDP, and the rule is kept per console until a snapshot is proven there, rather than argued per engine.
+  *Since §5.6:* a snapshot with the workers running is proven headlessly in every frame of six games (§5.6.7). The
+  rule stands until one is proven in play.
 - **States** are unchanged: MarsRT reads and writes Mars's format (§5.1), version 1 through `IStateFormat`. A state
   of the other memory size rebuilds the machine in Rust, and the shim's `ExpansionPak` now follows it, as MarsCore's
   `_expansionPak` does. A state's record gives the same core name for both engines, so it does not say which wrote it.
@@ -1204,6 +1208,8 @@ default and says that instead.
 RDRAM, because the threaded RDP may still be drawing into it. MarsRT runs its RDP inline, so there is nothing to wait
 for. `Core::read_memory` and `Core::write_memory` in `ffi/mod.rs` are the one place cheats and the debugger reach
 RDRAM, and §5.6's wait belongs there. Until it is added, a threaded MarsRT's cheats would race its RDP.
+*Paid in §5.6.4:* both functions now wait for every worker, and `site_9_the_hosts_read_and_write_wait_for_the_drain`
+holds them to it.
 
 #### 5.5.1 The evidence
 
@@ -1317,10 +1323,477 @@ This checks the published core and the published factory, not the published wind
 - The debugger's breakpoints, stepping, watches, coverage, call stack and labels, all of which need hooks inside the
   Rust loop. The deep inspection §5 planned through the state transfer was not built.
 - The seven settings MarsRT ignores. Each arrives with the stage that implements it: the threaded RDP and deferred
-  presentation with §5.6, and the multiple, antialiasing and the device later.
-- The wait a threaded RDP will need in `Core::read_memory` and `Core::write_memory`.
+  presentation with §5.6, and the multiple, antialiasing and the device later. *Four arrived with §5.6.*
+- The wait a threaded RDP will need in `Core::read_memory` and `Core::write_memory`. *Done in §5.6.4.*
 - An engine choice in Hotaru and Pharaoh, which still build the C# Mars.
 - `IFrameProfiler` phases, and the dashboard's audio peek.
+
+### 5.6 Threads (2026-09-22)
+
+MarsRT now takes work off the emulation thread the way the C# core does. The display processor's list runs on a
+thread of its own, or is shared by several processors, each shading its own rows. The scan-out's walk runs on another
+thread while the next frame runs. The claim is that neither changes anything the machine computes:
+- With the display processor threaded, the state, the picture and the sound after every frame are the unthreaded
+  machine's.
+- With presentation deferred, the picture shown after frame *n* + 1 is the immediate picture of frame *n*.
+
+The design being ported is the C# core's (`Mars_Rdp.md` §2.6 to §2.8, `Mars_Video.md` §2.7 and §2.8). MarsRT on one
+thread is the oracle. The C# core threaded is a second oracle wherever it is exact, and §5.6.2, §5.6.5 and §5.6.6
+record four places where it is not.
+
+The switches are `Machine::set_threaded_rdp`, `set_rdp_workers` and `set_deferred`, all off by default. The path
+§5.2 to §5.4 proved therefore stays the default until this one has been proven in play. The shim now honours Mars's
+`ThreadedRdp`, `RdpWorkers`, `DeferredPresentation` and `SkipRepeatedScans` keys, with MarsRT's defaults of off, one,
+off and on. Their hints no longer say "ignored", and the settings still ignored are three: the multiple, antialiasing
+and the device. The interface version is 5, which adds `mars_machine_set_threads` and `mars_threads_counters`
+(`src/ffi/threads.rs`).
+
+| Module | The C# it ports | Lines |
+| --- | --- | --- |
+| `memory/ram.rs` | nothing in C#: RDRAM and the processor as raw allocations (§5.6.1) | 297 |
+| `memory/dp_threads.rs` | `DpInterface`'s threaded half: the ring, the shadow, the marks, ranges and boxes, the waits, `Join`, `Hold`/`Pause`/`Resume`, the workers, the barrier and the verifier | 1,478 |
+| `memory/dp.rs` | `Take` onto the ring, `WritePending`, and the cheat's two accesses | 391 |
+| `rdp/split.rs` | `Classify`, `Serialised`, `Owns`, the stamps, `RecordAliasedRead`, `TakeScratchFrom` and `CopyStateFrom` | 303 |
+| `vi/scan.rs`, `vi/scan/presenter.rs` | `Prepare`, `Capture`, the walk apart, `Repeated`, `PresentDeferred` and `JoinPresentation` | 537, 130 |
+| the wait sites | a line or two each in `bus_access`, `interp`, `idle`, `si`, `ai`, `sp` and `ffi` | — |
+| `tests/threads.rs`, `tests/sites.rs`, `tests/games.rs` | `MarsThreadedRdpTests`, and more (§5.6.7) | 751, 260, 190 |
+
+The crate's diff against 7ea79b1 is 35 files, 4,447 lines in and 167 out.
+
+#### 5.6.1 Shared memory under Rust's rules
+
+In the C# design, two threads share RDRAM, its hidden bits and the processor, and the page marks decide who may touch
+which byte when. Rust's rule for data races is stricter than "the bytes come out right".
+- Two accesses to one byte from two threads, one of them a write, must be ordered by happens-before. Otherwise the
+  program's behaviour is undefined, whatever value the read would have found.
+- A reference counts as an access to every byte it covers, in the models Miri checks, because forming one retags those
+  bytes.
+
+So the port could not keep RDRAM as a `Vec<u8>` reached through `&mut [u8]` while a drain writes into it. Three types
+change:
+
+- **`Ram`** holds RDRAM and its hidden bits as one raw allocation each. Indexing a byte or a range forms a reference to
+  those bytes alone, never to the whole memory. The CPU's direct loads, stores and fetch and the bus's word access go
+  through its `read`, `write`, `be32` and `put_be32`, which touch only the bytes named. `Deref` to the whole slice
+  remains for a machine whose drain is joined: a state, a load, the unthreaded scan and the tests.
+- **`RdpMemory`** is now raw pointers with accessors. A worker holding it for a whole list therefore asserts nothing
+  about the bytes the machine touches meanwhile. Every byte the processor reads or writes passes one accessor, which is
+  also where the verifier checks it (§5.6.2).
+- **The processor lives in a `Detached` box** reached through its raw pointer. The machine's `&mut` of its own fields
+  therefore never covers the processor a worker is running.
+
+**The invariant,** as `dp_threads.rs` states it:
+- Between a word's publish and the join, the workers own the processors and may touch the bytes the word's marks name.
+- The machine's thread touches such a byte only after an Acquire of every worker's count at or past the last word that
+  touches it.
+- Every word goes into the ring before the count that publishes it is stored with Release. So a worker's Acquire of
+  that count sees the word and everything the machine wrote before it.
+- The ring, the marks, the ranges and the boxes are atomics. They are Relaxed where one thread writes them, with
+  Release and Acquire fences where the verifier reads what the machine is writing.
+
+#### 5.6.2 The interface on a thread
+
+The port follows C#'s structure closely.
+- `Take` reads each word as the unthreaded path does, and `publish` puts it in a ring of 65,536.
+- The shadow gathers the stream as the processor does, and marks the pages each command can reach:
+  - a draw's own rows (`MarkDraw`, §2.6.2);
+  - a load's bytes, with the sixteen-byte window it reads through;
+  - the batch's images, marked idle until the batch ends, when they are downgraded to its count.
+- Ranges (8,192), idle ranges (256) and boxes (16,384) record the bytes behind the marks.
+- A waiter tests its page's mark, which is one load and a compare on every fast path. It is freed as a bystander by the
+  ranges, or narrowed by the boxes when the read is small, and otherwise waits for the words that matter.
+- A full sync is answered when its word is published. The MI's interrupt and the status word therefore change at the
+  cycle at which they change unthreaded.
+
+MarsRT departs from C# in the following places.
+
+- **A wait tests every byte of the access,** where C# tests its first byte (`Mars_Rdp.md` §2.6.3 records that
+  suspicion). A doubleword load whose second half falls in a pending range now waits. This is stricter than C#, so it
+  cannot cost exactness.
+- **A range read keeps the coarse wait.** C# narrows every read by the boxes that hold its first eight bytes,
+  including a capture of several pages. It therefore frees a range read whose first bytes no pending draw holds, even
+  when pending draws hold the rest.
+  - *In C#:* `The_csharp_interface_lets_a_range_read_pass_the_draws_that_hold_all_but_its_first_bytes` pauses the
+    thread with a fill of rows 8 and 9 pending. C#'s `WaitForReadRange` over the page at row 6 then returns at once
+    (narrowed 1, freed 1), and the bytes it lets through are the undrawn ones.
+  - *In MarsRT:* only reads of eight bytes or fewer are narrowed.
+    `a_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest` holds such a read
+    waiting until the drain is released.
+  - *Why the games miss it:* every VI capture, every SP DMA into the RSP and every SI transfer to the PIF is a range
+    read of more than eight bytes, so the defect sits on the C# core's most-used wait. No game comparison has caught
+    it, because the drain has usually finished before the capture reads.
+- **The workers are threads of MarsRT's own.** C# queues a single drain on the pool and gives several workers threads
+  of their own. A MarsRT worker parks when it has nothing to do.
+  - The publish wakes it after a Relaxed test of its sleeping flag.
+  - A batch's end and every wait wake it surely: a SeqCst fence pairs with the one the worker makes before it parks,
+    so one of the two sees the other.
+- **The verifier checks every byte,** where C# checks the first byte of each access. It is on in debug builds and with
+  `EMUSEN_MARSRT_VERIFY_RDP=1`.
+  - The hidden bits are checked as the second byte of their pair, which every writer of them writes.
+  - A box is found by halving the search, since the boxes' last words are unique and grow with the index.
+  - While one draw touches neighbouring bytes, the last covering range and box are remembered, and the memory accepts
+    only what the full scan would have accepted.
+  - Without that memory the verifier cost 2.5 s a frame in the Dam; with it the cost is 0.44 s.
+
+#### 5.6.3 The wait sites
+
+| Site | C# | MarsRT |
+| --- | --- | --- |
+| 0, bus read; 10, while taking | `MemoryBus.Read32` | `read32`: every byte, halfword and doubleword on the bus, and every device's DMA |
+| 1, bus write | `MemoryBus.Write32` | `write32` |
+| 2, 3, 4: load, store, fetch | `Cpu.Load`, `Cpu.Store`, `FetchInstruction` | `interp.rs`'s direct paths, over the access's size |
+| 5, block | `Cpu.StepBlock`, before a block is shaped | the idle test's two words (`idle.rs`), since MarsRT has no blocks |
+| 6, SI | `SiInterface.Land`, `Transfer` | the landing and the transfer to the PIF |
+| 7, AI | `AiInterface.Play` | the AI's read of each sample word |
+| 8, VI | `Vi.Scan`, `Vi.Capture` | `present_now`, `present_deferred` |
+| 9, cheat | `ReadForCheat`, `WriteForCheat` | `cheat_read8`, `cheat_write8`, and the host's access (§5.6.4) |
+| 11, SP DMA | `SpInterface.Transfer`, per row | the SP's transfer, per row |
+
+`tests/sites.rs` has fifteen tests, at least one for each site, and the host's access is among them. Each holds the
+drain with a draw or a load pending, makes the site's access, and releases the drain from another thread after
+300 ms. The access must have waited for the whole hold, and must see what the list run at once leaves. The tests exist because the game comparisons did not catch a
+dropped wait (§5.6.9). A read in the moment before the drain writes its bytes is rare, so a game leaves the catch to
+timing.
+
+#### 5.6.4 Holding the drain: states, snapshots, the switches and the host
+
+- **A state joins, and a snapshot holds.** `write_state` waits for every word, as C#'s `Write` does. A snapshot, for rewind, holds the workers at a word boundary instead. It writes the words not yet
+  run into the tail C#'s `WritePending` defines, and resumes them. A load replays those words on the machine's thread
+  before a drain starts again, as `ReadState` does. The tail's layout is C#'s. But a snapshot with words pending has
+  been loaded only by MarsRT; loading one into the C# core was not tested.
+- **Holds nest.** `save_state_vec` sizes a snapshot and then writes it, so it holds and resumes twice. At first the
+  inner resume released an outer hold, and a snapshot's tail then held 30 of 36 pending words. A hold is now a count,
+  and only the last resume lets the workers go.
+- **A pause is a numbered request,** and a worker answers with the number at the word where it stands. MarsRT does
+  this so that a stale answer cannot be taken for a new request. Whether C#'s flags can be confused that way was not
+  tested.
+- **The switches act between frames.** A drain starts at the next frame, or at once when the setter is called, once no
+  words from a load are pending. It takes the shadow from the processor. Turning it off joins it and hands the
+  processor back. A change of worker count restarts the drain.
+- **The host's memory access joins.** `Core::read_memory` and `write_memory`, through which the cheats and the
+  debugger go, now wait for every worker first. C# waits per byte at site 9. These two functions reach the whole
+  memory as one slice, so a narrower wait would still leave the reference that §5.6.1 forbids. §5.5 recorded this
+  wait as owed; it is now paid. The shim's `ApplyCheats` is unchanged, since every one of its bytes passes these
+  functions.
+
+#### 5.6.5 Deferred presentation
+
+`present_deferred` proceeds in four steps.
+1. It joins the walk still out.
+2. It runs `Prepare` on the emulation thread, since the held lines and the blank flag are state.
+3. It captures the lines the walk can reach, after waiting for them at site 8.
+4. It hands the walk and the composition to a presenter thread.
+
+The job is one boxed value, moved between the two threads under a state word that is stored with Release and loaded
+with Acquire. So nothing is shared while the walk runs. The shown frame is swapped at the next present, at
+`join_presentation`, or at a load, and the frame serial moves only then. A load presents at once and forgets the
+capture, as C#'s does. With the display processor threaded, the immediate path also waits at site 8 and walks only
+the bytes it waited for, so the walk cannot read a byte the drain is still writing.
+
+**One C# rule fails here, and MarsRT does not follow it.**
+- *The rule.* C# skips a deferred scan whose geometry and bytes repeat the last walk's, and keeps the picture on show.
+- *Why it fails.* `Prepare` has already advanced the borders. A held line that expires in that scan darkens the
+  raster, so the picture on show is no longer the raster's.
+- *In C#:* `The_csharp_deferred_path_keeps_a_stale_picture_when_a_repeat_follows_an_expired_line` shrinks a picture
+  and then repeats it. C# skips five scans, and for two frames it shows a picture that differs from the immediate
+  picture of the frame before.
+- *In MarsRT:* the scan-out notes whether a border or a blank has changed the raster since the last walk, and walks a
+  repeat when one has. `a_deferred_scan_repeating_after_a_held_line_expired_shows_the_darkened_picture` holds this.
+
+#### 5.6.6 The list shared by several processors
+
+`set_rdp_workers(n)` runs the list on *n* processors. Each shades the rows whose number modulo *n* is its index. The
+port is C#'s §2.8:
+- `Classify`'s steps, with the serialised primitives drawn by the leader alone;
+- the image changes and the hazard loads behind a barrier;
+- the stamps and `RecordAliasedRead`;
+- the leader's assembly of each scratch field from whichever processor wrote it last in raster order.
+
+The pause point is the furthest word any worker has reached. Three of C#'s rules fail, and MarsRT does not follow them.
+Each failure was found by a test.
+
+- **A barrier's waiter can deadlock a pause.**
+  - *How.* Suppose a pause is asked while some workers wait at a barrier for word *k* + 1 and the rest have not
+    reached it. The rest stand at *k*, short of the barrier. The waiters are inside a command and cannot stand.
+  - *Why C#'s argument misses it.* C# argues that "a processor short of the point can never be waited for at a
+    barrier by one past it". That holds for workers past the point, but these waiters are at it.
+  - *Found by.* MarsRT's test deadlocked on four workers, and the stacks showed two workers at the barrier and two
+    standing.
+  - *The fix in MarsRT.* A waiter at a barrier now raises the pause point to its own word. The standing workers then
+    run on through the barrier, and all of them stand past it.
+  - *In C#:* `The_csharp_workers_deadlock_when_a_pause_finds_some_at_a_barrier_and_the_rest_short_of_it` finds the C#
+    pause never answered at its second attempt. The test is gated behind `EMUSEN_MARS_DEADLOCK_PROBE=1`, because the
+    hang leaves threads spinning.
+  - *A candidate, not a proof.* `Mars_Rdp.md` §2.8 records a freeze met in Super Mario 64 whose cause was inferred and
+    not proven. This deadlock could cause it, and it has not been shown to.
+- **The level-of-detail fraction is a carry that C#'s inventory missed.**
+  - *How.* A one-cycle row starts from the processor's own last fraction. A primitive that computes no fraction writes
+    that value at every pixel, with its row's stamp. So each processor carries its own last value, and a primitive
+    drawn alone then assembles a stale one.
+  - *What it reaches.* It never reaches a picture, since a combiner that reads the fraction computes it. It is
+    serialised state all the same.
+  - *In C#:* `The_csharp_split_assembles_a_stale_level_of_detail_fraction_from_rows_that_computed_none` finds the C#
+    state wrong in `_lodFraction` alone, for 8 of 16 seeds, with the memory right. Against MarsRT's split, the C#
+    split parts at frame 6 of the Dam, again in `_lodFraction` alone.
+  - *In MarsRT:* the fraction is stamped only on rows that compute it.
+- **A load is joined only if a draw has reached its bytes since the image was set.**
+  - *How.* A load before an image's first draw is run apart, so the draws after it may write its source before a
+    slower processor has read it. Raster order has the load read first.
+  - *Found by.* ThreadSanitizer, in Ocarina of Time from its state: an unordered read by one worker's `load_row` and
+    write by another's `write_memory`, reported four times with two workers and once with four. The frames matched,
+    by timing.
+  - *In MarsRT:* any load whose source can meet the current colour or depth image is joined. The span tested is where
+    a draw before the next image change could reach, the walker's 1,024 rows at the image's width. The next image
+    change is itself a barrier. `a_load_from_the_current_image_before_its_first_draw_is_run_by_every_processor_together`
+    holds this.
+  - *In C#:* the rule is unchanged. Its race is argued from the code and not shown in C#, because a race that timing
+    hides cannot be shown by a test without a race detector.
+
+**One rule C# can keep and Rust cannot.**
+- *The read.* In a shared primitive, the pixel at the image's width reads the next row's first bytes, and that row's
+  owner may be writing them.
+- *In C#:* the read is made, and the stamps discard what it read.
+- *In Rust:* the read is a data race, and so undefined behaviour, even though its value is thrown away. MarsRT
+  therefore reads nothing there (`blind`): that pixel reads through a view of no memory, and every read past its end
+  reads zero.
+- *Why that is exact:* the value is dead. The next row's owner makes the read that matters itself
+  (`RecordAliasedRead`), and otherwise the value is superseded before anything reads it.
+
+#### 5.6.7 The evidence, and the races sought
+
+**The Rust oracles.**
+- `tests/threads.rs` holds 24 cases:
+  - `MarsThreadedRdpTests`' cases, ported;
+  - the split's cases, with two to four workers;
+  - a seeded stress of lists handed over in pieces, with loads from what was drawn, and processor reads and writes of
+    every image between them (24 seeds with one worker, 12 each with two, three and four);
+  - the cases for the level of detail, the barrier and the hazard load above;
+  - two written because a mutant survived without them (§5.6.9): a lost wake-up, and a depth slope carried into a
+    primitive drawn alone.
+- `tests/sites.rs` holds the fifteen site tests.
+- `tests/games.rs` runs a reference machine and a subject in one process, with the same input, and compares the save
+  state, the picture and the sound after every frame. The subject's state is taken one of two ways:
+  - joined;
+  - as a snapshot loaded, with its words run, into a scratch machine. This way leaves the workers running across
+    frames.
+
+| Mode | Frames a game | Result, six games |
+| --- | --- | --- |
+| threaded, state joined every frame | 300 | identical |
+| threaded, snapshot every frame | 300 | identical |
+| deferred, picture a frame late | 300 | identical |
+| threaded and deferred, snapshot every frame | 300 | identical |
+| threaded, verifier on, snapshot every frame | 600 | identical; no byte outside a mark, a range or a box |
+| two, three and four workers, snapshot every frame | 300 | identical |
+
+The six are Super Mario 64, Ocarina of Time and GoldenEye, each from power-on and from its gameplay state. Each run
+reports the workers' counters, so a run in which nothing reached the drain cannot pass. Super Mario 64 from power-on
+draws nothing before frame 121. In 600 verified frames the drain ran 2.2 million words for it, and 14.5 million for
+the Dam.
+
+**Through the shim** (`MarsRtThreadsTests`), with the C# core's own harness:
+
+| Comparison | Frames a game | Result, six games |
+| --- | --- | --- |
+| MarsRT threaded against MarsRT on one thread, state every frame | 300 | identical |
+| the same, with the state every sixtieth frame, so the drain runs across frames | 300 | identical |
+| threaded and deferred against one thread, a picture late | 300 | identical |
+| two and four workers against one thread | 300 | identical |
+| MarsRT threaded against the C# core threaded, blocks off, at once | 600 | identical |
+| the same, both deferred | 600 | identical |
+| MarsRT's four workers against the C# core's four | 300 | identical in five; the Dam parts at frame 6, in `_lodFraction` (§5.6.6) |
+
+**The C# failures.** Each is shown by a WiseMan test that asserts the C# behaviour: the range read, the deferred
+repeat, the fraction and the deadlock. Fixing the C# therefore fails the test, and the test is then to be turned
+around.
+
+**ThreadSanitizer, on a stable compiler.**
+- *The setup.* No nightly compiler is installed, and the Fedora toolchain ships no Rust TSan runtime. The
+  instrumentation is in rustc, and `RUSTC_BOOTSTRAP=1` unlocks it. `-Zexternal-clangrt` then links clang's
+  `libclang_rt.tsan`, with clang as the linker and the ABI check waived:
+
+      RUSTC_BOOTSTRAP=1 RUSTFLAGS="-Zsanitizer=thread -Zexternal-clangrt -Cunsafe-allow-abi-mismatch=sanitizer \
+        -Clinker=clang -Clink-arg=-fsanitize=thread" cargo test --release --lib --target-dir <scratch>
+
+- *The positive control* is a mutant (§5.6.9) that publishes the ring's count with Relaxed in place of Release. No
+  equality test catches it. TSan reports it within seconds.
+- *The blind spot.* Without rust-src, std is not rebuilt with instrumentation, so TSan cannot see std's own
+  synchronisation. libtest's result channel is reported, and that report, and only that one, is suppressed. MarsRT's
+  hand-offs are therefore its own atomics, never a std channel or mutex, so TSan sees every one of them.
+
+| Run | Result |
+| --- | --- |
+| the thread tests, the site tests, the switches and the scan tests (51, and 55 once the last four were written) | no report |
+| the games threaded (joined, snapshot, and deferred), 100 frames each, one worker | no report in 18 runs |
+| the games with two and four workers, 100 frames each, before the hazard-load fix | five reports, all in Ocarina of Time from its state (§5.6.6) |
+| the same, after it, with the hazard-load test | no report in 12 runs |
+
+**What TSan decides, and what it does not.** TSan decides by happens-before, not by timing. It reports two accesses
+that nothing orders even when they happened a millisecond apart. So a race is reported whenever both accesses occur
+in a run, not only when they collide. It still sees only the accesses a run makes, and a path no run takes is not
+checked. Nor does it see an ordering that is present but wrong, such as a read that waits for the wrong word. That is
+what the equality comparisons and the site tests are for.
+
+**Repetition under load.** The thread, site and switch tests were run 40 times at eight test threads: 38 cases, since
+the last two had not yet been written, with the stress at 24 seeds. The runs went beside the mutant round's three
+builds and test runs, so the workers met a loaded, preempting scheduler. All 40 runs passed. This is weak evidence on its own, since a schedule that no run happened to meet is not
+excluded. It is recorded because a hang, which TSan does not report, would have shown here.
+
+#### 5.6.8 Speed
+
+The runs were made flat out, from the gameplay states, on this 16-core desktop with the machine otherwise idle, in
+three rounds with the order rotated between rounds. The ranges given are the three rounds'.
+
+**Against the C# core, both in one process through WiseMan** (`MarsRtThreadsTests.Bench`, `EMUSEN_MARSRT_BENCH=1`),
+600 frames a run. MarsRT runs through its shim, cheats and picture included. The C# core runs in its production
+configuration: compiled blocks in the CPU and the RSP, the threaded RDP with its default worker count
+(`ProcessorCount / 3`, four here), and deferred presentation. MarsRT's split uses the same count.
+
+| ms a frame | MarsRT, one thread | MarsRT threaded | MarsRT threaded, deferred | MarsRT, four workers, deferred | C# production |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 14.78–15.06 | 10.72–10.93 | 8.07–8.37 | 6.13–6.37 | 6.12–6.15 |
+| Ocarina of Time | 17.10–17.31 | 13.87–13.94 | 8.66–8.73 | 7.22–7.61 | 7.36–7.64 |
+| GoldenEye, the Dam | 29.91–29.95 | 21.49–21.55 | 17.90–18.21 | 17.99–18.03 | 14.75–16.22 |
+
+**MarsRT's own modes without the shim** (`examples/threads`, the picture on, 300 frames a run). Every run's final
+state hash was the same in every mode:
+
+| ms a frame | one thread | threaded | threaded, deferred | four workers, deferred |
+| --- | --- | --- | --- | --- |
+| Super Mario 64 | 13.42–14.10 | 9.61–9.65 | 7.91–8.19 | **5.96–6.02** |
+| Ocarina of Time | 15.23–15.34 | 12.40–12.45 | 8.70–8.74 | **7.04–7.15** |
+| GoldenEye, the Dam | 28.27–28.41 | 19.59–19.66 | **16.93–17.04** | 17.19–17.35 |
+
+**Where the time goes.** The workers' counters give the emulation thread's waits and the first worker's busy time
+for one run of each mode:
+- *Super Mario 64 on one worker.* The emulation thread waits 1.98 ms a frame, all of it at the scan, for a drain that
+  is busy 6.1 ms. At four workers it waits nothing, and the drain's leader is busy 2.2 ms.
+- *Ocarina of Time.* The waits are the CPU's loads (0.62 ms, site 2) and the RSP's transfers (1.06 ms, site 11). These
+  are the waits `Mars_Rdp.md` §2.6.3 found in C#, and a transfer is a range, so it keeps the coarse wait. At two
+  workers they fall to 0.11 ms, and at four to nothing.
+- *GoldenEye.* The emulation thread waits under 0.05 ms at any count. The drain is busy 9.4 ms on one worker, and
+  deferral takes the scan-out's 2.7 ms off the thread, but workers buy nothing, because the thread is the bound.
+
+At four workers, then, no game's emulation thread waits for anything. The three numbers in bold in the second table
+are the emulation thread's own cost: 6.0, 7.1 and 17.0 ms a frame.
+
+**What the comparison says.**
+- *At the C# core's production configuration,* MarsRT with the same worker count is level with it on Super Mario 64
+  and Ocarina of Time, where the rounds overlap. On GoldenEye it is behind by 2 to 3 ms. GoldenEye is bound by its
+  CPU, and the C# CPU runs compiled blocks where MarsRT interprets. A 300-frame run of the same comparison, made
+  earlier, had MarsRT ahead on Ocarina of Time. The 600-frame rounds overlap, so that lead is withdrawn.
+- *On one worker,* MarsRT is about twice as fast as the C# core on the first two games. The 300-frame run measured
+  the C# core with one worker at 15.6–16.2 ms on Super Mario 64, 16.0–18.3 on Ocarina of Time and 19.9–21.6 on
+  GoldenEye, against MarsRT's 8.0–8.4, 8.7 and 17.9–18.2. C#'s single drain is the bound there, which is
+  `Mars_Performance.md` §35's finding (the rasteriser alone takes 14.0 ms for Mario's frame 400). MarsRT's drain does
+  the same list in about 6 ms. This is the configuration a machine with few cores gets.
+- *Through the shim,* MarsRT on one thread costs 0.7 to 2.1 ms a frame more than it does in the example. The extra
+  includes the shim's copy of the picture and its audio. That overhead was not taken apart.
+
+**The prediction of §5.7, retired.**
+- *The prediction:* about 4 to 5 ms a frame for Super Mario 64, at or below the C# core. *The measurement:* 6.0 ms
+  at four workers in the example and 6.1 to 6.4 through the shim. That is level with the C# core, not below it. On
+  one worker it is 8.0 ms.
+- *The prediction:* about 20 ms for GoldenEye, still above the C# core. *The measurement:* 16.9 to 17.3 ms in the
+  example and 18.0 through the shim. That is still above the C# core, as predicted, by 2 to 3 ms.
+- *Why it missed.* The prediction subtracted the whole measured cost of the RDP and the scan-out from the one-thread
+  frame. What it did not subtract is what threading leaves on the emulation thread: the shadow and its marks, the
+  scan's `Prepare` and the capture's copy. Super Mario 64 lost 7.4 ms of its 13.4, not the 8 to 9 the subtraction
+  assumed. How the remaining 6.0 ms divides was not measured.
+- *GoldenEye* lost 11.4 ms, close to the 12 the subtraction assumed. Its lower number owes more to the window than
+  to the design. §5.7's 32.2 ms is the mean of 1,500 frames, while these 300 frames cost 28.3 ms on one thread.
+
+**The one-thread path's cost,** checked because it is still the default. `examples/frames … scan` was run on the
+branch's base (7ea79b1) and on this branch, interleaved, three rounds, with the same state hashes:
+
+| ms a frame | before | after |
+| --- | --- | --- |
+| Super Mario 64 | 13.07–13.31 | 13.51–13.54 |
+| Ocarina of Time | 15.19–15.23 | 15.57–15.67 |
+| GoldenEye, the Dam | 28.46–28.51 | 28.25–28.47 |
+
+The unthreaded path is 1.5 to 3.5 per cent slower on Super Mario 64 and 2.5 to 3 per cent slower on Ocarina of Time,
+and unchanged on GoldenEye. The candidates are the marks' tests, which the unthreaded path makes too, and `Ram`'s
+accessors, which check each access's bounds. Neither has been measured apart, and the cost is recorded here as a
+regression that has been found and not yet explained.
+
+#### 5.6.9 Mutants
+
+Each mutant was applied alone to a copy of the crate, built apart, and run against the suites its code can reach:
+- the thread, site, switch and scan tests, with the stress at 24 seeds;
+- the threaded games, 120 frames;
+- the games with the verifier on, 40 frames;
+- the split games, 60 frames at two and four workers;
+- the deferred games, 120 frames;
+- the thread and site tests under TSan.
+
+The unmutated crate passed every suite. The final round ran 44 mutants from a frozen copy of the source, and a
+second round reran its five survivors, and two new capture mutants, once the tests below had been written. A hang
+counts as caught.
+
+| Mutant | Caught by |
+| --- | --- |
+| each of the thirteen waits dropped (sites 0 to 8 and 11, the SI's two, the VI's two, the SP's two) | its site test; the bus read and write also by TSan; the load and store also by the games |
+| the host's read without its wait; its write without its join | the site test for the host, and TSan |
+| the ring's count published with Relaxed; a worker's count stored with Relaxed | TSan only |
+| a load's bytes not marked; the depth image not marked; a rectangle's box a row short | the verifier; the first two also by the games |
+| a wait one word short; a narrowed read freed a word early; every waiter a bystander | the unit tests; the last also by the games and TSan |
+| a range read narrowed by its first eight bytes (C#'s rule) | its unit test (§5.6.2); no game |
+| a pause not waited for; a snapshot's tail dropped | the unit tests and the games |
+| a batch's idle marks left idle | an assertion added for it this round (below) |
+| the capture's hidden bits not copied; the join keeping the shown frame | the deferred games |
+| a repeat skipped though the raster changed (C#'s rule) | its unit test (§5.6.5); no game |
+| the capture ending at the last line, or one line past it | the unit tests and the deferred games |
+| the split: every row stamping the fraction (C#'s rule); the coverage not stamped; the memory colour from an earlier writer; the read past a row's end not made by the next row's owner | the unit tests and the split games |
+| the split: a load from a drawn image run apart; an image change without its barrier | the unit tests; the second also by TSan; not by the split games |
+| the split: the completed count taken from the leader alone | the verifier, the split games and TSan |
+| the split: the pixel at the width read though the next row is another's | TSan only |
+| the split: a barrier's waiter leaving the pause point (C#'s rule) | a hang in the unit tests, and TSan |
+| no kick before a wait | a hang in the lost wake-up test (below) |
+| the leader drawing alone without assembling | the slope test (below) |
+
+**Survivors, and what was done about each.**
+- *A batch's idle marks left idle,* rather than downgraded to the batch's count at its end, survived round 2. It is
+  conservative: a reader waits for the whole drain rather than for the batch, and exactness is unaffected. An
+  assertion on the mark's value after a batch now catches it, since the downgrade is what C# does and what the speed
+  depends on.
+- *No kick before a wait* survived two rounds. The kick is there for a wake-up the publish can lose. The worker
+  stores its sleeping flag and then tests the count. The publish stores the count and then tests the flag. Nothing
+  orders the second pair, so each side can see the other's old value, and the worker parks with a word waiting. Only
+  a wait's kick then wakes it, if a wait comes before the batch's end. No run met that schedule.
+  `a_wait_inside_a_batch_wakes_a_worker_whose_publish_wake_up_was_lost` makes the loss happen, through a test switch
+  that drops the publish's wake-up. It then takes a list word that the batch's own fill covers, so the take must wait
+  inside the batch. The unmutated test passes in 0.06 s, and the mutant hangs in three runs of three.
+- *The leader drawing alone without assembling* survived round 3. It was taken for equivalent until a probe counted
+  what the assembly changes. Over the thread tests, it changed a scratch field 189 times, and the combiner's carried
+  result never. The walker resets that result at every primitive (`Rdp.Walker.cs` does the same), so it is not a
+  carry between primitives. It is also why the first attempts at a test, which relied on it, could not fail.
+  - The carry that is real is the stored depth slope. A two-cycle primitive whose first blend reads memory alpha
+    shifts by the slope of the pixel before, and at a primitive's first pixel that is the last row's slope.
+  - `a_slope_carried_into_a_primitive_drawn_alone_is_the_raster_orders` gives the depth image a different slope
+    encoding on each row, tests it with shared triangles that do not write it, and then draws four such primitives
+    alone. The mutant parts RDRAM, and the unmutated crate is exact at two, three and four workers.
+- *The capture a line short, three lines short, or without the span slack* survive every round, and are equivalent.
+  `Vi.Reach` asks for four lines past the last line the picture steps to, and two lines and two row spans past that.
+  The walk reads at most the line after its last, plus a span. The two mutants that cut into that need, ending the
+  capture at the last line or one past it, are caught. The slack is C#'s, kept so that the two cores capture alike.
+
+**The split games catch less than the unit tests.** Four split mutants pass 60 frames of six games at two and four
+workers. Games rarely load from an image they are drawing, and rarely change the image while a slower worker is
+behind, so the split's rules are held by the targeted tests and TSan rather than by play.
+
+**Skipped.** The rounds ran every mutant listed. No mutant was written for the presenter's hand-off, the verifier's
+cache, or the seqlock of the idle ranges. Those are covered only by the tests and TSan runs above.
+
+#### 5.6.10 What is left
+
+- The multiple, antialiasing and the device, which MarsRT does not draw yet.
+- The C# core's four failures (§5.6.2, §5.6.5, §5.6.6). They are the C#'s to fix, and the WiseMan tests that show them
+  are the ones to turn around when it is.
+- Rewind for MarsRT. §5.5 kept it off per console until a snapshot is proven. A snapshot with workers running is now
+  proven headlessly in every frame of six games, but turning rewind on is a decision for play.
+- The defaults. The switches are wired through the shim and default off. Whether to turn them on for MarsRT in
+  Mistress is a decision for play, which headless tests cannot make.
 
 ### 5.7 Where MarsRT stands against the C# core in production (2026-09-22)
 
@@ -1345,3 +1818,7 @@ emulation thread: the RDP (5 to 9 ms a frame here) and the scan-out (about 3 ms)
   core.
 - GoldenEye reaches about 20 ms, still above it. The recompiler of stage 5 is what that gap is left to.
 - The prediction is subtraction from measured parts, and it will be replaced by §5.6's measurement.
+
+*Retired 2026-09-22 by §5.6.8.* Super Mario 64 reached 6.0 ms a frame at four workers, level with the C# core rather
+than below it, and 8.0 ms on one. GoldenEye reached 17.0 ms, still above the C# core as predicted. Threading leaves
+the shadow, the marks and the capture on the emulation thread, and the subtraction had not counted them.

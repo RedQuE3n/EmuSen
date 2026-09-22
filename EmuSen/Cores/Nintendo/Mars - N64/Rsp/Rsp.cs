@@ -11,7 +11,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         // Every data address is an offset into data memory, and wraps inside it - see §4.
         public const uint DataMask = 0xFFF;
 
-        public readonly uint[] Gpr = new uint[32];
+        public readonly uint[] Gpr = System.GC.AllocateArray<uint>(32, pinned: true);
 
         public uint Pc;
         public uint NextPc;
@@ -48,6 +48,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
 
         // The step for a caller that has tested the halt itself - see Mars_Rsp.md §10.1.
         public void StepOne()
+        {
+            if (UseNative && NativeStepOne()) return;
+            StepManaged();
+        }
+
+        // The C# step: the oracle, the fallback, and what runs an instruction the native side hands back - see Mars_Native.md §3.2.
+        internal void StepManaged()
         {
             if (Coverage is { IsArmed: true }) Coverage.Record((int)Pc);
 

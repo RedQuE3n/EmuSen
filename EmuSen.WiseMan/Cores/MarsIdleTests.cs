@@ -26,8 +26,14 @@ namespace EmuSen.WiseMan.Cores
             return words.ToArray();
         }
 
+        // These pin the C# processor's own blocks, which the native one does not use - see Mars_Native.md §3.3.
+        private readonly bool _nativeWas = Rsp.UseNative;
+
+        public MarsIdleTests() => Rsp.UseNative = false;
+
         public void Dispose()
         {
+            Rsp.UseNative = _nativeWas;
             Cpu.SkipIdle = true;
             Rsp.UseBlocks = true;
             Rsp.CompileBlocksInBackground = true;

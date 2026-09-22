@@ -27,6 +27,8 @@ The rule's phrasing matters: *accurately, safely, and with performance*, all thr
 
 **The cores are C#, permanently, and that is not an exception to the rule.** An emulator core in C# *is* the project's research claim; a Rust core would answer a question nobody asked here. `project_perf_investigation_settled` and §13.1 of `Venus_PPU.md` record four measured-and-rejected optimizations, none of which pointed at the language.
 
+*Qualified 2026-09-22.* The cores remain C#; what changed is that a core may now have a **Rust twin of a component**, called through a C ABI from the C# core, which stays canonical, exact and the fallback. That is this section's "anything C# cannot express … with performance" applied inside a core, and it was the user's decision. The first such component, the N64's signal processor, is exact and slower, and stays off (`Mars_Native.md` §3.4): the boundary cost is a matter of granularity, and the doc records what would have to change before another component is tried.
+
 **The one arguable case is `EmuSen.Endymion/AudioPlayer.cs`,** the only `unsafe` in the tree — a thin SDL3 binding on the audio submit path. It stays C#. Moving it to Rust would *add* an FFI boundary rather than remove one: today there is one hop (C# → SDL3), and a Rust sink would make it two with no accuracy or safety gained. Recorded here so the next reader does not have to re-derive it from the `unsafe` keyword alone.
 
 ### 2.2 Python — offline analysis, not in-process tests

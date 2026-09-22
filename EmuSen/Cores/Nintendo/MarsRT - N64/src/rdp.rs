@@ -1,0 +1,411 @@
+//! The display processor's serialized state, the C# `Rdp`: its modes, its tiles and the walker's scratch.
+
+use crate::state::{State, StateReader, StateResult, StateWriter, boxed};
+
+/// The C# `Color` struct, whose fields the serializer writes A, B, G, R, by ordinal name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct Color {
+    pub r: i32,
+    pub g: i32,
+    pub b: i32,
+    pub a: i32,
+}
+
+impl State for Color {
+    fn write_state(&self, w: &mut StateWriter) {
+        w.i32("A", self.a);
+        w.i32("B", self.b);
+        w.i32("G", self.g);
+        w.i32("R", self.r);
+    }
+
+    fn read_state(&mut self, r: &mut StateReader) -> StateResult {
+        self.a = r.i32()?; // A
+        self.b = r.i32()?; // B
+        self.g = r.i32()?; // G
+        self.r = r.i32()?; // R
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct TextureTile {
+    pub clamp_s: bool,
+    pub clamp_t: bool,
+    pub format: i32,
+    pub line: i32,
+    pub mask_s: i32,
+    pub mask_t: i32,
+    pub memory: i32,
+    pub mirror_s: bool,
+    pub mirror_t: bool,
+    pub palette: i32,
+    pub sh: i32,
+    pub sl: i32,
+    pub shift_s: i32,
+    pub shift_t: i32,
+    pub size: i32,
+    pub th: i32,
+    pub tl: i32,
+}
+
+impl State for TextureTile {
+    fn write_state(&self, w: &mut StateWriter) {
+        w.bool("ClampS", self.clamp_s);
+        w.bool("ClampT", self.clamp_t);
+        w.i32("Format", self.format);
+        w.i32("Line", self.line);
+        w.i32("MaskS", self.mask_s);
+        w.i32("MaskT", self.mask_t);
+        w.i32("Memory", self.memory);
+        w.bool("MirrorS", self.mirror_s);
+        w.bool("MirrorT", self.mirror_t);
+        w.i32("Palette", self.palette);
+        w.i32("SH", self.sh);
+        w.i32("SL", self.sl);
+        w.i32("ShiftS", self.shift_s);
+        w.i32("ShiftT", self.shift_t);
+        w.i32("Size", self.size);
+        w.i32("TH", self.th);
+        w.i32("TL", self.tl);
+    }
+
+    fn read_state(&mut self, r: &mut StateReader) -> StateResult {
+        self.clamp_s = r.bool()?; // ClampS
+        self.clamp_t = r.bool()?; // ClampT
+        self.format = r.i32()?; // Format
+        self.line = r.i32()?; // Line
+        self.mask_s = r.i32()?; // MaskS
+        self.mask_t = r.i32()?; // MaskT
+        self.memory = r.i32()?; // Memory
+        self.mirror_s = r.bool()?; // MirrorS
+        self.mirror_t = r.bool()?; // MirrorT
+        self.palette = r.i32()?; // Palette
+        self.sh = r.i32()?; // SH
+        self.sl = r.i32()?; // SL
+        self.shift_s = r.i32()?; // ShiftS
+        self.shift_t = r.i32()?; // ShiftT
+        self.size = r.i32()?; // Size
+        self.th = r.i32()?; // TH
+        self.tl = r.i32()?; // TL
+        Ok(())
+    }
+}
+
+/// The C# `Rdp`'s 74 serialized fields. The 1024-row arrays are the walker's scratch, at the scale the machine's own processor draws at, one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rdp {
+    /// `<TextureMemory>k__BackingField`, the auto-property's backing field.
+    pub texture_memory: Box<[u8; 4096]>,
+    pub attribute_de: [i32; 8],
+    pub attribute_dx: [i32; 8],
+    pub attribute_dy: [i32; 8],
+    pub attribute_value: [i32; 8],
+    pub blend_color: Color,
+    pub blend_shift_a: i32,
+    pub blend_shift_b: i32,
+    pub blended: Color,
+    pub blender_shade_alpha: i32,
+    pub color_image: u32,
+    pub color_image_bytes: i32,
+    pub color_image_format: i32,
+    pub color_image_size: i32,
+    pub color_image_width: i32,
+    pub combine: u64,
+    pub combined: Color,
+    pub command: [u64; 22],
+    pub coverage: Box<[u8; 1024]>,
+    pub depth_correct_dx: i32,
+    pub depth_correct_dy: i32,
+    pub depth_image: u32,
+    pub depth_slope: i32,
+    pub depth_step: i32,
+    pub edge_invalid: Box<[bool; 4096]>,
+    pub edge_left: Box<[i32; 4096]>,
+    pub edge_right: Box<[i32; 4096]>,
+    pub environment_color: Color,
+    pub fill_color: u32,
+    pub fog_color: Color,
+    pub k0: i32,
+    pub k1: i32,
+    pub k2: i32,
+    pub k3: i32,
+    pub k4: i32,
+    pub k5: i32,
+    pub key_center: Color,
+    pub key_scale: Color,
+    pub key_width: Color,
+    pub lod_fraction: i32,
+    pub memory: Color,
+    pub min_level: i32,
+    pub other_modes: u64,
+    pub past_shift_a: i32,
+    pub past_shift_b: i32,
+    pub past_stored_encoded: i32,
+    pub pixel: Color,
+    pub primitive_color: Color,
+    pub primitive_delta_z: i32,
+    pub primitive_lod_fraction: i32,
+    pub primitive_z: i32,
+    pub scissor_bottom: i32,
+    pub scissor_field: bool,
+    pub scissor_keep_odd: bool,
+    pub scissor_left: i32,
+    pub scissor_right: i32,
+    pub scissor_top: i32,
+    pub shade: Color,
+    pub shade_correct_dx: [i32; 4],
+    pub shade_correct_dy: [i32; 4],
+    pub shade_step: [i32; 4],
+    pub span_attributes: Box<[i32; 8192]>,
+    pub span_drawn: Box<[bool; 1024]>,
+    pub span_left: Box<[i32; 1024]>,
+    pub span_major_x: Box<[i32; 1024]>,
+    pub span_right: Box<[i32; 1024]>,
+    pub taken: i32,
+    pub texel0: Color,
+    pub texel1: Color,
+    pub texture_image: u32,
+    pub texture_image_size: i32,
+    pub texture_image_width: i32,
+    pub texture_step: [i32; 3],
+    pub tiles: [TextureTile; 8],
+}
+
+impl Default for Rdp {
+    fn default() -> Self {
+        Rdp {
+            texture_memory: boxed(0),
+            attribute_de: [0; 8],
+            attribute_dx: [0; 8],
+            attribute_dy: [0; 8],
+            attribute_value: [0; 8],
+            blend_color: Color::default(),
+            blend_shift_a: 0,
+            blend_shift_b: 0,
+            blended: Color::default(),
+            blender_shade_alpha: 0,
+            color_image: 0,
+            color_image_bytes: 0,
+            color_image_format: 0,
+            color_image_size: 0,
+            color_image_width: 0,
+            combine: 0,
+            combined: Color::default(),
+            command: [0; 22],
+            coverage: boxed(0),
+            depth_correct_dx: 0,
+            depth_correct_dy: 0,
+            depth_image: 0,
+            depth_slope: 0,
+            depth_step: 0,
+            edge_invalid: boxed(false),
+            edge_left: boxed(0),
+            edge_right: boxed(0),
+            environment_color: Color::default(),
+            fill_color: 0,
+            fog_color: Color::default(),
+            k0: 0,
+            k1: 0,
+            k2: 0,
+            k3: 0,
+            k4: 0,
+            k5: 0,
+            key_center: Color::default(),
+            key_scale: Color::default(),
+            key_width: Color::default(),
+            lod_fraction: 0,
+            memory: Color::default(),
+            min_level: 0,
+            other_modes: 0,
+            past_shift_a: 0,
+            past_shift_b: 0,
+            past_stored_encoded: 0,
+            pixel: Color::default(),
+            primitive_color: Color::default(),
+            primitive_delta_z: 0,
+            primitive_lod_fraction: 0,
+            primitive_z: 0,
+            scissor_bottom: 0,
+            scissor_field: false,
+            scissor_keep_odd: false,
+            scissor_left: 0,
+            scissor_right: 0,
+            scissor_top: 0,
+            shade: Color::default(),
+            shade_correct_dx: [0; 4],
+            shade_correct_dy: [0; 4],
+            shade_step: [0; 4],
+            span_attributes: boxed(0),
+            span_drawn: boxed(false),
+            span_left: boxed(0),
+            span_major_x: boxed(0),
+            span_right: boxed(0),
+            taken: 0,
+            texel0: Color::default(),
+            texel1: Color::default(),
+            texture_image: 0,
+            texture_image_size: 0,
+            texture_image_width: 0,
+            texture_step: [0; 3],
+            tiles: [TextureTile::default(); 8],
+        }
+    }
+}
+
+impl State for Rdp {
+    fn write_state(&self, w: &mut StateWriter) {
+        w.bytes("<TextureMemory>k__BackingField", &self.texture_memory[..]);
+        w.i32s("_attributeDe", &self.attribute_de[..]);
+        w.i32s("_attributeDx", &self.attribute_dx[..]);
+        w.i32s("_attributeDy", &self.attribute_dy[..]);
+        w.i32s("_attributeValue", &self.attribute_value[..]);
+        w.structure("_blendColor", &self.blend_color);
+        w.i32("_blendShiftA", self.blend_shift_a);
+        w.i32("_blendShiftB", self.blend_shift_b);
+        w.structure("_blended", &self.blended);
+        w.i32("_blenderShadeAlpha", self.blender_shade_alpha);
+        w.u32("_colorImage", self.color_image);
+        w.i32("_colorImageBytes", self.color_image_bytes);
+        w.i32("_colorImageFormat", self.color_image_format);
+        w.i32("_colorImageSize", self.color_image_size);
+        w.i32("_colorImageWidth", self.color_image_width);
+        w.u64("_combine", self.combine);
+        w.structure("_combined", &self.combined);
+        w.u64s("_command", &self.command[..]);
+        w.bytes("_coverage", &self.coverage[..]);
+        w.i32("_depthCorrectDx", self.depth_correct_dx);
+        w.i32("_depthCorrectDy", self.depth_correct_dy);
+        w.u32("_depthImage", self.depth_image);
+        w.i32("_depthSlope", self.depth_slope);
+        w.i32("_depthStep", self.depth_step);
+        w.bools("_edgeInvalid", &self.edge_invalid[..]);
+        w.i32s("_edgeLeft", &self.edge_left[..]);
+        w.i32s("_edgeRight", &self.edge_right[..]);
+        w.structure("_environmentColor", &self.environment_color);
+        w.u32("_fillColor", self.fill_color);
+        w.structure("_fogColor", &self.fog_color);
+        w.i32("_k0", self.k0);
+        w.i32("_k1", self.k1);
+        w.i32("_k2", self.k2);
+        w.i32("_k3", self.k3);
+        w.i32("_k4", self.k4);
+        w.i32("_k5", self.k5);
+        w.structure("_keyCenter", &self.key_center);
+        w.structure("_keyScale", &self.key_scale);
+        w.structure("_keyWidth", &self.key_width);
+        w.i32("_lodFraction", self.lod_fraction);
+        w.structure("_memory", &self.memory);
+        w.i32("_minLevel", self.min_level);
+        w.u64("_otherModes", self.other_modes);
+        w.i32("_pastShiftA", self.past_shift_a);
+        w.i32("_pastShiftB", self.past_shift_b);
+        w.i32("_pastStoredEncoded", self.past_stored_encoded);
+        w.structure("_pixel", &self.pixel);
+        w.structure("_primitiveColor", &self.primitive_color);
+        w.i32("_primitiveDeltaZ", self.primitive_delta_z);
+        w.i32("_primitiveLodFraction", self.primitive_lod_fraction);
+        w.i32("_primitiveZ", self.primitive_z);
+        w.i32("_scissorBottom", self.scissor_bottom);
+        w.bool("_scissorField", self.scissor_field);
+        w.bool("_scissorKeepOdd", self.scissor_keep_odd);
+        w.i32("_scissorLeft", self.scissor_left);
+        w.i32("_scissorRight", self.scissor_right);
+        w.i32("_scissorTop", self.scissor_top);
+        w.structure("_shade", &self.shade);
+        w.i32s("_shadeCorrectDx", &self.shade_correct_dx[..]);
+        w.i32s("_shadeCorrectDy", &self.shade_correct_dy[..]);
+        w.i32s("_shadeStep", &self.shade_step[..]);
+        w.i32s("_spanAttributes", &self.span_attributes[..]);
+        w.bools("_spanDrawn", &self.span_drawn[..]);
+        w.i32s("_spanLeft", &self.span_left[..]);
+        w.i32s("_spanMajorX", &self.span_major_x[..]);
+        w.i32s("_spanRight", &self.span_right[..]);
+        w.i32("_taken", self.taken);
+        w.structure("_texel0", &self.texel0);
+        w.structure("_texel1", &self.texel1);
+        w.u32("_textureImage", self.texture_image);
+        w.i32("_textureImageSize", self.texture_image_size);
+        w.i32("_textureImageWidth", self.texture_image_width);
+        w.i32s("_textureStep", &self.texture_step[..]);
+        w.structures("_tiles", &self.tiles);
+    }
+
+    fn read_state(&mut self, r: &mut StateReader) -> StateResult {
+        r.bytes(&mut self.texture_memory[..])?; // <TextureMemory>k__BackingField
+        r.i32s(&mut self.attribute_de[..])?; // _attributeDe
+        r.i32s(&mut self.attribute_dx[..])?; // _attributeDx
+        r.i32s(&mut self.attribute_dy[..])?; // _attributeDy
+        r.i32s(&mut self.attribute_value[..])?; // _attributeValue
+        self.blend_color.read_state(r)?; // _blendColor
+        self.blend_shift_a = r.i32()?; // _blendShiftA
+        self.blend_shift_b = r.i32()?; // _blendShiftB
+        self.blended.read_state(r)?; // _blended
+        self.blender_shade_alpha = r.i32()?; // _blenderShadeAlpha
+        self.color_image = r.u32()?; // _colorImage
+        self.color_image_bytes = r.i32()?; // _colorImageBytes
+        self.color_image_format = r.i32()?; // _colorImageFormat
+        self.color_image_size = r.i32()?; // _colorImageSize
+        self.color_image_width = r.i32()?; // _colorImageWidth
+        self.combine = r.u64()?; // _combine
+        self.combined.read_state(r)?; // _combined
+        r.u64s(&mut self.command[..])?; // _command
+        r.bytes(&mut self.coverage[..])?; // _coverage
+        self.depth_correct_dx = r.i32()?; // _depthCorrectDx
+        self.depth_correct_dy = r.i32()?; // _depthCorrectDy
+        self.depth_image = r.u32()?; // _depthImage
+        self.depth_slope = r.i32()?; // _depthSlope
+        self.depth_step = r.i32()?; // _depthStep
+        r.bools(&mut self.edge_invalid[..])?; // _edgeInvalid
+        r.i32s(&mut self.edge_left[..])?; // _edgeLeft
+        r.i32s(&mut self.edge_right[..])?; // _edgeRight
+        self.environment_color.read_state(r)?; // _environmentColor
+        self.fill_color = r.u32()?; // _fillColor
+        self.fog_color.read_state(r)?; // _fogColor
+        self.k0 = r.i32()?; // _k0
+        self.k1 = r.i32()?; // _k1
+        self.k2 = r.i32()?; // _k2
+        self.k3 = r.i32()?; // _k3
+        self.k4 = r.i32()?; // _k4
+        self.k5 = r.i32()?; // _k5
+        self.key_center.read_state(r)?; // _keyCenter
+        self.key_scale.read_state(r)?; // _keyScale
+        self.key_width.read_state(r)?; // _keyWidth
+        self.lod_fraction = r.i32()?; // _lodFraction
+        self.memory.read_state(r)?; // _memory
+        self.min_level = r.i32()?; // _minLevel
+        self.other_modes = r.u64()?; // _otherModes
+        self.past_shift_a = r.i32()?; // _pastShiftA
+        self.past_shift_b = r.i32()?; // _pastShiftB
+        self.past_stored_encoded = r.i32()?; // _pastStoredEncoded
+        self.pixel.read_state(r)?; // _pixel
+        self.primitive_color.read_state(r)?; // _primitiveColor
+        self.primitive_delta_z = r.i32()?; // _primitiveDeltaZ
+        self.primitive_lod_fraction = r.i32()?; // _primitiveLodFraction
+        self.primitive_z = r.i32()?; // _primitiveZ
+        self.scissor_bottom = r.i32()?; // _scissorBottom
+        self.scissor_field = r.bool()?; // _scissorField
+        self.scissor_keep_odd = r.bool()?; // _scissorKeepOdd
+        self.scissor_left = r.i32()?; // _scissorLeft
+        self.scissor_right = r.i32()?; // _scissorRight
+        self.scissor_top = r.i32()?; // _scissorTop
+        self.shade.read_state(r)?; // _shade
+        r.i32s(&mut self.shade_correct_dx[..])?; // _shadeCorrectDx
+        r.i32s(&mut self.shade_correct_dy[..])?; // _shadeCorrectDy
+        r.i32s(&mut self.shade_step[..])?; // _shadeStep
+        r.i32s(&mut self.span_attributes[..])?; // _spanAttributes
+        r.bools(&mut self.span_drawn[..])?; // _spanDrawn
+        r.i32s(&mut self.span_left[..])?; // _spanLeft
+        r.i32s(&mut self.span_major_x[..])?; // _spanMajorX
+        r.i32s(&mut self.span_right[..])?; // _spanRight
+        self.taken = r.i32()?; // _taken
+        self.texel0.read_state(r)?; // _texel0
+        self.texel1.read_state(r)?; // _texel1
+        self.texture_image = r.u32()?; // _textureImage
+        self.texture_image_size = r.i32()?; // _textureImageSize
+        self.texture_image_width = r.i32()?; // _textureImageWidth
+        r.i32s(&mut self.texture_step[..])?; // _textureStep
+        r.structures(&mut self.tiles)?; // _tiles
+        Ok(())
+    }
+}

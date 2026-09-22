@@ -1,12 +1,31 @@
 //! MarsRT, the N64 core in Rust, and the C# Mars's native components, called through a C ABI. See Mars_Native.md.
 
+pub mod ai;
+pub mod bus;
+pub mod controller;
+pub mod cpu;
+pub mod dp;
+pub mod ffi;
+pub mod isviewer;
+pub mod machine;
+pub mod mi;
+#[cfg(test)]
+mod naming;
+pub mod pi;
+pub mod rdp;
 pub mod rsp;
+pub mod save;
+pub mod si;
+pub mod sp;
+pub mod state;
+pub mod tlb;
+pub mod vi;
 
 use std::ffi::{CStr, c_char};
 use std::sync::OnceLock;
 
 /// The interface version; C# refuses a library whose number is not the one it was written against.
-pub const INTERFACE_VERSION: u32 = 1;
+pub const INTERFACE_VERSION: u32 = 2;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn emusen_native_interface_version() -> u32 {

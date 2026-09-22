@@ -517,9 +517,9 @@ namespace EmuSen.WiseMan.Cores
             {
                 ref TlbEntry entry = ref cpu.Tlb.Entries[i];
                 entry.PageMask = Tlb.PairedPageMask((ulong)r.Next() & Cpu.PageMaskWritable);
-                entry.EntryHi = ((ulong)r.Next(0x40) << 13) | (ulong)r.Next(4);
-                entry.EntryLo0 = (((ulong)(0x100 + r.Next(0x100)) << 6) | (ulong)r.Next(8) << 3 | (ulong)r.Next(8)) & Tlb.EntryLoKept | (ulong)(i & 1);
-                entry.EntryLo1 = (((ulong)(0x100 + r.Next(0x100)) << 6) | (ulong)r.Next(8) << 3 | (ulong)r.Next(8)) & Tlb.EntryLoKept | (ulong)(i & 1);
+                entry.EntryHi = ((ulong)(uint)r.Next(0x40) << 13) | (uint)r.Next(4);
+                entry.EntryLo0 = (((ulong)(uint)(0x100 + r.Next(0x100)) << 6) | (ulong)(uint)r.Next(8) << 3 | (uint)r.Next(8)) & Tlb.EntryLoKept | (uint)(i & 1);
+                entry.EntryLo1 = (((ulong)(uint)(0x100 + r.Next(0x100)) << 6) | (ulong)(uint)r.Next(8) << 3 | (uint)r.Next(8)) & Tlb.EntryLoKept | (uint)(i & 1);
             }
 
             // Each vector steps over the faulting instruction and returns; the program and its data are random.

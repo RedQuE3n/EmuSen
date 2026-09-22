@@ -156,6 +156,10 @@ They are faithful ports of the original Raylib/GLSL versions, not a redesign —
 
 The exact darkening factors are part of the contract, not incidental: `Scanlines` leaves even output rows at full brightness and multiplies odd rows by **0.78**; `Crt` uses **0.72** and adds a vignette of `1 - dot(centered, centered) * 0.55`. `EmuSen.WiseMan`'s `Scanlines_darkens_odd_output_rows_by_the_exact_documented_factor` renders a solid-color frame and checks that arithmetic precisely, which is what proved the local-matrix rewrite correct rather than merely different.
 
+### 3.1 The filters a frontend can offer, by name (2026-09-21)
+
+`ScreenFilters` is the list a settings window shows and a config stores: a name for each filter and the effect it draws, with **None** first. A frontend keeps the name, never the enum's number, so a filter added later or renamed cannot shift what an old config meant, and `ByName` answers None for any name it does not know, so a config from a newer build shows the picture unfiltered rather than failing. Today the list is the two effects above, as "Scanlines" and "Simple CRT"; it is where accurate CRT and handheld LCD filters are meant to arrive (`EmuSen_Settings_Reference.md` §4.40).
+
 ---
 
 ## 4. `FramePresenter` — the bundle nothing consumes yet

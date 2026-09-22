@@ -11,8 +11,12 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands.EmuSen
 {
     // A display name plus an extension allowlist, both core-agnostic - see §3.
     public sealed record CoreDescriptor(string DisplayName, string[] Extensions, string[]? CheatSystems = null,
-        string? ConsoleName = null, string Manufacturer = "", int ReleaseYear = 0, double CoverAspect = CoreDescriptor.DefaultCoverAspect)
+        string? ConsoleName = null, string Manufacturer = "", int ReleaseYear = 0, double CoverAspect = CoreDescriptor.DefaultCoverAspect,
+        string[]? OpenVgdbSystems = null, Func<byte[], byte[]>? OpenVgdbBytes = null)
     {
+        // OpenVGDB's systemShortName for each system this core plays, and the bytes of a file it hashed - see EmuSen_Settings_Reference.md §4.39.
+        public IReadOnlyList<string> OpenVgdbSystemNames => OpenVgdbSystems ?? Array.Empty<string>();
+
         // Height over width of the console's North American box, OpenEmu's fallback when unknown - see EmuSen_Settings_Reference.md §4.33.
         public const double DefaultCoverAspect = 1.365385;
 

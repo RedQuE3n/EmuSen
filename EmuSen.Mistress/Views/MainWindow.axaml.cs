@@ -197,6 +197,7 @@ namespace EmuSen.Mistress.Views
                 _session?.SaveSram();
                 WriteResumeState();
                 RecordPlayTime();
+                StopOnlineCovers();
                 CloseRecords();
                 _gamepad.Dispose();
                 _audioPlayer.Dispose();
@@ -407,7 +408,7 @@ namespace EmuSen.Mistress.Views
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
             var window = new PreferencesWindow(_appSettings);
-            window.Closed += (_, _) => { ScanArtwork(); if (LibraryView.IsVisible) RefreshLibrary(); };
+            window.Closed += (_, _) => { ScanArtwork(); ApplyOnlineCovers(); if (LibraryView.IsVisible) RefreshLibrary(); };
             window.Show(this);
         }
 

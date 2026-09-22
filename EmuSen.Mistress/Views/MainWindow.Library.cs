@@ -71,6 +71,7 @@ namespace EmuSen.Mistress.Views
             LibraryList.ContextMenu = LibraryContextMenu();
             ApplyLibraryView();
             ScanArtwork();
+            ApplyOnlineCovers();
         }
 
         private void ShowLibraryAs(string view)
@@ -113,7 +114,14 @@ namespace EmuSen.Mistress.Views
             string directory = ArtworkDirectory;
             Task.Run(() => ArtworkIndex.Scan(directory, EmuSen.Cores.CoreCatalog.Cores)).ContinueWith(scan =>
             {
-                if (scan.IsCompletedSuccessfully) Dispatcher.UIThread.Post(() => { _artwork = scan.Result; LibraryGrid.Refresh(_shownEntries); });
+                if (!scan.IsCompletedSuccessfully) return;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    // A cover fetched while the walk ran may have been written after the walk passed its folder.
+                    foreach ((string console, string stem, string file) in _fetchedCovers) scan.Result.Add(console, stem, file);
+                    _artwork = scan.Result;
+                    LibraryGrid.Refresh(_shownEntries);
+                });
             });
         }
 
@@ -128,6 +136,7 @@ namespace EmuSen.Mistress.Views
             string title = ArtworkIndex.Untagged(entry.Title);
             string tags = entry.Title.Length > title.Length ? entry.Title[title.Length..].Trim() : "";
             string subtitle = MixedConsoles ? (tags.Length > 0 ? $"{console}  ·  {FirstTag(tags)}" : console) : FirstTag(tags);
+            if (cover is null) AskForCover(entry, descriptor);
             ((CoverTile)tile).Show(title, subtitle, console, descriptor?.CoverAspect ?? 1.365,
                 cover is null ? null : _covers.Get(cover), _recordSnapshot.TryGetValue(entry.FullPath, out GameRecord? r) && r.Favourite);
         }
@@ -224,6 +233,7 @@ namespace EmuSen.Mistress.Views
             var favourite = new LunaAction("Add to _Favourites", () => { if (SelectedLibraryEntry is RomEntry e) ToggleFavourite(e); });
             var addArt = new LunaAction("Add _Cover Art from File...", () => { if (SelectedLibraryEntry is RomEntry e) _ = AddCoverArtAsync(e); });
             var removeArt = new LunaAction("_Remove Cover Art", () => { if (SelectedLibraryEntry is RomEntry e) RemoveCoverArt(e); });
+            var lookUp = new LunaAction("_Look Up Cover Online", () => { if (SelectedLibraryEntry is RomEntry e) LookUpCoverAgain(e); });
 
             var leave = new LunaAction("Remove from This Collection", () =>
             {
@@ -241,6 +251,11 @@ namespace EmuSen.Mistress.Views
                     actions.Add(leave);
                 }
                 actions.AddRange(new[] { LunaAction.Separator(), addArt, removeArt });
+                if (_appSettings.OnlineCovers)
+                {
+                    lookUp.IsEnabled = entry is not null && _fetcher is not null && CoverPathFor(entry) is null;
+                    actions.Add(lookUp);
+                }
                 menu.ItemsSource = Menus.Items(actions);
                 bool any = entry is not null;
                 play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = any;

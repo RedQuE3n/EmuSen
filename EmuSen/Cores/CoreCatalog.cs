@@ -16,7 +16,8 @@ namespace EmuSen.Cores
         };
 
         private static readonly CoreDescriptor Venus =
-            new("SNES (Venus)", new[] { ".smc", ".sfc" }, SnesCheatSystems, "SNES", "Nintendo", 1990, CoverAspect: 0.73);
+            new("SNES (Venus)", new[] { ".smc", ".sfc" }, SnesCheatSystems, "SNES", "Nintendo", 1990, CoverAspect: 0.73,
+                OpenVgdbSystems: new[] { "SNES" }, OpenVgdbBytes: WithoutCopierHeader);
 
         // The libretro folder name for the NES; Famicom Disk System is different hardware and is not claimed.
         private static readonly string[] NesCheatSystems =
@@ -25,7 +26,8 @@ namespace EmuSen.Cores
         };
 
         private static readonly CoreDescriptor Moon =
-            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems, "NES", "Nintendo", 1983, CoverAspect: 1.43);
+            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems, "NES", "Nintendo", 1983, CoverAspect: 1.43,
+                OpenVgdbSystems: new[] { "NES" }, OpenVgdbBytes: WithoutInesHeader);
 
         // Two libretro folders for one core, the same way Venus claims Satellaview - see Mercury_Core.md §1.
         private static readonly string[] GameBoyCheatSystems =
@@ -35,7 +37,8 @@ namespace EmuSen.Cores
         };
 
         private static readonly CoreDescriptor Mercury =
-            new("Game Boy (Mercury)", new[] { ".gb", ".gbc" }, GameBoyCheatSystems, "GB", "Nintendo", 1989, CoverAspect: 1.0);
+            new("Game Boy (Mercury)", new[] { ".gb", ".gbc" }, GameBoyCheatSystems, "GB", "Nintendo", 1989, CoverAspect: 1.0,
+                OpenVgdbSystems: new[] { "GB", "GBC" }, OpenVgdbBytes: file => file);
 
         // Claimed so `cheat db prune` keeps it, though Mars applies no cheats yet - see Mars_Core.md §8.
         private static readonly string[] N64CheatSystems =
@@ -45,7 +48,30 @@ namespace EmuSen.Cores
 
         // All three container orders, because the magic word decides and the extension does not - see Mars_Rom.md §1.1.
         private static readonly CoreDescriptor Mars =
-            new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996, CoverAspect: 0.7);
+            new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996, CoverAspect: 0.7,
+                OpenVgdbSystems: new[] { "N64" }, OpenVgdbBytes: InByteSwappedOrder);
+
+        // OpenVGDB hashes a SNES image without the 512-byte copier header some dumps carry, as No-Intro does - see EmuSen_Settings_Reference.md §4.39.
+        private static byte[] WithoutCopierHeader(byte[] file) => file.Length % 1024 == 512 ? file[512..] : file;
+
+        // Its SYSTEMS row gives the NES a 16-byte header to skip, which is the iNES header when the file has one.
+        private static byte[] WithoutInesHeader(byte[] file) =>
+            file.Length > 16 && file[0] == (byte)'N' && file[1] == (byte)'E' && file[2] == (byte)'S' && file[3] == 0x1A ? file[16..] : file;
+
+        // Measured on this library: its N64 hashes are of the halfword-swapped .v64 order, whatever order the file is in.
+        private static byte[] InByteSwappedOrder(byte[] file)
+        {
+            try
+            {
+                var order = Nintendo.Mars.Rom.RomImage.DetectByteOrder(file);
+                byte[] big = Nintendo.Mars.Rom.RomImage.Normalize(file, order);
+                return Nintendo.Mars.Rom.RomImage.Normalize(big, Nintendo.Mars.Rom.RomByteOrder.ByteSwapped);
+            }
+            catch (System.IO.InvalidDataException)
+            {
+                return file;
+            }
+        }
 
         // Keyed by what a user would type - the internal codename and the console name both reach the same core.
         public static IReadOnlyDictionary<string, CoreDescriptor> Registry { get; } =

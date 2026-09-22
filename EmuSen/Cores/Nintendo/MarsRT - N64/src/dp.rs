@@ -1,6 +1,5 @@
 //! The display processor's command interface, the C# `DpInterface`, and the words a snapshot carries.
 
-use crate::Skip;
 use crate::bus::{MemoryBus, SP_MEM_SIZE};
 use crate::mi::interrupt;
 use crate::rdp::{Rdp, RdpMemory};
@@ -21,7 +20,6 @@ pub struct DpInterface {
     pub xbus: bool,
     /// The words handed over and not yet run, which only a snapshot carries (`WritePending`); `[SkipInState]` in C#.
     pub pending: Vec<u64>,
-    pub framer: Skip<Framer>,
 }
 
 impl State for DpInterface {
@@ -148,9 +146,7 @@ impl MemoryBus {
         while !self.dp.freeze && self.dp.current < self.dp.end {
             let word = if self.dp.xbus { self.dp_read_dmem(self.dp.current) } else { self.read64(self.dp.current) };
             self.dp.current = self.dp.current.wrapping_add(8);
-            let full = self.rdp_accept(word);
-            let framed = self.dp.framer.on && self.dp.framer.frame(word);
-            if full || framed {
+            if self.rdp_accept(word) {
                 self.dp.running = false;
                 self.mi.raise(interrupt::DISPLAY_PROCESSOR);
             }
@@ -174,81 +170,10 @@ impl MemoryBus {
 
     /// `ReadPending`'s replay: a snapshot's words, run with no sync raised, as C# runs them.
     pub fn dp_replay_pending(&mut self) {
-        let p = &self.dp.processor;
-        let framer = &mut self.dp.framer;
-        framer.taken = p.taken;
-        framer.first = p.command[0];
-        framer.color = (p.color_image, p.color_image_width as u32, p.color_image_size as u32);
-        framer.depth = p.depth_image;
-        framer.scissor_bottom = p.scissor_bottom as u32;
         let pending = std::mem::take(&mut self.dp.pending);
         for word in pending {
             self.rdp_accept(word);
-            if self.dp.framer.on {
-                self.dp.framer.frame(word);
-            }
         }
     }
 }
 
-/// A measurement aid while the RDP is a stub: frames the words into commands as `Rdp.Gather` does, answers a full sync,
-/// and records the RDRAM an image command could draw into. Off by default; see Mars_Native.md §5.2.
-#[derive(Clone, Debug, Default)]
-pub struct Framer {
-    pub on: bool,
-    pub taken: i32,
-    pub first: u64,
-    pub color: (u32, u32, u32),
-    pub depth: u32,
-    pub scissor_bottom: u32,
-    /// The byte ranges primitives were drawn into since the last `take_regions`, as `(start, end)`.
-    pub regions: Vec<(u32, u32)>,
-}
-
-impl Framer {
-    /// `Rdp.Length`: a triangle's words by its coefficients, a textured rectangle's two, one otherwise.
-    fn length(id: u32) -> i32 {
-        match id {
-            0x08..=0x0F => 4 + if id & 4 != 0 { 8 } else { 0 } + if id & 2 != 0 { 8 } else { 0 } + if id & 1 != 0 { 2 } else { 0 },
-            0x24 | 0x25 => 2,
-            _ => 1,
-        }
-    }
-
-    /// A range merged into the one it overlaps, so the list stays as short as the images drawn.
-    fn note(&mut self, start: u32, end: u32) {
-        if let Some(r) = self.regions.iter_mut().find(|r| start <= r.1 && end >= r.0) {
-            *r = (r.0.min(start), r.1.max(end));
-        } else {
-            self.regions.push((start, end));
-        }
-    }
-
-    /// One word; true when it completed a full sync.
-    pub fn frame(&mut self, word: u64) -> bool {
-        if self.taken == 0 {
-            self.first = word;
-        }
-        self.taken += 1;
-        let id = ((self.first >> 56) & 0x3F) as u32;
-        if self.taken < Self::length(id) {
-            return false;
-        }
-        self.taken = 0;
-        let w = self.first;
-        match id {
-            0x3F => self.color = ((w & 0x03FF_FFFF) as u32, (((w >> 32) & 0x3FF) + 1) as u32, ((w >> 51) & 3) as u32),
-            0x3E => self.depth = (w & 0x03FF_FFFF) as u32,
-            0x2D => self.scissor_bottom = (w & 0xFFF) as u32,
-            0x08..=0x0F | 0x24 | 0x25 | 0x36 => {
-                let (address, width, size) = self.color;
-                let rows = (self.scissor_bottom >> 2) + 1;
-                let bytes = (width * rows) << size >> 1;
-                self.note(address, address.saturating_add(bytes.max(1)));
-                self.note(self.depth, self.depth.saturating_add(width * rows * 2));
-            }
-            _ => {}
-        }
-        id == 0x29
-    }
-}

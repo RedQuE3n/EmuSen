@@ -1,11 +1,11 @@
 //! The VR4300 interpreter: the step, the fetch, translation, and the integer instructions. C#'s Cpu.cs and Cpu/Opcodes. See Mars_Cpu.md.
 
-use crate::bus::MemoryBus;
-use crate::bus_access::be32;
-use crate::cop0::*;
+use crate::memory::bus::MemoryBus;
+use crate::memory::bus_access::be32;
+use crate::cpu::cop0::*;
 use crate::cpu::{Cpu, Exec, Fault, Raised, code};
-use crate::segments::{self, Mode, Segment};
-use crate::tlb::TlbResult;
+use crate::cpu::segments::{self, Mode, Segment};
+use crate::cpu::tlb::TlbResult;
 
 /// KSEG0 and KSEG1 as a sign-extended range, where kernel mode never mirrors.
 pub const KERNEL_DIRECT_BASE: u64 = 0xFFFF_FFFF_8000_0000;

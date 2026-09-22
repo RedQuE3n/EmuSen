@@ -24,21 +24,21 @@ mod tests {
     use super::snake;
 
     const SOURCES: [(&str, &str); 15] = [
-        ("ai.rs", include_str!("ai.rs")),
-        ("bus.rs", include_str!("bus.rs")),
-        ("controller.rs", include_str!("controller.rs")),
-        ("cpu.rs", include_str!("cpu.rs")),
-        ("dp.rs", include_str!("dp.rs")),
-        ("isviewer.rs", include_str!("isviewer.rs")),
+        ("memory/ai.rs", include_str!("memory/ai.rs")),
+        ("memory/bus.rs", include_str!("memory/bus.rs")),
+        ("memory/controller.rs", include_str!("memory/controller.rs")),
+        ("cpu/mod.rs", include_str!("cpu/mod.rs")),
+        ("memory/dp.rs", include_str!("memory/dp.rs")),
+        ("memory/isviewer.rs", include_str!("memory/isviewer.rs")),
         ("machine.rs", include_str!("machine.rs")),
-        ("mi.rs", include_str!("mi.rs")),
-        ("pi.rs", include_str!("pi.rs")),
-        ("rdp.rs", include_str!("rdp.rs")),
-        ("save.rs", include_str!("save.rs")),
-        ("si.rs", include_str!("si.rs")),
-        ("sp.rs", include_str!("sp.rs")),
-        ("tlb.rs", include_str!("tlb.rs")),
-        ("vi.rs", include_str!("vi.rs")),
+        ("memory/mi.rs", include_str!("memory/mi.rs")),
+        ("memory/pi.rs", include_str!("memory/pi.rs")),
+        ("rdp/mod.rs", include_str!("rdp/mod.rs")),
+        ("memory/save.rs", include_str!("memory/save.rs")),
+        ("memory/si.rs", include_str!("memory/si.rs")),
+        ("memory/sp.rs", include_str!("memory/sp.rs")),
+        ("cpu/tlb.rs", include_str!("cpu/tlb.rs")),
+        ("vi/mod.rs", include_str!("vi/mod.rs")),
     ];
 
     /// Named on purpose: `SaveChip.Type` is `kind`, `type` being a keyword; a snapshot's words are no C# field.

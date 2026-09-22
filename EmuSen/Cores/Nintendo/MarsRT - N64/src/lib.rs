@@ -7,6 +7,7 @@ pub mod cpu;
 pub mod dp;
 pub mod ffi;
 pub mod ffi_rdp;
+pub mod ffi_vi;
 pub mod isviewer;
 pub mod machine;
 pub mod mi;

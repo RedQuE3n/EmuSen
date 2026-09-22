@@ -409,3 +409,17 @@ impl State for Rdp {
         Ok(())
     }
 }
+
+/// The memories the RDP draws into: RDRAM and its hidden bits, byte for byte as the bus holds them. See Mars_Native.md §5.2.
+pub struct RdpMemory<'a> {
+    pub rdram: &'a mut [u8],
+    pub hidden: &'a mut [u8],
+}
+
+impl Rdp {
+    /// C#'s `Rdp.Accept`: one command word; true when it completed a full sync. A stub until the RDP stage lands.
+    pub fn accept(&mut self, word: u64, memory: &mut RdpMemory) -> bool {
+        let _ = (word, memory);
+        false
+    }
+}

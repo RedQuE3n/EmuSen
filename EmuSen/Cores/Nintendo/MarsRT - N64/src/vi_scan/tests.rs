@@ -1,6 +1,6 @@
 //! MarsViTests' angrylion pixels, and the filters' arithmetic against independent formulations. See Mars_Native.md §5.4.
 
-use super::filters::{Pixel, divot, median, mix, root, runners};
+use super::filters::{Pixel, divot, gamma, median, mix, pull, root, runners, step};
 use super::*;
 
 const FRAMEBUFFER: usize = 0x0020_0000;
@@ -341,3 +341,76 @@ fn a_scan_after_the_stamp_wraps_reads_no_sample_from_before_it() {
     assert!(scan(&mut fresh, &second, &hidden, &mut fresh_out));
     assert!(wrapped_out.raster() == fresh_out.raster());
 }
+
+/// Gamma reads the entry six bits above the channel: twice the root of the channel times 64 (Mars_VideoPasses.md §3).
+#[test]
+fn gamma_reads_the_entry_six_bits_above_the_channel() {
+    for c in 0..256 {
+        let p = gamma(Pixel { red: c, green: 255 - c, blue: c, coverage: 5 });
+        let root_of = |v: i32| 2 * ((v * 64) as f64).sqrt().floor() as i32;
+        assert_eq!((p.red, p.green, p.blue, p.coverage), (root_of(c), root_of(255 - c), root_of(c), 5), "{c}");
+    }
+}
+
+/// The dither filter compares the top five bits and nothing below them (Mars_VideoPasses.md §1).
+#[test]
+fn the_dither_step_compares_five_bits() {
+    for c in 0..256 {
+        for n in 0..256 {
+            assert_eq!(step(c, n), ((n >> 3) - (c >> 3)).signum(), "{c} {n}");
+        }
+    }
+}
+
+/// The FPGA's pull, `mid + ((penmin + penmax - 2 mid) * (7 - c) + 4) >> 3`, over unscaled values, where the rounding shows (Mars_VideoFilter.md §5).
+#[test]
+fn the_pull_is_the_fpgas_rounded_by_half_a_step() {
+    for centre in 0..24 {
+        for a in 0..24 {
+            for b in 0..24 {
+                let mut six = [centre, a, b, centre, centre, centre];
+                six.sort_unstable();
+                let (low, high) = (centre.min(six[1]), centre.max(six[4]));
+                for missing in 0..8 {
+                    let expected = centre + (((low + high - 2 * centre) * missing + 4) >> 3);
+                    assert_eq!(pull(&[centre, a, b], centre, missing), expected, "{centre} {a} {b} {missing}");
+                }
+            }
+        }
+    }
+}
+
+/// C# halves the vertical start less its offset by truncating division, so one half line above the offset is the offset.
+#[test]
+fn a_picture_one_half_line_above_the_offset_starts_at_it() {
+    let (rdram, hidden) = noisy();
+    let scan_at = |top: u32| {
+        let mut vi = Vi { registers: regs(2, 2, 64, 0x400, 0x2AB, 108, 256, top, 100, 0, 0).words(), ..Vi::default() };
+        let mut out = Scanout::default();
+        assert!(scan(&mut vi, &rdram, &hidden, &mut out));
+        out.raster().to_vec()
+    };
+    assert!(scan_at(33) == scan_at(34));
+    assert!(scan_at(32) != scan_at(34));
+}
+
+/// Eight columns at the left and seven at the right carry no signal, and a dark column keeps the coverage beneath it (Mars_Video.md §2.5).
+#[test]
+fn the_guard_columns_are_dark_and_keep_their_coverage() {
+    let (rdram, hidden) = noisy();
+    let mut vi = Vi { registers: regs(2, 3, 64, 0x400, 0x400, 40, 640, 34, 120, 0, 0).words(), ..Vi::default() };
+    let mut out = Scanout::default();
+    assert!(scan(&mut vi, &rdram, &hidden, &mut out));
+    vi.registers = regs(2, 3, 64, 0x400, 0x400, 108, 256, 34, 120, 0, 0).words();
+    assert!(scan(&mut vi, &rdram, &hidden, &mut out));
+
+    let raster = out.raster();
+    let pixel = |x: usize, y: usize| &raster[(y * 640 + x) * 4..(y * 640 + x) * 4 + 4];
+    let lit = |x: usize| (0..120).any(|y| pixel(x, y)[..3] != [0, 0, 0]);
+    for x in (0..8).chain(249..256) {
+        assert!(!lit(x), "column {x}");
+        assert!((0..120).all(|y| pixel(x, y)[3] == 7), "column {x} lost its coverage");
+    }
+    assert!(lit(8) && lit(248));
+}
+

@@ -223,8 +223,7 @@ pub unsafe extern "C" fn mars_machine_run_steps(core: *mut Core, steps: u64) {
     }
 }
 
-/// Bit 0 skips rendering; bit 1 turns the idle skip off; bit 2 steps the signal processor through the idle loop; bit 3 frames the RDP's words;
-/// bit 4 is C#'s `RepeatRows`.
+/// Bit 0 skips rendering; bit 1 turns the idle skip off; bit 2 steps the signal processor through the idle loop; bit 4 is C#'s `RepeatRows`.
 ///
 /// # Safety
 /// `core` must be live or null.
@@ -234,29 +233,8 @@ pub unsafe extern "C" fn mars_machine_set_options(core: *mut Core, flags: u32) {
         c.skip_rendering = flags & 1 != 0;
         c.machine.options.idle_skip = flags & 2 == 0;
         c.machine.options.rsp_whole = flags & 4 == 0;
-        c.machine.bus.dp.framer.on = flags & 8 != 0;
         c.scanout.repeat_rows = flags & 16 != 0;
     }
-}
-
-/// The RDRAM ranges the framer saw primitives drawn into since the last call, as start and end pairs, up to `max` pairs; returns the pairs.
-///
-/// # Safety
-/// `core` must be live or null; `out` valid for `2 * max` values.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn mars_machine_take_rdp_regions(core: *mut Core, out: *mut u32, max: u64) -> u64 {
-    let Some(c) = (unsafe { core.as_mut() }) else { return 0 };
-    let regions = std::mem::take(&mut c.machine.bus.dp.framer.regions);
-    let n = regions.len().min(max as usize);
-    if !out.is_null() {
-        for (i, &(start, end)) in regions.iter().take(n).enumerate() {
-            unsafe {
-                *out.add(2 * i) = start;
-                *out.add(2 * i + 1) = end;
-            }
-        }
-    }
-    n as u64
 }
 
 /// `Press`: one mask of the joybus's button bits on a port.

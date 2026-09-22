@@ -138,7 +138,6 @@ impl Machine {
         machine.bus.read_state_all(&mut r, version == SNAPSHOT_VERSION)?; // Bus
         machine.loaded_version = version;
         machine.options = self.options;
-        machine.bus.dp.framer.on = self.bus.dp.framer.on;
         machine.bus.vi_rebase();
         machine.bus.ai_rebase();
 
@@ -264,7 +263,7 @@ impl Machine {
         bus.vi_rebase();
         bus.ai_rebase();
         bus.reschedule();
-        // C#'s Rdp.Refresh, the display processor's decode of its own modes, is the RDP stage's to run here.
+        // C#'s Rdp.Refresh ran in the RDP's own read_state.
         bus.dp_replay_pending();
         self.cpu.run.idle_at = u64::MAX;
         self.cpu.cop0_written(&self.bus);

@@ -34,7 +34,6 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, byte*, nuint, int*, long> PakData = (delegate* unmanaged<nint, byte*, nuint, int*, long>)MarsNative.Export("mars_machine_pak_data");
         private static readonly delegate* unmanaged<nint, uint, void> MarkSaved = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_mark_saved");
         private static readonly delegate* unmanaged<nint, byte*, nuint, long> SaveCpu = (delegate* unmanaged<nint, byte*, nuint, long>)MarsNative.Export("mars_machine_save_cpu");
-        private static readonly delegate* unmanaged<nint, uint*, ulong, ulong> TakeRegions = (delegate* unmanaged<nint, uint*, ulong, ulong>)MarsNative.Export("mars_machine_take_rdp_regions");
 
         private const ushort ButtonA = 0x8000, ButtonB = 0x4000, ButtonZ = 0x2000, ButtonStart = 0x1000;
         private const ushort DpadUp = 0x0800, DpadDown = 0x0400, DpadLeft = 0x0200, DpadRight = 0x0100;
@@ -47,7 +46,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private byte[] _frame = Blank(MarsCore.DefaultScreenHeight);
         private int _screenWidth = MarsCore.ScreenWidthPixels, _screenHeight = MarsCore.DefaultScreenHeight, _rowRepeat = 1;
         private long _frameSerial, _takenSerial;
-        private bool _skipRendering, _idleSkip = true, _rspWhole = true, _framesRdp, _repeatRows = true;
+        private bool _skipRendering, _idleSkip = true, _rspWhole = true, _repeatRows = true;
 
         public static bool Available => LoadRomExport != null;
 
@@ -115,28 +114,12 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             set { _rspWhole = value; ApplyOptions(); }
         }
 
-        // A measurement aid while the display processor is a stub: its words framed, a full sync answered, the RDRAM it would draw recorded.
-        public bool FramesRdp
-        {
-            get => _framesRdp;
-            set { _framesRdp = value; ApplyOptions(); }
-        }
-
         private void ApplyOptions()
         {
-            if (_handle != 0) SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_framesRdp ? 8u : 0) | (_repeatRows ? 16u : 0));
+            if (_handle != 0) SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_repeatRows ? 16u : 0));
         }
 
-        // The RDRAM ranges the framer saw primitives drawn into since the last call, merged.
-        public IReadOnlyList<(uint Start, uint End)> TakeRdpRegions()
-        {
-            const int Most = 4096;
-            uint* pairs = stackalloc uint[2 * Most];
-            int n = (int)TakeRegions(Handle, pairs, Most);
-            var regions = new List<(uint, uint)>(n);
-            for (int i = 0; i < n; i++) regions.Add((pairs[2 * i], pairs[2 * i + 1]));
-            return regions;
-        }
+
 
         public void LoadRom(string path)
         {

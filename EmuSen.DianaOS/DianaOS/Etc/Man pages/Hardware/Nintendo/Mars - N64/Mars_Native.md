@@ -2402,10 +2402,21 @@ games need local ROMs and stay on this machine.
   Verified on this machine: a win-x64 publish without a library warns and carries none, one with a stand-in carries
   it at `lib/EmuSen/marsrt.dll`, and the linux-x64 publish carries the 6.9 MB `dist` library.
 
-**What is not verified here.** This machine cannot run the workflow; it runs on the next push of the crate, and its
-four results — three green and Rosetta's whatever it is — are what settle the Apple Silicon question. WiseMan's
-synthetic systems on the foreign platforms need a .NET job with LunaP checked out beside the repository
-(`RedQuE3n/EmuSen.LunaP`), which is left for when the libraries exist to test.
+**The workflow's first run, 2026-09-22 (run 35789632081), all four green.** Every job ran the 391 tests to a pass
+before building: linux-x64 in 55 s, win-x64 in 45 s, osx-arm64 in 22 s, and osx-x64 **under Rosetta in 45 s** — the
+run that was allowed to fail did not, so Cranelift's x86_64 code runs under Apple's translation as well as natively.
+That is the Apple Silicon question answered on the arm64 job: the block tests compiled and ran code on it, so
+`cranelift-jit`'s writable-then-executable pages are accepted by a process without the hardened runtime, which is
+what an unsigned local build is. A notarised build still needs the entitlement, and that is not tested. The
+libraries, downloaded and inspected here: `libmarsrt.so` 6.95 MB (ELF x86-64, needing glibc 2.34, as the desktop's
+own build does), `marsrt.dll` 5.19 MB (PE32+ x86-64), `libmarsrt.dylib` 3.41 MB arm64 and 6.40 MB x86_64 (Mach-O);
+each exports `mars_machine_run_frame`, `mars_machine_set_recompiler` and `mars_blocks_counters` under the names
+`MarsNative` looks up. The jobs took four to twelve minutes, Windows the longest.
+
+**What is not verified.** WiseMan's synthetic systems on the foreign platforms need a .NET job with LunaP checked
+out beside the repository (`RedQuE3n/EmuSen.LunaP`), which is left for when a foreign publish is made from these
+artefacts; and no publish for another platform has yet been made and run, which is stage B's engine default's
+concern as much as this stage's.
 
 ### 6.4 Stage D: the multiple, antialiasing and the device
 

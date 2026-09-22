@@ -104,8 +104,15 @@ pub unsafe extern "C" fn mars_machine_load_state(core: *mut Core, data: *const u
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mars_machine_restore_state(core: *mut Core, data: *const u8, len: usize) -> i32 {
     let Some(c) = (unsafe { core.as_mut() }) else { return STATUS_NULL };
+    let rdram = c.machine.rdram_bytes();
     match c.machine.restore_state(unsafe { input(data, len) }) {
         Ok(()) => {
+            // A state of the other size rebuilds the C# machine, and its raster with it.
+            if c.machine.rdram_bytes() != rdram {
+                let repeat_rows = c.scanout.repeat_rows;
+                c.scanout = Scanout::default();
+                c.scanout.repeat_rows = repeat_rows;
+            }
             if !c.skip_rendering {
                 c.present();
             }

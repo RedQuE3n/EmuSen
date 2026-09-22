@@ -31,6 +31,9 @@ namespace EmuSen.Galaxia.Library
         // Coprocessor firmware dumps the user supplies - see EmuSen_Firmware.md §2.
         public static string Firmware => Path.Combine(UsrHome, "Firmware");
 
+        // Shader packs downloaded on the player's request, never shipped with EmuSen - see EmuSen_Settings_Reference.md §4.41.
+        public static string Shaders => Path.Combine(UsrHome, "Shaders");
+
         // The user's own .cht tree, never shipped with EmuSen - see `man cheat`.
         public static string Cheats => Path.Combine(UsrHome, "Cheats");
 

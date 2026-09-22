@@ -52,6 +52,7 @@ The shell is rooted here: to DianaOS, this directory **is** `/`, and the install
     Save States/  whole-machine snapshots (.state)
   Firmware/     coprocessor dumps the user supplies    EmuSen_Firmware.md §2
   Cheats/       the user's own .cht tree               `man cheat`
+  Shaders/      shader packs downloaded on request     EmuSen_Settings_Reference.md §4.41
 ```
 
 `man hier` remains the user-facing description of this tree; this section is about who *owns* it.

@@ -57,6 +57,31 @@ namespace EmuSen.Serenity
             }
         }
 
+        // A RetroArch preset, drawn instead of both when it is built; until then, or if it cannot be, the picture is drawn plain - see EmuSen_Serenity.md §7.5.
+        private Slang.SlangRunner? _slang;
+
+        // Raised off the UI thread, once per preset that cannot be drawn, with the reason.
+        public event Action<string>? SlangFailed;
+
+        public string? ActiveSlangPreset
+        {
+            get { lock (_cacheLock) return _slang?.PresetPath; }
+            set
+            {
+                lock (_cacheLock)
+                {
+                    if (string.Equals(_slang?.PresetPath, value, StringComparison.Ordinal)) return;
+                    _slang?.Dispose();
+                    _slang = value is null ? null : new Slang.SlangRunner(value, problem => SlangFailed?.Invoke(problem),
+                        () => Avalonia.Threading.Dispatcher.UIThread.Post(InvalidateVisual));
+                }
+                InvalidateVisual();
+            }
+        }
+
+        // Whether the preset has finished building, for a test that waits on it.
+        internal bool SlangBuilt { get { lock (_cacheLock) return _slang?.Built ?? true; } }
+
         // How many earlier frames the running filter holds, for a test that asks whether history is kept.
         internal int FilterHistoryHeld { get { lock (_cacheLock) return _chain?.HistoryHeld ?? 0; } }
 
@@ -227,13 +252,21 @@ namespace EmuSen.Serenity
                     }
                     long copied = System.Diagnostics.Stopwatch.GetTimestamp();
 
-                    if (_owner._chain is { } chain) DrawFiltered(canvas, chain, lease.GrContext, _owner._cachedImage!);
+                    if (_owner._slang is { } slang && DrawSlang(canvas, slang, copy)) { }
+                    else if (_owner._chain is { } chain) DrawFiltered(canvas, chain, lease.GrContext, _owner._cachedImage!);
                     else Draw(canvas, _owner._cachedImage!);
 
                     // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
                     lease.GrContext?.Flush();
                     _owner.Presented(copy, copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, lease.GrContext is not null, _width, _height);
                 }
+            }
+
+            private bool DrawSlang(SKCanvas canvas, Slang.SlangRunner slang, bool newFrame)
+            {
+                var (x, y, w, h) = ComputeLetterboxRect(_width, _height * _rowRepeat, Bounds.Width, Bounds.Height);
+                var destination = new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
+                return slang.Draw(canvas, _rgba, _width, _height, _rowRepeat, newFrame, destination);
             }
 
             private void DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage)

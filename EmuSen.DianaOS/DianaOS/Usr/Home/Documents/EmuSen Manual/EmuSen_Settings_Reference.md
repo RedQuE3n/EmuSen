@@ -1087,3 +1087,40 @@ Graphics Settings now opens every console's tab with **Screen Filter**, a dropdo
 
 **What it does not cover.** ~~The two filters available are the simple single-pass ones Serenity already had; nothing here is an accurate CRT or LCD.~~ *Superseded the same evening: each console's row now lists the accurate filters that suit it (`EmuSen_Serenity.md` §3.3 to §3.5): CRT (Lottes) for the NES, SNES and N64; the Game Boy, Pocket, Light and Color LCDs for the Game Boy.* The in-game bar's options menu does not offer the filter yet. Tests: `ScreenFilterSettingTests` (every tab has the row, a choice is saved for that console alone, a game starts with its console's filter and a change reaches it, an unknown name draws no filter); three mutants each caught.
 
+
+### 4.41 RetroArch's shaders, downloaded on request (2026-09-21)
+
+Each console's **Screen Filter** dropdown (§4.40) now ends with **RetroArch Preset...**. Choosing it opens a picker, `SlangPresetWindow`, that lists every `.slangp` in the downloaded pack. The list can be narrowed by the pack's top-level folder (`crt`, `handheld` and so on) and by a search over the path. **Use This Preset**, a double-click or Enter stores the choice. Cancel, or closing the window, leaves the dropdown as it was.
+
+**Storage.** The choice is stored under the same `ScreenFilter` key as `slang:` followed by the preset's path inside the pack, for example `slang:crt/crt-royale.slangp`. It is stored as a relative path so that an updated pack keeps the choice. The dropdown then shows it as `RetroArch: crt-royale`. An unknown name still draws no filter (§4.40).
+
+**The pack.** The picker's **Download Pack** button fetches `shaders_slang.zip` from `buildbot.libretro.com/assets/frontend/`, the file RetroArch's own online updater fetches. Once a pack is there, the button reads **Update Pack**.
+
+- It is unpacked into `home/Shaders/RetroArch/` (`DataStore.Shaders`).
+- The server's `Last-Modified` is recorded in `.emusen-pack` beside the presets, and the picker shows it as the pack's build date.
+- The zip is written beside its final place and unpacked into a sibling folder. **A failed download, or one holding no presets, leaves the old pack as it was.** A complete one is swapped in.
+- .NET's extractor refuses an entry that would land outside the folder.
+- The download has its own HTTP client with a thirty-minute timeout, because 54 MB outlasts the thirty seconds a cover lookup is given (§4.39).
+
+**Nothing is fetched unless the player presses the button.** EmuSen ships no shader. The licence position is `EmuSen_Serenity.md` §3.6: a download on the player's request redistributes nothing.
+
+**When a game starts**, and whenever the value changes while that console's game runs, `ApplyScreenFilter` resolves the stored path against the pack and hands the full path to the frame control (`EmuSen_Serenity.md` §7.5).
+
+- If the preset is no longer in the pack, the status bar says so and the picture is drawn plain.
+- If the preset is there but cannot be built, for example when no Vulkan device is available or a shader does not compile, the status bar gives the reason and the picture is drawn plain.
+
+**What it does not cover.**
+- A preset's parameters cannot be changed from Mistress yet. The preset's own values, or the shaders' defaults, are what is drawn.
+- The in-game bar's options menu does not offer presets.
+- Presets are shown by path, with no preview.
+
+**Tests** (`ScreenFilterSettingTests`):
+- The last entry opens the picker over a pack laid out as libretro's is.
+- The search narrows the list.
+- The preset used is stored and shown.
+- Cancelling leaves the filter.
+- A game hands its preset's full path to the frame control, and a missing one is reported and drawn plain.
+- The download reads libretro's address and replaces the old pack, leaving no stray files.
+- A server error, or a zip with no presets, leaves the old pack.
+
+Two mutants were made, one dropping the no-presets check and one dropping the missing-file check. Each was caught.

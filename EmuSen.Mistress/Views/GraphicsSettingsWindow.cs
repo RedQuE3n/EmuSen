@@ -121,6 +121,14 @@ namespace EmuSen.Mistress.Views
             refreshers.Add(FillFilter);
             panel.Children.Add(new FieldRow { Label = "Screen Filter", Hint = "Drawn over the picture as it is shown, never in the game's own frame; changes apply at once.", Content = filter });
 
+            // Before the core's own rows, since it decides which core reads them - see EmuSen_Settings_Reference.md §4.44.
+            if (CoreCatalog.EngineFor(console) is { } engine)
+            {
+                (Control control, Action refresh) = BuildControl(console, engine);
+                refreshers.Add(refresh);
+                panel.Children.Add(new FieldRow { Label = engine.Label, Hint = engine.Hint, Content = control });
+            }
+
             if (settings.Count == 0)
             {
                 panel.Children.Add(new EmptyState { Message = "No core settings yet", Detail = $"The {console} core has nothing else to offer here; what it draws, it draws one way." });

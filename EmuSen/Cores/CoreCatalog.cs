@@ -167,6 +167,24 @@ namespace EmuSen.Cores
         public static IReadOnlyList<CoreSetting> SettingsFor(string console) =>
             SettingsByConsole.TryGetValue(console, out var settings) ? settings : Array.Empty<CoreSetting>();
 
+        // The graphics.json key a console's engine is stored under; no core declares it, so no core is handed it - see EmuSen_Settings_Reference.md §4.44.
+        public const string EngineKey = "Engine";
+
+        public const string MarsEngine = "Mars (C#)";
+        public const string MarsRtEngine = "MarsRT (Rust)";
+
+        // Which implementation runs a console, for the consoles that have more than one; the first is the default - see EmuSen_Settings_Reference.md §4.44.
+        private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["N64"] = new(EngineKey, "Engine",
+                "Which implementation runs the console. Mars (C#) is the reference. MarsRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; of the settings below it honours only the Expansion Pak so far, and it takes about twice Mars's time per frame while its display processor shares the emulation thread. Takes effect when a game is next loaded.",
+                CoreSettingKind.Choice, MarsEngine, Choices: new[] { MarsEngine, MarsRtEngine }),
+        };
+
+        // Null for a console with one implementation.
+        public static CoreSetting? EngineFor(string console) =>
+            EngineByConsole.TryGetValue(console, out var engine) ? engine : null;
+
         public static IReadOnlyList<string> FilterChoices { get; } =
             new[] { AllConsoles }.Concat(Cores.Select(c => c.DisplayName)).ToArray();
     }

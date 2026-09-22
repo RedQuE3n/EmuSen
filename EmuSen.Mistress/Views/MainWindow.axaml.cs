@@ -839,10 +839,13 @@ namespace EmuSen.Mistress.Views
 
             try
             {
-                _session = new EmulatorSession { Cheats = _cheats };
                 // Off the path, not the session: no core exists yet to ask - see EmuSen_Multicore.md §12.
-                StartLogging(EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown");
+                string console = EmuSen.Cores.CoreCatalog.ConsoleForRom(path) ?? "Unknown";
+                // The engine is chosen before the core exists, from the graphics window's row - see EmuSen_Settings_Reference.md §4.44.
+                _session = new EmulatorSession { Cheats = _cheats, Engine = _graphics.Value(console, EmuSen.Cores.CoreCatalog.EngineKey) };
+                StartLogging(console);
                 _session.LoadRom(path);
+                if (_session.EngineNotice is { } engineNotice) Console.WriteLine("[core] " + engineNotice);
 
                 // The pad this ROM's console reads, not whatever the last one used.
                 _activeConsole = _session.CoreName;
@@ -876,6 +879,7 @@ namespace EmuSen.Mistress.Views
                 StatusText.Text = restoredCheats > 0
                     ? $"Running: {displayName}  ({restoredCheats} saved cheat(s) restored)"
                     : $"Running: {displayName}";
+                if (_session.EngineNotice is { } notice) StatusText.Text += $"  ({notice})";
                 _currentRomPath = path;
                 _currentDisplayName = displayName;
                 if (!reset) RecordStart(path);
@@ -1222,8 +1226,8 @@ namespace EmuSen.Mistress.Views
                     RunCoreRequests(session);
 
                     // Right after RunFrame, which is what produces new samples to drain.
-                    // Off for the N64 for now: its snapshot with several rasteriser workers froze a game - see EmuSen_Settings_Reference.md §4.21b.
-                    if (session.Core is not null and not EmuSen.Cores.Nintendo.Mars.MarsCore) _rewind.OnFrameCompleted(session.Core);
+                    // Off for the N64 for now, on either engine: its snapshot with several rasteriser workers froze a game - see EmuSen_Settings_Reference.md §4.21b and §4.44.
+                    if (session.Core is not null and not (EmuSen.Cores.Nintendo.Mars.MarsCore or EmuSen.Cores.Nintendo.MarsRT.MarsRtCore)) _rewind.OnFrameCompleted(session.Core);
 
                     // Drained every frame either way, so a muted stretch cannot back the buffer up - see EmuSen_Audio_Sync.md §4.
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);

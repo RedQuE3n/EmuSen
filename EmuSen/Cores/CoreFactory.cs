@@ -1,8 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Cheats;
 using EmuSen.Cores.Nintendo.Mars.Debug;
+using EmuSen.Cores.Nintendo.Mars.Native;
+using EmuSen.Cores.Nintendo.MarsRT;
 using EmuSen.Cores.Nintendo.Mercury;
 using EmuSen.Cores.Nintendo.Mercury.Cheats;
 using EmuSen.Cores.Nintendo.Mercury.Debug;
@@ -17,37 +20,47 @@ using EmuSen.DianaOS.DianaOS.Var;
 
 namespace EmuSen.Cores
 {
-    // Everything a frontend needs for one loaded ROM, so it never names a core itself.
+    // Everything a frontend needs for one loaded ROM, so it never names a core itself; Notice says why the engine asked for is not the one running.
     public sealed record CoreBundle(
         ICore Core,
         IDebugTarget DebugTarget,
         ICheatCodeCodec? CheatAutoDetectCodec,
         ICheatCodeCodec? CheatExplicitCodec,
-        ICpuTraceSwitch? CpuTraceSwitch);
+        ICpuTraceSwitch? CpuTraceSwitch,
+        string? Notice = null);
 
     // The one place a ROM path turns into a running core - see EmuSen_Multicore.md §2.
     public static class CoreFactory
     {
         public static bool IsSupported(string romPath) => CoreCatalog.IsRomExtension(Extension(romPath));
 
-        // <headless> only means anything to a core that owns a window-ish resource; Moon ignores it.
-        public static ICore Create(string romPath, bool headless = true) => Extension(romPath) switch
+        // <headless> only means anything to a core that owns a window-ish resource; <engine> is a CoreCatalog.EngineFor name, and null is the default - see EmuSen_Settings_Reference.md §4.44.
+        public static ICore Create(string romPath, bool headless = true, string? engine = null) => Extension(romPath) switch
         {
             ".smc" or ".sfc" => new VenusCore(headless),
             ".nes" => new MoonCore(),
             ".gb" or ".gbc" => new MercuryCore(),
-            ".z64" or ".n64" or ".v64" => new MarsCore(expansionPak: true),
+            ".z64" or ".n64" or ".v64" => engine == CoreCatalog.MarsRtEngine && MarsRtCore.Available ? new MarsRtCore(expansionPak: true) : new MarsCore(expansionPak: true),
             var other => throw new NotSupportedException(
                 $"No core in this build handles '{other}' - see CoreCatalog for what is registered."),
         };
 
         // Loads the ROM too, because a debug target needs the core's hardware to already exist.
         public static CoreBundle Load(string romPath, bool headless = true, CheatRegistry? cheats = null,
-            Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null)
+            Func<(double CpuSpc700Ms, double PpuMs, double HdmaMs)>? venusFrameTimings = null, string? engine = null)
         {
-            ICore core = Create(romPath, headless);
+            ICore core = Create(romPath, headless, engine);
             core.LoadRom(romPath);
-            return Bundle(core, cheats, venusFrameTimings);
+            return Bundle(core, cheats, venusFrameTimings) with { Notice = EngineNotice(romPath, engine, core) };
+        }
+
+        // Why the engine asked for is not running, or null when it is; an unavailable MarsRT says what MarsNative found - see Mars_Native.md §5.5.
+        public static string? EngineNotice(string romPath, string? engine, ICore core)
+        {
+            if (engine is null || CoreCatalog.EngineFor(CoreCatalog.ConsoleForRom(romPath) ?? "") is not { } choice || engine == choice.Default) return null;
+            if (choice.Choices?.Contains(engine) != true) return $"No {choice.Label.ToLowerInvariant()} is named \"{engine}\"; {choice.Default} is running.";
+            if (engine == CoreCatalog.MarsRtEngine && core is not MarsRtCore) return $"{CoreCatalog.MarsRtEngine} is not available ({MarsNative.Report}); {CoreCatalog.MarsEngine} is running.";
+            return null;
         }
 
         // Split out so a caller that loaded the core itself can still get the rest of the wiring.
@@ -88,6 +101,10 @@ namespace EmuSen.Cores
                 // The GameShark pokes; no N64 format patches ROM, so the explicit slot stays empty - see Mars_Cheats.md §1.
                 case MarsCore mars:
                     return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), new N64GameSharkCheatCodec(), null, null);
+
+                // The same codec, and a target that reads and disassembles but cannot halt - see Mars_Native.md §5.5.
+                case MarsRtCore marsRt:
+                    return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), new N64GameSharkCheatCodec(), null, null);
 
                 default:
                     throw new NotSupportedException($"No debug target is registered for {core.GetType().Name}.");

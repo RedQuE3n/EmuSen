@@ -1,5 +1,6 @@
 //! MarsRT's C ABI: the machine, its state, and a frame at a time. A negative return is a status. See Mars_Native.md §5.1, §5.2 and §5.5.
 
+pub mod blocks;
 pub mod rdp;
 pub mod threads;
 pub mod vi;

@@ -1,5 +1,5 @@
 //! Runs a cartridge, from power-on or a state, for a number of frames, and prints the time and the final state's hash.
-//! `cargo run --release --example frames -- <rom> <state or -> <frames> [plain] [scan]`, for profiling. See Mars_Native.md §5.2.
+//! `cargo run --release --example frames -- <rom> <state or -> <frames> [plain] [scan] [blocks]`, for profiling. See Mars_Native.md §5.2.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -18,11 +18,13 @@ fn main() {
     let frames: usize = args[3].parse().expect("a frame count");
     let plain = args.iter().any(|a| a == "plain");
     let scan = args.iter().any(|a| a == "scan");
+    let blocks = args.iter().any(|a| a == "blocks");
 
     let mut core = Core::new(Machine::load_rom(Arc::new(image), true, None, None));
     core.skip_rendering = !scan;
     core.scanout.repeat_rows = true;
     core.machine.options.idle_skip = !plain;
+    core.machine.set_recompiler(blocks);
     if args[2] != "-" {
         core.machine.restore_state(&std::fs::read(&args[2]).expect("the state")).expect("a Mars state");
     }
@@ -43,4 +45,18 @@ fn main() {
         core.machine.cpu.instructions,
         core.machine.cpu.run.idle_turns_passed,
     );
+    if blocks {
+        let s = core.machine.blocks.stats;
+        println!(
+            "blocks: {} live, {} shaped, {} discarded; {} entries, {} instructions in blocks ({:.1} an entry), {} stepped, {} mapped",
+            core.machine.blocks.live(),
+            s.shaped,
+            s.discarded,
+            s.entries,
+            s.instructions,
+            s.instructions as f64 / s.entries.max(1) as f64,
+            s.stepped,
+            s.mapped
+        );
+    }
 }

@@ -31,15 +31,15 @@ pub fn rd(i: u32) -> usize {
     ((i >> 11) & 0x1F) as usize
 }
 #[inline(always)]
-fn sa(i: u32) -> u32 {
+pub(crate) fn sa(i: u32) -> u32 {
     (i >> 6) & 0x1F
 }
 #[inline(always)]
-fn immediate(i: u32) -> u64 {
+pub(crate) fn immediate(i: u32) -> u64 {
     (i & 0xFFFF) as u64
 }
 #[inline(always)]
-fn signed_immediate(i: u32) -> i64 {
+pub(crate) fn signed_immediate(i: u32) -> i64 {
     i as i16 as i64
 }
 
@@ -197,7 +197,7 @@ impl Cpu {
 
     /// `Branch`: the slot runs next; a branch to itself marks where the idle loop may be.
     #[inline(always)]
-    fn branch(&mut self, target: u64) {
+    pub(crate) fn branch(&mut self, target: u64) {
         if target == self.current_pc {
             self.run.idle_at = target;
         }
@@ -206,7 +206,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn execute(&mut self, bus: &mut MemoryBus, instruction: u32) -> Exec {
+    pub(crate) fn execute(&mut self, bus: &mut MemoryBus, instruction: u32) -> Exec {
         let op = instruction >> 26;
         if self.run.mode != Mode::Kernel && !self.wide_addressing() && is_doubleword(op, instruction) {
             return Err(self.raise(code::RESERVED_INSTRUCTION, self.current_pc));
@@ -254,28 +254,28 @@ impl Cpu {
             0x2F => return self.cache(i),
             0x31 => return self.load_cop1(bus, i, false),
             0x35 => return self.load_cop1(bus, i, true),
-            0x39 => return self.store_cop1(bus, i, false),
-            0x3D => return self.store_cop1(bus, i, true),
+            0x39 => _ = self.store_cop1(bus, i, false)?,
+            0x3D => _ = self.store_cop1(bus, i, true)?,
             0x30 => return self.load_linked(bus, i, 4),
             0x34 => return self.load_linked(bus, i, 8),
             0x37 => return self.load(bus, i, 8, false),
-            0x28 => return self.store(bus, i, 1),
-            0x29 => return self.store(bus, i, 2),
-            0x2A => return self.store_word_left(bus, i),
-            0x2B => return self.store(bus, i, 4),
-            0x2C => return self.store_double_left(bus, i),
-            0x2D => return self.store_double_right(bus, i),
-            0x2E => return self.store_word_right(bus, i),
-            0x38 => return self.store_conditional(bus, i, 4),
-            0x3C => return self.store_conditional(bus, i, 8),
-            0x3F => return self.store(bus, i, 8),
+            0x28 => _ = self.store(bus, i, 1)?,
+            0x29 => _ = self.store(bus, i, 2)?,
+            0x2A => _ = self.store_word_left(bus, i)?,
+            0x2B => _ = self.store(bus, i, 4)?,
+            0x2C => _ = self.store_double_left(bus, i)?,
+            0x2D => _ = self.store_double_right(bus, i)?,
+            0x2E => _ = self.store_word_right(bus, i)?,
+            0x38 => _ = self.store_conditional(bus, i, 4)?,
+            0x3C => _ = self.store_conditional(bus, i, 8)?,
+            0x3F => _ = self.store(bus, i, 8)?,
             _ => return Err(self.raise(code::RESERVED_INSTRUCTION, self.current_pc)),
         }
         Ok(())
     }
 
     #[inline(always)]
-    fn special(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn special(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
         let _ = bus;
         match i & 0x3F {
             0x00 => self.write32(rd(i), (self.read(rt(i)) as u32) << sa(i)),
@@ -330,7 +330,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn regimm(&mut self, i: u32) -> Exec {
+    pub(crate) fn regimm(&mut self, i: u32) -> Exec {
         let value = self.read(rs(i)) as i64;
         match rt(i) {
             0x00 => self.branch_if(value < 0, i, false, false),
@@ -349,11 +349,11 @@ impl Cpu {
 
     /// `ShiftRightArithmetic`: the whole register shifted, then truncated.
     #[inline(always)]
-    fn shift_right_arithmetic(&mut self, i: u32, amount: u32) {
+    pub(crate) fn shift_right_arithmetic(&mut self, i: u32, amount: u32) {
         self.write32(rd(i), ((self.read(rt(i)) as i64) >> amount) as u32);
     }
 
-    fn add_immediate(&mut self, i: u32, trap: bool) -> Exec {
+    pub(crate) fn add_immediate(&mut self, i: u32, trap: bool) -> Exec {
         let left = self.read(rs(i)) as u32 as i32;
         let right = signed_immediate(i) as i32;
         let result = left.wrapping_add(right);
@@ -364,7 +364,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn add_immediate64(&mut self, i: u32, trap: bool) -> Exec {
+    pub(crate) fn add_immediate64(&mut self, i: u32, trap: bool) -> Exec {
         let left = self.read(rs(i)) as i64;
         let right = signed_immediate(i);
         let result = left.wrapping_add(right);
@@ -375,7 +375,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn add(&mut self, i: u32, trap: bool) -> Exec {
+    pub(crate) fn add(&mut self, i: u32, trap: bool) -> Exec {
         let left = self.read(rs(i)) as u32 as i32;
         let right = self.read(rt(i)) as u32 as i32;
         let result = left.wrapping_add(right);
@@ -386,7 +386,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn subtract(&mut self, i: u32, trap: bool) -> Exec {
+    pub(crate) fn subtract(&mut self, i: u32, trap: bool) -> Exec {
         let left = self.read(rs(i)) as u32 as i32;
         let right = self.read(rt(i)) as u32 as i32;
         let result = left.wrapping_sub(right);
@@ -397,7 +397,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn add64(&mut self, i: u32, trap: bool) -> Exec {
+    pub(crate) fn add64(&mut self, i: u32, trap: bool) -> Exec {
         let left = self.read(rs(i)) as i64;
         let right = self.read(rt(i)) as i64;
         let result = left.wrapping_add(right);
@@ -408,7 +408,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn subtract64(&mut self, i: u32, trap: bool) -> Exec {
+    pub(crate) fn subtract64(&mut self, i: u32, trap: bool) -> Exec {
         let left = self.read(rs(i)) as i64;
         let right = self.read(rt(i)) as i64;
         let result = left.wrapping_sub(right);
@@ -440,12 +440,12 @@ impl Cpu {
 
     /// `JumpTarget`: the low 28 bits of the address the delay slot sits at, replaced.
     #[inline(always)]
-    fn jump_target(&self, i: u32) -> u64 {
+    pub(crate) fn jump_target(&self, i: u32) -> u64 {
         (self.pc & 0xFFFF_FFFF_F000_0000) | (((i & 0x03FF_FFFF) << 2) as u64)
     }
 
     #[inline(always)]
-    fn jump_register(&mut self, i: u32, link: bool) {
+    pub(crate) fn jump_register(&mut self, i: u32, link: bool) {
         let target = self.read(rs(i));
         if link {
             self.write(rd(i), self.next_pc);
@@ -454,7 +454,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn effective_address(&self, i: u32) -> u64 {
+    pub(crate) fn effective_address(&self, i: u32) -> u64 {
         self.read(rs(i)).wrapping_add(signed_immediate(i) as u64)
     }
 
@@ -468,7 +468,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn load(&mut self, bus: &mut MemoryBus, i: u32, size: u32, signed: bool) -> Exec {
+    pub(crate) fn load(&mut self, bus: &mut MemoryBus, i: u32, size: u32, signed: bool) -> Exec {
         let address = self.effective_address(i);
         self.require_alignment(address, size, code::ADDRESS_ERROR_LOAD)?;
         let physical = self.translate_access(self.mirrored(address, size), address, false)?;
@@ -494,9 +494,9 @@ impl Cpu {
         Ok(())
     }
 
-    /// `Store`: an aligned RDRAM store is the bytes named, unless the MI repeats it.
+    /// `Store`: an aligned RDRAM store is the bytes named, unless the MI repeats it; returns where it landed, or `THROUGH_BUS`.
     #[inline(always)]
-    fn store(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec {
+    pub(crate) fn store(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec<u32> {
         let address = self.effective_address(i);
         self.require_alignment(address, size, code::ADDRESS_ERROR_STORE)?;
         let physical = self.translate_access(self.mirrored(address, size), address, true)?;
@@ -506,14 +506,14 @@ impl Cpu {
                 bus.dp.wait_write(physical, size, site::STORE);
             }
             bus.rdram.write(physical, value, size);
-            return Ok(());
+            return Ok(physical);
         }
         bus.store(physical, value, size);
-        Ok(())
+        Ok(THROUGH_BUS)
     }
 
     /// `LoadLinked`: the load arms the link; the address is taken again after the load, as C# takes it.
-    fn load_linked(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec {
+    pub(crate) fn load_linked(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec {
         self.load(bus, i, size, size == 4)?;
         self.linked_flag = true;
         let address = self.effective_address(i);
@@ -522,24 +522,22 @@ impl Cpu {
         Ok(())
     }
 
-    fn store_conditional(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec {
-        if self.linked_flag {
-            self.store(bus, i, size)?;
-        }
+    pub(crate) fn store_conditional(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec<u32> {
+        let landed = if self.linked_flag { self.store(bus, i, size)? } else { NOT_STORED };
         self.write(rt(i), self.linked_flag as u64);
         self.linked_flag = false;
-        Ok(())
+        Ok(landed)
     }
 
     /// `Cache`: nothing is cached, but the address is still checked.
-    fn cache(&mut self, i: u32) -> Exec {
+    pub(crate) fn cache(&mut self, i: u32) -> Exec {
         let address = self.effective_address(i);
         self.require_alignment(address, 4, code::ADDRESS_ERROR_LOAD)?;
         self.translate(address, false)?;
         Ok(())
     }
 
-    fn load_word_left(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn load_word_left(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
         let address = self.effective_address(i);
         let access = self.mirrored(address, 1);
         let shift = (access & 3) as u32 * 8;
@@ -550,7 +548,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn load_word_right(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn load_word_right(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
         let address = self.effective_address(i);
         let access = self.mirrored(address, 1);
         let shift = (3 - (access & 3) as u32) * 8;
@@ -566,7 +564,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn load_double_left(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn load_double_left(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
         let address = self.effective_address(i);
         let access = self.mirrored(address, 1);
         let shift = (access & 7) as u32 * 8;
@@ -577,7 +575,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn load_double_right(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn load_double_right(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
         let address = self.effective_address(i);
         let access = self.mirrored(address, 1);
         let shift = (7 - (access & 7) as u32) * 8;
@@ -588,47 +586,47 @@ impl Cpu {
         Ok(())
     }
 
-    fn store_word_left(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn store_word_left(&mut self, bus: &mut MemoryBus, i: u32) -> Exec<u32> {
         let address = self.effective_address(i);
         let access = self.mirrored(address, 1);
         let shift = (access & 3) as u32 * 8;
         let physical = self.translate_access(access & !3, address, true)?;
         let kept = bus.read32(physical) & !(0xFFFF_FFFFu32 >> shift);
         bus.write32(physical, kept | ((self.read(rt(i)) as u32) >> shift));
-        Ok(())
+        Ok(landed(bus, physical))
     }
 
-    fn store_word_right(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn store_word_right(&mut self, bus: &mut MemoryBus, i: u32) -> Exec<u32> {
         let address = self.effective_address(i);
         let access = self.mirrored(address, 1);
         let shift = (3 - (access & 3) as u32) * 8;
         let physical = self.translate_access(access & !3, address, true)?;
         let kept = if shift == 0 { 0 } else { bus.read32(physical) & ((1u32 << shift) - 1) };
         bus.write32(physical, kept | ((self.read(rt(i)) as u32) << shift));
-        Ok(())
+        Ok(landed(bus, physical))
     }
 
-    fn store_double_left(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn store_double_left(&mut self, bus: &mut MemoryBus, i: u32) -> Exec<u32> {
         let address = self.effective_address(i);
         let access = self.mirrored(address, 1);
         let shift = (access & 7) as u32 * 8;
         let physical = self.translate_access(access & !7, address, true)?;
         let kept = bus.read64(physical) & !(u64::MAX >> shift);
         bus.write64(physical, kept | (self.read(rt(i)) >> shift));
-        Ok(())
+        Ok(landed(bus, physical))
     }
 
-    fn store_double_right(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn store_double_right(&mut self, bus: &mut MemoryBus, i: u32) -> Exec<u32> {
         let address = self.effective_address(i);
         let access = self.mirrored(address, 1);
         let shift = (7 - (access & 7) as u32) * 8;
         let physical = self.translate_access(access & !7, address, true)?;
         let kept = if shift == 0 { 0 } else { bus.read64(physical) & ((1u64 << shift) - 1) };
         bus.write64(physical, kept | (self.read(rt(i)) << shift));
-        Ok(())
+        Ok(landed(bus, physical))
     }
 
-    fn multiply(&mut self, i: u32, unsigned: bool) {
+    pub(crate) fn multiply(&mut self, i: u32, unsigned: bool) {
         let result: i64 = if unsigned {
             ((self.read(rs(i)) as u32 as u64) * (self.read(rt(i)) as u32 as u64)) as i64
         } else {
@@ -639,7 +637,7 @@ impl Cpu {
         self.extra_cycles = MULTIPLY_STALL;
     }
 
-    fn multiply_double(&mut self, i: u32, unsigned: bool) {
+    pub(crate) fn multiply_double(&mut self, i: u32, unsigned: bool) {
         let left = self.read(rs(i));
         let right = self.read(rt(i));
         if unsigned {
@@ -655,7 +653,7 @@ impl Cpu {
     }
 
     /// Division by zero and the one overflowing case have defined results rather than an exception.
-    fn divide(&mut self, i: u32, unsigned: bool) {
+    pub(crate) fn divide(&mut self, i: u32, unsigned: bool) {
         self.extra_cycles = DIVIDE_STALL;
         if unsigned {
             let left = self.read(rs(i)) as u32;
@@ -685,7 +683,7 @@ impl Cpu {
         self.hi = (left % right) as i64 as u64;
     }
 
-    fn divide_double(&mut self, i: u32, unsigned: bool) {
+    pub(crate) fn divide_double(&mut self, i: u32, unsigned: bool) {
         self.extra_cycles = DIVIDE_DOUBLE_STALL;
         if unsigned {
             let left = self.read(rs(i));
@@ -715,7 +713,7 @@ impl Cpu {
         self.hi = (left % right) as u64;
     }
 
-    fn execute_trap(&mut self, i: u32) -> Exec {
+    pub(crate) fn execute_trap(&mut self, i: u32) -> Exec {
         let left = self.read(rs(i));
         let right = self.read(rt(i));
         let condition = match i & 0x3F {
@@ -730,7 +728,7 @@ impl Cpu {
     }
 
     /// The immediate sign-extends to sixty-four bits even where the comparison is unsigned.
-    fn execute_trap_immediate(&mut self, i: u32) -> Exec {
+    pub(crate) fn execute_trap_immediate(&mut self, i: u32) -> Exec {
         let left = self.read(rs(i));
         let right = signed_immediate(i);
         let condition = match rt(i) {
@@ -753,7 +751,7 @@ impl Cpu {
     }
 
     /// `ExecuteCop2`: one latch behind a usability bit.
-    fn execute_cop2(&mut self, i: u32) -> Exec {
+    pub(crate) fn execute_cop2(&mut self, i: u32) -> Exec {
         if self.cop0[STATUS] & STATUS_COP2_USABLE == 0 {
             return Err(self.raise_with(code::COPROCESSOR_UNUSABLE, self.current_pc, false, 2));
         }
@@ -769,7 +767,7 @@ impl Cpu {
     }
 
     /// `LoadCop1`.
-    fn load_cop1(&mut self, bus: &mut MemoryBus, i: u32, wide: bool) -> Exec {
+    pub(crate) fn load_cop1(&mut self, bus: &mut MemoryBus, i: u32, wide: bool) -> Exec {
         self.require_cop1()?;
         let size = if wide { 8 } else { 4 };
         let address = self.effective_address(i);
@@ -786,7 +784,7 @@ impl Cpu {
     }
 
     /// `StoreCop1`: through the bus, never the direct path.
-    fn store_cop1(&mut self, bus: &mut MemoryBus, i: u32, wide: bool) -> Exec {
+    pub(crate) fn store_cop1(&mut self, bus: &mut MemoryBus, i: u32, wide: bool) -> Exec<u32> {
         self.require_cop1()?;
         let size = if wide { 8 } else { 4 };
         let address = self.effective_address(i);
@@ -797,11 +795,22 @@ impl Cpu {
         } else {
             bus.write32(physical, self.read_fpu_word(rt(i)));
         }
-        Ok(())
+        Ok(landed(bus, physical))
     }
 }
 
+/// What a store reports when it went through the bus's own `Store` (a device, the cartridge, the MI's repeat), which a block leaves after.
+pub const THROUGH_BUS: u32 = u32::MAX;
+/// What a store conditional reports when its link had gone and nothing was written.
+pub const NOT_STORED: u32 = u32::MAX - 1;
+
+/// Where a store through `write32` landed: RDRAM's own bytes, or somewhere a device may answer.
 #[inline(always)]
-fn sign_extend_operand(value: u64) -> i64 {
+fn landed(bus: &MemoryBus, physical: u32) -> u32 {
+    if (physical as usize) < bus.rdram.len() { physical } else { THROUGH_BUS }
+}
+
+#[inline(always)]
+pub(crate) fn sign_extend_operand(value: u64) -> i64 {
     ((value << (64 - MULTIPLY_OPERAND_BITS)) as i64) >> (64 - MULTIPLY_OPERAND_BITS)
 }

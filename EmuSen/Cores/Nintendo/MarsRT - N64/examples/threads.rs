@@ -1,5 +1,5 @@
 //! A timed run with the picture on, in one of MarsRT's thread modes, printing ms a frame and the joined state's hash. See Mars_Native.md §5.6.8.
-//! `cargo run --release --example threads -- <rom> <state or -> <frames> <plain|threaded|deferred|split> [workers]`
+//! `cargo run --release --example threads -- <rom> <state or -> <frames> <plain|threaded|deferred|split> [workers] [blocks]`
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -18,6 +18,7 @@ fn main() {
     let frames: usize = args[3].parse().expect("a frame count");
     let mode = args[4].as_str();
     let workers: usize = args.get(5).and_then(|w| w.parse().ok()).unwrap_or(4);
+    let blocks = args.iter().skip(5).any(|a| a == "blocks");
 
     let mut core = Core::new(Machine::load_rom(Arc::new(image), true, None, None));
     core.scanout.repeat_rows = true;
@@ -27,6 +28,7 @@ fn main() {
     core.machine.set_rdp_workers(if mode == "split" { workers } else { 1 });
     core.machine.set_threaded_rdp(mode != "plain");
     core.machine.set_deferred(mode == "deferred" || mode == "split");
+    core.machine.set_recompiler(blocks);
 
     let started = Instant::now();
     for _ in 0..frames {

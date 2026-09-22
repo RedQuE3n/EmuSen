@@ -24,14 +24,158 @@ pub struct Scalars {
     pub divide_loaded: u8,
 }
 
-/// The processor over memory C# owns: pinned registers, vectors, accumulator, IMEM and DMEM.
-pub struct Rsp {
+/// What the processor runs over: its registers, IMEM and DMEM, and its scalars. See Mars_Native.md §5.2.
+pub trait Memory {
+    fn gpr(&self, register: usize) -> u32;
+    fn set_gpr(&mut self, register: usize, value: u32);
+    fn element(&self, register: usize, element: usize) -> u16;
+    fn set_element(&mut self, register: usize, element: usize, value: u16);
+    fn acc(&self, element: usize) -> u64;
+    fn set_acc(&mut self, element: usize, value: u64);
+    fn data(&self, address: u32) -> u8;
+    fn set_data(&mut self, address: u32, value: u8);
+    fn fetch(&self, pc: u32) -> u32;
+    fn pc(&self) -> u32;
+    fn set_pc(&mut self, value: u32);
+    fn next_pc(&self) -> u32;
+    fn set_next_pc(&mut self, value: u32);
+    fn vco(&self) -> u16;
+    fn set_vco(&mut self, value: u16);
+    fn vcc(&self) -> u16;
+    fn set_vcc(&mut self, value: u16);
+    fn vce(&self) -> u8;
+    fn set_vce(&mut self, value: u8);
+    fn divide_input(&self) -> u16;
+    fn set_divide_input(&mut self, value: u16);
+    fn divide_output(&self) -> u16;
+    fn set_divide_output(&mut self, value: u16);
+    fn divide_loaded(&self) -> u8;
+    fn set_divide_loaded(&mut self, value: u8);
+    fn halted(&self) -> u8;
+}
+
+/// Memory C# owns: pinned registers, vectors, accumulator, IMEM and DMEM, and scalars copied across each call.
+pub struct Pinned {
     pub s: Scalars,
     gpr: *mut u32,
     vector: *mut u16,
     accumulator: *mut u64,
     imem: *const u8,
     dmem: *mut u8,
+}
+
+impl Memory for Pinned {
+    #[inline(always)]
+    fn gpr(&self, register: usize) -> u32 {
+        unsafe { *self.gpr.add(register & 31) }
+    }
+    #[inline(always)]
+    fn set_gpr(&mut self, register: usize, value: u32) {
+        unsafe { *self.gpr.add(register & 31) = value }
+    }
+    #[inline(always)]
+    fn element(&self, register: usize, element: usize) -> u16 {
+        unsafe { *self.vector.add(((register & 31) << 3) | (element & 7)) }
+    }
+    #[inline(always)]
+    fn set_element(&mut self, register: usize, element: usize, value: u16) {
+        unsafe { *self.vector.add(((register & 31) << 3) | (element & 7)) = value }
+    }
+    #[inline(always)]
+    fn acc(&self, element: usize) -> u64 {
+        unsafe { *self.accumulator.add(element & 7) }
+    }
+    #[inline(always)]
+    fn set_acc(&mut self, element: usize, value: u64) {
+        unsafe { *self.accumulator.add(element & 7) = value }
+    }
+    #[inline(always)]
+    fn data(&self, address: u32) -> u8 {
+        unsafe { *self.dmem.add((address & DATA_MASK) as usize) }
+    }
+    #[inline(always)]
+    fn set_data(&mut self, address: u32, value: u8) {
+        unsafe { *self.dmem.add((address & DATA_MASK) as usize) = value }
+    }
+    #[inline(always)]
+    fn fetch(&self, pc: u32) -> u32 {
+        let at = (pc & PC_MASK) as usize;
+        let bytes = unsafe { std::ptr::read_unaligned(self.imem.add(at) as *const [u8; 4]) };
+        u32::from_be_bytes(bytes)
+    }
+    #[inline(always)]
+    fn pc(&self) -> u32 {
+        self.s.pc
+    }
+    #[inline(always)]
+    fn set_pc(&mut self, value: u32) {
+        self.s.pc = value
+    }
+    #[inline(always)]
+    fn next_pc(&self) -> u32 {
+        self.s.next_pc
+    }
+    #[inline(always)]
+    fn set_next_pc(&mut self, value: u32) {
+        self.s.next_pc = value
+    }
+    #[inline(always)]
+    fn vco(&self) -> u16 {
+        self.s.vco
+    }
+    #[inline(always)]
+    fn set_vco(&mut self, value: u16) {
+        self.s.vco = value
+    }
+    #[inline(always)]
+    fn vcc(&self) -> u16 {
+        self.s.vcc
+    }
+    #[inline(always)]
+    fn set_vcc(&mut self, value: u16) {
+        self.s.vcc = value
+    }
+    #[inline(always)]
+    fn vce(&self) -> u8 {
+        self.s.vce
+    }
+    #[inline(always)]
+    fn set_vce(&mut self, value: u8) {
+        self.s.vce = value
+    }
+    #[inline(always)]
+    fn divide_input(&self) -> u16 {
+        self.s.divide_input
+    }
+    #[inline(always)]
+    fn set_divide_input(&mut self, value: u16) {
+        self.s.divide_input = value
+    }
+    #[inline(always)]
+    fn divide_output(&self) -> u16 {
+        self.s.divide_output
+    }
+    #[inline(always)]
+    fn set_divide_output(&mut self, value: u16) {
+        self.s.divide_output = value
+    }
+    #[inline(always)]
+    fn divide_loaded(&self) -> u8 {
+        self.s.divide_loaded
+    }
+    #[inline(always)]
+    fn set_divide_loaded(&mut self, value: u8) {
+        self.s.divide_loaded = value
+    }
+    #[inline(always)]
+    fn halted(&self) -> u8 {
+        self.s.halted
+    }
+}
+
+/// The processor over a `Memory`: C#'s pinned arrays for the twin, or MarsRT's own state.
+pub struct Rsp<M: Memory> {
+    pub m: M,
 }
 
 // Tables built once, by the C# arithmetic. See Mars_RspVector.md §10.
@@ -168,7 +312,7 @@ enum Reciprocal {
     High,
 }
 
-impl Rsp {
+impl Rsp<Pinned> {
     /// # Safety
     /// Every pointer must stay valid, and be touched by no one else while a call into this processor runs:
     /// gpr 32 words, vector 256 halfwords, accumulator 8 doublewords, imem and dmem 4096 bytes each.
@@ -178,58 +322,64 @@ impl Rsp {
         accumulator: *mut u64,
         imem: *const u8,
         dmem: *mut u8,
-    ) -> Rsp {
+    ) -> Rsp<Pinned> {
         tables();
-        Rsp { s: Scalars::default(), gpr, vector, accumulator, imem, dmem }
+        Rsp { m: Pinned { s: Scalars::default(), gpr, vector, accumulator, imem, dmem } }
+    }
+}
+
+impl<M: Memory> Rsp<M> {
+    /// The processor over memory the caller lends it for the call.
+    #[inline(always)]
+    pub fn over(m: M) -> Rsp<M> {
+        Rsp { m }
     }
 
     #[inline(always)]
     fn read(&self, register: usize) -> u32 {
-        unsafe { *self.gpr.add(register & 31) }
+        self.m.gpr(register)
     }
 
     #[inline(always)]
     fn write(&mut self, register: usize, value: u32) {
         if register != 0 {
-            unsafe { *self.gpr.add(register & 31) = value }
+            self.m.set_gpr(register, value)
         }
     }
 
     #[inline(always)]
     fn element(&self, register: usize, element: usize) -> u16 {
-        unsafe { *self.vector.add(((register & 31) << 3) | (element & 7)) }
+        self.m.element(register, element)
     }
 
     #[inline(always)]
     fn set_element(&mut self, register: usize, element: usize, value: u16) {
-        unsafe { *self.vector.add(((register & 31) << 3) | (element & 7)) = value }
+        self.m.set_element(register, element, value)
     }
 
     #[inline(always)]
     fn acc(&self, element: usize) -> u64 {
-        unsafe { *self.accumulator.add(element & 7) }
+        self.m.acc(element)
     }
 
     #[inline(always)]
     fn set_acc(&mut self, element: usize, value: u64) {
-        unsafe { *self.accumulator.add(element & 7) = value }
+        self.m.set_acc(element, value)
     }
 
     #[inline(always)]
     fn data(&self, address: u32) -> u8 {
-        unsafe { *self.dmem.add((address & DATA_MASK) as usize) }
+        self.m.data(address)
     }
 
     #[inline(always)]
     fn set_data(&mut self, address: u32, value: u8) {
-        unsafe { *self.dmem.add((address & DATA_MASK) as usize) = value }
+        self.m.set_data(address, value)
     }
 
     #[inline(always)]
     fn fetch(&self, pc: u32) -> u32 {
-        let at = (pc & PC_MASK) as usize;
-        let bytes = unsafe { std::ptr::read_unaligned(self.imem.add(at) as *const [u8; 4]) };
-        u32::from_be_bytes(bytes)
+        self.m.fetch(pc)
     }
 
     // A COP0 move or a break reaches the rest of the machine, so C# runs it; this side never calls back. See Mars_Native.md §3.2.
@@ -242,12 +392,12 @@ impl Rsp {
     /// One instruction, as C#'s StepOne, unless it is an event, which is left unrun; returns whether it ran.
     #[inline(always)]
     pub fn step(&mut self) -> bool {
-        let instruction = self.fetch(self.s.pc);
+        let instruction = self.fetch(self.m.pc());
         if Self::is_event(instruction) {
             return false;
         }
-        self.s.pc = self.s.next_pc;
-        self.s.next_pc = (self.s.pc + 4) & PC_MASK;
+        self.m.set_pc(self.m.next_pc());
+        self.m.set_next_pc((self.m.pc() + 4) & PC_MASK);
         self.execute(instruction);
         true
     }
@@ -255,7 +405,7 @@ impl Rsp {
     /// Up to `budget` instructions while not halted, stopping before an event; returns the steps run.
     pub fn run(&mut self, budget: u64) -> u64 {
         let mut ran = 0;
-        while ran < budget && self.s.halted == 0 {
+        while ran < budget && self.m.halted() == 0 {
             if !self.step() {
                 break;
             }
@@ -358,12 +508,12 @@ impl Rsp {
             0x04 => self.write(d, t << (s & 0x1F)),
             0x06 => self.write(d, t >> (s & 0x1F)),
             0x07 => self.write(d, ((t as i32) >> (s & 0x1F)) as u32),
-            0x08 => self.s.next_pc = s & PC_MASK,
+            0x08 => self.m.set_next_pc(s & PC_MASK),
             0x09 => {
                 let jump = s & PC_MASK;
-                let next = self.s.next_pc;
+                let next = self.m.next_pc();
                 self.write(d, next);
-                self.s.next_pc = jump;
+                self.m.set_next_pc(jump);
             }
             0x20 | 0x21 => self.write(d, s.wrapping_add(t)),
             0x22 | 0x23 => self.write(d, s.wrapping_sub(t)),
@@ -390,19 +540,19 @@ impl Rsp {
 
     #[inline(always)]
     fn link(&mut self) {
-        let next = self.s.next_pc;
+        let next = self.m.next_pc();
         self.write(31, next);
     }
 
     #[inline(always)]
     fn jump(&mut self, instruction: u32) {
-        self.s.next_pc = (instruction << 2) & PC_MASK;
+        self.m.set_next_pc((instruction << 2) & PC_MASK);
     }
 
     #[inline(always)]
     fn branch_if(&mut self, taken: bool, instruction: u32) {
         if taken {
-            self.s.next_pc = self.s.pc.wrapping_add(immediate(instruction) << 2) & PC_MASK;
+            self.m.set_next_pc(self.m.pc().wrapping_add(immediate(instruction) << 2) & PC_MASK);
         }
     }
 
@@ -453,9 +603,9 @@ impl Rsp {
             }
             0x02 => {
                 let value = match register & 3 {
-                    0 => self.s.vco as i16 as i32 as u32,
-                    1 => self.s.vcc as i16 as i32 as u32,
-                    _ => self.s.vce as u32,
+                    0 => self.m.vco() as i16 as i32 as u32,
+                    1 => self.m.vcc() as i16 as i32 as u32,
+                    _ => self.m.vce() as u32,
                 };
                 self.write(rt(instruction), value);
             }
@@ -469,9 +619,9 @@ impl Rsp {
             0x06 => {
                 let value = self.read(rt(instruction));
                 match register & 3 {
-                    0 => self.s.vco = value as u16,
-                    1 => self.s.vcc = value as u16,
-                    _ => self.s.vce = value as u8,
+                    0 => self.m.set_vco(value as u16),
+                    1 => self.m.set_vcc(value as u16),
+                    _ => self.m.set_vce(value as u8),
                 }
             }
             _ => {}
@@ -608,6 +758,7 @@ impl Rsp {
         }
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn accumulated_quarter(&mut self, d: &mut [u16; 8]) {
         for i in 0..ELEMENTS {
             let mut value = signed48(self.acc(i));
@@ -635,13 +786,13 @@ impl Rsp {
 
     fn add(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8], subtract: bool) {
         for i in 0..ELEMENTS {
-            let carry = ((self.s.vco >> i) & 1) as i32;
+            let carry = ((self.m.vco() >> i) & 1) as i32;
             let (a, b) = (s[i] as i16 as i32, t[i] as i16 as i32);
             let sum = if subtract { a - b - carry } else { a + b + carry };
             d[i] = clamp_signed(sum as i64);
             self.set_acc_low(i, sum as u16);
         }
-        self.s.vco = 0;
+        self.m.set_vco(0);
     }
 
     fn absolute(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8]) {
@@ -663,7 +814,7 @@ impl Rsp {
                 carries |= 1 << i;
             }
         }
-        self.s.vco = carries;
+        self.m.set_vco(carries);
     }
 
     fn subtract_carrying(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8]) {
@@ -679,7 +830,7 @@ impl Rsp {
                 flags |= 1 << i;
             }
         }
-        self.s.vco = flags;
+        self.m.set_vco(flags);
     }
 
     fn read_accumulator(&mut self, selector: usize, d: &mut [u16; 8]) {
@@ -698,8 +849,8 @@ impl Rsp {
         let mut flags = 0u16;
         for i in 0..ELEMENTS {
             let equal = s[i] == t[i];
-            let carry = (self.s.vco >> i) & 1 != 0;
-            let not_equal = (self.s.vco >> (8 + i)) & 1 != 0;
+            let carry = (self.m.vco() >> i) & 1 != 0;
+            let not_equal = (self.m.vco() >> (8 + i)) & 1 != 0;
             let (a, b) = (s[i] as i16, t[i] as i16);
             let chosen = match comparison {
                 Comparison::Less => a < b || (equal && carry && not_equal),
@@ -723,16 +874,16 @@ impl Rsp {
                 flags |= 1 << i;
             }
         }
-        self.s.vcc = flags;
-        self.s.vco = 0;
+        self.m.set_vcc(flags);
+        self.m.set_vco(0);
     }
 
     fn clip_low(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8]) {
-        let mut flags = self.s.vcc as i32;
+        let mut flags = self.m.vcc() as i32;
         for i in 0..ELEMENTS {
-            let signs_differed = (self.s.vco >> i) & 1 != 0;
-            let not_equal = (self.s.vco >> (8 + i)) & 1 != 0;
-            let extension = (self.s.vce >> i) & 1 != 0;
+            let signs_differed = (self.m.vco() >> i) & 1 != 0;
+            let not_equal = (self.m.vco() >> (8 + i)) & 1 != 0;
+            let extension = (self.m.vce() >> i) & 1 != 0;
             let mut less_or_equal = (flags >> i) & 1 != 0;
             let mut greater_or_equal = (flags >> (8 + i)) & 1 != 0;
             if signs_differed {
@@ -752,9 +903,9 @@ impl Rsp {
             self.set_acc_low(i, d[i]);
             flags = (flags & !(0x101 << i)) | if less_or_equal { 1 << i } else { 0 } | if greater_or_equal { 0x100 << i } else { 0 };
         }
-        self.s.vcc = flags as u16;
-        self.s.vco = 0;
-        self.s.vce = 0;
+        self.m.set_vcc(flags as u16);
+        self.m.set_vco(0);
+        self.m.set_vce(0);
     }
 
     fn clip_high(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8]) {
@@ -784,9 +935,9 @@ impl Rsp {
             compares |= if less_or_equal { 1 << i } else { 0 } | if greater_or_equal { 0x100 << i } else { 0 };
             extensions |= if extension { 1 << i } else { 0 };
         }
-        self.s.vco = carries;
-        self.s.vcc = compares;
-        self.s.vce = extensions;
+        self.m.set_vco(carries);
+        self.m.set_vcc(compares);
+        self.m.set_vce(extensions);
     }
 
     fn clip_ones(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8]) {
@@ -807,17 +958,17 @@ impl Rsp {
             self.set_acc_low(i, d[i]);
             compares |= if less_or_equal { 1 << i } else { 0 } | if greater_or_equal { 0x100 << i } else { 0 };
         }
-        self.s.vco = 0;
-        self.s.vcc = compares;
-        self.s.vce = 0;
+        self.m.set_vco(0);
+        self.m.set_vcc(compares);
+        self.m.set_vce(0);
     }
 
     fn merge(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8]) {
         for i in 0..ELEMENTS {
-            d[i] = if (self.s.vcc >> i) & 1 != 0 { s[i] } else { t[i] };
+            d[i] = if (self.m.vcc() >> i) & 1 != 0 { s[i] } else { t[i] };
             self.set_acc_low(i, d[i]);
         }
-        self.s.vco = 0;
+        self.m.set_vco(0);
     }
 
     fn logic(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8], operation: impl Fn(i32, i32) -> i32) {
@@ -839,20 +990,20 @@ impl Rsp {
             self.set_acc_low(i, *value);
         }
         if kind == Reciprocal::High {
-            d[element] = self.s.divide_output;
-            self.s.divide_input = input;
-            self.s.divide_loaded = 1;
+            d[element] = self.m.divide_output();
+            self.m.set_divide_input(input);
+            self.m.set_divide_loaded(1);
             return;
         }
-        let operand = if kind == Reciprocal::Low && self.s.divide_loaded != 0 {
-            ((self.s.divide_input as u32) << 16) | input as u32
+        let operand = if kind == Reciprocal::Low && self.m.divide_loaded() != 0 {
+            ((self.m.divide_input() as u32) << 16) | input as u32
         } else {
             input as i16 as i32 as u32
         };
         let result = evaluate(operand, root);
         d[element] = result as u16;
-        self.s.divide_output = (result >> 16) as u16;
-        self.s.divide_loaded = 0;
+        self.m.set_divide_output((result >> 16) as u16);
+        self.m.set_divide_loaded(0);
     }
 
     fn sum_into_accumulator(&mut self, s: &[u16; 8], t: &[u16; 8], d: &mut [u16; 8]) {
@@ -1051,14 +1202,14 @@ pub unsafe extern "C" fn mars_rsp_new(
     accumulator: *mut u64,
     imem: *const u8,
     dmem: *mut u8,
-) -> *mut Rsp {
+) -> *mut Rsp<Pinned> {
     Box::into_raw(Box::new(unsafe { Rsp::new(gpr, vector, accumulator, imem, dmem) }))
 }
 
 /// # Safety
 /// `rsp` came from `mars_rsp_new` and is not used again.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mars_rsp_free(rsp: *mut Rsp) {
+pub unsafe extern "C" fn mars_rsp_free(rsp: *mut Rsp<Pinned>) {
     if !rsp.is_null() {
         drop(unsafe { Box::from_raw(rsp) });
     }
@@ -1069,8 +1220,8 @@ pub unsafe extern "C" fn mars_rsp_free(rsp: *mut Rsp) {
 /// # Safety
 /// `rsp` came from `mars_rsp_new`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mars_rsp_scalars(rsp: *mut Rsp) -> *mut Scalars {
-    unsafe { &mut (*rsp).s }
+pub unsafe extern "C" fn mars_rsp_scalars(rsp: *mut Rsp<Pinned>) -> *mut Scalars {
+    unsafe { &mut (*rsp).m.s }
 }
 
 /// One instruction unless it is an event; returns 1 if it ran and 0 if C# must run it.
@@ -1078,7 +1229,7 @@ pub unsafe extern "C" fn mars_rsp_scalars(rsp: *mut Rsp) -> *mut Scalars {
 /// # Safety
 /// `rsp` came from `mars_rsp_new`; the processor is not halted.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mars_rsp_step(rsp: *mut Rsp) -> u32 {
+pub unsafe extern "C" fn mars_rsp_step(rsp: *mut Rsp<Pinned>) -> u32 {
     unsafe { (*rsp).step() as u32 }
 }
 
@@ -1087,7 +1238,7 @@ pub unsafe extern "C" fn mars_rsp_step(rsp: *mut Rsp) -> u32 {
 /// # Safety
 /// `rsp` came from `mars_rsp_new`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn mars_rsp_run(rsp: *mut Rsp, budget: u64) -> u64 {
+pub unsafe extern "C" fn mars_rsp_run(rsp: *mut Rsp<Pinned>, budget: u64) -> u64 {
     unsafe { (*rsp).run(budget) }
 }
 

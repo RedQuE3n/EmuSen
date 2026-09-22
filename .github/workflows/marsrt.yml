@@ -1,0 +1,85 @@
+# MarsRT, the Rust N64 core, built and tested where it runs, one library a platform - see Mars_Native.md §6.3.
+name: MarsRT
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
+      - '.github/workflows/marsrt.yml'
+
+defaults:
+  run:
+    working-directory: EmuSen/Cores/Nintendo/MarsRT - N64
+
+jobs:
+  library:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it.
+          - rid: linux-x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            file: libmarsrt.so
+            test: true
+          - rid: win-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            file: marsrt.dll
+            test: true
+          - rid: osx-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            file: libmarsrt.dylib
+            test: true
+          # Built on the arm64 runner with Apple's toolchain, which links x86_64; its tests run under Rosetta and may not.
+          - rid: osx-x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            file: libmarsrt.dylib
+            test: rosetta
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'EmuSen/Cores/Nintendo/MarsRT - N64 -> target'
+          key: ${{ matrix.rid }}
+
+      # The crate's own suite: 391 tests, the games and the corpus skipped without their files. The block tests run compiled code, which is the check on each platform's JIT rules.
+      - name: Test
+        if: matrix.test == true
+        run: cargo test --release --target ${{ matrix.target }}
+
+      - name: Test under Rosetta
+        if: matrix.test == 'rosetta'
+        continue-on-error: true
+        run: cargo test --release --target ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --profile dist --target ${{ matrix.target }}
+
+      - name: Exports
+        shell: bash
+        run: |
+          case "${{ matrix.rid }}" in
+            win-*) dumpbin_missing=1 ;;
+          esac
+          if [ -z "$dumpbin_missing" ]; then
+            nm -gU "target/${{ matrix.target }}/dist/${{ matrix.file }}" 2>/dev/null | grep -c ' _\?mars_' || nm -D "target/${{ matrix.target }}/dist/${{ matrix.file }}" | grep -c ' mars_'
+          fi
+          ls -la "target/${{ matrix.target }}/dist/${{ matrix.file }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marsrt-${{ matrix.rid }}
+          path: EmuSen/Cores/Nintendo/MarsRT - N64/target/${{ matrix.target }}/dist/${{ matrix.file }}
+          if-no-files-found: error

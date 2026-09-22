@@ -222,6 +222,18 @@ dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r linux-x64 \
 
 Swap `linux-x64` for `win-x64`, `osx-x64` or `osx-arm64`.
 
+MarsRT, the Rust N64 core, is built by `cargo` for the machine publishing and copied in; for another platform pass its
+library, built where it runs by the MarsRT workflow (`.github/workflows/marsrt.yml`, artefacts `marsrt-<rid>`):
+
+```sh
+dotnet publish EmuSen.Mistress/EmuSen.Mistress.csproj -c Release -r win-x64 \
+    --self-contained true -p:DebugType=none \
+    -p:ErrorOnDuplicatePublishOutputFiles=false -p:EmuSenNativePrebuilt=/path/to/native -o out/win-x64
+```
+
+where `/path/to/native/win-x64/marsrt.dll` is the artefact. Without it the publish warns and the N64 runs on Mars (C#)
+there.
+
 Two things worth knowing, both documented in [`EmuSen_Settings_Reference.md`](EmuSen.DianaOS/DianaOS/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md) §4.9:
 
 - **Ship the whole output folder.** The executable needs `libSDL3` and `DianaOSRoot/` beside it.

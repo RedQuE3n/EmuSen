@@ -2371,6 +2371,42 @@ only that the exported names survive the `.dll`'s linker unchanged.
 **Oracle.** The crate's tests on each platform, and WiseMan's eight synthetic systems there; the corpus and the six
 games need local ROMs and stay on this machine.
 
+**Built, 2026-09-22.** Route 1, as recommended:
+
+- `.github/workflows/marsrt.yml` builds the library on four runners — `ubuntu-22.04` for linux-x64, chosen for its
+  glibc 2.35 so the library loads on older distributions than the one that built it; `windows-latest` for win-x64;
+  `macos-latest` (arm64) for osx-arm64, and for osx-x64 as well, since Apple's toolchain on arm64 links x86_64
+  without another tool. Each runs `cargo test --release` first (the 391 tests; the games and the corpus skip without
+  their files), which is where the two risks above are answered rather than argued: the block tests run compiled
+  code, so a platform whose JIT rules refuse Cranelift's pages fails there. The osx-x64 tests run under Rosetta and
+  are allowed to fail; the library is built either way. Each job uploads one artefact, `marsrt-<rid>`, holding the
+  library alone. It runs on demand and on a push that touches the crate, so it does not spend the macOS runners'
+  minutes on every commit.
+- **`[profile.dist]`** in `Cargo.toml` inherits release, drops the line tables and strips debug information: the
+  linux library goes from 12.7 MB (34 in a tree that had kept full debug information) to **6.9 MB**. `EmuSen.csproj`
+  builds `dist` when `_IsPublishing` is set, which is what `dotnet publish` sets, and `release` for a development
+  build, so `ipsample` and the perf map keep their line tables where they are used.
+- **`EmuSenNativePrebuilt`**, in `MarsRtPublish.targets` beside the crate, imported by the two published frontends.
+  The first attempt put this in `EmuSen.csproj` and it could not work there, and the reason is worth recording: the
+  SDK builds a referenced library *without* the publish's `RuntimeIdentifier` (it undefines the property on the
+  reference), so the library project always sees the host, and a win-x64 publish made on Linux carried
+  `libmarsrt.so` — the first verification found it there, 6.9 MB, the `dist` profile having flowed where the
+  identifier had not. The frontends do see the identifier, and at `ComputeResolvedFilesToPublishList`, where
+  `DianaOSPublishLayout.targets` already drops native `.pdb`s, the targets file removes any MarsRT library from a
+  foreign publish and adds `$(EmuSenNativePrebuilt)/<rid>/<library>` (`win-*` → `marsrt.dll`, `osx-*` →
+  `libmarsrt.dylib`) when the property names a directory holding it, or **warns** — "No MarsRT library for
+  win-x64: this publish runs the N64 on Mars (C#) alone" — which closes the silence this stage opened with. The
+  README's publish recipe shows the property. A second thing the verification found: a distribution's SDK names its
+  host by distribution (`NETCoreSdkRuntimeIdentifier` is `fedora.44-x64` here) while a publish asks for the portable
+  `linux-x64`, so "foreign" is tested against both names, or the host's own publish would have dropped its library.
+  Verified on this machine: a win-x64 publish without a library warns and carries none, one with a stand-in carries
+  it at `lib/EmuSen/marsrt.dll`, and the linux-x64 publish carries the 6.9 MB `dist` library.
+
+**What is not verified here.** This machine cannot run the workflow; it runs on the next push of the crate, and its
+four results — three green and Rosetta's whatever it is — are what settle the Apple Silicon question. WiseMan's
+synthetic systems on the foreign platforms need a .NET job with LunaP checked out beside the repository
+(`RedQuE3n/EmuSen.LunaP`), which is left for when the libraries exist to test.
+
 ### 6.4 Stage D: the multiple, antialiasing and the device
 
 **What it is.** The three settings whose hint still reads "MarsRT does not implement this yet": `RenderScale`, the

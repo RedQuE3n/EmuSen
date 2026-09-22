@@ -52,21 +52,23 @@
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>
 
-  <!-- MarsRT, the Rust N64 core, built by cargo when it is installed and copied beside the assemblies; without it Mars runs its C# paths - see Mars_Native.md §1. -->
+  <!-- MarsRT, the Rust N64 core, built by cargo for this machine when it is installed and copied beside the assemblies; without it Mars runs its C# paths - see Mars_Native.md §1. A publish for another platform swaps the library in MarsRtPublish.targets, §6.3. -->
   <PropertyGroup>
     <EmuSenNativeDir>$(MSBuildThisFileDirectory)Cores\Nintendo\MarsRT - N64\</EmuSenNativeDir>
     <EmuSenNativeTarget>$(MSBuildProjectDirectory)/obj/marsrt</EmuSenNativeTarget>
     <EmuSenNativeFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">marsrt.dll</EmuSenNativeFile>
     <EmuSenNativeFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libmarsrt.dylib</EmuSenNativeFile>
     <EmuSenNativeFile Condition="'$(EmuSenNativeFile)' == ''">libmarsrt.so</EmuSenNativeFile>
-    <EmuSenNativeForHost Condition="'$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)'">true</EmuSenNativeForHost>
+    <EmuSenNativeForHost Condition="'$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkPortableRuntimeIdentifier)'">true</EmuSenNativeForHost>
+    <EmuSenNativeProfile Condition="'$(_IsPublishing)' == 'true'">dist</EmuSenNativeProfile>
+    <EmuSenNativeProfile Condition="'$(EmuSenNativeProfile)' == ''">release</EmuSenNativeProfile>
     <DefaultItemExcludes>$(DefaultItemExcludes);Cores/Nintendo/MarsRT - N64/target/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <Target Name="BuildEmuSenNative" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
-    <Exec Command="cargo build --release --manifest-path &quot;$(EmuSenNativeDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenNativeTarget)&quot;" ContinueOnError="true" StandardOutputImportance="low" />
-    <ItemGroup Condition="Exists('$(EmuSenNativeTarget)/release/$(EmuSenNativeFile)')">
-      <None Include="$(EmuSenNativeTarget)/release/$(EmuSenNativeFile)" Link="$(EmuSenNativeFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Exec Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;$(EmuSenNativeDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenNativeTarget)&quot;" ContinueOnError="true" StandardOutputImportance="low" />
+    <ItemGroup Condition="Exists('$(EmuSenNativeTarget)/$(EmuSenNativeProfile)/$(EmuSenNativeFile)')">
+      <None Include="$(EmuSenNativeTarget)/$(EmuSenNativeProfile)/$(EmuSenNativeFile)" Link="$(EmuSenNativeFile)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
 

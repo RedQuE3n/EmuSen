@@ -213,6 +213,7 @@ namespace EmuSen.WiseMan.Cores
                 ("MarsRT", () => Twin(threaded: false, deferred: false)),
                 ("MarsRT threaded", () => Twin(threaded: true, deferred: false)),
                 ("MarsRT threaded+deferred", () => Twin(threaded: true, deferred: true)),
+                ("MarsRT 4 workers+deferred", () => Twin(threaded: true, deferred: true, workers: Math.Clamp(Environment.ProcessorCount / 3, 1, 4))),
                 ("C# shipped", () => new MarsCore(expansionPak: true, batteryRamDisabled: true) { UseBlocks = true, ThreadedRdp = true, DeferredPresentation = true, RdpWorkers = Math.Clamp(Environment.ProcessorCount / 3, 1, 4) }),
                 ("C# shipped, one worker", () => new MarsCore(expansionPak: true, batteryRamDisabled: true) { UseBlocks = true, ThreadedRdp = true, DeferredPresentation = true, RdpWorkers = 1 }),
             };

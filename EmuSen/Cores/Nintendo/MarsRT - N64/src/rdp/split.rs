@@ -32,8 +32,6 @@ pub struct Split {
     pub shift: i64,
     pub past_shift: i64,
     pub coverage: Box<[i64; 1024]>,
-    pub color_drawn_to: i64,
-    pub depth_drawn_to: i64,
     pub primitives: i64,
     pub serialised: i64,
     pub hazard_loads: i64,
@@ -58,8 +56,6 @@ impl Default for Split {
             shift: 0,
             past_shift: 0,
             coverage: crate::state::boxed(0),
-            color_drawn_to: 0,
-            depth_drawn_to: 0,
             primitives: 0,
             serialised: 0,
             hazard_loads: 0,
@@ -108,7 +104,6 @@ impl Rdp {
                 if self.split.workers == 1 {
                     return Step::Ready;
                 }
-                self.reached();
                 let alone = self.serialised(id);
                 self.split.alone = alone;
                 if alone {
@@ -169,15 +164,7 @@ impl Rdp {
         (rows * width).max((rows - 1) * width + (self.scissor_right >> 2) as i64 + 3)
     }
 
-    fn reached(&mut self) {
-        let reach = self.reach();
-        self.split.color_drawn_to = self.split.color_drawn_to.max(reach);
-        if self.modes.cycle_type <= TWO_CYCLE && self.modes.depth_update {
-            self.split.depth_drawn_to = self.split.depth_drawn_to.max(reach);
-        }
-    }
-
-    /// `LoadReachesDrawn`: whether a load reads bytes a draw since the images were set may have written.
+    /// `LoadReachesDrawn`, widened: whether a load reads bytes any draw into the current images could write before the next image change, which is a barrier.
     fn load_reaches_drawn(&self, word: u64, block: bool) -> bool {
         let sl = ((word >> 44) & 0xFFF) as i32;
         let tl = ((word >> 32) & 0xFFF) as i32;
@@ -192,10 +179,11 @@ impl Rdp {
         } else {
             (image + (tl >> 2) as i64 * row_bytes + (sl >> 2) as i64 * bits / 8 - 16, image + (th >> 2) as i64 * row_bytes + ((sh as i64 >> 2) + 1) * bits / 8 + 32)
         };
+        // C# asks only whether a draw since the image was set reached the bytes, so a load before the first draw races the draws after it.
         let bytes = self.color_image_bytes.max(1) as i64;
+        let most = 1024 * self.color_image_width as i64 + 1024 + 3;
         let (color, depth) = (self.color_image as i64, self.depth_image as i64);
-        let (cd, dd) = (self.split.color_drawn_to, self.split.depth_drawn_to);
-        (cd > 0 && from < color + cd * bytes && to > color - 2 * bytes) || (dd > 0 && from < depth + dd * 2 && to > depth)
+        (from < color + most * bytes && to > color - 2 * bytes) || (from < depth + most * 2 && to > depth)
     }
 
     /// `RecordAliasedRead`: the last row's pixel past the width reads the next row's first bytes, which that row's owner reads here, in raster order's time.

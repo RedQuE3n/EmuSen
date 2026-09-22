@@ -667,3 +667,33 @@ fn a_snapshot_taken_while_workers_wait_at_barriers_is_answered_and_loads() {
     let barriers = run.join().expect("the run failed");
     assert!(barriers >= 40 * 3000, "{barriers} barriers passed");
 }
+
+/// A load from the colour image before the image's first draw, then draws over its rows: every processor loads before any draws, where C#'s rule lets a slow one load what a fast one drew (Mars_Native.md §5.6.6).
+#[test]
+fn a_load_from_the_current_image_before_its_first_draw_is_run_by_every_processor_together() {
+    let mut list = vec![FILL_CYCLE, scissor(0, 0, WIDTH, ROWS), (0x37 << 56) | 0x0102_0304, color_image(FRAMEBUFFER + 0x4_0000)];
+    list.push(fill_rectangle(0, 0, WIDTH - 1, 63));
+    list.push(color_image(FRAMEBUFFER));
+    list.push((0x3D << 56) | (2 << 51) | (((WIDTH - 1) as u64) << 32) | FRAMEBUFFER as u64);
+    list.push((0x35 << 56) | (2 << 51) | (16 << 41));
+    list.push((0x34 << 56) | ((31u64 << 2) << 12) | (15 << 2));
+    list.push((0x37 << 56) | 0x7E7E_7E7E);
+    for row in 0..16 {
+        list.push(fill_rectangle(0, row, WIDTH - 1, row));
+    }
+    list.push(SYNC_FULL);
+    for attempt in 0..40 {
+        let (mut once, mut shared) = (at_once(), split(2 + attempt % 3));
+        for m in [&mut once, &mut shared] {
+            for i in 0..(WIDTH * 2 * 16) / 4 {
+                m.bus.write32(FRAMEBUFFER + i * 4, 0x1111_1111u32.wrapping_mul(i));
+            }
+        }
+        hand_over(&mut once, &list, LIST);
+        hand_over(&mut shared, &list, LIST);
+        shared.join_rdp();
+        assert!(shared.bus.dp.processor.split.hazard_loads >= 1, "the load was not joined");
+        same_memory(&once, &shared);
+        assert!(state(&once) == state(&shared), "attempt {attempt}");
+    }
+}

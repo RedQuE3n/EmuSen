@@ -142,10 +142,7 @@ impl Rdp {
                 self.primitive_delta_z = (word & 0xFFFF) as i32;
                 self.primitive_z = ((word as u32) & (0x7FFF << 16)) as i32;
             }
-            SET_MASK_IMAGE => {
-                self.depth_image = (word as u32) & 0x00FF_FFFF;
-                self.split.depth_drawn_to = 0;
-            }
+            SET_MASK_IMAGE => self.depth_image = (word as u32) & 0x00FF_FFFF,
             _ => return false,
         }
         true

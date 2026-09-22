@@ -25,7 +25,6 @@ impl Rdp {
         };
         self.color_image_width = ((word >> 32) & 0x3FF) as i32 + 1;
         self.color_image = (word as u32) & 0x00FF_FFFF;
-        self.split.color_drawn_to = 0;
     }
 
     pub(super) fn set_scissor(&mut self, word: u64) {

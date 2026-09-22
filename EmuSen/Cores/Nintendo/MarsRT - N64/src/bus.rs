@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::Skip;
+use crate::ram::Ram;
 use crate::rom::RomImage;
 
 use crate::ai::AiInterface;
@@ -42,9 +43,9 @@ pub struct MemoryBus {
     pub pi: PiInterface,
     pub pif_ram: [u8; 64],
     /// `Rdram`: 4 MB, or 8 MB with the Expansion Pak.
-    pub rdram: Vec<u8>,
+    pub rdram: Ram,
     /// `RdramHidden`: the RDP's extra bits, one byte per 16-bit word.
-    pub rdram_hidden: Vec<u8>,
+    pub rdram_hidden: Ram,
     pub si: SiInterface,
     pub sp: SpInterface,
     pub sp_dmem: Box<[u8; SP_MEM_SIZE]>,
@@ -73,8 +74,8 @@ impl MemoryBus {
             mi: MiInterface::default(),
             pi: PiInterface::default(),
             pif_ram: [0; 64],
-            rdram: vec![0; rdram_bytes],
-            rdram_hidden: vec![0; rdram_bytes / 2],
+            rdram: Ram::zeroed(rdram_bytes),
+            rdram_hidden: Ram::zeroed(rdram_bytes / 2),
             si: SiInterface::default(),
             sp: SpInterface::default(),
             sp_dmem: boxed(0),
@@ -95,7 +96,7 @@ impl MemoryBus {
             self.write_state(w);
             self.write_tail(w);
             if snapshot {
-                self.dp.write_pending(w);
+                self.dp.write_pending(w, &self.dp.pending_words());
             }
         });
     }

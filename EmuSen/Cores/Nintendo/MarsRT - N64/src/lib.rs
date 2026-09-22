@@ -8,6 +8,7 @@ pub mod cop0;
 pub mod cop1;
 pub mod cpu;
 pub mod dp;
+pub mod dp_threads;
 pub mod ffi;
 pub mod ffi_rdp;
 pub mod ffi_vi;
@@ -20,6 +21,7 @@ pub mod mi;
 #[cfg(test)]
 mod naming;
 pub mod pi;
+pub mod ram;
 pub mod rdp;
 pub mod rom;
 pub mod rsp;

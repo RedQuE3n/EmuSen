@@ -483,22 +483,21 @@ impl Rdp {
     /// Memory colour and, with image reads on, the coverage stored beside it.
     #[inline(always)]
     pub(super) fn read_memory(&mut self, pixel: i32, mem: &RdpMemory) -> i32 {
-        let rdram = &*mem.rdram;
         self.memory = Color { r: 0, g: 0, b: 0, a: 0xE0 };
 
         match self.color_image_size {
             1 => {
                 let at = self.color_image.wrapping_add(pixel as u32) as usize;
-                let value = if at < rdram.len() { rdram[at] as i32 } else { 0 };
+                let value = if at < mem.len() { mem.get(at) as i32 } else { 0 };
                 self.memory = Color { r: value, g: value, b: value, a: 0xE0 };
                 7
             }
             2 => {
                 let word = (self.color_image >> 1).wrapping_add(pixel as u32);
                 let at = word.wrapping_mul(2);
-                let valid = (at.wrapping_add(1) as usize) < rdram.len();
-                let value = if valid { ((rdram[at as usize] as i32) << 8) | rdram[at as usize + 1] as i32 } else { 0 };
-                let hidden = if valid { mem.hidden[word as usize] as i32 } else { 0 };
+                let valid = (at.wrapping_add(1) as usize) < mem.len();
+                let value = if valid { ((mem.get(at as usize) as i32) << 8) | mem.get(at as usize + 1) as i32 } else { 0 };
+                let hidden = if valid { mem.get_hidden(word as usize) as i32 } else { 0 };
 
                 self.memory = if self.color_image_format == 0 {
                     Color { r: (value >> 8) & 0xF8, g: (value & 0x7C0) >> 3, b: (value & 0x3E) << 2, a: 0 }
@@ -517,9 +516,8 @@ impl Rdp {
             }
             3 => {
                 let at = (self.color_image >> 2).wrapping_add(pixel as u32).wrapping_mul(4);
-                let value = if (at.wrapping_add(3) as usize) < rdram.len() {
-                    let a = at as usize;
-                    u32::from_be_bytes([rdram[a], rdram[a + 1], rdram[a + 2], rdram[a + 3]])
+                let value = if (at.wrapping_add(3) as usize) < mem.len() {
+                    mem.be32(at as usize)
                 } else {
                     0
                 };
@@ -540,13 +538,13 @@ impl Rdp {
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     pub(super) fn write_memory(&self, pixel: i32, r: i32, g: i32, b: i32, blend: bool, coverage: i32, memory_coverage: i32, mem: &mut RdpMemory) {
-        let len = mem.rdram.len();
+        let len = mem.len();
 
         match self.color_image_size {
             0 => {
                 let at = self.color_image.wrapping_add(pixel as u32) as usize;
                 if at < len {
-                    mem.rdram[at] = 0;
+                    mem.set(at, 0);
                 }
             }
             1 => {
@@ -556,9 +554,9 @@ impl Rdp {
                 }
                 let odd = (at & 1) != 0;
                 let value = if odd { g } else { r };
-                mem.rdram[at as usize] = value as u8;
+                mem.set(at as usize, value as u8);
                 if odd {
-                    mem.hidden[(at >> 1) as usize] = ((value & 1) * 3) as u8;
+                    mem.set_hidden((at >> 1) as usize, ((value & 1) * 3) as u8);
                 }
             }
             2 => {
@@ -578,9 +576,9 @@ impl Rdp {
                 };
 
                 let value = (color | (stored >> 2)) & 0xFFFF;
-                mem.rdram[at as usize] = (value >> 8) as u8;
-                mem.rdram[at as usize + 1] = value as u8;
-                mem.hidden[word as usize] = (stored & 3) as u8;
+                mem.set(at as usize, (value >> 8) as u8);
+                mem.set(at as usize + 1, value as u8);
+                mem.set_hidden(word as usize, (stored & 3) as u8);
             }
             _ => {
                 let index = (self.color_image >> 2).wrapping_add(pixel as u32);
@@ -591,13 +589,13 @@ impl Rdp {
 
                 let stored = self.final_coverage(blend, coverage, memory_coverage);
                 let a = at as usize;
-                mem.rdram[a] = r as u8;
-                mem.rdram[a + 1] = g as u8;
-                mem.rdram[a + 2] = b as u8;
-                mem.rdram[a + 3] = (stored << 5) as u8;
+                mem.set(a, r as u8);
+                mem.set(a + 1, g as u8);
+                mem.set(a + 2, b as u8);
+                mem.set(a + 3, (stored << 5) as u8);
                 let h = index.wrapping_mul(2) as usize;
-                mem.hidden[h] = ((g & 1) * 3) as u8;
-                mem.hidden[h + 1] = 0;
+                mem.set_hidden(h, ((g & 1) * 3) as u8);
+                mem.set_hidden(h + 1, 0);
             }
         }
     }

@@ -41,15 +41,16 @@ fn replay(stream: &Path, expected: &Path) {
     s.bytes(frames * 4);
     let words: Vec<u64> = s.bytes(words * 8).as_chunks::<8>().0.iter().map(|c| u64::from_le_bytes(*c)).collect();
 
-    let mut memory = RdpMemory { rdram: &mut memory_rdram, hidden: &mut memory_hidden };
+    let mut memory = RdpMemory::new(&mut memory_rdram, &mut memory_hidden);
     let syncs = words.iter().filter(|&&w| rdp.accept(w, &mut memory)).count();
+    drop(memory);
 
     let data = std::fs::read(expected).unwrap();
     let mut e = Cursor { data: &data, at: 0 };
     assert_eq!(e.u32(), EXPECTED);
     let (rdram, hidden, state) = (e.u32() as usize, e.u32() as usize, e.u32() as usize);
-    assert!(e.bytes(rdram) == memory.rdram, "{}: RDRAM differs from C#'s", stream.display());
-    assert!(e.bytes(hidden) == memory.hidden, "{}: hidden RDRAM differs from C#'s", stream.display());
+    assert!(e.bytes(rdram) == &memory_rdram[..], "{}: RDRAM differs from C#'s", stream.display());
+    assert!(e.bytes(hidden) == &memory_hidden[..], "{}: hidden RDRAM differs from C#'s", stream.display());
 
     let mut counter = StateWriter::counter();
     rdp.write_state(&mut counter);

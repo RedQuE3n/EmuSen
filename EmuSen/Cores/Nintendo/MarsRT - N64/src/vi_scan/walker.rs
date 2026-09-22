@@ -1,7 +1,7 @@
 //! C#'s `Vi.Walker`: the rows of one walk, with the caches that make it cheap. Every cache is a pure function of memory and the registers. See Mars_Native.md §5.4.
 
 use super::filters::{Pixel, divot, gamma, mix, pull, step};
-use super::{Job, Picture};
+use super::{Job, Picture, View};
 
 /// `Vi.RowSpan`: every source pixel one row can reach, and the neighbour beyond.
 const ROW_SPAN: i32 = super::RASTER_WIDTH as i32 * 4 + 2;
@@ -9,10 +9,11 @@ const WINDOW_LINES: i32 = 32;
 /// `Vi.Covered`: above this anti-alias mode every pixel is whole.
 const COVERED: i32 = 1;
 
-/// What one walk reads: memory, where the frame buffer starts, and how it is laid out.
+/// What one walk reads: memory from `base`, memory's length, where the frame buffer starts, and how it is laid out.
 struct Source<'a> {
     rdram: &'a [u8],
     hidden: &'a [u8],
+    base: u32,
     length: u32,
     origin: u32,
     wide: bool,
@@ -20,6 +21,16 @@ struct Source<'a> {
 }
 
 impl Source<'_> {
+    /// `Walker.Within`: an address inside memory that the view does not hold is a defect in `reach`, said so rather than read stale.
+    #[inline(always)]
+    fn within(&self, address: u32, size: usize) -> usize {
+        let index = address.wrapping_sub(self.base) as usize;
+        if index + size > self.rdram.len() {
+            panic!("the scan reached frame buffer address {address:X} outside the lines captured for it, {:X} for {:X} bytes", self.base, self.rdram.len());
+        }
+        index
+    }
+
     /// `Walker.Fetch`: a read past memory is a whole zero (Mars_Video.md §2.6).
     #[inline(always)]
     fn fetch(&self, at: i32) -> Pixel {
@@ -28,7 +39,7 @@ impl Source<'_> {
             if address.wrapping_add(3) >= self.length {
                 return Pixel::default();
             }
-            let i = address as usize;
+            let i = self.within(address, 4);
             let b = &self.rdram[i..i + 4];
             return Pixel { red: b[0] as i32, green: b[1] as i32, blue: b[2] as i32, coverage: ((b[3] >> 5) & 7) as i32 };
         }
@@ -36,7 +47,7 @@ impl Source<'_> {
         if word.wrapping_add(1) >= self.length {
             return Pixel::default();
         }
-        let i = word as usize;
+        let i = self.within(word, 2);
         let pixel = ((self.rdram[i] as i32) << 8) | self.rdram[i + 1] as i32;
         let coverage = ((pixel & 1) << 2) | self.hidden[i >> 1] as i32;
         Pixel { red: (pixel >> 8) & 0xF8, green: (pixel & 0x7C0) >> 3, blue: (pixel & 0x3E) << 2, coverage }
@@ -65,11 +76,10 @@ pub struct Walker {
 }
 
 impl Walker {
-    /// `Vi.Walk` at one, over live memory, as one band.
-    pub fn walk(&mut self, job: &Job, rdram: &[u8], hidden: &[u8], raster: &mut [u8]) {
+    /// `Vi.Walk` at one, over live memory or a capture of it, as one band.
+    pub fn walk(&mut self, job: &Job, view: View, raster: &mut [u8]) {
         let aligned = if job.wide { job.origin & 0xFF_FFFC } else { job.origin & 0xFF_FFFE };
-        let length = rdram.len().min(hidden.len() * 2) as u32;
-        let source = Source { rdram, hidden, length, origin: aligned, wide: job.wide, width: job.width };
+        let source = Source { rdram: view.rdram, hidden: view.hidden, base: view.base, length: view.length, origin: aligned, wide: job.wide, width: job.width };
         self.begin(job);
         self.rows(&job.picture, &source, job.resample, job.divot, raster, 0, job.picture.rows);
     }

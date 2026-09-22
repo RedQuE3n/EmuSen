@@ -100,7 +100,7 @@ pub unsafe extern "C" fn mars_rdp_accept(
 ) -> i64 {
     let Some(rdp) = (unsafe { rdp.as_mut() }) else { return RDP_STATUS_NULL as i64 };
     let words = if words.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(words, count) } };
-    let mut memory = RdpMemory { rdram: unsafe { bytes_mut(rdram, rdram_len) }, hidden: unsafe { bytes_mut(hidden, hidden_len) } };
+    let mut memory = RdpMemory::new(unsafe { bytes_mut(rdram, rdram_len) }, unsafe { bytes_mut(hidden, hidden_len) });
 
     let mut taken = 0;
     let mut sync = false;

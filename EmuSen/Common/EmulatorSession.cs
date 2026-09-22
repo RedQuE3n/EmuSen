@@ -48,10 +48,17 @@ namespace EmuSen.Common
         // Set by the frontend before LoadRom so the debug target shares its registry.
         public CheatRegistry? Cheats { get; set; }
 
+        // The engine the frontend's setting asks for, a CoreCatalog.EngineFor name; null is the console's default - see EmuSen_Settings_Reference.md §4.44.
+        public string? Engine { get; set; }
+
+        // Why the engine asked for is not the one running, or null - see CoreFactory.EngineNotice.
+        public string? EngineNotice { get; private set; }
+
         public void LoadRom(string path)
         {
-            var bundle = CoreFactory.Load(path, headless: true, Cheats);
+            var bundle = CoreFactory.Load(path, headless: true, Cheats, engine: Engine);
             _core = bundle.Core;
+            EngineNotice = bundle.Notice;
             DebugTarget = bundle.DebugTarget;
             CheatAutoDetectCodec = bundle.CheatAutoDetectCodec;
             CheatExplicitCodec = bundle.CheatExplicitCodec;

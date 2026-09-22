@@ -76,7 +76,8 @@ namespace EmuSen.Mistress.Views
             {
                 _filling = true;
                 string current = _config.Value(console, ScreenFilterKey) ?? EmuSen.Serenity.Shaders.ScreenFilters.None;
-                filter.Fill(EmuSen.Serenity.Shaders.ScreenFilters.Names, EmuSen.Serenity.Shaders.ScreenFilters.Names.Contains(current) ? current : EmuSen.Serenity.Shaders.ScreenFilters.None);
+                IReadOnlyList<string> names = EmuSen.Serenity.Shaders.ScreenFilters.NamesFor(console);
+                filter.Fill(names, names.Contains(current) ? current : EmuSen.Serenity.Shaders.ScreenFilters.None);
                 _filling = false;
             }
             FillFilter();

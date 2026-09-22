@@ -395,7 +395,9 @@ namespace EmuSen.Mistress.Views
         // On the UI thread: the filter belongs to the control that draws, not to the core - see EmuSen_Settings_Reference.md §4.40.
         private void ApplyScreenFilter(string console)
         {
-            GameFrame.ActiveEffect = EmuSen.Serenity.Shaders.ScreenFilters.ByName(_graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey));
+            EmuSen.Serenity.Shaders.ScreenFilterChoice choice = EmuSen.Serenity.Shaders.ScreenFilters.Find(_graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey));
+            GameFrame.ActiveEffect = choice.Effect;
+            GameFrame.ActiveFilter = choice.Filter;
             GameFrame.InvalidateVisual();
         }
 

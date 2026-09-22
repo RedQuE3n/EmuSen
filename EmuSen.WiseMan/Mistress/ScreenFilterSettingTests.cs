@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Mistress
             foreach (string console in CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console))
             {
                 Dropdown filter = Filter(window, console);
-                Assert.Equal(ScreenFilters.Names, filter.Items.Cast<object>().Select(o => o.ToString()));
+                Assert.Equal(ScreenFilters.NamesFor(console), filter.Items.Cast<object>().Select(o => o.ToString()));
                 Assert.Equal(ScreenFilters.None, filter.SelectedItem);
             }
 

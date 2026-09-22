@@ -13,16 +13,27 @@ namespace EmuSen.Endymion.Input
 
         private IntPtr _gamepad;
         private bool _available;
-        private readonly bool _sdlInitialized;
+        private bool _sdlInitialized, _started;
 
         // Rate-limits the hot-plug rescan in Poll() - see EmuSen_Settings_Reference.md §4.4.
         private static readonly TimeSpan RescanInterval = TimeSpan.FromSeconds(1);
         private readonly Stopwatch _rescanClock = Stopwatch.StartNew();
         private TimeSpan _lastRescan = TimeSpan.MinValue;
 
-        public GamepadManager(GamepadBindingMap bindings)
+        // start: false leaves SDL untouched until Start, which a window calls once it is shown - see EmuSen_Settings_Reference.md §4.42.
+        public GamepadManager(GamepadBindingMap bindings, bool start = true)
         {
             Bindings = bindings;
+            if (start) Start();
+        }
+
+        public bool Started => _started;
+
+        // Idempotent, and on the thread that polls, as SDL asks.
+        public void Start()
+        {
+            if (_started) return;
+            _started = true;
 
             // Gamepad subsystem only, and InitSubSystem rather than Init -
             // see EmuSen_Settings_Reference.md §4.10.

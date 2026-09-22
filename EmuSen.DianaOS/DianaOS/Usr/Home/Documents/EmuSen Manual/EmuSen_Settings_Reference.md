@@ -1124,3 +1124,34 @@ Each console's **Screen Filter** dropdown (§4.40) now ends with **RetroArch Pre
 - A server error, or a zip with no presets, leaves the old pack.
 
 Two mutants were made, one dropping the no-presets check and one dropping the missing-file check. Each was caught.
+
+### 4.42 Cold start: ReadyToRun and a deferred gamepad (2026-09-22)
+
+**Measured, not estimated.** `~/.cache/emusen/probe/startbench/` runs Mistress's own startup in a fresh process: the same settings loads as `Program.Main`, `App` with its theme, and a real `MainWindow` over a copy of the published sandbox's `home` tree, reading the real ROM library read-only. It runs on Avalonia's headless platform with Skia and prints a timestamp per phase, measured from the process's start. It does **not** include X11's connection or the GPU context, and it runs with the file cache warm, since dropping the cache needs root. Its numbers are therefore a lower bound on a real cold start, and the savings below are real savings of that bound. Online covers were turned off in the copy, so that no run reached the network.
+
+**Where the time went** (sampled with `dotnet-trace`, a ReadyToRun build): the `MainWindow` constructor took 329 ms, and **193 ms of it was `GamepadManager`'s `SDL.InitSubSystem(Gamepad)`**. Timed alone, the time is SDL's joystick layer enumerating input devices (about 150 ms on this machine), not the gamepad mapping or HIDAPI. `SDL_JOYSTICK_HIDAPI=0` saved about 20 ms, and the other hints tried saved nothing.
+
+The rest of the constructor measured small with the file cache warm: the library scan, SQLite open and the list fill together 23 ms, XAML 31 ms, and audio device open 6 ms. A read-through of the startup path had marked the scan, the SQLite open and the audio device as candidates, and on this measurement none is worth moving. On a truly cold disk the scan of a large library may cost more; that is unmeasured.
+
+**Two changes.**
+- `PublishReadyToRun` is on for every Mistress publish with a runtime identifier. The run-time cost was measured before and found to be none (`Mars_Performance.md` §25: exact output, 1 to 7 per cent faster), because the JIT still re-tiers hot code and still compiles the recompiler's blocks. The publish grows by about 20 MB.
+- The gamepad is constructed unstarted, and `Start` runs from a job posted at background priority by the window's first animation frame. SDL asks for its initialisation on the thread that polls, so it stays on the UI thread rather than moving to a pool thread, but after the first frame is committed instead of before. A pad therefore connects about 150 ms after the window appears. Hotaru still starts its pad at construction.
+
+**Results.** Time to the first render tick, median of ten interleaved runs:
+
+| Build | First render tick |
+|---|---|
+| JIT, before | 742 ms |
+| JIT, gamepad deferred | 587 ms |
+| ReadyToRun, before | 488 ms |
+| ReadyToRun, gamepad deferred | **329 ms** |
+
+Together the two changes cut the time to the first render tick by 56 per cent.
+
+**A measurement trap, recorded because it hid the result twice.** On the headless platform nothing is drawn until the window is captured, and `CaptureRenderedFrame` pumps the dispatcher before returning. A bench that pumps jobs after `Show`, or that times the capture's return, runs the deferred start before its own frame mark and shows no gain at all. The first render tick can only be read from inside the tick: an animation-frame callback registered after `Show` fires in the same tick as the one that posts the gamepad's start. On a real platform, that tick commits its frame before the posted job runs.
+
+**Not done, and why.**
+- A source-generated JSON context for the settings types, and parsing the keybinding and gamepad files once rather than twice. The whole settings phase before Avalonia measured 38 ms.
+- Coalescing the per-cover `LibraryGrid.Refresh` after the first frame. That work happens after the window is shown, so it affects responsiveness rather than the start, and it is unmeasured here.
+
+**Test:** `PadNavigationTests.The_gamepad_starts_after_the_window_s_first_frame_and_not_before`. A mutant that starts the pad at construction fails it.

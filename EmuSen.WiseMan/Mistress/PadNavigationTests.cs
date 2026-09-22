@@ -44,6 +44,22 @@ namespace EmuSen.WiseMan.Mistress
 
         private static TimeSpan Ms(int ms) => TimeSpan.FromMilliseconds(ms);
 
+        // SDL's device scan waits for the window's first frame rather than delaying it - see EmuSen_Settings_Reference.md §4.42.
+        [Fact]
+        public Task The_gamepad_starts_after_the_window_s_first_frame_and_not_before() => Session.Dispatch(() =>
+        {
+            new AppSettings { RomDirectory = _romDir, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            var window = new MainWindow();
+            var gamepad = (EmuSen.Endymion.Input.GamepadManager)typeof(MainWindow).GetField("_gamepad", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+            Assert.False(gamepad.Started);
+            window.Show();
+            Assert.False(gamepad.Started);
+            using (var frame = window.CaptureRenderedFrame()) { }
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(gamepad.Started);
+            window.Close();
+        }, default);
+
         [Fact]
         public void A_held_direction_presses_once_then_repeats_after_the_delay()
         {

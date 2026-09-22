@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Shaderc's and Vulkan's bindings are pointers, as they are for Mars's GPU path - see EmuSen_Serenity.md §7.3. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +26,11 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
     <PackageReference Include="Avalonia.Skia" Version="12.1.0" />
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <!-- RetroArch's slang presets are Vulkan GLSL: Shaderc (glslang, Apache-2.0 natives, MIT binding) compiles them at run
+         time, and they run on Vulkan, the same two packages and versions Mars and its tests already take - see
+         EmuSen_Serenity.md §7.3. Their reflection is read from the SPIR-V here rather than taking SPIRV-Cross as well. -->
+    <PackageReference Include="Silk.NET.Shaderc" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
   </ItemGroup>
 
   <ItemGroup>

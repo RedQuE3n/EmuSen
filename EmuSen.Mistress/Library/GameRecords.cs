@@ -61,6 +61,14 @@ namespace EmuSen.Mistress.Library
             );
             CREATE INDEX collection_game_by_path ON collection_game(path);
             """,
+            """
+            CREATE TABLE cover_lookup (
+                path      TEXT PRIMARY KEY,
+                outcome   TEXT NOT NULL CHECK (outcome IN ('Found', 'Unknown', 'NoArt')),
+                rom_name  TEXT,
+                checked   TEXT NOT NULL
+            );
+            """,
         };
 
         public static int SchemaVersion => Migrations.Length;
@@ -216,8 +224,42 @@ namespace EmuSen.Mistress.Library
             Execute(_db, step, "UPDATE game SET last_played = NULL WHERE path = $to AND last_played = ''", ("$to", to));
             Execute(_db, step, "UPDATE OR IGNORE collection_game SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
             Execute(_db, step, "DELETE FROM collection_game WHERE path = $from", ("$from", from));
+            Execute(_db, step, "UPDATE OR IGNORE cover_lookup SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
+            Execute(_db, step, "DELETE FROM cover_lookup WHERE path = $from", ("$from", from));
             Execute(_db, step, "DELETE FROM game WHERE path = $from", ("$from", from));
             step.Commit();
+        }
+
+        // --- What an online cover lookup came to, so it is not asked again - see EmuSen_Settings_Reference.md §4.39.
+
+        public string? CoverLookup(string path)
+        {
+            using SqliteCommand command = _db.CreateCommand();
+            command.CommandText = "SELECT outcome FROM cover_lookup WHERE path = $path";
+            command.Parameters.AddWithValue("$path", path);
+            return command.ExecuteScalar() as string;
+        }
+
+        // A failure is not recorded, so the next session asks again; an answer is, until the player asks again by hand.
+        public void RecordCoverLookup(string path, CoverOutcome outcome, string? romName, DateTime now)
+        {
+            if (outcome == CoverOutcome.Failed) return;
+            using SqliteCommand command = _db.CreateCommand();
+            command.CommandText = "INSERT INTO cover_lookup (path, outcome, rom_name, checked) VALUES ($path, $outcome, $name, $now) "
+                + "ON CONFLICT(path) DO UPDATE SET outcome = excluded.outcome, rom_name = excluded.rom_name, checked = excluded.checked";
+            command.Parameters.AddWithValue("$path", path);
+            command.Parameters.AddWithValue("$outcome", outcome.ToString());
+            command.Parameters.AddWithValue("$name", (object?)romName ?? DBNull.Value);
+            command.Parameters.AddWithValue("$now", now.ToString("o", CultureInfo.InvariantCulture));
+            command.ExecuteNonQuery();
+        }
+
+        public void ForgetCoverLookup(string path)
+        {
+            using SqliteCommand command = _db.CreateCommand();
+            command.CommandText = "DELETE FROM cover_lookup WHERE path = $path";
+            command.Parameters.AddWithValue("$path", path);
+            command.ExecuteNonQuery();
         }
 
         // --- Collections the player makes - see EmuSen_Settings_Reference.md §4.38.

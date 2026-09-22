@@ -25,6 +25,7 @@ namespace EmuSen.Mistress.Views
         private readonly AppSettings _settings;
         private readonly LunaSwitch _bigScreen = new() { Name = "BigScreenSwitch", Label = "Start in big screen mode" };
         private readonly LunaSwitch _pauseInBackground = new() { Name = "PauseInBackgroundSwitch", Label = "Pause the game when another window is in front" };
+        private readonly LunaSwitch _onlineCovers = new() { Name = "OnlineCoversSwitch", Label = "Look up missing covers online" };
         private readonly Dropdown _theme = new() { Name = "ThemeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
         private readonly Dropdown _resume = new() { Name = "ResumeDropdown", HorizontalAlignment = HorizontalAlignment.Stretch };
 
@@ -55,6 +56,12 @@ namespace EmuSen.Mistress.Views
                     Label = "Cover Art Directory",
                     Hint = "Box art, named like the game's file (libretro-thumbnails' names work as they are). Leave blank for home/Artwork.",
                     Content = Picker("ArtworkDirectoryBox", "(default)", "Choose Cover Art Directory", _settings.ArtworkDirectory, p => _settings.ArtworkDirectory = p),
+                },
+                new FieldRow
+                {
+                    Label = "Online Covers",
+                    Hint = "Off unless you turn it on. Mistress then downloads OpenVGDB, the game database OpenEmu uses (about 9 MB, from GitHub), and for each game shown without a cover asks thumbnails.libretro.com for its box, then the address OpenVGDB gives (GameFAQs, which refused every request when this was built). Those servers see which games you have. OpenVGDB states no licence and the covers are other people's scans. They are saved in the cover art folder, never in the ROM folder.",
+                    Content = _onlineCovers,
                 },
                 new FieldRow
                 {
@@ -98,6 +105,8 @@ namespace EmuSen.Mistress.Views
 
             Content = Ui.Stack(12, tabs, Ui.Buttons(Ui.Button("Close", Close))).Margin(16);
 
+            _onlineCovers.IsChecked = _settings.OnlineCovers;
+            _onlineCovers.IsCheckedChanged += (_, _) => { _settings.OnlineCovers = _onlineCovers.IsChecked == true; _settings.Save(); };
             _bigScreen.IsChecked = _settings.BigScreen;
             _bigScreen.IsCheckedChanged += (_, _) => { _settings.BigScreen = _bigScreen.IsChecked == true; _settings.Save(); };
             _pauseInBackground.IsChecked = _settings.PauseInBackground;

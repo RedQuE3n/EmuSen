@@ -63,6 +63,9 @@ namespace EmuSen.Galaxia.Models
         public double Volume { get; set; } = 1.0;
         public bool PauseInBackground { get; set; } = true;
 
+        // Off unless the player turns it on: missing covers looked up in OpenVGDB and fetched - see EmuSen_Settings_Reference.md §4.39.
+        public bool OnlineCovers { get; set; } = false;
+
         // Box art the library shows, read and never written except by Add Cover Art - see EmuSen_Settings_Reference.md §4.33.
         public string? ArtworkDirectory { get; set; }
 

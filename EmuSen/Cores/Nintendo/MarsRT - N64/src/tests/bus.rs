@@ -454,6 +454,33 @@ fn the_stored_word_decays() {
     assert_eq!(bus.load(DATA, 4), 0x0123_4567);
 }
 
+/// The decay by its own number, the FPGA core's 150 cycles at 62.5MHz counted in the processor's, not by the constant.
+#[test]
+fn the_stored_word_lasts_225_cycles() {
+    let mut bus = cartridge();
+    bus.store(DATA, 0xBADC_0FFE, 4);
+    bus.tick(224);
+    assert_eq!(bus.load(DATA, 4), 0xBADC_0FFE);
+
+    bus.store(DATA, 0xBADC_0FFE, 4);
+    bus.tick(225);
+    assert_eq!(bus.load(DATA, 4), 0x0123_4567);
+}
+
+/// `MiInterface.Write32` clears before it sets, so a write carrying both bits of a device leaves it unmasked.
+#[test]
+fn a_mask_write_carrying_both_bits_of_a_device_sets_it() {
+    let mut bus = new_bus();
+    for source in 0..6u32 {
+        bus.mi.write32(0x0C, 0x0FFF);
+        assert_eq!(bus.mi.mask, 0x3F, "every device's pair written at once");
+        bus.mi.write32(0x0C, 1 << (source * 2));
+        assert_eq!(bus.mi.mask, 0x3F & !(1 << source));
+        bus.mi.write32(0x0C, 3 << (source * 2));
+        assert_eq!(bus.mi.mask, 0x3F, "device {source}'s pair written together");
+    }
+}
+
 #[test]
 fn the_decay_falls_inside_the_window_the_corpus_allows() {
     let mut bus = cartridge();

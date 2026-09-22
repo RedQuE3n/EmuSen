@@ -1040,3 +1040,25 @@ per cent; the tests' part is not bounded.
 for a day the bytes were reasoned about from the emitter's source. The JIT's listing for one block answered in a
 minute what the source could not: the largest thing in a block was not anything the emitter emits.
 
+
+## 20. Three small costs the thread was paying for nothing (2026-09-22)
+
+A profile of the emulation thread at e2742fa (instruction-pointer sampling with a frame-pointer stack walk, `ipstack.py` in the speed tooling, flat out from gameplay states in SM64, OoT and GoldenEye's Dam) named three costs that bought nothing:
+
+- **A shuffle thunk on every block call, about 1 per cent in each game.** `BlockCode` was an open delegate over a static method. Calling one goes through a stub that moves the arguments along by one register before jumping. Each block's method now takes an unused `object` first and is bound closed over a fixed object (`BlockCompiler.Bound`), so the call reaches the code directly. The emitter's CPU argument moved from `ldarg.0` to `ldarg.1`, at all 52 sites. The call sites still read `code(cpu)`.
+- **`MiInterface.Asserted` called rather than inlined, 0.7 to 1.3 per cent.** It is two fields and an AND, but it was reached from `RspRan` and the block loop. Both inline heavy RSP stepping, and the JIT's inlining budget ran out before it reached the getter. The getter is now `AggressiveInlining`.
+- **Two clock reads in every SP DMA, 0.5 to 1.1 per cent** (vDSO `clock_gettime`). They fed `SpInterface.TransferTicks`, which nothing read. Removed.
+
+**Measured**, base e2742fa against the change, three interleaved rounds of 1,500 frames flat out (`PACED=0`), mean frame:
+
+| Game | Base | Change | Difference |
+|---|---|---|---|
+| SM64 | 5.96, 5.97, 6.05 ms | 5.87, 5.92, 5.88 ms | −1.7% |
+| OoT | 7.57, 7.53, 7.44 ms | 7.43, 7.40, 7.41 ms | −1.3% |
+| GoldenEye (Dam) | 19.28, 19.11, 19.18 ms | 18.73, 18.54, 18.64 ms | −2.9% |
+
+Every round of the change is below every round of the base in each game. The three changes were not measured apart, so their shares of the gain are unknown. The state checksum after 1,500 frames is identical in all eighteen runs (`EA3ECCB37EC9E0C9`, `8CB10CB4CADBE713`, `2977CD4026CE8E75`). The Mars suite passes, 3,540 tests in Debug with the block verifier on.
+
+**Why the RSP's delegates were left.** `Mars_Rsp.md` §14 measured closure-less delegates there and found under 0.5 per cent. An RSP block's entry is rarer per instruction than a CPU block's, and its root method already calls its chunks directly.
+
+**The same profile's larger finding is not this section's.** When the CPU is busy, the RSP steps one interpreted instruction per CPU cycle from inside the CPU's blocks (`RspRan` into `StepOne`). That was 40 per cent of GoldenEye's thread (7.3 ms a frame), 23 per cent of OoT's and 14 per cent of SM64's. `Mars_Rsp.md` §13 tried two routes out of that lock-step, and rejected both.

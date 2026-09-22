@@ -1160,6 +1160,18 @@ impl Threads {
         }
     }
 
+    /// A test's way to end a hold from another thread.
+    #[cfg(test)]
+    pub fn resumer(&self) -> impl FnOnce() + Send + 'static {
+        let (shared, thread) = (self.shared.clone(), self.thread.clone());
+        move || {
+            if shared.holds.fetch_sub(1, Relaxed) == 1 {
+                shared.pause_request.store(0, SeqCst);
+                thread.unpark();
+            }
+        }
+    }
+
     /// `WritePending`'s words: those handed over and not run, read while the drain stands.
     pub fn pending_words(&self) -> Vec<u64> {
         let (completed, issued) = (self.shared.completed(), self.issued);

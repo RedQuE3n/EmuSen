@@ -180,6 +180,103 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // C#'s wait for a range read narrows each page by its first eight bytes, so a capture whose first bytes no pending draw holds reads rows still to be drawn - see Mars_Native.md §5.6.2.
+        [Fact]
+        public void The_csharp_interface_lets_a_range_read_pass_the_draws_that_hold_all_but_its_first_bytes()
+        {
+            const uint framebuffer = 0x0020_0000, page = framebuffer + 0x1000, row = framebuffer + 320 * 2 * 8;
+            ulong[] list =
+            {
+                (0x2FUL << 56) | (3UL << 52),
+                (0x3FUL << 56) | (2UL << 51) | (319UL << 32) | framebuffer,
+                (0x2DUL << 56) | ((320UL << 2) << 12) | (240UL << 2),
+                (0x37UL << 56) | 0x1234_5678,
+                (0x36UL << 56) | ((319UL << 2) << 44) | ((9UL << 2) << 32) | (8UL << 2),
+                0x29UL << 56,
+            };
+
+            EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus atOnce = new(), threaded = new();
+            threaded.Dp.Threaded = true;
+            ListTo(atOnce, list);
+            threaded.Dp.Pause();
+            ListTo(threaded, list);
+            Assert.Equal(list.Length, threaded.Dp.Pending);
+
+            var read = System.Threading.Tasks.Task.Run(() => threaded.Dp.WaitForReadRange(page, 0x1000, 8));
+            bool passed = read.Wait(TimeSpan.FromSeconds(2));
+            byte[] seen = threaded.Rdram.AsSpan((int)row, 0x80).ToArray();
+            threaded.Dp.Resume();
+            read.Wait();
+            threaded.Dp.Join();
+
+            _output.WriteLine($"C# returned from the range read {(passed ? "at once" : "only when the thread ran")}, reads narrowed {threaded.Dp.ReadsNarrowed}, freed {threaded.Dp.ReadsFreed}");
+            Assert.True(passed, "C# waited for the draw, so the defect this test records is gone and the test should be turned around");
+            Assert.False(seen.AsSpan().SequenceEqual(atOnce.Rdram.AsSpan((int)row, 0x80)), "the read found the drawn rows although it did not wait");
+            Assert.Equal(atOnce.Rdram, threaded.Rdram);
+        }
+
+        // C#'s deferred path skips a repeated scan though a held line expired since the last walk, and so keeps the picture from before the expiry - see Mars_Native.md §5.6.5.
+        [Fact]
+        public void The_csharp_deferred_path_keeps_a_stale_picture_when_a_repeat_follows_an_expired_line()
+        {
+            string rom = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.BuildRunningFromRdram(new uint[] { 0x1000_FFFF, 0x0000_0000 }));
+            _temporary.Add(rom);
+            MarsCore now = new(batteryRamDisabled: true) { UseBlocks = false, SkipRendering = false };
+            MarsCore later = new(batteryRamDisabled: true) { UseBlocks = false, SkipRendering = false, DeferredPresentation = true };
+            now.LoadRom(rom);
+            later.LoadRom(rom);
+            foreach (MarsCore core in new[] { now, later })
+            {
+                uint state = 0x2468_ACE0;
+                for (int i = 0; i < 0x30000; i++)
+                {
+                    state = state * 1103515245 + 12345;
+                    core.Bus!.Rdram[0x0020_0000 - 0x8000 + i] = (byte)(state >> 16);
+                }
+            }
+
+            uint[] tall = ViRegisters(rows: 120), shortened = ViRegisters(rows: 60);
+            byte[]? previous = null;
+            int stale = 0, changed = 0;
+            foreach (uint[] registers in new[] { tall, tall, tall, shortened, shortened, shortened, shortened })
+            {
+                foreach (MarsCore core in new[] { now, later })
+                    for (int i = 0; i < registers.Length; i++) core.Bus!.Write32(EmuSen.Cores.Nintendo.Mars.Memory.MemoryMap.ViBase + (uint)i * 4, registers[i]);
+                now.RunFrame();
+                later.RunFrame();
+                if (previous != null && !later.GetFrameBufferRgba().AsSpan().SequenceEqual(previous)) stale++;
+                if (previous != null && !now.GetFrameBufferRgba().AsSpan().SequenceEqual(previous)) changed++;
+                previous = now.GetFrameBufferRgba().ToArray();
+            }
+
+            _output.WriteLine($"C# deferred: {later.RepeatedScans} scans skipped as repeats; {stale} frames differ from the immediate picture of the frame before; the immediate picture changed {changed} times");
+            Assert.True(later.RepeatedScans >= 2 && changed >= 1, "the case was not reached");
+            Assert.True(stale > 0, "the C# deferred picture was the immediate one's every frame, so the defect this test records is gone and the test should be turned around");
+        }
+
+        private static void ListTo(EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus bus, ulong[] list)
+        {
+            const uint at = 0x0010_0000;
+            for (int i = 0; i < list.Length; i++) bus.Write64(at + (uint)i * 8, list[i]);
+            bus.Write32(EmuSen.Cores.Nintendo.Mars.Memory.MemoryMap.DpCommandBase, at);
+            bus.Write32(EmuSen.Cores.Nintendo.Mars.Memory.MemoryMap.DpCommandBase + 4, at + (uint)list.Length * 8);
+        }
+
+        // A 256-column sixteen-bit picture of the given rows at 0x200000, anti-alias mode 3, as MarsDeferredPresentationTests programs one.
+        private static uint[] ViRegisters(uint rows)
+        {
+            var registers = new uint[14];
+            registers[0] = 2u | (3u << 8);
+            registers[1] = 0x0020_0000;
+            registers[2] = 64;
+            registers[6] = 525;
+            registers[9] = (108u << 16) | (108u + 256);
+            registers[10] = (34u << 16) | (34u + rows * 2);
+            registers[12] = 0x400;
+            registers[13] = 0x400;
+            return registers;
+        }
+
         private static void Load(MarsRtCore core, (string Rom, byte[]? State) game)
         {
             core.LoadRom(game.Rom);

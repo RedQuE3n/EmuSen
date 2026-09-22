@@ -58,7 +58,7 @@ impl Run {
 pub(crate) fn drive(m: &mut Machine, frame: u64) {
     const BUTTONS: [u16; 6] = [0x8000, 0x4000, 0x1000, 0x0800, 0x2000, 0x0010];
     let button = BUTTONS[(frame % 6) as usize];
-    let pressed = (frame / 6) % 2 == 0;
+    let pressed = (frame / 6).is_multiple_of(2);
     for b in BUTTONS {
         m.press(0, b, b == button && pressed);
     }

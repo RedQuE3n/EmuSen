@@ -37,6 +37,29 @@ namespace EmuSen.Serenity
         // Not "Effect" - Avalonia's Visual already has an unrelated one - see EmuSen_Serenity.md §2.4.
         public ShaderEffect ActiveEffect { get; set; } = ShaderEffect.None;
 
+        // A multi-pass filter, drawn instead of ActiveEffect when set; its chain is built on the render thread - see EmuSen_Serenity.md §3.2.
+        private ScreenFilter? _activeFilter;
+        private FilterChain? _chain;
+
+        public ScreenFilter? ActiveFilter
+        {
+            get => _activeFilter;
+            set
+            {
+                lock (_cacheLock)
+                {
+                    if (ReferenceEquals(_activeFilter, value)) return;
+                    _activeFilter = value;
+                    _chain?.Dispose();
+                    _chain = null;
+                }
+                InvalidateVisual();
+            }
+        }
+
+        // How many earlier frames the running filter holds, for a test that asks whether history is kept.
+        internal int FilterHistoryHeld { get { lock (_cacheLock) return _chain?.HistoryHeld ?? 0; } }
+
         // What the render thread spent showing frames, summed until a frontend takes them - see EmuSen_Serenity.md §2.5.
         private long _presented, _copies, _copyTicks, _drawTicks, _shape;
         private int _gpu;
@@ -134,6 +157,8 @@ namespace EmuSen.Serenity
                 _cachedImage?.Dispose();
                 _cachedImage = null;
                 _cachedVersion = -1;
+                _chain?.Dispose();
+                _chain = null;
             }
         }
 
@@ -188,21 +213,34 @@ namespace EmuSen.Serenity
                 {
                     long started = System.Diagnostics.Stopwatch.GetTimestamp();
                     bool copy = _owner._cachedImage is null || _owner._cachedVersion != _version;
+                    if (_owner._activeFilter is { } filter && _owner._chain is null) _owner._chain = new FilterChain(filter);
                     if (copy)
                     {
                         var sourceInfo = new SKImageInfo(_width, _height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                        _owner._cachedImage?.Dispose();
+                        SKImage? previous = _owner._cachedImage;
                         _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, _rgba);
                         _owner._cachedVersion = _version;
+
+                        // A filter that looks back keeps the frame just replaced; otherwise it is freed as before.
+                        if (_owner._chain is { } running) running.Advance(previous);
+                        else previous?.Dispose();
                     }
                     long copied = System.Diagnostics.Stopwatch.GetTimestamp();
 
-                    Draw(canvas, _owner._cachedImage!);
+                    if (_owner._chain is { } chain) DrawFiltered(canvas, chain, lease.GrContext, _owner._cachedImage!);
+                    else Draw(canvas, _owner._cachedImage!);
 
                     // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
                     lease.GrContext?.Flush();
                     _owner.Presented(copy, copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, lease.GrContext is not null, _width, _height);
                 }
+            }
+
+            private void DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage)
+            {
+                var (x, y, w, h) = ComputeLetterboxRect(_width, _height * _rowRepeat, Bounds.Width, Bounds.Height);
+                var destination = new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
+                chain.Draw(canvas, context, sourceImage, _rowRepeat, destination);
             }
 
             private void Draw(SKCanvas canvas, SKImage sourceImage)

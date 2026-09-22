@@ -2192,3 +2192,211 @@ is a property of what it is doing, and one state is not a sample.
 - **Code is not freed a block at a time.** §5.8.4's bound drops everything at once, and no game has reached it.
 - **The verifier runs on one thread.** It needs the display processor unthreaded, since it clones the machine.
 
+## 6. Finishing the port (planned 2026-09-22)
+
+§5's six stages are five done and one open, and what the port set out to do is measured (§5.8.8): on this desktop,
+MarsRT with its recompiler is at or below the C# core on all three games. This section is the plan for what remains,
+written the way §5 was written before it began: what each stage covers, what its oracle is, what it costs, and the
+prediction or the decision rule stated before the measurement that will retire it.
+
+**What "finished" means here**, since the word has to be held to something:
+
+1. **A player gets MarsRT** on every platform EmuSen publishes for, in the configuration the numbers were measured in,
+   without choosing it.
+2. **Nothing a player or the tooling could do on the C# core is lost on MarsRT**, or its loss is written down.
+3. **The C# core's role is decided**, rather than left as the fallback by default.
+
+**Where each stage's work stands against those three**, as of this writing:
+
+| Stage | What it covers | Serves | Oracle | Cost |
+| --- | --- | --- | --- | --- |
+| A | The measurement the port was for: the handheld | 1 | the C# core on the same device | hours, once the device is reachable |
+| B | The defaults: threads, the engine, the other frontends | 1 | §5.6 and §5.8's suites, a play session | hours |
+| C | Every platform: the library built for the three other targets, and stripped | 1 | the crate's own tests and WiseMan's synthetic systems on each | a day |
+| D | Stage 6: the multiple, antialiasing and the GPU path | 2 | the C# multiple and the C# GPU path, picture for picture | two to three days |
+| E | The debugger's hooks in the Rust loop | 2 | the debugger's WiseMan tests, run against both engines | one to two days |
+| F | Parity leftovers: ROM patches, the profiler's phases, rewind, the four C# failures, the single-thread regression | 2 | each item's own | a day, in pieces |
+| G | The C# core's future | 3 | none: a decision, with the criteria below | — |
+
+A and B come first because they are cheap and they decide what D is worth. C is mechanical and can run beside
+anything. D and E do not depend on each other. F's items are side jobs. G is last, and its criteria are what A to E
+deliver.
+
+### 6.1 Stage A: the handheld
+
+**The port was priced on a device, not this desktop**: GoldenEye at 68 per cent of console on the Legion Go S against
+109 per cent here (§5). No MarsRT number exists from that device yet; it was unreachable on the day the recompiler
+landed, and on the day the threads did.
+
+**What is measured.** `examples/threads` and `examples/frames`, which need no .NET, on the three gameplay states:
+the interpreter against tier 2, and one worker against as many as the device has cores for, three interleaved rounds
+as §5.8.8 runs them; then the published Mistress with the C# engine and with MarsRT, since the shim and the scan-out
+are part of a frame. The C# core's numbers on the same device, the same day, are the comparison; the desktop's are
+not.
+
+**What it decides.** Whether the handheld's bound is the emulation thread or the rasteriser. If the frame is CPU-bound
+there as it is here, the levers left are the recompiler's (§5.8.9) and stage D matters only for the multiple; if it is
+RDP-bound, because the device has fewer cores to split across, the split's shape and stage D's device path come
+before anything else. The device has either four cores or eight depending on its model, and the split was measured
+here on sixteen.
+
+**Two things to settle before the numbers are trusted.** The examples link the desktop's glibc (2.43); the device's
+version is not recorded, and an older one will refuse the binary at load. The fix is either to build on the device or
+to pin the target's glibc through `cargo zigbuild`, which stage C wants anyway. And the published Mistress carries its
+own .NET but not its own C library, so the same question applies to `libmarsrt.so` inside it, and the shim's report
+(`MarsNative.Report`) is where a refused load shows.
+
+**The prediction, before the measurement.** The desktop's ratio (the Dam at 15.0 against the C# core's 14.9 to 16.7)
+carries over only if the device's core count lets the split run at four workers. At two workers the C# core and
+MarsRT both lose the split's gain and the frame is the emulation thread's again, where MarsRT's advantage is the
+recompiler's sixteen per cent on the Dam and three to four on the others. So: GoldenEye somewhat better than the C#
+core there, not level, and the other two about level. Held loosely, as §3.4 taught.
+
+### 6.2 Stage B: the defaults, the engine, the other frontends
+
+Three defaults are wrong for a player, and each is a line:
+
+- **The threads.** MarsRT's `ThreadedRdp`, `RdpWorkers` and `DeferredPresentation` default to off, one and off
+  (§5.6), where the C# core's default to on, a third of the processors clamped to four, and on. Every production
+  number in §5.8.8 was taken at four workers, deferred. A player who picks MarsRT today gets the rasteriser on the
+  emulation thread, about 8 ms a frame on Super Mario 64 (§5.7) against the 6 measured. The defaults should be the C#
+  core's, by the same reasoning §5.8.7 gave for the recompiler: the suites are the evidence, and off is a switch
+  away.
+- **The engine.** `CoreCatalog`'s Engine row for the N64 defaults to the C# core. Once A and the thread defaults are in,
+  it should default to MarsRT where the library loads, with the factory's fallback unchanged and its message kept, so
+  that a platform without the library (stage C) still plays.
+- **Hotaru and Pharaoh** build the C# core with no choice (§5.5.4). They should read the same per-console setting the
+  factory reads, so the engine is one decision, not three.
+
+**Oracle.** `MarsRtFrontendTests` and `MarsRtEngineTests` for the wiring; the exactness suites do not change. The
+decision to flip is a play decision as §5.6.10 and §5.8.7 said, and it should follow a session on the desktop and one
+on the handheld with the crash log clean. One thing MarsRT has that the C# core does not, which bears on the risk:
+its pause point for a snapshot is a tested barrier (§5.6.4), where the C# core's is the deadlock §5.6.2 records.
+
+### 6.3 Stage C: every platform
+
+**The gap.** `EmuSen.csproj` builds the crate only when the publish's runtime identifier is the host's
+(`EmuSenNativeForHost`), so the `win-x64`, `osx-x64` and `osx-arm64` trees under `out/` carry no `marsrt.dll` or
+`libmarsrt.dylib`, and on those machines MarsRT is silently unavailable: the factory falls back to the C# core and
+says so in the Engine row's message. The linux-x64 library it does ship is 34 MB, because the release profile keeps
+debug information for `ipsample` and the perf map.
+
+**The route.** Two are open, and the first is recommended:
+
+1. **Build the three libraries where they run.** A GitHub Actions workflow with a three-runner matrix (`ubuntu`,
+   `windows`, `macos`) builds the crate, runs its own tests — the 391 need no ROM — and attaches the libraries as
+   artefacts; the publish takes a prebuilt library for a foreign runtime identifier through a new csproj property,
+   `EmuSenNativePrebuilt`, and the existing `Exists` guard keeps the fallback when none is given. This needs no
+   toolchain on this machine, and it tests each library on the platform it is for.
+2. **Cross-compile here** with `cargo zigbuild`, which links every target through one toolchain (Zig) and pins the
+   Linux target's glibc. This machine's Rust is Fedora's package, without `rustup`, so the three targets' standard
+   libraries would have to come from `rustup` first. It is the route for stage A's glibc pin, and a fallback for 1.
+
+**Stripping.** A second profile, `[profile.dist]`, inheriting release with `strip = "debuginfo"`, for the published
+library; the development build keeps its symbols. About 8 MB against 34.
+
+**Two risks to test rather than argue.** `cranelift-jit` 0.136 has no code for Apple Silicon's JIT restrictions: it
+takes a page writable, fills it, and turns it executable with `mprotect`, which Apple permits for a process without
+the hardened runtime, and refuses for one with it unless the `allow-jit` entitlement is granted. A notarised
+build needs the entitlement; a local one does not; and both need a run on a Mac with a `cargo test` of the crate to
+say so. Windows has no such rule, and `MarsNative` already knows the library's name there; what needs checking is
+only that the exported names survive the `.dll`'s linker unchanged.
+
+**Oracle.** The crate's tests on each platform, and WiseMan's eight synthetic systems there; the corpus and the six
+games need local ROMs and stay on this machine.
+
+### 6.4 Stage D: the multiple, antialiasing and the device
+
+**What it is.** The three settings whose hint still reads "MarsRT does not implement this yet": `RenderScale`, the
+rasteriser at one to four times the console's resolution (`Mars_Video.md`), `Antialiasing`, and `Gpu`, the device path
+of `Mars_Gpu.md`, phases 0 to 7 with §14's tiles and §15's device average. In C# the multiple is 18 lines across six
+files of the rasteriser and the walker's hardware widths; the device path is 1,288 lines and its shaders.
+
+**Order inside the stage.** The CPU multiple first, because it is the oracle for the device's: `Mars_Video.md`'s
+tests grade the C# rasteriser at 2× and 4× picture for picture, and the same tests grade MarsRT's once the shim
+honours the key. Then the device path on `ash`, sharing the C# path's SPIR-V byte for byte, so that the differential
+between the two cores' device paths has no shader in it, only the host code around it. Then antialiasing, which is
+the device average.
+
+**Oracle.** The C# core at the same multiple, picture for picture, every frame of the three games; the device against
+the CPU rasteriser at the same multiple, as `Mars_Gpu.md` grades the C# device; the state unchanged by any of it,
+since the multiple is the picture's and not the machine's. The GPU tests run on the RX 6800 only, by standing
+instruction, with `EMUSEN_MARS_GPU_TEST_DEVICES=all` for the occasional cross-check.
+
+**What it buys, stated first.** At 1× the emulation thread is the bound and the device helps nothing
+(`Mars_Gpu.md` §16); the multiple is where it pays, at 150 to 250 per cent of the CPU rasteriser's rate at 4× on this
+machine's discrete card. On the handheld's integrated device the figure is unmeasured, and stage A's result says
+whether the multiple is what that device's frame has room for. If A finds the handheld CPU-bound at 1×, this stage is
+for the desktop's multiple and comes after E; if it finds it RDP-bound, this stage's device path is the next lever
+and comes before.
+
+### 6.5 Stage E: the debugger's hooks
+
+**What is missing.** Breakpoints, stepping, watches, the coverage recorder, the call stack's observers, labels and the
+frame log: everything `RunFrame`'s debugging loop does that `RunQuietly`'s does not (§5.2.5). MarsRT's debug target
+serves the inspector through the state transfer, which is read-only; `run_steps` exists and is exact through the
+blocks (§5.8), so stepping is the one hook already there.
+
+**The design constraint** is §3.2's rule, which stage 5 kept: the native side never calls C#. So the hooks cannot be
+callbacks. They are tables C# pushes down — breakpoint addresses, watch ranges, a coverage buffer — and a frame that
+ends early with a reason when one fires: the frame loop takes the observed path only when a table is non-empty, as
+the C# takes `RunFrame`'s loop only when something is armed, and returns *why* it stopped and *where*, which the
+shim turns into the debug target's events. Coverage is written by Rust into a buffer C# reads at the frame's end; the
+call stack is tracked in Rust and read through the transfer.
+
+**The recompiler is part of this.** A breakpoint inside a block must stop at the instruction, not the block's end,
+and a watch must see a store the compiled code made inline. The C# core's answer (`Mars_Recompiler.md`) is that an
+armed observer disables the blocks for the frame; the same rule here costs nothing to prove and is exact by
+construction, and a finer one is not worth building until someone debugs at speed.
+
+**Oracle.** The debugger's WiseMan tests, which drive DianaOS's `h-*` commands against the C# core, run against both
+engines with the same expected transcripts. Where a test cannot pass on MarsRT, the doc says which and why.
+
+**What it decides.** Nothing for a player. It is a condition of stage G, and of the coverage-driven work the C# core
+has been used for.
+
+### 6.6 Stage F: parity leftovers
+
+Each is small, has its own oracle, and can be given to an agent beside larger work.
+
+- **ROM-patch cheats** (§5.5.4): the patch list held beside the cartridge reads in `memory/bus_access.rs`, pushed at
+  the frame's end as the codes are. No N64 code format produces one, so this closes a hole a hand-made patch would
+  fall through, not a game.
+- **`IFrameProfiler` phases and the dashboard's audio peek** (§5.5.4): counters the shim reads once a frame.
+- **Rewind for the N64** is off on both engines in Mistress, because the C# core's snapshot with several workers froze
+  a game (`EmuSen_Settings_Reference.md` §4.21b, §4.44). MarsRT's snapshot is proven headlessly in every frame of six
+  games (§5.6.4) and its pause point is a barrier the C# core lacks. Turning it on for MarsRT alone is a play decision
+  of the same kind as stage B's, and the C# core's stays off until its failure is fixed.
+- **The C# core's four failures** (§5.6.2, §5.6.5, §5.6.6): each has a WiseMan test that shows it and is marked as the
+  C# core's; the work is to fix each in C# and turn its test around. The pause barrier's is the one that may be a
+  game's freeze, and comes first.
+- **MarsRT's single-thread regression** of 1.5 to 3.5 per cent (§5.6.8), found and not explained: a bisection with the
+  interleaved bench between the RDP merge and the threads' merge, about two hours, and either a cause or a recorded
+  negative.
+
+### 6.7 Stage G: the C# core
+
+**The decision**, which is the project's and not this page's, has criteria this page can state. The C# core can be
+retired from the Engine row when:
+
+1. every published platform carries the library and MarsRT is the default there (B and C);
+2. everything the debugger and the coverage recorder do runs on MarsRT (E);
+3. a season of play has passed with no fault that was MarsRT's alone.
+
+**What "retired" means.** Not deleted. Every exactness claim in §5 is a comparison against the C# core, and the
+WiseMan suites that make those claims need it to build and run; `EmuSen_Stack.md`'s rule keeps a 2D core in C# and
+says nothing against a reference. So the C# core stays as the oracle in the test harness for as long as MarsRT is
+graded against it, and "retired" means it is no longer offered to a player. Its four failures (§6.6) matter less
+then, but its exactness still does.
+
+**The recommendation** is to keep it offered until 1 to 3 hold, and to keep it as the oracle indefinitely. A port
+that removed its own reference would have to be graded against something else, and there is nothing else that is
+exact to the frame.
+
+### 6.8 What this plan does not cover
+
+- Anything the recompiler could still gain (§5.8.9): the processor beside a block, the coprocessor's calls, chaining.
+  Stage A says whether any of it is needed on the device that matters.
+- The C# core's own remaining costs, which stop mattering once it is not what a player runs.
+- A second 3D core. `EmuSen_Stack.md`'s rule says its language; nothing here says its design, and it should not be
+  started until G is decided, so that the lessons of this port are the ones it starts from.

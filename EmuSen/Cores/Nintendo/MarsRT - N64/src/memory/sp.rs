@@ -3,7 +3,8 @@
 use crate::memory::bus::MemoryBus;
 use crate::memory::dp_threads::site;
 use crate::memory::mi::interrupt;
-use crate::rsp::{self, DATA_MASK, Memory, PC_MASK};
+use crate::Skip;
+use crate::rsp::{self, DATA_MASK, Memory, PC_MASK, Trace};
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,6 +88,8 @@ pub struct SpInterface {
     pub semaphore: bool,
     pub signals: u32,
     pub single_step: bool,
+    /// The processor's coverage while `cov rsp` is armed, in no state; while it exists the idle loop steps the processor a cycle at a time (Mars_Native.md §6.5).
+    pub trace: Skip<Option<Trace>>,
 }
 
 impl State for SpInterface {
@@ -351,6 +354,9 @@ impl MemoryBus {
         if self.sp.processor.halted {
             return;
         }
+        if self.sp.trace.is_some() {
+            return self.sp_step_traced(cycles);
+        }
         if cycles <= 1 && !self.sp.single_step {
             if !self.rsp_core().step() {
                 self.rsp_event();
@@ -392,13 +398,61 @@ impl MemoryBus {
     /// `StepOne`: one step for a caller that has tested the halt itself; an event runs here, in the machine.
     #[inline(always)]
     pub fn rsp_step_one(&mut self) {
+        if self.sp.trace.is_some() {
+            return self.rsp_step_one_traced();
+        }
         if !self.rsp_core().step() {
             self.rsp_event();
         }
     }
 
+    /// `sp_step` with every instruction recorded, the events included: C#'s managed step, which the native shortcut yields to while `cov rsp` is armed.
+    #[inline(never)]
+    fn sp_step_traced(&mut self, cycles: i64) {
+        if self.sp.single_step {
+            self.rsp_step_one_traced();
+            self.sp.processor.halted = true;
+            return;
+        }
+        let mut left = cycles.max(1) as u64;
+        loop {
+            let ran = self.rsp_run_traced(left);
+            left -= ran;
+            if left == 0 {
+                return;
+            }
+            self.rsp_event_traced();
+            left -= 1;
+            if left == 0 || self.sp.processor.halted {
+                return;
+            }
+        }
+    }
+
+    #[inline(never)]
+    fn rsp_step_one_traced(&mut self) {
+        if self.rsp_run_traced(1) == 0 {
+            self.rsp_event_traced();
+        }
+    }
+
+    fn rsp_run_traced(&mut self, budget: u64) -> u64 {
+        let (sp, imem, dmem) = (&mut self.sp, &self.sp_imem, &mut self.sp_dmem);
+        let trace = sp.trace.as_mut().expect("the trace is armed");
+        rsp::Rsp::over(Lent { p: &mut sp.processor, imem, dmem }).run_traced(budget, trace)
+    }
+
+    fn rsp_event_traced(&mut self) {
+        let pc = self.sp.processor.pc;
+        if let Some(trace) = self.sp.trace.as_mut() {
+            trace.record(pc);
+        }
+        self.rsp_event();
+    }
+
     /// `NativeRunToEvent`: at most the budget, stopping after an event; a single step the event asked for halts, as a tick's would.
     pub fn rsp_run_to_event(&mut self, budget: i64) -> i64 {
+        debug_assert!(self.sp.trace.is_none(), "a whole run is not taken while the processor's coverage is armed");
         if self.sp.processor.halted || budget <= 0 {
             return 0;
         }

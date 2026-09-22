@@ -8,6 +8,7 @@ use crate::memory::controller::ControllerPak;
 use crate::cpu::cop0::{COMPARE, CONFIG, CONFIG_AT_RESET, PROCESSOR_ID, PROCESSOR_ID_REGISTER, STATUS};
 use crate::cpu::Cpu;
 use crate::cpu::blocks::Blocks;
+use crate::cpu::hooks::stop;
 use crate::memory::dp::{DpInterface, SNAPSHOT_WORDS};
 use crate::memory::dp_threads::Threads;
 use crate::rom::{self, Cic, RomImage};
@@ -182,6 +183,8 @@ impl Machine {
         machine.loaded_version = version;
         machine.options = self.options;
         machine.blocks = std::mem::take(&mut self.blocks);
+        machine.cpu.hooks = std::mem::take(&mut self.cpu.hooks);
+        machine.bus.sp.trace = std::mem::take(&mut self.bus.sp.trace);
         if machine.rdram_bytes() != self.rdram_bytes() {
             machine.blocks.clear();
         }
@@ -265,6 +268,8 @@ impl Machine {
         let fields = self.bus.vi.fields;
         let cap_at = start + CYCLE_CAP;
         let Options { idle_skip, rsp_whole, .. } = *self.options;
+        // C#'s `RunIdle` steps a running processor a cycle at a time while its coverage is armed, so each instruction is recorded.
+        let rsp_whole = rsp_whole && self.bus.sp.trace.is_none();
         let (cpu, bus) = (&mut self.cpu, &mut self.bus);
         if self.blocks.on {
             self.blocks.run_frame(cpu, bus, cap_at, idle_skip, rsp_whole);
@@ -278,6 +283,43 @@ impl Machine {
         }
         self.last_frame_cycles = self.bus.cycles - start;
         self.total_frames += 1;
+    }
+
+    /// `RunFrame`'s observed loop: the interpreter alone, the tables consulted before every instruction, and a return with the
+    /// reasons (`hooks::stop`) as soon as one holds, `FRAME` at the field's end. With `unchecked` the first instruction runs without
+    /// the tables, as the instruction a halt stopped in front of does; with `continuing` the frame the last call stopped inside goes
+    /// on, its start and its cap kept, as C#'s loop keeps them across a check that said no, where a halt the host returned from
+    /// begins the frame's clock again at the next call, as C#'s `RunFrame` does. Exact: it computes what `run_frame` computes
+    /// (Mars_Native.md §6.5).
+    pub fn run_frame_debug(&mut self, unchecked: bool, continuing: bool) -> u32 {
+        self.apply_threads();
+        let (cpu, bus) = (&mut self.cpu, &mut self.bus);
+        if !(continuing && cpu.hooks.frame_open) {
+            cpu.hooks.frame_open = true;
+            cpu.hooks.frame_start = bus.cycles;
+            cpu.hooks.frame_fields = bus.vi.fields;
+        }
+        let (start, fields) = (cpu.hooks.frame_start, cpu.hooks.frame_fields);
+        let cap_at = start + CYCLE_CAP;
+        let mut unchecked = unchecked;
+        while bus.vi.fields == fields && bus.cycles < cap_at {
+            let pc = cpu.pc;
+            if !unchecked {
+                let why = cpu.hooks.stop_before(pc);
+                if why != stop::FRAME {
+                    cpu.hooks.flush();
+                    return why;
+                }
+            }
+            unchecked = false;
+            cpu.hooks.record(pc);
+            cpu.step(bus);
+        }
+        cpu.hooks.flush();
+        cpu.hooks.frame_open = false;
+        self.last_frame_cycles = self.bus.cycles - start;
+        self.total_frames += 1;
+        stop::FRAME
     }
 
     /// The recompiler on or off; exact either way, and off by default. See Mars_Native.md §5.8.

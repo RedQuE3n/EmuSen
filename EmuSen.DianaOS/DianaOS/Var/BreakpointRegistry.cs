@@ -435,6 +435,13 @@ namespace EmuSen.DianaOS.DianaOS.Var
 
         public int DepthGuard => _depthGuard;
 
+        // What a core that runs its frame elsewhere pushes down before it: the step, the depth `step over`/`out` wait for, and a break already owed - see Mars_Native.md §6.5.
+        public bool IsSingleStepArmed => _singleStepArmed;
+
+        public int? StepDepthTarget => _stepDepthTarget == int.MinValue ? null : _stepDepthTarget;
+
+        public bool HasPendingBreak => _dataBreakPending || _eventBreakPending;
+
         public bool ArmRunToInterrupt(CallFrameKind kind)
         {
             _runToInterrupt = kind;

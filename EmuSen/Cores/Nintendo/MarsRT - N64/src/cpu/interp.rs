@@ -100,6 +100,11 @@ impl Cpu {
         bus.tick(1 + self.extra_cycles as i64);
         self.extra_cycles = 0;
         self.instructions += 1;
+        // `ReturnObserver`: the return a `jr ra` began is done once its delay slot has run.
+        if self.hooks.return_after_slot && self.in_delay_slot {
+            self.hooks.return_after_slot = false;
+            self.hooks.note_return();
+        }
         if bus.cycles >= self.run.timer_due {
             self.timer_reached(bus);
         }
@@ -218,7 +223,11 @@ impl Cpu {
             0x02 => self.branch(self.jump_target(i)),
             0x03 => {
                 self.write(31, self.next_pc);
-                self.branch(self.jump_target(i));
+                let target = self.jump_target(i);
+                if self.hooks.calls {
+                    self.hooks.note_call(self.current_pc, target);
+                }
+                self.branch(target);
             }
             0x04 => self.branch_if(self.read(rs(i)) == self.read(rt(i)), i, false, false),
             0x05 => self.branch_if(self.read(rs(i)) != self.read(rt(i)), i, false, false),
@@ -427,6 +436,9 @@ impl Cpu {
         }
         if taken {
             let target = self.pc.wrapping_add((signed_immediate(i) << 2) as u64);
+            if link && self.hooks.calls {
+                self.hooks.note_call(self.current_pc, target);
+            }
             self.branch(target);
             return;
         }
@@ -449,6 +461,14 @@ impl Cpu {
         let target = self.read(rs(i));
         if link {
             self.write(rd(i), self.next_pc);
+        }
+        // A `jalr` is a call and a `jr` through `ra` a return, the conventions `bt` reads (Mars_Debug.md §2).
+        if self.hooks.calls {
+            if link {
+                self.hooks.note_call(self.current_pc, target);
+            } else if rs(i) == 31 {
+                self.hooks.return_after_slot = true;
+            }
         }
         self.branch(target);
     }
@@ -506,10 +526,37 @@ impl Cpu {
                 bus.dp.wait_write(physical, size, site::STORE);
             }
             bus.rdram.write(physical, value, size);
+            if self.hooks.writes {
+                self.report_store(bus, physical, size);
+            }
             return Ok(physical);
         }
         bus.store(physical, value, size);
+        if self.hooks.writes {
+            self.report_store(bus, physical, size);
+        }
         Ok(THROUGH_BUS)
+    }
+
+    /// `MemoryBus.Report`: what the store left, byte by byte in the memory it landed in; a latching window reports its whole word.
+    #[inline(never)]
+    fn report_store(&mut self, bus: &MemoryBus, physical: u32, size: u32) {
+        use crate::ffi::space;
+        use crate::memory::bus_access::{latches_whole_words, map, sp_memory};
+        let whole = latches_whole_words(physical);
+        let (first, count) = if whole && size < 8 { (physical & !3, 4) } else { (physical, size) };
+        let pc = self.current_pc;
+        for at in first..first.wrapping_add(count) {
+            if (at as usize) < bus.rdram.len() {
+                self.hooks.note_write(space::RDRAM, at, bus.rdram[at as usize], pc);
+            } else if let Some((imem, offset)) = sp_memory(at) {
+                let bank = if imem { &bus.sp_imem[..] } else { &bus.sp_dmem[..] };
+                self.hooks.note_write(if imem { space::IMEM } else { space::DMEM }, offset, bank[offset as usize], pc);
+            } else if at.wrapping_sub(map::PIF_RAM_BASE) < map::PIF_RAM_SIZE {
+                let offset = at - map::PIF_RAM_BASE;
+                self.hooks.note_write(space::PIF_RAM, offset, bus.pif_ram[offset as usize], pc);
+            }
+        }
     }
 
     /// `LoadLinked`: the load arms the link; the address is taken again after the load, as C# takes it.

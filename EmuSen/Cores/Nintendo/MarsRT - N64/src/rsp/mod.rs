@@ -178,6 +178,33 @@ pub struct Rsp<M: Memory> {
     pub m: M,
 }
 
+/// The processor's coverage while `cov rsp` is armed: one bit per instruction address and the instructions recorded, as C#'s
+/// `Rsp.Coverage` records them in `StepManaged`; drained by the host. See Mars_Native.md §6.5.
+#[derive(Clone, Debug)]
+pub struct Trace {
+    pub bits: Box<[u8; (PC_MASK as usize + 4) / 8]>,
+    pub recorded: i64,
+}
+
+impl Default for Trace {
+    fn default() -> Self {
+        Trace::new()
+    }
+}
+
+impl Trace {
+    pub fn new() -> Trace {
+        Trace { bits: Box::new([0; (PC_MASK as usize + 4) / 8]), recorded: 0 }
+    }
+
+    #[inline(always)]
+    pub fn record(&mut self, pc: u32) {
+        let index = (pc & DATA_MASK) as usize;
+        self.bits[index >> 3] |= 1 << (index & 7);
+        self.recorded += 1;
+    }
+}
+
 // Tables built once, by the C# arithmetic. See Mars_RspVector.md §10.
 static TABLES: std::sync::OnceLock<([u16; 512], [u16; 512])> = std::sync::OnceLock::new();
 
@@ -409,6 +436,20 @@ impl<M: Memory> Rsp<M> {
             if !self.step() {
                 break;
             }
+            ran += 1;
+        }
+        ran
+    }
+
+    /// `run`, with each instruction that ran recorded; an event is left unrun and is recorded by whoever runs it.
+    pub fn run_traced(&mut self, budget: u64, trace: &mut Trace) -> u64 {
+        let mut ran = 0;
+        while ran < budget && self.m.halted() == 0 {
+            let pc = self.m.pc();
+            if !self.step() {
+                break;
+            }
+            trace.record(pc);
             ran += 1;
         }
         ran

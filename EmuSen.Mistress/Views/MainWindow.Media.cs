@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
         private LunaAction? _libraryCategory, _statesCategory, _screenshotsCategory;
         private string _category = LibraryCategory;
         private IReadOnlyList<MediaItem> _shownMedia = Array.Empty<MediaItem>();
-        private LunaAction _playMedia = null!, _deleteMedia = null!;
+        private LunaAction _playMedia = null!, _deleteMedia = null!, _mediaProvenance = null!;
 
         private string StateDirectory => string.IsNullOrWhiteSpace(_appSettings.StateDirectory) ? DataStore.SaveStates : _appSettings.StateDirectory;
 
@@ -36,12 +36,13 @@ namespace EmuSen.Mistress.Views
 
             _playMedia = new LunaAction("_Play Save State", () => _ = PlayMediaAsync());
             _deleteMedia = new LunaAction("_Delete Save State", () => _ = DeleteMediaAsync());
+            _mediaProvenance = new LunaAction("") { IsEnabled = false };
             MediaGrid.Key = m => m.Path;
             MediaGrid.Label = m => $"{m.Title}, {m.Label}";
             MediaGrid.CreateTile = () => new CoverTile();
             MediaGrid.BindTile = BindMedia;
             MediaGrid.Activated += item => { _ = PlayMediaAsync(); };
-            MediaGrid.ContextMenu = Menus.Context(_playMedia, LunaAction.Separator(), _deleteMedia);
+            MediaGrid.ContextMenu = Menus.Context(_mediaProvenance, LunaAction.Separator(), _playMedia, LunaAction.Separator(), _deleteMedia);
             MediaGrid.ContextMenu.Opening += (_, _) =>
             {
                 bool any = MediaGrid.Selected is not null;
@@ -50,6 +51,10 @@ namespace EmuSen.Mistress.Views
                 _playMedia.IsEnabled = any && (!state || MediaGrid.Selected!.Game is not null);
                 _deleteMedia.Text = state ? "_Delete Save State" : "_Delete Screenshot";
                 _deleteMedia.IsEnabled = any;
+                StateRecord? record = MediaGrid.Selected?.Record;
+                _mediaProvenance.Text = record is null
+                    ? state ? "No record of who saved this state" : MediaGrid.Selected?.Title ?? ""
+                    : $"Saved by {record.Core} (state version {record.StateVersion}), {record.Build}";
             };
             _covers.Loaded += _ => MediaGrid.Refresh(_shownMedia);
         }
@@ -66,7 +71,7 @@ namespace EmuSen.Mistress.Views
         private void ShowMedia(IReadOnlyList<RomEntry> games, string search)
         {
             IReadOnlyList<MediaItem> all = _category == StatesCategory
-                ? MediaLibrary.SaveStates(StateDirectory, _allScan.Entries)
+                ? MediaLibrary.SaveStates(StateDirectory, _allScan.Entries, _records.PathByHash)
                 : MediaLibrary.Screenshots(DataStore.Screenshots, _allScan.Entries);
             var inView = new HashSet<string>(games.Select(g => g.FullPath), StringComparer.Ordinal);
             bool everything = SelectedConsole == EmuSen.Cores.CoreCatalog.AllConsoles && CollectionKey == AllGamesKey;
@@ -108,6 +113,12 @@ namespace EmuSen.Mistress.Views
                 StatusText.Text = $"{item.GameStem} is not in the library, so its state has no game to load into.";
                 return;
             }
+            if (Refusal(item.Record, game.FullPath, null) is string refused)
+            {
+                StatusText.Text = refused;
+                return;
+            }
+            if (!await SameGameOrConfirmedAsync(item.Record, game.FullPath)) return;
             await PromptForMissingFirmwareAsync(game.FullPath);
             LoadGame(game.FullPath, game.FileName, resumeFrom: item.Path, reset: false);
         }
@@ -121,6 +132,7 @@ namespace EmuSen.Mistress.Views
             {
                 File.Delete(item.Path);
                 if (item.Kind == MediaKind.SaveState && item.PicturePath is string picture) File.Delete(picture);
+                if (item.Kind == MediaKind.SaveState) File.Delete(StateRecord.PathFor(item.Path));
                 if (item.PicturePath is string shown) _covers.Forget(shown);
                 StatusText.Text = $"Deleted {what}";
             }

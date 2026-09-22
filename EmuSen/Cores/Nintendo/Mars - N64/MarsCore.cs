@@ -15,7 +15,7 @@ using VideoInterface = EmuSen.Cores.Nintendo.Mars.Vi.Vi;
 namespace EmuSen.Cores.Nintendo.Mars
 {
     // The Nintendo 64's ICore; what the machine cannot provide yet is stubbed on purpose - see Mars_Core.md.
-    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings, global::EmuSen.Cores.IFrameSerial, global::EmuSen.Cores.IRepeatedRows
+    public sealed partial class MarsCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ISnapshotCore, global::EmuSen.Cores.ICoreSettings, global::EmuSen.Cores.IFrameSerial, global::EmuSen.Cores.IRepeatedRows, global::EmuSen.Cores.IStateFormat
     {
         // The VR4300's pipeline clock, which is what MemoryBus.Cycles counts - see Mars_Memory.md §3.
         public const long ProcessorClockHz = 93_750_000;
@@ -43,6 +43,7 @@ namespace EmuSen.Cores.Nintendo.Mars
         // "MARS" little-endian, then the format version - see Mars_SaveStates.md §1.
         private const uint StateMagic = 0x5352_414D;
         private const int StateVersion = 1;
+        int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         // The same body, then the words the display processor's thread had not run - see Mars_SaveStates.md §1.
         private const int SnapshotVersion = 2;

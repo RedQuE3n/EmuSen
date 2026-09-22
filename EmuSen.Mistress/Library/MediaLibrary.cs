@@ -9,7 +9,7 @@ namespace EmuSen.Mistress.Library
     public enum MediaKind { SaveState, Screenshot }
 
     // One save state or screenshot, and the game it belongs to when the library has it - see EmuSen_Settings_Reference.md §4.35.
-    public sealed record MediaItem(MediaKind Kind, string Path, string? PicturePath, string GameStem, string Label, DateTime When, RomEntry? Game)
+    public sealed record MediaItem(MediaKind Kind, string Path, string? PicturePath, string GameStem, string Label, DateTime When, RomEntry? Game, StateRecord? Record = null)
     {
         public string Title => Game?.Title ?? GameStem;
     }
@@ -18,7 +18,8 @@ namespace EmuSen.Mistress.Library
     public static class MediaLibrary
     {
         // "<stem>.state" is slot 1, "<stem>.slotN.state" slot N, "<stem>.resume.state" where the game was left - see EmuSen_Galaxia.md §5.
-        public static IReadOnlyList<MediaItem> SaveStates(string directory, IReadOnlyList<RomEntry> games)
+        // A state whose file name finds no game is matched by the ROM contents its record names, so a renamed ROM keeps its states.
+        public static IReadOnlyList<MediaItem> SaveStates(string directory, IReadOnlyList<RomEntry> games, Func<string, string?>? pathByHash = null)
         {
             if (!Directory.Exists(directory)) return Array.Empty<MediaItem>();
             ILookup<string, RomEntry> byStem = games.ToLookup(g => Path.GetFileNameWithoutExtension(g.FullPath), StringComparer.Ordinal);
@@ -28,8 +29,12 @@ namespace EmuSen.Mistress.Library
                 string name = Path.GetFileNameWithoutExtension(file);
                 (string stem, string label) = Parse(name);
                 string picture = SaveLibrary.PicturePathFor(file);
+                StateRecord? record = StateRecord.Read(file);
+                RomEntry? game = byStem[stem].FirstOrDefault();
+                if (game is null && record?.RomMd5 is string md5 && pathByHash?.Invoke(md5) is string path)
+                    game = games.FirstOrDefault(g => g.FullPath == path);
                 items.Add(new MediaItem(MediaKind.SaveState, file, File.Exists(picture) ? picture : null, stem, label,
-                    File.GetLastWriteTime(file), byStem[stem].FirstOrDefault()));
+                    File.GetLastWriteTime(file), game, record));
             }
             return items.OrderBy(i => i.Title, StringComparer.OrdinalIgnoreCase).ThenByDescending(i => i.When).ToList();
         }

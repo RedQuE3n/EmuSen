@@ -114,3 +114,9 @@ graph; it was written correctly and never restored, so a loaded state kept whate
 load until the game next wrote CGRAM. `A_uint_array_is_restored_by_a_read` fails against the old serializer on
 Venus's own `Ppu` with exactly that — the palette left as it was — and passes now. How often it showed is not
 measured: loading a state from the same scene, the common case, leaves the two palettes identical and hides it.
+
+## 6. A core says which version it writes (2026-09-21)
+
+Each core keeps its state version as a private constant (Venus 3, Moon 3, Mercury 5, Mars 1, with Mars's rewind snapshots at 2), and each decides for itself what it will read: Venus reads any version up to its own, the other three only their own. `IStateFormat.StateVersion` (`EmuSen/Cores/CoreCapabilities.cs`) publishes the first number and deliberately not the second. A frontend recording a state beside it needs to know what was written; what a core accepts is the core's policy, and a frontend that copied it would be a second copy of four rules that drift independently. So Mistress refuses only what no core could read (a state from another console, or a version newer than the one this build writes) and lets the core judge everything else, adding the state's provenance to whatever the core says when it refuses (`EmuSen_Settings_Reference.md` §4.37).
+
+All four cores implement it by returning their existing constant, so the interface cannot disagree with the header the core writes. Not covered: the Mars snapshot version, which only rewind reads and which never reaches a file.

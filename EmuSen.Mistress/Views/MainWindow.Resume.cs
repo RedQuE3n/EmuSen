@@ -32,10 +32,16 @@ namespace EmuSen.Mistress.Views
         {
             string state = ResumeStatePath(romPath);
             if (!File.Exists(state)) return ResumeChoice.Restart;
+            StateRecord? record = StateRecord.Read(state);
+            if (Refusal(record, romPath, null) is string refused)
+            {
+                StatusText.Text = $"{refused} Starting from the beginning.";
+                return ResumeChoice.Restart;
+            }
 
             switch (_appSettings.ResumeOnLaunch)
             {
-                case AppSettings.ResumeAlways: return ResumeChoice.Resume;
+                case AppSettings.ResumeAlways: return await SameGameOrConfirmedAsync(record, romPath) ? ResumeChoice.Resume : ResumeChoice.Restart;
                 case AppSettings.ResumeNever: return ResumeChoice.Restart;
             }
 
@@ -47,6 +53,7 @@ namespace EmuSen.Mistress.Views
                 _appSettings.ResumeOnLaunch = chosen == ResumeChoice.Resume ? AppSettings.ResumeAlways : AppSettings.ResumeNever;
                 _appSettings.Save();
             }
+            if (choice == ResumeChoice.Resume && !await SameGameOrConfirmedAsync(record, romPath)) return ResumeChoice.Restart;
             return choice;
         }
 
@@ -60,6 +67,7 @@ namespace EmuSen.Mistress.Views
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 session.SaveState(path);
                 WriteStatePicture(session, path);
+                WriteStateRecord(session, path, rom);
             }
             catch (Exception ex)
             {
@@ -90,8 +98,10 @@ namespace EmuSen.Mistress.Views
         }
 
         // Null when the state loaded; otherwise why it did not, and the caller starts the game afresh.
-        private static string? TryResume(EmulatorSession session, string statePath)
+        private static string? TryResume(EmulatorSession session, string statePath, string romPath)
         {
+            StateRecord? record = StateRecord.Read(statePath);
+            if (Refusal(record, romPath, session) is string refused) return $"Could not resume, started from the beginning: {refused}";
             try
             {
                 session.LoadState(statePath);
@@ -99,13 +109,16 @@ namespace EmuSen.Mistress.Views
             }
             catch (Exception ex)
             {
-                return $"Could not resume, started from the beginning: {ex.Message}";
+                return $"Could not resume, started from the beginning: {ex.Message}{Provenance(record)}";
             }
         }
 
         private void RecordStart(string path)
         {
+            _currentRomMd5 = null;
+            _currentRomBytes = 0;
             _records.Started(path, DateTime.Now);
+            IdentifyLater(path);
             _playClock.Restart();
         }
 

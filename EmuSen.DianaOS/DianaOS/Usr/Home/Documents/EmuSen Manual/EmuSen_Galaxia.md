@@ -140,6 +140,16 @@ string PicturePathFor(statePath)                       // the same name with .pn
 
 **What this does not cover.** The state still carries no record of which core version wrote it; OpenEmu's per-state plist does, and that remains stage 2's second half in `EmuSen_Mistress_LibraryPlan.md`. States written by the DianaOS `state save` command get no picture. And the resume state goes wherever `StateDirectory` points, which on this machine is the ROM folder itself; that is the user's setting and not changed here, but it means leaving a game now writes two files there.
 
+### 5.3 A state's record (2026-09-21)
+
+`StateRecord` is a JSON file beside each state Mistress writes, named by `StateRecord.PathFor` (the state's name with `.json`): the console, the core's name, the state version the core wrote (`EmuSen_Save_States.md` §6), the build (the assembly's informational version, which carries the commit when the SDK knows it), when it was written, and the ROM's file name, size and MD5. It is the half of OpenEmu's per-state plist that the plan's stage 2 wanted, and it is a sidecar for the same reason the picture is (§5.2): a state with no record loads exactly as before, a record that will not parse is treated as absent, and no core ever reads one.
+
+The record's ROM hash is whatever was known when the state was written; the hash is taken on a worker when a game starts, so a state saved in the first instant of a very large ROM's session can have none, and is then never questioned about which copy it came from.
+
+### 5.4 A ROM's identity (2026-09-21)
+
+`RomHash.Md5` is the MD5 of every byte of the file, header included. That is a choice with a stated cost. The No-Intro and screenscraper conventions hash some consoles without their copier header, and OpenEmu hashes the whole file at import and the headerless file at lookup, which the library plan's §2 calls a trap. Here the hash has one job, to recognise the same file after a rename, and for that job the whole file is the right thing to hash: two files differing only in a header are different files to the core that loads them. A lookup against an external database would need the headerless hash as well, and would add it rather than replace this one.
+
 ---
 
 ## 6. What this pass deliberately did not do

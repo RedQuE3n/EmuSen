@@ -986,7 +986,7 @@ What Mistress remembers about each game it has seen (favourite, last played, pla
 
 **Play time.** A stopwatch runs while a game is on screen and unpaused; pausing, or stepping out to the library (which pauses, §4.18), stops it, and leaving the game adds it to the row. The count and the last-played stamp are written at the start, so a crash loses at most the time of the session that crashed.
 
-**What it does not cover.** Rows are keyed by path, so moving the library orphans them; identity by hash waits on the catalogue (stage 3 of the plan). The driver sits in Mistress rather than in `EmuSen` beside `SqliteCatalogue` (§7.1's convergence argument), because Mistress is its only reader; if Hotaru or the shell ever wants it, that argument applies and it moves.
+**What it does not cover.** Rows are keyed by path, so moving the library orphans them; identity by hash waits on the catalogue (stage 3 of the plan). *Corrected the same day by §4.37: identity by hash came without the catalogue, in this file.* The driver sits in Mistress rather than in `EmuSen` beside `SqliteCatalogue` (§7.1's convergence argument), because Mistress is its only reader; if Hotaru or the shell ever wants it, that argument applies and it moves.
 
 
 ### 4.33 The library as OpenEmu lays it out (2026-09-21)
@@ -1032,3 +1032,31 @@ OpenEmu's toolbar switches between Library, Save States and Screenshots, and so 
 The Preferences window is tabs: **Library** (the ROM, cover art, save state and log folders), **Gameplay** (what happens when a game with a resume state starts, pausing in the background, big screen), **Appearance** (the theme of §4.25) and **System Files** (the firmware installed, and where). OpenEmu's Controls pane is Settings > Controller Bindings here, which already had tabs per console, and its Cores pane has no counterpart because the cores are built in.
 
 **The "Emulator Core" dropdown is gone.** It was scaffolding from when one core existed, it said it drove nothing, and it wrote `AppSettings.SelectedCore`, which by then was the library's console filter (§4.23); so choosing a "core" in Preferences silently changed which games the library showed. The sidebar is now the one place that value is chosen.
+
+### 4.37 A game known by its contents, and a state that says who wrote it (2026-09-21)
+
+**A renamed ROM keeps its record.** `games.db`'s second migration gives each game's row the MD5 and size of its file (`EmuSen_Galaxia.md` §5.4) and adds `file_hash`, a cache of path, size, modification time and MD5, so a file is hashed again only when it changes. A game is identified, on a worker, when it is started, marked a favourite or put in a collection, which are the three things that make a row worth keeping. After each walk of the library, rows whose file is gone and which carry a hash are **orphans**; files that have no row and are the size of some orphan are hashed (from the cache when possible), and an orphan whose hash matches moves to the new path with `GameRecords.Move`, taking its collections with it and merging into any row the new path already had (favourite kept, counts and time added, the later of the two last-played stamps). Only files of a missing file's size are hashed, so a library in which nothing was renamed costs one query and no reads.
+
+**What it does not cover.** A file edited in place (patched, or re-dumped) is a different file and keeps nothing. Two identical copies are matched to the first found. Save states are still named by the ROM's file name (`EmuSen_Galaxia.md` §5), so a renamed game's states stay under the old name: the Save States view finds them by the hash in their record, but the resume question and the slot menu, which look up by name, do not. Renaming the state files to follow would mean writing into the state folder on the user's behalf, which on this machine is the ROM folder, and was not done.
+
+**A state records who wrote it.** Every state written from the window (a slot, or the resume state) gets `StateRecord` beside it (`EmuSen_Galaxia.md` §5.3), naming the console, the core, the state version it wrote (`EmuSen_Save_States.md` §6), the build, and the ROM's name and hash. Before a state reaches a core:
+
+- **a state from another console is refused**, with both consoles named, rather than handed to a core that would read another machine's bytes as its own;
+- **a state from a newer state version is refused**, naming the build that wrote it;
+- **a state from a different copy of the game is asked about**, since loading it may crash the game but may also be exactly what the player wants (a patched copy, a revision), so the question is the player's to answer;
+- **anything else goes to the core**, which knows what it can read, and if it refuses, its message is followed by the record's provenance.
+
+The resume question applies the first check before asking and the version check when the core exists; a refused resume starts the game from the beginning and says why. The Save States view shows the record on each state's menu ("Saved by Mars (state version 1), build ...") and deletes it with its state.
+
+**What it does not cover.** States written before this build have no record and are loaded as before, unexamined. A state written by the DianaOS `state save` command gets no record. The build string is whatever the assembly says, which is a version and a commit when the SDK has one and `1.0.0` otherwise. Tests: `IdentityAndCollectionsTests` (the rename, the record's contents, both refusals, the different-copy question) and `GameRecordsTests` (the migration from a first-version file, the cache, the merge); seven mutants each caught.
+
+### 4.38 Collections the player makes (2026-09-21)
+
+OpenEmu's sidebar has a Collections group beneath the consoles, and so does this one: each collection with its count, and a last row, **New Collection...**, which is an action in the place OpenEmu puts its "+". A collection is a list of games and nothing else; `games.db`'s third migration holds them (`collection` and `collection_game`, deleting a collection cascades to its memberships and never to a game). Names are unique regardless of case, because two collections called "RPGs" and "rpgs" are a mistake nobody means.
+
+**Where it is reached.** A game's context menu has **Add to Collection** (New Collection..., then every collection with a tick where the game already is, so the same item adds and removes), and inside a collection **Remove from** it. The sidebar's context menu has New, Rename and Delete; File has New Collection. Names are asked for with LunaP's `Dialogs.PromptAsync`, which was added to the toolkit for this (`docs/LunaP.md` §89) rather than built here. A collection's games follow a rename by hash with the rest of the record (§4.37).
+
+**What it does not cover.** No drag and drop onto a collection, and no smart collections beyond the two fixed ones. A pad cannot yet add a game to a collection, only view one. A collection is shown across every console, as OpenEmu's are, so choosing one clears the console filter.
+
+**A flaky test, found here and older than this work.** During the blast-radius run for §4.37 and §4.38, `MainWindowLibraryTests` failed one test in some runs and none in others, on the same binary: `The_search_box_accepts_a_character_that_is_also_a_hotkey` (the typed "p" never reached the box), `Escape_does_nothing_with_no_game_loaded`, `Enter_in_the_search_box_starts_the_narrowed_selection`, and once `Browsing_the_library_cannot_reach_a_suspended_game`. Measured by running the class alone repeatedly: **1 failed run in 10 at c0f1a72, before any of the OpenEmu work**, 1 in 5 at 072fdbd, 2 in 10 with §4.37 and §4.38 in place. So the flake predates this work, and the difference between the rates is within what ten runs can distinguish. **One hypothesis was tested and refuted:** that a window left open by an earlier test in the class takes the next test's keys, since keyboard focus belongs to the process rather than to a window. Closing every window the class opened, in its `Dispose`, left the rate at 3 failed runs in 20. The cause is not known and is recorded here rather than guessed at.
+

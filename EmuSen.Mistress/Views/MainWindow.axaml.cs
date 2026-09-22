@@ -197,7 +197,7 @@ namespace EmuSen.Mistress.Views
                 _session?.SaveSram();
                 WriteResumeState();
                 RecordPlayTime();
-                _records.Dispose();
+                CloseRecords();
                 _gamepad.Dispose();
                 _audioPlayer.Dispose();
                 StopLogging();
@@ -533,6 +533,7 @@ namespace EmuSen.Mistress.Views
             }
 
             int slot = _stateSlot;
+            string rom = _currentRomPath!;
             RequestOnEmulationThread(session =>
             {
                 string status;
@@ -541,6 +542,7 @@ namespace EmuSen.Mistress.Views
                     System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
                     session.SaveState(path);
                     WriteStatePicture(session, path);
+                    WriteStateRecord(session, path, rom);
                     status = $"State saved to slot {slot}: {System.IO.Path.GetFileName(path)}";
                 }
                 catch (Exception ex)
@@ -553,9 +555,12 @@ namespace EmuSen.Mistress.Views
             });
         }
 
-        private void LoadState()
+        private void LoadState() => _ = LoadStateAsync();
+
+        // Runs straight through to the request unless the state's record gives a reason to stop or to ask - see EmuSen_Settings_Reference.md §4.37.
+        private async Task LoadStateAsync()
         {
-            if (_session is not { IsRomLoaded: true } || CurrentStatePath is not string path)
+            if (_session is not { IsRomLoaded: true } || CurrentStatePath is not string path || _currentRomPath is not string rom)
             {
                 StatusText.Text = "Load State: no ROM loaded";
                 return;
@@ -566,6 +571,15 @@ namespace EmuSen.Mistress.Views
                 StatusText.Text = $"Load State: slot {_stateSlot} is empty";
                 return;
             }
+
+            StateRecord? record = StateRecord.Read(path);
+            if (Refusal(record, rom, _session) is string refused)
+            {
+                StatusText.Text = $"Load State: {refused}";
+                Notify("State not loaded");
+                return;
+            }
+            if (!await SameGameOrConfirmedAsync(record, rom)) return;
 
             int slot = _stateSlot;
             RequestOnEmulationThread(session =>
@@ -580,7 +594,7 @@ namespace EmuSen.Mistress.Views
                 }
                 catch (Exception ex)
                 {
-                    status = $"Load State failed: {ex.Message}";
+                    status = $"Load State failed: {ex.Message}{Provenance(record)}";
                 }
 
                 Dispatcher.UIThread.Post(() => { StatusText.Text = status; Notify(status.StartsWith("State loaded", StringComparison.Ordinal) ? $"State loaded from slot {slot}" : status); });
@@ -617,6 +631,7 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("_Browse ROMs...", () => _ = BrowseRomsAsync()),
                     LunaAction.Separator(),
                     new LunaAction("Game _Library", ShowLibrary),
+                    _newCollection,
                     LunaAction.Separator(),
                     new LunaAction("E_xit", () => Close())),
                 new LunaMenu("_Emulation",
@@ -802,7 +817,7 @@ namespace EmuSen.Mistress.Views
                 // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
                 ApplyConsoleSettings(_session, _activeConsole);
                 // A half-loaded state is not a machine to run on, so the game starts again from nothing.
-                if (resumeFrom is not null && TryResume(_session, resumeFrom) is string resumeFailure)
+                if (resumeFrom is not null && TryResume(_session, resumeFrom, path) is string resumeFailure)
                 {
                     _session = null;
                     LoadGame(path, displayName, resumeFrom: null, reset: false);
@@ -950,12 +965,14 @@ namespace EmuSen.Mistress.Views
             _allScan = RomLibrary.Scan(_appSettings.RomDirectory);
             _libraryScan = RomLibrary.Narrow(_allScan, SelectedConsole);
             ShowLibraryEntries();
+            ReclaimMovedGames();
         }
 
         private void ShowLibraryEntries()
         {
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
+            _collections = _records.Collections();
             RomEntry? keptSelection = LibraryList.Selected;
             bool sameSearch = search == _lastLibrarySearch;
             _lastLibrarySearch = search;

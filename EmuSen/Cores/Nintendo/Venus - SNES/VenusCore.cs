@@ -19,7 +19,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.Venus
 {
     // The SNES ICore, and the one place the per-scanline loop lives - see EmuSen_Multicore.md.
-    public partial class VenusCore : ICore, IFrameProfiler, ICoprocessorHalt, ICoprocessorLoad, ITraceFlushable
+    public partial class VenusCore : ICore, IFrameProfiler, ICoprocessorHalt, ICoprocessorLoad, ITraceFlushable, IStateFormat
     {
         // Real master clocks per scanline, not back-derived CPU cycles - see Venus_CPU.md §8.
         public const int CyclesPerScanline = 1364;
@@ -42,6 +42,7 @@ namespace EmuSen.Cores.Nintendo.Venus
         private const uint StateMagic = 0x53454E53;
         // Each version appends a chip's state, only for a cart carrying it - see EmuSen_Save_States.md §3.
         private const int StateVersion = 3;
+        int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         private readonly bool _headless;
         private int _currentScanline;

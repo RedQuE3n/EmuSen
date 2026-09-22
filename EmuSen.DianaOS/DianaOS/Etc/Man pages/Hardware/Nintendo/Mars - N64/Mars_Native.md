@@ -217,7 +217,7 @@ measurement the whole of Phase G used, applied across two languages.
 | 2 | The signal processor (§3, already exact) and SP DMA | §3.3's differential; the microcode tests |
 | 3 | The RDP rasteriser and its workers | The RDP differential against angrylion and against the C# RDP |
 | 4 | VI scan-out, audio, SI, PIF and joybus, the save chips | Frame-by-frame state against the C# core in the golden-probe games |
-| 5 | The recompiler, on Cranelift | Its interpreter, and the C# recompiler's block tests |
+| 5 | The recompiler, on Cranelift (§5.8) | Its interpreter, and the C# recompiler's block tests |
 | 6 | The GPU path, on ash | The C# GPU path's tests |
 
 **What is deliberately kept out:**
@@ -1822,3 +1822,366 @@ emulation thread: the RDP (5 to 9 ms a frame here) and the scan-out (about 3 ms)
 *Retired 2026-09-22 by §5.6.8.* Super Mario 64 reached 6.0 ms a frame at four workers, level with the C# core rather
 than below it, and 8.0 ms on one. GoldenEye reached 17.0 ms, still above the C# core as predicted. Threading leaves
 the shadow, the marks and the capture on the emulation thread, and the subtraction had not counted them.
+
+*And the gap it left to stage 5 is closed (§5.8.8).* With the recompiler on, the same three rounds put the Dam at
+14.95 ms a frame against the C# core's 14.88 to 16.71, Super Mario 64 at 5.96 against 6.12 and Ocarina of Time at
+6.94 against 7.37. What closed GoldenEye's gap was not the compiler but keeping the decode: sixteen per cent of its
+frame was the fetch and the translation of code behind the TLB.
+
+### 5.8 The recompiler (2026-09-22)
+
+*Stage 5.* MarsRT's processor now runs its code in **blocks**: runs of consecutive instructions decoded once, validated
+against memory on every entry, and run between the checks the interpreter makes at every step. Where the C# has one
+recompiler this page has three tiers, each proven against the interpreter before the next was built, because each is a
+separate claim about what the emulator gains:
+
+| Tier | What a block is | Where its code comes from |
+| --- | --- | --- |
+| 1, decoded | a loop over the block's instructions, each with the handler chosen when the block was shaped | nothing is compiled |
+| 2, compiled | machine code for the block, the simple arithmetic, the branches and the aligned loads inline and everything else a call to the interpreter's own handler | Cranelift, on a thread of its own |
+| 3, compiled with the registers held | the same, with the guest registers in host registers across the block and RDRAM's aligned stores made by the code itself | the same |
+
+**The claim is the C# recompiler's** (`Mars_Recompiler.md` §0): a block leaves the machine in the state the interpreter
+would have left it after the same instructions, at every point the machine can be observed — the registers, the
+devices, the cycle count, the save state — and every event lands after exactly the instruction it lands after in the
+interpreter. The tier is a setting; the default is off, and §5.8.7 says what is recommended.
+
+**The design is C#'s where it can be, and this section records only where it differs.** Shaping (a branch and its slot,
+an ender, sixty-four words, the end of memory), the refusal of a branch whose slot is a branch or an ender, the cache
+by physical word address, the comparison of the block's words with memory on every entry, the dispatcher's address
+rules, blocks behind the TLB held to their page, and compiling on another thread are `Mars_Recompiler.md` §1 to §4 and
+§17, ported.
+
+| Module | What it holds | Lines |
+| --- | --- | --- |
+| `cpu/blocks/mod.rs` | the dispatcher, the block, the tiers, the mapped fetch, the counters, and what a compiled block's exit leaves | 517 |
+| `cpu/blocks/shape.rs` | what ends a block and what is refused, and the cycles an instruction ticks | 92 |
+| `cpu/blocks/ops.rs` | each instruction's handler behind a C ABI, chosen once when the block is shaped | 179 |
+| `cpu/blocks/decoded.rs` | tier 1: the block's instructions as the interpreter's steps, less the fetch and the interrupt check | 75 |
+| `cpu/blocks/cache.rs` | blocks by physical word address, in pages allocated where code runs | 47 |
+| `cpu/blocks/verify.rs` | the interpreter run beside the blocks and compared after every instruction | 77 |
+| `cpu/blocks/jit/mod.rs` | the compiler's thread, its queue, the slots code is published in, and its counters | 239 |
+| `cpu/blocks/jit/emit.rs` | the Cranelift IR for one block | 1,076 |
+| `ffi/blocks.rs`, `Shim/MarsRtCore.cs` | the switch and the counters; `UseBlocks`, `BlockTier`, `VerifyBlocks` and a `Recompiler` setting | 33, +60 |
+| `tests/blocks.rs` | the random programs and the twenty-one mechanisms, at every tier | 791 |
+
+#### 5.8.1 What a block may skip, and what it may not
+
+A block does not fetch, and does not run the interrupt check before each of its instructions. Everything else it does
+is the interpreter's own code. What makes that exact is not an argument about each instruction but four conditions,
+and a block leaves at the first step boundary where one of them fails:
+
+- **The words are the words it was made from.** They are compared with memory on entry, as C# compares them, and the
+  block leaves after any store of its own that could have landed in them, after any write to memory it did not make
+  (the bus's write count), and after any step of the signal processor that wrote (§5.8.3). The drain of a threaded
+  display processor is waited for over the block's own bytes before the comparison, at site 5.
+- **The interrupt check would do nothing.** Its inputs are the recheck flag and the MI's line. A COP0 write, a TLB
+  instruction and `ERET` end the block after themselves; a fault leaves it; the line can move only through a write to
+  a device (which leaves the block) or the signal processor (§5.8.3).
+- **No event and no timer is due.** The interpreter tests both after every instruction. A tier 1 block tests them too,
+  since it runs the interpreter's own tick. A compiled block does not: the dispatcher admits it only when
+  `cycles + the block's longest run < the earliest of the next event, the timer and the frame's cap`, so no instruction
+  of it can reach one. The stop cannot move inside a block, because every device write and every COP0 write leaves it.
+- **The straight line is the line the block was shaped from.** A likely branch that threw its slot away, a jump
+  through a register and every other exit leave the block at the instruction the interpreter would have left it at.
+
+**What the dispatcher leaves to one interpreter step** is C#'s list (`Mars_Recompiler.md` §3.1): a pending delay slot,
+a mode that is not kernel, a misaligned or untranslatable program counter, an address outside RDRAM, a refused entry,
+a mapped block that would cross its page — and one MarsRT has of its own, an instruction whose stall cycles are still
+owed, which no state at a step boundary carries.
+
+#### 5.8.2 What compiled code emits, and what it leaves to the dispatcher
+
+A compiled block is one function, `(processor, bus, context) -> exit`, called through the C ABI. The context carries
+the virtual address the block was entered at, the stop, RDRAM and its two mark tables, and the verifier's interpreter.
+
+- **Inline:** the shifts, the logic, the compares, the non-trapping adds and subtracts in both widths, the immediates,
+  `LUI`, the moves to and from `HI` and `LO`, `SYNC`; every branch and jump but the coprocessor's; and the seven
+  aligned integer loads, whose fast case is the interpreter's own — a direct kernel address, aligned, inside RDRAM,
+  its page not marked — with the slow case the call the block would have made. Tier 3 adds the four aligned stores,
+  with the MI's repeat and the page's mark tested as the interpreter tests them.
+- **A call to the interpreter's handler** for everything else, with the counters and the current address written back
+  first, and the two program counters as well where the handler reads them.
+- **The counters are compile-time constants along the straight line.** `bus.cycles` and the instruction count are read
+  once at entry and written back only where an observer could look: before a call, at every exit, and after every
+  instruction while the verifier is on. The multiplies and divides add the vendor's stall to that constant.
+- **Three exits.** *Done* leaves the machine at a step boundary and the dispatcher sets the count a step leaves.
+  *Raised* leaves the counters and the registers as they stood before the faulting instruction, and the dispatcher
+  enters the exception and ticks one cycle, as the interpreter's step does. *Finish* is a store that may have reached
+  a device or the block's own words, or an ender: the instruction ran and the dispatcher pays its tick, which is the
+  interpreter's own, events, timer and all.
+- **A loop stays in its block** (`Mars_Recompiler.md` §3.4) when the block's last branch is relative and returns to its
+  own first word: the guard is tested again with the cycles the pass spent, and the loop is taken while it holds. The
+  idle loop is not looped over, because the frame loop passes it whole (§5.2).
+- **The registers, at tier 3,** are Cranelift variables, loaded at entry for every register the block names. Before a
+  call, only the registers that handler reads are written back; after it, the registers it writes are read again; on
+  every exit the rest follow. The dirty set is a compile-time set along the straight line, and at a loop's head it is
+  every register the block writes anywhere, which is a superset of what any pass can leave dirty.
+
+#### 5.8.3 The signal processor beside a block: measured, and not kept
+
+While the processor runs, the interpreter steps it once per CPU cycle from inside the tick, and a block must do the
+same. A second compiled variant does: it tests the halt flag after every instruction, calls a helper that steps the
+processor as the tick steps it, and leaves the block when that step wrote memory or moved the interrupt line — C#'s
+`RspRan`, emitted. It is exact, and it is off.
+
+*Measured* at step 2, three interleaved rounds of 600 frames from the gameplay states, four workers, deferred, the
+variant on against off (blocks entered while the processor runs then run decoded):
+
+| ms a frame | the variant on | the variant off |
+| --- | --- | --- |
+| Super Mario 64 | 5.90, 5.72, 5.77 | 5.79, 5.73, 5.74 |
+| Ocarina of Time | 6.80, 6.79, 6.79 | 6.75, 6.79, 6.78 |
+| GoldenEye, the Dam | 14.74, 14.79, 14.77 | 14.50, 14.52, 14.40 |
+
+GoldenEye is two per cent better without it in every round, and the other two are unchanged. The call costs more than
+the compiled instruction around it saves, which is `Mars_Rsp.md` §13's finding about a step at a time, in another
+core. `EMUSEN_MARSRT_BESIDE=1` turns it on; the tests run with it on, so that the code it emits is still graded.
+
+*The batch that would pay for it, priced and not built.* The processor's instructions between two of its events touch
+only its own registers and its two memories, and a run of CPU instructions that touch no memory touches neither, so
+the processor's steps for such a run could be taken in one call before it, its events never early. Counting the runs
+of two or more memory-free instructions in the blocks GoldenEye enters beside a running processor: 44.3 million of
+98.7 million compiled instructions stand in 15.5 million such runs, 2.9 instructions each. The batch would replace
+44.3 million calls with 15.5 million, which at the seven nanoseconds a call measures is **0.3 milliseconds a frame**,
+two per cent of the Dam's frame, for a run-ahead whose exactness rests on that disjointness. Not built.
+
+#### 5.8.4 Cranelift, and the thread it runs on
+
+**The dependency.** `cranelift-codegen`, `cranelift-frontend`, `cranelift-jit`, `cranelift-module` and
+`cranelift-native`, 0.136.0, from crates.io, with `regalloc2`, `cranelift-entity`, `cranelift-bforest`,
+`cranelift-bitset`, `cranelift-control`, `cranelift-assembler-x64`, `wasmtime-internal-core` and
+`wasmtime-internal-jit-icache-coherence` behind them and the usual small crates (`anyhow`, `smallvec`, `hashbrown`,
+`log`, `memmap2`, `region`, `target-lexicon`, `gimli`, `libc`). **Cranelift is Apache-2.0 WITH LLVM-exception**, which
+is compatible with this project's GPL-3.0; the small crates are MIT or MIT/Apache-2.0. It is the code generator of
+Wasmtime, it is not LLVM, and it compiles a block of seven instructions in about a third of a millisecond (§5.8.8).
+
+**The thread.** A block is handed over at its sixty-fourth entry, as C# hands one over, and runs decoded until its code
+is published. The compiler's thread owns the Cranelift module; nothing of the machine crosses to it but the block's
+words, and nothing comes back but one pointer, stored with Release and read with Acquire. The queue is a spin lock of
+MarsRT's own with `park_timeout`, not a channel, for the reason §5.6.7 gives: ThreadSanitizer sees MarsRT's own
+atomics and not std's.
+
+**W^X.** `cranelift-jit` writes a batch of functions into fresh pages and makes them readable and executable in one
+call, which starts the next batch on a new page: a page that holds code is never writable again. A batch is every job
+queued when the thread wakes, so the pages are shared by the blocks compiled together.
+
+**Code is never freed one block at a time.** A block whose words changed is dropped, and its code stays in the module.
+Past 256 MB of code the dispatcher drops every block and the module with it, and the blocks are compiled again as they
+run; the counter says how often that happened. No game has reached it (GoldenEye's 600 frames compile 20 MB).
+
+**A block Cranelift refuses** — none does now — publishes a sentinel rather than a pointer and runs decoded for ever;
+the tests fail if the counter moves.
+
+#### 5.8.5 The evidence
+
+Six oracles, each able to see something the others cannot. Every one of them runs at every tier.
+
+1. **The interpreter, stepped beside the blocks and compared after every instruction.** `verify.rs` holds a clone of
+   the machine; the dispatcher steps it once for every instruction the blocks run — a call the compiled code makes
+   itself, with everything written back first — and compares the processor, the run's derived fields and every device
+   after each, and the whole machine, RDRAM included, at the end of the run. It is C#'s `VerifyBlockStep` made
+   stronger: where C# proves that the check it skipped would have done nothing, this compares the machine it left.
+   `EMUSEN_MARSRT_VERIFY_BLOCKS=1` or `MarsRtCore.VerifyBlocks` turns it on; the idle loop is mirrored rather than
+   stepped, so that a frame of it does not take an hour.
+2. **Random programs, compared every sixteen steps.** §5.2.1's differential, ported to Rust with its own generator, at
+   every tier at once: 160 seeds, 24,000 steps each, the processor compared every sixteen and the whole machine at the
+   end. A block is compiled at its second entry and waited for, so short programs run compiled: 2.0 million of the 2.6
+   million instructions the blocks ran were compiled code. The same programs run again with the verifier on.
+3. **The mechanisms, one at a time.** Seventeen tests, each a program written for one thing the dispatcher or the
+   emitter has to get right: a hot loop with the video and audio interfaces due inside it, frames that end on a field
+   and on the cycle cap, the timer's interrupt taken inside a block, a fault in the middle of one, a block that
+   rewrites its own words, code replaced under a block from outside, a likely branch not taken, a branch in a delay
+   slot left to the interpreter, the multiply and divide stalls, a store to the video interface inside a loop, a
+   mapped loop across two pages whose frames are not neighbours with a decoy after the first, a page remapped by a TLB
+   write alone, a jump to a misaligned address and one into a mapped segment, a state loaded over a machine with
+   blocks, and the signal processor running its own loop beside the blocks.
+4. **The hardware corpus.** `n64-systemtest` boots and runs to its end at each tier, and its transcript is compared
+   line by line with the interpreter's, which `MarsRtTests` holds line by line to the C# core's. All 1,722 lines are
+   identical at every tier, ending in "Failed 46 of 4637 tests".
+5. **Real games, frame by frame.** Super Mario 64, Ocarina of Time and GoldenEye, from power-on and from the gameplay
+   states, 600 frames each, the save state, the picture and the sound compared after every frame against MarsRT
+   interpreted — unthreaded, and with four rasteriser workers and the picture deferred, where the state is taken as a
+   snapshot so that the drain runs across frames.
+6. **Against the C# core, through the shim.** `MarsRtTests` runs the same six games against the C# interpreter, and
+   the three gameplay states again at each tier; `MarsRtThreadsTests` runs MarsRT recompiled and threaded against the
+   C# core threaded, at once and deferred. The corpus runs there too, compared line by line with the C# core's own
+   transcript.
+
+**The runs, counted.** In Rust: 160 random programs at three tiers, 40 of them again under the verifier, 21 mechanism
+tests at three tiers, the corpus at three tiers, and 36 game runs of 600 frames — three tiers, six games, unthreaded
+and on four workers deferred — every one identical in state, picture and sound after every frame. Through WiseMan,
+366 tests: 12 game runs against the C# interpreter, 9 more at the three tiers, 6 against the C# core threaded (each
+at once and deferred), 120 random programs at the three tiers, 8 synthetic systems from boot, and the corpus twice.
+
+**A run that carries its blocks against one that does not.** `Mars_Recompiler.md` §13 found the C# core's stale shape
+through that asymmetry, and it is a test here: each game runs 100 frames with the recompiler on, its state is taken,
+and a second machine loads it with an empty cache; both then run 100 frames and are compared after each. They agree
+in all six, with caches that end far apart — 33,073 blocks live in the machine that played the Dam against 22,956 in
+the one that loaded it.
+
+**ThreadSanitizer**, built as §5.6.7 builds it, over the twenty-one block tests at every tier with the variant beside
+a running processor on: one report, libtest's own result channel, the one §5.6.7 also had to suppress. Everything
+else it first reported was std's own synchronisation, which is not instrumented here — an `Arc`'s refcount as a block
+or its slot is dropped, and the page-size `OnceLock` inside the `region` crate. Two blind spots are worth stating
+plainly: **the compiler's hand-off rides on `Arc`**, unlike the display processor's, so TSan cannot see that ordering;
+and **compiled code is not instrumented at all**, so no access it makes is checked. What is checked is every access
+the handlers it calls make.
+
+#### 5.8.6 Mutants
+
+Fifteen were made, each alone, on a copy of the crate built apart, and run against the suites its code can reach: the
+block tests (the random programs at every tier, the verifier's pass and the seventeen mechanisms), the corpus at every
+tier, and — for a mutant the first two let through — the six games at 90 frames, unthreaded and on four workers
+deferred. A hang counts as a catch; none hung.
+
+| Mutant | Caught by |
+| --- | --- |
+| the inline add subtracts | the block tests, the corpus |
+| the inline unsigned compare is signed | the block tests |
+| a branch's tick is not counted | the block tests, the corpus |
+| the guard lets an instruction reach the stop | the block tests |
+| the loop back is taken whatever the stop | the block tests |
+| the loop back leaves the slot flag up | the block tests |
+| a likely branch not taken runs its slot | the block tests |
+| an exit after a store leaves the addresses stale | the block tests, the corpus |
+| a compiled block is not compared with memory | the block tests |
+| the registers a handler reads are not written back (tier 3) | the block tests, the corpus |
+| an exit leaves its dirty registers in host registers (tier 3) | the block tests, the corpus |
+| a step of the processor beside never leaves the block | **the games alone** |
+| a register jump reads its target after its link | **survived**, then caught by the test written for it |
+| a store into the block's own words does not leave it | **survived**, then caught by the test written for it |
+| a decoded block ignores a write it did not make | **survived**, then caught by the test written for it |
+
+**What the three survivors taught, which is the round's whole value.**
+
+- *A test that compares every few steps grades the decoded tier only.* `run_steps(n)` gives a block a cycle cap of the
+  steps that remain, and the guard refuses compiled code whose longest run could reach that cap. Eleven mechanism
+  tests compared every five to thirty steps, so their blocks never ran compiled at all, and two mutants of the emitter
+  walked through them. The strides are now two hundred and up, and the random programs' sixteen still admits compiled
+  code because their blocks are short. *The lesson is general: a differential whose comparison is finer than the
+  dispatcher's own unit of work does not test the dispatcher.*
+- *A block that rewrites its own words every pass is never compiled.* The first test for the store into a block's own
+  words changed a word each turn, so the comparison on entry discarded the block every turn and it never reached the
+  threshold; the mutant that removed the check never met compiled code. The test now writes a word that alternates
+  with a counter's bit that turns over as often as the address comes back to the block, so the block is compiled
+  between writes and the pass that writes runs with code the memory no longer matches.
+- *A write the block did not make must happen more than once, and land mid-block.* The first test for the signal
+  processor's DMA over a running block transferred once, at a cycle past the words it wrote, so nothing stale ever
+  ran. The test now transfers again and again with an alternating word.
+
+#### 5.8.7 The switch, and what is recommended
+
+`Machine::set_recompiler(bool)` turns it on and `Blocks::tier` chooses the tier; through the shim they are
+`MarsRtCore.UseBlocks` (Mars's own key for the same thing) and `BlockTier`, and a `Recompiler` setting stands beside
+Mars's keys in the graphics settings, off by default, with a hint that says it is exact. `VerifyBlocks` turns on the
+verifier. The environment carries the same three for measurement: `EMUSEN_MARSRT_TIER`, `EMUSEN_MARSRT_VERIFY_BLOCKS`,
+`EMUSEN_MARSRT_THRESHOLD`; `EMUSEN_MARSRT_NOMAPPEDBLOCKS=1` leaves mapped code to the interpreter and
+`EMUSEN_MARSRT_BESIDE=1` compiles the variant §5.8.3 rejected. The interface version is 6, which adds
+`mars_machine_set_recompiler` and `mars_blocks_counters`.
+
+**The default is off**, as every MarsRT switch has been until it is proven in play. **What is recommended is on, at
+step 2**, which is what `BlockTier` gives a caller who asks for no tier: it is the fastest of the three in every game
+(§5.8.8), it is the cheapest to compile, and it is the only one that is never slower than the interpreter. Turning it
+on for MarsRT in Mistress is a decision for play, as the threads' switches were; what a headless bench can say, this
+section says.
+
+#### 5.8.8 Speed
+
+**The method** is the phase's: three interleaved rounds of 600 frames from the three gameplay states, flat out, on this
+sixteen-processor machine, the order rotated between rounds; every run's state hash is compared, and all of them agree.
+Two shapes are measured. *Production* is MarsRT as a frontend runs it — four rasteriser workers, the picture deferred,
+the scan-out and the shim's copy included — and is where the comparison with the C# core belongs. *The processor's own
+view* is MarsRT on one thread with the picture not scanned, where the display processor is on the emulation thread and
+a change in the CPU's cost is a third of what it is in production terms.
+
+**Production, through the shim, against the C# core as it ships** (`MarsRtThreadsTests.Bench`, milliseconds a frame,
+the three rounds):
+
+| ms a frame | MarsRT interpreted | step 1, decoded | step 2, compiled | step 3, registers held | C# production |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 6.06, 6.11, 6.11 | 6.16, 6.38, 6.11 | **5.92, 6.01, 5.96** | 5.94, 5.97, 5.95 | 6.12, 6.22, 6.05 |
+| Ocarina of Time | 7.17, 7.15, 7.19 | 7.44, 7.48, 7.50 | **6.94, 6.92, 6.98** | 6.98, 6.97, 6.97 | 7.37, 7.33, 7.78 |
+| GoldenEye, the Dam | 17.95, 17.87, 17.92 | 15.14, 15.03, 14.95 | **14.95, 14.95, 14.99** | 14.94, 15.04, 15.00 | 16.71, 14.88, 14.95 |
+
+**MarsRT's own runs, without the shim** (`examples/threads … split 4`, the same three rounds):
+
+| ms a frame | interpreted | step 1 | step 2 | step 3 |
+| --- | --- | --- | --- | --- |
+| Super Mario 64 | 5.87, 5.95, 5.87 | 6.00, 5.98, 6.07 | **5.71, 5.74, 5.73** | 5.74, 5.75, 5.81 |
+| Ocarina of Time | 7.00, 7.03, 6.95 | 7.29, 7.29, 7.26 | **6.75, 6.77, 6.82** | 6.82, 6.88, 6.85 |
+| GoldenEye, the Dam | 17.89, 17.23, 17.17 | 14.35, 14.33, 14.38 | **14.36, 14.44, 14.29** | 14.30, 14.45, 14.39 |
+
+**The processor's own view** (`examples/frames`, the display processor on the emulation thread, no scan, two rounds):
+
+| ms a frame | interpreted | step 1 | step 2 | step 3 |
+| --- | --- | --- | --- | --- |
+| Super Mario 64 | 10.76, 10.61 | 10.74, 10.70 | 10.53, 10.44 | 10.62, 10.41 |
+| Ocarina of Time | 10.89, 10.86 | 11.05, 11.11 | 10.59, 10.59 | 10.56, 10.60 |
+| GoldenEye, the Dam | 25.18, 25.24 | 22.27, 22.45 | 22.28, 22.29 | 22.31, 22.34 |
+
+**What each step bought.**
+
+- **Step 1, the decode kept, is GoldenEye's whole gain and the other two games' small loss.** The Dam falls from 17.9
+  to 15.0 milliseconds a frame, sixteen per cent, and nothing the compiler does afterwards adds to it. Super Mario 64
+  and Ocarina of Time are one to four per cent *worse* than the interpreter: their blocks average seven instructions,
+  and a dispatch that looks a block up, compares its bytes and opens a step costs more than the fetch and decode it
+  spares at that length. GoldenEye's blocks are shorter still, five instructions, but its code is behind the TLB and
+  its every fetch would otherwise be a translation; that is what the block's remembered page removes.
+- **Step 2, the code, buys three to four per cent on the two games whose CPU is not the bound, and nothing on
+  GoldenEye.** It also undoes step 1's loss. Its gain is where the compiled share is: two thirds of the block
+  instructions in Super Mario 64 and Ocarina of Time run as machine code, and **two per cent** of GoldenEye's do,
+  because nearly every block GoldenEye enters is entered while the signal processor runs beside it, and §5.8.3 leaves
+  those decoded.
+- **Step 3, the registers held, buys nothing**, which is `Mars_Recompiler.md` §11's result in another core: every call
+  into a handler pays for the registers it must write back, real code calls every few instructions, and the code grows
+  by a third (1,540 bytes a block against 1,122 in Super Mario 64) for an entry that must stream it in. It is kept as
+  a tier and it is not the default.
+- **Against the C# core**, MarsRT with the recompiler is at or below it on all three: 5.96 against 6.12 on Super Mario
+  64, 6.94 against 7.37 on Ocarina of Time, and 14.95 against 14.95 on the Dam, where the C# core's own rounds range
+  from 14.88 to 16.71. The gap §5.7 left to this stage — the Dam at 17 to 18 milliseconds against the C# core's 14.8
+  to 16.2 — is closed.
+
+**What it costs to compile.** Over 600 frames, at step 2:
+
+| | blocks compiled | the thread's time | code | per block | of the blocks' instructions, compiled |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 2,938 | 0.81 s | 3.30 MB | 0.28 ms, 1,122 bytes | 60.2M of 86.4M |
+| Ocarina of Time | 5,224 | 1.56 s | 6.71 MB | 0.30 ms, 1,285 bytes | 125.1M of 188.3M |
+| GoldenEye, the Dam | 628 | 0.20 s | 0.74 MB | 0.32 ms, 1,185 bytes | 4.0M of 214.4M |
+
+At step 3 the same blocks take 0.37 to 0.44 milliseconds each and 1,540 to 1,752 bytes. A block is handed over at its
+sixty-fourth entry and runs decoded until its code arrives, so nothing waits for the compiler; the counts above are
+what one thread did beside 600 frames, seven seconds of wall clock at most.
+
+**The entry's own cost, bounded, and two changes that measured nothing.** An entry looks a block up, compares its
+bytes with memory, opens the step and builds the context the code reads — about a fifth of the Dam's emulation thread
+by an interrupt sample (the dispatcher 8 per cent, the C library, which is the comparison's `memcmp`, 7). Three things
+were tried against it. *The comparison removed altogether* — inexact, so a bound and nothing more — is worth 0.1 to
+0.35 milliseconds a frame: 5.64 against 5.74 in Super Mario 64, 6.66 against 6.85 in Ocarina of Time, 14.47 against
+14.80 in the Dam, one round each. *The comparison written by hand*, eight bytes at a time rather than a call to
+`memcmp`, and *the context built once a run* rather than once an entry, both measured nothing at all against the same
+build, and by `Mars_Performance.md` §6's rule neither is carried. What is left of that fifth is the lookup and the
+step's own opening, and `Mars_Recompiler.md` §9 to §12 is the record of what happens to a lever aimed at it.
+
+**What the numbers do not say.** The three states are driven with no input, as the examples run them; the same states
+under the WiseMan comparisons, where a button pattern is pressed every frame, put far more of GoldenEye's code through
+blocks with the processor halted (17.3 million compiled entries against half a million here). A game's compiled share
+is a property of what it is doing, and one state is not a sample.
+
+#### 5.8.9 What is not done
+
+- **The processor beside a block** runs decoded, because compiling for it measures worse (§5.8.3), and the batch that
+  would change that is priced and not built.
+- **Loads and stores through the TLB** call the interpreter, as they do in C# (`Mars_Recompiler.md` §16): only a
+  direct kernel address is inline. A mapped block whose words would cross its page is interpreted rather than split.
+- **The coprocessor is a call.** Its arithmetic is software floating point, exact by construction and long; the moves,
+  the loads into it and its branch are calls as well. C#'s §16 inlines the two loads; MarsRT does not.
+- **Nothing is chained, nothing is extended, and no block holds more than sixty-four words.** `Mars_Recompiler.md`
+  §10 to §12 measured all three in C# and kept none; this page has not measured them in Rust, and its own numbers
+  (§5.8.8) say where the time is instead.
+- **The debugger, the coverage recorder and single-stepping** are outside MarsRT altogether (§5.2.5), so nothing here
+  had to keep them working.
+- **Code is not freed a block at a time.** §5.8.4's bound drops everything at once, and no game has reached it.
+- **The verifier runs on one thread.** It needs the display processor unthreaded, since it clones the machine.
+

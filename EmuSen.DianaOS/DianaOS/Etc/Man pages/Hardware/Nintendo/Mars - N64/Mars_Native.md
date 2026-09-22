@@ -353,3 +353,183 @@ output). Those two are the class a byte-exact claim does not cover by itself.
   stages that own it.
 - **Power-on values.** `Machine::new` is zeros, except where a C# field initializer is a constant: `_lastFrameCycles`,
   the SI's idle markers, `RiSelect`'s 0x14, and the save chips' 0xFF. The rest is stage 1's boot.
+
+### 5.3 The RDP
+
+*Stage 3's first half, 2026-09-22.* The display processor's rasteriser, ported from the C# `Rdp` partials to Rust and
+proven against them byte for byte: RDRAM, hidden RDRAM, texture memory and the processor's serialized state. It is
+the single-threaded path at scale one, the one `ThreadedRdp = false` and `RdpWorkers = 1` run. The seam is the one
+stage 1 left, `Rdp::accept(&mut self, word, &mut RdpMemory) -> bool`, and its signature did not change.
+
+**What was ported.** Every command the C# `Rdp.Accept` runs, one module per C# file:
+
+| Module | C# file | Lines |
+| --- | --- | --- |
+| `rdp.rs` | `Rdp.cs`: gathering, command lengths, dispatch; the stage-1a state, unchanged | 539 (425 before) |
+| `rdp/modes.rs` | `Rdp.Modes.cs`: the registers, the decoded modes, `Refresh` | 213 |
+| `rdp/fill.rs`, `rdp/walker.rs` | `Rdp.Fill.cs`, `Rdp.Walker.cs`: images, scissor, fill, triangles, the edge walk | 172, 205 |
+| `rdp/one_cycle.rs`, `rdp/two_cycle.rs` | the combiner, blender, dither and colour image; the pipelined two-cycle mode | 604, 256 |
+| `rdp/copy.rs` | `Rdp.Copy.cs` | 231 |
+| `rdp/textures.rs`, `rdp/filter.rs`, `rdp/lod.rs` | coordinates, perspective and fetch; four-texel filtering and palettes; level of detail | 276, 219, 218 |
+| `rdp/texture_memory.rs` | `Rdp.TextureMemory.cs`: tiles, and the tile, block and palette loads | 232 |
+| `rdp/coverage.rs`, `rdp/depth.rs`, `rdp/chroma_key.rs` | coverage; the depth encoding, compare and store, shade and depth correction; the key | 68, 194, 20 |
+| `rdp/tables.rs` | the builders of the dither, blend-quotient, divide, five-to-eight, log and coverage-offset tables | 175 |
+| `rdp/replay.rs` | a `cargo test` over the recorded game streams (below) | 76 |
+| `ffi_rdp.rs` | a test-only C ABI over one processor: new, free, load and save its state, texture memory, accept words | 141 |
+
+**What the port leaves out, and the argument that no serialized byte depends on it.** The processors that share a
+list (`Classify`'s steps, `Configure`, `Owns`, the stamps, `TakeScratchFrom`, `CopyStateFrom`, `RecordAliasedRead`,
+the drawn-to extents), drawing at a multiple (`DrawAt`, `Widen`, `Rescale` and every `_scaled` branch), the device
+path (`Rdp.Gpu.cs` and the change flags it reads), the interface's verifier (`Touch`, `Wrote`, `RunningWord`), the
+counters (`Primitives` and its three siblings), `Drew`, and the Debug build's `VerifyModes`. All are `[SkipInState]`.
+With one processor `Owns` is always true and `Classify` returns `Ready` for every command; at scale one every product
+with `_scale` is the identity, a rectangle's `inclusive` is zero, and `_scaled` selects the branches that were ported.
+That is an argument from reading. The evidence is the differential below, which would show a byte the argument missed.
+
+**Four decisions.**
+
+- **The decoded modes are a field, `Rdp::modes`, whose equality always holds.** Two processors are equal when their
+  state is, because the modes are a function of `other_modes` and `combine`; `DpInterface` derives equality over the
+  processor, and §5.1's whole-machine comparison compares machines that way. `read_state` ends with `refresh()`, as `Default` does,
+  so no loaded processor carries stale modes, and `refresh()` is public for a caller that writes either word itself.
+  C#'s Debug build checks at every draw that no mode is stale. Rust has no such check: a caller that assigns
+  `other_modes` without `refresh()` draws with the old modes.
+- **C#'s integer semantics are written out.** C# `int` arithmetic wraps and masks a shift count to five bits. Release
+  Rust does the same, but a debug build panics on overflow, so every sum or product whose operands come from a command
+  or from memory uses `wrapping_*`, and the two shifts whose counts come from memory (`1 << storedEncoded`, where a
+  hidden byte may exceed 3) use `wrapping_shl`. The debug replay below is the evidence that none was missed on the
+  three games' lists; it is not evidence for lists no game sent.
+- **The reciprocal table is built with integer rounding.** C# builds it with `Math.Round`, which rounds half to even.
+  No quotient 2^20/(64+s) for s in 0..64 is a tie, so rounding half up gives the same table, and a test compares the
+  two at all 65 segments. With that, every table is a compile-time `static`, and no per-pixel path reads a lazy cell.
+- **Texel fetch borrows the processor immutably.** A tile is read by reference and the fetch writes nothing, which the
+  C# code already obeyed; the Rust port needs it to hold texture memory and a tile at once.
+
+**The seam the proof uses.** `DpInterface.IWordWatcher`, `[SkipInState]` and null outside tests, is called before and
+after each word the interface's inline path gives the processor. Its cost on that path is one null check per word.
+The threaded path has no watcher, and nothing here runs threaded.
+
+**Four oracles, each seeing something the others cannot.**
+
+1. **The MarsRdpTests cases, run a second time with MarsRT beside them.** `MarsRdpTests.NewBus()` became virtual, and
+   `MarsNativeRdpTwinTests` inherits every case with a twin attached to each bus. Before each word the twin copies the
+   bus's RDRAM and hidden RDRAM, so the CPU's writes between lists reach it, and runs the word in Rust; after the C#
+   processor has run it, the twin compares RDRAM, hidden RDRAM, texture memory and the two state serializations. The
+   Rust state is taken from C# once, at the first word, and never again, so a divergence persists and is seen. **29
+   cases, 30 buses, 367 words, 27 full syncs, identical after every word**, and the base class's own assertions pass
+   in both classes.
+2. **Three games' command streams.** A game is run from its state with the list inline and one processor, and the
+   watcher records every word for 120 frames, beside the RDRAM, hidden RDRAM and processor state at the frame
+   boundary where recording began. Both processors replay the stream from those bytes and are compared before the
+   first word, after every full sync, and at the end:
+
+   | Game | Words | Frames | Full syncs | Comparisons | Result |
+   | --- | --- | --- | --- | --- | --- |
+   | Super Mario 64 (`sm64.state`) | 978,596 | 120 | 60 | 61 | identical |
+   | Ocarina of Time (`oot.state`) | 974,648 | 120 | 40 | 41 | identical |
+   | GoldenEye (`ge-dam.state`) | 2,811,622 | 120 | 60 | 61 | identical |
+
+   What the streams exercise, by decoding them as the processor gathers them:
+
+   | | SM64 | OoT | GoldenEye |
+   | --- | --- | --- | --- |
+   | one-cycle triangles | 50,786 | 5,219 | 60 |
+   | two-cycle triangles | 0 | 31,867 | 116,817 |
+   | triangles with a depth test or update | 49,226 | 35,859 | 104,526 |
+   | texture rectangles | 480, copy mode | 520, one-cycle | 1,680, one-cycle |
+   | fill rectangles (fill / one-cycle) | 180 / 0 | 80 / 40 | 120 / 180 |
+   | loads (block / tile / palette) | 4,920 / 0 / 0 | 12,693 / 40 / 2,600 | 11,688 / 0 / 9,048 |
+   | texel formats drawn | RGBA16, IA16, IA8 | RGBA16, CI8, I4, I8, IA16, IA8, IA4 | CI4, CI8, I4, I8, IA8, RGBA32 |
+
+   Every textured primitive in the three streams is bilinearly filtered. No stream holds a YUV texel, a flipped
+   texture rectangle, a keyed combine, or a copy outside SM64. **The replay is not the game's run:** the CPU's and the
+   signal processor's writes to RDRAM during the 120 frames are not recorded, so a texture a game loaded after
+   recording began is replayed from the bytes that were there before. Both processors see the same inputs, which is
+   what a differential needs; the pictures they agree on are the replay's, not the game's.
+3. **Random modes over well-formed primitives.** Three thousand seeded lists each set a random colour image (all four
+   sizes), scissor (sometimes interlaced), texture image, one to three random tiles each with a tile, block or palette
+   load, one or two tile sizes, a random combine, every colour register, the key and conversion constants and the
+   primitive depth, and then draw one to four primitives, each under random other modes: fill rectangles, texture
+   rectangles of both kinds, and triangles of all eight kinds on the edges of five the other tests draw, their
+   attribute blocks kept, perturbed or random. A third of the primitives use a keyed combine, (A − centre) × scale,
+   with key widths small enough that the distance lands in the alpha's range. The memories start as noise, hidden
+   RDRAM included. **3,000 lists, 150,820 words, 7,586 primitives (2,895 one-cycle, 2,805 two-cycle, 933 copy, 953
+   fill), 1,456,851 bytes of colour and depth changed, identical after every list.**
+4. **The streams again, in a debug build.** The game differential writes the C# processor's final memories and state
+   beside each stream, and `rdp::replay` replays the streams with overflow checks on and compares the end. Identical
+   for all three, and no overflow check fired. This oracle sees only the end, and is the one `cargo test` can run
+   without .NET; it needs `EMUSEN_MARSRT_RDP` and passes unrun without it.
+
+**Mutants.** Twenty-four were made in the Rust port and each run against all four oracles, the source restored and
+rebuilt after each round by a script. The first round had only the twin and the game streams:
+
+| # | Mutant | Twin cases | Game streams | Random lists | Debug replay |
+| --- | --- | --- | --- | --- | --- |
+| 1 | combiner: colour rounding `+ 0x80` as `+ 0x7F` | 1 | 3 | caught | caught |
+| 2 | combiner: input C 13 reads the primitive's level-of-detail fraction | 2 | 1 | caught | caught |
+| 3 | combiner: nine-bit sign extension on bit 8 alone | 0 | 0 | caught | survived |
+| 4 | blender: the second weight without its +1 | 3 | 3 | caught | caught |
+| 5 | blender: the divisor without its +4 | 1 | 3 | caught | caught |
+| 6 | blender: dither rounds up at equality | 1 | 3 | caught | caught |
+| 7 | two-cycle: the first blend shifted by this pixel's slope, not the last's | 0 | 0 | caught | survived |
+| 8 | two-cycle: the texels not exchanged for the second cycle | 1 | 0 | caught | survived |
+| 9 | texture fetch: odd rows do not swap words | 4 | 3 | caught | caught |
+| 10 | texture fetch: RGBA16's alpha from bit 1 | 2 | 2 | caught | caught |
+| 11 | texture fetch: the perspective flag at w < 0, not w ≤ 0 | 0 | 0 | caught | survived |
+| 12 | filter: the lower triangle rounds with `0x0F` | 1 | 3 | caught | caught |
+| 13 | texture memory: loads do not swap banks on odd rows | 0 | 0 | caught | survived |
+| 14 | level of detail: distant only past the top level | 2 | 1 | caught | caught |
+| 15 | depth: mode 0 ignores overflow | 1 | 3 | caught | caught |
+| 16 | depth: a margin of four slopes, not eight | 0 | 3 | caught | caught |
+| 17 | depth: the compressed mantissa keeps one bit fewer | 1 | 3 | caught | caught |
+| 18 | depth: correction divides by sixteen, not thirty-two | 1 | 3 | caught | caught |
+| 19 | coverage: left samples without the rounding step | 5 | 3 | caught | caught |
+| 20 | coverage: the second sub-scanline's samples unshifted | 7 | 3 | caught | caught |
+| 21 | coverage: stored coverage wraps instead of clamping | 2 | 1 | caught | caught |
+| 22 | walker: edges that touch count as crossed | 5 | 3 | caught | caught |
+| 23 | copy: alpha compare keeps one byte of each pair | 0 | 1 | caught | caught |
+| 24 | chroma key: the other rounding at nibble seven | 0 | 0 | caught | survived |
+
+**Five survived the first round** (3, 7, 11, 13, 24), and each is behaviour no list in it reached: a combiner input
+between 0x100 and 0x17F under a nonzero multiplier, a two-cycle first blend weighing memory alpha where this pixel's
+slope and the last's differ, a w whose integer part is exactly zero, and a key distance inside 0 to 255. Mutant 13 is
+nearly equivalent: the load's first bank index has bit 1 cleared, so for a load starting on a word that is a multiple
+of four the swap only permutes an aligned group of four banks among themselves, and the two versions differ only for
+a load starting one word past such a boundary. The random lists were written for these survivors and caught four at
+once; the keyed case was added when the chroma key survived them too, since random widths almost never put a distance
+in range. **No mutant survives the final suite, and the random lists alone catch all 24.** A mutant that only they
+catch is a rule none of the three games' lists exercises, so for those five rules the claim of exactness rests on
+random inputs and not on any game's.
+
+**Speed.** Each processor runs a whole stream from the same start, with no comparison timed and the memories copied
+outside the clock. C# calls `Rdp.Accept` per word, as the interface does; Rust takes words through the ABI until each
+full sync, so the boundary is crossed about once a frame. Release builds, one warm-up round of each, then three rounds
+interleaved:
+
+| Stream | C#, ms (three rounds) | Rust, ms | C# / Rust | Per frame, C# → Rust |
+| --- | --- | --- | --- | --- |
+| SM64 | 1,701.8, 1,703.6, 1,697.1 | 698.3, 697.2, 697.9 | 2.43–2.44 | 14.17 → 5.82 ms |
+| OoT | 1,331.0, 1,342.4, 1,333.7 | 550.0, 549.3, 553.7 | 2.41–2.44 | 11.13 → 4.59 ms |
+| GoldenEye | 2,220.8, 2,262.5, 2,266.2 | 1,042.7, 1,057.3, 1,058.1 | 2.13–2.14 | 18.75 → 8.77 ms |
+
+The ratio is not a comparison of languages alone. The C# single-threaded path still pays for the split it does not
+use: a stamp per row and a `_coverageStamp` fill beside each coverage fill, a worker test per row, the verifier's test
+per byte touched, and the primitive counters. How much of the factor those account for was not measured. The result
+also differs in kind from §3.4's: there the component was entered once per emulated cycle and lost on the boundary,
+and here the boundary is crossed once per full sync, which is the shape §5 chose the whole machine for.
+
+**What surprised.**
+
+- **The port was exact the first time each oracle ran.** That says nothing about how sensitive the oracles are, which
+  is why the mutants were run; they are the measurement of the proof, and they changed the proof twice.
+- **SM64's recording changes only 10,868 bytes of RDRAM over 120 frames,** against 393,249 for OoT and 213,331 for
+  GoldenEye. Its frame buffers cycle and the scene holds still, so each buffer is redrawn with what it held. Every full
+  sync is still compared, but the final memory is weak evidence for that game.
+
+**Left out, and not proven.**
+
+- Everything listed under what the port leaves out: the shared list, the multiple, the device, the verifier.
+- `DpInterface` itself, the interface's registers and its ring, which belong to the machine stage.
+- YUV texels, flipped texture rectangles and keyed combines are covered by the random lists and by no game's.
+- The replay covers lists as they arrive at a processor, not the game's own evolution of memory; the machine stage's
+  frame-by-frame comparison against the C# core is what will cover that.

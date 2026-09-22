@@ -640,8 +640,7 @@ fn barriers(count: usize) -> Vec<u64> {
 /// A snapshot taken while the workers are at barriers is answered: a worker waiting at one raises the pause point past it, where C#'s workers wait for ones standing short of it.
 #[test]
 fn a_snapshot_taken_while_workers_wait_at_barriers_is_answered_and_loads() {
-    let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
+    let run = std::thread::spawn(move || {
         let list = barriers(3000);
         let (mut once, mut shared, mut loaded) = (at_once(), split(4), at_once());
         for attempt in 0..40u32 {
@@ -658,8 +657,13 @@ fn a_snapshot_taken_while_workers_wait_at_barriers_is_answered_and_loads() {
         }
         shared.join_rdp();
         assert!(state(&once) == state(&shared));
-        sender.send(threads(&shared).shared().barriers()).unwrap();
+        threads(&shared).shared().barriers()
     });
-    let barriers = receiver.recv_timeout(std::time::Duration::from_secs(120)).expect("a snapshot was never answered: the workers deadlocked, or the run failed");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    while !run.is_finished() {
+        assert!(std::time::Instant::now() < deadline, "a snapshot was never answered: the workers deadlocked");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let barriers = run.join().expect("the run failed");
     assert!(barriers >= 40 * 3000, "{barriers} barriers passed");
 }

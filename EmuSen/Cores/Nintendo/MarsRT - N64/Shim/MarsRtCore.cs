@@ -206,7 +206,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static CoreSetting Threads(CoreSetting s) => s.Key switch
         {
             "ThreadedRdp" => s with { Default = "false", Hint = "The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread. Off by default on MarsRT until proven in play." },
-            "RdpWorkers" => s with { Default = "1", Hint = "How many processors share each list when the list runs on its own thread. MarsRT runs one; a higher count is kept and has no effect yet." },
+            "RdpWorkers" => s with { Default = "1", Hint = "How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One by default on MarsRT." },
             "DeferredPresentation" => s with { Default = "false", Hint = "The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been. Off by default on MarsRT until proven in play." },
             _ => s,
         };

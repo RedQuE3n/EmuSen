@@ -3,6 +3,7 @@
 
 pub mod cache;
 pub mod decoded;
+pub mod jit;
 pub mod ops;
 pub mod shape;
 pub mod verify;
@@ -15,37 +16,59 @@ use crate::cpu::tlb::TlbResult;
 use crate::memory::bus::MemoryBus;
 use crate::memory::dp_threads::site;
 use crate::memory::ram::Ram;
+use std::sync::Arc;
+use std::sync::atomic::Ordering::{Acquire, Relaxed};
 use cache::Cache;
 use decoded::Op;
 use shape::MAX_WORDS;
 use verify::Shadow;
 
 /// How far the recompiler goes: each tier runs everything the one before could not.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tier {
     /// Step 1: every block a loop over its decoded instructions.
     Decoded,
+    /// Step 2: hot blocks compiled by Cranelift, the guest registers in memory.
+    Compiled,
+    /// Step 3: the registers held in host registers across a block, RDRAM's stores made inline; measured and not the
+    /// default, since it costs a third more code and compiling for nothing (§5.8.8).
+    Cached,
 }
 
 impl Tier {
-    /// The furthest tier built.
-    pub const BEST: Tier = Tier::Decoded;
+    /// The tier a caller gets by asking for none: the furthest that measured better than the one before it (§5.8.8).
+    pub const BEST: Tier = Tier::Compiled;
 
-    /// 1 is step 1 and so on; 0, or a number past the last, is the furthest built.
+    /// 1 is step 1 and so on; 0, or a number past the last, is `BEST`.
     pub fn from_number(n: u32) -> Tier {
         match n {
             1 => Tier::Decoded,
+            2 => Tier::Compiled,
+            3 => Tier::Cached,
             _ => Tier::BEST,
         }
     }
 
     fn from_env() -> Tier {
         match std::env::var("EMUSEN_MARSRT_TIER").as_deref() {
-            Ok("decoded") => Tier::Decoded,
+            Ok("decoded") | Ok("1") => Tier::Decoded,
+            Ok("compiled") | Ok("2") => Tier::Compiled,
+            Ok("cached") | Ok("3") => Tier::Cached,
             _ => Tier::BEST,
         }
     }
+
+    /// How a block is compiled at this tier, for a signal processor halted or running beside it.
+    fn options(self, verify: bool, beside: bool) -> jit::Options {
+        jit::Options { cached: self >= Tier::Cached, verify, inline_stores: self >= Tier::Cached, beside }
+    }
 }
+
+/// Entries a block runs before it is handed to the compiler (Mars_Recompiler.md §7's sweep chose 64 for C#).
+pub const THRESHOLD: u32 = 64;
+
+/// Bytes of compiled code past which every block is dropped and compiled again as it runs.
+pub const CODE_BOUND: u64 = 256 << 20;
 
 /// A run of consecutive words, the bytes it was shaped from, and what it runs as.
 pub struct Block {
@@ -57,6 +80,45 @@ pub struct Block {
     /// The most cycles its instructions tick, stalls included.
     pub max_cycles: i64,
     pub runs: u32,
+    /// Where the compiler publishes its code, once the block is queued; and the code, once seen there.
+    pub quiet: Compiled,
+    /// The same for the variant that steps a running signal processor, compiled for blocks that meet one often.
+    pub beside: Compiled,
+}
+
+/// One compiled variant of a block: its entries counted, its slot once queued, its code once published.
+#[derive(Default)]
+pub struct Compiled {
+    pub runs: u32,
+    pub slot: Option<Arc<jit::Slot>>,
+    pub code: Option<jit::Code>,
+}
+
+impl Compiled {
+    /// The code, compiling it once the entries reach the threshold; the dispatcher waits for it when asked to.
+    fn want(&mut self, words: &[Op], start: u32, threshold: u32, options: jit::Options, synchronous: bool, compiler: &mut Option<jit::Compiler>) -> Option<jit::Code> {
+        if self.code.is_some() {
+            return self.code;
+        }
+        self.runs = self.runs.saturating_add(1);
+        match &self.slot {
+            Some(slot) => self.code = jit::published(slot),
+            None if self.runs >= threshold => {
+                let slot = Arc::new(jit::Slot::default());
+                let words: Box<[u32]> = words.iter().map(|op| op.word).collect();
+                compiler.get_or_insert_with(jit::Compiler::new).enqueue(words, start, options, slot.clone());
+                if synchronous {
+                    while slot.code.load(Acquire) == 0 {
+                        std::thread::yield_now();
+                    }
+                    self.code = jit::published(&slot);
+                }
+                self.slot = Some(slot);
+            }
+            None => {}
+        }
+        self.code
+    }
 }
 
 impl Block {
@@ -83,6 +145,8 @@ impl Block {
             max_cycles: ops.iter().map(|op| shape::cycles(op.word)).sum(),
             ops,
             runs: 0,
+            quiet: Compiled::default(),
+            beside: Compiled::default(),
         }
     }
 }
@@ -100,6 +164,14 @@ pub struct Stats {
     pub stepped: u64,
     /// Entries through the TLB.
     pub mapped: u64,
+    /// Entries that ran compiled code, and the instructions that code completed.
+    pub compiled_entries: u64,
+    pub compiled_instructions: u64,
+    /// Compiled entries beside a running signal processor, and entries with code that ran decoded, the stop within reach.
+    pub compiled_beside: u64,
+    pub refused_near_stop: u64,
+    /// Times the code's bound dropped every block.
+    pub flushes: u64,
 }
 
 /// The last page a mapped fetch was translated through, trusted while the translation's generation stands (Mars_Recompiler.md §17).
@@ -123,6 +195,14 @@ pub struct Blocks {
     fetch: Fetch,
     shadow: Option<Box<Shadow>>,
     pub stats: Stats,
+    /// Entries before a block is compiled, and whether the dispatcher waits for its code, as the tests need.
+    pub threshold: u32,
+    pub synchronous: bool,
+    /// Compile a variant for a block entered while the signal processor runs; measured and not kept (Mars_Native.md §5.8).
+    pub beside_variant: bool,
+    /// Bytes of compiled code past which every block is dropped and the compiler's memory with it.
+    pub code_bound: u64,
+    compiler: Option<jit::Compiler>,
 }
 
 impl Default for Blocks {
@@ -136,6 +216,11 @@ impl Default for Blocks {
             fetch: Fetch::default(),
             shadow: None,
             stats: Stats::default(),
+            threshold: std::env::var("EMUSEN_MARSRT_THRESHOLD").ok().and_then(|v| v.parse().ok()).unwrap_or(THRESHOLD),
+            synchronous: false,
+            beside_variant: std::env::var("EMUSEN_MARSRT_BESIDE").is_ok_and(|v| v == "1"),
+            code_bound: CODE_BOUND,
+            compiler: None,
         }
     }
 }
@@ -143,7 +228,17 @@ impl Default for Blocks {
 /// A copy of a machine starts with no blocks, and blocks are shaped again from its memory; the settings go with it.
 impl Clone for Blocks {
     fn clone(&self) -> Self {
-        Blocks { on: self.on, tier: self.tier, mapped: self.mapped, verify: self.verify, ..Blocks::default() }
+        Blocks {
+            on: self.on,
+            tier: self.tier,
+            mapped: self.mapped,
+            verify: self.verify,
+            threshold: self.threshold,
+            synchronous: self.synchronous,
+            beside_variant: self.beside_variant,
+            code_bound: self.code_bound,
+            ..Blocks::default()
+        }
     }
 }
 
@@ -159,17 +254,46 @@ impl Blocks {
         std::env::var("EMUSEN_MARSRT_VERIFY_BLOCKS").is_ok_and(|v| v == "1")
     }
 
-    /// Live blocks, shaped, discarded, entries, instructions in blocks, interpreter steps, mapped entries, and four the
-    /// compiled tiers fill: blocks compiled, nanoseconds compiling, bytes of code, and entries that ran compiled code.
+    /// Live blocks, shaped, discarded, entries, instructions in blocks, interpreter steps, mapped entries, and six the
+    /// compiled tiers fill: blocks compiled, nanoseconds compiling, bytes of code, entries and instructions that ran compiled,
+    /// and blocks Cranelift refused, which run decoded.
     pub fn counters(&self) -> Vec<i64> {
         let s = &self.stats;
-        vec![self.cache.live as i64, s.shaped as i64, s.discarded as i64, s.entries as i64, s.instructions as i64, s.stepped as i64, s.mapped as i64, 0, 0, 0, 0]
+        let (compiled, nanos, bytes, failed) = self.compiler.as_ref().map_or((0, 0, 0, 0), |c| {
+            let c = c.counters();
+            (c.compiled.load(Relaxed), c.nanos.load(Relaxed), c.bytes.load(Relaxed), c.failed.load(Relaxed))
+        });
+        vec![
+            self.cache.live as i64,
+            s.shaped as i64,
+            s.discarded as i64,
+            s.entries as i64,
+            s.instructions as i64,
+            s.stepped as i64,
+            s.mapped as i64,
+            compiled as i64,
+            nanos as i64,
+            bytes as i64,
+            s.compiled_entries as i64,
+            s.compiled_instructions as i64,
+            failed as i64,
+        ]
     }
 
     /// Every block forgotten, as a machine of another RDRAM size needs.
     pub fn clear(&mut self) {
         self.cache.clear();
         self.fetch.valid = false;
+    }
+
+    /// The tier and the verifier set; code compiled under others is dropped with its blocks, which are shaped again.
+    pub fn configure(&mut self, tier: Tier, verify: bool) {
+        if tier != self.tier || verify != self.verify {
+            self.clear();
+            self.compiler = None;
+        }
+        self.tier = tier;
+        self.verify = verify;
     }
 
     pub fn live(&self) -> usize {
@@ -221,7 +345,10 @@ impl Blocks {
             bus.dp.wait_read_range(physical, reach, site::BLOCK);
         }
 
-        let Blocks { cache, stats, shadow, .. } = self;
+        let tier = self.tier;
+        let verify = self.verify;
+        let (threshold, synchronous, beside_variant) = (self.threshold, self.synchronous, self.beside_variant);
+        let Blocks { cache, stats, shadow, compiler, .. } = self;
         let block = match cache.get_mut(physical) {
             Some(b) if b.matches(&bus.rdram) => b,
             found => {
@@ -251,8 +378,42 @@ impl Blocks {
         stats.entries += 1;
         stats.mapped += !direct as u64;
         let before = cpu.instructions;
+
+        if tier >= Tier::Compiled {
+            // The guard: every instruction short of the stop, so no step of the block's has an event or the timer to run; and the
+            // variant for the signal processor as it stands, the quiet one while it is halted.
+            let stop = (*bus.next_event).min(cpu.run.timer_due).min(cap_at);
+            let halted = bus.sp.processor.halted;
+            if !halted && !beside_variant {
+                // A block entered while the processor runs beside it is left decoded: compiling one measures worse (§5.8).
+                decoded::run(cpu, bus, block, pc, cap_at, fields, shadow.as_deref_mut());
+                stats.instructions += (cpu.instructions - before) as u64;
+                return;
+            }
+            let (variant, beside) = if halted { (&mut block.quiet, false) } else { (&mut block.beside, true) };
+            let code = variant.want(&block.ops, block.start, threshold, tier.options(verify, beside), synchronous, compiler);
+            if let Some(code) = code {
+                if bus.cycles + block.max_cycles < stop {
+                    compiled(cpu, bus, code, pc, stop, shadow.as_deref_mut());
+                    stats.compiled_entries += 1;
+                    stats.compiled_beside += beside as u64;
+                    let ran = (cpu.instructions - before) as u64;
+                    stats.compiled_instructions += ran;
+                    stats.instructions += ran;
+                    return;
+                }
+                stats.refused_near_stop += 1;
+            }
+        }
         decoded::run(cpu, bus, block, pc, cap_at, fields, shadow.as_deref_mut());
         stats.instructions += (cpu.instructions - before) as u64;
+    }
+
+    /// Waits for every block queued to be compiled; for tests that count what compiled code did.
+    pub fn settle_compiler(&self) {
+        if let Some(c) = &self.compiler {
+            c.drain();
+        }
     }
 
     #[inline(always)]
@@ -295,11 +456,63 @@ impl Blocks {
 
     fn begin(&mut self, cpu: &Cpu, bus: &MemoryBus) {
         self.shadow = (self.verify && bus.dp.threads.is_none()).then(|| Shadow::of(cpu, bus));
+        // Code is never freed one block at a time; past the bound every block goes, and the compiler's memory with it.
+        if self.compiler.as_ref().is_some_and(|c| c.counters().bytes.load(Relaxed) > self.code_bound) {
+            self.clear();
+            self.compiler = None;
+            self.stats.flushes += 1;
+        }
     }
 
     fn end(&mut self, cpu: &Cpu, bus: &MemoryBus) {
         if let Some(s) = self.shadow.take() {
             s.check_all(cpu, bus);
+        }
+    }
+}
+
+/// A compiled block's run, and what its exit leaves the dispatcher: the step's tail, as the interpreter would have run it.
+fn compiled(cpu: &mut Cpu, bus: &mut MemoryBus, code: jit::Code, entry: u64, stop: i64, shadow: Option<&mut Shadow>) {
+    let before = cpu.instructions;
+    let marks = &bus.dp.marks;
+    let mut x = jit::Context_ {
+        entry,
+        stop,
+        rdram: bus.rdram.as_ptr(),
+        rdram_len: bus.rdram.len() as u64,
+        read_marks: marks.write_marks.as_ptr().cast(),
+        write_marks: marks.marks.as_ptr().cast(),
+        at: 0,
+        shadow: shadow.map_or(std::ptr::null_mut(), |s| s as *mut Shadow),
+        written: *bus.written,
+    };
+    // SAFETY: the code was compiled for this signature; it borrows the two halves and the context for the call alone.
+    let exit = unsafe { code(cpu, bus, &mut x) };
+    // SAFETY: the shadow outlives the call, and nothing else holds it.
+    let shadow = unsafe { x.shadow.as_mut() };
+    match exit {
+        jit::DONE => cpu.last_count = bus.count(),
+        jit::RAISED => {
+            if cpu.instructions != before {
+                cpu.last_count = bus.count();
+            }
+            cpu.enter_exception();
+            bus.tick(1);
+            if let Some(s) = shadow {
+                s.follow(cpu, bus, "a raise in compiled code");
+            }
+        }
+        _ => {
+            bus.tick(1 + cpu.extra_cycles as i64);
+            cpu.extra_cycles = 0;
+            cpu.instructions += 1;
+            if bus.cycles >= cpu.run.timer_due {
+                cpu.timer_reached(bus);
+            }
+            cpu.last_count = bus.count();
+            if let Some(s) = shadow {
+                s.follow(cpu, bus, "an exit after a store or an ender in compiled code");
+            }
         }
     }
 }

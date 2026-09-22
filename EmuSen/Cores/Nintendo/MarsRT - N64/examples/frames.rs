@@ -48,7 +48,7 @@ fn main() {
     if blocks {
         let s = core.machine.blocks.stats;
         println!(
-            "blocks: {} live, {} shaped, {} discarded; {} entries, {} instructions in blocks ({:.1} an entry), {} stepped, {} mapped",
+            "blocks: {} live, {} shaped, {} discarded; {} entries, {} instructions in blocks ({:.1} an entry), {} stepped, {} mapped; compiled {:?}, (beside, refused near stop) {:?}",
             core.machine.blocks.live(),
             s.shaped,
             s.discarded,
@@ -56,7 +56,9 @@ fn main() {
             s.instructions,
             s.instructions as f64 / s.entries.max(1) as f64,
             s.stepped,
-            s.mapped
+            s.mapped,
+            &core.machine.blocks.counters()[7..],
+            (s.compiled_beside, s.refused_near_stop)
         );
     }
 }

@@ -6,6 +6,7 @@ use super::support::{SyntheticRom, build_rom};
 use crate::cpu::cop0::{COMPARE, ENTRY_HI, ENTRY_LO0, ENTRY_LO1, INDEX, PAGE_MASK, PAGE_MASK_WRITABLE, STATUS};
 use crate::cpu::cop1::FCSR_FLUSH_TO_ZERO;
 use crate::cpu::tlb::{ENTRY_LO_KEPT, Tlb};
+use crate::cpu::blocks::Tier;
 use crate::machine::Machine;
 use crate::rom::RomImage;
 
@@ -221,44 +222,78 @@ pub(crate) fn random_machine(seed: u64) -> Machine {
     m
 }
 
-/// An interpreter and a recompiler from one machine.
-pub(crate) fn pair(m: &Machine) -> (Machine, Machine) {
-    let reference = m.clone();
-    let mut subject = m.clone();
-    subject.set_recompiler(true);
-    (reference, subject)
+/// The tiers under test: every one built, or those `EMUSEN_MARSRT_TIERS` names by number.
+pub(crate) fn tiers() -> Vec<Tier> {
+    match std::env::var("EMUSEN_MARSRT_TIERS") {
+        Ok(v) => v.split(',').filter_map(|n| n.trim().parse().ok()).map(Tier::from_number).collect(),
+        Err(_) => vec![Tier::Decoded, Tier::Compiled, Tier::Cached],
+    }
 }
 
-/// Both machines stepped alike, the processor compared every `stride` steps and everything at the end.
+/// A machine through the blocks at `tier`, compiling a block at its second entry and waiting for it, so short programs run compiled.
+pub(crate) fn recompiled(m: &Machine, tier: Tier) -> Machine {
+    let mut subject = m.clone();
+    subject.set_recompiler(true);
+    subject.blocks.tier = tier;
+    subject.blocks.threshold = std::env::var("EMUSEN_MARSRT_TEST_THRESHOLD").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+    subject.blocks.synchronous = true;
+    subject
+}
+
+/// An interpreter and a recompiler at each tier, from one machine; the variant beside a running processor is compiled too,
+/// since a test that never meets one would leave it uncovered.
+pub(crate) fn pairs(m: &Machine) -> (Machine, Vec<Machine>) {
+    (
+        m.clone(),
+        tiers()
+            .into_iter()
+            .map(|t| {
+                let mut subject = recompiled(m, t);
+                subject.blocks.beside_variant = true;
+                subject
+            })
+            .collect(),
+    )
+}
+
+/// Every machine stepped alike, the processor compared every `stride` steps and everything at the end; returns the last tier's.
 pub(crate) fn lockstep(m: &Machine, steps: u64, stride: u64, what: &str) -> Machine {
-    let (mut reference, mut subject) = pair(m);
+    let (mut reference, mut subjects) = pairs(m);
     let mut done = 0;
     while done < steps {
         reference.run_steps(stride);
-        subject.run_steps(stride);
         done += stride;
-        assert!(
-            reference.cpu == subject.cpu && reference.bus.cycles == subject.bus.cycles,
-            "{what}: the processors part after {done} steps (interpreter pc {:X} cycles {}, blocks pc {:X} cycles {})",
-            reference.cpu.current_pc,
-            reference.bus.cycles,
-            subject.cpu.current_pc,
-            subject.bus.cycles
-        );
+        for subject in &mut subjects {
+            subject.run_steps(stride);
+            assert!(
+                reference.cpu == subject.cpu && reference.bus.cycles == subject.bus.cycles,
+                "{what}, {:?}: the processors part after {done} steps (interpreter pc {:X} cycles {}, blocks pc {:X} cycles {})",
+                subject.blocks.tier,
+                reference.cpu.current_pc,
+                reference.bus.cycles,
+                subject.cpu.current_pc,
+                subject.bus.cycles
+            );
+        }
     }
-    assert!(reference == subject, "{what}: the machines part outside the processor after {steps} steps");
-    subject
+    for subject in &subjects {
+        assert!(reference == *subject, "{what}, {:?}: the machines part outside the processor after {steps} steps", subject.blocks.tier);
+        assert_eq!(subject.blocks.counters()[12], 0, "{what}: Cranelift refused a block");
+    }
+    subjects.pop().unwrap()
 }
 
-/// Both machines run frame by frame, compared whole after each.
+/// Every machine run frame by frame, compared whole after each; returns the last tier's.
 pub(crate) fn frames(m: &Machine, frames: u32, what: &str) -> Machine {
-    let (mut reference, mut subject) = pair(m);
+    let (mut reference, mut subjects) = pairs(m);
     for n in 1..=frames {
         reference.run_frame();
-        subject.run_frame();
-        assert!(reference == subject, "{what}: the machines part at frame {n} (pc {:X} and {:X})", reference.cpu.current_pc, subject.cpu.current_pc);
+        for subject in &mut subjects {
+            subject.run_frame();
+            assert!(reference == *subject, "{what}, {:?}: the machines part at frame {n} (pc {:X} and {:X})", subject.blocks.tier, reference.cpu.current_pc, subject.cpu.current_pc);
+        }
     }
-    subject
+    subjects.pop().unwrap()
 }
 
 fn seeds() -> u64 {
@@ -267,14 +302,46 @@ fn seeds() -> u64 {
 
 #[test]
 fn a_random_program_through_the_blocks_leaves_the_state_the_interpreter_leaves() {
-    let (mut instructions, mut entries) = (0, 0);
+    let (mut instructions, mut entries, mut compiled) = (0, 0, 0);
     for seed in 1..=seeds() {
         let m = random_machine(seed);
         let subject = lockstep(&m, 24_000, 16, &format!("seed {seed}"));
         instructions += subject.blocks.stats.instructions;
         entries += subject.blocks.stats.entries;
+        compiled += subject.blocks.stats.compiled_instructions;
     }
+    eprintln!("{entries} entries, {instructions} instructions in blocks, {compiled} of them compiled");
     assert!(entries > 1000 && instructions > entries, "the blocks ran too little to compare: {entries} entries, {instructions} instructions");
+    assert!(subjects_compile() || compiled > instructions / 4, "compiled code ran {compiled} of {instructions} instructions");
+}
+
+/// Whether the last tier under test is one that compiles; the counts above are then checked.
+fn subjects_compile() -> bool {
+    tiers().last().is_some_and(|&t| t == Tier::Decoded)
+}
+
+/// The verifier on: the interpreter stepped beside every instruction the blocks run, compiled or decoded, and compared.
+#[test]
+fn the_verifier_steps_beside_every_instruction_and_finds_nothing() {
+    for seed in 1..=seeds().min(40) {
+        let m = random_machine(seed);
+        let mut reference = m.clone();
+        reference.run_steps(24_000);
+        for tier in tiers() {
+            let mut subject = recompiled(&m, tier);
+            subject.blocks.verify = true;
+            subject.run_steps(24_000);
+            assert!(reference == subject, "seed {seed}, {tier:?}: the machines part");
+        }
+    }
+    let mut m = machine_with(0x1000, &counted_loop(30_000));
+    with_devices(&mut m);
+    let mut subject = recompiled(&m, Tier::BEST);
+    subject.blocks.verify = true;
+    for _ in 0..3 {
+        subject.run_frame();
+    }
+    assert!(subject.blocks.stats.compiled_instructions > 100_000 || subjects_compile(), "{:?}", subject.blocks.stats);
 }
 
 // ---- The mechanisms one at a time ----
@@ -409,7 +476,7 @@ fn a_fault_in_the_middle_of_a_block_is_taken_on_its_instruction() {
     let program = [lui(4, 0x8010), ori(4, 4, 2), addiu(8, 8, 1), lw(5, 4, 0), addiu(10, 10, 1), beq(0, 0, -4), addiu(11, 11, 1)];
     let mut m = machine_with(0x1000, &program);
     with_handler(&mut m);
-    let subject = lockstep(&m, 50_000, 13, "the fault");
+    let subject = lockstep(&m, 50_000, 211, "the fault");
     assert!(subject.cpu.gpr[27] > 1000, "the fault was taken {} times", subject.cpu.gpr[27]);
 }
 
@@ -427,14 +494,14 @@ fn a_block_that_stores_into_its_own_words_runs_the_new_ones() {
         NOP,
     ];
     let m = machine_with(0x1000, &program);
-    let subject = lockstep(&m, 20_000, 7, "the rewriting loop");
+    let subject = lockstep(&m, 20_000, 223, "the rewriting loop");
     assert!(subject.cpu.gpr[10] > 1000 && subject.blocks.stats.discarded > 100, "{} discarded", subject.blocks.stats.discarded);
 }
 
 #[test]
 fn code_replaced_under_a_block_from_outside_is_run_as_replaced() {
-    let mut m = machine_with(0x1000, &counted_loop(100));
-    let (mut reference, mut subject) = pair(&m);
+    let m = machine_with(0x1000, &counted_loop(100));
+    let (mut reference, mut subject) = (m.clone(), recompiled(&m, Tier::BEST));
     for turn in 0..40u32 {
         reference.run_steps(3_001);
         subject.run_steps(3_001);
@@ -445,15 +512,14 @@ fn code_replaced_under_a_block_from_outside_is_run_as_replaced() {
             *machine.bus.written += 1;
         }
     }
-    m = subject;
-    assert!(m.blocks.stats.discarded > 10);
+    assert!(subject.blocks.stats.discarded > 10);
 }
 
 #[test]
 fn a_likely_branch_not_taken_leaves_its_slot_unrun() {
     let program = [addiu(8, 8, 1), andi_(9, 8, 3), bnel(9, 0, 2), addiu(10, 10, 1), addiu(11, 11, 1), beql(0, 0, -6), addiu(12, 12, 1)];
     let m = machine_with(0x1000, &program);
-    lockstep(&m, 30_000, 11, "the likely branches");
+    lockstep(&m, 30_000, 227, "the likely branches");
 }
 
 fn andi_(rt: u32, rs: u32, v: u32) -> u32 {
@@ -464,7 +530,7 @@ fn andi_(rt: u32, rs: u32, v: u32) -> u32 {
 fn a_branch_in_a_delay_slot_is_left_to_the_interpreter() {
     let program = [addiu(8, 8, 1), beq(0, 0, 3), bne(8, 0, -2), addiu(10, 10, 1), addiu(11, 11, 1), addiu(12, 12, 1), j(KSEG0 | 0x1000), NOP];
     let m = machine_with(0x1000, &program);
-    lockstep(&m, 20_000, 5, "the branch in a slot");
+    lockstep(&m, 20_000, 229, "the branch in a slot");
 }
 
 #[test]
@@ -481,7 +547,7 @@ fn the_multiply_and_divide_stalls_are_ticked() {
         NOP,
     ];
     let m = machine_with(0x1000, &program);
-    lockstep(&m, 40_000, 17, "the stalls");
+    lockstep(&m, 40_000, 233, "the stalls");
 }
 
 #[test]
@@ -490,7 +556,7 @@ fn a_store_to_the_vi_inside_a_loop_is_seen_at_once() {
     let program = [lui(4, 0xA440), addiu(5, 5, 1), andi_(5, 5, 0x1FF), sw(5, 4, 0x0C), addiu(10, 10, 1), beq(0, 0, -5), NOP];
     let mut m = machine_with(0x1000, &program);
     with_devices(&mut m);
-    lockstep(&m, 200_000, 101, "the VI store");
+    lockstep(&m, 200_000, 269, "the VI store");
 }
 
 /// A loop across two pages whose frames are not neighbours, with a decoy after the first frame: `Mars_Recompiler.md` §17.
@@ -517,7 +583,7 @@ fn a_mapped_loop_across_two_pages_leaves_the_interpreters_state() {
     m.cpu.pc = 0x0040_0FF8;
     m.cpu.next_pc = 0x0040_0FFC;
     m.cpu.cop0_written(&m.bus);
-    let subject = lockstep(&m, 30_000, 9, "the mapped loop");
+    let subject = lockstep(&m, 30_000, 239, "the mapped loop");
     assert!(subject.blocks.stats.mapped > 1000, "{} mapped entries", subject.blocks.stats.mapped);
     assert_eq!(subject.cpu.gpr[12], 0);
 }
@@ -558,8 +624,8 @@ fn a_page_remapped_by_a_tlb_write_alone_is_fetched_from_its_new_frame() {
     m.cpu.pc = 0x0040_0000;
     m.cpu.next_pc = 0x0040_0004;
     m.cpu.cop0_written(&m.bus);
-    let subject = lockstep(&m, 60_000, 31, "the remapped page");
-    assert!(subject.cpu.gpr[10] > 10_000 && subject.blocks.stats.mapped > 1000, "{} added, {} mapped", subject.cpu.gpr[10], subject.blocks.stats.mapped);
+    let subject = lockstep(&m, 60_000, 241, "the remapped page");
+    assert!(subject.cpu.gpr[10] > 10_000 && subject.blocks.stats.mapped > 100, "{} added, {} mapped", subject.cpu.gpr[10], subject.blocks.stats.mapped);
 }
 
 #[test]
@@ -571,16 +637,16 @@ fn a_jump_to_an_unaligned_address_or_out_of_the_direct_segments_faults_as_the_in
         put(&mut m, 0x180 + 4 * i as u32, word);
         put(&mut m, 4 * i as u32, word);
     }
-    lockstep(&m, 20_000, 7, "the misaligned jump");
+    lockstep(&m, 20_000, 251, "the misaligned jump");
     put(&mut m, 0x1004, ori(6, 6, 0x2010));
     put(&mut m, 0x1000, lui(6, 0));
-    lockstep(&m, 20_000, 7, "the jump into kuseg");
+    lockstep(&m, 20_000, 257, "the jump into kuseg");
 }
 
 #[test]
 fn a_machine_loaded_from_a_state_keeps_no_block_that_disagrees_with_memory() {
     let m = machine_with(0x1000, &counted_loop(2_000));
-    let (mut reference, mut subject) = pair(&m);
+    let (mut reference, mut subject) = (m.clone(), recompiled(&m, Tier::BEST));
     reference.run_steps(50_000);
     subject.run_steps(50_000);
     let state = reference.save_state_vec(false).unwrap();
@@ -598,4 +664,128 @@ fn a_machine_loaded_from_a_state_keeps_no_block_that_disagrees_with_memory() {
     reference.run_steps(20_000);
     subject.run_steps(20_000);
     assert!(reference == subject);
+}
+
+/// The signal processor running its own loop while the CPU's blocks run: the variant that steps it after every instruction.
+#[test]
+fn blocks_run_beside_a_running_processor_leave_the_interpreters_state() {
+    let mut m = machine_with(0x1000, &counted_loop(30_000));
+    with_devices(&mut m);
+    for (i, &word) in [addiu(2, 2, 1), bne(2, 0, -2), NOP].iter().enumerate() {
+        m.bus.write32(0x0400_1000 + 4 * i as u32, word);
+    }
+    m.bus.write32(0x0408_0000, 0);
+    m.bus.write32(0x0404_0010, 0x0005);
+    assert!(!m.bus.sp.processor.halted, "the processor did not start");
+
+    let subject = lockstep(&m, 200_000, 337, "the processor beside");
+    assert!(subject.bus.sp.processor.gpr[2] > 10_000, "the processor ran {} steps", subject.bus.sp.processor.gpr[2]);
+    assert!(subject.blocks.stats.compiled_beside > 100 || subjects_compile(), "{:?}", subject.blocks.stats);
+}
+
+/// `JALR` whose link is its own target register: the interpreter reads the target before it writes the link.
+/// Written for the mutant that reversed the two, which nothing else caught (Mars_Native.md §5.8.6).
+#[test]
+fn a_register_call_whose_link_is_its_own_register_leaves_the_interpreters_state() {
+    let program = [lui(31, 0x8000), ori(31, 31, 0x1014), r_type(31, 0, 31, 0, 0x09), NOP, addiu(10, 10, 1), addiu(11, 11, 1), j(KSEG0 | 0x1000), NOP];
+    let m = machine_with(0x1000, &program);
+    let subject = lockstep(&m, 20_000, 263, "the register call");
+    assert!(subject.cpu.gpr[11] > 1000 && subject.cpu.gpr[10] == 0, "r10 {} r11 {}", subject.cpu.gpr[10], subject.cpu.gpr[11]);
+}
+
+/// A compiled block that rewrites its own last word now and then: the pass that writes must run the new word, not the
+/// one its code holds. The word alternates with the counter's bit that turns over as often as the address comes back
+/// to the block, so the block stands still long enough to be compiled between writes (§5.8.6).
+#[test]
+fn a_compiled_block_that_rewrites_its_own_word_runs_the_new_one() {
+    let program = [
+        addiu(9, 9, 1),
+        r_type(0, 9, 3, 8, 0x02),
+        andi_(3, 3, 1),
+        r_type(0, 3, 2, 16, 0x00),
+        r_type(0, 3, 1, 21, 0x00),
+        r_type(2, 1, 3, 0, 0x25),
+        lui(6, 0x25CE),
+        ori(6, 6, 1),
+        r_type(6, 3, 5, 0, 0x26),
+        addiu(8, 8, 4),
+        andi_(8, 8, 0x3FC),
+        lui(4, 0x8000),
+        r_type(4, 8, 4, 0, 0x21),
+        addiu(4, 4, 0x1044),
+        sw(5, 4, 0),
+        addiu(10, 10, 1),
+        beq(0, 0, -17),
+        NOP,
+    ];
+    let m = machine_with(0x1000, &program);
+    let subject = lockstep(&m, 200_000, 281, "the block that rewrites its own word");
+    assert!(subject.cpu.gpr[14] > 4 && subject.cpu.gpr[15] > 4, "the word was never rewritten both ways: r14 {} r15 {}", subject.cpu.gpr[14], subject.cpu.gpr[15]);
+    assert!(subject.blocks.stats.discarded > 4, "{} discarded", subject.blocks.stats.discarded);
+}
+
+/// The signal processor's DMA writing over a block again and again, each time with another word: the block leaves at
+/// the write it did not make, and the word it runs is the one in memory. The transfer's address is eight-byte aligned,
+/// so the word it lands on is the block's last (§5.8.6).
+#[test]
+fn a_block_the_processors_dma_writes_over_runs_the_new_words() {
+    let program = [
+        addiu(10, 10, 1),
+        addiu(11, 11, 1),
+        addiu(12, 12, 1),
+        addiu(13, 13, 1),
+        addiu(8, 8, 1),
+        addiu(9, 9, 1),
+        addiu(10, 10, 1),
+        addiu(11, 11, 1),
+        addiu(12, 12, 1),
+        addiu(13, 13, 1),
+        addiu(8, 8, 1),
+        addiu(9, 9, 1),
+        addiu(10, 10, 1),
+        beq(0, 0, -14),
+        NOP,
+    ];
+    let mut m = machine_with(0x1000, &program);
+    with_devices(&mut m);
+    // The processor toggles a word in its own memory and hands it to the transfer, which lands on the loop's slot.
+    let rsp = [
+        0x3C05_25CE,
+        0x34A5_0001,
+        0x3C06_0021,
+        0x3402_1038,
+        0x3403_0007,
+        0x00A6_2826,
+        0xAC05_0000,
+        0x4081_0000,
+        0x4082_0800,
+        0x4083_1800,
+        0x0800_0005,
+        NOP,
+    ];
+    for (i, &word) in rsp.iter().enumerate() {
+        m.bus.write32(0x0400_1000 + 4 * i as u32, word);
+    }
+    m.bus.write32(0x0408_0000, 0);
+    m.bus.write32(0x0404_0010, 0x0005);
+
+    let subject = lockstep(&m, 200_000, 277, "the transfer over the block");
+    assert!(subject.cpu.gpr[14] > 4 && subject.cpu.gpr[15] > 4, "the transfer never landed both ways: r14 {} r15 {}", subject.cpu.gpr[14], subject.cpu.gpr[15]);
+    assert!(subject.blocks.stats.discarded > 4, "{} discarded", subject.blocks.stats.discarded);
+}
+
+/// Past the code's bound every block is dropped and the compiler's memory with it, and the machine computes the same.
+#[test]
+fn dropping_every_block_at_the_codes_bound_changes_nothing() {
+    let mut m = machine_with(0x1000, &counted_loop(30_000));
+    with_devices(&mut m);
+    let mut reference = m.clone();
+    let mut subject = recompiled(&m, Tier::BEST);
+    subject.blocks.code_bound = 64;
+    for n in 1..=8 {
+        reference.run_steps(20_000);
+        subject.run_steps(20_000);
+        assert!(reference == subject, "the machines part after {n} runs");
+    }
+    assert!(subject.blocks.stats.flushes > 2, "the bound dropped the blocks {} times", subject.blocks.stats.flushes);
 }

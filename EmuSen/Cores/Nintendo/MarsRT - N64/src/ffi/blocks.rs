@@ -13,8 +13,8 @@ use crate::ffi::Core;
 pub unsafe extern "C" fn mars_machine_set_recompiler(core: *mut Core, flags: u32) {
     if let Some(c) = unsafe { core.as_mut() } {
         c.machine.set_recompiler(flags & 1 != 0);
-        c.machine.blocks.verify = flags & 2 != 0 || crate::cpu::blocks::Blocks::verify_by_default();
-        c.machine.blocks.tier = Tier::from_number((flags >> 4) & 0xF);
+        let verify = flags & 2 != 0 || crate::cpu::blocks::Blocks::verify_by_default();
+        c.machine.blocks.configure(Tier::from_number((flags >> 4) & 0xF), verify);
     }
 }
 

@@ -201,3 +201,48 @@ fn a_recompiled_machine_is_the_interpreted_machine() {
 fn a_recompiled_machine_on_four_workers_deferred_is_the_interpreted_machine_a_picture_late() {
     each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true }, Compare::Snapshot);
 }
+
+/// A run that carries a history of blocks against one started from its state, which has none: `Mars_Recompiler.md` §13's
+/// asymmetry, which is how the C# core's stale shape was found. Both machines recompile, and both must agree.
+#[test]
+fn a_run_that_carries_its_blocks_and_one_loaded_from_its_state_agree() {
+    let Ok(folder) = std::env::var("EMUSEN_MARSRT_STATES") else {
+        eprintln!("EMUSEN_MARSRT_STATES unset, not run");
+        return;
+    };
+    let frames = frames();
+    let mode = Mode { threaded: false, deferred: false, workers: 1, blocks: true };
+    for (rom, state) in GAMES {
+        if !std::path::Path::new(&format!("{folder}/{rom}")).exists() {
+            continue;
+        }
+        let mut carried = Run::load(&folder, rom, state, mode);
+        for n in 1..=frames / 2 {
+            carried.frame(n);
+        }
+        carried.machine.settle();
+        let taken = carried.machine.save_state_vec(false).unwrap();
+        let mut fresh = Run::load(&folder, rom, state, mode);
+        fresh.machine.restore_state(&taken).unwrap();
+        fresh.scanout.forget();
+        fresh.machine.present_now(&mut fresh.scanout);
+        // The carried machine is loaded from its own state as well, since a load is observable (§5.2.1).
+        carried.machine.restore_state(&taken).unwrap();
+        for n in frames / 2 + 1..=frames {
+            carried.frame(n);
+            fresh.frame(n);
+            carried.machine.settle();
+            fresh.machine.settle();
+            assert!(
+                carried.machine.save_state_vec(false).unwrap() == fresh.machine.save_state_vec(false).unwrap(),
+                "{rom} {state:?}: the run with a history of blocks parts from the run without one at frame {n}"
+            );
+        }
+        eprintln!(
+            "{rom} {}: {frames} frames, the carried blocks and the fresh ones agree; carried {} live, fresh {} live",
+            state.unwrap_or("from power-on"),
+            carried.machine.blocks.live(),
+            fresh.machine.blocks.live()
+        );
+    }
+}

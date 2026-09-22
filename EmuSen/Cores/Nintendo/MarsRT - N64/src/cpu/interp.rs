@@ -1,7 +1,7 @@
 //! The VR4300 interpreter: the step, the fetch, translation, and the integer instructions. C#'s Cpu.cs and Cpu/Opcodes. See Mars_Cpu.md.
 
 use crate::memory::bus::MemoryBus;
-use crate::memory::bus_access::be32;
+use crate::memory::dp_threads::site;
 use crate::cpu::cop0::*;
 use crate::cpu::{Cpu, Exec, Fault, Raised, code};
 use crate::cpu::segments::{self, Mode, Segment};
@@ -41,28 +41,6 @@ fn immediate(i: u32) -> u64 {
 #[inline(always)]
 fn signed_immediate(i: u32) -> i64 {
     i as i16 as i64
-}
-
-#[inline(always)]
-fn read_rdram(rdram: &[u8], at: u32, size: u32) -> u64 {
-    let at = at as usize;
-    match size {
-        1 => rdram[at] as u64,
-        2 => u16::from_be_bytes([rdram[at], rdram[at + 1]]) as u64,
-        4 => u32::from_be_bytes([rdram[at], rdram[at + 1], rdram[at + 2], rdram[at + 3]]) as u64,
-        _ => u64::from_be_bytes(rdram[at..at + 8].try_into().unwrap()),
-    }
-}
-
-#[inline(always)]
-fn write_rdram(rdram: &mut [u8], at: u32, value: u64, size: u32) {
-    let at = at as usize;
-    match size {
-        1 => rdram[at] = value as u8,
-        2 => rdram[at..at + 2].copy_from_slice(&(value as u16).to_be_bytes()),
-        4 => rdram[at..at + 4].copy_from_slice(&(value as u32).to_be_bytes()),
-        _ => rdram[at..at + 8].copy_from_slice(&value.to_be_bytes()),
-    }
 }
 
 #[inline(always)]
@@ -138,7 +116,10 @@ impl Cpu {
         if pc.wrapping_sub(KERNEL_DIRECT_BASE) < KERNEL_DIRECT_SIZE && self.run.mode == Mode::Kernel {
             let physical = (pc as u32) & 0x1FFF_FFFF;
             if (physical as usize) < bus.rdram.len() {
-                return Ok(be32(&bus.rdram, physical));
+                if bus.dp.read_marked(physical) {
+                    bus.dp.wait_read(physical, 4, site::FETCH);
+                }
+                return Ok(bus.rdram.be32(physical));
             }
             return Ok(bus.read32(physical));
         }
@@ -491,7 +472,14 @@ impl Cpu {
         let address = self.effective_address(i);
         self.require_alignment(address, size, code::ADDRESS_ERROR_LOAD)?;
         let physical = self.translate_access(self.mirrored(address, size), address, false)?;
-        let raw = if (physical as usize) < bus.rdram.len() { read_rdram(&bus.rdram, physical, size) } else { bus.load(physical, size) };
+        let raw = if (physical as usize) < bus.rdram.len() {
+            if bus.dp.read_marked(physical) {
+                bus.dp.wait_read(physical, size, site::LOAD);
+            }
+            bus.rdram.read(physical, size)
+        } else {
+            bus.load(physical, size)
+        };
         let value = if !signed {
             raw
         } else {
@@ -514,7 +502,10 @@ impl Cpu {
         let physical = self.translate_access(self.mirrored(address, size), address, true)?;
         let value = self.read(rt(i));
         if (physical as usize) < bus.rdram.len() && !bus.mi.repeating {
-            write_rdram(&mut bus.rdram, physical, value, size);
+            if bus.dp.write_marked(physical) {
+                bus.dp.wait_write(physical, size, site::STORE);
+            }
+            bus.rdram.write(physical, value, size);
             return Ok(());
         }
         bus.store(physical, value, size);

@@ -3,6 +3,7 @@
 use crate::memory::bus::MemoryBus;
 use crate::memory::controller::Controller;
 use crate::memory::joybus;
+use crate::memory::dp_threads::site;
 use crate::memory::mi::interrupt;
 use crate::rom::Cic;
 use crate::state::{State, StateReader, StateResult, StateWriter};
@@ -63,6 +64,7 @@ impl MemoryBus {
         }
         let to = self.si.pending_read as u32;
         self.si.pending_read = -1;
+        self.dp.wait_write_range(to, PIF_RAM_SIZE as u32, site::SI);
         for i in 0..PIF_RAM_SIZE as u32 {
             let address = to.wrapping_add(i);
             if address as usize >= self.rdram.len() {
@@ -105,6 +107,7 @@ impl MemoryBus {
             }
         }
         if to_pif {
+            self.dp.wait_read_range(self.si.dram_address, PIF_RAM_SIZE as u32, site::SI);
             for i in 0..PIF_RAM_SIZE as u32 {
                 let address = self.si.dram_address.wrapping_add(i);
                 if address as usize >= self.rdram.len() {

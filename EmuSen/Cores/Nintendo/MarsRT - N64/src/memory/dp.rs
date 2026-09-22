@@ -159,13 +159,13 @@ impl DpInterface {
     /// `_writeMarks[page] != 0`: a reader of this byte may have to wait. One load and a compare on every fast path.
     #[inline(always)]
     pub fn read_marked(&self, physical: u32) -> bool {
-        self.marks.0.write_marks[(physical >> 12) as usize & (PAGES - 1)].load(Relaxed) != 0
+        self.marks.write_marks[(physical >> 12) as usize & (PAGES - 1)].load(Relaxed) != 0
     }
 
     /// `_marks[page] != 0`: a writer of this byte may have to wait.
     #[inline(always)]
     pub fn write_marked(&self, physical: u32) -> bool {
-        self.marks.0.marks[(physical >> 12) as usize & (PAGES - 1)].load(Relaxed) != 0
+        self.marks.marks[(physical >> 12) as usize & (PAGES - 1)].load(Relaxed) != 0
     }
 
     /// `WaitForRead` over the access's bytes, at a site; the caller has seen the page marked.
@@ -347,7 +347,7 @@ impl MemoryBus {
         match (on, self.dp.threads.is_some()) {
             (true, false) => {
                 debug_assert!(self.dp.pending.is_empty(), "a load's words run before a drain starts");
-                let threads = Threads::start(&mut self.dp.processor, &self.rdram, &self.rdram_hidden, &self.dp.marks.0, verify);
+                let threads = Threads::start(&mut self.dp.processor, &self.rdram, &self.rdram_hidden, &self.dp.marks.0.0, verify);
                 *self.dp.threads = Some(Box::new(threads));
             }
             (false, true) => {

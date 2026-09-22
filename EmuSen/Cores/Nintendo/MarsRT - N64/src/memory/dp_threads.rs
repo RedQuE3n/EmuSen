@@ -66,6 +66,14 @@ impl Default for PageMarks {
     }
 }
 
+impl std::ops::Deref for PageMarks {
+    type Target = Marks;
+    #[inline(always)]
+    fn deref(&self) -> &Marks {
+        &self.0
+    }
+}
+
 impl Clone for PageMarks {
     fn clone(&self) -> Self {
         PageMarks::default()
@@ -164,6 +172,8 @@ pub struct Shared {
     /// A pause's number while one is asked for, else zero; the drain answers with the number it stands for.
     pause_request: AtomicU64,
     standing: AtomicU64,
+    /// Holds nest: a snapshot sized and then written holds twice, and only the last resume lets the drain go.
+    holds: AtomicU32,
     stopping: AtomicBool,
     sleeping: AtomicBool,
     faulted: AtomicBool,
@@ -272,25 +282,29 @@ impl Shared {
         appended >= RANGE_COUNT as i64
     }
 
-    /// `BoxHolds`: the box of the draw ending at the word, newest first; a word that ends no recorded draw is not the boxes' to judge.
+    /// `BoxHolds`: the box of the draw ending at the word, found by halving, since ends are unique and grow with the index; none is not the boxes' to judge.
     fn box_holds(&self, at: i64, word: i64) -> bool {
         let appended = self.boxes_appended.load(Acquire);
-        let mut i = appended - 1;
-        while i >= (appended - BOX_COUNT as i64).max(0) {
-            let b = self.boxes[(i as usize) & (BOX_COUNT - 1)].load();
-            fence(Acquire);
-            if self.boxes_appended.load(Relaxed) - i > BOX_COUNT as i64 {
-                return true;
+        let oldest = (appended - BOX_COUNT as i64).max(0);
+        let (mut low, mut high) = (oldest, appended);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if self.boxes[(middle as usize) & (BOX_COUNT - 1)].end.load(Relaxed) <= word {
+                low = middle + 1;
+            } else {
+                high = middle;
             }
-            if b.end < word {
-                return true;
-            }
-            if b.end == word {
-                return holds(&b, at, at + 1);
-            }
-            i -= 1;
         }
-        true
+        if low == oldest {
+            return true;
+        }
+        let i = low - 1;
+        let b = self.boxes[(i as usize) & (BOX_COUNT - 1)].load();
+        fence(Acquire);
+        if self.boxes_appended.load(Relaxed) - i > BOX_COUNT as i64 || b.end != word {
+            return true;
+        }
+        holds(&b, at, at + 1)
     }
 }
 
@@ -480,6 +494,7 @@ impl Threads {
             completed: AtomicI64::new(0),
             pause_request: AtomicU64::new(0),
             standing: AtomicU64::new(0),
+            holds: AtomicU32::new(0),
             stopping: AtomicBool::new(false),
             sleeping: AtomicBool::new(false),
             faulted: AtomicBool::new(false),
@@ -1081,6 +1096,9 @@ impl Threads {
 
     /// `Pause`: nothing runs on the drain until `resume`; the Acquire of its answer makes what it drew this thread's to read.
     fn pause(&self) -> u64 {
+        if self.shared.holds.fetch_add(1, Relaxed) > 0 {
+            return self.shared.standing.load(Relaxed);
+        }
         let number = self.shared.pause_request.load(Relaxed).max(self.shared.standing.load(Relaxed)) + 1;
         self.shared.pause_request.store(number, SeqCst);
         self.thread.unpark();
@@ -1093,8 +1111,10 @@ impl Threads {
     }
 
     pub fn resume(&self) {
-        self.shared.pause_request.store(0, SeqCst);
-        self.thread.unpark();
+        if self.shared.holds.fetch_sub(1, Relaxed) == 1 {
+            self.shared.pause_request.store(0, SeqCst);
+            self.thread.unpark();
+        }
     }
 
     /// `WritePending`'s words: those handed over and not run, read while the drain stands.

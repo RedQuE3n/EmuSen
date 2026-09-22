@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 
 use crate::Skip;
 use crate::memory::bus::MemoryBus;
+use crate::memory::dp_threads::site;
 use crate::memory::mi::interrupt;
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
@@ -220,6 +221,9 @@ impl MemoryBus {
         let at = self.ai.address as usize;
         let (mut left, mut right) = (0i16, 0i16);
         if at + 3 < self.rdram.len() {
+            if self.dp.read_marked(at as u32) {
+                self.dp.wait_read(at as u32, 4, site::AI);
+            }
             left = i16::from_be_bytes([self.rdram[at], self.rdram[at + 1]]);
             right = i16::from_be_bytes([self.rdram[at + 2], self.rdram[at + 3]]);
         }

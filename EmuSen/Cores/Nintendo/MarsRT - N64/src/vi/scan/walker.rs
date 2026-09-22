@@ -4,7 +4,7 @@ use super::filters::{Pixel, divot, gamma, mix, pull, step};
 use super::{Job, Picture, View};
 
 /// `Vi.RowSpan`: every source pixel one row can reach, and the neighbour beyond.
-const ROW_SPAN: i32 = super::RASTER_WIDTH as i32 * 4 + 2;
+pub(super) const ROW_SPAN: i32 = super::RASTER_WIDTH as i32 * 4 + 2;
 const WINDOW_LINES: i32 = 32;
 /// `Vi.Covered`: above this anti-alias mode every pixel is whole.
 const COVERED: i32 = 1;

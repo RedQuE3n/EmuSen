@@ -17,7 +17,7 @@ mod textures;
 mod two_cycle;
 mod walker;
 
-pub use modes::{BlendSelectors, CombinerSelectors, Modes};
+pub use modes::{BlendSelectors, CombinerSelectors, Modes, SET_MASK_IMAGE};
 use texture_memory::LoadKind;
 
 use crate::state::{State, StateReader, StateResult, StateWriter, boxed};

@@ -1,6 +1,7 @@
 //! The C# `MemoryBus`'s behaviour: every read and write by region and width, the clock, and the events. See Mars_Memory.md §2.
 
 use crate::memory::bus::{MemoryBus, RDRAM_SIZE_EXPANDED};
+use crate::memory::dp_threads::site;
 
 /// `MemoryMap`: the physical address map.
 pub mod map {
@@ -103,7 +104,10 @@ fn whole_word(physical: u32, value: u64, size: u32) -> u32 {
 impl MemoryBus {
     pub fn read32(&mut self, physical: u32) -> u32 {
         if (physical as usize) < self.rdram.len() {
-            return be32(&self.rdram, physical);
+            if self.dp.read_marked(physical) {
+                self.dp.wait_read(physical, 4, site::BUS_READ);
+            }
+            return self.rdram.be32(physical);
         }
         if physical < RDRAM_SIZE_EXPANDED as u32 {
             return 0;
@@ -156,7 +160,10 @@ impl MemoryBus {
     pub fn write32(&mut self, physical: u32, value: u32) {
         *self.written += 1;
         if (physical as usize) < self.rdram.len() {
-            put_be32(&mut self.rdram, physical, value);
+            if self.dp.write_marked(physical) {
+                self.dp.wait_write(physical, 4, site::BUS_WRITE);
+            }
+            self.rdram.put_be32(physical, value);
             return;
         }
         if physical < RDRAM_SIZE_EXPANDED as u32 {

@@ -1,7 +1,7 @@
 //! The idle loop, a branch to itself over a no-operation, run in one piece: C#'s `RunIdle`, entered from the interpreter. See Mars_Native.md §5.2.
 
 use crate::memory::bus::MemoryBus;
-use crate::memory::bus_access::be32;
+use crate::memory::dp_threads::site;
 use crate::cpu::cop0::ENTRY_HI;
 use crate::cpu::Cpu;
 use crate::cpu::interp::{KERNEL_DIRECT_BASE, KERNEL_DIRECT_SIZE};
@@ -35,9 +35,10 @@ impl Cpu {
         if physical as usize + 8 > bus.rdram.len() || (!direct && (physical & 0xFFF) + 8 > 0x1000) {
             return false;
         }
-        let branch = be32(&bus.rdram, physical);
+        bus.dp.wait_read_range(physical, 8, site::BLOCK);
+        let branch = bus.rdram.be32(physical);
         let to_itself = branch == 0x1000_FFFF || ((branch >> 26) == 2 && ((branch & 0x03FF_FFFF) << 2) == (physical & 0x0FFF_FFFF));
-        if !to_itself || be32(&bus.rdram, physical + 4) != 0 || (!direct && branch != 0x1000_FFFF) {
+        if !to_itself || bus.rdram.be32(physical + 4) != 0 || (!direct && branch != 0x1000_FFFF) {
             return false;
         }
 

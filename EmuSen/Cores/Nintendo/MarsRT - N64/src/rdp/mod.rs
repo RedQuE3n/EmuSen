@@ -494,7 +494,7 @@ pub struct RdpMemory<'a> {
     rdram_len: usize,
     hidden: *mut u8,
     hidden_len: usize,
-    check: Option<(&'a crate::dp_threads::Shared, i64)>,
+    check: Option<(&'a crate::memory::dp_threads::Shared, i64)>,
     _memories: std::marker::PhantomData<&'a mut [u8]>,
 }
 
@@ -505,7 +505,7 @@ impl<'a> RdpMemory<'a> {
 
     /// # Safety
     /// Both memories must stay allocated for `'a`, and no other thread may touch a byte this view touches unless ordered by the page marks.
-    pub(crate) unsafe fn shared(rdram: (*mut u8, usize), hidden: (*mut u8, usize), check: Option<(&'a crate::dp_threads::Shared, i64)>) -> Self {
+    pub(crate) unsafe fn shared(rdram: (*mut u8, usize), hidden: (*mut u8, usize), check: Option<(&'a crate::memory::dp_threads::Shared, i64)>) -> Self {
         RdpMemory { rdram: rdram.0, rdram_len: rdram.1, hidden: hidden.0, hidden_len: hidden.1, check, _memories: std::marker::PhantomData }
     }
 

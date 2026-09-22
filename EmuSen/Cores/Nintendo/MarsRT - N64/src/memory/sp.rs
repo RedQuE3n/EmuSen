@@ -1,7 +1,7 @@
 //! The signal processor's interface and registers, the C# `SpInterface` and `Rsp`.
 
-use crate::bus::MemoryBus;
-use crate::mi::interrupt;
+use crate::memory::bus::MemoryBus;
+use crate::memory::mi::interrupt;
 use crate::rsp::{self, DATA_MASK, Memory, PC_MASK};
 use crate::state::{State, StateReader, StateResult, StateWriter};
 

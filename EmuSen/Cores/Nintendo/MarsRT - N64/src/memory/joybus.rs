@@ -1,7 +1,7 @@
 //! The PIF walking the command block a game left in PIF RAM, channel by channel: the C# `Joybus`. See Mars_Serial.md §3.
 
-use crate::controller::{CHUNK_SIZE, Controller, ControllerPak};
-use crate::save::SaveChip;
+use crate::memory::controller::{CHUNK_SIZE, Controller, ControllerPak};
+use crate::memory::save::SaveChip;
 
 pub const END: u8 = 0xFE;
 pub const SKIP: u8 = 0xFF;

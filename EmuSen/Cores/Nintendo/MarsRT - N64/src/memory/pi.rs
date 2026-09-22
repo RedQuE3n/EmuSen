@@ -1,7 +1,7 @@
 //! The peripheral interface, the C# `PiInterface`.
 
-use crate::bus::MemoryBus;
-use crate::mi::interrupt;
+use crate::memory::bus::MemoryBus;
+use crate::memory::mi::interrupt;
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]

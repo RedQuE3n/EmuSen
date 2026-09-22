@@ -4,18 +4,18 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::Skip;
-use crate::ram::Ram;
+use crate::memory::ram::Ram;
 use crate::rom::RomImage;
 
-use crate::ai::AiInterface;
-use crate::controller::ControllerPak;
-use crate::dp::DpInterface;
-use crate::isviewer::IsViewer;
-use crate::mi::MiInterface;
-use crate::pi::PiInterface;
-use crate::save::SaveChip;
-use crate::si::SiInterface;
-use crate::sp::SpInterface;
+use crate::memory::ai::AiInterface;
+use crate::memory::controller::ControllerPak;
+use crate::memory::dp::DpInterface;
+use crate::memory::isviewer::IsViewer;
+use crate::memory::mi::MiInterface;
+use crate::memory::pi::PiInterface;
+use crate::memory::save::SaveChip;
+use crate::memory::si::SiInterface;
+use crate::memory::sp::SpInterface;
 use crate::state::{State, StateReader, StateResult, StateWriter, boxed};
 use crate::vi::Vi;
 

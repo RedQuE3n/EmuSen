@@ -421,6 +421,7 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(difference is null, $"{state}, after word {i} of {words.Length} (frame {FrameOf(stream, i)}): {difference}");
             }
 
+            WriteExpected(StreamPath(state) + ".expected", bus.Rdram, bus.RdramHidden, RdpCompare.StateOf(cs));
             int changed = CountChanged(stream.Rdram, bus.Rdram);
             _output.WriteLine($"{state}: {words.Length} words, {stream.FrameEnds.Length} frames, {syncs} full syncs, {compared} comparisons, all identical; {changed} RDRAM bytes drawn");
             foreach (var (key, count) in new RdpCensus(words).Counts) _output.WriteLine($"  {count,8} {key}");
@@ -479,10 +480,186 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine($"{state}: {stream.Words.Length} words over {stream.FrameEnds.Length} frames; mean C# {perFrameC:F3} ms/frame, Rust {perFrameR:F3} ms/frame");
         }
 
+        // Random modes, tiles, loads and colours over well-formed primitives, both processors from one start, compared after each list - see Mars_Native.md §5.3.
+        [Fact]
+        public void Random_modes_over_well_formed_primitives_draw_the_same_bytes_in_rust()
+        {
+            Assert.True(NativeRdp.Available, MarsNative.Report);
+            const int Lists = 3000;
+
+            var bus = new MemoryBus();
+            RdpProcessor cs = bus.Dp.Processor;
+            var noise = new Random(64);
+            noise.NextBytes(bus.Rdram.AsSpan(0x0010_0000, 0x0008_0000));
+            noise.NextBytes(bus.Rdram.AsSpan(0x0020_0000, 0x0000_4000));
+            noise.NextBytes(bus.RdramHidden.AsSpan(0x0008_0000, 0x0004_0000));
+
+            using var rust = new NativeRdp();
+            rust.Load(RdpCompare.StateOf(cs));
+            byte[] rdram = (byte[])bus.Rdram.Clone(), hidden = (byte[])bus.RdramHidden.Clone();
+            byte[] start = (byte[])rdram.Clone();
+
+            long words = 0, primitives = 0, changed = 0;
+            var cycles = new int[4];
+            for (int list = 0; list < Lists; list++)
+            {
+                ulong[] commands = RandomList(new Random(1000 + list), cycles, ref primitives);
+                int csSyncs = 0, rustSyncs = 0;
+                foreach (ulong word in commands) if (cs.Accept(word)) csSyncs++;
+                for (int at = 0; at < commands.Length;)
+                {
+                    at += rust.Accept(commands.AsSpan(at), rdram, hidden, out bool sync);
+                    if (sync) rustSyncs++;
+                }
+
+                words += commands.Length;
+                changed += CountChanged(start.AsSpan(0x0010_0000, 0x0008_0000), rdram.AsSpan(0x0010_0000, 0x0008_0000));
+                rdram.AsSpan(0x0010_0000, 0x0008_0000).CopyTo(start.AsSpan(0x0010_0000));
+                string? difference = csSyncs != rustSyncs ? $"C# {csSyncs} syncs, Rust {rustSyncs}" : RdpCompare.Difference(cs, bus.Rdram, bus.RdramHidden, rust, rdram, hidden);
+                Assert.True(difference is null, $"list {list} (seed {1000 + list}): {difference}\n{string.Join(", ", commands.Select(w => w.ToString("X16")))}");
+            }
+
+            _output.WriteLine($"{Lists} lists, {words} words, {primitives} primitives ({cycles[0]} one-cycle, {cycles[1]} two-cycle, {cycles[2]} copy, {cycles[3]} fill), {changed} RDRAM bytes changed, all identical");
+        }
+
+        // The edges of five triangles the other tests draw, and the shade, depth and texture blocks two of them carry.
+        private static readonly ulong[][] Edges =
+        {
+            new[] { 0x0A980075_001B0006UL, 0x001DC000_FFFEF777UL, 0x00022C65_00002735UL, 0xFFFFA186_00053CF4UL },
+            new[] { 0x0D800071_0027000AUL, 0x001BC000_FFFEE7C9UL, 0x00032AE0_00002A41UL, 0x00018F73_0003611AUL },
+            new[] { 0x0D000077_00460005UL, 0x0004C000_00019783UL, 0x001C898B_FFFFD9D3UL, 0x001CDD8A_FFFE89D9UL },
+            new[] { 0x0A000070_00200008UL, 0x00040000_0000E666UL, 0x001A0000_FFFFD89EUL, 0x001A0000_FFFC5555UL },
+            new[] { 0x08800068_00280008UL, 0x00140000_FFFF2000UL, 0x00040000_00001555UL, 0x00040000_00020000UL },
+        };
+
+        private static readonly ulong[] Shade =
+        {
+            0x00FE0013_00380103UL, 0xFFF80008_FFFFFFFDUL, 0x13E20775_B2F4B7ECUL, 0x3D02D62A_3BC17C71UL,
+            0xFFF70001_0006FFF6UL, 0xFFF90000_0006FFF6UL, 0xD83CF116_9A199028UL, 0x202F7BB8_BA7DFA60UL,
+        };
+
+        private static readonly ulong[] Texture =
+        {
+            0xFFF3FF97_7FFF0000UL, 0x0046FFDF_FD270000UL, 0xE4531025_FFFF0000UL, 0xC1371E00_D82E0000UL,
+            0x001800D1_FE9D0000UL, 0x000D00D6_FF0D0000UL, 0x375ADFB6_C31D0000UL, 0x6141E8F4_480F0000UL,
+        };
+
+        private static readonly ulong[] Depth = { 0x0F392A41_02F31F10UL, 0x018DAB7F_011109C9UL };
+
+        private static ulong[] RandomList(Random r, int[] cycles, ref long primitives)
+        {
+            var w = new List<ulong>();
+            ulong Bits(int bits) => (ulong)r.NextInt64() & ((1UL << bits) - 1);
+            ulong Command(uint id, ulong operand) => ((ulong)id << 56) | (operand & 0x00FF_FFFF_FFFF_FFFFUL);
+            ulong Block(ulong word) => r.Next(3) switch { 0 => word, 1 => word ^ Bits(16) ^ (Bits(16) << 32), _ => (ulong)r.NextInt64() ^ ((ulong)r.Next() << 63) };
+
+            int size = new[] { 0, 1, 2, 2, 2, 3, 3 }[r.Next(7)];
+            ulong width = (ulong)r.Next(16, 48);
+            w.Add(Command(0x3F, (Bits(3) << 53) | ((ulong)size << 51) | ((width - 1) << 32) | (0x0010_0000UL + (ulong)r.Next(8))));
+            w.Add(Command(0x3E, 0x0014_0000UL + (ulong)r.Next(4) * 2));
+            ulong field = r.Next(8) == 0 ? (2UL | Bits(1)) << 24 : 0;
+            w.Add(Command(0x2D, ((ulong)r.Next(0, 24) << 44) | ((ulong)r.Next(0, 24) << 32) | field | ((ulong)r.Next(80, (int)width * 4 + 24) << 12) | (ulong)r.Next(80, 170)));
+
+            w.Add(Command(0x3D, (Bits(3) << 53) | ((ulong)r.Next(4) << 51) | ((ulong)r.Next(3, 40) << 32) | (0x0020_0000UL + (ulong)r.Next(0x200) * 8 + (ulong)r.Next(8))));
+            for (int n = r.Next(1, 4); n > 0; n--)
+            {
+                w.Add(Command(0x35, (Bits(3) << 53) | (Bits(2) << 51) | ((ulong)r.Next(9) << 41) | (Bits(9) << 32) | (Bits(3) << 24) | Bits(24)));
+                ulong sl = (ulong)r.Next(0, 24), tl = (ulong)r.Next(0, 24), tile = Bits(3);
+                w.Add(r.Next(3) switch
+                {
+                    0 => Command(0x34, (sl << 44) | (tl << 32) | (tile << 24) | ((sl + (ulong)r.Next(0, 96)) << 12) | (tl + (ulong)r.Next(0, 64))),
+                    1 => Command(0x33, (sl << 44) | (tl << 32) | (tile << 24) | ((ulong)r.Next(0, 0x200) << 12) | Bits(12)),
+                    _ => Command(0x30, (sl << 44) | (tl << 32) | (tile << 24) | ((sl + (ulong)r.Next(0, 0x400)) << 12) | tl),
+                });
+            }
+
+            for (int n = r.Next(1, 3); n > 0; n--)
+            {
+                ulong sl = (ulong)r.Next(0, 32), tl = (ulong)r.Next(0, 32);
+                w.Add(Command(0x32, (sl << 44) | (tl << 32) | (Bits(3) << 24) | ((sl + (ulong)r.Next(0, 160)) << 12) | (tl + (ulong)r.Next(0, 160))));
+            }
+
+            w.Add(Command(0x3C, Bits(56)));
+            w.Add(Command(0x3A, Bits(48)));
+            w.Add(Command(0x3B, Bits(32)));
+            w.Add(Command(0x39, Bits(32)));
+            w.Add(Command(0x38, Bits(32)));
+            w.Add(Command(0x2A, Bits(56)));
+            w.Add(Command(0x2B, Bits(28)));
+            w.Add(Command(0x2C, Bits(54)));
+            w.Add(Command(0x2E, Bits(32)));
+            w.Add(Command(0x37, Bits(32)));
+
+            for (int n = r.Next(1, 5); n > 0; n--)
+            {
+                int cycle = new[] { 0, 0, 0, 1, 1, 1, 2, 3 }[r.Next(8)];
+                ulong modes = (Bits(56) & ~(3UL << 52)) | ((ulong)cycle << 52);
+                if (r.Next(4) == 0) w.Add(Command(0x3C, Bits(56)));
+
+                // A keyed combine as a key is used, (A - centre) x scale, with widths small enough that distances land in the alpha's range.
+                if (r.Next(3) == 0)
+                {
+                    modes = (modes | (1UL << 40)) & ~(1UL << 13);
+                    ulong a = new ulong[] { 1, 2, 3, 4, 5 }[r.Next(5)];
+                    ulong cleared = Bits(56) & ~((0xFUL << 37) | (0x1FUL << 32) | (0xFUL << 24) | (7UL << 6));
+                    w.Add(Command(0x3C, cleared | (a << 37) | (6UL << 32) | (6UL << 24) | (7UL << 6)));
+                    w.Add(Command(0x2A, ((ulong)r.Next(0x40) << 44) | ((ulong)r.Next(0x40) << 32) | (Bits(8) << 24) | ((ulong)r.Next(0x20) << 16) | (Bits(8) << 8) | (ulong)r.Next(0x20)));
+                    w.Add(Command(0x2B, ((ulong)r.Next(0x40) << 16) | (Bits(8) << 8) | (ulong)r.Next(0x20)));
+                }
+
+                w.Add(Command(0x2F, modes));
+                cycles[cycle]++;
+                primitives++;
+
+                switch (r.Next(6))
+                {
+                    case 0:
+                        ulong x = (ulong)r.Next(0, 120), y = (ulong)r.Next(0, 120);
+                        w.Add(Command(0x36, ((x + (ulong)r.Next(0, 80)) << 44) | ((y + (ulong)r.Next(0, 80)) << 32) | (x << 12) | y));
+                        break;
+                    case 1:
+                        ulong left = (ulong)r.Next(0, 120), top = (ulong)r.Next(0, 120);
+                        ulong steps = r.Next(3) == 0 ? Bits(32) : ((ulong)(ushort)r.Next(-0x2000, 0x2000) << 16) | (ushort)r.Next(-0x2000, 0x2000);
+                        w.Add(Command((uint)(0x24 + r.Next(2)), ((left + (ulong)r.Next(0, 90)) << 44) | ((top + (ulong)r.Next(0, 90)) << 32) | (Bits(3) << 24) | (left << 12) | top));
+                        w.Add((Bits(32) << 32) | steps);
+                        break;
+                    default:
+                        ulong[] edges = Edges[r.Next(Edges.Length)];
+                        uint id = (uint)(0x08 + r.Next(8));
+                        ulong flags = r.Next(2) == 0 ? (edges[0] >> 48) & 0xFF : Bits(8);
+                        w.Add(((ulong)id << 56) | (flags << 48) | (edges[0] & 0x0000_FFFF_FFFF_FFFFUL));
+                        for (int k = 1; k < 4; k++) w.Add(r.Next(4) == 0 ? edges[k] ^ Bits(12) : edges[k]);
+                        if ((id & 4) != 0) foreach (ulong word in Shade) w.Add(Block(word));
+                        if ((id & 2) != 0) foreach (ulong word in Texture) w.Add(Block(word));
+                        if ((id & 1) != 0) foreach (ulong word in Depth) w.Add(Block(word));
+                        break;
+                }
+            }
+
+            w.Add(0x27UL << 56);
+            w.Add(0x29UL << 56);
+            return w.ToArray();
+        }
+
+        private static string StreamPath(string state) => Path.Combine(Environment.GetEnvironmentVariable(GamesVariable) ?? "", state) + $".{Frames}.rdp";
+
+        // The C# processor's memories and state at the stream's end, which MarsRT's cargo test replays against - see Mars_Native.md §5.3.
+        private static void WriteExpected(string path, byte[] rdram, byte[] hidden, byte[] state)
+        {
+            using var w = new BinaryWriter(File.Create(path));
+            w.Write(0x5844_5052u);
+            w.Write(rdram.Length);
+            w.Write(hidden.Length);
+            w.Write(state.Length);
+            w.Write(rdram);
+            w.Write(hidden);
+            w.Write(state);
+        }
+
         private RdpStream? Stream(string rom, string state)
         {
             string? folder = Environment.GetEnvironmentVariable(GamesVariable);
-            string romPath = Path.Combine(folder ?? "", rom), statePath = Path.Combine(folder ?? "", state), streamPath = statePath + $".{Frames}.rdp";
+            string romPath = Path.Combine(folder ?? "", rom), statePath = Path.Combine(folder ?? "", state), streamPath = StreamPath(state);
             if (folder is null || !File.Exists(streamPath) && (!File.Exists(romPath) || !File.Exists(statePath)))
             {
                 _output.WriteLine($"{state}: absent, not run");
@@ -505,7 +682,7 @@ namespace EmuSen.WiseMan.Cores
             return frame < 0 ? stream.FrameEnds.Length : frame;
         }
 
-        private static int CountChanged(byte[] before, byte[] after)
+        private static int CountChanged(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after)
         {
             int changed = 0;
             for (int i = 0; i < before.Length; i++) if (before[i] != after[i]) changed++;

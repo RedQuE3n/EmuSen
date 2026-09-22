@@ -116,15 +116,18 @@ namespace EmuSen.WiseMan.Cores
 
         // A machine built from the ROM in both, then compared after the load and after every frame; the scenarios reach every device.
         [Theory]
-        [InlineData("system", 240)]
-        [InlineData("system-without-rsp", 240)]
-        [InlineData("count-forever", 60)]
-        public void A_synthetic_rom_stays_byte_exact_frame_by_frame_from_boot(string scenario, int frames)
+        [InlineData("system", 240, false)]
+        [InlineData("system", 240, true)]
+        [InlineData("system-without-rsp", 240, false)]
+        [InlineData("system-without-rsp", 240, true)]
+        [InlineData("count-forever", 60, false)]
+        public void A_synthetic_rom_stays_byte_exact_frame_by_frame_from_boot(string scenario, int frames, bool render)
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             string rom = Temporary(Scenario(scenario));
             MarsCore oracle = Oracle();
             using MarsRtCore twin = Twin(framer: scenario == "system");
+            oracle.SkipRendering = twin.SkipRendering = !render;
             oracle.LoadRom(rom);
             twin.LoadRom(rom);
 
@@ -136,9 +139,10 @@ namespace EmuSen.WiseMan.Cores
                 oracle.RunFrame();
                 twin.RunFrame();
                 compare.Frame(frame, Save(oracle), twin.Save(false));
+                if (render) SamePicture(frame, oracle, twin);
             }
 
-            _output.WriteLine($"{scenario}: {frames} frames exact, {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions; MarsRT passed {twin.IdleTurnsPassed} idle turns{compare.Note}");
+            _output.WriteLine($"{scenario}{(render ? " with the picture" : "")}: {frames} frames exact, {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions; MarsRT passed {twin.IdleTurnsPassed} idle turns{compare.Note}");
             Assert.True(oracle.Cpu.Instructions > 100_000, "the program never ran");
             if (scenario.StartsWith("system")) Assert.True(oracle.Bus.Rdram[0x1003] > 100, "the handler saw too few fields");
         }
@@ -233,7 +237,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(passed > 1000, "the idle loop was never passed, so the test compared nothing");
         }
 
-        // Real games from boot and from their states, until the stub display processor makes them part: first exactly, then with its own fields and drawing left out.
+        // Real games from boot and from states, three ways: exactly; against a C# core whose display processor draws into memory of its own; and against the real one with its fields and drawing left out.
         [Theory]
         [InlineData("sm64.z64", null)]
         [InlineData("oot.z64", null)]
@@ -253,10 +257,12 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             string rom = Temporary(File.ReadAllBytes(Path.Combine(folder, romName)));
             int frames = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_MARSRT_FRAMES"), out int n) ? n : 300;
-            foreach (bool ignoreRdp in new[] { false, true })
+            foreach (string mode in new[] { "exactly", "against a C# display processor drawing into its own memory", "with the display processor's fields and drawing left out" })
             {
+                bool exactly = mode == "exactly", shadow = mode.StartsWith("against", StringComparison.Ordinal);
                 MarsCore oracle = Oracle(expansionPak: true);
-                using MarsRtCore twin = Twin(expansionPak: true, framer: ignoreRdp);
+                using MarsRtCore twin = Twin(expansionPak: true, framer: !exactly);
+                oracle.SkipRendering = twin.SkipRendering = !shadow;
                 oracle.LoadRom(rom);
                 twin.LoadRom(rom);
                 if (stateName != null)
@@ -265,8 +271,9 @@ namespace EmuSen.WiseMan.Cores
                     oracle.LoadState(new MemoryStream(state));
                     twin.LoadState(state);
                 }
+                if (shadow) DrawAside(oracle);
 
-                var compare = new StateComparer(ignoreRdp) { Regions = ignoreRdp ? twin : null };
+                var compare = new StateComparer(ignoreRdp: !exactly, ignoreDrawn: !exactly && !shadow) { Regions = !exactly && !shadow ? twin : null };
                 string verdict = $"all {frames} frames exact";
                 try
                 {
@@ -276,17 +283,18 @@ namespace EmuSen.WiseMan.Cores
                         oracle.RunFrame();
                         twin.RunFrame();
                         compare.Frame(frame, Save(oracle), twin.Save(false));
+                        if (shadow) SamePicture(frame, oracle, twin);
                     }
                 }
                 catch (DivergedException diverged)
                 {
                     verdict = diverged.Message;
                 }
-                _output.WriteLine($"{romName} {stateName ?? "from boot"} {(ignoreRdp ? "without the RDP's fields and drawing" : "exactly")}: {verdict}{compare.Note}");
+                _output.WriteLine($"{romName} {stateName ?? "from boot"} {mode}: {verdict}{compare.Note}");
             }
         }
 
-        // MarsRT's interpreter against the C# interpreter, blocks off in both, three interleaved rounds from the games' states.
+        // MarsRT's interpreter against the C# interpreter, blocks off in both, three interleaved rounds from the games' states; C# with its blocks is a reference.
         [Theory]
         [InlineData("sm64.z64", "sm64.state")]
         [InlineData("oot.z64", "oot.state")]
@@ -300,26 +308,30 @@ namespace EmuSen.WiseMan.Cores
             byte[] state = File.ReadAllBytes(Path.Combine(folder, stateName));
             int frames = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_MARSRT_FRAMES"), out int n) ? n : 300;
             bool rspBlocks = EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseBlocks;
-            EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseBlocks = false;
             try
             {
                 for (int round = 1; round <= 3; round++)
                 {
-                    MarsCore oracle = Oracle(expansionPak: true);
-                    oracle.LoadRom(rom);
-                    oracle.LoadState(new MemoryStream(state));
-                    double csharp = Time(frames, oracle.RunFrame);
-
                     var times = new List<string>();
-                    foreach (var (idle, framer) in new[] { (false, false), (true, false), (true, true) })
+                    foreach (bool blocks in new[] { false, true })
                     {
-                        using MarsRtCore twin = Twin(expansionPak: true, framer: framer);
+                        EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseBlocks = blocks;
+                        MarsCore oracle = Oracle(expansionPak: true);
+                        oracle.UseBlocks = blocks;
+                        oracle.LoadRom(rom);
+                        oracle.LoadState(new MemoryStream(state));
+                        times.Add($"C# {(blocks ? "with blocks" : "interpreter")} {Time(frames, oracle.RunFrame):F2} ms");
+                    }
+                    EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseBlocks = false;
+                    foreach (bool idle in new[] { false, true })
+                    {
+                        using MarsRtCore twin = Twin(expansionPak: true, framer: true);
                         twin.IdleSkip = idle;
                         twin.LoadRom(rom);
                         twin.LoadState(state);
-                        times.Add($"{Time(frames, twin.RunFrame):F2} ms{(idle ? " idle skip" : " plain")}{(framer ? " + syncs" : "")}");
+                        times.Add($"MarsRT {(idle ? "idle skip" : "interpreter")} {Time(frames, twin.RunFrame):F2} ms");
                     }
-                    _output.WriteLine($"{romName} round {round}: C# {csharp:F2} ms; MarsRT {string.Join(", ", times)} (per frame, {frames} frames)");
+                    _output.WriteLine($"{romName} round {round}, {frames} frames: {string.Join(", ", times)}");
                 }
             }
             finally
@@ -388,6 +400,10 @@ namespace EmuSen.WiseMan.Cores
             0x7FF8_0000_0000_0000, 0x7FF7_FFFF_FFFF_FFFF, 0x0000_0000_0000_0001, 0x43E0_0000_0000_0000, 0xC3E0_0000_0000_0000, 0x4330_0000_0000_0000,
         };
 
+        private static ulong StatusValue(Random r) =>
+            0x1000_0000UL | (r.Next(4) == 0 ? 0 : 1UL << 29) | (r.Next(2) == 0 ? 1UL << 26 : 0) | (r.Next(3) == 0 ? 1UL << 25 : 0) | (ulong)r.Next(8) << 5
+            | (r.Next(6) == 0 ? (ulong)r.Next(1, 3) << 3 : 0) | (r.Next(2) == 0 ? 0x8401UL : 0) | (r.Next(8) == 0 ? 1UL << 30 : 0);
+
         private static ulong Value(Random r) => r.Next(3) switch
         {
             0 => Edges[r.Next(Edges.Length)],
@@ -404,6 +420,8 @@ namespace EmuSen.WiseMan.Cores
             MemoryBus bus = core.Bus!;
             for (int i = 1; i < 32; i++) cpu.Gpr[i] = r.Next(4) == 0 && i > 1 ? cpu.Gpr[r.Next(1, i)] : Value(r);
             for (int i = 16; i < 24; i++) cpu.Gpr[i] = 0xFFFF_FFFF_8000_0000UL | (DataAt + (uint)(i - 16) * 0x1000 + (uint)r.Next(0x100) * 8);
+            // v0-a3 hold Status values a move may write: the FPU's half and full modes, 64-bit addressing, reverse endian, the three modes, the interrupt masks.
+            for (int i = 2; i < 8; i++) cpu.Gpr[i] = StatusValue(r);
             cpu.Gpr[24] = 0xFFFF_FFFF_8000_0000UL | (ProgramAt + (uint)r.Next((int)ProgramWords) * 4);
             cpu.Gpr[25] = 0xFFFF_FFFF_8000_0000UL | (ProgramAt + (uint)r.Next((int)ProgramWords) * 4);
             for (int i = 0; i < 32; i++) cpu.Fpr[i] = r.Next(3) == 0 ? (ulong)r.NextInt64() : FloatEdges[r.Next(FloatEdges.Length)] | (r.Next(4) == 0 ? (ulong)r.NextInt64() << 32 : 0);
@@ -468,12 +486,30 @@ namespace EmuSen.WiseMan.Cores
                 < 76 => 0x4400_0000u | (uint)new[] { 0x10, 0x11, 0x14, 0x15, 0x10, 0x11 }[r.Next(6)] << 21 | R(5) << 16 | R(5) << 11 | R(5) << 6 | R(6),
                 < 81 => 0x4400_0000u | (uint)new[] { 0, 1, 2, 4, 5, 6, 8, 3, 7 }[r.Next(9)] << 21 | R(5) << 16 | (r.Next(3) == 0 ? 31u : R(5)) << 11 | Offset(),
                 < 86 => 0x4000_0000u | (uint)new[] { 0, 1, 4, 5, 2, 8 }[r.Next(6)] << 21 | R(5) << 16 | (uint)Cop0Registers[r.Next(Cop0Registers.Length)] << 11,
+                < 87 => 0x4080_0000u | (uint)r.Next(2, 8) << 16 | 12u << 11,
                 < 88 => new uint[] { 0x4200_0001, 0x4200_0002, 0x4200_0006, 0x4200_0008, 0x4200_0018, 0x4200_0010, 0x4200_0020 }[r.Next(7)],
                 < 90 => new uint[] { 0x0000_000C, 0x0000_000D, 0x0000_000F }[r.Next(3)],
                 < 93 => 0x4800_0000u | (uint)new[] { 0, 1, 2, 4, 5, 6, 3 }[r.Next(7)] << 21 | R(5) << 16 | R(5) << 11,
                 < 95 => 0xBC00_0000u | (uint)r.Next(16, 24) << 21 | R(5) << 16 | (ushort)(short)(r.Next(-8, 8) * 4),
                 _ => (uint)r.Next() ^ ((uint)r.Next(2) << 31),
             };
+        }
+
+        // The picture each core shows: its size, its rows' repeat and every byte.
+        private static void SamePicture(int frame, MarsCore oracle, MarsRtCore twin)
+        {
+            byte[] want = oracle.GetFrameBufferRgba(), got = twin.GetFrameBufferRgba();
+            if (oracle.ScreenWidth != twin.ScreenWidth || oracle.ScreenHeight != twin.ScreenHeight || oracle.RowRepeat != twin.RowRepeat)
+                throw new DivergedException($"frame {frame}: C# shows {oracle.ScreenWidth}x{oracle.ScreenHeight} rows x{oracle.RowRepeat}, Rust {twin.ScreenWidth}x{twin.ScreenHeight} x{twin.RowRepeat}");
+            if (!want.AsSpan().SequenceEqual(got))
+                throw new DivergedException($"frame {frame}: the pictures differ from byte {want.AsSpan().CommonPrefixLength(got)} of {want.Length}");
+        }
+
+        // The C# display processor drawing into memory nothing else reads, so the machine sees what MarsRT's stub leaves; its fields still move.
+        public static void DrawAside(MarsCore core)
+        {
+            MemoryBus bus = core.Bus!;
+            bus.Dp.Processor.DrawAt(1, new byte[bus.Rdram.Length], new byte[bus.RdramHidden.Length]);
         }
 
         private static double Time(int frames, Action frame)
@@ -544,7 +580,7 @@ namespace EmuSen.WiseMan.Cores
         private sealed class DivergedException(string message) : Exception(message);
 
         // Two states compared by the C# serializer's field names; with the RDP left out, its fields, hidden bits and drawn RDRAM do not count.
-        private sealed class StateComparer(bool ignoreRdp)
+        private sealed class StateComparer(bool ignoreRdp, bool ignoreDrawn = false)
         {
             private readonly SortedSet<string> _ignoredFields = new(StringComparer.Ordinal);
             private readonly List<(uint Start, uint End)> _drawn = new();
@@ -575,14 +611,14 @@ namespace EmuSen.WiseMan.Cores
                 foreach (var (offset, length, path) in fields)
                 {
                     if (csharp.AsSpan(offset, length).SequenceEqual(rust.AsSpan(offset, length))) continue;
-                    bool rdp = path.StartsWith("Bus.Dp.Processor.", StringComparison.Ordinal) || path == "Bus.RdramHidden";
+                    bool rdp = path.StartsWith("Bus.Dp.Processor.", StringComparison.Ordinal) || (ignoreDrawn && path == "Bus.RdramHidden");
                     if (ignoreRdp && rdp)
                     {
                         _ignoredFields.Add(path);
                         _ignoredBytes += Differing(csharp, rust, offset, length);
                         continue;
                     }
-                    if (ignoreRdp && path == "Bus.Rdram")
+                    if (ignoreDrawn && path == "Bus.Rdram")
                     {
                         string? outside = Outside(csharp, rust, offset, length, frame);
                         if (outside is null) continue;

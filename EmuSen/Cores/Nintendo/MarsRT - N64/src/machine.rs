@@ -264,6 +264,7 @@ impl Machine {
         bus.vi_rebase();
         bus.ai_rebase();
         bus.reschedule();
+        // C#'s Rdp.Refresh, the display processor's decode of its own modes, is the RDP stage's to run here.
         bus.dp_replay_pending();
         self.cpu.run.idle_at = u64::MAX;
         self.cpu.cop0_written(&self.bus);

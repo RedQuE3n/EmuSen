@@ -55,11 +55,23 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public MarsRtCore(bool expansionPak = false, bool? batteryRamDisabled = null)
         {
             if (!Available) throw new InvalidOperationException($"MarsRT is not in use: {MarsNative.Report}");
-            ExpansionPak = expansionPak;
+            _expansionPak = expansionPak;
             _batteryRamDisabled = batteryRamDisabled;
         }
 
-        public bool ExpansionPak { get; set; }
+        // The Pak the next load builds; before the first frame a change rebuilds the machine at once, as MarsCore's does.
+        public bool ExpansionPak
+        {
+            get => _expansionPak;
+            set
+            {
+                if (value == _expansionPak) return;
+                _expansionPak = value;
+                if (_handle != 0 && TotalFrames == 0 && _romPath is { } path) LoadRom(path);
+            }
+        }
+
+        private bool _expansionPak;
 
         public string CoreName => "N64";
         public int ScreenWidth => _screenWidth;

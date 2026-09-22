@@ -274,3 +274,72 @@ The plan of §3.6, carried out in stages, each committed working. The pack is li
 **The packages.** Serenity now takes `Silk.NET.Shaderc` (MIT binding; its native, Google's shaderc and glslang, Apache-2.0, 9.2 MB for linux-x64) and `Silk.NET.Vulkan` (MIT), both at 2.23.0, the versions Mars and its tests already use. Both are compatible with this project's GPL-3.0.
 
 **Measured over the whole pack** (`Every_pass_in_the_pack_compiles_and_reflects`, with `EMUSEN_SLANG_PACK`): all **1,350** distinct passes compile in both stages and reflect, in 5.6 seconds on this machine, with no failures. `A_pass_compiles_and_its_block_members_offsets_and_textures_are_read_back` pins the std140 offsets (`MVP` 0 and 64 bytes, `OutputSize` 64, `OriginalSize` 80, a float at 96, block size 100), the push constants and the two sampler bindings.
+
+### 7.4 Running a preset on the device (2026-09-21)
+
+`SlangVulkan` is a Vulkan 1.1 device of its own: one graphics queue, host-mapped buffers, 2D images with an optional mip chain and two views (the whole chain, to sample; level 0, to draw into), samplers cached by filter, wrap and mipmapping, and one command buffer submitted and waited on. It prefers a discrete card, and `EMUSEN_SLANG_GPU_DEVICE` narrows the choice by name. When there is no device, `TryCreate` returns null with the reason, and the frontend is to show the picture unfiltered. It is **not Mars's device**. Sharing one would couple a presentation filter to one core's renderer, and the only thing shared is the driver, which serves both.
+
+`SlangChain` builds one pipeline per pass: a render pass with one colour attachment cleared to black, a four-vertex strip carrying `Position` and `TexCoord`, dynamic viewport and scissor, and no blending. The descriptor set layout and push-constant range come from §7.3's reflection. Each frame has two calls:
+
+- `Advance` uploads the core's picture into a ring of history images, with repeated rows expanded first (§2.7), because a slang pass sees the picture as the screen would.
+- `Render` sizes every pass, fills every block, draws the passes in one submission, and copies the last one back.
+
+**The semantics, as libretro's spec gives them.**
+
+Sizes and scaling:
+- Every `*Size` member is `(width, height, 1/width, 1/height)` of the texture it names.
+- A pass is sized by its scale type: the previous pass times the scale, the viewport times the scale, or the absolute value.
+- **The last pass is always the viewport's size**, whatever it asks, because RetroArch's Vulkan driver draws it into the swapchain. For the same reason it is 8-bit (sRGB if it says so), never float.
+
+Textures:
+- `Original` and `OriginalHistoryN` are the ring.
+- `Source` is the previous pass's output, or the original for pass 0.
+- `PassOutputN` and an alias name an earlier pass.
+- `PassFeedbackN` and alias + `Feedback` are last frame's output of any pass. Such a pass keeps two images and swaps them after each frame.
+- Lookup images are loaded by name.
+
+Samplers:
+- `Source` is sampled with its own pass's filter and wrap.
+- `Original` and the history are sampled with pass 0's.
+- An earlier pass's output is sampled with the settings of the pass after it. This is the rule by which a preset's `filter_linearN` describes how pass N reads its input.
+- `mipmap_input` gives the previous output a mip chain, blitted after the pass that drew it.
+
+Values:
+- A parameter takes the preset's value when the preset gives one, otherwise the `#pragma parameter` initial value.
+- `MVP` is the orthographic map of the unit square onto clip space.
+- `FrameCount` honours `frame_count_mod`.
+- A member the chain does not recognise is zero.
+
+**Deliberately constant**, since no core here produces what they describe:
+- `FrameDirection` is 1, because there is no rewind through the chain.
+- `Rotation` is 0.
+- `TotalSubFrames` and `CurrentSubFrame` are 1.
+- `OriginalFPS` is 60.
+
+**Why readback.** The chain ends by copying its last image into host memory, and the frontend is to draw that as an ordinary bitmap. Handing a Vulkan image to Avalonia's compositor directly would save the copy. However, it needs the compositor to be on Vulkan and to import the image, which Avalonia exposes only on some backends. The copy also keeps this runtime independent of what Avalonia is drawing with. Its cost is not yet measured inside Mistress. On the test device, ten frames of `crt-royale` (12 passes, 256×224 to 1024×896, readback included) took 24 ms, about 2.4 ms a frame.
+
+**Tests** (`SlangChainTests`, 12, on the RX 6800 by default):
+- An identity pass returns the picture byte for byte.
+- Repeated rows arrive expanded.
+- A second pass reads the first by alias and by number, and the original.
+- A pass reading its own feedback adds 10 a frame and reaches 30 after three.
+- `OriginalHistory1` and `OriginalHistory2` are the frames one and two back, over four frames.
+- A preset's parameter overrides the pragma's.
+- Sizes and a 3× source-scaled pass report 12, 6 and 20 as they should.
+- A two-pixel lookup image is sampled by name.
+- `crt-royale`, `crt-guest-advanced`, `crt-lottes` and `lcd-grid-v2` from the pack build, run ten frames and draw something. This case is gated by `EMUSEN_SLANG_PACK`.
+
+**Mutants.** Seven were made:
+- history stepping forward
+- no feedback swap
+- no parameter override
+- no row expansion
+- no alias
+- no source scaling
+- `OutputSize` reporting the viewport
+
+The history mutant **survived the first history test**: with two history slots, stepping the ring forward or backward lands on the same slot. The test now reads `OriginalHistory2`, and all seven are caught.
+
+**The validation layer** (`VK_LAYER_KHRONOS_validation` with synchronisation validation and `VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`) reports nothing over all twelve tests, the pack presets included. As a positive control, a mutant that skipped the final image's transition back to shader-read was flagged four times (`VUID-vkCmdDraw-None-09600`), so the silence is evidence.
+
+**What this does not show.** The pack presets are checked for running and drawing, not for drawing *correctly*. No output here has been compared against RetroArch's for the same frame. That comparison would need RetroArch run headless on a captured frame, and it is the obvious next evidence if a preset looks wrong.

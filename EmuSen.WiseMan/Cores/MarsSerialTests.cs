@@ -18,12 +18,16 @@ namespace EmuSen.WiseMan.Cores
             return bus;
         }
 
-        // What a game does: the block in, and then out, which is when the PIF runs it - see §2.
+        // What a game does: the block in, and then out, which is when the PIF runs it; the answer is in memory once the read is done - see §2 and §2.3.
         private static void Run(MemoryBus bus)
         {
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressWrite, 0);
+            bus.Tick(SiInterface.TransferCycles);
+            bus.Write32(MemoryMap.SiBase + SiInterface.Status, 0);
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
         }
+
+        private static void Finish(MemoryBus bus) => bus.Tick(SiInterface.TransferCycles);
 
         // The bytes move at once; the interface is busy and silent until the transfer's time has passed, and then it interrupts - see Mars_Serial.md §2.2.
         [Fact]
@@ -44,7 +48,31 @@ namespace EmuSen.WiseMan.Cores
 
             bus.PifRam[7] = 0xA5;
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
+            Finish(bus);
             Assert.Equal(0xA5, bus.Rdram[Dram + 7]);
+        }
+
+        // Mischief Makers starts the read, packs its next block into the same buffer at once, and reads the buffer later: the reply has to land last - see Mars_Serial.md §2.3.
+        [Fact]
+        public void A_read_lands_in_memory_when_the_transfer_finishes_so_a_write_made_meanwhile_is_overwritten()
+        {
+            MemoryBus bus = WithBlock(0xFF, 0x01, 0x04, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE);
+            bus.Si.Controllers[0].Buttons = 0x1000;
+            bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressWrite, 0);
+            bus.Tick(SiInterface.TransferCycles);
+            bus.Write32(MemoryMap.SiBase + SiInterface.Status, 0);
+
+            bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
+            for (uint i = 0; i < 64; i += 4) bus.Rdram[Dram + i + 3] = 0xFF;
+            bus.Rdram[Dram + 4] = 0;
+
+            bus.Tick(SiInterface.TransferCycles - 1);
+            Assert.Equal(0x00, bus.Rdram[Dram + 4]);
+            bus.Tick(1);
+
+            Assert.Equal(0x10, bus.Rdram[Dram + 4]);
+            Assert.Equal(0x04, bus.Rdram[Dram + 2]);
+            Assert.True(bus.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
         }
 
         [Fact]
@@ -68,6 +96,7 @@ namespace EmuSen.WiseMan.Cores
             MemoryBus bus = WithBlock(0xFE);
             Run(bus);
             bus.Tick(100);
+            bus.Rdram[Dram] = 0x00;
 
             using var stream = new System.IO.MemoryStream();
             using (var w = new System.IO.BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true)) bus.WriteState(w);
@@ -82,10 +111,14 @@ namespace EmuSen.WiseMan.Cores
             loaded.Tick(1);
             Assert.True(loaded.Mi.Pending.HasFlag(MiInterrupt.SerialInterface));
 
-            // Idle again, the two addresses are gone, and the state is the length it always was.
+            // The read under way was carried too, and its bytes landed with the interrupt - see Mars_Serial.md §2.3.
+            Assert.Equal(0xFE, loaded.Rdram[Dram]);
+            Assert.Equal(-1, loaded.Si.PendingRead);
+
+            // Idle again, the three addresses are gone, and the state is the length it always was.
             using var idle = new System.IO.MemoryStream();
             using (var w = new System.IO.BinaryWriter(idle, System.Text.Encoding.UTF8, leaveOpen: true)) loaded.WriteState(w);
-            Assert.Equal(stream.Length - 16, idle.Length);
+            Assert.Equal(stream.Length - 24, idle.Length);
         }
 
         // The referee's read walks the block whatever the last byte says; only the challenge bit steers it - see §2.
@@ -106,10 +139,12 @@ namespace EmuSen.WiseMan.Cores
         {
             MemoryBus bus = WithBlock(0xFF, 0x01, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0xFE);
             Run(bus);
+            Finish(bus);
             Assert.Equal(0x00, bus.Rdram[Dram + 4]);
 
             bus.Si.Controllers[0].Buttons = 0x1000;
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
+            Finish(bus);
 
             Assert.Equal(new byte[] { 0x10, 0x00 }, bus.Rdram[(int)(Dram + 4)..(int)(Dram + 6)]);
         }
@@ -274,6 +309,7 @@ namespace EmuSen.WiseMan.Cores
 
             bus.Write32(MemoryMap.SiBase + SiInterface.DramAddress, Dram);
             bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
+            Finish(bus);
 
             Assert.Equal(0x05, bus.PifRam[3]);
             Assert.Equal(0x05, bus.Rdram[Dram + 3]);

@@ -21,7 +21,7 @@ struct Source<'a> {
 
 impl Source<'_> {
     /// `Walker.Fetch`: a read past memory is a whole zero (Mars_Video.md §2.6).
-    #[inline]
+    #[inline(always)]
     fn fetch(&self, at: i32) -> Pixel {
         if self.wide {
             let address = self.origin.wrapping_add((at as u32).wrapping_mul(4));
@@ -229,7 +229,7 @@ impl Walker {
     }
 
     /// `Walker.Fetched`: from the window, or fetched when the index falls outside it.
-    #[inline]
+    #[inline(always)]
     fn fetched(&self, source: &Source, at: i32) -> Pixel {
         let index = at.wrapping_sub(self.window_from.wrapping_mul(self.window_width)) as u32;
         if index < (self.window_count * self.window_width) as u32 { self.window[index as usize] } else { source.fetch(at) }
@@ -299,6 +299,7 @@ impl Walker {
     }
 
     /// `Walker.Filter`: six neighbours, only the whole ones counted; the fetch bug folds the row below onto this one (Mars_VideoFilter.md §2.1, §3).
+    #[inline(always)]
     fn filter(&self, source: &Source, at: i32, bug: i32, centre: Pixel) -> Pixel {
         let width = source.width;
         let mut red = [0i32; 7];
@@ -339,6 +340,7 @@ impl Walker {
     }
 
     /// `Walker.Dither`: all eight neighbours, each weighed against the pixel as it arrived (Mars_VideoPasses.md §1).
+    #[inline(always)]
     fn undither(&self, source: &Source, at: i32, bug: i32, centre: Pixel) -> Pixel {
         let width = source.width;
         let folded = bug == 1;

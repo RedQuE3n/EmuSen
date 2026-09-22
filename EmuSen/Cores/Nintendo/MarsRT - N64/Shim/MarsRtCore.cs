@@ -23,6 +23,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, void> Free = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_free");
         private static readonly delegate* unmanaged<nint, void> AdvanceExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_advance");
         private static readonly delegate* unmanaged<nint, void> PresentExport = (delegate* unmanaged<nint, void>)MarsNative.Export("mars_machine_present");
+        private static readonly delegate* unmanaged<nint, uint, uint, void> SetThreads = (delegate* unmanaged<nint, uint, uint, void>)MarsNative.Export("mars_machine_set_threads");
+        private static readonly delegate* unmanaged<nint, long*, nuint, long> ThreadCounters = (delegate* unmanaged<nint, long*, nuint, long>)MarsNative.Export("mars_threads_counters");
         private static readonly delegate* unmanaged<nint, ulong, void> RunStepsExport = (delegate* unmanaged<nint, ulong, void>)MarsNative.Export("mars_machine_run_steps");
         private static readonly delegate* unmanaged<nint, uint, void> SetOptions = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_set_options");
         private static readonly delegate* unmanaged<nint, uint, uint, uint, void> PressExport = (delegate* unmanaged<nint, uint, uint, uint, void>)MarsNative.Export("mars_machine_press");
@@ -64,6 +66,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private int _screenWidth = MarsCore.ScreenWidthPixels, _screenHeight = MarsCore.DefaultScreenHeight, _rowRepeat = 1;
         private long _frameSerial, _takenSerial;
         private bool _skipRendering, _idleSkip = true, _rspWhole = true, _repeatRows = true;
+
+        // Off until proven in play, where Mars defaults them on; each is exact either way - see Mars_Native.md §5.6.
+        private bool _threadedRdp, _deferredPresentation, _skipRepeatedScans = true, _verifyRdp;
+        private int _rdpWorkers = 1;
 
         public static bool Available => LoadRomExport != null && MemorySize != null;
 
@@ -133,12 +139,77 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         private void ApplyOptions()
         {
-            if (_handle != 0) SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_repeatRows ? 16u : 0));
+            if (_handle == 0) return;
+            SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_repeatRows ? 16u : 0));
+            long serial = FrameSerialOf(_handle);
+            SetThreads(_handle, (_threadedRdp ? 1u : 0) | (_deferredPresentation ? 2u : 0) | (_skipRepeatedScans ? 0 : 4u) | (_verifyRdp ? 8u : 0), (uint)_rdpWorkers);
+            if (!_skipRendering && FrameSerialOf(_handle) != serial) TakePicture();
         }
 
-        // Mars's keys, so one graphics tab serves either engine; only the Expansion Pak is honoured yet - see Mars_Native.md §5.5.
+        // Mars's ThreadedRdp: the display processor's lists on a thread of MarsRT's own, behind page marks - see Mars_Native.md §5.6.
+        public bool ThreadedRdp
+        {
+            get => _threadedRdp;
+            set { _threadedRdp = value; ApplyOptions(); }
+        }
+
+        // Mars's RdpWorkers: processors sharing a threaded list, each shading every Nth row.
+        public int RdpWorkers
+        {
+            get => _rdpWorkers;
+            set { _rdpWorkers = Math.Clamp(value, 1, 8); ApplyOptions(); }
+        }
+
+        // Mars's DeferredPresentation: the picture walked on another thread while the next frame runs, and shown a frame late.
+        public bool DeferredPresentation
+        {
+            get => _deferredPresentation;
+            set { _deferredPresentation = value; ApplyOptions(); }
+        }
+
+        public bool SkipRepeatedScans
+        {
+            get => _skipRepeatedScans;
+            set { _skipRepeatedScans = value; ApplyOptions(); }
+        }
+
+        // Every byte the display processor's thread touches checked against the marks, as Mars's EMUSEN_MARS_VERIFY_RDP; for tests.
+        public bool VerifyRdp
+        {
+            get => _verifyRdp;
+            set { _verifyRdp = value; ApplyOptions(); }
+        }
+
+        // The thread's counters in mars_threads_counters' order: running, its words, starts and time, the waits, bystanders, reads, repeated scans, and by site.
+        public long[] ThreadCounterValues()
+        {
+            long count = ThreadCounters(Handle, null, 0);
+            var values = new long[count];
+            fixed (long* data = values) ThreadCounters(Handle, data, (nuint)values.Length);
+            return values;
+        }
+
+        private static long FrameSerialOf(nint handle)
+        {
+            long* info = stackalloc long[4];
+            FrameInfo(handle, info);
+            return info[3];
+        }
+
+        // Declared before VideoSettings, whose initializer reads it; static fields initialise in textual order.
+        private static readonly string[] Honoured = { "ExpansionPak", "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans" };
+
+        // Mars's keys, so one graphics tab serves either engine; the multiple, antialiasing and the device are not honoured yet - see Mars_Native.md §5.5 and §5.6.
         public static readonly IReadOnlyList<CoreSetting> VideoSettings =
-            MarsCore.VideoSettings.Select(s => s.Key == "ExpansionPak" ? s : s with { Hint = IgnoredHint + s.Hint }).ToArray();
+            MarsCore.VideoSettings.Select(s => Honoured.Contains(s.Key) ? Threads(s) : s with { Hint = IgnoredHint + s.Hint }).ToArray();
+
+        private static CoreSetting Threads(CoreSetting s) => s.Key switch
+        {
+            "ThreadedRdp" => s with { Default = "false", Hint = "The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread. Off by default on MarsRT until proven in play." },
+            "RdpWorkers" => s with { Default = "1", Hint = "How many processors share each list when the list runs on its own thread. MarsRT runs one; a higher count is kept and has no effect yet." },
+            "DeferredPresentation" => s with { Default = "false", Hint = "The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been. Off by default on MarsRT until proven in play." },
+            _ => s,
+        };
 
         private const string IgnoredHint = "MarsRT does not implement this yet and ignores it. On Mars (C#): ";
 
@@ -146,9 +217,15 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         IReadOnlyList<CoreSetting> ICoreSettings.Settings => VideoSettings;
 
-        public string Get(string key) => key == "ExpansionPak"
-            ? (ExpansionPak ? "true" : "false")
-            : _ignored.TryGetValue(Setting(key).Key, out string? value) ? value : Setting(key).Default;
+        public string Get(string key) => key switch
+        {
+            "ExpansionPak" => ExpansionPak ? "true" : "false",
+            "ThreadedRdp" => ThreadedRdp ? "true" : "false",
+            "RdpWorkers" => RdpWorkers.ToString(),
+            "DeferredPresentation" => DeferredPresentation ? "true" : "false",
+            "SkipRepeatedScans" => SkipRepeatedScans ? "true" : "false",
+            _ => _ignored.TryGetValue(Setting(key).Key, out string? value) ? value : Setting(key).Default,
+        };
 
         // Checked as its kind says, as MarsCore refuses text that is no value, and kept; only the Expansion Pak acts - see Mars_Native.md §5.5.
         public void Set(string key, string value)
@@ -161,8 +238,15 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 _ => setting.Choices?.Contains(value) == true ? value : throw new ArgumentException($"{value} is not a choice of {setting.Label}."),
             };
 
-            if (key == "ExpansionPak") ExpansionPak = accepted == "true";
-            else _ignored[key] = accepted;
+            switch (key)
+            {
+                case "ExpansionPak": ExpansionPak = accepted == "true"; break;
+                case "ThreadedRdp": ThreadedRdp = accepted == "true"; break;
+                case "RdpWorkers": RdpWorkers = int.Parse(accepted); break;
+                case "DeferredPresentation": DeferredPresentation = accepted == "true"; break;
+                case "SkipRepeatedScans": SkipRepeatedScans = accepted == "true"; break;
+                default: _ignored[key] = accepted; break;
+            }
         }
 
         private static CoreSetting Setting(string key) =>

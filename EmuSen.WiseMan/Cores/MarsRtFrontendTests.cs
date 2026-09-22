@@ -99,7 +99,8 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(MarsCore.VideoSettings.Select(s => s.Key), settings.Settings.Select(s => s.Key));
             foreach (CoreSetting setting in settings.Settings)
             {
-                if (setting.Key == "ExpansionPak") Assert.Equal(MarsCore.VideoSettings.Single(s => s.Key == "ExpansionPak").Hint, setting.Hint);
+                if (setting.Key is "ExpansionPak" or "SkipRepeatedScans") Assert.Equal(MarsCore.VideoSettings.Single(s => s.Key == setting.Key).Hint, setting.Hint);
+                else if (setting.Key is "ThreadedRdp" or "RdpWorkers" or "DeferredPresentation") Assert.DoesNotContain("ignores it", setting.Hint);
                 else Assert.StartsWith("MarsRT does not implement this yet and ignores it.", setting.Hint);
             }
         }

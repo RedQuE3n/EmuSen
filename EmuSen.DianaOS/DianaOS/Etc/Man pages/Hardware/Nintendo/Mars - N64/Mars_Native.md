@@ -2220,7 +2220,7 @@ prediction or the decision rule stated before the measurement that will retire i
 
 A and B come first because they are cheap and they decide what D is worth. C is mechanical and can run beside
 anything. D and E do not depend on each other. F's items are side jobs. G is last, and its criteria are what A to E
-deliver.
+deliver. *A is done (§6.1): the device is bound where the desktop is, so D is for the multiple and follows E.*
 
 ### 6.1 Stage A: the handheld
 
@@ -2251,6 +2251,59 @@ carries over only if the device's core count lets the split run at four workers.
 MarsRT both lose the split's gain and the frame is the emulation thread's again, where MarsRT's advantage is the
 recompiler's sixteen per cent on the Dam and three to four on the others. So: GoldenEye somewhat better than the C#
 core there, not level, and the other two about level. Held loosely, as §3.4 taught.
+
+**Measured, 2026-09-22, the same evening.** The device is a Legion Go S: a Ryzen Z1 Extreme, eight Zen 4 cores and
+sixteen threads — the same count as this desktop's 7700X, so the prediction's premise was wrong before its numbers
+were — with half the desktop's L3 (16 MB against 32), 24 GB, SteamOS 3.8.27, glibc 2.41 against the 2.34 the binaries
+ask for, in desktop mode on the charger, `amd_pstate` active with `balance_performance`. Three tools ran, each from
+the three gameplay states over 600 frames, the modes interleaved and rotated between rounds; every run's state hash
+was the desktop's, so the machine is exact there as well.
+
+*Production, through the shim, four workers, deferred, against the C# core as it ships* (`enginebench`, kept with the
+speed tooling outside the repository; milliseconds a frame, three rounds — the C# core's first round carries .NET's
+JIT warm-up and its second and third are the comparison):
+
+| ms a frame | C# production | MarsRT interpreted | tier 1 | **tier 2** |
+| --- | --- | --- | --- | --- |
+| Super Mario 64 | 9.78, 8.09, 8.30 | 7.47, 7.43, 7.66 | 7.58, 7.73, 7.78 | **7.67, 7.57, 7.53** |
+| Ocarina of Time | 12.61, 9.82, 9.95 | 8.81, 8.68, 8.84 | 9.22, 9.15, 9.30 | **8.89, 8.85, 9.07** |
+| GoldenEye, the Dam | 22.98, 20.33, 20.31 | 22.10, 21.75, 21.93 | 18.69, 18.55, 18.62 | **18.70, 18.55, 18.64** |
+
+*MarsRT alone, threaded* (`examples/threads … split 4`, two runs of three rounds): Super Mario 64 interpreted
+6.88 to 7.39, tier 2 7.01 to 7.33; Ocarina of Time 8.32 to 8.53 against 8.42 to 8.79; the Dam 20.39 to 20.78 against
+17.26 to 18.66. Tier 1 was 7.49 to 7.63, 8.75 to 9.11 and 17.27 to 17.65.
+
+*MarsRT on one thread, no scan* (`examples/frames`, two rounds): Super Mario 64 12.54 and 12.08 interpreted, 12.11
+and 11.89 at tier 2; Ocarina of Time 12.43 and 12.33 against 12.30 and 12.23; the Dam 28.50 and 28.34 against 25.22
+and 25.23.
+
+**What it says.**
+
+- **MarsRT is eight to nine per cent below the C# core on the device on all three games**, where on the desktop it
+  was three to five on two and level on the Dam. The Dam runs at 18.6 ms a frame against the console's 16.7: ninety
+  per cent of full speed, against the C# core's eighty-two. Neither reaches it. The other two are far past it.
+- **MarsRT loses less to the device than the C# core does.** From desktop to handheld the C# core's frame grows
+  by 30 to 34 per cent and MarsRT's by 24 to 29: the same cores at a lower power budget and half the cache cost the
+  managed runtime more than the native one, which is where the extra margin came from. That is the retired
+  prediction's error in the other direction: it expected the two games without a CPU bound to be level, and they
+  are not, for a reason that has nothing to do with core counts.
+- **Tier 2 stays the right default there.** A first run put it one to four per cent behind the interpreter on the
+  two light games, threaded; a second run of the same put it level, and on one thread it is one to three per cent
+  ahead, as on the desktop. The device's round-to-round noise is about three per cent, and the first run was inside
+  it. On the Dam it is twelve to fifteen per cent ahead in every configuration, and tier 1 costs two to five per
+  cent on the light games as it does here.
+- **The frame is the emulation thread's, on the device as on the desktop.** On the Dam the first rasteriser worker
+  is busy 3.7 to 3.9 ms of an 18 ms frame and the emulation thread waits for the workers 0.000 ms a frame; the
+  split takes the one-thread frame from 25.2 to 17.5 ms, a third, against the desktop's 35 per cent. So the
+  handheld is bound where the desktop is: the CPU with the signal processor beside it. **Stage D's device path is
+  for the multiple and not for the frame**, and it comes after stage E; what the Dam has left on the device is
+  §5.8.9's list, the interpreter's own cost and the processor's, and the batch priced at two per cent.
+
+**The tooling,** so that the run can be repeated: the two examples and the three states in `~/emusen-bench/rt/`
+on the device with `rtbench.sh`, which interleaves modes and rounds; `enginebench`, a self-contained publish that
+runs both engines from one state through the shim and prints the state hash of each, in
+`~/.cache/emusen/probe/mars-speed/enginebench/` here and `~/emusen-bench/enginebench/` there. The device's glibc
+was not a problem and no pin was needed; stage C's `cargo zigbuild` is therefore for the other platforms alone.
 
 ### 6.2 Stage B: the defaults, the engine, the other frontends
 

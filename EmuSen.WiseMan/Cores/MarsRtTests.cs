@@ -55,8 +55,10 @@ namespace EmuSen.WiseMan.Cores
 
         public static MarsRtCore Twin(bool expansionPak = false) => new(expansionPak, batteryRamDisabled: true) { SkipRendering = true };
 
-        [Fact]
-        public void The_corpus_reports_line_for_line_what_the_csharp_core_reports()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void The_corpus_reports_line_for_line_what_the_csharp_core_reports(bool blocks)
         {
             string? path = Environment.GetEnvironmentVariable(CorpusVariable) ?? N64TestRomLibrary.FindSystemTest();
             if (path is null || !File.Exists(path))
@@ -80,7 +82,7 @@ namespace EmuSen.WiseMan.Cores
             TimeSpan csharpTime = clock.Elapsed;
 
             clock.Restart();
-            using var twin = new MarsRtCore();
+            using var twin = new MarsRtCore { UseBlocks = blocks };
             twin.Boot(File.ReadAllBytes(path));
             string rust = "";
             for (int i = 0; i < 400; i++)
@@ -89,7 +91,7 @@ namespace EmuSen.WiseMan.Cores
                 rust = twin.IsViewerTranscript;
                 if (rust.Contains(Finished, StringComparison.Ordinal)) break;
             }
-            _output.WriteLine($"C# {cpu.Instructions} instructions in {csharpTime.TotalSeconds:F1} s; Rust {twin.Instructions} in {clock.Elapsed.TotalSeconds:F1} s");
+            _output.WriteLine($"C# {cpu.Instructions} instructions in {csharpTime.TotalSeconds:F1} s; Rust {twin.Instructions} in {clock.Elapsed.TotalSeconds:F1} s{(blocks ? $", blocks {string.Join(' ', twin.BlockCounterValues())}" : "")}");
             if (Environment.GetEnvironmentVariable("EMUSEN_MARSRT_CORPUS_OUT") is { } folder)
             {
                 File.WriteAllText(Path.Combine(folder, "csharp.txt"), csharp);
@@ -108,17 +110,21 @@ namespace EmuSen.WiseMan.Cores
 
         // A machine built from the ROM in both, then compared after the load and after every frame; the scenarios reach every device.
         [Theory]
-        [InlineData("system", 240, false)]
-        [InlineData("system", 240, true)]
-        [InlineData("system-without-rsp", 240, false)]
-        [InlineData("system-without-rsp", 240, true)]
-        [InlineData("count-forever", 60, false)]
-        public void A_synthetic_rom_stays_byte_exact_frame_by_frame_from_boot(string scenario, int frames, bool render)
+        [InlineData("system", 240, false, false)]
+        [InlineData("system", 240, true, false)]
+        [InlineData("system-without-rsp", 240, false, false)]
+        [InlineData("system-without-rsp", 240, true, false)]
+        [InlineData("count-forever", 60, false, false)]
+        [InlineData("system", 240, true, true)]
+        [InlineData("system-without-rsp", 240, false, true)]
+        [InlineData("count-forever", 60, false, true)]
+        public void A_synthetic_rom_stays_byte_exact_frame_by_frame_from_boot(string scenario, int frames, bool render, bool blocks)
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             string rom = Temporary(Scenario(scenario));
             MarsCore oracle = Oracle();
             using MarsRtCore twin = Twin();
+            twin.UseBlocks = blocks;
             oracle.SkipRendering = twin.SkipRendering = !render;
             oracle.LoadRom(rom);
             twin.LoadRom(rom);
@@ -332,13 +338,19 @@ namespace EmuSen.WiseMan.Cores
 
         // Real games from boot and from states: the whole state, the picture and the sound, after every frame.
         [Theory]
-        [InlineData("sm64.z64", null)]
-        [InlineData("oot.z64", null)]
-        [InlineData("ge.z64", null)]
-        [InlineData("sm64.z64", "sm64.state")]
-        [InlineData("oot.z64", "oot.state")]
-        [InlineData("ge.z64", "ge-dam.state")]
-        public void A_real_game_stays_byte_exact_with_its_picture_and_sound_frame_by_frame(string romName, string? stateName)
+        [InlineData("sm64.z64", null, false)]
+        [InlineData("oot.z64", null, false)]
+        [InlineData("ge.z64", null, false)]
+        [InlineData("sm64.z64", "sm64.state", false)]
+        [InlineData("oot.z64", "oot.state", false)]
+        [InlineData("ge.z64", "ge-dam.state", false)]
+        [InlineData("sm64.z64", null, true)]
+        [InlineData("oot.z64", null, true)]
+        [InlineData("ge.z64", null, true)]
+        [InlineData("sm64.z64", "sm64.state", true)]
+        [InlineData("oot.z64", "oot.state", true)]
+        [InlineData("ge.z64", "ge-dam.state", true)]
+        public void A_real_game_stays_byte_exact_with_its_picture_and_sound_frame_by_frame(string romName, string? stateName, bool blocks)
         {
             string? folder = Environment.GetEnvironmentVariable(StatesVariable);
             if (folder is null || !File.Exists(Path.Combine(folder, romName)) || (stateName != null && !File.Exists(Path.Combine(folder, stateName))))
@@ -352,6 +364,7 @@ namespace EmuSen.WiseMan.Cores
             int frames = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_MARSRT_FRAMES"), out int n) ? n : 300;
             MarsCore oracle = Oracle(expansionPak: true);
             using MarsRtCore twin = Twin(expansionPak: true);
+            twin.UseBlocks = blocks;
             oracle.SkipRendering = twin.SkipRendering = false;
             oracle.LoadRom(rom);
             twin.LoadRom(rom);
@@ -374,7 +387,7 @@ namespace EmuSen.WiseMan.Cores
                 SamePicture(frame, oracle, twin);
                 SameSound(frame, oracle, twin);
             }
-            _output.WriteLine($"{romName} {stateName ?? "from boot"}: {frames} frames, state, picture and sound exact; {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions");
+            _output.WriteLine($"{romName} {stateName ?? "from boot"}{(blocks ? " through the blocks" : "")}: {frames} frames, state, picture and sound exact; {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions{(blocks ? $"; blocks {string.Join(' ', twin.BlockCounterValues())}" : "")}");
         }
 
         // MarsRT's interpreter against the C# interpreter, blocks off in both, three interleaved rounds from the games' states; C# with its blocks is a reference.
@@ -426,7 +439,25 @@ namespace EmuSen.WiseMan.Cores
         // Random programs of every instruction class over edge-valued registers, stepped by both interpreters from one state and compared whole.
         [Theory]
         [MemberData(nameof(Seeds))]
-        public void A_random_program_leaves_the_state_the_csharp_interpreter_leaves(int seed)
+        public void A_random_program_leaves_the_state_the_csharp_interpreter_leaves(int seed) => RandomProgram(seed, blocks: false, tier: 0);
+
+        // The same programs through MarsRT's blocks, each tier: the steps counted as the interpreter counts them, a raise one step - see Mars_Native.md §5.8.
+        [Theory]
+        [MemberData(nameof(TierSeeds))]
+        public void A_random_program_through_the_blocks_leaves_the_state_the_csharp_interpreter_leaves(int seed, int tier) => RandomProgram(seed, blocks: true, tier);
+
+        public static TheoryData<int, int> TierSeeds()
+        {
+            var data = new TheoryData<int, int>();
+            foreach (int tier in RecompilerTiers)
+                for (int seed = 1; seed <= 40; seed++) data.Add(seed, tier);
+            return data;
+        }
+
+        // The recompiler's tiers as built: 1 the decoded blocks.
+        public static readonly int[] RecompilerTiers = { 1 };
+
+        private void RandomProgram(int seed, bool blocks, int tier)
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             const int Steps = 24_000, Stride = 16;
@@ -438,6 +469,8 @@ namespace EmuSen.WiseMan.Cores
             oracle.LoadState(new MemoryStream(start));
 
             using MarsRtCore twin = Twin();
+            twin.UseBlocks = blocks;
+            twin.BlockTier = tier;
             twin.LoadRom(rom);
             twin.LoadState(start);
             var seen = new HashSet<ulong>();
@@ -455,7 +488,8 @@ namespace EmuSen.WiseMan.Cores
                 using (var w = new BinaryWriter(csharp, System.Text.Encoding.UTF8, leaveOpen: true)) EmuSen.Common.StateSerializer.Write(w, oracle.Cpu!);
                 Assert.True(csharp.ToArray().AsSpan().SequenceEqual(rust) && oracle.Bus!.Cycles == twin.Cycles, $"seed {seed}: the processors part after {i + Stride} steps (C# pc {oracle.Cpu!.CurrentPc:X}, cycles {oracle.Bus!.Cycles} and {twin.Cycles})");
             }
-            _output.WriteLine($"seed {seed}: {oracle.Cpu!.Instructions - before} instructions, {seen.Count} addresses");
+            _output.WriteLine($"seed {seed}: {oracle.Cpu!.Instructions - before} instructions, {seen.Count} addresses{(blocks ? $"; blocks {string.Join(' ', twin.BlockCounterValues())}" : "")}");
+            if (blocks) Assert.True(twin.BlockCounterValues()[3] > 100, "the blocks were hardly entered, so the test compared the interpreter");
 
             new StateComparer().Frame(seed, Save(oracle), twin.Save(false));
             Assert.True(oracle.Cpu!.Instructions > Steps / 20, "almost every step raised, so the test compared little");

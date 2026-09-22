@@ -27,6 +27,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, long*, nuint, long> ThreadCounters = (delegate* unmanaged<nint, long*, nuint, long>)MarsNative.Export("mars_threads_counters");
         private static readonly delegate* unmanaged<nint, ulong, void> RunStepsExport = (delegate* unmanaged<nint, ulong, void>)MarsNative.Export("mars_machine_run_steps");
         private static readonly delegate* unmanaged<nint, uint, void> SetOptions = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_set_options");
+        private static readonly delegate* unmanaged<nint, uint, void> SetRecompiler = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_set_recompiler");
+        private static readonly delegate* unmanaged<nint, long*, nuint, long> BlockCounters = (delegate* unmanaged<nint, long*, nuint, long>)MarsNative.Export("mars_blocks_counters");
         private static readonly delegate* unmanaged<nint, uint, uint, uint, void> PressExport = (delegate* unmanaged<nint, uint, uint, uint, void>)MarsNative.Export("mars_machine_press");
         private static readonly delegate* unmanaged<nint, uint, uint, int, void> SetStick = (delegate* unmanaged<nint, uint, uint, int, void>)MarsNative.Export("mars_machine_set_stick");
         private static readonly delegate* unmanaged<nint, ulong> AudioBuffered = (delegate* unmanaged<nint, ulong>)MarsNative.Export("mars_machine_audio_buffered");
@@ -70,6 +72,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // Off until proven in play, where Mars defaults them on; each is exact either way - see Mars_Native.md §5.6.
         private bool _threadedRdp, _deferredPresentation, _skipRepeatedScans = true, _verifyRdp;
         private int _rdpWorkers = 1;
+
+        // The recompiler, off until proven in play; exact either way - see Mars_Native.md §5.8.
+        private bool _useBlocks, _verifyBlocks;
+        private int _blockTier;
 
         public static bool Available => LoadRomExport != null && MemorySize != null;
 
@@ -143,6 +149,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             SetOptions(_handle, (_skipRendering ? 1u : 0) | (_idleSkip ? 0 : 2u) | (_rspWhole ? 0 : 4u) | (_repeatRows ? 16u : 0));
             long serial = FrameSerialOf(_handle);
             SetThreads(_handle, (_threadedRdp ? 1u : 0) | (_deferredPresentation ? 2u : 0) | (_skipRepeatedScans ? 0 : 4u) | (_verifyRdp ? 8u : 0), (uint)_rdpWorkers);
+            SetRecompiler(_handle, (_useBlocks ? 1u : 0) | (_verifyBlocks ? 2u : 0) | ((uint)_blockTier << 4));
             if (!_skipRendering && FrameSerialOf(_handle) != serial) TakePicture();
         }
 
@@ -173,6 +180,36 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             set { _skipRepeatedScans = value; ApplyOptions(); }
         }
 
+        // Mars's UseBlocks: the processor's code compiled in blocks, validated against memory on entry - see Mars_Native.md §5.8.
+        public bool UseBlocks
+        {
+            get => _useBlocks;
+            set { _useBlocks = value; ApplyOptions(); }
+        }
+
+        // The interpreter run beside the blocks and compared after every instruction; for tests.
+        public bool VerifyBlocks
+        {
+            get => _verifyBlocks;
+            set { _verifyBlocks = value; ApplyOptions(); }
+        }
+
+        // Which step of the recompiler runs: 0 the furthest built, 1 decoded blocks, 2 compiled, 3 compiled with registers held.
+        public int BlockTier
+        {
+            get => _blockTier;
+            set { _blockTier = Math.Clamp(value, 0, 15); ApplyOptions(); }
+        }
+
+        // The recompiler's counters in mars_blocks_counters' order: live, shaped, discarded, entries, instructions, stepped, mapped, compiled, nanoseconds, bytes, compiled entries.
+        public long[] BlockCounterValues()
+        {
+            long count = BlockCounters(Handle, null, 0);
+            var values = new long[count];
+            fixed (long* data = values) BlockCounters(Handle, data, (nuint)values.Length);
+            return values;
+        }
+
         // Every byte the display processor's thread touches checked against the marks, as Mars's EMUSEN_MARS_VERIFY_RDP; for tests.
         public bool VerifyRdp
         {
@@ -201,7 +238,10 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         // Mars's keys, so one graphics tab serves either engine; the multiple, antialiasing and the device are not honoured yet - see Mars_Native.md §5.5 and §5.6.
         public static readonly IReadOnlyList<CoreSetting> VideoSettings =
-            MarsCore.VideoSettings.Select(s => Honoured.Contains(s.Key) ? Threads(s) : s with { Hint = IgnoredHint + s.Hint }).ToArray();
+            MarsCore.VideoSettings.Select(s => Honoured.Contains(s.Key) ? Threads(s) : s with { Hint = IgnoredHint + s.Hint }).Append(Recompiler).ToArray();
+
+        // MarsRT's own key for Mars's UseBlocks, which is no setting of Mars's - see Mars_Native.md §5.8.
+        private static readonly CoreSetting Recompiler = new("Recompiler", "Compile the processor's code", "The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter. Off by default on MarsRT until proven in play.", CoreSettingKind.Switch, "false");
 
         private static CoreSetting Threads(CoreSetting s) => s.Key switch
         {
@@ -224,6 +264,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             "RdpWorkers" => RdpWorkers.ToString(),
             "DeferredPresentation" => DeferredPresentation ? "true" : "false",
             "SkipRepeatedScans" => SkipRepeatedScans ? "true" : "false",
+            "Recompiler" => UseBlocks ? "true" : "false",
             _ => _ignored.TryGetValue(Setting(key).Key, out string? value) ? value : Setting(key).Default,
         };
 
@@ -245,6 +286,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
                 case "RdpWorkers": RdpWorkers = int.Parse(accepted); break;
                 case "DeferredPresentation": DeferredPresentation = accepted == "true"; break;
                 case "SkipRepeatedScans": SkipRepeatedScans = accepted == "true"; break;
+                case "Recompiler": UseBlocks = accepted == "true"; break;
                 default: _ignored[key] = accepted; break;
             }
         }
@@ -443,7 +485,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             TakePicture();
         }
 
-        // The interpreter alone, the given number of instructions, as MarsCorpusTests steps the C# core.
+        // The interpreter's steps, the given number, as MarsCorpusTests steps the C# core; through the blocks when they are on.
         public void RunSteps(ulong steps) => RunStepsExport(Handle, steps);
 
         public string IsViewerTranscript

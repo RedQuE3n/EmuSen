@@ -1,5 +1,6 @@
 //! Unit tests of the machine core, with values the C# WiseMan tests give; the corpus behind `EMUSEN_MARSRT_CORPUS`.
 
+mod blocks;
 mod bus;
 mod cpu;
 mod devices;

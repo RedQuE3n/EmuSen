@@ -12,6 +12,8 @@ pub(crate) struct Mode {
     pub threaded: bool,
     pub deferred: bool,
     pub workers: usize,
+    /// The recompiler on; the reference is always the interpreter.
+    pub blocks: bool,
 }
 
 /// How its state is compared: joined every frame, or a snapshot every frame replayed into a scratch machine, which leaves the drain running across frames.
@@ -33,6 +35,7 @@ impl Run {
         machine.set_rdp_workers(mode.workers);
         machine.set_threaded_rdp(mode.threaded);
         machine.set_deferred(mode.deferred);
+        machine.set_recompiler(mode.blocks);
         let mut scanout = Scanout::default();
         scanout.repeat_rows = true;
         if let Some(state) = state {
@@ -91,7 +94,7 @@ fn first_difference(a: &[u8], b: &[u8]) -> usize {
 
 /// Runs a game in both machines and returns the frames compared; panics at the first frame they part.
 pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64, mode: Mode, how: Compare) -> u64 {
-    let mut reference = Run::load(folder, rom, state, Mode { threaded: false, deferred: false, workers: 1 });
+    let mut reference = Run::load(folder, rom, state, Mode { threaded: false, deferred: false, workers: 1, blocks: false });
     let mut subject = Run::load(folder, rom, state, mode);
     let mut scratch = Machine::new(reference.machine.rdram_bytes()).unwrap();
     let mut previous = reference.picture();
@@ -163,28 +166,38 @@ fn each_game(mode: Mode, how: Compare) {
 
 #[test]
 fn a_threaded_machine_joined_every_frame_is_the_machine_at_once() {
-    each_game(Mode { threaded: true, deferred: false, workers: 1 }, Compare::Join);
+    each_game(Mode { threaded: true, deferred: false, workers: 1, blocks: false }, Compare::Join);
 }
 
 #[test]
 fn a_threaded_machine_snapshot_every_frame_is_the_machine_at_once() {
-    each_game(Mode { threaded: true, deferred: false, workers: 1 }, Compare::Snapshot);
+    each_game(Mode { threaded: true, deferred: false, workers: 1, blocks: false }, Compare::Snapshot);
 }
 
 #[test]
 fn a_deferred_picture_is_the_immediate_picture_of_the_frame_before() {
-    each_game(Mode { threaded: false, deferred: true, workers: 1 }, Compare::Join);
+    each_game(Mode { threaded: false, deferred: true, workers: 1, blocks: false }, Compare::Join);
 }
 
 #[test]
 fn a_threaded_and_deferred_machine_is_the_machine_at_once_a_picture_late() {
-    each_game(Mode { threaded: true, deferred: true, workers: 1 }, Compare::Snapshot);
+    each_game(Mode { threaded: true, deferred: true, workers: 1, blocks: false }, Compare::Snapshot);
 }
 
 #[test]
 fn a_machine_whose_list_several_processors_share_is_the_machine_at_once() {
     let counts = std::env::var("EMUSEN_MARSRT_WORKERS").unwrap_or_else(|_| "2,3,4".into());
     for workers in counts.split(',').filter_map(|n| n.trim().parse().ok()) {
-        each_game(Mode { threaded: true, deferred: workers % 2 == 1, workers }, Compare::Snapshot);
+        each_game(Mode { threaded: true, deferred: workers % 2 == 1, workers, blocks: false }, Compare::Snapshot);
     }
+}
+
+#[test]
+fn a_recompiled_machine_is_the_interpreted_machine() {
+    each_game(Mode { threaded: false, deferred: false, workers: 1, blocks: true }, Compare::Join);
+}
+
+#[test]
+fn a_recompiled_machine_on_four_workers_deferred_is_the_interpreted_machine_a_picture_late() {
+    each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true }, Compare::Snapshot);
 }

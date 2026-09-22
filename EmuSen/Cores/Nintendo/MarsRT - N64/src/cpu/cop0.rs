@@ -103,6 +103,7 @@ impl Cpu {
     /// `Cop0Written`: for a caller that wrote COP0 or loaded the processor outside an instruction.
     pub fn cop0_written(&mut self, bus: &MemoryBus) {
         self.run.recheck = true;
+        self.run.tlb_generation = self.run.tlb_generation.wrapping_add(1);
         self.refresh_mode();
         self.schedule_timer(bus);
     }
@@ -173,6 +174,7 @@ impl Cpu {
 
     fn write_cop0(&mut self, bus: &mut MemoryBus, register: usize, value: u64) {
         self.cop0_latch = value;
+        self.run.tlb_generation = self.run.tlb_generation.wrapping_add(1);
         if is_unused(register) {
             return;
         }
@@ -266,6 +268,8 @@ impl Cpu {
     /// `EnterException`: everything an exception does to the machine before the handler's first instruction.
     pub fn enter_exception(&mut self) {
         let raised = self.run.fault;
+        self.run.exceptions += 1;
+        self.run.tlb_generation = self.run.tlb_generation.wrapping_add(1);
         let already_handling = self.cop0[STATUS] & STATUS_EXCEPTION_LEVEL != 0;
         let extended = self.wide_addressing();
         if !already_handling {
@@ -316,6 +320,7 @@ impl Cpu {
     }
 
     fn read_tlb_entry(&mut self) {
+        self.run.tlb_generation = self.run.tlb_generation.wrapping_add(1);
         let entry = self.tlb.entries[(self.cop0[INDEX] & 0x1F) as usize];
         self.cop0[PAGE_MASK] = entry.page_mask;
         self.cop0[ENTRY_HI] = entry.entry_hi;
@@ -325,6 +330,7 @@ impl Cpu {
 
     /// `WriteTlbEntry`: an entry keeps less than the registers hold, and one global flag for both halves.
     fn write_tlb_entry(&mut self, index: usize) {
+        self.run.tlb_generation = self.run.tlb_generation.wrapping_add(1);
         let page_mask = Tlb::paired_page_mask(self.cop0[PAGE_MASK]);
         let global = self.cop0[ENTRY_LO0] & self.cop0[ENTRY_LO1] & ENTRY_LO_GLOBAL;
         let entry = &mut self.tlb.entries[index & 0x1F];

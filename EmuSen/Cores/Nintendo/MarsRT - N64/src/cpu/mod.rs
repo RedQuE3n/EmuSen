@@ -1,5 +1,6 @@
 //! The VR4300's state, the C# `Cpu` (with COP0, the FPU's registers and COP2's latch), and what C# derives beside it.
 
+pub mod blocks;
 pub mod cop0;
 pub mod cop1;
 pub mod idle;
@@ -61,6 +62,10 @@ pub struct CpuRun {
     pub idle_turns_passed: i64,
     pub idle_instructions: i64,
     pub rsp_steps: i64,
+    /// Moves whenever a translation could have changed, so a mapped fetch remembered from before is not trusted (Mars_Native.md §5.8).
+    pub tlb_generation: u32,
+    /// Every exception entered: a step that raised is a step, though it is no instruction.
+    pub exceptions: i64,
 }
 
 impl Default for CpuRun {
@@ -77,6 +82,8 @@ impl Default for CpuRun {
             idle_turns_passed: 0,
             idle_instructions: 0,
             rsp_steps: 0,
+            tlb_generation: 0,
+            exceptions: 0,
         }
     }
 }

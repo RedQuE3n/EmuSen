@@ -7,6 +7,7 @@ use crate::memory::bus::{MemoryBus, RDRAM_SIZE, RDRAM_SIZE_EXPANDED};
 use crate::memory::controller::ControllerPak;
 use crate::cpu::cop0::{COMPARE, CONFIG, CONFIG_AT_RESET, PROCESSOR_ID, PROCESSOR_ID_REGISTER, STATUS};
 use crate::cpu::Cpu;
+use crate::cpu::blocks::Blocks;
 use crate::memory::dp::{DpInterface, SNAPSHOT_WORDS};
 use crate::memory::dp_threads::Threads;
 use crate::rom::{self, Cic, RomImage};
@@ -35,6 +36,8 @@ pub struct Machine {
     /// The version of the state last loaded, 1 or 2; 0 before any.
     pub loaded_version: i32,
     pub options: Skip<Options>,
+    /// The recompiler, off unless set; kept across a load, since every block is compared with memory before it runs.
+    pub blocks: Skip<Blocks>,
 }
 
 /// How the machine runs, none of which changes what it computes.
@@ -101,6 +104,7 @@ impl Machine {
             bus: MemoryBus::new(rdram_bytes),
             loaded_version: 0,
             options: Skip(Options::default()),
+            blocks: Skip::default(),
         })
     }
 
@@ -177,6 +181,10 @@ impl Machine {
         machine.bus.read_state_all(&mut r, version == SNAPSHOT_VERSION)?; // Bus
         machine.loaded_version = version;
         machine.options = self.options;
+        machine.blocks = std::mem::take(&mut self.blocks);
+        if machine.rdram_bytes() != self.rdram_bytes() {
+            machine.blocks.clear();
+        }
         machine.bus.vi_rebase();
         machine.bus.ai_rebase();
 
@@ -228,7 +236,7 @@ impl Machine {
         let mut bus = MemoryBus::new(if expansion_pak { RDRAM_SIZE_EXPANDED } else { RDRAM_SIZE });
         let mut cpu = Cpu::power_on(&bus);
         hand_off(&mut bus, &mut cpu, rom);
-        Machine { total_frames: 0, last_frame_cycles: CYCLE_CAP, cpu, bus, loaded_version: 0, options: Skip(Options::default()) }
+        Machine { total_frames: 0, last_frame_cycles: CYCLE_CAP, cpu, bus, loaded_version: 0, options: Skip(Options::default()), blocks: Skip::default() }
     }
 
     /// `MarsCore.LoadRom` less the host: boot, then `LoadSaves` from the files the host read, or none.
@@ -258,20 +266,32 @@ impl Machine {
         let cap_at = start + CYCLE_CAP;
         let Options { idle_skip, rsp_whole, .. } = *self.options;
         let (cpu, bus) = (&mut self.cpu, &mut self.bus);
-        while bus.vi.fields == fields && bus.cycles < cap_at {
-            if idle_skip && cpu.pc == cpu.run.idle_at && cpu.try_idle(bus, cap_at, rsp_whole) {
-                continue;
+        if self.blocks.on {
+            self.blocks.run_frame(cpu, bus, cap_at, idle_skip, rsp_whole);
+        } else {
+            while bus.vi.fields == fields && bus.cycles < cap_at {
+                if idle_skip && cpu.pc == cpu.run.idle_at && cpu.try_idle(bus, cap_at, rsp_whole) {
+                    continue;
+                }
+                cpu.step(bus);
             }
-            cpu.step(bus);
         }
         self.last_frame_cycles = self.bus.cycles - start;
         self.total_frames += 1;
     }
 
-    /// The interpreter alone, as the corpus runs it: `Cpu.Step`, the given number of times.
+    /// The recompiler on or off; exact either way, and off by default. See Mars_Native.md §5.8.
+    pub fn set_recompiler(&mut self, on: bool) {
+        self.blocks.on = on;
+    }
+
+    /// The interpreter alone, as the corpus runs it: `Cpu.Step`, the given number of times; through the blocks when they are on.
     pub fn run_steps(&mut self, steps: u64) {
         self.apply_threads();
         let (cpu, bus) = (&mut self.cpu, &mut self.bus);
+        if self.blocks.on {
+            return self.blocks.run_steps(cpu, bus, steps);
+        }
         for _ in 0..steps {
             cpu.step(bus);
         }

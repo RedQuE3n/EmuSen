@@ -23,6 +23,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         public readonly Rdp.Rdp Processor;
 
+        // Sees each word the list runs inline, before and after the processor takes it, for a differential against another - see Mars_Native.md §5.3.
+        public interface IWordWatcher
+        {
+            void Before(ulong word);
+
+            void After(ulong word, bool fullSync);
+        }
+
+        [EmuSen.Common.SkipInState] public IWordWatcher? Watcher;
+
         [EmuSen.Common.SkipInState] private readonly MemoryBus _bus;
 
         private uint _start;
@@ -359,7 +369,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 ulong word = _xbus ? ReadDataMemory(_current) : _bus.Read64(_current);
                 _current += 8;
 
-                if (Processor.Accept(word)) FullSync();
+                Watcher?.Before(word);
+                bool sync = Processor.Accept(word);
+                Watcher?.After(word, sync);
+                if (sync) FullSync();
                 _scaledProcessor?.Accept(word);
             }
         }

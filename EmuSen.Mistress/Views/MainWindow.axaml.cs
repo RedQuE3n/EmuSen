@@ -387,8 +387,16 @@ namespace EmuSen.Mistress.Views
             {
                 // On the emulation thread, between frames, and only when the running game is that console's - see §4.26.
                 if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
+                if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
             }, _session is null ? null : _activeConsole);
             window.Show(this);
+        }
+
+        // On the UI thread: the filter belongs to the control that draws, not to the core - see EmuSen_Settings_Reference.md §4.40.
+        private void ApplyScreenFilter(string console)
+        {
+            GameFrame.ActiveEffect = EmuSen.Serenity.Shaders.ScreenFilters.ByName(_graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey));
+            GameFrame.InvalidateVisual();
         }
 
         // Every setting the core offers, from the config or its default; a value the core refuses falls back to the default - see §4.26.
@@ -817,6 +825,7 @@ namespace EmuSen.Mistress.Views
 
                 // What the graphics window holds for this console, or each setting's own default - see EmuSen_Settings_Reference.md §4.26.
                 ApplyConsoleSettings(_session, _activeConsole);
+                ApplyScreenFilter(_activeConsole);
                 // A half-loaded state is not a machine to run on, so the game starts again from nothing.
                 if (resumeFrom is not null && TryResume(_session, resumeFrom, path) is string resumeFailure)
                 {

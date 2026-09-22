@@ -60,19 +60,36 @@ namespace EmuSen.Mistress.Views
             Content = dock;
         }
 
+        // The key the frontend's own row is stored under, beside the core's; no core declares it, so no core is handed it - see EmuSen_Settings_Reference.md §4.40.
+        public const string ScreenFilterKey = "ScreenFilter";
+
         private Control BuildConsolePanel(string console)
         {
             IReadOnlyList<CoreSetting> settings = CoreCatalog.SettingsFor(console);
             var panel = new StackPanel { Spacing = 12, Margin = new Avalonia.Thickness(0, 8, 0, 0) };
+            var refreshers = new List<Action>();
+
+            // First on every tab: it belongs to the window the picture is drawn in, not to the core, so every console has it.
+            var filter = new Dropdown { Name = $"{console}.{ScreenFilterKey}", HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 160 };
+            filter.Chose += chosen => { if (!_filling && chosen is string value) Changed(console, ScreenFilterKey, value); };
+            void FillFilter()
+            {
+                _filling = true;
+                string current = _config.Value(console, ScreenFilterKey) ?? EmuSen.Serenity.Shaders.ScreenFilters.None;
+                filter.Fill(EmuSen.Serenity.Shaders.ScreenFilters.Names, EmuSen.Serenity.Shaders.ScreenFilters.Names.Contains(current) ? current : EmuSen.Serenity.Shaders.ScreenFilters.None);
+                _filling = false;
+            }
+            FillFilter();
+            refreshers.Add(FillFilter);
+            panel.Children.Add(new FieldRow { Label = "Screen Filter", Hint = "Drawn over the picture as it is shown, never in the game's own frame; changes apply at once.", Content = filter });
 
             if (settings.Count == 0)
             {
-                panel.Children.Add(new EmptyState { Message = "No graphics settings yet", Detail = $"The {console} core has nothing to offer here; what it draws, it draws one way." });
-                _panels.Add((console, () => { }));
+                panel.Children.Add(new EmptyState { Message = "No core settings yet", Detail = $"The {console} core has nothing else to offer here; what it draws, it draws one way." });
+                _panels.Add((console, () => { foreach (Action refresh in refreshers) refresh(); }));
                 return panel;
             }
 
-            var refreshers = new List<Action>();
             foreach (CoreSetting setting in settings)
             {
                 (Control control, Action refresh) = BuildControl(console, setting);

@@ -161,7 +161,8 @@ namespace EmuSen.Hotaru
             // Separate from home/Saves' battery-backed cartridge SRAM - see §1.
             string statePath = SaveLibrary.StatePathFor(romPath);
 
-            ICore core = CoreFactory.Create(romPath, headless: false);
+            string? engine = CoreFactory.ConfiguredEngine(romPath);
+            ICore core = CoreFactory.Create(romPath, headless: false, engine);
 
             // Needs core.CoreName, so it cannot be built any earlier - see §1 step 3.
             string logDir = Path.Combine(DianaOSSandbox.LogsDirectory, core.CoreName, $"console_{DateTime.Now:yyyyMMdd_HHmmss}");
@@ -170,6 +171,7 @@ namespace EmuSen.Hotaru
             Console.SetOut(logWriter);
 
             core.LoadRom(romPath);
+            if (CoreFactory.EngineNotice(romPath, engine, core) is { } notice) Console.WriteLine($"[core] {notice}");
             DebugSettings.CpuVerboseLogging = true;
             DebugSettings.Spc700VerboseLogging = true;
 

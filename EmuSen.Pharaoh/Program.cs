@@ -200,8 +200,10 @@ class Program
         ICore core;
         try
         {
-            core = CoreFactory.Create(options.RomPath, headless: true);
+            string? engine = CoreFactory.ConfiguredEngine(options.RomPath);
+            core = CoreFactory.Create(options.RomPath, headless: true, engine);
             core.LoadRom(options.RomPath);
+            if (CoreFactory.EngineNotice(options.RomPath, engine, core) is { } notice) Emit($"[core] {notice}");
         }
         catch (Exception ex) when (ex is NotSupportedException or InvalidDataException)
         {

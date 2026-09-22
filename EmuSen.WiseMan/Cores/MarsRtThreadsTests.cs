@@ -59,8 +59,8 @@ namespace EmuSen.WiseMan.Cores
             return (rom, stateName is null ? null : File.ReadAllBytes(Path.Combine(folder, stateName)));
         }
 
-        private static MarsRtCore Twin(bool threaded, bool deferred) =>
-            new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = threaded, DeferredPresentation = deferred, SkipRendering = false };
+        private static MarsRtCore Twin(bool threaded, bool deferred, int workers = 1) =>
+            new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = threaded, RdpWorkers = workers, DeferredPresentation = deferred, SkipRendering = false };
 
         // MarsRT on a thread, its state compared every frame (which joins) or every sixtieth (which leaves the thread running across frames), picture and sound every frame.
         [Theory]
@@ -96,6 +96,69 @@ namespace EmuSen.WiseMan.Cores
                 _output.WriteLine($"{romName} {stateName ?? "from power-on"}, deferred {deferred}, state every {every}: {frames} frames exact; the drain ran {counters[1]} words; waits by site {string.Join(",", counters.Skip(14).Take(12))}; scans repeated {counters[13]}");
                 Assert.True(counters[0] == 1 && (counters[1] > 0 || stateName is null), "the drain never ran, so nothing was compared");
             }
+        }
+
+        // MarsRT's list shared by several processors against MarsRT on one thread, then against the C# core's list shared as widely - see Mars_Native.md §5.6.6.
+        [Theory]
+        [MemberData(nameof(Games))]
+        public void MarsRT_with_its_list_shared_leaves_what_MarsRT_on_one_thread_leaves_and_is_compared_with_the_csharp_split(string romName, string? stateName)
+        {
+            if (Game(romName, stateName) is not { } game) return;
+            int frames = Frames(300);
+            foreach (int workers in new[] { 2, 4 })
+            {
+                using MarsRtCore reference = Twin(threaded: false, deferred: false), subject = Twin(threaded: true, deferred: false, workers);
+                Load(reference, game);
+                Load(subject, game);
+                for (int frame = 1; frame <= frames; frame++)
+                {
+                    Drive(reference, subject, frame);
+                    reference.RunFrame();
+                    subject.RunFrame();
+                    SameState(frame, reference.Save(false), subject.Save(false));
+                    SamePicture(frame, (reference.ScreenWidth, reference.ScreenHeight, reference.RowRepeat), reference.GetFrameBufferRgba(), subject);
+                    SameSound(frame, reference, subject);
+                }
+                _output.WriteLine($"{romName} {stateName ?? "from power-on"}, {workers} workers: {frames} frames exact against MarsRT on one thread");
+            }
+
+            // The C# split is an oracle only where it is exact; where it parts from MarsRT, the fields it parts in are named.
+            MarsCore oracle = MarsRtTests.Oracle(expansionPak: true);
+            oracle.ThreadedRdp = true;
+            oracle.RdpWorkers = 4;
+            oracle.SkipRendering = false;
+            using MarsRtCore twin = Twin(threaded: true, deferred: false, workers: 4);
+            oracle.LoadRom(game.Rom);
+            twin.LoadRom(game.Rom);
+            if (game.State is { } loaded)
+            {
+                oracle.LoadState(new MemoryStream(loaded));
+                twin.LoadState(loaded);
+            }
+            for (int frame = 1; frame <= frames; frame++)
+            {
+                Drive(oracle, twin, frame);
+                oracle.RunFrame();
+                twin.RunFrame();
+                byte[] want = Save(oracle), got = twin.Save(false);
+                if (!want.AsSpan().SequenceEqual(got))
+                {
+                    _output.WriteLine($"{romName} {stateName ?? "from power-on"}, four workers: the C# split parts from MarsRT's at frame {frame}, in {Differing(want, got)}");
+                    return;
+                }
+                SamePicture(frame, (oracle.ScreenWidth, oracle.ScreenHeight, oracle.RowRepeat), oracle.GetFrameBufferRgba(), twin);
+            }
+            _output.WriteLine($"{romName} {stateName ?? "from power-on"}, four workers: {frames} frames exact against the C# split too");
+        }
+
+        // The fields two states differ in, by the layout MarsRT writes.
+        private static string Differing(byte[] a, byte[] b)
+        {
+            using var machine = new MarsMachine(BitConverter.ToInt32(a, 8));
+            machine.Load(a);
+            var names = machine.Layout(snapshot: false).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split(' '))
+                .Where(p => !a.AsSpan(int.Parse(p[0]), int.Parse(p[1])).SequenceEqual(b.AsSpan(int.Parse(p[0]), int.Parse(p[1])))).Select(p => p[3]);
+            return string.Join(", ", names.Take(6));
         }
 
         // MarsRT threaded against the C# Mars threaded, the interpreter in both, presented at once and then both deferred.

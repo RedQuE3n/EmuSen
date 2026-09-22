@@ -180,3 +180,11 @@ fn a_deferred_picture_is_the_immediate_picture_of_the_frame_before() {
 fn a_threaded_and_deferred_machine_is_the_machine_at_once_a_picture_late() {
     each_game(Mode { threaded: true, deferred: true, workers: 1 }, Compare::Snapshot);
 }
+
+#[test]
+fn a_machine_whose_list_several_processors_share_is_the_machine_at_once() {
+    let counts = std::env::var("EMUSEN_MARSRT_WORKERS").unwrap_or_else(|_| "2,3,4".into());
+    for workers in counts.split(',').filter_map(|n| n.trim().parse().ok()) {
+        each_game(Mode { threaded: true, deferred: workers % 2 == 1, workers }, Compare::Snapshot);
+    }
+}

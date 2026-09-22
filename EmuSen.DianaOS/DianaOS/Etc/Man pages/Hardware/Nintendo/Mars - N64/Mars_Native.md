@@ -168,3 +168,42 @@ once per frame or per task, such as a rasteriser, faces no such boundary. Nothin
 `Rsp.UseNative` is off. `EMUSEN_MARS_NATIVERSP=1` turns on every entry point, and `=step` turns on only the stepped
 ones. Both are for measurement and differential testing. With the switch off, Mars runs exactly as before this page:
 the three games' frame times with the switch off matched the preceding commit's.
+
+## 5. The whole machine in Rust (planned 2026-09-22)
+
+§3.4's lesson decides the shape. A component entered once per emulated cycle loses on the boundary. So the port moves
+the **whole machine**, and the boundary is crossed **once per frame**: input in, and the picture and audio samples out.
+
+**It is a second N64 core, not a replacement.** The Rust machine runs behind a C# shim that implements the same
+interfaces as `MarsCore` (`ICore`, `ISnapshotCore`, `ICoreSettings`, `IFrameSerial`, `IRepeatedRows`, `IStateFormat`,
+`ICheatRegistryHost`), so the frontends and the tooling do not change. The C# Mars stays canonical, exact and the
+fallback, and a setting chooses between them.
+
+**The C# save state stays the format.** The shim transfers state between the two machines field by field, so a state
+written by either loads in either, and every existing `.state` file keeps working. That transfer is also the oracle's
+seam: run both machines from one state, and compare the C# save state of each after every frame. This is the
+measurement the whole of Phase G used, applied across two languages.
+
+**The order,** each stage proven against the C# core before the next begins:
+
+| Stage | What it covers | Its oracle |
+|---|---|---|
+| 1 | The machine's skeleton and bus, RDRAM, cartridge and PI, boot, and the CPU interpreter with COP0, the timer and interrupts, the TLB and software floating point | The CPU parts of n64-systemtest; boot frames against the C# core |
+| 2 | The signal processor (§3, already exact) and SP DMA | §3.3's differential; the microcode tests |
+| 3 | The RDP rasteriser and its workers | The RDP differential against angrylion and against the C# RDP |
+| 4 | VI scan-out, audio, SI, PIF and joybus, the save chips | Frame-by-frame state against the C# core in the golden-probe games |
+| 5 | The recompiler, on Cranelift | Its interpreter, and the C# recompiler's block tests |
+| 6 | The GPU path, on ash | The C# GPU path's tests |
+
+**What is deliberately kept out:**
+- The debugger's deep inspection: the Rust core serves the debug target through the state transfer, not live.
+- The coverage recorder, single-stepping and cheats: these run on the C# core until the Rust one has an equivalent.
+
+**Why the port may still fail to pay,** stated before it starts:
+- The C# core's remaining costs are memory traffic in the recompiler (`Mars_Recompiler.md` §12.3), the RSP's lock-step
+  (§3.4), and the RDP's pixel work on other threads.
+- A Rust machine removes the boundary from all three and gives the recompiler register allocation. It does not change
+  what the lock-step requires: one RSP step per CPU cycle.
+- The estimate before any measurement is 1.4 to 1.7× on GoldenEye and less on SM64 and OoT (`Mars_Native.md` §3.4 is
+  why estimates here are held loosely). Stage 1's interpreter is the first point at which a like-for-like number exists,
+  and it is to be measured against the C# interpreter, with the recompiler off in both, before stage 5 is priced again.

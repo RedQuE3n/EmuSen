@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace EmuSen.Cores.Nintendo.Mars.Native
 {
-    // The Rust library, loaded once; when it is absent, refused or turned off, every component runs its C# twin - see Mars_Native.md §1.
+    // MarsRT's Rust library, loaded once; when it is absent, refused or turned off, every component runs its C# twin - see Mars_Native.md §1.
     public static unsafe class MarsNative
     {
         public const uint InterfaceVersion = 1;
@@ -18,7 +18,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Native
         public static string Report => Library.Value.Report;
 
         private static string FileName =>
-            OperatingSystem.IsWindows() ? "emusen_native.dll" : OperatingSystem.IsMacOS() ? "libemusen_native.dylib" : "libemusen_native.so";
+            OperatingSystem.IsWindows() ? "marsrt.dll" : OperatingSystem.IsMacOS() ? "libmarsrt.dylib" : "libmarsrt.so";
 
         private static (nint, string) Load()
         {

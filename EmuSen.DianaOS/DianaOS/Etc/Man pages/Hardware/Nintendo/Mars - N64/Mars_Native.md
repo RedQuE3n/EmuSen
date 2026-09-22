@@ -7,14 +7,18 @@ groundwork a later component would stand on.
 
 ## 1. The library and how Mars finds it
 
-`EmuSen.Native/` is a Rust crate at the repository's root (`emusen-native`, edition 2024), built as a C-ABI dynamic
-library. It uses `panic = "abort"`, fat LTO, one codegen unit, and keeps line tables so that a panic's backtrace names
-its lines.
+`EmuSen/Cores/Nintendo/MarsRT - N64/` is a Rust crate (`marsrt`, edition 2024), built as a C-ABI dynamic library,
+`libmarsrt.so` (`marsrt.dll`, `libmarsrt.dylib`). It holds MarsRT, the N64 core in Rust that §5 plans, and the C#
+Mars's opt-in native components, of which §3's signal processor is the one so far. It uses `panic = "abort"`, fat LTO,
+one codegen unit, and keeps line tables so that a panic's backtrace names its lines. It was `EmuSen.Native/` at the
+repository's root until 2026-09-22, when it became MarsRT and moved beside the cores it sits among; the two exports
+below kept their `emusen_native_` names, because the C# Mars's twin already speaks them.
 
-`EmuSen.csproj` runs `cargo build --release` before the core compiles, and copies the library beside the assemblies as
-a `None` item. MSBuild carries that item into every consumer's output (Mistress, Hotaru, WiseMan) and into a publish.
-Cargo runs only for the host's own runtime identifier. A publish for another platform, or a machine without cargo,
-gets no library.
+`EmuSen.csproj` runs `cargo build --release` before the core compiles, with cargo's target directory at
+`EmuSen/obj/marsrt/` so that the build's output stays where MSBuild already ignores it, and copies the library beside
+the assemblies as a `None` item. MSBuild carries that item into every consumer's output (Mistress, Hotaru, WiseMan)
+and into a publish. Cargo runs only for the host's own runtime identifier. A publish for another platform, or a
+machine without cargo, gets no library.
 
 `MarsNative` loads it from `AppContext.BaseDirectory`. It refuses a library whose `emusen_native_interface_version` is
 not the build's (1), and installs the panic log. `EMUSEN_MARS_NATIVE=0` turns the library off. **Every component falls
@@ -29,7 +33,7 @@ cannot see a native abort, which is why the library keeps its own.
 
 ## 3. The signal processor in Rust
 
-`src/mars/rsp.rs` ports the C# processor's **plain** path: the scalar unit, the vector unit's arithmetic, all 24
+`src/rsp.rs` ports the C# processor's **plain** path: the scalar unit, the vector unit's arithmetic, all 24
 vector loads and stores, and the reciprocal tables built by the same arithmetic (`Mars_RspVector.md` §10). The C#
 SIMD path is required to equal the plain path, so either is the oracle. The shift counts of the reciprocal unit are
 taken modulo 32 with `wrapping_shl` and `wrapping_shr`, because C# masks a shift count to five bits and the corpus's
@@ -174,10 +178,11 @@ the three games' frame times with the switch off matched the preceding commit's.
 §3.4's lesson decides the shape. A component entered once per emulated cycle loses on the boundary. So the port moves
 the **whole machine**, and the boundary is crossed **once per frame**: input in, and the picture and audio samples out.
 
-**It is a second N64 core, not a replacement.** The Rust machine runs behind a C# shim that implements the same
-interfaces as `MarsCore` (`ICore`, `ISnapshotCore`, `ICoreSettings`, `IFrameSerial`, `IRepeatedRows`, `IStateFormat`,
-`ICheatRegistryHost`), so the frontends and the tooling do not change. The C# Mars stays canonical, exact and the
-fallback, and a setting chooses between them.
+**It is a second N64 core, not a replacement, and it is named MarsRT.** Its crate is a folder beside the other cores,
+`EmuSen/Cores/Nintendo/MarsRT - N64/`, rather than a component inside Mars's, because it is a core of its own. The
+Rust machine runs behind a C# shim that implements the same interfaces as `MarsCore` (`ICore`, `ISnapshotCore`,
+`ICoreSettings`, `IFrameSerial`, `IRepeatedRows`, `IStateFormat`, `ICheatRegistryHost`), so the frontends and the
+tooling do not change. The C# Mars stays canonical, exact and the fallback, and a setting chooses between them.
 
 **The C# save state stays the format.** The shim transfers state between the two machines field by field, so a state
 written by either loads in either, and every existing `.state` file keeps working. That transfer is also the oracle's

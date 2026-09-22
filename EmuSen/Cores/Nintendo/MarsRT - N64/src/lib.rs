@@ -1,6 +1,6 @@
-//! EmuSen's native components, called from C# through a C ABI. See Mars_Native.md.
+//! MarsRT, the N64 core in Rust, and the C# Mars's native components, called through a C ABI. See Mars_Native.md.
 
-pub mod mars;
+pub mod rsp;
 
 use std::ffi::{CStr, c_char};
 use std::sync::OnceLock;

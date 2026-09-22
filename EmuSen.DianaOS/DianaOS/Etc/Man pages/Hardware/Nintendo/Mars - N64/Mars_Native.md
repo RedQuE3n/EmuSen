@@ -1092,3 +1092,27 @@ machine stage's decision.
 **Left for the machine stage.** The call itself: the machine calls `scan` at the field's end, where `RunFrame` calls
 `Present`, and after a load, where `LoadState` does, and does not reset the `Scanout` when it loads. The deferred
 presentation, the repeat test, the bands, the multiple and the device are not ported.
+
+### 5.7 Where MarsRT stands against the C# core in production (2026-09-22)
+
+After stage 1, MarsRT was measured single-threaded against the C# core's shipping configuration, on this 16-core
+desktop, flat out, over three rounds of 1,500 frames from the gameplay states. MarsRT ran with its RDP and its
+scan-out on the emulation thread (`examples/frames … scan`). The C# core ran with compiled blocks, the threaded RDP
+and deferred presentation (pacebench, `PACED=0`).
+
+| Game | MarsRT, one thread | C# production |
+|---|---|---|
+| SM64 | 13.13–13.18 ms | 5.71–5.90 ms |
+| OoT | 15.06–15.15 ms | 7.10–7.17 ms |
+| GoldenEye | 32.17–32.23 ms | 17.72–17.78 ms |
+
+MarsRT is about 2.2 times slower in production terms. That is the expected shape. §5.2's like-for-like table has
+MarsRT's CPU and RSP faster than C#'s, even against C#'s compiled blocks: 10.8 ms against 18.3 ms for SM64 with the
+RDP on the emulation thread in both. What the production C# has and MarsRT does not yet have is work moved off the
+emulation thread: the RDP (5 to 9 ms a frame here) and the scan-out (about 3 ms).
+
+**The prediction, stated before §5.6 is measured:**
+- With the RDP and the scan-out off its thread, MarsRT reaches about 4 to 5 ms a frame on SM64, at or below the C#
+  core.
+- GoldenEye reaches about 20 ms, still above it. The recompiler of stage 5 is what that gap is left to.
+- The prediction is subtraction from measured parts, and it will be replaced by §5.6's measurement.

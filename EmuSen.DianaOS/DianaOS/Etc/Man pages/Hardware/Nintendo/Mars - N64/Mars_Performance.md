@@ -810,7 +810,9 @@ gained a tenth on the bench, is within its spread. Against the phase's opening p
 **Why it is exact.** The window holds `Fetch` of the same index over the same RDRAM and origin, which a scan does not
 change; the lookup and the fill use one stored width, so the window is a contiguous range of indices whatever the
 walk's width, and a stale width could only move the range. The pre-divot memo is stamped by the slot's line as
-`Remembered` is. All 1,800 probe frames match, state and all.
+`Remembered` is. All 1,800 probe frames match, state and all. *(2026-09-22: the stamps were the same and the wrap was
+not. The counter's wrap cleared only `Remembered`'s tags, so this memo was exact only below it; fixed with a test in
+`Mars_Video.md` §2.13.)*
 
 **What catches a mistake in it.** Eight breakages: the window not emptied between scans, a slide misaligning what it
 keeps, the lookup's index or the fill's index off by one, the pre-divot memo stamped wrongly or unbounded — each fails

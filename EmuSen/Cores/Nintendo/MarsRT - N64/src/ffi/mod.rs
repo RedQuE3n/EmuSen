@@ -1,16 +1,19 @@
 //! MarsRT's C ABI: the machine, its state, and a frame at a time. A negative return is a status. See Mars_Native.md §5.1, §5.2 and §5.5.
 
+pub mod rdp;
+pub mod vi;
+
 use std::ptr;
 use std::sync::Arc;
 
-use crate::bus_access::map;
-use crate::cop0::ENTRY_HI;
+use crate::cpu::cop0::ENTRY_HI;
+use crate::cpu::segments::{self, Mode, Segment};
+use crate::cpu::tlb::TlbResult;
 use crate::machine::Machine;
+use crate::memory::bus_access::map;
 use crate::rom::RomImage;
-use crate::segments::{self, Mode, Segment};
 use crate::state::{State, StateResult, StateWriter};
-use crate::tlb::TlbResult;
-use crate::vi_scan::{self, Scanout};
+use crate::vi::scan::{self, Scanout};
 
 /// A null handle or buffer.
 pub const STATUS_NULL: i32 = -1;
@@ -49,7 +52,7 @@ impl Core {
     /// `Present`: the VI's scan of what the machine left, which writes the VI's held lines; the frame is composed on every call.
     pub fn present(&mut self) {
         let bus = &mut self.machine.bus;
-        self.shown = vi_scan::scan(&mut bus.vi, &bus.rdram, &bus.rdram_hidden, &mut self.scanout);
+        self.shown = scan::scan(&mut bus.vi, &bus.rdram, &bus.rdram_hidden, &mut self.scanout);
         self.frame_serial += 1;
     }
 
@@ -438,7 +441,7 @@ pub unsafe extern "C" fn mars_machine_drain_audio(core: *mut Core, out: *mut i16
 /// `core` must be live or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mars_machine_audio_sample_rate(core: *const Core) -> i32 {
-    unsafe { core.as_ref() }.map_or(crate::ai::DEFAULT_SAMPLE_RATE, |c| c.machine.bus.ai.sample_rate(c.machine.bus.vi.video_clock()))
+    unsafe { core.as_ref() }.map_or(crate::memory::ai::DEFAULT_SAMPLE_RATE, |c| c.machine.bus.ai.sample_rate(c.machine.bus.vi.video_clock()))
 }
 
 /// The picture the last scan composed: width, height, rows shown per row, and the serial; the bytes are `mars_machine_frame_bytes`.
@@ -683,7 +686,7 @@ pub unsafe extern "C" fn mars_machine_vi_registers(core: *const Core, out: *mut 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bus::RDRAM_SIZE;
+    use crate::memory::bus::RDRAM_SIZE;
 
     fn core() -> Core {
         Core::new(Machine::new(RDRAM_SIZE).unwrap())

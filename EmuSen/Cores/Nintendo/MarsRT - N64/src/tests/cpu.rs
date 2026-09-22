@@ -1,14 +1,14 @@
 //! The integer core: `MarsCpuArithmeticTests`, `MarsCpuTrapTests`, `MarsCpuUnalignedTests`, `MarsCpuExceptionTests`, `MarsCpuInterruptTests`.
 
 use super::support::{Asm, ENTRY_POINT, Rig, build_rom, bus_with_cart, new_bus};
-use crate::bus::MemoryBus;
-use crate::bus_access::map::{MI_BASE, PI_BASE};
-use crate::cop0::{
+use crate::memory::bus::MemoryBus;
+use crate::memory::bus_access::map::{MI_BASE, PI_BASE};
+use crate::cpu::cop0::{
     BAD_VIRTUAL_ADDRESS, CAUSE, CAUSE_BRANCH_DELAY, CAUSE_INTERRUPT_RCP, CAUSE_INTERRUPT_TIMER, COMPARE, EXCEPTION_PC, STATUS,
     STATUS_BOOTSTRAP_VECTORS, STATUS_EXCEPTION_LEVEL, STATUS_INTERRUPT_ENABLE, VECTOR_BASE, VECTOR_BASE_BOOTSTRAP,
 };
 use crate::cpu::code;
-use crate::mi::interrupt;
+use crate::memory::mi::interrupt;
 
 const GENERAL_VECTOR: u64 = VECTOR_BASE + 0x180;
 const REFILL_VECTOR: u64 = VECTOR_BASE;

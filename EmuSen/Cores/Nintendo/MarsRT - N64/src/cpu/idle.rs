@@ -1,12 +1,12 @@
 //! The idle loop, a branch to itself over a no-operation, run in one piece: C#'s `RunIdle`, entered from the interpreter. See Mars_Native.md §5.2.
 
-use crate::bus::MemoryBus;
-use crate::bus_access::be32;
-use crate::cop0::ENTRY_HI;
+use crate::memory::bus::MemoryBus;
+use crate::memory::bus_access::be32;
+use crate::cpu::cop0::ENTRY_HI;
 use crate::cpu::Cpu;
-use crate::interp::{KERNEL_DIRECT_BASE, KERNEL_DIRECT_SIZE};
-use crate::segments::{self, Mode, Segment};
-use crate::tlb::TlbResult;
+use crate::cpu::interp::{KERNEL_DIRECT_BASE, KERNEL_DIRECT_SIZE};
+use crate::cpu::segments::{self, Mode, Segment};
+use crate::cpu::tlb::TlbResult;
 
 /// The cycles of one turn, and of its branch, as C#'s `BlockShape` decodes them: one each.
 const IDLE_CYCLES: i64 = 2;

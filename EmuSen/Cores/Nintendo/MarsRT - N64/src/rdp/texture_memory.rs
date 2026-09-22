@@ -46,17 +46,17 @@ impl TextureTile {
 
 /// The 32-bit word at an index of RDRAM, big-endian, or zero past its end.
 #[inline(always)]
-fn image_word(index: i32, rdram: &[u8]) -> u32 {
+fn image_word(index: i32, mem: &RdpMemory) -> u32 {
     let at = (index & 0x3F_FFFF) as usize * 4;
-    if at + 3 < rdram.len() { u32::from_be_bytes([rdram[at], rdram[at + 1], rdram[at + 2], rdram[at + 3]]) } else { 0 }
+    if at + 3 < mem.len() { mem.be32(at) } else { 0 }
 }
 
 /// The eight bytes from the image pointer, read through the two 32-bit words that hold them and a following pair.
 #[inline(always)]
-fn image_window(pointer: i32, rdram: &[u8]) -> u64 {
+fn image_window(pointer: i32, mem: &RdpMemory) -> u64 {
     let word = (pointer >> 2) & !1;
-    let first = ((image_word(word, rdram) as u64) << 32) | image_word(word + 1, rdram) as u64;
-    let second = ((image_word(word + 2, rdram) as u64) << 32) | image_word(word + 3, rdram) as u64;
+    let first = ((image_word(word, mem) as u64) << 32) | image_word(word + 1, mem) as u64;
+    let second = ((image_word(word + 2, mem) as u64) << 32) | image_word(word + 3, mem) as u64;
 
     let offset = (pointer & 7) * 8;
     if offset == 0 { first } else { (first << offset) | (second >> (64 - offset)) }
@@ -160,7 +160,7 @@ impl Rdp {
             let ts = (((s >> 16) & 0xFFFF) as i16 as i32 - (tile.sl << 3)) >> shift;
             let tt = (((t >> 16) & 0xFFFF) as i16 as i32 - (tile.tl << 3)) >> shift;
 
-            let mut window = image_window(pointer, mem.rdram);
+            let mut window = image_window(pointer, mem);
             if kind == LoadKind::Palette && (pointer & 1) == 0 {
                 window = (window >> 48) * 0x0001_0001_0001_0001;
             }

@@ -221,11 +221,11 @@ impl Rdp {
 /// One byte, and the hidden bits its pair shares, which only an odd address writes.
 #[inline(always)]
 fn write_copy_byte(address: u32, value: u8, mem: &mut RdpMemory) {
-    if address as usize >= mem.rdram.len() {
+    if address as usize >= mem.len() {
         return;
     }
-    mem.rdram[address as usize] = value;
+    mem.set(address as usize, value);
     if (address & 1) != 0 {
-        mem.hidden[(address >> 1) as usize] = (value & 1) * 3;
+        mem.set_hidden((address >> 1) as usize, (value & 1) * 3);
     }
 }

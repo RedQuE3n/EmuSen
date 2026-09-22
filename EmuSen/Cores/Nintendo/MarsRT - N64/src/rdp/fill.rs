@@ -160,13 +160,13 @@ impl Rdp {
 fn fill_pixel(address: u32, bytes: i32, color: u32, mem: &mut RdpMemory) {
     for i in 0..bytes as u32 {
         let at = address.wrapping_add(i);
-        if at as usize >= mem.rdram.len() {
+        if at as usize >= mem.len() {
             continue;
         }
         let value = (color >> (24 - 8 * (at & 3))) as u8;
-        mem.rdram[at as usize] = value;
+        mem.set(at as usize, value);
         if (at & 1) != 0 {
-            mem.hidden[(at >> 1) as usize] = (value & 1) * 3;
+            mem.set_hidden((at >> 1) as usize, (value & 1) * 3);
         }
     }
 }

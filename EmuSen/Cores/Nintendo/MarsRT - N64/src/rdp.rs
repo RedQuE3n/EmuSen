@@ -488,10 +488,81 @@ impl State for Rdp {
     }
 }
 
-/// The memories the RDP draws into: RDRAM and its hidden bits, byte for byte as the bus holds them. See Mars_Native.md §5.2.
+/// RDRAM and its hidden bits by raw pointer, so a drain can hold them while the machine touches other bytes. See Mars_Native.md §5.6.1.
 pub struct RdpMemory<'a> {
-    pub rdram: &'a mut [u8],
-    pub hidden: &'a mut [u8],
+    rdram: *mut u8,
+    rdram_len: usize,
+    hidden: *mut u8,
+    hidden_len: usize,
+    check: Option<(&'a crate::dp_threads::Shared, i64)>,
+    _memories: std::marker::PhantomData<&'a mut [u8]>,
+}
+
+impl<'a> RdpMemory<'a> {
+    pub fn new(rdram: &'a mut [u8], hidden: &'a mut [u8]) -> Self {
+        RdpMemory { rdram: rdram.as_mut_ptr(), rdram_len: rdram.len(), hidden: hidden.as_mut_ptr(), hidden_len: hidden.len(), check: None, _memories: std::marker::PhantomData }
+    }
+
+    /// # Safety
+    /// Both memories must stay allocated for `'a`, and no other thread may touch a byte this view touches unless ordered by the page marks.
+    pub(crate) unsafe fn shared(rdram: (*mut u8, usize), hidden: (*mut u8, usize), check: Option<(&'a crate::dp_threads::Shared, i64)>) -> Self {
+        RdpMemory { rdram: rdram.0, rdram_len: rdram.1, hidden: hidden.0, hidden_len: hidden.1, check, _memories: std::marker::PhantomData }
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.rdram_len
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.rdram_len == 0
+    }
+
+    #[inline(always)]
+    fn touch(&self, at: usize, write: bool) {
+        if let Some((shared, word)) = self.check {
+            shared.verify(at, word, write);
+        }
+    }
+
+    #[inline(always)]
+    pub fn get(&self, at: usize) -> u8 {
+        assert!(at < self.rdram_len);
+        self.touch(at, false);
+        // SAFETY: in bounds; see `shared`.
+        unsafe { self.rdram.add(at).read() }
+    }
+
+    #[inline(always)]
+    pub fn set(&mut self, at: usize, value: u8) {
+        assert!(at < self.rdram_len);
+        self.touch(at, true);
+        // SAFETY: in bounds; see `shared`.
+        unsafe { self.rdram.add(at).write(value) }
+    }
+
+    /// The hidden bits beside bytes `2 index` and `2 index + 1`, checked as the second, which every writer of them writes.
+    #[inline(always)]
+    pub fn get_hidden(&self, index: usize) -> u8 {
+        assert!(index < self.hidden_len);
+        self.touch(index * 2 + 1, false);
+        // SAFETY: in bounds; see `shared`.
+        unsafe { self.hidden.add(index).read() }
+    }
+
+    #[inline(always)]
+    pub fn set_hidden(&mut self, index: usize, value: u8) {
+        assert!(index < self.hidden_len);
+        self.touch(index * 2 + 1, true);
+        // SAFETY: in bounds; see `shared`.
+        unsafe { self.hidden.add(index).write(value) }
+    }
+
+    #[inline(always)]
+    pub fn be32(&self, at: usize) -> u32 {
+        u32::from_be_bytes([self.get(at), self.get(at + 1), self.get(at + 2), self.get(at + 3)])
+    }
 }
 
 impl Rdp {

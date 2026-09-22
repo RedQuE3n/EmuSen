@@ -7,10 +7,12 @@ use crate::bus::{MemoryBus, RDRAM_SIZE, RDRAM_SIZE_EXPANDED};
 use crate::controller::ControllerPak;
 use crate::cop0::{COMPARE, CONFIG, CONFIG_AT_RESET, PROCESSOR_ID, PROCESSOR_ID_REGISTER, STATUS};
 use crate::cpu::Cpu;
-use crate::dp::SNAPSHOT_WORDS;
+use crate::dp::{DpInterface, SNAPSHOT_WORDS};
+use crate::dp_threads::Threads;
 use crate::rom::{self, Cic, RomImage};
 use crate::save::{SaveChip, save_type};
 use crate::state::{State, StateError, StateReader, StateResult, StateWriter};
+use crate::vi_scan::{self, Presented, Scanout};
 
 /// `StateMagic`: "MARS" little-endian.
 pub const STATE_MAGIC: u32 = 0x5352_414D;
@@ -42,11 +44,47 @@ pub struct Options {
     pub idle_skip: bool,
     /// The idle loop runs a running signal processor to its next event at once, as C#'s `RunBlocks` does.
     pub rsp_whole: bool,
+    /// `ThreadedRdp`: the display processor's list on a drain of its own, behind page marks. See Mars_Native.md §5.6.
+    pub threaded_rdp: bool,
+    /// `RdpWorkers`: processors sharing a threaded list, each shading the rows that are its by count.
+    pub rdp_workers: usize,
+    /// `DeferredPresentation`: the scan-out walked on another thread and shown one frame late.
+    pub deferred: bool,
+    /// `DpInterface.VerifyMarks`: every byte the drain touches checked against the marks; on in debug builds and with `EMUSEN_MARSRT_VERIFY_RDP=1`.
+    pub verify_rdp: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { idle_skip: true, rsp_whole: true }
+        let verify = cfg!(debug_assertions) || std::env::var("EMUSEN_MARSRT_VERIFY_RDP").is_ok_and(|v| v == "1");
+        Options { idle_skip: true, rsp_whole: true, threaded_rdp: false, rdp_workers: 1, deferred: false, verify_rdp: verify }
+    }
+}
+
+/// What a state is written under: the drain waited for, or held between two words for a snapshot and resumed after (`Hold`, `Resume`).
+struct Frozen<'a>(Option<&'a Threads>);
+
+impl<'a> Frozen<'a> {
+    fn new(dp: &'a DpInterface, snapshot: bool) -> Frozen<'a> {
+        match dp.threads.as_deref() {
+            Some(t) if snapshot => {
+                t.hold();
+                Frozen(Some(t))
+            }
+            Some(t) => {
+                t.wait_all();
+                Frozen(None)
+            }
+            None => Frozen(None),
+        }
+    }
+}
+
+impl Drop for Frozen<'_> {
+    fn drop(&mut self) {
+        if let Some(t) = self.0 {
+            t.resume();
+        }
     }
 }
 
@@ -72,7 +110,8 @@ impl Machine {
 
     /// `MarsCore.Write`. A state cannot carry pending RDP words, since only running them would drain them.
     pub fn write_state(&self, w: &mut StateWriter, snapshot: bool) -> StateResult {
-        let pending = self.bus.dp.pending.len();
+        let _frozen = Frozen::new(&self.bus.dp, snapshot);
+        let pending = self.bus.dp.pending_count();
         if pending > SNAPSHOT_WORDS {
             return Err(StateError::PendingOverflow(pending as i32));
         }
@@ -213,6 +252,7 @@ impl Machine {
 
     /// `RunFrame` without rendering or the debugger: to the VI's next field, or the cap; `RunQuietly` with the idle loop.
     pub fn run_frame(&mut self) {
+        self.apply_threads();
         let start = self.bus.cycles;
         let fields = self.bus.vi.fields;
         let cap_at = start + CYCLE_CAP;
@@ -230,6 +270,7 @@ impl Machine {
 
     /// The interpreter alone, as the corpus runs it: `Cpu.Step`, the given number of times.
     pub fn run_steps(&mut self, steps: u64) {
+        self.apply_threads();
         let (cpu, bus) = (&mut self.cpu, &mut self.bus);
         for _ in 0..steps {
             cpu.step(bus);
@@ -244,7 +285,60 @@ impl Machine {
         self.bus.cart = cart;
         self.bus.save.saved = saved;
         self.derive_after_load();
+        self.apply_threads();
         Ok(())
+    }
+
+    /// `ThreadedRdp`'s setter: the drain started with the shadow taken from the processor, or joined and ended.
+    pub fn set_threaded_rdp(&mut self, on: bool) {
+        self.options.threaded_rdp = on;
+        self.apply_threads();
+    }
+
+    /// `RdpWorkers`' setter, clamped as C# clamps it to one to eight; a running drain restarts with the count.
+    pub fn set_rdp_workers(&mut self, workers: usize) {
+        let workers = workers.clamp(1, 8);
+        if workers != self.options.rdp_workers && self.bus.dp.threads.is_some() {
+            self.bus.dp_set_threaded(false, false);
+        }
+        self.options.rdp_workers = workers;
+        self.apply_threads();
+    }
+
+    /// `DeferredPresentation`'s setter; a walk still out is joined at the next `present` or `join_presentation`.
+    pub fn set_deferred(&mut self, on: bool) {
+        self.options.deferred = on;
+    }
+
+    pub fn set_verify_rdp(&mut self, on: bool) {
+        self.options.verify_rdp = on;
+        self.apply_threads();
+    }
+
+    /// The drain made to match the options; a load's words are replayed first, so none is left for it.
+    fn apply_threads(&mut self) {
+        let want = self.options.threaded_rdp && self.bus.dp.pending.is_empty();
+        self.bus.dp_set_threaded(want, self.options.verify_rdp);
+    }
+
+    /// `Join`: everything handed over has run and the marks are clear.
+    pub fn join_rdp(&mut self) {
+        self.bus.dp.join();
+    }
+
+    /// `RunFrame`'s presentation: at once, or captured here and walked on another thread, shown at the next present.
+    pub fn present(&mut self, out: &mut Scanout) -> Presented {
+        if self.options.deferred { vi_scan::present_deferred(&mut self.bus, out) } else { vi_scan::present_now(&mut self.bus, out) }
+    }
+
+    /// `Present`: at once whatever the mode, as a load presents; a walk still out is joined first.
+    pub fn present_now(&mut self, out: &mut Scanout) -> Presented {
+        vi_scan::present_now(&mut self.bus, out)
+    }
+
+    /// `JoinPresentation`: the walk still out, if one is, finished and made the shown picture; true when it was.
+    pub fn join_presentation(&mut self, out: &mut Scanout) -> bool {
+        out.join()
     }
 
     /// What `MemoryBus.ReadState` and `LoadState` run after the fields: marks, drops, rebases, replays, `Cop0Written`.

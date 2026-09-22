@@ -158,8 +158,8 @@ impl Rdp {
 #[inline(always)]
 pub(super) fn read_depth_word(index: u32, mem: &RdpMemory) -> (i32, i32) {
     let at = index.wrapping_mul(2);
-    if (at.wrapping_add(1) as usize) < mem.rdram.len() {
-        ((mem.rdram[at as usize] as i32) << 8 | mem.rdram[at as usize + 1] as i32, mem.hidden[index as usize] as i32)
+    if (at.wrapping_add(1) as usize) < mem.len() {
+        ((mem.get(at as usize) as i32) << 8 | mem.get(at as usize + 1) as i32, mem.get_hidden(index as usize) as i32)
     } else {
         (0, 0)
     }
@@ -168,13 +168,13 @@ pub(super) fn read_depth_word(index: u32, mem: &RdpMemory) -> (i32, i32) {
 #[inline(always)]
 pub(super) fn store_depth(index: u32, z: i32, delta_z_encoded: i32, mem: &mut RdpMemory) {
     let at = index.wrapping_mul(2);
-    if (at.wrapping_add(1) as usize) >= mem.rdram.len() {
+    if (at.wrapping_add(1) as usize) >= mem.len() {
         return;
     }
     let stored = compress_depth(z & 0x3FFFF) | (delta_z_encoded >> 2);
-    mem.rdram[at as usize] = (stored >> 8) as u8;
-    mem.rdram[at as usize + 1] = stored as u8;
-    mem.hidden[index as usize] = (delta_z_encoded & 3) as u8;
+    mem.set(at as usize, (stored >> 8) as u8);
+    mem.set(at as usize + 1, stored as u8);
+    mem.set_hidden(index as usize, (delta_z_encoded & 3) as u8);
 }
 
 #[cfg(test)]

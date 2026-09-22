@@ -21,8 +21,9 @@ and into a publish. Cargo runs only for the host's own runtime identifier. A pub
 machine without cargo, gets no library.
 
 `MarsNative` loads it from `AppContext.BaseDirectory`. It refuses a library whose `emusen_native_interface_version` is
-not the build's (2 since §5.1 added the machine's state; 1 before), and installs the panic log. `EMUSEN_MARS_NATIVE=0`
-turns the library off. **Every component falls back to its C# twin when the library is absent, refused or off.**
+not the build's (3 since §5.2 gave the machine its behaviour, 2 since §5.1 added its state, 1 before), and installs
+the panic log. `EMUSEN_MARS_NATIVE=0` turns the library off. **Every component falls back to its C# twin when the
+library is absent, refused or off.**
 `MarsNativeTests` pins the load.
 
 ## 2. A panic never crosses into C#
@@ -353,6 +354,354 @@ output). Those two are the class a byte-exact claim does not cover by itself.
   stages that own it.
 - **Power-on values.** `Machine::new` is zeros, except where a C# field initializer is a constant: `_lastFrameCycles`,
   the SI's idle markers, `RiSelect`'s 0x14, and the save chips' 0xFF. The rest is stage 1's boot.
+
+### 5.2 The machine core
+
+*Stage 1b, 2026-09-22.* MarsRT runs a game. Everything of the C# machine except the RDP's rasteriser (§5.3) and the
+VI's scan-out (§5.4) is ported: the VR4300 interpreter, the bus, every device, the signal processor in lock-step,
+boot, the frame, and everything a C# load derives after reading. The C# interpreter is the oracle. The claim is that
+MarsRT leaves the C# save state after every frame, byte for byte. Once §5.3 and §5.4 were merged, it also shows the
+same picture and plays the same sound.
+
+**What was built.**
+
+| Module | The C# it ports | Lines |
+| --- | --- | --- |
+| `interp.rs` | `Cpu.Step` and the fetch, `TranslateAccess`, `Cpu.Dispatch`, and the ALU, branch, load and store, unaligned, multiply and divide, trap and COP2 files | 816 |
+| `cop0.rs` | `Cop0Registers` and `Cpu.Opcodes.Cop0`: the registers and their masks, Random, the interrupt check, the timer, exceptions, the TLB instructions | 349 |
+| `cop1.rs` | `Fpu`, `Cpu.Opcodes.Cop1` and `Cop1Math`: the register file in both modes, the control word, the formats, compare, delivery | 284 |
+| `softfloat.rs` | `SoftFloat`, `SoftFloatMath`, `SoftFloatConvert`, `HostSingle` | 606 |
+| `segments.rs`, `tlb.rs` | `Segments`; `Tlb.TryTranslate`, `Probe`, `PairedPageMask` | 66, 110 |
+| `idle.rs` | the idle test in `StepBlock`, then `RunIdle`, `RspRan`, `AfterInstruction` | 130 |
+| `bus_access.rs` | `MemoryBus`: reads and writes by region and width, `Store`, `Load`, the cartridge latch, the MI's repeat, `Tick`, `RunEvents`, `Settle`, `Reschedule`, `Count` | 404 |
+| `mi.rs`, `pi.rs`, `si.rs`, `joybus.rs` | `MiInterface`; `PiInterface`; `SiInterface`; `Joybus` | 126, 135, 134, 119 |
+| `ai.rs`, `vi.rs` | `AiInterface`; `Vi.Timing` and the VI's registers | 237, 173 |
+| `sp.rs`, `dp.rs` | `SpInterface`, and the processor's two instructions that reach the machine; `DpInterface`'s registers and `Take` | 496, 179 |
+| `save.rs`, `controller.rs`, `isviewer.rs`, `rom.rs` | `SaveChip`, `Eeprom`, `Sram`, `FlashRam`; `ControllerPak`; `IsViewer`; `RomImage`, `Cic`, `SaveTypes` | 479, 150, 50, 229 |
+| `machine.rs` | `Boot.HandOff`, `LoadRom` with `LoadSaves`, `RunFrame` with `RunQuietly`, `LoadState` | 390 |
+| `ffi.rs`, `Shim/MarsRtCore.cs` | the C ABI; `MarsCore`'s interfaces over it | 429, 355 |
+| `tests/` (nine files), `examples/frames.rs` | the C# unit tests of §5.2.1, item 6; a timed run for profiling | 4,169, 46 |
+
+A module that stage 1a gave a state struct counts that code too. `rsp.rs`, §3's interpreter, was changed in one
+respect, described below.
+
+**How the C# maps onto Rust.**
+
+- **One owner, and the devices are methods of the bus.** Each C# device holds a `_bus` and reaches its neighbours
+  through it. In Rust, `MemoryBus` owns every device, and a device's behaviour that touches another is a method of
+  the bus (`pi_write32`, `si_catch`, `ai_settle`, …). A self-contained device keeps its own methods (`MiInterface`,
+  `IsViewer`, the save chips). The CPU is `Cpu::step(&mut self, bus: &mut MemoryBus)`: two disjoint borrows, and no
+  shared ownership anywhere.
+- **What C# marks `[SkipInState]` is a `Skip<T>`.** It is excluded from the state, as before, and also from the
+  machine's equality, so stage 1a's round trips still compare what a state holds. These are the CPU's mode,
+  `_recheck`, `_assertedSeen`, `_timerDue` and its two inputs, the bus's next event and write counter, the VI's and
+  AI's schedules, the undrained samples, the IS-Viewer's transcript, `SaveChip._saved`, and the cartridge.
+- **An exception is a `Result`.** `Exec` is `Result<(), Raised>`, where `Raised` is empty and the fault is written
+  into the CPU's own record, as C#'s single `_exception` is. An `Exec` is therefore one byte, and `?` carries a fault
+  to the step, which enters it and ticks once, as C#'s `catch` does. `_extraCycles` is left as the raising
+  instruction set it, as C#'s is: the catch never clears it.
+- **The signal processor runs over the machine's own fields.** §3's interpreter read everything through raw
+  pointers into C#'s pinned arrays, and copied its scalars in and out. It now reads through a `Memory` trait.
+  `Pinned` implements that trait for the C# twin, with the same pointers, the same copies and the same exports, and
+  `MarsNativeRspTests` still pass. `sp::Lent` implements it for MarsRT, lending `sp::Rsp`'s fields and the two
+  memories for each call, so nothing is copied. The two instructions that reach the machine, a COP0 move and a
+  break, run in `rsp_event`, which is `StepManaged` for those two. `SpInterface.Step` runs through the
+  interpreter's `run` between events. That is equivalent to C#'s instruction-by-instruction loop, because neither
+  the halt nor the single-step bit can change except at an event.
+- **The idle loop is entered from the interpreter.** C# runs `RunIdle` only from a compiled block. The oracle has
+  its blocks off, so it never skips a turn. MarsRT has no compiled blocks, so it looks for the loop itself. A taken
+  branch to its own address records that address. When the program counter returns there in kernel mode with no
+  branch pending, the two words are checked as `BlockShape.Idle` checks them: `0x1000FFFF`, or a J to itself,
+  followed by a no-operation. A mapped address qualifies for the first form only, and only inside its page. The
+  interrupt check then runs as the step's own would, and a raise is entered as `Step` enters it. `RunIdle` follows
+  from there. Two things differ from C#:
+  - `StepBlock`'s catch also sets `_lastCount`, which `Step`'s does not. MarsRT follows `Step`, since `Step` is the
+    oracle's path.
+  - Inside the loop, C#'s `RspRan` steps the processor by `StepOne` when one cycle is owed. `StepOne` does not halt
+    after an MTC0 that set the single-step bit, which `SpInterface.Step`, the tick's path, does. The whole-turn path
+    runs to the next event and has the same gap. MarsRT steps as a tick steps in both places, which keeps it equal
+    to the interpreter.
+    - *Demonstrated, not argued.* `A_processor_that_single_steps_itself_under_the_idle_loop_halts_where_the_interpreter_halts_it`
+      starts a seven-word program under an idle CPU. The program sets its own single-step bit and then counts in a
+      register. The C# interpreter halts it with the count at 0. The C# core with its blocks, and so with `RunIdle`,
+      halts it at 1. MarsRT halts it at 0 and matches the interpreter's whole state.
+    - *Its reach.* The gap needs a processor that single-steps itself, and no microcode does. The C# is the oracle and
+      this stage does not own it, so the one-line fix is left there: `RspRan` should step through
+      `SpInterface.Step` whenever the bit could change.
+- **The frame is `RunFrame` with nothing armed.** It is `RunQuietly`'s loop to the VI's next field or the cycle cap,
+  with the idle test in front of each step. Then come `_lastFrameCycles` and `TotalFrames`, then the scan (§5.4),
+  once at the field's end and once after a load. The periodic `SaveSram` belongs to the host, and the shim does it
+  every 300 frames, as `MarsCore` does.
+- **A load runs what the C# load runs after reading.** `restore_state` parses into a fresh machine, as
+  stage 1a's `load_state` does, and keeps the cartridge, the save chip's `_saved` and the options. Then, in C#'s
+  order, it runs:
+  1. `Written++`;
+  2. the save chip and every pak marked dirty;
+  3. `Ai.DropUndrained`;
+  4. `Vi.Rebase` and `Ai.Rebase`, then `Reschedule`;
+  5. the snapshot's pending words replayed through the RDP with no sync raised, as `ReadPending` replays them;
+  6. `Cop0Written`, which rebuilds the mode, the check and the timer's due cycle.
+
+  The RDP's own `Refresh` runs in its `read_state` (§5.3). A save settles the two clocks first, as `WriteState`
+  does. The raw `load_state` stays for stage 1a's byte round trips. It now rebases the clocks too, so that a save's
+  settle adds nothing to a state that was never run.
+- **The C ABI** grew to boot a cartridge (`mars_machine_load_rom`, with the save and pak files the host read, or
+  `mars_machine_boot` as the corpus boots), run a frame or a number of steps, press a button or set a stick, drain
+  audio and read its rate, and read the picture, the counters, the IS-Viewer's transcript, the CPU's fields alone,
+  and the save chip and pak for the host to write. The interface version is 3. `MarsRtCore` implements `ICore`,
+  `ISnapshotCore`, `IStateFormat`, `IFrameSerial` and `IRepeatedRows` over it, with `MarsCore`'s button map, stick
+  reach and save paths. It is not registered in `CoreFactory`.
+
+#### 5.2.1 The evidence
+
+Six oracles. Each can see something the others cannot.
+
+1. **The hardware corpus, line by line.** `The_corpus_reports_line_for_line_what_the_csharp_core_reports` boots
+   `n64-systemtest` in both cores, as `MarsCorpusTests` boots it: the interpreter alone, with no saves and no
+   frames. It then compares the IS-Viewer's transcripts line by line through the summary. With the RDP merged, all
+   1,722 lines are identical, ending in the C# core's own "Failed 46 of 4637 tests". The C# interpreter took 3.0 s
+   for its 309,310,184 instructions, and MarsRT 1.8 s.
+2. **A synthetic operating system, from boot.** `SyntheticN64System` is a cartridge whose boot code copies an image
+   in by PI DMA and enters an idle loop. Its handler serves every interrupt each field:
+   - it acknowledges the SP, SI, AI, VI, PI and DP;
+   - it runs a joybus state machine of writes and delayed reads, carrying a controller's state, a pak read, and an
+     EEPROM read and write;
+   - it queues AI buffers and makes an aligned PI transfer, a misaligned odd one and a cartridge-latch round trip;
+   - it DMAs an RSP program in, in plain rows and in skipped rows, and starts it. The program does vector
+     arithmetic, DMAs back, hands the RDP a list from DMEM over XBUS, takes the semaphore, and breaks with its
+     interrupt on;
+   - it does single and double arithmetic, conversions, compares and a branch on them;
+   - it multiplies and divides, does 64-bit arithmetic, the unaligned family and a linked pair;
+   - it goes through the TLB, probes and reads it back, reads Random and Count, reads DMEM, PIF RAM, the RDRAM
+     registers, the MI's version and a stub register, and uses the MI's repeat.
+
+   The main program first raises one of each of five exceptions, which the handler steps over. The two cores are
+   compared after the load and after each of 240 frames, with the input changing every frame, with and without the
+   RSP, and with the picture scanned and compared as well. That is 62,117,781 cycles, and MarsRT passed 30,704,510
+   idle turns in them. `count-forever`, a counter in RDRAM with no idle loop, runs 60 frames.
+3. **States in both directions.** A state and a snapshot the C# core wrote at frame 37 are loaded by both cores. The
+   two then run 163 frames side by side. A state MarsRT wrote is loaded by both and runs 70 frames. Every frame is
+   identical. Both cores load, because a load is observable: the first version of the test compared MarsRT, loaded,
+   with the C# core that had merely run to frame 37, and they differed at once in the pak's dirty flag, which a C#
+   load forces true.
+4. **Random programs, compared every sixteen instructions.** `A_random_program_leaves_the_state_the_csharp_interpreter_leaves`
+   takes 160 seeds. Each fills 8,192 words with instructions from every class:
+   - the special and immediate ALU, with a third of the two-register forms naming one register twice so that equal
+     operands are common;
+   - all 28 loads and stores, through base registers into the data;
+   - branches, mostly forward so that a taken loop does not hold the program in a few words, and jumps;
+   - every COP1 format and function, the moves, and branches on the condition;
+   - COP0 moves, Status among them, with values that switch the FPU's half and full modes, 64-bit addressing,
+     reverse endian and the three modes;
+   - the TLB instructions, traps, syscall, break, sync, cache and COP2.
+
+   The registers come from edge values, the floats from every class including both NaNs and subnormals, and the TLB
+   and the timer are random. Each vector steps over the faulting instruction. Both interpreters step from one state.
+   The CPU's fields and the cycle count are compared every sixteen instructions, and the whole state after 24,000.
+   The finer comparison is not a refinement. An SLTU compared with `<=` survived the end-state comparison on all 48
+   seeds of the first version, because a wrong register is usually overwritten before the end. Comparing every
+   sixteen steps caught it on 21 of 160, and on 14 of 160 once Status writes were added to the mix and took a share
+   of the instructions.
+5. **Real games: state, picture and sound, every frame.** Super Mario 64, Ocarina of Time and GoldenEye, each from
+   power-on and from a gameplay state, with the input driven. The C# oracle is the interpreter with its RDP on the
+   emulation thread and its presentation immediate. After every frame, the two cores are compared byte for byte in
+   three things: their save states; their pictures, with width, height and row repeat; and the samples each played,
+   drained whole, with the rate.
+
+   | Game | From | Frames | Instructions | Result |
+   | --- | --- | --- | --- | --- |
+   | Super Mario 64 | power-on | 1,500 | 2,809,461,902 | identical |
+   | Ocarina of Time | power-on | 1,500 | 2,805,841,811 | identical |
+   | GoldenEye | power-on | 1,500 | 2,653,825,385 | identical |
+   | Super Mario 64 | its state | 1,500 | 4,495,093,609 to the state's end | identical |
+   | Ocarina of Time | its state | 1,500 | 32,986,246,047 to the state's end | identical |
+   | GoldenEye | the Dam | 1,500 | 9,129,341,685 to the state's end | identical |
+
+   The 1,500-frame runs compared the state and the picture. Sound was added to the comparison afterwards, and all
+   six runs were repeated for 300 frames with it: identical. Instructions are counted from power-on, so a state's
+   runs include the instructions its state had already counted.
+
+6. **The C# unit tests, in Rust.** `src/tests/` ports 281 of the 286 tests in twenty `Mars*Tests` files with their
+   own values: the CPU's arithmetic, traps, unaligned access, exceptions and interrupts; the FPU's arithmetic and
+   register file; the TLB and segment map; the bus, MI and cartridge; DMA; the serial interface; event and VI
+   timing; audio; the save chips; the CIC and ROM image. With the crate's own tests and the two written for §5.2.4's survivors, `cargo test` runs 314. The five
+   not ported need what MarsRT does not hold: a segment's cached flag, the private save table's titles, a ROM's
+   title, and a load from a file. All passed at the first run. The port found one difference, which the machine
+   core then fixed. `MemoryBus::new` had left the RSP running and port 0 empty, where the C# constructors leave the
+   RSP halted and port 0 present. `Machine::boot` had set both, so no run was affected. The constructors now set
+   them.
+
+**The idle skip changes nothing.** The synthetic system's 120 frames leave the same state three ways: stepped
+plainly, with the idle loop passed whole, and with the RSP run to its events beside it
+(`The_idle_skip_changes_nothing_marsrt_computes`). Since the oracle never skips, every comparison above that ran
+with the skip on is also a comparison of the skip. That is every one but the corpus and the random programs, which
+step the interpreter as `MarsCorpusTests` does.
+
+#### 5.2.2 Before the RDP was merged
+
+The machine core was proven first against a stub RDP, whose `accept` took every word and ran nothing. The stub's
+effect on the comparison was measured, not assumed, and it is recorded here because it separates what the machine
+core does from what the RDP does.
+
+- **Exactly, the games parted at the first frame the RDP's work reached the machine.** That was frame 1 of the Dam,
+  2 of Super Mario 64's state, 3 of Ocarina of Time's, and 22, 57 and 121 from power-on for Ocarina of Time,
+  GoldenEye and Super Mario 64. Two mechanisms were at work. The RDP's own fields never moved. And no full sync was
+  ever answered, so the MI's DP interrupt never rose, and the next handler the C# core ran was one MarsRT did not.
+- **A framer, a measurement aid, answered the syncs.** It framed the words into commands by `Rdp.Length`, answered
+  `SyncFull`, and recorded the RDRAM each primitive could draw into, from the colour and depth images and the
+  scissor. With it, and with the RDP's fields, the hidden bits and the recorded memory left out of the comparison,
+  five of the six runs held for all 300 frames. Ocarina of Time parted: at frame 6 of its state, in the CPU, and at
+  frame 265 from power-on, in two bytes of RDRAM outside the recorded memory. The CPU parting means the machine read
+  something the C# RDP had drawn and the stub had not. The two bytes mean either that, or a write the recorded memory
+  missed. The comparison could not tell those apart.
+- **So the RDP was made to draw aside.** `Rdp.DrawAt(1, …)` points the C# processor at memory of its own. It reads
+  textures from the machine's RDRAM as before, and its drawing and hidden bits land where nothing reads them. Against
+  that C# core, with the framer on, every run held for all 300 frames: state and picture alike, all six, with only
+  the RDP's own fields different. The machine core was therefore exact wherever the RDP's output was invisible to the
+  machine. The Ocarina of Time partings came from the game reading what the RDP drew, and not from the machine core.
+- **The corpus had the same shape.** Every one of the C# core's 1,722 lines appeared in MarsRT's transcript in
+  order. Beside them were four failures, all in the RDP STATUS tests. Without the framer they timed out waiting for
+  the pipe to go idle. With it they failed on the auxiliary frame buffer's colour, which only drawing fills. MarsRT's
+  count was "Failed 50 of 4637".
+
+Merged with §5.3's RDP, every one of these runs is exact without exclusions, and the framer was deleted.
+
+#### 5.2.3 Speed: the first like-for-like number
+
+§5 asked for MarsRT's interpreter to be measured against the C# interpreter, with compiled code off in both, before
+stage 5 is priced again. This is that number.
+
+**The method.** `MarsRtTests.Bench` loads each game's state into a fresh core and times 300 frames flat out, Release,
+on this sixteen-processor machine. It does that four ways, and repeats the four in turn for three rounds:
+- the C# interpreter: `UseBlocks` and `Rsp.UseBlocks` off;
+- the C# core with both on;
+- MarsRT's interpreter with the idle skip off;
+- MarsRT with it on.
+
+Both cores run their RDP on the emulation thread (`ThreadedRdp` off), and neither scans the picture
+(`SkipRendering`). The C# presentation is therefore excluded from both. So is the thread the C# RDP normally has
+to itself, which the shipped core uses and this comparison does not. The numbers are milliseconds a frame, and the
+range is over the three rounds.
+
+| Game | C# interpreter | MarsRT interpreter | Ratio | MarsRT, idle skip | C#, blocks |
+| --- | --- | --- | --- | --- | --- |
+| Super Mario 64 | 33.90–34.18 | 19.46–19.53 | 1.74× | 10.80–10.82 | 18.27–18.46 |
+| Ocarina of Time | 31.46–31.56 | 18.53–18.58 | 1.70× | 11.16–11.20 | 17.58–17.64 |
+| GoldenEye, the Dam | 60.19–62.67 | 39.48–40.32 | 1.53× | 26.09–26.14 | 33.72–34.24 |
+
+**What the table says, and what it does not.**
+
+- **Interpreter against interpreter, MarsRT is 1.5 to 1.75 times faster.** Both do the same work instruction for
+  instruction, as §5.2.1 proves, and both pay the same RDP on the same thread. GoldenEye gains least. Its frames are
+  the longest, and its RDP's share is the largest, as the next point shows.
+- **The RDP is part of the frame here.** The same bench against the stub RDP, before §5.3 was merged, put MarsRT's
+  interpreter at 12.70–13.01, 13.17–14.20 and 29.82–32.70 ms, while the C# columns were unchanged. So MarsRT's RDP
+  costs about 6.6, 5 and 9 ms a frame in these three states. That is roughly a quarter to a third of MarsRT's
+  interpreted frame.
+- **The idle skip is not an optimisation of the C# interpreter.** It is what C#'s blocks give the idle loop, and
+  MarsRT reaches it without compiling anything. With it, MarsRT is faster than the C# core with its whole
+  recompiler: 1.70×, 1.57× and 1.30×. That comparison is of machines doing the same thing by different means, and
+  is not like for like.
+- **None of this is the recompiler's number.** §5's estimate of 1.4–1.7× on GoldenEye was for a Rust machine *with*
+  a recompiler, against the C# one with its own. A Rust interpreter with the idle skip already stands at 1.3× there.
+  That narrows what stage 5 must buy, and it is not a measurement of what stage 5 would buy. The estimate is held
+  as loosely as §3.4 says estimates here must be.
+- **Why MarsRT's interpreter is faster was not measured.** No profiler is installed on this machine. A reason
+  offered without one would be an assertion.
+
+#### 5.2.4 Mutants
+
+Thirty-one were made in the Rust, each applied alone. Each was run against `cargo test` and against the WiseMan
+comparisons: the random programs (160), the synthetic system and the states (9), the corpus, and the six games at
+60 frames. A count is the tests that failed. The corpus is one test, so it reads 1.
+
+| Mutant | Random | Synthetic | Corpus | Games | `cargo test` |
+| --- | --- | --- | --- | --- | --- |
+| CPU: SLTU compares with `<=` | 14 | — | 1 | 6 | — |
+| CPU: the multiplier reads 36 bits of its second operand | 3 | — | 1 | — | 2 |
+| CPU: a delay slot's fault returns to the slot, not the branch | 115 | 7 | 1 | 6 | caught |
+| CPU: LWR's partial merge drops the register's upper half | 22 | — | 1 | — | 2 |
+| CPU: the timer is due at half the cycle | 151 | 7 | 1 | 4 | 1 |
+| CPU: the TLB picks the odd page by the page mask, not the bit above it | 52 | 7 | 1 | 2 | caught |
+| CPU: a store-conditional lands without the link | 75 | — | 1 | — | — |
+| CPU: the interrupt check forgets the line it saw | — | — | — | — | 1 |
+| CPU: Random counts down from 30 | 22 | 7 | 1 | 2 | 1 |
+| FPU: round to nearest ties away from even | — | — | 1 | 1 | 1 |
+| FPU: an unordered compare's invalid flag inverted | 15 | — | 1 | — | — |
+| FPU: the flags recorded a bit too high | 58 | 7 | 1 | 6 | 2 |
+| FPU: to-integer accepts one past the positive limit | 3 | — | 1 | — | — |
+| FPU: half mode ignores the pair on a word read | 9 | — | 1 | — | 2 |
+| AI: the page carry lands at once | — | — | — | 4 | 2 |
+| VI: the line interrupt tested on odd half lines too | — | — | — | — | 1 |
+| SI: a transfer takes half its time | — | 6 | — | 6 | — |
+| SI: a read's bytes land at once, not at the transfer's end | — | — | — | — | 2 |
+| PI: a trimmed block writes its last byte | — | 7 | 1 | — | 2 |
+| SP: the DMA's skip ignored | — | 4 | — | 1 | 1 |
+| RSP: a COP0 move names the DP's registers as the SP's | — | 4 | — | 5 | — |
+| Joybus: an over-long reply not flagged | — | — | — | — | 1 |
+| EEPROM: a write does not wrap inside its block | — | — | — | — | 1 |
+| DP: a second start taken before an end | — | — | 1 | — | — |
+| Load: a state's pak not marked changed | 160 | 3 | — | 3 | — |
+| Idle: the processor's whole turns ignore the parity of the steps they ran | — | — | — | 5 | — |
+| Bus: the cartridge latch decays in 112 cycles | 1 | — | — | — | survived, then caught |
+| SP: a break raises the interrupt when already broken | — | survived, then 1 | — | — | — |
+| MI: a mask pair's clear beats its set | — | — | — | — | survived, then caught |
+| Idle: one turn more passed at once | — | — | — | — | **equivalent** |
+| FPU: the host path takes sums 29 exponents apart | — | — | — | — | **equivalent** |
+
+**What the pattern says.**
+
+- *Two survivors were argued equivalent, and the argument is the evidence.* The idle loop's bulk takes
+  ⌊(stop − cycles − 1) / 2⌋ − 1 whole turns. Without the final −1 it still never passes stop − 1, and the single
+  steps after it end on the same cycle with the same count and slot parity. The C#'s −1 is a margin of one turn.
+  The host path's limit is the other. With exponents 29 apart, the smaller single lies below 2⁻²⁸ of the larger.
+  An addition cannot carry and a subtraction loses at most a bit, so the exact result spans at most 53 bits and the
+  double holds it whole. C#'s 28 is a margin of one exponent. A limit much wider would not be equivalent. Once the
+  smaller operand falls below half a double ulp of the larger, the double sum rounds to the larger exactly, and the
+  inexact flag is lost.
+- *Three survived and were caught once a test was written for each,* and each gap is instructive.
+  - The latch's decay test measured itself against the constant it tests, so the mutant moved both sides.
+    `the_stored_word_lasts_225_cycles` now states the number.
+  - No test broke twice without clearing the broke bit between, since the synthetic system restarts with `0x105`.
+    `A_second_break_before_the_broke_bit_is_cleared_raises_no_interrupt_in_either_core` compares the two cores
+    there.
+  - No test wrote both bits of a mask pair at once. `a_mask_write_carrying_both_bits_of_a_device_sets_it` states
+    C#'s rule, clear then set.
+- *The random programs carry the CPU and the FPU; the rest carry the devices.* Every CPU and FPU mutant but two was
+  caught by the random programs. Of the two, the rounding tie is caught by the corpus and the games, and the
+  forgotten line only by `cargo test`. That second one is nearly equivalent in state: a check run on every step while
+  the line is up is idempotent, and only its cost and one early exit from the idle loop move. The device mutants
+  fall to the synthetic system, the games and the ported unit tests in varying mixtures. Seven were caught by one
+  oracle alone:
+  - the VI's odd half lines, the SI's early landing, the joybus's over-run flag and the EEPROM's wrap, by
+    `cargo test` alone;
+  - the idle loop's parity, by the games alone;
+  - the DP's refused second start, by the corpus alone;
+  - the latch's decay, by one random seed of 160, before its own test was written.
+
+  No single oracle would have caught them all.
+- *The finer comparison of the random programs mattered.* The SLTU mutant, caught here by 14 of 160 seeds, survived
+  the first version of that test on all 48 seeds, which compared only the final state.
+
+#### 5.2.5 What this stage finished for the others, and what it leaves
+
+**What §5.3 and §5.4 left for this stage, done.** The machine calls `accept` for every word `Take` reads, with
+RDRAM and its hidden bits lent. It raises the MI's DP interrupt and clears `_running` on a full sync, as `FullSync`
+does. It replays a snapshot's words with no sync raised. It calls `scan` at the field's end and after a load. It
+keeps one `Scanout` across loads, and rebuilds it only when a state of the other RDRAM size rebuilds the C# machine,
+and its raster with it.
+
+**Left out.**
+
+- **The CPU's compiled blocks,** by the stage's brief. The oracle runs without them as well. The idle loop's skip,
+  which C# reaches only through them, is kept.
+- **The threaded RDP, its page marks and every `WaitFor*`.** MarsRT runs the RDP inline on the emulation thread, as
+  C# does with `ThreadedRdp` off, and the marks exist only to make the threaded path wait.
+- **The debugger:** breakpoints, coverage, the call stack's observers, watches and the frame log. `RunFrame`'s
+  debugging loop is not ported. MarsRT runs `RunQuietly`'s loop, the C# path taken when nothing is armed.
+- **Cheats, `ICoreSettings`, the multiple, antialiasing, the device and deferred presentation.** The shim scans at
+  one, immediately.
+- **`CoreFactory` registration.** Nothing chooses MarsRT yet.
 
 ### 5.3 The RDP
 

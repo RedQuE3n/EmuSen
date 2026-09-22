@@ -256,7 +256,7 @@ impl Machine {
         let start = self.bus.cycles;
         let fields = self.bus.vi.fields;
         let cap_at = start + CYCLE_CAP;
-        let Options { idle_skip, rsp_whole } = *self.options;
+        let Options { idle_skip, rsp_whole, .. } = *self.options;
         let (cpu, bus) = (&mut self.cpu, &mut self.bus);
         while bus.vi.fields == fields && bus.cycles < cap_at {
             if idle_skip && cpu.pc == cpu.run.idle_at && cpu.try_idle(bus, cap_at, rsp_whole) {

@@ -4,9 +4,11 @@ mod bus;
 mod cpu;
 mod devices;
 mod fpu;
+mod games;
 mod rom;
 mod save;
 mod support;
+mod threads;
 mod tlb;
 
 use std::sync::Arc;

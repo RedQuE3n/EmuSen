@@ -1,6 +1,7 @@
 //! The signal processor's interface and registers, the C# `SpInterface` and `Rsp`.
 
 use crate::memory::bus::MemoryBus;
+use crate::memory::dp_threads::site;
 use crate::memory::mi::interrupt;
 use crate::rsp::{self, DATA_MASK, Memory, PC_MASK};
 use crate::state::{State, StateReader, StateResult, StateWriter};
@@ -455,6 +456,11 @@ impl MemoryBus {
         let mut bank_offset = self.sp.mem_address & 0xFF8;
         for _ in 0..rows {
             let dram = self.sp.dram_address;
+            if to_sp {
+                self.dp.wait_read_range(dram, length, site::SP_DMA);
+            } else {
+                self.dp.wait_write_range(dram, length, site::SP_DMA);
+            }
             if dram as u64 + length as u64 <= self.rdram.len() as u64 {
                 self.sp_copy_row(imem, bank_offset, length, to_sp);
             } else {

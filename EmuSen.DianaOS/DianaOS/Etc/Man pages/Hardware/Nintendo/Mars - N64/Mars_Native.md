@@ -459,9 +459,13 @@ the ordinary run of play.
   - *Its reach.* A walker takes one or two stamps a row, so the wrap comes after about ten hours of continuous play
     in one process at the worst (a 480-row interlaced picture reading two new lines a row, in one band) and days at
     the usual. Even then, a stale sample needs an offset no scan has written since the stamp last had that value,
-    which in practice means a mode change long before.
-  - MarsRT empties both caches, and `a_scan_after_the_stamp_wraps_reads_no_sample_from_before_it` holds it. The C# is
-    not changed here, since it is the oracle and this stage does not own it; the one-line fix is left for it.
+    which in practice means a mode change long before. *Sharpened the same day:* an entry is re-tagged whenever a row
+    touches it, so the offset's first touch after the wrap must also fall exactly on the stamp it was left with.
+  - MarsRT empties both caches, and `a_scan_after_the_stamp_wraps_reads_no_sample_from_before_it` holds it.
+    ~~The C# is not changed here, since it is the oracle and this stage does not own it; the one-line fix is left for
+    it.~~ **Fixed in the C# the same day,** with a regression test that constructs the mode change and fails by 2,886
+    bytes without the fix (`Mars_Video.md` §2.13). MarsRT already cleared both caches, so the port did not change, and
+    the two implementations now agree at the wrap too; the other two inputs below remain C# failures.
 - **`Borders` indexes `_held` past its end** once an interlaced picture's active lines exceed 625, which needs a
   vertical sync above 669 half lines. The C# throws out of `RunFrame`. MarsRT stops at the raster's last line.
 - **A hidden byte above 3 can carry a channel outside a byte** through the filter's pull, and the C# gamma lookup then

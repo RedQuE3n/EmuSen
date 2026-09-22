@@ -342,12 +342,15 @@ impl MemoryBus {
         }
     }
 
-    /// The list moved onto a drain, or back; a start takes the shadow from the processor (`Threaded`'s setter).
-    pub fn dp_set_threaded(&mut self, on: bool, verify: bool) {
+    /// The list moved onto workers, or back; a start takes the shadow from the processor (`Threaded`'s and `Workers`' setters).
+    pub fn dp_set_threaded(&mut self, on: bool, verify: bool, workers: usize) {
+        if on && self.dp.threads.as_ref().is_some_and(|t| t.workers() != workers.clamp(1, 8)) {
+            self.dp_set_threaded(false, verify, workers);
+        }
         match (on, self.dp.threads.is_some()) {
             (true, false) => {
                 debug_assert!(self.dp.pending.is_empty(), "a load's words run before a drain starts");
-                let threads = Threads::start(&mut self.dp.processor, &self.rdram, &self.rdram_hidden, &self.dp.marks.0.0, verify);
+                let threads = Threads::start(&mut self.dp.processor, &self.rdram, &self.rdram_hidden, &self.dp.marks.0.0, verify, workers);
                 *self.dp.threads = Some(Box::new(threads));
             }
             (false, true) => {

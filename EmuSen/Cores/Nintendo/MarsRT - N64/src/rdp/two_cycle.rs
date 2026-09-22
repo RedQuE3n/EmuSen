@@ -52,11 +52,12 @@ impl Rdp {
 
         for y in rows.0..=rows.1 {
             let yu = y as usize;
-            if !self.span_drawn[yu] || self.span_right[yu] < self.span_left[yu] {
+            if !self.span_drawn[yu] || self.span_right[yu] < self.span_left[yu] || !self.owns(y) {
                 continue;
             }
 
             let (left, right) = (self.span_left[yu], self.span_right[yu]);
+            self.stamp_row(y, left, right, false, true, true);
             self.row_coverage(y, left, right);
 
             values.copy_from_slice(&self.span_attributes[yu * ATTRIBUTES..yu * ATTRIBUTES + ATTRIBUTES]);
@@ -91,16 +92,19 @@ impl Rdp {
                 self.combine_second_cycle(dither_alpha, &mut coverage);
 
                 let pixel = y.wrapping_mul(self.color_image_width).wrapping_add(x);
-                let memory_coverage = self.read_memory(pixel, mem);
+                let nothing = RdpMemory::nothing();
+                let seen = if self.blind(x, y) { &nothing } else { &*mem };
+                let memory_coverage = self.read_memory(pixel, seen);
                 let depth_index = (self.depth_image >> 1).wrapping_add(pixel as u32);
 
                 let (mut blend, mut overflow) = (false, false);
-                let write = self.compare_depth(depth_index, z, delta_z, delta_z_encoded, memory_coverage, &mut coverage, &mut blend, &mut overflow, mem)
+                let write = self.compare_depth(depth_index, z, delta_z, delta_z_encoded, memory_coverage, &mut coverage, &mut blend, &mut overflow, seen)
                     && (if self.modes.antialias { coverage != 0 } else { current.coverage_bit });
 
                 if write {
                     let (br, bg, bb) = self.blend_equation(self.modes.first_blend_cycle, self.pixel, false, self.past_shift_a, self.past_shift_b);
                     self.blended = Color { r: br, g: bg, b: bb, a: 0 };
+                    self.split.blended = self.split.row_stamp;
                 }
 
                 for c in 0..ATTRIBUTES {
@@ -165,6 +169,9 @@ impl Rdp {
                 let (first, second, fraction) =
                     if setup.lod { self.next_row_level_of_detail(y + 1, ds, dt, dw, tile, max_level) } else { (tile, tile, self.lod_fraction) };
                 self.lod_fraction = fraction;
+                if setup.lod {
+                    self.split.lod = self.split.row_stamp;
+                }
 
                 let (cs, ct) = self.texture_coordinates(s, t, w);
                 self.texel0 = self.texel(cs, ct, first, bilinear_first, false, Color::default());
@@ -179,6 +186,9 @@ impl Rdp {
                     (tile, (tile + 1) & 7, self.lod_fraction)
                 };
                 self.lod_fraction = fraction;
+                if setup.lod {
+                    self.split.lod = self.split.row_stamp;
+                }
 
                 let (cs, ct) = self.texture_coordinates(s, t, w);
                 self.texel0 = self.texel(cs, ct, first, bilinear_first, false, Color::default());
@@ -188,6 +198,9 @@ impl Rdp {
             let (first, _, fraction) =
                 if setup.lod { self.two_cycle_level_of_detail(s, t, w, ds, dt, dw, tile, max_level) } else { (tile, 0, self.lod_fraction) };
             self.lod_fraction = fraction;
+            if setup.lod {
+                self.split.lod = self.split.row_stamp;
+            }
 
             let (cs, ct) = self.texture_coordinates(s, t, w);
             self.texel0 = self.texel(cs, ct, first, bilinear_first, false, Color::default());

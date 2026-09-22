@@ -11,6 +11,7 @@ mod modes;
 mod one_cycle;
 #[cfg(test)]
 mod replay;
+mod split;
 mod tables;
 mod texture_memory;
 mod textures;
@@ -18,6 +19,7 @@ mod two_cycle;
 mod walker;
 
 pub use modes::{BlendSelectors, CombinerSelectors, Modes, SET_MASK_IMAGE};
+pub use split::{Split, Step};
 use texture_memory::LoadKind;
 
 use crate::state::{State, StateReader, StateResult, StateWriter, boxed};
@@ -244,6 +246,8 @@ pub struct Rdp {
     pub tiles: [TextureTile; 8],
     /// `[SkipInState]` in C#: the modes decoded from `other_modes` and `combine`, which `refresh` rebuilds.
     pub modes: Modes,
+    /// `[SkipInState]` in C#: this processor's share of a list shared by several, and the stamps that assemble their scratch.
+    pub split: crate::Skip<Split>,
 }
 
 impl Default for Rdp {
@@ -324,6 +328,7 @@ impl Default for Rdp {
             texture_step: [0; 3],
             tiles: [TextureTile::default(); 8],
             modes: Modes::default(),
+            split: crate::Skip(Split::default()),
         };
         rdp.refresh();
         rdp
@@ -509,6 +514,12 @@ impl<'a> RdpMemory<'a> {
         RdpMemory { rdram: rdram.0, rdram_len: rdram.1, hidden: hidden.0, hidden_len: hidden.1, check, _memories: std::marker::PhantomData }
     }
 
+    /// A view of no memory, where every read is past the end and reads zero.
+    pub(crate) fn nothing() -> RdpMemory<'static> {
+        let dangling = std::ptr::NonNull::<u8>::dangling().as_ptr();
+        RdpMemory { rdram: dangling, rdram_len: 0, hidden: dangling, hidden_len: 0, check: None, _memories: std::marker::PhantomData }
+    }
+
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.rdram_len
@@ -568,16 +579,28 @@ impl<'a> RdpMemory<'a> {
 impl Rdp {
     /// C#'s `Rdp.Accept`: one command word, gathered until its command is whole and then run; true when it completed a full sync.
     pub fn accept(&mut self, word: u64, memory: &mut RdpMemory) -> bool {
+        self.gather(word) != Step::More && self.execute_gathered(memory)
+    }
+
+    /// `Gather`: a word taken; when it completes a command, what the drain must do before running it.
+    #[inline(always)]
+    pub fn gather(&mut self, word: u64) -> Step {
         self.command[self.taken as usize] = word;
         self.taken += 1;
 
         let id = command_id(self.command[0]);
         if self.taken < command_length(id) {
-            return false;
+            return Step::More;
         }
 
         self.taken = 0;
-        self.execute(id, self.command[0], memory)
+        self.classify(id)
+    }
+
+    /// `Execute`: runs the command the last word completed; true for a full sync.
+    #[inline(always)]
+    pub fn execute_gathered(&mut self, memory: &mut RdpMemory) -> bool {
+        self.execute(command_id(self.command[0]), self.command[0], memory)
     }
 
     fn execute(&mut self, id: u32, word: u64, memory: &mut RdpMemory) -> bool {

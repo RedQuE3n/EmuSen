@@ -72,10 +72,12 @@ impl Rdp {
             if shifts {
                 self.blend_shift_a = 0;
                 self.blend_shift_b = far;
+                self.split.shift = self.split.row_stamp;
             }
             if past_shifts {
                 self.past_shift_a = 0;
                 self.past_shift_b = far;
+                self.split.past_shift = self.split.row_stamp;
             }
             self.past_stored_encoded = 0xF;
             return true;
@@ -90,11 +92,13 @@ impl Rdp {
         if shifts {
             self.blend_shift_a = (delta_z_encoded - stored_encoded).clamp(0, 4);
             self.blend_shift_b = (stored_encoded - delta_z_encoded).clamp(0, 4);
+            self.split.shift = self.split.row_stamp;
         }
 
         if past_shifts {
             self.past_shift_a = (delta_z_encoded - self.past_stored_encoded).clamp(0, 4);
             self.past_shift_b = (self.past_stored_encoded - delta_z_encoded).clamp(0, 4);
+            self.split.past_shift = self.split.row_stamp;
         }
 
         self.past_stored_encoded = stored_encoded;

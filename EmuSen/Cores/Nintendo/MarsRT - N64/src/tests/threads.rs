@@ -355,8 +355,8 @@ fn a_drain_stopped_and_started_again_carries_on_from_the_processor() {
 }
 
 /// A seeded mixture of lists, loads from what was drawn, and processor reads and writes of every image between and inside them.
-fn stress(seed: u32, rounds: u32) {
-    let (mut once, mut drain) = (at_once(), threaded());
+fn stress_with(seed: u32, rounds: u32, workers: usize) {
+    let (mut once, mut drain) = (at_once(), if workers == 1 { threaded() } else { split(workers) });
     let mut s = seed;
     for round in 0..rounds {
         let pick = next(&mut s) % 4;
@@ -400,14 +400,25 @@ fn stress(seed: u32, rounds: u32) {
     }
     drain.join_rdp();
     same_memory(&once, &drain);
-    assert!(state(&once) == state(&drain), "seed {seed} at the end");
+    let (a, b) = (state(&once), state(&drain));
+    if a != b {
+        let layout = once.layout(false).unwrap();
+        for line in layout.lines() {
+            let p: Vec<&str> = line.split(' ').collect();
+            let (at, n) = (p[0].parse::<usize>().unwrap(), p[1].parse::<usize>().unwrap());
+            if a[at..at + n] != b[at..at + n] {
+                eprintln!("differs: {} ({} bytes) {:?} vs {:?}", p[3], n, &a[at..at + n.min(16)], &b[at..at + n.min(16)]);
+            }
+        }
+    }
+    assert!(a == b, "seed {seed} at the end");
 }
 
 #[test]
 fn seeded_lists_with_processor_accesses_between_leave_what_the_lists_at_once_leave() {
     let seeds: u32 = std::env::var("EMUSEN_MARSRT_STRESS").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(debug_assertions) { 3 } else { 24 });
     for seed in 1..=seeds {
-        stress(seed, 12);
+        stress_with(seed, 12, 1);
     }
 }
 
@@ -436,4 +447,219 @@ fn a_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_h
     watchdog.join().unwrap();
     assert!(waited >= std::time::Duration::from_millis(250), "the read went ahead of the draw after {waited:?}");
     assert!(seen[..] == once.bus.rdram[row..row + 0x80], "the read saw the rows before the draw");
+}
+
+pub(super) fn split(workers: usize) -> Machine {
+    let mut m = threaded();
+    m.set_rdp_workers(workers);
+    assert_eq!(threads(&m).workers(), workers);
+    m
+}
+
+/// A raw load, its words run, and the machine's threads started again as the options say, as C#'s `ReadState` with a snapshot leaves a threaded bus.
+fn load_snapshot(m: &mut Machine, snapshot: &[u8]) {
+    m.load_state(snapshot).unwrap();
+    m.bus.dp_replay_pending();
+    let threaded = m.options.threaded_rdp;
+    m.set_threaded_rdp(threaded);
+}
+
+fn triangle_rows() -> u64 {
+    (0x2F << 56) | (3 << 38) | (3 << 36) | (1 << 22) | (1 << 20) | (1 << 4) | (1 << 5) | (1 << 3) | (1 << 6)
+}
+
+#[test]
+fn processors_sharing_a_list_leave_what_one_leaves() {
+    for workers in [2, 3, 4] {
+        for list in [scene(0x1234_5678, false, 32, false), shaded(0x1122_3344, false, false, false), shaded(0x5566_7788, true, false, false), shaded(0x99AA_BBCC, true, true, false)] {
+            let (mut once, mut one, mut shared) = (at_once(), threaded(), split(workers));
+            hand_over(&mut once, &list, LIST);
+            hand_over(&mut one, &list, LIST);
+            hand_over(&mut shared, &list, LIST);
+            one.join_rdp();
+            shared.join_rdp();
+            same_memory(&once, &shared);
+            assert!(state(&once) == state(&shared), "{workers} workers");
+            assert!(state(&one) == state(&shared), "{workers} workers");
+        }
+    }
+}
+
+#[test]
+fn a_load_from_the_drawn_image_and_a_live_carry_are_drawn_as_at_once() {
+    let mut list = shaded(0x0F0F_0F0F, true, false, false);
+    list.pop();
+    list.push(combine(4, 0, 11, 7, 4, 7, 4, 7));
+    let again = shaded(0x0F0F_0F0F, true, false, false);
+    list.extend(&again[12..again.len() - 1]);
+    list.push((0x3D << 56) | (2 << 51) | (((WIDTH - 1) as u64) << 32) | FRAMEBUFFER as u64);
+    list.push((0x35 << 56) | (2 << 51) | (16 << 41));
+    list.push((0x34 << 56) | ((31u64 << 2) << 12) | (15 << 2));
+    list.extend(shaded(0xF0F0_F0F0, true, true, true));
+
+    let (mut once, mut shared) = (at_once(), split(3));
+    hand_over(&mut once, &list, LIST);
+    hand_over(&mut shared, &list, LIST);
+    shared.join_rdp();
+    let s = &*shared.bus.dp.processor.split;
+    assert!(s.hazard_loads >= 1 && s.serialised >= 1, "loads {} serialised {}", s.hazard_loads, s.serialised);
+    same_memory(&once, &shared);
+    assert!(state(&once) == state(&shared));
+}
+
+#[test]
+fn the_read_past_a_rows_end_is_made_by_the_next_rows_owner_before_it_runs_on() {
+    let list = [
+        FILL_CYCLE,
+        color_image(FRAMEBUFFER),
+        (0x3E << 56) | DEPTH as u64,
+        scissor(0, 0, WIDTH, ROWS),
+        (0x37 << 56) | 0x0001_0001,
+        fill_rectangle(0, 0, WIDTH - 1, ROWS - 1),
+        triangle_rows(),
+        combine(4, 8, 11, 7, 4, 7, 4, 7),
+        (0x36 << 56) | (((WIDTH << 2) as u64) << 44) | (403 << 32) | 400,
+        FILL_CYCLE,
+        (0x37 << 56) | 0x7777_7777,
+        fill_rectangle(0, 101, WIDTH - 1, 101),
+        SYNC_FULL,
+    ];
+    for _ in 0..8 {
+        let (mut once, mut shared) = (at_once(), split(2));
+        hand_over(&mut once, &list, LIST);
+        hand_over(&mut shared, &list, LIST);
+        shared.join_rdp();
+        let aliased = threads(&shared).aliased_reads();
+        same_memory(&once, &shared);
+        assert!(state(&once) == state(&shared));
+        assert_eq!(aliased, 1, "the next row's owner made the read");
+    }
+}
+
+#[test]
+fn an_image_one_row_into_the_last_is_drawn_after_the_last_is_finished() {
+    let mut list = vec![FILL_CYCLE, color_image(FRAMEBUFFER), (0x3E << 56) | DEPTH as u64, scissor(0, 0, WIDTH, ROWS), triangle_rows(), combine(4, 8, 11, 7, 4, 7, 4, 7)];
+    for _ in 0..20 {
+        list.push((0x36 << 56) | ((((WIDTH - 1) << 2) as u64) << 44) | (7 << 32) | 4);
+    }
+    list.extend([FILL_CYCLE, (0x37 << 56) | 0x1111_1111, fill_rectangle(0, 0, WIDTH - 1, ROWS - 1), color_image(FRAMEBUFFER + WIDTH * 2), (0x37 << 56) | 0x2222_2222, fill_rectangle(0, 0, WIDTH - 1, ROWS - 2), SYNC_FULL]);
+    let (mut once, mut shared) = (at_once(), split(2));
+    hand_over(&mut once, &list, LIST);
+    hand_over(&mut shared, &list, LIST);
+    shared.join_rdp();
+    same_memory(&once, &shared);
+    assert!(state(&once) == state(&shared));
+}
+
+#[test]
+fn a_snapshot_while_every_processor_waits_inside_a_command_is_written_and_loads() {
+    let list = shaded(0x1357_9BDF, true, false, false);
+    let cut = list.len() - 12;
+    let (mut once, mut shared, mut loaded) = (at_once(), split(2), split(2));
+    hand_over(&mut once, &list[..cut], LIST);
+    hand_over(&mut once, &list[cut..cut + 5], LIST + cut as u32 * 8);
+    hand_over(&mut once, &list[cut + 5..], LIST + (cut + 5) as u32 * 8);
+    hand_over(&mut shared, &list[..cut], LIST);
+    shared.join_rdp();
+    hand_over(&mut shared, &list[cut..cut + 5], LIST + cut as u32 * 8);
+
+    let snapshot = shared.save_state_vec(true).unwrap();
+    hand_over(&mut shared, &list[cut + 5..], LIST + (cut + 5) as u32 * 8);
+    shared.join_rdp();
+    same_memory(&once, &shared);
+    assert!(state(&once) == state(&shared), "the resumed machine's state differs");
+
+    load_snapshot(&mut loaded, &snapshot);
+    hand_over(&mut loaded, &list[cut + 5..], LIST + (cut + 5) as u32 * 8);
+    loaded.join_rdp();
+    same_memory(&once, &loaded);
+    assert!(state(&once) == state(&loaded), "the loaded machine's state differs");
+}
+
+#[test]
+fn a_snapshot_with_several_processors_stands_them_at_one_boundary() {
+    for seed in 0..6u32 {
+        let list = shaded(0x2468_ACE0 ^ seed, true, seed & 1 == 1, false);
+        let (mut once, mut shared, mut loaded) = (at_once(), split(4), split(2));
+        hand_over(&mut once, &list, LIST);
+        if seed < 3 {
+            threads(&shared).hold();
+        }
+        hand_over(&mut shared, &list, LIST);
+        let snapshot = shared.save_state_vec(true).unwrap();
+        if seed < 3 {
+            threads(&shared).resume();
+        }
+        load_snapshot(&mut loaded, &snapshot);
+        loaded.join_rdp();
+        same_memory(&once, &loaded);
+        assert!(state(&once) == state(&loaded), "seed {seed}: the loaded machine's state differs");
+        shared.join_rdp();
+        assert!(state(&once) == state(&shared), "seed {seed}");
+    }
+}
+
+#[test]
+fn seeded_lists_shared_by_several_processors_leave_what_the_lists_at_once_leave() {
+    let seeds: u32 = std::env::var("EMUSEN_MARSRT_STRESS").ok().and_then(|v| v.parse().ok()).unwrap_or(if cfg!(debug_assertions) { 2 } else { 12 });
+    for seed in 1..=seeds {
+        for workers in [2, 3, 4] {
+            stress_with(seed * 7 + workers as u32, 8, workers);
+        }
+    }
+}
+
+/// Rows that compute no level of detail stamp no fraction, so a primitive drawn alone assembles the raster order's, where C#'s split assembles a stale one (Mars_Native.md §5.6.6).
+#[test]
+fn a_fraction_carried_through_rows_that_compute_none_is_assembled_as_raster_order_leaves_it() {
+    for seed in 0..16u32 {
+        let mut list = scene(0x1234_5679 + seed, false, 32, true);
+        list.extend(shaded(0x2468_1357 + seed, false, false, false));
+        list.extend(shaded(0x1357_2468 + seed, true, true, true));
+        let (mut once, mut shared) = (at_once(), split(2));
+        hand_over(&mut once, &list, LIST);
+        hand_over(&mut shared, &list, LIST);
+        shared.join_rdp();
+        same_memory(&once, &shared);
+        assert_eq!(once.bus.dp.processor.lod_fraction, shared.bus.dp.processor.lod_fraction, "seed {seed}");
+        assert!(state(&once) == state(&shared), "seed {seed}");
+    }
+}
+
+/// A list of image changes, each a barrier, with fills between them.
+fn barriers(count: usize) -> Vec<u64> {
+    let mut list = vec![FILL_CYCLE, scissor(0, 0, WIDTH, ROWS), (0x37 << 56) | 0x0F0F_0F0F];
+    for i in 0..count {
+        list.push(color_image(FRAMEBUFFER + (i as u32 % 4) * WIDTH * 2));
+        list.push(fill_rectangle(0, (i as u32 * 3) % (ROWS - 2), WIDTH - 1, (i as u32 * 3) % (ROWS - 2) + 1));
+    }
+    list.push(SYNC_FULL);
+    list
+}
+
+/// A snapshot taken while the workers are at barriers is answered: a worker waiting at one raises the pause point past it, where C#'s workers wait for ones standing short of it.
+#[test]
+fn a_snapshot_taken_while_workers_wait_at_barriers_is_answered_and_loads() {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let list = barriers(3000);
+        let (mut once, mut shared, mut loaded) = (at_once(), split(4), at_once());
+        for attempt in 0..40u32 {
+            hand_over(&mut once, &list, LIST + (attempt % 2) * 0x10000);
+            hand_over(&mut shared, &list, LIST + (attempt % 2) * 0x10000);
+            for _ in 0..(attempt * 997) % 20_000 {
+                std::hint::spin_loop();
+            }
+            let snapshot = shared.save_state_vec(true).unwrap();
+            if attempt % 8 == 0 {
+                load_snapshot(&mut loaded, &snapshot);
+                assert!(state(&once) == state(&loaded), "attempt {attempt}: the loaded snapshot differs");
+            }
+        }
+        shared.join_rdp();
+        assert!(state(&once) == state(&shared));
+        sender.send(threads(&shared).shared().barriers()).unwrap();
+    });
+    let barriers = receiver.recv_timeout(std::time::Duration::from_secs(120)).expect("a snapshot was never answered: the workers deadlocked, or the run failed");
+    assert!(barriers >= 40 * 3000, "{barriers} barriers passed");
 }

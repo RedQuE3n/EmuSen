@@ -51,7 +51,33 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(stepped, compiled);
         }
 
-        private static (byte[] State, long Turns, long BlockSteps) Run(bool skipIdle, bool blocks, bool padded)
+        // A task a block flooded the pool that a frame's presentation waits on, stalling boots for seconds - see Mars_Rsp.md §11.1.
+        [Fact]
+        public void Blocks_compiled_in_the_background_are_compiled_off_the_pool_and_change_nothing()
+        {
+            Rsp.CompileBlocksInBackground = false;
+            (byte[] stepped, _, _) = Run(skipIdle: false, blocks: false, padded: false);
+
+            Rsp.CompileBlocksInBackground = true;
+            long before = System.Threading.Interlocked.Read(ref Rsp.PoolCompiles);
+            (byte[] compiled, _, long blockSteps, long blocksCompiled) = RunCounting(skipIdle: true, blocks: true, padded: false);
+
+            Assert.True(blocksCompiled > 0, "no block was compiled, so the test compared nothing");
+            Assert.Equal(0, System.Threading.Interlocked.Read(ref Rsp.PoolCompiles) - before);
+            Assert.Equal(stepped, compiled);
+        }
+
+        private static (byte[] State, long Turns, long BlockSteps, long Compiled) RunCounting(bool skipIdle, bool blocks, bool padded)
+        {
+            (byte[] state, long turns, long steps) = Run(skipIdle, blocks, padded, out MarsCore core);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (System.Threading.Interlocked.Read(ref core.Bus!.Sp.Processor.BlocksCompiled) == 0 && clock.ElapsedMilliseconds < 5000) System.Threading.Thread.Sleep(5);
+            return (state, turns, steps, System.Threading.Interlocked.Read(ref core.Bus.Sp.Processor.BlocksCompiled));
+        }
+
+        private static (byte[] State, long Turns, long BlockSteps) Run(bool skipIdle, bool blocks, bool padded) => Run(skipIdle, blocks, padded, out _);
+
+        private static (byte[] State, long Turns, long BlockSteps) Run(bool skipIdle, bool blocks, bool padded, out MarsCore machine)
         {
             Cpu.SkipIdle = skipIdle;
             Rsp.UseBlocks = blocks;
@@ -60,6 +86,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(path, SyntheticN64Rom.BuildRunningFromRdram(new uint[] { 0x1000_FFFF, 0x0000_0000 }));
 
             var core = new MarsCore(batteryRamDisabled: true);
+            machine = core;
             core.LoadRom(path);
             core.Cpu!.CompileInBackground = false;
             for (int i = 0; i < 3; i++) core.RunFrame();

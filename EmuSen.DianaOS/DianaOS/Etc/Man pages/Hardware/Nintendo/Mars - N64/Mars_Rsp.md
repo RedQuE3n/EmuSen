@@ -319,6 +319,49 @@ element shuffle and register arrays a block does not touch. Compiling those with
 next step and is not begun. `EMUSEN_MARS_NORSPBLOCKS=1` turns the blocks off; `MarsIdleTests` is the proof they
 change nothing (`Mars_Recompiler.md` §15).
 
+### 11.1 Two compiler threads, not a task a block (2026-09-22)
+
+**The defect: boots stalled for seconds.** Run from boot with pacebench, whose 120 warm-up frames are not measured, Super Mario 64 had a single frame of **1,657 ms**, and others of 583, 554 and 242 ms. Ocarina of Time had a single frame of **2,294 ms**. Afterwards both settled to 7 to 9 ms a frame.
+
+A thread-time trace of the first sixty frames showed what the emulation thread was doing: it spent 3.9 of its 5.7 s in `MarsCore.JoinPresentation`, waiting on the frame's deferred presentation job. That job runs on the thread pool. The pool had grown to **27 threads on 16 cores**, each spending 1.5 to 3.9 s in `Rsp.Compile` and `RuntimeHelpers.PrepareDelegate`. Each RSP block had been queued with its own `Task.Run`. A boot shapes about 1,700 blocks within seconds, and the pool, seeing its workers blocked, kept injecting threads for them. The presentation job queued behind all of them.
+
+The CPU's recompiler never did this. It has always compiled on one dedicated thread fed by a channel (`BlockCompiler`, `Mars_Recompiler.md` §2.4).
+
+**The change.** RSP blocks now go into one channel, drained by dedicated background threads named "Mars RSP block compiler". The thread pool is left to presentation and the RDP. How many compiler threads was chosen by measurement, over 1,200 frames from boot:
+
+| Compiler threads | SM64 worst frame | OoT worst frame | SM64 frames 900-1199 | SM64 RSP steps in blocks |
+|---|---|---|---|---|
+| a task a block (before) | 1,657 ms | 2,294 ms | 8.47 ms | 77.5% |
+| 1 | 66 ms | 25 ms | 9.37 ms | 49.7% |
+| **2** | 72 ms | 24 ms | 8.58 ms | 66.3% |
+| 4 | 108 ms | 30 ms | 8.71 ms | 73.5% |
+| 8 | 123 ms | 37 ms | 8.52 ms | 76.3% |
+
+One thread removes the stall, but it compiles slowly enough that a fifth of the blocks are still waiting at twenty seconds, so the steady frame costs about a millisecond more. Four or more threads compile as fast as the pool did, but they compete with the emulation thread and the RDP workers, and the long frames return. **Two was chosen.** It compiles every block the pool compiled in the same twenty seconds (1,719 and 1,546), with the steady frame within noise of the old build.
+
+`EMUSEN_MARS_RSPCOMPILERS=n` overrides the count, for measurement.
+
+**The prediction that did not hold.** Before the table was measured, the expectation was that compile threads could only help, and that the fix would be a matter of taking them off the pool. The rows for four and eight threads retire that: the compiler competes for the same cores the machine runs on. The right number is a property of the core count and of the emulation thread's load. Two is right for this 16-core machine, and it is unmeasured on the low-end x86-64 laptop the project also targets.
+
+**Confirmed over three interleaved rounds** (base and new, both games):
+- Mario's worst frame went from 1,666, 1,684 and 1,669 ms to 102, 103 and 105 ms.
+- Ocarina's went from 2,285, 2,283 and 2,269 ms to 23, 28 and 35 ms.
+- The steady frames were unchanged: Mario 8.68/8.57/8.47 ms against 8.50/8.50/8.43 ms; Ocarina 7.01/6.91/7.09 ms against 7.06/6.99/7.06 ms.
+- Mario has more frames over their interval, 26 to 29 against 18 to 20, but the worst is 83 ms late instead of 1.65 s. The single stall used to swallow the lateness of the frames behind it.
+
+**Exactness.** A block runs interpreted until its code is published, so the change moves only *when* code arrives. The state checksum after 1,200 frames is identical in every row above: `0B629FEAC97BA032` for SM64 and `51196CF259709DF9` for OoT.
+
+**What is left, and why it is not this.** Mario's remaining long frames, 36 to 51 after the warm-up, are the emulation thread interpreting RSP work before its blocks exist: `Rsp.StepOne` and the SP's DMA transfers, not waiting. Early in a process that interpreter is also first-tier JIT code. A ReadyToRun build of pacebench, which is how Mistress now publishes (`EmuSen_Settings_Reference.md` §4.42), brings Mario's worst frame to 55 to 67 ms and Ocarina's to 21 to 33 ms, with one to three late frames in Ocarina's twenty seconds.
+
+**Boot itself is not slow.** Measured from the very first frame (`WARMUP=0`):
+- Loading the cartridge takes 13 ms for SM64 and 24 ms for OoT.
+- The first frame takes 55 to 66 ms.
+- Mario's first five frames are 30 to 76 ms each while the boot code is interpreted.
+
+That is about a quarter of a second in total, spent on a black screen. What the frontend adds between choosing a game and the first frame (the resume prompt, a state read, the audio device) is not measured here.
+
+**Test:** `MarsIdleTests.Blocks_compiled_in_the_background_are_compiled_off_the_pool_and_change_nothing`. With background compiling on, it asserts that blocks were compiled, that none was compiled on a pool thread (`Rsp.PoolCompiles`), and that the state equals the single-stepped one. A mutant that restores `Task.Run` fails it.
+
 ## 12. The handlers folded into the blocks
 
 *2026-09-20.* §11's blocks called each instruction's handler with its word as a constant, and bought less than the

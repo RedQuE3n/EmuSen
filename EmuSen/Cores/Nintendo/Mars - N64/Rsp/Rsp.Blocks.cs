@@ -1,8 +1,10 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
+using System.Threading;
+using System.Threading.Channels;
 
 namespace EmuSen.Cores.Nintendo.Mars.Rsp
 {
@@ -32,6 +34,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         // Several per address, because the graphics and the sound microcode take turns at the same addresses - see §11.
         [EmuSen.Common.SkipInState] private readonly CodeBlock?[] _codeBlocks = new CodeBlock?[0x400 * Variants];
         [EmuSen.Common.SkipInState] public long BlockSteps, BlocksCompiled;
+
+        // Compiles that ran on a pool thread, which should be none - see Mars_Rsp.md §11.1.
+        public static long PoolCompiles;
 
         // Whole blocks only, at most the steps given, stopping after a block that ends in a move to or from the control registers or a break; returns the steps run - see §11.
         public long RunBlocks(long budget)
@@ -118,8 +123,26 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
         private void Queue(CodeBlock block, uint pc)
         {
             block.Queued = true;
-            if (CompileBlocksInBackground) Task.Run(() => Publish(block, pc));
+            if (CompileBlocksInBackground) CompileQueue.Writer.TryWrite((this, block, pc));
             else Publish(block, pc);
+        }
+
+        // Two threads for every machine's blocks; a task each flooded the pool that presentation runs on - see Mars_Rsp.md §11.1.
+        private static readonly Channel<(Rsp Rsp, CodeBlock Block, uint Pc)> CompileQueue =
+            Channel.CreateUnbounded<(Rsp, CodeBlock, uint)>(new UnboundedChannelOptions { SingleReader = false });
+
+        private static readonly int CompilerCount = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_MARS_RSPCOMPILERS"), out int n) && n > 0 ? n : 2;
+        private static readonly Thread[] Compilers = Enumerable.Range(0, CompilerCount).Select(_ => StartCompiler()).ToArray();
+
+        private static Thread StartCompiler()
+        {
+            var thread = new Thread(() =>
+            {
+                while (CompileQueue.Reader.WaitToReadAsync().AsTask().GetAwaiter().GetResult())
+                    while (CompileQueue.Reader.TryRead(out var item)) item.Rsp.Publish(item.Block, item.Pc);
+            }) { IsBackground = true, Name = "Mars RSP block compiler" };
+            thread.Start();
+            return thread;
         }
 
         private void Publish(CodeBlock block, uint pc)
@@ -127,6 +150,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Rsp
             Action<Rsp> code = Compile(block, pc);
             RuntimeHelpers.PrepareDelegate(code);
             System.Threading.Interlocked.Increment(ref BlocksCompiled);
+            if (Thread.CurrentThread.IsThreadPoolThread) Interlocked.Increment(ref PoolCompiles);
             block.Code = code;
         }
 

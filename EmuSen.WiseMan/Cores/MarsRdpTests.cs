@@ -38,6 +38,9 @@ namespace EmuSen.WiseMan.Cores
         private const ulong SyncFull = 0x29UL << 56;
         private const ulong FillCycle = (0x2FUL << 56) | (3UL << 52);
 
+        // Every case's bus; MarsNativeRdpTwinTests runs each case again with MarsRT's processor beside it - see Mars_Native.md §5.3.
+        protected virtual MemoryBus NewBus() => new();
+
         [Theory]
         [InlineData(0xFFFu)]
         [InlineData(0x00FF_FFFFu)]
@@ -46,7 +49,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0xFFFF_FFFFu)]
         public void Start_and_end_keep_twenty_four_bits_in_whole_words(uint value)
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             bus.Write32(Status, SetFreeze);
 
             bus.Write32(Start, value);
@@ -61,7 +64,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_start_write_holds_until_an_end_write_takes_it_into_current()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             bus.Write32(Status, SetFreeze);
             Assert.Equal(Freeze, bus.Read32(Status) & Freeze);
 
@@ -87,7 +90,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_end_write_starts_the_clock_and_a_full_sync_stops_it_and_interrupts()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             uint end = WriteList(bus, List,
                 ColorImage(Bits16, 8, Framebuffer), Scissor(0, 0, 8, 8), FillCycle, FillColor(0x003E_003E),
                 FillRectangle(0, 0, 7, 7), SyncPipe, SyncFull, SyncFull);
@@ -115,7 +118,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_frozen_processor_draws_nothing_until_it_is_thawed()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             uint end = WriteList(bus, List,
                 ColorImage(Bits16, 8, Framebuffer), Scissor(0, 0, 8, 8), FillCycle, FillColor(0x07C0_07C0),
                 FillRectangle(0, 0, 7, 7), SyncFull);
@@ -138,7 +141,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0xFF0u)]
         public void With_the_xbus_bit_set_commands_come_from_data_memory(uint dmem)
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             ulong[] list =
             {
                 ColorImage(Bits16, 8, Framebuffer), Scissor(0, 0, 8, 8), FillCycle, FillColor(0x07C0_07C0),
@@ -170,7 +173,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData(0x24, 16)]
         public void A_long_command_waits_for_all_its_words_and_none_of_them_is_read_as_a_command(int id, int length)
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             var words = new ulong[length / 8 + 1];
             words[0] = (ulong)id << 56;
             for (int i = 1; i < words.Length; i++) words[i] = SyncFull;
@@ -193,7 +196,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_sixteen_bit_fill_writes_its_colour_as_whole_words_across_pixel_pairs()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             RunList(bus, ColorImage(Bits16, 4, Framebuffer), Scissor(0, 0, 4, 2), FillCycle, FillColor(0x1111_2222),
                 FillRectangle(0, 0, 3, 1), SyncFull);
 
@@ -206,7 +209,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_fill_at_other_pixel_sizes_writes_the_lanes_of_the_word_each_pixel_occupies()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             RunList(bus, ColorImage(Bits32, 2, Framebuffer), Scissor(0, 0, 2, 1), FillCycle, FillColor(0x1122_3344),
                 FillRectangle(0, 0, 1, 0), SyncFull);
 
@@ -223,7 +226,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_fill_reaches_the_scissor_right_column_but_not_its_bottom_row()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             RunList(bus, ColorImage(Bits16, 8, Framebuffer), Scissor(0, 0, 4, 3), FillCycle, FillColor(0xFFFF_FFFF),
                 FillRectangle(1, 1, 5, 5), SyncFull);
 
@@ -247,7 +250,7 @@ namespace EmuSen.WiseMan.Cores
                 { 4, 16 }, { 5, 15 }, { 5, 14 }, { 5, 13 }, { 5, 13 }, { 5, 12 }, { 5, 11 }, { 5, 10 }, { 5, 9 }, { 5, 8 }, { 5, 7 }, { 5, 6 },
             };
 
-            var bus = new MemoryBus();
+            var bus = NewBus();
             RunList(bus, ColorImage(Bits16, 32, Framebuffer), Scissor(0, 0, 31, 31), FillCycle, FillColor(0xFFFF_FFFF),
                 0x08800068_00280008UL, 0x00140000_FFFF2000UL, 0x00040000_00001555UL, 0x00040000_00020000UL, SyncFull);
 
@@ -266,7 +269,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_anti_aliased_one_cycle_triangle_stores_the_coverage_the_reference_stores()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             const uint list = 0x0030_0000;
             uint end = WriteList(bus, list,
                 0x3F10001F_00100000UL, 0x2D000000_0007C07CUL, 0x2F300000_00000000UL, 0x37000000_7BDE7BDFUL, 0x3607C07C_00000000UL,
@@ -294,7 +297,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Two_shaded_triangles_crossing_in_depth_store_the_colours_and_depths_the_reference_stores()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             const uint list = 0x0030_0000;
             uint end = WriteList(bus, list,
                 0x3F10001F_00100000UL, 0x2D000000_0007C07CUL, 0x2F300000_00000000UL, 0x37000000_7BDE7BDFUL, 0x3607C07C_00000000UL,
@@ -330,7 +333,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_tile_loaded_and_drawn_through_a_texture_rectangle_matches_the_reference()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             for (uint y = 0; y < 8; y++)
             {
                 for (uint x = 0; x < 8; x++) bus.Write16(0x0020_0000 + (y * 8 + x) * 2, (ushort)(((x * 0x0843 + y * 0x2109) & 0xFFFE) | ((x ^ y) & 1)));
@@ -369,7 +372,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_palette_loaded_and_read_through_a_filtered_colour_indexed_tile_matches_the_reference()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             for (uint i = 0; i < 16; i++) bus.Write16(0x0020_0000 + i * 2, (ushort)(((i * 0x1357 + 0x0F0F) & 0xFFFE) | (i & 1)));
             for (uint y = 0; y < 8; y++)
             {
@@ -411,7 +414,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_mipmapped_triangle_with_its_level_of_detail_fraction_matches_the_reference()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             for (uint i = 0; i < 0x400; i++) bus.Write16(0x0020_0000 + i * 2, (ushort)(((i * 0x2B13 + 0x1357) & 0xFFFE) | (i & 1)));
 
             const uint list = 0x0030_0000;
@@ -442,7 +445,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_two_cycle_triangle_through_both_combiner_and_blender_cycles_matches_the_reference()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             for (uint i = 0; i < 0x400; i++) bus.Write16(0x0020_0000 + i * 2, (ushort)(((i * 0x2B13 + 0x1357) & 0xFFFE) | (i & 1)));
 
             const uint list = 0x0030_0000;
@@ -477,7 +480,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Copy_mode_rectangles_and_a_right_major_triangle_match_the_reference()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             for (uint i = 0; i < 0x400; i++) bus.Write16(0x0020_0000 + i * 2, (ushort)(((i * 0x2B13 + 0x1357) & 0xFFFE) | (i & 1)));
 
             const uint list = 0x0030_0000;
@@ -512,7 +515,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_chroma_keyed_triangle_matches_the_reference()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             for (uint i = 0; i < 0x400; i++) bus.Write16(0x0020_0000 + i * 2, (ushort)(((i * 0x2B13 + 0x1357) & 0xFFFE) | (i & 1)));
 
             const uint list = 0x0030_0000;
@@ -544,7 +547,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Writing_the_mode_register_clear_bit_lowers_the_display_processor_interrupt()
         {
-            var bus = new MemoryBus();
+            var bus = NewBus();
             RunList(bus, SyncFull);
             Assert.Equal(MiInterrupt.DisplayProcessor, bus.Mi.Pending);
 
@@ -556,13 +559,13 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_loaded_state_draws_with_the_modes_it_carried()
         {
-            var saver = new MemoryBus();
+            var saver = NewBus();
             RunList(saver, ColorImage(Bits16, 8, Framebuffer), Scissor(0, 0, 8, 8), FillCycle, FillColor(0x07C0_07C0), SyncFull);
 
             using var state = new MemoryStream();
             using (var w = new BinaryWriter(state, System.Text.Encoding.UTF8, leaveOpen: true)) saver.WriteState(w);
 
-            var loader = new MemoryBus();
+            var loader = NewBus();
             state.Position = 0;
             using (var r = new BinaryReader(state, System.Text.Encoding.UTF8, leaveOpen: true)) loader.ReadState(r);
 

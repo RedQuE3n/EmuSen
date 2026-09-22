@@ -1,6 +1,78 @@
-//! The display processor's serialized state, the C# `Rdp`: its modes, its tiles and the walker's scratch.
+//! The display processor, the C# `Rdp`: its serialized state here, and the rasteriser behind `accept` in `rdp/`. See Mars_Native.md §5.3.
+
+mod chroma_key;
+mod copy;
+mod coverage;
+mod depth;
+mod fill;
+mod filter;
+mod lod;
+mod modes;
+mod one_cycle;
+#[cfg(test)]
+mod replay;
+mod tables;
+mod texture_memory;
+mod textures;
+mod two_cycle;
+mod walker;
+
+pub use modes::{BlendSelectors, CombinerSelectors, Modes};
+use texture_memory::LoadKind;
 
 use crate::state::{State, StateReader, StateResult, StateWriter, boxed};
+
+pub const TEXTURE_RECTANGLE: u32 = 0x24;
+pub const TEXTURE_RECTANGLE_FLIPPED: u32 = 0x25;
+pub const SYNC_FULL: u32 = 0x29;
+pub const SET_SCISSOR: u32 = 0x2D;
+pub const SET_OTHER_MODES: u32 = 0x2F;
+pub const FILL_RECTANGLE: u32 = 0x36;
+pub const SET_FILL_COLOR: u32 = 0x37;
+pub const SET_COLOR_IMAGE: u32 = 0x3F;
+pub const LOAD_PALETTE: u32 = 0x30;
+pub const SET_TILE_SIZE: u32 = 0x32;
+pub const LOAD_BLOCK: u32 = 0x33;
+pub const LOAD_TILE: u32 = 0x34;
+pub const SET_TILE: u32 = 0x35;
+pub const SET_TEXTURE_IMAGE: u32 = 0x3D;
+
+const ONE_CYCLE: i32 = 0;
+const TWO_CYCLE: i32 = 1;
+const COPY_CYCLE: i32 = 2;
+const FILL_CYCLE: i32 = 3;
+
+/// Red, green, blue, alpha, depth, and the texture's s, t and w.
+const ATTRIBUTES: usize = 8;
+const ATTRIBUTE_Z: usize = 4;
+const ATTRIBUTE_S: usize = 5;
+const ATTRIBUTE_T: usize = 6;
+const ATTRIBUTE_W: usize = 7;
+
+/// The first and last rows a walk wrote, which are the only ones to draw.
+type Rows = (i32, i32);
+
+/// The low `bits` of a field, sign-extended.
+#[inline(always)]
+fn sign_extend(field: u32, bits: u32) -> i32 {
+    ((field << (32 - bits)) as i32) >> (32 - bits)
+}
+
+/// A command's number, from its first word.
+#[inline(always)]
+pub fn command_id(word: u64) -> u32 {
+    ((word >> 56) & 0x3F) as u32
+}
+
+/// In words: triangles grow by what they carry, texture rectangles take two, everything else one.
+#[inline(always)]
+pub fn command_length(id: u32) -> i32 {
+    match id {
+        0x08..=0x0F => 4 + (if (id & 4) != 0 { 8 } else { 0 }) + (if (id & 2) != 0 { 8 } else { 0 }) + (if (id & 1) != 0 { 2 } else { 0 }),
+        0x24 | 0x25 => 2,
+        _ => 1,
+    }
+}
 
 /// The C# `Color` struct, whose fields the serializer writes A, B, G, R, by ordinal name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -170,11 +242,13 @@ pub struct Rdp {
     pub texture_image_width: i32,
     pub texture_step: [i32; 3],
     pub tiles: [TextureTile; 8],
+    /// `[SkipInState]` in C#: the modes decoded from `other_modes` and `combine`, which `refresh` rebuilds.
+    pub modes: Modes,
 }
 
 impl Default for Rdp {
     fn default() -> Self {
-        Rdp {
+        let mut rdp = Rdp {
             texture_memory: boxed(0),
             attribute_de: [0; 8],
             attribute_dx: [0; 8],
@@ -249,7 +323,10 @@ impl Default for Rdp {
             texture_image_width: 0,
             texture_step: [0; 3],
             tiles: [TextureTile::default(); 8],
-        }
+            modes: Modes::default(),
+        };
+        rdp.refresh();
+        rdp
     }
 }
 
@@ -406,6 +483,7 @@ impl State for Rdp {
         self.texture_image_width = r.i32()?; // _textureImageWidth
         r.i32s(&mut self.texture_step[..])?; // _textureStep
         r.structures(&mut self.tiles)?; // _tiles
+        self.refresh();
         Ok(())
     }
 }
@@ -417,9 +495,45 @@ pub struct RdpMemory<'a> {
 }
 
 impl Rdp {
-    /// C#'s `Rdp.Accept`: one command word; true when it completed a full sync. A stub until the RDP stage lands.
+    /// C#'s `Rdp.Accept`: one command word, gathered until its command is whole and then run; true when it completed a full sync.
     pub fn accept(&mut self, word: u64, memory: &mut RdpMemory) -> bool {
-        let _ = (word, memory);
+        self.command[self.taken as usize] = word;
+        self.taken += 1;
+
+        let id = command_id(self.command[0]);
+        if self.taken < command_length(id) {
+            return false;
+        }
+
+        self.taken = 0;
+        self.execute(id, self.command[0], memory)
+    }
+
+    fn execute(&mut self, id: u32, word: u64, memory: &mut RdpMemory) -> bool {
+        match id {
+            0x08..=0x0F => self.triangle(id, memory),
+            TEXTURE_RECTANGLE | TEXTURE_RECTANGLE_FLIPPED => self.textured_rectangle(id == TEXTURE_RECTANGLE_FLIPPED, memory),
+            SET_TEXTURE_IMAGE => self.set_texture_image(word),
+            SET_TILE => self.set_tile(word),
+            SET_TILE_SIZE => {
+                self.set_tile_size(word);
+            }
+            LOAD_TILE => self.load(word, LoadKind::Tile, memory),
+            LOAD_BLOCK => self.load(word, LoadKind::Block, memory),
+            LOAD_PALETTE => self.load(word, LoadKind::Palette, memory),
+            SYNC_FULL => return true,
+            SET_SCISSOR => self.set_scissor(word),
+            SET_OTHER_MODES => {
+                self.other_modes = word;
+                self.decode_other_modes();
+            }
+            FILL_RECTANGLE => self.fill(word, memory),
+            SET_FILL_COLOR => self.fill_color = word as u32,
+            SET_COLOR_IMAGE => self.set_color_image(word),
+            _ => {
+                self.set_register(id, word);
+            }
+        }
         false
     }
 }

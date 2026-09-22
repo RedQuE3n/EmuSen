@@ -9,6 +9,8 @@ mod filter;
 mod lod;
 mod modes;
 mod one_cycle;
+#[cfg(test)]
+mod replay;
 mod tables;
 mod texture_memory;
 mod textures;

@@ -67,6 +67,19 @@ namespace EmuSen.DianaOS.DianaOS.Var
             _instructionsRecorded++;
         }
 
+        // A bitmap a core recorded itself, its first bits over this one's, and the instructions it stands for - see Mars_Native.md §6.5.
+        public void Merge(ReadOnlySpan<byte> bitmap, long instructions)
+        {
+            if (!IsArmed) return;
+            _seen ??= new byte[BitmapBytes];
+            Span<byte> seen = _seen.AsSpan(0, Math.Min(bitmap.Length, BitmapBytes));
+            Span<ulong> wide = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, ulong>(seen);
+            ReadOnlySpan<ulong> from = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, ulong>(bitmap.Slice(0, seen.Length));
+            for (int i = 0; i < wide.Length; i++) wide[i] |= from[i];
+            for (int i = wide.Length * 8; i < seen.Length; i++) seen[i] |= bitmap[i];
+            _instructionsRecorded += instructions;
+        }
+
         // Called from the call-stack seam for every call/interrupt taken - see `man cov`.
         public void RecordEntryPoint(int address, CallFrameKind kind)
         {

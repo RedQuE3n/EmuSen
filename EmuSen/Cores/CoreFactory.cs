@@ -107,7 +107,7 @@ namespace EmuSen.Cores
                 case MarsCore mars:
                     return new CoreBundle(mars, new MarsDebugTarget(mars, cheats), new N64GameSharkCheatCodec(), null, null);
 
-                // The same codec, and a target that reads and disassembles but cannot halt - see Mars_Native.md §5.5.
+                // The same codec, and a target whose hooks are tables in the Rust loop - see Mars_Native.md §6.5.
                 case MarsRtCore marsRt:
                     return new CoreBundle(marsRt, new MarsRtDebugTarget(marsRt, cheats), new N64GameSharkCheatCodec(), null, null);
 

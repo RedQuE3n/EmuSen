@@ -5,6 +5,7 @@ using EmuSen.Cauldron;
 using EmuSen.Cores.Nintendo.Mars;
 using EmuSen.Cores.Nintendo.Mars.Cpu.Disassembler;
 using EmuSen.Cores.Nintendo.Mars.Debug;
+using EmuSen.Cores.Nintendo.Mars.Memory;
 using EmuSen.Cores.Nintendo.Mars.Rsp;
 using EmuSen.DianaOS.DianaOS.Lib;
 using EmuSen.DianaOS.DianaOS.Var;
@@ -41,8 +42,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private uint Wrap(int address) => _space == MarsRtSpace.Cpu || Size == 0 ? (uint)address : (uint)(((address % Size) + Size) % Size);
     }
 
-    // The debugger's view of MarsRT: memories, registers, disassembly and cheats; nothing can halt or step it - see Mars_Native.md §5.5.
-    public sealed class MarsRtDebugTarget : IDebugTarget
+    // The debugger's view of MarsRT: Mars's memories, both processors and the core's registries, the hooks in the Rust loop - see Mars_Native.md §6.5.
+    public sealed class MarsRtDebugTarget : IDebugTarget, IWriteObserver
     {
         private static readonly string[] RegisterNames =
         {
@@ -60,7 +61,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         private readonly MarsRtCore _core;
         private readonly List<IDebugMemorySpace> _spaces = new();
-        private readonly BreakpointRegistry _breakpoints = new();
+
+        // The RSP runs inside the bus's clock and cannot stop mid-tick, so it has no breakpoints of its own - see Mars_Debug.md §5.
         private readonly BreakpointRegistry _rspBreakpoints = new();
 
         private readonly PollingProvider<IReadOnlyList<DebugRegisterValue>> _cpuRegisters;
@@ -93,28 +95,46 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public long FrameCount => _core.TotalFrames;
         public int MaxSprites => 0;
 
-        // Held so the commands that list them work; no breakpoint, watch or frame log is consulted by MarsRT - see Mars_Native.md §5.5.
-        public WatchRegistry Watches { get; } = new();
-        public FrameLogRegistry FrameLog { get; } = new();
-        public BreakpointRegistry Breakpoints => _breakpoints;
+        // The core's own, as MarsCore hands its out, so a breakpoint or a label outlives any one prompt - see Mars_Debug.md §1.
+        public WatchRegistry Watches => _core.Watches;
+        public FrameLogRegistry FrameLog => _core.FrameLog;
+        public BreakpointRegistry Breakpoints => _core.Breakpoints;
+        public CoverageRegistry? Coverage => _core.Coverage;
+        public CoverageRegistry? CoprocessorCoverage => _core.RspCoverage;
+        public CallStackRegistry? CallStack => _core.CallStack;
+        public LabelRegistry? Labels => _core.Labels;
 
         public IReadOnlyList<DebugCpu> DebugCpus => new[]
         {
-            new DebugCpu(global::EmuSen.DianaOS.DianaOS.Var.DebugCpus.MainName, "VR4300 (MarsRT)", _breakpoints)
+            new DebugCpu(global::EmuSen.DianaOS.DianaOS.Var.DebugCpus.MainName, "VR4300 (MarsRT)", _core.Breakpoints)
             {
+                Coverage = _core.Coverage,
+                CallStack = _core.CallStack,
                 CodeSpace = MarsDebugSpaces.Cpu,
                 Registers = _cpuRegisters,
-                ProgramCounter = () => (int)(uint)(_core.IsRomLoaded ? _core.CpuRegisters()[0] : 0),
-                CanHalt = false,
+                ProgramCounter = () => _core.IsRomLoaded ? _core.Pc : 0,
             },
             new DebugCpu("rsp", "RSP (MarsRT)", _rspBreakpoints)
             {
+                Coverage = _core.RspCoverage,
                 CodeSpace = MarsDebugSpaces.Imem,
                 Registers = _coprocessorRegisters,
                 ProgramCounter = () => (int)(_core.IsRomLoaded ? _core.RspRegisters()[0] : 0),
                 CanHalt = false,
             },
         };
+
+        // A processor store, reported in the space it landed in, drained from the Rust loop's log into the core's registries - see Mars_Native.md §6.5.
+        public bool Listening => _core.Listening;
+
+        public void OnWrite(string spaceName, int address, byte value)
+        {
+            Watches.RecordWrite(spaceName, address, value, () => $"PC={(uint)_core.Pc:X8}");
+            Breakpoints.NoteWrite(spaceName, address, value);
+        }
+
+        // The processor's view of an address, or null where the TLB has no entry for it - see `man addr`.
+        public PhysicalAddress? ResolvePhysical(int cpuAddress) => _core.TryPhysical((uint)cpuAddress, out uint physical) ? _core.Resolve(physical) : null;
 
         public CheatRegistry Cheats => _core.Cheats;
 
@@ -246,8 +266,6 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             text.AppendLine($"N64 (MarsRT) - frame {_core.TotalFrames}, {_core.Cycles / (double)MarsCore.ProcessorClockHz:F2}s of console time, {_core.SpaceSize(MarsRtSpace.Rdram) / (1024 * 1024)}MB RDRAM");
             text.AppendLine($"CPU  PC={cpu[0]:X16} SP={cpu[30]:X16} RA={cpu[32]:X16}");
             text.Append($"VI   ORIGIN={vi[1]:X8} WIDTH={vi[2]} V_SYNC={vi[6]} {_core.ScreenWidth}x{_core.ScreenHeight}");
-            text.AppendLine();
-            text.Append("No breakpoints, watches, coverage or stepping: MarsRT runs whole frames in Rust.");
             return text.ToString();
         }
     }

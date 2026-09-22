@@ -3,6 +3,7 @@
 mod blocks;
 mod bus;
 mod cpu;
+mod debug;
 mod devices;
 mod fpu;
 mod games;

@@ -16,7 +16,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
     public enum MarsRtSpace : uint { Rdram = 0, Dmem = 1, Imem = 2, PifRam = 3, Rom = 4, Cpu = 5 }
 
     // MarsRT, the N64 core in Rust, behind the interfaces MarsCore implements; the boundary is crossed once a frame - see Mars_Native.md §5.2 and §5.5.
-    public sealed unsafe class MarsRtCore : ICore, ISnapshotCore, IStateFormat, IFrameSerial, IRepeatedRows, ICoreSettings, ICheatRegistryHost, IDisposable
+    public sealed unsafe partial class MarsRtCore : ICore, ISnapshotCore, IStateFormat, IFrameSerial, IRepeatedRows, ICoreSettings, ICheatRegistryHost, IDisposable
     {
         private static readonly delegate* unmanaged<byte*, nuint, uint, byte*, nuint, byte*, nuint, nint> LoadRomExport = (delegate* unmanaged<byte*, nuint, uint, byte*, nuint, byte*, nuint, nint>)MarsNative.Export("mars_machine_load_rom");
         private static readonly delegate* unmanaged<byte*, nuint, uint, nint> BootExport = (delegate* unmanaged<byte*, nuint, uint, nint>)MarsNative.Export("mars_machine_boot");
@@ -85,6 +85,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             if (!Available) throw new InvalidOperationException($"MarsRT is not in use: {MarsNative.Report}");
             _expansionPak = expansionPak;
             _batteryRamDisabled = batteryRamDisabled;
+            WireRegistries();
         }
 
         // The Pak the next load builds; before the first frame a change rebuilds the machine at once, as MarsCore's does.
@@ -425,6 +426,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         {
             if (_handle != 0) Free(_handle);
             _handle = handle;
+            CallStack.Reset();
+            IsHaltedAtBreakpoint = false;
             ApplyOptions();
             _frame = Blank(MarsCore.DefaultScreenHeight);
             _screenWidth = MarsCore.ScreenWidthPixels;
@@ -473,12 +476,17 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             }
         }
 
-        // MarsCore.RunFrame's order: the frame, the cheats, the periodic save, then the picture - see Mars_Native.md §5.5.
+        // MarsCore.RunFrame's order: the frame, the cheats, the frame log, the periodic save, then the picture - see Mars_Native.md §5.5 and §6.5.
         public void RunFrame()
         {
             nint handle = Handle;
-            AdvanceExport(handle);
+            bool resuming = IsHaltedAtBreakpoint;
+            IsHaltedAtBreakpoint = false;
+            if (Observed) { if (!RunObserved(handle, resuming)) return; }
+            else AdvanceExport(handle);
             ApplyCheatsAtFrameEnd();
+            FrameLog.RecordFrame(TotalFrames, ReadWidth);
+            Breakpoints.NoteFrame(TotalFrames);
             if (TotalFrames % MarsCore.SaveEveryNFrames == 0) SaveSram();
             if (_skipRendering) return;
             PresentExport(handle);

@@ -55,10 +55,16 @@ fn in_range(address: u32, start: u32, length: u32) -> bool {
 
 /// `SignalProcessorMemory`: the two memories repeat every eight kilobytes up to the interface registers; true for IMEM.
 #[inline(always)]
-fn sp_memory(physical: u32) -> Option<(bool, u32)> {
+pub(crate) fn sp_memory(physical: u32) -> Option<(bool, u32)> {
     let local = physical.wrapping_sub(SP_DMEM_BASE);
     let imem = local % (2 * SP_MEM_SIZE) >= SP_MEM_SIZE;
     if physical >= SP_DMEM_BASE && local < SP_MEM_WINDOW { Some((imem, local % SP_MEM_SIZE)) } else { None }
+}
+
+/// `LatchesWholeWords`: the signal processor's memories, PIF RAM and the save chip take a whole word whatever size is named.
+#[inline(always)]
+pub(crate) fn latches_whole_words(physical: u32) -> bool {
+    sp_memory(physical).is_some() || in_range(physical, PIF_RAM_BASE, PIF_RAM_SIZE) || save_window(physical)
 }
 
 #[inline(always)]
@@ -262,7 +268,7 @@ impl MemoryBus {
 
     /// `LatchesWholeWords`: the signal processor's memories, PIF RAM and the save chip take a whole word whatever size is named.
     fn latches_whole_words(physical: u32) -> bool {
-        sp_memory(physical).is_some() || in_range(physical, PIF_RAM_BASE, PIF_RAM_SIZE) || save_window(physical)
+        latches_whole_words(physical)
     }
 
     /// `Store`: the processor's own stores. Nothing watches them here, so `Report` never runs.

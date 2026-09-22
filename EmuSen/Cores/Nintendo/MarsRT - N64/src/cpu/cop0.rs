@@ -269,6 +269,10 @@ impl Cpu {
     pub fn enter_exception(&mut self) {
         let raised = self.run.fault;
         self.run.exceptions += 1;
+        // `InterruptObserver`: an interrupt taken, which `runto irq` waits for (Mars_Native.md §6.5).
+        if raised.code == code::INTERRUPT && self.hooks.interrupts {
+            self.hooks.interrupt_taken = true;
+        }
         self.run.tlb_generation = self.run.tlb_generation.wrapping_add(1);
         let already_handling = self.cop0[STATUS] & STATUS_EXCEPTION_LEVEL != 0;
         let extended = self.wide_addressing();

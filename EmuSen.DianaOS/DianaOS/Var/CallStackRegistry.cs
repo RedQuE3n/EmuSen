@@ -110,6 +110,15 @@ namespace EmuSen.DianaOS.DianaOS.Var
             _exclusive[owner] = count + 1;
         }
 
+        // A run of instructions a core counted itself for the routine that was innermost while they ran - see Mars_Native.md §6.5.
+        public void NoteInstructions(int owner, long instructions)
+        {
+            if (!IsProfiling || instructions <= 0) return;
+            _profiledInstructions += instructions;
+            _exclusive.TryGetValue(owner, out long count);
+            _exclusive[owner] = count + instructions;
+        }
+
         // Hottest first; address 0 is the "outside any recorded call" bucket.
         public IReadOnlyList<(int Address, long Instructions, long Calls, double Percent)> Hottest(int limit)
         {

@@ -25,7 +25,7 @@ namespace EmuSen.WiseMan.Fixtures
             var image = new byte[ImageLength];
             Put(image, 0x0180, new uint[] { 0x3C1A_8000, 0x375A_0000 | (uint)HandlerAt, 0x0340_0008, 0 });
             Put(image, HandlerAt, Handler(rsp).Build());
-            Put(image, 0x0400, Main().Build());
+            Put(image, 0x0400, Program().Build());
             Put(image, 0x0800, RspProgram());
             byte[] dmem = new byte[0x200];
             for (int i = 0; i < 32; i++) dmem[i] = (byte)(0x13 * i + 7);
@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Fixtures
             return a.Build();
         }
 
-        private static Asm Main()
+        private static Asm Program()
         {
             var a = new Asm(0x8000_0400);
             // One of each exception the handler steps over.

@@ -1,10 +1,10 @@
 //! Coprocessor zero: its registers, the interrupt check, the timer, exceptions and the TLB instructions. C#'s Cop0Registers.cs and Cpu.Opcodes.Cop0.cs. See Mars_Cop0.md.
 
-use crate::bus::MemoryBus;
+use crate::memory::bus::MemoryBus;
 use crate::cpu::{Cpu, Exec, code};
-use crate::interp::{rd, rt};
-use crate::segments::Mode;
-use crate::tlb::{ENTRY_LO_GLOBAL, ENTRY_LO_KEPT, Tlb};
+use crate::cpu::interp::{rd, rt};
+use crate::cpu::segments::Mode;
+use crate::cpu::tlb::{ENTRY_LO_GLOBAL, ENTRY_LO_KEPT, Tlb};
 
 pub const INDEX: usize = 0;
 pub const RANDOM: usize = 1;

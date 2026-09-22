@@ -1,15 +1,15 @@
 //! The RCP's interfaces: `MarsDmaTests`, `MarsSerialTests`, `MarsEventTimingTests`, `MarsViTimingTests` and `MarsAudioTests`.
 
 use super::support::{SyntheticRom, build_rom, bus_state, bus_with_cart, load_bus, new_bus};
-use crate::ai::{DEFAULT_SAMPLE_RATE, MAX_BUFFERED_SAMPLES, PAGE_SIZE, SHORTEST_PERIOD, STATUS_ALWAYS_SET, STATUS_BUSY, STATUS_FULL};
-use crate::bus::MemoryBus;
-use crate::bus_access::map::{AI_BASE, CART_DOMAIN1_ADDRESS2, PI_BASE, SI_BASE, SP_DMEM_BASE, SP_REGISTERS_BASE, VI_BASE};
-use crate::controller::ControllerPak;
-use crate::joybus;
-use crate::mi::interrupt;
+use crate::memory::ai::{DEFAULT_SAMPLE_RATE, MAX_BUFFERED_SAMPLES, PAGE_SIZE, SHORTEST_PERIOD, STATUS_ALWAYS_SET, STATUS_BUSY, STATUS_FULL};
+use crate::memory::bus::MemoryBus;
+use crate::memory::bus_access::map::{AI_BASE, CART_DOMAIN1_ADDRESS2, PI_BASE, SI_BASE, SP_DMEM_BASE, SP_REGISTERS_BASE, VI_BASE};
+use crate::memory::controller::ControllerPak;
+use crate::memory::joybus;
+use crate::memory::mi::interrupt;
 use crate::rom::{HEADER_LENGTH, MAGIC};
-use crate::si::TRANSFER_CYCLES;
-use crate::sp::STATUS_HALT;
+use crate::memory::si::TRANSFER_CYCLES;
+use crate::memory::sp::STATUS_HALT;
 
 const SP_IMEM_BASE: u32 = 0x0400_1000;
 

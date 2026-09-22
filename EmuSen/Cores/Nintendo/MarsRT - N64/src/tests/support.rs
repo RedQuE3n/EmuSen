@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use crate::bus::{MemoryBus, RDRAM_SIZE, RDRAM_SIZE_EXPANDED};
+use crate::memory::bus::{MemoryBus, RDRAM_SIZE, RDRAM_SIZE_EXPANDED};
 use crate::cpu::{Cpu, Fault};
 use crate::machine::Machine;
 use crate::rom::{self, RomImage};
-use crate::save::save_type;
+use crate::memory::save::save_type;
 
 /// `MipsAssembler.LoadAddress` and `EntryPoint`: the program at physical zero, fetched through KSEG0.
 pub const LOAD_ADDRESS: u32 = 0;

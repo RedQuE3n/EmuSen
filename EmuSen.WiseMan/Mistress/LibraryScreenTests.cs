@@ -216,6 +216,49 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        [Fact]
+        public Task A_steam_launch_in_desktop_mode_keeps_the_sidebar_and_the_menu_bar() => Session.Dispatch(() =>
+        {
+            Rom("Alpha.sfc");
+            MainWindow window = UnderSteam(new() { ["SteamDeck"] = "1", ["SteamGameId"] = "123", ["XDG_CURRENT_DESKTOP"] = "KDE" });
+
+            Assert.True(window.GetControl<Control>("LibrarySidebarPane").IsVisible);
+            Assert.True(window.GetControl<Control>("MenuStrip").IsVisible);
+            Assert.False(window.GetControl<FilterBar>("LibraryFilter").ShowFacet);
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task Game_mode_under_gamescope_still_starts_the_big_screen() => Session.Dispatch(() =>
+        {
+            Rom("Alpha.sfc");
+            MainWindow window = UnderSteam(new() { ["SteamDeck"] = "1", ["SteamGameId"] = "123", ["XDG_CURRENT_DESKTOP"] = "gamescope" });
+
+            Assert.False(window.GetControl<Control>("LibrarySidebarPane").IsVisible);
+            Assert.False(window.GetControl<Control>("MenuStrip").IsVisible);
+            Assert.True(window.GetControl<FilterBar>("LibraryFilter").ShowFacet);
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task A_deck_that_names_no_desktop_is_taken_for_game_mode() => Session.Dispatch(() =>
+        {
+            Rom("Alpha.sfc");
+            MainWindow window = UnderSteam(new() { ["SteamDeck"] = "1", ["XDG_CURRENT_DESKTOP"] = null });
+
+            Assert.False(window.GetControl<Control>("LibrarySidebarPane").IsVisible);
+            window.Close();
+        }, default);
+
+        // The window reads the session once, in its constructor, so the variables are restored as soon as it exists.
+        private MainWindow UnderSteam(Dictionary<string, string?> environment)
+        {
+            var saved = environment.Keys.ToDictionary(k => k, Environment.GetEnvironmentVariable);
+            foreach (var (key, value) in environment) Environment.SetEnvironmentVariable(key, value);
+            try { return Open(); }
+            finally { foreach (var (key, value) in saved) Environment.SetEnvironmentVariable(key, value); }
+        }
+
         private static RomEntry Entry(MainWindow w, string name) => ((IReadOnlyList<RomEntry>)Field(w, "_shownEntries")).Single(e => e.FileName == name);
 
         private static MediaItem[] MediaShown(MainWindow w) => ((IReadOnlyList<MediaItem>)Field(w, "_shownMedia")).ToArray();

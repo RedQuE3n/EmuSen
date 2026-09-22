@@ -781,6 +781,9 @@ Deck's own session sets, starts the window full screen with the menu bar hidden 
 Everything the bar held that a player wants is in the pad's menu; the rest is a desktop session's business. It is
 read once, at start, because hiding and restoring the bar under a running game bought nothing worth the states it
 adds.
+*Corrected 2026-09-22 (§4.43):* the premise that `SteamDeck=1` marks a Deck's own session was wrong. Steam sets it on
+a Deck in Desktop Mode as well, so a game started from Steam on the desktop lost its menu bar and sidebar. The
+environment trigger is now a gamescope session, and `SteamDeck=1` counts only where no desktop is named.
 
 **The menu's entries.** Over a game: Resume, Save State, Load State, State Slot, Speed, Reset, then the three
 settings windows, Full Screen, Game Library, Close Game and Exit. In the library the game's entries give way to a
@@ -1155,3 +1158,56 @@ Together the two changes cut the time to the first render tick by 56 per cent.
 - Coalescing the per-cover `LibraryGrid.Refresh` after the first frame. That work happens after the window is shown, so it affects responsiveness rather than the start, and it is unmeasured here.
 
 **Test:** `PadNavigationTests.The_gamepad_starts_after_the_window_s_first_frame_and_not_before`. A mutant that starts the pad at construction fails it.
+### 4.43 Game Mode is gamescope, not `SteamDeck=1` (2026-09-22)
+
+**The report.** Mistress started from Steam on a Steam Deck showed neither the console sidebar (§4.33) nor the menu
+bar, in Game Mode and in Desktop Mode alike.
+
+**The mechanism.** Both are hidden by one branch, `StartPadNavigation` in `MainWindow.Pad.cs`, which big-screen mode
+(§4.29) takes: it clears `MenuStrip.IsVisible` and `LibrarySidebarPane.IsVisible`, moves the console choice into the
+filter bar's facet and asks for full screen. Nothing else in the window hides either control: no width breakpoint,
+no collapse of the pane, nothing tied to full screen. Of the three ways into that branch, the setting and the
+`--bigscreen` argument are off in a fresh install (`AppSettings.BigScreen` defaults to false, and the published
+`home/etc/EmuSen/appsettings.json` carries `false`). The third was `SteamDeck=1` in the environment. Steam puts that
+variable into every game it starts on a Deck, whichever mode the Deck is in, so the branch was taken in both.
+
+**The argument, separated from the mechanism.** In Game Mode the result is the design: §4.29 hides the bar because the
+pad's menu holds what a player needs from it and the pad cannot drive the bar's popups (§4.24); §4.33 hides the sidebar because its width is the handheld's
+screen. In Desktop Mode none of that holds. The Deck is then a KDE Plasma desktop with a pointer and, often, a
+keyboard and a monitor, and the window is one among others. What §4.29 needed was "the session is Game Mode", and it
+tested "the machine is a Deck". The two coincide only in the mode the section was written for.
+
+**What decides now.** `MainWindow.InGameModeSession` reads `XDG_CURRENT_DESKTOP`. SteamOS's Game Mode session names
+`gamescope` there; Desktop Mode names `KDE`. The variable is a colon-separated list, and any entry equal to
+`gamescope` (ignoring case) is Game Mode. Only when the variable is absent or empty does `SteamDeck=1` still decide,
+so that a Game Mode session which does not pass the desktop name through keeps its big screen rather than losing it.
+The setting and `--bigscreen` are unchanged and still force the mode anywhere, including Desktop Mode.
+
+**Why this does not generalise.** The rule is about SteamOS. Another handheld distribution that runs its game session
+under a compositor other than gamescope, or a desktop that names no `XDG_CURRENT_DESKTOP` on a Deck, is not
+distinguished by it; the second is taken for Game Mode. A desktop user who wraps Mistress in `gamescope` by hand gets
+whatever that nested gamescope sets, which was not examined.
+
+**The retired prediction.** §4.29 said `SteamDeck=1` is set by "a Deck's own session". That was an assumption and
+was never checked on a Deck; the report above is the evidence against it, since Desktop Mode had no other way into
+the branch.
+
+**Tests** (`LibraryScreenTests`), run with the variables set around the window's construction, since the mode is read
+once, there:
+
+- A Steam launch in Desktop Mode (`SteamDeck=1`, `SteamGameId`, `XDG_CURRENT_DESKTOP=KDE`) keeps the sidebar and the
+  menu bar and leaves the facet hidden. This case failed on the unmodified build, on the sidebar.
+- Game Mode (`XDG_CURRENT_DESKTOP=gamescope`) still hides both and shows the facet.
+- A Deck that names no desktop is taken for Game Mode.
+
+Three mutants were made: deciding a named desktop by `SteamDeck=1` again, treating an unnamed desktop as not Game
+Mode, and matching `KDE` instead of `gamescope`. Each was caught, the last by two cases.
+
+**What it does not cover.**
+
+- *No Deck was used.* That Game Mode sets `XDG_CURRENT_DESKTOP=gamescope` and that Steam passes it to a game it
+  starts, and that Desktop Mode sets `KDE`, are taken from SteamOS's session scripts as documented, not observed here.
+- *Game Mode's layout is unchanged.* If the sidebar is wanted there too, that is a change to §4.33's decision, not a
+  defect, and it was not made.
+- *Big Picture on the desktop.* Steam's full-screen interface in Desktop Mode sets `SteamTenfoot` and
+  `SteamGamepadUI`; they are not read, so a game started from it opens in the desktop layout.

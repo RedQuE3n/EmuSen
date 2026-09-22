@@ -20,6 +20,7 @@ pub mod sp;
 pub mod state;
 pub mod tlb;
 pub mod vi;
+pub mod vi_scan;
 
 use std::ffi::{CStr, c_char};
 use std::sync::OnceLock;

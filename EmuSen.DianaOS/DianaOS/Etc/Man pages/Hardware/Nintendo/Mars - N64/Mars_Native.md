@@ -2074,17 +2074,24 @@ deferred. A hang counts as a catch; none hung.
 
 `Machine::set_recompiler(bool)` turns it on and `Blocks::tier` chooses the tier; through the shim they are
 `MarsRtCore.UseBlocks` (Mars's own key for the same thing) and `BlockTier`, and a `Recompiler` setting stands beside
-Mars's keys in the graphics settings, off by default, with a hint that says it is exact. `VerifyBlocks` turns on the
-verifier. The environment carries the same three for measurement: `EMUSEN_MARSRT_TIER`, `EMUSEN_MARSRT_VERIFY_BLOCKS`,
+Mars's keys in the graphics settings, with a hint that says it is exact. `VerifyBlocks` turns on the verifier. The environment carries the same three for measurement: `EMUSEN_MARSRT_TIER`, `EMUSEN_MARSRT_VERIFY_BLOCKS`,
 `EMUSEN_MARSRT_THRESHOLD`; `EMUSEN_MARSRT_NOMAPPEDBLOCKS=1` leaves mapped code to the interpreter and
 `EMUSEN_MARSRT_BESIDE=1` compiles the variant §5.8.3 rejected. The interface version is 6, which adds
 `mars_machine_set_recompiler` and `mars_blocks_counters`.
 
-**The default is off**, as every MarsRT switch has been until it is proven in play. **What is recommended is on, at
-step 2**, which is what `BlockTier` gives a caller who asks for no tier: it is the fastest of the three in every game
-(§5.8.8), it is the cheapest to compile, and it is the only one that is never slower than the interpreter. Turning it
-on for MarsRT in Mistress is a decision for play, as the threads' switches were; what a headless bench can say, this
-section says.
+**The recommendation is on, at step 2**, which is what `BlockTier` gives a caller who asks for no tier: it is the
+fastest of the three in every game (§5.8.8), it is the cheapest to compile, and it is the only one that is never
+slower than the interpreter. The stage was built with the default off, as every MarsRT switch has been until it was
+proven in play, and turning it on was left as a decision for play, as the threads' switches were.
+
+**That decision was taken on 2026-09-22, the day the stage landed: the shim's default is on**, at step 2 —
+`MarsRtCore.UseBlocks` starts true and the `Recompiler` setting's default is `true` — on the strength of §5.8.5's
+oracles and §5.8.8's measurement rather than hours of play, which the threads' switches had been given first. Two
+things the default does not change. The machine in the library still boots with the recompiler off and is turned on
+through `set_recompiler`, so the Rust tests' interpreter oracle stays the plain machine and the shim is the only place
+the default lives; and `MarsRtTests.Twin` asks for the interpreter by name, so the comparisons against the C# core keep
+their claim while the tier runs turn the blocks on themselves. What the default leaves to play is what the oracles
+cannot see: a game none of the three is, driven by a player. Off is the interpreter, a switch away and still exact.
 
 #### 5.8.8 Speed
 

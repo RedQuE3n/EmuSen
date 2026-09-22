@@ -21,8 +21,9 @@ and into a publish. Cargo runs only for the host's own runtime identifier. A pub
 machine without cargo, gets no library.
 
 `MarsNative` loads it from `AppContext.BaseDirectory`. It refuses a library whose `emusen_native_interface_version` is
-not the build's (1), and installs the panic log. `EMUSEN_MARS_NATIVE=0` turns the library off. **Every component falls
-back to its C# twin when the library is absent, refused or off.** `MarsNativeTests` pins the load.
+not the build's (2 since §5.1 added the machine's state; 1 before), and installs the panic log. `EMUSEN_MARS_NATIVE=0`
+turns the library off. **Every component falls back to its C# twin when the library is absent, refused or off.**
+`MarsNativeTests` pins the load.
 
 ## 2. A panic never crosses into C#
 
@@ -212,3 +213,143 @@ measurement the whole of Phase G used, applied across two languages.
 - The estimate before any measurement is 1.4 to 1.7× on GoldenEye and less on SM64 and OoT (`Mars_Native.md` §3.4 is
   why estimates here are held loosely). Stage 1's interpreter is the first point at which a like-for-like number exists,
   and it is to be measured against the C# interpreter, with the recompiler off in both, before stage 5 is priced again.
+
+### 5.1 The state, byte for byte
+
+*Stage 1a, 2026-09-22.* The port's first step is the machine's data and not its behaviour: every field the C#
+serializer walks, held in Rust structs, and a reader and writer under which MarsRT's state **is** the C# save state,
+byte for byte. The C# serializer therefore stays the format, as §5 requires, and a state written by either machine
+loads in the other because it is the same bytes. Nothing runs yet, and nothing a C# load derives after reading is
+derived here.
+
+**What was built.**
+
+- **One module per C# class,** in `src/`:
+
+  | Module | C# classes | Lines |
+  | --- | --- | --- |
+  | `cpu`, `tlb` | `Cpu`, `Tlb`, `TlbEntry` | 74, 44 |
+  | `bus` | `MemoryBus`, and the tail it writes by hand | 205 |
+  | `mi`, `pi`, `ai`, `vi`, `isviewer` | `MiInterface`, `PiInterface`, `AiInterface`, `Vi`, `IsViewer` | 36, 28, 47, 52, 27 |
+  | `si`, `controller` | `SiInterface`, `Controller`, `ControllerPak` | 33, 58 |
+  | `sp` | `SpInterface`, and `Rsp`'s registers | 109 |
+  | `dp`, `rdp` | `DpInterface` and a snapshot's words; `Rdp`, `Color`, `TextureTile` | 71, 411 |
+  | `save` | `SaveChip`, `Eeprom`, `Sram`, `FlashRam` | 176 |
+  | `machine` | `MarsCore`'s header, and the `Machine` that owns everything | 223 |
+  | `state`, `ffi`, `naming` | the encodings; the C ABI; the naming rule's test | 410, 105, 101 |
+
+  §3's interpreter, `rsp.rs`, is untouched. Its registers and the machine's `sp::Rsp` are two structs until stage 2
+  joins them.
+- **The naming rule.** Each Rust field is the snake_case of its C# name without the leading underscore, and an
+  auto-property's backing field `<X>k__BackingField` is named for `X`. There are two exceptions: `SaveChip.Type` is
+  `kind`, since `type` is a keyword, and a snapshot's words, which are no C# field, are `DpInterface::pending`. What
+  C# marks `[SkipInState]` but a hand-written part of the format carries is held where C# holds it:
+  `SiInterface::due` and `pending_read`, `Controller::pak`, and `MemoryBus::registers` and `save`. `Color` declares
+  its fields red, green, blue, alpha and writes them in the serializer's order, which is A, B, G, R.
+- **The writer takes each field's C# name as an argument, and the reader carries it as a comment.** The order is
+  therefore written out twice, once in each function, and both copies are checked (below).
+- **A load parses into a fresh machine and replaces the old one only when it succeeds,** so a truncated or refused
+  state changes nothing. The C# load reads into the live machine.
+- **A state of version 1 cannot be written while display-processor words are pending.** C# drains them by running
+  them before it writes, and that needs the processor stage 3 ports. A snapshot carries them.
+- **The C ABI** is `mars_machine_new(rdram_bytes)`, `_free`, `_rdram_bytes`, `_load_state(ptr, len)`,
+  `_state_kind` (the version last loaded: 1 a state, 2 a snapshot), `_save_state_size(snapshot)`,
+  `_save_state(ptr, len, snapshot)` and `_state_layout(snapshot, ptr, len)`. A negative return is a status. The
+  interface version is 2. `MarsRT - N64/Shim/MarsMachine.cs` wraps the handle.
+
+**How the field lists were established.** They were not transcribed from a summary or from reading the classes. A
+throwaway reflection walk over a live `MarsCore`, using the serializer's own query (every instance field, ordinal
+sort, `[SkipInState]` and alias fields dropped), printed every serialized field with its type and array length. A
+throwaway script generated the modules from that listing, and they were then edited by hand. It found 210 fields in 21
+types, among them 19 in `Cpu`, 15 in `MemoryBus`, 13 in `Rsp`, 17 in `TextureTile` and **74 in `Rdp`**. The brief this
+stage was planned from said 78; the count here is the serializer's. The listing is not trusted as final either,
+because the tests below make the same query at test time: a field added to a C# class later fails them.
+
+**Three properties, each checked separately.** A byte round trip alone cannot see a consistent mistake. If the
+reader and the writer both exchange two fields of one size, the bytes come back whole and the Rust machine holds
+each value in the other's field. So the evidence is split three ways.
+
+1. **The reader inverts the writer on C#'s bytes.** A C# state is loaded into MarsRT, MarsRT writes it back, and the
+   bytes are compared (`MarsNativeStateTests`).
+2. **Every field sits where the C# serializer puts it, under its C# name.** MarsRT's writer can emit a layout: one
+   line per field, giving offset, length, type and path, such as `816 8 u64 Cpu.Hi`. The test builds the same
+   listing by walking the C# objects as the serializer walks them, and compares the two line by line. A 4 MB state
+   has 504 lines and a snapshot 507.
+3. **Each label names the field on its own line.** `naming.rs` reads the modules' own source. In 214 writer lines and
+   215 reader lines, it checks that the label or comment is the C# name of the field written or read under the
+   naming rule. This is the only one of the three that could catch a Rust field holding its neighbour's value under
+   the correct label.
+
+**The round trips,** all identical:
+
+| Case | What it covers |
+| --- | --- |
+| A running machine, state and snapshot | 300 frames of a synthetic ROM with an EEPROM, 9.7M cycles; a 6,433,277-byte state loaded into an 8 MB MarsRT, which rebuilt itself to 4 MB |
+| Noise in every field, eight cases | every save type, 4 MB and 8 MB, state and snapshot; three paks and an empty port; five stub registers; an SI transfer under way |
+| A snapshot with 37 pending words | the tail written by hand, since the C# thread seldom stands with words unrun |
+| An odd bool | four bool bytes set to 2: MarsRT's re-save equals the C# core's re-save, which writes them back as 1 |
+| `sm64.state`, `oot.state`, `ge-dam.state` | 12,724,733, 12,755,456 and 12,724,733 bytes, all version 1 on 8 MB; copies read through `EMUSEN_MARSRT_STATES`, and passed unrun without it |
+
+The odd-bool case also found that the C# core's own load and save is the identity on that state once the pak's
+dirty flag is already set, which is what made it usable as the oracle there.
+
+**Mutants.** Eighteen were made in the Rust state code. The first sixteen were run against the WiseMan tests; then all
+eighteen were run against those tests and `cargo test`, and each survivor was run again after the test written for it.
+
+| Mutant | Result |
+| --- | --- |
+| `Hi` and `InDelaySlot` exchanged in the writer only | caught: bytes and layout |
+| `Hi` and `Lo` exchange places in both, the names following | caught by the layout only; the real states' bytes came back whole |
+| The RSP's `NextPc` and `Pc` exchanged in the reader only | caught: bytes |
+| `Vi._wasBlank` dropped from both | caught: bytes and layout |
+| `ControllerPak.Dirty` dropped from both | caught: bytes and layout |
+| `DpInterface._current` and `_end` hold each other's values under the right labels | **survived**; caught once `naming.rs` was written for it |
+| `Color` written R, G, B, A in both, the names following | caught by the layout only |
+| The registers written in descending order | caught: bytes (the noise case) |
+| `SiReadTo` left among the registers and `pending_read` not decoded | **survived** the WiseMan tests, whose bytes come back whole; caught by `cargo test`'s whole-machine comparison, which the first round did not run |
+| The SI's due cycle decoded with its halves exchanged | caught: bytes and `cargo test` |
+| The snapshot's padding not written | caught: bytes |
+| A 16 Kbit EEPROM built as SRAM | caught: bytes |
+| A bool read as `== 1` | **survived**, since no C# writer makes another byte; caught once the odd-bool case was written for it |
+| A class's present flag read and ignored | **survived** for the same reason; caught once a `cargo test` that clears one was written |
+| `TextureTile`'s `SH` and `SL` exchanged in the writer | caught: bytes and layout |
+| The RDRAM size check accepting any size | caught: the refusal tests |
+| The snapshot's padding left unread | **survived**, because the padding is the stream's last bytes; caught once MarsRT's refusal of a snapshot cut short inside it was tested |
+| `Eeprom.Large` left as the type built it | caught: the noise case |
+
+None survives the final suite. Two were caught only by an oracle that exists because the bytes could not see them:
+the mislabel (`naming.rs`) and the undecoded SI field (`cargo test`, which compares the Rust machine and not its
+output). Those two are the class a byte-exact claim does not cover by itself.
+
+**What surprised, in the format.**
+
+- **The order is the ordinal order of the names,** not declaration order. So `Color` is A, B, G, R. A backing field
+  (`<`) sorts before every other name, and upper case sorts before an underscore.
+- **The RDP walker's scratch is in every state:** `_edgeLeft`, `_edgeRight`, `_edgeInvalid`, the span arrays and
+  `_coverage`, about 82 KB. The machine's own processor always has 1024 rows. Only the processors that draw at a
+  multiple call `Widen`, and they are not serialized, so the format has a fixed size. If the serialized processor
+  were ever widened, the state would change length with no version change.
+- **The SI's transfer rides among the stub registers,** at three addresses no bus reaches. After a C# save the
+  dictionary keeps them, because writing a state mutates it.
+- **Every present flag in a Mars state is 1,** since every class field is built with its owner. The C# reader, given
+  a 0, reads none of that object's fields and leaves the live object as it was. MarsRT, loading into a fresh machine,
+  leaves power-on values. The two can differ only on bytes no C# writer produces.
+- **The dirty flags are written, and the C# load then forces them true** on the save chip and on every pak. MarsRT
+  keeps what it read, which byte-exactness requires. Marking them dirty is the host's business, and belongs to the
+  shim that later writes the save files.
+- **The C# reader seeks past a snapshot's padding without reading it,** so it accepts a snapshot truncated inside the
+  padding; the test shows it. By its code, and untested, a count over 32,768 makes it read past the tail and then
+  seek backwards. MarsRT refuses both.
+- **`Sram._banks` is serialized, but the data's length is set by the save type,** which is read first. A state whose
+  `_banks` disagrees with its type is read with the type's length by both readers.
+
+**Left out.**
+
+- **Everything `[SkipInState]`.** That is the derived or host state: the CPU's mode, timer and blocks; the bus's next
+  event and write counter; the display processor's ring, threads, stamps, scaled processors and device; the VI's and
+  AI's schedules; the frame buffers; the ROM; `SaveChip._saved`.
+- **What a C# load does after reading:** `Cop0Written`, `AccumulatorWritten`, `Rebase`, `Reschedule`, `Refresh`,
+  `RefreshShadow`, dropping undrained audio, and running pending words. All of it is behaviour and arrives with the
+  stages that own it.
+- **Power-on values.** `Machine::new` is zeros, except where a C# field initializer is a constant: `_lastFrameCycles`,
+  the SI's idle markers, `RiSelect`'s 0x14, and the save chips' 0xFF. The rest is stage 1's boot.

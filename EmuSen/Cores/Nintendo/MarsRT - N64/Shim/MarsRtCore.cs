@@ -69,9 +69,9 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private long _frameSerial, _takenSerial;
         private bool _skipRendering, _idleSkip = true, _rspWhole = true, _repeatRows = true;
 
-        // Off until proven in play, where Mars defaults them on; each is exact either way - see Mars_Native.md §5.6.
-        private bool _threadedRdp, _deferredPresentation, _skipRepeatedScans = true, _verifyRdp;
-        private int _rdpWorkers = 1;
+        // Mars's defaults since 2026-09-22, measured on the desktop and the handheld; each is exact either way - see Mars_Native.md §6.2.
+        private bool _threadedRdp = true, _deferredPresentation = true, _skipRepeatedScans = true, _verifyRdp;
+        private int _rdpWorkers = Math.Clamp(Environment.ProcessorCount / 3, 1, 4);
 
         // The recompiler, on since 2026-09-22 at the tier §5.8.7 recommends; off is the interpreter, exact as well - see Mars_Native.md §5.8.
         private bool _useBlocks = true, _verifyBlocks;
@@ -245,9 +245,9 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         private static CoreSetting Threads(CoreSetting s) => s.Key switch
         {
-            "ThreadedRdp" => s with { Default = "false", Hint = "The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread. Off by default on MarsRT until proven in play." },
-            "RdpWorkers" => s with { Default = "1", Hint = "How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One by default on MarsRT." },
-            "DeferredPresentation" => s with { Default = "false", Hint = "The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been. Off by default on MarsRT until proven in play." },
+            "ThreadedRdp" => s with { Hint = "The display processor runs its lists on a thread of its own, behind marks on the memory it reaches. Exact: frame for frame the machine on one thread." },
+            "RdpWorkers" => s with { Hint = "How many processors share each list when it runs on a thread of its own, each shading every Nth row. Exact at any count: frame for frame the machine on one thread. One per three cores is the default, as on Mars." },
+            "DeferredPresentation" => s with { Hint = "The picture is finished on another thread while the machine runs the next frame, so it reaches the screen one frame late, exactly the picture it would have been." },
             _ => s,
         };
 

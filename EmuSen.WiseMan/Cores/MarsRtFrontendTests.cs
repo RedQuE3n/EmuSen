@@ -267,7 +267,8 @@ namespace EmuSen.WiseMan.Cores
         public void The_frame_handed_out_is_a_copy_the_next_frame_does_not_touch()
         {
             string rom = Rom(SyntheticN64System.Build(rsp: false));
-            using var core = new MarsRtCore(batteryRamDisabled: true);
+            // Presented at once: the synthetic picture changes on alternate frames, and a deferred one shows the same alternation a frame late.
+            using var core = new MarsRtCore(batteryRamDisabled: true) { DeferredPresentation = false };
             core.LoadRom(rom);
             for (int frame = 0; frame < 5; frame++) core.RunFrame();
 

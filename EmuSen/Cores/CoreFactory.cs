@@ -12,6 +12,7 @@ using EmuSen.Cores.Nintendo.Mercury.Debug;
 using EmuSen.Cores.Nintendo.Moon;
 using EmuSen.Cores.Nintendo.Moon.Cheats;
 using EmuSen.Cores.Nintendo.Moon.Debug;
+using EmuSen.Galaxia.Models;
 using EmuSen.Cores.Nintendo.Venus;
 using EmuSen.Cores.Nintendo.Venus.Cheats;
 using EmuSen.Cores.Nintendo.Venus.Debug;
@@ -53,6 +54,10 @@ namespace EmuSen.Cores
             core.LoadRom(romPath);
             return Bundle(core, cheats, venusFrameTimings) with { Notice = EngineNotice(romPath, engine, core) };
         }
+
+        // The engine graphics.json stores for the ROM's console, so every frontend makes the one decision Mistress's row records; null where nothing is stored - see EmuSen_Settings_Reference.md §4.44.
+        public static string? ConfiguredEngine(string romPath) =>
+            CoreCatalog.ConsoleForRom(romPath) is { } console ? GraphicsConfig.Load().Value(console, CoreCatalog.EngineKey) : null;
 
         // Why the engine asked for is not running, or null when it is; an unavailable MarsRT says what MarsNative found - see Mars_Native.md §5.5.
         public static string? EngineNotice(string romPath, string? engine, ICore core)

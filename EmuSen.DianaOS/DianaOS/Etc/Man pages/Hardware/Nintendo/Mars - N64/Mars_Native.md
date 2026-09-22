@@ -1345,7 +1345,8 @@ The switches are `Machine::set_threaded_rdp`, `set_rdp_workers` and `set_deferre
 §5.2 to §5.4 proved therefore stays the default until this one has been proven in play. The shim now honours Mars's
 `ThreadedRdp`, `RdpWorkers`, `DeferredPresentation` and `SkipRepeatedScans` keys, with MarsRT's defaults of off, one,
 off and on. Their hints no longer say "ignored", and the settings still ignored are three: the multiple, antialiasing
-and the device. The interface version is 5, which adds `mars_machine_set_threads` and `mars_threads_counters`
+and the device. *Since 2026-09-22 the shim's defaults are Mars's own — on, one per three cores, on — by §6.2; the
+machine in the library still boots with them off.* The interface version is 5, which adds `mars_machine_set_threads` and `mars_threads_counters`
 (`src/ffi/threads.rs`).
 
 | Module | The C# it ports | Lines |
@@ -1793,7 +1794,7 @@ cache, or the seqlock of the idle ranges. Those are covered only by the tests an
 - Rewind for MarsRT. §5.5 kept it off per console until a snapshot is proven. A snapshot with workers running is now
   proven headlessly in every frame of six games, but turning rewind on is a decision for play.
 - The defaults. The switches are wired through the shim and default off. Whether to turn them on for MarsRT in
-  Mistress is a decision for play, which headless tests cannot make.
+  Mistress is a decision for play, which headless tests cannot make. *Turned on 2026-09-22, §6.2.*
 
 ### 5.7 Where MarsRT stands against the C# core in production (2026-09-22)
 
@@ -2325,6 +2326,18 @@ Three defaults are wrong for a player, and each is a line:
 decision to flip is a play decision as §5.6.10 and §5.8.7 said, and it should follow a session on the desktop and one
 on the handheld with the crash log clean. One thing MarsRT has that the C# core does not, which bears on the risk:
 its pause point for a snapshot is a tested barrier (§5.6.4), where the C# core's is the deadlock §5.6.2 records.
+
+**Done, 2026-09-22, the same evening as §6.1.** The shim's thread defaults are Mars's: `ThreadedRdp` on, `RdpWorkers`
+one per three cores clamped to four, `DeferredPresentation` on, so a player who picks MarsRT gets the configuration
+§5.8.8 and §6.1 measured, and the three hints no longer say "off until proven in play". The `Threads` transform now
+rewrites hints alone and lets Mars's defaults through, so the two engines' rows agree by construction. The tests
+that mean "MarsRT's interpreter on one thread" — `MarsRtTests.Twin` and the frontend comparisons — ask for it by
+name, as §5.8.7 made them ask for the interpreter. `CoreFactory.ConfiguredEngine` reads `graphics.json`'s
+`Consoles.<console>.Engine` for a ROM, and Hotaru, Pharaoh and the probe runner pass it to `Create` and print the
+factory's notice when the engine asked for is not the one running; Mistress reads the same value through its own
+config, so the engine is one decision. **The engine's default is still Mars (C#).** Flipping it is one line in
+`CoreCatalog` and the factory's rule for a null engine, and it waits, as this stage said it should, for a session of
+play on each machine with the crash log clean.
 
 ### 6.3 Stage C: every platform
 

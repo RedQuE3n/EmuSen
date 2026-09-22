@@ -42,8 +42,10 @@ namespace EmuSen.Pharaoh.Reference
                 if (!args[i].StartsWith('-')) stride = long.Parse(args[i], CultureInfo.InvariantCulture);
             }
 
-            ICore core = CoreFactory.Create(romPath, headless: true);
+            string? engine = CoreFactory.ConfiguredEngine(romPath);
+            ICore core = CoreFactory.Create(romPath, headless: true, engine);
             core.LoadRom(romPath);
+            if (CoreFactory.EngineNotice(romPath, engine, core) is { } notice) Console.WriteLine($"[core] {notice}");
 
             return PeerProbe.Run(core, romPath, dumpDir, startFrame, endFrame, stride, wantSignature, taps,
                 Console.WriteLine);

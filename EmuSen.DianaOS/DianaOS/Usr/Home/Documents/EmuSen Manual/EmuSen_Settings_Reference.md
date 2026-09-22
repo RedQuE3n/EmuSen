@@ -1216,9 +1216,11 @@ Mode, and matching `KDE` instead of `gamescope`. Each was caught, the last by tw
 
 Graphics Settings' N64 tab now begins, after the screen filter, with **Engine**, a dropdown of *Mars (C#)* and
 *MarsRT (Rust)*. It is stored in `graphics.json` as `Consoles.N64.Engine`. The default is Mars (C#), so a player who
-never opens the row plays exactly as before, and so does every frontend but Mistress: Hotaru, Pharaoh, the probe and
-the tests build the C# Mars whatever the file says. MarsRT is the N64 core in Rust (`Mars_Native.md` §5), exact
-against Mars in state, picture and sound; what it does and does not do in a frontend is `Mars_Native.md` §5.5.
+never opens the row plays exactly as before. ~~And so does every frontend but Mistress: Hotaru, Pharaoh, the probe and
+the tests build the C# Mars whatever the file says.~~ *Since 2026-09-22 Hotaru, Pharaoh and the probe read the same
+value (`CoreFactory.ConfiguredEngine`) and print the same notice when the engine asked for cannot run; the tests
+build what they ask for.* MarsRT is the N64 core in Rust (`Mars_Native.md` §5), exact against Mars in state, picture
+and sound; what it does and does not do in a frontend is `Mars_Native.md` §5.5.
 
 **When it takes effect.** At the next load of a game. The value decides which core is built, so it is read by
 `LoadGame` before any core exists; a running core cannot become the other engine, and the row's change is not handed
@@ -1232,11 +1234,14 @@ running core between frames, and this one cannot be, so it is declared beside th
 filter is by the frontend (§4.40), and `ApplyConsoleSettings` never hands it to either core.
 
 **The rows below it.** They are Mars's, and they keep their values whichever engine runs. MarsRT honours the
-Expansion Pak and accepts the other seven, checks them as Mars does and ignores them; the Engine row's hint says so,
-and each of MarsRT's own settings says so in its hint. At the time of writing MarsRT draws on the emulation thread and
-takes about twice Mars's time per frame (`Mars_Native.md` §5.7: 13 ms against 6 ms in Super Mario 64 on the
-development desktop), which is inside a frame on that machine and was not measured on a slow one; the row is for
-choosing it, not a recommendation of it.
+Expansion Pak, the three thread rows and Skip Repeated Scans, adds a Recompiler row of its own, and ignores the
+resolution multiple, antialiasing and the device; each row's hint says which. Its defaults are Mars's since
+2026-09-22. ~~At the time of writing MarsRT draws on the emulation thread and takes about twice Mars's time per frame
+(`Mars_Native.md` §5.7: 13 ms against 6 ms in Super Mario 64 on the development desktop), which is inside a frame on
+that machine and was not measured on a slow one; the row is for choosing it, not a recommendation of it.~~ *Retired
+2026-09-22: with its threads and recompiler on, MarsRT measures a little faster than Mars on the development
+desktop and eight to nine per cent faster on a handheld (`Mars_Native.md` §5.8.8 and §6.1). The default stays Mars
+until it has been played on both.*
 
 **When MarsRT cannot run.** If `libmarsrt.so` is missing, speaks another interface, or is turned off with
 `EMUSEN_MARS_NATIVE=0`, the game runs on Mars (C#), and the status bar says so after the game's name, quoting what

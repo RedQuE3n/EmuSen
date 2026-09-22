@@ -328,6 +328,154 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // Random programs of every instruction class over edge-valued registers, stepped by both interpreters from one state and compared whole.
+        [Theory]
+        [MemberData(nameof(Seeds))]
+        public void A_random_program_leaves_the_state_the_csharp_interpreter_leaves(int seed)
+        {
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            const int Steps = 24_000, Stride = 16;
+            string rom = Temporary(SyntheticN64Rom.Build());
+            MarsCore oracle = Oracle();
+            oracle.LoadRom(rom);
+            Randomise(oracle, new Random(seed));
+            byte[] start = Save(oracle);
+            oracle.LoadState(new MemoryStream(start));
+
+            using MarsRtCore twin = Twin();
+            twin.LoadRom(rom);
+            twin.LoadState(start);
+            var seen = new HashSet<ulong>();
+            long before = oracle.Cpu!.Instructions;
+            for (int i = 0; i < Steps; i += Stride)
+            {
+                for (int j = 0; j < Stride; j++)
+                {
+                    seen.Add(oracle.Cpu!.Pc);
+                    oracle.Cpu!.Step();
+                }
+                twin.RunSteps(Stride);
+                byte[] rust = twin.SaveProcessor();
+                using var csharp = new MemoryStream();
+                using (var w = new BinaryWriter(csharp, System.Text.Encoding.UTF8, leaveOpen: true)) EmuSen.Common.StateSerializer.Write(w, oracle.Cpu!);
+                Assert.True(csharp.ToArray().AsSpan().SequenceEqual(rust) && oracle.Bus!.Cycles == twin.Cycles, $"seed {seed}: the processors part after {i + Stride} steps (C# pc {oracle.Cpu!.CurrentPc:X}, cycles {oracle.Bus!.Cycles} and {twin.Cycles})");
+            }
+            _output.WriteLine($"seed {seed}: {oracle.Cpu!.Instructions - before} instructions, {seen.Count} addresses");
+
+            new StateComparer(ignoreRdp: false).Frame(seed, Save(oracle), twin.Save(false));
+            Assert.True(oracle.Cpu!.Instructions > Steps / 20, "almost every step raised, so the test compared little");
+        }
+
+        public static TheoryData<int> Seeds()
+        {
+            var data = new TheoryData<int>();
+            for (int seed = 1; seed <= 160; seed++) data.Add(seed);
+            return data;
+        }
+
+        private static readonly ulong[] Edges =
+        {
+            0, 1, 2, 3, 0x7F, 0x80, 0xFF, 0x7FFF, 0x8000, 0xFFFF, 0x7FFF_FFFF, 0x8000_0000, 0xFFFF_FFFF, 0x1_0000_0000,
+            0x7FFF_FFFF_FFFF_FFFF, 0x8000_0000_0000_0000, 0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF_8000_0000, 0xFFFF_FFFF_7FFF_FFFF, 0xFFFF_FFFF_FFFF_FFFE,
+        };
+
+        // Floats from every class: zeros, normals, the extremes, infinities, both NaNs, and subnormals, in either width.
+        private static readonly ulong[] FloatEdges =
+        {
+            0x0000_0000, 0x8000_0000, 0x3F80_0000, 0xBF80_0000, 0x4040_0000, 0x3EAA_AAAB, 0x7F7F_FFFF, 0x0080_0000, 0x7F80_0000, 0xFF80_0000,
+            0x7FC0_0000, 0x7FBF_FFFF, 0x0000_0001, 0x4F00_0000, 0xCF00_0000, 0x3F00_0000,
+            0x3FF0_0000_0000_0000, 0xBFF0_0000_0000_0000, 0x4000_0000_0000_0000, 0x7FEF_FFFF_FFFF_FFFF, 0x0010_0000_0000_0000, 0x7FF0_0000_0000_0000,
+            0x7FF8_0000_0000_0000, 0x7FF7_FFFF_FFFF_FFFF, 0x0000_0000_0000_0001, 0x43E0_0000_0000_0000, 0xC3E0_0000_0000_0000, 0x4330_0000_0000_0000,
+        };
+
+        private static ulong Value(Random r) => r.Next(3) switch
+        {
+            0 => Edges[r.Next(Edges.Length)],
+            1 => (ulong)(long)(short)r.Next(-40, 40),
+            _ => (ulong)r.NextInt64() ^ ((ulong)r.Next(2) << 63),
+        };
+
+        private const uint ProgramAt = 0x0400, ProgramWords = 0x2000, DataAt = 0x0010_0000;
+
+        // Registers, FPU, COP0's timer, the TLB and memory set at random; s0-s7 point into the data, t8 and t9 into the program.
+        private static void Randomise(MarsCore core, Random r)
+        {
+            Cpu cpu = core.Cpu!;
+            MemoryBus bus = core.Bus!;
+            for (int i = 1; i < 32; i++) cpu.Gpr[i] = r.Next(4) == 0 && i > 1 ? cpu.Gpr[r.Next(1, i)] : Value(r);
+            for (int i = 16; i < 24; i++) cpu.Gpr[i] = 0xFFFF_FFFF_8000_0000UL | (DataAt + (uint)(i - 16) * 0x1000 + (uint)r.Next(0x100) * 8);
+            cpu.Gpr[24] = 0xFFFF_FFFF_8000_0000UL | (ProgramAt + (uint)r.Next((int)ProgramWords) * 4);
+            cpu.Gpr[25] = 0xFFFF_FFFF_8000_0000UL | (ProgramAt + (uint)r.Next((int)ProgramWords) * 4);
+            for (int i = 0; i < 32; i++) cpu.Fpr[i] = r.Next(3) == 0 ? (ulong)r.NextInt64() : FloatEdges[r.Next(FloatEdges.Length)] | (r.Next(4) == 0 ? (ulong)r.NextInt64() << 32 : 0);
+            cpu.Fcsr = (uint)r.Next(4) | (r.Next(3) == 0 ? Cpu.FcsrFlushToZero : 0) | (r.Next(6) == 0 ? (uint)r.Next(0x20) << 7 : 0);
+            cpu.Hi = Value(r);
+            cpu.Lo = Value(r);
+            cpu.Cop0[Cpu.StatusRegister] = 0x3400_0000UL | (r.Next(2) == 0 ? 0x8001UL : 0) | (r.Next(4) == 0 ? 0xE0UL : 0);
+            cpu.Cop0[Cpu.CompareRegister] = bus.Count + (uint)r.Next(1, 20_000);
+            for (int i = 0; i < 32; i++)
+            {
+                ref TlbEntry entry = ref cpu.Tlb.Entries[i];
+                entry.PageMask = Tlb.PairedPageMask((ulong)r.Next() & Cpu.PageMaskWritable);
+                entry.EntryHi = ((ulong)r.Next(0x40) << 13) | (ulong)r.Next(4);
+                entry.EntryLo0 = (((ulong)(0x100 + r.Next(0x100)) << 6) | (ulong)r.Next(8) << 3 | (ulong)r.Next(8)) & Tlb.EntryLoKept | (ulong)(i & 1);
+                entry.EntryLo1 = (((ulong)(0x100 + r.Next(0x100)) << 6) | (ulong)r.Next(8) << 3 | (ulong)r.Next(8)) & Tlb.EntryLoKept | (ulong)(i & 1);
+            }
+
+            // Each vector steps over the faulting instruction and returns; the program and its data are random.
+            uint[] handler = { 0x401A_7000, 0x275A_0004, 0x409A_7000, 0x4200_0018 };
+            foreach (uint vector in new uint[] { 0x000, 0x080, 0x180 })
+                for (int i = 0; i < handler.Length; i++) Put(bus.Rdram, vector + (uint)i * 4, handler[i]);
+            for (uint i = 0; i < ProgramWords; i++) Put(bus.Rdram, ProgramAt + i * 4, Instruction(r));
+            for (uint i = 0; i < 0x8000; i += 4) Put(bus.Rdram, DataAt + i, (uint)Value(r));
+            cpu.Pc = 0xFFFF_FFFF_8000_0000UL | ProgramAt;
+            cpu.NextPc = cpu.Pc + 4;
+            cpu.Cop0Written();
+        }
+
+        private static void Put(byte[] rdram, uint at, uint word) => System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(rdram.AsSpan((int)at), word);
+
+        private static readonly uint[] SpecialFunctions =
+        {
+            0x00, 0x02, 0x03, 0x04, 0x06, 0x07, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+            0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x36, 0x38, 0x3A, 0x3B, 0x3C, 0x3E, 0x3F,
+        };
+
+        private static readonly uint[] MemoryOps =
+        {
+            0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x1A, 0x1B, 0x37, 0x3F, 0x30, 0x34, 0x38, 0x3C, 0x31, 0x35, 0x39, 0x3D, 0x2F,
+        };
+
+        private static readonly int[] Cop0Registers = { 0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 13, 14, 16, 17, 20, 26, 27, 28, 29, 30, 7, 31 };
+
+        private static uint Instruction(Random r)
+        {
+            uint R(int bits) => (uint)r.Next(1 << bits);
+            uint Imm() => r.Next(2) == 0 ? R(16) : (ushort)(short)r.Next(-9, 9);
+            // A third of the two-register forms name one register twice, so equal operands are common.
+            uint Pair() { uint rs = R(5); return rs << 21 | (r.Next(3) == 0 ? rs : R(5)) << 16; }
+            // Branches mostly forward, so a loop a taken branch closes does not hold the program in a few words.
+            uint Offset() => (ushort)(short)(r.Next(32) == 0 ? r.Next(-8, 0) : r.Next(1, 9));
+            int roll = r.Next(100);
+            return roll switch
+            {
+                < 22 => Pair() | R(5) << 11 | R(5) << 6 | SpecialFunctions[r.Next(SpecialFunctions.Length)],
+                < 34 => (uint)new[] { 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x18, 0x19 }[r.Next(10)] << 26 | R(5) << 21 | R(5) << 16 | Imm(),
+                < 48 => MemoryOps[r.Next(MemoryOps.Length)] << 26 | (uint)r.Next(16, 24) << 21 | R(5) << 16 | (ushort)(short)(r.Next(-16, 16) * (r.Next(3) == 0 ? 1 : 8)),
+                < 55 => (uint)new[] { 0x04, 0x05, 0x06, 0x07, 0x14, 0x15, 0x16, 0x17 }[r.Next(8)] << 26 | Pair() | Offset(),
+                < 58 => 0x0400_0000u | R(5) << 21 | (uint)new[] { 0, 1, 2, 3, 0x10, 0x11, 0x12, 0x13, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0E }[r.Next(14)] << 16 | Offset(),
+                < 60 => (r.Next(2) == 0 ? 0x0800_0000u : 0x0C00_0000u) | ((0x8000_0000u | ProgramAt + (uint)r.Next((int)ProgramWords) * 4) >> 2 & 0x03FF_FFFF),
+                < 61 => (uint)r.Next(24, 26) << 21 | R(5) << 11 | (r.Next(2) == 0 ? 0x08u : 0x09u),
+                < 76 => 0x4400_0000u | (uint)new[] { 0x10, 0x11, 0x14, 0x15, 0x10, 0x11 }[r.Next(6)] << 21 | R(5) << 16 | R(5) << 11 | R(5) << 6 | R(6),
+                < 81 => 0x4400_0000u | (uint)new[] { 0, 1, 2, 4, 5, 6, 8, 3, 7 }[r.Next(9)] << 21 | R(5) << 16 | (r.Next(3) == 0 ? 31u : R(5)) << 11 | Offset(),
+                < 86 => 0x4000_0000u | (uint)new[] { 0, 1, 4, 5, 2, 8 }[r.Next(6)] << 21 | R(5) << 16 | (uint)Cop0Registers[r.Next(Cop0Registers.Length)] << 11,
+                < 88 => new uint[] { 0x4200_0001, 0x4200_0002, 0x4200_0006, 0x4200_0008, 0x4200_0018, 0x4200_0010, 0x4200_0020 }[r.Next(7)],
+                < 90 => new uint[] { 0x0000_000C, 0x0000_000D, 0x0000_000F }[r.Next(3)],
+                < 93 => 0x4800_0000u | (uint)new[] { 0, 1, 2, 4, 5, 6, 3 }[r.Next(7)] << 21 | R(5) << 16 | R(5) << 11,
+                < 95 => 0xBC00_0000u | (uint)r.Next(16, 24) << 21 | R(5) << 16 | (ushort)(short)(r.Next(-8, 8) * 4),
+                _ => (uint)r.Next() ^ ((uint)r.Next(2) << 31),
+            };
+        }
+
         private static double Time(int frames, Action frame)
         {
             var clock = Stopwatch.StartNew();

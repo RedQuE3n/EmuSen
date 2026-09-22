@@ -33,6 +33,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, byte*, nuint, int*, long> SaveData = (delegate* unmanaged<nint, byte*, nuint, int*, long>)MarsNative.Export("mars_machine_save_data");
         private static readonly delegate* unmanaged<nint, byte*, nuint, int*, long> PakData = (delegate* unmanaged<nint, byte*, nuint, int*, long>)MarsNative.Export("mars_machine_pak_data");
         private static readonly delegate* unmanaged<nint, uint, void> MarkSaved = (delegate* unmanaged<nint, uint, void>)MarsNative.Export("mars_machine_mark_saved");
+        private static readonly delegate* unmanaged<nint, byte*, nuint, long> SaveCpu = (delegate* unmanaged<nint, byte*, nuint, long>)MarsNative.Export("mars_machine_save_cpu");
         private static readonly delegate* unmanaged<nint, uint*, ulong, ulong> TakeRegions = (delegate* unmanaged<nint, uint*, ulong, ulong>)MarsNative.Export("mars_machine_take_rdp_regions");
 
         private const ushort ButtonA = 0x8000, ButtonB = 0x4000, ButtonZ = 0x2000, ButtonStart = 0x1000;
@@ -318,6 +319,14 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             fixed (byte* data = state) written = SaveStateExport(Handle, data, (nuint)state.Length, snapshot ? 1u : 0);
             if (written < 0) throw new InvalidDataException($"MarsRT could not write the state: {MarsMachine.Describe(written)}.");
             return state;
+        }
+
+        // The CPU's fields alone, as StateSerializer writes a Cpu, for a comparison made every few instructions.
+        public byte[] SaveProcessor()
+        {
+            var bytes = new byte[SaveCpu(Handle, null, 0)];
+            fixed (byte* data = bytes) SaveCpu(Handle, data, (nuint)bytes.Length);
+            return bytes;
         }
 
         private long Counter(int index)

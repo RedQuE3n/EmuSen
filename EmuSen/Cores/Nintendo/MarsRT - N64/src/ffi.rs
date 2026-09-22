@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::machine::Machine;
 use crate::rom::RomImage;
-use crate::state::StateResult;
+use crate::state::{State, StateResult, StateWriter};
 use crate::vi_scan::{self, Scanout};
 
 /// A null handle or buffer.
@@ -424,4 +424,21 @@ pub unsafe extern "C" fn mars_machine_mark_saved(core: *mut Core, which: u32) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mars_machine_vi_fields(core: *const Core) -> i64 {
     unsafe { core.as_ref() }.map_or(0, |c| c.machine.bus.vi.fields)
+}
+
+/// The CPU's fields alone, as C#'s `StateSerializer.Write(w, cpu)` writes them; returns the bytes, or a negative status.
+///
+/// # Safety
+/// `core` must be live or null; `out` valid for `len` bytes, or null to ask the length.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mars_machine_save_cpu(core: *const Core, out: *mut u8, len: usize) -> i64 {
+    let Some(c) = (unsafe { core.as_ref() }) else { return STATUS_NULL as i64 };
+    if out.is_null() {
+        let mut w = StateWriter::counter();
+        c.machine.cpu.write_state(&mut w);
+        return w.len() as i64;
+    }
+    let mut w = StateWriter::new(unsafe { std::slice::from_raw_parts_mut(out, len) });
+    c.machine.cpu.write_state(&mut w);
+    if w.overflowed() { STATUS_NULL as i64 } else { w.len() as i64 }
 }

@@ -177,7 +177,7 @@ namespace EmuSen.Cores
         private static readonly Dictionary<string, CoreSetting> EngineByConsole = new(StringComparer.OrdinalIgnoreCase)
         {
             ["N64"] = new(EngineKey, "Engine",
-                "Which implementation runs the console. Mars (C#) is the reference. MarsRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; of the settings below it honours only the Expansion Pak so far. Takes effect when a game is next loaded.",
+                "Which implementation runs the console. Mars (C#) is the reference. MarsRT (Rust) is exact against it in state, picture and sound and reads the same save states and battery saves; of the settings below it honours only the Expansion Pak so far, and it takes about twice Mars's time per frame while its display processor shares the emulation thread. Takes effect when a game is next loaded.",
                 CoreSettingKind.Choice, MarsEngine, Choices: new[] { MarsEngine, MarsRtEngine }),
         };
 

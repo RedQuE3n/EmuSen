@@ -18,10 +18,12 @@ below kept their `emusen_native_` names, because the C# Mars's twin already spea
 `EmuSen/obj/marsrt/` so that the build's output stays where MSBuild already ignores it, and copies the library beside
 the assemblies as a `None` item. MSBuild carries that item into every consumer's output (Mistress, Hotaru, WiseMan)
 and into a publish. Cargo runs only for the host's own runtime identifier. A publish for another platform, or a
-machine without cargo, gets no library.
+machine without cargo, gets no library. A `-r linux-x64` publish on this machine, whose SDK names the host
+`fedora.44-x64`, does get it, because the runtime identifier is not passed on to `EmuSen.csproj` (§5.5.3).
 
 `MarsNative` loads it from `AppContext.BaseDirectory`. It refuses a library whose `emusen_native_interface_version` is
-not the build's (3 since §5.2 gave the machine its behaviour, 2 since §5.1 added its state, 1 before), and installs
+not the build's (4 since §5.5 gave the host the machine's memories and a frame in two halves, 3 since §5.2 gave the
+machine its behaviour, 2 since §5.1 added its state, 1 before), and installs
 the panic log. `EMUSEN_MARS_NATIVE=0` turns the library off. **Every component falls back to its C# twin when the
 library is absent, refused or off.**
 `MarsNativeTests` pins the load.
@@ -221,6 +223,7 @@ measurement the whole of Phase G used, applied across two languages.
 **What is deliberately kept out:**
 - The debugger's deep inspection: the Rust core serves the debug target through the state transfer, not live.
 - The coverage recorder, single-stepping and cheats: these run on the C# core until the Rust one has an equivalent.
+  *Cheats since §5.5:* MarsRT applies the registry as Mars does; the coverage recorder and single-stepping are still out.
 
 **Why the port may still fail to pay,** stated before it starts:
 - The C# core's remaining costs are memory traffic in the recompiler (`Mars_Recompiler.md` §12.3), the RSP's lock-step
@@ -466,7 +469,7 @@ respect, described below.
   audio and read its rate, and read the picture, the counters, the IS-Viewer's transcript, the CPU's fields alone,
   and the save chip and pak for the host to write. The interface version is 3. `MarsRtCore` implements `ICore`,
   `ISnapshotCore`, `IStateFormat`, `IFrameSerial` and `IRepeatedRows` over it, with `MarsCore`'s button map, stick
-  reach and save paths. It is not registered in `CoreFactory`.
+  reach and save paths. ~~It is not registered in `CoreFactory`.~~ It is, since §5.5, behind a setting.
 
 #### 5.2.1 The evidence
 
@@ -716,8 +719,8 @@ and its raster with it.
 - **The debugger:** breakpoints, coverage, the call stack's observers, watches and the frame log. `RunFrame`'s
   debugging loop is not ported. MarsRT runs `RunQuietly`'s loop, the C# path taken when nothing is armed.
 - **Cheats, `ICoreSettings`, the multiple, antialiasing, the device and deferred presentation.** The shim scans at
-  one, immediately.
-- **`CoreFactory` registration.** Nothing chooses MarsRT yet.
+  one, immediately. *Cheats and `ICoreSettings` arrived in §5.5; the rest is still out.*
+- ~~**`CoreFactory` registration.** Nothing chooses MarsRT yet.~~ *§5.5: a per-console setting chooses it.*
 
 ### 5.3 The RDP
 
@@ -1108,6 +1111,216 @@ machine stage's decision.
 **Left for the machine stage.** The call itself: the machine calls `scan` at the field's end, where `RunFrame` calls
 `Present`, and after a load, where `LoadState` does, and does not reset the `Scanout` when it loads. The deferred
 presentation, the repeat test, the bands, the multiple and the device are not ported.
+
+### 5.5 MarsRT in the frontends (2026-09-22)
+
+MarsRT can now run a game in Mistress. The graphics window's N64 tab has an **Engine** row, *Mars (C#)* or *MarsRT
+(Rust)*, stored in `graphics.json` as `Consoles.N64.Engine`. The default is Mars (C#), and nothing chooses MarsRT
+unless the player does. `EmuSen_Settings_Reference.md` §4.44 is the player's side of the switch; this section is the
+core's. The claim is narrower than §5.2's. It is not that MarsRT is exact, which §5.2 to §5.4 prove, but that what a
+frontend does with a Mars core it now does with MarsRT, by the same rules, and that where it cannot, the frontend is
+told.
+
+**Where the choice is stored, and why there.** Two places were weighed: `AppSettings` (`appsettings.json`), and a key
+beside the core settings in `graphics.json`.
+
+- *The choice is per console.* It picks an N64 implementation; a second implementation of another console would be
+  another console's key. `graphics.json`'s `Consoles` is the one store keyed by console, and `AppSettings` would need a
+  per-console map invented for one entry.
+- *The window already builds such a row.* It builds a dropdown from any `CoreSetting` of kind `Choice`, so the engine
+  cost one catalogue entry and a few lines of window code. The preferences' one earlier core picker was removed
+  (§4.36 of the settings reference) because it drove nothing and aliased the library filter, and a picker there would
+  repeat that shape.
+- *The engine is not one of the core's settings.* `ICoreSettings.Set` is applied to a running core between frames.
+  The engine decides which core exists, so it is read before any core does, and no core could apply it. It is
+  therefore declared by the catalogue (`CoreCatalog.EngineFor`), not listed in `SettingsFor`, which stays "the settings
+  the core offers", and `ApplyConsoleSettings` hands a core only the keys it declares. The screen filter (§4.40 of the
+  settings reference) set the precedent: a key stored beside the core's, and owned by someone else.
+- *The cost of the choice.* A change while a game runs does nothing until the next load, as the Expansion Pak's does
+  after the first frame. The row's hint says so.
+
+**The value's path.** `MainWindow.LoadGame` reads the value for the ROM's console (`CoreCatalog.ConsoleForRom`) and
+sets `EmulatorSession.Engine` before `LoadRom`. The session passes it to `CoreFactory.Load(…, engine)`, which builds
+`MarsRtCore` only when the value is *MarsRT (Rust)* and `MarsRtCore.Available` holds. Every other caller of the factory
+(Hotaru, Pharaoh, the probe, the tests) passes no engine and gets the C# Mars, as before.
+
+**The fallback.** When MarsRT is asked for and the library is absent, refused or turned off (`EMUSEN_MARS_NATIVE=0`),
+the factory builds the C# Mars, and `CoreBundle.Notice` says why, quoting `MarsNative.Report`: *"MarsRT (Rust) is not
+available (turned off by EMUSEN_MARS_NATIVE=0); Mars (C#) is running."* Mistress appends it to the status line after
+the game's name and prints it with `[core]`. An engine name the build does not know, such as a hand edit, runs the
+default and says that instead.
+
+**What the shim now implements for a frontend.**
+
+- **Settings.** `MarsRtCore.VideoSettings` is Mars's list, key for key, so one tab serves either engine and a value set
+  under one is kept for the other. Only `ExpansionPak` acts: before the first frame it rebuilds the machine, and after
+  it the change waits for the next load, as Mars's does. The other seven are accepted and checked by their kind: a
+  switch must be a boolean, a count is clamped to its range, and a choice must be one of its names, so a hand edit
+  falls back to the default in Mistress as it does for Mars. They are then recorded, read back and ignored. Each one's
+  hint begins "MarsRT does not implement this yet and ignores it." Those are the hints the core answers. The window
+  shows the catalogue's, which are Mars's, so the Engine row's hint carries the qualification there.
+- **Cheats, in `MarsCore.RunFrame`'s order.** They are applied after the frame, before the periodic save and before
+  the picture, and only while Status.IE is set (`Mars_Cheats.md` §5.1). That order needed the frame split in two:
+  `mars_machine_advance` runs the machine to the field's end, and `mars_machine_present` scans. `ApplyCheats`, the
+  paused frontend's Apply, is not held, as Mars's is not. Reads and writes go a byte at a time through
+  `mars_machine_read_memory` and `mars_machine_write_memory` by space number: RDRAM, DMEM, IMEM and PIF RAM. Past a
+  memory's end a read is zero and a write is dropped, as `ReadForCheat` and `WriteForCheat` have it. A write that lands
+  counts as one the idle loop would see (`Written`), as C#'s does. The gate reads `mars_machine_cop0(12)`.
+- **ROM patches are not applied.** C# consults `CheatRomPatcher` on every cartridge read. MarsRT would need either a
+  call from Rust into C# on that path, which §3.2 rules out, or the patch list held beside the cartridge reads in
+  `memory/bus_access.rs`, which this stage did not own. No N64 code format produces a ROM patch (the explicit codec
+  slot is empty, `Mars_Cheats.md` §1). So only a patch added to the registry by hand is affected, and on MarsRT it is
+  silently not applied.
+- **Battery saves** are as §5.2 left them: the `.srm` and `.mpk` are read at `LoadRom` through
+  `SaveLibrary.SramPathFor` and `AtomicFile`, `CoreOptions.BatteryRamDisabled` is latched there, and a changed chip or
+  pak is written by `SaveSram` and on every 300th frame. What is new is the evidence below.
+- **The frame handed out is a copy.** `GetFrameBufferRgba` returns a new array each call. The shim refills one buffer
+  per picture, and Mistress hands the array to its render thread, so a live array would be written by the next frame
+  while it is drawn. MarsCore hands out its live buffer and has the same exposure on its immediate path; that was not
+  changed here. The cost is one allocation of the frame's size per picture shown.
+- **The debugger.** `MarsRtDebugTarget` gives the console Mars's memory names: RDRAM, DMEM, IMEM, PIFRAM, ROM (read
+  only), and CPU, the processor's kernel view through the direct segments and the TLB, never faulting. It gives the
+  CPU's, the RSP's and the VI's registers, disassembly by Mars's two disassemblers, the summary and the cheats. Both
+  processors are published with `CanHalt = false`, so `bp` and `step` refuse with "cannot be halted by this core"
+  rather than arming a registry nothing consults. Watches, the frame log, coverage, the call stack, labels and the
+  dashboard's audio peek are absent or inert. The memory exports read memories only, never registers, so a read
+  disturbs nothing.
+- **One thread.** The shim must be driven from one thread. A state load replaces the Rust machine, and a read racing
+  it would read freed memory, where the C# Mars's arrays are merely racy. Every current caller is on the emulation
+  thread: the frame loop, and the console, whose commands Mistress drains there.
+- **Rewind stays off for MarsRT.** §4.21b of the settings reference turned it off for Mars because a snapshot taken
+  with several rasteriser workers hung. MarsRT has no workers, so that reason does not reach it today. But §5.6 gives
+  it a threaded RDP, and the rule is kept per console until a snapshot is proven there, rather than argued per engine.
+- **States** are unchanged: MarsRT reads and writes Mars's format (§5.1), version 1 through `IStateFormat`. A state
+  of the other memory size rebuilds the machine in Rust, and the shim's `ExpansionPak` now follows it, as MarsCore's
+  `_expansionPak` does. A state's record gives the same core name for both engines, so it does not say which wrote it.
+
+**The C ABI, interface 4.** The new exports are `mars_machine_advance`, `_present`, `_memory_size`, `_read_memory`,
+`_write_memory`, `_cop0`, `_cpu_registers`, `_rsp_registers` and `_vi_registers`. The spaces are numbered 0 RDRAM,
+1 DMEM, 2 IMEM, 3 PIF RAM, 4 ROM and 5 CPU; status −10 names no space, and −11 refuses a write to ROM.
+`mars_machine_run_frame` stays for the test ABI.
+
+**What a threaded RDP will owe this section.** C#'s cheat and debugger accesses call `Dp.WaitFor` before touching
+RDRAM, because the threaded RDP may still be drawing into it. MarsRT runs its RDP inline, so there is nothing to wait
+for. `Core::read_memory` and `Core::write_memory` in `ffi/mod.rs` are the one place cheats and the debugger reach
+RDRAM, and §5.6's wait belongs there. Until it is added, a threaded MarsRT's cheats would race its RDP.
+
+#### 5.5.1 The evidence
+
+The tests run the real code paths on WiseMan's headless platform. Where a C# counterpart exists, it is the oracle.
+
+1. **Mistress, a real window** (`MarsRtEngineTests`). A `SyntheticN64System` cartridge with a 4 Kbit EEPROM, which
+   writes EEPROM block 2 every other field, sits in a sandboxed library.
+   - The N64 tab has the Engine row with both names and *Mars (C#)* selected, and no other console has one. Choosing
+     MarsRT stores it.
+   - The game runs on Mars until MarsRT is chosen, and on MarsRT after. Its frames advance, the frame serial moves,
+     and the rewind buffer stays empty.
+   - A state saved by the hotkey on MarsRT loads into a C# Mars. A load by the hotkey returns MarsRT to within the
+     sixty frames the test allows.
+   - **The battery save.** A marker is placed in block 5 of the `.srm`, which the cartridge never writes. After forty
+     frames and a return to the library, the file holds the marker, so the start read it, and new bytes in block 2, so
+     the stop wrote them. A C# Mars loads the same bytes.
+   - A cheat imported from a `.cht` file into the window's own registry reaches RDRAM.
+   - **The fallback, in a process of its own.** `MarsNative` loads once per process, so the variable cannot be set
+     after the fact. The test starts `dotnet test` on one test of the same assembly with `EMUSEN_MARS_NATIVE=0`. That
+     child opens a window, asks for MarsRT, and records what it got: `MarsCore`, the report "turned off by
+     EMUSEN_MARS_NATIVE=0", and the notice, which was also in the status line. The parent reads the record, so a child
+     that ran nothing fails.
+2. **The core** (`MarsRtFrontendTests`, `MarsRtSaveFileTests`).
+   - The factory builds MarsRT for `.z64`, `.n64` and `.v64` only when asked, with the GameShark codec and the new
+     target. An unknown engine name runs Mars, and the notice names it.
+   - The settings: Mars's keys and each hint; ignored values checked and read back; unknown keys refused; the
+     Expansion Pak rebuilding before the first frame and not after; and a 4 MB state carrying the Pak into an 8 MB
+     machine.
+   - Cheats: a `.cht` import landing at the frame's end; interrupts off holding a cheat in both engines while Apply
+     does not; every writable space reached, and nothing past an end or in ROM.
+   - **With a cheat on, MarsRT and Mars agree for sixty frames.** Both run the synthetic system with a code that writes
+     two pixels inside the visible picture and a word the handler counts in. Their save states and their pictures are
+     compared after every frame.
+   - The frame is a copy the next frame does not touch.
+   - `disasm`, `regs` and `mem` work, `bp` and `step` refuse, and the CPU space follows the TLB the game set, compared
+     at seven addresses with Mars's own target.
+   - Battery: a save read and written back for either engine to read; nothing written when nothing changed; a saved
+     chip written again only after it changes again; the three-hundredth frame's save; and `batteryRamDisabled`
+     reading and writing nothing.
+3. **Super Mario 64's Unlimited Lives.** This uses a scratch copy of the European cartridge, the libretro database's
+   `.cht` for it, and its code `803094DD 0064`, imported through `CheatImport.FromChtFile` with the bundle's codec.
+   Both engines are started from `sm64.state` with the cheat on and run 120 frames. RDRAM `0x3094DD` is `0x64`, and
+   the two engines' 12.7 MB states are identical. It runs only with `EMUSEN_MARSRT_STATES` and `EMUSEN_MARSRT_SM64_CHT`
+   set, and passes unrun without them.
+4. **`cargo test`:** five tests on the memory exports, 319 in all.
+
+The blast radius was run as well: every `MarsRt*`, `MarsNative*`, `MarsCoreSettings`, `MarsDebug`, `MarsSaveFile`,
+`MarsCheat` and `CoreFactoryCheatWiring` class, the graphics window's two classes, and the save-state thread tests.
+All 569 passed after WiseMan's regrouping was merged, and the whole WiseMan suite, 6,554 tests, passed once at the end.
+
+#### 5.5.2 Mutants
+
+Thirteen were made, each applied alone and run against the three new classes, and the Rust ones against `cargo test`
+as well.
+
+| Mutant | Caught by |
+| --- | --- |
+| The gate removed: cheats applied with interrupts off | the interrupts-off test |
+| The gate inverted | four: both `.cht` imports, the interrupts-off test, the sixty-frame comparison |
+| Cheats applied after the picture rather than before | the sixty-frame comparison alone, by its picture |
+| The `.srm` not handed to the machine at load | the core's and Mistress's battery tests |
+| A changed chip not written | four battery tests |
+| The chip not marked saved after writing | the written-again test, **which was written for it** |
+| No save on the three-hundredth frame | the three-hundredth-frame test |
+| The battery switch ignored | the `batteryRamDisabled` test |
+| The live frame buffer handed out | the copy test |
+| The factory building MarsRT without asking whether it is there | the fallback, in its child process |
+| Rewind left on for MarsRT | Mistress's run test, by the buffer's depth |
+| A landed write not counted as one the idle loop sees (Rust) | `cargo test` alone; **equivalent between frames** |
+| The CPU space ignoring the TLB (Rust) | **survived**, then caught once the TLB comparison was written |
+
+**What the pattern says.**
+- *Two had no test before they were made.* No test asked for a save to be written twice, and none read a mapped
+  address through the CPU space, so neither the saved mark nor the TLB was held. A test was written for each; the
+  first was written before its mutant ran, the second after the mutant survived.
+- *One is equivalent at the level a host can see.* A cheat writes between frames, when no idle run is in progress to
+  compare the counter against, so leaving `Written` alone changes nothing a frame computes. The Rust test pins it
+  because C# counts it, and because a threaded RDP (§5.6) may make a write outside a frame matter.
+- *The order mutant is caught by one oracle only,* the comparison of pictures. A cheat that writes outside the frame
+  buffer leaves the same state whichever side of the scan it runs.
+
+#### 5.5.3 The publish, and a defect predicted and refuted
+
+**The prediction.** `EmuSen.csproj` runs cargo only when `RuntimeIdentifier` is empty or equals
+`NETCoreSdkRuntimeIdentifier`, and this machine's Fedora-built SDK names the host `fedora.44-x64`. From reading the
+condition, a `-r linux-x64` publish looked as though it would get no library, and `out/linux-x64/Mistress` has none.
+
+**The measurement refuted it.** The requested command (`dotnet publish EmuSen.Mistress -c Release -r linux-x64
+--self-contained true -p:DebugType=none -p:ErrorOnDuplicatePublishOutputFiles=false`), run on the unmodified tree into
+a scratch folder, put `libmarsrt.so` in `lib/EmuSen/` with every export. The runtime identifier given to the publish
+is not passed on to the referenced library project, which builds for no identifier, and so for the host. The copy in
+`out/` predates the library. The condition was not changed.
+
+**The load, headless.** A throwaway console program, run by the system `dotnet`, set its base directory to the
+published `lib/EmuSen/` and loaded that folder's own `EmuSen.dll`. It wrote `Consoles.N64.Engine = MarsRT (Rust)` into a
+scratch `graphics.json`, read the value back and set it on an `EmulatorSession`, as `LoadGame` does, and loaded a
+scratch copy of Super Mario 64.
+
+| Run | Library | Core | Result |
+| --- | --- | --- | --- |
+| As published | the published `libmarsrt.so`, interface 4 | `MarsRtCore` | 300 frames and a 640×576 picture |
+| `EMUSEN_MARS_NATIVE=0` | turned off | `MarsCore` | the notice, "turned off by EMUSEN_MARS_NATIVE=0" |
+| The library moved aside | "not found beside the assemblies" | `MarsCore` | the notice, quoting that |
+
+This checks the published core and the published factory, not the published window. The window's own path is
+§5.5.1's first group, on the build tree.
+
+#### 5.5.4 What is left
+
+- ROM-patch cheats, as argued above.
+- The debugger's breakpoints, stepping, watches, coverage, call stack and labels, all of which need hooks inside the
+  Rust loop. The deep inspection §5 planned through the state transfer was not built.
+- The seven settings MarsRT ignores. Each arrives with the stage that implements it: the threaded RDP and deferred
+  presentation with §5.6, and the multiple, antialiasing and the device later.
+- The wait a threaded RDP will need in `Core::read_memory` and `Core::write_memory`.
+- An engine choice in Hotaru and Pharaoh, which still build the C# Mars.
+- `IFrameProfiler` phases, and the dashboard's audio peek.
 
 ### 5.7 Where MarsRT stands against the C# core in production (2026-09-22)
 

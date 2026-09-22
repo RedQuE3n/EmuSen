@@ -1211,3 +1211,52 @@ Mode, and matching `KDE` instead of `gamescope`. Each was caught, the last by tw
   defect, and it was not made.
 - *Big Picture on the desktop.* Steam's full-screen interface in Desktop Mode sets `SteamTenfoot` and
   `SteamGamepadUI`; they are not read, so a game started from it opens in the desktop layout.
+
+### 4.44 The N64's engine: Mars (C#) or MarsRT (Rust) (2026-09-22)
+
+Graphics Settings' N64 tab now begins, after the screen filter, with **Engine**, a dropdown of *Mars (C#)* and
+*MarsRT (Rust)*. It is stored in `graphics.json` as `Consoles.N64.Engine`. The default is Mars (C#), so a player who
+never opens the row plays exactly as before, and so does every frontend but Mistress: Hotaru, Pharaoh, the probe and
+the tests build the C# Mars whatever the file says. MarsRT is the N64 core in Rust (`Mars_Native.md` §5), exact
+against Mars in state, picture and sound; what it does and does not do in a frontend is `Mars_Native.md` §5.5.
+
+**When it takes effect.** At the next load of a game. The value decides which core is built, so it is read by
+`LoadGame` before any core exists; a running core cannot become the other engine, and the row's change is not handed
+to it. The Expansion Pak row behaves the same way once a game has run a frame.
+
+**Why here and not in the preferences.** The choice is per console, and `graphics.json`'s `Consoles` is the one store
+keyed by console; the window builds the row from a catalogue entry (`CoreCatalog.EngineFor`) with the control it
+already builds for a choice, so no window was designed for it. The preferences' one previous core picker was removed
+in §4.36 because it drove nothing. The engine is **not** one of the core's own settings: those are applied to a
+running core between frames, and this one cannot be, so it is declared beside them by the catalogue, as the screen
+filter is by the frontend (§4.40), and `ApplyConsoleSettings` never hands it to either core.
+
+**The rows below it.** They are Mars's, and they keep their values whichever engine runs. MarsRT honours the
+Expansion Pak and accepts the other seven, checks them as Mars does and ignores them; the Engine row's hint says so,
+and each of MarsRT's own settings says so in its hint. At the time of writing MarsRT draws on the emulation thread and
+takes about twice Mars's time per frame (`Mars_Native.md` §5.7: 13 ms against 6 ms in Super Mario 64 on the
+development desktop), which is inside a frame on that machine and was not measured on a slow one; the row is for
+choosing it, not a recommendation of it.
+
+**When MarsRT cannot run.** If `libmarsrt.so` is missing, speaks another interface, or is turned off with
+`EMUSEN_MARS_NATIVE=0`, the game runs on Mars (C#), and the status bar says so after the game's name, quoting what
+the library loader found, for example *"MarsRT (Rust) is not available (turned off by EMUSEN_MARS_NATIVE=0); Mars
+(C#) is running."* The same line is printed with `[core]`. A value no build knows, such as a hand edit, runs the
+default and says that instead.
+
+**What stays the same across the two.** Save states are one format (a state saved on either loads on the other, and
+see below), battery saves are the same `.srm` and `.mpk` files, cheats go
+through the same registry and apply under the same rule, and the controller map is the same. A state's record
+(§4.37) gives the same core name and state version for both, so it does not say which engine wrote it. **Rewind stays off for
+the N64 on either engine** (§4.21b).
+
+**What MarsRT does not offer yet.** ROM-patch cheats (no N64 code format makes one, but one added by hand does
+nothing on MarsRT); breakpoints, stepping, watches and coverage in the DianaOS console, which refuses `bp` and `step`
+with "cannot be halted by this core" while `regs`, `mem` and `disasm` work; internal resolution,
+antialiasing, the graphics card, the threaded display processor and deferred presentation.
+
+**Tests:** `MarsRtEngineTests` drives a real window on the headless platform: the row and its storage; a game on Mars
+until MarsRT is chosen and then on MarsRT, with rewind empty; states through the hotkeys that load into the C# Mars;
+a battery save read at the start and written at the stop; a `.cht` cheat reaching RDRAM; and the fallback, in a child
+process started with the library off, since the library is loaded once per process. `MarsRtFrontendTests` and
+`MarsRtSaveFileTests` hold the core's side. The mutants are `Mars_Native.md` §5.5.2.

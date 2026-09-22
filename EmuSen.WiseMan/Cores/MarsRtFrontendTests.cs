@@ -303,9 +303,34 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(romSpace.IsWritable);
             Assert.Equal(0x80, romSpace.Read(0));
 
+            Assert.Contains("5A", new MemCommand().Execute(target, new[] { "mem", "RDRAM", "300", "4" }, null).Output);
             Assert.Contains("cannot be halted", new BreakCommand().Execute(target, new[] { "bp", "add", "A4000040" }, null).Output);
             Assert.NotEqual(0, new StepCommand().Execute(target, new[] { "step", "main" }, null).ExitCode);
             Assert.Contains("MarsRT", target.GetSummaryText());
+        }
+
+        // The synthetic system maps user space's first page pair onto physical 1MB and stores its field count there; Mars's own target is the oracle.
+        [Fact]
+        public void The_processor_s_view_follows_the_TLB_the_game_set_as_Mars_s_does()
+        {
+            string rom = Rom(SyntheticN64System.Build(rsp: false));
+            MarsCore oracle = MarsRtTests.Oracle();
+            using MarsRtCore twin = MarsRtTests.Twin();
+            oracle.LoadRom(rom);
+            twin.LoadRom(rom);
+            for (int frame = 0; frame < 5; frame++)
+            {
+                oracle.RunFrame();
+                twin.RunFrame();
+            }
+
+            IDebugMemorySpace want = new EmuSen.Cores.Nintendo.Mars.Debug.MarsDebugTarget(oracle).GetMemorySpaces().Single(s => s.Name == "CPU");
+            IDebugMemorySpace got = new MarsRtDebugTarget(twin).GetMemorySpaces().Single(s => s.Name == "CPU");
+            foreach (uint address in new uint[] { 0x0000_0000, 0x0000_0010, 0x0000_1FFC, 0x0000_2000, 0x8000_0400, 0xA400_0040, 0xBFC0_07C0 })
+                for (int i = 0; i < 4; i++) Assert.Equal(want.Read(unchecked((int)address) + i), got.Read(unchecked((int)address) + i));
+
+            Assert.NotEqual(0, twin.Peek(MarsRtSpace.Cpu, 0x13));
+            Assert.Equal(twin.Peek(MarsRtSpace.Rdram, 0x10_0013), twin.Peek(MarsRtSpace.Cpu, 0x13));
         }
 
         private static byte[] State(MarsCore core)
@@ -397,6 +422,27 @@ namespace EmuSen.WiseMan.Cores
 
             Assert.False(File.Exists(SaveLibrary.SramPathFor(rom)));
             Assert.False(File.Exists(Path.ChangeExtension(SaveLibrary.SramPathFor(rom), MarsCore.PakExtension)));
+        }
+
+        [Fact]
+        public void A_saved_chip_is_written_again_only_after_it_changes_again()
+        {
+            string rom = WriteRom("Twice");
+            string save = SaveLibrary.SramPathFor(rom);
+
+            using var core = new MarsRtCore(batteryRamDisabled: false);
+            core.LoadRom(rom);
+            for (int frame = 0; frame < 40; frame++) core.RunFrame();
+            core.SaveSram();
+            Assert.True(File.Exists(save));
+            File.Delete(save);
+
+            core.SaveSram();
+            Assert.False(File.Exists(save));
+
+            for (int frame = 0; frame < 40; frame++) core.RunFrame();
+            core.SaveSram();
+            Assert.True(File.Exists(save));
         }
 
         // Three hundred frames, as MarsCore's own autosave counts them - see Mars_Save.md §7.

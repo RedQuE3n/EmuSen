@@ -577,6 +577,9 @@ pub struct Threads {
     pub(crate) taking: bool,
     waiting: i32,
     pub counters: Counters,
+    /// A test's way to lose the publish's wake-up, as a store and a load reordered at the publish can.
+    #[cfg(test)]
+    pub lose_wakeups: bool,
 }
 
 impl Threads {
@@ -663,6 +666,8 @@ impl Threads {
             taking: false,
             waiting: 0,
             counters: Counters::default(),
+            #[cfg(test)]
+            lose_wakeups: false,
         };
         threads.refresh_shadow(processor);
         threads
@@ -731,6 +736,10 @@ impl Threads {
         let sync = self.shadow(word, tail);
         self.issued = tail;
         self.shared.issued.store(tail, Release);
+        #[cfg(test)]
+        if self.lose_wakeups {
+            return sync;
+        }
         for (w, t) in self.shared.workers.iter().zip(&self.threads) {
             if w.sleeping.load(Relaxed) {
                 t.unpark();

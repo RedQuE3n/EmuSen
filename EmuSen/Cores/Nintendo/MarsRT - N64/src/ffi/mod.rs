@@ -125,7 +125,7 @@ impl Core {
 
     /// Bytes from a memory into `out`, zero wherever the address names nothing, and nothing disturbed; the host reads between frames.
     pub fn read_memory(&self, space: u32, address: u32, out: &mut [u8]) -> Result<(), i32> {
-        // C# waits at site 9 per byte; RDRAM's whole slice is formed below, so the drain is waited for whole (Mars_Native.md §5.6).
+        // C# waits at site 9 per byte; RDRAM's whole slice is formed below, so the drain is waited for whole (Mars_Native.md §5.6.4).
         if space == space::RDRAM || space == space::CPU {
             self.machine.bus.dp.wait_all();
         }

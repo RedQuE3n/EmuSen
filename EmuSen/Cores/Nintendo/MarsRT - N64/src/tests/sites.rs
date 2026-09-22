@@ -202,6 +202,42 @@ fn site_9_a_cheats_read_waits_for_the_draw_and_its_write_for_the_load() {
     });
 }
 
+/// The host's read and write through `Core`, which cheats and the debugger use, wait for the drain whole (Mars_Native.md §5.6.4).
+#[test]
+fn site_9_the_hosts_read_and_write_wait_for_the_drain() {
+    use crate::ffi::{Core, space};
+    for write in [false, true] {
+        let (mut once, mut drain) = (Core::new(at_once()), Core::new(threaded()));
+        hand_over(&mut once.machine, &fill_list(), LIST);
+        drain.machine.bus.dp.threads.as_deref().unwrap().hold();
+        hand_over(&mut drain.machine, &fill_list(), LIST);
+
+        let resume = drain.machine.bus.dp.threads.as_deref().unwrap().resumer();
+        let watchdog = std::thread::spawn(move || {
+            std::thread::sleep(HELD);
+            resume();
+        });
+        let at = FRAMEBUFFER + WIDTH * 2 * 4;
+        let access = |c: &mut Core| {
+            let mut seen = [0u8; 16];
+            if write {
+                c.write_memory(space::RDRAM, at, &[0xAB; 16]).unwrap();
+            }
+            c.read_memory(space::RDRAM, at, &mut seen).unwrap();
+            seen
+        };
+        let started = Instant::now();
+        let seen = access(&mut drain);
+        let waited = started.elapsed();
+        watchdog.join().unwrap();
+
+        assert!(waited >= HELD - Duration::from_millis(50), "the host went ahead of the list after {waited:?}");
+        assert!(seen == access(&mut once), "the host saw what the list had not yet left");
+        drain.machine.join_rdp();
+        assert!(state(&once.machine) == state(&drain.machine), "the machines part after the list");
+    }
+}
+
 #[test]
 fn site_11_a_transfer_into_the_signal_processor_waits_for_the_draw() {
     after_a_held_list(|_| {}, &fill_list(), |m| {

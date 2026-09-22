@@ -219,8 +219,9 @@ fn a_read_of_the_image_being_drawn_waits_for_the_drawing() {
 fn pages_no_command_reaches_are_not_marked_and_the_images_and_texture_source_are() {
     let mut drain = threaded();
     drain.bus.dp.threads.as_ref().unwrap().hold();
-    hand_over(&mut drain, &scene(0x8000_8000, true, 32, false), LIST);
-    assert_ne!(mark(&drain, FRAMEBUFFER), 0);
+    let list = scene(0x8000_8000, true, 32, false);
+    hand_over(&mut drain, &list, LIST);
+    assert_eq!(mark(&drain, FRAMEBUFFER), list.len() as i64, "the batch's end marks its images with its count, not idle");
     assert_ne!(mark(&drain, FRAMEBUFFER + WIDTH * 2 * (ROWS - 1)), 0);
     assert_ne!(mark(&drain, TEXTURE), 0);
     assert_eq!(mark(&drain, DEPTH + WIDTH * 2 * 120), 0, "fill mode never reaches depth");
@@ -696,4 +697,55 @@ fn a_load_from_the_current_image_before_its_first_draw_is_run_by_every_processor
         same_memory(&once, &shared);
         assert!(state(&once) == state(&shared), "attempt {attempt}");
     }
+}
+
+/// A depth image whose rows carry slope encodings 0 to 3 in turn, shared triangles that test it and leave it, then triangles drawn alone that blend by memory alpha: the first pixel's shift reads the last row's slope, which only the raster order's last writer holds (Mars_Native.md §5.6.9).
+#[test]
+fn a_slope_carried_into_a_primitive_drawn_alone_is_the_raster_orders() {
+    for workers in [2, 3, 4] {
+        for seed in 0..6u32 {
+            let tested = shaded(0x1357_0000 + seed, false, false, false);
+            let alone = shaded(0x2468_0000 + seed, false, true, true);
+            let mut list = tested[..7].to_vec();
+            list.push(color_image(DEPTH));
+            for row in 0..ROWS {
+                let word = 0xFFFC | (row as u64 & 3);
+                list.push((0x37 << 56) | (word << 16) | word);
+                list.push(fill_rectangle(0, row, WIDTH - 1, row));
+            }
+            list.push(color_image(FRAMEBUFFER));
+            list.push(tested[10] & !(1 << 5));
+            list.push(tested[11]);
+            list.extend(&tested[12..tested.len() - 1]);
+            list.push(alone[10] | (1 << 14));
+            list.push(alone[11]);
+            list.extend(&alone[12..12 + 4 * 12]);
+            list.push(SYNC_FULL);
+            let (mut once, mut shared) = (at_once(), split(workers));
+            hand_over(&mut once, &list, LIST);
+            hand_over(&mut shared, &list, LIST);
+            shared.join_rdp();
+            assert!(shared.bus.dp.processor.split.serialised >= 4, "the last four were not drawn alone");
+            same_memory(&once, &shared);
+            assert!(state(&once) == state(&shared), "{workers} workers, seed {seed}");
+        }
+    }
+}
+
+/// The publish's wake-up lost while the worker sleeps, and a list word the batch's own fill covers: the wait's kick must wake it, or the take hangs (Mars_Native.md §5.6.9).
+#[test]
+fn a_wait_inside_a_batch_wakes_a_worker_whose_publish_wake_up_was_lost() {
+    let row4 = FRAMEBUFFER + WIDTH * 2 * 4;
+    let list = [FILL_CYCLE, color_image(FRAMEBUFFER), scissor(0, 0, WIDTH, ROWS), (0x37 << 56) | 0x2900_0000, fill_rectangle(0, 4, WIDTH - 1, 5), 0];
+    let at = row4 - 5 * 8;
+    let (mut once, mut drain) = (at_once(), threaded());
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    drain.bus.dp.threads.as_mut().unwrap().lose_wakeups = true;
+    hand_over(&mut once, &list, at);
+    hand_over(&mut drain, &list, at);
+    assert_eq!(threads(&drain).counters.waits_per_site[site::TAKE], 1, "the sixth word was taken without waiting for the fill beneath it");
+    assert_eq!(once.bus.read32(MI_INTERRUPT), drain.bus.read32(MI_INTERRUPT), "the fill's colour, read as the next word, is a full sync");
+    drain.join_rdp();
+    same_memory(&once, &drain);
+    assert!(state(&once) == state(&drain));
 }

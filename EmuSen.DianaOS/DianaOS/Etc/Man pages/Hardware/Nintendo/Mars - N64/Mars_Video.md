@@ -254,6 +254,11 @@ because a deferred picture is one frame behind, and the frame it would have show
 differs, the bytes are copied and walked as before. The borders and the two frames of grace of §2.4 are advanced in
 `Prepare`, which always runs, so a skipped walk leaves them as a walk would have.
 
+*2026-09-22: not when a held line expires* (`Mars_Native.md` §5.6.5). The expiry in `Prepare` darkens the raster, and
+the picture on show does not hold that change.
+`The_csharp_deferred_path_keeps_a_stale_picture_when_a_repeat_follows_an_expired_line` finds C# showing a stale
+picture for two frames. MarsRT walks a repeat whenever the raster has been changed in this way. The C# is unchanged.
+
 **A loaded state forgets the capture**, since the raster it presents at once is not the one the last walk wrote;
 the scan after a load always walks.
 

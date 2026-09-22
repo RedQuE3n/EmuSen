@@ -289,12 +289,45 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(inBlocks > 0 || !interpreted.AsSpan().SequenceEqual(compiled), "C#'s blocks halted where the interpreter halts, so there is no gap to record");
         }
 
-        // The program into IMEM and the processor started, while the CPU sits in its idle loop.
-        private static void Start(MarsCore core, uint[] program)
+        // The program into IMEM and the processor started by the status write given, while the CPU sits in its idle loop.
+        private static void Start(MarsCore core, uint[] program, uint status = 0x0005)
         {
             for (int i = 0; i < program.Length; i++) core.Bus!.Write32(0x0400_1000 + (uint)i * 4, program[i]);
             core.Bus!.Write32(0x0408_0000, 0);
-            core.Bus.Write32(0x0404_0010, 0x0005);
+            core.Bus.Write32(0x0404_0010, status);
+        }
+
+        // A break that finds the processor already broken raises no second interrupt; restarted with the broke bit left set, it breaks again silently.
+        [Fact]
+        public void A_second_break_before_the_broke_bit_is_cleared_raises_no_interrupt_in_either_core()
+        {
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            string rom = Temporary(SyntheticN64Rom.BuildRunningFromRdram(new uint[] { 0x1000_FFFF, 0x0000_0000 }));
+            MarsCore setup = Oracle();
+            setup.LoadRom(rom);
+            for (int i = 0; i < 2; i++) setup.RunFrame();
+            Start(setup, new uint[] { 0x2402_0001, 0x0000_000D }, status: 0x0105);
+            setup.RunFrame();
+            Assert.True(setup.Bus!.Sp.Processor.Broke && (setup.Bus.Mi.Pending & MiInterrupt.SignalProcessor) != 0, "the first break raised nothing");
+
+            // The interrupt cleared, then the processor restarted with only its halt cleared and the break's interrupt left on.
+            setup.Bus.Write32(0x0404_0010, 0x0008);
+            setup.Bus.Write32(0x0408_0000, 0);
+            setup.Bus.Write32(0x0404_0010, 0x0001);
+            byte[] started = Save(setup);
+            setup.LoadState(new MemoryStream(started));
+            using MarsRtCore twin = Twin();
+            twin.LoadRom(rom);
+            twin.LoadState(started);
+            for (int i = 0; i < 2; i++)
+            {
+                setup.RunFrame();
+                twin.RunFrame();
+            }
+
+            new StateComparer().Frame(2, Save(setup), twin.Save(false));
+            Assert.True(setup.Bus.Sp.Processor.Halted, "the second break was never reached");
+            Assert.Equal(MiInterrupt.None, setup.Bus.Mi.Pending & MiInterrupt.SignalProcessor);
         }
 
         // Real games from boot and from states: the whole state, the picture and the sound, after every frame.

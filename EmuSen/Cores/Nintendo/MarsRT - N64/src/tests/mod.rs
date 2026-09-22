@@ -7,6 +7,7 @@ mod fpu;
 mod games;
 mod rom;
 mod save;
+mod sites;
 mod support;
 mod threads;
 mod tlb;

@@ -133,7 +133,13 @@ namespace EmuSen.WiseMan.Cores
             return bus;
         }
 
-        private static void ReadBack(MemoryBus bus) => bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
+        // The answer reaches memory when the read's transfer is done - see Mars_Serial.md §2.3.
+        private static void ReadBack(MemoryBus bus)
+        {
+            bus.Tick(SiInterface.TransferCycles);
+            bus.Write32(MemoryMap.SiBase + SiInterface.PifAddressRead, 0);
+            bus.Tick(SiInterface.TransferCycles);
+        }
 
         [Fact]
         public void A_6105_cartridge_answers_as_the_block_goes_out()

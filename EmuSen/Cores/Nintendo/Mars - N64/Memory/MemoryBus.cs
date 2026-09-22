@@ -72,7 +72,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         // Stubs until each device exists; a register nobody models still has to read back - see §2.2.
         [EmuSen.Common.SkipInState] private readonly Dictionary<uint, uint> _registers = new();
-        private const uint SiDueLow = 0xFFFF_FF00, SiDueHigh = 0xFFFF_FF04;
+        private const uint SiDueLow = 0xFFFF_FF00, SiDueHigh = 0xFFFF_FF04, SiReadTo = 0xFFFF_FF08;
 
         public MemoryBus(bool expansionPak = false)
         {
@@ -121,7 +121,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             // A transfer under way rides among the unmodelled registers at two addresses no bus reaches, so the format stands - see Mars_Serial.md §2.2.
             _registers.Remove(SiDueLow);
             _registers.Remove(SiDueHigh);
+            _registers.Remove(SiReadTo);
             if (Si.Due != long.MaxValue) (_registers[SiDueLow], _registers[SiDueHigh]) = ((uint)Si.Due, (uint)(Si.Due >> 32));
+            if (Si.PendingRead >= 0) _registers[SiReadTo] = (uint)Si.PendingRead;
 
             w.Write(_registers.Count);
             foreach (var (address, value) in _registers.OrderBy(pair => pair.Key))
@@ -152,8 +154,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             for (int count = r.ReadInt32(); count > 0; count--) _registers[r.ReadUInt32()] = r.ReadUInt32();
 
             Si.Due = _registers.TryGetValue(SiDueLow, out uint low) && _registers.TryGetValue(SiDueHigh, out uint high) ? (long)(((ulong)high << 32) | low) : long.MaxValue;
+            Si.PendingRead = _registers.TryGetValue(SiReadTo, out uint readTo) ? readTo : -1;
             _registers.Remove(SiDueLow);
             _registers.Remove(SiDueHigh);
+            _registers.Remove(SiReadTo);
 
             Save.ReadState(r);
 

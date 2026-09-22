@@ -33,12 +33,33 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         // The cycle the transfer under way finishes at, or never; carried in a state beside the unmodelled registers - see §2.2.
         [EmuSen.Common.SkipInState] public long Due = long.MaxValue;
 
-        // The interrupt a transfer earned, raised once its time has passed - see §2.2.
+        // Where a read's sixty-four bytes land when it finishes, or none; carried in a state beside Due - see Mars_Serial.md §2.3.
+        [EmuSen.Common.SkipInState] public long PendingRead = -1;
+
+        // The interrupt a transfer earned, raised once its time has passed, and a read's bytes with it - see §2.2 and §2.3.
         public void Catch()
         {
             if (_bus.Cycles < Due) return;
             Due = long.MaxValue;
+            Land();
             _bus.Mi.Raise(MiInterrupt.SerialInterface);
+        }
+
+        // PIF RAM into memory at the end of the transfer, as the console's PIF delivers it - see §2.3.
+        private void Land()
+        {
+            if (PendingRead < 0) return;
+            uint to = (uint)PendingRead;
+            PendingRead = -1;
+            _bus.Dp.WaitForRange(to, MemoryMap.PifRamSize, 6);
+            byte[] ram = _bus.PifRam;
+            for (uint i = 0; i < MemoryMap.PifRamSize; i++)
+            {
+                uint address = to + i;
+                if (address >= _bus.Rdram.Length) break;
+                _bus.Rdram[address] = ram[i];
+            }
+            _bus.Written++;
         }
 
         public SiInterface(MemoryBus bus) => _bus = bus;
@@ -83,6 +104,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         {
             byte[] ram = _bus.PifRam;
 
+            // A transfer started over one still running finishes the first, which a game waiting for the interrupt never does.
+            Land();
+
             // The PIF works as its RAM is read out: the challenge if one is asked, the joybus walk otherwise - see Mars_Serial.md §2.
             if (!toPif)
             {
@@ -90,16 +114,20 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 else Joybus.Run(ram, Controllers, _bus.Save);
             }
 
-            if (toPif) _bus.Dp.WaitForReadRange(_dramAddress, MemoryMap.PifRamSize, 6);
-            else _bus.Dp.WaitForRange(_dramAddress, MemoryMap.PifRamSize, 6);
-
-            for (uint i = 0; i < MemoryMap.PifRamSize; i++)
+            // Memory goes into the PIF now; the PIF's answer reaches memory when the transfer is done - see §2.3.
+            if (toPif)
             {
-                uint address = _dramAddress + i;
-                if (address >= _bus.Rdram.Length) break;
-
-                if (toPif) ram[i] = _bus.Rdram[address];
-                else _bus.Rdram[address] = ram[i];
+                _bus.Dp.WaitForReadRange(_dramAddress, MemoryMap.PifRamSize, 6);
+                for (uint i = 0; i < MemoryMap.PifRamSize; i++)
+                {
+                    uint address = _dramAddress + i;
+                    if (address >= _bus.Rdram.Length) break;
+                    ram[i] = _bus.Rdram[address];
+                }
+            }
+            else
+            {
+                PendingRead = _dramAddress;
             }
 
             _bus.Written++;

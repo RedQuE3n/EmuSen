@@ -48,6 +48,9 @@ namespace EmuSen.Serenity.Slang
         private readonly Fence _fence;
         private readonly PhysicalDeviceMemoryProperties _memory;
         private readonly Dictionary<(bool Linear, SlangWrap Wrap, bool Mipmap), Sampler> _samplers = new();
+
+        // One command buffer, and a chain may be built on one thread while another draws.
+        private readonly object _submit = new();
         private bool _disposed;
 
         public string Name { get; }
@@ -218,6 +221,11 @@ namespace EmuSen.Serenity.Slang
 
         internal Sampler SamplerFor(bool linear, SlangWrap wrap, bool mipmap)
         {
+            lock (_samplers) return CreateSampler(linear, wrap, mipmap);
+        }
+
+        private Sampler CreateSampler(bool linear, SlangWrap wrap, bool mipmap)
+        {
             if (_samplers.TryGetValue((linear, wrap, mipmap), out Sampler existing)) return existing;
             SamplerAddressMode mode = wrap switch
             {
@@ -241,6 +249,11 @@ namespace EmuSen.Serenity.Slang
 
         // Records, submits and waits; nothing recorded here is still running when it returns.
         internal void Run(Action<CommandBuffer> record)
+        {
+            lock (_submit) RunLocked(record);
+        }
+
+        private void RunLocked(Action<CommandBuffer> record)
         {
             Check(Vk.ResetCommandBuffer(_commands, 0), "vkResetCommandBuffer");
             var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
@@ -303,7 +316,7 @@ namespace EmuSen.Serenity.Slang
         internal void Upload(SlangImage image, ReadOnlySpan<byte> rgba, SlangBuffer staging)
         {
             fixed (byte* source = rgba) System.Buffer.MemoryCopy(source, staging.Mapped, (long)staging.Size, rgba.Length);
-            Run(commands =>
+            lock (_submit) RunLocked(commands =>
             {
                 Transition(commands, image, ImageLayout.TransferDstOptimal);
                 var region = new BufferImageCopy

@@ -196,7 +196,7 @@ Two passes each: the panel at the game's size, then its pixel grid at the screen
 
 ### 3.6 RetroArch's shaders, the plan after this
 
-Downloading libretro's `slang-shaders` on request and running any `.slangp` preset needs a real shader runtime, since SkSL cannot express them (§3.2): glslang to SPIR-V (Silk.NET.Shaderc), then either Vulkan directly, beside Mars's device, or SPIRV-Cross to GLSL on Avalonia's OpenGL, with presets' passes, scale types, history, feedback, lookup textures and float and sRGB targets. Legally a download on the player's request redistributes nothing, and GPL-2.0-or-later shaders are compatible with this project's GPL-3.0 besides; about ten shaders and several lookup images state no licence and may be run from a download but never copied into source (the licence survey of 2026-09-21). Not started.
+Downloading libretro's `slang-shaders` on request and running any `.slangp` preset needs a real shader runtime, since SkSL cannot express them (§3.2): glslang to SPIR-V (Silk.NET.Shaderc), then either Vulkan directly, beside Mars's device, or SPIRV-Cross to GLSL on Avalonia's OpenGL, with presets' passes, scale types, history, feedback, lookup textures and float and sRGB targets. Legally a download on the player's request redistributes nothing, and GPL-2.0-or-later shaders are compatible with this project's GPL-3.0 besides; about ten shaders and several lookup images state no licence and may be run from a download but never copied into source (the licence survey of 2026-09-21). ~~Not started.~~ *Carried out the same night, on Vulkan directly: §7.*
 
 ---
 
@@ -343,3 +343,20 @@ The history mutant **survived the first history test**: with two history slots, 
 **The validation layer** (`VK_LAYER_KHRONOS_validation` with synchronisation validation and `VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`) reports nothing over all twelve tests, the pack presets included. As a positive control, a mutant that skipped the final image's transition back to shader-read was flagged four times (`VUID-vkCmdDraw-None-09600`), so the silence is evidence.
 
 **What this does not show.** The pack presets are checked for running and drawing, not for drawing *correctly*. No output here has been compared against RetroArch's for the same frame. That comparison would need RetroArch run headless on a captured frame, and it is the obvious next evidence if a preset looks wrong.
+
+### 7.5 Drawing a preset in the frame control (2026-09-21)
+
+`GameFrameControl.ActiveSlangPreset` takes a preset's path and draws it instead of `ActiveFilter` and `ActiveEffect`. Setting it creates a `SlangRunner`, which builds the chain on a pool thread; `crt-royale` takes 1.7 s to compile, and a render thread that waited for it would freeze the window for that long. **Until the chain is built, the picture is drawn plain**, as it is when the chain cannot be built. In that case `SlangFailed` is raised once, off the UI thread, with the preset's name and the compiler's or device's first line, and Mistress puts it in the status bar. When the build finishes, the control is asked to redraw, so the filtered picture appears without waiting for the next frame.
+
+**The device is one per process**, created on first use and never closed. Every preset the player tries would otherwise open, and after a switch close, another Vulkan device. Its command buffer is now guarded by a lock, because a chain can be building (uploading its lookup images) on one thread while another chain draws on the render thread.
+
+**Per draw**, under the control's lock:
+- A new frame is advanced into the chain.
+- The chain is rendered at the letterbox rectangle's size **in device pixels**: the canvas's scale times the rectangle, so a 2× display gets a 2× viewport, as RetroArch's would.
+- The result is drawn as an opaque image, with nearest sampling since it is already at the size shown.
+
+A redraw with no new frame and no change of size reuses the last image. This is §2.6's distinction between a redraw and a frame, kept so that a feedback or history preset does not advance on a repaint.
+
+**Tests** (`SlangFrameControlTests`, through the real headless render pass):
+- An inverting preset turns an (10, 20, 30) frame into (245, 235, 225) once built.
+- A preset whose shader does not compile raises `SlangFailed` with its name and draws the frame unchanged.

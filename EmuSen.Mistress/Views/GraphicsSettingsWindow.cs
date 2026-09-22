@@ -23,10 +23,19 @@ namespace EmuSen.Mistress.Views
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public GraphicsSettingsWindow() : this(new GraphicsConfig(), null, null) { }
 
-        public GraphicsSettingsWindow(GraphicsConfig config, Action<string>? changed, string? selectedConsole)
+        private readonly Func<System.Net.Http.HttpClient> _http;
+        private readonly string _pack;
+
+        // The picker the "RetroArch Preset..." entry opened last, for a test to drive.
+        public SlangPresetWindow? PresetPicker { get; private set; }
+
+        public GraphicsSettingsWindow(GraphicsConfig config, Action<string>? changed, string? selectedConsole,
+            Func<System.Net.Http.HttpClient>? http = null, string? pack = null)
         {
             _config = config;
             _changed = changed;
+            _http = http ?? (() => new System.Net.Http.HttpClient());
+            _pack = pack ?? Library.SlangPackDownload.DefaultDirectory;
 
             Title = "Graphics Settings";
             Width = 680;
@@ -63,6 +72,14 @@ namespace EmuSen.Mistress.Views
         // The key the frontend's own row is stored under, beside the core's; no core declares it, so no core is handed it - see EmuSen_Settings_Reference.md §4.40.
         public const string ScreenFilterKey = "ScreenFilter";
 
+        // A stored value naming a preset in the downloaded pack, by its path inside it - see EmuSen_Settings_Reference.md §4.41.
+        public const string SlangPrefix = "slang:";
+
+        // The dropdown's last entry, which opens the picker rather than being a filter itself.
+        public const string ChooseRetroArch = "RetroArch Preset...";
+
+        public static string SlangLabel(string relative) => "RetroArch: " + System.IO.Path.GetFileNameWithoutExtension(relative);
+
         private Control BuildConsolePanel(string console)
         {
             IReadOnlyList<CoreSetting> settings = CoreCatalog.SettingsFor(console);
@@ -71,15 +88,35 @@ namespace EmuSen.Mistress.Views
 
             // First on every tab: it belongs to the window the picture is drawn in, not to the core, so every console has it.
             var filter = new Dropdown { Name = $"{console}.{ScreenFilterKey}", HorizontalAlignment = HorizontalAlignment.Left, MinWidth = 160 };
-            filter.Chose += chosen => { if (!_filling && chosen is string value) Changed(console, ScreenFilterKey, value); };
             void FillFilter()
             {
                 _filling = true;
                 string current = _config.Value(console, ScreenFilterKey) ?? EmuSen.Serenity.Shaders.ScreenFilters.None;
-                IReadOnlyList<string> names = EmuSen.Serenity.Shaders.ScreenFilters.NamesFor(console);
-                filter.Fill(names, names.Contains(current) ? current : EmuSen.Serenity.Shaders.ScreenFilters.None);
+                var names = EmuSen.Serenity.Shaders.ScreenFilters.NamesFor(console).ToList();
+                string selected = names.Contains(current) ? current : EmuSen.Serenity.Shaders.ScreenFilters.None;
+                if (current.StartsWith(SlangPrefix, StringComparison.Ordinal))
+                {
+                    selected = SlangLabel(current[SlangPrefix.Length..]);
+                    names.Add(selected);
+                }
+                names.Add(ChooseRetroArch);
+                filter.Fill(names, selected);
                 _filling = false;
             }
+            filter.Chose += chosen =>
+            {
+                if (_filling || chosen is not string value) return;
+                if (value == ChooseRetroArch)
+                {
+                    string current = _config.Value(console, ScreenFilterKey) ?? "";
+                    PresetPicker = new SlangPresetWindow(_http, _pack,
+                        current.StartsWith(SlangPrefix, StringComparison.Ordinal) ? current[SlangPrefix.Length..] : null,
+                        preset => Changed(console, ScreenFilterKey, SlangPrefix + preset), console);
+                    PresetPicker.Closed += (_, _) => FillFilter();
+                    PresetPicker.Show(this);
+                }
+                else if (!value.StartsWith("RetroArch: ", StringComparison.Ordinal)) Changed(console, ScreenFilterKey, value);
+            };
             FillFilter();
             refreshers.Add(FillFilter);
             panel.Children.Add(new FieldRow { Label = "Screen Filter", Hint = "Drawn over the picture as it is shown, never in the game's own frame; changes apply at once.", Content = filter });

@@ -225,3 +225,90 @@ namespace EmuSen.WiseMan.Serenity
         }
     }
 }
+
+namespace EmuSen.WiseMan.Serenity
+{
+    // A preset set on GameFrameControl, built off the render thread and drawn through its real render pass - see EmuSen_Serenity.md §7.5.
+    public class SlangFrameControlTests : IDisposable
+    {
+        private static readonly Avalonia.Headless.HeadlessUnitTestSession Session =
+            Avalonia.Headless.HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlangFrameControlTests).Assembly);
+
+        private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenSlangFrame", Guid.NewGuid().ToString("N"));
+
+        public SlangFrameControlTests() => Directory.CreateDirectory(_root);
+
+        public void Dispose()
+        {
+            try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        }
+
+        private string Invert()
+        {
+            File.WriteAllText(Path.Combine(_root, "invert.slang"), """
+                #version 450
+                layout(std140, set = 0, binding = 0) uniform UBO { mat4 MVP; } global;
+                #pragma stage vertex
+                layout(location = 0) in vec4 Position;
+                layout(location = 1) in vec2 TexCoord;
+                layout(location = 0) out vec2 vTexCoord;
+                void main() { gl_Position = global.MVP * Position; vTexCoord = TexCoord; }
+                #pragma stage fragment
+                layout(location = 0) in vec2 vTexCoord;
+                layout(location = 0) out vec4 FragColor;
+                layout(set = 0, binding = 2) uniform sampler2D Source;
+                void main() { FragColor = vec4(1.0 - texture(Source, vTexCoord).rgb, 1.0); }
+                """);
+            string preset = Path.Combine(_root, "invert.slangp");
+            File.WriteAllText(preset, "shaders = 1\nshader0 = invert.slang\nfilter_linear0 = false\n");
+            return preset;
+        }
+
+        private static (int R, int G, int B) Centre(string? preset, Action<EmuSen.Serenity.GameFrameControl>? before = null)
+        {
+            var control = new EmuSen.Serenity.GameFrameControl { ActiveSlangPreset = preset };
+            before?.Invoke(control);
+            var window = new Avalonia.Controls.Window { Width = 64, Height = 64, Content = control };
+            window.Show();
+            try
+            {
+                var clock = Stopwatch.StartNew();
+                while (!control.SlangBuilt && clock.ElapsedMilliseconds < 20000) System.Threading.Thread.Sleep(10);
+                var frame = new byte[8 * 8 * 4];
+                for (int i = 0; i < frame.Length; i += 4) (frame[i], frame[i + 1], frame[i + 2], frame[i + 3]) = (10, 20, 30, 255);
+                control.UpdateFrame(frame, 8, 8);
+                using var captured = Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window)!;
+                var capture = EmuSen.WiseMan.Fixtures.UiTest.Capture(captured);
+                int at = (32 * capture.Width + 32) * 4;
+                return (capture.Rgba[at], capture.Rgba[at + 1], capture.Rgba[at + 2]);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task A_preset_is_drawn_once_it_is_built()
+        {
+            if (SlangVulkan.TryCreate(out _) is not { } probe) return;
+            probe.Dispose();
+            string preset = Invert();
+            var centre = await Session.Dispatch(() => Centre(preset), default);
+            Assert.Equal((245, 235, 225), centre);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task A_preset_that_cannot_be_built_says_why_and_the_picture_is_drawn_plain()
+        {
+            File.WriteAllText(Path.Combine(_root, "broken.slang"), "#version 450\n#pragma stage vertex\nvoid main() { nope(); }\n#pragma stage fragment\nvoid main() { }\n");
+            string preset = Path.Combine(_root, "broken.slangp");
+            File.WriteAllText(preset, "shaders = 1\nshader0 = broken.slang\n");
+            string? problem = null;
+            var centre = await Session.Dispatch(() => Centre(preset, c => c.SlangFailed += p => problem = p), default);
+            Assert.Equal((10, 20, 30), centre);
+            Assert.NotNull(problem);
+            Assert.Contains("broken", problem);
+        }
+    }
+}

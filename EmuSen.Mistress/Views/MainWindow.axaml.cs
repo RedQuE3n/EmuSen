@@ -388,17 +388,37 @@ namespace EmuSen.Mistress.Views
                 // On the emulation thread, between frames, and only when the running game is that console's - see §4.26.
                 if (_session is not null && console == _activeConsole) RequestOnEmulationThread(session => ApplyConsoleSettings(session, console));
                 if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
-            }, _session is null ? null : _activeConsole);
+            }, _session is null ? null : _activeConsole, HttpFactory);
             window.Show(this);
         }
 
         // On the UI thread: the filter belongs to the control that draws, not to the core - see EmuSen_Settings_Reference.md §4.40.
         private void ApplyScreenFilter(string console)
         {
-            EmuSen.Serenity.Shaders.ScreenFilterChoice choice = EmuSen.Serenity.Shaders.ScreenFilters.Find(_graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey));
+            string? stored = _graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey);
+            EmuSen.Serenity.Shaders.ScreenFilterChoice choice = EmuSen.Serenity.Shaders.ScreenFilters.Find(stored);
             GameFrame.ActiveEffect = choice.Effect;
             GameFrame.ActiveFilter = choice.Filter;
+            GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();
+        }
+
+        private bool _slangFailuresShown;
+
+        // A stored "slang:" value as a file in the downloaded pack, or null; a preset since deleted is said once and drawn plain.
+        private string? SlangPresetPath(string? stored)
+        {
+            if (stored is null || !stored.StartsWith(GraphicsSettingsWindow.SlangPrefix, StringComparison.Ordinal)) return null;
+            if (!_slangFailuresShown)
+            {
+                _slangFailuresShown = true;
+                GameFrame.SlangFailed += problem => Dispatcher.UIThread.Post(() => StatusText.Text = $"RetroArch shader not drawn: {problem}");
+            }
+            string relative = stored[GraphicsSettingsWindow.SlangPrefix.Length..];
+            string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(EmuSen.Mistress.Library.SlangPackDownload.DefaultDirectory, relative));
+            if (System.IO.File.Exists(path)) return path;
+            StatusText.Text = $"RetroArch shader not drawn: {relative} is not in the downloaded pack.";
+            return null;
         }
 
         // Every setting the core offers, from the config or its default; a value the core refuses falls back to the default - see §4.26.

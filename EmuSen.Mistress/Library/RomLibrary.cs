@@ -82,6 +82,15 @@ namespace EmuSen.Mistress.Library
             return new RomLibraryResult(status, romDirectory, entries, Narrowed(coreDisplayName));
         }
 
+        // One console's share of a scan of all of them, so a sidebar can count every console from one walk.
+        public static RomLibraryResult Narrow(RomLibraryResult all, string? coreDisplayName)
+        {
+            string? console = Narrowed(coreDisplayName);
+            if (console is null || all.Status is not (RomLibraryStatus.Ok or RomLibraryStatus.Empty)) return all with { CoreDisplayName = console };
+            List<RomEntry> entries = all.Entries.Where(e => e.CoreDisplayName == console).ToList();
+            return new RomLibraryResult(entries.Count == 0 ? RomLibraryStatus.Empty : RomLibraryStatus.Ok, all.Directory, entries, console);
+        }
+
         // The display name only when it names a real core in this build.
         private static string? Narrowed(string? coreDisplayName) =>
             EmuSen.Cores.CoreCatalog.ByDisplayName(coreDisplayName)?.DisplayName;

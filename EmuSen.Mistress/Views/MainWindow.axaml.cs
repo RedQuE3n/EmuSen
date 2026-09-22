@@ -169,6 +169,7 @@ namespace EmuSen.Mistress.Views
             _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", () => OpenCoretopWindow(_debugTarget));
             InitializeComponent();
+            SetUpLibraryScreen();
             BuildMenus();
             // The tick follows the window, so a window-manager key cannot leave it lying - see §4.19.
             FullScreenChanged += on => _fullscreen.IsChecked = on;
@@ -178,6 +179,8 @@ namespace EmuSen.Mistress.Views
                 AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);
             // On GameFrame, not the window: a window-level flag cannot say that - see §4.20.
             _idleCursor = new IdleCursor(GameFrame);
+            SetUpHud();
+            SetUpBackgroundPause();
             _fileDrop = new FileDrop(this, paths => _ = OpenDroppedRomAsync(paths[0]))
             {
                 Accept = paths => paths.Count == 1,
@@ -240,7 +243,11 @@ namespace EmuSen.Mistress.Views
             // Held vs one-shot - see EmuSen_Rewind_And_FastForward.md §4, EmuSen_Settings_Reference.md §4.3.
             if (HotkeyBindingMap.IsHeld(action))
             {
-                if (action == HotkeyAction.FastForward) _turboHeld = pressed;
+                if (action == HotkeyAction.FastForward)
+                {
+                    if (pressed && !_turboHeld) Notify("Fast forward");
+                    _turboHeld = pressed;
+                }
                 else if (action == HotkeyAction.Rewind) _rewindHeld = pressed;
                 e.Handled = true;
                 return;
@@ -252,6 +259,7 @@ namespace EmuSen.Mistress.Views
                 case HotkeyAction.SaveState: SaveState(); break;
                 case HotkeyAction.LoadState: LoadState(); break;
                 case HotkeyAction.ExitToLibrary: ToggleLibrary(); break;
+                case HotkeyAction.Screenshot: TakeScreenshot(); break;
                 // Nothing to pause while the library is up: it is already suspended - see §4.18.
                 case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
                 case HotkeyAction.ToggleFullscreen:
@@ -399,7 +407,7 @@ namespace EmuSen.Mistress.Views
         {
             // Non-modal, so re-scan on close rather than leaving a stale library behind it.
             var window = new PreferencesWindow(_appSettings);
-            window.Closed += (_, _) => { if (LibraryView.IsVisible) RefreshLibrary(); };
+            window.Closed += (_, _) => { ScanArtwork(); if (LibraryView.IsVisible) RefreshLibrary(); };
             window.Show(this);
         }
 
@@ -541,7 +549,7 @@ namespace EmuSen.Mistress.Views
                 }
 
                 // SyncMenuState because that slot has a timestamp now.
-                Dispatcher.UIThread.Post(() => { StatusText.Text = status; SyncMenuState(); });
+                Dispatcher.UIThread.Post(() => { StatusText.Text = status; SyncMenuState(); Notify(status.StartsWith("State saved", StringComparison.Ordinal) ? $"State saved to slot {slot}" : status); });
             });
         }
 
@@ -575,7 +583,7 @@ namespace EmuSen.Mistress.Views
                     status = $"Load State failed: {ex.Message}";
                 }
 
-                Dispatcher.UIThread.Post(() => StatusText.Text = status);
+                Dispatcher.UIThread.Post(() => { StatusText.Text = status; Notify(status.StartsWith("State loaded", StringComparison.Ordinal) ? $"State loaded from slot {slot}" : status); });
             });
         }
 
@@ -617,7 +625,10 @@ namespace EmuSen.Mistress.Views
                     _speedMenu,
                     LunaAction.Separator(),
                     _saveState, _loadState, _slotMenu),
-                new LunaMenu("_View", _fullscreen),
+                new LunaMenu("_View", _asGrid!, _asList!,
+                    new LunaAction("_Larger Covers", () => TileScale.Value = Math.Min(MaximumTileScale, TileScale.Value + 0.25)),
+                    new LunaAction("S_maller Covers", () => TileScale.Value = Math.Max(MinimumTileScale, TileScale.Value - 0.25)),
+                    LunaAction.Separator(), _fullscreen),
                 new LunaMenu("_Settings",
                     new LunaAction("_Controller Bindings...", ShowControllerBindings),
                     new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
@@ -672,6 +683,7 @@ namespace EmuSen.Mistress.Views
             _hardwareDashboard.IsEnabled = _debugTarget is not null;
 
             ShowHotkeysOnTheMenu();
+            SyncHud();
         }
 
         private int SpeedIndex(int percent)
@@ -934,25 +946,43 @@ namespace EmuSen.Mistress.Views
                 LibraryFilter.Submitted += LaunchSelectedLibraryEntry;
             }
 
-            // The disk walk happens here; typing in the search box only re-filters what it found.
-            _libraryScan = RomLibrary.Scan(_appSettings.RomDirectory, SelectedConsole);
+            // The disk walk happens here, once for every console; the sidebar counts them, the console choice narrows them, and typing only re-filters.
+            _allScan = RomLibrary.Scan(_appSettings.RomDirectory);
+            _libraryScan = RomLibrary.Narrow(_allScan, SelectedConsole);
             ShowLibraryEntries();
         }
 
         private void ShowLibraryEntries()
         {
             string search = LibraryFilter.SearchText;
+            _recordSnapshot = _records.All();
+            RomEntry? keptSelection = LibraryList.Selected;
+            bool sameSearch = search == _lastLibrarySearch;
+            _lastLibrarySearch = search;
+            IReadOnlyList<RomEntry> pool = InCollection(_libraryScan.Entries);
 
             IReadOnlyList<RomEntry> shownEntries = string.IsNullOrWhiteSpace(search)
-                ? _libraryScan.Entries
-                : _libraryScan.Entries.Where(e => FilterBar.Matches(search, e.Title)).ToList();
+                ? pool
+                : pool.Where(e => FilterBar.Matches(search, e.Title)).ToList();
 
             // Off the whole scan, not the search subset, so the tag cannot flicker while typing.
             bool mixed = _libraryScan.Entries.Select(e => e.CoreDisplayName).Distinct().Count() > 1;
+            MixedConsoles = mixed;
             LibraryList.Label = e => mixed ? $"{e.Title}   —   {e.CoreDisplayName}" : e.Title;
             LibraryList.Refresh(shownEntries);
+            _shownEntries = shownEntries;
+            LibraryGrid.Refresh(shownEntries);
+            ApplyLibraryView();
+            FillSidebar();
 
-            LibraryList.IsVisible = shownEntries.Count > 0;
+            if (MediaShown)
+            {
+                ShowMedia(pool, search);
+                ApplyLibraryView();
+                LibraryHintText.IsVisible = _shownMedia.Count > 0;
+                LibraryHintText.Text = _category == StatesCategory ? "Double-click a state to play from it." : "Double-click a screenshot to open it.";
+                return;
+            }
 
             // Otherwise a suspended game is unreachable from here - see EmuSen_Settings_Reference.md §4.18.
             bool suspended = _session is { IsRomLoaded: true };
@@ -965,17 +995,20 @@ namespace EmuSen.Mistress.Views
 
             if (shownEntries.Count > 0)
             {
-                string shown = shownEntries.Count == _libraryScan.Entries.Count
+                string shown = shownEntries.Count == pool.Count
                     ? $"{shownEntries.Count} game{(shownEntries.Count == 1 ? "" : "s")}"
-                    : $"{shownEntries.Count} of {_libraryScan.Entries.Count} games";
+                    : $"{shownEntries.Count} of {pool.Count} games";
                 LibraryHeaderText.Text = $"{shown} under {_libraryScan.Directory}";
-                // Deliberate: the top match is what FilterBar.Submitted launches - see §4.11a.
-                LibraryList.Select(shownEntries[0]);
+                // Deliberate: the top match is what FilterBar.Submitted launches - see §4.11a; the same search keeps the choice.
+                RomEntry? kept = sameSearch ? keptSelection : null;
+                LibraryList.Select(kept is not null && shownEntries.Contains(kept) ? kept : shownEntries[0]);
+                LibraryGrid.Select(LibraryList.Selected);
             }
             else
             {
-                LibraryHeaderText.Text = _libraryScan.Entries.Count > 0
-                    ? $"No title matches \"{search}\" in {_libraryScan.Entries.Count} game(s)."
+                LibraryHeaderText.Text = pool.Count > 0
+                    ? $"No title matches \"{search}\" in {pool.Count} game(s)."
+                    : _libraryScan.Entries.Count > 0 ? DescribeEmptyCollection()
                     : RomLibrary.DescribeEmpty(_libraryScan);
             }
         }

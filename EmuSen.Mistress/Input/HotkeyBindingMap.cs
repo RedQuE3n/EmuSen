@@ -14,6 +14,7 @@ namespace EmuSen.Mistress.Input
         TogglePause,
         ToggleFullscreen,
         ExitToLibrary,
+        Screenshot,
     }
 
     // Keyboard -> HotkeyAction, shaped like ControllerKeyMap - see EmuSen_Settings_Reference.md §4.3.
@@ -38,6 +39,7 @@ namespace EmuSen.Mistress.Input
             [HotkeyAction.TogglePause] = Key.P,
             [HotkeyAction.ToggleFullscreen] = Key.F11,
             [HotkeyAction.ExitToLibrary] = Key.Escape,
+            [HotkeyAction.Screenshot] = Key.F9,
         };
 
         public static string DisplayName(HotkeyAction action) => action switch
@@ -49,6 +51,7 @@ namespace EmuSen.Mistress.Input
             HotkeyAction.TogglePause => "Pause / Resume",
             HotkeyAction.ToggleFullscreen => "Fullscreen",
             HotkeyAction.ExitToLibrary => "Exit to Library",
+            HotkeyAction.Screenshot => "Screenshot",
             _ => action.ToString(),
         };
 

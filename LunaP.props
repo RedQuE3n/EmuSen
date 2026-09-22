@@ -1,0 +1,14 @@
+<Project>
+
+  <!-- Where the four projects that use EmuSen.LunaP get it. Since 2026-09-21 it
+       is the sibling checkout's project rather than the nuget.org package,
+       while the controls the OpenEmu-style library needs are built in the
+       toolkit itself; the day a LunaP release carries them, this file goes
+       back to one PackageReference and nothing else changes. One file, so the
+       four cannot disagree about which LunaP they were built against - see
+       EmuSen_LunaP.md §9. -->
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../EmuSen.LunaP/src/EmuSen.LunaP/EmuSen.LunaP.csproj" />
+  </ItemGroup>
+
+</Project>

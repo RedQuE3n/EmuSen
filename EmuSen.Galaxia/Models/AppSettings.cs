@@ -52,6 +52,20 @@ namespace EmuSen.Galaxia.Models
         public const string ResumeAlways = "Resume";
         public const string ResumeNever = "Restart";
 
+        // How the library shows its games, and which part of it - see EmuSen_Settings_Reference.md §4.33.
+        public string LibraryView { get; set; } = LibraryGrid;
+        public const string LibraryGrid = "Grid";
+        public const string LibraryList = "List";
+        public double LibraryTileScale { get; set; } = 1.0;
+        public string LibraryCollection { get; set; } = "all";
+
+        // The in-game bar's volume, 0 to 1, and OpenEmu's pause when the window is not the one in front - see EmuSen_Settings_Reference.md §4.34.
+        public double Volume { get; set; } = 1.0;
+        public bool PauseInBackground { get; set; } = true;
+
+        // Box art the library shows, read and never written except by Add Cover Art - see EmuSen_Settings_Reference.md §4.33.
+        public string? ArtworkDirectory { get; set; }
+
         private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
 
         public void Save() => File.Save(this);

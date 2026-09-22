@@ -32,6 +32,19 @@ namespace EmuSen.Endymion
         // The rate the device is currently open at - see EmuSen_Audio_Sync.md §7.2.
         public int SampleRate => _openSampleRate;
 
+        private float _volume = 1f;
+
+        // 0 to 1, applied as the stream's gain and carried across a reopen - see EmuSen_Audio_Sync.md §7.3.
+        public float Volume
+        {
+            get => _volume;
+            set
+            {
+                _volume = Math.Clamp(value, 0f, 1f);
+                if (_deviceOpen) SDL.SetAudioStreamGain(_stream, _volume);
+            }
+        }
+
         // Every knob is a parameter, not a global read - that is what makes this project a leaf - see §7.1.
         public AudioPlayer(int sampleRate = 32000, int targetLatencyMs = 256,
             double maxRateDeviation = 0.005, int bufferFrames = 4096)
@@ -67,6 +80,8 @@ namespace EmuSen.Endymion
 
             // The latency target is a frame count, so it moves with the rate - see EmuSen_Audio_Sync.md §7.2.
             _rateControl.TargetQueuedFrames = _targetLatencyMs * sampleRate / 1000;
+
+            SDL.SetAudioStreamGain(_stream, _volume);
 
             // Devices open paused - unpause once, up front, never again.
             SDL.ResumeAudioStreamDevice(_stream);

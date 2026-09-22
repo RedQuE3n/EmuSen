@@ -42,6 +42,9 @@ namespace EmuSen.Mistress.Views
             if (_bigScreen)
             {
                 MenuStrip.IsVisible = false;
+                // A desktop sidebar costs a handheld its width, so the console choice goes back in the filter bar - see EmuSen_Settings_Reference.md §4.33.
+                LibrarySidebarPane.IsVisible = false;
+                LibraryFilter.ShowFacet = true;
                 LibraryList.FontSize = 24;
                 LibraryHeaderText.FontSize = 17;
                 LibraryHintText.FontSize = 17;
@@ -120,14 +123,16 @@ namespace EmuSen.Mistress.Views
         {
             switch (button)
             {
-                case UiButton.Up: MoveLibrarySelection(-1); break;
-                case UiButton.Down: MoveLibrarySelection(1); break;
-                case UiButton.PageUp: MoveLibrarySelection(-10); break;
-                case UiButton.PageDown: MoveLibrarySelection(10); break;
+                // Covers move in two dimensions, so the shoulders take the console instead - see EmuSen_Settings_Reference.md §4.33.
+                case UiButton.Up: MoveLibrarySelection(GridShown ? -LibraryGrid.Columns : -1); break;
+                case UiButton.Down: MoveLibrarySelection(GridShown ? LibraryGrid.Columns : 1); break;
+                case UiButton.PageUp: if (GridShown) StepLibraryConsole(-1); else MoveLibrarySelection(-10); break;
+                case UiButton.PageDown: if (GridShown) StepLibraryConsole(1); else MoveLibrarySelection(10); break;
                 case UiButton.First: MoveLibrarySelection(int.MinValue / 2); break;
                 case UiButton.Last: MoveLibrarySelection(int.MaxValue / 2); break;
-                case UiButton.Left: StepLibraryConsole(-1); break;
-                case UiButton.Right: StepLibraryConsole(1); break;
+                case UiButton.Left: if (GridShown) MoveLibrarySelection(-1); else StepLibraryConsole(-1); break;
+                case UiButton.Right: if (GridShown) MoveLibrarySelection(1); else StepLibraryConsole(1); break;
+                case UiButton.Options: if (LibraryList.Selected is EmuSen.Mistress.Library.RomEntry chosen) ToggleFavourite(chosen); break;
                 case UiButton.Accept: LaunchSelectedLibraryEntry(); break;
                 case UiButton.Search: SearchFromThePad(); break;
                 case UiButton.Back: if (!LeaveTheSearchBox() && _session is { IsRomLoaded: true }) ToggleLibrary(); break;
@@ -173,10 +178,12 @@ namespace EmuSen.Mistress.Views
             OnLibraryFilterChanged();
         }
 
-        private string PadLibraryHint() =>
-            _session is { IsRomLoaded: true }
-                ? $"A  Play      B  Back to {_currentDisplayName}      Y  Search      L1 R1  Page      L2 R2  Top, End      Left Right  Console      Start  Menu"
-                : "A  Play      Y  Search      L1 R1  Page      L2 R2  Top, End      Left Right  Console      Start  Menu";
+        private string PadLibraryHint()
+        {
+            string back = _session is { IsRomLoaded: true } ? $"B  Back to {_currentDisplayName}      " : "";
+            string moves = GridShown ? "L1 R1  Console      L2 R2  Top, End" : "L1 R1  Page      L2 R2  Top, End      Left Right  Console";
+            return $"A  Play      {back}Y  Search      Select  Favourite      {moves}      Start  Menu";
+        }
 
         private void OpenPadMenu()
         {

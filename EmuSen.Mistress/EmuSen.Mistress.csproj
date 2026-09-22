@@ -61,12 +61,14 @@
     <!-- The shared theme (App.axaml's one StyleInclude), the Avalonia
          bootstrap sequence Program.cs used to spell out, and the controls/
          window scaffolding Views/ is migrating onto - see EmuSen_LunaP.md. -->
-    <PackageReference Include="EmuSen.LunaP" Version="0.10.0" />
+    <!-- Now through LunaP.props, which names where it comes from. -->
   </ItemGroup>
 
 
   <!-- A published build's output directory is DianaOS's own root: the .NET
        app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
   <Import Project="..\EmuSen.DianaOS\Publish\DianaOSPublishLayout.targets" />
+
+  <Import Project="..\LunaP.props" />
 
 </Project>

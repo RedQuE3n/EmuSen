@@ -6,9 +6,51 @@
         xmlns:input="clr-namespace:EmuSen.Mistress.Input"
         xmlns:serenity="clr-namespace:EmuSen.Serenity;assembly=EmuSen.Serenity"
         x:Class="EmuSen.Mistress.Views.MainWindow"
-        Title="EmuSen Testing Studio"
+        Title="EmuSen"
         Width="1024" Height="768"
         MinWidth="512" MinHeight="480">
+
+    <luna:ToolWindow.Styles>
+        <!-- The in-game bar's buttons: OpenEmu's 32-point glyphs, and its two pills - see EmuSen_Settings_Reference.md §4.34. -->
+        <Style Selector="Button.hud, Button.hud-pill">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource LunaText}" />
+        </Style>
+        <Style Selector="Button.hud">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.hud-pill">
+            <Setter Property="Width" Value="51" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="#5E414141" />
+                    <GradientStop Offset="1" Color="#4D070707" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="Button.hud-power">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="#9EFF5B5B" />
+                    <GradientStop Offset="1" Color="#70EF0909" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="Button.hud:pointerover /template/ ContentPresenter, Button.hud-pill:pointerover /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.hud:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+    </luna:ToolWindow.Styles>
 
     <DockPanel>
 
@@ -44,31 +86,66 @@
              (Skia/Ganesh) presentation surface, the same control Hotaru's
              GameWindow uses. -->
         <Grid Background="{DynamicResource LunaVoid}">
-            <DockPanel x:Name="LibraryView" Margin="12">
-                <!-- A full NES set is thousands of titles - see EmuSen_Multicore.md §10. -->
-                <lunac:FilterBar DockPanel.Dock="Top"
-                                 x:Name="LibraryFilter"
-                                 ShowFacet="True"
-                                 FacetLabel="Console:"
-                                 Placeholder="Search titles"
-                                 Margin="2,0,2,8" />
-                <TextBlock DockPanel.Dock="Top"
-                           x:Name="LibraryHeaderText"
-                           Foreground="{DynamicResource LunaMuted}"
-                           Margin="2,0,2,8" />
-                <!-- Text is set in ShowLibraryEntries: it depends on whether a game is suspended. -->
-                <TextBlock DockPanel.Dock="Bottom"
-                           x:Name="LibraryHintText"
-                           Foreground="{DynamicResource LunaMuted}"
-                           Margin="2,8,2,0" />
-                <lunac:LunaList x:TypeArguments="lib:RomEntry"
-                                x:Name="LibraryList"
-                                AutomationProperties.Name="ROM library"
-                                Background="Transparent"
-                                DoubleTapped="OnLibraryItemActivated"
-                                KeyDown="OnLibraryKeyDown" />
+            <!-- OpenEmu's library window: a sidebar of collections and consoles, and the covers or the list - see EmuSen_Settings_Reference.md §4.33. -->
+            <DockPanel x:Name="LibraryView">
+                <Border DockPanel.Dock="Left" x:Name="LibrarySidebarPane" Width="200"
+                        Background="{DynamicResource LunaSurface}"
+                        BorderBrush="{DynamicResource LunaBorder}" BorderThickness="0,0,1,0">
+                    <lunac:SourceList x:Name="LibrarySidebar" AutomationProperties.Name="Collections and consoles" Margin="0,10,0,0" />
+                </Border>
+                <DockPanel Margin="12">
+                    <Grid DockPanel.Dock="Top" x:Name="LibraryToolbar" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,8">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                            <lunac:ButtonBar x:Name="LibraryViewButtons" VerticalAlignment="Center" />
+                            <lunac:ButtonBar x:Name="LibraryCategoryButtons" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Slider Grid.Column="2" x:Name="TileScale" Width="96" Margin="12,0"
+                                VerticalAlignment="Center" SmallChange="0.1" LargeChange="0.25"
+                                AutomationProperties.Name="Cover size" />
+                        <!-- A full NES set is thousands of titles - see EmuSen_Multicore.md §10. -->
+                        <lunac:FilterBar Grid.Column="3"
+                                         x:Name="LibraryFilter"
+                                         ShowFacet="False"
+                                         FacetLabel="Console:"
+                                         Placeholder="Search titles"
+                                         MinWidth="220" />
+                    </Grid>
+                    <TextBlock DockPanel.Dock="Top"
+                               x:Name="LibraryHeaderText"
+                               Foreground="{DynamicResource LunaMuted}"
+                               Margin="2,0,2,8" />
+                    <!-- Text is set in ShowLibraryEntries: it depends on whether a game is suspended. -->
+                    <TextBlock DockPanel.Dock="Bottom"
+                               x:Name="LibraryHintText"
+                               Foreground="{DynamicResource LunaMuted}"
+                               Margin="2,8,2,0" />
+                    <Grid>
+                        <lunac:TileGrid x:TypeArguments="lib:RomEntry"
+                                        x:Name="LibraryGrid"
+                                        AutomationProperties.Name="ROM library covers" />
+                        <lunac:TileGrid x:TypeArguments="lib:MediaItem"
+                                        x:Name="MediaGrid" IsVisible="False"
+                                        AutomationProperties.Name="Save states and screenshots" />
+                        <lunac:LunaList x:TypeArguments="lib:RomEntry"
+                                        x:Name="LibraryList"
+                                        AutomationProperties.Name="ROM library"
+                                        Background="Transparent"
+                                        DoubleTapped="OnLibraryItemActivated"
+                                        KeyDown="OnLibraryKeyDown" />
+                    </Grid>
+                </DockPanel>
             </DockPanel>
             <serenity:GameFrameControl x:Name="GameFrame" IsVisible="False" />
+
+            <!-- OpenEmu's heads-up bar and its notices, over the picture only - see EmuSen_Settings_Reference.md §4.34. -->
+            <lunac:OverlayBar x:Name="GameHud"
+                              IsVisible="{Binding #GameFrame.IsVisible}"
+                              HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                              Width="442" Height="42" Margin="0,0,0,19"
+                              AutomationProperties.Name="Game controls" />
+            <lunac:NoticeLayer x:Name="GameNotice"
+                               IsVisible="{Binding #GameFrame.IsVisible}"
+                               HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,16,0" />
 
             <!-- The pad's menu, over whichever screen is showing - see EmuSen_Settings_Reference.md §4.29. -->
             <Border x:Name="PadMenuPanel" IsVisible="False" Background="#D0000000">

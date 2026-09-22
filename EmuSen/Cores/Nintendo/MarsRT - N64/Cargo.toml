@@ -1,12 +1,12 @@
 [package]
-name = "emusen-native"
+name = "marsrt"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
-# A C-ABI library the C# cores call into; each component keeps its C# twin as oracle and fallback. See Mars_Native.md.
+# MarsRT, the N64 core in Rust, and the C# Mars's opt-in native components, behind a C ABI. See Mars_Native.md.
 [lib]
-name = "emusen_native"
+name = "marsrt"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

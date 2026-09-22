@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
@@ -60,7 +61,7 @@ namespace EmuSen.WiseMan.Mistress
                 ":root {\n  --luna-surface: " + surface + ";\n}\n");
 
         private static Dropdown ThemeRow(PreferencesWindow window) =>
-            window.GetVisualDescendants().OfType<Dropdown>().Single(d => d.Name == "ThemeDropdown");
+            window.GetLogicalDescendants().OfType<Dropdown>().Single(d => d.Name == "ThemeDropdown");
 
         private static PreferencesWindow Shown()
         {

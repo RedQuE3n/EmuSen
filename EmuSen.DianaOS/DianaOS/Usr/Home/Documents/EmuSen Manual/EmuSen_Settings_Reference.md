@@ -988,3 +988,47 @@ What Mistress remembers about each game it has seen (favourite, last played, pla
 
 **What it does not cover.** Rows are keyed by path, so moving the library orphans them; identity by hash waits on the catalogue (stage 3 of the plan). The driver sits in Mistress rather than in `EmuSen` beside `SqliteCatalogue` (§7.1's convergence argument), because Mistress is its only reader; if Hotaru or the shell ever wants it, that argument applies and it moves.
 
+
+### 4.33 The library as OpenEmu lays it out (2026-09-21)
+
+The library screen is OpenEmu's library window: a sidebar of collections and consoles on the left, a toolbar, and the games as a grid of covers or as the list of §4.11. It is stage 4 and stage 5 of `EmuSen_Mistress_LibraryPlan.md`, with stage 1's favourites and recency surfacing as two of the sidebar's collections.
+
+**Built from LunaP's controls.** The sidebar is LunaP's `SourceList`, the grid its `TileGrid<T>`, the view and category switches `ActionToggle`s over `LunaAction` radio groups that the View menu also holds, and every context menu is `Menus.Context` over `LunaAction`s. The four new controls were written into the toolkit itself rather than into Mistress, because none of them names anything of an emulator (LunaP's `docs/LunaP.md` §88); while they are unreleased the four projects that use LunaP take it from the sibling checkout through `LunaP.props` (`EmuSen_LunaP.md` §21). What Mistress adds is only what is about games: `CoverTile`, which draws one cover, and `ArtworkIndex`, which finds it.
+
+**The sidebar.** Library (All Games, Favourites, Recently Played) and Consoles (each core in release order), each row with its count. A console row is the console filter of §4.23 and a collection row spans every console, as OpenEmu's does, so the two are one choice rather than two that could contradict each other. The folder is walked once for every console (`RomLibrary.Scan` then `RomLibrary.Narrow`), which is what lets every row carry a count; the walk was already whole-tree, since it recursed. Recently Played is the thirty most recently started, OpenEmu's limit for its Recently Added. In big-screen mode (§4.29) the sidebar is hidden, because on a handheld its width is the screen, and the console facet returns to the filter bar where the pad's shoulders step it.
+
+**The grid.** Each cover is OpenEmu's cell: the art standing on the bottom of a square, the title in 13-point medium beneath it, a second line in the muted colour. Missing art is OpenEmu's placeholder, a faint rounded box ruled with scanlines, in the console's box shape: `CoreDescriptor.CoverAspect` carries OpenEmu's North American ratios (NES 1.43, SNES 0.73, N64 0.70, Game Boy 1.0), so the placeholder is where console knowledge meets the frontend and that is why it sits beside the core's declaration rather than here (plan §2). **One departure from OpenEmu, on purpose:** the placeholder carries the console's name and the game's title. OpenEmu's is blank, which is right for a library whose art is fetched; this one has no art until the user supplies it, and a wall of identical blank boxes was the case the plan's §6 said would make a grid worse than a list. The cover size is a slider (0.5 to 2.5 of the default, OpenEmu's range), also on the View menu. On a pad the grid moves in two dimensions and the shoulders take the console instead (§4.29's grammar otherwise); Select marks a favourite.
+
+**Cover art.** `ArtworkIndex` walks the art folder (Preferences, default `home/Artwork`) off the UI thread and matches a picture to a game by name: the ROM's own file name first, then the name without its region and revision tags ("Super Mario 64 (Europe) (En,Fr,De)" finds "Super Mario 64 (USA).png"), in the console's own folder before a shared one. A folder counts as a console's if it is named for the console or for one of the libretro system names the core already declares for cheats, so a libretro-thumbnails checkout works where it is dropped. Names are compared under libretro's substitution of `&*/:\`<>?\|"` by `_`. Pictures are decoded at tile size on a worker and kept in a cache of six hundred; an evicted picture is not disposed, because a tile may still be drawing it. "Add Cover Art from File..." copies the chosen picture into the console's folder under the game's name, and never touches the chosen file or the ROM folder.
+
+**Nothing is fetched.** The plan's §4 is why: the one dataset OpenEmu uses is unlicensed and hotlinks someone else's scans.
+
+**What this does not cover.** No test renders a cover and inspects its pixels; the tests pin which picture is chosen, not how it is drawn. The fallback match can pick the wrong region's art when two regions' boxes differ, since it discards exactly the tags that say so. The folder is still walked on every return to the library, now for every console at once. Measured on this machine's library (5,520 files, Release, six runs): the whole walk takes 2.7 ms warm and 14 ms cold, and narrowing it to the NES's 3,537 takes 0.6 ms, against 2.4 to 5.9 ms for the one-console walk it replaced, so walking everything costs nothing a person can see and was kept.
+
+### 4.34 The bar over the game, and its notices (2026-09-21)
+
+OpenEmu's heads-up bar is LunaP's `OverlayBar` over the picture: 442 by 42, centred 19 points above the bottom, shown when the pointer moves over the game and hidden a second and a half after it stops, never while the pointer is on the bar or one of its menus is open. Left to right, as OpenEmu orders them: quit (the red pill), pause or resume, restart, a save menu (save, load, the slot), an options menu (speed, graphics, bindings, cheats, a screenshot), the volume between its two speaker glyphs, and full screen (the dark pill). The menus are `Menus.Items` over the same `LunaAction`s the menu bar holds, so the bar can never show a label the menu bar has already changed. The glyphs are path data rather than characters, so no fallback font decides what they look like.
+
+**Notices** are LunaP's `NoticeLayer`, top right, for 1.75 seconds with OpenEmu's keyframes: a state saved or loaded (with its slot), a screenshot, fast-forward starting. A handheld has no status line to say a button did something.
+
+**Screenshots** are a new hotkey (F9, rebindable, `HotkeyAction.Screenshot` appended so existing binding files keep their keys) and an options entry. Like a state's picture (§4.31) the PNG is written on the emulation thread with the frame the machine is on, into `home/Screenshots`, named by the game and the moment.
+
+**Volume** is `AudioPlayer.Volume` (`EmuSen_Audio_Sync.md` §7.3), kept in `AppSettings.Volume`.
+
+**Pausing in the background** is OpenEmu's default and `AppSettings.PauseInBackground`: a running game pauses when the window stops being the active one and resumes when it comes back, **but only if this was what paused it**, so a pause the player chose survives a trip to another window, and a game behind the pad menu (§4.29) stays paused.
+
+**What this does not cover.** The bar has no keyboard or pad route of its own; the pad already has the menu of §4.29 with the same entries, and the keyboard has the menu bar. OpenEmu's "Always Hide HUD" is not offered. The background pause is not exercised by a test, since the headless platform's activation events are not the desktop's.
+
+### 4.35 Save states and screenshots as their own views (2026-09-21)
+
+OpenEmu's toolbar switches between Library, Save States and Screenshots, and so does this one. Both media views are a second `TileGrid` whose tiles are the pictures Mistress writes beside each state (§4.31) and the screenshots of §4.34, each titled by its game and labelled by slot ("Where you left off" for the resume state) or by time. The sidebar narrows them by the game each belongs to, the same way it narrows the library, and the search box by the game's title.
+
+**A state is found by its name.** `MediaLibrary.Parse` reads back `SaveLibrary`'s spelling (`<stem>.state`, `<stem>.slotN.state`, `<stem>.resume.state`) and the game is the library entry with that file name; a state whose game is not in the library is still shown, and says so when played. Playing a state starts its game at that instant with no resume question, since choosing the state was the answer. Deleting asks first.
+
+**What this does not cover.** A state from before §4.31 has no picture and shows the placeholder. Two ROMs with one file name in different folders share their states, which has been true of `SaveLibrary` since it existed and is not introduced here. A screenshot opens in a window at its own size; OpenEmu's share and rename are not offered.
+
+### 4.36 Preferences as OpenEmu's panes (2026-09-21)
+
+The Preferences window is tabs: **Library** (the ROM, cover art, save state and log folders), **Gameplay** (what happens when a game with a resume state starts, pausing in the background, big screen), **Appearance** (the theme of §4.25) and **System Files** (the firmware installed, and where). OpenEmu's Controls pane is Settings > Controller Bindings here, which already had tabs per console, and its Cores pane has no counterpart because the cores are built in.
+
+**The "Emulator Core" dropdown is gone.** It was scaffolding from when one core existed, it said it drove nothing, and it wrote `AppSettings.SelectedCore`, which by then was the library's console filter (§4.23); so choosing a "core" in Preferences silently changed which games the library showed. The sidebar is now the one place that value is chosen.

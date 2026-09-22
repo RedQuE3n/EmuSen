@@ -202,3 +202,7 @@ This is the same class of defect as the `EmulatorSession.ScreenHeight` constant 
 > to a fixed one, because this sink already reopens on a mismatch and a resampler in the core would stand in front of the
 > one here. The contract's comment now says a core may change the rate when its machine does; the cost is a reopen per
 > change, which for a game that sets its rate before it plays anything is one reopen with nothing yet queued.
+
+### 7.3 Volume is the stream's gain (2026-09-21)
+
+`AudioPlayer.Volume` (0 to 1, default 1) is applied with `SDL_SetAudioStreamGain` on the open stream, and again every time `OpenDevice` opens one, because a core with a different sample rate closes and reopens the stream (§7.2) and a gain set on the old stream would otherwise be lost silently. It scales the samples SDL mixes out; it does not touch what rate control sees, so `QueuedFrames` and the latency target are unaffected by it. Mistress's in-game bar drives it (`EmuSen_Settings_Reference.md` §4.34). Not covered by a test: with no audio device, as under the headless harness, the setter only stores the value, so the gain call itself is unexercised there.

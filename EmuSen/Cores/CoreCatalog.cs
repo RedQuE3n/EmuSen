@@ -16,7 +16,7 @@ namespace EmuSen.Cores
         };
 
         private static readonly CoreDescriptor Venus =
-            new("SNES (Venus)", new[] { ".smc", ".sfc" }, SnesCheatSystems, "SNES", "Nintendo", 1990);
+            new("SNES (Venus)", new[] { ".smc", ".sfc" }, SnesCheatSystems, "SNES", "Nintendo", 1990, CoverAspect: 0.73);
 
         // The libretro folder name for the NES; Famicom Disk System is different hardware and is not claimed.
         private static readonly string[] NesCheatSystems =
@@ -25,7 +25,7 @@ namespace EmuSen.Cores
         };
 
         private static readonly CoreDescriptor Moon =
-            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems, "NES", "Nintendo", 1983);
+            new("NES (Moon)", new[] { ".nes" }, NesCheatSystems, "NES", "Nintendo", 1983, CoverAspect: 1.43);
 
         // Two libretro folders for one core, the same way Venus claims Satellaview - see Mercury_Core.md §1.
         private static readonly string[] GameBoyCheatSystems =
@@ -35,7 +35,7 @@ namespace EmuSen.Cores
         };
 
         private static readonly CoreDescriptor Mercury =
-            new("Game Boy (Mercury)", new[] { ".gb", ".gbc" }, GameBoyCheatSystems, "GB", "Nintendo", 1989);
+            new("Game Boy (Mercury)", new[] { ".gb", ".gbc" }, GameBoyCheatSystems, "GB", "Nintendo", 1989, CoverAspect: 1.0);
 
         // Claimed so `cheat db prune` keeps it, though Mars applies no cheats yet - see Mars_Core.md §8.
         private static readonly string[] N64CheatSystems =
@@ -45,7 +45,7 @@ namespace EmuSen.Cores
 
         // All three container orders, because the magic word decides and the extension does not - see Mars_Rom.md §1.1.
         private static readonly CoreDescriptor Mars =
-            new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996);
+            new("Nintendo 64 (Mars)", new[] { ".z64", ".n64", ".v64" }, N64CheatSystems, "N64", "Nintendo", 1996, CoverAspect: 0.7);
 
         // Keyed by what a user would type - the internal codename and the console name both reach the same core.
         public static IReadOnlyDictionary<string, CoreDescriptor> Registry { get; } =

@@ -87,7 +87,7 @@ namespace EmuSen.WiseMan.LunaP
             }
 
             Assert.Equal(1, counts[nameof(CheatDatabaseWindow)]);
-            Assert.Equal(3, counts[nameof(PreferencesWindow)]);
+            Assert.Equal(4, counts[nameof(PreferencesWindow)]);
         });
     }
 }

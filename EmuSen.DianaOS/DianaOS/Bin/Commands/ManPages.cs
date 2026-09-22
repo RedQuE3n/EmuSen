@@ -1528,6 +1528,7 @@ namespace EmuSen.DianaOS.DianaOS.Bin.Commands
                 "    --luna-nominal           load ramp, below 60%\n" +
                 "    --luna-busy              load ramp, 60% and above\n" +
                 "    --luna-hot               load ramp, 85% and above\n" +
+                "    --luna-hud-surface       the bar and the notices over a running game\n" +
                 "    --luna-mono-font         the monospace family list\n" +
                 "    --luna-hint-font-size    hint text size\n" +
                 "    --luna-header-font-size  section heading size\n\n" +

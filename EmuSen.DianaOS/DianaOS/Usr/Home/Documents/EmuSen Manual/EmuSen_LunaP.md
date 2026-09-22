@@ -252,3 +252,13 @@ own tests" — was right about the tests and wrong about the separation. It cost
 tests and a net deletion, which is what the audit's own §8.1 rule about not
 smuggling features would have refused as a rider and was correct to ask for
 separately.
+
+## 9. Taken from the sibling checkout while the library controls are built (2026-09-21)
+
+**§3's arrangement is suspended, deliberately and for a stated span.** Modelling Mistress on OpenEmu (`EmuSen_Mistress_LibraryPlan.md` §7) needed four controls no toolkit version has: a virtualised tile grid, a sidebar list, a bar that appears over the game, and a notice. None of them names anything of an emulator, so by LunaP's own rule they belong in the toolkit rather than in Mistress. The user chose, on 2026-09-21, to build them there and to consume them from the checkout at `../EmuSen.LunaP` until a release carries them, rather than publish a version for each step or grow a private copy in Mistress.
+
+**One file says where LunaP comes from.** `LunaP.props` at the repository root holds a single `ProjectReference` to `../EmuSen.LunaP/src/EmuSen.LunaP/EmuSen.LunaP.csproj`, and the four projects of §3 import it in place of their `PackageReference`. One file rather than four edits, so the four cannot be built against two different LunaPs; that mismatch is not a hypothetical, because a `ProjectReference` in one and a package in another puts two assemblies named `EmuSen.LunaP` into one process.
+
+**What it costs, stated as §3.1 states its costs.** A bare clone of this repository no longer builds; it needs the LunaP checkout beside it, on the branch that carries the controls. The build takes whatever is in that working tree, committed or not, so a Mistress commit made in this span names a toolkit state only by date. And the unreleased 0.11.0 surface, not the published 0.10.0, is what every EmuSen window now runs on; the Mistress, LunaP, Serenity and Hotaru tests in `EmuSen.WiseMan` passed against it (341 of 341) before any new control was used.
+
+**How it ends.** When a LunaP release carries the four controls, `LunaP.props` becomes one `PackageReference` at that version and this section is retired with a note of the version.

@@ -1,6 +1,6 @@
 //! The C# `MemoryBus`'s behaviour: every read and write by region and width, the clock, and the events. See Mars_Memory.md §2.
 
-use crate::bus::{MemoryBus, RDRAM_SIZE_EXPANDED};
+use crate::memory::bus::{MemoryBus, RDRAM_SIZE_EXPANDED};
 
 /// `MemoryMap`: the physical address map.
 pub mod map {

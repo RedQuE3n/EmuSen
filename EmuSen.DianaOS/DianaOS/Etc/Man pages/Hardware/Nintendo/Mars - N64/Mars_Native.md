@@ -35,7 +35,7 @@ cannot see a native abort, which is why the library keeps its own.
 
 ## 3. The signal processor in Rust
 
-`src/rsp.rs` ports the C# processor's **plain** path: the scalar unit, the vector unit's arithmetic, all 24
+`src/rsp/mod.rs` ports the C# processor's **plain** path: the scalar unit, the vector unit's arithmetic, all 24
 vector loads and stores, and the reciprocal tables built by the same arithmetic (`Mars_RspVector.md` §10). The C#
 SIMD path is required to equal the plain path, so either is the oracle. The shift counts of the reciprocal unit are
 taken modulo 32 with `wrapping_shl` and `wrapping_shr`, because C# masks a shift count to five bits and the corpus's
@@ -177,6 +177,22 @@ the three games' frame times with the switch off matched the preceding commit's.
 
 ## 5. The whole machine in Rust (planned 2026-09-22)
 
+*Layout, 2026-09-22.* The crate's `src/` mirrors the C# Mars's folders:
+
+| Rust | C# |
+|---|---|
+| `cpu/` | `Cpu/` |
+| `memory/` (the bus and every device) | `Memory/` |
+| `rsp/` | `Rsp/` |
+| `rdp/` | `Rdp/` |
+| `vi/` (timing, with the scan-out as `vi/scan`) | `Vi/` |
+| `rom/` | `Rom/` |
+| `ffi/` (the C ABI and the test ABIs) | the shim's interface |
+
+`machine.rs` (the counterpart of `MarsCore` and `Boot`), `state.rs` and the tests stay at the top. The move changed
+module paths only. The exported symbols and the state layout did not change, and the 314 crate tests and 398 WiseMan
+tests passed before and after it.
+
 §3.4's lesson decides the shape. A component entered once per emulated cycle loses on the boundary. So the port moves
 the **whole machine**, and the boundary is crossed **once per frame**: input in, and the picture and audio samples out.
 
@@ -239,7 +255,7 @@ derived here.
   | `machine` | `MarsCore`'s header, and the `Machine` that owns everything | 223 |
   | `state`, `ffi`, `naming` | the encodings; the C ABI; the naming rule's test | 410, 105, 101 |
 
-  §3's interpreter, `rsp.rs`, is untouched. Its registers and the machine's `sp::Rsp` are two structs until stage 2
+  §3's interpreter, `rsp/mod.rs`, is untouched. Its registers and the machine's `sp::Rsp` are two structs until stage 2
   joins them.
 - **The naming rule.** Each Rust field is the snake_case of its C# name without the leading underscore, and an
   auto-property's backing field `<X>k__BackingField` is named for `X`. There are two exceptions: `SaveChip.Type` is
@@ -367,22 +383,22 @@ same picture and plays the same sound.
 
 | Module | The C# it ports | Lines |
 | --- | --- | --- |
-| `interp.rs` | `Cpu.Step` and the fetch, `TranslateAccess`, `Cpu.Dispatch`, and the ALU, branch, load and store, unaligned, multiply and divide, trap and COP2 files | 816 |
-| `cop0.rs` | `Cop0Registers` and `Cpu.Opcodes.Cop0`: the registers and their masks, Random, the interrupt check, the timer, exceptions, the TLB instructions | 349 |
-| `cop1.rs` | `Fpu`, `Cpu.Opcodes.Cop1` and `Cop1Math`: the register file in both modes, the control word, the formats, compare, delivery | 284 |
-| `softfloat.rs` | `SoftFloat`, `SoftFloatMath`, `SoftFloatConvert`, `HostSingle` | 606 |
-| `segments.rs`, `tlb.rs` | `Segments`; `Tlb.TryTranslate`, `Probe`, `PairedPageMask` | 66, 110 |
-| `idle.rs` | the idle test in `StepBlock`, then `RunIdle`, `RspRan`, `AfterInstruction` | 130 |
-| `bus_access.rs` | `MemoryBus`: reads and writes by region and width, `Store`, `Load`, the cartridge latch, the MI's repeat, `Tick`, `RunEvents`, `Settle`, `Reschedule`, `Count` | 404 |
-| `mi.rs`, `pi.rs`, `si.rs`, `joybus.rs` | `MiInterface`; `PiInterface`; `SiInterface`; `Joybus` | 126, 135, 134, 119 |
-| `ai.rs`, `vi.rs` | `AiInterface`; `Vi.Timing` and the VI's registers | 237, 173 |
-| `sp.rs`, `dp.rs` | `SpInterface`, and the processor's two instructions that reach the machine; `DpInterface`'s registers and `Take` | 496, 179 |
-| `save.rs`, `controller.rs`, `isviewer.rs`, `rom.rs` | `SaveChip`, `Eeprom`, `Sram`, `FlashRam`; `ControllerPak`; `IsViewer`; `RomImage`, `Cic`, `SaveTypes` | 479, 150, 50, 229 |
+| `cpu/interp.rs` | `Cpu.Step` and the fetch, `TranslateAccess`, `Cpu.Dispatch`, and the ALU, branch, load and store, unaligned, multiply and divide, trap and COP2 files | 816 |
+| `cpu/cop0.rs` | `Cop0Registers` and `Cpu.Opcodes.Cop0`: the registers and their masks, Random, the interrupt check, the timer, exceptions, the TLB instructions | 349 |
+| `cpu/cop1.rs` | `Fpu`, `Cpu.Opcodes.Cop1` and `Cop1Math`: the register file in both modes, the control word, the formats, compare, delivery | 284 |
+| `cpu/softfloat.rs` | `SoftFloat`, `SoftFloatMath`, `SoftFloatConvert`, `HostSingle` | 606 |
+| `cpu/segments.rs`, `cpu/tlb.rs` | `Segments`; `Tlb.TryTranslate`, `Probe`, `PairedPageMask` | 66, 110 |
+| `cpu/idle.rs` | the idle test in `StepBlock`, then `RunIdle`, `RspRan`, `AfterInstruction` | 130 |
+| `memory/bus_access.rs` | `MemoryBus`: reads and writes by region and width, `Store`, `Load`, the cartridge latch, the MI's repeat, `Tick`, `RunEvents`, `Settle`, `Reschedule`, `Count` | 404 |
+| `memory/mi.rs`, `memory/pi.rs`, `memory/si.rs`, `memory/joybus.rs` | `MiInterface`; `PiInterface`; `SiInterface`; `Joybus` | 126, 135, 134, 119 |
+| `memory/ai.rs`, `vi/mod.rs` | `AiInterface`; `Vi.Timing` and the VI's registers | 237, 173 |
+| `memory/sp.rs`, `memory/dp.rs` | `SpInterface`, and the processor's two instructions that reach the machine; `DpInterface`'s registers and `Take` | 496, 179 |
+| `memory/save.rs`, `memory/controller.rs`, `memory/isviewer.rs`, `rom/mod.rs` | `SaveChip`, `Eeprom`, `Sram`, `FlashRam`; `ControllerPak`; `IsViewer`; `RomImage`, `Cic`, `SaveTypes` | 479, 150, 50, 229 |
 | `machine.rs` | `Boot.HandOff`, `LoadRom` with `LoadSaves`, `RunFrame` with `RunQuietly`, `LoadState` | 390 |
-| `ffi.rs`, `Shim/MarsRtCore.cs` | the C ABI; `MarsCore`'s interfaces over it | 429, 355 |
+| `ffi/mod.rs`, `Shim/MarsRtCore.cs` | the C ABI; `MarsCore`'s interfaces over it | 429, 355 |
 | `tests/` (nine files), `examples/frames.rs` | the C# unit tests of §5.2.1, item 6; a timed run for profiling | 4,169, 46 |
 
-A module that stage 1a gave a state struct counts that code too. `rsp.rs`, §3's interpreter, was changed in one
+A module that stage 1a gave a state struct counts that code too. `rsp/mod.rs`, §3's interpreter, was changed in one
 respect, described below.
 
 **How the C# maps onto Rust.**
@@ -714,7 +730,7 @@ stage 1 left, `Rdp::accept(&mut self, word, &mut RdpMemory) -> bool`, and its si
 
 | Module | C# file | Lines |
 | --- | --- | --- |
-| `rdp.rs` | `Rdp.cs`: gathering, command lengths, dispatch; the stage-1a state, unchanged | 539 (425 before) |
+| `rdp/mod.rs` | `Rdp.cs`: gathering, command lengths, dispatch; the stage-1a state, unchanged | 539 (425 before) |
 | `rdp/modes.rs` | `Rdp.Modes.cs`: the registers, the decoded modes, `Refresh` | 213 |
 | `rdp/fill.rs`, `rdp/walker.rs` | `Rdp.Fill.cs`, `Rdp.Walker.cs`: images, scissor, fill, triangles, the edge walk | 172, 205 |
 | `rdp/one_cycle.rs`, `rdp/two_cycle.rs` | the combiner, blender, dither and colour image; the pipelined two-cycle mode | 604, 256 |
@@ -724,7 +740,7 @@ stage 1 left, `Rdp::accept(&mut self, word, &mut RdpMemory) -> bool`, and its si
 | `rdp/coverage.rs`, `rdp/depth.rs`, `rdp/chroma_key.rs` | coverage; the depth encoding, compare and store, shade and depth correction; the key | 68, 194, 20 |
 | `rdp/tables.rs` | the builders of the dither, blend-quotient, divide, five-to-eight, log and coverage-offset tables | 175 |
 | `rdp/replay.rs` | a `cargo test` over the recorded game streams (below) | 76 |
-| `ffi_rdp.rs` | a test-only C ABI over one processor: new, free, load and save its state, texture memory, accept words | 141 |
+| `ffi/rdp.rs` | a test-only C ABI over one processor: new, free, load and save its state, texture memory, accept words | 141 |
 
 **What the port leaves out, and the argument that no serialized byte depends on it.** The processors that share a
 list (`Classify`'s steps, `Configure`, `Owns`, the stamps, `TakeScratchFrom`, `CopyStateFrom`, `RecordAliasedRead`,
@@ -886,7 +902,7 @@ and here the boundary is crossed once per full sync, which is the shape §5 chos
 ### 5.4 The scan-out
 
 *Stage 4's first part, 2026-09-22.* MarsRT's video interface turns its registers and RDRAM into a picture.
-`src/vi_scan.rs` is C#'s `Vi.Scan()` followed by `MarsCore.Compose`, on the immediate path, at a `RenderScale` of
+`src/vi/scan.rs` is C#'s `Vi.Scan()` followed by `MarsCore.Compose`, on the immediate path, at a `RenderScale` of
 one, with no antialiasing and no compute device. The C# scan-out is the oracle. The claim is that the two agree byte
 for byte in everything a scan leaves behind: the frame, its width, height and row repeat, the whole raster with its
 coverage bytes, the held lines, the blank flag, and the value `Scan()` returns.
@@ -895,11 +911,11 @@ coverage bytes, the held lines, the blank flag, and the value `Scan()` returns.
 
 | Module | The C# it ports | Lines |
 | --- | --- | --- |
-| `vi_scan.rs` | `Vi.Prepare`, `Measure`, `Borders`, `Hold`, `Fade`, `Expire`, `Darken`, `FrameHeight`; `MarsCore.Compose` | 327 |
+| `vi/scan.rs` | `Vi.Prepare`, `Measure`, `Borders`, `Hold`, `Fade`, `Expire`, `Darken`, `FrameHeight`; `MarsCore.Compose` | 327 |
 | `vi_scan/walker.rs` | `Vi.Walk` and `Vi.Walker`: the fetch, the line window, the two slots and their sample caches, `Filter`, `Dither` | 366 |
 | `vi_scan/filters.rs` | `Pixel`, `Pull`, `Runners`, `Step`, `Divot`, `Median`, `Mix`, `Between`, the gamma table and `Root` | 138 |
 | `vi_scan/tests.rs` | `MarsViTests`' angrylion pixels, and the filters against formulations written independently of them | 416 |
-| `ffi_vi.rs` | nothing: a test-only C ABI, one VI and its scan-out behind a handle | 125 |
+| `ffi/vi.rs` | nothing: a test-only C ABI, one VI and its scan-out behind a handle | 125 |
 
 `EmuSen.WiseMan/Fixtures/MarsRTViScan.cs` wraps the test ABI, and `MarsRTViTests` and one theory added to
 `MarsViDifferentialTests` drive it. The port keeps the C# structure closely, down to the window's sliding rule and the
@@ -911,7 +927,7 @@ comparison one of languages rather than of algorithms.
 are serialized (§5.1). A scan that could not write them would leave MarsRT's state different from the C# state after
 the same frame, which is the property the whole port is graded by. The signature is therefore
 `scan(vi: &mut Vi, rdram, hidden, out: &mut Scanout) -> bool`. What the C# marks `[SkipInState]` for the scan, the
-raster and the walker's caches, lives in `Scanout`, so `vi.rs`'s state layout is untouched. A machine holds one
+raster and the walker's caches, lives in `Scanout`, so `vi/mod.rs`'s state layout is untouched. A machine holds one
 `Scanout` for its life and keeps it across a load, as the C# raster is kept across one. `Scanout` also carries
 `repeat_rows`, C#'s `RepeatRows`, false as Mistress sets it.
 

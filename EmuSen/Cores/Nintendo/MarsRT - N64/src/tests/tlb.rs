@@ -1,10 +1,10 @@
 //! Translation: `MarsTlbTests` and `MarsSegmentMapTests`.
 
 use super::support::{Asm, Rig, new_bus};
-use crate::bus::MemoryBus;
-use crate::cop0::{CONTEXT, ENTRY_HI, ENTRY_LO0, ENTRY_LO1, INDEX, PAGE_MASK, STATUS, VECTOR_BASE, WIRED};
+use crate::memory::bus::MemoryBus;
+use crate::cpu::cop0::{CONTEXT, ENTRY_HI, ENTRY_LO0, ENTRY_LO1, INDEX, PAGE_MASK, STATUS, VECTOR_BASE, WIRED};
 use crate::cpu::code;
-use crate::tlb::{ENTRY_LO_DIRTY, ENTRY_LO_GLOBAL, ENTRY_LO_VALID, TlbEntry};
+use crate::cpu::tlb::{ENTRY_LO_DIRTY, ENTRY_LO_GLOBAL, ENTRY_LO_VALID, TlbEntry};
 
 const MAPPED_PAGE: u64 = 0x0000_0000_0010_0000;
 const FRAME: u32 = 0x2000;

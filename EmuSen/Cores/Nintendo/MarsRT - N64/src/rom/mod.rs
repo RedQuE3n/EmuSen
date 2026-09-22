@@ -1,6 +1,6 @@
 //! A cartridge image normalised to big-endian with its header read, its CIC, and its declared save chip: C#'s `RomImage`, `Cic` and `SaveTypes`. See Mars_Rom.md.
 
-use crate::save::save_type;
+use crate::memory::save::save_type;
 
 pub const MAGIC: u32 = 0x8037_1240;
 pub const HEADER_LENGTH: usize = 0x40;

@@ -1,7 +1,7 @@
 //! The display processor's command interface, the C# `DpInterface`, and the words a snapshot carries.
 
-use crate::bus::{MemoryBus, SP_MEM_SIZE};
-use crate::mi::interrupt;
+use crate::memory::bus::{MemoryBus, SP_MEM_SIZE};
+use crate::memory::mi::interrupt;
 use crate::rdp::{Rdp, RdpMemory};
 use crate::state::{State, StateError, StateReader, StateResult, StateWriter};
 

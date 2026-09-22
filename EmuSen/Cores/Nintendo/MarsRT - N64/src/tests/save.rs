@@ -3,11 +3,11 @@
 use std::sync::Arc;
 
 use super::support::{build_homebrew, build_rom, new_bus, rom_image};
-use crate::bus::MemoryBus;
-use crate::bus_access::map::{CART_DOMAIN2_ADDRESS2, PI_BASE};
-use crate::controller::ControllerPak;
-use crate::joybus;
-use crate::save::{Eeprom, FlashRam, SRAM_BANK, SaveChip, SaveDevice, Sram, save_type};
+use crate::memory::bus::MemoryBus;
+use crate::memory::bus_access::map::{CART_DOMAIN2_ADDRESS2, PI_BASE};
+use crate::memory::controller::ControllerPak;
+use crate::memory::joybus;
+use crate::memory::save::{Eeprom, FlashRam, SRAM_BANK, SaveChip, SaveDevice, Sram, save_type};
 
 const DRAM: u32 = 0x0010_0000;
 const SAVE_BASE: u32 = CART_DOMAIN2_ADDRESS2;

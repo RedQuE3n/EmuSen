@@ -42,4 +42,26 @@ fn the_corpus_reports_what_the_csharp_core_reports() {
     let at = text.find(FINISHED).expect("the corpus did not finish");
     let summary = &text[at + 6..at + text[at..].find(" tests").unwrap() + 6];
     assert_eq!(summary, "Failed 46 of 4637 tests");
+
+    // Through the recompiler at each tier: the transcript line for line the interpreter's, which the WiseMan test holds to C#'s.
+    let through = |text: &str| text[..text.find(FINISHED).map_or(text.len(), |at| at + text[at..].find('\n').unwrap_or(text.len() - at))].to_string();
+    for tier in blocks::tiers() {
+        let mut machine = Machine::boot(Arc::new(RomImage::from_image(&std::fs::read(std::env::var("EMUSEN_MARSRT_CORPUS").unwrap()).unwrap()).unwrap()), true);
+        machine.set_recompiler(true);
+        machine.blocks.tier = tier;
+        let started = std::time::Instant::now();
+        for _ in 0..400 {
+            machine.run_steps(1 << 20);
+            if String::from_utf8_lossy(&machine.bus.is_viewer.text).contains(FINISHED) {
+                break;
+            }
+        }
+        let got = String::from_utf8_lossy(&machine.bus.is_viewer.text).into_owned();
+        let (want, got) = (through(&text), through(&got));
+        for (n, (a, b)) in want.lines().zip(got.lines()).enumerate() {
+            assert_eq!(a, b, "{tier:?}: line {}", n + 1);
+        }
+        assert_eq!(want.lines().count(), got.lines().count(), "{tier:?}");
+        eprintln!("{tier:?}: {} lines identical in {:?}; blocks {:?}", got.lines().count(), started.elapsed(), machine.blocks.counters());
+    }
 }

@@ -236,12 +236,12 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         // Declared before VideoSettings, whose initializer reads it; static fields initialise in textual order.
         private static readonly string[] Honoured = { "ExpansionPak", "ThreadedRdp", "RdpWorkers", "DeferredPresentation", "SkipRepeatedScans" };
 
+        // MarsRT's own key for Mars's UseBlocks, which is no setting of Mars's; before VideoSettings for the same reason - see Mars_Native.md §5.8.
+        private static readonly CoreSetting Recompiler = new("Recompiler", "Compile the processor's code", "The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter. Off by default on MarsRT until proven in play.", CoreSettingKind.Switch, "false");
+
         // Mars's keys, so one graphics tab serves either engine; the multiple, antialiasing and the device are not honoured yet - see Mars_Native.md §5.5 and §5.6.
         public static readonly IReadOnlyList<CoreSetting> VideoSettings =
             MarsCore.VideoSettings.Select(s => Honoured.Contains(s.Key) ? Threads(s) : s with { Hint = IgnoredHint + s.Hint }).Append(Recompiler).ToArray();
-
-        // MarsRT's own key for Mars's UseBlocks, which is no setting of Mars's - see Mars_Native.md §5.8.
-        private static readonly CoreSetting Recompiler = new("Recompiler", "Compile the processor's code", "The processor's code is compiled to the host's machine code in blocks, each compared with memory before it runs, on a thread of its own. Exact: frame for frame the interpreter. Off by default on MarsRT until proven in play.", CoreSettingKind.Switch, "false");
 
         private static CoreSetting Threads(CoreSetting s) => s.Key switch
         {

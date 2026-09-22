@@ -59,8 +59,8 @@ namespace EmuSen.WiseMan.Cores
             return (rom, stateName is null ? null : File.ReadAllBytes(Path.Combine(folder, stateName)));
         }
 
-        private static MarsRtCore Twin(bool threaded, bool deferred, int workers = 1) =>
-            new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = threaded, RdpWorkers = workers, DeferredPresentation = deferred, SkipRendering = false };
+        private static MarsRtCore Twin(bool threaded, bool deferred, int workers = 1, int tier = 0, bool blocks = false) =>
+            new(expansionPak: true, batteryRamDisabled: true) { ThreadedRdp = threaded, RdpWorkers = workers, DeferredPresentation = deferred, SkipRendering = false, UseBlocks = blocks, BlockTier = tier };
 
         // MarsRT on a thread, its state compared every frame (which joins) or every sixtieth (which leaves the thread running across frames), picture and sound every frame.
         [Theory]
@@ -164,7 +164,14 @@ namespace EmuSen.WiseMan.Cores
         // MarsRT threaded against the C# Mars threaded, the interpreter in both, presented at once and then both deferred.
         [Theory]
         [MemberData(nameof(Games))]
-        public void MarsRT_threaded_leaves_what_the_csharp_core_threaded_leaves(string romName, string? stateName)
+        public void MarsRT_threaded_leaves_what_the_csharp_core_threaded_leaves(string romName, string? stateName) => AgainstTheCsharpCore(romName, stateName, blocks: false);
+
+        // The same, with MarsRT's recompiler on: the C# interpreter threaded is still the oracle - see Mars_Native.md §5.8.
+        [Theory]
+        [MemberData(nameof(Games))]
+        public void MarsRT_recompiled_and_threaded_leaves_what_the_csharp_core_threaded_leaves(string romName, string? stateName) => AgainstTheCsharpCore(romName, stateName, blocks: true);
+
+        private void AgainstTheCsharpCore(string romName, string? stateName, bool blocks)
         {
             if (Game(romName, stateName) is not { } game) return;
             int frames = Frames(600);
@@ -175,7 +182,7 @@ namespace EmuSen.WiseMan.Cores
                 oracle.RdpWorkers = 1;
                 oracle.DeferredPresentation = deferred;
                 oracle.SkipRendering = false;
-                using MarsRtCore twin = Twin(threaded: true, deferred);
+                using MarsRtCore twin = Twin(threaded: true, deferred, blocks: blocks);
                 oracle.LoadRom(game.Rom);
                 twin.LoadRom(game.Rom);
                 if (game.State is { } state)
@@ -194,7 +201,7 @@ namespace EmuSen.WiseMan.Cores
                     SamePicture(frame, (oracle.ScreenWidth, oracle.ScreenHeight, oracle.RowRepeat), oracle.GetFrameBufferRgba(), twin);
                     SameSound(frame, oracle, twin);
                 }
-                _output.WriteLine($"{romName} {stateName ?? "from power-on"}, deferred {deferred}: {frames} frames, state, picture and sound exact against the C# core threaded; {oracle.Bus!.Cycles} cycles");
+                _output.WriteLine($"{romName} {stateName ?? "from power-on"}, deferred {deferred}{(blocks ? ", recompiled" : "")}: {frames} frames, state, picture and sound exact against the C# core threaded; {oracle.Bus!.Cycles} cycles{(blocks ? $"; blocks {string.Join(' ', twin.BlockCounterValues())}" : "")}");
             }
         }
 
@@ -208,13 +215,14 @@ namespace EmuSen.WiseMan.Cores
             if (Environment.GetEnvironmentVariable(MarsRtTests.BenchVariable) != "1") return;
             if (Game(romName, stateName) is not { } game) return;
             int frames = Frames(300);
+            int workers = Math.Clamp(Environment.ProcessorCount / 3, 1, 4);
             var runs = new (string Name, Func<EmuSen.Cores.ICore> Make)[]
             {
-                ("MarsRT", () => Twin(threaded: false, deferred: false)),
-                ("MarsRT threaded", () => Twin(threaded: true, deferred: false)),
-                ("MarsRT threaded+deferred", () => Twin(threaded: true, deferred: true)),
-                ("MarsRT split+deferred", () => Twin(threaded: true, deferred: true, workers: Math.Clamp(Environment.ProcessorCount / 3, 1, 4))),
-                ("C# production", () => new MarsCore(expansionPak: true, batteryRamDisabled: true) { UseBlocks = true, ThreadedRdp = true, DeferredPresentation = true, RdpWorkers = Math.Clamp(Environment.ProcessorCount / 3, 1, 4) }),
+                ("MarsRT split+deferred, interpreter", () => Twin(threaded: true, deferred: true, workers)),
+                ("MarsRT split+deferred, decoded blocks", () => Twin(threaded: true, deferred: true, workers, tier: 1, blocks: true)),
+                ("MarsRT split+deferred, compiled", () => Twin(threaded: true, deferred: true, workers, tier: 2, blocks: true)),
+                ("MarsRT split+deferred, compiled with registers held", () => Twin(threaded: true, deferred: true, workers, tier: 3, blocks: true)),
+                ("C# production", () => new MarsCore(expansionPak: true, batteryRamDisabled: true) { UseBlocks = true, ThreadedRdp = true, DeferredPresentation = true, RdpWorkers = workers }),
             };
 
             bool rspBlocks = EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseBlocks;
@@ -232,6 +240,7 @@ namespace EmuSen.WiseMan.Cores
                         var clock = Stopwatch.StartNew();
                         for (int i = 0; i < frames; i++) core.RunFrame();
                         times.Add($"{name} {clock.Elapsed.TotalMilliseconds / frames:F2}");
+                        if (core is MarsRtCore rt && rt.UseBlocks) times[^1] += $" (blocks {string.Join(' ', rt.BlockCounterValues())})";
                         (core as IDisposable)?.Dispose();
                     }
                     _output.WriteLine($"{romName} round {round}, {frames} frames, ms a frame: {string.Join("; ", times)}");

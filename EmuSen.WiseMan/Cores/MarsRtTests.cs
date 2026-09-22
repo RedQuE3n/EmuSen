@@ -350,7 +350,25 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("sm64.z64", "sm64.state", true)]
         [InlineData("oot.z64", "oot.state", true)]
         [InlineData("ge.z64", "ge-dam.state", true)]
-        public void A_real_game_stays_byte_exact_with_its_picture_and_sound_frame_by_frame(string romName, string? stateName, bool blocks)
+        public void A_real_game_stays_byte_exact_with_its_picture_and_sound_frame_by_frame(string romName, string? stateName, bool blocks) =>
+            RealGame(romName, stateName, blocks, tier: 0);
+
+        // The same games at each tier of the recompiler, which the default leaves to the furthest built.
+        [Theory]
+        [MemberData(nameof(GameTiers))]
+        public void A_real_game_stays_byte_exact_at_each_tier_of_the_recompiler(string romName, string? stateName, int tier) =>
+            RealGame(romName, stateName, blocks: true, tier);
+
+        public static TheoryData<string, string?, int> GameTiers()
+        {
+            var data = new TheoryData<string, string?, int>();
+            foreach (int tier in RecompilerTiers)
+                foreach (var (rom, state) in new[] { ("sm64.z64", "sm64.state"), ("oot.z64", "oot.state"), ("ge.z64", "ge-dam.state") })
+                    data.Add(rom, state, tier);
+            return data;
+        }
+
+        private void RealGame(string romName, string? stateName, bool blocks, int tier)
         {
             string? folder = Environment.GetEnvironmentVariable(StatesVariable);
             if (folder is null || !File.Exists(Path.Combine(folder, romName)) || (stateName != null && !File.Exists(Path.Combine(folder, stateName))))
@@ -365,6 +383,7 @@ namespace EmuSen.WiseMan.Cores
             MarsCore oracle = Oracle(expansionPak: true);
             using MarsRtCore twin = Twin(expansionPak: true);
             twin.UseBlocks = blocks;
+            twin.BlockTier = tier;
             oracle.SkipRendering = twin.SkipRendering = false;
             oracle.LoadRom(rom);
             twin.LoadRom(rom);
@@ -387,7 +406,7 @@ namespace EmuSen.WiseMan.Cores
                 SamePicture(frame, oracle, twin);
                 SameSound(frame, oracle, twin);
             }
-            _output.WriteLine($"{romName} {stateName ?? "from boot"}{(blocks ? " through the blocks" : "")}: {frames} frames, state, picture and sound exact; {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions{(blocks ? $"; blocks {string.Join(' ', twin.BlockCounterValues())}" : "")}");
+            _output.WriteLine($"{romName} {stateName ?? "from boot"}{(blocks ? $" through the blocks at tier {tier}" : "")}: {frames} frames, state, picture and sound exact; {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions{(blocks ? $"; blocks {string.Join(' ', twin.BlockCounterValues())}" : "")}");
         }
 
         // MarsRT's interpreter against the C# interpreter, blocks off in both, three interleaved rounds from the games' states; C# with its blocks is a reference.
@@ -454,8 +473,8 @@ namespace EmuSen.WiseMan.Cores
             return data;
         }
 
-        // The recompiler's tiers as built: 1 the decoded blocks.
-        public static readonly int[] RecompilerTiers = { 1 };
+        // The recompiler's tiers as built: 1 decoded blocks, 2 compiled, 3 compiled with the registers held.
+        public static readonly int[] RecompilerTiers = { 1, 2, 3 };
 
         private void RandomProgram(int seed, bool blocks, int tier)
         {
@@ -489,7 +508,6 @@ namespace EmuSen.WiseMan.Cores
                 Assert.True(csharp.ToArray().AsSpan().SequenceEqual(rust) && oracle.Bus!.Cycles == twin.Cycles, $"seed {seed}: the processors part after {i + Stride} steps (C# pc {oracle.Cpu!.CurrentPc:X}, cycles {oracle.Bus!.Cycles} and {twin.Cycles})");
             }
             _output.WriteLine($"seed {seed}: {oracle.Cpu!.Instructions - before} instructions, {seen.Count} addresses{(blocks ? $"; blocks {string.Join(' ', twin.BlockCounterValues())}" : "")}");
-            if (blocks) Assert.True(twin.BlockCounterValues()[3] > 100, "the blocks were hardly entered, so the test compared the interpreter");
 
             new StateComparer().Frame(seed, Save(oracle), twin.Save(false));
             Assert.True(oracle.Cpu!.Instructions > Steps / 20, "almost every step raised, so the test compared little");

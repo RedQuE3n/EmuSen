@@ -10,6 +10,12 @@ name = "marsrt"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# The recompiler's code generator; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See Mars_Native.md §5.8.
+cranelift-codegen = "0.136.0"
+cranelift-frontend = "0.136.0"
+cranelift-jit = "0.136.0"
+cranelift-module = "0.136.0"
+cranelift-native = "0.136.0"
 
 [profile.release]
 panic = "abort"

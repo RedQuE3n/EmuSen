@@ -51,6 +51,13 @@ namespace EmuSen.Cores
         void Set(string key, string value);
     }
 
+    // The number a core writes at the head of its save states, for a frontend to record beside them - see EmuSen_Save_States.md §6.
+    public interface IStateFormat
+    {
+        // The version SaveState writes now; what LoadState accepts is the core's own business.
+        int StateVersion { get; }
+    }
+
     // A core that knows when its picture is the one it gave last, so a frontend need not present it again - see EmuSen_Multicore.md §14.
     public interface IFrameSerial
     {

@@ -14,7 +14,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.Moon
 {
     // The NES's ICore implementation; the hardware is public beyond the interface - see Moon_Core.md §1.
-    public partial class MoonCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.IFrameProfiler, global::EmuSen.Cores.ICheatRegistryHost
+    public partial class MoonCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.IFrameProfiler, global::EmuSen.Cores.ICheatRegistryHost, global::EmuSen.Cores.IStateFormat
     {
         public const int MasterClockHz = 21477272;
         public const int MasterClocksPerCpuCycle = 12;
@@ -28,6 +28,7 @@ namespace EmuSen.Cores.Nintendo.Moon
         private const uint StateMagic = 0x4E4F4F4D;
         // Bumped when the timeline folded into the core, replacing Crystal's span - see Moon_Core.md §5.
         private const int StateVersion = 3;
+        int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         public Cartridge? Cart { get; private set; }
         public Cpu? Cpu { get; private set; }

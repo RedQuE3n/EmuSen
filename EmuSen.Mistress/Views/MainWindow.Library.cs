@@ -56,6 +56,10 @@ namespace EmuSen.Mistress.Views
             _covers.Loaded += _ => LibraryGrid.Refresh(_shownEntries);
 
             LibrarySidebar.Chose += ChooseCollection;
+            _newCollection = new LunaAction("_New Collection...", () => _ = NewCollectionAsync(null));
+            _renameCollection = new LunaAction("_Rename Collection...", () => _ = RenameCollectionAsync());
+            _deleteCollection = new LunaAction("_Delete Collection...", () => _ = DeleteCollectionAsync());
+            LibrarySidebar.ContextMenu = SidebarContextMenu();
             TileScale.Minimum = MinimumTileScale;
             TileScale.Maximum = MaximumTileScale;
             TileScale.Value = Math.Clamp(_appSettings.LibraryTileScale, MinimumTileScale, MaximumTileScale);
@@ -138,7 +142,9 @@ namespace EmuSen.Mistress.Views
         private bool MixedConsoles { get; set; }
 
         private string CollectionKey =>
-            _appSettings.LibraryCollection is FavouritesKey or RecentKey ? _appSettings.LibraryCollection : AllGamesKey;
+            _appSettings.LibraryCollection is FavouritesKey or RecentKey ? _appSettings.LibraryCollection
+            : ShownCollection is GameCollection collection ? KeyOf(collection)
+            : AllGamesKey;
 
         // The console narrows first, the collection second, the search box last.
         private IReadOnlyList<RomEntry> InCollection(IReadOnlyList<RomEntry> entries) => CollectionKey switch
@@ -146,6 +152,8 @@ namespace EmuSen.Mistress.Views
             FavouritesKey => entries.Where(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.Favourite).ToList(),
             RecentKey => entries.Where(e => _recordSnapshot.TryGetValue(e.FullPath, out GameRecord? r) && r.LastPlayed is not null)
                 .OrderByDescending(e => _recordSnapshot[e.FullPath].LastPlayed).Take(RecentLimit).ToList(),
+            _ when ShownCollection is GameCollection collection && _records.Members(collection.Id) is var members =>
+                entries.Where(e => members.Contains(e.FullPath)).ToList(),
             _ => entries,
         };
 
@@ -167,12 +175,20 @@ namespace EmuSen.Mistress.Views
             var consoles = new SourceListGroup("Consoles", EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder
                 .Select(c => new SourceListItem(ConsoleKeyPrefix + c.DisplayName, c.Console, _allScan.Entries.Count(e => e.CoreDisplayName == c.DisplayName).ToString()))
                 .ToArray());
-            LibrarySidebar.Fill(new[] { library, consoles }, SidebarKey);
+            LibrarySidebar.Fill(new[] { library, consoles, CollectionsGroup() }, SidebarKey);
         }
 
         // A collection spans every console, and a console is all of its games, as OpenEmu's sidebar has it.
         private void ChooseCollection(string key)
         {
+            // The last row is an action, as OpenEmu's "+" is, and leaves the selection where it was.
+            if (key == NewCollectionKey)
+            {
+                FillSidebar();
+                _ = NewCollectionAsync(null);
+                return;
+            }
+
             string console = key.StartsWith(ConsoleKeyPrefix, StringComparison.Ordinal) ? key[ConsoleKeyPrefix.Length..] : EmuSen.Cores.CoreCatalog.AllConsoles;
             _appSettings.LibraryCollection = key.StartsWith(ConsoleKeyPrefix, StringComparison.Ordinal) ? AllGamesKey : key;
             if (console != SelectedConsole)
@@ -196,6 +212,7 @@ namespace EmuSen.Mistress.Views
         {
             FavouritesKey => "No favourites yet. Right-click a game and choose Add to Favourites, or press Select on a pad.",
             RecentKey => "Nothing played yet. Games appear here once they have been started.",
+            _ when ShownCollection is GameCollection collection => $"Nothing in {collection.Name} yet. Right-click a game and choose Add to Collection.",
             _ => RomLibrary.DescribeEmpty(_libraryScan),
         };
 
@@ -208,10 +225,23 @@ namespace EmuSen.Mistress.Views
             var addArt = new LunaAction("Add _Cover Art from File...", () => { if (SelectedLibraryEntry is RomEntry e) _ = AddCoverArtAsync(e); });
             var removeArt = new LunaAction("_Remove Cover Art", () => { if (SelectedLibraryEntry is RomEntry e) RemoveCoverArt(e); });
 
+            var leave = new LunaAction("Remove from This Collection", () =>
+            {
+                if (SelectedLibraryEntry is RomEntry e && ShownCollection is GameCollection c) ToggleMembership(c, e);
+            });
+
             ContextMenu menu = Menus.Context(play, restart, LunaAction.Separator(), favourite, LunaAction.Separator(), addArt, removeArt);
             menu.Opening += (_, _) =>
             {
                 RomEntry? entry = SelectedLibraryEntry;
+                var actions = new List<LunaAction> { play, restart, LunaAction.Separator(), favourite, CollectionsSubmenu(entry) };
+                if (ShownCollection is GameCollection shown)
+                {
+                    leave.Text = $"Remove from {shown.Name.Replace("_", "__")}";
+                    actions.Add(leave);
+                }
+                actions.AddRange(new[] { LunaAction.Separator(), addArt, removeArt });
+                menu.ItemsSource = Menus.Items(actions);
                 bool any = entry is not null;
                 play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = any;
                 restart.IsEnabled = any && File.Exists(ResumeStatePath(entry!.FullPath));
@@ -230,6 +260,7 @@ namespace EmuSen.Mistress.Views
         private void ToggleFavourite(RomEntry entry)
         {
             _records.ToggleFavourite(entry.FullPath);
+            IdentifyLater(entry.FullPath);
             bool now = _records.IsFavourite(entry.FullPath);
             StatusText.Text = now ? $"Added {entry.Title} to Favourites" : $"Removed {entry.Title} from Favourites";
             ShowLibraryEntries();

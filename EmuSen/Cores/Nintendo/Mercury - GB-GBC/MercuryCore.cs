@@ -10,7 +10,7 @@ using EmuSen.Galaxia.Input;
 namespace EmuSen.Cores.Nintendo.Mercury
 {
     // The Game Boy's ICore implementation; colour is an additive mode on this same core - see Mercury_Core.md §1.
-    public sealed partial class MercuryCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ICheatRegistryHost
+    public sealed partial class MercuryCore : global::EmuSen.Cores.ICore, global::EmuSen.Cores.ICheatRegistryHost, global::EmuSen.Cores.IStateFormat
     {
         public const int CpuClockHz = 4194304;
 
@@ -22,6 +22,7 @@ namespace EmuSen.Cores.Nintendo.Mercury
 
         // 2 added the PPU to the bus walk, 3 the colour banks and HDMA, 4 the APU, 5 the serial port - see EmuSen_Save_States.md §1.
         private const int StateVersion = 5;
+        int global::EmuSen.Cores.IStateFormat.StateVersion => StateVersion;
 
         private const int SaveEveryNFrames = 300;
 

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using EmuSen.Mistress.Library;
 using Microsoft.Data.Sqlite;
 
@@ -65,6 +67,96 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.Throws<InvalidDataException>(() => GameRecords.Open(Db));
             Assert.Equal(GameRecords.SchemaVersion + 1, UserVersion());
+        }
+
+        // A games.db from the first build of §4.32 has only the game table and user_version 1; its rows must survive the upgrade.
+        [Fact]
+        public void A_first_version_file_is_migrated_with_its_rows_kept()
+        {
+            Directory.CreateDirectory(_root);
+            using (var db = new SqliteConnection($"Data Source={Db};Pooling=False"))
+            {
+                db.Open();
+                using SqliteCommand create = db.CreateCommand();
+                create.CommandText = """
+                    CREATE TABLE game (path TEXT PRIMARY KEY, favourite INTEGER NOT NULL DEFAULT 0 CHECK (favourite IN (0, 1)),
+                        last_played TEXT, play_count INTEGER NOT NULL DEFAULT 0, play_seconds REAL NOT NULL DEFAULT 0);
+                    CREATE INDEX game_by_last_played ON game(last_played);
+                    INSERT INTO game (path, favourite, play_count, play_seconds) VALUES ('/r/old.z64', 1, 3, 42.5);
+                    PRAGMA user_version = 1;
+                    """;
+                create.ExecuteNonQuery();
+            }
+
+            using GameRecords records = GameRecords.Open(Db);
+            GameRecord old = records.Find("/r/old.z64")!;
+            Assert.True(old.Favourite);
+            Assert.Equal(3, old.PlayCount);
+            Assert.Equal(GameRecords.SchemaVersion, UserVersion());
+            Assert.Empty(records.Collections());
+        }
+
+        [Fact]
+        public void A_cached_hash_holds_only_while_the_file_is_the_size_and_age_it_was()
+        {
+            using GameRecords records = GameRecords.Open(Db);
+            records.StoreHash("/r/a.nes", 40976, 638000000000000000, "abc");
+
+            Assert.Equal("abc", records.KnownHash("/r/a.nes", 40976, 638000000000000000));
+            Assert.Null(records.KnownHash("/r/a.nes", 40977, 638000000000000000));
+            Assert.Null(records.KnownHash("/r/a.nes", 40976, 638000000000000001));
+            Assert.Equal("/r/a.nes", records.PathByHash("abc"));
+        }
+
+        [Fact]
+        public void A_moved_game_takes_its_row_and_its_collections_and_merges_into_what_the_new_path_had()
+        {
+            using GameRecords records = GameRecords.Open(Db);
+            records.Started("/r/old name.sfc", new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Local));
+            records.Played("/r/old name.sfc", TimeSpan.FromSeconds(100));
+            records.ToggleFavourite("/r/old name.sfc");
+            records.Identify("/r/old name.sfc", "feed", 1024);
+            long rpgs = records.CreateCollection("RPGs", DateTime.Now)!.Value;
+            long both = records.CreateCollection("Both", DateTime.Now)!.Value;
+            records.AddToCollection(rpgs, "/r/old name.sfc");
+            records.AddToCollection(both, "/r/old name.sfc");
+            records.AddToCollection(both, "/r/new name.sfc");
+            records.Started("/r/new name.sfc", new DateTime(2026, 9, 20, 0, 0, 0, DateTimeKind.Local));
+
+            Assert.Single(records.Orphans(new HashSet<string> { "/r/new name.sfc" }));
+            records.Move("/r/old name.sfc", "/r/new name.sfc");
+
+            Assert.Null(records.Find("/r/old name.sfc"));
+            GameRecord moved = records.Find("/r/new name.sfc")!;
+            Assert.True(moved.Favourite);
+            Assert.Equal(2, moved.PlayCount);
+            Assert.Equal(100, moved.PlaySeconds, 3);
+            Assert.Equal(new DateTime(2026, 9, 20, 0, 0, 0, DateTimeKind.Local), moved.LastPlayed);
+            Assert.Equal(new HashSet<long> { rpgs, both }, records.CollectionsOf("/r/new name.sfc"));
+            Assert.Empty(records.CollectionsOf("/r/old name.sfc"));
+            Assert.Empty(records.Orphans(new HashSet<string> { "/r/new name.sfc" }));
+        }
+
+        [Fact]
+        public void Collections_are_named_once_in_any_case_and_deleting_one_leaves_the_games()
+        {
+            using GameRecords records = GameRecords.Open(Db);
+            long rpgs = records.CreateCollection("RPGs", DateTime.Now)!.Value;
+            long racers = records.CreateCollection("Racers", DateTime.Now)!.Value;
+            Assert.Null(records.CreateCollection("rpgs", DateTime.Now));
+            Assert.False(records.RenameCollection(racers, "RPGS"));
+            Assert.True(records.RenameCollection(racers, "Racing"));
+
+            records.AddToCollection(rpgs, "/r/a.sfc");
+            records.AddToCollection(rpgs, "/r/a.sfc");
+            records.AddToCollection(rpgs, "/r/b.sfc");
+            records.Started("/r/a.sfc", DateTime.Now);
+            Assert.Equal(new[] { ("Racing", 0), ("RPGs", 2) }, records.Collections().Select(c => (c.Name, c.Count)).ToArray());
+
+            records.DeleteCollection(rpgs);
+            Assert.Empty(records.CollectionsOf("/r/a.sfc"));
+            Assert.NotNull(records.Find("/r/a.sfc"));
+            Assert.Single(records.Collections());
         }
 
         private long UserVersion()

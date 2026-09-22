@@ -25,6 +25,7 @@ impl Rdp {
         };
         self.color_image_width = ((word >> 32) & 0x3FF) as i32 + 1;
         self.color_image = (word as u32) & 0x00FF_FFFF;
+        self.split.color_drawn_to = 0;
     }
 
     pub(super) fn set_scissor(&mut self, word: u64) {
@@ -130,6 +131,9 @@ impl Rdp {
             TWO_CYCLE => self.draw_two_cycle(rows, major_on_left, tile, max_level, mem),
             _ => self.draw_copy(rows, major_on_left, tile, max_level, mem),
         }
+        if self.split.workers > 1 && !self.split.alone && self.modes.cycle_type <= TWO_CYCLE {
+            self.record_aliased_read(rows, major_on_left, mem);
+        }
     }
 
     /// A four-bit image has nothing to fill.
@@ -144,7 +148,7 @@ impl Rdp {
 
         for y in rows.0..=rows.1 {
             let yu = y as usize;
-            if !self.span_drawn[yu] {
+            if !self.span_drawn[yu] || !self.owns(y) {
                 continue;
             }
             for x in self.span_left[yu]..=self.span_right[yu] {

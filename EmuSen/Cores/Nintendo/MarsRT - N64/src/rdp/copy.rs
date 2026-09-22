@@ -58,7 +58,7 @@ impl Rdp {
 
         for y in rows.0..=rows.1 {
             let yu = y as usize;
-            if !self.span_drawn[yu] || self.span_right[yu] < self.span_left[yu] {
+            if !self.span_drawn[yu] || self.span_right[yu] < self.span_left[yu] || !self.owns(y) {
                 continue;
             }
 

@@ -68,11 +68,12 @@ impl Rdp {
 
         for y in rows.0..=rows.1 {
             let yu = y as usize;
-            if !self.span_drawn[yu] || self.span_right[yu] < self.span_left[yu] {
+            if !self.span_drawn[yu] || self.span_right[yu] < self.span_left[yu] || !self.owns(y) {
                 continue;
             }
 
             let (left, right) = (self.span_left[yu], self.span_right[yu]);
+            self.stamp_row(y, left, right, lod && (texel0 || texel1 || lod_fraction), texel0 || texel1, texel1);
             self.row_coverage(y, left, right);
 
             values.copy_from_slice(&self.span_attributes[yu * ATTRIBUTES..yu * ATTRIBUTES + ATTRIBUTES]);
@@ -153,11 +154,13 @@ impl Rdp {
                 self.combine_second_cycle(dither_alpha, &mut coverage);
 
                 let pixel = y.wrapping_mul(self.color_image_width).wrapping_add(x);
-                let memory_coverage = self.read_memory(pixel, mem);
+                let nothing = RdpMemory::nothing();
+                let seen = if self.blind(x, y) { &nothing } else { &*mem };
+                let memory_coverage = self.read_memory(pixel, seen);
                 let depth_index = (self.depth_image >> 1).wrapping_add(pixel as u32);
 
                 let (mut blend, mut overflow) = (false, false);
-                if self.compare_depth(depth_index, z, delta_z, delta_z_encoded, memory_coverage, &mut coverage, &mut blend, &mut overflow, mem)
+                if self.compare_depth(depth_index, z, delta_z, delta_z_encoded, memory_coverage, &mut coverage, &mut blend, &mut overflow, seen)
                     && let Some((r, g, b)) = self.blend_one_cycle(dither_color, blend, overflow, coverage, coverage_bit)
                 {
                     self.write_memory(pixel, r, g, b, blend, coverage, memory_coverage, mem);

@@ -254,6 +254,80 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(stale > 0, "the C# deferred picture was the immediate one's every frame, so the defect this test records is gone and the test should be turned around");
         }
 
+        // C#'s split carries each processor's own last level-of-detail fraction into rows that compute none, and a primitive drawn alone then assembles a stale one - see Mars_Native.md §5.6.6.
+        [Fact]
+        public void The_csharp_split_assembles_a_stale_level_of_detail_fraction_from_rows_that_computed_none()
+        {
+            const System.Reflection.BindingFlags Hidden = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            object Call(string name, params object[] args) => typeof(MarsThreadedRdpTests).GetMethod(name, Hidden)!.Invoke(null, args)!;
+            var fraction = typeof(EmuSen.Cores.Nintendo.Mars.Rdp.Rdp).GetField("_lodFraction", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+            int stale = 0, seeds = 16;
+            for (uint seed = 0; seed < seeds; seed++)
+            {
+                // A scene drawn alone that computes the fraction, a split one that computes none, then one drawn alone, which assembles first.
+                ulong[] list =
+                [
+                    .. (ulong[])Call("Scene", 0x1234_5679u + seed, false, 32, true),
+                    .. (ulong[])Call("Shaded", 0x2468_1357u + seed, false, false, false, false),
+                    .. (ulong[])Call("Shaded", 0x1357_2468u + seed, true, true, true, false),
+                ];
+                EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus atOnce = new(), split = new();
+                split.Dp.Threaded = true;
+                split.Dp.Workers = 2;
+                Call("HandOver", atOnce, list, 0x0010_0000u);
+                Call("HandOver", split, list, 0x0010_0000u);
+                split.Dp.Join();
+
+                Assert.Equal(atOnce.Rdram, split.Rdram);
+                int want = (int)fraction.GetValue(atOnce.Dp.Processor)!, got = (int)fraction.GetValue(split.Dp.Processor)!;
+                if (want != got) stale++;
+                bool same = ((byte[])Call("State", atOnce, false)).AsSpan().SequenceEqual((byte[])Call("State", split, false));
+                Assert.Equal(want == got, same);
+            }
+
+            _output.WriteLine($"C#, two processors: the state differs in _lodFraction alone for {stale} of {seeds} seeds, the memory for none");
+            Assert.True(stale > 0, "C#'s split assembled the raster order's fraction for every seed, so the defect this test records is gone and the test should be turned around");
+        }
+
+        // C#'s workers deadlock when a pause finds some at a barrier and the rest standing short of it; it leaves threads spinning, so it runs only when asked - see Mars_Native.md §5.6.6.
+        [Fact]
+        public void The_csharp_workers_deadlock_when_a_pause_finds_some_at_a_barrier_and_the_rest_short_of_it()
+        {
+            if (Environment.GetEnvironmentVariable("EMUSEN_MARS_DEADLOCK_PROBE") != "1")
+            {
+                _output.WriteLine("EMUSEN_MARS_DEADLOCK_PROBE unset, not run: a hang it finds leaves threads spinning");
+                return;
+            }
+
+            var list = new List<ulong> { (0x2FUL << 56) | (3UL << 52), (0x2DUL << 56) | ((320UL << 2) << 12) | (240UL << 2), (0x37UL << 56) | 0x0F0F_0F0F };
+            for (uint i = 0; i < 3000; i++)
+            {
+                list.Add((0x3FUL << 56) | (2UL << 51) | (319UL << 32) | (0x0020_0000 + (i % 4) * 640));
+                uint row = i * 3 % 238;
+                list.Add((0x36UL << 56) | ((319UL << 2) << 44) | ((ulong)((row + 1) << 2) << 32) | (row << 2));
+            }
+            list.Add(0x29UL << 56);
+
+            int attempts = 0, hung = -1;
+            for (int attempt = 0; attempt < 200 && hung < 0; attempt++, attempts++)
+            {
+                var bus = new EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus();
+                bus.Dp.Threaded = true;
+                bus.Dp.Workers = 4;
+                ListTo(bus, list.ToArray());
+                System.Threading.Thread.SpinWait(attempt * 997 % 20_000);
+                var pause = System.Threading.Tasks.Task.Run(() => bus.Dp.Pause());
+                if (!pause.Wait(TimeSpan.FromSeconds(3))) { hung = attempt; break; }
+                bus.Dp.Resume();
+                bus.Dp.Join();
+                bus.Dp.Threaded = false;
+            }
+
+            _output.WriteLine(hung >= 0 ? $"C#, four processors: a pause was never answered at attempt {hung} of {attempts}" : $"C#: every one of {attempts} pauses was answered");
+            Assert.True(hung >= 0, "every pause was answered, so the defect this test records was not reached");
+        }
+
         private static void ListTo(EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus bus, ulong[] list)
         {
             const uint at = 0x0010_0000;

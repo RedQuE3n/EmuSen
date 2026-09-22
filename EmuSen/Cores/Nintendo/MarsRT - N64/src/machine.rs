@@ -297,11 +297,7 @@ impl Machine {
 
     /// `RdpWorkers`' setter, clamped as C# clamps it to one to eight; a running drain restarts with the count.
     pub fn set_rdp_workers(&mut self, workers: usize) {
-        let workers = workers.clamp(1, 8);
-        if workers != self.options.rdp_workers && self.bus.dp.threads.is_some() {
-            self.bus.dp_set_threaded(false, false);
-        }
-        self.options.rdp_workers = workers;
+        self.options.rdp_workers = workers.clamp(1, 8);
         self.apply_threads();
     }
 
@@ -318,7 +314,7 @@ impl Machine {
     /// The drain made to match the options; a load's words are replayed first, so none is left for it.
     fn apply_threads(&mut self) {
         let want = self.options.threaded_rdp && self.bus.dp.pending.is_empty();
-        self.bus.dp_set_threaded(want, self.options.verify_rdp);
+        self.bus.dp_set_threaded(want, self.options.verify_rdp, self.options.rdp_workers);
     }
 
     /// `Join`: everything handed over has run and the marks are clear.

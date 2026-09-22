@@ -5,14 +5,14 @@
 
 use std::cell::Cell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::atomic::Ordering::{Acquire, Relaxed, Release, SeqCst};
+use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed, Release, SeqCst};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU64, fence};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, Thread};
 use std::time::Instant;
 
 use crate::memory::ram::{Detached, Ram};
-use crate::rdp::{self, Rdp, RdpMemory, command_id, command_length};
+use crate::rdp::{self, Rdp, RdpMemory, Step, command_id, command_length};
 
 /// `_ring.Length`: the words handed over and not yet run.
 pub const RING: usize = 1 << 16;
@@ -182,18 +182,56 @@ pub struct Checked {
     draw: Cell<Option<DrawBox>>,
 }
 
-/// What the machine's thread and the drain both reach. Its raw pointers are the bus's own allocations, which outlive the drain (`Threads::stop`).
+/// One processor's thread as the others see it: how far it has come, where and for which pause it stands, whether it sleeps. See Mars_Rdp.md §2.8.
+struct Worker {
+    completed: AtomicI64,
+    standing: AtomicU64,
+    standing_at: AtomicI64,
+    sleeping: AtomicBool,
+    processor: *mut Rdp,
+    words: AtomicI64,
+}
+
+/// `SpinBarrier`: all arrive before any leaves, a fault lets all through, and a waiter raises a pause point to its word (Mars_Native.md §5.6.6).
+struct Barrier {
+    parties: u32,
+    arrived: AtomicU32,
+    generation: AtomicU32,
+    passed: AtomicI64,
+}
+
+impl Barrier {
+    fn arrive(&self, shared: &Shared, word: i64) {
+        let generation = self.generation.load(Acquire);
+        if self.arrived.fetch_add(1, AcqRel) + 1 == self.parties {
+            self.passed.fetch_add(1, Relaxed);
+            self.arrived.store(0, Relaxed);
+            self.generation.store(generation.wrapping_add(1), Release);
+            return;
+        }
+        let mut spins = 0;
+        while self.generation.load(Acquire) == generation && !shared.faulted.load(Acquire) {
+            if shared.pause_request.load(Acquire) != 0 {
+                raise(&shared.pause_at, word);
+            }
+            backoff(&mut spins);
+        }
+    }
+}
+
+/// What the machine's thread and the workers all reach. Its raw pointers are the bus's own allocations, and the processors', which outlive the workers (`Threads::stop`).
 pub struct Shared {
     ring: Box<[AtomicU64]>,
     issued: AtomicI64,
-    completed: AtomicI64,
-    /// A pause's number while one is asked for, else zero; the drain answers with the number it stands for.
+    workers: Box<[Worker]>,
+    barrier: Barrier,
+    /// A pause's number while one is asked for, else zero; the workers answer with it where they stand, at the one word `pause_at` all reach.
     pause_request: AtomicU64,
-    standing: AtomicU64,
-    /// Holds nest: a snapshot sized and then written holds twice, and only the last resume lets the drain go.
+    pause_at: AtomicI64,
+    pauses: AtomicU64,
+    /// Holds nest: a snapshot sized and then written holds twice, and only the last resume lets the workers go.
     holds: AtomicU32,
     stopping: AtomicBool,
-    sleeping: AtomicBool,
     faulted: AtomicBool,
     fault: Mutex<Option<String>>,
     marks: Arc<Marks>,
@@ -205,7 +243,6 @@ pub struct Shared {
     boxes: Box<[BoxSlot]>,
     boxes_appended: AtomicI64,
     verifying: AtomicBool,
-    processor: *mut Rdp,
     rdram: *mut u8,
     rdram_len: usize,
     hidden: *mut u8,
@@ -220,9 +257,23 @@ unsafe impl Send for Shared {}
 unsafe impl Sync for Shared {}
 
 impl Shared {
+    /// `Completed`: the least of the workers' counts, since a word is done when every processor has run it.
     #[inline(always)]
     fn completed(&self) -> i64 {
-        self.completed.load(Acquire)
+        let mut least = self.workers[0].completed.load(Acquire);
+        for w in &self.workers[1..] {
+            least = least.min(w.completed.load(Acquire));
+        }
+        least
+    }
+
+    /// Words, barriers passed, and aliased reads, by worker, for the counters.
+    pub fn worker_words(&self) -> Vec<i64> {
+        self.workers.iter().map(|w| w.words.load(Relaxed)).collect()
+    }
+
+    pub fn barriers(&self) -> i64 {
+        self.barrier.passed.load(Relaxed)
     }
 
     fn record_fault(&self, message: String) {
@@ -494,11 +545,12 @@ pub struct Counters {
     pub nanos_per_site: [i64; site::COUNT],
 }
 
-/// The machine's half: the drain's handle, the shadow of the processor's registers, the extents, and the counters.
+/// The machine's half: the workers' handles and their processors past the first, the shadow of the processor's registers, the extents, and the counters.
 pub struct Threads {
     shared: Arc<Shared>,
-    drain: Option<JoinHandle<()>>,
-    thread: Thread,
+    drains: Vec<JoinHandle<()>>,
+    threads: Vec<Thread>,
+    extra: Vec<Detached<Rdp>>,
     issued: i64,
     shadow_taken: i32,
     shadow_first: u64,
@@ -528,18 +580,32 @@ pub struct Threads {
 }
 
 impl Threads {
-    /// `Threaded = true`: the shadow taken from the processor (`RefreshShadow`), then the drain started over the bus's memories.
-    pub fn start(processor: &mut Detached<Rdp>, rdram: &Ram, hidden: &Ram, marks: &Arc<Marks>, verify: bool) -> Threads {
+    /// `Threaded = true` and `Workers`: the shadow taken from the processor (`RefreshShadow`), the others copied from it (`CopyStateFrom`), and a thread each.
+    pub fn start(processor: &mut Detached<Rdp>, rdram: &Ram, hidden: &Ram, marks: &Arc<Marks>, verify: bool, workers: usize) -> Threads {
         marks.clear();
+        let n = workers.clamp(1, 8);
+        processor.configure(0, n as i32);
+        let extra: Vec<Detached<Rdp>> = (1..n)
+            .map(|i| {
+                let mut p = Detached::new((**processor).clone());
+                p.configure(i as i32, n as i32);
+                p
+            })
+            .collect();
+        let pointers: Vec<*mut Rdp> = std::iter::once(processor.as_ptr()).chain(extra.iter().map(|p| p.as_ptr())).collect();
         let shared = Arc::new(Shared {
             ring: (0..RING).map(|_| AtomicU64::new(0)).collect(),
             issued: AtomicI64::new(0),
-            completed: AtomicI64::new(0),
+            workers: pointers
+                .iter()
+                .map(|&processor| Worker { completed: AtomicI64::new(0), standing: AtomicU64::new(0), standing_at: AtomicI64::new(-1), sleeping: AtomicBool::new(false), processor, words: AtomicI64::new(0) })
+                .collect(),
+            barrier: Barrier { parties: n as u32, arrived: AtomicU32::new(0), generation: AtomicU32::new(0), passed: AtomicI64::new(0) },
             pause_request: AtomicU64::new(0),
-            standing: AtomicU64::new(0),
+            pause_at: AtomicI64::new(-1),
+            pauses: AtomicU64::new(0),
             holds: AtomicU32::new(0),
             stopping: AtomicBool::new(false),
-            sleeping: AtomicBool::new(false),
             faulted: AtomicBool::new(false),
             fault: Mutex::new(None),
             marks: marks.clone(),
@@ -551,7 +617,6 @@ impl Threads {
             boxes: (0..BOX_COUNT).map(|_| BoxSlot::default()).collect(),
             boxes_appended: AtomicI64::new(0),
             verifying: AtomicBool::new(verify),
-            processor: processor.as_ptr(),
             rdram: rdram.as_ptr(),
             rdram_len: rdram.len(),
             hidden: hidden.as_ptr(),
@@ -560,13 +625,18 @@ impl Threads {
             drain_nanos: AtomicI64::new(0),
             drain_starts: AtomicI64::new(0),
         });
-        let theirs = shared.clone();
-        let drain = thread::Builder::new().name("MarsRT RDP".into()).spawn(move || drain(theirs)).expect("the drain thread could not start");
-        let thread = drain.thread().clone();
+        let drains: Vec<JoinHandle<()>> = (0..n)
+            .map(|i| {
+                let theirs = shared.clone();
+                thread::Builder::new().name(format!("MarsRT RDP {i}")).spawn(move || work(theirs, i)).expect("a worker thread could not start")
+            })
+            .collect();
+        let threads = drains.iter().map(|d| d.thread().clone()).collect();
         let mut threads = Threads {
             shared,
-            drain: Some(drain),
-            thread,
+            drains,
+            threads,
+            extra,
             issued: 0,
             shadow_taken: 0,
             shadow_first: 0,
@@ -661,8 +731,10 @@ impl Threads {
         let sync = self.shadow(word, tail);
         self.issued = tail;
         self.shared.issued.store(tail, Release);
-        if self.shared.sleeping.load(Relaxed) {
-            self.thread.unpark();
+        for (w, t) in self.shared.workers.iter().zip(&self.threads) {
+            if w.sleeping.load(Relaxed) {
+                t.unpark();
+            }
         }
         sync
     }
@@ -689,9 +761,37 @@ impl Threads {
     /// The drain woken if it may sleep: the fence pairs with its own before it parks, so one of the two sees the other.
     fn kick_surely(&self) {
         fence(SeqCst);
-        if self.shared.sleeping.load(Relaxed) {
-            self.thread.unpark();
+        for (w, t) in self.shared.workers.iter().zip(&self.threads) {
+            if w.sleeping.load(Relaxed) {
+                t.unpark();
+            }
         }
+    }
+
+    fn wake_all(&self) {
+        for t in &self.threads {
+            t.unpark();
+        }
+    }
+
+    /// `AliasedReads`: reads past a row's end made for another processor's row, by whichever processor made them; while the workers idle.
+    pub fn aliased_reads(&self) -> i64 {
+        self.wait_all();
+        // SAFETY: every worker has run everything, so no processor is being written.
+        self.shared.workers.iter().map(|w| unsafe { (&*w.processor).split.aliased_reads }).sum()
+    }
+
+    /// A test's look at one worker's processor while the workers idle.
+    #[cfg(test)]
+    pub fn processor(&self, i: usize) -> &Rdp {
+        self.wait_all();
+        // SAFETY: every worker has run everything, so no processor is being written.
+        unsafe { &*self.shared.workers[i].processor }
+    }
+
+    /// How many processors share the list: the leader, which is the machine's, and the ones owned here.
+    pub fn workers(&self) -> usize {
+        1 + self.extra.len()
     }
 
     fn make_room(&self, tail: i64) {
@@ -1111,11 +1211,12 @@ impl Threads {
         self.check_fault();
     }
 
-    /// `Join`: everything handed over has run, and the marks and ranges are forgotten.
+    /// `Join`: everything handed over has run, the leader holds each scratch field as raster order left it, and the marks and ranges are forgotten.
     pub fn join(&mut self) {
         let started = Instant::now();
         let waited = self.shared.completed() < self.issued;
         self.wait_until(self.issued);
+        assemble(&self.shared);
         self.shared.marks.clear();
         self.shared.ranges_appended.store(0, Release);
         if waited {
@@ -1124,12 +1225,13 @@ impl Threads {
         }
     }
 
-    /// Everything handed over has run; for a caller holding the machine shared, which leaves the marks to be cleared by the next wait.
+    /// Everything handed over has run and the leader assembled, for a caller holding the machine shared; the marks are cleared by the next wait.
     pub fn wait_all(&self) {
         self.wait_until(self.issued);
+        assemble(&self.shared);
     }
 
-    /// `Hold`: the backlog brought within a snapshot's tail, then the drain stood between two words.
+    /// `Hold`: the backlog brought within a snapshot's tail, then every worker stood at one word.
     pub fn hold(&self) -> u64 {
         if self.pending() > SNAPSHOT_WORDS {
             self.wait_until(self.issued - SNAPSHOT_WORDS);
@@ -1137,48 +1239,51 @@ impl Threads {
         self.pause()
     }
 
-    /// `Pause`: nothing runs on the drain until `resume`; the Acquire of its answer makes what it drew this thread's to read.
+    /// `Pause`: answered when every worker stands, for this request, at a pause point that holds still; the Acquires make what they drew this thread's.
     fn pause(&self) -> u64 {
         if self.shared.holds.fetch_add(1, Relaxed) > 0 {
-            return self.shared.standing.load(Relaxed);
+            return self.shared.pauses.load(Relaxed);
         }
-        let number = self.shared.pause_request.load(Relaxed).max(self.shared.standing.load(Relaxed)) + 1;
+        let number = self.shared.pauses.fetch_add(1, Relaxed) + 1;
         self.shared.pause_request.store(number, SeqCst);
-        self.thread.unpark();
+        self.wake_all();
         let mut spins = 0;
-        while self.shared.standing.load(Acquire) != number {
+        loop {
             self.check_fault();
+            let at = self.shared.pause_at.load(Acquire);
+            if at >= 0 && self.shared.workers.iter().all(|w| w.standing.load(Acquire) == number && w.standing_at.load(Relaxed) == at) && self.shared.pause_at.load(Acquire) == at {
+                break;
+            }
             backoff(&mut spins);
         }
+        assemble(&self.shared);
         number
     }
 
     pub fn resume(&self) {
         if self.shared.holds.fetch_sub(1, Relaxed) == 1 {
-            self.shared.pause_request.store(0, SeqCst);
-            self.thread.unpark();
+            release(&self.shared, &self.threads);
         }
     }
 
     /// A test's way to end a hold from another thread.
     #[cfg(test)]
     pub fn resumer(&self) -> impl FnOnce() + Send + 'static {
-        let (shared, thread) = (self.shared.clone(), self.thread.clone());
+        let (shared, threads) = (self.shared.clone(), self.threads.clone());
         move || {
             if shared.holds.fetch_sub(1, Relaxed) == 1 {
-                shared.pause_request.store(0, SeqCst);
-                thread.unpark();
+                release(&shared, &threads);
             }
         }
     }
 
-    /// `WritePending`'s words: those handed over and not run, read while the drain stands.
+    /// `WritePending`'s words: those handed over and not run, read while the workers stand.
     pub fn pending_words(&self) -> Vec<u64> {
         let (completed, issued) = (self.shared.completed(), self.issued);
         (completed..issued).map(|i| self.shared.ring[(i as usize) & (RING - 1)].load(Relaxed)).collect()
     }
 
-    /// `Rethrow`: a fault on the drain, or one the verifier found, is this thread's to raise.
+    /// `Rethrow`: a fault on a worker, or one the verifier found, is this thread's to raise.
     pub fn check_fault(&self) {
         if self.shared.faulted.load(Acquire) {
             let fault = self.shared.fault.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -1186,29 +1291,54 @@ impl Threads {
         }
     }
 
-    /// The drain joined and ended, and the marks left clear for the unthreaded path; after this the processor and memories are the machine's alone.
+    /// The workers joined, assembled and ended, and the marks left clear; after this the leader and the memories are the machine's alone, and it draws alone.
     pub fn stop(&mut self) {
         if !self.shared.faulted.load(Acquire) {
             self.wait_until(self.issued);
+            assemble(&self.shared);
         }
+        self.end();
+    }
+
+    fn end(&mut self) {
         self.shared.stopping.store(true, SeqCst);
-        self.thread.unpark();
-        if let Some(drain) = self.drain.take() {
+        self.wake_all();
+        for drain in self.drains.drain(..) {
             let _ = drain.join();
         }
         self.shared.marks.clear();
+        // SAFETY: every worker has ended, so the leader is the machine's again.
+        unsafe { (*self.shared.workers[0].processor).configure(0, 1) };
     }
 }
 
 impl Drop for Threads {
     fn drop(&mut self) {
-        if self.drain.is_some() {
-            self.shared.stopping.store(true, SeqCst);
-            self.thread.unpark();
-            if let Some(drain) = self.drain.take() {
-                let _ = drain.join();
-            }
-            self.shared.marks.clear();
+        if !self.drains.is_empty() {
+            self.end();
+        }
+    }
+}
+
+/// `Resume`: the request withdrawn and the pause point forgotten, then every worker woken.
+fn release(shared: &Shared, threads: &[Thread]) {
+    shared.pause_request.store(0, SeqCst);
+    shared.pause_at.store(-1, SeqCst);
+    for t in threads {
+        t.unpark();
+    }
+}
+
+/// `Assemble`: the leader's scratch replaced by whichever processor wrote each field last in raster order.
+fn assemble(shared: &Shared) {
+    if shared.workers.len() < 2 {
+        return;
+    }
+    // SAFETY: every caller has every worker standing, waiting at a barrier, or past every word, so no processor is being written.
+    unsafe {
+        let leader = shared.workers[0].processor;
+        for w in &shared.workers[1..] {
+            (*leader).take_scratch_from(&*w.processor);
         }
     }
 }
@@ -1226,85 +1356,123 @@ fn backoff(spins: &mut u32) {
     *spins = spins.saturating_add(1);
 }
 
-/// `Drain`: every published word in order, standing when asked, lingering a moment, then parked until kicked.
-fn drain(shared: Arc<Shared>) {
-    let run = catch_unwind(AssertUnwindSafe(|| drain_words(&shared)));
+/// A worker's thread; a panic is recorded, and its count set past every word so no one waits for it, as C#'s catch does.
+fn work(shared: Arc<Shared>, index: usize) {
+    let run = catch_unwind(AssertUnwindSafe(|| run_worker(&shared, index)));
     if let Err(panic) = run {
         let message = panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
-        shared.record_fault(format!("a panic on the drain: {message}"));
+        shared.record_fault(format!("a panic on worker {index}: {message}"));
+        shared.workers[index].completed.store(i64::MAX >> 1, Release);
     }
 }
 
-fn drain_words(shared: &Shared) {
+/// `RunWorker`: every word in order, each command as its step asks, standing when asked and sleeping when there is nothing.
+fn run_worker(shared: &Shared, index: usize) {
+    let me = &shared.workers[index];
+    let processor = me.processor;
     let checked = Checked::default();
-    let mut completed = shared.completed.load(Relaxed);
+    let mut completed = me.completed.load(Relaxed);
+    let (mut from, mut started) = (completed, Instant::now());
     loop {
         if shared.stopping.load(Acquire) {
             return;
         }
-        stand(shared);
-        let issued = shared.issued.load(Acquire);
-        if completed < issued {
-            shared.drain_starts.fetch_add(1, Relaxed);
-            let started = Instant::now();
-            let before = completed;
-            while completed < issued {
-                if shared.pause_request.load(Acquire) != 0 {
-                    stand(shared);
-                    if shared.stopping.load(Acquire) {
-                        return;
-                    }
-                }
-                let word = shared.ring[(completed as usize) & (RING - 1)].load(Relaxed);
-                let check = if shared.verifying.load(Relaxed) { Some((shared, completed + 1, &checked)) } else { None };
-                // SAFETY: published words are the drain's to run until the machine's Acquire of `completed` passes them (the module's rule).
-                unsafe {
-                    let mut memory = RdpMemory::shared((shared.rdram, shared.rdram_len), (shared.hidden, shared.hidden_len), check);
-                    (*shared.processor).accept(word, &mut memory);
-                }
-                completed += 1;
-                shared.completed.store(completed, Release);
+        if shared.pause_request.load(Acquire) != 0 && stand(shared, index, completed) {
+            continue;
+        }
+        if completed == shared.issued.load(Acquire) {
+            me.words.fetch_add(completed - from, Relaxed);
+            if index == 0 {
+                shared.drain_words.fetch_add(completed - from, Relaxed);
+                shared.drain_nanos.fetch_add(started.elapsed().as_nanos() as i64, Relaxed);
             }
-            shared.drain_words.fetch_add(completed - before, Relaxed);
-            shared.drain_nanos.fetch_add(started.elapsed().as_nanos() as i64, Relaxed);
+            sleep(shared, index, completed);
+            if index == 0 {
+                shared.drain_starts.fetch_add(1, Relaxed);
+            }
+            (from, started) = (completed, Instant::now());
             continue;
         }
-        if linger(shared, completed) {
-            continue;
+
+        let word = shared.ring[(completed as usize) & (RING - 1)].load(Relaxed);
+        let check = if shared.verifying.load(Relaxed) { Some((shared, completed + 1, &checked)) } else { None };
+        // SAFETY: published words are the workers' to run until the machine's Acquire of every count passes them (the module's rule); each worker has its own processor, the leader's reached by the others only at barriers.
+        unsafe {
+            let mut memory = RdpMemory::shared((shared.rdram, shared.rdram_len), (shared.hidden, shared.hidden_len), check);
+            match (*processor).gather(word) {
+                Step::More => {}
+                Step::Ready => {
+                    (*processor).execute_gathered(&mut memory);
+                }
+                Step::Leader => {
+                    shared.barrier.arrive(shared, completed + 1);
+                    if index == 0 {
+                        assemble(shared);
+                        (*processor).execute_gathered(&mut memory);
+                    }
+                    shared.barrier.arrive(shared, completed + 1);
+                }
+                Step::All => {
+                    shared.barrier.arrive(shared, completed + 1);
+                    (*processor).execute_gathered(&mut memory);
+                }
+                Step::AllJoined => {
+                    shared.barrier.arrive(shared, completed + 1);
+                    (*processor).execute_gathered(&mut memory);
+                    shared.barrier.arrive(shared, completed + 1);
+                }
+            }
         }
-        shared.sleeping.store(true, SeqCst);
-        if shared.issued.load(SeqCst) == completed && shared.pause_request.load(SeqCst) == 0 && !shared.stopping.load(SeqCst) {
-            thread::park();
-        }
-        shared.sleeping.store(false, SeqCst);
+        completed += 1;
+        me.completed.store(completed, Release);
     }
 }
 
-/// `Linger`: a moment's spinning for more before sleeping.
-fn linger(shared: &Shared, completed: i64) -> bool {
+/// `Sleep`: a moment's spinning for more, then parked until kicked; the flag and the fence keep a kick from passing unseen.
+fn sleep(shared: &Shared, index: usize, completed: i64) {
     for _ in 0..400 {
-        if shared.pause_request.load(Acquire) != 0 || shared.stopping.load(Acquire) {
-            return false;
-        }
-        if shared.issued.load(Acquire) != completed {
-            return true;
+        if shared.issued.load(Acquire) != completed || shared.pause_request.load(Acquire) != 0 || shared.stopping.load(Acquire) {
+            return;
         }
         for _ in 0..50 {
             std::hint::spin_loop();
         }
     }
-    false
+    let me = &shared.workers[index];
+    me.sleeping.store(true, SeqCst);
+    if shared.issued.load(SeqCst) == completed && shared.pause_request.load(SeqCst) == 0 && !shared.stopping.load(SeqCst) {
+        thread::park();
+    }
+    me.sleeping.store(false, SeqCst);
 }
 
-/// `StandStill`: between two words while a pause is asked for, answering with the request's number, which a later request replaces.
-fn stand(shared: &Shared) {
+/// The pause point raised to at least `to`; returns where it stands.
+fn raise(pause_at: &AtomicI64, to: i64) -> i64 {
+    let mut at = pause_at.load(Acquire);
+    while at < to {
+        match pause_at.compare_exchange_weak(at, to, AcqRel, Acquire) {
+            Ok(_) => at = to,
+            Err(now) => at = now,
+        }
+    }
+    at
+}
+
+/// `Stand`: the pause point raised to this worker's place; short of it, run on (false); at it, stand and answer until the request or the point moves (true).
+fn stand(shared: &Shared, index: usize, completed: i64) -> bool {
+    let me = &shared.workers[index];
     let mut spins = 0;
     loop {
         let request = shared.pause_request.load(Acquire);
         if request == 0 || shared.stopping.load(Acquire) {
-            return;
+            return true;
         }
-        shared.standing.store(request, Release);
+        let at = raise(&shared.pause_at, completed);
+        if at > completed {
+            return false;
+        }
+        me.standing_at.store(completed, Relaxed);
+        me.standing.store(request, Release);
         backoff(&mut spins);
     }
 }

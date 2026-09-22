@@ -1,5 +1,8 @@
 # Mars — the recompiler: blocks between the interpreter's checks
 
+*MarsRT, the Rust core, has a recompiler of its own, built on this one's design and measured against it:
+`Mars_Native.md` §5.8. What follows is the C# core's.*
+
 *Phase G, 2026-09-18. The code is `Cpu/Blocks/` (the shape, the cache, the emitter) and `Cpu/Core/Cpu.Blocks.cs` (the
 dispatcher); the tests are `EmuSen.WiseMan/Cores/MarsBlockTests.cs`; the measurement that preceded it is §7, and the
 switch build behind that measurement is kept with the speed tooling outside the repository. The rule it works under is

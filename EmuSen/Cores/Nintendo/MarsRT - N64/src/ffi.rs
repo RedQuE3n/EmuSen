@@ -24,7 +24,7 @@ pub struct Core {
 }
 
 impl Core {
-    fn new(machine: Machine) -> Core {
+    pub fn new(machine: Machine) -> Core {
         Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false }
     }
 

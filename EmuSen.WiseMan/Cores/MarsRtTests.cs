@@ -132,6 +132,7 @@ namespace EmuSen.WiseMan.Cores
                 twin.RunFrame();
                 compare.Frame(frame, Save(oracle), twin.Save(false));
                 if (render) SamePicture(frame, oracle, twin);
+                SameSound(frame, oracle, twin);
             }
 
             _output.WriteLine($"{scenario}{(render ? " with the picture" : "")}: {frames} frames exact, {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions; MarsRT passed {twin.IdleTurnsPassed} idle turns");
@@ -229,7 +230,74 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(passed > 1000, "the idle loop was never passed, so the test compared nothing");
         }
 
-        // Real games from boot and from states: the whole state and the picture, after every frame.
+        // A signal processor that sets its own single-step bit while the CPU idles: the tick's step halts it at once, and C#'s idle loop in blocks does not.
+        [Fact]
+        public void A_processor_that_single_steps_itself_under_the_idle_loop_halts_where_the_interpreter_halts_it()
+        {
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            string rom = Temporary(SyntheticN64Rom.BuildRunningFromRdram(new uint[] { 0x1000_FFFF, 0x0000_0000 }));
+            // Set the single-step bit, then count in $2 until a break the halt should prevent.
+            uint[] program = { 0x2401_0040, 0x4081_2000, 0x2442_0001, 0x2442_0001, 0x2442_0001, 0x2442_0001, 0x0000_000D };
+
+            byte[] Run(bool blocks, out long counted)
+            {
+                bool skip = Cpu.SkipIdle, rsp = EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseBlocks, background = EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.CompileBlocksInBackground;
+                try
+                {
+                    Cpu.SkipIdle = true;
+                    EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseBlocks = blocks;
+                    EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.CompileBlocksInBackground = false;
+                    MarsCore core = Oracle();
+                    core.UseBlocks = blocks;
+                    core.LoadRom(rom);
+                    core.Cpu!.CompileInBackground = false;
+                    for (int i = 0; i < 3; i++) core.RunFrame();
+                    Start(core, program);
+                    for (int i = 0; i < 3; i++) core.RunFrame();
+                    counted = core.Bus!.Sp.Processor.Gpr[2];
+                    return Save(core);
+                }
+                finally
+                {
+                    Cpu.SkipIdle = skip;
+                    EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.UseBlocks = rsp;
+                    EmuSen.Cores.Nintendo.Mars.Rsp.Rsp.CompileBlocksInBackground = background;
+                }
+            }
+
+            byte[] interpreted = Run(blocks: false, out long stepped);
+            byte[] compiled = Run(blocks: true, out long inBlocks);
+
+            MarsCore setup = Oracle();
+            setup.LoadRom(rom);
+            for (int i = 0; i < 3; i++) setup.RunFrame();
+            Start(setup, program);
+            using MarsRtCore twin = Twin();
+            twin.LoadRom(rom);
+            byte[] started = Save(setup);
+            setup.LoadState(new MemoryStream(started));
+            twin.LoadState(started);
+            for (int i = 0; i < 3; i++)
+            {
+                setup.RunFrame();
+                twin.RunFrame();
+            }
+
+            _output.WriteLine($"$2 counted {stepped} under the interpreter and {inBlocks} under C#'s blocks; MarsRT passed {twin.IdleTurnsPassed} idle turns");
+            new StateComparer().Frame(3, Save(setup), twin.Save(false));
+            Assert.Equal(0, stepped);
+            Assert.True(inBlocks > 0 || !interpreted.AsSpan().SequenceEqual(compiled), "C#'s blocks halted where the interpreter halts, so there is no gap to record");
+        }
+
+        // The program into IMEM and the processor started, while the CPU sits in its idle loop.
+        private static void Start(MarsCore core, uint[] program)
+        {
+            for (int i = 0; i < program.Length; i++) core.Bus!.Write32(0x0400_1000 + (uint)i * 4, program[i]);
+            core.Bus!.Write32(0x0408_0000, 0);
+            core.Bus.Write32(0x0404_0010, 0x0005);
+        }
+
+        // Real games from boot and from states: the whole state, the picture and the sound, after every frame.
         [Theory]
         [InlineData("sm64.z64", null)]
         [InlineData("oot.z64", null)]
@@ -237,7 +305,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("sm64.z64", "sm64.state")]
         [InlineData("oot.z64", "oot.state")]
         [InlineData("ge.z64", "ge-dam.state")]
-        public void A_real_game_stays_byte_exact_with_its_picture_frame_by_frame(string romName, string? stateName)
+        public void A_real_game_stays_byte_exact_with_its_picture_and_sound_frame_by_frame(string romName, string? stateName)
         {
             string? folder = Environment.GetEnvironmentVariable(StatesVariable);
             if (folder is null || !File.Exists(Path.Combine(folder, romName)) || (stateName != null && !File.Exists(Path.Combine(folder, stateName))))
@@ -271,8 +339,9 @@ namespace EmuSen.WiseMan.Cores
                 twin.RunFrame();
                 compare.Frame(frame, Save(oracle), twin.Save(false));
                 SamePicture(frame, oracle, twin);
+                SameSound(frame, oracle, twin);
             }
-            _output.WriteLine($"{romName} {stateName ?? "from boot"}: {frames} frames, state and picture exact; {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions");
+            _output.WriteLine($"{romName} {stateName ?? "from boot"}: {frames} frames, state, picture and sound exact; {oracle.Bus!.Cycles} cycles, {oracle.Cpu!.Instructions} instructions");
         }
 
         // MarsRT's interpreter against the C# interpreter, blocks off in both, three interleaved rounds from the games' states; C# with its blocks is a reference.
@@ -474,6 +543,14 @@ namespace EmuSen.WiseMan.Cores
                 < 95 => 0xBC00_0000u | (uint)r.Next(16, 24) << 21 | R(5) << 16 | (ushort)(short)(r.Next(-8, 8) * 4),
                 _ => (uint)r.Next() ^ ((uint)r.Next(2) << 31),
             };
+        }
+
+        // The samples each core played since the last frame, drained whole, and the rate it plays them at.
+        private static void SameSound(int frame, MarsCore oracle, MarsRtCore twin)
+        {
+            short[] want = oracle.DequeueAudioSamples(1 << 20), got = twin.DequeueAudioSamples(1 << 20);
+            if (oracle.AudioSampleRate != twin.AudioSampleRate || !want.AsSpan().SequenceEqual(got))
+                throw new DivergedException($"frame {frame}: C# played {want.Length} samples at {oracle.AudioSampleRate} Hz, Rust {got.Length} at {twin.AudioSampleRate} Hz, the first difference at {want.AsSpan().CommonPrefixLength(got)}");
         }
 
         // The picture each core shows: its size, its rows' repeat and every byte.

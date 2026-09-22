@@ -28,7 +28,7 @@ impl Default for Rsp {
             accumulator: [0; 8],
             broke: false,
             gpr: [0; 32],
-            halted: false,
+            halted: true,
             next_pc: 0,
             pc: 0,
             vcc: 0,

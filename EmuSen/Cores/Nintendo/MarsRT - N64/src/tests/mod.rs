@@ -1,5 +1,14 @@
 //! Unit tests of the machine core, with values the C# WiseMan tests give; the corpus behind `EMUSEN_MARSRT_CORPUS`.
 
+mod bus;
+mod cpu;
+mod devices;
+mod fpu;
+mod rom;
+mod save;
+mod support;
+mod tlb;
+
 use std::sync::Arc;
 
 use crate::machine::Machine;

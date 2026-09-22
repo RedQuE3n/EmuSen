@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle, Thread};
 use std::time::Instant;
 
-use crate::ram::{Detached, Ram};
+use crate::memory::ram::{Detached, Ram};
 use crate::rdp::{self, Rdp, RdpMemory, command_id, command_length};
 
 /// `_ring.Length`: the words handed over and not yet run.
@@ -24,7 +24,7 @@ pub const PAGES: usize = 2048;
 /// `Idle`: an image's mark while its batch is open, everything handed over so far.
 pub const IDLE: i64 = i64::MAX;
 /// `SnapshotWords`, as `dp::SNAPSHOT_WORDS`.
-const SNAPSHOT_WORDS: i64 = crate::dp::SNAPSHOT_WORDS as i64;
+const SNAPSHOT_WORDS: i64 = crate::memory::dp::SNAPSHOT_WORDS as i64;
 
 /// The wait sites of C#'s `DpInterface`, by number.
 pub mod site {

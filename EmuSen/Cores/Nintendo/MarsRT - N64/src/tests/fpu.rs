@@ -1,8 +1,8 @@
 //! Coprocessor one: `MarsFpuArithmeticTests` and `MarsFpuRegisterFileTests`.
 
 use super::support::{Asm, ENTRY_POINT, Rig};
-use crate::cop0::{CAUSE, CAUSE_COPROCESSOR, EXCEPTION_PC, STATUS, STATUS_COP1_USABLE, STATUS_FPU_FULL_MODE};
-use crate::cop1::{FCSR_CAUSE_UNIMPLEMENTED, FPU_IMPLEMENTATION};
+use crate::cpu::cop0::{CAUSE, CAUSE_COPROCESSOR, EXCEPTION_PC, STATUS, STATUS_COP1_USABLE, STATUS_FPU_FULL_MODE};
+use crate::cpu::cop1::{FCSR_CAUSE_UNIMPLEMENTED, FPU_IMPLEMENTATION};
 use crate::cpu::code;
 
 const FULL_MODE: u64 = STATUS_COP1_USABLE | STATUS_FPU_FULL_MODE;

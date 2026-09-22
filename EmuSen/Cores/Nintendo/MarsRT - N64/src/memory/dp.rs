@@ -1,10 +1,10 @@
 //! The display processor's command interface, the C# `DpInterface`, and the words a snapshot carries; the threaded half is `dp_threads`.
 
 use crate::Skip;
-use crate::bus::{MemoryBus, SP_MEM_SIZE};
-use crate::dp_threads::{PAGES, PageMarks, Threads, site};
-use crate::mi::interrupt;
-use crate::ram::Detached;
+use crate::memory::bus::{MemoryBus, SP_MEM_SIZE};
+use crate::memory::dp_threads::{PAGES, PageMarks, Threads, site};
+use crate::memory::mi::interrupt;
+use crate::memory::ram::Detached;
 use crate::rdp::{Rdp, RdpMemory};
 use crate::state::{State, StateError, StateReader, StateResult, StateWriter};
 use std::sync::atomic::Ordering::Relaxed;

@@ -3,7 +3,7 @@
 use std::ptr;
 
 use crate::vi::Vi;
-use crate::vi_scan::{self, RASTER_HEIGHT, Scanout};
+use crate::vi::scan::{self, RASTER_HEIGHT, Scanout};
 
 /// One VI with its scan-out, as the machine will hold them.
 #[derive(Default)]
@@ -88,7 +88,7 @@ pub unsafe extern "C" fn mars_vi_scan_run(scan: *mut ViScan, rdram: *const u8, r
     }
     let rdram = unsafe { std::slice::from_raw_parts(rdram, rdram_len) };
     let hidden = unsafe { std::slice::from_raw_parts(hidden, hidden_len) };
-    vi_scan::scan(&mut s.vi, rdram, hidden, &mut s.out) as i32
+    scan::scan(&mut s.vi, rdram, hidden, &mut s.out) as i32
 }
 
 /// The last frame's width, height and row repeat into `shape`, and up to `len` of its bytes into `out`; returns its whole length.

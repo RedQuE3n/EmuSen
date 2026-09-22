@@ -1,9 +1,17 @@
 //! The VR4300's state, the C# `Cpu` (with COP0, the FPU's registers and COP2's latch), and what C# derives beside it.
 
+pub mod cop0;
+pub mod cop1;
+pub mod idle;
+pub mod interp;
+pub mod segments;
+pub mod softfloat;
+pub mod tlb;
+
 use crate::Skip;
-use crate::segments::Mode;
+use crate::cpu::segments::Mode;
 use crate::state::{State, StateReader, StateResult, StateWriter};
-use crate::tlb::Tlb;
+use crate::cpu::tlb::Tlb;
 
 /// `ExceptionCode`, the Cause register's codes.
 pub mod code {

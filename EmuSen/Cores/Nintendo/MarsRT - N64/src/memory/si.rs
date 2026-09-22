@@ -1,9 +1,9 @@
 //! The serial interface, the C# `SiInterface`, with its four ports.
 
-use crate::bus::MemoryBus;
-use crate::controller::Controller;
-use crate::joybus;
-use crate::mi::interrupt;
+use crate::memory::bus::MemoryBus;
+use crate::memory::controller::Controller;
+use crate::memory::joybus;
+use crate::memory::mi::interrupt;
 use crate::rom::Cic;
 use crate::state::{State, StateReader, StateResult, StateWriter};
 

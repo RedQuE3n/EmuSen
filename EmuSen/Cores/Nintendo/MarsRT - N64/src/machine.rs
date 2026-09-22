@@ -3,16 +3,16 @@
 use std::sync::Arc;
 
 use crate::Skip;
-use crate::bus::{MemoryBus, RDRAM_SIZE, RDRAM_SIZE_EXPANDED};
-use crate::controller::ControllerPak;
-use crate::cop0::{COMPARE, CONFIG, CONFIG_AT_RESET, PROCESSOR_ID, PROCESSOR_ID_REGISTER, STATUS};
+use crate::memory::bus::{MemoryBus, RDRAM_SIZE, RDRAM_SIZE_EXPANDED};
+use crate::memory::controller::ControllerPak;
+use crate::cpu::cop0::{COMPARE, CONFIG, CONFIG_AT_RESET, PROCESSOR_ID, PROCESSOR_ID_REGISTER, STATUS};
 use crate::cpu::Cpu;
-use crate::dp::{DpInterface, SNAPSHOT_WORDS};
-use crate::dp_threads::Threads;
+use crate::memory::dp::{DpInterface, SNAPSHOT_WORDS};
+use crate::memory::dp_threads::Threads;
 use crate::rom::{self, Cic, RomImage};
-use crate::save::{SaveChip, save_type};
+use crate::memory::save::{SaveChip, save_type};
 use crate::state::{State, StateError, StateReader, StateResult, StateWriter};
-use crate::vi_scan::{self, Presented, Scanout};
+use crate::vi::scan::{self as vi_scan, Presented, Scanout};
 
 /// `StateMagic`: "MARS" little-endian.
 pub const STATE_MAGIC: u32 = 0x5352_414D;
@@ -383,8 +383,8 @@ impl Machine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::controller::ControllerPak;
-    use crate::save::SaveChip;
+    use crate::memory::controller::ControllerPak;
+    use crate::memory::save::SaveChip;
 
     fn busy() -> Machine {
         let mut m = Machine::new(RDRAM_SIZE_EXPANDED).unwrap();
@@ -396,7 +396,7 @@ mod tests {
         m.bus.si.due = 0x1_2345_6789;
         m.bus.si.pending_read = 0x1000;
         m.bus.registers.insert(0x0450_0010, 7);
-        m.bus.save = SaveChip::new(crate::save::save_type::FLASH_RAM);
+        m.bus.save = SaveChip::new(crate::memory::save::save_type::FLASH_RAM);
         m.bus.si.controllers[2].pak = Some(ControllerPak::default());
         m
     }

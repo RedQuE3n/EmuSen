@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::Skip;
-use crate::joybus;
+use crate::memory::joybus;
 use crate::state::{State, StateReader, StateResult, StateWriter, boxed};
 
 /// `N64SaveType`, as the int32 a state stores.

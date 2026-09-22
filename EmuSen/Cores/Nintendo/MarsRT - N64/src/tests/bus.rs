@@ -1,13 +1,13 @@
 //! The memory map and the processor's bus: `MarsBusTests`, `MarsMiTests` and `MarsCartridgeTests`.
 
 use super::support::{Asm, SyntheticRom, build_rom, bus_with_cart, new_bus, new_bus_expanded};
-use crate::bus::{MemoryBus, RDRAM_SIZE, RI_SELECT};
-use crate::bus_access::map::{CART_DOMAIN1_ADDRESS2, IS_VIEWER_BASE, MI_BASE, PI_BASE, RDRAM_REGISTERS_BASE, SP_DMEM_BASE};
-use crate::isviewer::{BUFFER_OFFSET, LENGTH_REGISTER_OFFSET};
-use crate::mi::interrupt;
-use crate::pi::STORE_DECAY_CYCLES;
+use crate::memory::bus::{MemoryBus, RDRAM_SIZE, RI_SELECT};
+use crate::memory::bus_access::map::{CART_DOMAIN1_ADDRESS2, IS_VIEWER_BASE, MI_BASE, PI_BASE, RDRAM_REGISTERS_BASE, SP_DMEM_BASE};
+use crate::memory::isviewer::{BUFFER_OFFSET, LENGTH_REGISTER_OFFSET};
+use crate::memory::mi::interrupt;
+use crate::memory::pi::STORE_DECAY_CYCLES;
 use crate::rom::{HEADER_LENGTH, MAGIC, MINIMUM_LENGTH};
-use crate::segments::{self, Mode, Segment};
+use crate::cpu::segments::{self, Mode, Segment};
 
 const SP_IMEM_BASE: u32 = 0x0400_1000;
 

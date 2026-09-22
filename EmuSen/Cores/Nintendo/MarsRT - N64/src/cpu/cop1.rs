@@ -1,9 +1,9 @@
 //! Coprocessor one: the register file, its control registers, and the arithmetic formats. C#'s Fpu.cs, Cpu.Opcodes.Cop1.cs and Cop1Math.cs. See Mars_Fpu.md.
 
-use crate::cop0::{STATUS, STATUS_COP1_USABLE, STATUS_FPU_FULL_MODE};
+use crate::cpu::cop0::{STATUS, STATUS_COP1_USABLE, STATUS_FPU_FULL_MODE};
 use crate::cpu::{Cpu, Exec, Raised, code};
-use crate::interp::{rd, rt};
-use crate::softfloat::{self as sf, DOUBLE, FloatClass, FloatFormat, FloatResult, SINGLE, SoftFloat};
+use crate::cpu::interp::{rd, rt};
+use crate::cpu::softfloat::{self as sf, DOUBLE, FloatClass, FloatFormat, FloatResult, SINGLE, SoftFloat};
 
 pub const FPU_IMPLEMENTATION: u32 = 0x0000_0A00;
 pub const FCSR_WRITABLE_MASK: u32 = 0x0183_FFFF;

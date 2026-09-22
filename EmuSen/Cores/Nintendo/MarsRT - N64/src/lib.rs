@@ -1,41 +1,18 @@
 //! MarsRT, the N64 core in Rust, and the C# Mars's native components, called through a C ABI. See Mars_Native.md.
 
-pub mod ai;
-pub mod bus;
-pub mod bus_access;
-pub mod controller;
-pub mod cop0;
-pub mod cop1;
 pub mod cpu;
-pub mod dp;
-pub mod dp_threads;
 pub mod ffi;
-pub mod ffi_rdp;
-pub mod ffi_vi;
-pub mod idle;
-pub mod interp;
-pub mod isviewer;
-pub mod joybus;
 pub mod machine;
-pub mod mi;
+pub mod memory;
 #[cfg(test)]
 mod naming;
-pub mod pi;
-pub mod ram;
 pub mod rdp;
 pub mod rom;
 pub mod rsp;
-pub mod save;
-pub mod segments;
-pub mod si;
-pub mod softfloat;
-pub mod sp;
 pub mod state;
 #[cfg(test)]
 mod tests;
-pub mod tlb;
 pub mod vi;
-pub mod vi_scan;
 
 use std::ffi::{CStr, c_char};
 use std::sync::OnceLock;

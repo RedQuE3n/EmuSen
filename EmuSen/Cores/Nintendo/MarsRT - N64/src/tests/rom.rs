@@ -1,13 +1,13 @@
 //! The cartridge image and its security chip: `MarsRomImageTests` and `MarsCicTests`.
 
 use super::support::{SyntheticRom, build_homebrew_with, build_rom, byte_swapped, from_hex, little_endian, new_bus, rom_image, to_hex};
-use crate::bus::MemoryBus;
-use crate::bus_access::map::{SI_BASE, SP_DMEM_BASE};
+use crate::memory::bus::MemoryBus;
+use crate::memory::bus_access::map::{SI_BASE, SP_DMEM_BASE};
 use crate::cpu::Cpu;
 use crate::machine::{boot, hand_off};
 use crate::rom::{self, BOOT_CODE_LENGTH, Cic, MINIMUM_LENGTH, RomError, RomImage};
-use crate::save::save_type;
-use crate::si::TRANSFER_CYCLES;
+use crate::memory::save::save_type;
+use crate::memory::si::TRANSFER_CYCLES;
 
 // ---- MarsRomImageTests ----
 

@@ -3,6 +3,7 @@
 //! The rule: between a word's publish and the join, the drain owns the processor and may touch the RDRAM bytes the word's marks name; the
 //! emulation thread touches such a byte only after an Acquire of `completed` at or past the word that last touches it (`wait`).
 
+use std::cell::Cell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release, SeqCst};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, AtomicU64, fence};
@@ -164,6 +165,23 @@ impl BoxSlot {
     }
 }
 
+/// A ring range that covered a byte: its bytes, its first word and its count, and whether the processor writes it.
+#[derive(Clone, Copy)]
+struct Covering {
+    from: i64,
+    to: i64,
+    start: i64,
+    mark: i64,
+    write: bool,
+}
+
+/// The drain's memory of the last range and box that held a byte, which accepts only what the full scan would; a draw's bytes are neighbours.
+#[derive(Default)]
+pub struct Checked {
+    range: Cell<Option<Covering>>,
+    draw: Cell<Option<DrawBox>>,
+}
+
 /// What the machine's thread and the drain both reach. Its raw pointers are the bus's own allocations, which outlive the drain (`Threads::stop`).
 pub struct Shared {
     ring: Box<[AtomicU64]>,
@@ -216,7 +234,12 @@ impl Shared {
     }
 
     /// `Touched` and `Wrote`: a byte the processor reaches for a word must lie in a page and a range marked for it, and a write in its draw's box.
+    #[cfg(test)]
     pub(crate) fn verify(&self, at: usize, word: i64, write: bool) {
+        self.verify_with(at, word, write, &Checked::default());
+    }
+
+    pub(crate) fn verify_with(&self, at: usize, word: i64, write: bool, checked: &Checked) {
         if at >= self.rdram_len || self.faulted.load(Relaxed) {
             return;
         }
@@ -227,17 +250,37 @@ impl Shared {
             self.record_fault(format!("the display processor {what} {at:06X} in a page its interface did not mark before word {word}"));
             return;
         }
-        if !self.covers(at as i64, word, write) {
-            self.record_fault(format!("the display processor {what} {at:06X} outside every range its interface marked for word {word}"));
-            return;
+        let byte = at as i64;
+        let remembered = checked.range.get().is_some_and(|r| r.start <= word && word <= r.mark && byte >= r.from && byte < r.to && (!write || r.write));
+        if !remembered {
+            match self.covers(byte, word, write) {
+                None => {
+                    self.record_fault(format!("the display processor {what} {at:06X} outside every range its interface marked for word {word}"));
+                    return;
+                }
+                Some(found) => {
+                    if found.is_some() {
+                        checked.range.set(found);
+                    }
+                }
+            }
         }
-        if write && !self.box_holds(at as i64, word) {
-            self.record_fault(format!("the display processor wrote {at:06X} outside the box its interface recorded for the draw ending at word {word}"));
+        if write {
+            let draw = match checked.draw.get() {
+                Some(b) if b.end == word => Some(b),
+                _ => self.box_for(word),
+            };
+            if let Some(b) = draw {
+                checked.draw.set(Some(b));
+                if !holds(&b, byte, byte + 1) {
+                    self.record_fault(format!("the display processor wrote {at:06X} outside the box its interface recorded for the draw ending at word {word}"));
+                }
+            }
         }
     }
 
-    /// `Covers`: the open batch read whole under its sequence, then the ring newest first until the counts fall below the word.
-    fn covers(&self, at: i64, word: i64, write: bool) -> bool {
+    /// `Covers`: the open batch read whole under its sequence, then the ring newest first until the counts fall below the word; the ring range that covered, if one did.
+    fn covers(&self, at: i64, word: i64, write: bool) -> Option<Option<Covering>> {
         loop {
             let sequence = self.idle_sequence.load(Acquire);
             if sequence & 1 != 0 {
@@ -257,7 +300,7 @@ impl Shared {
                 continue;
             }
             if covered {
-                return true;
+                return Some(None);
             }
             break;
         }
@@ -269,21 +312,21 @@ impl Shared {
             let (from, to, start, mark, writes) = (slot.from.load(Relaxed), slot.to.load(Relaxed), slot.start.load(Relaxed), slot.mark.load(Relaxed), slot.write.load(Relaxed));
             fence(Acquire);
             if self.ranges_appended.load(Relaxed) - i >= RANGE_COUNT as i64 {
-                return true;
+                return Some(None);
             }
             if mark < word {
-                return false;
+                return None;
             }
             if start <= word && at >= from && at < to && (!write || writes) {
-                return true;
+                return Some(Some(Covering { from, to, start, mark, write: writes }));
             }
             i -= 1;
         }
-        appended >= RANGE_COUNT as i64
+        (appended >= RANGE_COUNT as i64).then_some(None)
     }
 
-    /// `BoxHolds`: the box of the draw ending at the word, found by halving, since ends are unique and grow with the index; none is not the boxes' to judge.
-    fn box_holds(&self, at: i64, word: i64) -> bool {
+    /// `BoxHolds`' box: the draw ending at the word, found by halving, since ends are unique and grow with the index; none is not the boxes' to judge.
+    fn box_for(&self, word: i64) -> Option<DrawBox> {
         let appended = self.boxes_appended.load(Acquire);
         let oldest = (appended - BOX_COUNT as i64).max(0);
         let (mut low, mut high) = (oldest, appended);
@@ -296,15 +339,15 @@ impl Shared {
             }
         }
         if low == oldest {
-            return true;
+            return None;
         }
         let i = low - 1;
         let b = self.boxes[(i as usize) & (BOX_COUNT - 1)].load();
         fence(Acquire);
         if self.boxes_appended.load(Relaxed) - i > BOX_COUNT as i64 || b.end != word {
-            return true;
+            return None;
         }
-        holds(&b, at, at + 1)
+        Some(b)
     }
 }
 
@@ -1181,6 +1224,7 @@ fn drain(shared: Arc<Shared>) {
 }
 
 fn drain_words(shared: &Shared) {
+    let checked = Checked::default();
     let mut completed = shared.completed.load(Relaxed);
     loop {
         if shared.stopping.load(Acquire) {
@@ -1200,7 +1244,7 @@ fn drain_words(shared: &Shared) {
                     }
                 }
                 let word = shared.ring[(completed as usize) & (RING - 1)].load(Relaxed);
-                let check = if shared.verifying.load(Relaxed) { Some((shared, completed + 1)) } else { None };
+                let check = if shared.verifying.load(Relaxed) { Some((shared, completed + 1, &checked)) } else { None };
                 // SAFETY: published words are the drain's to run until the machine's Acquire of `completed` passes them (the module's rule).
                 unsafe {
                     let mut memory = RdpMemory::shared((shared.rdram, shared.rdram_len), (shared.hidden, shared.hidden_len), check);

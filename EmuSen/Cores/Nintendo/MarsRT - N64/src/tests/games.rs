@@ -128,7 +128,7 @@ pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64,
             c.reads_freed,
             c.joins
         );
-        if mode.threaded && frames >= 20 {
+        if mode.threaded && state.is_some() {
             assert!(s.drain_words.load(std::sync::atomic::Ordering::Relaxed) > 0, "{rom}: the drain ran nothing, so nothing was compared");
         }
     }

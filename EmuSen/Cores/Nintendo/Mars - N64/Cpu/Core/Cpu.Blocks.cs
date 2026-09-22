@@ -19,6 +19,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Core
 
         public long BlocksCompiled => _blocks.Compiled;
 
+        public long BlockCompileTicks => _blocks.CompileTicks;
+
         public long BlocksDiscarded => _blocks.Discarded;
 
         public long BlocksReshaped => _blocks.Reshaped;

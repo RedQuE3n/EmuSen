@@ -55,7 +55,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
         public int RepeatLength => (int)RepeatCount + 1;
 
         // Level-triggered: the line stays asserted for as long as a device is both raised and unmasked.
-        public bool Asserted => (Pending & Mask) != MiInterrupt.None;
+        public bool Asserted
+        {
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+            get => (Pending & Mask) != MiInterrupt.None;
+        }
 
         public void Raise(MiInterrupt source) => Pending |= source;
 

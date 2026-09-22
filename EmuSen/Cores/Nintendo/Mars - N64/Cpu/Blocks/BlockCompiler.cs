@@ -84,15 +84,18 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
         private static readonly Thread Worker = Start();
 
+        // Closed over this, so a call through the delegate needs no argument-shuffling thunk - see Mars_Recompiler.md §20.
+        private static readonly object Bound = new();
+
         // Compiled from the image the block already holds, and the JIT forced here rather than on the first call - see Mars_Recompiler.md §2.4.
         public static void Compile(Block block, BlockCache cache, int rdramLength)
         {
             long began = Stopwatch.GetTimestamp();
 
-            var method = new DynamicMethod("mars_block_" + block.Physical.ToString("X8"), typeof(void), new[] { CpuType }, CpuType.Module, skipVisibility: true);
+            var method = new DynamicMethod("mars_block_" + block.Physical.ToString("X8"), typeof(void), new[] { typeof(object), CpuType }, CpuType.Module, skipVisibility: true);
             new Emitter(method.GetILGenerator(), block, rdramLength).Emit();
 
-            var code = (BlockCode)method.CreateDelegate(typeof(BlockCode));
+            var code = (BlockCode)method.CreateDelegate(typeof(BlockCode), Bound);
             RuntimeHelpers.PrepareDelegate(code);
 
             cache.NoteCompiled(Stopwatch.GetTimestamp() - began);
@@ -195,12 +198,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
             private void Prologue()
             {
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Bus); _il.Emit(OpCodes.Stloc, _bus);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Gpr); _il.Emit(OpCodes.Stloc, _g);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Bus); _il.Emit(OpCodes.Stloc, _bus);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Gpr); _il.Emit(OpCodes.Stloc, _g);
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusSp); _il.Emit(OpCodes.Ldfld, SpProcessor); _il.Emit(OpCodes.Stloc, _sp);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Pc); _il.Emit(OpCodes.Stloc, _entry);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Pc); _il.Emit(OpCodes.Stloc, _entry);
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusRdram); _il.Emit(OpCodes.Stloc, _rdram);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, DpWriteMarks); _il.Emit(OpCodes.Stloc, _marks);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, DpWriteMarks); _il.Emit(OpCodes.Stloc, _marks);
 
                 // The three arrays by their first elements, so an access whose index is already known to be inside is an address and not a checked one - see Mars_Recompiler.md §19.
                 _il.Emit(OpCodes.Ldloc, _g); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Ldelema, typeof(ulong)); _il.Emit(OpCodes.Stloc, _registers);
@@ -208,8 +211,8 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _il.Emit(OpCodes.Ldloc, _marks); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Ldelema, typeof(long)); _il.Emit(OpCodes.Stloc, _marked);
 
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Call, BusNextEvent);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, TimerDue); _il.Emit(OpCodes.Call, MathMin);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, CapAt); _il.Emit(OpCodes.Call, MathMin);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, TimerDue); _il.Emit(OpCodes.Call, MathMin);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, CapAt); _il.Emit(OpCodes.Call, MathMin);
                 _il.Emit(OpCodes.Stloc, _stop);
 
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusWritten); _il.Emit(OpCodes.Stloc, _written);
@@ -225,10 +228,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
                 if (slot)
                 {
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, BranchPending); _il.Emit(OpCodes.Stfld, InDelaySlot);
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Stfld, BranchPending);
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, NextPc); _il.Emit(OpCodes.Stfld, Pc);
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Pc); _il.Emit(OpCodes.Ldc_I8, 4L); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Stfld, NextPc);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, BranchPending); _il.Emit(OpCodes.Stfld, InDelaySlot);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Stfld, BranchPending);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, NextPc); _il.Emit(OpCodes.Stfld, Pc);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Pc); _il.Emit(OpCodes.Ldc_I8, 4L); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Stfld, NextPc);
                 }
 
                 if (k > 0 && d.Kind != Kind.Pure) StoreAddress(CurrentPc, k * 4);
@@ -249,13 +252,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                     case Kind.Call when InlineLoads && (d.Word >> 26) is 0x31 or 0x35: LoadFloat(d.Word); break;
                     case Kind.Call when InlineLoads && MovesFloat(d.Word): MoveFloat(d.Word); break;
                     default:
-                        _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)d.Word)); _il.Emit(OpCodes.Call, Execute);
+                        _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, unchecked((int)d.Word)); _il.Emit(OpCodes.Call, Execute);
                         break;
                 }
 
                 if (d.Kind == Kind.MulDiv)
                 {
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Stfld, ExtraCycles);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Stfld, ExtraCycles);
                 }
 
                 Tick(d.Cycles, exit);
@@ -263,9 +266,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 if (slot)
                 {
                     Label noReturn = _il.DefineLabel();
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, ReturnAfterSlot); _il.Emit(OpCodes.Brfalse, noReturn);
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, InDelaySlot); _il.Emit(OpCodes.Brfalse, noReturn);
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Call, ReturnedAfterSlot);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, ReturnAfterSlot); _il.Emit(OpCodes.Brfalse, noReturn);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, InDelaySlot); _il.Emit(OpCodes.Brfalse, noReturn);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Call, ReturnedAfterSlot);
                     _il.MarkLabel(noReturn);
                 }
 
@@ -273,12 +276,12 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
                 if (d.Kind == Kind.Branch)
                 {
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, BranchPending); _il.Emit(OpCodes.Brfalse, exit);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, BranchPending); _il.Emit(OpCodes.Brfalse, exit);
                 }
 
                 if (!last)
                 {
-                    if (Verify) { _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Call, VerifyBlockStep); }
+                    if (Verify) { _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Call, VerifyBlockStep); }
                     _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusCycles); _il.Emit(OpCodes.Ldloc, _stop); _il.Emit(OpCodes.Bge, exit);
                     return;
                 }
@@ -309,17 +312,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _il.MarkLabel(_epilogue);
                 _il.Emit(OpCodes.Ldloc, _exitAt); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Blt, countersSet);
 
-                _il.Emit(OpCodes.Ldarg_0); Address(_exitAt, 4); _il.Emit(OpCodes.Stfld, Pc);
-                _il.Emit(OpCodes.Ldarg_0); Address(_exitAt, 8); _il.Emit(OpCodes.Stfld, NextPc);
-                _il.Emit(OpCodes.Ldarg_0); Address(_exitAt, 0); _il.Emit(OpCodes.Stfld, CurrentPc);
+                _il.Emit(OpCodes.Ldarg_1); Address(_exitAt, 4); _il.Emit(OpCodes.Stfld, Pc);
+                _il.Emit(OpCodes.Ldarg_1); Address(_exitAt, 8); _il.Emit(OpCodes.Stfld, NextPc);
+                _il.Emit(OpCodes.Ldarg_1); Address(_exitAt, 0); _il.Emit(OpCodes.Stfld, CurrentPc);
                 _il.Emit(OpCodes.Br, done);
 
                 _il.MarkLabel(countersSet);
                 _il.Emit(OpCodes.Ldloc, _exitAt); _il.Emit(OpCodes.Not); _il.Emit(OpCodes.Stloc, _exitAt);
-                _il.Emit(OpCodes.Ldarg_0); Address(_exitAt, 0); _il.Emit(OpCodes.Stfld, CurrentPc);
+                _il.Emit(OpCodes.Ldarg_1); Address(_exitAt, 0); _il.Emit(OpCodes.Stfld, CurrentPc);
 
                 _il.MarkLabel(done);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Call, AfterInstruction); _il.Emit(OpCodes.Ret);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Call, AfterInstruction); _il.Emit(OpCodes.Ret);
             }
 
             // entry + 4 * index + offset, as a 64-bit address.
@@ -332,11 +335,11 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
             // A slot that lands on the block's own start goes round inside the method, with what the dispatcher would check at entry - see Mars_Recompiler.md §3.4.
             private void LoopBack(Label exit)
             {
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Pc); _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Bne_Un, exit);
-                if (Verify) { _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Call, VerifyBlockStep); }
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Pc); _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Bne_Un, exit);
+                if (Verify) { _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Call, VerifyBlockStep); }
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusCycles); _il.Emit(OpCodes.Ldloc, _stop); _il.Emit(OpCodes.Bge, exit);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Stfld, InDelaySlot);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Stfld, CurrentPc);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4_0); _il.Emit(OpCodes.Stfld, InDelaySlot);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Stfld, CurrentPc);
                 _il.Emit(OpCodes.Br, _head);
             }
 
@@ -374,7 +377,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 if (Likely(word))
                 {
                     Label done = _il.DefineLabel();
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
                     _il.Emit(OpCodes.Br, done);
                     _il.MarkLabel(notTaken);
                     StoreAddress(Pc, k * 4 + 8);
@@ -384,7 +387,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 }
 
                 _il.MarkLabel(notTaken);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
             }
 
             private static bool Likely(uint word) => (word >> 26) is 0x14 or 0x15 or 0x16 or 0x17 || ((word >> 26) == 0x01 && ((word >> 16) & 0x1F) is 2 or 3);
@@ -402,7 +405,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
                 if (link || (register && rs == 31))
                 {
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, link ? CallObserver : ReturnObserver); _il.Emit(OpCodes.Brtrue, slow);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, link ? CallObserver : ReturnObserver); _il.Emit(OpCodes.Brtrue, slow);
                 }
 
                 if (register)
@@ -410,29 +413,29 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                     // The target is read before the link is written, since they may be one register.
                     LdReg(rs); _il.Emit(OpCodes.Stloc, _address);
                     if (link) StReg(rd, () => { _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Ldc_I8, (long)(k * 4 + 8)); _il.Emit(OpCodes.Add); });
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldloc, _address); _il.Emit(OpCodes.Stfld, NextPc);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldloc, _address); _il.Emit(OpCodes.Stfld, NextPc);
                 }
                 else
                 {
                     if (link) StReg(31, () => { _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Ldc_I8, (long)(k * 4 + 8)); _il.Emit(OpCodes.Add); });
-                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldarg_1);
                     _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Ldc_I8, (long)(k * 4 + 4)); _il.Emit(OpCodes.Add);
                     _il.Emit(OpCodes.Ldc_I8, unchecked((long)0xFFFF_FFFF_F000_0000)); _il.Emit(OpCodes.And);
                     _il.Emit(OpCodes.Ldc_I8, (long)((word & 0x03FF_FFFF) << 2)); _il.Emit(OpCodes.Or);
                     _il.Emit(OpCodes.Stfld, NextPc);
                 }
 
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4_1); _il.Emit(OpCodes.Stfld, BranchPending);
                 _il.Emit(OpCodes.Br, done);
 
                 _il.MarkLabel(slow);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
                 _il.MarkLabel(done);
             }
 
             private void StoreAddress(FieldInfo field, int offset)
             {
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Ldc_I8, (long)offset); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Stfld, field);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldloc, _entry); _il.Emit(OpCodes.Ldc_I8, (long)offset); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Stfld, field);
             }
 
             private void Tick(int cycles, Label exit)
@@ -440,16 +443,16 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 Label halted = _il.DefineLabel();
 
                 _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldloc, _bus); _il.Emit(OpCodes.Ldfld, BusCycles); _il.Emit(OpCodes.Ldc_I8, (long)cycles); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Stfld, BusCycles);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Instructions); _il.Emit(OpCodes.Ldc_I8, 1L); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Stfld, Instructions);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Instructions); _il.Emit(OpCodes.Ldc_I8, 1L); _il.Emit(OpCodes.Add); _il.Emit(OpCodes.Stfld, Instructions);
 
                 _il.Emit(OpCodes.Ldloc, _sp); _il.Emit(OpCodes.Ldfld, RspHalted); _il.Emit(OpCodes.Brtrue, halted);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I8, (long)cycles); _il.Emit(OpCodes.Ldloc, _written); _il.Emit(OpCodes.Call, RspRan); _il.Emit(OpCodes.Brtrue, exit);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I8, (long)cycles); _il.Emit(OpCodes.Ldloc, _written); _il.Emit(OpCodes.Call, RspRan); _il.Emit(OpCodes.Brtrue, exit);
                 _il.MarkLabel(halted);
             }
 
             private void StoreOf(Decoded d)
             {
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)d.Word));
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, unchecked((int)d.Word));
 
                 switch (d.Store)
                 {
@@ -511,7 +514,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 _il.Emit(OpCodes.Br, done);
 
                 _il.MarkLabel(slow);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
                 _il.MarkLabel(done);
             }
 
@@ -548,13 +551,13 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                 Usable(slow);
                 DirectAddress((int)((word >> 21) & 0x1F), (short)word, wide ? 8 : 4, slow);
 
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, (int)((word >> 16) & 0x1F));
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, (int)((word >> 16) & 0x1F));
                 if (wide) { Unaligned(OpCodes.Ldind_I8); _il.Emit(OpCodes.Call, Swap64); _il.Emit(OpCodes.Call, WriteFpuWide); }
                 else { Unaligned(OpCodes.Ldind_U4); _il.Emit(OpCodes.Call, SwapU32); _il.Emit(OpCodes.Call, WriteFpuWord); }
                 _il.Emit(OpCodes.Br, done);
 
                 _il.MarkLabel(slow);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
                 _il.MarkLabel(done);
             }
 
@@ -571,22 +574,22 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
 
                 if (((word >> 21) & 0x1F) == 0x04)
                 {
-                    _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, fs); LdReg(rt); _il.Emit(OpCodes.Conv_U4); _il.Emit(OpCodes.Call, WriteFpuWord);
+                    _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, fs); LdReg(rt); _il.Emit(OpCodes.Conv_U4); _il.Emit(OpCodes.Call, WriteFpuWord);
                 }
                 else
                 {
-                    StReg(rt, () => { _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, fs); _il.Emit(OpCodes.Call, ReadFpuWord); SignExtend32(); });
+                    StReg(rt, () => { _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, fs); _il.Emit(OpCodes.Call, ReadFpuWord); SignExtend32(); });
                 }
 
                 _il.Emit(OpCodes.Br, done);
                 _il.MarkLabel(slow);
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldc_I4, unchecked((int)word)); _il.Emit(OpCodes.Call, Execute);
                 _il.MarkLabel(done);
             }
 
             private void Usable(Label slow)
             {
-                _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Cop0); _il.Emit(OpCodes.Ldc_I4, Core.Cpu.StatusRegister); _il.Emit(OpCodes.Ldelem_I8);
+                _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Cop0); _il.Emit(OpCodes.Ldc_I4, Core.Cpu.StatusRegister); _il.Emit(OpCodes.Ldelem_I8);
                 _il.Emit(OpCodes.Ldc_I8, (long)Core.Cpu.StatusCop1Usable); _il.Emit(OpCodes.And); _il.Emit(OpCodes.Brfalse, slow);
             }
 
@@ -665,10 +668,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Cpu.Blocks
                     case 0x06: StReg(rd, () => { LdReg(rt); _il.Emit(OpCodes.Conv_U4); Amount(rs, 0x1F); _il.Emit(OpCodes.Shr_Un); SignExtend32(); }); return;
                     case 0x07: StReg(rd, () => { LdReg(rt); Amount(rs, 0x1F); _il.Emit(OpCodes.Shr); SignExtend32(); }); return;
                     case 0x0F: return;
-                    case 0x10: StReg(rd, () => { _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Hi); }); return;
-                    case 0x11: _il.Emit(OpCodes.Ldarg_0); LdReg(rs); _il.Emit(OpCodes.Stfld, Hi); return;
-                    case 0x12: StReg(rd, () => { _il.Emit(OpCodes.Ldarg_0); _il.Emit(OpCodes.Ldfld, Lo); }); return;
-                    case 0x13: _il.Emit(OpCodes.Ldarg_0); LdReg(rs); _il.Emit(OpCodes.Stfld, Lo); return;
+                    case 0x10: StReg(rd, () => { _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Hi); }); return;
+                    case 0x11: _il.Emit(OpCodes.Ldarg_1); LdReg(rs); _il.Emit(OpCodes.Stfld, Hi); return;
+                    case 0x12: StReg(rd, () => { _il.Emit(OpCodes.Ldarg_1); _il.Emit(OpCodes.Ldfld, Lo); }); return;
+                    case 0x13: _il.Emit(OpCodes.Ldarg_1); LdReg(rs); _il.Emit(OpCodes.Stfld, Lo); return;
                     case 0x14: StReg(rd, () => { LdReg(rt); Amount(rs, 0x3F); _il.Emit(OpCodes.Shl); }); return;
                     case 0x16: StReg(rd, () => { LdReg(rt); Amount(rs, 0x3F); _il.Emit(OpCodes.Shr_Un); }); return;
                     case 0x17: StReg(rd, () => { LdReg(rt); Amount(rs, 0x3F); _il.Emit(OpCodes.Shr); }); return;

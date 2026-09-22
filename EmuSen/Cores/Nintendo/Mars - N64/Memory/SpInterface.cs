@@ -178,11 +178,10 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
 
         // Length is encoded one short, and the row count and skip make it rectangular - see Mars_Memory.md §6.
         // What the transfers moved: for the emulation thread's profile - see Mars_Performance.md §36.
-        [EmuSen.Common.SkipInState] public long Transfers, TransferRows, TransferBytes, TransferTicks;
+        [EmuSen.Common.SkipInState] public long Transfers, TransferRows, TransferBytes;
 
         private void Transfer(uint encoded, bool toSignalProcessor)
         {
-            long started = System.Diagnostics.Stopwatch.GetTimestamp();
             uint length = ((encoded & 0xFFF) | 7) + 1;
             uint rows = ((encoded >> 12) & 0xFF) + 1;
             uint skip = (encoded >> 20) & 0xFFF;
@@ -217,7 +216,6 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
 
             _memAddress = (_memAddress & ImemSelect) | bankOffset;
-            TransferTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started;
         }
 
         // A row inside RDRAM is the bytes the byte path moves, in two runs where the bank wraps, after the same wait - see Mars_Memory.md §6.2.

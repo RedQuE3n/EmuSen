@@ -173,7 +173,9 @@ namespace EmuSen.Mistress.Views
             BuildMenus();
             // The tick follows the window, so a window-manager key cannot leave it lying - see §4.19.
             FullScreenChanged += on => _fullscreen.IsChecked = on;
-            _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole));
+            // SDL's device scan takes ~150 ms, so it waits for the window's first frame - see EmuSen_Settings_Reference.md §4.42.
+            _gamepad = new GamepadManager(_gamepadBindings.For(_activeConsole), start: false);
+            Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
             // Endymion is a leaf and reads no globals, so the settings come from here - see EmuSen_Audio_Sync.md §7.1.
             _audioPlayer = new AudioPlayer(
                 AudioSettings.SampleRate, AudioSettings.OutputTargetLatencyMs, AudioSettings.RateControlMaxDeviation);

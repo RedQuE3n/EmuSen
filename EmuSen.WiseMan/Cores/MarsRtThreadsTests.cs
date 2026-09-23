@@ -98,6 +98,37 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
+        // The phases on a game with its workers busy: each frame's waits inside the frame's own time, and some frame waiting at all - see Mars_Native.md §6.6.2.
+        [Theory]
+        [InlineData("sm64.z64", "sm64.state")]
+        [InlineData("oot.z64", "oot.state")]
+        [InlineData("ge.z64", "ge-dam.state")]
+        public void MarsRT_s_phases_on_a_game_are_each_frame_s_own(string romName, string stateName)
+        {
+            if (Game(romName, stateName) is not { } game) return;
+            using MarsRtCore subject = Twin(threaded: true, deferred: true, workers: 4, blocks: true);
+            Load(subject, game);
+            int frames = Frames(300), waitedInMachine = 0, waitedInPresent = 0, joined = 0;
+            double machine = 0, machineWaits = 0, present = 0, presentWaits = 0;
+            var clock = new Stopwatch();
+            for (int frame = 1; frame <= frames; frame++)
+            {
+                Drive(subject, subject, frame);
+                clock.Restart();
+                subject.RunFrame();
+                double wall = clock.Elapsed.TotalMilliseconds;
+                var p = subject.LastFramePhases.ToDictionary(x => x.Name, x => x.Milliseconds);
+                if (p["machine/rdp-wait"] > p["machine"] || p["present/rdp-wait"] + p["present/walk-join"] > p["present"] || p["machine"] + p["present"] > wall)
+                    throw new Xunit.Sdk.XunitException($"frame {frame}: {string.Join(", ", p.Select(x => $"{x.Key} {x.Value:F3}"))} in a frame of {wall:F3} ms");
+                waitedInMachine += p["machine/rdp-wait"] > 0 ? 1 : 0;
+                waitedInPresent += p["present/rdp-wait"] > 0 ? 1 : 0;
+                joined += p["present/walk-join"] > 0 ? 1 : 0;
+                (machine, machineWaits, present, presentWaits) = (machine + p["machine"], machineWaits + p["machine/rdp-wait"], present + p["present"], presentWaits + p["present/rdp-wait"] + p["present/walk-join"]);
+            }
+            _output.WriteLine($"{romName}: {frames} frames, the machine {machine / frames:F3} ms a frame of which drain waits {machineWaits / frames:F3} ({waitedInMachine} frames waited), present {present / frames:F3} of which waits {presentWaits / frames:F3} ({waitedInPresent} waited on the drain, {joined} on the walk)");
+            Assert.True(waitedInMachine + waitedInPresent > 0, "no frame waited for the drain, so the waits were not tested");
+        }
+
         // MarsRT's list shared by several processors against MarsRT on one thread, then against the C# core's list shared as widely - see Mars_Native.md §5.6.6.
         [Theory]
         [MemberData(nameof(Games))]

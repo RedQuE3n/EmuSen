@@ -81,7 +81,8 @@ impl Rdp {
                 values[ATTRIBUTE_Z] = self.primitive_z;
             }
 
-            let clipped = (if major_on_left { left - self.span_major_x[yu] } else { self.span_major_x[yu] - right }) & 0xFFF;
+            let clipped = if major_on_left { left - self.span_major_x[yu] } else { self.span_major_x[yu] - right };
+            let clipped = if self.multiple.scaled { clipped } else { clipped & 0xFFF };
             for c in 0..ATTRIBUTES {
                 values[c] = values[c].wrapping_add(steps[c].wrapping_mul(clipped));
             }
@@ -283,7 +284,7 @@ impl Rdp {
     }
 
     /// Which texels the second cycle's selectors read.
-    fn combiner_texels(&self) -> (bool, bool) {
+    pub(super) fn combiner_texels(&self) -> (bool, bool) {
         let c = self.modes.second_combine_cycle;
         let reads = |texel: i32| {
             c.color_a == texel

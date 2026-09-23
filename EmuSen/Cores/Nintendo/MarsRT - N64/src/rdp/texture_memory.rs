@@ -48,7 +48,7 @@ impl TextureTile {
 #[inline(always)]
 fn image_word(index: i32, mem: &RdpMemory) -> u32 {
     let at = (index & 0x3F_FFFF) as usize * 4;
-    if at + 3 < mem.len() { mem.be32(at) } else { 0 }
+    if at + 3 < mem.texture_len() { mem.texture_be32(at) } else { 0 }
 }
 
 /// The eight bytes from the image pointer, read through the two 32-bit words that hold them and a following pair.
@@ -70,6 +70,7 @@ impl Rdp {
     }
 
     pub(super) fn set_tile(&mut self, word: u64) {
+        self.multiple.tiles_changed = true;
         let tile = &mut self.tiles[((word >> 24) & 7) as usize];
         tile.format = ((word >> 53) & 7) as i32;
         tile.size = ((word >> 51) & 3) as i32;
@@ -87,6 +88,7 @@ impl Rdp {
     }
 
     pub(super) fn set_tile_size(&mut self, word: u64) -> usize {
+        self.multiple.tiles_changed = true;
         let index = ((word >> 24) & 7) as usize;
         let tile = &mut self.tiles[index];
         tile.sl = quarters(word >> 44);
@@ -225,6 +227,7 @@ impl Rdp {
 
     #[inline(always)]
     fn write_texture_word(&mut self, index: i32, value: i32) {
+        self.multiple.texture_memory_changed = true;
         let at = index as usize * 2;
         self.texture_memory[at] = (value >> 8) as u8;
         self.texture_memory[at + 1] = value as u8;

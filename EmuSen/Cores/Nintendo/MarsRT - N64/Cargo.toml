@@ -10,6 +10,8 @@ name = "marsrt"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# The device path's Vulkan bindings, the loader found at run time; MIT OR Apache-2.0, and libloading ISC, both compatible with the GPL-3.0. See Mars_Native.md §6.4.
+ash = "0.38"
 # The recompiler's code generator; Apache-2.0 WITH LLVM-exception, compatible with the GPL-3.0. See Mars_Native.md §5.8.
 cranelift-codegen = "0.136.0"
 cranelift-frontend = "0.136.0"

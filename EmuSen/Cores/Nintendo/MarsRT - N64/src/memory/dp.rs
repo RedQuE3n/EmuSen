@@ -2,15 +2,87 @@
 
 use crate::Skip;
 use crate::memory::bus::{MemoryBus, SP_MEM_SIZE};
-use crate::memory::dp_threads::{PAGES, PageMarks, Threads, site};
+use crate::memory::dp_threads::{PAGES, PageMarks, ScaledStart, Threads, site};
 use crate::memory::mi::interrupt;
-use crate::memory::ram::Detached;
+use crate::memory::ram::{Detached, Ram};
+use crate::rdp::gpu::{GpuDevice, GpuRasteriser};
 use crate::rdp::{Rdp, RdpMemory};
 use crate::state::{State, StateError, StateReader, StateResult, StateWriter};
 use std::sync::atomic::Ordering::Relaxed;
 
 /// `DpInterface.SnapshotWords`: a snapshot's tail always holds this many words, the unused ones zero.
 pub const SNAPSHOT_WORDS: usize = 1 << 15;
+
+/// The picture drawn at a multiple beside the machine's own: the scale, a shadow of RDRAM and its hidden bits at the scale squared,
+/// and the direct paths' processor at the multiple, which nothing in the machine reads. C#'s `_scale`, `_scaledRdram`, `_scaledHidden`
+/// and `_scaledProcessor` (Mars_Rdp.md §11, Mars_Native.md §6.4).
+pub struct ScaledDrawing {
+    pub scale: i32,
+    pub rdram: Ram,
+    pub hidden: Ram,
+    pub processor: Option<Detached<Rdp>>,
+    /// The compute device the multiple is shaded on, when one was asked for and one exists, and what the asking got (Mars_Gpu.md §11).
+    pub wants_gpu: bool,
+    pub gpu: Option<Box<GpuRasteriser>>,
+    pub gpu_report: String,
+    /// Counts the device's scans and its rebuilds, so a job can tell whether the picture the device holds is still its own (Mars_Gpu.md §14).
+    pub scan_outs: u64,
+}
+
+impl Default for ScaledDrawing {
+    fn default() -> Self {
+        ScaledDrawing { scale: 1, rdram: Ram::zeroed(0), hidden: Ram::zeroed(0), processor: None, wants_gpu: false, gpu: None, gpu_report: "off".into(), scan_outs: 0 }
+    }
+}
+
+impl ScaledDrawing {
+    /// `RebuildGpu`: the device path made or dropped to match the scale and the wish; a rasteriser whose memory still fits is kept and emptied, as `ResetScaled` empties it.
+    fn rebuild_gpu(&mut self) {
+        self.scan_outs += 1;
+        if !self.wants_gpu || self.scale <= 1 {
+            self.gpu = None;
+            self.gpu_report = if self.wants_gpu { "off at one".into() } else { "off".into() };
+            return;
+        }
+        if let Some(mut gpu) = self.gpu.take()
+            && gpu.memory_words() as usize == self.rdram.len() / 2
+        {
+            gpu.clear();
+            self.gpu = Some(gpu);
+            return;
+        }
+        match GpuDevice::try_create(None) {
+            Err(report) => self.gpu_report = report,
+            Ok(device) => {
+                // The device's name alone, as C#'s `GpuRasteriser.TryCreate` reports it; `GpuDevice::report` adds the version.
+                match GpuRasteriser::try_create(device, self.rdram.len()) {
+                    Ok(gpu) => {
+                        self.gpu_report = gpu.device_name().to_string();
+                        self.gpu = Some(Box::new(gpu));
+                    }
+                    Err((_, report)) => self.gpu_report = report,
+                }
+            }
+        }
+    }
+
+    /// `CanScanOut`: the device holds the memory at the multiple and can walk the picture out of it itself (Mars_Gpu.md §13).
+    pub fn can_scan_out(&self) -> bool {
+        self.gpu.is_some()
+    }
+
+    /// `NewScaled`'s tail: the direct paths' processor made to shade on the device when there is one.
+    fn shade_on_device(&mut self) {
+        let on = self.gpu.is_some();
+        if let Some(p) = self.processor.as_mut() {
+            p.shade_on_device(on);
+        }
+    }
+
+    fn gpu_pointer(&mut self) -> *mut GpuRasteriser {
+        self.gpu.as_mut().map_or(std::ptr::null_mut(), |g| &mut **g as *mut GpuRasteriser)
+    }
+}
 
 /// Dropped before the bus's RDRAM, which `MemoryBus` declares after it, so the drain never outlives the memory it draws into.
 #[derive(Default)]
@@ -29,6 +101,8 @@ pub struct DpInterface {
     pub marks: Skip<PageMarks>,
     /// The drain and the shadow, while the list runs on a thread of its own.
     pub threads: Skip<Option<Box<Threads>>>,
+    /// The drawing at a multiple, `[SkipInState]` in C#: the picture's, never the machine's.
+    pub multiple: Skip<ScaledDrawing>,
 }
 
 impl Drop for DpInterface {
@@ -61,6 +135,7 @@ impl Clone for DpInterface {
             pending: self.pending.clone(),
             marks: Skip(PageMarks::default()),
             threads: Skip(None),
+            multiple: Skip(ScaledDrawing::default()),
         }
     }
 }
@@ -91,6 +166,7 @@ impl std::fmt::Debug for DpInterface {
             .field("xbus", &self.xbus)
             .field("pending", &self.pending)
             .field("threaded", &self.threads.is_some())
+            .field("scale", &self.multiple.scale)
             .finish()
     }
 }
@@ -206,6 +282,62 @@ impl DpInterface {
     pub fn join(&mut self) {
         if let Some(t) = self.threads.as_mut() {
             t.join();
+        }
+    }
+
+    /// `Scale`: the multiple the picture is drawn at beside the machine's own, one when it is not.
+    #[inline(always)]
+    pub fn scale(&self) -> i32 {
+        self.multiple.scale
+    }
+
+    /// `ScaledDrawn`: a draw has reached the scaled memory since it was last emptied, which is when the scan-out may show it (Mars_Rdp.md §11).
+    pub fn scaled_drawn(&self) -> bool {
+        let m = &self.multiple.0;
+        if m.scale <= 1 {
+            return false;
+        }
+        if let Some(t) = self.threads.as_ref() {
+            return t.scaled_drawn();
+        }
+        m.processor.as_ref().is_some_and(|p| p.drew())
+    }
+
+    /// `GpuReport`: what the device setting actually got, which is a sentence when it got nothing.
+    pub fn gpu_report(&self) -> &str {
+        &self.multiple.gpu_report
+    }
+
+    /// `ScanOut`: the VI's walk over the device's own memory, once the drawing is finished, submitted without waiting (Mars_Gpu.md §14).
+    pub fn scan_out(&mut self, scan: &crate::rdp::gpu::ScanParameters) {
+        self.join();
+        let m = &mut self.multiple.0;
+        if let Some(gpu) = m.gpu.as_mut() {
+            gpu.scan_out(scan);
+            m.scan_outs += 1;
+        }
+    }
+
+    /// `ScanIntoRaster`: the VI's clears and walk into the raster the device keeps while it averages, submitted without waiting (Mars_Gpu.md §15).
+    #[allow(clippy::too_many_arguments)]
+    pub fn scan_into_raster(&mut self, width: usize, height: usize, side: usize, seed: &[u8], clear: bool, spans: &[u32], walk: bool, scan: &crate::rdp::gpu::ScanParameters) {
+        self.join();
+        let m = &mut self.multiple.0;
+        if let Some(gpu) = m.gpu.as_mut() {
+            gpu.scan_into_raster(width, height, side, seed, clear, spans, walk, scan);
+            m.scan_outs += 1;
+        }
+    }
+
+    /// `ReadBackScaled`: what the device holds becomes the shadow's bytes, which is the one place a walk on the processor reads them (Mars_Gpu.md §11.2).
+    pub fn read_back_scaled(&mut self, from: u32, count: u32) {
+        if self.multiple.gpu.is_none() || count == 0 {
+            return;
+        }
+        self.join();
+        let m = &mut self.multiple.0;
+        if let Some(gpu) = m.gpu.as_mut() {
+            gpu.read(from as usize, count as usize, &mut m.rdram, &mut m.hidden);
         }
     }
 }
@@ -326,12 +458,58 @@ impl MemoryBus {
         word
     }
 
-    /// One word to the display processor on this thread, over the memories it draws into; true on a full sync.
+    /// One word to the display processor on this thread, over the memories it draws into, and then to the processor at the multiple; true on a full sync.
     #[inline]
     pub fn rdp_accept(&mut self, word: u64) -> bool {
         debug_assert!(self.dp.threads.is_none(), "the processor is the drain's while it runs");
-        let mut memory = RdpMemory::new(&mut self.rdram, &mut self.rdram_hidden);
-        self.dp.processor.accept(word, &mut memory)
+        let sync = {
+            let mut memory = RdpMemory::new(&mut self.rdram, &mut self.rdram_hidden);
+            self.dp.processor.accept(word, &mut memory)
+        };
+        let scaled = &mut self.dp.multiple.0;
+        let gpu = scaled.gpu_pointer();
+        if let Some(p) = scaled.processor.as_mut() {
+            let mut memory = RdpMemory::scaled(&mut scaled.rdram, &mut scaled.hidden, &self.rdram).with_gpu(gpu);
+            p.accept(word, &mut memory);
+        }
+        sync
+    }
+
+    /// `Gpu`'s setter: the device asked for or not; the drain, if one runs, is stopped first and restarted by the caller.
+    pub fn dp_set_gpu(&mut self, on: bool) {
+        if on == self.dp.multiple.wants_gpu {
+            return;
+        }
+        if let Some(mut t) = self.dp.threads.take() {
+            t.stop();
+        }
+        let scaled = &mut self.dp.multiple.0;
+        scaled.wants_gpu = on;
+        scaled.rebuild_gpu();
+        if scaled.scale > 1 {
+            scaled.processor = Some(Detached::new(Rdp::new_scaled(&self.dp.processor, scaled.scale)));
+            scaled.shade_on_device();
+        }
+    }
+
+    /// `Scale`'s setter: a shadow at the multiple squared and a processor at the multiple, or none at one; the drain, if one runs,
+    /// is stopped first and restarted by the caller. A change empties the shadow, as a state read does (`ResetScaled`).
+    pub fn dp_set_scale(&mut self, scale: i32) {
+        let scale = scale.clamp(1, 8);
+        if scale == self.dp.multiple.scale {
+            return;
+        }
+        if let Some(mut t) = self.dp.threads.take() {
+            t.stop();
+        }
+        let area = (scale * scale) as usize;
+        let scaled = &mut self.dp.multiple.0;
+        scaled.scale = scale;
+        scaled.rdram = Ram::zeroed(if scale > 1 { self.rdram.len() * area } else { 0 });
+        scaled.hidden = Ram::zeroed(if scale > 1 { self.rdram_hidden.len() * area } else { 0 });
+        scaled.rebuild_gpu();
+        scaled.processor = (scale > 1).then(|| Detached::new(Rdp::new_scaled(&self.dp.processor, scale)));
+        scaled.shade_on_device();
     }
 
     /// `ReadPending`'s replay: a snapshot's words, run here with no sync raised, as C# runs them.
@@ -350,7 +528,10 @@ impl MemoryBus {
         match (on, self.dp.threads.is_some()) {
             (true, false) => {
                 debug_assert!(self.dp.pending.is_empty(), "a load's words run before a drain starts");
-                let threads = Threads::start(&mut self.dp.processor, &self.rdram, &self.rdram_hidden, &self.dp.marks.0.0, verify, workers);
+                let scaled = &mut self.dp.multiple.0;
+                let gpu = scaled.gpu_pointer();
+                let at_multiple = scaled.processor.as_mut().map(|p| ScaledStart { processor: p, rdram: &scaled.rdram, hidden: &scaled.hidden, scale: scaled.scale, gpu });
+                let threads = Threads::start(&mut self.dp.processor, &self.rdram, &self.rdram_hidden, &self.dp.marks.0.0, verify, workers, at_multiple);
                 *self.dp.threads = Some(Box::new(threads));
             }
             (false, true) => {

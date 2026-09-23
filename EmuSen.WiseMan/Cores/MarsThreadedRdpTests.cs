@@ -511,6 +511,43 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(raised > 0, "no pause found a processor at a barrier, so the case was not reached");
         }
 
+        // A range read whose first bytes no pending draw holds still waits for the draws that hold the rest of it - see Mars_Rdp.md §2.6.3.
+        [Fact]
+        public void A_range_read_whose_first_bytes_no_draw_holds_still_waits_for_the_draws_that_hold_the_rest()
+        {
+            const uint page = Framebuffer + 0x1000, row = Framebuffer + Width * 2 * 8;
+            ulong[] list =
+            {
+                FillCycle,
+                (0x3FUL << 56) | (2UL << 51) | ((ulong)(Width - 1) << 32) | Framebuffer,
+                Scissor(0, 0, Width, Rows),
+                (0x37UL << 56) | 0x1234_5678,
+                FillRectangle(0, 8, Width - 1, 9),
+                SyncFull,
+            };
+
+            MemoryBus atOnce = new(), threaded = new();
+            threaded.Dp.Threaded = true;
+            HandOver(atOnce, list);
+            threaded.Dp.Pause();
+            HandOver(threaded, list);
+            Assert.Equal(list.Length, threaded.Dp.Pending);
+
+            var read = System.Threading.Tasks.Task.Run(() =>
+            {
+                threaded.Dp.WaitForReadRange(page, 0x1000, 8);
+                return threaded.Rdram.AsSpan((int)row, 0x80).ToArray();
+            });
+            bool early = read.Wait(TimeSpan.FromMilliseconds(500));
+            threaded.Dp.Resume();
+            byte[] seen = read.Result;
+            threaded.Dp.Join();
+
+            Assert.False(early, "the range read returned while the draw holding its later rows was still pending");
+            Assert.Equal(atOnce.Rdram.AsSpan((int)row, 0x80).ToArray(), seen);
+            Assert.Equal(atOnce.Rdram, threaded.Rdram);
+        }
+
         // A one-cycle scene of shaded, depth-tested triangles over a full frame buffer; to the edge, their right edges cross a scissor as wide as the image - see Mars_Rdp.md §2.8.
         private static ulong[] Shaded(uint seed, bool toTheEdge, bool twoCycle = false, bool memoryAlphaFirst = false, bool gentle = false)
         {

@@ -1,5 +1,5 @@
 //! A timed run with the picture on, in one of MarsRT's thread modes, printing ms a frame and the joined state's hash. See Mars_Native.md §5.6.8.
-//! `cargo run --release --example threads -- <rom> <state or -> <frames> <plain|threaded|deferred|split> [workers] [blocks] [scale=N] [aa=N] [gpu]`;
+//! `cargo run --release --example threads -- <rom> <state or -> <frames> <plain|threaded|deferred|split> [workers] [blocks] [scale=N] [aa=N] [gpu] [trace=<file>]`;
 //! the last three as the shim's `RenderScale`, `Antialiasing` and `Gpu` (Mars_Native.md §6.4).
 
 use std::sync::Arc;
@@ -37,11 +37,31 @@ fn main() {
         eprintln!("device: {}", core.gpu_report());
     }
 
+    // `trace=<file>`: one line a frame, the emulation, the present, the presenter's join and its job, in nanoseconds (Mars_Native.md §6.11).
+    let trace = args.iter().skip(5).find_map(|a| a.strip_prefix("trace="));
+    let mut lines = String::new();
     let started = Instant::now();
-    for _ in 0..frames {
-        core.run_frame();
+    for frame in 0..frames {
+        if trace.is_none() {
+            core.run_frame();
+            continue;
+        }
+        let (waited, joined, walked) = (core.scanout.presenter_waits().1, core.scanout.joined, core.scanout.presenter_nanos);
+        let site8 = core.machine.bus.dp.threads.as_deref().map_or(0, |t| t.counters.nanos_per_site[8]);
+        let t0 = Instant::now();
+        core.machine.run_frame();
+        let t1 = Instant::now();
+        let presented = core.machine.present(&mut core.scanout);
+        let t2 = Instant::now();
+        let site8 = core.machine.bus.dp.threads.as_deref().map_or(0, |t| t.counters.nanos_per_site[8]) - site8;
+        let joined = core.scanout.joined - joined;
+        lines += &format!("{frame} {} {} {} {} {} {} {site8}\n", (t1 - t0).as_nanos(), (t2 - t1).as_nanos(), core.scanout.presenter_waits().1 - waited, joined, if joined > 0 { core.scanout.presenter_nanos - walked } else { 0 }, presented.walked as u8);
     }
     let elapsed = started.elapsed();
+    if let Some(path) = trace {
+        std::fs::write(path, "frame emulation present join_wait joined presenter walked site8\n".to_string() + &lines).expect("the trace");
+    }
+    let (joins_waited, waited) = core.scanout.presenter_waits();
     let per_frame = |nanos: i64| nanos as f64 / 1e6 / frames as f64;
     let waits = core.machine.bus.dp.threads.as_deref().map(|t| {
         let (c, s) = (&t.counters, t.shared());
@@ -54,5 +74,6 @@ fn main() {
     core.machine.settle();
     let state = core.machine.save_state_vec(false).expect("a state");
     let hash = state.iter().fold(0xCBF2_9CE4_8422_2325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x0100_0000_01B3));
-    println!("{mode} {frames} frames: {:.3} ms a frame; state {hash:016X}{}", elapsed.as_secs_f64() * 1000.0 / frames as f64, waits.unwrap_or_default());
+    let presenter = format!("; the presenter's join {:.3} ms a frame ({joins_waited} of {} joins waited), its jobs {:.3}", per_frame(waited), core.scanout.joined, per_frame(core.scanout.presenter_nanos));
+    println!("{mode} {frames} frames: {:.3} ms a frame; state {hash:016X}{}{presenter}", elapsed.as_secs_f64() * 1000.0 / frames as f64, waits.unwrap_or_default());
 }

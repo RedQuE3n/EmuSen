@@ -2313,6 +2313,31 @@ and 25.23.
   for the multiple and not for the frame**, and it comes after stage E; what the Dam has left on the device is
   §5.8.9's list, the interpreter's own cost and the processor's, and the batch priced at two per cent.
 
+**Measured again, 2026-09-23, after §6.10 to §6.12.** The same device, the same `custom` profile at its 40 W limit, on
+the charger; yesterday's binary (the recompiler alone) and today's (the vector unit in host vectors, the decoded
+table, the walk in bands) run interleaved, three rounds of 600 frames from the gameplay states, four workers, deferred,
+tier 2; every run's state hash the desktop's.
+
+| ms a frame | yesterday's MarsRT | today's MarsRT |
+| --- | --- | --- |
+| Super Mario 64 | 6.73, 7.21, 7.49 | **4.41, 4.62, 4.76** |
+| Ocarina of Time | 8.05, 8.15, 8.89 | **5.53, 5.55, 6.03** |
+| GoldenEye, the Dam | 16.77, 19.05, 18.00 | **11.45, 12.32, 12.43** |
+
+And through the shim beside the C# core as it ships (`enginebench`, the C# core's first round its JIT's warm-up):
+
+| ms a frame | C# production | MarsRT |
+| --- | --- | --- |
+| Super Mario 64 | 10.34, 7.88, 7.88 | **5.70, 5.16, 4.85** |
+| Ocarina of Time | 12.27, 9.48, 9.37 | **5.68, 5.68, 5.80** |
+| GoldenEye, the Dam | 21.57, 19.04, 19.38 | **11.89, 11.66, 11.74** |
+
+**The Dam is at full speed on the device**: 11.7 ms a frame against the console's 16.7, about 140 per cent, where the
+C# core is at 86 to 88. The C# core takes 1.6 times MarsRT's time on each of the three games here, against about 1.5
+on the desktop. The device's rounds drift, yesterday's binary by 2.3 ms across three, which is its temperature rather
+than the code; today's stays under 12.5 in every round. This is the measurement the port was priced on (§5, §6.1),
+and it is the first on which a Nintendo 64 game EmuSen could not run at full speed on this device does.
+
 **The tooling,** so that the run can be repeated: the two examples and the three states in `~/emusen-bench/rt/`
 on the device with `rtbench.sh`, which interleaves modes and rounds; `enginebench`, a self-contained publish that
 runs both engines from one state through the shim and prints the state hash of each, in

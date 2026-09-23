@@ -2742,6 +2742,53 @@ at the same settings in the same process, is interleaved.
 - **The transition off the device** deviates for up to two frames as C#'s does (`Mars_Gpu.md` §15.2), and no test holds
   it on either core.
 
+
+#### 6.4.8 A setting sent again every frame, and the overlap it threw away (2026-09-23)
+
+**The defect.** Mistress sets `SkipRendering` before every frame (`MainWindow`'s loop, for fast-forward's skipped
+frames), and `MarsRtCore`'s setter ran `ApplyOptions`, which sent every setting across the boundary again. The last of
+them, `mars_machine_set_multiple`, began by joining the deferred presentation (`join_presentation`), whatever it was
+given. So in Mistress, and nowhere else, every frame waited for the presenter to finish the walk it had just been
+handed — the overlap §6.11 builds was discarded before the next frame began. The C# core's `SkipRendering` is a plain
+property and has no such cost; the benches (`examples/threads`, the enginebench, §6.9's sampler) never set it and so
+never saw it.
+
+**How it was found, and a prediction that failed first.** A handheld session's `[fps]` line on Donkey Kong 64's title,
+at 2x on the device with four workers, stood at 20-23 ms a frame against a `run` of 15-18. §6.13's frame lending had
+already removed the collections, so the remainder was split (`EmuSen_Settings_Reference.md` §4.21's `outside:`
+figures): requests 0.01 ms, audio 0.01-0.02, the hand-off 0.11-0.16, and **4.1-5.4 ms in "sleep and the rest"** — with
+the loop behind its schedule, where the pacer (`FramePacer.Settle`) cannot sleep. The line left at the top of the loop
+was the `SkipRendering` assignment. On this desktop, the same probe with and without that assignment before every
+frame measured **no difference** (16.6 and 17.7 against 16.7 and 16.7 ms a frame): the desktop's presenter finishes
+within the frame, so the join never waited. *The desktop's negative is recorded because it would have closed the
+question wrongly;* on the handheld, three rounds of 600 frames from the user's state:
+
+| ms a frame, loop | `SkipRendering` never set | set before every frame (Mistress) |
+| --- | --- | --- |
+| round 1 | 17.42 | 21.36 |
+| round 2 | 17.42 | 21.35 |
+| round 3 | 18.66 | 21.88 |
+
+with `RunFrame`'s own mean the same in both columns (16.4-17.9 ms). The 3.2-4 ms is the join.
+
+**The fix, on both sides of the boundary.** `Core::set_multiple` returns at once when the multiple, the averaging and
+the device are what it already holds, so an unchanged value leaves a walk out; and `ApplyOptions` in the shim keeps
+what it last sent to the current handle and sends only the calls whose values changed, re-sending everything to a new
+handle. The early return is taken only once a multiple has been applied (`Core::multiple_applied`). *A first version
+compared against the fresh `Core`'s remembered values alone, on the argument that a machine is only ever made with a
+fresh `Core` whose values (one, none, no device) are a fresh machine's; the argument was false — a fresh scan-out's
+averaging is zero, not one — and `the_drawing_is_the_resolution_times_the_averaging_held_to_four` caught it on the
+first run, its first case left at an averaging of zero.*
+
+**The evidence.** `the_multiple_sent_again_unchanged_leaves_the_deferred_walk_out` counts the scan-out's joins: a
+`set_multiple` with the values already set must not join, and a changed one must. It failed on the code before the fix
+("an unchanged multiple joined the walk out") and passes after. On the handheld, the Mistress-shaped loop (the setting
+assigned before every frame) went from **21.46, 21.77, 21.91 ms a frame to 17.56, 17.65, 17.26**, interleaved, the
+same as the loop that never assigns it. What remains at 2x on the device on this title, ~17.4 ms, is the core's own
+frame, which §6.14 is about.
+
+**What it does not cover.** Every other per-frame property Mistress touches was not audited for the same shape; the
+shim's other setters now go through the same comparison, but a setter that calls the library directly would not.
 ### 6.5 Stage E: the debugger's hooks
 
 **What was missing.** Breakpoints, stepping, watches, the coverage recorder, the call stack's observers, labels and the

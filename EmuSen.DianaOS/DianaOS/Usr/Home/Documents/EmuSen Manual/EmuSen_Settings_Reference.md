@@ -580,6 +580,16 @@ figures sit beside it, labelled as what they are, so the dropped frames the hand
 difference between two named rates rather than as a slow emulator. The same line goes to the session's
 `general.log` once a second, prefixed `[fps]`.*
 
+
+**The loop's work outside the core, split (2026-09-23).** The `[fps]` line now ends with `| outside: requests R
+audio A hand-off H sleep+rest S ms`, each a mean over the second's frames: *requests* is the debugger's refresh, the
+console's queue, the cheats flag and the core requests that follow `RunFrame`; *audio* is draining the core's samples
+and submitting them to the player; *hand-off* is taking the picture and offering it to the render thread
+(`GetFrameBufferRgba`, `SubmitFrame`); *sleep+rest* is everything from there to the next `RunFrame`, which is the
+pacer's sleep when the loop is ahead and the pacer's own work and the line's printing when it is not. `run` plus the
+four is `total`. It was added when a handheld's `total` stood ~4.7 ms above `run` on Donkey Kong 64's title at 2×
+after the frame lending (`Mars_Native.md` §6.13) had removed the collections, so that the remainder could be read
+instead of argued.
 ### 4.21a Save and load states run on the emulation thread
 
 *2026-09-19.* Until this date `SaveState()` and `LoadState()` — the `F5`/`F8` hotkeys and both Emulation menu items — called `_session.SaveState`/`LoadState` on the UI thread while `EmulationLoop` ran `RunFrame()` on its own. Nothing ordered the two. They now hand the work to the emulation thread, as the console and Hotaru already did.

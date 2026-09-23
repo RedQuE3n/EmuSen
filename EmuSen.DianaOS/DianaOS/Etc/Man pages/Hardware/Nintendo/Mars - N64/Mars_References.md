@@ -57,10 +57,42 @@ gitignore entry, because there is nothing here to ignore.
 > Mars's fill rule was read from angrylion's edge walker for mechanism and written in its own terms,
 > and then graded by running angrylion — the rule's authority is the grading, not the reading.
 
-**Every one of these is GPL. EmuSen is not.** Copying any of it — a function, a
+~~**Every one of these is GPL. EmuSen is not.** Copying any of it — a function, a
 table, a struct layout transcribed field for field — would put this project under a
 licence it has not chosen, and the fact that a reader could not tell is exactly why
-the rule has to be procedural rather than a matter of good intentions.
+the rule has to be procedural rather than a matter of good intentions.~~
+
+> **Corrected 2026-09-23: the premise was false, and the rule stands on other grounds.** EmuSen has been
+> licensed GPL-3.0 since 2026-07-26 (`c482bd0`), seven weeks before this page was written, so "EmuSen is not"
+> was wrong on the day it was written, and the argument built on it — that copying would put the project under a
+> licence it had not chosen — does not hold. What the licences actually permit, read from the checkouts' own
+> files on the day of the correction:
+>
+> | Checkout | Terms | Could its code enter a GPL-3.0 project? |
+> | --- | --- | --- |
+> | `mupen64plus-core` | GPL v2, and its source headers grant "or (at your option) any later version" | Yes, under the GPL's terms, with notices kept |
+> | `parallel-n64` | A bundle: its `mupen64plus-core` carries the same v2-or-later headers; its plugins are each their own | Only per component, after reading each one's terms |
+> | `project64` | GPL v2, `license.md` alone, with no "or later" grant found | No: v2-only code cannot be relicensed as v3 |
+> | `retroarch` | GPL v3 | Yes, and there is no N64 code in it to want |
+> | `parallel-rdp` | MIT (Granite likewise) | Yes, with its notice kept |
+> | angrylion-rdp-plus | the MAME licence, non-commercial | No: its non-commercial clause is incompatible with the GPL |
+>
+> The Project64 row is read from the licence file and the absence of a wider grant in the files checked, not from
+> every source file, and should be re-read before it is relied on.
+>
+> **So the rule is kept, and its reasons are now these.** Two of the references could not legally enter this
+> project at all, and they are the two that matter most to Mars: angrylion is the grader of the display processor,
+> and Project64 is §5's mistake record. For the others, taking their code would be lawful and would still end the
+> claim this page's last paragraph protects, that Mars is independent research whose every rule is derived from
+> hardware documentation and graded, not inherited. And the procedural half of the original argument survives the
+> correction untouched: a reader cannot tell a transcription from a derivation, which is why the rule is a
+> procedure rather than a good intention. *Why it does not generalise:* a later core with a permissive reference
+> and no research claim could decide otherwise; this page decides for Mars.
+>
+> **An audit is owed.** The rule has never been checked mechanically. A token-level clone detection of Mars and
+> MarsRT against every checkout above, and a search for their distinctive constants and comments, is planned for a
+> later date across all of EmuSen's cores; until it has run, "nothing was copied" is the procedure's claim, not a
+> measurement.
 
 The working rule, which is narrower than "don't paste":
 

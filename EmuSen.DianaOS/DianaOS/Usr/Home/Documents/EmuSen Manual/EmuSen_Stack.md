@@ -29,6 +29,18 @@ The rule's phrasing matters: *accurately, safely, and with performance*, all thr
 
 *Revised 2026-09-22, by the user's decision:* **2D consoles' cores are C#, 3D consoles' cores are Rust, and everything that is not a core stays C#.** Moon, Venus and Mercury, and any later 2D core, stay C#. Mars is ported to Rust (`Mars_Native.md` §5), and any later 3D core is written in Rust. The frontends, LunaP, Serenity, DianaOS, Galaxia, WiseMan and each Rust core's C# shim stay C#. The sentence above, "the cores are C#, permanently", is retired for 3D cores and kept for the rest. Its research claim now holds for the 2D cores, where it was measured (§13.1 of `Venus_PPU.md`), and does not extend to a core whose remaining costs `Mars_Native.md` §3.4 traced to what a managed boundary and a managed JIT cannot remove. While the port runs, the C# Mars stays as its oracle and fallback.
 
+*Revised again 2026-09-23, by the user's decision:* **every core is to be ported to Rust once Mars is finished**,
+2D as well as 3D; everything that is not a core stays C#, as before. The reasons given were the speed Mars's port
+measured and the room to optimise that a managed runtime does not give. The evidence behind that is Mars's own and
+should be read as such: like for like, the Rust interpreter measured 1.5 to 1.75 times the C# one, the rasteriser
+2.1 to 2.4 times, the scan-out 1.6 to 1.9 times (`Mars_Native.md` §5.2 to §5.4), and the finished core 35 to 40 per
+cent under the C# one on the desktop and 1.6 times as fast on the handheld (§6.1, §6.12). *What does not transfer
+without measuring:* the 2D cores' remaining costs were never traced to the language — `Venus_PPU.md` §13.1's four
+rejected optimisations pointed elsewhere — so each 2D port states its own prediction before it begins and is priced
+against it, as §5 of `Mars_Native.md` was. The method carries over unchanged: the C# core is the oracle, its save
+state the format, a shim implements its interfaces, and the port is proven frame for frame before it is offered. The
+paragraph above, "2D consoles' cores are C#", is retired by this one, and "the cores are C#, permanently" with it.
+
 **The one arguable case is `EmuSen.Endymion/AudioPlayer.cs`,** the only `unsafe` in the tree — a thin SDL3 binding on the audio submit path. It stays C#. Moving it to Rust would *add* an FFI boundary rather than remove one: today there is one hop (C# → SDL3), and a Rust sink would make it two with no accuracy or safety gained. Recorded here so the next reader does not have to re-derive it from the `unsafe` keyword alone.
 
 ### 2.2 Python — offline analysis, not in-process tests

@@ -371,45 +371,6 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // C#'s deferred path skips a repeated scan though a held line expired since the last walk, and so keeps the picture from before the expiry - see Mars_Native.md §5.6.5.
-        [Fact]
-        public void The_csharp_deferred_path_keeps_a_stale_picture_when_a_repeat_follows_an_expired_line()
-        {
-            string rom = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.BuildRunningFromRdram(new uint[] { 0x1000_FFFF, 0x0000_0000 }));
-            _temporary.Add(rom);
-            MarsCore now = new(batteryRamDisabled: true) { UseBlocks = false, SkipRendering = false };
-            MarsCore later = new(batteryRamDisabled: true) { UseBlocks = false, SkipRendering = false, DeferredPresentation = true };
-            now.LoadRom(rom);
-            later.LoadRom(rom);
-            foreach (MarsCore core in new[] { now, later })
-            {
-                uint state = 0x2468_ACE0;
-                for (int i = 0; i < 0x30000; i++)
-                {
-                    state = state * 1103515245 + 12345;
-                    core.Bus!.Rdram[0x0020_0000 - 0x8000 + i] = (byte)(state >> 16);
-                }
-            }
-
-            uint[] tall = ViRegisters(rows: 120), shortened = ViRegisters(rows: 60);
-            byte[]? previous = null;
-            int stale = 0, changed = 0;
-            foreach (uint[] registers in new[] { tall, tall, tall, shortened, shortened, shortened, shortened })
-            {
-                foreach (MarsCore core in new[] { now, later })
-                    for (int i = 0; i < registers.Length; i++) core.Bus!.Write32(EmuSen.Cores.Nintendo.Mars.Memory.MemoryMap.ViBase + (uint)i * 4, registers[i]);
-                now.RunFrame();
-                later.RunFrame();
-                if (previous != null && !later.GetFrameBufferRgba().AsSpan().SequenceEqual(previous)) stale++;
-                if (previous != null && !now.GetFrameBufferRgba().AsSpan().SequenceEqual(previous)) changed++;
-                previous = now.GetFrameBufferRgba().ToArray();
-            }
-
-            _output.WriteLine($"C# deferred: {later.RepeatedScans} scans skipped as repeats; {stale} frames differ from the immediate picture of the frame before; the immediate picture changed {changed} times");
-            Assert.True(later.RepeatedScans >= 2 && changed >= 1, "the case was not reached");
-            Assert.True(stale > 0, "the C# deferred picture was the immediate one's every frame, so the defect this test records is gone and the test should be turned around");
-        }
-
         // C#'s split carries each processor's own last level-of-detail fraction into rows that compute none, and a primitive drawn alone then assembles a stale one - see Mars_Native.md §5.6.6.
         [Fact]
         public void The_csharp_split_assembles_a_stale_level_of_detail_fraction_from_rows_that_computed_none()

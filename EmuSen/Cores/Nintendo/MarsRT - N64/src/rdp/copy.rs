@@ -43,6 +43,10 @@ fn copy_palette_index(word: i32, nibble: i32, tile: &TextureTile) -> i32 {
 impl Rdp {
     /// Eight bytes a step, cut short at the span's end, mirrored when the span runs right to left.
     pub(super) fn draw_copy(&mut self, rows: Rows, major_on_left: bool, tile: i32, max_level: i32, mem: &mut RdpMemory) {
+        if self.multiple.scaled {
+            self.draw_copy_scaled(rows, major_on_left, tile, max_level, mem);
+            return;
+        }
         let size = self.color_image_size;
         if size == 3 {
             return;
@@ -109,6 +113,71 @@ impl Rdp {
                 w = w.wrapping_add(dw);
                 pointer = pointer.wrapping_add(direction.wrapping_mul(8) as u32);
                 left -= per_step;
+            }
+        }
+    }
+
+    /// `CopyPixelStep`: the group's step shared among the group's pixels, since at a multiple each pixel is stepped on its own (Mars_Rdp.md §11.2).
+    #[inline(always)]
+    pub(super) fn copy_pixel_step(&self, attribute: usize) -> i32 {
+        self.texture_step[attribute] / if self.color_image_size == 2 { 4 } else { 8 }
+    }
+
+    /// `DrawCopyScaled`: at a multiple each pixel takes the texel its own coordinate names, so a texel repeats across the pixels that share it.
+    fn draw_copy_scaled(&mut self, rows: Rows, major_on_left: bool, tile: i32, max_level: i32, mem: &mut RdpMemory) {
+        let size = self.color_image_size;
+        if size == 3 {
+            return;
+        }
+        let direction: i32 = if major_on_left { 1 } else { -1 };
+        let pixel_bytes = if size == 2 { 2 } else { 1 };
+        let ds = direction.wrapping_mul(self.copy_pixel_step(0));
+        let dt = direction.wrapping_mul(self.copy_pixel_step(1));
+        let dw = direction.wrapping_mul(self.copy_pixel_step(2));
+
+        for y in rows.0..=rows.1 {
+            let yu = y as usize;
+            if !self.span_drawn[yu] || self.span_right[yu] < self.span_left[yu] || !self.owns(y) {
+                continue;
+            }
+            let at = yu * ATTRIBUTES;
+            let mut s = self.span_attributes[at + ATTRIBUTE_S];
+            let mut t = self.span_attributes[at + ATTRIBUTE_T];
+            let mut w = self.span_attributes[at + ATTRIBUTE_W];
+            let mut x = if major_on_left { self.span_left[yu] } else { self.span_right[yu] };
+
+            let mut n = self.span_right[yu] - self.span_left[yu];
+            while n >= 0 {
+                let (cs, ct) = self.texture_coordinates(s, t, w);
+                let from = self
+                    .level_of_detail(
+                        s.wrapping_add(ds),
+                        t.wrapping_add(dt),
+                        w.wrapping_add(dw),
+                        s.wrapping_add(ds << 1),
+                        t.wrapping_add(dt << 1),
+                        w.wrapping_add(dw << 1),
+                        tile,
+                        max_level,
+                    )
+                    .0;
+                let texels = if size == 0 { 0 } else { self.copy_texels(cs, ct, from) };
+                let mask = self.copy_alpha_mask(texels);
+
+                let pointer = self.color_image.wrapping_add(y.wrapping_mul(self.color_image_width).wrapping_add(x).wrapping_mul(pixel_bytes) as u32);
+                let mut k = 7;
+                for b in 0..pixel_bytes as u32 {
+                    if (mask & (1 << k)) != 0 {
+                        write_copy_byte(pointer.wrapping_add(b), ((texels >> (k << 3)) & 0xFF) as u8, mem);
+                    }
+                    k -= 1;
+                }
+
+                s = s.wrapping_add(ds);
+                t = t.wrapping_add(dt);
+                w = w.wrapping_add(dw);
+                n -= 1;
+                x += direction;
             }
         }
     }

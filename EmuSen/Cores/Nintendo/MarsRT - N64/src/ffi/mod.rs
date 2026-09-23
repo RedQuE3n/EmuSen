@@ -2,6 +2,7 @@
 
 pub mod blocks;
 pub mod debug;
+pub mod multiple;
 pub mod rdp;
 pub mod threads;
 pub mod vi;
@@ -45,11 +46,22 @@ pub struct Core {
     pub frame_serial: i64,
     pub skip_rendering: bool,
     pub shown: bool,
+    /// C#'s `RenderScale`, `Antialiasing` and `Gpu` as asked for; what they got is the machine's scale and the scan-out's average (Mars_Native.md §6.4).
+    pub render_scale: i32,
+    pub antialiasing: i32,
+    pub gpu: bool,
+}
+
+impl Drop for Core {
+    /// A walk still out reads the device's pictures and the shadow, so it is joined before the machine goes.
+    fn drop(&mut self) {
+        self.scanout.join();
+    }
 }
 
 impl Core {
     pub fn new(machine: Machine) -> Core {
-        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false }
+        Core { machine, scanout: Scanout::default(), frame_serial: 0, skip_rendering: false, shown: false, render_scale: 1, antialiasing: 1, gpu: false }
     }
 
     /// `Present`: the VI's scan of what the machine left, at once or deferred as the machine is set; the serial moves when the shown frame does.
@@ -245,6 +257,10 @@ pub unsafe extern "C" fn mars_machine_load_state(core: *mut Core, data: *const u
 pub unsafe extern "C" fn mars_machine_restore_state(core: *mut Core, data: *const u8, len: usize) -> i32 {
     let Some(c) = (unsafe { core.as_mut() }) else { return STATUS_NULL };
     let rdram = c.machine.rdram_bytes();
+    // A walk still out reads the device's pictures, which a state read empties (Mars_Gpu.md §14.3).
+    if c.machine.join_presentation(&mut c.scanout) {
+        c.frame_serial += 1;
+    }
     match c.machine.restore_state(unsafe { input(data, len) }) {
         Ok(()) => {
             // A state of the other size rebuilds the C# machine, and its raster with it.

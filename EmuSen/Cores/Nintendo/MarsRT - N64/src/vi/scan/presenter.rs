@@ -7,29 +7,35 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::thread::{self, JoinHandle};
 
-use super::{Capture, Job, Walker, compose_into};
+use super::{Capture, Job, Rasters, SharedPictures, Walker, compose_from};
 
 /// One deferred scan: what it walks, over what, into which raster and frame; everything it touches travels with it.
 pub(super) struct Work {
     pub job: Option<Job>,
     pub capture: Capture,
-    pub raster: Vec<u8>,
+    pub rasters: Rasters,
     pub walker: Walker,
     pub frame: Vec<u8>,
     pub rows: usize,
     pub serrate: bool,
     pub repeat_rows: bool,
+    pub average: i32,
+    /// The device's part: whether the raster is the device's while it averages, what the last walk showed, and the device's pictures to wait for (Mars_Gpu.md §14, §15).
+    pub device_raster: bool,
+    pub shown_from_device: bool,
+    pub pictures: SharedPictures,
     pub shown: (u32, u32, u32),
     pub fault: Option<String>,
 }
 
 impl Work {
-    /// `Walk` over the capture, then `Compose`, as the pool item of `PresentDeferred` runs them.
+    /// `Walk` over the capture, or the device's picture, then `Compose`, as the pool item of `PresentDeferred` runs them.
     fn run(&mut self) {
         if let Some(job) = self.job {
-            self.walker.walk(&job, self.capture.view(), &mut self.raster);
+            let scaled = (job.scale() > 1).then(|| self.capture.scaled_view());
+            self.shown_from_device = super::walk(&mut self.walker, &mut self.rasters, &job, self.capture.view(), scaled, self.capture.device_scanned, self.device_raster, self.pictures.as_deref());
         }
-        self.shown = compose_into(&self.raster, self.rows, self.serrate, self.repeat_rows, &mut self.frame);
+        self.shown = compose_from(&mut self.rasters, self.rows, self.serrate, self.repeat_rows, self.average, self.shown_from_device, self.pictures.as_deref(), &mut self.frame);
     }
 }
 

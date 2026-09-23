@@ -12,6 +12,7 @@ use std::thread::{self, JoinHandle, Thread};
 use std::time::Instant;
 
 use crate::memory::ram::{Detached, Ram};
+use crate::rdp::gpu::GpuRasteriser;
 use crate::rdp::{self, Rdp, RdpMemory, Step, command_id, command_length};
 
 /// `_ring.Length`: the words handed over and not yet run.
@@ -189,7 +190,19 @@ struct Worker {
     standing_at: AtomicI64,
     sleeping: AtomicBool,
     processor: *mut Rdp,
+    /// The processor at the multiple beside this one, fed the same words after it, or null at one (Mars_Rdp.md §11).
+    scaled: *mut Rdp,
     words: AtomicI64,
+}
+
+/// What a drain at a multiple starts with: the direct paths' processor at the multiple, which the leader's thread takes, and the shadow it draws into.
+pub struct ScaledStart<'a> {
+    pub processor: &'a mut Detached<Rdp>,
+    pub rdram: &'a Ram,
+    pub hidden: &'a Ram,
+    pub scale: i32,
+    /// The device the leader's processor at the multiple records for, or null; with a device there is one such processor (Mars_Gpu.md §11).
+    pub gpu: *mut GpuRasteriser,
 }
 
 /// `SpinBarrier`: all arrive before any leaves, a fault lets all through, and a waiter raises a pause point to its word (Mars_Native.md §5.6.6).
@@ -247,6 +260,14 @@ pub struct Shared {
     rdram_len: usize,
     hidden: *mut u8,
     hidden_len: usize,
+    /// The shadow at the multiple, which only the processors at the multiple write and the scan-out reads behind the same marks.
+    scaled_rdram: *mut u8,
+    scaled_rdram_len: usize,
+    scaled_hidden: *mut u8,
+    scaled_hidden_len: usize,
+    scaled_gpu: *mut GpuRasteriser,
+    /// `ScaledDrawn` over the workers: set once any processor at the multiple has drawn.
+    scaled_drawn: AtomicBool,
     pub drain_words: AtomicI64,
     pub drain_nanos: AtomicI64,
     pub drain_starts: AtomicI64,
@@ -551,6 +572,8 @@ pub struct Threads {
     drains: Vec<JoinHandle<()>>,
     threads: Vec<Thread>,
     extra: Vec<Detached<Rdp>>,
+    /// The workers' processors at the multiple past the first, which is the interface's own.
+    extra_scaled: Vec<Detached<Rdp>>,
     issued: i64,
     shadow_taken: i32,
     shadow_first: u64,
@@ -584,7 +607,8 @@ pub struct Threads {
 
 impl Threads {
     /// `Threaded = true` and `Workers`: the shadow taken from the processor (`RefreshShadow`), the others copied from it (`CopyStateFrom`), and a thread each.
-    pub fn start(processor: &mut Detached<Rdp>, rdram: &Ram, hidden: &Ram, marks: &Arc<Marks>, verify: bool, workers: usize) -> Threads {
+    #[allow(clippy::too_many_arguments)]
+    pub fn start(processor: &mut Detached<Rdp>, rdram: &Ram, hidden: &Ram, marks: &Arc<Marks>, verify: bool, workers: usize, mut scaled: Option<ScaledStart>) -> Threads {
         marks.clear();
         let n = workers.clamp(1, 8);
         processor.configure(0, n as i32);
@@ -596,12 +620,35 @@ impl Threads {
             })
             .collect();
         let pointers: Vec<*mut Rdp> = std::iter::once(processor.as_ptr()).chain(extra.iter().map(|p| p.as_ptr())).collect();
+
+        // A processor at the multiple beside each, the leader's the interface's own, the others made from the native leader (`NewScaled`);
+        // with the device, the leader's alone, which rides its thread.
+        let extra_scaled: Vec<Detached<Rdp>> = match &scaled {
+            Some(s) if s.gpu.is_null() => (1..n)
+                .map(|i| {
+                    let mut p = Detached::new(Rdp::new_scaled(processor, s.scale));
+                    p.configure(i as i32, n as i32);
+                    p
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        let scaled_pointers: Vec<*mut Rdp> = match scaled.as_mut() {
+            Some(s) if s.gpu.is_null() => {
+                s.processor.configure(0, n as i32);
+                std::iter::once(s.processor.as_ptr()).chain(extra_scaled.iter().map(|p| p.as_ptr())).collect()
+            }
+            Some(s) => std::iter::once(s.processor.as_ptr()).chain(std::iter::repeat_n(std::ptr::null_mut(), n - 1)).collect(),
+            None => vec![std::ptr::null_mut(); n],
+        };
+        let drawn = scaled.as_ref().is_some_and(|s| s.processor.drew());
         let shared = Arc::new(Shared {
             ring: (0..RING).map(|_| AtomicU64::new(0)).collect(),
             issued: AtomicI64::new(0),
             workers: pointers
                 .iter()
-                .map(|&processor| Worker { completed: AtomicI64::new(0), standing: AtomicU64::new(0), standing_at: AtomicI64::new(-1), sleeping: AtomicBool::new(false), processor, words: AtomicI64::new(0) })
+                .zip(&scaled_pointers)
+                .map(|(&processor, &scaled)| Worker { completed: AtomicI64::new(0), standing: AtomicU64::new(0), standing_at: AtomicI64::new(-1), sleeping: AtomicBool::new(false), processor, scaled, words: AtomicI64::new(0) })
                 .collect(),
             barrier: Barrier { parties: n as u32, arrived: AtomicU32::new(0), generation: AtomicU32::new(0), passed: AtomicI64::new(0) },
             pause_request: AtomicU64::new(0),
@@ -624,6 +671,12 @@ impl Threads {
             rdram_len: rdram.len(),
             hidden: hidden.as_ptr(),
             hidden_len: hidden.len(),
+            scaled_rdram: scaled.as_ref().map_or(std::ptr::null_mut(), |s| s.rdram.as_ptr()),
+            scaled_rdram_len: scaled.as_ref().map_or(0, |s| s.rdram.len()),
+            scaled_hidden: scaled.as_ref().map_or(std::ptr::null_mut(), |s| s.hidden.as_ptr()),
+            scaled_hidden_len: scaled.as_ref().map_or(0, |s| s.hidden.len()),
+            scaled_gpu: scaled.as_ref().map_or(std::ptr::null_mut(), |s| s.gpu),
+            scaled_drawn: AtomicBool::new(drawn),
             drain_words: AtomicI64::new(0),
             drain_nanos: AtomicI64::new(0),
             drain_starts: AtomicI64::new(0),
@@ -640,6 +693,7 @@ impl Threads {
             drains,
             threads,
             extra,
+            extra_scaled,
             issued: 0,
             shadow_taken: 0,
             shadow_first: 0,
@@ -801,6 +855,19 @@ impl Threads {
     /// How many processors share the list: the leader, which is the machine's, and the ones owned here.
     pub fn workers(&self) -> usize {
         1 + self.extra.len()
+    }
+
+    /// `ScaledDrawn` over the workers' processors at the multiple.
+    pub fn scaled_drawn(&self) -> bool {
+        self.shared.scaled_drawn.load(Relaxed)
+    }
+
+    /// A test's look at one worker's processor at the multiple while the workers idle, none at one.
+    #[cfg(test)]
+    pub fn scaled_processor(&self, i: usize) -> Option<&Rdp> {
+        self.wait_all();
+        // SAFETY: every worker has run everything, so no processor is being written.
+        unsafe { self.shared.workers[i].scaled.as_ref() }
     }
 
     fn make_room(&self, tail: i64) {
@@ -1317,7 +1384,15 @@ impl Threads {
         }
         self.shared.marks.clear();
         // SAFETY: every worker has ended, so the leader is the machine's again.
-        unsafe { (*self.shared.workers[0].processor).configure(0, 1) };
+        unsafe {
+            (*self.shared.workers[0].processor).configure(0, 1);
+            if let Some(scaled) = self.shared.workers[0].scaled.as_mut()
+                && !scaled.multiple.device
+            {
+                scaled.configure(0, 1);
+            }
+        }
+        let _ = &self.extra_scaled;
     }
 }
 
@@ -1349,6 +1424,14 @@ fn assemble(shared: &Shared) {
         for w in &shared.workers[1..] {
             (*leader).take_scratch_from(&*w.processor);
         }
+        let leader = shared.workers[0].scaled;
+        if !leader.is_null() {
+            for w in &shared.workers[1..] {
+                if !w.scaled.is_null() {
+                    (*leader).take_scratch_from(&*w.scaled);
+                }
+            }
+        }
     }
 }
 
@@ -1379,6 +1462,7 @@ fn work(shared: Arc<Shared>, index: usize) {
 fn run_worker(shared: &Shared, index: usize) {
     let me = &shared.workers[index];
     let processor = me.processor;
+    let scaled = me.scaled;
     let checked = Checked::default();
     let mut completed = me.completed.load(Relaxed);
     let (mut from, mut started) = (completed, Instant::now());
@@ -1408,28 +1492,43 @@ fn run_worker(shared: &Shared, index: usize) {
         // SAFETY: published words are the workers' to run until the machine's Acquire of every count passes them (the module's rule); each worker has its own processor, the leader's reached by the others only at barriers.
         unsafe {
             let mut memory = RdpMemory::shared((shared.rdram, shared.rdram_len), (shared.hidden, shared.hidden_len), check);
-            match (*processor).gather(word) {
-                Step::More => {}
-                Step::Ready => {
-                    (*processor).execute_gathered(&mut memory);
+            let step = (*processor).gather(word);
+            // The processor at the multiple takes the same word and follows the native one's decision to draw alone (Mars_Rdp.md §11).
+            let mut at_multiple = RdpMemory::scaled_shared((shared.scaled_rdram, shared.scaled_rdram_len), (shared.scaled_hidden, shared.scaled_hidden_len), (shared.rdram.cast_const(), shared.rdram_len))
+                .with_gpu(if index == 0 { shared.scaled_gpu } else { std::ptr::null_mut() });
+            if !scaled.is_null() {
+                (*scaled).gather(word);
+                (*scaled).follow(&*processor);
+            }
+            let execute = |memory: &mut RdpMemory, at_multiple: &mut RdpMemory| {
+                (*processor).execute_gathered(memory);
+                if !scaled.is_null() {
+                    (*scaled).execute_gathered(at_multiple);
                 }
+            };
+            match step {
+                Step::More => {}
+                Step::Ready => execute(&mut memory, &mut at_multiple),
                 Step::Leader => {
                     shared.barrier.arrive(shared, completed + 1);
                     if index == 0 {
                         assemble(shared);
-                        (*processor).execute_gathered(&mut memory);
+                        execute(&mut memory, &mut at_multiple);
                     }
                     shared.barrier.arrive(shared, completed + 1);
                 }
                 Step::All => {
                     shared.barrier.arrive(shared, completed + 1);
-                    (*processor).execute_gathered(&mut memory);
+                    execute(&mut memory, &mut at_multiple);
                 }
                 Step::AllJoined => {
                     shared.barrier.arrive(shared, completed + 1);
-                    (*processor).execute_gathered(&mut memory);
+                    execute(&mut memory, &mut at_multiple);
                     shared.barrier.arrive(shared, completed + 1);
                 }
+            }
+            if !scaled.is_null() && (*scaled).drew() && !shared.scaled_drawn.load(Relaxed) {
+                shared.scaled_drawn.store(true, Relaxed);
             }
         }
         completed += 1;

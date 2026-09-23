@@ -29,10 +29,12 @@ pub(crate) struct Mode {
     pub rsp_simd: Option<bool>,
     /// The signal processor through its decoded table set on the machine under test, and the reference then the interpreter (Mars_Native.md §6.12).
     pub rsp_blocks: Option<bool>,
+    /// The bands a deferred walk is split into; zero is the scan-out's default (Mars_Native.md §6.11).
+    pub bands: usize,
 }
 
 impl Mode {
-    const PLAIN: Mode = Mode { threaded: false, deferred: false, workers: 1, blocks: false, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None };
+    const PLAIN: Mode = Mode { threaded: false, deferred: false, workers: 1, blocks: false, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 };
 }
 
 /// How its state is compared: joined every frame, or a snapshot every frame replayed into a scratch machine, which leaves the drain running across frames.
@@ -66,6 +68,7 @@ impl Run {
         let mut scanout = Scanout::default();
         scanout.repeat_rows = true;
         scanout.average = mode.average;
+        scanout.bands = mode.bands;
         if let Some(state) = state {
             machine.restore_state(&std::fs::read(format!("{folder}/{state}")).unwrap()).unwrap();
             scanout.forget();
@@ -250,7 +253,7 @@ pub(crate) fn compare(folder: &str, rom: &str, state: Option<&str>, frames: u64,
         }
     }
     if mode.deferred {
-        eprintln!("  scans repeated and not walked: {}", subject.scanout.repeated_scans);
+        eprintln!("  scans repeated and not walked: {}; walks joined {}, in bands {}", subject.scanout.repeated_scans, subject.scanout.joined, subject.scanout.banded_walks);
     }
     if mode.scale > 1 {
         if let Some(gpu) = subject.machine.bus.dp.multiple.gpu.as_ref() {
@@ -318,7 +321,7 @@ fn a_machine_whose_list_several_processors_share_is_the_machine_at_once() {
 #[test]
 fn a_machine_at_a_multiple_split_and_deferred_is_the_machine_at_once_at_that_multiple() {
     for scale in [2, 4] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None }, Compare::Snapshot);
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
     }
 }
 
@@ -331,7 +334,7 @@ fn a_machine_at_a_multiple_on_the_device_is_the_machine_at_once_on_the_processor
         return;
     }
     for scale in [2, 4] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None }, Compare::Snapshot);
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
     }
 }
 
@@ -344,7 +347,7 @@ fn a_machine_averaged_on_the_device_split_and_deferred_is_the_device_at_once() {
         return;
     }
     for (scale, average) in [(4, 2), (4, 4), (2, 2)] {
-        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average, rsp_simd: None, rsp_blocks: None }, Compare::Snapshot);
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale, gpu: true, average, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
     }
 }
 
@@ -368,6 +371,15 @@ fn a_machine_whose_signal_processor_runs_decoded_is_the_machine_interpreted() {
     each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, rsp_blocks: Some(true), ..Mode::PLAIN }, Compare::Snapshot);
 }
 
+/// The deferred walk in two, three and eight bands, beside the default's four, on four workers through the blocks: the picture a frame late is
+/// the immediate one-band picture, and the state is the machine's at once (Mars_Native.md §6.11).
+#[test]
+fn a_deferred_walk_in_bands_is_the_immediate_walk_a_picture_late() {
+    for bands in [2, 3, 8] {
+        each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, bands, ..Mode::PLAIN }, Compare::Snapshot);
+    }
+}
+
 #[test]
 fn a_recompiled_machine_is_the_interpreted_machine() {
     each_game(Mode { blocks: true, ..Mode::PLAIN }, Compare::Join);
@@ -375,7 +387,7 @@ fn a_recompiled_machine_is_the_interpreted_machine() {
 
 #[test]
 fn a_recompiled_machine_on_four_workers_deferred_is_the_interpreted_machine_a_picture_late() {
-    each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None }, Compare::Snapshot);
+    each_game(Mode { threaded: true, deferred: true, workers: 4, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 }, Compare::Snapshot);
 }
 
 /// Every debugger table armed and nothing halting, unthreaded and on four workers deferred: the observed loop leaves what the plain
@@ -397,7 +409,7 @@ fn a_game_halted_at_breakpoints_and_resumed_is_the_game_run_through() {
     };
     let frames = frames();
     for threaded in [false, true] {
-        let mode = Mode { threaded, deferred: threaded, workers: if threaded { 4 } else { 1 }, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None };
+        let mode = Mode { threaded, deferred: threaded, workers: if threaded { 4 } else { 1 }, blocks: true, observed: false, scale: 1, gpu: false, average: 1, rsp_simd: None, rsp_blocks: None, bands: 0 };
         for (rom, state) in GAMES {
             let Some(state) = state else { continue };
             if !std::path::Path::new(&format!("{folder}/{rom}")).exists() {

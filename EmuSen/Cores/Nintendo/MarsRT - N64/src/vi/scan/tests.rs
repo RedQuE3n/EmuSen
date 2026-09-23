@@ -444,3 +444,128 @@ fn a_deferred_scan_repeating_after_a_held_line_expired_shows_the_darkened_pictur
     assert!(later.repeated_scans >= 2, "no scan repeated, so the case was not reached");
     assert!(changed >= 1, "the expiry changed no picture, so the case was not reached");
 }
+
+/// Memory for the band tests: 1 MB of noise from the frame buffer, colour and coverage, so every row of a tall picture differs.
+fn noisy_tall(seed: u32) -> crate::memory::bus::MemoryBus {
+    let mut bus = crate::memory::bus::MemoryBus::new(0x40_0000);
+    let mut state = seed.wrapping_mul(0x9E37_79B9) | 1;
+    for i in 0..0x10_0000 {
+        state = state.wrapping_mul(1_103_515_245).wrapping_add(12345);
+        bus.rdram[FRAMEBUFFER + i] = (state >> 16) as u8;
+        if i % 2 == 0 {
+            bus.rdram_hidden[(FRAMEBUFFER + i) / 2] = (state >> 30) as u8;
+        }
+    }
+    bus
+}
+
+/// The geometries the band tests walk: progressive and interlaced on both fields, sixteen and thirty-two bits, fractional steps both ways,
+/// a picture pulled in at the left and one clamped at the right, PAL's tallest, a top offset, and one too short to split.
+fn band_geometries() -> Vec<(&'static str, [u32; 14])> {
+    vec![
+        ("progressive, whole steps", regs(2, 3, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0).words()),
+        ("fractional both ways, filtered", regs(2, 0, 320, 0x2AB, 0x155, 108, 640, 34, 237, 0x80, 0x40).control(DIVOT_ON | GAMMA_ON).words()),
+        ("thirty-two bits", regs(3, 2, 320, 0x200, 0x200, 108, 640, 34, 200, 0, 0).words()),
+        ("interlaced, upper field", regs(2, 1, 640, 0x400, 0x400, 108, 640, 34, 240, 0, 0).serrate(1).words()),
+        ("interlaced, lower field", regs(2, 1, 640, 0x400, 0x400, 108, 640, 34, 240, 0, 0).serrate(0).control(DITHER_FILTER).words()),
+        ("pulled in at the left, clamped at the right", regs(2, 3, 320, 0x300, 0x3A0, 40, 700, 20, 233, 0x10, 0x20).words()),
+        ("PAL, tallest", regs(2, 3, 320, 0x200, 0x200, 128, 640, 44, 288, 0, 0).sync(625).words()),
+        ("a top offset", regs(2, 3, 320, 0x400, 0x400, 108, 320, 100, 150, 0, 0).words()),
+        ("too short to split", regs(2, 3, 320, 0x400, 0x400, 108, 320, 34, 63, 0, 0).words()),
+    ]
+}
+
+/// A deferred walk in one to eight bands leaves the raster and the picture the immediate walk leaves, a frame later (Mars_Native.md §6.11).
+#[test]
+fn a_deferred_walk_in_any_number_of_bands_is_the_immediate_walk() {
+    let mut compared = 0;
+    for (name, registers) in band_geometries() {
+        for bands in 1..=8 {
+            let mut at_once = noisy_tall(bands as u32);
+            let mut deferred = at_once.clone();
+            let (mut now, mut later) = (Scanout::default(), Scanout { bands, walk_repeats: true, ..Scanout::default() });
+            let mut previous: Option<(Vec<u8>, Vec<u8>)> = None;
+            for step in 0..3u32 {
+                // Each step a new picture, so a band that walks nothing, or the wrong rows, leaves the step before's bytes showing.
+                for bus in [&mut at_once, &mut deferred] {
+                    bus.vi.registers = registers;
+                    let at = FRAMEBUFFER + (step as usize * 0x1_1111) % 0x8_0000;
+                    bus.rdram[at..at + 0x100].fill(step as u8 * 0x55);
+                }
+                present_now(&mut at_once, &mut now);
+                present_deferred(&mut deferred, &mut later);
+                if let Some((frame, _)) = &previous {
+                    assert!(later.frame == *frame, "{name}, {bands} bands, step {step}: the deferred picture is not the immediate picture of the step before");
+                }
+                previous = Some((now.frame.clone(), now.raster().to_vec()));
+            }
+            assert!(later.join());
+            let (frame, raster) = previous.unwrap();
+            assert!(later.frame == frame, "{name}, {bands} bands: the last deferred picture differs");
+            assert!(later.raster() == &raster[..], "{name}, {bands} bands: the rasters differ from byte {}", later.raster().iter().zip(&raster).position(|(a, b)| a != b).unwrap_or(0));
+            let split = bands > 1 && name != "too short to split";
+            assert!(if split { later.banded_walks == 3 } else { later.banded_walks == 0 }, "{name}, {bands} bands: {} of the walks ran in bands", later.banded_walks);
+            compared += 1;
+        }
+    }
+    assert_eq!(compared, 9 * 8);
+}
+
+/// The wait at the new site: a band held on its helper for 300 ms holds the join for all of it, and the picture then shown is whole (Mars_Native.md §6.11).
+#[test]
+fn the_join_waits_for_a_held_band_and_shows_the_whole_picture() {
+    let registers = regs(2, 3, 320, 0x400, 0x400, 108, 320, 34, 240, 0, 0).words();
+    for held in 1..4 {
+        let mut at_once = noisy_tall(7);
+        let mut deferred = at_once.clone();
+        at_once.vi.registers = registers;
+        deferred.vi.registers = registers;
+        let release = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (mut now, mut later) = (Scanout::default(), Scanout { bands: 4, hold_band: Some((held, release.clone())), ..Scanout::default() });
+        present_now(&mut at_once, &mut now);
+        present_deferred(&mut deferred, &mut later);
+        let started = std::time::Instant::now();
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            release.store(true, std::sync::atomic::Ordering::Release);
+        });
+        assert!(later.join(), "band {held}: nothing was out");
+        let waited = started.elapsed();
+        releaser.join().unwrap();
+        assert!(waited >= std::time::Duration::from_millis(290), "band {held}: the join returned after {waited:?}, before the held band was released");
+        assert!(later.frame == now.frame, "band {held}: the picture shown after the join is not the immediate picture, from byte {}", later.frame.iter().zip(&now.frame).position(|(a, b)| a != b).unwrap_or(0));
+        let (w, h) = (later.presenter_waits(), later.joined);
+        assert!(w.0 == 1 && h == 1, "band {held}: the counters say {w:?} and {h} joined");
+    }
+}
+
+/// Three thousand banded walks back to back, each joined by the next present: a lost wake-up of a helper or of the presenter hangs here,
+/// which the watchdog turns into a failure, and every picture is compared with the immediate one (Mars_Native.md §6.11).
+#[test]
+fn three_thousand_banded_walks_lose_no_wake_up() {
+    let (done, finished) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let registers = regs(2, 3, 64, 0x400, 0x400, 108, 64, 34, 128, 0, 0).words();
+        let mut at_once = noisy_tall(11);
+        let mut deferred = at_once.clone();
+        at_once.vi.registers = registers;
+        deferred.vi.registers = registers;
+        let (mut now, mut later) = (Scanout::default(), Scanout { bands: 4, walk_repeats: true, ..Scanout::default() });
+        let mut previous: Option<Vec<u8>> = None;
+        for step in 0..3000u32 {
+            for bus in [&mut at_once, &mut deferred] {
+                let at = FRAMEBUFFER + (step as usize * 4 * 64) % (128 * 64 * 2);
+                bus.rdram[at..at + 64].fill(step as u8);
+            }
+            present_now(&mut at_once, &mut now);
+            present_deferred(&mut deferred, &mut later);
+            if let Some(frame) = &previous {
+                assert!(later.frame == *frame, "walk {step}: the deferred picture is not the immediate picture of the walk before");
+            }
+            previous = Some(now.frame.clone());
+        }
+        let _ = done.send(later.joined);
+    });
+    let joined = finished.recv_timeout(std::time::Duration::from_secs(120)).expect("the banded walks hung or failed");
+    assert_eq!(joined, 2999);
+}

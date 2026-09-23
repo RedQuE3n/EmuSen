@@ -1117,7 +1117,7 @@ machine stage's decision.
 **Left for the machine stage.** The call itself: the machine calls `scan` at the field's end, where `RunFrame` calls
 `Present`, and after a load, where `LoadState` does, and does not reset the `Scanout` when it loads. The deferred
 presentation, the repeat test, the bands, the multiple and the device are not ported. *The deferred presentation and
-the repeat test arrived with §5.6, the multiple and the device with §6.4; the bands are still not ported.*
+the repeat test arrived with §5.6, the multiple and the device with §6.4; the bands are still not ported.* *The bands arrived with §6.11, for the deferred walk only; the immediate walk is still one band.*
 
 ### 5.5 MarsRT in the frontends (2026-09-22)
 
@@ -3403,7 +3403,7 @@ part of (below). The last column is what the C# history already measured for the
 | 1 | the vector unit (5.25, 2.44, 2.43 ms) | 9.3 | 4.3 | 3.4 | `Mars_RspVector.md` §14: the same arithmetic in host vectors bought C# 4, 19 and 22 per cent with the processor at 27 to 36 per cent of its thread; here the vector unit alone is 36 to 42, and the plain path it would be checked against is what MarsRT already runs. Not a recompiler lever, and not measured in Rust. *Built in §6.10: 14.35 to 11.67, 6.75 to 5.57, 5.74 to 4.58 ms, the unit a sixth of each frame.* |
 | 2 | the decoded tier (2.11, 0.66, 0.28) | 12.4 | 6.1 | 5.5 | §5.8.3 compiled the blocks entered beside a running processor and measured the Dam two per cent worse; the batch that would pay for it is priced at 0.3 ms and not built. Compiled code runs twice the decoded tier's instructions for 0.27 ms in Ocarina of Time, so the tier compiled at that rate would leave about 0.4 of the Dam's 2.1; the ceiling is the whole 2.1. |
 | 3 | the processor's decode and dispatch (1.64, 0.54, 0.48) | 12.9 | 6.2 | 5.3 | `Mars_Rsp.md` §11 to §12: straight lines compiled with the handlers folded bought C# a quarter to a third of its thread, and §11.2's two tiers made them cheap enough for the device; §3.4 says why a Rust interpreter at 8 ns loses to them at 3. Not built in Rust. *Built in §6.12 as a decoded table, C#'s first tier: 11.69 to 10.44, 5.59 to 5.42, 4.57 to 4.47 ms; the Cranelift tier priced at 0.85 ms at most for the Dam and not built.* |
-| 4 | the presenter's join (0.63, 0.69, 0.99) | 13.9 | 6.1 | 4.8 | Not priced for MarsRT: §5.6.8's counters could not see it. The C# core walks in four bands at 1.8 to 2.9 ms (§5.4.4) against MarsRT's one thread at 2.9 to 4.5, and a frame that is shorter than the walk before it waits; bands, a cheaper walk, or a second frame of latency would each take it, the last a play decision. |
+| 4 | the presenter's join (0.63, 0.69, 0.99) | 13.9 | 6.1 | 4.8 | Not priced for MarsRT: §5.6.8's counters could not see it. The C# core walks in four bands at 1.8 to 2.9 ms (§5.4.4) against MarsRT's one thread at 2.9 to 4.5, and a frame that is shorter than the walk before it waits; bands, a cheaper walk, or a second frame of latency would each take it, the last a play decision. *Built in §6.11: the join waited because the light field after a new picture is a quarter of the walk; the walk in four bands took Mario 4.69 to 3.65, Ocarina 5.70 to 4.79 and the Dam 11.65 to 11.03 ms, the join 0.02 to 0.2 ms.* |
 | 5 | the dispatcher, comparison included (1.11, 0.65, 0.31) | 13.4 | 6.1 | 5.5 | `Mars_Recompiler.md` §9 to §12: the entry is memory, and extension, density and chaining measured nothing in C#; §5.8.8 measured the comparison removed at 0.1 to 0.35 ms and two rewrites at nothing. |
 | 6 | the lock-step's own overhead (0.83, 0.26, 0.25) | 13.7 | 6.5 | 5.5 | §5.8.3's batch, 0.3 ms priced; `Mars_Rsp.md` §13's two routes, one slower and one a two per cent ceiling with an undo, neither kept. |
 | 7 | the coprocessor (0.52, 0.37, 0.17) | 14.0 | 6.4 | 5.6 | `Mars_Recompiler.md` §16 declined a host-float fast case — the inexact flag bit for bit — and inlined the two loads, which here are 0.04 to 0.11 ms; §5.8.9 leaves the call. |
@@ -3435,7 +3435,7 @@ exact against the plain path as §3 requires, takes the Dam from 14.5 to between
 1 to 1.5 ms each — the vector unit's share is not all arithmetic, and C#'s §14 did not make its unit free (*held,
 §6.10: 11.67 ms, and 1.18 and 1.15 off the others*); and
 either bands or a deeper queue for the presenter take Super Mario 64 from 5.8 to about 5.0 and Ocarina of Time to
-about 6.2, with the Dam gaining half a millisecond. Held as §3.4 taught, since neither is measured in Rust.
+about 6.2, with the Dam gaining half a millisecond (*retired, §6.11.5: the bands took 1.04, 0.92 and 0.62 ms from the frames §6.10 left, more than predicted on every game, because the join depends on the light field and not on the mean frame this prediction priced it from*). Held as §3.4 taught, since neither is measured in Rust.
 
 **What the numbers cannot say.**
 
@@ -3695,6 +3695,278 @@ say.
 - **AVX2.** The unit is 128 bits wide and every operation touches one register; 256-bit lanes would help only a
   pair of independent operations, which a step at a time never has.
 - **The unexplained 0.3 ms** of §6.10.4, and the CI's own run of the osx-arm64 and win-x64 jobs.
+
+#### 6.11 The presenter's join, and the walk in bands (2026-09-23)
+
+§6.10.4 left the deferred presenter's join as the largest single thing on Super Mario 64's emulation thread, 1.13 ms
+and a quarter of a 4.6 ms frame, and 0.86 and 0.79 ms of Ocarina of Time's and the Dam's. §6.9 had found the presenter
+busy 1.4 ms of an average frame while the emulation thread waited 1.0 ms of it, "so the walk barely overlaps the next
+frame; why was not measured". This section measures why, and removes most of the wait. **The finding** is that the walk
+does overlap the next frame, all of it; the next frame is simply shorter than the walk. The games' fields alternate
+between a heavy one that ends with a new picture and a light one in which the game waits for the retrace, and the
+walk handed over after the heavy field is joined at the end of the light one. The mean frame, four times the mean
+walk, hides a light field a quarter as long as the walk it waits for. **The fix** is the C# core's: the deferred walk in bands of rows, one on
+the presenter and three on helper threads, so that the walk ends inside the light field. Super Mario 64 goes from 4.69
+to 3.65 ms a frame, Ocarina of Time from 5.70 to 4.79, the Dam from 11.65 to 11.03, with the state hashes unchanged.
+
+**The claim.** §5.6.5's claim stands unchanged: with presentation deferred, the picture shown after frame *n* + 1 is
+exactly the immediate picture of frame *n*, and the state is the machine's at once. The bands are a way of computing the
+same raster, not a different raster: every band leaves the rows it owns as the one-band walk leaves them, and the
+immediate path, which is not banded, is the oracle.
+
+##### 6.11.1 The diagnosis, measured before anything was changed
+
+*The instruments.* Two were added, and both stay. The presenter now counts the joins that found its job unfinished and
+how long they waited, and the scan-out the jobs joined and the presenter's own time over them (`Presenter::waits`,
+`waited_nanos`, `Scanout::joined`, `presenter_nanos`); `examples/threads` prints them after the display processor's
+wait sites, which is the counter §5.6.8 lacked. And `examples/threads … trace=<file>` writes one line a frame: the
+emulation (`Machine::run_frame`), the present, the join's wait inside it, the presenter's time over the job that join
+took back, whether this present handed a walk over, and site 8's wait. The trace times the two threads against each
+other frame by frame, which a sample of either cannot: the presenter's time is its own clock around `Work::run`, the
+join's is the emulation thread's around its spin.
+
+The traced runs are production's shape (`split 4 blocks`, 600 frames from the gameplay states); the first twenty frames
+are left out. A frame is *heavy* below if its emulation took more than 4 ms.
+
+| 580 frames, before the fix | Super Mario 64 | Ocarina of Time | GoldenEye, the Dam |
+| --- | --- | --- | --- |
+| heavy fields, their emulation (median, ms) | 290, 5.36 | 194, 9.36 | 317, 20.99 |
+| light fields, their emulation (median, ms) | 290, 0.81 | 386, 2.15 | 263, 2.08 |
+| walks handed over, and after which fields | 290, every heavy one | 194, every heavy one | 559, nearly every field |
+| the presenter's time a walk (median, ms) | 3.12 | 4.83 | 3.55 |
+| joins that waited, of those that took a walk back | 290 of 290 | 193 of 193 | 281 of 558 |
+| a waiting join's wait (mean, ms) | 2.31 | 2.63 | 1.70 |
+| joins whose frame ran shorter than the walk they took back | 289 of 289 | 193 of 193 | 279 of 558 |
+| the join's wait over all frames (ms a frame) | 1.15 | 0.88 | 0.82 |
+
+*What the table says.*
+
+- **Super Mario 64** runs two fields a picture on its PAL console. The field that ends with a new frame buffer at the
+  origin is 5.4 ms; the next, in which the game sits in its idle loop until the retrace, is 0.8 ms. The walk of the new
+  picture, 3.1 ms, goes out at the end of the heavy field and is joined at the end of the light one, which therefore
+  waits 2.3 ms for it. At the end of the light field the capture repeats (§5.6.5's repeat test: 299 of the 600 scans), so
+  nothing goes out, and the heavy field that follows overlaps no walk at all. Every one of the 290 light fields waits.
+- **Ocarina of Time** draws one picture in three fields: 9.4 ms, then 2.2 and 2.2. Its walk, 4.8 ms, is joined at the
+  end of the first light field, which waits 2.6 ms; the second light field repeats and waits nothing.
+- **The Dam** walks every field — its capture does not repeat — and alternates fields of 21 and 2.1 ms. The walk after
+  a light field overlaps a heavy one and is never waited for; the walk after a heavy field, 3.6 ms, is joined after a
+  light one and waits 1.7 ms. That is the 281 of 558.
+
+So the reason §6.9 did not have is the shape of the frame, not the presenter. The presenter starts at once and works
+without pause — its time per job is the walk §5.4.4 measured on one thread, 2.85 to 4.5 ms, plus the composition,
+0.09 ms (timed separately, once, on Super Mario 64) — and the walk overlaps the whole of the next field. The join
+waits because that field is a quarter of the walk. The sample of §6.9 saw the same thing from the other side: a
+presenter busy 1.4 ms of a 5.8 ms *mean* frame, which is 2.8 ms of every other one.
+
+*What the diagnosis rules out.* Three remedies were considered before any was built, and the diagnosis decides
+between them.
+
+- **A second buffer**, so that the next capture need not wait for the last walk. At the light field's end nothing is
+  captured (it repeats) or the capture is small (the Dam); what the join waits for is the *picture*, which §5.6.5 says
+  must be the one shown after this frame. A second buffer would show it a frame later: the claim changed, not kept,
+  and §6.9 already called that a play decision.
+- **The join moved later** — to the host's read of the frame, say. Every host reads the frame after every frame, on
+  the thread that runs the machine, so the wait would move and not shrink.
+- **A shorter walk.** The light field is 0.8 ms on Super Mario 64 and about 2.1 ms on the other two; the walk it must
+  contain is 3.1 to 4.8 ms. C#'s four bands walk in 1.8 to 2.9 ms (§5.4.4). That is the only one of the three that
+  keeps the claim and shortens the wait, and it is the one built.
+
+##### 6.11.2 The walk in bands
+
+`src/vi/scan/bands.rs` is C#'s `Vi.Walk` banding (`Mars_Video.md` §2.12), on MarsRT's threads.
+
+- *How many.* `bands = clamp(rows / 32, 1, count)`, C#'s `MinimumBandRows`; `count` is C#'s `Vi.Bands`, a quarter
+  of the processors, one to four — four on this sixteen-processor desktop. `Scanout::bands`
+  sets it for a scan-out (the tests), `EMUSEN_MARSRT_SCAN_BANDS` for a process (the measurements), one to eight.
+- *Who walks.* The presenter walks the first band itself and hands each other band to a helper thread of its own,
+  started when a walk first needs it and stopped with the presenter. A helper keeps a walker of its own across walks,
+  as C#'s `_walkers[b]` does, so that its caches are its own.
+- *What a band writes.* Band *b* is rows ⌊rows·b/n⌋ to ⌊rows·(b+1)/n⌋. Row *r* writes its columns from the raster
+  line `top·stride + left + (lower ? width : 0) + stride·r`, and never reaches the next row's line, since `left ≥ 0` and
+  `columns ≤ width − left ≤ stride` at one and at every multiple. The raster is therefore split with `split_at_mut` at
+  each band's first line, and each band holds a chunk no other band holds. A write outside the chunk is an index out of
+  range, which panics, so a wrong boundary is loud (mutants 5 and 6 below) rather than a race.
+- *The hand-over* is the presenter's own protocol (§5.6.5) once per helper: a slot with a state word, the task written
+  and `SUBMITTED` stored with Release, the helper's Acquire, its band, its panic if it raised one, `DONE` with Release,
+  the presenter's Acquire in a spin that yields after 64 rounds. The task carries the walk's pass (the picture, the
+  captured bytes, the raster's width) as a pointer to the presenter's stack and the chunk as a pointer and a length.
+  That is the one `unsafe` lifetime the design adds; it is sound because the presenter waits for every helper before
+  `Bands::walk` returns *or unwinds* — its own band runs under `catch_unwind`, and a panic of any band is resumed only
+  after all have finished.
+- *Why it is exact.* It is §2.12's argument, which C# has run on since its bands were built: every cache the walker
+  keeps is a pure function of memory and the registers, `begin` empties the window and the slots, and the fetch bug's
+  counter has a closed form at a band's first row (`rows` already computed it from the row before). A band walker
+  therefore writes what the one-band walker writes for the same rows.
+- *What is banded.* The deferred walk on the processor, at one and at every multiple (at a multiple the rows are the
+  scaled picture's, `rows·n`). Not banded: the immediate walk (`present_now`, `scan`), which stays the oracle; the
+  device's walk and `write_device_picture`, which the device path already takes off the processor; and the
+  composition and the box average, which follow the walk on the presenter.
+
+##### 6.11.3 The evidence
+
+1. **Synthetic pictures in every number of bands**
+   (`a_deferred_walk_in_any_number_of_bands_is_the_immediate_walk`). Nine geometries — progressive with whole steps;
+   fractional both ways with divot and gamma; thirty-two-bit; interlaced on each field, the lower with the dither
+   filter; pulled in at the left and clamped at the right; PAL's tallest, 288 rows; a top offset; and one of 63 rows,
+   too short to split — each in one to eight bands, over a megabyte of noise in colour and coverage, three steps each
+   with the frame buffer changed between them: the deferred picture after every step is the immediate picture of the
+   step before, and after the last join the raster is the immediate raster byte for byte. 72 cases; the counter
+   `banded_walks` is required to say that all three walks of a case ran in bands, or none for the short picture and
+   for one band.
+2. **The wait at the new site** (`the_join_waits_for_a_held_band_and_shows_the_whole_picture`), in the pattern of
+   `tests/sites.rs`. With four bands, band 1, 2 and then 3 is held on its helper before its rows, and released from
+   another thread after 300 ms. The join must wait for all of it, and the picture it then shows must be the immediate
+   one. It does, for each band.
+3. **Lost wake-ups** (`three_thousand_banded_walks_lose_no_wake_up`): 3,000 banded walks back to back, each joined by
+   the next present and compared with the immediate picture, under a watchdog of two minutes. A wake-up lost by a
+   helper or by the presenter hangs there and fails.
+4. **The games.** From power-on and from the three states, 600 frames each, every frame compared in state, picture a
+   frame late and sound with the machine at once, the tests of `tests/games.rs` run with the default of four bands:
+
+   | test | runs | frames |
+   | --- | ---: | ---: |
+   | deferred, unthreaded (`a_deferred_picture_is_the_immediate_picture_of_the_frame_before`) | 6 | 3,600 |
+   | deferred, one worker, snapshots (`a_threaded_and_deferred_machine_…`) | 6 | 3,600 |
+   | four workers through the blocks, snapshots (`a_recompiled_machine_on_four_workers_deferred_…`) | 6 | 3,600 |
+   | the same in two, three and eight bands (`a_deferred_walk_in_bands_is_the_immediate_walk_a_picture_late`, new) | 18 | 10,800 |
+   | at 2× and 4×, four workers, deferred (`a_machine_at_a_multiple_split_and_deferred_…`) | 12 | 7,200 |
+   | at 2× and 4× on the device, the RX 6800 (`a_machine_at_a_multiple_on_the_device_…`) | 12 | 7,200 |
+   | averaged on the device, 4×/2, 4×/4, 2×/2 (`a_machine_averaged_on_the_device_…`) | 18 | 10,800 |
+
+   90 runs, 54,000 frames, identical. The frames at the multiples walked the scaled raster in bands on the processor
+   runs; the device runs' pictures were the device's, which the bands do not touch, and are the evidence that the
+   device path is unchanged beside them. The counters, from a rerun of the four-worker test after the band counter was added: of 2,509 jobs joined in its six runs, 2,305 walked in bands — every job of the three states (300, 300 and 579) and, from power-on, the rest being jobs with nothing to walk or a picture under 64 rows, which the counter does not tell apart.
+5. **ThreadSanitizer**, as §5.6.7 runs it. Two runs, after one control:
+
+   | run | result |
+   | --- | --- |
+   | the positive control: the helper's `DONE` stored Relaxed, the scan tests | 29 reports, in `Helper::wait`, the walker's fetch and allocation, the composition and the band's panic slot; the equality tests passed but for the 3,000 walks, which ran out their watchdog under the instrumentation |
+   | the scan tests, the thread tests and the site tests (18, 24, 15) | 9 reports, none with a frame in `bands.rs`, `presenter.rs` or the walker |
+   | the scan tests again, and the games through the blocks on four workers deferred and in two, three and eight bands, 100 frames each (24 runs) | 9 reports, the same |
+
+   Every report of the two clean runs is in std's own synchronisation, which §5.6.7's build cannot see: libtest's
+   result channel (seven, the one §5.6.7 suppresses), the fence at the end of an `Arc`'s last drop (the test's hold
+   flag, a thread handle and the recompiler's `jit::Slot`), a channel's thread-local context (the watchdog of test 3),
+   and `OnceLock` (§6.10's `simd_default`, reached by two threads building machines at once). None is a hand-over of
+   this section's; each helper's is its own atomic, which the control shows TSan does see.
+6. `cargo test --release`, all 459 of the crate's tests, and `cargo clippy --all-targets`, debug and release, clean.
+   WiseMan's `FullyQualifiedName~MarsRt` filter — `MarsRtTests`, `MarsRtThreadsTests` and `MarsRTViTests` among it — 602 tests, all passed, against the library built from this section's crate.
+
+##### 6.11.4 Mutants
+
+Six, each applied alone to `bands.rs` and run against the three band tests one at a time, with a limit of three
+minutes each.
+
+| Mutant | Any number of bands | The held band | 3,000 walks |
+| --- | --- | --- | --- |
+| a band's join skipped (band 1's helper never waited for) | caught: fractional, 5 bands | crashed, SIGSEGV | survived |
+| a band handed back before its walk finished (the helper's `DONE` before its rows) | caught: progressive, 3 bands | hung | caught, walk 1 |
+| a helper's band starts one row late | caught, 2 bands | caught, band 1 | caught, walk 1 |
+| a helper's band stops one row early | caught, 2 bands | caught, band 1 | caught, walk 1 |
+| the presenter's band walks one row into the next | caught: an index out of range | caught: the same | caught: the same |
+| a chunk starts one row below its band's first row | caught: an index out of range | caught: the same | caught: the same |
+
+*What the pattern says.* The two boundary mutants that move rows between bands without leaving a chunk are caught as
+wrong pictures: a row no band walked keeps the step before's bytes. The two that move a boundary across a chunk are
+caught as a panic in the band, which the presenter carries back to the join, and are never a silent race — the point
+of splitting the raster by `split_at_mut` rather than by pointers. The skipped join survived the 3,000 small walks,
+whose skipped band of 32 rows of 64 columns finishes before the composition reaches it; it fell to the larger
+pictures and, as undefined behaviour does, crashed the held-band test outright. The early hand-back hung the held-band
+test because the helper's second `DONE`, after its band, overwrote the presenter's `STOP`; a hang counts as caught.
+In the same pattern as §5.6.9's positive control, a seventh mutant — the helper's `DONE` stored Relaxed — is invisible
+to the equality tests on x86-64 and is ThreadSanitizer's control (below).
+
+##### 6.11.5 Speed, and the prediction's fate
+
+*The prediction*, written to the results directory after the diagnosis's trace and before the first line of the bands
+was built: four bands cut each walk by about C#'s own ratio, 2.5 (§5.4.4, 4.55 against 1.78 ms), to 1.2, 1.9 and
+1.5 ms; the light fields that join them are 0.8 to 1.0, 2.1 to 2.5 and 2.3 to 2.7 ms; so Super Mario 64 from 4.60 to
+3.6 ± 0.15 ms, with a residual wait of 0.2 to 0.4 ms on every light field; Ocarina of Time from 5.56 to about 4.7; the
+Dam from 11.67 to about 10.9, its whole 0.8 ms of join.
+
+*The measurement.* Three interleaved rounds of 600 frames, `examples/threads <rom> <state> 600 split 4 blocks`, each
+round running the build before this section (WiseMan 2d85f17, built from a clean checkout), this section's build, and
+this section's build with `EMUSEN_MARSRT_SCAN_BANDS=1` in turn, every run under the shared lock with ten seconds'
+pause before each game. The load average at the start of the runs was 1.4 to 5.1: another agent's runs were interleaved
+with these under the same lock, and a run's own four spinning workers raise the next run's reading, so the number was
+recorded and the rounds were compared with each other rather than rejected. The state hashes are
+`4DEACE55468AA765`, `6881AF7D3E8BF471` and `18279384D87951D7` in all 27 runs, as in §6.10.
+
+| ms a frame | before | four bands | one band, this build |
+| --- | --- | --- | --- |
+| GoldenEye, the Dam | 11.645, 11.608, 11.709 | **10.979, 11.026, 11.034** | 11.972, 11.768, 11.977 |
+| Ocarina of Time | 5.602, 5.738, 5.704 | **4.682, 4.828, 4.787** | 5.786, 5.669, 5.685 |
+| Super Mario 64 | 4.687, 4.648, 4.716 | **3.755, 3.625, 3.649** | 4.576, 4.613, 4.620 |
+| the join, four bands (ms a frame) | — | 0.022–0.028, 0.001–0.002, 0.154–0.196 | 0.79–0.80, 0.88–0.91, 1.12–1.13 |
+
+Medians: **the Dam 11.65 to 11.03 ms, 0.62 and 5.3 per cent; Ocarina of Time 5.70 to 4.79, 0.92 and 16 per cent;
+Super Mario 64 4.69 to 3.65, 1.04 and 22 per cent.** No round of one column overlaps another's. The one-band column is
+the control: the same build with the old walk is the old frame within two per cent on the two lighter games, and 2.8
+per cent slower at the Dam, which the rounds do not separate from noise.
+
+*The band count*, one run each on Super Mario 64 of the same build (`EMUSEN_MARSRT_SCAN_BANDS`), in the same session:
+
+| bands | 1 | 2 | 3 | 4 | 6 | 8 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ms a frame | 4.682 | 3.983 | 3.813 | 3.702 | 3.585 | 3.596 |
+| the join, ms a frame | 1.115 | 0.508 | 0.313 | 0.189 | 0.103 | 0.071 |
+| the presenter's time a walk, ms | 3.07 | 1.82 | 1.46 | 1.22 | 1.04 | 0.99 |
+
+Six bands would buy another 0.1 ms here; the default stays C#'s four, because it is C#'s, because the handheld shares its
+package with the thread that is the bound (§6.1), and because the eighth band's walk is no faster than the sixth's.
+
+*The prediction's fate.* **It held for Super Mario 64 and Ocarina of Time and fell short at the Dam.** Super Mario 64
+landed at 3.65 against 3.6 ± 0.15, the residual wait at 0.15 to 0.20 ms a frame, which is 0.3 to 0.4 ms on each light
+field, as predicted; Ocarina of Time at 4.79 against about 4.7. The walks' ratio was C#'s: 3.1 to 1.2, 4.8 to 1.75, 3.55
+to 1.26 ms, 2.5 to 2.8 times. At the Dam the join fell from 0.80 to 0.02 ms, all of it, as predicted, and the frame fell
+by 0.62 ms, not 0.8. The Dam is the one game whose walks also overlap its heavy fields, and there four threads now
+share the cache and the memory with the emulation thread for 1.3 ms where one did for 3.6; that the missing 0.2 ms is
+that sharing is a reading, not a measurement. §6.9's own prediction for this lever, stated on the frames before §6.10
+— "bands or a deeper queue take Super Mario 64 from 5.8 to about 5.0 and Ocarina of Time to about 6.2, with the Dam
+gaining half a millisecond" — is retired: the bands took 1.04, 0.92 and 0.62 ms, more than its 0.8, 0.6 and 0.5 on
+every game, from frames that §6.10 had already shortened. It had priced the lever from the mean frame, which is what
+this section found the join does not depend on.
+
+##### 6.11.6 Where Super Mario 64's frame goes now
+
+`rtsample.py` on the emulation thread, one run before and two after, the shares multiplied by the medians above:
+
+| ms a frame, share | before | after, run 1 | after, run 2 |
+| --- | --- | --- | --- |
+| RSP: the vector unit | 0.81, 17.3% | 0.90, 24.7% | 0.88, 24.1% |
+| RSP: decode and dispatch | 0.62, 13.2% | 0.68, 18.7% | 0.69, 18.9% |
+| RSP: the lock-step | 0.31, 6.6% | 0.24, 6.5% | 0.27, 7.5% |
+| the presenter's join | **1.12, 24.0%** | **0.13, 3.5%** | **0.15, 4.0%** |
+| RDP: waiting for the workers | 0.22, 4.7% | 0.12, 3.4% | 0.11, 2.9% |
+| decoded blocks, loop and handlers | 0.33, 7.1% | 0.34, 9.2% | 0.33, 9.0% |
+| samples | 1,793 | 1,210 | 1,197 |
+
+The join is a twenty-fifth of the frame where it was a quarter; the signal processor's vector unit and its decode and
+dispatch are now the first and second things on the thread, §6.9's third lever. The sampled runs' own frames were 4.78
+and 3.73 to 3.79 ms, two to four per cent above the unsampled medians.
+
+*Two runs discarded, and why.* The first "before" run of the emulation thread ran at 33 ms a frame, seven times its
+unsampled frame, with 17.5 ms of it at site 8; it was repeated, and the repeat is the column above. The all-threads
+runs that were to sample the presenter and the helpers beside the emulation thread ran at 17.5 ms (before) and hung the
+sampler at the child's exit (both), so no sample of the presenter's thread is given: stopping every thread a thousand
+times a second stalls threads that wait for each other by spinning, which the Dam's workers of §6.9 survived and this
+game's presenter and workers did not. The per-frame trace of §6.11.1, which times both threads on their own clocks,
+is the measurement of the presenter's side, and the trace after the fix gives: walks of 1.18, 1.75 and 1.26 ms
+(medians), joins that waited 282 of 290, 20 of 193 and 73 of 558, and waits of 0.39, 0.14 and 0.46 ms when they did.
+
+##### 6.11.7 What is not done
+
+- **The handheld.** The Legion Go S gets a quarter of its processors by the same rule; how many bands that is there,
+  and whether they cost the emulation thread more where it shares the package with them, is not measured.
+- **The residual wait on Super Mario 64**, 0.15 to 0.20 ms a frame: a walk of 1.2 ms joined after a light field of
+  0.8. Six bands take half of it; composing in bands, or starting the band helpers spinning rather than parked, might
+  take more. Neither is tried.
+- **The multiples' speed.** The bands at 2× and 4× are proven exact (§6.11.3) and not timed; at a multiple with
+  antialiasing the box average runs after the walk on the presenter alone, and its share of the job is not measured.
+- **The immediate walk** is not banded, so the non-deferred mode and the picture after a load walk on one thread as
+  before.
+- **The Dam's missing 0.2 ms** (§6.11.5), a reading and not a measurement.
+- **The all-threads sample** of the presenter and its helpers (§6.11.6).
 
 #### 6.12 The signal processor's instructions decoded once (2026-09-23)
 

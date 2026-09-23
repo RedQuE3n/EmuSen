@@ -58,6 +58,9 @@ namespace EmuSen.DianaOS.DianaOS.Var
         public uint Value => Writes.Count > 0 ? Writes[0].Value : 0;
     }
 
+    // One byte a ROM patch substitutes, and the cartridge byte it needs there, or none.
+    public readonly record struct RomPatchByte(uint Address, byte Value, byte? Compare);
+
     // RamPoke rewrites every frame; RomPatch substitutes a read - see EmuSen_Cheats.md and `man cheat`.
     public class CheatRegistry
     {
@@ -174,9 +177,17 @@ namespace EmuSen.DianaOS.DianaOS.Var
             lock (_gate) Publish(Array.Empty<Cheat>());
         }
 
-        // Master off counts as zero, so TryPatchRom's hot path stays one int compare.
-        private void RecountRomPatches() =>
+        // Master off counts as zero, so TryPatchRom's hot path stays one int compare; every change passes here, so it moves Version too.
+        private void RecountRomPatches()
+        {
             _enabledRomPatches = _masterEnabled ? _cheats.Count(c => c.Kind == CheatKind.RomPatch && c.Enabled) : 0;
+            System.Threading.Interlocked.Increment(ref _version);
+        }
+
+        private int _version;
+
+        // Moves on every change, so a core holding its own copy of the patches knows when to take them again - see Mars_Native.md §6.6.1.
+        public int Version => System.Threading.Volatile.Read(ref _version);
 
         public IReadOnlyList<CheatInfo> GetCheats() =>
             Snapshot().Select(c => new CheatInfo(c.Id, c.Kind, c.Writes, c.Compare, c.Description, c.Enabled)).ToList();
@@ -382,6 +393,34 @@ namespace EmuSen.DianaOS.DianaOS.Var
             }
 
             return false;
+        }
+
+        // Every byte TryPatchRom would substitute below <limit>, in the order it tries them, resolved by its own rule - see Mars_Native.md §6.6.1.
+        public IReadOnlyList<RomPatchByte> ResolveRomPatches(long limit = long.MaxValue)
+        {
+            var bytes = new List<RomPatchByte>();
+            if (_enabledRomPatches == 0) return bytes;
+
+            foreach (Cheat c in Snapshot())
+            {
+                if (c.Kind != CheatKind.RomPatch || !c.Enabled) continue;
+                foreach (CheatWrite w in c.Writes)
+                {
+                    var seen = new HashSet<int>();
+                    for (int i = 0; i < w.EffectiveRepeatCount; i++)
+                    {
+                        for (int b = 0; b < w.EffectiveWidth; b++)
+                        {
+                            int target = w.AddressAt(i) + b;
+                            if (target < 0 || target >= limit || !seen.Add(target)) continue;
+                            if (!TryResolveRepetition(w, target, out int repetition, out int offset)) continue;
+                            bytes.Add(new RomPatchByte((uint)target, w.ByteAt(w.ValueAt(repetition), offset), c.Compare));
+                        }
+                    }
+                }
+            }
+
+            return bytes;
         }
 
         // Division for the ordinary forward stride; a bounded walk only for zero or negative.

@@ -11,6 +11,7 @@ pub mod joybus;
 pub mod mi;
 pub mod pi;
 pub mod ram;
+pub mod rom_patches;
 pub mod save;
 pub mod si;
 pub mod sp;

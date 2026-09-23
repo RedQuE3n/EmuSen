@@ -363,9 +363,11 @@ impl Machine {
     /// `MarsCore.LoadState`: the state read, then everything C# derives after reading it. See Mars_Native.md §5.2.
     pub fn restore_state(&mut self, data: &[u8]) -> StateResult {
         let cart = self.bus.cart.clone();
+        let patches = self.bus.rom_patches.clone();
         let saved = self.bus.save.saved.clone();
         self.load_state(data)?;
         self.bus.cart = cart;
+        self.bus.rom_patches = patches;
         self.bus.save.saved = saved;
         self.derive_after_load();
         self.apply_threads();

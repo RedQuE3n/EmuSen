@@ -51,6 +51,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private static readonly delegate* unmanaged<nint, uint, long> MemorySize = (delegate* unmanaged<nint, uint, long>)MarsNative.Export("mars_machine_memory_size");
         private static readonly delegate* unmanaged<nint, uint, uint, byte*, nuint, long> ReadMemory = (delegate* unmanaged<nint, uint, uint, byte*, nuint, long>)MarsNative.Export("mars_machine_read_memory");
         private static readonly delegate* unmanaged<nint, uint, uint, byte*, nuint, long> WriteMemory = (delegate* unmanaged<nint, uint, uint, byte*, nuint, long>)MarsNative.Export("mars_machine_write_memory");
+        private static readonly delegate* unmanaged<nint, uint*, nuint, long> SetRomPatches = (delegate* unmanaged<nint, uint*, nuint, long>)MarsNative.Export("mars_machine_set_rom_patches");
         private static readonly delegate* unmanaged<nint, uint, ulong> Cop0Export = (delegate* unmanaged<nint, uint, ulong>)MarsNative.Export("mars_machine_cop0");
         private static readonly delegate* unmanaged<nint, ulong*, nuint, long> CpuRegistersExport = (delegate* unmanaged<nint, ulong*, nuint, long>)MarsNative.Export("mars_machine_cpu_registers");
         private static readonly delegate* unmanaged<nint, uint*, nuint, long> RspRegistersExport = (delegate* unmanaged<nint, uint*, nuint, long>)MarsNative.Export("mars_machine_rsp_registers");
@@ -83,7 +84,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         private bool _useBlocks = true, _verifyBlocks;
         private int _blockTier;
 
-        public static bool Available => LoadRomExport != null && MemorySize != null;
+        public static bool Available => LoadRomExport != null && MemorySize != null && SetRomPatches != null;
 
         // A stock console unless asked, as MarsCore; null defers to --nobattery.
         public MarsRtCore(bool expansionPak = false, bool? batteryRamDisabled = null)
@@ -349,10 +350,37 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public CheatRegistry Cheats
         {
             get => _cheats;
-            set => _cheats = value;
+            set
+            {
+                _cheats = value;
+                SyncRomPatches();
+            }
         }
 
-        // Public so a paused frontend need not wait for a frame boundary; ROM patches are not applied - see Mars_Native.md §5.5.
+        private CheatRegistry? _patchesFrom;
+        private int _patchesVersion;
+
+        // The registry's ROM patches handed to the library whenever the registry or its version moved, before the machine runs - see Mars_Native.md §6.6.1.
+        private void SyncRomPatches()
+        {
+            if (_handle == 0) return;
+            CheatRegistry cheats = _cheats;
+            int version = cheats.Version;
+            if (ReferenceEquals(cheats, _patchesFrom) && version == _patchesVersion) return;
+            IReadOnlyList<RomPatchByte> bytes = cheats.ResolveRomPatches(SpaceSize(MarsRtSpace.Rom));
+            var words = new uint[bytes.Count * 3];
+            for (int i = 0; i < bytes.Count; i++)
+            {
+                words[3 * i] = bytes[i].Address;
+                words[3 * i + 1] = bytes[i].Value;
+                words[3 * i + 2] = bytes[i].Compare is byte compare ? compare : uint.MaxValue;
+            }
+            fixed (uint* data = words) SetRomPatches(_handle, data, (nuint)bytes.Count);
+            _patchesFrom = cheats;
+            _patchesVersion = version;
+        }
+
+        // Public so a paused frontend need not wait for a frame boundary; ROM patches reach the cartridge at the next run - see Mars_Native.md §6.6.1.
         public void ApplyCheats()
         {
             if (_handle != 0) Cheats.ApplyAll(ReadForCheat, WriteForCheat);
@@ -483,6 +511,8 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             _rowRepeat = 1;
             _frameSerial++;
             _takenSerial = 0;
+            _patchesFrom = null;
+            SyncRomPatches();
         }
 
         public void SetButton(int port, PadButton button, bool pressed)
@@ -528,6 +558,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         public void RunFrame()
         {
             nint handle = Handle;
+            SyncRomPatches();
             bool resuming = IsHaltedAtBreakpoint;
             IsHaltedAtBreakpoint = false;
             if (Observed) { if (!RunObserved(handle, resuming)) return; }
@@ -542,7 +573,12 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         }
 
         // The interpreter's steps, the given number, as MarsCorpusTests steps the C# core; through the blocks when they are on.
-        public void RunSteps(ulong steps) => RunStepsExport(Handle, steps);
+        public void RunSteps(ulong steps)
+        {
+            nint handle = Handle;
+            SyncRomPatches();
+            RunStepsExport(handle, steps);
+        }
 
         public string IsViewerTranscript
         {

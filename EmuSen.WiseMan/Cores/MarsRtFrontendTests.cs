@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.Cores
 {
     // What a frontend needs of MarsRT beyond the machine: the factory's choice, settings, cheats, the debugger's view, and the frame it hands out - see Mars_Native.md §5.5.
     [Collection("MarsStatics")]
-    public class MarsRtFrontendTests : IDisposable
+    public class MarsRtFrontendTests(Xunit.Abstractions.ITestOutputHelper output) : IDisposable
     {
         private readonly List<string> _temporary = new();
 
@@ -268,6 +268,66 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(0, twin.Peek(MarsRtSpace.Rdram, 0x1003));
             Assert.Equal(0xFF, twin.Peek(MarsRtSpace.Rdram, 0x10FB40));
             Assert.True(drew, "no frame showed anything, so the picture compared nothing");
+        }
+
+        // ROM patches on the program the boot copies out, the data a transfer reads each field and the bytes the processor loads, changed between frames - see Mars_Native.md §6.6.1.
+        [Fact]
+        public void With_rom_patches_MarsRT_leaves_the_state_and_the_picture_Mars_leaves_frame_by_frame()
+        {
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            byte[] image = SyntheticN64System.Build(rsp: true);
+            int origin = OnlyWord(image, 0x3C09_0010, SyntheticN64System.ImageAt, SyntheticN64System.ImageLength);
+            const int Data = SyntheticN64System.DataAt;
+            string rom = Rom(image);
+
+            var cheats = new CheatRegistry();
+            cheats.AddRomPatch(origin + 3, 0x00, null, "the picture's origin to zero");
+            int run = cheats.AddCheat(CheatKind.RomPatch, new[] { new CheatWrite { Address = Data + 0x10, Value = 0xF00D, Width = 2, BigEndian = true, RepeatCount = 16, RepeatAddAddress = 0x100, RepeatAddValue = 0x11 } }, null, "a run through every transfer");
+            cheats.AddRomPatch(Data + 3, 0x5C, image[Data + 3], "the byte load, compared true");
+            cheats.AddRomPatch(Data + 6, 0x5D, (byte)(image[Data + 6] ^ 0xFF), "the halfword load, compared false");
+            cheats.AddRomPatch(0x1005, 0xA5, null, "the word load past the latch");
+
+            MarsCore oracle = MarsRtTests.Oracle();
+            using MarsRtCore twin = MarsRtTests.Twin(), plain = MarsRtTests.Twin();
+            oracle.SkipRendering = twin.SkipRendering = plain.SkipRendering = false;
+            oracle.Cheats = twin.Cheats = cheats;
+            oracle.LoadRom(rom);
+            twin.LoadRom(rom);
+            plain.LoadRom(rom);
+
+            int statesApart = 0, picturesApart = 0;
+            for (int frame = 1; frame <= 80; frame++)
+            {
+                if (frame == 25) cheats.SetEnabled(run, false);
+                if (frame == 40) cheats.MasterEnabled = false;
+                if (frame == 50)
+                {
+                    cheats.MasterEnabled = true;
+                    cheats.AddRomPatch(Data + 0x210, 0x77, null, "added while running");
+                }
+                oracle.RunFrame();
+                twin.RunFrame();
+                plain.RunFrame();
+                byte[] state = twin.Save(false);
+                Assert.True(State(oracle).AsSpan().SequenceEqual(state), $"frame {frame}: the states differ");
+                byte[] want = oracle.GetFrameBufferRgba(), got = twin.GetFrameBufferRgba();
+                Assert.True(want.AsSpan().SequenceEqual(got), $"frame {frame}: the pictures differ from byte {want.AsSpan().CommonPrefixLength(got)}");
+                statesApart += state.AsSpan().SequenceEqual(plain.Save(false)) ? 0 : 1;
+                picturesApart += got.AsSpan().SequenceEqual(plain.GetFrameBufferRgba()) ? 0 : 1;
+            }
+
+            output.WriteLine($"80 frames identical to Mars; {statesApart} states and {picturesApart} pictures differ from MarsRT unpatched");
+            Assert.Equal(image[origin + 3], twin.Peek(MarsRtSpace.Rom, (uint)origin + 3));
+            Assert.True(statesApart > 60 && picturesApart > 60, $"the patches changed {statesApart} states and {picturesApart} pictures of 80, so the comparison tested little");
+        }
+
+        // The one offset in a stretch of the image where a big-endian word stands.
+        private static int OnlyWord(byte[] image, uint word, int from, int length)
+        {
+            var at = new List<int>();
+            for (int i = from; i + 4 <= from + length; i += 4)
+                if ((uint)(image[i] << 24 | image[i + 1] << 16 | image[i + 2] << 8 | image[i + 3]) == word) at.Add(i);
+            return Assert.Single(at);
         }
 
         // Since §6.13 the claim is the lending's: a buffer held is never written or lent again until it is returned, and a returned one is reused.

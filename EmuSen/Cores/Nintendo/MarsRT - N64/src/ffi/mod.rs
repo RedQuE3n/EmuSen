@@ -15,6 +15,7 @@ use crate::cpu::segments::{self, Mode, Segment};
 use crate::cpu::tlb::TlbResult;
 use crate::machine::Machine;
 use crate::memory::bus_access::map;
+use crate::memory::rom_patches::{RomPatch, RomPatches};
 use crate::rom::RomImage;
 use crate::state::{State, StateResult, StateWriter};
 use crate::vi::scan::Scanout;
@@ -653,6 +654,29 @@ pub unsafe extern "C" fn mars_machine_write_memory(core: *mut Core, space: u32, 
         Err(status) => status as i64,
     }
 }
+
+/// The registry's ROM patches as the host resolved them, three words each: the ROM offset, the value, and the byte compared or
+/// `NO_COMPARE`; they replace the last list, and none clears it. Returns how many were taken (Mars_Native.md §6.6.1).
+///
+/// # Safety
+/// `core` must be live or null; `words` valid for `3 * count` words, or null when `count` is zero.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mars_machine_set_rom_patches(core: *mut Core, words: *const u32, count: usize) -> i64 {
+    let Some(c) = (unsafe { core.as_mut() }) else { return STATUS_NULL as i64 };
+    if words.is_null() && count != 0 {
+        return STATUS_NULL as i64;
+    }
+    let words = if count == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(words, 3 * count) } };
+    let entries = words
+        .chunks_exact(3)
+        .map(|w| RomPatch { address: w[0], value: w[1] as u8, compare: (w[2] != NO_COMPARE).then_some(w[2] as u8) })
+        .collect();
+    c.machine.bus.rom_patches = crate::Skip(RomPatches::new(entries).map(Arc::new));
+    count as i64
+}
+
+/// The third word of a ROM patch that compares nothing.
+pub const NO_COMPARE: u32 = u32::MAX;
 
 /// One COP0 register, `Cop0[register]`; the cheat gate reads Status (12).
 ///

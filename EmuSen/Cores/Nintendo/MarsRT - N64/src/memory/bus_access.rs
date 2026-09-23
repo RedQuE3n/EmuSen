@@ -343,10 +343,16 @@ impl MemoryBus {
         }
     }
 
-    /// `ReadCart32`: past the end of the cartridge is zero.
+    /// `ReadCart32`: past the end of the cartridge is zero, and a ROM patch substitutes its bytes, as `Patched` does.
     pub fn read_cart32(&self, offset: u32) -> u32 {
         match self.cart.as_ref() {
-            Some(rom) if (offset as u64 + 3) < rom.rom.len() as u64 => be32(&rom.rom, offset),
+            Some(rom) if (offset as u64 + 3) < rom.rom.len() as u64 => {
+                let word = be32(&rom.rom, offset);
+                match self.rom_patches.as_deref() {
+                    Some(patches) => patches.word(offset, word),
+                    None => word,
+                }
+            }
             _ => 0,
         }
     }

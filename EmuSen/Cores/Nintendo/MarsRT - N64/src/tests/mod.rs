@@ -10,6 +10,7 @@ mod games;
 mod gpu;
 mod multiple;
 mod rom;
+mod rsp;
 mod save;
 mod sites;
 mod support;

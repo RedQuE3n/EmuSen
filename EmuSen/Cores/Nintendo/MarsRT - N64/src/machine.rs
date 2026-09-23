@@ -189,6 +189,7 @@ impl Machine {
         machine.blocks = std::mem::take(&mut self.blocks);
         machine.cpu.hooks = std::mem::take(&mut self.cpu.hooks);
         machine.bus.sp.trace = std::mem::take(&mut self.bus.sp.trace);
+        machine.bus.sp.processor.simd = self.bus.sp.processor.simd;
         if machine.rdram_bytes() != self.rdram_bytes() {
             machine.blocks.clear();
         }
@@ -334,6 +335,11 @@ impl Machine {
     /// The recompiler on or off; exact either way, and off by default. See Mars_Native.md §5.8.
     pub fn set_recompiler(&mut self, on: bool) {
         self.blocks.on = on;
+    }
+
+    /// The signal processor's vector unit in host vectors or element by element; on only where the host has it (Mars_Native.md §6.10).
+    pub fn set_rsp_simd(&mut self, on: bool) {
+        *self.bus.sp.processor.simd = on && crate::rsp::simd_supported();
     }
 
     /// The interpreter alone, as the corpus runs it: `Cpu.Step`, the given number of times; through the blocks when they are on.

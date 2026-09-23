@@ -1,5 +1,8 @@
 //! The signal processor, ported from Mars's C# plain path, which stays its oracle. See Mars_Native.md §3.
 
+#[cfg(target_arch = "x86_64")]
+mod simd;
+
 pub const PC_MASK: u32 = 0xFFC;
 pub const DATA_MASK: u32 = 0xFFF;
 const ELEMENTS: usize = 8;
@@ -52,6 +55,80 @@ pub trait Memory {
     fn divide_loaded(&self) -> u8;
     fn set_divide_loaded(&mut self, value: u8);
     fn halted(&self) -> u8;
+    /// Whether the vector unit runs in host vectors; true only where `simd_supported`.
+    fn simd(&self) -> bool;
+
+    /// A whole register, element 0 first.
+    #[inline(always)]
+    fn register(&self, register: usize) -> [u16; 8] {
+        std::array::from_fn(|i| self.element(register, i))
+    }
+    #[inline(always)]
+    fn set_register(&mut self, register: usize, value: [u16; 8]) {
+        for (i, v) in value.into_iter().enumerate() {
+            self.set_element(register, i, v);
+        }
+    }
+    /// Sixteen bytes of DMEM from an address at most 0xFF0, which do not wrap.
+    #[inline(always)]
+    fn data_block(&self, address: usize) -> [u8; 16] {
+        std::array::from_fn(|i| self.data((address + i) as u32))
+    }
+    #[inline(always)]
+    fn set_data_block(&mut self, address: usize, value: [u8; 16]) {
+        for (i, v) in value.into_iter().enumerate() {
+            self.set_data((address + i) as u32, v);
+        }
+    }
+    /// One third of the accumulator's eight lanes: 0 the high sixteen bits, 1 the middle, 2 the low.
+    #[inline(always)]
+    fn third(&self, third: usize) -> [u16; 8] {
+        let shift = 32 - 16 * third as u32;
+        std::array::from_fn(|i| (self.acc(i) >> shift) as u16)
+    }
+    #[inline(always)]
+    fn set_third(&mut self, third: usize, value: [u16; 8]) {
+        let shift = 32 - 16 * third as u32;
+        for (i, v) in value.into_iter().enumerate() {
+            let old = self.acc(i);
+            self.set_acc(i, (old & !(0xFFFFu64 << shift)) | ((v as u64) << shift));
+        }
+    }
+    /// The whole accumulator written, as `accumulate` writes it: the bits above 47 cleared.
+    #[inline(always)]
+    fn set_thirds(&mut self, value: [[u16; 8]; 3]) {
+        for (i, word) in widen(&value, &[0; 8]).into_iter().enumerate() {
+            self.set_acc(i, word);
+        }
+    }
+}
+
+/// Whether the host has what the vector unit's SIMD path needs: SSSE3 and SSE4.1 on x86-64, and nothing elsewhere.
+pub fn simd_supported() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        std::is_x86_feature_detected!("ssse3") && std::is_x86_feature_detected!("sse4.1")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        false
+    }
+}
+
+/// The SIMD path's default: on where supported, unless `EMUSEN_MARSRT_RSP_SIMD=0`.
+pub fn simd_default() -> bool {
+    static DEFAULT: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *DEFAULT.get_or_init(|| simd_supported() && std::env::var("EMUSEN_MARSRT_RSP_SIMD").map_or(true, |v| v != "0"))
+}
+
+/// The accumulator's three thirds and the bits above them as C#'s eight words, which is what a state carries.
+pub fn widen(thirds: &[[u16; 8]; 3], top: &[u16; 8]) -> [u64; 8] {
+    std::array::from_fn(|i| ((top[i] as u64) << 48) | ((thirds[0][i] as u64) << 32) | ((thirds[1][i] as u64) << 16) | thirds[2][i] as u64)
+}
+
+/// Eight words as the three thirds and the sixteen bits above them, which only a state that no machine wrote holds.
+pub fn narrow(words: &[u64; 8]) -> ([[u16; 8]; 3], [u16; 8]) {
+    (std::array::from_fn(|third| std::array::from_fn(|i| (words[i] >> (32 - 16 * third)) as u16)), std::array::from_fn(|i| (words[i] >> 48) as u16))
 }
 
 /// Memory C# owns: pinned registers, vectors, accumulator, IMEM and DMEM, and scalars copied across each call.
@@ -62,6 +139,7 @@ pub struct Pinned {
     accumulator: *mut u64,
     imem: *const u8,
     dmem: *mut u8,
+    simd: bool,
 }
 
 impl Memory for Pinned {
@@ -170,6 +248,10 @@ impl Memory for Pinned {
     #[inline(always)]
     fn halted(&self) -> u8 {
         self.s.halted
+    }
+    #[inline(always)]
+    fn simd(&self) -> bool {
+        self.simd
     }
 }
 
@@ -351,7 +433,7 @@ impl Rsp<Pinned> {
         dmem: *mut u8,
     ) -> Rsp<Pinned> {
         tables();
-        Rsp { m: Pinned { s: Scalars::default(), gpr, vector, accumulator, imem, dmem } }
+        Rsp { m: Pinned { s: Scalars::default(), gpr, vector, accumulator, imem, dmem, simd: simd_default() } }
     }
 }
 
@@ -506,7 +588,15 @@ impl<M: Memory> Rsp<M> {
                 self.write(rt(instruction), value);
             }
             0x0F => self.write(rt(instruction), instruction << 16),
-            0x12 => self.cop2(instruction),
+            0x12 => {
+                #[cfg(target_arch = "x86_64")]
+                if instruction & VECTOR_OPERATION != 0 && self.m.simd() {
+                    // SAFETY: `simd` is true only where `simd_supported` found the features.
+                    unsafe { self.vector_op_simd(instruction) };
+                    return;
+                }
+                self.cop2(instruction)
+            }
             0x20 => {
                 let value = self.read_data(self.address(instruction), 1) as i8 as i32 as u32;
                 self.write(rt(instruction), value);
@@ -530,8 +620,24 @@ impl<M: Memory> Rsp<M> {
             0x28 => self.write_data(self.address(instruction), self.read(rt(instruction)), 1),
             0x29 => self.write_data(self.address(instruction), self.read(rt(instruction)), 2),
             0x2B => self.write_data(self.address(instruction), self.read(rt(instruction)), 4),
-            0x32 => self.vector_load(instruction),
-            0x3A => self.vector_store(instruction),
+            0x32 => {
+                #[cfg(target_arch = "x86_64")]
+                if self.m.simd() {
+                    // SAFETY: as for the vector operations above.
+                    unsafe { self.vector_load_simd(instruction) };
+                    return;
+                }
+                self.vector_load(instruction)
+            }
+            0x3A => {
+                #[cfg(target_arch = "x86_64")]
+                if self.m.simd() {
+                    // SAFETY: as for the vector operations above.
+                    unsafe { self.vector_store_simd(instruction) };
+                    return;
+                }
+                self.vector_store(instruction)
+            }
             _ => {}
         }
     }
@@ -1070,6 +1176,10 @@ impl<M: Memory> Rsp<M> {
 
     fn vector_load(&mut self, instruction: u32) {
         let Some((format, vt, element, address)) = self.transfer_operands(instruction) else { return };
+        self.load_format(format, vt, element, address);
+    }
+
+    fn load_format(&mut self, format: u32, vt: usize, element: usize, address: u32) {
         match format {
             0..=3 => self.load_bytes(vt, element, address, 1 << format),
             4 => self.load_bytes(vt, element, address, 16 - (address & 0xF) as usize),
@@ -1085,6 +1195,10 @@ impl<M: Memory> Rsp<M> {
 
     fn vector_store(&mut self, instruction: u32) {
         let Some((format, vt, element, address)) = self.transfer_operands(instruction) else { return };
+        self.store_format(format, vt, element, address);
+    }
+
+    fn store_format(&mut self, format: u32, vt: usize, element: usize, address: u32) {
         match format {
             0..=3 => self.store_bytes(vt, element, address, 1 << format),
             4 => self.store_bytes(vt, element, address, 16 - (address & 0xF) as usize),
@@ -1096,6 +1210,29 @@ impl<M: Memory> Rsp<M> {
             10 => self.store_whole(vt, element, address),
             11 => self.store_transposed(vt, element, address),
             _ => {}
+        }
+    }
+
+    /// `load_bytes` of `n` bytes from an even element in whole elements, for the SIMD path where its sixteen bytes would leave DMEM; `data` wraps as it does.
+    #[cfg_attr(not(target_arch = "x86_64"), allow(dead_code))]
+    fn load_lanes(&mut self, vt: usize, element: usize, address: u32, n: usize) {
+        let mut register = self.m.register(vt);
+        for k in 0..n / 2 {
+            let at = address + 2 * k as u32;
+            register[element / 2 + k] = u16::from_be_bytes([self.data(at), self.data(at + 1)]);
+        }
+        self.m.set_register(vt, register);
+    }
+
+    /// `store_bytes` of `count` bytes from an even element that does not wrap the register, in whole elements; `set_data` wraps as it does.
+    #[cfg_attr(not(target_arch = "x86_64"), allow(dead_code))]
+    fn store_lanes(&mut self, vt: usize, element: usize, address: u32, count: usize) {
+        let register = self.m.register(vt);
+        for k in 0..count / 2 {
+            let [high, low] = register[element / 2 + k].to_be_bytes();
+            let at = address + 2 * k as u32;
+            self.set_data(at, high);
+            self.set_data(at + 1, low);
         }
     }
 
@@ -1263,6 +1400,15 @@ pub unsafe extern "C" fn mars_rsp_free(rsp: *mut Rsp<Pinned>) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mars_rsp_scalars(rsp: *mut Rsp<Pinned>) -> *mut Scalars {
     unsafe { &mut (*rsp).m.s }
+}
+
+/// The vector unit's SIMD path on or off; on only where the host has it (Mars_Native.md §6.10).
+///
+/// # Safety
+/// `rsp` came from `mars_rsp_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mars_rsp_set_simd(rsp: *mut Rsp<Pinned>, on: u32) {
+    unsafe { (*rsp).m.simd = on != 0 && simd_supported() }
 }
 
 /// One instruction unless it is an event; returns 1 if it ran and 0 if C# must run it.

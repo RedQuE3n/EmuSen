@@ -9,7 +9,10 @@ use crate::state::{State, StateReader, StateResult, StateWriter};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rsp {
-    pub accumulator: [u64; 8],
+    /// The 48-bit accumulator as three thirds of eight lanes, high, middle and low, as the vector unit keeps it; the state carries it as C#'s eight words (Mars_Native.md §6.10).
+    pub accumulator: [[u16; 8]; 3],
+    /// Bits 63:48 of the state's words, which no instruction reads; a load keeps them and a whole write clears them, as the words did.
+    pub accumulator_top: [u16; 8],
     pub broke: bool,
     pub gpr: [u32; 32],
     pub halted: bool,
@@ -18,16 +21,20 @@ pub struct Rsp {
     pub vcc: u16,
     pub vce: u8,
     pub vco: u16,
-    pub vector: [u16; 256],
+    /// Register first, element second: a register is one 128-bit lane of eight elements.
+    pub vector: [[u16; 8]; 32],
     pub divide_input: u16,
     pub divide_input_loaded: bool,
     pub divide_output: u16,
+    /// The vector unit in host vectors rather than element by element, where the host has them; in no state (Mars_Native.md §6.10).
+    pub simd: Skip<bool>,
 }
 
 impl Default for Rsp {
     fn default() -> Self {
         Rsp {
-            accumulator: [0; 8],
+            accumulator: [[0; 8]; 3],
+            accumulator_top: [0; 8],
             broke: false,
             gpr: [0; 32],
             halted: true,
@@ -36,17 +43,18 @@ impl Default for Rsp {
             vcc: 0,
             vce: 0,
             vco: 0,
-            vector: [0; 256],
+            vector: [[0; 8]; 32],
             divide_input: 0,
             divide_input_loaded: false,
             divide_output: 0,
+            simd: Skip(rsp::simd_default()),
         }
     }
 }
 
 impl State for Rsp {
     fn write_state(&self, w: &mut StateWriter) {
-        w.u64s("Accumulator", &self.accumulator[..]);
+        w.u64s("Accumulator", &rsp::widen(&self.accumulator, &self.accumulator_top));
         w.bool("Broke", self.broke);
         w.u32s("Gpr", &self.gpr[..]);
         w.bool("Halted", self.halted);
@@ -55,14 +63,16 @@ impl State for Rsp {
         w.u16("Vcc", self.vcc);
         w.u8("Vce", self.vce);
         w.u16("Vco", self.vco);
-        w.u16s("Vector", &self.vector[..]);
+        w.u16s("Vector", self.vector.as_flattened());
         w.u16("_divideInput", self.divide_input);
         w.bool("_divideInputLoaded", self.divide_input_loaded);
         w.u16("_divideOutput", self.divide_output);
     }
 
     fn read_state(&mut self, r: &mut StateReader) -> StateResult {
-        r.u64s(&mut self.accumulator[..])?; // Accumulator
+        let mut wide = [0u64; 8];
+        r.u64s(&mut wide)?; // Accumulator
+        (self.accumulator, self.accumulator_top) = rsp::narrow(&wide);
         self.broke = r.bool()?; // Broke
         r.u32s(&mut self.gpr[..])?; // Gpr
         self.halted = r.bool()?; // Halted
@@ -71,7 +81,7 @@ impl State for Rsp {
         self.vcc = r.u16()?; // Vcc
         self.vce = r.u8()?; // Vce
         self.vco = r.u16()?; // Vco
-        r.u16s(&mut self.vector[..])?; // Vector
+        r.u16s(self.vector.as_flattened_mut())?; // Vector
         self.divide_input = r.u16()?; // _divideInput
         self.divide_input_loaded = r.bool()?; // _divideInputLoaded
         self.divide_output = r.u16()?; // _divideOutput
@@ -141,19 +151,57 @@ impl Memory for Lent<'_> {
     }
     #[inline(always)]
     fn element(&self, register: usize, element: usize) -> u16 {
-        self.p.vector[((register & 31) << 3) | (element & 7)]
+        self.p.vector[register & 31][element & 7]
     }
     #[inline(always)]
     fn set_element(&mut self, register: usize, element: usize, value: u16) {
-        self.p.vector[((register & 31) << 3) | (element & 7)] = value
+        self.p.vector[register & 31][element & 7] = value
     }
     #[inline(always)]
     fn acc(&self, element: usize) -> u64 {
-        self.p.accumulator[element & 7]
+        let (a, i) = (&self.p.accumulator, element & 7);
+        ((self.p.accumulator_top[i] as u64) << 48) | ((a[0][i] as u64) << 32) | ((a[1][i] as u64) << 16) | a[2][i] as u64
     }
     #[inline(always)]
     fn set_acc(&mut self, element: usize, value: u64) {
-        self.p.accumulator[element & 7] = value
+        let (a, i) = (&mut self.p.accumulator, element & 7);
+        a[0][i] = (value >> 32) as u16;
+        a[1][i] = (value >> 16) as u16;
+        a[2][i] = value as u16;
+        self.p.accumulator_top[i] = (value >> 48) as u16;
+    }
+    #[inline(always)]
+    fn register(&self, register: usize) -> [u16; 8] {
+        self.p.vector[register & 31]
+    }
+    #[inline(always)]
+    fn set_register(&mut self, register: usize, value: [u16; 8]) {
+        self.p.vector[register & 31] = value
+    }
+    #[inline(always)]
+    fn third(&self, third: usize) -> [u16; 8] {
+        self.p.accumulator[third]
+    }
+    #[inline(always)]
+    fn set_third(&mut self, third: usize, value: [u16; 8]) {
+        self.p.accumulator[third] = value
+    }
+    #[inline(always)]
+    fn set_thirds(&mut self, value: [[u16; 8]; 3]) {
+        self.p.accumulator = value;
+        self.p.accumulator_top = [0; 8];
+    }
+    #[inline(always)]
+    fn simd(&self) -> bool {
+        *self.p.simd
+    }
+    #[inline(always)]
+    fn data_block(&self, address: usize) -> [u8; 16] {
+        self.dmem[address..address + 16].try_into().unwrap()
+    }
+    #[inline(always)]
+    fn set_data_block(&mut self, address: usize, value: [u8; 16]) {
+        self.dmem[address..address + 16].copy_from_slice(&value)
     }
     #[inline(always)]
     fn data(&self, address: u32) -> u8 {

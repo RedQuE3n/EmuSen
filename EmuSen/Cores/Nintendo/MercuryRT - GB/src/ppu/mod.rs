@@ -1,5 +1,8 @@
 //! C#'s `Ppu/`: the LCD controller's registers, mode machine and colour palettes. See Mercury_Ppu.md and Mercury_Cgb.md §2.
 
+pub mod render;
+pub mod timing;
+
 use crate::Skip;
 use crate::state::{State, StateReader, StateResult, StateWriter};
 
@@ -136,7 +139,7 @@ impl Ppu {
         self.frame_rgba.fill(0xFF);
     }
 
-    fn mode_i32(&self) -> i32 {
+    pub(crate) fn mode_i32(&self) -> i32 {
         self.mode_raw.unwrap_or(self.mode as i32)
     }
 }

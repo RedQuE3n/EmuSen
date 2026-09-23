@@ -14,6 +14,19 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
         private static readonly delegate* unmanaged<nint, byte*, nuint, long> SaveState = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Export("mercury_machine_save_state");
         private static readonly delegate* unmanaged<nint, byte*, nuint, long> LayoutOf = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Export("mercury_machine_state_layout");
 
+        private static readonly delegate* unmanaged<nint, uint*, int> RunFrameOf = (delegate* unmanaged<nint, uint*, int>)MercuryNative.Export("mercury_machine_run_frame");
+        private static readonly delegate* unmanaged<nint, int> StepOf = (delegate* unmanaged<nint, int>)MercuryNative.Export("mercury_machine_step");
+        private static readonly delegate* unmanaged<nint, uint, void> SetButtonsOf = (delegate* unmanaged<nint, uint, void>)MercuryNative.Export("mercury_machine_set_buttons");
+        private static readonly delegate* unmanaged<nint, uint, void> SetOptionsOf = (delegate* unmanaged<nint, uint, void>)MercuryNative.Export("mercury_machine_set_options");
+        private static readonly delegate* unmanaged<nint, uint, void> SetMutesOf = (delegate* unmanaged<nint, uint, void>)MercuryNative.Export("mercury_machine_set_mutes");
+        private static readonly delegate* unmanaged<nint, double, double, void> SetSampleRateOf = (delegate* unmanaged<nint, double, double, void>)MercuryNative.Export("mercury_machine_set_sample_rate");
+        private static readonly delegate* unmanaged<nint, byte*, nuint, long> FrameOf = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Export("mercury_machine_frame");
+        private static readonly delegate* unmanaged<nint, long> AudioBufferedOf = (delegate* unmanaged<nint, long>)MercuryNative.Export("mercury_machine_audio_buffered");
+        private static readonly delegate* unmanaged<nint, short*, nuint, long, long> DrainOf = (delegate* unmanaged<nint, short*, nuint, long, long>)MercuryNative.Export("mercury_machine_drain_audio");
+        private static readonly delegate* unmanaged<nint, byte*, nuint, long> SerialOf = (delegate* unmanaged<nint, byte*, nuint, long>)MercuryNative.Export("mercury_machine_serial");
+
+        public const int FrameBytes = 160 * 144 * 4;
+
         private nint _handle;
 
         public static bool Available => New != null;
@@ -30,6 +43,61 @@ namespace EmuSen.Cores.Nintendo.MercuryRT
                 _handle = New(image, (nuint)rom.Length, text, path is null ? -1 : path.Length, &status);
             }
             if (_handle == 0) throw status == -10 ? new NotSupportedException($"Cartridge type ${rom[0x147]:X2} is not implemented - see Mercury_Memory.md §4.") : new InvalidDataException($"MercuryRT refused the image: {Describe(status)}.");
+            SetSampleRate(44100);
+        }
+
+        // C#'s Apu.SetSampleRate, integer division and Math.Pow both evaluated here - see Mercury_Native.md §3.3.
+        public void SetSampleRate(int sampleRate)
+        {
+            double cyclesPerSample = 4194304 / sampleRate;
+            SetSampleRateOf(Handle, cyclesPerSample, Math.Pow(EmuSen.Cores.Nintendo.Mercury.Audio.Apu.HighPassSeed, cyclesPerSample));
+        }
+
+        // A frame, or the C# core's exception for an opcode no SM83 has.
+        public void RunFrame()
+        {
+            uint detail = 0;
+            int status = RunFrameOf(Handle, &detail);
+            if (status == -20) throw IllegalOpcode(detail);
+            if (status != 0) throw new InvalidOperationException($"MercuryRT could not run: {Describe(status)}.");
+        }
+
+        // One instruction with the frame loop's acknowledge and stall; the T-cycles, or -20 for an illegal opcode.
+        public int Step() => StepOf(Handle);
+
+        public static NotSupportedException IllegalOpcode(uint detail) =>
+            new($"Opcode ${detail >> 16:X2} at ${detail & 0xFFFF:X4} is not a real SM83 instruction - see Mercury_Cpu.md §6.1.");
+
+        // Bit order right, left, up, down, A, B, select, start.
+        public void SetButtons(uint mask) => SetButtonsOf(Handle, mask);
+
+        public void SetOptions(bool skipRendering) => SetOptionsOf(Handle, skipRendering ? 1u : 0u);
+
+        public void SetMutes(uint mask) => SetMutesOf(Handle, mask);
+
+        public void CopyFrame(byte[] into)
+        {
+            fixed (byte* data = into) FrameOf(Handle, data, (nuint)into.Length);
+        }
+
+        public int BufferedSamples => (int)AudioBufferedOf(Handle);
+
+        public short[] DrainAudio(int maxFrames)
+        {
+            int wanted = (int)Math.Min((long)maxFrames * 2, BufferedSamples);
+            wanted -= wanted & 1;
+            if (wanted <= 0) return Array.Empty<short>();
+            var samples = new short[wanted];
+            fixed (short* data = samples) DrainOf(Handle, data, (nuint)samples.Length, maxFrames);
+            return samples;
+        }
+
+        public byte[] SerialLog()
+        {
+            long n = SerialOf(Handle, null, 0);
+            var log = new byte[n];
+            fixed (byte* data = log) SerialOf(Handle, data, (nuint)log.Length);
+            return log;
         }
 
         // A failed load leaves the machine as it was.

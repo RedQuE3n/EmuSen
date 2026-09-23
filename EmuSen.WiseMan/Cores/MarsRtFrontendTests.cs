@@ -321,6 +321,90 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(statesApart > 60 && picturesApart > 60, $"the patches changed {statesApart} states and {picturesApart} pictures of 80, so the comparison tested little");
         }
 
+        // The phases are the frame's own: a frame not presented reports no presentation, and none reports more than the frame took - see Mars_Native.md §6.6.2.
+        [Fact]
+        public void MarsRT_reports_the_phases_of_the_frame_just_run()
+        {
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            string rom = Rom(SyntheticN64System.Build(rsp: true));
+            using var core = new MarsRtCore(batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true, SkipRendering = false };
+            var profiler = Assert.IsAssignableFrom<IFrameProfiler>(core);
+            string[] names = { "machine", "machine/rdp-wait", "present", "present/rdp-wait", "present/walk-join" };
+            Assert.Equal(names, profiler.LastFramePhases.Select(p => p.Name));
+            core.LoadRom(rom);
+
+            var clock = new System.Diagnostics.Stopwatch();
+            double slow = 0, fast = 0;
+            int skipped = 0, presented = 0;
+            for (int frame = 1; frame <= 150; frame++)
+            {
+                bool skip = frame % 5 == 0;
+                core.SkipRendering = skip;
+                core.IdleSkip = frame % 5 != 4;
+                clock.Restart();
+                core.RunFrame();
+                double wall = clock.Elapsed.TotalMilliseconds;
+                var phases = profiler.LastFramePhases.ToDictionary(p => p.Name, p => p.Milliseconds);
+
+                Assert.Equal(names, profiler.LastFramePhases.Select(p => p.Name));
+                Assert.All(phases.Values, ms => Assert.True(ms >= 0));
+                Assert.True(phases["machine"] > 0, $"frame {frame}: the machine took no time");
+                Assert.True(phases["machine"] + phases["present"] <= wall, $"frame {frame}: {phases["machine"]:F3} + {phases["present"]:F3} ms reported of a frame that took {wall:F3}");
+                Assert.True(phases["machine/rdp-wait"] <= phases["machine"] && phases["present/rdp-wait"] + phases["present/walk-join"] <= phases["present"], $"frame {frame}: a phase is longer than its parent: {string.Join(", ", phases.Select(p => $"{p.Key} {p.Value:F4}"))}");
+                if (skip)
+                {
+                    Assert.True(phases["present"] == 0 && phases["present/rdp-wait"] == 0 && phases["present/walk-join"] == 0, $"frame {frame}: a frame not presented reported {phases["present"]:F3} ms of presentation");
+                    fast += phases["machine"];
+                    skipped++;
+                }
+                else
+                {
+                    Assert.True(phases["present"] > 0, $"frame {frame}: a presented frame reported no presentation: {string.Join(", ", phases.Select(p => $"{p.Key} {p.Value:F4}"))}");
+                    presented++;
+                }
+                if (frame % 5 == 4) slow += phases["machine"];
+            }
+
+            output.WriteLine($"{presented} frames presented and {skipped} not; the machine {slow / skipped:F3} ms a frame with the idle loop run instruction by instruction and {fast / skipped:F3} ms the frame after it");
+            Assert.True(slow > 2 * fast, "the frames with the idle loop run were not slow enough to catch a report of the frame before");
+        }
+
+        // The dashboard's peek is the undrained queue, oldest first, and leaves it for the drain, on both engines - see Mars_Native.md §6.6.2.
+        [Fact]
+        public void The_audio_peek_is_what_Mars_s_peek_is_and_the_drain_still_takes_it()
+        {
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            string rom = Rom(SyntheticN64System.Build(rsp: true));
+            MarsCore oracle = MarsRtTests.Oracle();
+            using MarsRtCore twin = MarsRtTests.Twin();
+            oracle.LoadRom(rom);
+            twin.LoadRom(rom);
+            var want = new EmuSen.Cores.Nintendo.Mars.Debug.MarsDebugTarget(oracle);
+            var got = new MarsRtDebugTarget(twin);
+
+            long peeked = 0, drained = 0;
+            for (int frame = 1; frame <= 90; frame++)
+            {
+                oracle.RunFrame();
+                twin.RunFrame();
+                var (a, rateA) = want.GetAudioSamples();
+                var (b, rateB) = got.GetAudioSamples();
+                Assert.Equal(rateA, rateB);
+                Assert.True(a.AsSpan().SequenceEqual(b), $"frame {frame}: Mars peeked {a.Length} samples and MarsRT {b.Length}, differing from {a.AsSpan().CommonPrefixLength(b)}");
+                Assert.True(b.AsSpan().SequenceEqual(got.GetAudioSamples().Samples), $"frame {frame}: a second peek saw something else");
+                peeked += b.Length;
+                if (frame % 4 != 0) continue;
+
+                short[] fromMars = oracle.DequeueAudioSamples(int.MaxValue), fromTwin = twin.DequeueAudioSamples(int.MaxValue);
+                Assert.True(fromMars.AsSpan().SequenceEqual(a) && fromTwin.AsSpan().SequenceEqual(b), $"frame {frame}: the drain took {fromTwin.Length} samples after a peek of {b.Length}");
+                Assert.Empty(got.GetAudioSamples().Samples);
+                drained += fromTwin.Length;
+            }
+
+            output.WriteLine($"{peeked} samples peeked and {drained} drained over 90 frames, identical to Mars's");
+            Assert.True(drained > 1000, $"only {drained} samples were drained, so the peek compared little");
+        }
+
         // The one offset in a stretch of the image where a big-endian word stands.
         private static int OnlyWord(byte[] image, uint word, int from, int length)
         {

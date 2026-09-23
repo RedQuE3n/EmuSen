@@ -1,6 +1,7 @@
 //! The VI's scan-out: C#'s `Vi.Scan` then `MarsCore.Compose`, at once or deferred to a presenter thread, at one or at the multiple the display
 //! processor drew beside the machine's picture, walked on the processor or on the device. See Mars_Native.md §5.4, §5.6 and §6.4.
 
+mod bands;
 mod filters;
 mod presenter;
 #[cfg(test)]
@@ -14,6 +15,8 @@ use crate::memory::dp::DpInterface;
 use crate::memory::dp_threads::site;
 use crate::rdp::gpu::{MAX_SPANS, Pictures, SCAN_DITHER, SCAN_DIVOT, SCAN_GAMMA, SCAN_RESAMPLE, SCAN_WIDE, ScanParameters};
 use crate::vi::Vi;
+pub use bands::default_bands;
+use bands::Bands;
 use presenter::{Presenter, Work};
 use walker::Walker;
 
@@ -54,6 +57,16 @@ pub struct Scanout {
     pub repeated_scans: i64,
     /// `ScanJob.Repeats` counted: deferred captures that repeated the last, walked or not.
     pub repeated_captures: i64,
+    /// How many bands a deferred walk is split into; zero takes `default_bands` (Mars_Native.md §6.11).
+    pub bands: usize,
+    /// A test's hold on one band of the next deferred walks.
+    #[cfg(test)]
+    pub hold_band: bands::Hold,
+    /// The deferred jobs joined, and the presenter's time over them.
+    pub joined: i64,
+    pub presenter_nanos: i64,
+    /// The deferred walks joined that ran in more than one band.
+    pub banded_walks: i64,
     /// `Vi._raster` and the raster at the multiple: four bytes a pixel, the fourth coverage, kept between scans and across a load, as C# keeps them.
     rasters: Rasters,
     /// `Vi.Average`: how many pixels each way of the multiple's raster are averaged into one of the picture's (Mars_Video.md §2.10).
@@ -104,6 +117,9 @@ impl Scanout {
     pub fn join(&mut self) -> bool {
         let Some(work) = self.presenter.as_mut().and_then(Presenter::take) else { return false };
         let work = *work;
+        self.joined += 1;
+        self.presenter_nanos += work.nanos;
+        self.banded_walks += (work.walked_in > 1) as i64;
         if let Some(fault) = work.fault {
             panic!("the deferred scan-out failed: {fault}");
         }
@@ -114,6 +130,11 @@ impl Scanout {
         self.pending = std::mem::replace(&mut self.frame, work.frame);
         (self.width, self.height, self.row_repeat) = work.shown;
         true
+    }
+
+    /// The joins that waited for the presenter, and the nanoseconds they waited (Mars_Native.md §6.11).
+    pub fn presenter_waits(&self) -> (i64, i64) {
+        self.presenter.as_ref().map_or((0, 0), |p| (p.waits, p.waited_nanos))
     }
 
     /// True while a deferred walk is out.
@@ -378,7 +399,7 @@ pub fn present_now(bus: &mut MemoryBus, out: &mut Scanout) -> Presented {
             let shadow = &bus.dp.multiple.0;
             let scaled = (job.scale > 1).then(|| View::whole(&shadow.rdram, &shadow.hidden));
             let pictures = shadow.gpu.as_ref().map(|g| g.pictures());
-            out.shown_from_device = walk(&mut out.walker, &mut out.rasters, &job, view, scaled, out.capture.device_scanned, out.device_raster, pictures.as_deref());
+            out.shown_from_device = walk(&mut out.walker, None, &mut out.rasters, &job, view, scaled, out.capture.device_scanned, out.device_raster, pictures.as_deref());
             true
         }
         None => false,
@@ -454,15 +475,20 @@ pub fn present_deferred(bus: &mut MemoryBus, out: &mut Scanout) -> Presented {
         pictures: bus.dp.multiple.gpu.as_ref().map(|g| g.pictures()),
         shown: (0, 0, 0),
         fault: None,
+        nanos: 0,
+        walked_in: 0,
+        bands: if out.bands == 0 { default_bands() } else { out.bands },
+        #[cfg(test)]
+        hold: out.hold_band.clone(),
     };
     out.presenter.get_or_insert_with(Presenter::start).submit(Box::new(work));
     Presented { walked: job.is_some(), replaced }
 }
 
 /// `Vi.Walk`'s head: the raster at the multiple made, then the device's picture written into it, or the device's averaged raster shown as it is,
-/// or the walk on the processor; returns `_shownFromDevice`.
+/// or the walk on the processor, in bands when a presenter's helpers are given; returns `_shownFromDevice`.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn walk(walker: &mut Walker, rasters: &mut Rasters, job: &Job, view: View, scaled: Option<View>, device_scanned: bool, device_raster: bool, pictures: Option<&Pictures>) -> bool {
+fn walk(walker: &mut Walker, bands: Option<(&mut Bands, usize, Hold)>, rasters: &mut Rasters, job: &Job, view: View, scaled: Option<View>, device_scanned: bool, device_raster: bool, pictures: Option<&Pictures>) -> bool {
     let scale = job.scale;
     rasters.output_scale = scale;
     let raster_width = RASTER_WIDTH as i32 * scale;
@@ -475,9 +501,21 @@ pub(super) fn walk(walker: &mut Walker, rasters: &mut Rasters, job: &Job, view: 
         pictures.expect("a device scanned").scanned(|words| write_device_picture(&picture, raster, raster_width, words));
         return false;
     }
-    walker.walk(job, view, scaled, rasters);
+    match bands {
+        #[cfg(test)]
+        Some((pool, count, hold)) => pool.walk(walker, count, job, view, scaled, rasters, hold),
+        #[cfg(not(test))]
+        Some((pool, count, _)) => pool.walk(walker, count, job, view, scaled, rasters),
+        None => walker.walk(job, view, scaled, rasters),
+    }
     false
 }
+
+/// A test's hold on a band, or nothing outside tests.
+#[cfg(test)]
+pub(super) type Hold = bands::Hold;
+#[cfg(not(test))]
+pub(super) type Hold = ();
 
 /// `Vi.WriteDevicePicture`: the device's words into the raster as the walk writes them: a shown pixel whole, a dark one's colour cleared and its coverage kept.
 fn write_device_picture(picture: &Picture, raster: &mut [u8], raster_width: i32, words: &[u32]) {

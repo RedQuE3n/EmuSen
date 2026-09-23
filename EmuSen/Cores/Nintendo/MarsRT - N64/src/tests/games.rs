@@ -53,7 +53,7 @@ impl Run {
             machine.present_now(&mut scanout);
         }
         if mode.observed {
-            arm_everything(&mut machine);
+            arm_everything(&mut machine, hot_page(rom));
         }
         Run { machine, scanout }
     }
@@ -101,15 +101,26 @@ pub(crate) fn drive(m: &mut Machine, frame: u64) {
     m.press(0, 0x0004, -c >= 0.5);
 }
 
-/// Every table armed, none of it able to halt a game: a breakpoint at an address no game runs, a watch and a data breakpoint over a
-/// busy stretch of RDRAM (the stop after each such store is taken and resumed, as the host resumes when the registry says no), a stop
-/// after every interrupt, coverage on both processors, the profiler, and a depth guard no game reaches.
-fn arm_everything(m: &mut Machine) {
+/// The 4 KB page of RDRAM each game's state writes most (measured over twenty frames: 17, 44 and 62 thousand bytes a frame), so
+/// that the watch and the data breakpoint below see stores every frame.
+pub(crate) fn hot_page(rom: &str) -> u32 {
+    match rom {
+        "sm64.z64" => 0x20_1000,
+        "oot.z64" => 0x11_C000,
+        _ => 0x3A_9000,
+    }
+}
+
+/// Every table armed, none of it able to halt a game: a breakpoint at an address no game runs, a watch over the game's busiest page
+/// of RDRAM and a data breakpoint over its first 256 bytes (the stop after each such store is taken and resumed, as the host resumes
+/// when the registry says no), a stop after every interrupt, coverage on both processors, the profiler, and a depth guard no game
+/// reaches.
+fn arm_everything(m: &mut Machine, page: u32) {
     m.cpu.hooks.configure(true, true, true, false, true, true);
     *m.bus.sp.trace = Some(Box::new(Trace::new()));
     m.cpu.hooks.breakpoints = vec![(0, 0)];
-    m.cpu.hooks.watch_ranges = vec![Range { space: space::RDRAM, start: 0x10_0000, end: 0x10_0FFF }];
-    m.cpu.hooks.break_ranges = vec![Range { space: space::RDRAM, start: 0x10_0000, end: 0x10_00FF }];
+    m.cpu.hooks.watch_ranges = vec![Range { space: space::RDRAM, start: page, end: page + 0xFFF }];
+    m.cpu.hooks.break_ranges = vec![Range { space: space::RDRAM, start: page, end: page + 0xFF }];
     m.cpu.hooks.depth_guard = 100_000;
 }
 

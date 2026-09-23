@@ -115,13 +115,15 @@ namespace EmuSen.WiseMan.Cores
                     core.LoadRom(game.Rom);
                     core.LoadState(game.State);
                 }
+                // The page of RDRAM the game's state writes most, so the watch logs and the data breakpoint stops every frame; the registry says no to each stop, since no byte is 256.
+                int page = romName switch { "sm64.z64" => 0x0020_1000, "oot.z64" => 0x0011_C000, _ => 0x003A_9000 };
                 var target = new MarsRtDebugTarget(armed);
                 armed.Breakpoints.AddBreakpoint(0);
-                armed.Breakpoints.AddDataBreakpoint("RDRAM", 0x0010_0000, 0x0010_00FF, value: 256, onRead: false, changedOnly: false, condition: null);
+                armed.Breakpoints.AddDataBreakpoint("RDRAM", page, page + 0xFF, value: 256, onRead: false, changedOnly: false, condition: null);
                 armed.Breakpoints.AddForbidRange(0x0040_0000, 0x0040_0FFF);
                 armed.Breakpoints.ArmRunToInterrupt(CallFrameKind.Nmi);
                 armed.Breakpoints.ArmDepthGuard(100_000);
-                int watch = armed.Watches.AddWatch("RDRAM", 0x0010_0000, 0x1000);
+                int watch = armed.Watches.AddWatch("RDRAM", page, 0x1000);
                 armed.Coverage.Arm();
                 armed.RspCoverage.Arm();
                 armed.CallStack.ArmProfiler();
@@ -140,6 +142,8 @@ namespace EmuSen.WiseMan.Cores
 
                 Assert.True(armed.Coverage.InstructionsRecorded > 0 && armed.CallStack.ProfiledInstructions > 0);
                 Assert.Equal(armed.CallStack.ProfiledInstructions, armed.Coverage.InstructionsRecorded);
+                Assert.True(armed.Watches.GetEventCounts(watch).Total > 0, $"{romName}: the watch saw no store");
+                Assert.True(armed.Breakpoints.GetDataBreakpoints()[0].HitCount == 0, $"{romName}: the data breakpoint counted a hit");
                 _output.WriteLine($"{romName} {(threaded ? "four workers deferred" : "unthreaded")}: {frames} frames identical; {armed.Coverage.InstructionsRecorded} instructions recorded, {armed.RspCoverage.InstructionsRecorded} on the RSP, {armed.Watches.GetEventCounts(watch).Total} stores watched, depth {armed.CallStack.Depth}, {armed.CallStack.UnmatchedReturns} unmatched returns, {armed.Coverage.EntryPointCount} entry points; {string.Join(' ', target.DebugCpus.Select(c => c.Name))}");
             }
         }

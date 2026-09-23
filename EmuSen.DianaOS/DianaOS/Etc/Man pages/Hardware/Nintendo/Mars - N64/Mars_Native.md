@@ -2764,7 +2764,422 @@ exact to the frame.
 ### 6.8 What this plan does not cover
 
 - Anything the recompiler could still gain (§5.8.9): the processor beside a block, the coprocessor's calls, chaining.
-  Stage A says whether any of it is needed on the device that matters.
+  Stage A says whether any of it is needed on the device that matters. *§6.9 measured where the frame goes and ranks
+  what is left with a ceiling each: the processor's vector unit is first by a factor of two and a half, the processor
+  beside a block second, and the presenter's join fourth.*
 - The C# core's own remaining costs, which stop mattering once it is not what a player runs.
 - A second 3D core. `EmuSen_Stack.md`'s rule says its language; nothing here says its design, and it should not be
   started until G is decided, so that the lessons of this port are the ones it starts from.
+
+#### 6.9 Where a MarsRT frame goes (measured 2026-09-23)
+
+§5.6.8 left one sentence open — "how the remaining 6.0 ms divides was not measured" — and §5.8.8 bounded only the
+entry's fifth of the Dam's thread. §6.1 then found the handheld bound where the desktop is, on the emulation thread,
+and named what is left there as "§5.8.9's list, the interpreter's own cost and the processor's" without a number for
+any of them. This section is those numbers: the emulation thread of a production frame, sampled and divided into the
+machine's components, for the three gameplay states, so that the levers left can be ranked by what each could buy at
+most before any is built.
+
+**The method.** An interrupt sampler of MarsRT's own (`rtsample.py`, kept with the speed tooling outside the
+repository in `~/.cache/emusen/probe/mars-speed/rt-tools/`, with a README that repeats the run in two lines). It
+spawns one of the crate's examples, waits a second for the load and the first frames, and then, about once a
+millisecond, stops the emulation thread with `PTRACE_INTERRUPT`, reads its instruction pointer, and resumes it. An
+address inside the example is attributed through the binary's own symbol table and `eu-addr2line`'s inline chain, so
+that a function the compiler inlined is named by its innermost frame — `set_element` inside `vector_op`, `tick`
+inside `decoded::run` — and a sample is grouped by the innermost frame that belongs to a component. An address in the
+C library is attributed through the library's debuginfo, and, since a leaf such as `memcmp` or a system call keeps no
+frame, the word at the stack pointer is read as its return address and names the caller: this is how the
+comparison's `memcmp` is the dispatcher's and a `sched_yield` is the presenter's or a worker's. A compiled block's
+address is attributed through the recompiler's perf map, by block and no finer. The runs are production's shape,
+`examples/threads <rom> <state> 600 split 4 blocks` — four rasteriser workers, deferred presentation, tier 2 — twice
+for each game, and the processor's own view, `examples/frames … 600 blocks` — one thread, no scan — once, plus two
+runs with every thread stopped in turn: GoldenEye's workers, and Super Mario 64's six threads. The samples: 7,369 and 7,371 of the Dam's thread, 3,198 and 3,166
+of Ocarina of Time's, 2,539 and 2,456 of Super Mario 64's, and 12,070, 5,266 and 5,120 on one thread. A row of a
+percent is therefore twenty-five to seventy samples, and the standard error of the largest rows is half a point on
+the Dam and a point on Super Mario 64; the two runs of each game agree to within that, and both are printed so that
+the reader can see it rather than take it. The milliseconds are the shares multiplied by an unsampled run's frame,
+taken in the same batch: 14.501, 6.778 and 5.801 ms threaded, 22.659, 10.661 and 10.396 on one thread. The six were
+run twice more after the samples, on 2026-09-23 as another agent's test suite was finishing on the machine: 14.47 and
+14.74, 6.84 and 7.84, 5.79 and 5.80 threaded; 22.32 and 22.94, 10.61 and 10.82, 10.40 and 10.41 on one thread. All but
+Ocarina of Time's higher threaded run, taken first while the load was still falling, are within two per cent of the
+batch's, and the batch's are the ones used.
+
+**What the stop costs.** The sampled runs' own frames were 14.667 and 14.668 ms on the Dam, 7.229 and 7.185 on
+Ocarina of Time and 6.111 and 5.962 on Super Mario 64 — one, six to seven and three to five per cent above the
+unsampled frame. A stop costs about the same however long the frame is, so the light games pay more of it per frame, and the
+first game's two runs agreeing to a microsecond says the machine was otherwise idle.
+
+**What the attribution cannot do.** A sample inside the binary carries no caller, so a handler the compiled code calls
+and the same handler a decoded block calls are one row; the split between them is bounded below from the counters
+instead. A compiled block is a name and nothing inside it. A cache miss is charged to the instruction that waited for
+it, not to whoever evicted the line — which is what an instruction-pointer sample measures, and is also the right
+charge for a lever's ceiling, since the lever removes the waiter. The presenter's own thread was not sampled in the
+main threaded runs, only its join on the emulation thread; one all-threads run of Super Mario 64 samples it. And the frame is the desktop's, with its 32 MB of L3 and
+its idle cores: §6.1's device halves the cache, and the shares there are not measured.
+
+**GoldenEye, the Dam** — the game that matters, at 90 per cent of its console on the device (§6.1). The emulation
+thread, two runs, four workers, deferred, tier 2:
+
+| component | run 1 % | ms | run 2 % | ms |
+| --- | ---: | ---: | ---: | ---: |
+| the interpreter: step, cop0, the rest of `Cpu` | 0.5 | 0.07 | 0.4 | 0.06 |
+| compiled blocks: the code itself | 0.9 | 0.13 | 0.9 | 0.13 |
+| decoded blocks: the loop | 7.0 | 1.02 | 6.9 | 1.00 |
+| decoded blocks: the handlers | 7.6 | 1.11 | 7.5 | 1.09 |
+| the dispatcher: lookup, shaping, the entry | 5.5 | 0.80 | 5.3 | 0.78 |
+| the dispatcher: the entry comparison (`memcmp`) | 2.1 | 0.31 | 2.2 | 0.33 |
+| RSP: the vector unit | 36.4 | 5.28 | 36.0 | 5.23 |
+| RSP: the scalar unit and its loads and stores | 7.0 | 1.01 | 7.1 | 1.03 |
+| RSP: decode and dispatch | 11.2 | 1.62 | 11.4 | 1.65 |
+| RSP: the lock-step (`sp_step`, `tick`, `is_event`, `run`) | 5.6 | 0.81 | 5.8 | 0.85 |
+| RSP: events (break, DMA, status) | 0.6 | 0.09 | 0.7 | 0.11 |
+| CPU: the coprocessor (software float, moves, loads) | 3.7 | 0.53 | 3.5 | 0.50 |
+| CPU: the TLB (`translate`) | 1.4 | 0.20 | 1.3 | 0.19 |
+| CPU: the idle loop | 0.3 | 0.04 | 0.3 | 0.05 |
+| RDP on this thread: marks, ranges, publish, shadow, `Take` | 3.7 | 0.54 | 3.7 | 0.54 |
+| scan-out on this thread: prepare and the capture | 0.1 | 0.01 | 0.2 | 0.03 |
+| scan-out on this thread: the presenter's join | 4.3 | 0.62 | 4.3 | 0.63 |
+| bus and devices | 1.1 | 0.15 | 1.0 | 0.15 |
+| the frame loop (`Machine::run_frame`) | 0.4 | 0.06 | 0.4 | 0.05 |
+| other (allocation, the C library, unattributed) | 0.7 | 0.10 | 0.8 | 0.12 |
+| **the frame** | 100 | 14.50 | 100 | 14.50 |
+| samples | 7369 |  | 7371 |  |
+
+*What the table says.*
+
+- **The signal processor is 61 per cent of the frame, 8.8 ms.** Its vector unit alone is 5.25 ms, more than a third
+  of the frame; the decode and dispatch of its instructions 1.6; the scalar unit with its loads and stores 1.0; the
+  lock-step itself — `sp_step`, the tick, the `is_event` test and `run`'s loop — 0.8; its events 0.1. The Dam runs its
+  processor the whole frame: by the C# core's counter on these frames (`pacebench`, 1.03 to 1.16 million steps a
+  frame, and the two cores step it identically, §5.2) that is about 1.1 million steps, so the processor costs **8.0 ns
+  a step**, of which the lock-step's own overhead is 0.75 ns and the instruction the rest. §3.4 measured MarsRT's
+  interpreter at 7.9 ns a step on random programs and the C# blocks at about 3; the game confirms the first number
+  and pays it on every step, since MarsRT compiles nothing for this processor.
+- **The vector unit's hottest frame is a two-byte store.** `set_element` — one element of one register written — is 11
+  per cent of the thread by itself, `element` 2.4, `set_acc` and `set_acc_low` 2, `clamp_signed` and `clamp_low` 2.
+  §3 ports the C# processor's *plain* path, which the specification writes element by element; the C# core runs
+  `Rsp.VectorSimd.cs`, the same arithmetic eight elements at a time, since `Mars_RspVector.md` §14. What the Dam's
+  vector unit does is scalar work on a vector, and the samples say so.
+- **The CPU is 30 per cent, 4.4 ms, and nearly all of it is the decoded tier.** The decoded blocks' loop is 1.0 ms and
+  their handlers 1.1; the dispatcher's lookup, shaping and entry 0.8 and its comparison 0.3; the coprocessor 0.5; the
+  TLB 0.2; the bus 0.15; compiled code 0.13; the interpreter proper, the idle loop and the frame loop 0.2 together.
+  §5.8.8 counted two per cent of the Dam's block instructions compiled, because nearly every block is entered beside
+  a running processor and §5.8.3 leaves those decoded; the profile is that count's price. The `lw` handler alone is
+  1.2 to 1.5 per cent and `sw` 0.9, `addiu`, `sll` and `or` half a per cent each: the handler call is the cost of an
+  instruction here, not the instruction.
+- **Threading left 1.2 ms on the thread.** The display processor's marks, ranges, extents, shadow and `Take` are
+  0.54 ms (`dp_take`, the words read from RDRAM into the ring, is 2.2 per cent by itself); the deferred presenter's
+  join 0.63; the scan's own prepare and capture 0.02. The thread waits for the workers 0.000 ms, as the counters
+  said in §5.6.8, and the rasteriser's own code does not appear on it.
+
+The top twenty-five symbols of the first run, by containing function, so the grouping can be checked against the raw
+count (a library symbol is followed by the caller the sampler read):
+
+```
+ 32.08%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_op
+ 21.16%  [threads] marsrt::cpu::blocks::decoded::run
+  7.27%  [threads] <marsrt::cpu::blocks::Blocks>::step
+  5.36%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::run
+  4.30%  [libc.so.6] sched_yield  <- [threads] take
+  3.49%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_load
+  2.20%  [threads] <marsrt::memory::bus::MemoryBus>::dp_take
+  2.14%  [libc.so.6] __memcmp_evex_movbe  <- [threads] equal_same_length<u8, u8>
+  2.09%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_store
+  1.45%  [threads] marsrt::cpu::blocks::ops::lw
+  1.22%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::add
+  1.11%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::compare
+  1.03%  [threads] <marsrt::cpu::Cpu>::execute_format
+  0.90%  [threads] marsrt::cpu::blocks::ops::sw
+  0.88%  [threads] <marsrt::memory::bus::MemoryBus>::read32
+  0.84%  [anon] ?
+  0.69%  [threads] marsrt::cpu::blocks::ops::addiu
+  0.69%  [threads] <marsrt::memory::bus::MemoryBus>::rsp_event
+  0.62%  [threads] <marsrt::cpu::Cpu>::load_cop1
+  0.62%  [threads] <marsrt::cpu::Cpu>::execute_cop1
+  0.52%  [threads] marsrt::cpu::blocks::ops::sll
+  0.49%  [threads] marsrt::cpu::blocks::ops::or
+  0.41%  [threads] <marsrt::cpu::Cpu>::run_idle
+  0.41%  [threads] <marsrt::machine::Machine>::run_frame
+  0.41%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::cop2
+```
+
+**Ocarina of Time**, the same shape, two runs:
+
+| component | run 1 % | ms | run 2 % | ms |
+| --- | ---: | ---: | ---: | ---: |
+| the interpreter: step, cop0, the rest of `Cpu` | 0.4 | 0.03 | 0.4 | 0.03 |
+| compiled blocks: the code itself | 4.0 | 0.27 | 4.0 | 0.27 |
+| decoded blocks: the loop | 3.9 | 0.26 | 3.7 | 0.25 |
+| decoded blocks: the handlers | 6.5 | 0.44 | 5.3 | 0.36 |
+| the dispatcher: lookup, shaping, the entry | 6.8 | 0.46 | 8.1 | 0.55 |
+| the dispatcher: the entry comparison (`memcmp`) | 2.4 | 0.17 | 1.7 | 0.12 |
+| RSP: the vector unit | 35.2 | 2.39 | 36.9 | 2.50 |
+| RSP: the scalar unit and its loads and stores | 6.2 | 0.42 | 5.2 | 0.35 |
+| RSP: decode and dispatch | 8.2 | 0.56 | 7.7 | 0.53 |
+| RSP: the lock-step (`sp_step`, `tick`, `is_event`, `run`) | 3.9 | 0.27 | 3.6 | 0.24 |
+| RSP: events (break, DMA, status) | 0.3 | 0.02 | 0.4 | 0.03 |
+| CPU: the coprocessor (software float, moves, loads) | 5.5 | 0.37 | 5.6 | 0.38 |
+| CPU: the TLB (`translate`) | 0.3 | 0.02 | 0.3 | 0.02 |
+| CPU: the idle loop | 0.3 | 0.02 | 0.6 | 0.04 |
+| RDP on this thread: marks, ranges, publish, shadow, `Take` | 3.0 | 0.20 | 2.5 | 0.17 |
+| scan-out on this thread: prepare and the capture | 0.2 | 0.01 | 0.1 | 0.01 |
+| scan-out on this thread: the presenter's join | 9.9 | 0.67 | 10.4 | 0.71 |
+| bus and devices | 1.5 | 0.10 | 1.8 | 0.12 |
+| the frame loop (`Machine::run_frame`) | 0.3 | 0.02 | 0.2 | 0.01 |
+| other (allocation, the C library, unattributed) | 1.1 | 0.07 | 1.3 | 0.09 |
+| **the frame** | 100 | 6.78 | 100 | 6.78 |
+| samples | 3198 |  | 3166 |  |
+
+- **The processor is 54 per cent, 3.65 ms**, at 8.6 ns a step over the C# counter's 0.42 to 0.43 million steps a
+  frame; its vector unit 2.4 ms, 36 per cent of the frame.
+- **The presenter's join is the second component, 10 per cent, 0.7 ms.** The emulation thread stands in
+  `Presenter::take`, spinning and then yielding, for the walk it handed over at the end of the frame before.
+  §5.4.4 measured that walk at 4.5 ms for this game on one thread, and a frame that runs shorter than the walk
+  before it — a field with no drawing — waits for the difference. §5.6.8 did not see this because it counted only the
+  display processor's wait sites, and the presenter's join is not one of them.
+- **The CPU is 32 per cent, 2.1 ms**, and here it is split: compiled code 0.27, the decoded tier 0.66 (a third of the
+  instructions, §5.8.8), the dispatcher 0.65 of which the comparison 0.15, the coprocessor 0.37, the bus 0.1. The
+  entry costs more than twice the compiled code it enters, which is `Mars_Recompiler.md` §9's finding in the other
+  core.
+
+```
+ 30.39%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_op
+ 11.32%  [threads] marsrt::cpu::blocks::decoded::run
+  9.94%  [libc.so.6] sched_yield  <- [threads] take
+  6.47%  [threads] <marsrt::cpu::blocks::Blocks>::step
+  5.72%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::run
+  4.88%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_load
+  2.44%  [libc.so.6] __memcmp_evex_movbe  <- [threads] equal_same_length<u8, u8>
+  1.91%  [threads] <marsrt::cpu::Cpu>::execute_format
+  1.56%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_store
+  1.56%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::add
+  1.53%  [threads] <marsrt::memory::bus::MemoryBus>::dp_take
+  1.00%  [threads] marsrt::cpu::blocks::compiled
+  0.94%  [threads] marsrt::cpu::blocks::ops::lw
+  0.94%  [threads] <marsrt::memory::bus::MemoryBus>::read32
+  0.81%  [threads] marsrt::cpu::blocks::ops::sw
+  0.75%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::fraction
+  0.69%  [threads] <marsrt::cpu::Cpu>::run_idle
+  0.63%  [threads] <marsrt::cpu::Cpu>::load_cop1
+  0.63%  [threads] <marsrt::cpu::Cpu>::execute_cop1
+  0.50%  [threads] marsrt::cpu::blocks::ops::cop1
+  0.50%  [threads] <marsrt::memory::bus::MemoryBus>::write32
+  0.50%  [threads] marsrt::cpu::blocks::ops::sll
+  0.47%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::compare
+  0.44%  [threads] <marsrt::memory::bus::MemoryBus>::rsp_event
+  0.44%  [threads] marsrt::cpu::blocks::ops::lbu
+```
+
+**Super Mario 64**, two runs:
+
+| component | run 1 % | ms | run 2 % | ms |
+| --- | ---: | ---: | ---: | ---: |
+| the interpreter: step, cop0, the rest of `Cpu` | 0.0 | 0.00 | 0.2 | 0.01 |
+| compiled blocks: the code itself | 3.2 | 0.18 | 4.0 | 0.23 |
+| decoded blocks: the loop | 1.9 | 0.11 | 1.9 | 0.11 |
+| decoded blocks: the handlers | 2.9 | 0.17 | 2.8 | 0.16 |
+| the dispatcher: lookup, shaping, the entry | 3.7 | 0.21 | 4.1 | 0.24 |
+| the dispatcher: the entry comparison (`memcmp`) | 1.6 | 0.10 | 1.2 | 0.07 |
+| RSP: the vector unit | 41.4 | 2.40 | 42.2 | 2.45 |
+| RSP: the scalar unit and its loads and stores | 5.9 | 0.34 | 5.7 | 0.33 |
+| RSP: decode and dispatch | 8.4 | 0.49 | 8.1 | 0.47 |
+| RSP: the lock-step (`sp_step`, `tick`, `is_event`, `run`) | 4.7 | 0.27 | 3.9 | 0.22 |
+| RSP: events (break, DMA, status) | 0.3 | 0.02 | 0.7 | 0.04 |
+| CPU: the coprocessor (software float, moves, loads) | 3.0 | 0.17 | 2.9 | 0.17 |
+| CPU: the TLB (`translate`) | 0.0 | 0.00 | 0.2 | 0.01 |
+| CPU: the idle loop | 0.3 | 0.02 | 0.7 | 0.04 |
+| RDP on this thread: marks, ranges, publish, shadow, `Take` | 2.8 | 0.16 | 2.2 | 0.13 |
+| RDP on this thread: waiting for the workers | 0.2 | 0.01 | 0.1 | 0.01 |
+| scan-out on this thread: prepare and the capture | 0.5 | 0.03 | 0.4 | 0.02 |
+| scan-out on this thread: the presenter's join | 16.9 | 0.98 | 17.1 | 0.99 |
+| bus and devices | 0.7 | 0.04 | 0.8 | 0.04 |
+| the frame loop (`Machine::run_frame`) | 0.2 | 0.01 | 0.1 | 0.01 |
+| other (allocation, the C library, unattributed) | 1.4 | 0.08 | 1.1 | 0.06 |
+| **the frame** | 100 | 5.80 | 100 | 5.80 |
+| samples | 2539 |  | 2456 |  |
+
+- **The processor is 60 per cent, 3.5 ms**, at 6.8 ns a step over 0.52 million; the vector unit 2.4 ms, 42 per
+  cent of the frame, the largest share it has in any of the three.
+- **The presenter's join is 17 per cent, 1.0 ms**, the largest thing on the thread after the processor. The
+  all-threads run below found the presenter busy 1.4 ms a frame on average, so the emulation thread waits for about
+  seventy per cent of the walk it handed over: the walk overlaps the next frame's emulation very little, though the
+  mean frame is four times as long as the mean walk. The per-frame times that would say which frames are short
+  enough to wait were not recorded, and the reason is not measured.
+- **The CPU is 18 per cent, 1.1 ms**: compiled code 0.21, the decoded tier 0.28, the dispatcher 0.31, the
+  coprocessor 0.17, the rest 0.1. There is little left to compile here; what the frame has left is the processor
+  and the join.
+
+```
+ 35.57%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_op
+ 16.94%  [libc.so.6] sched_yield  <- [threads] take
+ 10.75%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::run
+  5.16%  [threads] marsrt::cpu::blocks::decoded::run
+  4.06%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_load
+  3.51%  [threads] <marsrt::cpu::blocks::Blocks>::step
+  2.32%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::add
+  1.65%  [libc.so.6] __memcmp_evex_movbe  <- [threads] equal_same_length<u8, u8>
+  1.65%  [threads] <marsrt::memory::bus::MemoryBus>::dp_take
+  1.54%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::vector_store
+  1.26%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::compare
+  1.10%  [threads] <marsrt::rsp::Rsp<marsrt::memory::sp::Lent>>::reciprocate
+  0.95%  [threads] <marsrt::cpu::Cpu>::execute_format
+  0.63%  [threads] <marsrt::cpu::Cpu>::run_idle
+  0.55%  [anon] ?
+  0.51%  [threads] <marsrt::cpu::Cpu>::execute_cop1
+  0.51%  [threads] <marsrt::cpu::Cpu>::load_cop1
+  0.47%  [threads] marsrt::cpu::blocks::compiled
+  0.47%  [threads] marsrt::cpu::blocks::ops::sw
+  0.43%  [threads] <marsrt::memory::bus::MemoryBus>::read32
+  0.43%  [threads] <marsrt::memory::bus::MemoryBus>::rsp_event
+  0.39%  [threads] <marsrt::cpu::Cpu>::store_cop1
+  0.35%  [threads] <marsrt::memory::dp_threads::Threads>::wait_range
+  0.35%  [threads] threads::main
+  0.32%  [threads] marsrt::cpu::blocks::ops::sh
+```
+
+**The coprocessor and the TLB, and how much of each is compiled code's calls.** The rows are the buckets above; the
+split by caller is not observable (above), so it is bounded from §5.8.8's counters by supposing the calls follow the
+instructions:
+
+| ms a frame | GoldenEye | Ocarina of Time | Super Mario 64 |
+| --- | --- | --- | --- |
+| the coprocessor: `execute_format`, `execute_cop1`, the software float, its branch | 0.52 (3.6%) | 0.37 (5.6%) | 0.17 (2.9%) |
+| of which the loads and stores into it (`load_cop1`, `store_cop1`) | 0.11 | 0.07 | 0.04 |
+| the TLB: `translate`, `try_translate`, the mapped fetch | 0.20 (1.4%) | 0.02 | 0.01 |
+| block instructions run as compiled code (§5.8.8) | 2% | 66% | 70% |
+| so the coprocessor's calls from compiled code, if they follow the instructions | 0.01 | 0.25 | 0.12 |
+
+§5.8.9's "the coprocessor is a call" costs, then, a quarter of a millisecond in Ocarina of Time and a tenth in Super
+Mario 64, and the loads C#'s `Mars_Recompiler.md` §16 inlines and MarsRT does not are 0.04 to 0.11 ms. The TLB is a
+cost in GoldenEye alone, where the code is mapped, and there it is already blocks behind the TLB (§5.8, ported from
+`Mars_Recompiler.md` §17): the 0.2 ms is the loads and stores through it, which call the interpreter.
+
+**What threading left on the emulation thread**, in milliseconds, against what it took off:
+
+| ms a frame | GoldenEye | Ocarina of Time | Super Mario 64 |
+| --- | --- | --- | --- |
+| the display processor's marks, ranges, extents, shadow and `Take` | 0.54 | 0.18 | 0.15 |
+| the scan's prepare and capture | 0.02 | 0.01 | 0.03 |
+| the presenter's join | 0.63 | 0.69 | 0.99 |
+| **left on the thread** | **1.19** | **0.88** | **1.17** |
+| the rasteriser, on one thread (below) | 9.19 | 4.66 | 5.85 |
+| the walk and composition, on one thread (§5.4.4) | 3.16 | 4.48 | 2.85 |
+
+This is the number §5.6.8's retired prediction lacked: the subtraction assumed nothing was left, and 0.9 to 1.2 ms
+is, two thirds to five sixths of it the join. The marks and the shadow, which that section named as the suspects,
+are the smaller part.
+
+**The unthreaded frame**, once, for contrast — `examples/frames`, the rasteriser on the emulation thread, the
+picture not scanned:
+
+| component | GoldenEye % | ms | Ocarina of Time % | ms | Super Mario 64 % | ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| the interpreter: step, cop0, the rest of `Cpu` | 0.2 | 0.05 | 0.3 | 0.03 | 0.1 | 0.01 |
+| compiled blocks: the code itself | 0.1 | 0.01 | 2.7 | 0.29 | 1.3 | 0.13 |
+| decoded blocks: the loop | 4.7 | 1.05 | 2.7 | 0.29 | 1.3 | 0.13 |
+| decoded blocks: the handlers | 5.3 | 1.19 | 3.3 | 0.35 | 1.6 | 0.17 |
+| the dispatcher: lookup, shaping, the entry | 3.7 | 0.83 | 4.8 | 0.51 | 2.5 | 0.26 |
+| the dispatcher: the entry comparison (`memcmp`) | 1.2 | 0.27 | 1.5 | 0.16 | 0.4 | 0.04 |
+| RSP: the vector unit | 23.0 | 5.21 | 23.8 | 2.54 | 24.0 | 2.49 |
+| RSP: the scalar unit and its loads and stores | 4.4 | 0.99 | 3.6 | 0.39 | 2.8 | 0.29 |
+| RSP: decode and dispatch | 6.8 | 1.54 | 4.5 | 0.48 | 3.6 | 0.37 |
+| RSP: the lock-step (`sp_step`, `tick`, `is_event`, `run`) | 4.0 | 0.92 | 2.8 | 0.30 | 2.0 | 0.21 |
+| RSP: events (break, DMA, status) | 0.4 | 0.08 | 0.2 | 0.02 | 0.3 | 0.03 |
+| CPU: the coprocessor (software float, moves, loads) | 2.5 | 0.57 | 3.6 | 0.39 | 1.4 | 0.14 |
+| CPU: the TLB (`translate`) | 0.8 | 0.18 | 0.0 | 0.00 | 0.1 | 0.01 |
+| CPU: the idle loop | 0.3 | 0.06 | 0.1 | 0.01 | 0.5 | 0.05 |
+| RDP on this thread: marks, ranges, publish, shadow, `Take` | 1.0 | 0.22 | 0.8 | 0.09 | 0.5 | 0.05 |
+| RDP: the rasteriser (unthreaded shape only) | 40.6 | 9.19 | 43.7 | 4.66 | 56.3 | 5.85 |
+| bus and devices | 0.5 | 0.11 | 0.7 | 0.07 | 0.6 | 0.06 |
+| the frame loop (`Machine::run_frame`) | 0.3 | 0.06 | 0.2 | 0.02 | 0.1 | 0.01 |
+| other (allocation, the C library, unattributed) | 0.5 | 0.11 | 0.6 | 0.07 | 0.6 | 0.07 |
+| **the frame** | 100 | 22.66 | 100 | 10.66 | 100 | 10.40 |
+| samples | 12070 |  | 5266 |  | 5120 |  |
+
+The rasteriser is 41, 44 and 56 per cent of the one-thread frame; the split takes all of it off, at four workers,
+and the join and the marks are what it costs. The processor's milliseconds are the same in both shapes — 8.7
+against 8.8, 3.7 against 3.65, 3.4 against 3.5 — which is what they should be, since the processor does the same
+steps whatever thread the rasteriser is on, and it is the check that the sampler's milliseconds are a measurement
+and not an artefact of the shape sampled.
+
+**The workers**, from the GoldenEye run with the workers' and the compiler's threads stopped in turn (`w1`, its own
+frame 15.14 ms): each of the four rasteriser threads spends 20 per cent of the frame rasterising — 3.0 to 3.1 ms, against the
+counter's "first worker busy" 3.41 to 3.49 — 58 per cent spinning in `dp_threads::sleep` (400 rounds of fifty
+pauses before it parks) and 18 per cent parked in the futex; the compiler thread is parked 98 per cent of the time
+and compiles in the rest. The Dam's four workers are busy a fifth of the frame each, so the split has three times
+the rasteriser it needs here, and four cores spin for nine milliseconds a frame each waiting for words: nothing on
+the desktop, and a power-budget question on §6.1's device, where the workers share the package with the thread that
+is the bound. That run did not reach the presenter. A second, of Super Mario 64, where the join is largest, stopped all six
+threads 2,431 to 2,435 times each (`w2`, fifteen seconds): the emulation thread's shares were those of the two main
+runs within a point and a half; the presenter walked (`Walker::sample`, `walk`, `remembered`) and composed for 24 per
+cent of the frame, 1.4 ms, and was parked for the other 76; the workers were as the Dam's, parked or spinning for
+most of it.
+
+**The prediction for the processor's share, and its fate.** The agent that built the sampler and took these runs
+was stopped before writing them up, and no prediction of its survives in the results directory; this write-up
+cannot reproduce one it did not see, and a prediction stated after the tables are read is not a prediction. What
+the record allowed one to expect before the sample is nonetheless worth stating, because the sample tests it:
+§3.4 priced MarsRT's processor at 7.9 to 15 ns a step and the C# blocks at 3, and `Mars_Rsp.md` §13 and
+`Mars_Recompiler.md` §9 and `Mars_RspVector.md` §14 put the processor at 15 to 36 per cent of the C# thread *with* those blocks running 60 to
+90 per cent of its steps; so MarsRT, interpreting every step, should have had the processor as its largest component
+at roughly twice the C# share, and 8 ns times the step count should have given the milliseconds. Both hold: 54 to 61
+per cent against C#'s 15 to 36, and 6.8 to 8.6 ns a step against the bench's 7.9. It is recorded as a consistency
+check of §3.4's price against a game's step count, which is what it is, and not as a forecast retired.
+
+**The levers, ranked, with a ceiling each.** The ceiling is the frame if the component cost nothing — "at most",
+since no lever makes its component free — from the two-run means above. They are ranked by the milliseconds a
+frame they would free summed over the three games, except fastmem, whose ceiling is the whole of a row it is only a
+part of (below). The last column is what the C# history already measured for the same lever, where it did.
+
+| # | if this were free | the Dam, from 14.50 | Ocarina, from 6.78 | Mario, from 5.80 | priced by the C# history? |
+| --- | --- | --- | --- | --- | --- |
+| 1 | the vector unit (5.25, 2.44, 2.43 ms) | 9.3 | 4.3 | 3.4 | `Mars_RspVector.md` §14: the same arithmetic in host vectors bought C# 4, 19 and 22 per cent with the processor at 27 to 36 per cent of its thread; here the vector unit alone is 36 to 42, and the plain path it would be checked against is what MarsRT already runs. Not a recompiler lever, and not measured in Rust. |
+| 2 | the decoded tier (2.11, 0.66, 0.28) | 12.4 | 6.1 | 5.5 | §5.8.3 compiled the blocks entered beside a running processor and measured the Dam two per cent worse; the batch that would pay for it is priced at 0.3 ms and not built. Compiled code runs twice the decoded tier's instructions for 0.27 ms in Ocarina of Time, so the tier compiled at that rate would leave about 0.4 of the Dam's 2.1; the ceiling is the whole 2.1. |
+| 3 | the processor's decode and dispatch (1.64, 0.54, 0.48) | 12.9 | 6.2 | 5.3 | `Mars_Rsp.md` §11 to §12: straight lines compiled with the handlers folded bought C# a quarter to a third of its thread, and §11.2's two tiers made them cheap enough for the device; §3.4 says why a Rust interpreter at 8 ns loses to them at 3. Not built in Rust. |
+| 4 | the presenter's join (0.63, 0.69, 0.99) | 13.9 | 6.1 | 4.8 | Not priced for MarsRT: §5.6.8's counters could not see it. The C# core walks in four bands at 1.8 to 2.9 ms (§5.4.4) against MarsRT's one thread at 2.9 to 4.5, and a frame that is shorter than the walk before it waits; bands, a cheaper walk, or a second frame of latency would each take it, the last a play decision. |
+| 5 | the dispatcher, comparison included (1.11, 0.65, 0.31) | 13.4 | 6.1 | 5.5 | `Mars_Recompiler.md` §9 to §12: the entry is memory, and extension, density and chaining measured nothing in C#; §5.8.8 measured the comparison removed at 0.1 to 0.35 ms and two rewrites at nothing. |
+| 6 | the lock-step's own overhead (0.83, 0.26, 0.25) | 13.7 | 6.5 | 5.5 | §5.8.3's batch, 0.3 ms priced; `Mars_Rsp.md` §13's two routes, one slower and one a two per cent ceiling with an undo, neither kept. |
+| 7 | the coprocessor (0.52, 0.37, 0.17) | 14.0 | 6.4 | 5.6 | `Mars_Recompiler.md` §16 declined a host-float fast case — the inexact flag bit for bit — and inlined the two loads, which here are 0.04 to 0.11 ms; §5.8.9 leaves the call. |
+| 8 | the display processor's share of the thread (0.54, 0.18, 0.15) | 14.0 | 6.6 | 5.65 | `Mars_Performance.md` §28 priced C#'s sites; §5.6.8 said MarsRT's was not taken apart, and `dp_take` is the largest piece of it. |
+| 9 | the TLB (0.20, 0.02, 0.01) | 14.3 | 6.76 | 5.79 | `Mars_Recompiler.md` §17's mapped blocks are already ported; what is left is the loads through it. |
+| 10 | fastmem: every compiled load and store a host access (at most the compiled code's whole share: 0.13, 0.27, 0.21) | 14.4 | 6.5 | 5.6 | Not priced by the C# history, which could not take a page fault in managed code; priced here by the shares alone, below. |
+
+**The verdict on fastmem.** A host-mapped guest memory — RDRAM reserved at a fixed offset from a base so that a
+compiled load is one host instruction and a fault handler catches the rest — could serve only the loads and stores
+the compiler emits, and those live inside the "compiled blocks" row: 0.13, 0.27 and 0.21 ms a frame in all, the
+arithmetic, the branches and the entry's context included. The decoded tier's loads go through the interpreter's
+handler and would not change, and the Dam's compiled share is two per cent, so its ceiling there is a hundredth of a
+millisecond until §5.8.3's problem is solved. The inline fast case that fastmem would replace (§5.8.2) tests the
+segment, the bounds, the alignment and then **the page's mark** — one 64-bit load from the 2,048-entry table the
+threaded display processor keeps per 4 KB page, and a compare against zero (`emit.rs`, `direct`) — and takes the
+slow call when any fails. The mark is the protocol §5.6.1 rests on: a page the drain is writing is read only after an
+Acquire of `completed` past the word that writes it, and the mark is how a load knows to wait. A host mapping must
+either keep that test, in which case it removes the segment, bounds and alignment tests — a handful of register
+operations — and not the mark's load, which is the part that can miss, or replace it with page protection — `mprotect` of every marked page when its mark is set and again when it
+clears, a system call and a TLB shootdown across the five threads each time, at every draw batch — which would put
+on the thread a cost that is not on it today. So: fastmem's ceiling is under 0.3 ms a frame on every game, less
+than the presenter's join alone, its realistic value a fraction of that, and it carries the one change this page's
+threading cannot afford. It is ranked last and not recommended.
+
+**What is predicted, to be retired by measurement.** The first lever and the fourth are the ones this section says to
+build next — the second is §5.8.3's, measured a loss once and waiting on the batch, and the third is a compiler for
+the processor, `Mars_Rsp.md` §11's whole design over again — and the prediction for each is stated here so it can be wrong in writing: a vector unit in host vectors,
+exact against the plain path as §3 requires, takes the Dam from 14.5 to between 10 and 12 ms and the other two by
+1 to 1.5 ms each — the vector unit's share is not all arithmetic, and C#'s §14 did not make its unit free; and
+either bands or a deeper queue for the presenter take Super Mario 64 from 5.8 to about 5.0 and Ocarina of Time to
+about 6.2, with the Dam gaining half a millisecond. Held as §3.4 taught, since neither is measured in Rust.
+
+**What the numbers cannot say.**
+
+- The three states run with no input, as the examples run them (§5.8.8), and one state is not a sample of a game:
+  the Dam's compiled share under the WiseMan comparisons, where buttons are pressed, is thirty times this run's.
+- Nothing inside a compiled block: the perf map names the block, and whether its time is its loads, its arithmetic
+  or its entry is not in these samples. Item 10's ceiling is the whole row for that reason.
+- Which caller a shared handler was called from — the coprocessor's table above is a proportion, not a count.
+- The processor's step counts are the C# core's counter on the same frames; the two cores step the processor
+  identically (§5.2), so the count is MarsRT's, but MarsRT does not yet print it.
+- The presenter's own thread was sampled once, in one game, and not at the Dam or in Ocarina of Time.
+- The device. §6.1 found the handheld bound where the desktop is, with half the cache; the *order* of the shares
+  should carry over and their sizes need not, since a cache miss charged to `set_element` here is a larger miss
+  there. Repeating the batch on the device is the two lines the README gives, once its Python has `elfutils`.
+- Anything under half a per cent: those rows are ten to thirty samples.

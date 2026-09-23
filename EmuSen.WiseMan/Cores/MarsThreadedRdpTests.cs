@@ -548,6 +548,39 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(atOnce.Rdram, threaded.Rdram);
         }
 
+        // A primitive drawn alone after a split one that measured no level of detail assembles the raster order's fraction, not a processor's own - see Mars_Rdp.md §2.8.
+        [Fact]
+        public void A_primitive_drawn_alone_after_rows_that_measured_no_level_assembles_the_raster_orders_fraction()
+        {
+            var fraction = typeof(EmuSen.Cores.Nintendo.Mars.Rdp.Rdp).GetField("_lodFraction", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            int stale = 0, states = 0, measured = 0, seeds = 16;
+            for (uint seed = 0; seed < seeds; seed++)
+            {
+                // A scene drawn alone that measures the fraction, a split one that measures none, then one drawn alone, which assembles first.
+                ulong[] list =
+                [
+                    .. Scene(0x1234_5679u + seed, false, 32, true),
+                    .. Shaded(0x2468_1357u + seed, false, false, false, false),
+                    .. Shaded(0x1357_2468u + seed, true, true, true, false),
+                ];
+                MemoryBus atOnce = new(), split = new();
+                split.Dp.Threaded = true;
+                split.Dp.Workers = 2;
+                HandOver(atOnce, list);
+                HandOver(split, list);
+                split.Dp.Join();
+
+                Assert.Equal(atOnce.Rdram, split.Rdram);
+                int want = (int)fraction.GetValue(atOnce.Dp.Processor)!, got = (int)fraction.GetValue(split.Dp.Processor)!;
+                if (want != got) stale++;
+                if (want != 0) measured++;
+                if (!State(atOnce).AsSpan().SequenceEqual(State(split))) states++;
+            }
+
+            Assert.True(stale == 0 && states == 0, $"two processors: the fraction was stale for {stale} of {seeds} seeds, the state differed for {states}");
+            Assert.True(measured > 0, "no seed measured a fraction, so the case was not reached");
+        }
+
         // A one-cycle scene of shaded, depth-tested triangles over a full frame buffer; to the edge, their right edges cross a scissor as wide as the image - see Mars_Rdp.md §2.8.
         private static ulong[] Shaded(uint seed, bool toTheEdge, bool twoCycle = false, bool memoryAlphaFirst = false, bool gentle = false)
         {

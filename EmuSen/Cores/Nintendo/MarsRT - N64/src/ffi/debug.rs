@@ -32,7 +32,7 @@ pub unsafe extern "C" fn mars_debug_set(core: *mut Core, flags: u32, depth_targe
     hooks.depth_guard = depth_guard;
     let trace = &mut c.machine.bus.sp.trace;
     if on(flag::RSP_COVERAGE) != trace.is_some() {
-        **trace = on(flag::RSP_COVERAGE).then(Trace::new);
+        **trace = on(flag::RSP_COVERAGE).then(|| Box::new(Trace::new()));
     }
 }
 
@@ -145,7 +145,7 @@ pub unsafe extern "C" fn mars_debug_profile(core: *mut Core, out: *mut i64, len:
 pub unsafe extern "C" fn mars_debug_coverage(core: *mut Core, which: u32, out: *mut u8, len: usize, recorded: *mut i64) -> i64 {
     let Some(c) = (unsafe { core.as_mut() }) else { return STATUS_NULL as i64 };
     let (bits, count): (&mut [u8], &mut i64) = if which == 0 {
-        let crate::cpu::hooks::Hooks { coverage, covered, .. } = &mut *c.machine.cpu.hooks;
+        let crate::cpu::hooks::Hooks { coverage, covered, .. } = &mut **c.machine.cpu.hooks;
         let Some(bits) = coverage.as_deref_mut() else { return 0 };
         (bits, covered)
     } else {

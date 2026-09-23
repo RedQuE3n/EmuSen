@@ -75,19 +75,30 @@ impl Cpu {
         cpu
     }
 
-    /// `Step`: one instruction, or the exception it raised.
+    /// `Step`: one instruction, or the exception it raised; the plain step, with no debugger seam in it.
     #[inline(always)]
     pub fn step(&mut self, bus: &mut MemoryBus) {
+        self.step_in::<false>(bus);
+    }
+
+    /// The step the observed frame takes: the same instruction, with the debugger's seams compiled in (Mars_Native.md §6.5).
+    #[inline(always)]
+    pub fn step_hooked(&mut self, bus: &mut MemoryBus) {
+        self.step_in::<true>(bus);
+    }
+
+    #[inline(always)]
+    fn step_in<const HOOKED: bool>(&mut self, bus: &mut MemoryBus) {
         self.current_pc = self.pc;
         self.in_delay_slot = self.branch_pending;
-        if self.step_body(bus).is_err() {
+        if self.step_body::<HOOKED>(bus).is_err() {
             self.enter_exception();
             bus.tick(1);
         }
     }
 
     #[inline(always)]
-    fn step_body(&mut self, bus: &mut MemoryBus) -> Exec {
+    fn step_body<const HOOKED: bool>(&mut self, bus: &mut MemoryBus) -> Exec {
         let asserted = bus.mi.asserted();
         if self.run.recheck || asserted != self.run.asserted_seen {
             self.check_interrupts(asserted)?;
@@ -96,12 +107,16 @@ impl Cpu {
         self.branch_pending = false;
         self.pc = self.next_pc;
         self.next_pc = self.pc.wrapping_add(4);
-        self.execute(bus, instruction)?;
-        bus.tick(1 + self.extra_cycles as i64);
+        self.execute::<HOOKED>(bus, instruction)?;
+        if HOOKED {
+            bus.tick_traced(1 + self.extra_cycles as i64);
+        } else {
+            bus.tick(1 + self.extra_cycles as i64);
+        }
         self.extra_cycles = 0;
         self.instructions += 1;
         // `ReturnObserver`: the return a `jr ra` began is done once its delay slot has run.
-        if self.hooks.return_after_slot && self.in_delay_slot {
+        if HOOKED && self.hooks.return_after_slot && self.in_delay_slot {
             self.hooks.return_after_slot = false;
             self.hooks.note_return();
         }
@@ -211,28 +226,28 @@ impl Cpu {
     }
 
     #[inline(always)]
-    pub(crate) fn execute(&mut self, bus: &mut MemoryBus, instruction: u32) -> Exec {
+    pub(crate) fn execute<const HOOKED: bool>(&mut self, bus: &mut MemoryBus, instruction: u32) -> Exec {
         let op = instruction >> 26;
         if self.run.mode != Mode::Kernel && !self.wide_addressing() && is_doubleword(op, instruction) {
             return Err(self.raise(code::RESERVED_INSTRUCTION, self.current_pc));
         }
         let i = instruction;
         match op {
-            0x00 => return self.special(bus, i),
-            0x01 => return self.regimm(i),
+            0x00 => return self.special::<HOOKED>(bus, i),
+            0x01 => return self.regimm::<HOOKED>(i),
             0x02 => self.branch(self.jump_target(i)),
             0x03 => {
                 self.write(31, self.next_pc);
                 let target = self.jump_target(i);
-                if self.hooks.calls {
+                if HOOKED && self.hooks.calls {
                     self.hooks.note_call(self.current_pc, target);
                 }
                 self.branch(target);
             }
-            0x04 => self.branch_if(self.read(rs(i)) == self.read(rt(i)), i, false, false),
-            0x05 => self.branch_if(self.read(rs(i)) != self.read(rt(i)), i, false, false),
-            0x06 => self.branch_if(self.read(rs(i)) as i64 <= 0, i, false, false),
-            0x07 => self.branch_if(self.read(rs(i)) as i64 > 0, i, false, false),
+            0x04 => self.branch_if::<HOOKED>(self.read(rs(i)) == self.read(rt(i)), i, false, false),
+            0x05 => self.branch_if::<HOOKED>(self.read(rs(i)) != self.read(rt(i)), i, false, false),
+            0x06 => self.branch_if::<HOOKED>(self.read(rs(i)) as i64 <= 0, i, false, false),
+            0x07 => self.branch_if::<HOOKED>(self.read(rs(i)) as i64 > 0, i, false, false),
             0x08 => return self.add_immediate(i, true),
             0x09 => return self.add_immediate(i, false),
             0x0A => self.write(rt(i), ((self.read(rs(i)) as i64) < signed_immediate(i)) as u64),
@@ -244,10 +259,10 @@ impl Cpu {
             0x10 => return self.execute_cop0(bus, i),
             0x11 => return self.execute_cop1(i),
             0x12 => return self.execute_cop2(i),
-            0x14 => self.branch_if(self.read(rs(i)) == self.read(rt(i)), i, true, false),
-            0x15 => self.branch_if(self.read(rs(i)) != self.read(rt(i)), i, true, false),
-            0x16 => self.branch_if(self.read(rs(i)) as i64 <= 0, i, true, false),
-            0x17 => self.branch_if(self.read(rs(i)) as i64 > 0, i, true, false),
+            0x14 => self.branch_if::<HOOKED>(self.read(rs(i)) == self.read(rt(i)), i, true, false),
+            0x15 => self.branch_if::<HOOKED>(self.read(rs(i)) != self.read(rt(i)), i, true, false),
+            0x16 => self.branch_if::<HOOKED>(self.read(rs(i)) as i64 <= 0, i, true, false),
+            0x17 => self.branch_if::<HOOKED>(self.read(rs(i)) as i64 > 0, i, true, false),
             0x18 => return self.add_immediate64(i, true),
             0x19 => return self.add_immediate64(i, false),
             0x1A => return self.load_double_left(bus, i),
@@ -268,23 +283,23 @@ impl Cpu {
             0x30 => return self.load_linked(bus, i, 4),
             0x34 => return self.load_linked(bus, i, 8),
             0x37 => return self.load(bus, i, 8, false),
-            0x28 => _ = self.store(bus, i, 1)?,
-            0x29 => _ = self.store(bus, i, 2)?,
+            0x28 => _ = self.store::<HOOKED>(bus, i, 1)?,
+            0x29 => _ = self.store::<HOOKED>(bus, i, 2)?,
             0x2A => _ = self.store_word_left(bus, i)?,
-            0x2B => _ = self.store(bus, i, 4)?,
+            0x2B => _ = self.store::<HOOKED>(bus, i, 4)?,
             0x2C => _ = self.store_double_left(bus, i)?,
             0x2D => _ = self.store_double_right(bus, i)?,
             0x2E => _ = self.store_word_right(bus, i)?,
-            0x38 => _ = self.store_conditional(bus, i, 4)?,
-            0x3C => _ = self.store_conditional(bus, i, 8)?,
-            0x3F => _ = self.store(bus, i, 8)?,
+            0x38 => _ = self.store_conditional::<HOOKED>(bus, i, 4)?,
+            0x3C => _ = self.store_conditional::<HOOKED>(bus, i, 8)?,
+            0x3F => _ = self.store::<HOOKED>(bus, i, 8)?,
             _ => return Err(self.raise(code::RESERVED_INSTRUCTION, self.current_pc)),
         }
         Ok(())
     }
 
     #[inline(always)]
-    pub(crate) fn special(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
+    pub(crate) fn special<const HOOKED: bool>(&mut self, bus: &mut MemoryBus, i: u32) -> Exec {
         let _ = bus;
         match i & 0x3F {
             0x00 => self.write32(rd(i), (self.read(rt(i)) as u32) << sa(i)),
@@ -293,8 +308,8 @@ impl Cpu {
             0x04 => self.write32(rd(i), (self.read(rt(i)) as u32) << (self.read(rs(i)) & 0x1F)),
             0x06 => self.write32(rd(i), (self.read(rt(i)) as u32) >> (self.read(rs(i)) & 0x1F)),
             0x07 => self.shift_right_arithmetic(i, (self.read(rs(i)) & 0x1F) as u32),
-            0x08 => self.jump_register(i, false),
-            0x09 => self.jump_register(i, true),
+            0x08 => self.jump_register::<HOOKED>(i, false),
+            0x09 => self.jump_register::<HOOKED>(i, true),
             0x0F => {}
             0x0C => return Err(self.raise(code::SYSCALL, self.current_pc)),
             0x0D => return Err(self.raise(code::BREAKPOINT, self.current_pc)),
@@ -339,18 +354,18 @@ impl Cpu {
         Ok(())
     }
 
-    pub(crate) fn regimm(&mut self, i: u32) -> Exec {
+    pub(crate) fn regimm<const HOOKED: bool>(&mut self, i: u32) -> Exec {
         let value = self.read(rs(i)) as i64;
         match rt(i) {
-            0x00 => self.branch_if(value < 0, i, false, false),
-            0x01 => self.branch_if(value >= 0, i, false, false),
-            0x02 => self.branch_if(value < 0, i, true, false),
-            0x03 => self.branch_if(value >= 0, i, true, false),
+            0x00 => self.branch_if::<HOOKED>(value < 0, i, false, false),
+            0x01 => self.branch_if::<HOOKED>(value >= 0, i, false, false),
+            0x02 => self.branch_if::<HOOKED>(value < 0, i, true, false),
+            0x03 => self.branch_if::<HOOKED>(value >= 0, i, true, false),
             0x08..=0x0C | 0x0E => return self.execute_trap_immediate(i),
-            0x10 => self.branch_if(value < 0, i, false, true),
-            0x11 => self.branch_if(value >= 0, i, false, true),
-            0x12 => self.branch_if(value < 0, i, true, true),
-            0x13 => self.branch_if(value >= 0, i, true, true),
+            0x10 => self.branch_if::<HOOKED>(value < 0, i, false, true),
+            0x11 => self.branch_if::<HOOKED>(value >= 0, i, false, true),
+            0x12 => self.branch_if::<HOOKED>(value < 0, i, true, true),
+            0x13 => self.branch_if::<HOOKED>(value >= 0, i, true, true),
             _ => return Err(self.raise(code::RESERVED_INSTRUCTION, self.current_pc)),
         }
         Ok(())
@@ -430,13 +445,13 @@ impl Cpu {
 
     /// `BranchIf`: the link happens whether or not the branch is taken; a likely branch not taken throws its slot away.
     #[inline(always)]
-    pub(crate) fn branch_if(&mut self, taken: bool, i: u32, likely: bool, link: bool) {
+    pub(crate) fn branch_if<const HOOKED: bool>(&mut self, taken: bool, i: u32, likely: bool, link: bool) {
         if link {
             self.write(31, self.next_pc);
         }
         if taken {
             let target = self.pc.wrapping_add((signed_immediate(i) << 2) as u64);
-            if link && self.hooks.calls {
+            if HOOKED && link && self.hooks.calls {
                 self.hooks.note_call(self.current_pc, target);
             }
             self.branch(target);
@@ -457,13 +472,13 @@ impl Cpu {
     }
 
     #[inline(always)]
-    pub(crate) fn jump_register(&mut self, i: u32, link: bool) {
+    pub(crate) fn jump_register<const HOOKED: bool>(&mut self, i: u32, link: bool) {
         let target = self.read(rs(i));
         if link {
             self.write(rd(i), self.next_pc);
         }
         // A `jalr` is a call and a `jr` through `ra` a return, the conventions `bt` reads (Mars_Debug.md §2).
-        if self.hooks.calls {
+        if HOOKED && self.hooks.calls {
             if link {
                 self.hooks.note_call(self.current_pc, target);
             } else if rs(i) == 31 {
@@ -516,7 +531,7 @@ impl Cpu {
 
     /// `Store`: an aligned RDRAM store is the bytes named, unless the MI repeats it; returns where it landed, or `THROUGH_BUS`.
     #[inline(always)]
-    pub(crate) fn store(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec<u32> {
+    pub(crate) fn store<const HOOKED: bool>(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec<u32> {
         let address = self.effective_address(i);
         self.require_alignment(address, size, code::ADDRESS_ERROR_STORE)?;
         let physical = self.translate_access(self.mirrored(address, size), address, true)?;
@@ -526,13 +541,13 @@ impl Cpu {
                 bus.dp.wait_write(physical, size, site::STORE);
             }
             bus.rdram.write(physical, value, size);
-            if self.hooks.writes {
+            if HOOKED && self.hooks.writes {
                 self.report_store(bus, physical, size);
             }
             return Ok(physical);
         }
         bus.store(physical, value, size);
-        if self.hooks.writes {
+        if HOOKED && self.hooks.writes {
             self.report_store(bus, physical, size);
         }
         Ok(THROUGH_BUS)
@@ -569,8 +584,8 @@ impl Cpu {
         Ok(())
     }
 
-    pub(crate) fn store_conditional(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec<u32> {
-        let landed = if self.linked_flag { self.store(bus, i, size)? } else { NOT_STORED };
+    pub(crate) fn store_conditional<const HOOKED: bool>(&mut self, bus: &mut MemoryBus, i: u32, size: u32) -> Exec<u32> {
+        let landed = if self.linked_flag { self.store::<HOOKED>(bus, i, size)? } else { NOT_STORED };
         self.write(rt(i), self.linked_flag as u64);
         self.linked_flag = false;
         Ok(landed)

@@ -268,8 +268,6 @@ impl Machine {
         let fields = self.bus.vi.fields;
         let cap_at = start + CYCLE_CAP;
         let Options { idle_skip, rsp_whole, .. } = *self.options;
-        // C#'s `RunIdle` steps a running processor a cycle at a time while its coverage is armed, so each instruction is recorded.
-        let rsp_whole = rsp_whole && self.bus.sp.trace.is_none();
         let (cpu, bus) = (&mut self.cpu, &mut self.bus);
         if self.blocks.on {
             self.blocks.run_frame(cpu, bus, cap_at, idle_skip, rsp_whole);
@@ -313,7 +311,7 @@ impl Machine {
             }
             unchecked = false;
             cpu.hooks.record(pc);
-            cpu.step(bus);
+            cpu.step_hooked(bus);
         }
         cpu.hooks.flush();
         cpu.hooks.frame_open = false;

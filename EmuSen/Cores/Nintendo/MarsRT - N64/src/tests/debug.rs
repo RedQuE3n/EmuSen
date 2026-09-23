@@ -258,7 +258,7 @@ fn the_profiler_charges_an_instruction_to_the_routine_it_ran_in() {
 #[test]
 fn the_rsp_records_its_own_coverage_and_the_processor_does_not() {
     let mut m = load(&COUNT_FOREVER);
-    *m.bus.sp.trace = Some(Trace::new());
+    *m.bus.sp.trace = Some(Box::new(Trace::new()));
     m.cpu.hooks.configure(false, false, false, false, true, false);
     m.bus.sp.processor.start(0x010);
     m.bus.rsp_step_one();
@@ -293,13 +293,13 @@ fn the_rsp_is_recorded_through_the_frame_loop_and_the_idle_loop_steps_it_a_cycle
     plain.bus.sp.processor.start(0x020);
     plain.run_frame();
     let mut traced = load_in_rdram(&IDLE);
-    *traced.bus.sp.trace = Some(Trace::new());
+    *traced.bus.sp.trace = Some(Box::new(Trace::new()));
     traced.bus.sp.processor.start(0x020);
     let start = traced.bus.cycles;
-    traced.run_frame();
+    assert_eq!(traced.run_frame_debug(false, false), stop::FRAME);
     assert_eq!(plain.save_state_vec(false).unwrap(), traced.save_state_vec(false).unwrap());
-    assert!(plain.cpu.run.rsp_steps > 0 && traced.cpu.run.rsp_steps > 0, "the idle loop ran beside the processor");
-    assert!(plain.cpu.run.idle_turns_passed == 0 && traced.cpu.run.idle_turns_passed == 0, "no turn is passed while the processor runs");
+    assert!(plain.cpu.run.rsp_steps > 0 && traced.cpu.run.rsp_steps == 0, "the plain frame's idle loop ran the processor whole; the observed frame stepped it");
+    assert!(plain.cpu.run.idle_turns_passed == 0, "no turn is passed while the processor runs");
     let trace = traced.bus.sp.trace.as_ref().unwrap();
     assert_eq!(trace.recorded, traced.bus.cycles - start);
     assert!(trace.bits[4..].iter().all(|&b| b == 0x11), "every word of IMEM past the boot head was passed");
@@ -332,7 +332,7 @@ fn a_full_log_stops_the_frame_so_it_can_be_drained_and_loses_nothing() {
 /// Every table armed and nothing firing: a breakpoint no instruction reaches, a watch that logs every lap, coverage, the profiler.
 fn arm_everything(m: &mut Machine) {
     m.cpu.hooks.configure(true, true, true, false, true, true);
-    *m.bus.sp.trace = Some(Trace::new());
+    *m.bus.sp.trace = Some(Box::new(Trace::new()));
     m.cpu.hooks.breakpoints = vec![at(0x8000_1000)];
     m.cpu.hooks.watch_ranges = vec![Range { space: space::RDRAM, start: 0x10_0000, end: 0x10_0003 }];
     m.cpu.hooks.depth_guard = 100_000;
@@ -391,7 +391,7 @@ fn a_state_loaded_keeps_the_tables_and_the_stack() {
     let mut m = load(&CALL_ONCE);
     m.cpu.hooks.configure(true, false, false, false, false, false);
     m.cpu.hooks.breakpoints = vec![at(ENTRY + 0x20)];
-    *m.bus.sp.trace = Some(Trace::new());
+    *m.bus.sp.trace = Some(Box::new(Trace::new()));
     assert_eq!(m.run_frame_debug(false, false), stop::BREAKPOINT);
     let state = m.save_state_vec(false).unwrap();
     m.restore_state(&state).unwrap();

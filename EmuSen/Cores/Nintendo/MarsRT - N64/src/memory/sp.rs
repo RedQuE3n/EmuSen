@@ -89,7 +89,7 @@ pub struct SpInterface {
     pub signals: u32,
     pub single_step: bool,
     /// The processor's coverage while `cov rsp` is armed, in no state; while it exists the idle loop steps the processor a cycle at a time (Mars_Native.md §6.5).
-    pub trace: Skip<Option<Trace>>,
+    pub trace: Skip<Option<Box<Trace>>>,
 }
 
 impl State for SpInterface {
@@ -354,9 +354,6 @@ impl MemoryBus {
         if self.sp.processor.halted {
             return;
         }
-        if self.sp.trace.is_some() {
-            return self.sp_step_traced(cycles);
-        }
         if cycles <= 1 && !self.sp.single_step {
             if !self.rsp_core().step() {
                 self.rsp_event();
@@ -408,7 +405,7 @@ impl MemoryBus {
 
     /// `sp_step` with every instruction recorded, the events included: C#'s managed step, which the native shortcut yields to while `cov rsp` is armed.
     #[inline(never)]
-    fn sp_step_traced(&mut self, cycles: i64) {
+    pub(crate) fn sp_step_traced(&mut self, cycles: i64) {
         if self.sp.single_step {
             self.rsp_step_one_traced();
             self.sp.processor.halted = true;

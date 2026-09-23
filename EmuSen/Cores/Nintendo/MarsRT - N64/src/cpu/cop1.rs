@@ -267,7 +267,7 @@ impl Cpu {
         }
         let wanted = selector & 1 != 0;
         let met = (self.fcsr & FCSR_CONDITION != 0) == wanted;
-        self.branch_if(met, i, selector & 2 != 0, false);
+        self.branch_if::<false>(met, i, selector & 2 != 0, false);
         Ok(())
     }
 

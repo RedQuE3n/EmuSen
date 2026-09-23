@@ -363,6 +363,22 @@ impl MemoryBus {
         }
     }
 
+    /// `Tick` for the observed frame: the signal processor's step records while `cov rsp` is armed (Mars_Native.md §6.5).
+    #[inline(always)]
+    pub fn tick_traced(&mut self, cycles: i64) {
+        self.cycles += cycles;
+        if !self.sp.processor.halted {
+            if self.sp.trace.is_some() {
+                self.sp_step_traced(cycles);
+            } else {
+                self.sp_step(cycles);
+            }
+        }
+        if self.cycles >= *self.next_event {
+            self.run_events();
+        }
+    }
+
     /// `RunEvents`: the VI's half lines before the AI's samples, then the SI.
     pub fn run_events(&mut self) {
         self.vi_catch();

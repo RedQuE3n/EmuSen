@@ -39,7 +39,7 @@ macro_rules! plain {
     };
 }
 
-handler!(any, |c, b, i| c.execute(b, i).map(|_| NOT_STORED));
+handler!(any, |c, b, i| c.execute::<false>(b, i).map(|_| NOT_STORED));
 
 plain!(sll, |c, i| c.write32(rd(i), (c.read(rt(i)) as u32) << sa(i)));
 plain!(srl, |c, i| c.write32(rd(i), (c.read(rt(i)) as u32) >> sa(i)));
@@ -47,8 +47,8 @@ plain!(sra, |c, i| c.shift_right_arithmetic(i, sa(i)));
 plain!(sllv, |c, i| c.write32(rd(i), (c.read(rt(i)) as u32) << (c.read(rs(i)) & 0x1F)));
 plain!(srlv, |c, i| c.write32(rd(i), (c.read(rt(i)) as u32) >> (c.read(rs(i)) & 0x1F)));
 plain!(srav, |c, i| c.shift_right_arithmetic(i, (c.read(rs(i)) & 0x1F) as u32));
-plain!(jr, |c, i| c.jump_register(i, false));
-plain!(jalr, |c, i| c.jump_register(i, true));
+plain!(jr, |c, i| c.jump_register::<false>(i, false));
+plain!(jalr, |c, i| c.jump_register::<false>(i, true));
 plain!(mfhi, |c, i| c.write(rd(i), c.hi));
 plain!(mflo, |c, i| c.write(rd(i), c.lo));
 plain!(addu, |c, i| c.write32(rd(i), (c.read(rs(i)) as u32).wrapping_add(c.read(rt(i)) as u32)));
@@ -69,12 +69,12 @@ plain!(jal, |c, i| {
     c.write(31, c.next_pc);
     c.branch(c.jump_target(i));
 });
-plain!(beq, |c, i| c.branch_if(c.read(rs(i)) == c.read(rt(i)), i, false, false));
-plain!(bne, |c, i| c.branch_if(c.read(rs(i)) != c.read(rt(i)), i, false, false));
-plain!(blez, |c, i| c.branch_if(c.read(rs(i)) as i64 <= 0, i, false, false));
-plain!(bgtz, |c, i| c.branch_if(c.read(rs(i)) as i64 > 0, i, false, false));
-plain!(beql, |c, i| c.branch_if(c.read(rs(i)) == c.read(rt(i)), i, true, false));
-plain!(bnel, |c, i| c.branch_if(c.read(rs(i)) != c.read(rt(i)), i, true, false));
+plain!(beq, |c, i| c.branch_if::<false>(c.read(rs(i)) == c.read(rt(i)), i, false, false));
+plain!(bne, |c, i| c.branch_if::<false>(c.read(rs(i)) != c.read(rt(i)), i, false, false));
+plain!(blez, |c, i| c.branch_if::<false>(c.read(rs(i)) as i64 <= 0, i, false, false));
+plain!(bgtz, |c, i| c.branch_if::<false>(c.read(rs(i)) as i64 > 0, i, false, false));
+plain!(beql, |c, i| c.branch_if::<false>(c.read(rs(i)) == c.read(rt(i)), i, true, false));
+plain!(bnel, |c, i| c.branch_if::<false>(c.read(rs(i)) != c.read(rt(i)), i, true, false));
 plain!(addiu, |c, i| c.write32(rt(i), (c.read(rs(i)) as u32).wrapping_add(signed_immediate(i) as u32)));
 plain!(slti, |c, i| c.write(rt(i), ((c.read(rs(i)) as i64) < signed_immediate(i)) as u64));
 plain!(sltiu, |c, i| c.write(rt(i), (c.read(rs(i)) < signed_immediate(i) as u64) as u64));
@@ -95,16 +95,16 @@ handler!(lwc1, |c, b, i| c.load_cop1(b, i, false).map(|_| NOT_STORED));
 handler!(ldc1, |c, b, i| c.load_cop1(b, i, true).map(|_| NOT_STORED));
 handler!(cop1, |c, _b, i| c.execute_cop1(i).map(|_| NOT_STORED));
 
-handler!(sb, |c, b, i| c.store(b, i, 1));
-handler!(sh, |c, b, i| c.store(b, i, 2));
-handler!(sw, |c, b, i| c.store(b, i, 4));
-handler!(sd, |c, b, i| c.store(b, i, 8));
+handler!(sb, |c, b, i| c.store::<false>(b, i, 1));
+handler!(sh, |c, b, i| c.store::<false>(b, i, 2));
+handler!(sw, |c, b, i| c.store::<false>(b, i, 4));
+handler!(sd, |c, b, i| c.store::<false>(b, i, 8));
 handler!(swl, |c, b, i| c.store_word_left(b, i));
 handler!(swr, |c, b, i| c.store_word_right(b, i));
 handler!(sdl, |c, b, i| c.store_double_left(b, i));
 handler!(sdr, |c, b, i| c.store_double_right(b, i));
-handler!(sc, |c, b, i| c.store_conditional(b, i, 4));
-handler!(scd, |c, b, i| c.store_conditional(b, i, 8));
+handler!(sc, |c, b, i| c.store_conditional::<false>(b, i, 4));
+handler!(scd, |c, b, i| c.store_conditional::<false>(b, i, 8));
 handler!(swc1, |c, b, i| c.store_cop1(b, i, false));
 handler!(sdc1, |c, b, i| c.store_cop1(b, i, true));
 

@@ -106,7 +106,7 @@ pub(crate) fn drive(m: &mut Machine, frame: u64) {
 /// after every interrupt, coverage on both processors, the profiler, and a depth guard no game reaches.
 fn arm_everything(m: &mut Machine) {
     m.cpu.hooks.configure(true, true, true, false, true, true);
-    *m.bus.sp.trace = Some(Trace::new());
+    *m.bus.sp.trace = Some(Box::new(Trace::new()));
     m.cpu.hooks.breakpoints = vec![(0, 0)];
     m.cpu.hooks.watch_ranges = vec![Range { space: space::RDRAM, start: 0x10_0000, end: 0x10_0FFF }];
     m.cpu.hooks.break_ranges = vec![Range { space: space::RDRAM, start: 0x10_0000, end: 0x10_00FF }];

@@ -111,8 +111,8 @@ pub struct Cpu {
     pub extra_cycles: i32,
     pub last_count: u32,
     pub random_start: i64,
-    /// The debugger's tables and logs, none of it in the state; last, so the compiled code's offsets stand (Mars_Native.md §6.5).
-    pub hooks: Skip<hooks::Hooks>,
+    /// The debugger's tables and logs, none of it in the state, boxed so the machine's layout keeps its shape (Mars_Native.md §6.5).
+    pub hooks: Skip<Box<hooks::Hooks>>,
 }
 
 impl State for Cpu {

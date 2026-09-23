@@ -715,13 +715,34 @@ namespace EmuSen.Cores.Nintendo.MarsRT
 
         public void SaveState(Stream stream) => stream.Write(Save(snapshot: false));
 
-        public void SaveSnapshot(Stream stream) => stream.Write(Save(snapshot: true));
+        // Written through an array kept for the purpose, so the rewind's capture every few frames allocates no state - see Mars_Native.md §6.6.3.
+        public void SaveSnapshot(Stream stream)
+        {
+            long size = SizeOf(Handle, 1);
+            if (size < 0) throw new InvalidDataException($"MarsRT could not write the state: {MarsMachine.Describe(size)}.");
+            if (_snapshotBytes.Length != size) _snapshotBytes = new byte[size];
+            long written;
+            fixed (byte* data = _snapshotBytes) written = SaveStateExport(_handle, data, (nuint)size, 1);
+            if (written < 0) throw new InvalidDataException($"MarsRT could not write the state: {MarsMachine.Describe(written)}.");
+            stream.Write(_snapshotBytes, 0, (int)written);
+        }
 
+        private byte[] _snapshotBytes = Array.Empty<byte>(), _loadBytes = Array.Empty<byte>();
+
+        // A stream that can say its length is read into an array kept for the purpose, as a step back is - see Mars_Native.md §6.6.3.
         public void LoadState(Stream stream)
         {
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            LoadState(copy.ToArray());
+            if (!stream.CanSeek)
+            {
+                using var copy = new MemoryStream();
+                stream.CopyTo(copy);
+                LoadState(copy.ToArray());
+                return;
+            }
+            int length = checked((int)(stream.Length - stream.Position));
+            if (_loadBytes.Length < length) _loadBytes = new byte[length];
+            stream.ReadExactly(_loadBytes, 0, length);
+            LoadState(_loadBytes.AsSpan(0, length));
         }
 
         // The C# Mars's format byte for byte; a state of the other memory size rebuilds the machine and the Pak follows it, as MarsCore's does.

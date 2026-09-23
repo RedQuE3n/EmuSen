@@ -270,6 +270,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(drew, "no frame showed anything, so the picture compared nothing");
         }
 
+        // Since §6.13 the claim is the lending's: a buffer held is never written or lent again until it is returned, and a returned one is reused.
         [Fact]
         public void The_frame_handed_out_is_a_copy_the_next_frame_does_not_touch()
         {
@@ -288,6 +289,26 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(core.GetFrameBufferRgba().AsSpan().SequenceEqual(kept), "the picture did not change, so the copy was not tested");
             Assert.Equal(kept, shown);
             Assert.NotSame(core.GetFrameBufferRgba(), core.GetFrameBufferRgba());
+
+            // Others lent and returned while this one is held are reused, and it is not among them however many frames pass.
+            long made = core.FrameBuffers.Made;
+            for (int frame = 0; frame < 12; frame++)
+            {
+                core.RunFrame();
+                byte[] other = core.GetFrameBufferRgba();
+                Assert.NotSame(shown, other);
+                core.ReturnFrameBuffer(other);
+            }
+            Assert.Equal(kept, shown);
+            Assert.True(core.FrameBuffers.Made - made <= 1, $"{core.FrameBuffers.Made - made} arrays made for 12 frames returned each time");
+
+            // Returned, it is lent again, holding the new picture rather than the old.
+            core.ReturnFrameBuffer(shown);
+            core.RunFrame();
+            byte[] reused = core.GetFrameBufferRgba();
+            byte[] fresh = core.GetFrameBufferRgba();
+            Assert.True(ReferenceEquals(reused, shown) || ReferenceEquals(fresh, shown), "the returned array was not lent again");
+            Assert.Equal(fresh, reused);
         }
 
         [Fact]

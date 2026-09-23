@@ -19,6 +19,8 @@ The whole contract is one method:
 void UpdateFrame(byte[] rgba, int width, int height)
 ```
 
+*Since 2026-09-21 and 2026-09-23 it also takes how many times each row is shown (§2.7) and who takes the array back (§2.8); both are optional.*
+
 Plain RGBA8888 data plus the dimensions needed to interpret it. The frontend pulls (`core.GetFrameBufferRgba()`) and hands over bytes; Serenity presents them. `EmuSen.Serenity.csproj` references **only `EmuSen.Galaxia`**, for `GraphicsConfig`.
 
 This is the video half of the Serenity/Endymion pair — `EmuSen_Audio_Sync.md` §7 is the audio half, written against this project as its model, and has the side-by-side table of the two shapes. `width` is taken per-frame rather than at construction because it genuinely changes frame to frame (SNES pseudo-hi-res is 512 wide); §7.2 there explains why sample rate is the audio equivalent.
@@ -140,6 +142,80 @@ differ, by up to 28 levels. The stretched version is the filter applied to the p
 to a copy of it with its rows doubled, and it is the one Mistress now shows; it is recorded here because it is a
 change in what the player sees, not only in what it costs.
 
+
+### 2.8 A lent array, given back once (2026-09-23)
+
+`UpdateFrame` takes a fifth argument, `release`. A frontend whose core lends its pictures (`EmuSen_Multicore.md` §16)
+passes the core's `ReturnFrameBuffer`, and the control calls it **once per offer, with that offer's array, when
+nothing in the control can read the array again**. A frontend that passes nothing, which is Hotaru, `FramePresenter`
+and every test that predates this, sees no change. The reason is MarsRT's picture: until this section it was a new
+array per frame, 1.2 MB at one multiple and 19 MB at four, and on the handheld the collections those arrays caused
+cost more than the copies did (`Mars_Native.md` §6.13).
+
+**The claim.** An array the control has been given is never handed back while a draw operation could still copy
+it, and a picture once drawn is never replaced on screen by an older one. The second is a condition of the first, and
+it was not true before.
+
+**The defect fixed on the way.** The render thread decided whether to copy by `_cachedVersion != _version`: a draw
+operation holding an *older* version than the cached one satisfied the test and copied its older array over the newer
+image, so the picture went back a frame. `A_draw_operation_rendered_late_never_takes_the_picture_backwards` holds two
+operations, draws the newer and then the older, and on the old rule the second draw showed the older frame's red where
+the newer's green had been; on the new rule it shows green. It was latent: Avalonia's compositor applies the UI
+thread's batches in order, so an older operation reaching the render thread after a newer one was not seen in
+practice. It matters now because an older operation's array may already be another frame's, lent again.
+
+**The mechanism.** Each `UpdateFrame` makes an *offer*: the array, its geometry, its version, its `release`, and a
+count of its readers. A draw operation made by `Render` is a reader of the newest offer until it is disposed; a draw
+in progress is a reader of the offer it draws from. The render thread keeps `_copiedVersion`, the newest version it
+has ever copied, which only moves forward, and `_cached`, the offer the cached image came from. A draw copies its own
+offer only if that offer is newer than `_copiedVersion`; otherwise it draws the cached image, with the cached offer's
+size and rows, whatever operation it is. An offer is then dead, and its array given back, when all three hold:
+
+1. it is **superseded**, a later `UpdateFrame` having come;
+2. it is **not the cached offer**, which is kept readable because the image is given back when the control leaves the
+   window (§2.6) and must be made again on its return, and because a RetroArch preset started later asks the draw for
+   the picture on show (`SlangRunner.Draw`'s `!_advanced`, §7.5);
+3. it has **no readers, or its version is at most `_copiedVersion`**, in which case every reader it has will draw the
+   cache and not it.
+
+The test is made where each condition can change: in `UpdateFrame` for the offer just superseded, when an operation
+is disposed, and after every copy for all the superseded offers still held, of which at most eight are kept; one
+pushed out is never given back and is left to the collector, which costs an allocation, never a picture. The
+bookkeeping has its own lock, held for a few comparisons and never across a copy or a draw, so `UpdateFrame` does not
+wait for the render thread. `release` runs under that lock, on whichever thread made the offer dead, and must not call
+back into the control. **The same array offered again**, as Moon and Mercury offer their PPU's buffer, is not given
+back while a later offer, the cached one or a held one holds it
+(`The_same_array_offered_again_is_not_given_back_while_it_is_current`).
+
+**Mistress's side** is `EmuSen.Mistress/FrameHandOff.cs`, the hand-off of §4 over LunaP's `Latest<T>`. `Latest`
+drops a stale frame by forgetting it, which is right for a frame nobody owns and wrong for a lent one, so each frame
+carries a state, and whichever thread moves it out of *waiting* owns its array: the UI thread by presenting it, which
+passes the array and `release` to the control, or the emulation thread by replacing it before the UI thread took it,
+which gives it back at once. The `release` Mistress passes is `FrameHandOff.ReleaseFor(core)`: a *route* to the
+session's core's `ReturnFrameBuffer`, taken once when the emulation loop starts, and `null` for a core that does not
+lend. `EndSession`, called in `ShutDownCurrentSession` once the emulation thread has stopped, gives back a frame not
+yet taken and then cuts the route. The picture still on screen after a game is closed or reset is let go only when a
+later one is drawn over it, and by then it goes nowhere. The route exists for a reason found while writing this: a
+`release` that named the core directly would have kept the ended session's core, native machine and threads with it,
+reachable from the control for as long as its last picture stayed on screen — on the library screen, indefinitely
+(`Once_a_session_ends_the_picture_left_on_screen_neither_keeps_its_core_nor_returns_to_it`).
+
+**The evidence.** `GameFrameReleaseTests` holds operations and draws them in every order the rules distinguish,
+recording what is given back: an unread offer when superseded, a drawn one when a newer is drawn, a held one when its
+operation is disposed undrawn, and nothing twice. `FrameHandOffTests` wires MarsRT, the hand-off and the control as
+`MainWindow` does, on the headless platform: in 400 frames on a seeded schedule, holding up to four operations, drawing
+them late and out of order (83 of 187 draws late, 54 of them onto a changed picture) and disposing them at random, it
+asserts after every frame that each array lent and not yet given back is byte-identical to the copy taken when it was
+lent, that the core never lends one of them, and that every draw shows exactly the newest version drawn so far; the
+lending reused 391 arrays, so a premature return had plenty to be overwritten by. Another counts 667 to 670 bytes
+allocated a frame on that path against a 1,228,800-byte picture, and no array made after the first thirty frames.
+Six mutants, each caught, are listed in `Mars_Native.md` §6.13.3.
+
+**What this does not cover.** A frontend that passes `release` and goes on writing the array; a frontend that returns the
+same lend twice across a re-lend (§16 of `EmuSen_Multicore.md` says why the lending cannot tell); an Avalonia that
+rendered an operation after disposing it, which the operation checks and answers by drawing nothing. That check is made in the same hold of the lock that takes the draw's read: made in a hold of its own, as first written, a `Dispose` on another thread between the two could have given the array back just before the copy. That window was closed on reading the code, and no test reaches it. The live
+compositor's order of rendering and disposing was not instrumented; the rules do not depend on it.
+
 ---
 
 ## 3. The built-in shaders
@@ -240,6 +316,7 @@ Two facts worth knowing here rather than there. Its namespace is `EmuSen.Graphic
 All headless, in `EmuSen.WiseMan/Serenity/`, through `HeadlessUnitTestSession` — real Avalonia render passes with no display or GPU. `TestAppBuilder.cs` includes the same `LunaTheme.axaml` the real frontends do, so a render pass never runs over untemplated controls.
 
 - `GameFrameControlTests.cs` — `ComputeLetterboxRect` arithmetic, including the degenerate zero/negative inputs.
+- `GameFrameReleaseTests.cs` — §2.8: draw operations held and drawn out of order, and the arrays given back.
 - `GameFrameControlRenderTests.cs` — the real render path, added specifically to close the "nothing exercises this" gap that hid the §2.2 crash. Byte-identical repeated output, 120 consecutive frames without throwing, and the exact scanline pixel math.
 - `BuiltInShadersTests.cs` — asserts the SkSL source itself, via the `InternalsVisibleTo` in `AssemblyInfo.cs`.
 - `FramePresenterEffectCyclingTests.cs` — `NextEffect`'s cycle, without a window.

@@ -1313,9 +1313,9 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
                 return false;
             }
 
-            // A read is written over only by draws, so it waits for the last pending draw whose box holds it, if one does - see Mars_Rdp.md §2.6.3.
+            // A read inside one doubleword is written over only by draws, so it waits for the last pending draw whose box holds it, if one does - see Mars_Rdp.md §2.6.3.
             long goal = mark == Idle ? _issued : mark;
-            if (!write)
+            if (!write && ((from ^ (to - 1)) & ~7L) == 0)
             {
                 long holding = LastHolding(from, completed);
                 if (holding != Idle && holding < goal)

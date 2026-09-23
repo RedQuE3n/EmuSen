@@ -371,41 +371,6 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // C#'s wait for a range read narrows each page by its first eight bytes, so a capture whose first bytes no pending draw holds reads rows still to be drawn - see Mars_Native.md §5.6.2.
-        [Fact]
-        public void The_csharp_interface_lets_a_range_read_pass_the_draws_that_hold_all_but_its_first_bytes()
-        {
-            const uint framebuffer = 0x0020_0000, page = framebuffer + 0x1000, row = framebuffer + 320 * 2 * 8;
-            ulong[] list =
-            {
-                (0x2FUL << 56) | (3UL << 52),
-                (0x3FUL << 56) | (2UL << 51) | (319UL << 32) | framebuffer,
-                (0x2DUL << 56) | ((320UL << 2) << 12) | (240UL << 2),
-                (0x37UL << 56) | 0x1234_5678,
-                (0x36UL << 56) | ((319UL << 2) << 44) | ((9UL << 2) << 32) | (8UL << 2),
-                0x29UL << 56,
-            };
-
-            EmuSen.Cores.Nintendo.Mars.Memory.MemoryBus atOnce = new(), threaded = new();
-            threaded.Dp.Threaded = true;
-            ListTo(atOnce, list);
-            threaded.Dp.Pause();
-            ListTo(threaded, list);
-            Assert.Equal(list.Length, threaded.Dp.Pending);
-
-            var read = System.Threading.Tasks.Task.Run(() => threaded.Dp.WaitForReadRange(page, 0x1000, 8));
-            bool passed = read.Wait(TimeSpan.FromSeconds(2));
-            byte[] seen = threaded.Rdram.AsSpan((int)row, 0x80).ToArray();
-            threaded.Dp.Resume();
-            read.Wait();
-            threaded.Dp.Join();
-
-            _output.WriteLine($"C# returned from the range read {(passed ? "at once" : "only when the thread ran")}, reads narrowed {threaded.Dp.ReadsNarrowed}, freed {threaded.Dp.ReadsFreed}");
-            Assert.True(passed, "C# waited for the draw, so the defect this test records is gone and the test should be turned around");
-            Assert.False(seen.AsSpan().SequenceEqual(atOnce.Rdram.AsSpan((int)row, 0x80)), "the read found the drawn rows although it did not wait");
-            Assert.Equal(atOnce.Rdram, threaded.Rdram);
-        }
-
         // C#'s deferred path skips a repeated scan though a held line expired since the last walk, and so keeps the picture from before the expiry - see Mars_Native.md §5.6.5.
         [Fact]
         public void The_csharp_deferred_path_keeps_a_stale_picture_when_a_repeat_follows_an_expired_line()

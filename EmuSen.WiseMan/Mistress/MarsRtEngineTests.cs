@@ -92,11 +92,13 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Fact]
-        public Task A_game_runs_on_Mars_until_MarsRT_is_chosen_and_then_on_MarsRT_with_rewind_off() => Session.Dispatch(() =>
+        public Task A_game_runs_on_Mars_until_MarsRT_is_chosen_and_then_on_MarsRT_with_rewind_on_for_MarsRT_alone() => Session.Dispatch(() =>
         {
             Assert.True(MarsRtCore.Available, MarsNative.Report);
             MainWindow window = Start();
             Assert.IsType<MarsCore>(Game(window).Core);
+            WaitFor(() => Game(window).TotalFrames > 60);
+            Assert.Equal(0, Rewind(window).Depth);
             window.Close();
 
             Choose(CoreCatalog.MarsRtEngine);
@@ -108,8 +110,29 @@ namespace EmuSen.WiseMan.Mistress
 
             long? serial = game.FrameSerial;
             WaitFor(() => game.TotalFrames > 60 && game.FrameSerial != serial);
-            Assert.Equal(0, Rewind(window).Depth);
+            Assert.True(Rewind(window).Depth > 0, "MarsRT's frames left no rewind history");
             Assert.Equal("true", ((ICoreSettings)game.Core!).Get("ExpansionPak"));
+            window.Close();
+        }, default);
+
+        // The hotkey held on MarsRT with its workers and deferred picture: the game goes back, then plays on when let go - see Mars_Native.md §6.6.3.
+        [Fact]
+        public Task Holding_rewind_on_MarsRT_steps_the_game_back_and_letting_go_plays_it_on() => Session.Dispatch(() =>
+        {
+            Choose(CoreCatalog.MarsRtEngine);
+            MainWindow window = Start();
+            EmulatorSession game = Game(window);
+            WaitFor(() => game.TotalFrames > 120 && Rewind(window).Depth > 20);
+            var core = Assert.IsType<MarsRtCore>(game.Core);
+            Assert.True(core.ThreadedRdp && core.DeferredPresentation, "Mistress did not give MarsRT its workers and the deferred picture");
+
+            long reached = game.TotalFrames;
+            FieldInfo held = typeof(MainWindow).GetField("_rewindHeld", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            held.SetValue(window, true);
+            WaitFor(() => game.TotalFrames < reached - 40);
+            held.SetValue(window, false);
+            long back = game.TotalFrames;
+            WaitFor(() => game.TotalFrames > back + 60);
             window.Close();
         }, default);
 

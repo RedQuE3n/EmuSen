@@ -247,6 +247,90 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
+        // Mistress's rewind path offers a lent picture after every step back as its frame path does after a frame: nothing the screen holds is written, lent twice or given back twice - see Mars_Native.md §6.6.3.
+        [Fact]
+        public async Task With_MarsRT_rewinding_between_frames_no_array_the_screen_can_read_is_written()
+        {
+            Assert.True(MarsRtCore.Available, MarsNative.Report);
+            string rom = SyntheticN64Rom.WriteTemp(SyntheticN64System.Build(rsp: true), ".z64");
+            try
+            {
+                await Session.Dispatch(() =>
+                {
+                    using var core = new MarsRtCore(batteryRamDisabled: true) { ThreadedRdp = true, RdpWorkers = 4, DeferredPresentation = true };
+                    core.LoadRom(rom);
+                    var rewind = new EmuSen.Common.RewindBuffer { Enabled = true, IntervalFrames = 1 };
+                    var control = new GameFrameControl();
+                    var copies = new Dictionary<byte[], byte[]>(ReferenceEqualityComparer.Instance);
+                    int releasedTwice = 0, offered = 0, steps = 0, frames = 0, draws = 0;
+                    var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
+                    Action<byte[]> giveBack = buffer =>
+                    {
+                        if (!copies.Remove(buffer)) releasedTwice++;
+                        core.ReturnFrameBuffer(buffer);
+                    };
+                    void Offer(string when)
+                    {
+                        byte[] lent = core.GetFrameBufferRgba();
+                        Assert.False(copies.ContainsKey(lent), $"{when}: the core lent an array the screen can still read");
+                        copies[lent] = (byte[])lent.Clone();
+                        handOff.Offer(lent, core.ScreenWidth, core.ScreenHeight, core.RowRepeat, giveBack);
+                        offered++;
+                    }
+
+                    var random = new Random(0x2E1D);
+                    var held = new List<GameFrameControl.DrawOp>();
+                    long serial = -1;
+                    for (int turn = 0; turn < 500; turn++)
+                    {
+                        if (random.Next(3) == 0)
+                        {
+                            for (int i = random.Next(1, 4); i > 0 && rewind.Rewind(core); i--)
+                            {
+                                steps++;
+                                Offer($"turn {turn}, a step back to frame {core.TotalFrames}");
+                            }
+                            serial = -1;
+                        }
+                        else
+                        {
+                            core.RunFrame();
+                            rewind.OnFrameCompleted(core);
+                            frames++;
+                            if (core.FrameSerial != serial)
+                            {
+                                serial = core.FrameSerial;
+                                Offer($"turn {turn}, frame {core.TotalFrames}");
+                            }
+                        }
+
+                        foreach (var (array, copy) in copies) Assert.True(array.AsSpan().SequenceEqual(copy), $"turn {turn}: an array still held was written");
+                        if (random.Next(2) == 0) Dispatcher.UIThread.RunJobs();
+                        if (random.Next(2) == 0 && held.Count < 4 && control.CaptureDrawOp(new Size(64, 64)) is { } op) held.Add(op);
+                        if (held.Count > 0 && random.Next(3) == 0)
+                        {
+                            int which = random.Next(held.Count);
+                            using var surface = SKSurface.Create(new SKImageInfo(64, 64, SKColorType.Rgba8888, SKAlphaType.Premul));
+                            held[which].RenderTo(surface.Canvas, null);
+                            held[which].Dispose();
+                            held.RemoveAt(which);
+                            draws++;
+                        }
+                    }
+                    foreach (var op in held) op.Dispose();
+
+                    _output.WriteLine($"{frames} frames and {steps} steps back, {offered} pictures offered, {draws} draws; arrays made {core.FrameBuffers.Made}, reused {core.FrameBuffers.Reused}, dropped {core.FrameBuffers.Dropped}; {copies.Count} still held");
+                    Assert.Equal(0, releasedTwice);
+                    Assert.True(steps > 100 && core.FrameBuffers.Reused > 100, $"{steps} steps back and {core.FrameBuffers.Reused} arrays reused tested too little");
+                    Assert.True(copies.Count <= 8, $"{copies.Count} arrays still held after the run");
+                }, default);
+            }
+            finally
+            {
+                try { File.Delete(rom); } catch (IOException) { }
+            }
+        }
+
         // The steady state of MainWindow's loop for the picture: lent, handed off, presented, drawn, given back - and nothing of the frame's size allocated.
         [Fact]
         public async Task With_the_lending_wired_as_Mistress_wires_it_a_frame_allocates_next_to_nothing()

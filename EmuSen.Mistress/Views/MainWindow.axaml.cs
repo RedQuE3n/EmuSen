@@ -1147,6 +1147,9 @@ namespace EmuSen.Mistress.Views
             TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
             var frameStopwatch = new Stopwatch();
 
+            // The loop's work outside RunFrame, split so a slow frame says where it went - see EmuSen_Settings_Reference.md §4.21.
+            long requestsTicks = 0, audioTicks = 0, handOffTicks = 0, restTicks = 0, loopMark = 0;
+
             // Whatever phases the core publishes, averaged like runFrameTimeInWindow - see EmuSen_Multicore.md §5.
             var profiler = _session?.Core as IFrameProfiler;
             string[] phaseNames = profiler?.LastFramePhases.Select(p => p.Name).ToArray() ?? Array.Empty<string>();
@@ -1200,9 +1203,12 @@ namespace EmuSen.Mistress.Views
 
                 try
                 {
+                    long frameStart = Stopwatch.GetTimestamp();
+                    if (loopMark != 0) restTicks += frameStart - loopMark;
                     frameStopwatch.Restart();
                     session.RunFrame();
                     runFrameTimeInWindow += frameStopwatch.Elapsed;
+                    long afterRun = Stopwatch.GetTimestamp();
 
                     // Publishes this frame's snapshots; null-conditional because a swap can be in flight.
                     _debugTarget?.RefreshProviders();
@@ -1220,6 +1226,9 @@ namespace EmuSen.Mistress.Views
                     // Between frames, and before the rewind snapshot, so a loaded state seeds the chain - see §4.21a.
                     RunCoreRequests(session);
 
+                    long afterRequests = Stopwatch.GetTimestamp();
+                    requestsTicks += afterRequests - afterRun;
+
                     // Right after RunFrame, which is what produces new samples to drain.
                     // Off for the N64 for now, on either engine: its snapshot with several rasteriser workers froze a game - see EmuSen_Settings_Reference.md §4.21b and §4.44.
                     if (session.Core is not null and not (EmuSen.Cores.Nintendo.Mars.MarsCore or EmuSen.Cores.Nintendo.MarsRT.MarsRtCore)) _rewind.OnFrameCompleted(session.Core);
@@ -1228,6 +1237,9 @@ namespace EmuSen.Mistress.Views
                     short[] samples = session.DequeueAudioSamples(int.MaxValue);
                     if (_speed.ShouldPlayAudio) _audioPlayer.Submit(samples, session.AudioSampleRate);
                     else _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
+
+                    long afterAudio = Stopwatch.GetTimestamp();
+                    audioTicks += afterAudio - afterRequests;
 
                     if (profiler is not null)
                     {
@@ -1247,6 +1259,9 @@ namespace EmuSen.Mistress.Views
                         offeredSerial = serial;
                         offeredInWindow++;
                     }
+
+                    loopMark = Stopwatch.GetTimestamp();
+                    handOffTicks += loopMark - afterAudio;
 
                     framesInWindow++;
                     TimeSpan windowElapsed = clock.Elapsed - fpsWindowStart;
@@ -1272,7 +1287,9 @@ namespace EmuSen.Mistress.Views
                         string presentation = shown.Frames == 0
                             ? $" | offered {offeredInWindow / seconds:F1}, shown 0"
                             : $" | offered {offeredInWindow / seconds:F1}, shown {shown.Frames / seconds:F1} fps ({shown.Copies / seconds:F1} copied), copy {shown.CopyMilliseconds / Math.Max(shown.Copies, 1):F2} draw {shown.DrawMilliseconds / shown.Frames:F2}ms, {(shown.Gpu ? "GPU" : "software")} {shown.Width}x{shown.Height}";
-                        string line = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}{presentation}";
+                        double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency / framesInWindow;
+                        string outside = $" | outside: requests {Ms(requestsTicks):F2} audio {Ms(audioTicks):F2} hand-off {Ms(handOffTicks):F2} sleep+rest {Ms(restTicks):F2}ms";
+                        string line = $"{fps:F1} fps (run {runFrameMs:F2}ms / total {totalMs:F2}ms){breakdown}{presentation}{outside}";
                         Console.WriteLine($"[fps] {line}");
 
                         Dispatcher.UIThread.Post(() => FpsText.Text = line);
@@ -1280,6 +1297,7 @@ namespace EmuSen.Mistress.Views
                         offeredInWindow = 0;
                         Array.Clear(phaseMsInWindow);
                         runFrameTimeInWindow = TimeSpan.Zero;
+                        requestsTicks = audioTicks = handOffTicks = restTicks = 0;
                         fpsWindowStart = clock.Elapsed;
                     }
                 }

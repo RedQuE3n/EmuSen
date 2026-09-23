@@ -448,6 +448,17 @@ namespace EmuSen.Cores.Nintendo.Mars.Memory
             }
         }
 
+        // ScaledDrawn as of every word handed over: on the drain the flag is the workers' progress, so while it is false the drain is joined first - see Mars_Rdp.md §11.
+        public bool ScaledDrawnHandedOver
+        {
+            get
+            {
+                if (_scale == 1) return false;
+                if (!ScaledDrawn && _threaded && Completed() < _issued) Join();
+                return ScaledDrawn;
+            }
+        }
+
         // A processor at the multiple, standing where the native one stands - see Mars_Rdp.md §11.
         private Rdp.Rdp NewScaled()
         {

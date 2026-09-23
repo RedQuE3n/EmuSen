@@ -581,6 +581,43 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(measured > 0, "no seed measured a fraction, so the case was not reached");
         }
 
+        // The scan decides whether the multiple has drawn from every word handed over, not from how far the drain has run - see Mars_Rdp.md §11.
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        public void A_scan_decides_whether_the_multiple_drew_from_the_words_handed_over(int workers)
+        {
+            uint[] registers = { 2u | (3u << 8), Framebuffer, 64, 0, 0, 0, 525, 0, 0, (108u << 16) | (108u + 256), (34u << 16) | (34u + 240), 0, 0x400, 0x400 };
+            MemoryBus atOnce = new(), threaded = new();
+            threaded.Dp.Threaded = true;
+            threaded.Dp.Workers = workers;
+            foreach (MemoryBus bus in new[] { atOnce, threaded })
+            {
+                bus.Dp.Scale = 2;
+                for (int i = 0; i < registers.Length; i++) bus.Write32(MemoryMap.ViBase + (uint)i * 4, registers[i]);
+            }
+
+            HandOver(atOnce, Scene(0x1234_5678));
+            threaded.Dp.Pause();
+            HandOver(threaded, Scene(0x1234_5678));
+            var release = System.Threading.Tasks.Task.Run(() =>
+            {
+                System.Threading.Thread.Sleep(300);
+                threaded.Dp.Resume();
+            });
+
+            EmuSen.Cores.Nintendo.Mars.Vi.ScanJob want = new(), got = new();
+            Assert.True(atOnce.Vi.Prepare(want));
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            Assert.True(threaded.Vi.Prepare(got));
+            long waited = clock.ElapsedMilliseconds;
+            release.Wait();
+            threaded.Dp.Join();
+
+            Assert.Equal(2, want.Scale);
+            Assert.True(got.Scale == want.Scale, $"the scan read the multiple at {got.Scale} after {waited} ms, where the list run at once reads it at {want.Scale}");
+        }
+
         // A one-cycle scene of shaded, depth-tested triangles over a full frame buffer; to the edge, their right edges cross a scissor as wide as the image - see Mars_Rdp.md §2.8.
         private static ulong[] Shaded(uint seed, bool toTheEdge, bool twoCycle = false, bool memoryAlphaFirst = false, bool gentle = false)
         {

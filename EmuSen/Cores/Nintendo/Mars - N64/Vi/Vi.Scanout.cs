@@ -82,7 +82,7 @@ namespace EmuSen.Cores.Nintendo.Mars.Vi
             Reach(job);
 
             // The scaled memory is read in place of the machine's once something has drawn into it - see Mars_Video.md §2.9.
-            job.Scale = _bus.Dp.ScaledDrawn ? _bus.Dp.Scale : 1;
+            job.Scale = _bus.Dp.ScaledDrawnHandedOver ? _bus.Dp.Scale : 1;
             if (job.Scale > 1)
             {
                 int n = job.Scale;

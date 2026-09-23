@@ -22,7 +22,6 @@ using EmuSen.Serenity.Dashboards;
 using EmuSen.Mistress.Input;
 using EmuSen.LunaP.Commands;
 using EmuSen.LunaP.Controls;
-using EmuSen.LunaP.Threading;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
 using EmuSen.Galaxia.Library;
@@ -93,16 +92,8 @@ namespace EmuSen.Mistress.Views
         private readonly ManualResetEventSlim _requestSignal = new(initialState: false);
         private WaitHandle[]? _parkedWakes;
 
-        // Coalescing hand-off to the UI thread - see EmuSen_Serenity.md §4.
-        private sealed class FrameData
-        {
-            public required byte[] Pixels;
-            public required int Width;
-            public required int Height;
-            public required int RowRepeat;
-        }
-        // Was written out here, in Hotaru and in Serenity, all three with one defect - LunaP.md §22.1.
-        private readonly Latest<FrameData> _frames;
+        // Coalescing hand-off to the UI thread over LunaP's Latest (LunaP.md §22.1), giving a lent array back once - see EmuSen_Serenity.md §2.8.
+        private readonly FrameHandOff _frames;
 
         // Rebuilt on every LoadRom, so the console never sees a swapped-out core - see §4.12.
         private IDebugTarget? _debugTarget;
@@ -158,7 +149,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new Latest<FrameData>(PresentPendingFrame);
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release));
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
@@ -818,6 +809,7 @@ namespace EmuSen.Mistress.Views
         {
             _timer?.Stop();
             StopEmulationThread(); // must fully stop before _session changes - see that method's own comment
+            _frames.EndSession(); // a picture the screen never took goes back, and the one it shows lets go of its core - see EmuSen_Serenity.md §2.8
             _session?.SaveSram(); // flush whatever was previously running before switching
             // A Reset starts the same game again, so it is not leaving it - see EmuSen_Settings_Reference.md §4.31.
             if (leaving)
@@ -1160,6 +1152,9 @@ namespace EmuSen.Mistress.Views
             string[] phaseNames = profiler?.LastFramePhases.Select(p => p.Name).ToArray() ?? Array.Empty<string>();
             var phaseMsInWindow = new double[phaseNames.Length];
 
+            // A core that lends its pictures gets each back once nothing can read it - see EmuSen_Serenity.md §2.8.
+            Action<byte[]>? release = _frames.ReleaseFor(_session?.Core);
+
             while (_running)
             {
                 // Checked before waiting so the unpaused case stays a plain read - see §4.21.
@@ -1194,7 +1189,7 @@ namespace EmuSen.Mistress.Views
                     _debugTarget?.RefreshProviders();
                     session.DequeueAudioSamples(int.MaxValue);
                     _audioPlayer.RateControl.Reset(); // skipped content - see EmuSen_Audio_Sync.md §3.2
-                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat);
+                    SubmitFrame(session.GetFrameBufferRgba(), session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release);
                     offeredSerial = null;
                     RunCoreRequests(session);
                     SleepUntil(nextTick, clock);
@@ -1248,7 +1243,7 @@ namespace EmuSen.Mistress.Views
                     if (!session.SkipRendering && (serial is null || serial != offeredSerial))
                     {
                         byte[] frame = session.GetFrameBufferRgba();
-                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat);
+                        SubmitFrame(frame, session.ScreenWidth, session.ScreenHeight, session.RowRepeat, release);
                         offeredSerial = serial;
                         offeredInWindow++;
                     }
@@ -1322,15 +1317,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // Called from the emulation thread; newest wins - see EmuSen_Serenity.md §4.
-        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat)
+        private void SubmitFrame(byte[] pixels, int width, int height, int rowRepeat, Action<byte[]>? release)
         {
-            _frames.Offer(new FrameData { Pixels = pixels, Width = width, Height = height, RowRepeat = rowRepeat });
-        }
-
-        // Presents whatever is newest when it runs; dropping stale frames is intended.
-        private void PresentPendingFrame(FrameData frame)
-        {
-            GameFrame.UpdateFrame(frame.Pixels, frame.Width, frame.Height, frame.RowRepeat);
+            _frames.Offer(pixels, width, height, rowRepeat, release);
         }
 
         private void OnExitClick(object? sender, RoutedEventArgs e)

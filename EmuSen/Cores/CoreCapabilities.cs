@@ -65,6 +65,13 @@ namespace EmuSen.Cores
         long FrameSerial { get; }
     }
 
+    // A core whose GetFrameBufferRgba lends arrays a frontend may hand back, so a picture need not be a new array - see EmuSen_Multicore.md §16.
+    public interface IFrameBufferPool
+    {
+        // Once, when the caller will never read the array again; a buffer this core did not lend, or lent at another size, is dropped. Any thread.
+        void ReturnFrameBuffer(byte[] buffer);
+    }
+
     // A core whose picture repeats rows, which can hand each over once and say how many times it is shown - see EmuSen_Multicore.md §15.
     public interface IRepeatedRows
     {

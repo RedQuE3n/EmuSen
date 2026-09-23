@@ -16,7 +16,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
     public enum MarsRtSpace : uint { Rdram = 0, Dmem = 1, Imem = 2, PifRam = 3, Rom = 4, Cpu = 5 }
 
     // MarsRT, the N64 core in Rust, behind the interfaces MarsCore implements; the boundary is crossed once a frame - see Mars_Native.md §5.2 and §5.5.
-    public sealed unsafe partial class MarsRtCore : ICore, ISnapshotCore, IStateFormat, IFrameSerial, IRepeatedRows, ICoreSettings, ICheatRegistryHost, IDisposable
+    public sealed unsafe partial class MarsRtCore : ICore, ISnapshotCore, IStateFormat, IFrameSerial, IRepeatedRows, IFrameBufferPool, ICoreSettings, ICheatRegistryHost, IDisposable
     {
         private static readonly delegate* unmanaged<byte*, nuint, uint, byte*, nuint, byte*, nuint, nint> LoadRomExport = (delegate* unmanaged<byte*, nuint, uint, byte*, nuint, byte*, nuint, nint>)MarsNative.Export("mars_machine_load_rom");
         private static readonly delegate* unmanaged<byte*, nuint, uint, nint> BootExport = (delegate* unmanaged<byte*, nuint, uint, nint>)MarsNative.Export("mars_machine_boot");
@@ -573,8 +573,20 @@ namespace EmuSen.Cores.Nintendo.MarsRT
             _frameSerial++;
         }
 
-        // A copy, since the next frame refills this core's buffer while a frontend may still be drawing the last - see Mars_Native.md §5.5.
-        public byte[] GetFrameBufferRgba() => _frame.AsSpan().ToArray();
+        // A copy in an array no one else holds: a returned one when there is one, else new - see Mars_Native.md §6.13.
+        public byte[] GetFrameBufferRgba()
+        {
+            byte[] buffer = _lending.Lend(_frame.Length);
+            _frame.AsSpan().CopyTo(buffer);
+            return buffer;
+        }
+
+        public void ReturnFrameBuffer(byte[] buffer) => _lending.Return(buffer);
+
+        private readonly FrameBufferLending _lending = new();
+
+        // What the lending has done, for the tests and the probe.
+        public FrameBufferLending FrameBuffers => _lending;
 
         public short[] DequeueAudioSamples(int maxFrames)
         {
@@ -682,6 +694,7 @@ namespace EmuSen.Cores.Nintendo.MarsRT
         {
             if (_handle != 0) Free(_handle);
             _handle = 0;
+            _lending.Close();
             GC.SuppressFinalize(this);
         }
 

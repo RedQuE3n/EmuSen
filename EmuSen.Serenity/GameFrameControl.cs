@@ -14,20 +14,35 @@ namespace EmuSen.Serenity
     // Draws a raw RGBA8888 frame through Avalonia's own Skia backend - see EmuSen_Serenity.md §2.
     public sealed class GameFrameControl : Control
     {
-        private byte[]? _rgba;
-        private int _frameWidth;
-        private int _frameHeight;
-
-        // How many times each row of the frame is shown, stretched here rather than repeated in the frame - see EmuSen_Serenity.md §2.7.
-        private int _rowRepeat = 1;
+        // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
+        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release)
+        {
+            public readonly byte[] Rgba = rgba;
+            public readonly int Width = width, Height = height, RowRepeat = rowRepeat;
+            public readonly long Version = version;
+            public readonly Action<byte[]>? Release = release;
+            public int Readers;
+            public bool Superseded, Released;
+        }
 
         // Each offer is a new version even of the same array, whose contents a core may have rewritten - see EmuSen_Serenity.md §2.6.
         private long _version;
 
+        // The bookkeeping of §2.8, taken briefly by every thread; never held across a copy or a draw.
+        private readonly object _offerLock = new();
+        private Offer? _current;
+
+        // The offer the cached image was made from, kept readable, and the newest version ever copied, which only moves forward - see EmuSen_Serenity.md §2.8.
+        private Offer? _cached;
+        private long _copiedVersion = -1;
+
+        // Superseded offers a draw operation may still copy; bounded, and one pushed out is left to the collector unreleased.
+        private readonly List<Offer> _held = new(HeldLimit);
+        private const int HeldLimit = 8;
+
         // The image made from the last version drawn, reused when the control is only redrawn; the render thread's, under the lock.
         private readonly object _cacheLock = new();
         private SKImage? _cachedImage;
-        private long _cachedVersion = -1;
 
         private readonly Dictionary<ShaderEffect, SKRuntimeEffect> _effects = new();
 
@@ -115,15 +130,76 @@ namespace EmuSen.Serenity
             System.Threading.Interlocked.Increment(ref _presented);
         }
 
-        // Stores the frame and asks for a repaint; drawing happens in Render() below.
-        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1)
+        // Stores the frame and asks for a repaint; release, if given, is called once with the array when nothing here can read it again - see EmuSen_Serenity.md §2.8.
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null)
         {
-            _rgba = rgba;
-            _frameWidth = width;
-            _frameHeight = height;
-            _rowRepeat = Math.Max(1, rowRepeat);
-            _version++;
+            lock (_offerLock)
+            {
+                Offer? previous = _current;
+                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release);
+                if (previous is not null)
+                {
+                    previous.Superseded = true;
+                    if (!TryRelease(previous)) Hold(previous);
+                }
+            }
             InvalidateVisual();
+        }
+
+        // Under _offerLock: an offer is dead once superseded, not the cache's, and read by nothing that could still copy it - see EmuSen_Serenity.md §2.8.
+        private bool TryRelease(Offer offer)
+        {
+            if (offer.Released || !offer.Superseded || ReferenceEquals(offer, _cached)) return false;
+            if (offer.Readers > 0 && offer.Version > _copiedVersion) return false;
+            offer.Released = true;
+            if (offer.Release is { } release && !StillOffered(offer)) release(offer.Rgba);
+            return true;
+        }
+
+        // The same array offered again, as a core that rewrites its own buffer does, is not given back while a later offer holds it.
+        private bool StillOffered(Offer offer)
+        {
+            if (ReferenceEquals(_current?.Rgba, offer.Rgba) || ReferenceEquals(_cached?.Rgba, offer.Rgba)) return true;
+            foreach (Offer held in _held)
+            {
+                if (held != offer && !held.Released && ReferenceEquals(held.Rgba, offer.Rgba)) return true;
+            }
+            return false;
+        }
+
+        private void Hold(Offer offer)
+        {
+            if (_held.Count == HeldLimit) _held.RemoveAt(0);
+            _held.Add(offer);
+        }
+
+        // Under _offerLock: whatever the newer copy has made dead is given back.
+        private void ReleaseHeld()
+        {
+            for (int i = _held.Count - 1; i >= 0; i--)
+            {
+                if (_held[i].Released || TryRelease(_held[i])) _held.RemoveAt(i);
+            }
+        }
+
+        // A draw operation's reference, taken when it is made and put down when it is disposed or has finished reading.
+        private Offer? TakeReader(Offer? offer)
+        {
+            lock (_offerLock)
+            {
+                offer ??= _current;
+                if (offer is not null) offer.Readers++;
+                return offer;
+            }
+        }
+
+        private void PutReader(Offer offer)
+        {
+            lock (_offerLock)
+            {
+                offer.Readers--;
+                if (offer.Superseded) ReleaseHeld();
+            }
         }
 
         // Fits the frame, centered, inside the control's real bounds - see EmuSen_Serenity.md §2.1.
@@ -173,7 +249,7 @@ namespace EmuSen.Serenity
             return builder;
         }
 
-        // The cached image is native memory the size of a frame, so a control leaving the window gives it back.
+        // The cached image is native memory the size of a frame, so a control leaving the window gives it back; the offer it came from stays, to be copied again.
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnDetachedFromVisualTree(e);
@@ -181,7 +257,6 @@ namespace EmuSen.Serenity
             {
                 _cachedImage?.Dispose();
                 _cachedImage = null;
-                _cachedVersion = -1;
                 _chain?.Dispose();
                 _chain = null;
             }
@@ -190,31 +265,54 @@ namespace EmuSen.Serenity
         public override void Render(DrawingContext context)
         {
             base.Render(context);
-            if (_rgba == null || _frameWidth <= 0 || _frameHeight <= 0) return;
-
-            context.Custom(new DrawOp(new Rect(Bounds.Size), this, _rgba, _frameWidth, _frameHeight, _rowRepeat, ActiveEffect, _version));
+            if (CaptureDrawOp(Bounds.Size) is { } op) context.Custom(op);
         }
 
-        // An immutable snapshot per Render() call - see EmuSen_Serenity.md §2.3.
-        private sealed class DrawOp : ICustomDrawOperation
+        // What Render hands the compositor, holding the newest offer until disposed; the tests hold one and draw it when they like.
+        internal DrawOp? CaptureDrawOp(Size size)
+        {
+            Offer? offer = TakeReader(null);
+            if (offer is null) return null;
+            if (offer.Width > 0 && offer.Height > 0) return new DrawOp(new Rect(size), this, offer, ActiveEffect);
+            PutReader(offer);
+            return null;
+        }
+
+        // The render thread's side of §2.8: the newest version ever copied is what a later draw shows, whichever operation draws it.
+        private Offer BeginRead(Offer mine, out bool fresh)
+        {
+            lock (_offerLock)
+            {
+                fresh = mine.Version > _copiedVersion;
+                Offer source = fresh ? mine : _cached!;
+                source.Readers++;
+                return source;
+            }
+        }
+
+        private void Copied(Offer offer)
+        {
+            lock (_offerLock)
+            {
+                _cached = offer;
+                _copiedVersion = offer.Version;
+                ReleaseHeld();
+            }
+        }
+
+        // One Render() call's offer, drawn forward only; the control's cache is under its lock - see EmuSen_Serenity.md §2.3 and §2.8.
+        internal sealed class DrawOp : ICustomDrawOperation
         {
             private readonly GameFrameControl _owner;
-            private readonly byte[] _rgba;
-            private readonly int _width;
-            private readonly int _height;
+            private readonly Offer _offer;
             private readonly ShaderEffect _effect;
-            private readonly long _version;
-            private readonly int _rowRepeat;
+            private bool _disposed;
 
-            public DrawOp(Rect bounds, GameFrameControl owner, byte[] rgba, int width, int height, int rowRepeat, ShaderEffect effect, long version)
+            internal DrawOp(Rect bounds, GameFrameControl owner, Offer offer, ShaderEffect effect)
             {
-                _version = version;
-                _rowRepeat = rowRepeat;
                 Bounds = bounds;
                 _owner = owner;
-                _rgba = rgba;
-                _width = width;
-                _height = height;
+                _offer = offer;
                 _effect = effect;
             }
 
@@ -224,7 +322,15 @@ namespace EmuSen.Serenity
 
             public bool Equals(ICustomDrawOperation? other) => false; // always re-render - this is a live video feed, never cacheable
 
-            public void Dispose() { }
+            public void Dispose()
+            {
+                lock (_owner._offerLock)
+                {
+                    if (_disposed) return;
+                    _disposed = true;
+                }
+                _owner.PutReader(_offer);
+            }
 
             public void Render(ImmediateDrawingContext context)
             {
@@ -232,61 +338,76 @@ namespace EmuSen.Serenity
                 if (feature == null) return; // non-Skia backend - nothing to draw through
 
                 using ISkiaSharpApiLease lease = feature.Lease();
-                SKCanvas canvas = lease.SkCanvas;
+                RenderTo(lease.SkCanvas, lease.GrContext);
+            }
 
+            internal void RenderTo(SKCanvas canvas, GRContext? grContext)
+            {
                 lock (_owner._cacheLock)
                 {
                     long started = System.Diagnostics.Stopwatch.GetTimestamp();
-                    bool copy = _owner._cachedImage is null || _owner._cachedVersion != _version;
-                    if (_owner._activeFilter is { } filter && _owner._chain is null) _owner._chain = new FilterChain(filter);
-                    if (copy)
+                    Offer source;
+                    bool fresh;
+                    lock (_owner._offerLock)
                     {
-                        var sourceInfo = new SKImageInfo(_width, _height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                        SKImage? previous = _owner._cachedImage;
-                        _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, _rgba);
-                        _owner._cachedVersion = _version;
-
-                        // A filter that looks back keeps the frame just replaced; otherwise it is freed as before.
-                        if (_owner._chain is { } running) running.Advance(previous);
-                        else previous?.Dispose();
+                        // In one hold with the read taken, or a Dispose between the two could give the array back first.
+                        if (_disposed) return;
+                        source = _owner.BeginRead(_offer, out fresh);
                     }
-                    long copied = System.Diagnostics.Stopwatch.GetTimestamp();
+                    try
+                    {
+                        bool copy = fresh || _owner._cachedImage is null;
+                        if (_owner._activeFilter is { } filter && _owner._chain is null) _owner._chain = new FilterChain(filter);
+                        if (copy)
+                        {
+                            var sourceInfo = new SKImageInfo(source.Width, source.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+                            SKImage? previous = _owner._cachedImage;
+                            _owner._cachedImage = SKImage.FromPixelCopy(sourceInfo, source.Rgba);
 
-                    if (_owner._slang is { } slang && DrawSlang(canvas, slang, copy)) { }
-                    else if (_owner._chain is { } chain) DrawFiltered(canvas, chain, lease.GrContext, _owner._cachedImage!);
-                    else Draw(canvas, _owner._cachedImage!);
+                            // A filter that looks back keeps the frame just replaced; otherwise it is freed as before.
+                            if (_owner._chain is { } running) running.Advance(previous);
+                            else previous?.Dispose();
+                        }
+                        if (fresh) _owner.Copied(source);
+                        long copied = System.Diagnostics.Stopwatch.GetTimestamp();
 
-                    // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
-                    lease.GrContext?.Flush();
-                    _owner.Presented(copy, copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, lease.GrContext is not null, _width, _height);
+                        if (_owner._slang is { } slang && DrawSlang(canvas, slang, copy, source)) { }
+                        else if (_owner._chain is { } chain) DrawFiltered(canvas, chain, grContext, _owner._cachedImage!, source);
+                        else Draw(canvas, _owner._cachedImage!, source);
+
+                        // Flushed here so the texture's upload, which Skia defers to a flush, is timed with the draw - see EmuSen_Serenity.md §2.5.
+                        grContext?.Flush();
+                        _owner.Presented(copy, copied - started, System.Diagnostics.Stopwatch.GetTimestamp() - copied, grContext is not null, source.Width, source.Height);
+                    }
+                    finally
+                    {
+                        _owner.PutReader(source);
+                    }
                 }
             }
 
-            private bool DrawSlang(SKCanvas canvas, Slang.SlangRunner slang, bool newFrame)
+            private SKRect Destination(Offer source)
             {
-                var (x, y, w, h) = ComputeLetterboxRect(_width, _height * _rowRepeat, Bounds.Width, Bounds.Height);
-                var destination = new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
-                return slang.Draw(canvas, _rgba, _width, _height, _rowRepeat, newFrame, destination);
+                var (x, y, w, h) = ComputeLetterboxRect(source.Width, source.Height * source.RowRepeat, Bounds.Width, Bounds.Height);
+                return new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
             }
 
-            private void DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage)
-            {
-                var (x, y, w, h) = ComputeLetterboxRect(_width, _height * _rowRepeat, Bounds.Width, Bounds.Height);
-                var destination = new SKRect((float)x, (float)y, (float)x + Math.Max(1, (int)Math.Round(w)), (float)y + Math.Max(1, (int)Math.Round(h)));
-                chain.Draw(canvas, context, sourceImage, _rowRepeat, destination);
-            }
+            private bool DrawSlang(SKCanvas canvas, Slang.SlangRunner slang, bool newFrame, Offer source) =>
+                slang.Draw(canvas, source.Rgba, source.Width, source.Height, source.RowRepeat, newFrame, Destination(source));
 
-            private void Draw(SKCanvas canvas, SKImage sourceImage)
+            private void DrawFiltered(SKCanvas canvas, FilterChain chain, GRContext? context, SKImage sourceImage, Offer source) =>
+                chain.Draw(canvas, context, sourceImage, source.RowRepeat, Destination(source));
+
+            private void Draw(SKCanvas canvas, SKImage sourceImage, Offer source)
             {
                 // GraphicsSettings.BilinearFiltering - see EmuSen_Settings_Reference.md §3.
                 SKSamplingOptions sampling = GraphicsSettings.BilinearFiltering
                     ? new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None)
                     : new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None);
 
-                var (x, y, w, h) = ComputeLetterboxRect(_width, _height * _rowRepeat, Bounds.Width, Bounds.Height);
-                int upscaledW = Math.Max(1, (int)Math.Round(w));
-                int upscaledH = Math.Max(1, (int)Math.Round(h));
-                var destRect = new SKRect((float)x, (float)y, (float)x + upscaledW, (float)y + upscaledH);
+                SKRect destRect = Destination(source);
+                float x = destRect.Left, y = destRect.Top;
+                int upscaledW = (int)Math.Round(destRect.Width), upscaledH = (int)Math.Round(destRect.Height);
 
                 // No offscreen surface on either path - see EmuSen_Serenity.md §2.2.
                 if (_effect == ShaderEffect.None)
@@ -296,8 +417,8 @@ namespace EmuSen.Serenity
                 }
 
                 // A local matrix is what puts the shader's math in output-pixel space - see EmuSen_Serenity.md §3.
-                float scaleX = upscaledW / (float)_width;
-                float scaleY = upscaledH / (float)_height;
+                float scaleX = upscaledW / (float)source.Width;
+                float scaleY = upscaledH / (float)source.Height;
 
                 SKRuntimeShaderBuilder builder = _owner.GetBuilder(_effect);
                 builder.Children["image"] = sourceImage.ToShader(
@@ -307,7 +428,7 @@ namespace EmuSen.Serenity
                 using SKShader shader = builder.Build();
                 using var paint = new SKPaint { Shader = shader };
                 canvas.Save();
-                canvas.Translate((float)x, (float)y);
+                canvas.Translate(x, y);
                 canvas.DrawRect(new SKRect(0, 0, upscaledW, upscaledH), paint);
                 canvas.Restore();
             }
